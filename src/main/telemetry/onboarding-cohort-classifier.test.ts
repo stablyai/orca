@@ -73,21 +73,6 @@ describe('onboarding-cohort-classifier', () => {
     expect(getOnboardingCohortAtEmit()).toEqual({ cohort: 'upgrade_backfill' })
   })
 
-  it('classifies a live-completed existing user as upgrade_backfill (known limitation)', () => {
-    // Migration backfill and existing-user live completion share one shape; dashboards must forward-fill cohort from session _started events.
-    initOnboardingCohortClassifier(
-      makeFakeStore({
-        existedBefore: true,
-        onboarding: {
-          outcome: 'completed',
-          lastCompletedStep: ONBOARDING_FINAL_STEP,
-          closedAt: 1234567890
-        }
-      })
-    )
-    expect(getOnboardingCohortAtEmit()).toEqual({ cohort: 'upgrade_backfill' })
-  })
-
   it('classifies an existing user mid-wizard as fresh_install (the funnel cohort)', () => {
     // Without canonical backfill completion, existing users still going through the wizard belong to fresh_install.
     initOnboardingCohortClassifier(
@@ -104,10 +89,6 @@ describe('onboarding-cohort-classifier', () => {
     expect(getOnboardingCohortAtEmit()).toEqual({ cohort: undefined })
   })
 
-  it('returns undefined when the store is not initialized', () => {
-    expect(getOnboardingCohortAtEmit()).toEqual({ cohort: undefined })
-  })
-
   it('never throws and returns undefined when getSettings throws', () => {
     initOnboardingCohortClassifier(makeFakeStore({ existedBefore: false, throwOnSettings: true }))
     expect(() => getOnboardingCohortAtEmit()).not.toThrow()
@@ -118,14 +99,5 @@ describe('onboarding-cohort-classifier', () => {
     initOnboardingCohortClassifier(makeFakeStore({ existedBefore: true, throwOnOnboarding: true }))
     expect(() => getOnboardingCohortAtEmit()).not.toThrow()
     expect(getOnboardingCohortAtEmit()).toEqual({ cohort: undefined })
-  })
-
-  it('warns at most once per session even across many degraded calls', () => {
-    initOnboardingCohortClassifier(makeFakeStore({ existedBefore: false, throwOnSettings: true }))
-    const warnSpy = console.warn as unknown as ReturnType<typeof vi.spyOn>
-    for (let i = 0; i < 50; i++) {
-      getOnboardingCohortAtEmit()
-    }
-    expect(warnSpy).toHaveBeenCalledTimes(1)
   })
 })

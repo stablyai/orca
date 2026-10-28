@@ -117,11 +117,13 @@ async function listAiVaultSessions(
         ? [...new Set(scopePaths)].sort()
         : scopePaths,
     executionHostScope,
-    historyOwnership: args?.historyOwnership,
     includeAntigravityIdeSessions: args?.includeAntigravityIdeSessions === true
   })
   const depth = requestedAiVaultSessionDepth(args)
-  const afterFingerprint = parsedHost?.kind === 'runtime' ? args?.afterFingerprint : undefined
+  const afterFingerprint =
+    parseRoutableExecutionHostId(executionHostScope)?.kind === 'runtime'
+      ? args?.afterFingerprint
+      : undefined
   // Why: every renderer request carries its own cancellation signal, so
   // coalescing has to survive them — the coordinator hands all same-key callers
   // one scan and only aborts it once every one of them has cancelled.

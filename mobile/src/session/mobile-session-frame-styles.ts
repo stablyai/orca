@@ -1,8 +1,9 @@
 import { StyleSheet } from 'react-native'
 
 import { colors, spacing, radii, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
 
-export const mobileSessionFrameStyles = StyleSheet.create({
+export const mobileSessionFrameStyles = themedStyleSheet(() => ({
   container: {
     flex: 1,
     backgroundColor: colors.bgBase
@@ -223,4 +224,4 @@ export const mobileSessionFrameStyles = StyleSheet.create({
     color: colors.statusRed,
     fontSize: typography.bodySize
   }
-})
+}))

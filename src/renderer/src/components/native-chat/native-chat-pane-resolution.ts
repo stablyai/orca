@@ -1,6 +1,7 @@
 import type { AgentStatusEntry, AgentType } from '../../../../shared/agent-status-types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
-import { isNativeChatSupportedAgent } from './native-chat-availability'
+import { isNativeChatSupportedAgent } from '../../../../shared/native-chat-agent-support'
+import { nativeChatAvailabilityAgent } from '../../../../shared/native-chat-availability'
 
 export type NativeChatPaneResolutionInput = {
   /** Composite `${tabId}:${leafId}` key of the active leaf. */
@@ -26,7 +27,11 @@ export type NativeChatPaneResolution = {
 export function resolveNativeChatSession(
   input: NativeChatPaneResolutionInput
 ): NativeChatPaneResolution | null {
-  const agent = input.agentStatusEntry?.agentType ?? input.launchAgent ?? input.resolvedAgent
+  const agent = nativeChatAvailabilityAgent({
+    detectedAgent: input.agentStatusEntry?.agentType,
+    launchAgent: input.launchAgent,
+    resolvedAgent: input.resolvedAgent
+  })
   if (!agent || !isNativeChatSupportedAgent(agent)) {
     return null
   }

@@ -1,3 +1,4 @@
+import { createBrowserUuid } from '@/lib/browser-uuid'
 import type { Tab } from '../../../../shared/tab-types'
 import { useAppStore } from '../../store'
 import { needsSavePromptOnClose } from '@/store/slices/editor/buffers/editor-buffer-close-rule'
@@ -5,6 +6,9 @@ import { requestEditorFileClose } from '../editor/editor-autosave'
 import { closeTerminalTab } from '../terminal/terminal-tab-actions'
 import { closeWorkspaceBrowserTab } from '@/lib/workspace-browser-tab-close'
 import { isEditorTabContentType } from '@/store/slices/editor/tabs/editor-tab-content-type'
+import { admitStructuredAgentSession } from '@/lib/agent-session/structured-agent-session-busy'
+import { readStructuredChatTabName } from '@/runtime/structured-chat-tab-name'
+import { useRunningTerminalCloseConfirmStore } from '@/store/running-terminal-close-confirm'
 
 export function createWorkspaceTabCloseCommands({
   worktreeId,
@@ -48,8 +52,46 @@ export function createWorkspaceTabCloseCommands({
     }
     const whenEmptied = opts?.whenEmptied ?? null
     if (item.contentType === 'agent-session') {
-      closeUnifiedTab(item.id)
-      whenEmptied?.()
+      const close = () => {
+        if (useAppStore.getState().closeUnifiedTab(item.id)) {
+          whenEmptied?.()
+        }
+      }
+      if (
+        !opts?.skipRunningProcessConfirm &&
+        useAppStore.getState().settings?.skipCloseTerminalWithRunningProcessConfirm !== true
+      ) {
+        void admitStructuredAgentSession(
+          worktreeId,
+          item,
+          'close',
+          (busy, attempt) =>
+            new Promise<void>((resolve) => {
+              const confirmed = () => {
+                try {
+                  if (attempt.current()) {
+                    close()
+                  }
+                } finally {
+                  resolve()
+                }
+              }
+              if (!busy) {
+                return confirmed()
+              }
+              useRunningTerminalCloseConfirmStore.getState().requestRunningTerminalCloseConfirm({
+                // Consent belongs to this attempt; a reused tab ID must not inherit its dialog.
+                terminalTabId: createBrowserUuid(),
+                tabLabel: readStructuredChatTabName(item, useAppStore.getState()),
+                copyKind: 'chat-agent',
+                onConfirm: confirmed,
+                onCancel: resolve
+              })
+            })
+        )
+      } else {
+        close()
+      }
       return
     }
     if (item.contentType === 'terminal') {

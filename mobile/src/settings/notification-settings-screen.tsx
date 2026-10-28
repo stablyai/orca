@@ -1,10 +1,12 @@
 import { useState, useCallback, useEffect, useRef, type ReactNode } from 'react'
-import { AppState, View, Text, StyleSheet, Pressable, Switch, ScrollView } from 'react-native'
+import { AppState, View, Text, Pressable, Switch, ScrollView } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useFocusEffect } from 'expo-router'
 import type { NotificationSettingsOperations } from './notification-settings-operations'
 import { ChevronLeft } from 'lucide-react-native'
 import { colors, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import type { NotificationPermissionState } from '../notifications/notification-permissions'
 
 const DEFAULT_PERMISSION_STATE: NotificationPermissionState = {
@@ -25,6 +27,7 @@ export default function NotificationsScreen({
   description?: string
   children?: (enabled: boolean) => ReactNode
 }) {
+  useMobileColorScheme()
   const insets = useSafeAreaInsets()
   const [saving, setSaving] = useState(false)
   const savingRef = useRef(false)
@@ -162,7 +165,7 @@ export default function NotificationsScreen({
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   container: {
     flex: 1,
     backgroundColor: colors.bgBase,
@@ -228,4 +231,4 @@ const styles = StyleSheet.create({
     fontSize: typography.metaSize,
     fontWeight: '600'
   }
-})
+}))

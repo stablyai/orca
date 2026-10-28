@@ -121,9 +121,12 @@ export type UiCommandEventApi = {
       sessionProfileId?: string | null
       sessionPartition?: string
       activate?: boolean
+      fallbackWorktreeId?: string
     }) => void
   ) => () => void
   replyTabCreate: (reply: { requestId: string; browserPageId?: string; error?: string }) => void
+  /** Tells main this window can take browser tab requests: listening, with its workspaces restored. */
+  browserTabRequestsReady: () => void
   /** Main asks whether a paired environment owns a workspace before running that host's CLI command. */
   onRequestRemoteCliBrowserScope: (
     callback: (data: RemoteCliBrowserScopeQuery) => void

@@ -10,6 +10,8 @@ export const NATIVE_CHAT_TOOL_ACTIVITY_COPY = {
   runningCommand: 'Running command',
   runningNamedPreview: 'Running {{toolName}} {{preview}}',
   runningNamed: 'Running {{toolName}}',
+  /** A run holding only results, whose calls were folded elsewhere. */
+  result: 'Result',
   countOne: '1 tool call',
   countN: '{{value0}} tool calls',
   moreCalls: '+{{value0}} more',

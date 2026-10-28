@@ -15,7 +15,7 @@ vi.mock('react-native', () => ({
   View: 'View'
 }))
 vi.mock('../components/MobileLoadErrorState', () => ({ MobileLoadErrorState: 'LoadError' }))
-vi.mock('../session/MobileNativeChatImageViewer', () => ({
+vi.mock('../session/native-chat/visual/MobileNativeChatImageViewer', () => ({
   MobileNativeChatImageViewer: 'ImageViewer'
 }))
 const loader = vi.hoisted(() => vi.fn())

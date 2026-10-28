@@ -272,7 +272,7 @@ export function CrashReportDialogSurface({
               <div className="rounded-md border border-border/70 bg-muted/30 p-3 text-xs">
                 <div className="font-medium text-foreground">{formatSummary(report)}</div>
                 <div className="mt-1 text-muted-foreground">
-                  {new Date(report.createdAt).toLocaleString()} · {report.platform} {report.arch} ·
+                  {new Date(report.createdAt).toLocaleString()} · {report.platform} {report.arch} ·{' '}
                   {translate('auto.components.crash.report.CrashReportDialog.835037edc9', 'Orca')}{' '}
                   {report.appVersion}
                 </div>

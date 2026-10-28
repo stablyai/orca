@@ -43,6 +43,8 @@ describe('describeBrowserLoadFailure', () => {
     [-106, 'https://example.com/', DIRECT, "You're offline", 'online'],
     [-118, 'http://localhost:3000/', DIRECT, 'localhost:3000 took too long to respond', 'poll'],
     [-101, 'https://example.com/', DIRECT, 'The connection to example.com was interrupted', null],
+    // An extension's blocking rule: reloading can't help until the site is allowed.
+    [-20, 'https://ads.example.com/', DIRECT, 'ads.example.com is blocked', null],
     // Through the SSH route every failure is -120; the host's state says which one it was.
     [-120, 'http://localhost:3000/', SSH_UP, 'Nothing is running on localhost:3000 yet', 'poll'],
     [-120, 'http://localhost:3000/', SSH_DOWN, "Can't reach the SSH host", 'poll'],

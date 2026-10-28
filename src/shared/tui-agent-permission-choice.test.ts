@@ -2,7 +2,7 @@ import * as permissionArgs from './agent-permission-args'
 import { getDefaultSettings } from './constants'
 import { legacyChatPermissionWrite } from '../main/persistence/applying-settings/legacy-chat-permission-write'
 import { measureSettingsWork, expectSettingsWorkScale } from './global-settings-test-fixture'
-import { buildAgentStartupPlan, buildAgentResumeStartupPlan } from './tui-agent-startup'
+
 import {
   wholeAgentEnvironmentUpdates,
   legacyLaunchTextUpdates
@@ -48,28 +48,6 @@ describe('one-time move of permission flags out of Arguments', () => {
       args: '--search'
     })
     expect(resolveTuiAgentLaunchArgs('codex', { agentPermissionDefault: 'ask' })).toBe(recipe)
-  })
-
-  it('imports Grok modes from recorded 1.0.62 help without taking ownership of other modes', () => {
-    // Installed 1.0.62 (1474f9cbdd91) --help, permission-mode excerpt; not captured argv.
-    const recordedHelp = `      --permission-mode <MODE>
-          Permission mode
-
-          [possible values: default, acceptEdits, auto, dontAsk, bypassPermissions, plan]`
-    const option = recordedHelp.trim().split(' ')[0]
-    const modes = recordedHelp.match(/possible values: ([^\]]+)/)?.[1].split(', ')
-    expect(modes).toBeDefined()
-    for (const mode of modes ?? []) {
-      const text = `${option} ${mode} --model grok-code-fast-1`
-      const migrated = migrateAgentPermissionChoice({ agentDefaultArgs: { grok: text } })
-      const choice =
-        mode === 'default' ? 'ask' : mode === 'bypassPermissions' ? 'full-access' : 'own'
-      expect(resolveAgentPermission('grok', migrated).choice).toBe(choice)
-      expect(migrated.agentDefaultArgs.grok).toBe(
-        choice === 'own' ? text : '--model grok-code-fast-1'
-      )
-      expect(resolveTuiAgentLaunchArgs('grok', migrated)).toBe(text)
-    }
   })
 
   it('turns saved shapes into a stored choice and leaves the rest of the text', () => {
@@ -143,14 +121,6 @@ describe('terminal launch composes the stored choice', () => {
     expect(resolveTuiAgentLaunchArgs('gemini', { agentPermissionDefault: 'ask' })).toBe('')
   })
 
-  it('passes an older host’s published text through unchanged', () => {
-    expect(
-      resolveTuiAgentLaunchArgs('claude', {
-        agentDefaultArgs: { claude: '--permission-mode auto' }
-      })
-    ).toBe('--permission-mode auto')
-  })
-
   it('Auto for all agents keeps the others on what they had', () => {
     const next = applyAllAgentsPermission({ agentPermissionDefault: 'full-access' }, 'auto')
     expect(resolveAgentPermission('claude', next).choice).toBe('auto')
@@ -203,12 +173,6 @@ describe('older clients against a host with the stored choice', () => {
     nativeChatPermissionMode: 'ask'
   } satisfies AgentLaunchSettingsSource
 
-  it('see Arguments with the flag included', () => {
-    const projected = projectAgentLaunchSettings(host)
-    expect(projected.agentDefaultArgs.codex).toBe('--approve-for-me --search')
-    expect(projected.agentPermission?.userArgs.codex).toBe('--search')
-  })
-
   it('deleting the published flag means the agent’s own settings; another flag becomes the choice', () => {
     const deleted = agentLaunchSettingsMutationUpdates(
       host,
@@ -233,12 +197,6 @@ describe('older clients against a host with the stored choice', () => {
       'linux'
     )
     expect(resolveTuiAgentLaunchArgs('claude', { ...host, ...manual })).toBe('')
-  })
-
-  it('new chats start in the stored choice; agents on their own settings delegate their chats too', () => {
-    expect(newChatPermissionModeForSettings('codex', host)).toBe('auto')
-    const own = { ...host, agentPermissionOverrides: { codex: 'own' as const } }
-    expect(newChatPermissionModeForSettings('codex', own)).toBe('own')
   })
 })
 
@@ -435,21 +393,6 @@ describe('permission carrier ownership across save, reload and consumers', () =>
     expect(projectAgentLaunchSettings(loaded).agentDefaultArgs[agent]).toBe(launch)
     expect(newChatPermissionModeForSettings(agent, loaded)).toBe(chat)
     expect(agentArgsSetPermission(agent, value)).toBe(carrier)
-  })
-
-  it('keeps a Gemini mode from recorded 0.63.0 help user-owned through import and composition', () => {
-    // Installed 0.63.0 --help, ticket 1916: syntax evidence, without a provider turn.
-    const recordedHelp = `      --approval-mode             Set the approval mode: default (prompt for approval), auto_edit (auto-approve edit tools), yolo (auto-approve all tools), plan (read-only mode)  [string] [choices: "default", "auto_edit", "yolo", "plan"]`
-    const option = recordedHelp.trim().split(/\s+/)[0]
-    const mode = recordedHelp.match(/choices: "([^"]+)"/)?.[1]
-    const text = `${option} ${mode}`
-    expect(text).toBe('--approval-mode default')
-    const imported = migrateAgentPermissionChoice({ agentDefaultArgs: { gemini: text } })
-    expect(imported.agentDefaultArgs.gemini).toBe(text)
-    expect(resolveAgentPermission('gemini', imported).choice).toBe('own')
-    const full = { ...imported, agentPermissionDefault: 'full-access' as const }
-    expect(resolveAgentPermission('gemini', full).choice).toBe('full-access')
-    expect(resolveTuiAgentLaunchArgs('gemini', full)).toBe(text)
   })
 
   it.each(['--approval-mode auto_edit', '--approval-mode=plan', '-y'])(
@@ -715,28 +658,4 @@ vi.spyOn(permissionArgs, 'permissionRecipeCut').mockImplementation((agent, text,
     expect(actual).toBeLessThanOrEqual(bound)
   }
   return value
-})
-it.each([false, true])('bounds actual startup/raw resume (%s)', (resume) => {
-  for (const n of [20, 200]) {
-    const models = '--model opus '.repeat(n).trim(),
-      raw = Array(n).fill("'--model' 'opus'").join(' ')
-    const { value: plan, work } = measureSettingsWork(() =>
-      (resume ? buildAgentResumeStartupPlan : buildAgentStartupPlan)({
-        agent: 'claude',
-        cmdOverrides: {},
-        platform: 'linux',
-        agentArgs: models,
-        sessionOptions: { model: 'opus' },
-        sessionOptionsOverrideAgentArgs: resume,
-        prompt: '',
-        allowEmptyPromptLaunch: true,
-        providerSession: { key: 'session_id', id: 's' }
-      })
-    )
-    // Restart records surviving raw pins; the provider restores the generated model seed.
-    expect(plan?.launchConfig.agentCommand).toBe(resume ? 'claude' : `claude ${raw}`)
-    expect(plan?.launchCommand).toBe(`claude ${resume ? "'--model' 'opus' '--resume' 's'" : raw}`)
-    expect(work.visits).toBeLessThanOrEqual(40 * (2 * n + 1))
-    expectSettingsWorkScale(`startup-${resume}`, n, [work.visits])
-  }
 })

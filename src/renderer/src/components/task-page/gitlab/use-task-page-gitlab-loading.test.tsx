@@ -3,6 +3,7 @@
 import { cleanup, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../../../../shared/repo-types'
+import type { GitLabWorkItem } from '../../../../../shared/gitlab-types'
 
 const rpc = vi.hoisted(() => ({ call: vi.fn() }))
 
@@ -67,6 +68,70 @@ describe('useTaskPageGitLabLoading', () => {
       expect.objectContaining({ id: 'i1', repoId: 'server-repo' })
     ])
     expect(setGitlabError).not.toHaveBeenCalledWith(expect.stringContaining('Access denied'))
+  })
+
+  it('shows MR rows and refresh errors without fetching the advertised probe page', async () => {
+    const items: GitLabWorkItem[] = Array.from({ length: 50 }, (_, index) => ({
+      id: `mr-${index + 1}`,
+      type: 'mr',
+      number: index + 1,
+      title: `Merge request ${index + 1}`,
+      state: 'opened',
+      url: `https://gitlab.com/group/app/-/merge_requests/${index + 1}`,
+      labels: [],
+      updatedAt: '2026-10-01T00:00:00Z',
+      author: null,
+      repoId: 'group/app'
+    }))
+    rpc.call.mockResolvedValueOnce({ items, page: 1, perPage: 50, totalCount: 0, totalPages: 2 })
+    const setGitlabItems = vi.fn()
+    const setGitlabError = vi.fn()
+    const setGitlabLoading = vi.fn()
+    const { rerender } = renderHook(
+      ({ refreshNonce }) =>
+        useTaskPageGitLabLoading({
+          selectedRepos: [serverRepo],
+          selectedReposKey: 'server-repo',
+          primaryRepo: serverRepo,
+          taskSource: 'gitlab',
+          setGitlabItems,
+          setGitlabLoading,
+          setGitlabError,
+          gitlabRefreshNonce: refreshNonce,
+          gitlabView: 'mrs',
+          setGitlabTodos: vi.fn(),
+          setGitlabTodosLoading: vi.fn(),
+          activeGitlabFilter: 'opened'
+        }),
+      { initialProps: { refreshNonce: 0 } }
+    )
+
+    await waitFor(() => expect(setGitlabLoading).toHaveBeenLastCalledWith(false))
+    expect(setGitlabItems).toHaveBeenLastCalledWith(
+      items.map((item) => ({ ...item, repoId: serverRepo.id, repoHostId: 'runtime:build-box' }))
+    )
+    expect(setGitlabError).toHaveBeenLastCalledWith(null)
+    expect(rpc.call).toHaveBeenCalledTimes(1)
+    expect(rpc.call).toHaveBeenCalledWith(
+      { kind: 'environment', environmentId: 'build-box' },
+      'gitlab.listMRs',
+      expect.objectContaining({ repo: 'id:server-repo', state: 'opened', page: 1, perPage: 50 }),
+      expect.anything()
+    )
+
+    rpc.call.mockResolvedValueOnce({
+      items: [],
+      page: 1,
+      perPage: 50,
+      totalCount: 0,
+      totalPages: 0,
+      error: { type: 'permission_denied', message: 'GitLab access denied' }
+    })
+    rerender({ refreshNonce: 1 })
+    await waitFor(() => expect(setGitlabError).toHaveBeenLastCalledWith('GitLab access denied'))
+    expect(setGitlabItems).toHaveBeenLastCalledWith([])
+    expect(setGitlabLoading).toHaveBeenLastCalledWith(false)
+    expect(rpc.call).toHaveBeenCalledTimes(2)
   })
 
   function manyServerRepos(count: number): Repo[] {

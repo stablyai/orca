@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { mergeDiscoveredAuthoritativeModels } from '../../../../shared/agent-session-option-catalog'
 import { GROK_SESSION_OPTION_CATALOG } from '../../../../shared/agent-session-option-catalog-grok'
-import { updateNativeChatSessionOptionDefaults } from '../../../../shared/native-chat-session-option-defaults'
-import type { PersistedNativeChatSessionOptions } from '../../../../shared/native-chat-session-options'
+import { updateNativeChatSessionOptionDefaults } from '../../../../shared/native-chat/input/native-chat-session-option-defaults'
+import type { PersistedNativeChatSessionOptions } from '../../../../shared/native-chat/input/native-chat-session-options'
 import {
   clearNativeChatSessionOptionCacheForTests,
   readNativeChatSessionOptionCache,
@@ -12,7 +12,7 @@ import {
   createNativeChatPtySessionOptions,
   type CreateNativeChatPtySessionOptionsArgs,
   type NativeChatPtySessionOptionsSurface
-} from './native-chat-pty-session-options'
+} from '../../../../shared/native-chat-pty-session-options'
 
 const discoveredGrok5 = (): ReturnType<typeof mergeDiscoveredAuthoritativeModels> =>
   mergeDiscoveredAuthoritativeModels(GROK_SESSION_OPTION_CATALOG.models, [
@@ -28,6 +28,7 @@ function createGrokSurface(args?: Partial<CreateNativeChatPtySessionOptionsArgs>
     agent: 'grok',
     scopeKey: 'pty-1',
     mode: 'live',
+    modelLabel: 'Model',
     dispatchCommand: vi.fn(),
     persistSelection: ({ modelId, optionId, value, adoptModelAsLaunchDefault }) => {
       persisted = updateNativeChatSessionOptionDefaults({

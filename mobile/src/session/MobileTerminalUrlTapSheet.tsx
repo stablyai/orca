@@ -12,9 +12,10 @@ export type PendingTerminalUrlTap = {
 
 export function displayTitleFromTerminalUrl(url: string): string {
   try {
-    const parsed = new URL(url)
-    if (parsed.host) {
-      return parsed.host
+    new URL(url)
+    const authority = /^[a-z][a-z\d+.-]*:\/\/(?:[^/?#]*@)?([^/?#]+)/i.exec(url)
+    if (authority?.[1]) {
+      return authority[1]
     }
   } catch {
     // Non-standard URLs fall back to the generic sheet heading.

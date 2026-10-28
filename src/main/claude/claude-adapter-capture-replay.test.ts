@@ -14,13 +14,13 @@ import { ClaudeStructuredSessionAdapter } from './claude-structured-session-adap
 import type {
   ClaudeLateDispatchOutcome,
   ClaudeStructuredSessionAdapterDeps
-} from './claude-structured-session-state'
+} from './structured/claude-structured-session-state'
 import {
   fakeClaude,
   identityFor,
-  PROVIDER_SESSION_ID,
-  claudeStartupSettled
+  PROVIDER_SESSION_ID
 } from './claude-structured-session-test-support'
+import { claudeStartupSettled } from './claude-structured-startup-settled-test-support'
 
 type CapturedEvent =
   | { at: number; kind: 'meta'; providerSessionId: string }

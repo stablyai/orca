@@ -1,6 +1,7 @@
 import { basename } from 'node:path'
 import { parseGitRevListAheadBehindCounts } from '../../shared/git-rev-list-output'
 import { buildHostedRemoteCommitUrl, buildHostedRemoteFileUrl } from './hosted-remote-url'
+import { getRemoteFileTarget } from './repo-remote-file-target'
 import {
   DEFAULT_BASE_REF_PROBE_TIMEOUT_MS,
   getDefaultBaseRefAsync,
@@ -178,22 +179,14 @@ export async function getDefaultRemote(
 export async function getRemoteFileUrl(
   repoPath: string,
   relativePath: string,
-  line: number
+  line: number,
+  endLine?: number,
+  options: LocalGitExecOptions = {}
 ): Promise<string | null> {
-  const remoteUrl = await getRemoteUrl(repoPath)
-  if (!remoteUrl) {
-    return null
-  }
-  const defaultBaseRef = await getDefaultBaseRefAsync(repoPath)
-  if (!defaultBaseRef) {
-    return null
-  }
-  return buildHostedRemoteFileUrl(
-    remoteUrl,
-    relativePath,
-    defaultBaseRef.replace(/^origin\//, ''),
-    line
-  )
+  const target = await getRemoteFileTarget(repoPath, options)
+  return target
+    ? buildHostedRemoteFileUrl(target.remoteUrl, relativePath, target.ref, line, endLine)
+    : null
 }
 
 export async function getRemoteCommitUrl(repoPath: string, sha: string): Promise<string | null> {

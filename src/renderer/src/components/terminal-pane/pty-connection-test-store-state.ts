@@ -55,8 +55,7 @@ export type StoreState = {
     displayName?: string
     executionHostId?: string | null
   }[]
-  endpointProjectHostSetups: AppState['endpointProjectHostSetups']
-  endpointProjects: {
+  projects: {
     id: string
     localWindowsRuntimePreference?:
       | { kind: 'inherit-global' }

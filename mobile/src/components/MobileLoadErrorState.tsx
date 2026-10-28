@@ -1,5 +1,7 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 
 /** A failed load: the message with its Retry button centered under it as one group. */
 export function MobileLoadErrorState({
@@ -9,6 +11,7 @@ export function MobileLoadErrorState({
   message: string
   onRetry?: (() => void) | null
 }) {
+  useMobileColorScheme()
   return (
     <View style={styles.state}>
       <Text style={styles.errorText}>{message}</Text>
@@ -19,6 +22,7 @@ export function MobileLoadErrorState({
 
 /** The bordered action a centered load state offers, such as Retry. */
 export function MobileStateButton({ label, onPress }: { label: string; onPress: () => void }) {
+  useMobileColorScheme()
   return (
     <Pressable style={styles.retryButton} onPress={onPress} accessibilityRole="button">
       <Text style={styles.retryText}>{label}</Text>
@@ -26,7 +30,7 @@ export function MobileStateButton({ label, onPress }: { label: string; onPress: 
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   state: {
     flex: 1,
     alignItems: 'center',
@@ -53,4 +57,4 @@ const styles = StyleSheet.create({
     fontSize: typography.bodySize,
     fontWeight: '600'
   }
-})
+}))

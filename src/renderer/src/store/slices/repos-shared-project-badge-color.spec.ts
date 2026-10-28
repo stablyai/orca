@@ -131,8 +131,7 @@ export function registerReposSharedProjectBadgeColorTests(): void {
   })
 
   function badgeColor(store: ReturnType<typeof createTestStore>): string | undefined {
-    return store.getState().endpointProjects.find((project) => project.id === SHARED_PROJECT_ID)
-      ?.badgeColor
+    return store.getState().projects.find((project) => project.id === SHARED_PROJECT_ID)?.badgeColor
   }
 
   describe('shared project badge color across hosts', () => {

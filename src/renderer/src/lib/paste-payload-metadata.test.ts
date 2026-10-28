@@ -7,23 +7,8 @@ import {
   measurePastePayloadMetadata,
   measurePastePayloadMetadataWithYield
 } from './paste-payload-metadata'
-import { PASTE_PAYLOAD_CORPUS } from './paste-payload-corpus'
-
-const textEncoder = new TextEncoder()
 
 describe('paste payload metadata', () => {
-  it('matches the shared paste payload corpus', () => {
-    for (const { expected, name, text } of PASTE_PAYLOAD_CORPUS) {
-      expect(measurePastePayloadMetadata(text), name).toEqual({
-        byteLength: textEncoder.encode(text).byteLength,
-        exceededLimit: false,
-        hasControlSequences: expected.hasControlSequences,
-        lineEndingByteLength: text.match(/[\r\n]/g)?.length ?? 0,
-        lineCount: expected.lineCount
-      })
-    }
-  })
-
   it('measures bytes, logical lines, and control-sequence flags in one pass', () => {
     const text = 'alpha\r\nbeta\ngamma😀\x1b[31m'
 

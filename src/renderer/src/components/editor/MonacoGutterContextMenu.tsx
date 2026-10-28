@@ -1,4 +1,5 @@
 import React from 'react'
+import type { IRange } from 'monaco-editor'
 import { getRuntimeTargetForFileOwner } from '@/lib/file-owner-runtime-target'
 import { Copy, ExternalLink } from 'lucide-react'
 import {
@@ -14,12 +15,14 @@ import { getRuntimeGitRemoteFileUrl } from '@/runtime/runtime-git-working-tree-c
 import { formatPathLineReference } from './line-copy-path'
 import { translate } from '@/i18n/i18n'
 import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import { getRemoteUrlLineRange } from './selection-copy'
 
 type MonacoGutterContextMenuProps = {
   open: boolean
   onOpenChange: (open: boolean) => void
   point: { x: number; y: number }
   line: number
+  selection: IRange | null
   filePath: string
   relativePath: string
 }
@@ -29,6 +32,7 @@ export function MonacoGutterContextMenu({
   onOpenChange,
   point,
   line,
+  selection,
   filePath,
   relativePath
 }: MonacoGutterContextMenuProps): React.JSX.Element {
@@ -90,7 +94,7 @@ export function MonacoGutterContextMenu({
                 worktreePath: worktree.path,
                 connectionId
               },
-              { relativePath, line }
+              { relativePath, ...getRemoteUrlLineRange(line, selection) }
             )
             if (url) {
               window.api.ui.writeClipboardText(url)

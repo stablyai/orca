@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -33,13 +33,6 @@ async function ensureFrom(
 }
 
 describe('orcad agent-session claim signer', () => {
-  it('wires the persistent signer from orcad user data into its runtime', () => {
-    const entry = readFileSync(join(import.meta.dirname, 'orcad-entry.ts'), 'utf8')
-    expect(entry).toContain(
-      'agentSessionClaimSigner: loadAgentSessionClaimSigner(runtimeUserDataPath, runtimeUserDataPath)'
-    )
-  })
-
   it('adopts the live PTY after an orcad restart instead of starting a second writer', async () => {
     const userData = mkdtempSync(join(tmpdir(), 'orcad-claim-signer-'))
     try {

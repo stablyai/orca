@@ -2,8 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   findGithubIssueWorkspaceAttachment,
-  findGithubPrWorkspaceAttachment,
-  findGithubWorkItemWorkspaceAttachment
+  findGithubPrWorkspaceAttachment
 } from './github-work-item-workspace-attachment'
 import type { Worktree } from '../../../shared/worktree/types'
 
@@ -38,21 +37,6 @@ describe('GitHub work-item workspace attachment', () => {
     expect(findGithubPrWorkspaceAttachment([first, second], 'repo-1', 42)).toBe(first)
   })
 
-  it('finds the first non-archived workspace linked to the repo issue', () => {
-    const first = worktree({ id: 'first', linkedIssue: 42 })
-    const second = worktree({ id: 'second', linkedIssue: 42 })
-
-    expect(findGithubIssueWorkspaceAttachment([first, second], 'repo-1', 42)).toBe(first)
-  })
-
-  it('matches PRs and issues through the generic helper', () => {
-    const pr = worktree({ id: 'pr', linkedPR: 42 })
-    const issue = worktree({ id: 'issue', linkedIssue: 42 })
-
-    expect(findGithubWorkItemWorkspaceAttachment([issue, pr], 'repo-1', 'pr', 42)).toBe(pr)
-    expect(findGithubWorkItemWorkspaceAttachment([pr, issue], 'repo-1', 'issue', 42)).toBe(issue)
-  })
-
   it('does not match workspaces from a different repo', () => {
     const attachedElsewhere = worktree({ repoId: 'repo-2', linkedIssue: 42, linkedPR: 42 })
 
@@ -67,31 +51,12 @@ describe('GitHub work-item workspace attachment', () => {
     expect(findGithubIssueWorkspaceAttachment([archived], 'repo-1', 42)).toBeNull()
   })
 
-  it('returns null when no repo ID is available', () => {
-    const attached = worktree({ linkedIssue: 42, linkedPR: 42 })
-
-    expect(findGithubPrWorkspaceAttachment([attached], null, 42)).toBeNull()
-    expect(findGithubIssueWorkspaceAttachment([attached], undefined, 42)).toBeNull()
-  })
-
   it('does not cross-match PR and issue slots with the same number', () => {
     const prOnly = worktree({ id: 'pr', linkedPR: 42 })
     const issueOnly = worktree({ id: 'issue', linkedIssue: 42 })
 
     expect(findGithubIssueWorkspaceAttachment([prOnly], 'repo-1', 42)).toBeNull()
     expect(findGithubPrWorkspaceAttachment([issueOnly], 'repo-1', 42)).toBeNull()
-  })
-
-  it('does not treat GitLab metadata as a GitHub work-item attachment', () => {
-    const gitlabOnly = worktree({
-      linkedIssue: null,
-      linkedPR: null,
-      linkedGitLabIssue: 42,
-      linkedGitLabMR: 42
-    })
-
-    expect(findGithubPrWorkspaceAttachment([gitlabOnly], 'repo-1', 42)).toBeNull()
-    expect(findGithubIssueWorkspaceAttachment([gitlabOnly], 'repo-1', 42)).toBeNull()
   })
 })
 

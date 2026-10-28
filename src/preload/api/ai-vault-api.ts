@@ -33,8 +33,7 @@ export type AiVaultApi = {
   /** Omitted host means this host; `all` is merged by this desktop across every enumerated host. */
   searchSessions: (
     request: AiVaultSearchRequest,
-    executionHostScope?: ExecutionHostScope,
-    isActive?: () => boolean
+    executionHostScope?: ExecutionHostScope
   ) => Promise<AiVaultSearchResponse>
   /** Status describes one index, so it never accepts the `all` scope. */
   searchStatus: (executionHostScope?: ExecutionHostId) => Promise<AiVaultSearchStatus>

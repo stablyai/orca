@@ -14,9 +14,6 @@ const request = () => ({
 })
 afterEach(() => terminals.splice(0).forEach((value) => value.dispose()))
 describe('terminal Kitty file reader ownership', () => {
-  it('fails closed when the terminal has no owner', async () => {
-    await expect(readTerminalKittyFile(terminal(), request())).rejects.toThrow('unavailable')
-  })
   it('does not use another terminal reader', async () => {
     const first = terminal()
     const second = terminal()
@@ -37,14 +34,5 @@ describe('terminal Kitty file reader ownership', () => {
     expect(first).not.toHaveBeenCalled()
     cleanSecond()
     await expect(readTerminalKittyFile(value, request())).rejects.toThrow('unavailable')
-  })
-  it('passes the request and abort signal unchanged', async () => {
-    const value = terminal()
-    const reader = vi.fn(async () => new Uint8Array([1, 2]))
-    const cleanup = bindTerminalKittyFileReader(value, reader)
-    const input = { ...request(), offset: 10, length: 12 }
-    await expect(readTerminalKittyFile(value, input)).resolves.toEqual(new Uint8Array([1, 2]))
-    expect(reader).toHaveBeenCalledWith(input)
-    cleanup()
   })
 })

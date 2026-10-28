@@ -347,7 +347,7 @@ describe('SkillInstallDialog', () => {
     await inspectSkill()
     expect(screen.getByText(/^2 files$/)).toBeTruthy()
     expect(screen.queryByText(/supporting$/, { selector: 'span' })).toBeNull()
-    expect(screen.getByText('Includes supporting files')).toBeTruthy()
+    expect(screen.getByText('Review the supporting files')).toBeTruthy()
     expect(screen.getByText(/include 1 file beyond SKILL.md/)).toBeTruthy()
     expect(screen.queryByRole('checkbox', { name: /I trust the sender/ })).toBeNull()
     expect(

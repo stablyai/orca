@@ -1,4 +1,4 @@
-import type { NativeChatAwaitingInput } from './NativeChatMessageList'
+import type { NativeChatAwaitingInput } from '../../../../shared/native-chat/native-chat-terminal-turn'
 
 export function transcriptTailRow(
   isWorking: boolean,

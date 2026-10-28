@@ -10,7 +10,9 @@ import {
 } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
+import * as gitRunner from '../main/git/runner'
+import { getRemoteFileUrl } from '../main/git/repo'
 import {
   isUnsupportedMergeTreeMergeBaseError,
   isUnsupportedMergeTreeWriteTreeError
@@ -48,6 +50,8 @@ const image = process.env.ORCA_GIT_COMPAT_IMAGE
 const binary = process.env.ORCA_GIT_COMPAT_BINARY
 const expectedVersion = process.env.ORCA_GIT_COMPAT_VERSION
 const describeBinaryCompatibility = image || binary ? describe : describe.skip
+const PAIRS_REFS_TEST =
+  'pairs published, tracked and default refs with configured repositories, on the selected Git binary'
 
 type GitResult = { stdout: string; stderr: string }
 
@@ -107,6 +111,152 @@ describeBinaryCompatibility('real Git binary compatibility', () => {
       } finally {
         await rm(repoPath, { recursive: true, force: true })
       }
+    }
+  })
+
+  // Each Git call is a docker exec: image runs take 22-25 s of a 30 s default, so loaded runners tripped it.
+  it(PAIRS_REFS_TEST, { timeout: image ? 90_000 : undefined }, async () => {
+    const root = join(repoPath, 'copy-url')
+    await mkdir(root)
+    const cwd = image ? '/repo/copy-url' : root
+    const git = (...args: string[]) => runGit(['-C', cwd, ...args])
+    let overflow = false
+    const exec = vi
+      .spyOn(gitRunner, 'gitExecFileAsync')
+      .mockImplementation(async (args, options) => {
+        const result = await git(...args)
+        if (args[0] === 'for-each-ref' && !args.some((arg) => arg.startsWith('--contains='))) {
+          expect(Buffer.byteLength(result.stdout)).toBeLessThan(1024)
+        }
+        if (Buffer.byteLength(result.stdout) > (options?.maxBuffer ?? Infinity)) {
+          overflow = true
+          throw new Error('stdout exceeded maxBuffer')
+        }
+        return result
+      })
+    try {
+      const url = (ref: string | null, remote = 'origin', path = root) =>
+        expect(getRemoteFileUrl(path, 'a b.ts', 10, 20)).resolves.toBe(
+          ref === null
+            ? null
+            : `https://github.com/org/${remote}/blob/${encodeURIComponent(ref)}/a%20b.ts#L10-L20`
+        )
+      await url(null) // Non-Git folder.
+      await git('init', '-q')
+      await git('symbolic-ref', 'HEAD', 'refs/heads/main')
+      await git('config', 'user.name', 'Test')
+      await git('config', 'user.email', 'test@example.invalid')
+      await git('config', 'core.hooksPath', join(root, 'no-hooks'))
+      await git('remote', 'add', 'origin', 'https://github.com/org/origin.git')
+      await url(null) // Unborn.
+      await git('-c', 'commit.gpgSign=false', 'commit', '--allow-empty', '-qm', 'base')
+      const base = (await git('rev-parse', 'HEAD')).stdout.trim()
+      await git('update-ref', 'refs/remotes/origin/main', base)
+      await git('checkout', '-qb', 'feature/local')
+      await git('-c', 'commit.gpgSign=false', 'commit', '--allow-empty', '-qm', 'feature')
+      const head = (await git('rev-parse', 'HEAD')).stdout.trim()
+      await url('main')
+      const forkFetchConfig = 'remote.team/fork.x.fetch'
+      const publicationRef = 'refs/remotes/origin/published'
+      await git('remote', 'add', 'team/fork.x', 'https://github.com/org/team-fork.git')
+      for (const [mapping, destination] of [
+        ['+refs/heads/review-*:refs/cache/published-*', 'refs/cache/published-feature'],
+        ['+refs/heads/*:refs/c*end', 'refs/cache/team/feature-end']
+      ]) {
+        await git('config', forkFetchConfig, mapping)
+        await git('update-ref', destination, head)
+        await url(head, 'team-fork')
+        await git('update-ref', '-d', destination)
+      }
+      await git('config', forkFetchConfig, '+refs/heads/review/*:refs/hosting-cache/*')
+      await git('update-ref', 'refs/hosting-cache/topic', base)
+      await git('config', 'branch.feature/local.remote', 'team/fork.x')
+      await git('config', 'branch.feature/local.merge', 'refs/heads/review/topic')
+      await url('review/topic', 'team-fork')
+      const tree = (await git('rev-parse', 'HEAD^{tree}')).stdout.trim()
+      const descendant = (await git('commit-tree', tree, '-p', head, '-m', 'later')).stdout.trim()
+      for (const [destination, tip, remote] of [
+        [publicationRef, head, 'origin'], // Publication elsewhere beats an ahead upstream.
+        ['refs/hosting-cache/topic', head, 'team-fork'], // Upstream wins ties.
+        ['refs/hosting-cache/topic', descendant, 'team-fork'] // Contains an ancestor.
+      ]) {
+        await git('update-ref', destination, tip)
+        await url(head, remote)
+      }
+      await git('remote', 'remove', 'origin')
+      await git('checkout', '--detach', '-q')
+      await url(head, 'team-fork') // Detached, no origin, custom destination.
+      await git('update-ref', 'refs/hosting-cache/topic', base)
+      await git('symbolic-ref', 'refs/remotes/team/fork.x/HEAD', 'refs/hosting-cache/topic')
+      await url('review/topic', 'team-fork') // Mapped named default.
+      await git('remote', 'add', 'origin', 'https://github.com/org/origin.git')
+      await git('config', 'remote.origin.fetch', '+refs/heads/review/*:refs/remotes/origin/*')
+      await git('update-ref', 'refs/remotes/origin/main', base)
+      await git('symbolic-ref', 'refs/remotes/origin/HEAD', 'refs/remotes/origin/main')
+      await url('review/main') // Mapped origin default, never destination suffix.
+      await git('config', 'remote.origin.fetch', '+refs/heads/*:refs/origin-cache/*')
+      await git('config', forkFetchConfig, `+refs/heads/published:${publicationRef}`)
+      await git('update-ref', publicationRef, head)
+      await url(head, 'team-fork') // Origin-looking destination belongs to fork.
+      await git('remote', 'add', 'unsupported', '/unhosted.git')
+      await git('config', 'remote.unsupported.fetch', `+refs/heads/other:${publicationRef}`)
+      await url(null) // Unsupported owner still makes attribution ambiguous.
+      await git('remote', 'remove', 'unsupported')
+      await git('config', '--add', forkFetchConfig, `+refs/heads/other:${publicationRef}`)
+      await url(null) // Ambiguity inside one remote cannot disappear.
+      await git('config', '--unset-all', forkFetchConfig)
+      await git('config', forkFetchConfig, '+refs/heads/review/*:refs/hosting-cache/*')
+      await git('checkout', '-q', 'feature/local')
+      await git('update-ref', '-d', 'refs/hosting-cache/topic')
+      await git('update-ref', 'refs/hosting-cache/topic/descendant', base)
+      await url(null) // Descendants prove neither upstream nor dangling default target exists.
+      await git('update-ref', '-d', 'refs/hosting-cache/topic/descendant')
+      await git('config', 'branch.feature/local.remote', '.')
+      await git('config', 'branch.feature/local.merge', 'refs/heads/main')
+      await url(null)
+      if (supports(2, 29)) {
+        await git('update-ref', 'refs/hosting-cache/topic', head)
+        await git('config', '--add', forkFetchConfig, '^refs/heads/review/topic')
+        await url(null)
+      }
+      await git('remote', 'remove', 'team/fork.x')
+      await git('remote', 'set-url', 'origin', '/unhosted.git')
+      await url(null) // No supported URL.
+      await git('remote', 'set-url', 'origin', 'https://github.com/org/origin.git')
+      await git('config', 'remote.origin.fetch', '+refs/heads/*:refs/remotes/origin/*')
+      await git('update-ref', 'refs/remotes/origin/main', base)
+      await git('update-ref', '-d', publicationRef)
+      for (const tip of [base, head, base]) {
+        await runGit(
+          ['-C', cwd, 'update-ref', '--stdin'],
+          undefined,
+          Array.from(
+            { length: 4500 },
+            (_, i) => `update refs/remotes/origin/${'x'.repeat(220)}${i} ${tip}\n`
+          ).join('')
+        )
+        overflow = false
+        await url('main')
+        expect(overflow).toBe(tip === head)
+      }
+      const counts: number[] = []
+      for (const n of [10, 100]) {
+        for (let i = counts.length ? 10 : 0; i < n; i++) {
+          await git('remote', 'add', `r${i}`, `https://github.com/org/r${i}.git`)
+          await git('update-ref', `refs/remotes/r${i}/main`, head)
+        }
+        await git('symbolic-ref', 'refs/remotes/r0/HEAD', 'refs/remotes/r0/main')
+        exec.mockClear()
+        await url(head, 'r0')
+        counts.push(exec.mock.calls.length)
+      }
+      expect(counts).toEqual([7, 7])
+      await mkdir(join(root, 'linked'))
+      await git('worktree', 'add', '--detach', join(cwd, 'linked'), head)
+      exec.mockImplementation((args) => runGit(['-C', join(cwd, 'linked'), ...args]))
+      await url(head, 'r0', join(root, 'linked'))
+    } finally {
+      exec.mockRestore()
     }
   })
 

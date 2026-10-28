@@ -10,11 +10,13 @@ import { getNodeRuntimeInclude } from './scripts/vitest-node-runtime-files.mjs'
 import { nodeRuntimePool } from './scripts/vitest-node-runtime-pool'
 import { readRunFilters } from './scripts/vitest-run-filters.mjs'
 import { createWorkspaceSourceResolver } from './scripts/workspace-source-exports.mjs'
+import { moduleCacheResolutionKey } from './scripts/vitest-module-cache-resolution-key'
 
 const nodeRuntimeInclude = process.versions.bun
   ? getNodeRuntimeInclude({ filters: readRunFilters() })
   : []
 const balancedShards = process.env.ORCA_BALANCE_UNIT_SHARDS === '1'
+const moduleCachePath = process.env.ORCA_UNIT_MODULE_CACHE_PATH
 const measurementFile = 'src/main/foreign-sqlite-readers/foreign-sqlite-reader-event-loop.test.ts'
 const paletteMeasurementFile =
   'src/renderer/src/lib/palette-match/palette-match-performance.test.ts'
@@ -45,6 +47,7 @@ const transforms = {
         return { code: result.code, map: result.map }
       }
     } satisfies Plugin,
+    ...(moduleCachePath ? [moduleCacheResolutionKey()] : []),
     {
       // Unit tests have no asset server; retain real catalog parsing through fetch(data:).
       name: 'locale-catalog-test-assets',
@@ -83,11 +86,9 @@ const testOptions = {
   environment: 'node',
   clearMocks: false,
   ...(balancedShards ? { silent: 'passed-only' as const } : {}),
-  // Persistent transforms can miss source additions; only explicit cache experiments opt in.
-  fsModuleCache: Boolean(process.env.ORCA_UNIT_MODULE_CACHE_PATH),
-  ...(process.env.ORCA_UNIT_MODULE_CACHE_PATH
-    ? { fsModuleCachePath: process.env.ORCA_UNIT_MODULE_CACHE_PATH }
-    : {}),
+  // Persistent transforms are CI-keyed (ci-unit-module-cache.mjs); local runs stay cold.
+  fsModuleCache: Boolean(moduleCachePath),
+  ...(moduleCachePath ? { fsModuleCachePath: moduleCachePath } : {}),
   env: { ORCA_VITEST_RUNTIME: 'node' },
   server: { deps: { inline: ['zod'] } },
   // Node's storage globals and V8 retention checks require the existing child flags.

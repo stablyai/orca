@@ -40,7 +40,7 @@ function seedStale(store: ReturnType<typeof createTestStore>): void {
         executionHostId: RUNTIME_A
       }
     ],
-    endpointProjectHostSetups: [
+    projectHostSetups: [
       {
         id: 's-a',
         projectId: 'p',
@@ -70,7 +70,7 @@ describe('setRuntimeEnvironments removal diff fires the stale-runtime purge', ()
 
     const s = store.getState()
     expect(s.repos.map((r) => r.id)).toEqual(['repo1'])
-    expect(s.endpointProjectHostSetups).toEqual([])
+    expect(s.projectHostSetups).toEqual([])
     expect(s.worktreesByRepo.repoA).toEqual([])
     expect(s.tabsByWorktree['repoA::/wt-a']).toBeUndefined()
     expect(s.runtimeEnvironments.map((e) => e.id)).toEqual(['env-b'])

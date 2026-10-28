@@ -149,12 +149,13 @@ export function WarpThemeImportModal({
                   {preview.themes.length === 1
                     ? translate(
                         'auto.components.settings.WarpThemeImportModal.found_theme_one',
-                        'Found 1 theme'
+                        'Found {{value0}} theme',
+                        { value0: preview.themes.length, count: preview.themes.length }
                       )
                     : translate(
                         'auto.components.settings.WarpThemeImportModal.found_theme_other',
                         'Found {{value0}} themes',
-                        { value0: preview.themes.length }
+                        { value0: preview.themes.length, count: preview.themes.length }
                       )}
                   {preview.sourceLabel
                     ? translate(
@@ -319,13 +320,14 @@ export function WarpThemeImportModal({
             {selectedCount === 1
               ? translate(
                   'auto.components.settings.WarpThemeImportModal.import_theme_one',
-                  'Import 1 Theme'
+                  'Import {{value0}} Theme',
+                  { value0: selectedCount, count: selectedCount }
                 )
               : selectedCount > 0
                 ? translate(
                     'auto.components.settings.WarpThemeImportModal.import_theme_other',
                     'Import {{value0}} Themes',
-                    { value0: selectedCount }
+                    { value0: selectedCount, count: selectedCount }
                   )
                 : translate(
                     'auto.components.settings.WarpThemeImportModal.import_themes',

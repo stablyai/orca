@@ -5,10 +5,13 @@ import { cn } from '@/lib/utils'
 import type { SkillSourceKind } from '../../../../shared/skills'
 import { FilenameFirstPath } from '@/components/file-path-cursor-tooltip'
 import { FileTypeIcon } from '@/components/FileTypeIcon'
-import type { ComposerAutocomplete } from './native-chat-composer-state'
-import type { NativeChatPickerItem } from '../../../../shared/native-chat/input/native-chat-picker-items'
+import type {
+  ComposerAutocomplete,
+  NativeChatPickerItem
+} from '../../../../shared/native-chat-composer-autocomplete'
 import type { NativeChatMentionFiles } from './use-native-chat-mention-files'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
+import { localizeSlashCommandDescription } from './native-chat-slash-command-descriptions'
 
 export const NativeChatPickerMenu = memo(function NativeChatPickerMenu({
   autocomplete,
@@ -183,10 +186,8 @@ function PickerOption({
 }): React.JSX.Element {
   const annotation = getPickerAnnotation(item)
   const description =
-    item.kind === 'command' &&
-    item.name === 'clear' &&
-    item.description === 'Clear conversation context'
-      ? translate('components.native-chat.composer.clearDescription', 'Clear conversation context')
+    item.kind === 'command'
+      ? localizeSlashCommandDescription(item.name, item.description)
       : item.description
   return (
     <PickerOptionButton

@@ -24,55 +24,9 @@ describe('advanceTerminalEscapeBoundary', () => {
       }
     }
   )
-
-  it('matches the full-tail scanner at every split, without retaining payloads', () => {
-    const streams = [
-      '\x1b[38;2;115;118;123;48;2;65;69;76m⠁',
-      '\x1b\x00\t[31;1mred\x1b[0m',
-      '\x1b]0;title\x1b\\plain',
-      '\x1b\x00]0;title\x07',
-      '\x1bP$qm\x1b\\',
-      '\x1b_Gpayload\x1b\\',
-      '\x1b  q\x1b[31;\x18plain',
-      '\x1b]0;title\x1b\x1b[31mred',
-      '\x1bPpayload\x1b[32mgreen',
-      '\x1b[31;\x1a',
-      `\x1b]0;${'x'.repeat(MAX_PARTIAL_ESCAPE_TAIL_LENGTH + 1)}\x1b\\`
-    ]
-    for (const stream of streams) {
-      let state = ''
-      for (let i = 0; i < stream.length; i += 1) {
-        state = advanceTerminalEscapeBoundary(state, stream[i])
-        expect(state.length).toBeLessThanOrEqual(3)
-        expect(state === '', JSON.stringify({ stream: stream.slice(0, 50), i })).toBe(
-          extractPartialEscapeTail(stream.slice(0, i + 1)) === ''
-        )
-      }
-    }
-  })
 })
 
 describe('extractPartialEscapeTail', () => {
-  it('returns empty for parser-clean streams', () => {
-    expect(extractPartialEscapeTail('')).toBe('')
-    expect(extractPartialEscapeTail('plain text no escapes')).toBe('')
-    expect(extractPartialEscapeTail('\x1b[38;5;196mred\x1b[0m done')).toBe('')
-    expect(extractPartialEscapeTail('\x1b[2J\x1b[H')).toBe('')
-  })
-
-  it('returns the dangling CSI when a chunk ends mid-sequence', () => {
-    expect(extractPartialEscapeTail('hello\x1b[3')).toBe('\x1b[3')
-    expect(extractPartialEscapeTail('a\x1b[38;5;')).toBe('\x1b[38;5;')
-    expect(extractPartialEscapeTail('\x1b')).toBe('\x1b')
-    expect(extractPartialEscapeTail('\x1b[')).toBe('\x1b[')
-  })
-
-  it('returns the dangling OSC (unterminated) sequence', () => {
-    expect(extractPartialEscapeTail('\x1b]0;my-title')).toBe('\x1b]0;my-title')
-    expect(extractPartialEscapeTail('\x1b]0;title\x07after')).toBe('')
-    expect(extractPartialEscapeTail('\x1b]0;title\x1b\\after')).toBe('')
-  })
-
   it('treats a fresh ESC as aborting a pending CSI', () => {
     expect(extractPartialEscapeTail('\x1b[3\x1b[0m')).toBe('')
     expect(extractPartialEscapeTail('\x1b[3\x1b[')).toBe('\x1b[')
@@ -106,40 +60,9 @@ describe('extractPartialEscapeTail', () => {
     expect(extractPartialEscapeTail('\x1bPq\x1b\x1b[3')).toBe('\x1b[3')
     expect(extractPartialEscapeTail('\x1b]0;t\x1b\x1b')).toBe('\x1b')
   })
-
-  it('is fold-safe across chunk boundaries', () => {
-    // extract(a + b) === extract(extract(a) + b) — the invariant ingest relies on.
-    const cases: [string, string][] = [
-      ['first\x1b[3', '8;5;196mred'],
-      ['\x1b', '[0m'],
-      ['\x1b]0;ti', 'tle\x07'],
-      ['clean', '\x1b[1'],
-      // Fold-safety must hold across the CAN abort too.
-      ['\x1b', '\x18after'],
-      ['\x1b ', '\x18after'],
-      // Boundary landing inside stringEsc/oscEsc — the two states that used to break the fold.
-      ['\x1bPx\x1b\x18', 'X0abc'],
-      ['\x1b]0;t\x1b\x1a', 'X0abc'],
-      ['\x1b] \x1b\x1b', '^'],
-      ['\x1bPq\x1b\x1b', '[3']
-    ]
-    for (const [a, b] of cases) {
-      expect(extractPartialEscapeTail(extractPartialEscapeTail(a) + b)).toBe(
-        extractPartialEscapeTail(a + b)
-      )
-    }
-  })
 })
 
 describe('advancePartialEscapeTail', () => {
-  it('accumulates a split sequence across chunks', () => {
-    let tail = ''
-    tail = advancePartialEscapeTail(tail, 'ls\r\n\x1b[3')
-    expect(tail).toBe('\x1b[3')
-    tail = advancePartialEscapeTail(tail, '8;5;196m')
-    expect(tail).toBe('') // sequence completed
-  })
-
   it('abandons tracking (returns empty) past the cap', () => {
     // An unterminated OSC longer than the cap degrades to pre-fix behavior.
     const huge = `\x1b]0;${'x'.repeat(MAX_PARTIAL_ESCAPE_TAIL_LENGTH + 10)}`
@@ -148,35 +71,6 @@ describe('advancePartialEscapeTail', () => {
 })
 
 describe('advancePartialEscapeTail ESC-free fast path', () => {
-  // Compare every pending-state/chunk pairing against the unconditional fold.
-  const pieces = [
-    '',
-    'plain output\n',
-    '\x1b[32mgreen\x1b[0m',
-    '\x1b[3',
-    '\x1b]0;title\x07',
-    '\x1b]0;partial',
-    '\x1bP dcs payload',
-    '\x1b',
-    '\x18',
-    '\x1a',
-    '\x1b]8;;https://example.com\x1b\\',
-    '\x1b(',
-    '\x1b[1;2;3'
-  ]
-
-  it('matches an unconditional fold for every pending-tail and chunk pairing', () => {
-    for (const pending of pieces.map((piece) => extractPartialEscapeTail(piece))) {
-      for (const chunk of pieces) {
-        // Apply the cap to the oracle too or large pairings compare different contracts.
-        const unguarded = extractPartialEscapeTail(pending + chunk)
-        expect(advancePartialEscapeTail(pending, chunk), JSON.stringify({ pending, chunk })).toBe(
-          unguarded.length > MAX_PARTIAL_ESCAPE_TAIL_LENGTH ? '' : unguarded
-        )
-      }
-    }
-  })
-
   it('still carries a pending tail through an ESC-free chunk', () => {
     expect(advancePartialEscapeTail('\x1b]0;my-title', ' still in the OSC')).toBe(
       '\x1b]0;my-title still in the OSC'

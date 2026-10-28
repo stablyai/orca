@@ -1,13 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { setupPtyIpcSuite } from './pty-ipc-test-harness'
-import { createDaemonActiveProviderFixtures } from './pty-ipc-daemon-provider-fixtures'
+import { setupPtyIpcSuite } from './pty/pty-ipc-test-harness'
+import { createDaemonActiveProviderFixtures } from './pty/pty-ipc-daemon-provider-fixtures'
 import { registerPtyHandlers } from './pty/register-handlers'
 import { isCommandOnPath } from './preflight-command-exec'
 import { detectWslCommandsOnPath } from './preflight-wsl-agent-detection'
 import type * as FsPromises from 'node:fs/promises'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import type { FolderWorkspace } from '../../shared/folder-workspace-types'
-import { buildAgentResumeStartupPlan } from '../../shared/tui-agent-startup'
+import { buildAgentResumeStartupPlan } from '../../shared/tui-agent-resume-startup'
 import type { PtySpawnIpcArgs } from './pty/ipc/spawn-types'
 
 vi.mock('./preflight-command-exec', () => ({ isCommandOnPath: vi.fn() }))
@@ -21,48 +21,48 @@ vi.mock('node:fs/promises', async (importOriginal) => ({
   ...(await importOriginal<typeof FsPromises>()),
   stat: vi.fn(async () => ({ isDirectory: () => true }))
 }))
-vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
-vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
-vi.mock('node-pty', () => import('./pty-ipc-mock-registry').then((m) => m.nodePtyModuleMock()))
+vi.mock('electron', () => import('./pty/pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
+vi.mock('fs', () => import('./pty/pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
+vi.mock('node-pty', () => import('./pty/pty-ipc-mock-registry').then((m) => m.nodePtyModuleMock()))
 vi.mock('node:child_process', async (importOriginal) =>
-  (await import('./pty-ipc-mock-registry')).childProcessModuleMock(await importOriginal())
+  (await import('./pty/pty-ipc-mock-registry')).childProcessModuleMock(await importOriginal())
 )
 vi.mock('../opencode/hook-service', () =>
-  import('./pty-ipc-mock-registry').then((m) => m.openCodeHookServiceModuleMock())
+  import('./pty/pty-ipc-mock-registry').then((m) => m.openCodeHookServiceModuleMock())
 )
 vi.mock('../mimo/hook-service', () =>
-  import('./pty-ipc-mock-registry').then((m) => m.mimoHookServiceModuleMock())
+  import('./pty/pty-ipc-mock-registry').then((m) => m.mimoHookServiceModuleMock())
 )
 vi.mock('../agent-hooks/server', () =>
-  import('./pty-ipc-mock-registry').then((m) => m.agentHookServerModuleMock())
+  import('./pty/pty-ipc-mock-registry').then((m) => m.agentHookServerModuleMock())
 )
 vi.mock('../pi/titlebar-extension-service', () =>
-  import('./pty-ipc-mock-registry').then((m) => m.piTitlebarExtensionModuleMock())
+  import('./pty/pty-ipc-mock-registry').then((m) => m.piTitlebarExtensionModuleMock())
 )
-vi.mock('../pwsh', () => import('./pty-ipc-mock-registry').then((m) => m.pwshModuleMock()))
+vi.mock('../pwsh', () => import('./pty/pty-ipc-mock-registry').then((m) => m.pwshModuleMock()))
 vi.mock('../wsl', async (importOriginal) =>
-  (await import('./pty-ipc-mock-registry')).wslModuleMock(await importOriginal())
+  (await import('./pty/pty-ipc-mock-registry')).wslModuleMock(await importOriginal())
 )
 vi.mock('../telemetry/client', () =>
-  import('./pty-ipc-mock-registry').then((m) => m.telemetryClientModuleMock())
+  import('./pty/pty-ipc-mock-registry').then((m) => m.telemetryClientModuleMock())
 )
 vi.mock('../telemetry/classify-error', () =>
-  import('./pty-ipc-mock-registry').then((m) => m.classifyErrorModuleMock())
+  import('./pty/pty-ipc-mock-registry').then((m) => m.classifyErrorModuleMock())
 )
 vi.mock('../cli/linux-terminal-orca-cli-shim', () =>
-  import('./pty-ipc-mock-registry').then((m) => m.linuxCliShimModuleMock())
+  import('./pty/pty-ipc-mock-registry').then((m) => m.linuxCliShimModuleMock())
 )
 vi.mock('../memory/pty-registry', () =>
-  import('./pty-ipc-mock-registry').then((m) => m.ptyRegistryModuleMock())
+  import('./pty/pty-ipc-mock-registry').then((m) => m.ptyRegistryModuleMock())
 )
 vi.mock('../agent-hooks/migration-unsupported-pty-state', () =>
-  import('./pty-ipc-mock-registry').then((m) => m.migrationUnsupportedPtyModuleMock())
+  import('./pty/pty-ipc-mock-registry').then((m) => m.migrationUnsupportedPtyModuleMock())
 )
 vi.mock('../codex/codex-pane-account-registry', () =>
-  import('./pty-ipc-mock-registry').then((m) => m.codexPaneAccountRegistryModuleMock())
+  import('./pty/pty-ipc-mock-registry').then((m) => m.codexPaneAccountRegistryModuleMock())
 )
 vi.mock('../codex/codex-state-db-backfill-recovery', () =>
-  import('./pty-ipc-mock-registry').then((m) => m.codexBackfillRecoveryModuleMock())
+  import('./pty/pty-ipc-mock-registry').then((m) => m.codexBackfillRecoveryModuleMock())
 )
 
 describe('desktop Qoder execution-host selection', () => {

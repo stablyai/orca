@@ -1,4 +1,3 @@
-import type { AiVaultSessionSources } from '../../ai-vault/cached-session-list'
 import type { CliWriterObservation } from '../../agent-hooks/server/cli-writer-observation'
 import type { ExecutionHostScope } from '../../../shared/execution-host'
 import type { IPtyProvider } from '../../providers/pty-provider-contract'
@@ -24,6 +23,7 @@ import type { WorkspaceSleepPlatform } from '../workspaces/workspace-sleep-platf
 import type { SessionSearchSettingsApply } from '../runtime-session-search-settings'
 
 export type RuntimeConstructionDependencies = {
+  getSetupTerminalTitle?: () => string
   getLocalProvider?: () => IPtyProvider
   prepareClaudeAuth?: PrepareClaudeAuth
   onPtyStopped?: (ptyId: string) => void
@@ -59,7 +59,6 @@ export type RuntimeConstructionDependencies = {
   dropAgentStatusForRemovedWorktree?: (worktreeId: string, host?: ExecutionHostScope) => void
   canRecoverPersistentLocalPtys?: () => boolean
   getPairedDeviceName?: (pairedDeviceId: string) => string | null
-  getProjectOwnershipCatalog?: AiVaultSessionSources['getProjectOwnershipCatalog']
   getAdditionalAiVaultCodexHomePaths?: () => readonly string[]
   prepareAiVaultSessionResume?: (
     args: AiVaultPrepareSessionResumeArgs

@@ -24,7 +24,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-22.04, macos-15, windows-2022]
-    runs-on: ${{ fromJSON('{"ubuntu-22.04":"blacksmith-4vcpu-ubuntu-2204","macos-15":"blacksmith-6vcpu-macos-15","windows-2022":"blacksmith-4vcpu-windows-2025"}')[matrix.os] || matrix.os }}
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     env:
       ORCA_BACKGROUND_LAUNCH: '1'
@@ -38,5 +38,6 @@ jobs:
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version-file: config/.bun-version
+          no-cache: true
       - name: Verify SQLite ordering, legacy readers, and host routing
         run: pnpm test src/main/native-chat/transcript-zcode.test.ts src/main/native-chat/transcript-opencode.test.ts src/main/native-chat/transcript-opencode-sqlite-query.test.ts src/main/native-chat/transcript-opencode2-sqlite.test.ts src/main/native-chat/transcript-opencode-semantic-fidelity.test.ts src/main/native-chat/transcript-opencode-read-bounds.test.ts src/main/native-chat/transcript-opencode-subscribe.test.ts src/main/ai-vault/session-scanner-zcode.test.ts src/main/ai-vault/session-scanner-zcode-sources.test.ts src/main/ai-vault/opencode-wsl-runtime-preparation.test.ts src/main/ai-vault/session-scanner-opencode-wsl-routing.test.ts src/shared/native-chat-transcript-projection.test.ts src/renderer/src/components/native-chat/structured-agent-session-transcript-order.test.ts

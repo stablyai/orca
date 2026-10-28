@@ -108,7 +108,11 @@ function WorktreePortRow({ port }: { port: WorkspacePort }): React.JSX.Element {
   const runtimeTarget = useWorktreeRuntimeTarget(
     port.kind === 'workspace' ? port.owner.worktreeId : null
   )
-  const processLabel = port.processName ?? (port.pid ? `PID ${port.pid}` : 'Unknown process')
+  const processLabel =
+    port.processName ??
+    (port.pid
+      ? `PID ${port.pid}`
+      : translate('auto.components.sidebar.WorktreeCardPorts.unknownProcess', 'Unknown process'))
   const address = addressForPort(port)
   const canStop = canStopWorkspacePort(port)
   const openBrowserLabel = translate(

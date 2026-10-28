@@ -419,7 +419,7 @@ describe('useAiVaultSessionRefresh refocus behavior', () => {
     await flushMicrotasks()
     const firstResult = latest?.scanResult
 
-    // Repeated stamp and equal content reuse the snapshot already on screen.
+    // Same scannedAt = the snapshot already on screen was replayed.
     listSessionsMock.mockResolvedValueOnce({ ...EMPTY_RESULT })
     await advance(THROTTLE_MS + 1)
     await fireWindowFocused()
@@ -435,9 +435,7 @@ describe('useAiVaultSessionRefresh refocus behavior', () => {
     expect(latest?.scanResult).toBe(firstResult)
   })
 
-  // An 'all' result is a merge of legs on independent clocks, stamped with the
-  // newest leg. A paired host whose clock lags the desktop can return new
-  // sessions while the merged stamp repeats; final content decides publication.
+  // Merged stamps use the newest host clock; lagging-host changes require structural reconciliation.
   it('applies a changed all-host result whose merged scannedAt stood still', async () => {
     const pinned = '2026-07-01T00:00:00.000Z'
     listSessionsMock.mockResolvedValueOnce({
@@ -461,8 +459,7 @@ describe('useAiVaultSessionRefresh refocus behavior', () => {
     expect(latest?.sessions[1]?.id).toBe('session-2')
   })
 
-  // The main process routes an empty or unrecognized scope to the same all-host
-  // merge; its changed content must also reach reconciliation.
+  // Empty/unknown scopes also use the main-process all-host merge and cannot trust its stamp.
   it('treats a scope that normalizes to all-host as merged', async () => {
     const pinned = '2026-07-01T00:00:00.000Z'
     listSessionsMock.mockResolvedValueOnce({
@@ -498,7 +495,7 @@ describe('useAiVaultSessionRefresh refocus behavior', () => {
     const applied = latest?.scanResult
     const appliedSessions = latest?.sessions
 
-    // Reconciliation recognises an independently cloned identical body.
+    // Structural reconciliation must still skip identical IPC clones after bypassing the all-host stamp guard.
     listSessionsMock.mockResolvedValueOnce(structuredClone(first))
     await advance(THROTTLE_MS + 1)
     await fireWindowFocused()

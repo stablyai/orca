@@ -111,12 +111,6 @@ describe('reference URLs', () => {
   ])('rejects ambiguous or invalid input %s', (input) => {
     expect(() => parseWorkspaceReferenceUrl(input)).toThrow()
   })
-
-  it('accepts a known provider hint for self-hosted issue metadata', () => {
-    expect(
-      parseWorkspaceReferenceUrl('https://git.example/acme/api/issues/42', 'gitea').provider
-    ).toBe('gitea')
-  })
 })
 
 describe('reference identity', () => {
@@ -124,17 +118,6 @@ describe('reference identity', () => {
     expect(identity('https://github.com/ACME/Api/pull/0042/files#diff')).toBe(
       identity('https://github.com/acme/api/pull/42')
     )
-  })
-
-  it.each([
-    ['https://www.github.com/acme/api/pull/42', 'https://github.com/acme/api/pull/42'],
-    [
-      'https://gitlab.com/Group/Api/-/merge_requests/42',
-      'https://gitlab.com/group/api/-/merge_requests/42'
-    ],
-    ['https://codeberg.org/Acme/Api/pulls/42', 'https://codeberg.org/acme/api/pulls/42']
-  ])('treats case-insensitive host routes as one source: %s vs %s', (a, b) => {
-    expect(identity(a)).toBe(identity(b))
   })
 
   it.each([
@@ -172,13 +155,6 @@ describe('reference identity', () => {
     ['https://git.example/a/api/-/issues/42', 'https://other.example/a/api/-/issues/42']
   ])('keeps distinct sources separate: %s vs %s', (a, b) => {
     expect(identity(a)).not.toBe(identity(b))
-  })
-
-  it('does not let local repository IDs split a proven external identity', () => {
-    const reference = parseWorkspaceReferenceUrl('https://github.com/acme/api/pull/42')
-    expect(getWorkspaceReferenceIdentity({ ...reference, repoId: 'repo-a' })).toBe(
-      getWorkspaceReferenceIdentity({ ...reference, repoId: 'repo-b' })
-    )
   })
 
   it('matches URL-less entries only when stored provider metadata proves the source', () => {

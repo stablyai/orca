@@ -129,14 +129,16 @@ function findDismissedStartupModalIndex(normalized: string): number | null {
   return live === null || muse === null ? (live ?? muse) : Math.max(live, muse)
 }
 
-// Muse keeps its bare-cwd OSC title; only the body proves readiness, including the voice composer without skills.
+// Muse keeps its bare-cwd OSC title; its composer (❯ under a rule, labeled "voice input" only where voice exists) proves readiness.
+const MUSE_COMPOSER_RE = /\u2500\u2500\s*\u276F/
+
 function findMuseReadyPromptIndex(normalized: string): number | null {
   const headerIndex = normalized.lastIndexOf('muse code')
   if (headerIndex === -1) {
     return null
   }
   const segment = normalized.slice(headerIndex)
-  return segment.includes('voice') && segment.includes('input') && segment.includes('❯')
-    ? headerIndex
-    : null
+  const voiceComposer =
+    segment.includes('voice') && segment.includes('input') && segment.includes('❯')
+  return voiceComposer || MUSE_COMPOSER_RE.test(segment) ? headerIndex : null
 }

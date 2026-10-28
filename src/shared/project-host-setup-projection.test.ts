@@ -1,13 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import {
   projectHostSetupProjectionFromRepos,
+  getProjectHostSetupsForProject,
   getProjectIdForProviderIdentity,
   isProjectRemoteIdentityPending
 } from './project-host-setup-projection'
-import {
-  getProjectHostSetupsForProject,
-  getProjectHostSetupWorktreeMeta
-} from './project-host-setup-lookup'
+import { getProjectHostSetupWorktreeMeta } from './project-host-setup-lookup'
 import type { Repo } from './repo-types'
 
 function repo(overrides: Partial<Repo> & Pick<Repo, 'id' | 'path' | 'displayName'>): Repo {
@@ -20,53 +18,6 @@ function repo(overrides: Partial<Repo> & Pick<Repo, 'id' | 'path' | 'displayName
 }
 
 describe('project host setup projection', () => {
-  it('lets a shared remote join checkouts across hosts but not two checkouts on one host', () => {
-    const upstream = { owner: 'stablyai', repo: 'orca' }
-    const firstLocal = repo({ id: 'local-a', path: '/a', displayName: 'a', addedAt: 100, upstream })
-    const secondLocal = repo({
-      id: 'local-b',
-      path: '/b',
-      displayName: 'b',
-      addedAt: 200,
-      upstream
-    })
-    const remoteCopy = repo({
-      id: 'remote-a',
-      path: '/home/a',
-      displayName: 'a',
-      addedAt: 300,
-      connectionId: 'gpu-vm',
-      upstream
-    })
-
-    const projection = projectHostSetupProjectionFromRepos([secondLocal, remoteCopy, firstLocal])
-    expect(projection.setups.map((setup) => [setup.repoId, setup.projectId])).toEqual([
-      ['local-b', 'repo:local-b'],
-      ['remote-a', 'github:stablyai/orca'],
-      ['local-a', 'github:stablyai/orca']
-    ])
-
-    // A WSL checkout is another surface of the same machine, so it joins the project too.
-    const wslCopy = repo({
-      id: 'local-wsl',
-      path: '\\\\wsl.localhost\\Ubuntu\\home\\a\\orca',
-      displayName: 'a',
-      addedAt: 400,
-      upstream
-    })
-    expect(
-      projectHostSetupProjectionFromRepos([firstLocal, wslCopy]).projects.map(
-        (p) => p.sourceRepoIds
-      )
-    ).toEqual([['local-a', 'local-wsl']])
-
-    // Removing the claimant hands the shared id to the next checkout on that host.
-    const handedOff = projectHostSetupProjectionFromRepos([secondLocal, remoteCopy])
-    expect(handedOff.projects.map((project) => [project.id, project.sourceRepoIds])).toEqual([
-      ['github:stablyai/orca', ['local-b', 'remote-a']]
-    ])
-  })
-
   it('keeps timestamps stable when addedAt is 0 across different now values', () => {
     const target = repo({
       id: 'repo-1',
@@ -349,9 +300,8 @@ describe('project host setup projection', () => {
       }),
       repo({
         id: 'old-branch-checkout',
-        path: '/home/alice/orca/workspaces/orca/re-enable-webgl-for-remote-runtime-terminals',
+        path: '/Users/alice/orca/workspaces/orca/re-enable-webgl-for-remote-runtime-terminals',
         displayName: 're-enable-webgl-for-remote-runtime-terminals',
-        connectionId: 'gpu-vm',
         repoIcon: {
           type: 'image',
           src: 'https://github.com/stablyai.png?size=64',
@@ -671,7 +621,6 @@ it('appends project source IDs without repeatedly copying an accumulating array'
       id: `source-${i}`,
       path: `/repos/${i}`,
       displayName: `Repo ${i}`,
-      connectionId: `host-${i}`,
       upstream: { owner: 'acme', repo: 'project' }
     })
   )

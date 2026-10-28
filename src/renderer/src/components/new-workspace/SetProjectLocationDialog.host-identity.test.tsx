@@ -4,7 +4,7 @@ import { cleanup, render, renderHook, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ExecutionHostRegistryEntry } from '../../../../shared/execution-host-registry'
-import type { Project, ProjectHostSetup } from '../../../../shared/project-types'
+import type { ProjectHostSetup } from '../../../../shared/project-types'
 import type { Repo } from '../../../../shared/repo-types'
 import { projectHostSetupProjectionFromRepos } from '../../../../shared/project-host-setup-projection'
 import {
@@ -17,12 +17,10 @@ import { SetProjectLocationDialog } from './SetProjectLocationDialog'
 
 const storeMock = vi.hoisted(() => {
   const repos: Repo[] = []
-  const endpointProjects: Project[] = []
-  const endpointProjectHostSetups: ProjectHostSetup[] = []
+  const projectHostSetups: ProjectHostSetup[] = []
   return {
     repos,
-    endpointProjects,
-    endpointProjectHostSetups,
+    projectHostSetups,
     setupProjectExistingFolder: vi.fn(),
     setupProjectClone: vi.fn()
   }
@@ -127,14 +125,12 @@ function createInput(): Parameters<typeof useTargetChangeActions>[0] {
 
 beforeEach(() => {
   storeMock.repos = [localRepo]
-  storeMock.endpointProjects = [...localProjection.projects]
-  storeMock.endpointProjectHostSetups = [...localProjection.setups]
+  storeMock.projectHostSetups = [...localProjection.setups]
   storeMock.setupProjectExistingFolder.mockReset()
   storeMock.setupProjectClone.mockReset()
   const publishRuntimeSetup = async () => {
     storeMock.repos = [localRepo, runtimeRepo]
-    storeMock.endpointProjects = [...localProjection.projects, ...runtimeProjection.projects]
-    storeMock.endpointProjectHostSetups = [...localProjection.setups, ...runtimeProjection.setups]
+    storeMock.projectHostSetups = [...localProjection.setups, ...runtimeProjection.setups]
     return {
       project: runtimeProjection.projects[0],
       repo: runtimeRepo,

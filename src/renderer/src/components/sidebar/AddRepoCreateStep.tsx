@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react'
+import React, { useMemo, useState, type ReactNode } from 'react'
 import { ChevronDown, GitBranch, Loader2 } from 'lucide-react'
 import { DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
@@ -30,6 +30,8 @@ type CreateStepProps = {
   runtimeEnvironmentId?: string | null
   /** No host resolved yet (its server is still coming up): never create on this computer. */
   submitDisabled?: boolean
+  /** A WSL host's Windows drive refusal for the parent folder. */
+  notice?: ReactNode
   onNameChange: (value: string) => void
   onParentChange: (value: string) => void
   onPickParent: () => void
@@ -48,6 +50,7 @@ export function CreateStep({
   manualParentEntry = false,
   runtimeEnvironmentId,
   submitDisabled = false,
+  notice,
   onNameChange,
   onParentChange,
   onPickParent,
@@ -242,6 +245,7 @@ export function CreateStep({
           )}
         </div>
 
+        {notice}
         {createError && (
           <p className="text-[11px] text-destructive" role="alert">
             {createError}

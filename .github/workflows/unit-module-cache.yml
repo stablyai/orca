@@ -1,0 +1,50 @@
+name: Unit transform cache producer
+
+# Cold full unit run on main that publishes per-shard Vitest transform caches for PRs.
+on:
+  schedule:
+    - cron: '17 */6 * * *'
+  workflow_dispatch:
+  push:
+    branches: [main]
+    # Cache-key inputs (see ci-unit-module-cache.mjs) change the key; reseed right away.
+    paths:
+      - '.github/workflows/unit-module-cache.yml'
+      - '.github/workflows/unit-tests.yml'
+      - 'config/vitest.config.ts'
+      - 'config/scripts/vitest*'
+      - 'config/scripts/ci-unit-module-cache*.mjs'
+      - 'config/patches/**'
+      - 'config/scripts/workspace-source-exports.mjs'
+      - 'config/dark-build-switches.cjs'
+      - 'config/pnpmfile.cjs'
+      - '.npmrc'
+      - '**/package.json'
+      - '**/tsconfig*.json'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - 'config/.bun-version'
+
+concurrency:
+  group: unit-module-cache-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  unit_plan:
+    if: github.ref == 'refs/heads/main'
+    uses: ./.github/workflows/unit-plan.yml
+
+  test:
+    needs: unit_plan
+    uses: ./.github/workflows/unit-tests.yml
+    with:
+      # Match the PR unit matrix so the cache key's runtime and shard fields line up.
+      node_versions: '["24"]'
+      runner: blacksmith-8vcpu-ubuntu-2404
+      shards: ${{ needs.unit_plan.outputs.shards }}
+      module_cache: cold
+      artifact_prefix: cache-producer-unit
+      run_relay_integration: false

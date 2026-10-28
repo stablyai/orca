@@ -82,6 +82,10 @@ export function isMobilePublishableOpenFile(file: AppState['openFiles'][number])
   if (file.mirroredFromRuntimeSession === true) {
     return false
   }
+  // Virtual review/check views use display labels as paths, not readable files.
+  if (file.mode !== 'edit' && file.mode !== 'diff' && file.mode !== 'markdown-preview') {
+    return false
+  }
   // Combined diff tabs use display labels as paths and need the desktop renderer.
   return !(
     file.diffSource === 'combined-all' ||

@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import {
   nativeChatLiveLine,
   type NativeChatLiveLine
-} from '../../../../shared/native-chat-live-line'
+} from '../../../../shared/native-chat/transcript/native-chat-live-line'
 import { isNativeChatRowInLiveWorkingTurn } from '../../../../shared/native-chat-turn-membership'
 import {
   buildNativeChatTranscriptSlots,

@@ -1,5 +1,10 @@
 import { chatWorkspaceByTabId } from '@/lib/structured-chat-tab-index'
-import { routeNativeChatHref } from '../../../../shared/native-chat-href-routing'
+import {
+  routeNativeChatHref,
+  type NativeChatHrefRoute
+} from '../../../../shared/native-chat-href-routing'
+import { WINDOWS_DRIVE_PATH_PREFIX } from '../../../../shared/file-uri-path'
+import { normalizeAbsolutePath } from '../../../../shared/terminal-path-normalization'
 import {
   parseExplicitFileLinkTarget,
   resolveExplicitFileLinkTarget,
@@ -130,6 +135,19 @@ function resolvePathText(
   }
 }
 
+// Chats open a drive-letter workspace as native Windows (no WSL mapping), so URL-style /D:/… there is D:.
+function routeNativeChatFileHref(
+  href: string | undefined,
+  worktreePath: string
+): NativeChatHrefRoute {
+  const route = routeNativeChatHref(href)
+  return route.kind === 'file' &&
+    WINDOWS_DRIVE_PATH_PREFIX.test(route.pathText) &&
+    normalizeAbsolutePath(worktreePath)?.rootKind === 'windows'
+    ? { ...route, pathText: route.pathText.slice(1) }
+    : route
+}
+
 export function resolveNativeChatFileLink(
   href: string | undefined,
   context: NativeChatFileLinkContext | null
@@ -137,7 +155,7 @@ export function resolveNativeChatFileLink(
   if (!context) {
     return null
   }
-  const route = routeNativeChatHref(href)
+  const route = routeNativeChatFileHref(href, context.worktreePath)
   if (route.kind !== 'file') {
     return null
   }

@@ -30,18 +30,14 @@ export function mergeProjectCompatibilityForHostRepoChange({
   nextRepos,
   hostId
 }: {
-  previous: Pick<RepoSlice, 'endpointProjects' | 'endpointProjectHostSetups'>
+  previous: Pick<RepoSlice, 'projects' | 'projectHostSetups'>
   nextRepos: readonly Repo[]
   hostId: string
-}): Pick<RepoSlice, 'endpointProjects' | 'endpointProjectHostSetups'> {
-  const merged = mergeFetchedProjectCompatibilityForHost({
-    previous: {
-      projects: previous.endpointProjects,
-      projectHostSetups: previous.endpointProjectHostSetups
-    },
+}): Pick<RepoSlice, 'projects' | 'projectHostSetups'> {
+  return mergeFetchedProjectCompatibilityForHost({
+    previous,
     fetched: projectCompatibilityFromRepos(nextRepos),
     repos: nextRepos,
     hostId
   })
-  return { endpointProjects: merged.projects, endpointProjectHostSetups: merged.projectHostSetups }
 }

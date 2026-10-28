@@ -328,15 +328,15 @@ const NATIVE_CACHE_FILES = new Set([
   'config/scripts/electron-platform-path.mjs',
   'config/scripts/zip-extractor-command.mjs',
   'src/shared/zip-extractor-command.ts',
-  'config/scripts/shared-electron-dist-cache.mjs',
-  'config/scripts/shared-tree-publish.mjs',
   'config/scripts/space-sharing-copy.mjs',
-  'config/scripts/native-build-entry.cjs',
-  'config/scripts/native-build-entry-probe.cjs',
-  'config/scripts/shared-native-build.mjs'
+  'config/scripts/native-dependency-lock-digest.mjs',
+  'config/scripts/orcad-prebuild-node-gyp.mjs',
+  'config/scripts/msbuild-file-tracking.mjs'
 ])
 
 const NATIVE_CACHE_PREFIXES = [
+  'config/scripts/native-build-entry',
+  'config/scripts/shared-',
   'config/patches/node-pty@',
   'config/patches/@vscode__windows-process-tree',
   // The vendored addons' sources: build/ and bin/ beside them are ignored, so nothing else lands here.

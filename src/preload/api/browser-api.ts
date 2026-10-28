@@ -5,6 +5,13 @@ import type {
   BrowserAgentCursorEvent
 } from '../../shared/browser-agent-activity-contract'
 import type { ManagedBrowserProfileOwner } from '../../shared/browser-profile-scope'
+import type { BrowserExtensionToolbarApi } from './browser-extension-toolbar-api'
+import type { BrowserExtensionContextMenuApi } from './browser-extension-context-menu-api'
+import type { BrowserExtensionWebStoreApi } from './browser-extension-webstore-api'
+import type {
+  BrowserExtensionActionResult,
+  BrowserExtensionListResult
+} from '../../shared/browser-extension-types'
 import type {
   BrowserPageSiteDisplay,
   BrowserSiteColorScheme
@@ -267,7 +274,39 @@ export type BrowserApi = {
     decision: BrowserSitePermissionDecision | null
   }) => Promise<BrowserSitePermissionEntry[]>
   notifyActiveTabChanged: (args: { browserPageId: string }) => Promise<boolean>
-}
+  extensionsList: (args: { profileId: string }) => Promise<BrowserExtensionListResult>
+  extensionsSetEnabled: (args: {
+    profileId: string
+    extensionId: string
+    enabled: boolean
+  }) => Promise<BrowserExtensionActionResult>
+  extensionsRemove: (args: {
+    profileId: string
+    extensionId: string
+  }) => Promise<BrowserExtensionActionResult>
+  extensionsLoadUnpacked: (args: {
+    profileId: string
+    directory: string
+  }) => Promise<BrowserExtensionActionResult>
+  /** Re-copies an unpacked extension's folder and restarts it in every profile. */
+  extensionsReload: (args: {
+    profileId: string
+    extensionId: string
+  }) => Promise<BrowserExtensionActionResult>
+  extensionsOpenOptions: (args: {
+    profileId: string
+    extensionId: string
+  }) => Promise<BrowserExtensionActionResult>
+  /** Asks about a held store update's new access, then installs it. */
+  extensionsReviewUpdate: (args: {
+    profileId: string
+    extensionId: string
+  }) => Promise<BrowserExtensionActionResult>
+  /** Installs, updates, removals, load errors or held updates changed; refetch the list. */
+  onExtensionsChanged: (callback: () => void) => () => void
+} & BrowserExtensionToolbarApi &
+  BrowserExtensionWebStoreApi &
+  BrowserExtensionContextMenuApi
 
 export type DetectedBrowserProfileInfo = {
   name: string

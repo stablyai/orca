@@ -1,4 +1,3 @@
-import { selectCanonicalProjectHostSetups } from '@/store/project-host-setup-selector'
 import type { ComposerModel } from './composer-model'
 
 type TargetChangeActionsInput = Pick<
@@ -246,7 +245,7 @@ export function useTargetChangeActions(input: TargetChangeActionsInput) {
           ? option
           : buildProjectHostSetupOptions({
               projectId: selectedRepoProjectId,
-              projectHostSetups: selectCanonicalProjectHostSetups(useAppStore.getState()),
+              projectHostSetups: useAppStore.getState().projectHostSetups,
               eligibleRepos: getComposerEligibleRepos(useAppStore.getState().repos),
               hosts: hostOptions
             }).find(

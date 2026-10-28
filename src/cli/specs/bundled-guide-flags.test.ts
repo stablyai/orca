@@ -27,7 +27,8 @@ function findSpecForInvocation(invocation: string): CommandSpec | undefined {
 function collectGuideInvocations(): GuideInvocation[] {
   const found: GuideInvocation[] = []
   for (const guide of BUNDLED_SKILL_GUIDES) {
-    for (const match of guide.fullMarkdown.matchAll(CLI_INVOCATION)) {
+    const documents = [guide.markdown, ...guide.references.map((reference) => reference.markdown)]
+    for (const match of documents.join('\n').matchAll(CLI_INVOCATION)) {
       const invocation = match[1].trim()
       const spec = findSpecForInvocation(invocation)
       if (!spec) {

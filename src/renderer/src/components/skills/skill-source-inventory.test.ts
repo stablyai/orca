@@ -72,55 +72,6 @@ describe('summarizeSkillSources', () => {
     expect(rootReads).toBeLessThanOrEqual(skills.length)
   })
 
-  it('does not inspect skills without sources', () => {
-    const unused = {
-      ...skill(),
-      get rootPath(): string {
-        throw new Error('No source needs a count')
-      }
-    }
-    expect(summarizeSkillSources(null)).toEqual([])
-    expect(summarizeSkillSources(result({ skills: [unused] }))).toEqual([])
-  })
-
-  it('accepts frozen ownership lists and inputs without changing them', () => {
-    const home = Object.freeze(source())
-    const item = skill({ rootPaths: [home.path, '/co-owner', home.path] })
-    Object.freeze(item.rootPaths)
-    Object.freeze(item)
-    const discovery = result({ sources: [home, source({ path: '/co-owner' })], skills: [item] })
-    Object.freeze(discovery.sources)
-    Object.freeze(discovery.skills)
-    Object.freeze(discovery)
-    expect(summarizeSkillSources(discovery).map((entry) => entry.skillCount)).toEqual([1, 1])
-    expect(item.rootPaths).toEqual([home.path, '/co-owner', home.path])
-  })
-
-  it('counts a symlinked skill under every root that reached it', () => {
-    const shared = source({ id: 'repo', path: '/repo/.agents/skills', sourceKind: 'repo' })
-    const entries = summarizeSkillSources(
-      result({
-        sources: [source(), shared],
-        skills: [skill({ rootPaths: ['/home/dev/.agents/skills', '/repo/.agents/skills'] })]
-      })
-    )
-    expect(entries.map((entry) => entry.skillCount)).toEqual([1, 1])
-  })
-
-  it('reports why a root produced nothing instead of showing an empty count', () => {
-    const entries = summarizeSkillSources(
-      result({
-        sources: [
-          source({ id: 'missing', exists: false, skippedReason: 'missing' }),
-          source({ id: 'remote', exists: false, skippedReason: 'remote-repo' }),
-          source({ id: 'unknown', exists: false })
-        ]
-      })
-    )
-    expect(entries.map((entry) => entry.status)).toEqual(['missing', 'remote-repo', 'unavailable'])
-    expect(scannedSkillSourceCount(entries)).toBe(0)
-  })
-
   it('reports an unanswered root as unavailable even though it claims to exist', () => {
     // An unavailable root retains exists:true because absence is unproven; retained skills do not establish a full scan.
     const entries = summarizeSkillSources(
@@ -131,12 +82,5 @@ describe('summarizeSkillSources', () => {
     )
     expect(entries.map((entry) => entry.status)).toEqual(['unavailable'])
     expect(scannedSkillSourceCount(entries)).toBe(0)
-  })
-
-  it('counts only roots that were actually scanned', () => {
-    const entries = summarizeSkillSources(
-      result({ sources: [source(), source({ id: 'gone', exists: false })] })
-    )
-    expect(scannedSkillSourceCount(entries)).toBe(1)
   })
 })

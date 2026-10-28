@@ -1,7 +1,9 @@
 import { useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { Alert, View, Text, Pressable, StyleSheet } from 'react-native'
+import { Alert, View, Text, Pressable } from 'react-native'
 import { ChevronLeft } from 'lucide-react-native'
 import { colors, spacing } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { BottomDrawer } from '../components/BottomDrawer'
 import type { RpcClient } from '../transport/rpc-client'
 import type { TerminalQuickCommand } from '../../../src/shared/terminal-quick-command-types'
@@ -37,6 +39,7 @@ export function QuickCommandsSheet({
   agentPromptMaxLength,
   onLaunch
 }: Props) {
+  useMobileColorScheme()
   const { commands, loading, ready, error, persist } = useQuickCommands({
     client,
     enabled: visible
@@ -252,7 +255,7 @@ export function QuickCommandsSheet({
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   header: { flexDirection: 'row', alignItems: 'center', paddingBottom: spacing.sm },
   backButton: {
     width: 30,
@@ -272,4 +275,4 @@ const styles = StyleSheet.create({
   pressed: { backgroundColor: colors.bgRaised },
   editorDesc: { paddingHorizontal: spacing.xs, paddingBottom: spacing.sm },
   descText: { fontSize: 12, color: colors.textMuted }
-})
+}))

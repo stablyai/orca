@@ -26,7 +26,7 @@ function buildOrcadBundles(): string[] {
     const out = ${JSON.stringify(directory)}
     await entries.buildOrcadEntry(join(out, 'orcad.js'))
     await Promise.all(Object.values(entries.ORCAD_CHILD_ENTRY_POINTS).map((entry) => build({
-      entryPoints: [entry], bundle: true, platform: 'node', target: 'node18', format: 'cjs',
+      entryPoints: [entry], bundle: true, platform: 'node', target: entries.ORCAD_SERVER_BUILD_TARGET, format: 'cjs',
       outfile: join(out, entries.orcadChildOutputFilename(entry)),
       external: entries.ORCAD_EXTERNAL_MODULES, plugins: [entries.externalNativeAddons],
       logLevel: 'error'

@@ -218,7 +218,6 @@ async function verifyRunningRelayUpgrade(
         .toMatchObject({ kind: 'relay', reason: 'refused', canLeaveBehind: true })
       // The refusal toast offers it too; this is the pane's own button.
       const move = page
-        .locator('[data-terminal-ssh-reconnect-banner]')
         .getByRole('button', { name: 'Move anyway…', exact: true })
         .and(page.locator(':not([data-sonner-toast] button)'))
       await expect(move).toBeVisible()

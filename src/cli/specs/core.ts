@@ -151,9 +151,12 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
   {
     path: ['worktree', 'ps'],
     summary: 'Show a compact orchestration summary across worktrees',
-    usage: 'orca worktree ps [--limit <n>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'limit'],
-    notes: [...WORKTREE_LISTING_SCOPE_NOTES]
+    usage: 'orca worktree ps [--limit <n>] [--agent-wait] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'limit', 'agent-wait'],
+    notes: [
+      ...WORKTREE_LISTING_SCOPE_NOTES,
+      'JSON omits agentWait by default; pass --agent-wait to add the `terminal show` wait verdict to each terminal-backed agent row on the returned page.'
+    ]
   },
   {
     path: ['terminal', 'list'],

@@ -105,7 +105,7 @@ jobs:
     name: Mobile verify
     if: github.event_name == 'pull_request' && github.event.pull_request.draft != true
     # Use ARM for pure Vitest; no x86 native toolchain is needed and Gemfile.lock’s ruby platform supports frozen install.
-    runs-on: blacksmith-4vcpu-ubuntu-2404-arm
+    runs-on: ubuntu-24.04-arm
 
     env:
       # Freeze bundler to reject Gemfile drift before release jobs resolve different fastlane versions.
@@ -141,19 +141,46 @@ jobs:
             echo 'should_run=true' >> "$GITHUB_OUTPUT"
           fi
 
-      # Bundler-cache proves the release’s pinned fastlane still resolves before a release needs it.
-      - name: Setup Ruby and fastlane
-        id: ruby-tools
+      - name: Setup Ruby
+        id: ruby-setup
         background: true
         if: steps.ruby-scope.outputs.should_run != 'false'
         uses: ruby/setup-ruby@v1
         with:
           ruby-version: '3.3'
-          bundler-cache: true
           working-directory: mobile
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - wait: ruby-setup
+
+      # ruby/setup-ruby's bundler-cache saves on every miss; the platform warmup saves this key on main.
+      - name: Resolve fastlane bundle cache
+        id: ruby-bundle
+        if: steps.ruby-scope.outputs.should_run != 'false'
+        env:
+          GEMFILE_HASH: ${{ hashFiles('mobile/Gemfile', 'mobile/Gemfile.lock') }}
+        run: |
+          . /etc/os-release
+          printf 'key=mobile-bundle-v1-%s-%s-%s-%s\n' "$ID-$VERSION_ID" "$(ruby -e 'print RUBY_PLATFORM')" "$(ruby -e 'print RbConfig::CONFIG["ruby_version"]')" "$GEMFILE_HASH" >> "$GITHUB_OUTPUT"
+
+      - name: Restore fastlane bundle
+        if: steps.ruby-scope.outputs.should_run != 'false'
+        uses: actions/cache/restore@v5
+        with:
+          path: mobile/vendor/bundle
+          key: ${{ steps.ruby-bundle.outputs.key }}
+
+      # Installing proves the release’s pinned fastlane still resolves before a release needs it.
+      - name: Install fastlane
+        id: ruby-tools
+        background: true
+        if: steps.ruby-scope.outputs.should_run != 'false'
+        run: |
+          bundle config set --local path "$PWD/vendor/bundle"
+          bundle config set --local deployment true
+          bundle install --jobs 4
 
       # Check mobile import cycles after Expo deps install; pre-install pr.yml cannot load its tsconfig.
       - name: Lint mobile imports with mobile dependencies installed
@@ -192,6 +219,7 @@ jobs:
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version-file: config/.bun-version
+          no-cache: true
 
       - name: Test
         if: steps.test-scope.outputs.should_run != 'false'
@@ -240,7 +268,7 @@ jobs:
   native-fingerprint:
     name: Mobile native fingerprint
     if: github.event_name == 'pull_request' && github.event.pull_request.draft != true
-    runs-on: blacksmith-2vcpu-ubuntu-2404
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     continue-on-error: true
 
@@ -285,7 +313,7 @@ jobs:
       ORCA_MOBILE_TYPECHECK_COMPILER: 'bun'
     if: github.event_name == 'push'
     # Why ARM: the same pure-Node Vitest run `verify` makes on a pull request.
-    runs-on: blacksmith-4vcpu-ubuntu-2404-arm
+    runs-on: ubuntu-24.04-arm
 
     defaults:
       run:
@@ -297,8 +325,10 @@ jobs:
         with:
           persist-credentials: false
 
+      # Restoring the 650 MB store took longer than downloading these packages.
       - uses: ./.github/actions/install-node-dependencies
         with:
+          cache-pnpm-store: 'false'
           cache-dependency-path: |
             pnpm-lock.yaml
             mobile/pnpm-lock.yaml
@@ -321,6 +351,7 @@ jobs:
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version-file: config/.bun-version
+          no-cache: true
 
       - name: Test
         env:

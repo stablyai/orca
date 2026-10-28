@@ -28,12 +28,12 @@ function fileCountLabel(count: number): string {
     ? translate(
         'auto.components.right.sidebar.AiVaultScanProgressStrip.fileCount_one',
         '{{value0}} file',
-        { value0 }
+        { value0, count }
       )
     : translate(
         'auto.components.right.sidebar.AiVaultScanProgressStrip.fileCount_other',
         '{{value0}} files',
-        { value0 }
+        { value0, count }
       )
 }
 
@@ -43,12 +43,12 @@ function databaseCountLabel(count: number): string {
     ? translate(
         'auto.components.right.sidebar.AiVaultScanProgressStrip.databaseCount_one',
         '{{value0}} database',
-        { value0 }
+        { value0, count }
       )
     : translate(
         'auto.components.right.sidebar.AiVaultScanProgressStrip.databaseCount_other',
         '{{value0}} databases',
-        { value0 }
+        { value0, count }
       )
 }
 

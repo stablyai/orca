@@ -1,3 +1,5 @@
+import { AcpAtRestCommandCatalog } from '../acp/acp-at-rest-commands'
+import { resolveNativeChatVisualsSkillLocation } from '../native-chat/native-chat-visuals-skill-location'
 import { withSupportedCodexCli } from '../codex/codex-cli-installation-error'
 import { codexStructuredLaunchPart } from '../codex/codex-structured-launch-resolution'
 import { claudeStructuredLaunchPart } from '../claude/claude-structured-launch-resolution'
@@ -102,9 +104,11 @@ function createClaudeAdapter(
 ): StructuredAgentRuntimeAdapter {
   const { deps, store, followUps, host } = context
   const overlay = claudeLaunchEnvOverlay(deps).resolveEnv
+  const resolveAccountHome = deps.resolveAgentAccountHome
   return createStructuredClaudeRuntimeAdapter({
     store,
     resolveWorkspacePath: deps.resolveWorkspacePath,
+    ...(resolveAccountHome ? { resolveAccountHome: () => resolveAccountHome('claude') } : {}),
     resolveLaunch: composeStructuredLaunch(
       CLAUDE_STRUCTURED_AGENT,
       structuredAgentLaunchSources(context),
@@ -147,6 +151,24 @@ function createAcpAdapter(
     })
     return new AcpStructuredSessionAdapter({
       spec,
+      ...(spec.agent === 'omp'
+        ? {
+            atRestCommands: new AcpAtRestCommandCatalog(spec, {
+              ...deps.acpLaunchCommand,
+              resolveWorkspacePath: deps.resolveWorkspacePath,
+              resolveEnvironment: context.environment.resolveBaseEnvironment,
+              refreshEnvironmentAfterMiss: context.environment.refreshAfterMissingProgram,
+              resolveLaunchEnv: deps.resolveAgentLaunchEnv,
+              resolveCommandSettings: deps.resolveAgentCommandSettings,
+              dataDirectory: deps.stateDirectory,
+              resolveVisualsSkill: () =>
+                deps.nativeChatVisuals && deps.nativeChatVisuals.isEnabled?.() !== false
+                  ? resolveNativeChatVisualsSkillLocation()
+                  : Promise.resolve(null),
+              logger: deps.logger
+            })
+          }
+        : {}),
       resolveLaunch: composeStructuredLaunch(definition, sources, part),
       readLaunch: composeStructuredLaunchRead(definition, sources, part),
       dataDirectory: deps.stateDirectory,

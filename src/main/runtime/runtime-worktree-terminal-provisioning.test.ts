@@ -132,6 +132,13 @@ function provisionWithSetup(
 }
 
 describe('provisionWorktreeTerminals with a cleared creation choice', () => {
+  it('uses the injected setup title', async () => {
+    const { host, titles } = createHost()
+    host.getSetupTerminalTitle = () => '초기 설정'
+    await provisionWithSetup(host, true, true)
+    expect(titles()).toEqual(['초기 설정'])
+  })
+
   it('creates only Setup for an explicit setup-only choice', async () => {
     const { host, titles } = createHost()
     await provisionWithSetup(host, true, true)

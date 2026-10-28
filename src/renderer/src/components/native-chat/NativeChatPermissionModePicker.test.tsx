@@ -84,7 +84,7 @@ vi.mock('@/components/ui/dropdown-menu', async () => {
 
 import { structuredAgentSessionPermissionDescriptor } from '../../../../shared/structured-agent-session-permission-option'
 import { createStructuredAgentSessionOptionState } from '../../../../shared/structured-agent-session-options'
-import type { SessionOptionDescriptor } from '../../../../shared/native-chat-session-options'
+import type { SessionOptionDescriptor } from '../../../../shared/native-chat/input/native-chat-session-options'
 import {
   NativeChatComposerPermissionPicker,
   NativeChatPermissionModePicker,

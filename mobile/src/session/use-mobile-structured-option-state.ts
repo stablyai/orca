@@ -14,6 +14,10 @@ import type { AgentSessionOptionCatalog } from '../../../src/shared/agent-sessio
 import { usesInstalledAgentModelCatalog } from '../../../src/shared/agent-model-catalog-ownership'
 import { cloneStructuredAgentSessionOptionRecord } from '../../../src/shared/structured-agent-session-option-state'
 import {
+  createStructuredOptionPickBook,
+  resetStructuredOptionPickBook
+} from '../../../src/shared/structured-agent-session-option-pick-book'
+import {
   createStructuredAgentSessionOptionState,
   applyStructuredAgentSessionOptions,
   applyStructuredAgentSessionModelCatalog,
@@ -33,6 +37,7 @@ export function useMobileStructuredOptionState(args: {
   fence: number | null
   optionCatalog: AgentSessionOptionCatalog | null
   sessionId: string | null
+  turnId: string | null
 }) {
   const {
     agent,
@@ -41,6 +46,7 @@ export function useMobileStructuredOptionState(args: {
     fence,
     optionCatalog,
     sessionId,
+    turnId,
     client,
     optionStamp,
     newLaunch,
@@ -58,6 +64,8 @@ export function useMobileStructuredOptionState(args: {
   const summary = useSyncExternalStore(feed?.subscribe ?? (() => () => {}), () =>
     sessionId ? feed?.getSnapshot().get(sessionId) : undefined
   )
+  // As on desktop, a host still starting the provider holds option writes; picks show at once.
+  const providerStarting = summary?.hostExecutionPhase === 'starting'
   const projectPermission = <T extends { reportedPermissionMode?: string | null }>(state: T): T =>
     projectRuntimePermission(state, summary, fence)
   const coherentCatalog = usesInstalledAgentModelCatalog(agent ?? '', hostCoherentCatalog)
@@ -66,8 +74,7 @@ export function useMobileStructuredOptionState(args: {
   )
   const optionStateRef = useRef(optionState)
   const activeOptionRecordRef = useRef(optionState.record)
-  const pendingOptionRef = useRef<string | null>(null)
-  const optionMutationGeneration = useRef(0)
+  const optionPicks = useRef(createStructuredOptionPickBook())
   const updateOptionState = useCallback(
     (update: (current: StructuredAgentSessionOptionState) => StructuredAgentSessionOptionState) => {
       const next = update(optionStateRef.current)
@@ -107,8 +114,7 @@ export function useMobileStructuredOptionState(args: {
     // Keep the chat’s mode visible through provider restarts.
     const next = sameSession ? { ...kept, permissionMode: previous.permissionMode } : kept
     writes.current = { count: 0, readback: false }
-    optionMutationGeneration.current += 1
-    pendingOptionRef.current = null
+    resetStructuredOptionPickBook(optionPicks.current)
     optionStateRef.current = next
     activeOptionRecordRef.current = next.record
     setOptionState(next)
@@ -146,7 +152,8 @@ export function useMobileStructuredOptionState(args: {
     }
   }
   useEffect(() => {
-    if (!client || !sessionId || !enabled || !optionCatalog) {
+    // Read each turn and after provider start; before start only a resumed chat has model evidence.
+    if (!client || !sessionId || !enabled || !optionCatalog || (providerStarting && newLaunch)) {
       return
     }
     let stale = false
@@ -162,7 +169,7 @@ export function useMobileStructuredOptionState(args: {
         }
         writes.current.readback = false
         const record = activeOptionRecordRef.current
-        const readGeneration = optionMutationGeneration.current
+        const readGeneration = optionPicks.current.generation
         const result = await callAgentSession<AgentSessionOptionsResult>(
           client,
           'agentSession.options',
@@ -178,7 +185,7 @@ export function useMobileStructuredOptionState(args: {
           acceptsImages: result.acceptsImages,
           statesPermissionMode: result.current?.permissionMode !== undefined
         })
-        if (optionMutationGeneration.current !== readGeneration) {
+        if (optionPicks.current.generation !== readGeneration) {
           return
         }
         setConversationSupport({ sessionId, fence, commands: result.conversationCommands ?? [] })
@@ -204,8 +211,10 @@ export function useMobileStructuredOptionState(args: {
     optionStamp,
     isCurrentContext,
     coherentCatalog,
+    providerStarting,
     sessionId,
     fence,
+    turnId,
     updateOptionState
   ])
 
@@ -221,8 +230,8 @@ export function useMobileStructuredOptionState(args: {
     optionState,
     optionStateRef,
     activeOptionRecordRef,
-    pendingOptionRef,
-    optionMutationGeneration,
+    optionPicks,
+    providerStarting,
     updateOptionState
   }
 }

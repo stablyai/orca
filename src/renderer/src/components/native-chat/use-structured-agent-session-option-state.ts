@@ -1,3 +1,8 @@
+import {
+  createStructuredOptionPickBook,
+  resetStructuredOptionPickBook,
+  structuredOptionPickIsPending
+} from '../../../../shared/structured-agent-session-option-pick-book'
 import { projectRuntimePermission } from '../../../../shared/structured-agent-session-permission-option'
 import { useStructuredAgentSessionStatusSummary } from './StructuredAgentSessionStatusBridge'
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -112,9 +117,8 @@ export function useStructuredAgentSessionOptionState(args: {
   }, [target, newLaunch, worktree, seedsModel])
   const optionStateRef = useRef(optionState)
   const activeOptionRecordRef = useRef(optionState.record)
-  // A pick on its way to the host, which every send carries too.
-  const pendingOptionsRef = useRef<Record<string, string>>({})
-  const optionMutationGeneration = useRef(0)
+  // Picks on their way to the host, which every send carries too.
+  const optionPicks = useRef(createStructuredOptionPickBook())
   const updateOptionState = useCallback(
     (update: (current: StructuredAgentSessionOptionState) => StructuredAgentSessionOptionState) => {
       const next = update(optionStateRef.current)
@@ -155,8 +159,7 @@ export function useStructuredAgentSessionOptionState(args: {
         : seeded
     const next = sameSession ? { ...kept, permissionMode: previous.permissionMode } : kept
     writes.current = { count: 0, readback: false }
-    optionMutationGeneration.current += 1
-    pendingOptionsRef.current = {}
+    resetStructuredOptionPickBook(optionPicks.current)
     optionStateRef.current = next
     activeOptionRecordRef.current = next.record
     setOptionState(next)
@@ -179,7 +182,7 @@ export function useStructuredAgentSessionOptionState(args: {
       }
       writes.current.readback = false
       const record = activeOptionRecordRef.current
-      const readGeneration = optionMutationGeneration.current
+      const readGeneration = optionPicks.current.generation
       const result = await callStructuredAgentSession<AgentSessionOptionsResult>(
         target,
         'agentSession.options',
@@ -189,7 +192,7 @@ export function useStructuredAgentSessionOptionState(args: {
         !stale &&
         isCurrentContext() &&
         activeOptionRecordRef.current === record &&
-        optionMutationGeneration.current === readGeneration
+        optionPicks.current.generation === readGeneration
       ) {
         setConversationSupport({
           sessionId,
@@ -292,7 +295,9 @@ export function useStructuredAgentSessionOptionState(args: {
         ...projectRuntimePermission(structuredAgentSessionOptionView(...args), summary, fence),
         permissionOwnSupported
       }
-      return pendingOptionsRef.current.model === undefined ? view : { ...view, pendingId: 'model' }
+      return structuredOptionPickIsPending(optionPicks.current, 'model')
+        ? { ...view, pendingId: 'model' }
+        : view
     },
     takesSendOptions,
     conversationSupport,
@@ -302,8 +307,7 @@ export function useStructuredAgentSessionOptionState(args: {
     optionState,
     optionStateRef,
     activeOptionRecordRef,
-    pendingOptionsRef,
-    optionMutationGeneration,
+    optionPicks,
     updateOptionState
   }
 }

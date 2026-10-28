@@ -17,19 +17,21 @@ const INITIALIZE_JSON_LIMITS = { structuralTokens: 64 * 1024, nestingDepth: 16 }
 export type ClaudeCommandCatalogProbe = (request: {
   cwd: string
   accountHomePath: string
+  signal?: AbortSignal
   isCurrent?: () => boolean
 }) => Promise<AgentSessionSlashCommand[]>
 
 export function createClaudeCommandCatalogProbe(
   deps: ClaudeModelCatalogProbeDeps
 ): ClaudeCommandCatalogProbe {
-  return async ({ cwd, accountHomePath, isCurrent }) => {
+  return async ({ cwd, accountHomePath, isCurrent, signal }) => {
     const stdout = await runClaudeListing(deps, {
       accountHomePath,
       cwd,
       stdin: CLAUDE_COMMAND_LIST_STDIN,
       site: 'claude-command-catalog-probe',
-      isCurrent
+      isCurrent,
+      signal
     })
     const commands = readInitializeCommands(stdout)
     if (!commands?.length) {

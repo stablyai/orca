@@ -498,6 +498,22 @@ function selectsManagedSshLane(file) {
   return selectPrE2eSpecs([file]).some((spec) => spec.startsWith(MANAGED_SSH_E2E_SPEC_PREFIX))
 }
 
+describe('wsl-host fake connector routing', () => {
+  it('runs both WSL host specs for a fake connector change', () => {
+    const specs = selectPrE2eSpecs(['src/main/wsl/wsl-host-e2e-fake-connector.ts'])
+    for (const spec of [
+      'tests/e2e/wsl-host-chat.spec.ts',
+      'tests/e2e/wsl-host-fake-transport.spec.ts'
+    ]) {
+      expect(specs, spec).toContain(spec)
+      expect(existsSync(join(projectDir, spec)), spec).toBe(true)
+    }
+    expect(selectPrE2eSpecs(['src/main/wsl/wsl-host-e2e-fake-connector.test.ts'])).not.toContain(
+      'tests/e2e/wsl-host-chat.spec.ts'
+    )
+  })
+})
+
 describe('managed-SSH remote sources routing', () => {
   it('gives every managed-SSH spec a source route', () => {
     const routed = new Set(PR_E2E_SOURCE_ROUTES.flatMap((route) => route.specs))

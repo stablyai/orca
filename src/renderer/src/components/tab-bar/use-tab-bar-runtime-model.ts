@@ -1,7 +1,3 @@
-import {
-  selectCanonicalProjects,
-  selectCanonicalProjectHostSetups
-} from '@/store/project-host-setup-selector'
 import { useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import type { GitFileStatus } from '../../../../shared/git-status-types'
@@ -39,7 +35,7 @@ type AppStoreState = ReturnType<typeof useAppStore.getState>
 type GitStatusEntries = AppStoreState['gitStatusByWorktree'][string]
 const EMPTY_GIT_STATUS_ENTRIES: GitStatusEntries = []
 const EMPTY_UNIFIED_TABS: readonly Tab[] = []
-const EMPTY_PROJECTS: AppStoreState['endpointProjects'] = []
+const EMPTY_PROJECTS: AppStoreState['projects'] = []
 const EMPTY_REPOS: AppStoreState['repos'] = []
 const EMPTY_WORKTREES_BY_REPO: AppStoreState['worktreesByRepo'] = {}
 
@@ -175,10 +171,7 @@ export function useTabBarRuntimeModel({
   // Subscribe to project/worktree maps only for the local shell menu; their routine writes otherwise repaint every retained strip.
   const needsLocalProjectRuntime =
     showWindowsShellMenu && !activeRuntimeEnvironmentId?.trim() && !worktreeConnectionId
-  const projectHostSetups = useAppStore(selectCanonicalProjectHostSetups)
-  const projects = useAppStore((s) =>
-    needsLocalProjectRuntime ? selectCanonicalProjects(s) : EMPTY_PROJECTS
-  )
+  const projects = useAppStore((s) => (needsLocalProjectRuntime ? s.projects : EMPTY_PROJECTS))
   const repos = useAppStore((s) => (needsLocalProjectRuntime ? s.repos : EMPTY_REPOS))
   const worktreesByRepo = useAppStore((s) =>
     needsLocalProjectRuntime ? selectWorktreesByRepo(s) : EMPTY_WORKTREES_BY_REPO
@@ -188,14 +181,7 @@ export function useTabBarRuntimeModel({
       return undefined
     }
     return getLocalProjectExecutionRuntimeContext(
-      {
-        activeRepoId,
-        activeWorktreeId,
-        projectHostSetupProjection: { projects, setups: projectHostSetups },
-        repos,
-        settings,
-        worktreesByRepo
-      },
+      { activeRepoId, activeWorktreeId, projects, repos, settings, worktreesByRepo },
       worktreeId,
       'win32',
       {
@@ -212,7 +198,6 @@ export function useTabBarRuntimeModel({
     activeWorktreeId,
     needsLocalProjectRuntime,
     projects,
-    projectHostSetups,
     repos,
     settings,
     windowsTerminalCapabilities.isLoading,

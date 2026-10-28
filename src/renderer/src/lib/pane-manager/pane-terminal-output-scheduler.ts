@@ -37,7 +37,6 @@ export {
   registerTerminalBacklogRecovery,
   requestRegisteredTerminalBacklogRecovery,
   scheduleDrain,
-  setUseMessageChannelDrainForTesting,
   type QueueEntry,
   type QueuedWrite,
   type TerminalOutputBeforeWrite,

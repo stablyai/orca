@@ -69,7 +69,7 @@ jobs:
   template:
     if: github.event_name != 'pull_request' || github.event.pull_request.draft != true
     name: Build the linux-x64-glibc orcad template
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     outputs:
       families: ${{ steps.scope.outcome == 'success' && steps.scope.outputs.families || '' }}
@@ -119,7 +119,7 @@ jobs:
   container-rootfs:
     if: github.event_name != 'pull_request' || github.event.pull_request.draft != true
     name: Export ${{ matrix.family }} rootfs
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     strategy:
       fail-fast: false

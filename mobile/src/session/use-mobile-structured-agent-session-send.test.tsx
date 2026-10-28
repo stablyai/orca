@@ -1,4 +1,4 @@
-import { createElement } from 'react'
+import { createElement, useState } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentJournalDispatchState } from '../../../src/shared/agent-session-journal-types'
@@ -12,7 +12,10 @@ import {
 import { markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import { structuredSendResultFixture } from './structured-agent-send-result.test-fixture'
 import { useMobileStructuredAgentSession } from './use-mobile-structured-agent-session'
-import { AGENT_SESSION_SEND_OPTIONS_RUNTIME_CAPABILITY } from '../../../src/shared/agent-session-create-capabilities'
+import {
+  AGENT_SESSION_SEND_OPTIONS_RUNTIME_CAPABILITY,
+  AGENT_SESSION_SEND_SKILLS_RUNTIME_CAPABILITY
+} from '../../../src/shared/agent-session-create-capabilities'
 import {
   structuredAgentSessionHostSupport,
   type StructuredAgentSessionHostSupport
@@ -24,6 +27,12 @@ import {
   useMobileNativeChatSendError,
   type MobileNativeChatSendErrorDetails
 } from './native-chat/use-mobile-native-chat-send-error'
+
+import capture from '../../../src/shared/__fixtures__/omp-native-commands.json'
+import { useMobileNativeChatComposerMenu } from './native-chat/composer/use-mobile-native-chat-composer-menu'
+vi.mock('./native-chat/composer/MobileNativeChatComposerMenu', () => ({
+  composerMenuInsertText: (row: { token: string }) => row.token
+}))
 
 const asyncStorage = vi.hoisted(() => ({
   getItem: vi.fn(),
@@ -47,6 +56,8 @@ describe('mobile structured send actions', () => {
   let renderer: ReactTestRenderer | null = null
   let hook: ReturnType<typeof useMobileStructuredAgentSession> | null = null
   let banner: ReturnType<typeof useMobileNativeChatSendError> | null = null
+  let menu: ReturnType<typeof useMobileNativeChatComposerMenu>
+  let draft = ''
   let listener: ((value: unknown) => void) | null = null
   let storedOperations: Map<string, string>
   let agent = 'codex'
@@ -70,6 +81,23 @@ describe('mobile structured send actions', () => {
   }
 
   function Harness() {
+    const [value, onChangeText] = useState('/skill:pl')
+    draft = value
+    menu = useMobileNativeChatComposerMenu({
+      value,
+      onChangeText,
+      agent,
+      structuredCatalog: {
+        conversationCommands: [],
+        reported: capture.enabled.availableCommands.map((row) => ({
+          name: row.name,
+          description: row.description,
+          kind: 'command' as const
+        }))
+      },
+      filePaths: [],
+      focusField: vi.fn()
+    })
     banner = useMobileNativeChatSendError({ scopeKey: 'session-1', showToast: vi.fn() })
     banner.bannerMountedRef.current = true
     hook = useMobileStructuredAgentSession({
@@ -132,6 +160,26 @@ describe('mobile structured send actions', () => {
     listener = null
     agent = 'codex'
     hostSupport = null
+  })
+
+  it('selects a native OMP skill and sends the exact token and arguments through RPC', async () => {
+    agent = 'omp'
+    sendRequest.mockImplementation(async (method) =>
+      method === 'agentSession.send' ? sendResult('accepted') : ok({})
+    )
+    await mountSession()
+    act(() => menu.onSelectionChange({ start: draft.length, end: draft.length }))
+    const skill = menu.rows.find((row) => row.kind === 'skill')!
+    expect(skill).toMatchObject({ kind: 'skill', token: '/skill:plan' })
+    act(() => menu.pick(skill))
+    expect(draft).toBe('/skill:plan ')
+    act(() => menu.onFieldChange(`${draft}args`))
+    await act(async () => {
+      await hook!.sendWithOutcome(draft)
+    })
+    expect(fieldsOf(calls()[0]![1]).body).toMatchObject({
+      blocks: [{ type: 'text', text: '/skill:plan args' }]
+    })
   })
 
   it.each([
@@ -446,6 +494,29 @@ describe('mobile structured send actions', () => {
       }
     })
   })
+
+  it.each([true, false])(
+    'sends the picked skill path only to a host that takes it: %s',
+    async (takesSkills) => {
+      hostSupport = structuredAgentSessionHostSupport(
+        takesSkills ? [AGENT_SESSION_SEND_SKILLS_RUNTIME_CAPABILITY] : []
+      )
+      sendRequest.mockImplementation(async (method) =>
+        method === 'agentSession.send' ? sendResult('accepted') : ok({ models: [], current: {} })
+      )
+      await mountSession()
+      const review = { name: 'review', path: '/repo/.agents/skills/review/SKILL.md' }
+      await act(async () => {
+        await hook!.sendWithOutcome('$review this', undefined, undefined, [], [review])
+      })
+      expect(fieldsOf(calls()[0]?.[1]).body).toEqual({
+        kind: 'message',
+        role: 'user',
+        blocks: [{ type: 'text', text: '$review this' }],
+        ...(takesSkills ? { skills: [review] } : {})
+      })
+    }
+  )
 
   it('sends an attached file as a reference after the text, and only images as image blocks', async () => {
     sendRequest.mockImplementation(async (method) =>

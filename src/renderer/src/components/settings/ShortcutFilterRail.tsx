@@ -25,11 +25,13 @@ export type ShortcutRowsByGroup = {
   rows: ShortcutRowModel[]
 }
 
-const SHORTCUT_FILTER_LABELS: Record<ShortcutFilter, string> = {
-  all: 'All',
-  modified: 'Modified',
-  unassigned: 'Unassigned',
-  conflicts: 'Conflicts'
+const SHORTCUT_FILTER_LABELS: Record<ShortcutFilter, () => string> = {
+  all: () => translate('auto.components.settings.ShortcutFilterRail.filterAll', 'All'),
+  modified: () => translate('auto.components.settings.ShortcutCommandBlock.287e07ddde', 'Modified'),
+  unassigned: () =>
+    translate('auto.components.settings.ShortcutFilterRail.filterUnassigned', 'Unassigned'),
+  conflicts: () =>
+    translate('auto.components.settings.ShortcutFilterRail.filterConflicts', 'Conflicts')
 }
 
 export const SHORTCUT_LOCAL_SEARCH_QUERY_MAX_BYTES = 2 * 1024
@@ -123,7 +125,7 @@ export function ShortcutFilterRail({
 }): React.JSX.Element {
   const filters = (Object.keys(SHORTCUT_FILTER_LABELS) as ShortcutFilter[]).map((id) => ({
     id,
-    label: SHORTCUT_FILTER_LABELS[id],
+    label: SHORTCUT_FILTER_LABELS[id](),
     count: filterCounts[id]
   }))
 

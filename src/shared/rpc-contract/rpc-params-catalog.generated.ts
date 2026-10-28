@@ -554,6 +554,7 @@ import {
   SshTargetUpdate
 } from './ssh-params'
 import { ContinueInterruptedParams } from './structured-agent-session-continue-params'
+import { ContinuationContextParams } from './structured-agent-session-identifiers'
 import {
   AcknowledgeAttentionParams,
   AgentsParams,
@@ -732,6 +733,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'agentSession.cancel': CancelParams,
   'agentSession.close': OptionsParams,
   'agentSession.commands': OptionsParams,
+  'agentSession.continuationContext': ContinuationContextParams,
   'agentSession.continueInterrupted': ContinueInterruptedParams,
   'agentSession.conversationCommand': ConversationCommandParams,
   'agentSession.conversationOutline': OptionsParams,

@@ -28,7 +28,11 @@ export async function getProjectViewTable(
   if (args.ownerType !== 'organization' && args.ownerType !== 'user') {
     return {
       ok: false,
-      error: { type: 'validation_error', message: 'Invalid ownerType.' }
+      error: {
+        type: 'validation_error',
+        message: 'Invalid ownerType.',
+        reason: 'invalid_owner_type'
+      }
     }
   }
 
@@ -79,7 +83,10 @@ export async function getProjectViewTable(
     }
   }
   if (!project) {
-    return { ok: false, error: { type: 'not_found', message: 'Project not found.' } }
+    return {
+      ok: false,
+      error: { type: 'not_found', message: 'Project not found.', reason: 'project_not_found' }
+    }
   }
   const noSelector =
     args.viewId === undefined && args.viewNumber === undefined && args.viewName === undefined
@@ -91,7 +98,14 @@ export async function getProjectViewTable(
       null
   }
   if (!selectedRaw) {
-    return { ok: false, error: { type: 'not_found', message: 'Could not find the selected view.' } }
+    return {
+      ok: false,
+      error: {
+        type: 'not_found',
+        message: 'Could not find the selected view.',
+        reason: 'view_not_found'
+      }
+    }
   }
 
   let extraFields: RawProjectV2Field[] = []

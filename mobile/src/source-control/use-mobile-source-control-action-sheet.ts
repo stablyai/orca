@@ -1,16 +1,23 @@
 import { useMemo } from 'react'
+import { ENGLISH_COMMIT_DROPDOWN_COPY } from '../../../src/shared/source-control-dropdown-commit-items'
 import { buildMobileSourceControlActions } from './mobile-source-control-actions'
 import type { ActionSheetAction } from '../components/ActionSheetModal'
 import { SOURCE_CONTROL_ACTION_ICONS } from './mobile-source-control-screen-state'
 import type { MobileSourceControlState } from './use-mobile-source-control-state'
+import {
+  buildMobileSourceControlDecisionInputs,
+  getMobileForcePushBlockedReason,
+  type MobileSourceControlReviewInputs
+} from './mobile-source-control-primary-action'
 
 export function useMobileSourceControlActionSheet(
-  state: MobileSourceControlState
+  state: MobileSourceControlState,
+  review: MobileSourceControlReviewInputs
 ): ActionSheetAction[] {
   const {
-    commitMessage,
-    stagedCount,
-    upstream,
+    primaryActionArgs,
+    status,
+    rebaseBaseRef,
     upstreamKnown,
     busyAction,
     openingPath,
@@ -29,21 +36,31 @@ export function useMobileSourceControlActionSheet(
   return useMemo<ActionSheetAction[]>(
     () =>
       buildMobileSourceControlActions({
-        commitMessage,
-        stagedCount,
-        upstream: upstream ?? null,
-        upstreamKnown,
+        decision: buildMobileSourceControlDecisionInputs({ ...primaryActionArgs, review }),
+        conflictOperation: status?.conflictOperation,
+        // Desktop rebases onto the effective base, not an upstream compare base.
+        rebaseBaseRef,
         busyAction,
         openingPath,
         openingBranchPath,
         // Create intent may publish or push before review creation.
         prAvailable: upstreamKnown,
+        prHint: upstreamKnown ? undefined : ENGLISH_COMMIT_DROPDOWN_COPY.checkingBranchStatus,
+        forcePushBlockedReason: getMobileForcePushBlockedReason(review),
         handlers: {
           commit: () => void runActionSheetCommit(),
-          commitPush: () =>
-            void runActionSheetCommitSequence('commit-push', [{ method: 'git.push' }]),
+          commitPush: (forceWithLease) =>
+            void runActionSheetCommitSequence('commit-push', [
+              forceWithLease
+                ? { method: 'git.push', params: { forceWithLease: true } }
+                : { method: 'git.push' }
+            ]),
           commitSync: () => void runActionSheetCommitSync(),
           push: () => void runActionSheetGitSequence('push', [{ method: 'git.push' }]),
+          forcePush: () =>
+            void runActionSheetGitSequence('force-push', [
+              { method: 'git.push', params: { forceWithLease: true } }
+            ]),
           pull: () => void runActionSheetGitSequence('pull', [{ method: 'git.pull' }]),
           sync: () => void runActionSheetGitSync(),
           fetch: () => void runActionSheetGitSequence('fetch', [{ method: 'git.fetch' }]),
@@ -53,7 +70,7 @@ export function useMobileSourceControlActionSheet(
             ]),
           fastForward: () =>
             void runActionSheetGitSequence('fast-forward', [{ method: 'git.fastForward' }]),
-          rebase: () => void runActionSheetRebase(),
+          rebase: () => void runActionSheetRebase(rebaseBaseRef),
           createPr: () => void createPr(false),
           pushAndCreatePr: () => void createPr(true),
           checkout: () => void openBranchPicker(),
@@ -62,20 +79,21 @@ export function useMobileSourceControlActionSheet(
       }).map((action) => ({ ...action, icon: SOURCE_CONTROL_ACTION_ICONS[action.iconKey] })),
     [
       busyAction,
-      commitMessage,
       createPr,
       openBranchPicker,
       openHistory,
       openingBranchPath,
       openingPath,
+      primaryActionArgs,
+      rebaseBaseRef,
+      review,
       runActionSheetCommit,
       runActionSheetCommitSequence,
       runActionSheetCommitSync,
       runActionSheetGitSequence,
       runActionSheetGitSync,
       runActionSheetRebase,
-      stagedCount,
-      upstream,
+      status?.conflictOperation,
       upstreamKnown
     ]
   )

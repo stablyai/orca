@@ -182,15 +182,16 @@ async function startOrcadRuntime(
     clientCodexHomes: codexAccountHomes
   })
 
-  const { orcadAiVaultSessionSources, installOrcadSessionSearchService } =
-    await import('./orcad-session-search')
   const { loadAgentSessionClaimSigner } =
     await import('../runtime/agent-session/ownership/agent-session-claim-identity')
   const runtime = new OrcaRuntimeService(profileStore, stats, {
     // Persistent signatures let restarted runtimes adopt PTYs owned before restart.
     agentSessionClaimSigner: loadAgentSessionClaimSigner(runtimeUserDataPath, runtimeUserDataPath),
-    ...orcadAiVaultSessionSources(profileStore, codexAccountHomes, accountLaunch),
-    // Why absent on a WSL host: a resolver overrides the desktop-pushed CODEX_HOME.
+    getAdditionalAiVaultCodexHomePaths: () => [
+      ...codexAccountHomes.listSessionHomes(),
+      ...(accountLaunch?.listCodexSessionHomes() ?? [])
+    ],
+    // WSL must retain desktop-pushed CODEX_HOME instead of host-selected resolvers.
     ...accountLaunch?.runtimeDeps,
     ...agentHookRuntimeDeps(agentHookServer, observedPaneIdentities, () =>
       profileStore.getSettings()
@@ -219,6 +220,7 @@ async function startOrcadRuntime(
   const { restoreOrcadHostAccountLaunchEnv } = await import('./orcad-host-account-launch-env-store')
   restoreOrcadHostAccountLaunchEnv(runtime, runtimeUserDataPath)
 
+  const { installOrcadSessionSearchService } = await import('./orcad-session-search')
   sessionSearch = await installOrcadSessionSearchService({
     userDataPath: runtimeUserDataPath,
     getSettings: () => profileStore.getSettings()

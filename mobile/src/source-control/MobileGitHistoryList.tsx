@@ -1,7 +1,9 @@
 import { memo, useCallback, useEffect, useState } from 'react'
-import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native'
+import { ActivityIndicator, FlatList, Pressable, Text, View } from 'react-native'
 import { ChevronDown, ChevronRight } from 'lucide-react-native'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import type { ConnectionState } from '../transport/types'
 import type { RpcClient } from '../transport/rpc-client'
 import { useForceReconnect } from '../transport/host-client-hooks'
@@ -39,6 +41,7 @@ export const MobileGitHistoryList = memo(function MobileGitHistoryList({
   bottomInset,
   refreshNonce = 0
 }: Props) {
+  const colorScheme = useMobileColorScheme()
   const forceReconnect = useForceReconnect()
   const [rows, setRows] = useState<MobileCommitRow[] | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -209,7 +212,7 @@ export const MobileGitHistoryList = memo(function MobileGitHistoryList({
         </View>
       )
     },
-    [connected, connState, expanded, filesById, retryAction, toggleCommit]
+    [colorScheme, connected, connState, expanded, filesById, retryAction, toggleCommit]
   )
 
   const view = resolveMobileHistoryScreenView({ connected, rows, error })
@@ -245,6 +248,7 @@ export const MobileGitHistoryList = memo(function MobileGitHistoryList({
   return (
     <FlatList
       data={view.rows}
+      extraData={colorScheme}
       renderItem={renderCommit}
       keyExtractor={(row) => row.id}
       contentContainerStyle={{ paddingBottom: spacing.lg + bottomInset }}
@@ -252,7 +256,7 @@ export const MobileGitHistoryList = memo(function MobileGitHistoryList({
   )
 })
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   state: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.lg },
   stateText: { color: colors.textMuted, fontSize: typography.bodySize },
   retryButton: {
@@ -292,4 +296,4 @@ const styles = StyleSheet.create({
   add: { color: colors.gitDecorationAdded },
   del: { color: colors.gitDecorationDeleted },
   empty: { color: colors.textMuted, fontSize: typography.metaSize }
-})
+}))

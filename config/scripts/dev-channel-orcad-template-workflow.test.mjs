@@ -35,7 +35,7 @@ describe.each(channels)('$name build ships the orcad template', (channel) => {
     expect(template.with).toEqual({
       ref: channel.pinnedSha,
       build_template: true,
-      fast_runners: true
+      fast_runners: false
     })
     expect(template.permissions).toEqual({ contents: 'read', actions: 'read' })
     expect(template.secrets).toBeUndefined()

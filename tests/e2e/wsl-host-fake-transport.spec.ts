@@ -26,6 +26,7 @@ import {
   findWslHostDeployment
 } from '../../src/shared/runtime-environment-wsl-host-store'
 import { WSL_HOSTS_INTERNAL_GATE_ENV } from '../../src/shared/wsl-host-internal-gate'
+import type { AppState } from '../../src/renderer/src/store/types'
 import { openSidebarProjectDialog } from './helpers/sidebar-project-dialog'
 import { ensureTerminalVisible, waitForSessionReady } from './helpers/store'
 import {
@@ -34,6 +35,15 @@ import {
   waitForActiveTerminalManager,
   waitForTerminalOutput
 } from './helpers/terminal'
+
+declare global {
+  // oxlint-disable-next-line typescript-eslint/consistent-type-definitions -- declaration merging requires interface
+  interface Window {
+    /** E8 drive-refusal steps: records where the held local add went. */
+    e2eRecordDriveRefusalScan?: (path: string, runtimeEnvironmentId: string | null) => void
+    e2eOriginalScanNestedRepos?: AppState['scanNestedRepos']
+  }
+}
 
 const WSL_ENVIRONMENT_ID = 'wsl:ubuntu'
 const WSL_HOST_LABEL = 'Ubuntu (WSL)'
@@ -185,12 +195,65 @@ async function checkWindowsFolderPicker(
   await page.keyboard.press('Escape')
   await expect(manual).toBeHidden()
 
-  // A drive folder is refused with copy that says it stays on this computer.
+  // E8: a drive folder, picked directly, through the distro's /mnt, or typed, is refused inline in
+  // the dialog (toasts above a modal take no clicks), with a switch to this computer.
+  const dialog = page.getByRole('dialog', { name: /Add a project|Open host project/i })
+  // The Windows path is not a folder on this CI host, so hold the local add at its first step (the
+  // nested scan) and record where it went, instead of letting it fail into another modal.
+  const localAdds: { path: string; runtimeEnvironmentId: string | null }[] = []
+  await page.exposeFunction('e2eRecordDriveRefusalScan', (path: string, envId: string | null) =>
+    localAdds.push({ path, runtimeEnvironmentId: envId })
+  )
+  const expectDriveRefusal = async (windowsPath: string, screenshot: string): Promise<void> => {
+    const notice = dialog
+      .getByRole('alert')
+      .filter({ hasText: 'Add Windows drive folders on this computer' })
+      .filter({ hasText: windowsPath })
+    await expect(notice).toBeVisible({ timeout: 30_000 })
+    // Refused before any scan: nothing has been added yet, on either host.
+    expect(localAdds).toEqual([])
+    await settleAnimations(page)
+    await page.screenshot({ path: testInfo.outputPath(screenshot) })
+    await page.evaluate(() => {
+      const store = window.__store
+      if (!store) {
+        return
+      }
+      window.e2eOriginalScanNestedRepos = store.getState().scanNestedRepos
+      store.setState({
+        scanNestedRepos: (path, _connectionId, controls) => {
+          window.e2eRecordDriveRefusalScan?.(path, controls.runtimeEnvironmentId)
+          return new Promise(() => {})
+        }
+      })
+    })
+    await notice.getByRole('button', { name: 'Add on this computer' }).click()
+    // The open dialog switches its own host (the renderer is told it runs on Windows here) and
+    // adds the folder there.
+    await expect(dialog.getByRole('combobox')).toContainText('Local Windows', { timeout: 30_000 })
+    await expect
+      .poll(() => localAdds, { timeout: 30_000 })
+      .toEqual([{ path: windowsPath, runtimeEnvironmentId: null }])
+    await expect(notice).toBeHidden()
+    localAdds.length = 0
+    await page.evaluate(() => {
+      const original = window.e2eOriginalScanNestedRepos
+      if (original) {
+        window.__store?.setState({ scanNestedRepos: original })
+      }
+      window.__store?.getState().closeModal()
+    })
+    await expect(dialog).toBeHidden()
+  }
   await pickFolder('C:\\Users\\me\\src')
-  await expect(page.getByText('Pick a folder inside Ubuntu.')).toBeVisible()
-  await settleAnimations(page)
-  await page.screenshot({ path: testInfo.outputPath('wsl-windows-folder-picker-drive.png') })
-  await page.keyboard.press('Escape')
+  await expectDriveRefusal('C:\\Users\\me\\src', 'wsl-windows-folder-picker-drive.png')
+  await pickFolder('\\\\wsl.localhost\\Ubuntu\\mnt\\c\\Users\\me\\work')
+  await expectDriveRefusal('C:\\Users\\me\\work', 'wsl-windows-folder-picker-drvfs.png')
+  await pickFolder(uncPick)
+  await expect(manual.locator('#server-project-path')).toHaveValue(projectPath, { timeout: 30_000 })
+  await manual.locator('#server-project-path').fill('/mnt/d/typed/app')
+  await manual.getByRole('button', { name: /Add Git Project/i }).click()
+  await expectDriveRefusal('D:\\typed\\app', 'wsl-typed-drvfs-path.png')
   await cdp.send('Emulation.setUserAgentOverride', { userAgent: '' })
   await cdp.detach()
 }
@@ -313,6 +376,8 @@ test('adds a WSL distro as a host, adds a project on it, and runs a terminal the
     await waitForActiveTerminalManager(page, 30_000)
     const ptyId = await waitForActivePanePtyId(page, 30_000)
     expect(ptyId).toMatch(/^remote:/)
+    // Why: keys typed before the shell's first prompt can be dropped; its prompt names the project folder.
+    await waitForTerminalOutput(page, path.basename(projectPath), 30_000)
     await focusActiveTerminalInput(page)
     await page.keyboard.type("printf 'WSL_HOST_TERMINAL_%s\\n' ready")
     await page.keyboard.press('Enter')

@@ -16,25 +16,22 @@ import {
 } from 'react'
 import type { AgentType } from '../../../../shared/agent-status-types'
 import { getNativeChatAgentProfile } from '../../../../shared/native-chat-agent-profiles'
-import {
-  classifyNativeChatSend,
-  type NativeChatSendClassification,
-  type NativeChatSessionSkill,
-  type SlashCommandSuggestion
+import type {
+  NativeChatSessionSkill,
+  SlashCommandSuggestion
 } from '../../../../shared/native-chat/input/native-chat-slash-commands'
-import { isStructuredAgentSessionComposerCommand } from '../../../../shared/structured-agent-session-composer'
 import {
   applyMentionSuggestion,
+  applyPickerSuggestion,
+  classifyNativeChatSend,
   deriveComposerAutocomplete,
   editReplacesTriggerToken,
   isSkillPickerTriggered,
-  type ComposerAutocomplete
-} from './native-chat-composer-state'
-import { applyPickerSuggestion } from '../../../../shared/native-chat/input/native-chat-picker-triggers'
-import {
-  classifyPickerCommands,
-  type NativeChatPickerItem
-} from '../../../../shared/native-chat/input/native-chat-picker-items'
+  type ComposerAutocomplete,
+  type NativeChatPickerItem,
+  type NativeChatSendClassification
+} from '../../../../shared/native-chat-composer-autocomplete'
+import { nativeChatPickerCommands } from '../../../../shared/native-chat-skill-visibility'
 import { useNativeChatSkills } from './use-native-chat-skills'
 import {
   emitNativeChatPickerItemAccepted,
@@ -101,13 +98,8 @@ export function useNativeChatPickerState(args: {
   const skillPickerTriggered = !disabled && isSkillPickerTriggered(draft.slice(0, caret), profile)
   const discovery = useNativeChatSkills(agent, terminalTabId, skillPickerTriggered)
   const pickerCommands = useMemo(
-    () =>
-      classifyPickerCommands(agentCommands, discovery.skills, {
-        // A chat that keeps scanned skills (OpenCode) may report each as a command too.
-        reportMayListSkills: profile?.keepsScannedSkills === true,
-        isSendCommand: (name) => isStructuredAgentSessionComposerCommand(`/${name}`, agent)
-      }),
-    [agent, agentCommands, discovery.skills, profile]
+    () => nativeChatPickerCommands(agent, agentCommands, discovery.skills),
+    [agent, agentCommands, discovery.skills]
   )
   const listboxId = `native-chat-picker-${useId().replaceAll(':', '')}`
   const dismissalContext = `${draftScopeKey}:${agent}`

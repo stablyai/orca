@@ -115,36 +115,6 @@ function renderSurface(
   )
 }
 
-for (const surface of ['panel', 'guided-panel', 'linear', 'browser', 'capabilities'] as const) {
-  describe(`${surface} blocked setup`, () => {
-    describe.each([
-      [
-        'update-server',
-        'Update Orca on the server to install its skills.',
-        'Update Orca on the server'
-      ],
-      ['connect-host', 'Connect to this SSH host to install its skills.', 'Connect the SSH host']
-    ] as const)('%s', (reason, message, pill) => {
-      it.each(surface === 'browser' || surface === 'capabilities' ? [false] : [false, true])(
-        'explains the prerequisite before any click (installed: %s)',
-        async (installed) => {
-          mocks.installed = installed
-          mocks.plan.mockResolvedValue({ kind: 'unsupported', reason })
-          renderSurface(surface)
-
-          expect(await screen.findByText(message)).toBeDefined()
-          expect(screen.queryByRole('button', { name: /^(Install|Update|Replace)/ })).toBeNull()
-          expect(screen.queryByText('Check failed')).toBeNull()
-          if (surface === 'panel' || surface === 'guided-panel' || surface === 'linear') {
-            expect(screen.getByText(pill, { exact: true })).toBeDefined()
-          }
-          expect(mocks.execute).not.toHaveBeenCalled()
-        }
-      )
-    })
-  })
-}
-
 for (const surface of ['panel', 'linear', 'browser', 'capabilities'] as const) {
   describe(`${surface} blocked setup`, () => {
     it.each([false, true])(

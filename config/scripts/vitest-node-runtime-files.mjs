@@ -164,7 +164,6 @@ const NODE_RUNTIME_INCLUDE = [
   'src/main/native-chat/agent-session-wire/structured-agent-session-permission-mode.test.ts',
   'src/main/native-chat/agent-session-wire/structured-agent-session-queued-legacy-import.test.ts',
   'src/main/runtime/agent-session-conversation-name-store.test.ts',
-  'src/main/runtime/structured-session-mail-redrive-wiring.test.ts',
   'src/main/runtime/rpc/ws-transport.test.ts',
   'src/main/runtime/rpc/dispatcher-transport-parity.test.ts',
   'src/main/runtime/rpc/methods/structured-agent-session-visual.test.ts',

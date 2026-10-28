@@ -189,7 +189,6 @@ export function useAiVaultSessionRefresh(
           return
         }
         setFailure(null)
-        // Post-scan projection can change content without changing the transcript scan stamp.
         cacheAiVaultSessionList(request, result, { replaceHostEntries: args.force === true })
         publicationGateRef.current.publish(result, (published) => {
           if (requestCurrent()) {

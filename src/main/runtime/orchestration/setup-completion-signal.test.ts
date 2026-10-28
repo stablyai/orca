@@ -13,6 +13,8 @@ describe('orchestration setup completion signal', () => {
     expect(command).toContain('__ORCA_SETUP_COMPLETE__:token-posix:%s\\n')
     expect(command).toContain('"$status"')
     expect(command).toContain('exit "$status"')
+    // Pair-inserting line editors (zsh-autopair) corrupt typed brackets (#18059).
+    expect(command).not.toMatch(/[()[\]{}]/)
   })
 
   it('preserves a native Windows setup path and exit code without shell interpolation', () => {

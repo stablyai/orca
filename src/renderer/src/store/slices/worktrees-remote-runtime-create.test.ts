@@ -178,8 +178,6 @@ describe('worktree remote runtime mutations', () => {
     expect(store.getState().worktreesByRepo.repo1).toEqual([
       {
         ...wt,
-        projectId: 'repo:repo1',
-        projectHostSetupId: 'repo1',
         hostId: 'runtime:env-1',
         runtimeOwnerEnvironmentId: 'env-1'
       }

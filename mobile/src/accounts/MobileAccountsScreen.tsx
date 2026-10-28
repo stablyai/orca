@@ -6,6 +6,7 @@ import { ChevronLeft, Check, RefreshCw, User } from 'lucide-react-native'
 import { loadHosts } from '../transport/host-store'
 import { useHostClient } from '../transport/host-client-hooks'
 import { colors, spacing } from '../theme/mobile-theme'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { styles } from './mobile-accounts-screen-styles'
 import { useNow } from '../hooks/use-now'
 import { ClaudeIcon, OpenAIIcon } from '../components/AgentIcons'
@@ -33,6 +34,7 @@ type AccountsNotice = { title: string; message: string }
 
 // Use page ConfirmModal because RN Web Alert.alert is a no-op; Back must hand off to shell’s native stack.
 export function MobileAccountsScreen() {
+  useMobileColorScheme()
   const router = useRouteHandoff()
   const insets = useSafeAreaInsets()
   const { hostId } = useLocalSearchParams<{ hostId: string }>()

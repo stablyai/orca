@@ -11,7 +11,6 @@
 1 src/renderer/src/components/dashboard/dashboard-worktree-launch-options.ts # P5b-2 must clear: optional state field defaults to empty
 4 src/renderer/src/components/dashboard/useDashboardPopoutBridge.ts # P5b-2 must clear: change detection on optional fields never fires when absent
 2 src/renderer/src/components/dashboard/useRetainedAgents.ts # reads a passed-in copy
-6 src/renderer/src/components/editor/closed-editor-tab-controller.ts # P5b-2 must clear: identity compare of store slices passes when absent
 1 src/renderer/src/components/editor/markdown-document-worktree-path-selector.ts # P5b-2 must clear: optional state field
 1 src/renderer/src/components/feature-wall/feature-wall-setup-progress.ts # reads a passed-in copy
 3 src/renderer/src/components/quick-open-file-list.ts # P5b-2 must clear: store read; file at the max-lines limit

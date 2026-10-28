@@ -68,9 +68,9 @@ export function createAllHostRepoCatalogActions(
           const finalizedRepos = applyManualRepoOrder(reconciliation.repos, s.manualRepoOrder)
           const mergedProjectCompatibility = mergeFetchedHostProjectCatalog({
             previous: {
-              projects: s.endpointProjects,
+              projects: s.projects,
               projectHostSetups: filterSetupsForPrunedRepoRows(
-                s.endpointProjectHostSetups,
+                s.projectHostSetups,
                 result.repos,
                 finalizedRepos
               )
@@ -86,8 +86,7 @@ export function createAllHostRepoCatalogActions(
             repos: finalizedRepos,
             pendingSshRepoReadoptions: reconciliation.pendingReadoptions,
             ...reconcileFetchedCatalogWorktreeState(s, catalog, finalizedRepos),
-            endpointProjects: mergedProjectCompatibility.projects,
-            endpointProjectHostSetups: mergedProjectCompatibility.projectHostSetups,
+            ...mergedProjectCompatibility,
             ...(arrayElementsUnchanged(finalizedRepos, s.repos)
               ? {}
               : { folderWorkspacePathStatuses: {} }),

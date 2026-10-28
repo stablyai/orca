@@ -6,6 +6,7 @@ import {
 } from '../../../../shared/keybindings'
 import { normalizeDisabledTuiAgents } from '../../../../shared/tui-agent-selection'
 import type { TuiAgent } from '../../../../shared/tui-agent'
+import { localizeKeybindingDefinition } from './keybinding-title-copy'
 
 export type ShortcutGroup = {
   title: string
@@ -33,7 +34,8 @@ export function groupDefinitions(
     if (hiddenAgentActionIds.has(definition.id)) {
       continue
     }
-    groups.set(definition.group, [...(groups.get(definition.group) ?? []), definition])
+    const localized = localizeKeybindingDefinition(definition)
+    groups.set(localized.group, [...(groups.get(localized.group) ?? []), localized])
   }
   return Array.from(groups.entries()).map(([title, items]) => ({ title, items }))
 }

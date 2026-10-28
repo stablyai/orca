@@ -66,12 +66,7 @@ describe('TabBar worktree-write gate (non-Windows client)', () => {
     probeWindowsCapabilities.hostPlatform = 'darwin'
     tabBarSurfaceRenders.count = 0
     localProjectRuntimeSpy.mockClear()
-    ;(await createTabBarProbeStore()).setState({
-      worktreesByRepo: {},
-      endpointProjects: [],
-      endpointProjectHostSetups: [],
-      repos: []
-    })
+    ;(await createTabBarProbeStore()).setState({ worktreesByRepo: {}, projects: [], repos: [] })
   })
 
   afterEach(() => {

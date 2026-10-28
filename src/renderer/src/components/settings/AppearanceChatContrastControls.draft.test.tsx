@@ -3,7 +3,7 @@ import type { ComponentProps } from 'react'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Slider } from '../ui/slider'
-import { resolveNativeChatAppearanceSettings } from '../../../../shared/native-chat-appearance-settings'
+import { resolveNativeChatAppearanceSettings } from '../../../../shared/native-chat/native-chat-appearance-settings'
 import { AppearanceChatContrastControls } from './AppearanceChatContrastControls'
 
 vi.mock('../../store', () => ({

@@ -113,9 +113,6 @@ function sharedCreateFields(
     ...(options?.linkedWorkItem !== undefined ? { linkedWorkItem: options.linkedWorkItem } : {}),
     ...(options?.linkedTaskSourceContext !== undefined
       ? { linkedTaskSourceContext: options.linkedTaskSourceContext }
-      : {}),
-    ...(options?.automationProvenanceRequest
-      ? { automationProvenanceRequest: options.automationProvenanceRequest }
       : {})
   }
 }
@@ -128,7 +125,11 @@ export function buildLocalWorktreeCreateArgs(
     repoId: request.repoId,
     ...sharedCreateFields(request, attempt),
     ...(request.startup ? { startup: request.startup } : {}),
-    ...(request.creationId ? { creationId: request.creationId } : {})
+    ...(request.creationId ? { creationId: request.creationId } : {}),
+    // Why local only: this desktop's main minted the dispatch token, so a runtime host must reject it.
+    ...(request.options?.automationProvenanceRequest
+      ? { automationProvenanceRequest: request.options.automationProvenanceRequest }
+      : {})
   }
 }
 

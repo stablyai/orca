@@ -2,6 +2,7 @@ import { Children, type ReactNode } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import { Check, ChevronRight } from 'lucide-react-native'
 import { colors } from '../theme/mobile-theme'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { MobileSwitch } from '../components/MobileSwitch'
 import type { WorkspaceViewChoice } from '../../../src/shared/workspace-view/workspace-view-options'
 import { hostScreenStyles as styles } from './host-screen-styles'
@@ -15,6 +16,7 @@ export function CheckRow(props: {
   radio?: boolean
   disabled?: boolean
 }) {
+  useMobileColorScheme()
   return (
     <Pressable
       style={[
@@ -45,6 +47,7 @@ export function CheckRow(props: {
 }
 
 export function OptionRowList({ children }: { children: ReactNode }) {
+  useMobileColorScheme()
   return (
     <>
       {Children.map(children, (child, i) => (
@@ -85,6 +88,7 @@ export function SwitchRow(props: {
   onChange: (value: boolean) => void
   indent?: boolean
 }) {
+  useMobileColorScheme()
   return (
     <View style={[styles.filterRow, props.indent && styles.optionRowIndented]}>
       <Text style={styles.filterRowText} numberOfLines={1}>
@@ -100,6 +104,7 @@ export function SwitchRow(props: {
 }
 
 export function DrillRow(props: { label: string; value: string; onPress: () => void }) {
+  useMobileColorScheme()
   return (
     <Pressable
       style={styles.filterRow}

@@ -3,7 +3,7 @@
 import { createHash, randomBytes } from 'node:crypto'
 import { appendFileSync, cpSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { delimiter, join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 
 vi.mock('electron', () => ({ app: { getAppPath: () => process.cwd() } }))
@@ -26,6 +26,12 @@ import { readWindowsProcessTableFresh } from '../windows/windows-process-table'
 import { resolveWslInteropSpawnCwd } from '../wsl-interop-spawn-directory'
 import { createWslDistroHolder, type WslDistroHolder } from './wsl-distro-holder'
 import { proveWslStructuredChat } from './wsl-orcad-structured-chat-contract'
+import { WSL_CHAT_GUEST_BIN } from './wsl-orcad-chat-provider-fixture'
+import {
+  WSL_CHAT_WINDOWS_DECOY,
+  WSL_CHAT_WINDOWS_DECOY_AGENTS,
+  WSL_CHAT_WINDOWS_DECOY_DIR
+} from './wsl-orcad-chat-windows-decoy'
 import { WSL_DISTRO_HOLDER_MARKER } from './wsl-distro-holder-command'
 import { resolveWslExecutablePath } from './wsl-executable-path'
 import { wslDistroHolderKey } from './wsl-distro-holder-record'
@@ -57,6 +63,7 @@ const WSL_INTEROP = '/proc/sys/fs/binfmt_misc/WSLInterop'
 const LOGIN_ENV_SOCK = '/tmp/orca-lane-agent.sock'
 const LOGIN_ENV_TAG = 'orca-lane-login-env'
 const LANE_REPO = '$HOME/wsl-orcad-lane-repo'
+const CHAT_PATH_TAG = 'orca-lane-chat-path'
 
 type LaunchState = {
   launchEndedAtMs: number
@@ -459,7 +466,10 @@ async function launchPhase(distro: string, systemd: boolean): Promise<Receipt> {
     `rc="$HOME/.profile"; for f in "$HOME/.bash_profile" "$HOME/.bash_login"; do ` +
       `if [ -f "$f" ]; then rc="$f"; break; fi; done; ` +
       `grep -q ${LOGIN_ENV_TAG} "$rc" 2>/dev/null || ` +
-      `printf 'export SSH_AUTH_SOCK=${LOGIN_ENV_SOCK} # ${LOGIN_ENV_TAG}\\n' >> "$rc"`
+      `printf 'export SSH_AUTH_SOCK=${LOGIN_ENV_SOCK} # ${LOGIN_ENV_TAG}\\n' >> "$rc"; ` +
+      // The chat fixtures' agent CLIs go here, ahead of the Windows PATH WSL appends.
+      `grep -q ${CHAT_PATH_TAG} "$rc" 2>/dev/null || ` +
+      `printf 'export PATH="$HOME/${WSL_CHAT_GUEST_BIN}:$PATH" # ${CHAT_PATH_TAG}\\n' >> "$rc"`
   )
   let started = performance.now()
   const connection = await supervisor.connect(distro)
@@ -607,6 +617,13 @@ describe.runIf(RUN && process.platform === 'win32')('WSL orcad on real WSL2 dist
   beforeAll(async () => {
     mkdirSync(USER_DATA, { recursive: true })
     mkdirSync(RECEIPT_DIR, { recursive: true })
+    // Windows-side agents on this process's PATH reach orcad through WSL's appended PATH.
+    const decoyDir = join(WORK_DIR, WSL_CHAT_WINDOWS_DECOY_DIR)
+    mkdirSync(decoyDir, { recursive: true })
+    for (const agent of WSL_CHAT_WINDOWS_DECOY_AGENTS) {
+      writeFileSync(join(decoyDir, agent), WSL_CHAT_WINDOWS_DECOY)
+    }
+    process.env.PATH = `${decoyDir}${delimiter}${process.env.PATH ?? ''}`
     installLaneAppEnvironment()
     createLaneManager()
     receipt.wslVersion = (await wslExe(['--version'])).output

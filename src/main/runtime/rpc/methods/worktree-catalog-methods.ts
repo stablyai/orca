@@ -28,7 +28,8 @@ export const WORKTREE_CATALOG_METHODS = [
             supportsWorktreeVisibilitySourceDefaults(
               context,
               params.supportsWorktreeVisibilitySourceDefaults
-            )
+            ),
+            params.includeAgentWait === true
           ),
           context,
           pendingAtScan

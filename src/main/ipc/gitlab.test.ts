@@ -214,31 +214,40 @@ describe('GitLab IPC handlers', () => {
   })
 
   it('forwards the typed search query into listMRs and listWorkItems', async () => {
-    listMergeRequestsMock.mockResolvedValueOnce({ items: [] })
-    listWorkItemsMock.mockResolvedValueOnce({ items: [] })
+    const result = {
+      items: [{ id: 'mr-7', type: 'mr', number: 7 }],
+      page: 3,
+      perPage: 1,
+      totalCount: 0,
+      totalPages: 4
+    }
+    listMergeRequestsMock.mockResolvedValueOnce(result)
+    listWorkItemsMock.mockResolvedValueOnce(result)
     registerGitLabHandlers(storeWithRepos([repo()]) as Store)
 
-    await ipcHandlers.get('gitlab:listMRs')?.(null, {
+    const mergeRequests = await ipcHandlers.get('gitlab:listMRs')?.(null, {
       repoPath: '/local/orca',
       state: 'opened',
-      page: 1,
-      perPage: 20,
+      page: 3,
+      perPage: 1,
       query: '  fix login  '
     })
-    await ipcHandlers.get('gitlab:listWorkItems')?.(null, {
+    const workItems = await ipcHandlers.get('gitlab:listWorkItems')?.(null, {
       repoPath: '/local/orca',
       state: 'opened',
-      page: 1,
-      perPage: 20,
+      page: 3,
+      perPage: 1,
       query: 'fix login'
     })
 
+    expect(mergeRequests).toEqual(result)
+    expect(workItems).toEqual(result)
     // Preserve the query's sixth argument slot; omitting it silently disables search (#6263).
     expect(listMergeRequestsMock).toHaveBeenCalledWith(
       '/local/orca',
       'opened',
+      3,
       1,
-      20,
       undefined,
       'fix login',
       null
@@ -246,8 +255,8 @@ describe('GitLab IPC handlers', () => {
     expect(listWorkItemsMock).toHaveBeenCalledWith(
       '/local/orca',
       'opened',
+      3,
       1,
-      20,
       undefined,
       'fix login',
       null

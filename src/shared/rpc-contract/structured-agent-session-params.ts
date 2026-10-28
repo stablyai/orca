@@ -1,22 +1,10 @@
 import {
   SendBody,
-  AgentSessionOptions,
   MAX_OPTION_LABEL,
-  MAX_PROMPT_BYTES
+  AgentSessionOptions
 } from './structured-agent-session-message-params'
-export {
-  SendBlock,
-  MAX_BLOCKS,
-  MAX_OPTION_LABEL,
-  MAX_PROMPT_BYTES
-} from './structured-agent-session-message-params'
+import { TerminalClose } from './terminal-unary-params'
 import {
-  Identifier,
-  JournalCursor,
-  MAX_ID_LENGTH,
-  SessionId
-} from './structured-agent-session-identifiers'
-export {
   Identifier,
   JournalCursor,
   MAX_ID_LENGTH,
@@ -26,37 +14,36 @@ import { z } from 'zod'
 import { CREATE_TAB_FIELDS } from './structured-agent-session-create-tab-params'
 import { isStructuredAgentId } from '../agent-session-provider-handle-encoding'
 import { normalizeExecutionHostId } from '../execution-host'
-import {
-  AGENT_SESSION_QUESTION_ANSWER_MAX_BYTES,
-  AGENT_SESSION_RESPONSE_OPTION_ID_MAX_LENGTH
-} from '../agent-session-question-answer'
+import { AGENT_SESSION_RESPONSE_OPTION_ID_MAX_LENGTH } from '../agent-session-question-answer'
 import {
   AGENT_SESSION_HISTORY_DIRECTIONS,
   AGENT_SESSION_HISTORY_MAX_LIMIT
 } from '../agent-session-wire'
 import { AGENT_SESSION_THREAD_GOAL_OBJECTIVE_MAX_LENGTH } from '../agent-session-thread-goal-wire'
+import { MutationEnvelope } from './structured-agent-session-mutation-envelope'
+
+export {
+  SendBlock,
+  MAX_BLOCKS,
+  MAX_OPTION_LABEL,
+  MAX_PROMPT_BYTES
+} from './structured-agent-session-message-params'
+
+export {
+  ContinuationContextParams,
+  Identifier,
+  JournalCursor,
+  MAX_ID_LENGTH,
+  SessionId
+} from './structured-agent-session-identifiers'
 
 // Four Claude questions with all four generated choices occupy 610 chars when fully percent-encoded.
 export const MAX_RESPONSE_OPTION_ID_LENGTH = AGENT_SESSION_RESPONSE_OPTION_ID_MAX_LENGTH
 
 /** Matches the journal's bounds on one grouped prompt. */
-const MAX_QUESTION_ANSWER_QUESTIONS = 4
-const MAX_QUESTION_ANSWER_OPTIONS = 64
 
 /** One relaunch cannot offer more chats than a profile plausibly holds. */
 export const MAX_RESTART_RESUME_SESSIONS = 512
-
-export const MutationEnvelope = z
-  .object({
-    sessionId: SessionId,
-    clientOperationId: Identifier('Invalid client operation id'),
-    /** Null is the "must not exist yet" case; every other call fences. */
-    expectedRuntimeFence: z.number().int().positive().nullable(),
-    payloadFingerprint: z
-      .string()
-      .regex(/^[0-9a-f]{64}$/, 'Payload fingerprint must be a sha256 hex digest')
-  })
-  .strict()
 
 export const ProviderHandle = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('codex'), threadId: Identifier('Invalid thread id') }).strict(),
@@ -216,50 +203,6 @@ export const RespondParams = z
   })
   .strict()
 
-const QuestionAnswer = z
-  .object({
-    // Codex question ids are model-written and untrimmed; the host matches them exactly.
-    questionId: z
-      .string()
-      .min(1, 'Invalid question id')
-      .max(MAX_RESPONSE_OPTION_ID_LENGTH, 'Invalid question id'),
-    optionIds: z
-      .array(Identifier('Invalid option id', MAX_RESPONSE_OPTION_ID_LENGTH))
-      .max(MAX_QUESTION_ANSWER_OPTIONS),
-    // Hashed verbatim by both peers, so no trim or transform here.
-    other: z
-      .string()
-      .max(AGENT_SESSION_QUESTION_ANSWER_MAX_BYTES)
-      .refine(
-        (value) => Buffer.byteLength(value, 'utf8') <= AGENT_SESSION_QUESTION_ANSWER_MAX_BYTES,
-        'Answer is too large'
-      )
-      .optional()
-  })
-  .strict()
-
-export const RespondToQuestionParams = z
-  .object({
-    envelope: MutationEnvelope,
-    itemId: Identifier('Invalid item id'),
-    expectedRevision: z.number().int().positive(),
-    /** An answer packed into one id, from clients that predate `answers`. */
-    optionId: Identifier('Invalid option id', MAX_RESPONSE_OPTION_ID_LENGTH).optional(),
-    answers: z.array(QuestionAnswer).min(1).max(MAX_QUESTION_ANSWER_QUESTIONS).optional()
-  })
-  .strict()
-  .superRefine((value, ctx) => {
-    if ((value.optionId === undefined) === (value.answers === undefined)) {
-      ctx.addIssue({ code: 'custom', message: 'Send exactly one of an option id or answers' })
-    }
-    if (
-      value.answers !== undefined &&
-      Buffer.byteLength(JSON.stringify(value.answers), 'utf8') > MAX_PROMPT_BYTES
-    ) {
-      ctx.addIssue({ code: 'custom', message: 'Answer is too large' })
-    }
-  })
-
 export const SetOptionParams = z.strictObject({
   envelope: MutationEnvelope,
   key: Identifier('Invalid option key'),
@@ -267,6 +210,47 @@ export const SetOptionParams = z.strictObject({
 })
 
 export const OptionsParams = z.object({ sessionId: SessionId }).strict()
+export const SwitchToChatParams = OptionsParams.extend({
+  execution: z
+    .object({
+      invocationId: Identifier('Invalid invocation'),
+      observe: z.boolean().optional(),
+      receipt: z
+        .object({
+          generation: Identifier('Invalid generation'),
+          shown: z.boolean(),
+          retained: z.boolean().optional(),
+          converged: z.boolean().optional()
+        })
+        .strict()
+        .optional(),
+      create: CreateIntentParams.omit({ firstMessage: true }).optional(),
+      source: TerminalClose.required().optional()
+    })
+    .strict()
+    .optional()
+}).strict()
+export const SwitchToTerminalParams = OptionsParams.extend({
+  execution: z
+    .object({
+      invocationId: Identifier('Invalid invocation'),
+      observe: z.boolean().optional(),
+      receipt: z
+        .object({
+          generation: Identifier('Invalid generation'),
+          shown: z.boolean(),
+          retained: z.boolean().optional(),
+          converged: z.boolean().optional()
+        })
+        .strict()
+        .optional(),
+      sourceTabId: Identifier('Invalid tab').optional(),
+      groupId: Identifier('Invalid group').optional(),
+      commandOverride: z.string().max(8192).optional()
+    })
+    .strict()
+    .optional()
+}).strict()
 export const ItemParams = OptionsParams.extend({ itemId: z.string().min(1) }).strict()
 // Why optional: only a host advertising the workspace-sleep-mark capability is sent `markAsleep`.
 export const SleepWorkspaceParams = z
@@ -365,3 +349,7 @@ export const RewindParams = z
     expectedEpoch: Identifier('Invalid journal epoch')
   })
   .strict()
+
+export { RespondToQuestionParams } from './structured-agent-session-question-params'
+
+export { MutationEnvelope } from './structured-agent-session-mutation-envelope'

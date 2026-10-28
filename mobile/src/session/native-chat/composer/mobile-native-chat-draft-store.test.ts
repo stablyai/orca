@@ -4,7 +4,13 @@ import { afterEach, describe, expect, it } from 'vitest'
 import type { NativeChatMessage } from '../../../../../src/shared/native-chat-types'
 import { useMobileNativeChatDrafts } from './use-mobile-native-chat-drafts'
 import {
+  readMobileNativeChatPickedSkills,
+  editMobileNativeChatDraft,
+  readMobileNativeChatSkillOrigin,
+  recordMobileNativeChatSkillPick,
+  restoreMobileNativeChatPickedSkills,
   resetMobileNativeChatDraftStoreForTests,
+  setMobileNativeChatDraftText,
   useMobileNativeChatDraft
 } from './mobile-native-chat-draft-store'
 
@@ -141,5 +147,43 @@ describe('mobile native-chat draft store', () => {
 
     expect(shown).toBe('typed')
     expect(screenRenders).toBe(rendersBeforeTyping)
+  })
+})
+
+describe('picked skills', () => {
+  afterEach(() => resetMobileNativeChatDraftStoreForTests())
+
+  it('forgets a pick once an edit deletes its token, even if the name is typed again', () => {
+    const review = { name: 'review', path: '/a/review/SKILL.md' }
+    setMobileNativeChatDraftText('draft', 'fix $review then ')
+    recordMobileNativeChatSkillPick('draft', { token: '$review', path: review.path })
+    editMobileNativeChatDraft('draft', 'fix it then ')
+    editMobileNativeChatDraft('draft', 'fix it then $review')
+    expect(readMobileNativeChatPickedSkills('draft')).toEqual([])
+  })
+
+  it('keeps a picked skill as the send origin through a send clear, until an edit stops it leading', () => {
+    editMobileNativeChatDraft('draft', '/triage ')
+    recordMobileNativeChatSkillPick('draft', { token: '/triage' })
+    editMobileNativeChatDraft('draft', '/triage the flaky test')
+    setMobileNativeChatDraftText('draft', '')
+    setMobileNativeChatDraftText('draft', '/triage the flaky test')
+    expect(readMobileNativeChatSkillOrigin('draft')).toBe('/triage')
+    editMobileNativeChatDraft('draft', 'the flaky test')
+    expect(readMobileNativeChatSkillOrigin('draft')).toBeNull()
+  })
+
+  it('replaces the file a re-picked token named, and gives a rejected draft its files back', () => {
+    const first = { name: 'review', path: '/a/review/SKILL.md' }
+    const second = { name: 'review', path: '/b/review/SKILL.md' }
+    editMobileNativeChatDraft('draft', '$review ')
+    recordMobileNativeChatSkillPick('draft', { token: '$review', path: first.path })
+    recordMobileNativeChatSkillPick('draft', { token: '$review', path: second.path })
+    expect(readMobileNativeChatPickedSkills('draft')).toEqual([second])
+
+    editMobileNativeChatDraft('draft', 'something else')
+    setMobileNativeChatDraftText('draft', '$review ')
+    restoreMobileNativeChatPickedSkills('draft', [second])
+    expect(readMobileNativeChatPickedSkills('draft')).toEqual([second])
   })
 })

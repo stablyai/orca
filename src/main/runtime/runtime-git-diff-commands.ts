@@ -109,14 +109,16 @@ export class RuntimeGitDiffCommands {
   async getRuntimeGitRemoteFileUrl(
     worktreeSelector: string,
     relativePath: string,
-    line: number
+    line: number,
+    endLine?: number
   ): Promise<string | null> {
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
     const normalizedRelativePath = normalizeRuntimeGitRelativePath(relativePath)
     return requireRuntimeGitProvider(target).getRemoteFileUrl(
       target.worktree.path,
       normalizedRelativePath,
-      line
+      line,
+      endLine
     )
   }
 

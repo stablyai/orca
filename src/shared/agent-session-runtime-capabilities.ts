@@ -65,6 +65,8 @@ export const CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY =
 // Probe additive conversationOutline before calling; older hosts keep loaded-message rails instead of method_not_found.
 export const AGENT_SESSION_CONVERSATION_OUTLINE_RUNTIME_CAPABILITY =
   'agent-session.conversation-outline.v1' as const
+export const AGENT_SESSION_CONTINUATION_CONTEXT_RUNTIME_CAPABILITY =
+  'agent-session.continuation-context.v1' as const
 // Probe additive item reads before offering full output; older hosts retain only heads.
 export const AGENT_SESSION_ITEM_DETAIL_RUNTIME_CAPABILITY = 'agent-session.item-detail.v1' as const
 // The RPC is registered unconditionally; per-session rewind support is a separate check.
@@ -118,6 +120,7 @@ export const AGENT_SESSION_RUNTIME_CAPABILITIES = [
   AGENT_SESSION_REWIND_RUNTIME_CAPABILITY,
   AGENT_SESSION_REWIND_RECOVERY_CAPABILITY,
   AGENT_SESSION_CONVERSATION_OUTLINE_RUNTIME_CAPABILITY,
+  AGENT_SESSION_CONTINUATION_CONTEXT_RUNTIME_CAPABILITY,
   AGENT_SESSION_ITEM_DETAIL_RUNTIME_CAPABILITY,
   AGENT_SESSION_BACKGROUND_TASK_STOP_CAPABILITY,
   AGENT_SESSION_QUESTION_ANSWERS_RUNTIME_CAPABILITY,

@@ -12,6 +12,8 @@ import Animated, {
   type SharedValue
 } from 'react-native-reanimated'
 import { colors, spacing } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { triggerMediumImpact } from '../platform/haptics'
 import {
   type DragReorderLayout,
@@ -66,6 +68,7 @@ export function DragReorderRow({
   onAccessibilityMove: (key: string, delta: number) => void
   renderContent: (handle: ReactNode) => ReactNode
 }): React.JSX.Element {
+  useMobileColorScheme()
   const {
     layout,
     initialPositions,
@@ -77,6 +80,9 @@ export function DragReorderRow({
     dragTranslationY,
     dragPointerAbsY
   } = shared
+  // Read on the JS thread: capturing the live `colors` in a worklet would freeze it.
+  const activeBackground = colors.bgRaised
+  const restingBackground = colors.bgPanel
 
   const pan = Gesture.Pan()
     .enabled(ready && movable && !disabled)
@@ -144,7 +150,7 @@ export function DragReorderRow({
         zIndex: 2,
         elevation: presentation === 'settings' ? 4 : 0,
         shadowOpacity: presentation === 'settings' ? 0.3 : 0,
-        backgroundColor: presentation === 'settings' ? colors.bgRaised : undefined,
+        backgroundColor: presentation === 'settings' ? activeBackground : undefined,
         transform: [{ scale: presentation === 'settings' ? 1.02 : 1 }]
       }
     }
@@ -154,10 +160,21 @@ export function DragReorderRow({
       zIndex: 0,
       elevation: 0,
       shadowOpacity: 0,
-      backgroundColor: presentation === 'settings' ? colors.bgPanel : undefined,
+      backgroundColor: presentation === 'settings' ? restingBackground : undefined,
       transform: [{ scale: 1 }]
     }
-  }, [layout, activeKey, activeTop, rowKey, ready, measurementKey, presentation, rowTop])
+  }, [
+    layout,
+    activeKey,
+    activeTop,
+    rowKey,
+    ready,
+    measurementKey,
+    presentation,
+    rowTop,
+    activeBackground,
+    restingBackground
+  ])
 
   const handle = movable ? (
     <GestureDetector gesture={pan}>
@@ -216,7 +233,7 @@ export function DragReorderRow({
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   row: {
     position: 'absolute',
     left: 0,
@@ -246,4 +263,4 @@ const styles = StyleSheet.create({
     height: StyleSheet.hairlineWidth,
     backgroundColor: colors.borderSubtle
   }
-})
+}))

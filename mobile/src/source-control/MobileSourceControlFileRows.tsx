@@ -3,6 +3,7 @@ import { ChevronRight, FileText, Minus, Plus, Trash2 } from 'lucide-react-native
 import { colors } from '../theme/mobile-theme'
 import { STATUS_LABELS } from '../../../src/shared/git-status-labels'
 import { CONFLICT_KIND_LABELS } from '../../../src/shared/source-control-conflict-prompts'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { formatMobileBranchEntryMeta } from './mobile-branch-entry-format'
 import {
   statusColor,
@@ -149,6 +150,7 @@ type BranchState = Pick<
 >
 
 export function BranchCompareHeader({ state }: { state: BranchState }) {
+  useMobileColorScheme()
   const {
     shouldShowBranchCompareSection,
     branchCompareSummaryText,
@@ -200,6 +202,7 @@ export function BranchFileRow({
   entry: MobileBranchEntryView
   state: BranchState
 }) {
+  useMobileColorScheme()
   const { busyAction, openBranchDiff, openingBranchPath, openingPath } = state
   const rowBusy = openingBranchPath === entry.path
   const rowDisabled =

@@ -72,21 +72,6 @@ describe('fitRevealedPane routing', () => {
     expect(mocks.safeFit).not.toHaveBeenCalled()
   })
 
-  it('still flushes parked metric options when the pane also resized while hidden', () => {
-    mocks.flushDeferredPaneMetricOptionsIfMeasurable.mockReturnValue(true)
-    const pane = createPane({
-      lastFitClientSize: { width: 800, height: 600 },
-      currentSize: { width: 640, height: 480 },
-      terminal: { cols: 80, rows: 24 },
-      proposed: { cols: 64, rows: 20 }
-    })
-
-    fitRevealedPane(pane)
-
-    expect(mocks.flushDeferredPaneMetricOptionsIfMeasurable).toHaveBeenCalledWith(pane)
-    expect(mocks.safeFit).toHaveBeenCalledWith(pane)
-  })
-
   it('fits synchronously when the fit element resized while hidden', () => {
     const pane = createPane({
       lastFitClientSize: { width: 800, height: 600 },

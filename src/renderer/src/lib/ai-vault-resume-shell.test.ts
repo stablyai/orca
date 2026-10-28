@@ -10,29 +10,25 @@ import { buildAiVaultResumeCopyCommandForWorktree } from './ai-vault-resume-comm
 
 type ResumeShellState = Parameters<typeof buildAiVaultResumeCopyCommandForWorktree>[0]['state']
 
-function makeState(
-  worktreeHostId?: Parameters<typeof makeWorktree>[0]['hostId']
-): ResumeShellState {
+function makeState(worktreeHostId?: `ssh:${string}`): ResumeShellState {
   return {
     activeRepoId: 'repo-1',
     activeWorktreeId: 'repo-1::worktree-1',
     folderWorkspaces: [],
     projectGroups: [],
     repos: [{ ...TEST_REPO, id: 'repo-1', path: '/home/alice/repo' }],
-    endpointProjectHostSetups: [],
-    endpointProjects: [
+    projects: [
       {
-        id: 'repo-1',
         displayName: 'repo',
         badgeColor: '',
         createdAt: 0,
         updatedAt: 0,
+        id: 'repo-1',
         sourceRepoIds: ['repo-1']
       }
     ],
     settings: {
       ...getDefaultSettings('/tmp'),
-      agentPermissionOverrides: { codex: 'own' },
       agentDefaultArgs: { codex: '' },
       agentDefaultEnv: { codex: {} }
     },

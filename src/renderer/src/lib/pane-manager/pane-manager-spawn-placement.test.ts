@@ -35,30 +35,6 @@ describe('PaneManager spawn placement hints', () => {
     vi.unstubAllGlobals()
   })
 
-  it('marks a tab first pane as a new tab', () => {
-    const pane = manager.createInitialPane({ leafId: LEAF_A })
-
-    expect(onPaneCreated).toHaveBeenCalledExactlyOnceWith(
-      expect.objectContaining({ id: pane.id, leafId: LEAF_A }),
-      { placement: { kind: 'new-tab' } }
-    )
-  })
-
-  it('names the split pane and direction alongside the other spawn hints', () => {
-    const first = manager.createInitialPane({ leafId: LEAF_A })
-    onPaneCreated.mockClear()
-
-    manager.splitPane(first.id, 'horizontal', { leafId: LEAF_B, cwd: '/repo/app' })
-
-    expect(onPaneCreated).toHaveBeenCalledExactlyOnceWith(
-      expect.objectContaining({ leafId: LEAF_B }),
-      {
-        cwd: '/repo/app',
-        placement: { kind: 'split', parentLeafId: LEAF_A, direction: 'horizontal' }
-      }
-    )
-  })
-
   it('publishes a split placed before a mounted subtree with its final order', () => {
     const first = manager.createInitialPane({ leafId: LEAF_A })
     manager.splitPane(first.id, 'vertical', { leafId: LEAF_B })

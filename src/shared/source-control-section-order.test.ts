@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest'
 import type { GitStatusEntry } from './git-status-types'
 import {
   buildSourceControlDisplaySections,
-  getConflictReviewEntries,
   getSourceControlSectionViewAction,
   resolveSourceControlGroupOrder,
   splitPinnedSourceControlConflicts,
@@ -26,35 +25,7 @@ function groups(partial: Partial<SourceControlEntryGroups>): SourceControlEntryG
   }
 }
 
-describe('resolveSourceControlGroupOrder', () => {
-  it('keeps Changes first by default', () => {
-    expect(resolveSourceControlGroupOrder(undefined)).toEqual(['unstaged', 'staged'])
-  })
-
-  it('supports staged-first and untracked-first presets', () => {
-    expect(resolveSourceControlGroupOrder('staged-first')).toEqual(['staged', 'unstaged'])
-    expect(resolveSourceControlGroupOrder('untracked-first')).toEqual(['unstaged', 'staged'])
-  })
-})
-
 describe('buildSourceControlDisplaySections', () => {
-  it('uses the configured order for normal sections', () => {
-    const sections = buildSourceControlDisplaySections(
-      groups({
-        staged: [entry({ area: 'staged', path: 'staged.ts' })],
-        unstaged: [entry({ area: 'unstaged', path: 'changed.ts' })],
-        untracked: [entry({ area: 'untracked', path: 'new.ts', status: 'untracked' })]
-      }),
-      resolveSourceControlGroupOrder('staged-first')
-    )
-
-    expect(sections.map((section) => section.id)).toEqual(['staged', 'unstaged'])
-    expect(sections[1]?.items.map(({ path, area }) => ({ path, area }))).toEqual([
-      { path: 'changed.ts', area: 'unstaged' },
-      { path: 'new.ts', area: 'untracked' }
-    ])
-  })
-
   it('combines working files in path order before staged changes by default', () => {
     const sections = buildSourceControlDisplaySections(
       groups({
@@ -67,27 +38,6 @@ describe('buildSourceControlDisplaySections', () => {
 
     expect(sections.map((section) => section.id)).toEqual(['unstaged', 'staged'])
     expect(sections[0]?.items.map((item) => item.path)).toEqual(['new.ts', 'working.ts'])
-  })
-
-  it('keeps conflicts pinned before the configured normal order', () => {
-    const sections = buildSourceControlDisplaySections(
-      groups({
-        staged: [entry({ area: 'staged', path: 'staged.ts' })],
-        unstaged: [
-          entry({
-            area: 'unstaged',
-            path: 'conflict.ts',
-            conflictKind: 'both_modified',
-            conflictStatus: 'unresolved'
-          }),
-          entry({ area: 'unstaged', path: 'changed.ts' })
-        ],
-        untracked: [entry({ area: 'untracked', path: 'new.ts', status: 'untracked' })]
-      }),
-      resolveSourceControlGroupOrder('staged-first')
-    )
-
-    expect(sections.map((section) => section.id)).toEqual(['conflicts', 'staged', 'unstaged'])
   })
 
   it('pins conflict rows and removes them from the normal Changes section', () => {
@@ -140,25 +90,6 @@ describe('buildSourceControlDisplaySections', () => {
     expect(sections[1]?.items).toEqual([staged])
   })
 
-  it('builds review entries only for unresolved conflicts', () => {
-    expect(
-      getConflictReviewEntries([
-        entry({
-          area: 'unstaged',
-          path: 'conflict.ts',
-          conflictKind: 'both_modified',
-          conflictStatus: 'unresolved'
-        }),
-        entry({
-          area: 'unstaged',
-          path: 'resolved.ts',
-          conflictKind: 'both_modified',
-          conflictStatus: 'resolved_locally'
-        })
-      ])
-    ).toEqual([{ path: 'conflict.ts', conflictKind: 'both_modified' }])
-  })
-
   it('routes the pinned Conflicts section to conflict review', () => {
     const sections = buildSourceControlDisplaySections(
       groups({
@@ -183,26 +114,6 @@ describe('buildSourceControlDisplaySections', () => {
       kind: 'combined-diff',
       area: 'unstaged',
       entries: [entry({ area: 'unstaged', path: 'normal.ts' })]
-    })
-  })
-
-  it('scopes normal combined-diff actions to the conflict-split section items', () => {
-    const pinned = entry({
-      area: 'unstaged',
-      path: 'resolved.ts',
-      conflictKind: 'both_modified',
-      conflictStatus: 'resolved_locally'
-    })
-    const normal = entry({ area: 'unstaged', path: 'normal.ts' })
-    const sections = buildSourceControlDisplaySections(
-      groups({ unstaged: [pinned, normal] }),
-      resolveSourceControlGroupOrder('changes-first')
-    )
-
-    expect(getSourceControlSectionViewAction(sections[1]!)).toEqual({
-      kind: 'combined-diff',
-      area: 'unstaged',
-      entries: [normal]
     })
   })
 

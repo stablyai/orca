@@ -11,6 +11,8 @@ import {
 } from 'react-native'
 import { Check, X } from 'lucide-react-native'
 import { colors, radii, spacing, typography } from '../../../theme/mobile-theme'
+import { themedStyleSheet } from '../../../theme/themed-styles'
+import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { mobileNativeChatInputStyles } from '../composer/mobile-native-chat-input-styles'
 import type { MobileQueuedMessageInlineEditor } from '../../use-mobile-structured-queued-edit'
 import { useTextInputContentHeight } from '../../../platform/text-input-content-height'
@@ -35,6 +37,7 @@ export function MobileNativeChatQueuedMessageEditor({
   editor: MobileQueuedMessageInlineEditor
   attribution: string | null
 }): React.JSX.Element {
+  useMobileColorScheme()
   const input = useRef<TextInput>(null)
   const contentHeight = useTextInputContentHeight(input, editor.text)
   const [focused, setFocused] = useState(false)
@@ -125,6 +128,7 @@ function EditorButton({
   onPress: () => void
   children: React.ReactNode
 }): React.JSX.Element {
+  useMobileColorScheme()
   // Style the inner square separately because Pressable owns the larger invisible target.
   const [pressed, setPressed] = useState(false)
   return (
@@ -147,7 +151,7 @@ function EditorButton({
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   editor: {
     paddingVertical: spacing.sm,
     paddingLeft: spacing.md,
@@ -215,4 +219,4 @@ const styles = StyleSheet.create({
     backgroundColor: colors.textSecondary
   },
   disabled: { opacity: 0.5 }
-})
+}))

@@ -84,8 +84,8 @@ describe('composer mapped Jira creation ownership', () => {
       useAppStore.setState({
         settings: null,
         repos,
-        endpointProjects: [...projection.projects],
-        endpointProjectHostSetups: [...projection.setups],
+        projects: [...projection.projects],
+        projectHostSetups: [...projection.setups],
         projectGroups: [],
         newWorkspaceDraft: null,
         worktreesByRepo: {},
@@ -158,7 +158,6 @@ function renderUnavailableMappedComposer(
     includeSetupHint?: boolean
     emptyRepoOverride?: boolean
     missingSshSetup?: boolean
-    missingSshRepo?: boolean
     canonicalSameHostSetup?: boolean
   } = {}
 ) {
@@ -180,9 +179,9 @@ function renderUnavailableMappedComposer(
   }
   useAppStore.setState({
     settings: null,
-    repos: options.missingSshRepo ? repos.filter((repo) => repo !== mappedRepo) : repos,
-    endpointProjects: [...projection.projects],
-    endpointProjectHostSetups: projection.setups.filter(
+    repos,
+    projects: [...projection.projects],
+    projectHostSetups: projection.setups.filter(
       (setup) => !options.missingSshSetup || setup.hostId !== 'ssh:builder'
     ),
     projectGroups: [],
@@ -246,7 +245,7 @@ describe('unavailable mapped Jira destinations', () => {
   })
 
   it('recovers the intended host when it becomes configured', () => {
-    const { result, mappedRepo } = renderUnavailableMappedComposer({ missingSshSetup: true })
+    const { result, mappedRepo } = renderUnavailableMappedComposer()
     act(() => useAppStore.setState({ sshTargetLabels: new Map([['builder', 'Builder']]) }))
 
     expect(result.current.runtimeTargetSelection.selectedWorkspaceTarget).toMatchObject({
@@ -276,10 +275,7 @@ describe('unavailable mapped Jira destinations', () => {
 
     act(() =>
       useAppStore.setState((state) => ({
-        endpointProjectHostSetups: state.endpointProjectHostSetups.filter(
-          (setup) => setup.hostId !== 'ssh:builder'
-        ),
-        repos: state.repos.filter((repo) => repo !== mappedRepo)
+        projectHostSetups: state.projectHostSetups.filter((setup) => setup.hostId !== 'ssh:builder')
       }))
     )
 
@@ -292,8 +288,7 @@ describe('unavailable mapped Jira destinations', () => {
     const { result } = renderUnavailableMappedComposer({
       repeatedId: true,
       configured: true,
-      missingSshSetup: true,
-      missingSshRepo: true
+      missingSshSetup: true
     })
 
     expect(result.current.runtimeTargetSelection.selectedWorkspaceTarget).toEqual({

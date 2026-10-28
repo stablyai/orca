@@ -6,7 +6,6 @@ import { makeWorktree, TEST_REPO } from '@/store/slices/worktrees-slice-test-fix
 import { useNewTabAgentMenuRows } from '@/components/tab-bar/use-new-tab-agent-menu-rows'
 import { FLOATING_TERMINAL_WORKTREE_ID, getDefaultSettings } from '../../../shared/constants'
 import type { Project } from '../../../shared/project-types'
-import { projectHostSetupProjectionFromRepos } from '../../../shared/project-host-setup-projection'
 import { useDetectedAgents, type AgentDetectionTarget } from './useDetectedAgents'
 
 const initialState = useAppStore.getInitialState()
@@ -61,19 +60,21 @@ it.each(localTargets)('restarts an invalidated first probe for $worktreeId', asy
 })
 
 it('retargets a mounted first load when the project switches to WSL', async () => {
-  const worktree = makeWorktree({ id: 'wt1', repoId: TEST_REPO.id, path: 'C:\\project' })
-  const repos = [{ ...TEST_REPO, path: worktree.path }]
-  const catalog = projectHostSetupProjectionFromRepos(repos)
   const project: Project = {
-    ...catalog.projects[0],
+    id: TEST_REPO.id,
+    displayName: TEST_REPO.displayName,
+    badgeColor: TEST_REPO.badgeColor,
+    sourceRepoIds: [TEST_REPO.id],
+    createdAt: 0,
+    updatedAt: 0,
     localWindowsRuntimePreference: { kind: 'windows-host' }
   }
+  const worktree = makeWorktree({ id: 'wt1', repoId: TEST_REPO.id, path: 'C:\\project' })
   useAppStore.setState({
     activeRepoId: TEST_REPO.id,
     activeWorktreeId: worktree.id,
-    repos,
-    endpointProjects: [project],
-    endpointProjectHostSetups: [...catalog.setups],
+    repos: [{ ...TEST_REPO, path: worktree.path }],
+    projects: [project],
     worktreesByRepo: { [TEST_REPO.id]: [worktree] },
     settings: {
       ...getDefaultSettings('/home/test'),

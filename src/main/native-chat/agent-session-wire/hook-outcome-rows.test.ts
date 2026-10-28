@@ -16,8 +16,11 @@ import { withNativeChatCutTurnNotices } from '../../../shared/native-chat-cut-tu
 import {
   nativeChatRowTurnKeys,
   nativeChatTurnBarRows
-} from '../../../shared/native-chat-turn-grouping'
-import { nativeChatTurnFold, nativeChatTurnFoldRow } from '../../../shared/native-chat-turn-fold'
+} from '../../../shared/native-chat/transcript/native-chat-turn-grouping'
+import {
+  nativeChatTurnFold,
+  nativeChatTurnFoldRow
+} from '../../../shared/native-chat/transcript/native-chat-turn-fold'
 import { nativeChatTurnMembership } from '../../../shared/native-chat-turn-membership'
 import { projectStructuredItemsToNativeChat } from '../../../shared/structured-agent-session-projection'
 import { GROK_ACP_DIALECT } from '../../acp/acp-dialects/grok-dialect'

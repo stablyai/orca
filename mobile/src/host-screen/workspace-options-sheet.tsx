@@ -2,6 +2,7 @@ import { useMemo, type ReactNode } from 'react'
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 import { ChevronLeft } from 'lucide-react-native'
 import { colors } from '../theme/mobile-theme'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useBackClaim } from '../navigation/use-back-claim'
 import { BottomDrawer } from '../components/BottomDrawer'
 import {
@@ -72,6 +73,7 @@ export function WorkspaceOptionsSheet({ controller }: { controller: HostScreenCo
 }
 
 function WorkspaceOptionsPending({ settings }: Pick<HostScreenController, 'settings'>) {
+  useMobileColorScheme()
   const { pending, stale } = settings.pendingViewChanges
   if (!pending.some((change) => change.kind === 'view')) {
     return null
@@ -94,6 +96,7 @@ function WorkspaceOptionsContent({
   controller: HostScreenController
   pager: OptionPagerControls<WorkspaceViewOptionKey>
 }) {
+  useMobileColorScheme()
   const { settings, state } = controller
   const hosts = useWorkspaceOptionHosts(controller)
   const sections = getShownWorkspaceViewSections({

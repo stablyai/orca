@@ -49,6 +49,10 @@ describe('MobileTerminalUrlTapSheet', () => {
       'github.com'
     )
     expect(displayTitleFromTerminalUrl('http://localhost:3000/session/123')).toBe('localhost:3000')
+    expect(displayTitleFromTerminalUrl('https://example.com/build:1234/log')).toBe('example.com')
+    expect(
+      displayTitleFromTerminalUrl('https://attacker.example/path/@trusted.example/')
+    ).toBe('attacker.example')
     expect(displayTitleFromTerminalUrl('not a url')).toBe('URL Link')
   })
 

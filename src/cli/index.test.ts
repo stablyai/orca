@@ -464,22 +464,25 @@ describe('unknown help command surfaces a suggestion', () => {
 
 describe('nested command group help', () => {
   it.each([
+    ['browser', ['browser', '--help'], ['identity get', 'identity set']],
+    ['browser identity', ['browser', 'identity', '--help'], ['get', 'set']],
     ['browser', ['browser'], ['identity get', 'identity set']],
+    ['skills', ['skills'], ['installed', 'share']],
     ['browser identity', ['browser', 'identity'], ['get', 'set']]
   ])(
     'prints successful help for %s without constructing a runtime client',
-    async (_, path, commands) => {
+    async (path, argv, commands) => {
       const previousExitCode = process.exitCode
       const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
       runtimeClientConstructorMock.mockClear()
       process.exitCode = 0
 
       try {
-        await main([...path, '--help'], '/tmp/repo')
+        await main(argv, '/tmp/repo')
 
         expect(process.exitCode).toBe(0)
         const output = logSpy.mock.calls.flat().join('\n')
-        expect(output).toContain(`orca ${path.join(' ')}`)
+        expect(output).toContain(`orca ${path}`)
         for (const command of commands) {
           expect(output).toContain(command)
         }
@@ -492,6 +495,45 @@ describe('nested command group help', () => {
       }
     }
   )
+
+  it('reports a flagged bare group as a missing subcommand, not a typo', async () => {
+    const previousExitCode = process.exitCode
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    runtimeClientConstructorMock.mockClear()
+    process.exitCode = 0
+
+    try {
+      await main(['skills', '--worktree', 'active'], '/tmp/repo')
+
+      expect(process.exitCode).toBe(1)
+      const stderr = errorSpy.mock.calls.flat().join('\n')
+      expect(stderr).toContain('Missing subcommand for: orca skills')
+      expect(stderr).toContain('orca skills --help')
+      expect(stderr).not.toContain('Did you mean')
+      expect(runtimeClientConstructorMock).not.toHaveBeenCalled()
+    } finally {
+      process.exitCode = previousExitCode
+      errorSpy.mockRestore()
+    }
+  })
+
+  it('keeps an executable leaf ahead of its child groups', async () => {
+    const previousExitCode = process.exitCode
+    process.exitCode = 0
+    serveOrcaAppMock.mockClear().mockResolvedValue(0)
+
+    try {
+      await main(['serve'], '/tmp/repo')
+
+      expect(process.exitCode).toBe(0)
+      expect(serveOrcaAppMock).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({ json: false })
+      )
+    } finally {
+      process.exitCode = previousExitCode
+      serveOrcaAppMock.mockReset()
+    }
+  })
 })
 
 describe('orca help', () => {

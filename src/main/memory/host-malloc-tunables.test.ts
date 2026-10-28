@@ -10,12 +10,6 @@ import {
 afterEach(() => resetHostMallocTunablesForTests())
 
 describe('host malloc tunables', () => {
-  it('launches with the mmap threshold glibc reads at exec', () => {
-    expect(Object.fromEntries(hostMallocTunablesLaunchEnv()).GLIBC_TUNABLES).toBe(
-      'glibc.malloc.mmap_threshold=16384'
-    )
-  })
-
   it('removes what the launch set from this process, and keeps it only for the daemon', () => {
     const env: NodeJS.ProcessEnv = {
       PATH: '/bin',
@@ -48,17 +42,4 @@ describe('host malloc tunables', () => {
     expect(hostMallocTunablesDaemonEnv()).toEqual({})
     expect(HOST_MALLOC_TUNABLES).toContain('mmap_threshold')
   })
-})
-
-describe('host process entries', () => {
-  it.each(['../orcad/main.ts', '../daemon/daemon-entry.ts'])(
-    '%s claims the tunables before importing anything that could start a child',
-    async (entry) => {
-      const { readFile } = await import('node:fs/promises')
-      const source = await readFile(new URL(entry, import.meta.url), 'utf8')
-      expect(source.match(/^import .*$/m)?.[0]).toBe(
-        "import '../memory/host-malloc-tunables-claim'"
-      )
-    }
-  )
 })

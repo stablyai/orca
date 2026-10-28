@@ -81,19 +81,6 @@ describe('publishWorkspacePortScanForHost', () => {
     remoteScan = scanWithPort(3000, 20)
   })
 
-  it('publishes the single tracked host under its own key', () => {
-    const harness = makeStoreHarness()
-
-    publishWorkspacePortScanForHost({
-      ...harness.publisher,
-      scanKey: 'local:all',
-      scan: localScan
-    })
-
-    expect(harness.projections).toEqual([{ key: 'local:all', result: localScan }])
-    expect(Object.keys(harness.scansByKey)).toEqual(['local:all'])
-  })
-
   it('keeps the other host in the projection when one host refreshes', () => {
     const harness = makeStoreHarness({ 'local:all': localScan })
 

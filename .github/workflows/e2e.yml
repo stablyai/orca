@@ -32,6 +32,12 @@ on:
         required: false
         type: string
         default: '["1/2","2/2"]'
+      # Why: whole-file balancing cannot split one long spec; Playwright's native shards split its tests.
+      changed_e2e_test_shards:
+        description: JSON test-level shard assignments for the changed-spec lane; empty sizes shards by file count
+        required: false
+        type: string
+        default: ''
       # Why: artifact names are unique per workflow run, and pr.yml calls this workflow twice.
       artifact_suffix:
         description: Appended to the build and trace artifact names so two calls in one run do not collide
@@ -85,7 +91,12 @@ jobs:
         id: changed-e2e-shards
         env:
           TEST_FILES_JSON: ${{ inputs.test_files }}
+          TEST_SHARDS_JSON: ${{ inputs.changed_e2e_test_shards }}
         run: |
+          if [ -n "$TEST_SHARDS_JSON" ]; then
+            echo "shards=$(jq -c . <<<"$TEST_SHARDS_JSON")" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           node --input-type=module <<'NODE'
           import { appendFileSync, existsSync } from 'node:fs'
           const modulePath = './config/scripts/ci-e2e-job-selection.mjs'
@@ -361,6 +372,7 @@ jobs:
           TEST_FILES_JSON: ${{ inputs.test_files }}
           LAYOUT_OWNER: ${{ inputs.layout_owner }}
           SHARD: ${{ matrix.shard }}
+          TEST_LEVEL_SHARDS: ${{ inputs.changed_e2e_test_shards != '' }}
         run: |
           if [ -f config/scripts/ci-e2e-job-selection.mjs ]; then
             printf '%s\n' "$TEST_FILES_JSON" | node config/scripts/ci-e2e-job-selection.mjs > "$RUNNER_TEMP/general-e2e-specs"
@@ -397,7 +409,10 @@ jobs:
             E2E_PROJECT_ARGS+=(--project=electron-headful)
           fi
           E2E_SELECTION_ARGS=(--shard="$SHARD")
-          if [ -f config/scripts/ci-e2e-shard-plan.mjs ]; then
+          if [ "$TEST_LEVEL_SHARDS" = true ]; then
+            mkdir -p ci-shards-changed
+            pnpm exec playwright test "${TEST_FILES[@]}" --config tests/playwright.config.ts --project=electron-headless "${E2E_PROJECT_ARGS[@]}" --shard="$SHARD" --list --reporter=json > ci-shards-changed/selected-discovery.json
+          elif [ -f config/scripts/ci-e2e-shard-plan.mjs ]; then
             mkdir -p ci-shards-changed
             pnpm exec playwright test "${TEST_FILES[@]}" --config tests/playwright.config.ts --project=electron-headless "${E2E_PROJECT_ARGS[@]}" --list --reporter=json > ci-shards-changed/discovery.json
             export ORCA_SHARD_SOURCE_SHA="$(git rev-parse HEAD)"

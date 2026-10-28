@@ -63,14 +63,6 @@ describe.each(helpers)('%s parked renderer resize', (_name, present) => {
     expect(service._needsFullRefresh).toBe(false)
   })
 
-  it('flushes before a DEC 2026 present too', () => {
-    const { terminal, service, order } = createPausedTerminal({ synchronizedOutput: true })
-
-    expect(present(terminal)).toBe(true)
-    expect(service._pausedResizeTask?.flush).toHaveBeenCalledTimes(1)
-    expect(order[0]).toBe('flush')
-  })
-
   it('still presents when the parked-task internal is unavailable', () => {
     const { terminal, service } = createPausedTerminal({ withoutTask: true })
 

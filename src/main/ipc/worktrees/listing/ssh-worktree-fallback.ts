@@ -141,10 +141,10 @@ export function buildDetectedGitWorktrees(
   const settings = store.getSettings()
   const knownOrcaLayouts = buildKnownOrcaWorkspaceLayouts(settings, repo)
   const isLegacyRepoForVisibility = isLegacyRepoForExternalWorktreeVisibility(repo)
-  // Prunable registrations lack working directories; omit from display while keeping cleanup discovery intact (#8389).
+  // Keep failed removals retryable; other prunable registrations stay hidden (#8389).
   const liveWorktrees = dedupeWorktreesByPath(
     preserveFolderUpgradeWorktreePath(repo, gitWorktrees).filter(
-      (gitWorktree) => !gitWorktree.prunable
+      (gitWorktree) => !gitWorktree.prunable || !!gitWorktree.removalError
     )
   )
   const worktreeVisibilitySourceMatcher = createWorktreeVisibilitySourceMatcher(

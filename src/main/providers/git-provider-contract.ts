@@ -107,7 +107,12 @@ export type IGitProvider = {
     cwd: string,
     options?: { signal?: AbortSignal; timeoutMs?: number }
   ): Promise<{ stdout: string; stderr: string }>
-  getRemoteFileUrl(worktreePath: string, relativePath: string, line: number): Promise<string | null>
+  getRemoteFileUrl(
+    worktreePath: string,
+    relativePath: string,
+    line: number,
+    endLine?: number
+  ): Promise<string | null>
   getRemoteCommitUrl(worktreePath: string, sha: string): Promise<string | null>
   worktreeIsClean(
     worktreePath: string,

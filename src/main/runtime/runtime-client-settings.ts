@@ -14,8 +14,8 @@ import { normalizeSourceControlAiSettings } from '../../shared/source-control-ai
 import { normalizeSourceControlGroupOrder } from '../../shared/source-control-group-order'
 import { SOURCE_CONTROL_LAUNCH_ACTION_IDS } from '../../shared/source-control-ai-actions'
 import type { GlobalSettings } from '../../shared/global-settings-types'
-import { applyNativeChatSessionOptionSettingsMutation } from '../../shared/native-chat-session-option-defaults'
-import type { NativeChatSessionOptionSettingsMutation } from '../../shared/native-chat-session-options'
+import { applyNativeChatSessionOptionSettingsMutation } from '../../shared/native-chat/input/native-chat-session-option-defaults'
+import type { NativeChatSessionOptionSettingsMutation } from '../../shared/native-chat/input/native-chat-session-options'
 import { getHostDisplayLabelOverrides } from '../../shared/host-setting-overrides'
 import type { TerminalQuickCommand } from '../../shared/terminal-quick-command-types'
 import { recordManagedHookInstallFailure } from '../agent-hooks/install-telemetry'
@@ -109,6 +109,8 @@ export class RuntimeClientSettingsController {
         : { agentSkillSharingEnabled: isAgentSkillSharingEnabled(settings) }),
       machineName: settings.machineName ?? '',
       nativeChatPermissionMode: publishedLegacyChatPermissionMode(settings),
+      // Phone sends queue mid-turn only while this is on; absence from older hosts means on.
+      nativeChatQueueFollowUps: settings.nativeChatQueueFollowUps !== false,
       // Why projected: a paired client's AI buttons start these actions' agents, and must honour
       // the agent saved for each one as the desktop does. Absent on older hosts.
       sourceControlAi: projectSourceControlLaunchRecipes(settings),

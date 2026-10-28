@@ -8,7 +8,7 @@ import {
 } from './MobileTerminalUrlTapSheet'
 import { resolveMobileNativeChatSessionId } from './native-chat/mobile-native-chat-eligibility'
 import { activateOpenedSourceControlDiffTab } from './opened-mobile-session-tab'
-import { useProvideSessionDiffOpenHandlers } from './session-diff-open-handlers'
+import { useProvideSessionScreenHandlers } from './session-screen-handlers'
 import type { MobileSessionTab } from './mobile-session-route-types'
 import type { MobileSessionTerminalSendActionsModel } from './use-mobile-session-terminal-send-actions'
 
@@ -27,6 +27,7 @@ export function useMobileSessionFileActions(scope: MobileSessionTerminalSendActi
     activeSessionTab,
     activeSessionTabTypeRef,
     switchSessionTabRef,
+    switchTab,
     handleCreateBrowserRef,
     scheduleDelayedAction,
     nativeChatSendError,
@@ -87,7 +88,11 @@ export function useMobileSessionFileActions(scope: MobileSessionTerminalSendActi
     },
     [fetchSessionTabs, scheduleDelayedAction]
   )
-  useProvideSessionDiffOpenHandlers(hostId, worktreeId, handleFileOpenStart, handleOpenedFileDiff)
+  useProvideSessionScreenHandlers(hostId, worktreeId, {
+    onFileOpenStart: handleFileOpenStart,
+    onOpenedFileDiff: handleOpenedFileDiff,
+    onResumedTerminal: switchTab
+  })
 
   const [pendingTerminalUrlTap, setPendingTerminalUrlTap] =
     useState<PendingTerminalUrlTap | null>(null)

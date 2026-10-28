@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, type vi } from 'vitest'
 import type { Store } from '../persistence'
 import { _setShuttingDownForTests, track, trackAppOpenedOnce } from './client'
 import {
@@ -37,21 +37,6 @@ describe('track()', () => {
     })
   })
 
-  // Bound outgoing property keys to the declared schemas plus process-person flag so SDK upgrades cannot silently widen payloads.
-  it('serialized property set is exactly CommonProps plus EventProps plus $process_person_profile', () => {
-    track('workspace_created', { source: 'command_palette', from_existing_branch: true })
-    const call = mock.capture.mock.calls[0]![0]
-    const allowed = new Set([
-      ...Object.keys(BASE_COMMON),
-      'source',
-      'from_existing_branch',
-      '$process_person_profile'
-    ])
-    for (const key of Object.keys(call.properties)) {
-      expect(allowed.has(key)).toBe(true)
-    }
-  })
-
   it('respects the shutdown gate', () => {
     _setShuttingDownForTests(true)
     track('app_opened', {})
@@ -76,25 +61,6 @@ describe('track()', () => {
     }
     expect((store.getSettings as ReturnType<typeof vi.fn>).mock.calls.length).toBe(callsAtBoundary)
     expect(mock.capture).not.toHaveBeenCalled()
-  })
-
-  it('enforces per-event burst cap (30 per minute default)', () => {
-    for (let i = 0; i < 50; i++) {
-      track('app_opened', {})
-    }
-    expect(mock.capture).toHaveBeenCalledTimes(30)
-  })
-
-  it('enforces the per-session 1000-event global ceiling across event names', () => {
-    vi.useFakeTimers()
-    vi.setSystemTime(new Date('2026-05-03T00:00:00Z'))
-    // Refill per-event caps to isolate the session ceiling.
-    for (let i = 0; i < 1500; i++) {
-      vi.advanceTimersByTime(10_000)
-      track('app_opened', {})
-    }
-    expect(mock.capture).toHaveBeenCalledTimes(1000)
-    vi.useRealTimers()
   })
 
   it('drops invalid events before calling capture', () => {

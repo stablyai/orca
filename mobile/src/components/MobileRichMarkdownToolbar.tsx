@@ -18,6 +18,8 @@ import {
   Strikethrough
 } from 'lucide-react-native'
 import { colors, radii, spacing } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import type { MobileRichMarkdownCommand } from './mobile-rich-markdown-editor-contract'
 
 type ToolbarItem = {
@@ -55,6 +57,7 @@ export const MobileRichMarkdownToolbar = memo(function MobileRichMarkdownToolbar
   editable: boolean
   onCommand: (command: MobileRichMarkdownCommand) => void
 }) {
+  useMobileColorScheme()
   return (
     <View style={styles.toolbar}>
       <ScrollView
@@ -87,7 +90,7 @@ export const MobileRichMarkdownToolbar = memo(function MobileRichMarkdownToolbar
   )
 })
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   toolbar: {
     minHeight: 42,
     borderBottomWidth: StyleSheet.hairlineWidth,
@@ -114,4 +117,4 @@ const styles = StyleSheet.create({
   toolbarButtonDisabled: {
     opacity: 0.55
   }
-})
+}))

@@ -182,7 +182,7 @@ export function useSettingsPageEffects(
         : repoIdToHostSelection.get(targetRepoId)
       if (hostSelection) {
         setSettingsProjectHostSelection(
-          hostSelection.projectId,
+          hostSelection.selectionKey,
           hostSelection.hostId,
           hostSelection.setupId
         )

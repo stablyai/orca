@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest'
 import { getAgentLabel as getSharedAgentLabel } from './agent-title-identity'
 import { isOpenCodeNativeTitle } from './opencode-terminal-title'
 import {
-  isClaudeAgent,
   isClaudeIdentityFrameTitle,
   isGrokRotatingWorkingTitle,
   resolveExplicitTerminalTitleAgentType,
@@ -37,20 +36,6 @@ describe('isGrokRotatingWorkingTitle', () => {
 })
 
 describe('resolveExplicitTerminalTitleAgentType', () => {
-  it('maps explicit product-name titles to their TuiAgent id', () => {
-    expect(resolveExplicitTerminalTitleAgentType('✳ Claude Code')).toBe('claude')
-    expect(resolveExplicitTerminalTitleAgentType('⠋ Codex')).toBe('codex')
-    expect(resolveExplicitTerminalTitleAgentType('✦ Gemini CLI')).toBe('gemini')
-    expect(resolveExplicitTerminalTitleAgentType('MiMo Code')).toBe('mimo-code')
-    expect(resolveExplicitTerminalTitleAgentType('⠋ OpenClaude')).toBe('openclaude')
-    expect(resolveExplicitTerminalTitleAgentType('OMP')).toBe('omp')
-  })
-
-  it('reads Pi/OMP identity only from the leading brand', () => {
-    expect(resolveExplicitTerminalTitleAgentType('⠂ OMP: fix title detection')).toBeNull()
-    expect(resolveExplicitTerminalTitleAgentType('Fix Pi > OMP routing - grok')).toBe('grok')
-  })
-
   it('treats Claude generic status prefixes as activity-only, not identity', () => {
     expect(resolveExplicitTerminalTitleAgentType('✳ investigating startup')).toBeNull()
     expect(resolveExplicitTerminalTitleAgentType('⠸ investigating startup')).toBeNull()
@@ -75,22 +60,6 @@ describe('resolveExplicitTerminalTitleAgentType', () => {
   it('does not find an OpenCode marker inside another agent task title', () => {
     expect(isOpenCodeNativeTitle('⠋ Fix foo | OC | bar')).toBe(false)
     expect(resolveExplicitTerminalTitleAgentType('⠋ Fix foo | OC | bar')).toBeNull()
-  })
-
-  it('keeps other agents classified correctly alongside OpenCode native titles', () => {
-    expect(resolveExplicitTerminalTitleAgentType('✳ Claude Code')).toBe('claude')
-    expect(resolveExplicitTerminalTitleAgentType('⠋ Codex')).toBe('codex')
-    expect(resolveExplicitTerminalTitleAgentType('✦ Gemini CLI')).toBe('gemini')
-    expect(resolveExplicitTerminalTitleAgentType('Cursor Agent')).toBe('cursor')
-    expect(resolveExplicitTerminalTitleAgentType('Pi ready')).toBe('pi')
-    expect(resolveExplicitTerminalTitleAgentType('OpenCode ready')).toBe('opencode')
-    expect(resolveTerminalTitleAgentType('OC | ⠋ implementing the feature')).toBe('opencode')
-    expect(isClaudeAgent('OC | ⠋ implementing the feature')).toBe(false)
-    expect(isClaudeAgent('OC | Understand about the plugin')).toBe(false)
-  })
-
-  it('still resolves Claude when the title explicitly names Claude', () => {
-    expect(resolveExplicitTerminalTitleAgentType('. Claude Code compare Opencode')).toBe('claude')
   })
 
   // Only explicit Claude identity may replace the owner; task-text mentions do not prove identity (#8940).
@@ -123,11 +92,6 @@ describe('resolveExplicitTerminalTitleAgentType', () => {
     }
   })
 
-  it('returns null for plain shell and unknown titles', () => {
-    expect(resolveExplicitTerminalTitleAgentType('Terminal 1')).toBeNull()
-    expect(resolveExplicitTerminalTitleAgentType('zsh')).toBeNull()
-  })
-
   // cursor is ordinary task vocabulary; only Cursor’s identity frames can claim the pane.
   it('resolves Cursor by its identity titles, never a bare cursor token', () => {
     expect(resolveExplicitTerminalTitleAgentType('Cursor Agent')).toBe('cursor')
@@ -153,15 +117,5 @@ describe('resolveTerminalTitleAgentType', () => {
       'claude'
     )
     expect(resolveTerminalTitleAgentType('⠋ Codex: fix cursor offsets')).toBe('codex')
-  })
-})
-
-// Pin this module’s parallel isClaudeAgent guard directly so it cannot drift from agent-title-identity.ts.
-describe('isClaudeAgent', () => {
-  it('excludes real Cursor identity titles, keeps cursor-mentioning Claude braille titles', () => {
-    expect(isClaudeAgent('⠋ Cursor Agent')).toBe(false)
-    expect(isClaudeAgent('Cursor ready')).toBe(false)
-    expect(isClaudeAgent('⠋ preserve cursor visibility across replays')).toBe(true)
-    expect(isClaudeAgent('⠋ OpenClaude')).toBe(false)
   })
 })

@@ -124,8 +124,6 @@ function setFolderWorkspaceFixtureState(
     reorderRepos: vi.fn(),
     reportVisibleGitHubPRRefreshCandidates: vi.fn(),
     retainedAgentsByPaneKey: {},
-    endpointProjects: [],
-    endpointProjectHostSetups: [],
     repos: [],
     runtimePaneTitlesByTabId: {},
     setFilterRepoIds: vi.fn(),

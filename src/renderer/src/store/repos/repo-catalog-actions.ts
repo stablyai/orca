@@ -55,26 +55,22 @@ export function createRepoCatalogActions(
         const reconciliation = reconcileReadoptedSshRepoRows(s.repos, pendingSshRepoReadoptions)
         const repos = reconciliation.repos
         const worktreeState = reconcileReadoptedSshWorktreeState(s, pendingSshRepoReadoptions)
-        const remainingSetups = filterSetupsForPrunedRepoRows(
-          s.endpointProjectHostSetups,
-          s.repos,
-          repos
-        )
+        const remainingSetups = filterSetupsForPrunedRepoRows(s.projectHostSetups, s.repos, repos)
         const compatibility = mergeProjectHostSetupCompatibility(
           projectCompatibilityFromRepos(repos),
           {
-            projects: s.endpointProjects,
+            projects: s.projects,
             setups: remainingSetups
           }
         )
         // All-repos readoption cannot use host-scoped merge. Reconcile always-allocating compat results to preserve unchanged catalog arrays and avoid selector churn.
         const projects = reconcileCatalogRows(
-          s.endpointProjects,
+          s.projects,
           compatibility.projects,
           (project) => project.id
         )
         const projectHostSetups = reconcileCatalogRows(
-          s.endpointProjectHostSetups,
+          s.projectHostSetups,
           compatibility.projectHostSetups,
           getProjectHostSetupOwnerKey
         )
@@ -82,8 +78,8 @@ export function createRepoCatalogActions(
           repos,
           pendingSshRepoReadoptions: reconciliation.pendingReadoptions,
           ...worktreeState,
-          endpointProjects: projects,
-          endpointProjectHostSetups: projectHostSetups
+          projects,
+          projectHostSetups
         }
       }),
 
@@ -115,9 +111,9 @@ export function createRepoCatalogActions(
           const validRepoHostIdentities = new Set(prunedRepos.map(getRepoHostIdentity))
           const mergedProjectCompatibility = mergeFetchedHostProjectCatalog({
             previous: {
-              projects: s.endpointProjects,
+              projects: s.projects,
               projectHostSetups: filterSetupsForPrunedRepoRows(
-                s.endpointProjectHostSetups,
+                s.projectHostSetups,
                 result.repos,
                 prunedRepos
               )
@@ -133,8 +129,7 @@ export function createRepoCatalogActions(
             repos: prunedRepos,
             pendingSshRepoReadoptions: reconciliation.pendingReadoptions,
             ...reconcileFetchedCatalogWorktreeState(s, catalog, prunedRepos),
-            endpointProjects: mergedProjectCompatibility.projects,
-            endpointProjectHostSetups: mergedProjectCompatibility.projectHostSetups,
+            ...mergedProjectCompatibility,
             ...(arrayElementsUnchanged(prunedRepos, s.repos)
               ? {}
               : { folderWorkspacePathStatuses: {} }),

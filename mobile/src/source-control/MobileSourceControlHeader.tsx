@@ -1,6 +1,7 @@
 import { Pressable, Text, View } from 'react-native'
 import { ChevronLeft, ExternalLink, RefreshCw, X } from 'lucide-react-native'
 import { colors } from '../theme/mobile-theme'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { styles } from './mobile-source-control-styles'
 
 type Props = {
@@ -26,6 +27,7 @@ export function MobileSourceControlHeader({
   onOpenPrWeb,
   prNumber = null
 }: Props) {
+  useMobileColorScheme()
   return (
     <View style={styles.topBar}>
       {/* Dock dismissal and route Back have distinct semantics. */}

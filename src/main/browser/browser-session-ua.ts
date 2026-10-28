@@ -2,6 +2,8 @@ import type { Session } from 'electron'
 import type { BrowserTabIdentity, UserAgentMetadata } from './browser-tab-identity'
 export { cleanElectronUserAgent } from './browser-process-user-agent'
 import { getBrowserProcessUserAgentIdentity } from './browser-process-user-agent'
+import { decideBrowserSessionRequestHeaders } from './browser-session-request-decisions'
+import { reportBrowserSessionWebRequest } from './browser-session-web-request-observer'
 
 import {
   currentUserAgent,
@@ -65,47 +67,52 @@ export function installBrowserSessionUserAgentPolicy(
   resolveRequestUserAgent?: BrowserSessionRequestUserAgentResolver
 ): () => void {
   const firefoxUa = googleAuthUserAgent()
+  const applyUserAgentPolicy = (details: Electron.OnBeforeSendHeadersListenerDetails): void => {
+    const headers = details.requestHeaders
+    const requestUserAgent = currentUserAgent(headers)
+    let effectiveUserAgent: string | undefined
+    try {
+      effectiveUserAgent = details.webContents?.getUserAgent()
+    } catch {
+      // The request can race guest teardown; the header and manager state still provide a fallback.
+    }
+    // Native mode must keep its process identity on auth requests.
+    if (
+      getBrowserProcessUserAgentIdentity().mode === 'clean' &&
+      shouldUseGoogleAuthIdentity(details.url, details.referrer ?? '', details.resourceType ?? '')
+    ) {
+      setUserAgentHeader(headers, firefoxUa)
+      stripClientHints(headers)
+      return
+    }
+    const identity = resolveRequestUserAgent?.({
+      session: sess,
+      url: details.url,
+      referrer: details.referrer,
+      resourceType: details.resourceType,
+      webContentsId: details.webContentsId,
+      currentUserAgent: requestUserAgent,
+      effectiveUserAgent
+    })
+    if (!identity) {
+      return
+    }
+    setUserAgentHeader(headers, identity.userAgent)
+    if (identity.kind === 'google-auth') {
+      stripClientHints(headers)
+    } else if (identity.kind === 'mobile') {
+      applyUserAgentMetadataHeaders(headers, identity.userAgentMetadata)
+    }
+  }
   sess.webRequest.onBeforeSendHeaders(
     { urls: ['http://*/*', 'https://*/*', 'ws://*/*', 'wss://*/*'] },
     (details, callback) => {
-      const headers = details.requestHeaders
-      const requestUserAgent = currentUserAgent(headers)
-      let effectiveUserAgent: string | undefined
-      try {
-        effectiveUserAgent = details.webContents?.getUserAgent()
-      } catch {
-        // The request can race guest teardown; the header and manager state still provide a fallback.
-      }
-      // Native mode must keep its process identity on auth requests.
-      if (
-        getBrowserProcessUserAgentIdentity().mode === 'clean' &&
-        shouldUseGoogleAuthIdentity(details.url, details.referrer ?? '', details.resourceType ?? '')
-      ) {
-        setUserAgentHeader(headers, firefoxUa)
-        stripClientHints(headers)
-        callback({ requestHeaders: headers })
-        return
-      }
-      const identity = resolveRequestUserAgent?.({
-        session: sess,
-        url: details.url,
-        referrer: details.referrer,
-        resourceType: details.resourceType,
-        webContentsId: details.webContentsId,
-        currentUserAgent: requestUserAgent,
-        effectiveUserAgent
+      reportBrowserSessionWebRequest(sess, 'onBeforeSendHeaders', details)
+      applyUserAgentPolicy(details)
+      // Why after the policy: Chrome sets its own user agent before extensions modify headers.
+      callback({
+        requestHeaders: decideBrowserSessionRequestHeaders(sess, details, details.requestHeaders)
       })
-      if (!identity) {
-        callback({ requestHeaders: headers })
-        return
-      }
-      setUserAgentHeader(headers, identity.userAgent)
-      if (identity.kind === 'google-auth') {
-        stripClientHints(headers)
-      } else if (identity.kind === 'mobile') {
-        applyUserAgentMetadataHeaders(headers, identity.userAgentMetadata)
-      }
-      callback({ requestHeaders: headers })
     }
   )
   let disposed = false

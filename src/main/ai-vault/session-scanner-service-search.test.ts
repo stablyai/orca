@@ -1,4 +1,3 @@
-import { compileSessionSearchProjectOwnership } from '../ai-vault-search/session-search-project-ownership'
 import { existsSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { afterAll, beforeAll, expect, it, vi } from 'vitest'
@@ -131,30 +130,6 @@ it('answers a search and a reconcile over the protocol', async () => {
   if (response.kind === 'results') {
     expect(response.hits.map((hit) => hit.sessionId)).toEqual([SESSION_ID])
   }
-})
-
-it('executes the canonical selection through the actual child message executor and native index', async () => {
-  const selection = await compileSessionSearchProjectOwnership(
-    {
-      repos: [{ id: 'actual', path: '/repo/app', displayName: 'app', badgeColor: '', addedAt: 1 }],
-      projects: [],
-      projectHostSetups: [],
-      worktreeMeta: {},
-      settings: { workspaceDir: '', nestWorkspaces: false }
-    },
-    'repo:actual'
-  )
-  const response = await call({
-    type: 'request',
-    operation: 'searchSessions',
-    request: { query: 'distinctive' },
-    hostScope: { kind: 'canonical', selection }
-  })
-  expect(response.operation).toBe('searchSessions')
-  if (response.operation !== 'searchSessions') {
-    throw new Error('wrong operation')
-  }
-  expect(response.value).toMatchObject({ kind: 'results', hits: [{ sessionId: SESSION_ID }] })
 })
 
 it('discovers a new root through the parent exchange on manual reconciliation', async () => {

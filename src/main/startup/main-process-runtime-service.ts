@@ -6,6 +6,7 @@ import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import { sessionSearchScopeCatalogFromStore } from '../ai-vault-search/session-search-store-scope-catalog'
 import { getCanonicalUserDataPath } from '../persistence/loading-store/user-data-path'
 import { app } from 'electron'
+import { translateMain } from '../i18n/main-i18n'
 import { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { getLocalPtyProvider } from '../ipc/pty/provider/registry'
 import { clearProviderPtyState } from '../ipc/pty/provider/state-cleanup'
@@ -87,6 +88,7 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
   // Process-scope subscription covers desktop, headless serve and fleet status.
   const observedPaneIdentities = new AgentStatusObservedPaneIdentities()
   const runtime = new OrcaRuntimeService(store, stats, {
+    getSetupTerminalTitle: () => translateMain('worktree.setupTerminalTitle', 'Setup'),
     ...agentHookRuntimeDeps(agentHookServer, observedPaneIdentities, () =>
       state.store?.getSettings()
     ),
@@ -113,9 +115,7 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
     // Resolve per call: the RPC server/device registry is constructed later with this runtime.
     getPairedDeviceName: (pairedDeviceId) =>
       state.runtimeRpc?.getDeviceRegistry()?.getDevice(pairedDeviceId)?.name ?? null,
-    // Why: source codex-home here (runs in window AND serve) so aiVault.listSessions includes managed-Codex sessions; registerCoreHandlers is window-only.
-    getProjectOwnershipCatalog: () =>
-      sessionSearchScopeCatalogFromStore(store, LOCAL_EXECUTION_HOST_ID),
+    // Provide managed Codex homes here for desktop and headless session discovery; core IPC registration is window-only.
     getAdditionalAiVaultCodexHomePaths: () =>
       state.codexRuntimeHome?.getHostCodexHomePathsForSessionDiscovery() ?? [],
     prepareAiVaultSessionResume: codexAiVaultSessionResumePreparation(() => ({

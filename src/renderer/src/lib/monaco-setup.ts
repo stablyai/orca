@@ -11,6 +11,7 @@ import tsWorker from 'monaco-editor/esm/vs/language/typescript/ts.worker?worker'
 import { registerAstroLanguage } from './monaco-languages/register-astro'
 import { registerJsonlLanguage } from './monaco-languages/register-jsonl'
 import { registerLeanLanguage } from './monaco-languages/register-lean'
+import { registerMarkdownLanguage } from './monaco-languages/register-markdown'
 import { registerNimLanguage } from './monaco-languages/register-nim'
 import { registerQuartoLanguage } from './monaco-languages/register-quarto'
 import { registerShellMarkdownAliases } from './monaco-languages/register-shell-markdown-aliases'
@@ -76,6 +77,7 @@ runMonacoSetupSteps([
   ['Zig language registration', () => registerZigLanguage(monaco)],
   ['JSONL language registration', () => registerJsonlLanguage(monaco)],
   ['Quarto language registration', () => registerQuartoLanguage(monaco)],
+  ['Markdown language registration', () => registerMarkdownLanguage(monaco)],
   ['shell Markdown alias registration', () => registerShellMarkdownAliases(monaco)],
   ['delayer cancellation guard', installMonacoDelayerCancellationGuard],
   ['diff editor disposal guard', () => installMonacoDiffEditorDisposalGuard(monaco)],

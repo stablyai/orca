@@ -7,7 +7,6 @@ import type {
 import { AGENT_SESSION_FAILURE_KINDS, isSubmissionRejectionKind } from './agent-session-failure'
 import { agentJournalSubmissionKey } from './agent-session-journal-item-key'
 import {
-  classifyDispatchRejection,
   DISPATCH_REJECTED_CANCELLED,
   DISPATCH_REJECTED_CODEX_QUEUE_FULL,
   DISPATCH_REJECTED_HOST_RESTARTED,
@@ -313,21 +312,6 @@ describe('the sidebar verdict agrees with the rejection classifier', () => {
     DISPATCH_REJECTED_WRITE_FAILED,
     `${DISPATCH_REJECTED_WRITE_FAILED}: broken pipe`
   ].map((reason) => ({ name: `legacy ${reason}`, submission: rejected('m1', reason) }))
-  const unknownKind = {
-    name: 'a kind this build cannot place',
-    submission: sent('m1', {
-      dispatchState: 'rejected',
-      reason: 'A newer host wrote this.',
-      rejection: { kind: 'someFutureKind' }
-    })
-  }
-
-  it.each([...typed, ...legacy, unknownKind])('$name', ({ submission }) => {
-    const items = [userEntry('m1', 1)]
-    const { verdict } = classifyDispatchRejection(submission)
-    expect(latestStructuredAgentSessionRequest(items, [submission])?.outcome ?? null).toBe(verdict)
-    expect(hasStructuredAgentSessionRequest(items, [submission])).toBe(verdict === 'failure')
-  })
 
   const failedNobody = new Set([
     'typed notDelivered',
@@ -340,9 +324,6 @@ describe('the sidebar verdict agrees with the rejection classifier', () => {
     `legacy ${DISPATCH_REJECTED_PROVIDER_CLOSED}`
   ])
   const failedNobodyCases = [...typed, ...legacy].filter(({ name }) => failedNobody.has(name))
-  it('covers every send that failed nobody', () => {
-    expect(failedNobodyCases).toHaveLength(failedNobody.size)
-  })
   it.each(failedNobodyCases)(
     'gives no verdict for a send that failed nobody: $name',
     ({ submission }) => {

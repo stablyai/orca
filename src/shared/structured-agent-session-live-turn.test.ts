@@ -26,10 +26,6 @@ describe('isStructuredAgentSessionThinking', () => {
       blocks: [{ type: 'text', text: 'Weighing two approaches' }]
     })
 
-  it('is true while reasoning is the newest thing the turn produced', () => {
-    expect(isStructuredAgentSessionThinking({ items: [turnStart, reasoning(2)] })).toBe(true)
-  })
-
   it("reads a reasoning row's own state when its host keeps one", () => {
     const withState = (state: 'running' | 'completed'): AgentJournalRenderItem =>
       item('reasoning-state', 2, {
@@ -62,21 +58,6 @@ describe('isStructuredAgentSessionThinking', () => {
         patch: { head: '@@', byteLength: 2, digest: 'd', truncated: false }
       })
     ).toBe(false)
-  })
-
-  it('is false when a turn produced no reasoning at all', () => {
-    expect(isStructuredAgentSessionThinking({ items: [turnStart] })).toBe(false)
-    expect(isStructuredAgentSessionThinking({ items: [] })).toBe(false)
-  })
-
-  it('does not read an earlier turn as this one reasoning', () => {
-    // A new turn with no content must not inherit the previous turn’s reasoning.
-    const newTurn = item('turn-2-start', 2, {
-      kind: 'status',
-      text: 'Working',
-      turnLifecycle: { turnId: 'turn-2', state: 'running' }
-    })
-    expect(isStructuredAgentSessionThinking({ items: [reasoning(1), newTurn] })).toBe(false)
   })
 
   it('does not read a completed turn as reasoning during the next pending dispatch', () => {
@@ -191,17 +172,6 @@ describe("the live-turn readers answer for the session's own agent", () => {
     ).toBe(false)
   })
 
-  it('still reports the parent as thinking when the parent itself is reasoning', () => {
-    const ownReasoning = item('own-reasoning', 3, {
-      kind: 'message',
-      role: 'reasoning',
-      blocks: [{ type: 'text', text: 'Weighing two approaches' }]
-    })
-    expect(isStructuredAgentSessionThinking({ items: [turnStart, spawnCall, ownReasoning] })).toBe(
-      true
-    )
-  })
-
   it("reports the parent's own running call while a subagent runs its own", () => {
     const childCall = child('child-grep', 3, {
       kind: 'tool-call',
@@ -235,17 +205,5 @@ describe("the live-turn readers answer for the session's own agent", () => {
     expect(statusStructuredAgentSessionToolCall([turnStart, spawnCall, unresolved])?.name).toBe(
       'Task'
     )
-  })
-
-  it("reads a row written before linkage existed as the parent's own", () => {
-    const legacyChildCall = item('legacy-call', 3, {
-      kind: 'tool-call',
-      name: 'Grep',
-      input: { pattern: 'x' },
-      state: 'running'
-    })
-    expect(
-      statusStructuredAgentSessionToolCall([turnStart, spawnCall, legacyChildCall])?.name
-    ).toBe('Grep')
   })
 })

@@ -30,7 +30,7 @@ jobs:
   # Avoid occupying the limited Mac pool when main has not moved.
   preflight:
     if: github.repository == 'stablyai/orca'
-    runs-on: blacksmith-2vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
       should_build: ${{ steps.freshness.outputs.should_build }}
@@ -92,7 +92,7 @@ jobs:
     with:
       ref: ${{ needs.preflight.outputs.head_sha }}
       build_template: true
-      fast_runners: true
+      fast_runners: false
 
   build-hourly-mac:
     needs:
@@ -104,6 +104,7 @@ jobs:
       version: ${{ steps.hourly.outputs.version }}
       head_sha: ${{ needs.preflight.outputs.head_sha }}
       published: ${{ steps.publish_live.outcome == 'success' && 'true' || 'false' }}
+    # Hosted macos-15 cannot boot the packaged x64 terminal host that afterPack verifies.
     runs-on: blacksmith-6vcpu-macos-15
     # Allow 150min for install 3×10 + publish 2×45 + ~25 setup/build/verify; outer timeout otherwise interrupts cleanup.
     timeout-minutes: 150
@@ -402,4 +403,4 @@ jobs:
       ref: ${{ needs.build-hourly-mac.outputs.head_sha }}
       version: ${{ needs.build-hourly-mac.outputs.version }}
       orcad_template: true
-      fast_release: true
+      fast_release: false

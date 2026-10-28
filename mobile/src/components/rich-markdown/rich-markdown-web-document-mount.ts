@@ -1,6 +1,7 @@
 import { createRichMarkdownEditorDocument } from './create-rich-markdown-editor-document'
 import { RICH_MARKDOWN_EDITOR_MARKUP } from './document-markup'
 import { richMarkdownEditorStyle } from './document-style'
+import { getMobileColorScheme } from '../../theme/mobile-theme'
 import { scopeDocumentStyleToHost } from '../../style-scoping/document-style-scoping'
 import type { RichMarkdownEditorApi, RichMarkdownUrlPromptKind } from './document-host-seams'
 import type { MobileRichMarkdownEditorMessage } from '../mobile-rich-markdown-editor-contract'
@@ -26,17 +27,23 @@ export const RICH_MARKDOWN_HOST_CLASS = 'orca-rich-markdown-document-host'
 
 // Plant sheet once per page, scoped to host class; move document-wide theme/color/font globals onto host itself.
 // Leave sheet in head on unmount: removing host class makes it inert, and next mount reuses it.
-function ensureDocumentStyle() {
-  if (document.getElementById(STYLE_ELEMENT_ID)) {
+// Rewrite it in place when the color scheme changes; live editors keep their DOM and caret.
+export function ensureDocumentStyle() {
+  const scheme = getMobileColorScheme()
+  const existing = document.getElementById(STYLE_ELEMENT_ID)
+  if (existing?.dataset.scheme === scheme) {
     return
   }
-  const style = document.createElement('style')
+  const style = existing ?? document.createElement('style')
   style.id = STYLE_ELEMENT_ID
+  style.dataset.scheme = scheme
   style.textContent = scopeDocumentStyleToHost(
     richMarkdownEditorStyle(),
     `.${RICH_MARKDOWN_HOST_CLASS}`
   )
-  document.head.appendChild(style)
+  if (!existing) {
+    document.head.appendChild(style)
+  }
 }
 
 // Mount static modules synchronously so cleanup cannot arrive before disposal handle exists.

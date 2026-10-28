@@ -9,6 +9,7 @@ const require = createRequire(import.meta.url)
 const {
   CYGWIN_BREAKAWAY_MARKER,
   CYGWIN_BREAKAWAY_MARKER_TEXT,
+  NATIVE_HOST_JOB_MARKER,
   assertNodePtyJobOwnership,
   assertRebuiltConptyDeniesMsysBreakaway,
   nodePtyAddonPath
@@ -21,19 +22,21 @@ const NODE_PTY_PATCH = readFileSync(
 const JOB_EXPORTS = {
   listJobProcessIds: () => [],
   terminateJob: () => true,
-  assignCurrentProcessToJob: () => true
+  assignCurrentProcessToJob: () => true,
+  assignCurrentProcessToStrictJob: () => true
 }
 
 const fixtureDir = mkdtempSync(join(tmpdir(), 'node-pty-job-ownership-'))
 
 /** A stand-in addon; only the wide literal the gate reads has to be real. */
-function writeAddon(name, { cygwinBreakawayDenied }) {
+function writeAddon(name, { cygwinBreakawayDenied, nativeHostJobOwned = true }) {
   const path = join(fixtureDir, name)
   writeFileSync(
     path,
     Buffer.concat([
       Buffer.from('MZ fake addon '),
-      cygwinBreakawayDenied ? CYGWIN_BREAKAWAY_MARKER : Buffer.alloc(0)
+      cygwinBreakawayDenied ? CYGWIN_BREAKAWAY_MARKER : Buffer.alloc(0),
+      nativeHostJobOwned ? NATIVE_HOST_JOB_MARKER : Buffer.alloc(0)
     ])
   )
   return path
@@ -99,6 +102,16 @@ describe('assertNodePtyJobOwnership', () => {
   it('rejects the prebuild that shipped without the job exports', () => {
     expect(() => assertNodePtyJobOwnership(onWindows(PREBUILD, CURRENT_ADDON))).toThrow(
       /listJobProcessIds, terminateJob, assignCurrentProcessToJob[\s\S]*prebuilds\/win32-x64/
+    )
+  })
+
+  it('rejects older job bindings without strict native-host ownership', () => {
+    const previous = {
+      ...PATCHED,
+      module: { ...JOB_EXPORTS, assignCurrentProcessToStrictJob: undefined }
+    }
+    expect(() => assertNodePtyJobOwnership(onWindows(previous, CURRENT_ADDON))).toThrow(
+      /missing assignCurrentProcessToStrictJob/
     )
   })
 
@@ -172,7 +185,8 @@ describe('assertRebuiltConptyDeniesMsysBreakaway', () => {
         addonPath,
         Buffer.concat([
           peImage({ arch }),
-          cygwinBreakawayDenied ? CYGWIN_BREAKAWAY_MARKER : Buffer.alloc(0)
+          cygwinBreakawayDenied ? CYGWIN_BREAKAWAY_MARKER : Buffer.alloc(0),
+          NATIVE_HOST_JOB_MARKER
         ])
       )
     }

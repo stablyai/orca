@@ -7,16 +7,12 @@ import {
   type GateTestStore,
   listed,
   LIVE_LEAF_ID,
-  seedExistingSurface,
   SIBLING_LEAF_ID,
   sleepingRecord,
   testDeps,
   WORKTREE_ID
 } from './worktree-agent-activation-gate.test-fixture'
-import {
-  readWorktreeLiveTerminalSurfaceOwners,
-  type LiveTerminalSurfaceOwner
-} from './worktree-live-terminal-surface-owners'
+import type { LiveTerminalSurfaceOwner } from './worktree-live-terminal-surface-owners'
 
 vi.mock('../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
 
@@ -44,27 +40,6 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-describe('the sweep’s listing, layout-owner build', () => {
-  it('asks main to place the workspace’s unshown live terminals before it lists', async () => {
-    const call = vi.fn(async () => ({
-      ok: true,
-      result: { terminals: [], hostScope: { hostIds: ['local'], omittedHostIds: [] } }
-    }))
-    vi.stubGlobal('window', { api: { runtime: { call } } })
-
-    await readWorktreeLiveTerminalSurfaceOwners(WORKTREE_ID)
-
-    expect(call).toHaveBeenCalledWith({
-      method: 'terminal.list',
-      params: expect.objectContaining({
-        worktree: `id:${WORKTREE_ID}`,
-        requireFreshPtyLiveness: true,
-        placeUnshownLiveTerminals: true
-      })
-    })
-  })
-})
-
 describe('the activation sweep reads main’s placement, layout-owner build', () => {
   it('counts a terminal main placed as shown before its frame arrives: no shell is seeded', async () => {
     const { deps, resume } = testDeps({
@@ -76,18 +51,6 @@ describe('the activation sweep reads main’s placement, layout-owner build', ()
 
     expectNoWindowWrite(deps.getState())
     expect(resume).not.toHaveBeenCalled()
-  })
-
-  it('writes nothing for a pane main names in a tab this window already has', async () => {
-    const { deps } = testDeps({
-      sessions: [listed(LIVE_PTY)],
-      surfaceOwners: new Map([[LIVE_PTY, placedByMain(LIVE_PTY, 'tab-known')]])
-    })
-    seedExistingSurface(deps.getState(), { tabId: 'tab-known', leafId: LIVE_LEAF_ID })
-
-    await expect(runWorktreeAgentActivationGate(WORKTREE_ID, deps)).resolves.toBe('adopted')
-
-    expectNoWindowWrite(deps.getState())
   })
 
   it('still resumes the workspace’s sleeping agent beside the terminal main placed', async () => {

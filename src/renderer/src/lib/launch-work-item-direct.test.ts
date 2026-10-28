@@ -4,7 +4,6 @@ import * as inventory from './agent-detection-target-inventory'
 import * as localCapabilities from '@/runtime/local-runtime-capabilities'
 import { RUNTIME_CAPABILITIES } from '../../../shared/protocol-version'
 import type { AppState } from '@/store'
-import { directWorkItemCatalogFixture } from './launch-work-item-direct-catalog.test-fixture'
 import type * as TuiAgentSelectionModule from '../../../shared/tui-agent-selection'
 import type * as TuiAgentStartupModule from '@/lib/tui-agent-startup'
 import type * as DirectAgentRoutingModule from '@/lib/launch-work-item-direct-agent-routing'
@@ -172,7 +171,26 @@ describe('launchWorkItemDirect', () => {
     mocks.activateAndRevealWorktree.mockReturnValue({ primaryTabId: 'tab-1' })
     mocks.pasteDraftWhenAgentReady.mockResolvedValue(true)
     mocks.store = {
-      ...directWorkItemCatalogFixture(),
+      repos: [
+        {
+          id: 'repo-1',
+          path: '/repo',
+          displayName: 'Repo',
+          addedAt: 1
+        }
+      ],
+      activeRepoId: 'repo-1',
+      activeWorktreeId: null,
+      projects: [
+        {
+          id: 'repo-1',
+          displayName: 'Repo',
+          badgeColor: '#000000',
+          sourceRepoIds: ['repo-1'],
+          createdAt: 1,
+          updatedAt: 1
+        }
+      ],
       worktreesByRepo: {},
       settings: {
         defaultTuiAgent: 'codex',

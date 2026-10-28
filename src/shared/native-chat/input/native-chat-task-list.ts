@@ -114,6 +114,10 @@ export function nativeChatTaskChangeWords(change: NativeChatTaskChange): {
   }
 }
 
+export function nativeChatCompletedTaskCount(list: NativeChatTaskList): number {
+  return list.tasks.filter((task) => task.status === 'completed').length
+}
+
 export function nativeChatTaskLabel(task: NativeChatTask): string {
   return task.status === 'in_progress' && task.activeForm ? task.activeForm : task.content
 }

@@ -70,10 +70,6 @@ export function resetSimulatorLaunchCoordinationForTests(): void {
   prelaunchedSessionsByWorktree.clear()
 }
 
-export function getPrelaunchedSimulatorSessionCountForTests(): number {
-  return prelaunchedSessionsByWorktree.size
-}
-
 export function dispatchManualSimulatorLaunchStarted(worktreeId: string): void {
   dispatchManualSimulatorLaunchEvent(EMULATOR_MANUAL_LAUNCH_STARTED_EVENT, { worktreeId })
 }

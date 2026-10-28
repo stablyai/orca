@@ -40,6 +40,10 @@ __orca_osc133_preexec() {
 }
 __orca_deferred_line_init() {
   builtin emulate -L zsh
+  if [[ "${CONTEXT-}" != start ]]; then
+    (( ${+widgets[__orca_saved_line_init]} )) && zle __orca_saved_line_init "$@"
+    return 0
+  fi
   (( ${+functions[__orca_deferred_init]} )) || return 0
   local __orca_direct_line_init=0
   [[ "${widgets[zle-line-init]:-}" == user:__orca_deferred_line_init ]] && __orca_direct_line_init=1
@@ -57,7 +61,7 @@ __orca_deferred_sched_init() {
   builtin emulate -L zsh
   (( ${+functions[__orca_deferred_init]} )) && __orca_deferred_init
   builtin unset __orca_deferred_sched_armed
-  builtin unfunction __orca_deferred_sched_init
+  (( ${+functions[__orca_deferred_sched_init]} )) && builtin unfunction __orca_deferred_sched_init
   return $__orca_prompt_status
 }
 __orca_arm_deferred_line_init() {
@@ -75,6 +79,8 @@ __orca_arm_deferred_line_init() {
 __orca_deferred_init() {
   # Reset user options: NO_UNSET can abort hooks and KSH_ARRAYS breaks the feature lookup.
   builtin emulate -L zsh
+  # Startup files can invoke prompt hooks or nested editors before initialization ends.
+  [[ ":$ZSH_EVAL_CONTEXT:" == *:file:* ]] && return 0
   (( $+_orca_deferred_init_done )) && return 0
   builtin typeset -g _orca_deferred_init_done=1
   builtin typeset -g precmd_functions
@@ -286,7 +292,9 @@ __orca_deferred_init() {
   # The permanent hook was added during this sweep; run it now so the first prompt gets its mark.
   __orca_has_feature markers && __orca_osc133_precmd
   builtin unset _orca_shell_features _orca_histfile
-  (( $+__orca_deferred_sched_armed )) || builtin unfunction __orca_deferred_sched_init
+  if (( ! $+__orca_deferred_sched_armed && ${+functions[__orca_deferred_sched_init]} )); then
+    builtin unfunction __orca_deferred_sched_init
+  fi
   builtin unfunction __orca_deferred_init __orca_has_feature __orca_arm_deferred_line_init
 }
 {

@@ -4,7 +4,7 @@ import { cn } from '@/lib/utils'
 import {
   NATIVE_CHAT_MESSAGE_FULL_TIME_FORMAT,
   NATIVE_CHAT_MESSAGE_TIME_FORMAT
-} from '../../../../shared/native-chat-message-time'
+} from '../../../../shared/native-chat/transcript/native-chat-message-time'
 
 let cached: {
   locale: string

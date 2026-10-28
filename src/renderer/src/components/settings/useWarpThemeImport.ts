@@ -131,13 +131,13 @@ export function useWarpThemeImport(
         overflowCount === 1
           ? translate(
               'auto.components.settings.useWarpThemeImport.over_limit_one',
-              'Importing these themes would exceed the {{value0}} custom terminal theme limit. Deselect 1 new theme and try again.',
-              { value0: MAX_TERMINAL_CUSTOM_THEMES }
+              'Importing these themes would exceed the {{value0}} custom terminal theme limit. Deselect {{value1}} new theme and try again.',
+              { value0: MAX_TERMINAL_CUSTOM_THEMES, value1: overflowCount, count: overflowCount }
             )
           : translate(
               'auto.components.settings.useWarpThemeImport.over_limit_other',
               'Importing these themes would exceed the {{value0}} custom terminal theme limit. Deselect {{value1}} new themes and try again.',
-              { value0: MAX_TERMINAL_CUSTOM_THEMES, value1: overflowCount }
+              { value0: MAX_TERMINAL_CUSTOM_THEMES, value1: overflowCount, count: overflowCount }
             )
       )
       return
@@ -157,12 +157,13 @@ export function useWarpThemeImport(
         count === 1
           ? translate(
               'auto.components.settings.useWarpThemeImport.imported_one',
-              'Imported 1 theme'
+              'Imported {{value0}} theme',
+              { value0: count, count }
             )
           : translate(
               'auto.components.settings.useWarpThemeImport.imported_other',
               'Imported {{value0}} themes',
-              { value0: count }
+              { value0: count, count }
             )
       )
       // Reveal new themes that otherwise remain below the built-in list.

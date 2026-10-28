@@ -167,7 +167,7 @@ export function useComposerRuntimeTargetSelection(input: ComposerRuntimeTargetSe
           {
             activeRepoId,
             activeWorktreeId: null,
-            projectHostSetupProjection: { projects, setups: projectHostSetups },
+            projects,
             repos,
             settings,
             worktreesByRepo
@@ -178,7 +178,6 @@ export function useComposerRuntimeTargetSelection(input: ComposerRuntimeTargetSe
     )
   }, [
     activeRepoId,
-    projectHostSetups,
     projects,
     repos,
     runtimeStatusByEnvironmentId,
