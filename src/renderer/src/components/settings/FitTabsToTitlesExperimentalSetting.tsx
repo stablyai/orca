@@ -37,7 +37,7 @@ export function FitTabsToTitlesExperimentalSetting({
           <p className="text-xs text-muted-foreground">
             {translate(
               'auto.components.settings.ExperimentalPane.fitTabsToTitles.copy',
-              'Short titles take less room and long titles get more. Tabs resize when you open, close, move, or rename them, not when an agent or program renames a tab.'
+              'Short titles take less room and long titles get more. Tabs resize only after their titles stop changing for a few seconds, and never while your pointer is over them.'
             )}
           </p>
         </div>

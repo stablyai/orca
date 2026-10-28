@@ -30,7 +30,7 @@ function TabWidthFixture({
 }: {
   count: number
   titles?: string[]
-  /** Titles an agent applies after mount; widths should hold until the strip changes. */
+  /** Titles an agent applies after mount; with no pointer over the strip, widths follow them. */
   renamedTitles?: string[]
 } & Pick<TabBarProps, 'browserTabs' | 'editorFiles' | 'tabBarOrder'>): React.JSX.Element {
   const [activeTabId, setActiveTabId] = useState('tab-0')
