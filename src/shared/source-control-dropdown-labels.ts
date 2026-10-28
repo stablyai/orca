@@ -1,31 +1,17 @@
-import { translate } from '@/i18n/i18n'
-
 export function describePushCount(ahead: number): string {
-  return translate('sourceControl.actions.pushCount', 'Push {{count}} commits', {
-    count: ahead,
-    defaultValue_one: 'Push {{count}} commit'
-  })
+  return `Push ${ahead} commit${ahead === 1 ? '' : 's'}`
 }
 
 export function describePullCount(behind: number): string {
-  return translate('sourceControl.actions.pullCount', 'Pull {{count}} commits', {
-    count: behind,
-    defaultValue_one: 'Pull {{count}} commit'
-  })
+  return `Pull ${behind} commit${behind === 1 ? '' : 's'}`
 }
 
 export function describeFastForwardCount(behind: number): string {
-  return translate('sourceControl.actions.fastForwardCount', 'Fast-forward {{count}} commits', {
-    count: behind,
-    defaultValue_one: 'Fast-forward {{count}} commit'
-  })
+  return `Fast-forward ${behind} commit${behind === 1 ? '' : 's'}`
 }
 
 export function describeSyncCounts(ahead: number, behind: number): string {
-  return translate('sourceControl.actions.syncCounts', 'Pull {{behind}}, push {{ahead}}', {
-    behind,
-    ahead
-  })
+  return `Pull ${behind}, push ${ahead}`
 }
 
 export function formatCountLabel(base: string, count: number): string {
@@ -43,24 +29,11 @@ export function formatForcePushTitle(
   branchCommitsAhead: number | undefined,
   upstreamName?: string
 ): string {
-  const upstream =
-    upstreamName ?? translate('sourceControl.actions.remoteBranch', 'the remote branch')
-  return branchCommitsAhead && branchCommitsAhead > 0
-    ? translate(
-        'sourceControl.actions.forcePushCount',
-        'Remote only has older copies of local commits. Force push {{count}} branch commits with lease to update {{upstream}}.',
-        {
-          count: branchCommitsAhead,
-          upstream,
-          defaultValue_one:
-            'Remote only has older copies of local commits. Force push {{count}} branch commit with lease to update {{upstream}}.'
-        }
-      )
-    : translate(
-        'sourceControl.actions.forcePushBranch',
-        'Remote only has older copies of local commits. Force push this branch with lease to update {{upstream}}.',
-        { upstream }
-      )
+  const countText =
+    branchCommitsAhead && branchCommitsAhead > 0
+      ? `${branchCommitsAhead} branch commit${branchCommitsAhead === 1 ? '' : 's'}`
+      : 'this branch'
+  return `Remote only has older copies of local commits. Force push ${countText} with lease to update ${upstreamName ?? 'the remote branch'}.`
 }
 
 export function formatManualForcePushTitle(
@@ -68,46 +41,19 @@ export function formatManualForcePushTitle(
   behind: number,
   upstreamName?: string
 ): string {
-  const upstream =
-    upstreamName ?? translate('sourceControl.actions.remoteBranch', 'the remote branch')
+  const commitText = ahead === 1 ? '1 local commit' : `${ahead} local commits`
   if (behind > 0) {
-    return translate(
-      'sourceControl.actions.manualForcePushReplace',
-      'Force push {{count}} local commits with lease to update {{upstream}} and replace remote-only commits.',
-      {
-        count: ahead,
-        upstream,
-        defaultValue_one:
-          'Force push {{count}} local commit with lease to update {{upstream}} and replace remote-only commits.'
-      }
-    )
+    return `Force push ${commitText} with lease to update ${upstreamName ?? 'the remote branch'} and replace remote-only commits.`
   }
-  return translate(
-    'sourceControl.actions.manualForcePush',
-    'Force push {{count}} local commits with lease to update {{upstream}}.',
-    {
-      count: ahead,
-      upstream,
-      defaultValue_one: 'Force push {{count}} local commit with lease to update {{upstream}}.'
-    }
-  )
+  return `Force push ${commitText} with lease to update ${upstreamName ?? 'the remote branch'}.`
 }
 
 export function formatUnpublishedForcePushTitle(branchCommitsAhead: number | undefined): string {
-  return branchCommitsAhead && branchCommitsAhead > 0
-    ? translate(
-        'sourceControl.actions.unpublishedForcePushCount',
-        'Force push {{count}} branch commits with lease and set an upstream if needed.',
-        {
-          count: branchCommitsAhead,
-          defaultValue_one:
-            'Force push {{count}} branch commit with lease and set an upstream if needed.'
-        }
-      )
-    : translate(
-        'sourceControl.actions.unpublishedForcePushBranch',
-        'Force push this branch with lease and set an upstream if needed.'
-      )
+  const countText =
+    branchCommitsAhead && branchCommitsAhead > 0
+      ? `${branchCommitsAhead} branch commit${branchCommitsAhead === 1 ? '' : 's'}`
+      : 'this branch'
+  return `Force push ${countText} with lease and set an upstream if needed.`
 }
 
 export function formatRebaseBaseRef(baseRef: string): string {
