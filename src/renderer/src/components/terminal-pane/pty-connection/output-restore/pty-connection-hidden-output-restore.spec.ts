@@ -22,6 +22,7 @@ import {
   installTerminalTestGlobals,
   restoreTerminalTestGlobals
 } from '../test-fixtures/pty-connection-test-environment'
+import { mockPanePtyArgs } from '../test-fixtures/pty-connection-test-connect-mock-pane'
 
 export function registerPtyConnectionHiddenOutputRestoreTests(): void {
   let mockStoreState: StoreState
@@ -170,6 +171,80 @@ export function registerPtyConnectionHiddenOutputRestoreTests(): void {
 
       expect(writes).not.toContain(staleQueryFrame)
       expect(rendererBuffer).toEqual(referenceBuffer)
+      binding.dispose()
+    })
+
+    it('does not forward mode controls surfaced after a hidden snapshot restore', async () => {
+      const visibilityChangeListeners: (() => void)[] = []
+      ;(globalThis as { document?: Document }).document = {
+        visibilityState: 'visible',
+        addEventListener: vi.fn((type: string, listener: EventListenerOrEventListenerObject) => {
+          if (type === 'visibilitychange') {
+            visibilityChangeListeners.push(listener as () => void)
+          }
+        }),
+        removeEventListener: vi.fn()
+      } as unknown as Document
+
+      const { connectPanePty } = await import('../connect-pane-pty')
+      const agentTitleMocksHiddenRestore = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
+      const transport = createMockTransport('pty-id')
+      const capturedDataCallback: { current: ConnectCallbacks['onData'] | null } = { current: null }
+      transport.connect.mockImplementation(
+        async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+          capturedDataCallback.current = callbacks.onData ?? null
+          return 'pty-id'
+        }
+      )
+      transportFactoryQueue.push(transport)
+      const getMainBufferSnapshot = vi.mocked(window.api.pty.getMainBufferSnapshot)
+      const restoredModes = '\x1b[?1002h\x1b[>4;2m'
+      getMainBufferSnapshot.mockResolvedValue({
+        data: `${restoredModes}restored snapshot`,
+        cols: 80,
+        rows: 8,
+        seq: 1
+      })
+
+      const pane = createPane(1)
+      pane.terminal.cols = 80
+      pane.terminal.rows = 8
+      let terminalInputHandler: ((data: string) => void) | null = null
+      pane.terminal.write.mockImplementation((data: string | Uint8Array, callback?: () => void) => {
+        callback?.()
+        if (terminalWriteText(data).includes(restoredModes)) {
+          queueMicrotask(() => terminalInputHandler?.(restoredModes))
+        }
+      })
+      const deps = createDeps({
+        isVisibleRef: { current: false },
+        startup: { command: 'claude' }
+      })
+      const binding = connectPanePty(
+        ...mockPanePtyArgs(
+          pane,
+          createManager(1),
+          bindPaneAgentTitleMocks(deps, agentTitleMocksHiddenRestore)
+        )
+      )
+      await flushAsyncTicks(6)
+      const onDataMock = pane.terminal.onData as unknown as {
+        mock: { calls: [[(data: string) => void] | []] }
+      }
+      terminalInputHandler = onDataMock.mock.calls[0]?.[0] ?? null
+      expect(terminalInputHandler).toBeTypeOf('function')
+
+      capturedDataCallback.current?.('hidden output', { seq: 1, rawLength: 13 })
+      ;(deps.isVisibleRef as { current: boolean }).current = true
+      for (const listener of visibilityChangeListeners) {
+        listener()
+      }
+      await flushAsyncTicks(20)
+
+      expect(getMainBufferSnapshot).toHaveBeenCalled()
+      expect(transport.sendInput).not.toHaveBeenCalled()
       binding.dispose()
     })
 

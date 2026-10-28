@@ -1,5 +1,6 @@
 const ESC = '\x1b'
 
+/** Returns the final byte of a complete CSI sequence, or null while input is split. */
 function csiFinalIndex(data: string): number | null {
   for (let index = 2; index < data.length; index += 1) {
     const code = data.charCodeAt(index)
@@ -10,6 +11,7 @@ function csiFinalIndex(data: string): number | null {
   return null
 }
 
+/** Identifies renderer-output mode controls that must never travel as PTY input. */
 function isTerminalOutputModeControl(csi: string): boolean {
   const final = csi.at(-1)
   const params = csi.slice(2, -1)
@@ -23,6 +25,7 @@ function isTerminalOutputModeControl(csi: string): boolean {
 export class TerminalOutputControlInputFilter {
   private pending = ''
 
+  /** Filters non-user input while retaining an incomplete CSI for its next event. */
   filter(data: string): string {
     let remaining = this.pending + data
     this.pending = ''
