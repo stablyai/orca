@@ -77,14 +77,14 @@ const SidebarHeader = React.memo(function SidebarHeader({
         >
           <Tooltip>
             <TooltipTrigger asChild>
-              <span className="inline-flex shrink-0">
+              <span className="inline-flex shrink-0 text-muted-foreground">
                 <PopoverAnchor asChild>
                   <Button
                     type="button"
                     variant="ghost"
                     size="icon-xs"
                     className={cn(
-                      'w-8 text-muted-foreground',
+                      'w-auto min-w-8',
                       agentsViewActive &&
                         'bg-foreground/10 text-foreground hover:bg-foreground/15 dark:hover:bg-foreground/15'
                     )}
@@ -93,14 +93,14 @@ const SidebarHeader = React.memo(function SidebarHeader({
                     aria-describedby={activityBadgeId}
                     onClick={() => setSidebarBody?.(agentsViewActive ? 'workspaces' : 'agents')}
                   >
-                    <span className="relative h-5 w-6 shrink-0">
-                      <Bell className="absolute left-0 top-1 size-3" />
+                    <span className="flex items-center gap-0.5 px-1">
+                      <Bell className="size-3" />
                       <span
-                        className="pointer-events-none absolute inset-0"
+                        className="pointer-events-none flex items-center gap-0.5"
                         id={activityBadgeId}
                         aria-label={`${activityStatusLabel}: ${activityCount}`}
                       >
-                        <span className="absolute right-0 top-0 flex h-2 w-3 items-center justify-center">
+                        <span className="flex size-2 items-center justify-center">
                           {counts.attention > 0 ? (
                             <AgentQuestionIcon className="size-2" />
                           ) : (
@@ -112,16 +112,11 @@ const SidebarHeader = React.memo(function SidebarHeader({
                             />
                           )}
                         </span>
-                        <span className="absolute right-0 top-2.5 flex h-2.5 w-3 items-center justify-center">
-                          <span
-                            className={cn(
-                              'icon-superscript-count',
-                              activityCount > 99 && 'origin-center scale-x-65'
-                            )}
-                            data-multiple-digits={activityCount > 9}
-                          >
-                            {activityCount > 99 ? '99+' : activityCount}
-                          </span>
+                        <span
+                          className="icon-superscript-count"
+                          data-multiple-digits={activityCount > 9}
+                        >
+                          {activityCount > 99 ? '99+' : activityCount}
                         </span>
                       </span>
                     </span>
