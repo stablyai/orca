@@ -1,4 +1,5 @@
-import { act, fireEvent, render, screen } from '@testing-library/react'
+import { act, fireEvent, screen } from '@testing-library/react'
+import { render } from './native-chat-tooltip-test-harness'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'

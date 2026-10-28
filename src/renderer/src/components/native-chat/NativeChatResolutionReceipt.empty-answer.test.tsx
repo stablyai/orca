@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import '@testing-library/jest-dom/vitest'
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, screen } from '@testing-library/react'
+import { render } from './native-chat-tooltip-test-harness'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { AgentJournalQuestionItem } from '../../../../shared/agent-session-journal-types'
 import { NativeChatResolutionReceipt } from './NativeChatResolutionReceipt'

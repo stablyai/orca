@@ -2,7 +2,8 @@
 // Queued sends wait after the opening turn’s live status until actual handover, including across Stop.
 
 import '@testing-library/jest-dom/vitest'
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, screen } from '@testing-library/react'
+import { render } from './native-chat-tooltip-test-harness'
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 
 // Why: these fixtures have neither inline visual owners nor sender navigation.
