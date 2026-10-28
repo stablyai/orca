@@ -2,6 +2,10 @@
 import { useCallback, useRef, useState } from 'react'
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import {
+  JIRA_ISSUE_LIST_MAX,
+  JIRA_REMOTE_ISSUE_LIST_MAX
+} from '../../../shared/jira/jira-issue-list-limit'
 import type { JiraIssue } from '../../../shared/jira/jira-types'
 import type { JiraSavedFilterState } from '../../../shared/jira/jira-saved-filters'
 import type { TaskPageLinearCollectionEffectsModel } from './task-page/linear/use-task-page-linear-collection-effects'
@@ -139,8 +143,9 @@ it.each([
   'settles $cache Jira results after $failure and keeps query/refresh working',
   async (testCase) => {
     const store = createTestStore()
+    const limit = testCase.remote ? JIRA_REMOTE_ISSUE_LIST_MAX : JIRA_ISSUE_LIST_MAX
     store.setState({ jiraStatus: { connected: true, viewer: null, selectedSiteId: 'site-1' } })
-    await store.getState().listJiraIssues('assigned', 50)
+    await store.getState().listJiraIssues('assigned', limit)
     if (testCase.cache === 'stale') {
       store.setState((state) => ({
         jiraSearchCache: Object.fromEntries(
@@ -179,14 +184,14 @@ it.each([
     act(() => result.current.setJiraSearchInput('login bug'))
     await waitFor(() => expect(result.current.appliedJiraSearch).toBe('login bug'))
     await waitFor(() => expect(result.current.jiraLoading).toBe(false))
-    expect(search).toHaveBeenCalledExactlyOnceWith('text ~ "login bug*"', 50, {
+    expect(search).toHaveBeenCalledExactlyOnceWith('text ~ "login bug*"', limit, {
       sourceContext: null,
       force: false
     })
     act(() => result.current.refresh())
     await waitFor(() => expect(search).toHaveBeenCalledTimes(2))
     await waitFor(() => expect(result.current.jiraLoading).toBe(false))
-    expect(search).toHaveBeenLastCalledWith('text ~ "login bug*"', 50, {
+    expect(search).toHaveBeenLastCalledWith('text ~ "login bug*"', limit, {
       sourceContext: null,
       force: true
     })
@@ -219,7 +224,7 @@ it('recovers from a failed owner read and restores the active exact JQL on retry
   await waitFor(() => expect(result.current.jiraLoading).toBe(false))
   expect(result.current.jiraSavedFiltersError).toBeNull()
   expect(result.current.appliedJiraSearch).toBe('filter = 12345')
-  expect(search).toHaveBeenCalledExactlyOnceWith('filter = 12345', 50, {
+  expect(search).toHaveBeenCalledExactlyOnceWith('filter = 12345', JIRA_REMOTE_ISSUE_LIST_MAX, {
     sourceContext: null,
     force: false
   })

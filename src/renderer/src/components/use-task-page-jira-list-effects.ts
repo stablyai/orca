@@ -15,7 +15,7 @@ import {
 } from '@/components/task-page-jira-status-order'
 import { createTaskPageJiraLoadFailureState } from '@/components/task-page-jira-load-state'
 import { searchTaskPageJiraIssues } from '@/components/task-page-jira-search'
-import { JIRA_ITEM_LIMIT } from './task-page/task-page-source-context'
+import { jiraIssueListMaxFor } from '../../../shared/jira/jira-issue-list-limit'
 import { useTaskSearchDebouncedApply } from './task-page/use-task-search-debounced-apply'
 import { readLinkedJiraIssues } from './task-page-jira-linked-issues'
 import { ipcOrRuntimeTargetForHostId } from '@/runtime/runtime-client-target'
@@ -125,7 +125,7 @@ export function useTaskPageJiraListEffects(model: TaskPageLinearCollectionEffect
         queryTooLong = true
         throw new Error('Query exceeds the request limit.')
       }
-      return searchJiraIssues(query, JIRA_ITEM_LIMIT, {
+      return searchJiraIssues(query, jiraIssueListMaxFor(statusOrderOwner), {
         sourceContext: jiraTaskSourceContext,
         ...(favourite
           ? { siteId: favourite.siteId }
@@ -159,7 +159,7 @@ export function useTaskPageJiraListEffects(model: TaskPageLinearCollectionEffect
                 jiraProjectFilter
               )
             ).then((issues) => ({ issues, jqlRejection: null, error: null }))
-          : listJiraIssues(activeJiraPreset, JIRA_ITEM_LIMIT, {
+          : listJiraIssues(activeJiraPreset, jiraIssueListMaxFor(statusOrderOwner), {
               sourceContext: jiraTaskSourceContext,
               force,
               ...(selectedJiraStatuses.length || jiraCurrentSprint

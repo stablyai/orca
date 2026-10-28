@@ -17,7 +17,7 @@ describe('Jira IPC parameters', () => {
 
   it('bounds issue reads and rejects nonfinite limits', () => {
     expect(clampJiraIssueLimit(0)).toBe(1)
-    expect(clampJiraIssueLimit(1_000_000)).toBe(100)
+    expect(clampJiraIssueLimit(1_000_000)).toBe(1000)
     expect(clampJiraIssueLimit(50)).toBe(50)
     for (const value of [undefined, '100', Number.NaN, Infinity, -Infinity]) {
       expect(clampJiraIssueLimit(value)).toBe(30)

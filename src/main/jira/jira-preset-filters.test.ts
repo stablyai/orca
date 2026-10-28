@@ -169,6 +169,43 @@ describe('Jira preset filters', () => {
     expect(jiraRequest).toHaveBeenCalledTimes(1)
   })
 
+  it('follows Cloud page tokens past one page, asking for at most 100 issues per page', async () => {
+    const pageSizes: number[] = []
+    jiraRequest.mockImplementation(async (_entry, _path, init) => {
+      const body = JSON.parse(init.body)
+      pageSizes.push(body.maxResults)
+      const page = pageSizes.length
+      return {
+        issues: Array.from({ length: page < 3 ? 100 : 30 }, (_, index) =>
+          issue(`P${page}-${index}`, false, false)
+        ),
+        ...(page < 3 ? { nextPageToken: `t${page}` } : { isLast: true })
+      }
+    })
+    const { listIssues } = await import('./jira-issue-search')
+    await expect(listIssues('assigned', 1000, 'cloud')).resolves.toHaveLength(230)
+    expect(pageSizes).toEqual([100, 100, 100])
+  })
+
+  it('pages Server/DC classic search by offset until it reaches the total', async () => {
+    getClients.mockReturnValue([site('server', 'server')])
+    const offsets: (number | undefined)[] = []
+    jiraRequest.mockImplementation(async (_entry, _path, init) => {
+      const body = JSON.parse(init.body)
+      offsets.push(body.startAt)
+      const count = body.startAt === undefined ? 100 : 50
+      return {
+        total: 150,
+        issues: Array.from({ length: count }, (_, index) =>
+          issue(`S${offsets.length}-${index}`, false, false)
+        )
+      }
+    })
+    const { listIssues } = await import('./jira-issue-search')
+    await expect(listIssues('assigned', 1000, 'server')).resolves.toHaveLength(150)
+    expect(offsets).toEqual([undefined, 100])
+  })
+
   it('does not send an unbounded search when the Cloud account has no projects', async () => {
     jiraRequest.mockResolvedValue({ values: [], isLast: true })
     const { listIssues } = await import('./jira-issue-search')

@@ -1,6 +1,10 @@
 // @vitest-environment happy-dom
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  JIRA_ISSUE_LIST_MAX,
+  JIRA_REMOTE_ISSUE_LIST_MAX
+} from '../../../shared/jira/jira-issue-list-limit'
 import type { TaskPageLinearCollectionEffectsModel } from './task-page/linear/use-task-page-linear-collection-effects'
 import { useTaskPageJiraListEffects } from './use-task-page-jira-list-effects'
 import { restrictJiraQueryToProject } from '../../../shared/jira/jira-project-reference'
@@ -71,7 +75,7 @@ describe('useTaskPageJiraListEffects refresh wiring', () => {
     model.selectedJiraStatuses = ['Blocked']
     const { rerender } = renderHook(() => useTaskPageJiraListEffects(model))
     await waitFor(() =>
-      expect(listJiraIssues).toHaveBeenCalledWith('all', 50, {
+      expect(listJiraIssues).toHaveBeenCalledWith('all', JIRA_ISSUE_LIST_MAX, {
         sourceContext: null,
         force: false,
         filters: { statuses: ['Blocked'], currentSprint: true }
@@ -86,7 +90,7 @@ describe('useTaskPageJiraListEffects refresh wiring', () => {
     await waitFor(() =>
       expect(searchJiraIssues).toHaveBeenCalledWith(
         '(text ~ "fix login*") AND sprint in openSprints()',
-        50,
+        JIRA_ISSUE_LIST_MAX,
         { sourceContext: null, force: false }
       )
     )
@@ -107,7 +111,7 @@ describe('useTaskPageJiraListEffects refresh wiring', () => {
     )
     expect(searchJiraIssues).toHaveBeenCalledExactlyOnceWith(
       '(saved-query) AND sprint in openSprints() ORDER BY updated DESC',
-      50,
+      JIRA_ISSUE_LIST_MAX,
       { sourceContext: null, force: false }
     )
     expect(listJiraIssues).not.toHaveBeenCalled()
@@ -130,7 +134,7 @@ describe('useTaskPageJiraListEffects refresh wiring', () => {
     )
     expect(searchJiraIssues).toHaveBeenCalledExactlyOnceWith(
       'project = "10" AND ((filter = 12345) AND sprint in openSprints()) ORDER BY created ASC',
-      50,
+      JIRA_ISSUE_LIST_MAX,
       { sourceContext: null, siteId: 'site-a', force: false }
     )
     expect(listJiraIssues).not.toHaveBeenCalled()
@@ -146,7 +150,7 @@ describe('useTaskPageJiraListEffects refresh wiring', () => {
     await waitFor(() =>
       expect(searchJiraIssues).toHaveBeenCalledExactlyOnceWith(
         'project = "10" AND ((text ~ "fix login*") AND sprint in openSprints())',
-        50,
+        JIRA_ISSUE_LIST_MAX,
         { sourceContext: null, siteId: 'site-a', force: false }
       )
     )
@@ -242,11 +246,15 @@ describe('useTaskPageJiraListEffects refresh wiring', () => {
       }
       rerender()
       await waitFor(() => expect(model.setJiraLoading).toHaveBeenLastCalledWith(false))
-      expect(searchJiraIssues).toHaveBeenCalledExactlyOnceWith(scopedValidJql, 50, {
-        sourceContext: null,
-        siteId: 'site-a',
-        force: false
-      })
+      expect(searchJiraIssues).toHaveBeenCalledExactlyOnceWith(
+        scopedValidJql,
+        JIRA_ISSUE_LIST_MAX,
+        {
+          sourceContext: null,
+          siteId: 'site-a',
+          force: false
+        }
+      )
       expect(model.setJiraError).toHaveBeenLastCalledWith(null)
     }
   )
@@ -286,7 +294,7 @@ describe('useTaskPageJiraListEffects refresh wiring', () => {
       await waitFor(() => expect(searchJiraIssues).toHaveBeenCalledTimes(1))
       expect(searchJiraIssues).toHaveBeenLastCalledWith(
         'project = "10" AND (statusCategory != Done AND status in ("Blocked")) ORDER BY updated DESC',
-        50,
+        JIRA_ISSUE_LIST_MAX,
         { sourceContext: null, siteId: 'site-a', force: false }
       )
       await waitFor(() => expect(model.setJiraError).toHaveBeenLastCalledWith(null))
@@ -383,7 +391,7 @@ describe('useTaskPageJiraListEffects refresh wiring', () => {
     const { rerender } = renderHook(() => useTaskPageJiraListEffects(model))
 
     await waitFor(() => expect(listJiraIssues).toHaveBeenCalledTimes(1))
-    expect(listJiraIssues).toHaveBeenNthCalledWith(1, 'assigned', 50, {
+    expect(listJiraIssues).toHaveBeenNthCalledWith(1, 'assigned', JIRA_ISSUE_LIST_MAX, {
       sourceContext: null,
       force: false
     })
@@ -394,7 +402,7 @@ describe('useTaskPageJiraListEffects refresh wiring', () => {
       await Promise.resolve()
     })
     await waitFor(() => expect(listJiraIssues).toHaveBeenCalledTimes(2))
-    expect(listJiraIssues).toHaveBeenNthCalledWith(2, 'assigned', 50, {
+    expect(listJiraIssues).toHaveBeenNthCalledWith(2, 'assigned', JIRA_ISSUE_LIST_MAX, {
       sourceContext: null,
       force: true
     })
@@ -405,7 +413,7 @@ describe('useTaskPageJiraListEffects refresh wiring', () => {
       await Promise.resolve()
     })
     await waitFor(() => expect(listJiraIssues).toHaveBeenCalledTimes(3))
-    expect(listJiraIssues).toHaveBeenNthCalledWith(3, 'reported', 50, {
+    expect(listJiraIssues).toHaveBeenNthCalledWith(3, 'reported', JIRA_ISSUE_LIST_MAX, {
       sourceContext: null,
       force: false
     })
@@ -416,7 +424,7 @@ describe('useTaskPageJiraListEffects refresh wiring', () => {
     model.selectedJiraStatuses = ['In Progress', 'Blocked']
     const { rerender } = renderHook(() => useTaskPageJiraListEffects(model))
     await waitFor(() => expect(listJiraIssues).toHaveBeenCalledTimes(1))
-    expect(listJiraIssues).toHaveBeenLastCalledWith('assigned', 50, {
+    expect(listJiraIssues).toHaveBeenLastCalledWith('assigned', JIRA_ISSUE_LIST_MAX, {
       sourceContext: null,
       force: false,
       filters: { statuses: ['In Progress', 'Blocked'] }
@@ -426,7 +434,7 @@ describe('useTaskPageJiraListEffects refresh wiring', () => {
       model.selectedJiraStatuses = []
       rerender()
     })
-    expect(listJiraIssues).toHaveBeenLastCalledWith('assigned', 50, {
+    expect(listJiraIssues).toHaveBeenLastCalledWith('assigned', JIRA_ISSUE_LIST_MAX, {
       sourceContext: null,
       force: false
     })
@@ -438,10 +446,14 @@ describe('useTaskPageJiraListEffects refresh wiring', () => {
     model.appliedJiraSearch = 'project = APP ORDER BY created ASC'
     renderHook(() => useTaskPageJiraListEffects(model))
     await waitFor(() => expect(searchJiraIssues).toHaveBeenCalledTimes(1))
-    expect(searchJiraIssues).toHaveBeenCalledWith('project = APP ORDER BY created ASC', 50, {
-      sourceContext: null,
-      force: false
-    })
+    expect(searchJiraIssues).toHaveBeenCalledWith(
+      'project = APP ORDER BY created ASC',
+      JIRA_ISSUE_LIST_MAX,
+      {
+        sourceContext: null,
+        force: false
+      }
+    )
     expect(listJiraIssues).not.toHaveBeenCalled()
   })
 
@@ -457,10 +469,15 @@ describe('useTaskPageJiraListEffects refresh wiring', () => {
       await Promise.resolve()
     })
     await waitFor(() => expect(searchJiraIssues).toHaveBeenCalledTimes(2))
-    expect(searchJiraIssues).toHaveBeenNthCalledWith(2, 'text ~ "fix login*"', 50, {
-      sourceContext: null,
-      force: true
-    })
+    expect(searchJiraIssues).toHaveBeenNthCalledWith(
+      2,
+      'text ~ "fix login*"',
+      JIRA_ISSUE_LIST_MAX,
+      {
+        sourceContext: null,
+        force: true
+      }
+    )
   })
 
   it.each([
@@ -503,7 +520,7 @@ describe('useTaskPageJiraListEffects refresh wiring', () => {
       model.jiraProjectFilter = { id: '10', key: 'ALP', name: 'Alpha', siteId: 'site-a' }
       renderHook(() => useTaskPageJiraListEffects(model))
       await waitFor(() =>
-        expect(searchJiraIssues).toHaveBeenCalledWith(query, 50, {
+        expect(searchJiraIssues).toHaveBeenCalledWith(query, JIRA_REMOTE_ISSUE_LIST_MAX, {
           sourceContext: model.jiraTaskSourceContext,
           siteId: 'site-a',
           force: false
@@ -547,7 +564,7 @@ describe('useTaskPageJiraListEffects refresh wiring', () => {
     await waitFor(() => expect(searchJiraIssues).toHaveBeenCalledTimes(2))
     expect(searchJiraIssues).toHaveBeenLastCalledWith(
       'project = "10" AND (statusCategory != Done AND status in ("Blocked") AND sprint in openSprints()) ORDER BY updated DESC',
-      50,
+      JIRA_ISSUE_LIST_MAX,
       { sourceContext: null, siteId: 'site-a', force: false }
     )
     expect(model.setJiraError).toHaveBeenLastCalledWith(null)
@@ -584,11 +601,15 @@ describe('useTaskPageJiraListEffects refresh wiring', () => {
           expect.objectContaining({ details: 'JQL syntax invalid' })
         )
       )
-      expect(searchJiraIssues).toHaveBeenCalledExactlyOnceWith(scopedQuery, 50, {
-        sourceContext: model.jiraTaskSourceContext,
-        siteId: 'site-a',
-        force: false
-      })
+      expect(searchJiraIssues).toHaveBeenCalledExactlyOnceWith(
+        scopedQuery,
+        JIRA_REMOTE_ISSUE_LIST_MAX,
+        {
+          sourceContext: model.jiraTaskSourceContext,
+          siteId: 'site-a',
+          force: false
+        }
+      )
       expect(model.setJiraJqlRejection).toHaveBeenCalledExactlyOnceWith(null)
 
       model.jiraActiveSavedFilterId = null
@@ -597,7 +618,7 @@ describe('useTaskPageJiraListEffects refresh wiring', () => {
       await waitFor(() => expect(searchJiraIssues).toHaveBeenCalledTimes(2))
       expect(searchJiraIssues).toHaveBeenLastCalledWith(
         'project = "10" AND (statusCategory != Done AND status in ("Blocked")) ORDER BY updated DESC',
-        50,
+        JIRA_REMOTE_ISSUE_LIST_MAX,
         { sourceContext: model.jiraTaskSourceContext, siteId: 'site-a', force: false }
       )
       expect(listJiraIssues).not.toHaveBeenCalled()

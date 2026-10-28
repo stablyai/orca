@@ -6,6 +6,7 @@ export type JiraSearchResponse = {
   issues?: JiraRecord[]
   nextPageToken?: string
   isLast?: boolean
+  total?: number
 }
 
 export type JiraPagedResponse<T> = {

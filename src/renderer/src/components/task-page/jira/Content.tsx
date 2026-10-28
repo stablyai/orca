@@ -14,6 +14,8 @@ import { TaskPageJiraIssueList } from '@/components/task-page-jira-issue-list'
 import { TaskPageJiraBoardView } from '@/components/task-page-jira-board-view'
 import { TaskPageJiraViewControls } from '@/components/task-page-jira-view-controls'
 import { formatRelativeTime } from '../task-page-source-context'
+import { jiraIssueListMaxFor } from '../../../../../shared/jira/jira-issue-list-limit'
+import { TaskPageJiraIssueCount } from './IssueCount'
 import { getJiraStatusTone } from '@/components/task-page-jira-status-tone'
 import JiraIssueWorkspace from '@/components/JiraIssueWorkspace'
 import { TaskPageLinearContent } from '../linear/Content'
@@ -70,6 +72,7 @@ export function TaskPageJiraContent({
   const boardTarget = ipcOrRuntimeTargetForHostId(
     jiraTaskSourceContext?.hostId ?? accountBackedTaskSourceHostId
   )
+  const jiraIssueLimit = jiraIssueListMaxFor(boardTarget)
   const boardScopeKey = JSON.stringify([
     jiraTaskSourceScopeKey,
     boardTarget ? getEnvironmentRuntimeContextKey(runtimeTargetEnvironmentId(boardTarget)) : null
@@ -117,10 +120,11 @@ export function TaskPageJiraContent({
             sprintDisabled={jiraHasWorkspace}
           />
           <div className="flex shrink-0 items-center gap-2 text-2xs text-muted-foreground">
-            <span>
-              {displayedJiraIssues.length}{' '}
-              {translate('auto.components.TaskPage.b7bae28b6a', 'shown')}
-            </span>
+            <TaskPageJiraIssueCount
+              shown={displayedJiraIssues.length}
+              loaded={jiraIssues.length}
+              limit={jiraIssueLimit}
+            />
             {jiraViewMode === 'list' ? (
               <JiraListColumnsMenu ids={jiraColumnIds} onToggle={toggleJiraColumn} />
             ) : null}

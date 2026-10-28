@@ -1,5 +1,6 @@
 import type { JiraIssueUpdate, JiraSiteSelection } from '../../../shared/jira/jira-types'
 import { isRecord } from '../../../shared/agent-status-child-work-value-guards'
+import { JIRA_ISSUE_LIST_MAX } from '../../../shared/jira/jira-issue-list-limit'
 
 export function normalizeJiraSiteId(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim() ? value.trim() : undefined
@@ -12,7 +13,7 @@ export function normalizeJiraSiteSelection(value: unknown): JiraSiteSelection | 
 
 export function clampJiraIssueLimit(value: unknown, fallback = 30): number {
   const limit = typeof value === 'number' && Number.isFinite(value) ? value : fallback
-  return Math.min(Math.max(1, limit), 100)
+  return Math.min(Math.max(1, limit), JIRA_ISSUE_LIST_MAX)
 }
 
 function normalizeStringArray(value: unknown): string[] | undefined {

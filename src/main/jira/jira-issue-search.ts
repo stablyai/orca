@@ -11,7 +11,8 @@ import { apiBasePath, jiraRequest, type JiraClientForSite } from './authenticate
 import { clearToken, getClients, isAuthError } from './client'
 import { ISSUE_LIST_FIELDS, mapJiraIssue, type JiraAgileFieldIds } from './jira-issue-mapping'
 import { agileFieldIdList, getAgileFieldIds } from './jira-agile-fields'
-import type { JiraSearchResponse } from './jira-record-pages'
+import { JIRA_ISSUE_LIST_MAX } from '../../shared/jira/jira-issue-list-limit'
+import { asFiniteNumber, type JiraSearchResponse } from './jira-record-pages'
 import { readProjectsForClient } from './jira-project-queries'
 import {
   requireStrictJiraSite,
@@ -23,10 +24,15 @@ import {
 
 const ISSUE_SEARCH_TIMEOUT_MS = 30_000
 const PROJECTS_PER_QUERY = 100
+// Jira Cloud returns at most 100 issues per page when fields are requested.
+const SEARCH_PAGE_SIZE = 100
 type JiraIssueQuery = { filter: JiraIssueFilter; filters?: JiraIssueListFilters } | { jql: string }
 
 function clampLimit(limit: number | undefined, fallback = 30): number {
-  return Math.min(Math.max(1, Number.isFinite(limit) ? Number(limit) : fallback), 100)
+  return Math.min(
+    Math.max(1, Number.isFinite(limit) ? Number(limit) : fallback),
+    JIRA_ISSUE_LIST_MAX
+  )
 }
 
 function sortAndLimitIssues(issues: JiraIssue[], limit: number): JiraIssue[] {
@@ -79,10 +85,8 @@ async function searchIssuesForClient(
   collectPages = false
 ): Promise<JiraIssue[]> {
   // Server/DC only has the classic /search resource; /search/jql is Cloud-only.
-  const searchPath =
-    entry.site.authType === 'server'
-      ? `${apiBasePath(entry.site)}/search`
-      : '/rest/api/3/search/jql'
+  const isServer = entry.site.authType === 'server'
+  const searchPath = isServer ? `${apiBasePath(entry.site)}/search` : '/rest/api/3/search/jql'
   const issues: JiraIssue[] = []
   const seenTokens = new Set<string>()
   let nextPageToken: string | undefined
@@ -91,8 +95,9 @@ async function searchIssuesForClient(
       method: 'POST',
       body: JSON.stringify({
         jql,
-        maxResults: limit - issues.length,
+        maxResults: Math.min(limit - issues.length, SEARCH_PAGE_SIZE),
         fields: [...ISSUE_LIST_FIELDS, ...agileFieldIdList(agileFields)],
+        ...(isServer && issues.length > 0 ? { startAt: issues.length } : {}),
         ...(nextPageToken ? { nextPageToken } : {})
       }),
       signal
@@ -100,16 +105,23 @@ async function searchIssuesForClient(
     if (collectPages && !Array.isArray(result.issues)) {
       throw new Error('Jira returned an invalid issue page.')
     }
+    const pageIssues = result.issues ?? []
     issues.push(
-      ...(result.issues ?? []).map((issue) =>
-        mapJiraIssue(entry.site, issue, undefined, agileFields)
-      )
+      ...pageIssues.map((issue) => mapJiraIssue(entry.site, issue, undefined, agileFields))
     )
-    if (!collectPages || issues.length >= limit || result.isLast === true) {
+    if (issues.length >= limit || result.isLast === true) {
       return issues.slice(0, limit)
     }
+    if (isServer) {
+      // Classic search pages by offset and reports a total instead of page tokens.
+      const total = asFiniteNumber(result.total) ?? 0
+      if (pageIssues.length === 0 || issues.length >= total) {
+        return issues
+      }
+      continue
+    }
     if (!result.nextPageToken) {
-      if (result.isLast === false) {
+      if (collectPages && result.isLast === false) {
         throw new Error('Jira returned an incomplete issue page.')
       }
       return issues.slice(0, limit)

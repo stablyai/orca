@@ -16,6 +16,7 @@ import type {
   JiraSiteSelection
 } from '../../shared/jira/jira-types'
 import type { JiraMediaFormat } from '../../shared/jira/jira-attachment-image'
+import { JIRA_REMOTE_ISSUE_LIST_MAX } from '../../shared/jira/jira-issue-list-limit'
 import { connect, disconnect, getStatus, selectSite, testConnection } from '../jira/client'
 import { listFavouriteFilters } from '../jira/favourite-filters'
 import {
@@ -88,7 +89,13 @@ export class RuntimeJiraCommands {
     signal?: AbortSignal,
     strict = false
   ): ReturnType<typeof searchIssues> {
-    return searchIssues(jql, Math.min(Math.max(1, limit), 100), siteId, signal, strict)
+    return searchIssues(
+      jql,
+      Math.min(Math.max(1, limit), JIRA_REMOTE_ISSUE_LIST_MAX),
+      siteId,
+      signal,
+      strict
+    )
   }
 
   jiraListIssues(
@@ -98,7 +105,13 @@ export class RuntimeJiraCommands {
     strict = false,
     filters?: JiraIssueListFilters
   ): ReturnType<typeof listIssues> {
-    return listIssues(filter, Math.min(Math.max(1, limit), 100), siteId, strict, filters)
+    return listIssues(
+      filter,
+      Math.min(Math.max(1, limit), JIRA_REMOTE_ISSUE_LIST_MAX),
+      siteId,
+      strict,
+      filters
+    )
   }
 
   jiraCreateIssue(args: JiraCreateIssueArgs): ReturnType<typeof createIssue> {

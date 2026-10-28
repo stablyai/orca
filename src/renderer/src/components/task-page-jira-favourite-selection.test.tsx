@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it } from 'vitest'
+import { JIRA_REMOTE_ISSUE_LIST_MAX } from '../../../shared/jira/jira-issue-list-limit'
 import { UNRESOLVED_OWNER_HOST_ID } from '../../../shared/execution-host'
 import {
   favouriteTransport as transport,
@@ -43,11 +44,15 @@ it('runs an exact favourite on its captured owner/site without saving its JQL', 
     'site-a'
   )
   await select(result)
-  expect(transport.search).toHaveBeenCalledExactlyOnceWith(favourite.jql, 50, {
-    sourceContext: result.current.jiraTaskSourceContext,
-    siteId: 'site-a',
-    force: false
-  })
+  expect(transport.search).toHaveBeenCalledExactlyOnceWith(
+    favourite.jql,
+    JIRA_REMOTE_ISSUE_LIST_MAX,
+    {
+      sourceContext: result.current.jiraTaskSourceContext,
+      siteId: 'site-a',
+      force: false
+    }
+  )
   expect(result.current.jiraSearchInput).toBe('')
   expect(result.current.appliedJiraSearch).toBe('')
   expect(JSON.stringify(transport.resume.mock.calls)).not.toContain('12345')
@@ -68,7 +73,7 @@ it('composes same-site project and sprint while preserving exact JQL and orderin
   await select(result)
   expect(transport.search).toHaveBeenLastCalledWith(
     'project = "77" AND ((filter = 12345) AND sprint in openSprints()) ORDER BY updated DESC',
-    50,
+    JIRA_REMOTE_ISSUE_LIST_MAX,
     { sourceContext: result.current.jiraTaskSourceContext, siteId: 'site-a', force: false }
   )
 })
