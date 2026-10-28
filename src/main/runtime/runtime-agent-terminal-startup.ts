@@ -1,4 +1,4 @@
-import type { SessionOptionValue } from '../../shared/native-chat-session-options'
+import type { SessionOptionValue } from '../../shared/native-chat/input/native-chat-session-options'
 import type { TuiAgent } from '../../shared/tui-agent'
 import type { AgentLaunchPreferences } from '../../shared/agent-session-host-authority'
 import {

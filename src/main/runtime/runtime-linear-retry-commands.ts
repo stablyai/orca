@@ -89,13 +89,9 @@ export class RuntimeLinearRetryCommands extends RuntimeLinearCommandBase {
     identifier: string | readonly string[]
   ): Promise<void> {
     const identifiers = typeof identifier === 'string' ? [identifier] : identifier
-    const normalized = new Map(
-      identifiers.map((value) => [value.toLocaleUpperCase(), value] as const)
-    )
+    const normalized = new Map(identifiers.map((value) => [value.toUpperCase(), value] as const))
     for (const worktree of await this.listResolvedWorktrees()) {
-      const linkedIdentifier = normalized.get(
-        (worktree.linkedLinearIssue ?? '').toLocaleUpperCase()
-      )
+      const linkedIdentifier = normalized.get((worktree.linkedLinearIssue ?? '').toUpperCase())
       if (!linkedIdentifier) {
         continue
       }

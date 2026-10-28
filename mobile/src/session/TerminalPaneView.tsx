@@ -1,4 +1,4 @@
-import { useCallback } from 'react'
+import { useCallback, useState } from 'react'
 import { StyleSheet, View } from 'react-native'
 import type { ParsedFileLinkLocation } from '../../../src/shared/file-link-location'
 import { TerminalWebView } from '../terminal/TerminalWebView'
@@ -57,12 +57,20 @@ export function TerminalPaneView({
   onTextScaleChange,
   onCellBoxChange
 }: TerminalPaneViewProps) {
+  const [visited, setVisited] = useState(active)
+  if (active && !visited) {
+    setVisited(true)
+  }
   const setRef = useCallback(
     (ref: TerminalWebViewHandle | null) => {
       onRef(handle, ref)
     },
     [handle, onRef]
   )
+
+  if (!active && !visited) {
+    return null
+  }
 
   return (
     <View

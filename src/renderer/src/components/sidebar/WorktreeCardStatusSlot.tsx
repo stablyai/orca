@@ -210,7 +210,9 @@ export function WorktreeCardStatusSlot({
     return overlayNewCardUnreadStatus(passiveStatus, showNewCardUnreadAlert)
   }
 
-  const actionLabel = isUnread ? 'Mark as read' : 'Mark as unread'
+  const actionLabel = isUnread
+    ? translate('auto.components.sidebar.WorktreeCardStatusSlot.markAsRead', 'Mark as read')
+    : translate('auto.components.sidebar.WorktreeCardStatusSlot.markAsUnread', 'Mark as unread')
   const tooltip =
     showStatus && !isUnread ? `${passiveStatusLabel} · ${unreadTooltip}` : unreadTooltip
 

@@ -200,6 +200,10 @@ export function createClaudeJournalTranslator(
             event.message.type === 'stream_event'
           ) {
             turn.observeProviderCycleWork()
+            turn.inputChoiceWorkObserved ||=
+              event.message.type !== 'assistant' ||
+              event.message.is_api_error_message !== true ||
+              event.startedSend != null
           }
         }
       }
@@ -275,6 +279,9 @@ export function createClaudeJournalTranslator(
     commandInterruptRequested: (turnId) => turn.commandInterruptRequested(turnId),
     get openTurnInLiveProviderCycle() {
       return turn.openedInLiveProviderCycle
+    },
+    get openTurnHasInputWork() {
+      return turn.isOpen && turn.inputChoiceWorkObserved
     },
     flush,
     childToolOwner: childQueries.childToolOwner,

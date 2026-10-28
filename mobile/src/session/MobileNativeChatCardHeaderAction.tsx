@@ -1,6 +1,7 @@
 import { Keyboard, Pressable, StyleSheet } from 'react-native'
 import { ChevronDown, X } from 'lucide-react-native'
 import { colors } from '../theme/mobile-theme'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 
 export function MobileNativeChatCardHeaderAction<Prompt>({
   prompt,
@@ -13,6 +14,7 @@ export function MobileNativeChatCardHeaderAction<Prompt>({
   onCollapse?: () => void
   disabled?: boolean
 }): React.JSX.Element | null {
+  useMobileColorScheme()
   if (!onCancel && !onCollapse) {
     return null
   }

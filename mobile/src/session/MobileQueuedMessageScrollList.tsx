@@ -1,22 +1,44 @@
 import { useLayoutEffect, useRef, useState, type ReactNode } from 'react'
-import { Platform, ScrollView, StyleSheet, View, type LayoutRectangle } from 'react-native'
+import { Platform, StyleSheet, View, type LayoutRectangle } from 'react-native'
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg'
+import Animated, {
+  useAnimatedRef,
+  useSharedValue,
+  type AnimatedRef,
+  type SharedValue
+} from 'react-native-reanimated'
 import { colors, spacing } from '../theme/mobile-theme'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 
+/** Desktop's `max-h-40`: three one-line cards and part of a fourth, whose cut-off edge is the
+ *  sign that the list scrolls. */
 export const QUEUE_LIST_MAX_HEIGHT = 160
+
+export type MobileQueueDragViewport = {
+  scrollRef: AnimatedRef<Animated.ScrollView>
+  scrollOffsetY: SharedValue<number>
+  scrollContentHeight: SharedValue<number>
+  onDragActiveChange: (active: boolean) => void
+}
 
 type Metrics = { offset: number; viewport: number; content: number }
 
+/** The queued cards under the fixed header, capped so a long queue never takes over the screen. */
 export function MobileQueuedMessageScrollList({
   messageIds,
   newestIsPersons,
   children
 }: {
   messageIds: readonly string[]
+  /** The newest card has no sender: the person just queued it, so the list shows it. */
   newestIsPersons: boolean
-  children: (reveal: (row: LayoutRectangle) => void) => ReactNode
+  /** Rows, given `reveal` to keep an edited row in view. */
+  children: (reveal: (row: LayoutRectangle) => void, drag: MobileQueueDragViewport) => ReactNode
 }): React.JSX.Element {
-  const scrollRef = useRef<ScrollView>(null)
+  const scrollRef = useAnimatedRef<Animated.ScrollView>()
+  const scrollOffsetY = useSharedValue(0)
+  const scrollContentHeight = useSharedValue(0)
+  const [dragging, setDragging] = useState(false)
   const metrics = useRef<Metrics>({ offset: 0, viewport: 0, content: 0 })
   const shownIds = useRef<ReadonlySet<string>>(new Set(messageIds))
   const flashed = useRef(false)
@@ -26,7 +48,7 @@ export function MobileQueuedMessageScrollList({
     const appended =
       shownIds.current.size > 0 && newest !== undefined && !shownIds.current.has(newest)
     shownIds.current = new Set(messageIds)
-    // Reveal own appends even if a simultaneous removal leaves content height unchanged.
+    // Reveal the committed own append even when a simultaneous removal keeps content size equal.
     if (appended && newestIsPersons) {
       scrollRef.current?.scrollToEnd({ animated: false })
     }
@@ -43,6 +65,7 @@ export function MobileQueuedMessageScrollList({
       }
     }
   }
+  // The nearest scroll that shows the whole row, as desktop's editor does, clear of the edge fades.
   const reveal = (row: LayoutRectangle) => {
     const { offset, viewport, content } = metrics.current
     if (viewport === 0) {
@@ -60,27 +83,41 @@ export function MobileQueuedMessageScrollList({
   }
   return (
     <View>
-      <ScrollView
+      <Animated.ScrollView
         ref={scrollRef}
         style={styles.scroll}
+        scrollEnabled={!dragging}
         nestedScrollEnabled
         showsVerticalScrollIndicator
         persistentScrollbar
         keyboardShouldPersistTaps="handled"
         scrollEventThrottle={32}
-        onScroll={(event) => measure({ offset: event.nativeEvent.contentOffset.y })}
+        onScroll={(event) => {
+          scrollOffsetY.value = event.nativeEvent.contentOffset.y
+          measure({ offset: event.nativeEvent.contentOffset.y })
+        }}
         onLayout={(event) => measure({ viewport: event.nativeEvent.layout.height })}
-        onContentSizeChange={(_width, height) => measure({ content: height })}
+        onContentSizeChange={(_width, height) => {
+          scrollContentHeight.value = height
+          measure({ content: height })
+        }}
       >
-        {children(reveal)}
-      </ScrollView>
+        {children(reveal, {
+          scrollRef,
+          scrollOffsetY,
+          scrollContentHeight,
+          onDragActiveChange: setDragging
+        })}
+      </Animated.ScrollView>
       {cues.above ? <ListEdgeFade edge="top" /> : null}
       {cues.below ? <ListEdgeFade edge="bottom" /> : null}
     </View>
   )
 }
 
+/** Fades the cards into the box's fill at an edge more content lies past. */
 function ListEdgeFade({ edge }: { edge: 'top' | 'bottom' }): React.JSX.Element {
+  useMobileColorScheme()
   const id = `queued-list-fade-${edge}`
   const top = edge === 'top'
   return (

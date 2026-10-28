@@ -39,7 +39,7 @@ async function start(): Promise<{
 }> {
   const exit = vi.fn()
   const log = vi.fn()
-  const deadline = createDaemonShutdownDeadline({ log, close: () => {} }, exit)
+  const deadline = createDaemonShutdownDeadline({ log, close: () => {} }, () => daemon, exit)
   cancelDeadline = deadline.cancel
   const requested = vi.fn(deadline.start)
   const socketPath = getDaemonSocketPath(directory)

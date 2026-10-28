@@ -197,7 +197,7 @@ export const TERMINAL_SEND_METHODS = [
           ? await runtime.sendTerminalAgentPrompt(params.terminal, params.text!, {
               inputKind: 'driving',
               beforeWrite,
-              signal,
+              observationSignal: signal,
               ...(orchestrationMutation
                 ? {
                     acceptQueued: true,

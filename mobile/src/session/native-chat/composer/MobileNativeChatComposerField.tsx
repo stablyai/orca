@@ -4,6 +4,7 @@ import {
   type MobileNativeChatComposerFieldProps
 } from './mobile-native-chat-composer-field-skill'
 import { mobileNativeChatInputStyles as inputStyles } from './mobile-native-chat-input-styles'
+import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 
 export function MobileNativeChatComposerField({
   value,
@@ -11,6 +12,7 @@ export function MobileNativeChatComposerField({
   ref,
   ...props
 }: MobileNativeChatComposerFieldProps) {
+  useMobileColorScheme()
   if (!skillToken) {
     return <TextInput ref={ref} value={value} style={inputStyles.input} {...props} />
   }

@@ -8,11 +8,20 @@ import {
   nativeChatFileInventoryRead,
   nativeChatFileSearchRead
 } from '../../mobile-session-read-operations'
-import { rankSuggestions } from './mobile-native-chat-autocomplete'
+import {
+  getPreparedQuickOpenFiles,
+  rankQuickOpenFiles
+} from '../../../../../src/shared/quick-open-path-search'
 
 const FILE_SEARCH_DEBOUNCE_MS = 120
 const FILE_SEARCH_RESULT_LIMIT = 16
 const FILE_SEARCH_QUERY_CACHE_LIMIT = 20
+
+function rankInventory(paths: readonly string[], query: string): string[] {
+  return rankQuickOpenFiles(query, getPreparedQuickOpenFiles(paths), FILE_SEARCH_RESULT_LIMIT).map(
+    (result) => result.path
+  )
+}
 
 /** The legacy inventory is the whole workspace, so its request carries no further parameters. */
 type WorkspaceInventoryParameters = Readonly<Record<string, never>>
@@ -114,7 +123,7 @@ export function useMobileNativeChatFileSearch(args: {
           const inventoryScope: RequestScope = [client, worktreeId, generation]
           const held = inventory.read(inventoryScope, WHOLE_WORKSPACE)
           if (held) {
-            applyPaths(rankSuggestions(held, normalizedQuery, FILE_SEARCH_RESULT_LIMIT))
+            applyPaths(rankInventory(held, normalizedQuery))
             return
           }
           // Share overlapping legacy full-inventory reads, especially across slow SSH.
@@ -128,7 +137,7 @@ export function useMobileNativeChatFileSearch(args: {
           if (!loaded || inventory.commit(loaded.lease, loaded.value) !== 'committed') {
             return
           }
-          applyPaths(rankSuggestions(loaded.value, normalizedQuery, FILE_SEARCH_RESULT_LIMIT))
+          applyPaths(rankInventory(loaded.value, normalizedQuery))
         }
         void (async () => {
           if (!isCurrentRequest()) {

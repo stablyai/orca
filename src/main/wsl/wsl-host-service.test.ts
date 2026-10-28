@@ -96,6 +96,23 @@ describe('WslHostService', () => {
     expect(listEnvironments(userDataPath)).toMatchObject([{ id: 'wsl:ubuntu' }])
   })
 
+  it('re-saves the live connection on request, so the deployment link overlays again', async () => {
+    const connector = makeConnector([UBUNTU])
+    const service = makeService(connector)
+    await service.add({ distro: 'Ubuntu' })
+    service.resaveConnection('wsl:missing')
+    connector.get.mockReturnValue(connection('Ubuntu', 42001, 'token-2'))
+    pairingChanged.mockClear()
+
+    service.resaveConnection('wsl:ubuntu')
+
+    expect(findWslHostDeployment(userDataPath, 'wsl:ubuntu')?.localPort).toBe(42001)
+    expect(listEnvironments(userDataPath)).toMatchObject([
+      { id: 'wsl:ubuntu', orcadDeployment: { kind: 'wsl', localPort: 42001 } }
+    ])
+    expect(pairingChanged).toHaveBeenCalledExactlyOnceWith('wsl:ubuntu')
+  })
+
   it('refuses WSL 1, an added distro, and a stopped distro the user did not ask to start', async () => {
     const connector = makeConnector([
       UBUNTU,

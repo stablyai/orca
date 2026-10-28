@@ -156,6 +156,8 @@ export const EXECUTION_HOST_METHODS = [
   'repo.searchRefs',
   'repo.sparsePresets',
   'repo.update',
+  // The host that owns the workspace scans its skills.
+  'skills.discover',
   // SSH targets belong to the host that holds them; untargeted calls stay the Mac's own, as on the desktop.
   'ssh.connect',
   'ssh.getState',
@@ -164,6 +166,7 @@ export const EXECUTION_HOST_METHODS = [
   'ssh.listTargets',
   // A targeted status is the server's own, so a server workspace gates on what that server supports.
   'status.get',
+  'session.readTerminalScrollback',
   'session.tabs.activate',
   'session.tabs.close',
   'session.tabs.closeLifecycle',

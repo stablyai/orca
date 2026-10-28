@@ -3,7 +3,6 @@ import { retireClaudeLaunchedModel } from './claude-structured-retired-model'
 import {
   adapterFor,
   claudeFrame,
-  claudeStartupSettled,
   fakeClaude,
   tick,
   identityFor,
@@ -11,6 +10,7 @@ import {
   recordingJournalSink,
   USER_MESSAGE
 } from './claude-structured-session-test-support'
+import { claudeStartupSettled } from './claude-structured-startup-settled-test-support'
 
 const RETIRED = 'claude-retired-1'
 /** Claude Code 2.1.280 lists native rows plus the custom model passed at launch. */

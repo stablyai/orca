@@ -80,15 +80,15 @@ export function useMobileSourceControlState(params: MobileSourceControlStatePara
     recordCommitFailure(null)
   }, [recordCommitFailure])
 
-  const { screenState, branchCompareState, mountedRef, setRootRef, loadStatus, settings } =
-    useMobileSourceControlLoaders({
-      client,
-      connState,
-      statusIdentityKey,
-      worktreeId,
-      setActionError,
-      onStatusLoadSuccess: clearCommitFailureRecovery
-    })
+  const loaders = useMobileSourceControlLoaders({
+    client,
+    connState,
+    statusIdentityKey,
+    worktreeId,
+    setActionError,
+    onStatusLoadSuccess: clearCommitFailureRecovery
+  })
+  const { screenState, branchCompareState, mountedRef, setRootRef, loadStatus, settings } = loaders
 
   const {
     router,
@@ -294,12 +294,12 @@ export function useMobileSourceControlState(params: MobileSourceControlStatePara
     stagedCount,
     unstagedCount,
     branchLabel,
-    upstream,
     upstreamKnown,
     syncLabel,
     primaryActionArgs,
     createPrAction,
     loadStatus,
+    rebaseBaseRef: loaders.rebaseBaseRef,
     openFile,
     openBranchDiff,
     ...runners

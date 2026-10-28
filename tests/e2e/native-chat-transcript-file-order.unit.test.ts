@@ -336,7 +336,7 @@ describe('canonical source positions', () => {
 
   it('keeps factual clocks for status, clear boundaries, mixed sources and optimistic tiers', async () => {
     const { mergeNativeChatLiveSession } =
-      await import('../../src/renderer/src/components/native-chat/native-chat-live-status')
+      await import('../../src/shared/native-chat/native-chat-live-status')
     const { applyCommandMarkerBoundaries, commandMarkersAsMessages } =
       await import('../../src/renderer/src/components/native-chat/native-chat-command-marker')
     const { assembleNativeChatSession } =

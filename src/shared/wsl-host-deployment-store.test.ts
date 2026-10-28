@@ -31,7 +31,7 @@ import {
   WslHostDeploymentStoreInvalidError,
   type WslHostDeploymentRecord
 } from './wsl-host-deployment-store'
-import { WSL_HOSTS_INTERNAL_GATE_ENV } from './wsl-host-internal-gate'
+import { noteWslHostsServeOnly, WSL_HOSTS_INTERNAL_GATE_ENV } from './wsl-host-internal-gate'
 
 const pairing = {
   v: 2 as const,
@@ -255,6 +255,18 @@ describe('WSL host deployment store', () => {
       expect(() => writeWslHostDeployment(userDataPath, 'x', null)).toThrow(
         WslHostDeploymentStoreInvalidError
       )
+    })
+
+    it('fails closed when the file itself is corrupt in serve-only too', () => {
+      vi.stubEnv(WSL_HOSTS_INTERNAL_GATE_ENV, '')
+      noteWslHostsServeOnly(true)
+      try {
+        addSshManaged()
+        writeFileSync(getWslHostDeploymentStorePath(userDataPath), '{"version":1,"deployments":{}}')
+        expect(() => listEnvironments(userDataPath)).toThrow(RuntimeEnvironmentStoreError)
+      } finally {
+        noteWslHostsServeOnly(false)
+      }
     })
 
     it('keeps every other server listed when the file is corrupt and the gate is closed', () => {

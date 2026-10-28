@@ -87,7 +87,9 @@ export async function sendLocalPtySignal(id: string, signal: string): Promise<vo
   }
   // Real SIGWINCH reaches the tty foreground group, which excludes proc.pid (posix-pty-foreground-group).
   if (signal === 'SIGWINCH') {
-    signalPosixPtyForegroundGroup(proc.pid, readPtsName(proc), signal, signalRootPid)
+    await signalPosixPtyForegroundGroup(proc.pid, readPtsName(proc), signal, signalRootPid, {
+      ownsRoot: () => ptyProcesses.get(id) === proc
+    })
     return
   }
   signalRootPid()

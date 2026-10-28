@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 import { useAppStore } from '@/store'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
-import { hasFeatureInteraction } from '../../../../shared/feature-interactions'
 import { checkRuntimeHooks } from '@/runtime/runtime-hooks-client'
 import { getLocalPreflightContext, localPreflightContextKey } from '@/lib/local-preflight-context'
 import { hasEffectiveSetupCommand } from '@/lib/setup-script-status'
@@ -18,7 +17,7 @@ import {
 } from '@/hooks/useInstalledAgentSkills'
 import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRuntime'
 import {
-  getFeatureWallSetupProgress,
+  getSetupGuideProgressSnapshot,
   type FeatureWallSetupProgress
 } from '../feature-wall/feature-wall-setup-progress'
 import { deriveIntegrationConnectionStatus } from '../feature-wall/use-integration-connection-status'
@@ -275,9 +274,9 @@ export function useSetupGuideProgress(
     computerUsePermissionStatusChecked: currentComputerUsePermissionStatusChecked
   })
 
-  const rawProgress = useMemo(
+  const { rawProgress, preBrowserSetupComplete } = useMemo(
     () =>
-      getFeatureWallSetupProgress({
+      getSetupGuideProgressSnapshot({
         ready,
         settings,
         featureInteractions,
@@ -309,9 +308,5 @@ export function useSetupGuideProgress(
       worktreesByRepo
     ]
   )
-  const historicalSplitTerminalDone = hasFeatureInteraction(
-    featureInteractions,
-    'terminal-pane-split'
-  )
-  return useSetupGuideBrowserMilestoneProgress(rawProgress, historicalSplitTerminalDone)
+  return useSetupGuideBrowserMilestoneProgress(rawProgress, preBrowserSetupComplete)
 }

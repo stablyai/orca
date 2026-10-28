@@ -2,7 +2,7 @@
 import { renderHook } from '@testing-library/react'
 import { beforeEach, expect, it, vi } from 'vitest'
 import type { AgentType } from '../../../../shared/agent-status-types'
-import type { NativeChatSendClassification } from '../../../../shared/native-chat-slash-commands'
+import type { NativeChatSendClassification } from '../../../../shared/native-chat/input/native-chat-slash-commands'
 import { useNativeChatPtyComposerSend } from './use-native-chat-pty-composer-send'
 import { sendNativeChatMessage } from './native-chat-runtime-send'
 import { sendNativeChatMessageWithImageAttachments } from './native-chat-runtime-image-send'

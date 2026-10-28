@@ -1,9 +1,11 @@
 import { agentNoUpdateLabel } from '../../../src/shared/agent-row-decay-state'
 import { memo } from 'react'
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { Pressable, Text, View } from 'react-native'
 import type { RuntimeWorktreeAgentRow } from '../../../src/shared/runtime-types'
-import { withoutNativeChatVisualDirectiveLines } from '../../../src/shared/native-chat-visual-directive'
+import { withoutNativeChatVisualDirectiveLines } from '../../../src/shared/native-chat/native-chat-visual-directive'
 import { colors, spacing } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import {
   agentDisplayLabel,
   agentDotState,
@@ -38,6 +40,7 @@ function WorktreeAgentRowComponent({
   isReadOnly,
   onPress
 }: Props) {
+  useMobileColorScheme()
   const dotState = childRow?.displayState ?? agentDotState(agent, now)
   // Visuals render only in transcript; row keeps surrounding prose and treats visual-only reply as empty.
   const reply = agent.lastAssistantMessage
@@ -95,7 +98,7 @@ function WorktreeAgentRowComponent({
 
 export const WorktreeAgentRow = memo(WorktreeAgentRowComponent)
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -115,4 +118,4 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: colors.textMuted
   }
-})
+}))

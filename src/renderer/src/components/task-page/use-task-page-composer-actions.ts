@@ -1,4 +1,3 @@
-import { selectCanonicalProjectHostSetups } from '@/store/project-host-setup-selector'
 import type { TaskPageJiraListEffectsModel } from '../use-task-page-jira-list-effects'
 import { useCallback } from 'react'
 import type { LinearIssue } from '../../../../shared/linear/issue-types'
@@ -221,10 +220,7 @@ export function useTaskPageComposerActions(model: TaskPageJiraListEffectsModel) 
         taskSourceContext,
         initialRepoId: mappedRepo?.id,
         initialWorkspaceTarget: mappedRepo
-          ? getRepoWorkspaceCreationTargetHint(
-              mappedRepo,
-              selectCanonicalProjectHostSetups(useAppStore.getState())
-            )
+          ? getRepoWorkspaceCreationTargetHint(mappedRepo, useAppStore.getState().projectHostSetups)
           : undefined,
         prefilledName: getJiraIssueWorkspaceSeed(issue),
         telemetrySource: 'sidebar'

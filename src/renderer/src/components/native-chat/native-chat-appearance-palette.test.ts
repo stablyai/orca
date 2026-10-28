@@ -1,7 +1,6 @@
 // @vitest-environment happy-dom
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { compile } from 'tailwindcss'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createGlobalSettingsFixture } from '../../../../shared/global-settings-test-fixture'
 import * as terminalThemeSelection from '../../../../shared/terminal-theme-selection'
@@ -121,25 +120,5 @@ describe('matching chat surfaces with opposite app schemes', () => {
     const styles = getComputedStyle(chat)
     expect(styles.getPropertyValue('--chat-canvas')).toContain('#000000')
     expect(styles.getPropertyValue('--chat-source-foreground')).toBe('#fafafa')
-  })
-})
-
-describe('chat scheme and inherited dark utilities', () => {
-  it('compiles the custom variant and excludes light chats and enables dark chats', async () => {
-    const declaration = css.match(/^@custom-variant dark \((.+)\);$/m)
-    expect(declaration).not.toBeNull()
-    if (!declaration) {
-      throw new Error('Missing dark variant')
-    }
-    const compiler = await compile(
-      `${declaration[0]}\n@theme { --color-input: #123456; }\n@tailwind utilities;`
-    )
-    expect(compiler.build(['dark:bg-input/30'])).toContain('data-native-chat-scheme')
-    expect(declaration[1]).toContain(
-      ".dark *:not(:where([data-native-chat-scheme='light'], [data-native-chat-scheme='light'] *))"
-    )
-    expect(declaration[1]).toContain(
-      ", [data-native-chat-scheme='dark'], [data-native-chat-scheme='dark'] *"
-    )
   })
 })

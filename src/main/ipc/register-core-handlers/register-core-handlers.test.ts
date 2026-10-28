@@ -148,7 +148,8 @@ vi.mock('electron', () => ({
   app: {
     getPath: getPathMock,
     once: vi.fn()
-  }
+  },
+  webContents: { fromId: () => undefined }
 }))
 
 vi.mock('../../shared/runtime-environment-store', () => ({
@@ -323,6 +324,10 @@ vi.mock('../wsl-host-handlers', () => ({
 
 vi.mock('../wsl-move-handlers', () => ({
   registerWslMoveHandlers: vi.fn()
+}))
+
+vi.mock('../wsl-move-orchestrator-wiring', () => ({
+  registerWslMoveOrchestrator: vi.fn()
 }))
 
 vi.mock('../ephemeral-vm', () => ({

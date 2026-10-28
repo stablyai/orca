@@ -65,6 +65,7 @@ describe('saved browser note lifetime and marker eligibility', () => {
     for (let index = 0; index < GRAB_BUDGET.annotationsMaxPerPage + 3; index++) {
       const url = `https://example.com/page-${index % 2}`
       store.getState().setBrowserPageUrl(pageId, url)
+      store.getState().invalidateBrowserPageAnnotationGeometry(pageId)
       const note = makeAnnotation(pageId, `note-${index}`)
       note.payload.page.sanitizedUrl = url
       store.getState().addBrowserPageAnnotation(note)

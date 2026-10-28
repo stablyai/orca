@@ -1,13 +1,11 @@
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { FileText, Package, Terminal } from 'lucide-react-native'
-import type { NativeChatPickerItem } from '../../../../../src/shared/native-chat-picker-items'
+import type { NativeChatPickerItem } from '../../../../../src/shared/native-chat/input/native-chat-picker-items'
 import { colors, spacing, typography } from '../../../theme/mobile-theme'
+import { themedStyleSheet } from '../../../theme/themed-styles'
+import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 
 export type ComposerMenuRow = NativeChatPickerItem | { kind: 'file'; id: string; path: string }
-
-export function composerMenuInsertText(row: ComposerMenuRow): string {
-  return row.kind === 'file' ? `@${row.path}` : row.token
-}
 
 const HEADINGS = { command: 'Commands', skill: 'Skills', file: 'Files' } as const
 
@@ -18,6 +16,7 @@ export function MobileNativeChatComposerMenu({
   rows: readonly ComposerMenuRow[]
   onPick: (row: ComposerMenuRow) => void
 }): React.JSX.Element {
+  useMobileColorScheme()
   return (
     <View style={styles.card}>
       <ScrollView keyboardShouldPersistTaps="always" style={styles.scroll}>
@@ -41,15 +40,18 @@ function MenuRow({
   row: ComposerMenuRow
   onPick: (row: ComposerMenuRow) => void
 }): React.JSX.Element {
+  useMobileColorScheme()
   const Icon = row.kind === 'skill' ? Package : row.kind === 'command' ? Terminal : FileText
   const description = row.kind === 'file' ? null : row.description
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={
-        row.kind === 'skill' && row.location
-          ? `${row.token}, ${row.location}`
-          : composerMenuInsertText(row)
+        row.kind === 'file'
+          ? row.path
+          : row.kind === 'skill' && row.location
+            ? `${row.token}, ${row.location}`
+            : row.token
       }
       style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
       onPress={() => onPick(row)}
@@ -79,7 +81,7 @@ function MenuRow({
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   card: {
     marginHorizontal: 10,
     marginBottom: spacing.sm,
@@ -143,4 +145,4 @@ const styles = StyleSheet.create({
     fontSize: 12.5,
     lineHeight: 17
   }
-})
+}))

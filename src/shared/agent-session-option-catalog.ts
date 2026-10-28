@@ -19,7 +19,7 @@ import type {
   CatalogModel,
   CatalogOption
 } from './agent-session-option-catalog-types'
-import type { SessionOptionValue } from './native-chat-session-options'
+import type { SessionOptionValue } from './native-chat/input/native-chat-session-options'
 
 export type {
   AgentSessionOptionCatalog,

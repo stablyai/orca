@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useState } from 'react'
-import { ActivityIndicator, Pressable, StyleSheet, Switch, Text, View } from 'react-native'
+import { ActivityIndicator, Pressable, Switch, Text, View } from 'react-native'
 import { Check, Download } from 'lucide-react-native'
 import { BottomDrawer } from './BottomDrawer'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import type { RpcClient } from '../transport/rpc-client'
 import { triggerError, triggerSuccess } from '../platform/haptics'
 import { useDictationSetupPoller } from '../dictation/use-dictation-setup-poller'
@@ -36,6 +38,7 @@ function formatSize(bytes: number | null | undefined): string {
 
 // Configure paired computer’s dictation/model from phone; poll while download is in flight.
 export function MobileDictationSetupSheet({ visible, client, onClose, onReady }: Props) {
+  useMobileColorScheme()
   const [setup, setSetup] = useState<MobileSpeechSetup | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
@@ -223,7 +226,7 @@ export function MobileDictationSetupSheet({ visible, client, onClose, onReady }:
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   heading: {
     color: colors.textPrimary,
     fontSize: typography.bodySize,
@@ -277,4 +280,4 @@ const styles = StyleSheet.create({
   selectedTag: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   selectedText: { color: colors.statusGreen, fontSize: typography.metaSize, fontWeight: '600' },
   error: { color: colors.statusRed, fontSize: typography.metaSize, marginTop: spacing.md }
-})
+}))

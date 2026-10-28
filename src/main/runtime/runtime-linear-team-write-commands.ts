@@ -91,12 +91,12 @@ export class RuntimeLinearTeamWriteCommands extends RuntimeLinearDedupeCommands 
     } catch (error) {
       throw this.mapLinearReadFailure(error)
     }
-    const normalized = teamInput.toLocaleLowerCase()
-    const idMatches = teams.filter((team) => team.id.toLocaleLowerCase() === normalized)
+    const normalized = teamInput.toLowerCase()
+    const idMatches = teams.filter((team) => team.id.toLowerCase() === normalized)
     const matches =
       idMatches.length > 0
         ? idMatches
-        : teams.filter((team) => team.key.toLocaleLowerCase() === normalized)
+        : teams.filter((team) => team.key.toLowerCase() === normalized)
     if (matches.length === 1 && matches[0].workspaceId) {
       return {
         id: matches[0].id,
@@ -157,8 +157,8 @@ export class RuntimeLinearTeamWriteCommands extends RuntimeLinearDedupeCommands 
     }
     const matches = teams.filter(
       (team) =>
-        team.id.toLocaleLowerCase() === teamInput.toLocaleLowerCase() ||
-        team.key.toLocaleLowerCase() === teamInput.toLocaleLowerCase()
+        team.id.toLowerCase() === teamInput.toLowerCase() ||
+        team.key.toLowerCase() === teamInput.toLowerCase()
     )
     if (matches.length === 1 && matches[0].workspaceId) {
       return {
@@ -190,8 +190,8 @@ export class RuntimeLinearTeamWriteCommands extends RuntimeLinearDedupeCommands 
       }
       const globalMatch = globalTeams.find(
         (team) =>
-          team.id.toLocaleLowerCase() === teamInput.toLocaleLowerCase() ||
-          team.key.toLocaleLowerCase() === teamInput.toLocaleLowerCase()
+          team.id.toLowerCase() === teamInput.toLowerCase() ||
+          team.key.toLowerCase() === teamInput.toLowerCase()
       )
       if (globalMatch) {
         throw linearError(

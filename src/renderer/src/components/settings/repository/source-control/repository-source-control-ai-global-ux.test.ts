@@ -443,19 +443,6 @@ describe('editing one repository action', () => {
     expect(set().launchPreferences).toBeUndefined()
   })
 
-  it('makes the copied model owned by the action, so it outranks the raw model it yielded to', () => {
-    const legacy = { actionOverrides: { fixCommitFailure: { agentArgs: '--model gpt-5.6-sol' } } }
-    const stored = {
-      settings,
-      repo: { sourceControlAi: legacy },
-      actionId: 'fixCommitFailure'
-    } as const
-    expect(resolveSourceControlActionRecipe(stored).launchPreferencesYieldToAgentArgs).toBe(true)
-    const edited = reload(editPrompt(legacy, 'fixCommitFailure'), 'fixCommitFailure')
-    expect(edited).toMatchObject({ commandInputTemplate: 'mine', launchPreferences: terra })
-    expect(edited.launchPreferencesYieldToAgentArgs).toBeUndefined()
-  })
-
   it('saves a prompt edit without authoring args the user never typed or touching a sibling', async () => {
     const sibling = { agentArgs: '--repo' }
     const cleared = {

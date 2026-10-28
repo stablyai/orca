@@ -1,5 +1,6 @@
-import { StyleSheet, type TextInput, type TextInputProps } from 'react-native'
+import type { TextInput, TextInputProps } from 'react-native'
 import { colors } from '../../../theme/mobile-theme'
+import { themedStyleSheet } from '../../../theme/themed-styles'
 
 export type MobileNativeChatComposerFieldProps = Omit<
   TextInputProps,
@@ -11,9 +12,9 @@ export type MobileNativeChatComposerFieldProps = Omit<
 }
 
 // Use the field’s exact font so the web overlay and transparent textarea occupy identical space.
-export const mobileNativeChatComposerSkillStyles = StyleSheet.create({
+export const mobileNativeChatComposerSkillStyles = themedStyleSheet(() => ({
   token: {
     color: colors.skillToken,
     backgroundColor: colors.skillTokenSurface
   }
-})
+}))

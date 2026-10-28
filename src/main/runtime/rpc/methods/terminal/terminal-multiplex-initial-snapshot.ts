@@ -4,6 +4,11 @@ import {
   serializeBudgetedMobileSnapshot
 } from './terminal-snapshot-publication'
 import { getOutputAfterSnapshotSeq } from './terminal-stream-replay'
+import { isMovedPaneHistorySessionId } from '../../../../../shared/orcad-migration/orcad-migration-terminal-history'
+import {
+  MOBILE_SUBSCRIBE_SCROLLBACK_ROWS,
+  MOVED_PANE_SUBSCRIBE_SCROLLBACK_ROWS
+} from '../../../scrollback-limits'
 import { getTerminalInputSequenceLedger } from './terminal-input-sequence-ledger'
 import {
   isMultiplexStreamAttached,
@@ -29,8 +34,12 @@ export async function publishMultiplexInitialSnapshot(
   const isMobile = stream.isMobile
   const forcedInitialSnapshotTruncated =
     process.env.ORCA_E2E_FORCE_REMOTE_TERMINAL_INITIAL_SNAPSHOT_TRUNCATED === '1'
+  // A WSL-moved pane replays its whole carried history once; the first view must hold all of it.
+  const firstRows = isMovedPaneHistorySessionId(ptyId)
+    ? MOVED_PANE_SUBSCRIBE_SCROLLBACK_ROWS
+    : MOBILE_SUBSCRIBE_SCROLLBACK_ROWS
   let read = await runtime.readTerminal(request.terminal)
-  let serialized = await serializeBudgetedMobileSnapshot(runtime, ptyId)
+  let serialized = await serializeBudgetedMobileSnapshot(runtime, ptyId, undefined, firstRows)
   if (!isMultiplexStreamAttached(state, stream)) {
     return null
   }
@@ -40,7 +49,7 @@ export async function publishMultiplexInitialSnapshot(
     stream.pendingOutputBytes = 0
     stream.pendingOutputOverflowed = false
     read = await runtime.readTerminal(request.terminal)
-    serialized = await serializeBudgetedMobileSnapshot(runtime, ptyId)
+    serialized = await serializeBudgetedMobileSnapshot(runtime, ptyId, undefined, firstRows)
     if (!isMultiplexStreamAttached(state, stream)) {
       return null
     }

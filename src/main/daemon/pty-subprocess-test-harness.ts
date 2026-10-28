@@ -60,11 +60,6 @@ export function createConptyPreludeSender(): (cb: (data: string) => void) => voi
   }
 }
 
-/** What a mocked pane printed before the test's own output; the replayed prelude on Windows. */
-export function mockConptyStartupOutput(): string[] {
-  return process.platform === 'win32' ? [CONPTY_MOCK_PRELUDE] : []
-}
-
 export function mockPtyProcess(pid = 12345): MockPtyProcess {
   const onDataListeners: ((data: string) => void)[] = []
   const onExitListeners: ((e: { exitCode: number }) => void)[] = []

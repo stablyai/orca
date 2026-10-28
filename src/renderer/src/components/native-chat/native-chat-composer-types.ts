@@ -12,7 +12,7 @@ import type {
 import type {
   SessionOptionDescriptor,
   SessionOptionsSurface
-} from '../../../../shared/native-chat-session-options'
+} from '../../../../shared/native-chat/input/native-chat-session-options'
 import type { NativeChatLaunchDraft } from '@/lib/native-chat-launch-prompt'
 import type { NativeChatComposerImageAttachment } from './NativeChatComposerField'
 import type { NativeChatAfterStopSend } from './native-chat-composer-target'

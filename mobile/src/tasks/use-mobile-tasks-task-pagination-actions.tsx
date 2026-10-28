@@ -168,7 +168,7 @@ export function useMobileTasksTaskPaginationActions(model: TaskListLoadingModel)
       setGithubPaginationLoading(true)
       setGithubLoadingTargetPage(targetPage)
       try {
-        const page = await fetchGitHubItemsPage(client, selectedHostedRepos, targetPage)
+        const page = await fetchGitHubItemsPage(client, selectedHostedRepos, targetPage, isCurrent)
         if (!isCurrent() || page.items.length === 0) {
           return
         }

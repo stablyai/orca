@@ -172,6 +172,10 @@ export function hostStub(): StructuredAgentSessionHost {
       }
     })),
     waitForSendSettlement: vi.fn(),
+    queuedMessageMove: vi.fn(async () => ({
+      ok: true,
+      value: { messageId: 'queued-1', status: 'moved' }
+    })),
     cancel: vi.fn(async () => ({ ok: true, replayed: false })),
     close: vi.fn(async () => undefined),
     sleepWorkspace: vi.fn(async () => ({ stoppedSessionIds: [SESSION] })),

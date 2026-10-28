@@ -16,6 +16,8 @@ export type ProfileStateStartupAuthorityOptions = Omit<
   storageAuthority: AutomationStorageAuthority
   onPersistenceFailure?: (error: Error) => void
   onPersistenceSaveDelayChanged?: (delayed: boolean) => void
+  /** See ProfileStateWorkerAuthorityOptions.writerIdleStopMs. */
+  writerIdleStopMs?: number
 }
 
 export class ProfileStateStartupAuthorityError extends Error {
@@ -38,6 +40,7 @@ export async function createProfileStateStoreForStartup(
   }
   return createLiveProfileStateStore(options, {
     onSaveDelayChanged: options.onPersistenceSaveDelayChanged,
+    writerIdleStopMs: options.writerIdleStopMs,
     onFailure:
       options.onPersistenceFailure ??
       ((error) =>

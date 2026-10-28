@@ -227,7 +227,10 @@ const OrcaDetails = Details.extend({
   markdownTokenizer: {
     name: 'details',
     level: 'block',
-    start: registerMarkdownTokenizerStart('<', (source) => source.search(/<details\b/i)),
+    // HTML blocks open only at a line start; marked passes source.slice(1), so offset 0 never qualifies.
+    start: registerMarkdownTokenizerStart('<', (source) =>
+      source.search(/(?<=[\n\r] {0,3})<details\b/i)
+    ),
     tokenize(src, _tokens, lexer) {
       const detailsBlock = matchDetailsHtmlBlock(src, 0)
       if (!detailsBlock || !isEditableDetailsHtmlBlock(detailsBlock)) {

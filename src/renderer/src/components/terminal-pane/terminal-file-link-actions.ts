@@ -59,7 +59,8 @@ export function handleTerminalFileLink(
   const actions = buildFileLinkActions(filePath, line, column, deps, actionContext?.sourceOwner)
   return requestTerminalLinkAction(event, actionContext, {
     ...actions,
-    destination: actionDestination ?? actions.destination
+    destination: actionDestination ?? actions.destination,
+    copyValue: actions.destination
   })
 }
 

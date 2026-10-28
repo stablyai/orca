@@ -195,7 +195,11 @@ export function ShortcutsPane(): React.JSX.Element {
         .join(', ')
       setErrors((prev) => ({
         ...prev,
-        [actionId]: `${formatKeybindingList([blockingConflict.binding], platform)} conflicts with ${labels}.`
+        [actionId]: translate(
+          'auto.components.settings.shortcutDefinitionCatalog.bindingConflict',
+          '{{binding}} conflicts with {{actions}}.',
+          { binding: formatKeybindingList([blockingConflict.binding], platform), actions: labels }
+        )
       }))
       return false
     }

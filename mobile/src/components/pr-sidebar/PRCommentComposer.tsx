@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react'
 import { ActivityIndicator, Pressable, Text, TextInput, View } from 'react-native'
 import { colors } from '../../theme/mobile-theme'
+import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { isSubmittableCommentBody } from '../../session/pr-comment-actions'
 import { prCommentComposerStyles as styles } from './pr-comment-composer-styles'
 
@@ -26,6 +27,7 @@ export function PRCommentComposer({
   onCancel,
   autoFocus
 }: Props) {
+  useMobileColorScheme()
   const [body, setBody] = useState(initialBody ?? '')
   // Guard synchronously against double-submit before parent’s async submitting state rerenders.
   const inFlightRef = useRef(false)

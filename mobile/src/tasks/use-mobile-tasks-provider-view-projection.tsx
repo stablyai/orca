@@ -5,7 +5,8 @@ import {
   type PickerOption,
   githubProjectKey,
   useCallback,
-  useMemo
+  useMemo,
+  useMobileColorScheme
 } from './mobile-tasks-dependencies'
 import {
   GITLAB_FILTER_OPTIONS,
@@ -22,6 +23,7 @@ import {
 } from './mobile-tasks-legacy-foundation'
 
 export function useMobileTasksProviderViewProjection(model: PickerProjectionModel) {
+  const colorScheme = useMobileColorScheme()
   const {
     activeGitHubProject,
     defaultGitHubPreset,
@@ -145,7 +147,7 @@ export function useMobileTasksProviderViewProjection(model: PickerProjectionMode
   )
   const linearIssueSections = useMemo(
     () => groupSortedLinearIssues(linearIssuesForView, linearGroupBy),
-    [linearGroupBy, linearIssuesForView]
+    [colorScheme, linearGroupBy, linearIssuesForView]
   )
   // Preserve FlatList data identity across unrelated renders.
   const linearListEntries = useMemo<LinearListEntry[]>(

@@ -27,7 +27,11 @@ import { isPublishedHeld, reopenHeldPanes } from '../../terminal/recovery/held-p
 import { reopenNewerDaemonTerminals } from '../../../daemon/daemon-newer-protocol-hold'
 import type { NewerDaemonReopenResult } from '../../../../shared/newer-daemon-hold'
 import type { WorkspaceLayoutStream } from '../../workspace-layout-stream'
-import { parsePaneKey } from '../../../../shared/stable-pane-id'
+import { getDaemonHistoryDir } from '../../../daemon/daemon-launch-paths'
+import { HistoryReader } from '../../../daemon/history-reader'
+import { servesWslMovedPaneHistory } from '../../../orcad/orcad-migration-wsl-destination'
+import { movedPaneHistorySessionId } from '../../../persistence/migrating-orcad-catalog/orcad-terminal-history-installer'
+import { makePaneKey, parsePaneKey } from '../../../../shared/stable-pane-id'
 import { agentProviderSessionsEqual } from '../../../../shared/agent-session-resume'
 import { worktreeIdsEqual } from '../../../../shared/worktree/id'
 
@@ -143,6 +147,34 @@ export abstract class OrcaRuntimeWithRestoredPaneStart extends OrcaRuntimeWithBu
     })
   }
 
+  /**
+   * The session a WSL move installed for this pane (its carried checkpoint, interrupted), so its
+   * first start cold-restores that history once like after an app restart; undefined otherwise.
+   */
+  private async claimMovedPaneHistorySession({
+    worktreeId,
+    tabId,
+    leafId
+  }: RestoredPane): Promise<string | undefined> {
+    // Only a WSL host installs moved panes' history; other hosts skip the scope and meta.json reads.
+    if (!servesWslMovedPaneHistory()) {
+      return undefined
+    }
+    try {
+      const workspace = await this.resolveTerminalWorkspaceLaunchScope(`id:${worktreeId}`)
+      // Why never over SSH: only this host's own daemon holds the installed history.
+      if (workspace.connectionId !== null) {
+        return undefined
+      }
+      const sessionId = movedPaneHistorySessionId(worktreeId, makePaneKey(tabId, leafId))
+      const probe = new HistoryReader(getDaemonHistoryDir()).probeRestorableHistory(sessionId)
+      return probe.status === 'restorable' ? sessionId : undefined
+    } catch {
+      // Why: history is best effort; the pane still starts, only without what it showed before.
+      return undefined
+    }
+  }
+
   /** The pane's stored terminal; undefined while unbound, null once main no longer holds it. */
   private storedPaneBinding({
     worktreeId,
@@ -197,6 +229,13 @@ export abstract class OrcaRuntimeWithRestoredPaneStart extends OrcaRuntimeWithBu
     }
     let dispatched = false
     try {
+      const startSessionId =
+        sessionId ??
+        (await this.claimMovedPaneHistorySession({
+          worktreeId,
+          tabId: tab.parentTabId,
+          leafId: tab.leafId
+        }))
       const created = await this.createRuntimeOwnedMobileSessionTerminal(
         worktreeId,
         targetsHost,
@@ -205,7 +244,7 @@ export abstract class OrcaRuntimeWithRestoredPaneStart extends OrcaRuntimeWithBu
           identity: {
             tabId: tab.parentTabId,
             leafId: tab.leafId,
-            sessionId
+            sessionId: startSessionId
           },
           cwd: tab.startupCwd,
           command: agentStartup.command,

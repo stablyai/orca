@@ -2,7 +2,6 @@ import React, { useState, useCallback } from 'react'
 import { cn } from '@/lib/utils'
 import { viewClaudeAgentFromRow } from '@/lib/claude-agent-row-view'
 import { useClaudeAgentRowView } from './use-claude-agent-row-view'
-import { ClaudeAgentViewIndicator } from '@/components/ClaudeAgentViewIndicator'
 import {
   AgentStateDot,
   agentStateLabel,
@@ -298,7 +297,6 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
         >
           {displayLabel}
         </span>
-        <ClaudeAgentViewIndicator view={view} showChild={!childAgentsExpanded} />
         {model && (
           <span
             className={cn(

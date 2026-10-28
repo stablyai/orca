@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import { ActivityIndicator, Pressable, Text, TextInput, View } from 'react-native'
 import { Minus, MoreHorizontal, Plus, Sparkles } from 'lucide-react-native'
 import { colors, spacing } from '../theme/mobile-theme'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { MobileSourceControlCreatePrEntry } from './MobileSourceControlCreatePrEntry'
 import { MobileCommitFailurePanel } from './MobileCommitFailurePanel'
 import { KEYBOARD_COMMIT_BAR_CLEARANCE } from './mobile-source-control-screen-state'
@@ -18,6 +19,7 @@ type Props = {
 }
 
 export function MobileSourceControlContent({ state, primaryAction }: Props) {
+  useMobileColorScheme()
   const {
     insets,
     connState,

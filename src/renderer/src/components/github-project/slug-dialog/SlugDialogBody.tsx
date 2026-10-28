@@ -8,11 +8,13 @@ import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
 import { useAppStore } from '@/store'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import type { GitHubWorkItemDetails } from '../../../../../shared/github/work-item-types'
+import type { ProjectWorkItemDetailsBySlugResult } from '../../../../../shared/github/project-result-types'
 import type { GitHubItemDialogProjectOrigin } from '@/components/GitHubItemDialog'
 import { LabelsEditor } from './LabelsEditor'
 import { AssigneesEditor } from './AssigneesEditor'
 import { CommentsList, NewCommentForm } from './Comments'
 import { translate } from '@/i18n/i18n'
+import { projectViewErrorMessage } from '../project-view-error-copy'
 
 export function SlugDialogBody({
   projectOrigin,
@@ -56,9 +58,7 @@ export function SlugDialogBody({
     const target = sourceTarget
     const request =
       target.kind === 'environment'
-        ? callRuntimeRpc<
-            { ok: true; details: GitHubWorkItemDetails } | { ok: false; error: { message: string } }
-          >(
+        ? callRuntimeRpc<ProjectWorkItemDetailsBySlugResult>(
             target,
             'github.project.workItemDetailsBySlug',
             { owner, repo, host, number, type },
@@ -73,7 +73,7 @@ export function SlugDialogBody({
         if (res.ok) {
           setDetails(res.details)
         } else {
-          setError(res.error.message)
+          setError(projectViewErrorMessage(res.error))
         }
       })
       .catch((err) => {
@@ -109,7 +109,7 @@ export function SlugDialogBody({
     }
     const res = await patchProjectIssueOrPr(cacheKey, row.id, { title: next })
     if (!res.ok) {
-      toast.error(res.error.message)
+      toast.error(projectViewErrorMessage(res.error))
     }
   }, [titleDraft, title, patchProjectIssueOrPr, cacheKey, row])
 
@@ -126,7 +126,7 @@ export function SlugDialogBody({
     }
     const res = await patchProjectIssueOrPr(cacheKey, row.id, { body: bodyDraft })
     if (!res.ok) {
-      toast.error(res.error.message)
+      toast.error(projectViewErrorMessage(res.error))
       return
     }
     setDetails((prev) => (prev ? { ...prev, body: bodyDraft } : prev))
@@ -227,7 +227,7 @@ export function SlugDialogBody({
                 ...(remove.length ? { removeLabels: remove } : {})
               })
               if (!res.ok) {
-                toast.error(res.error.message)
+                toast.error(projectViewErrorMessage(res.error))
               }
             }}
           />
@@ -247,7 +247,7 @@ export function SlugDialogBody({
                 ...(remove.length ? { removeAssignees: remove } : {})
               })
               if (!res.ok) {
-                toast.error(res.error.message)
+                toast.error(projectViewErrorMessage(res.error))
               }
             }}
           />

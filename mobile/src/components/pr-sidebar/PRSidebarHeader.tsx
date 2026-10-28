@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { ActivityIndicator, Pressable, Text, TextInput, View } from 'react-native'
 import { ArrowRight, ExternalLink, Pencil } from 'lucide-react-native'
 import { colors } from '../../theme/mobile-theme'
+import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import type { PRInfo } from '../../../../src/shared/github/pull-request-types'
 import type { GitHubWorkItemDetails } from '../../../../src/shared/github/work-item-types'
 import type { MobilePrTitleAction } from '../../session/use-mobile-pr-title-action'
@@ -31,6 +32,7 @@ export function PRSidebarHeader({
   showOpenOnWeb = true,
   bare = false
 }: Props) {
+  useMobileColorScheme()
   const item = details?.item
   const badge = prStateBadge(pr.state)
   const badgeColor = statusColor(badge.token)
@@ -114,6 +116,7 @@ function PRTitle({
   editable: boolean
   titleAction: MobilePrTitleAction
 }) {
+  useMobileColorScheme()
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(title)
 

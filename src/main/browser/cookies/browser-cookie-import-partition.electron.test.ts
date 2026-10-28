@@ -79,8 +79,7 @@ async function run() {
     partitionKey: { topLevelSite: 'https://example.com', hasCrossSiteAncestor: true }
   })
   mark('partitioned cookie set')
-  // Why (STA-4797): a stale cookie on a domain the import DOES bring over. Narrowing the clear
-  // must not stop it removing this one, or imported sites inherit a session the site rejects.
+  // Merging preserves other cookie coordinates even on an imported domain.
   await targetSession.cookies.set({
     url: 'https://example.com/',
     name: 'superseded',
@@ -216,7 +215,7 @@ async function runFixture(): Promise<FixtureResult> {
 }
 
 describe('native Chromium excluded partition cookie under Electron', () => {
-  it('survives selective clearing unchanged without a lossy Electron reconstruction', async () => {
+  it('survives a native merge unchanged alongside other destination cookies', async () => {
     const result = await runFixture()
 
     expect(result.before.partitionKey).toEqual({
@@ -234,7 +233,8 @@ describe('native Chromium excluded partition cookie under Electron', () => {
       'http-google',
       'imported',
       'partitioned-google',
-      'stale'
+      'stale',
+      'superseded'
     ])
   }, 150_000)
 })

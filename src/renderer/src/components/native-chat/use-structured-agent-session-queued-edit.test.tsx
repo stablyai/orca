@@ -14,7 +14,7 @@ import type {
 } from '../../../../shared/agent-session-wire'
 import { agentSessionSendBodyFingerprint } from '../../../../shared/structured-agent-session-send-mutation'
 import { useStructuredAgentSessionQueuedEdit } from './use-structured-agent-session-queued-edit'
-import { projectQueuedMessageCards } from './structured-agent-session-queued-cards'
+import { projectQueuedMessageCards } from '../../../../shared/structured-agent-session-queued-cards'
 import {
   clearNativeChatDraftCacheForTests,
   readNativeChatDraftCache,

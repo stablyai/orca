@@ -9,7 +9,8 @@ import {
   ActionSheetModal,
   BottomDrawerModalHost,
   GitBranch,
-  ConfirmModal
+  ConfirmModal,
+  useMobileColorScheme
 } from './mobile-tasks-dependencies'
 import { styles } from './mobile-tasks-legacy-styles'
 import {
@@ -80,6 +81,7 @@ import {
 import { renderMobileTasksItemDetailDrawer } from './mobile-tasks-item-detail-drawer'
 
 export function MobileTasksLegacySurface({ model }: { model: ConnectionPresentationModel }) {
+  const colorScheme = useMobileColorScheme()
   const {
     error,
     githubMode,
@@ -179,7 +181,7 @@ export function MobileTasksLegacySurface({ model }: { model: ConnectionPresentat
         </View>
       ) : null}
 
-      {renderMobileTasksListSurface(model)}
+      {renderMobileTasksListSurface(model, colorScheme)}
 
       {/* iOS refuses stacked sibling native modals; layer Tasks sheets in one Modal by zIndex. */}
       <BottomDrawerModalHost>

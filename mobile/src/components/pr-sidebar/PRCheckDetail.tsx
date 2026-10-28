@@ -1,5 +1,6 @@
 import { ActivityIndicator, ScrollView, Text, View } from 'react-native'
 import { colors } from '../../theme/mobile-theme'
+import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import type { PRCheckRunDetails } from '../../../../src/shared/github/check-types'
 import { presentCheckDetail, type CheckDetailJob } from './pr-check-detail-content'
 import { mobilePrSidebarStyles as styles } from './mobile-pr-sidebar-styles'
@@ -12,6 +13,7 @@ export type DetailEntry =
 
 // Match desktop check conclusion/summary/annotations/failed jobs; keep output muted and scrollable to bound sidebar layout.
 export function PRCheckDetailView({ entry }: { entry: DetailEntry | undefined }) {
+  useMobileColorScheme()
   if (!entry || entry.status === 'loading') {
     return (
       <View style={styles.checkDetailArea}>
@@ -89,6 +91,7 @@ export function PRCheckDetailView({ entry }: { entry: DetailEntry | undefined })
 }
 
 function JobRow({ job }: { job: CheckDetailJob }) {
+  useMobileColorScheme()
   return (
     <View>
       <View style={styles.checkDetailStepRow}>

@@ -1,10 +1,11 @@
 import { AGENT_SESSION_PERMISSION_OWN_RUNTIME_CAPABILITY } from '../../../shared/agent-session-permission-modes-capability'
-import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
+import { useEffect, useState, useSyncExternalStore } from 'react'
 import { useAppStore } from '@/store'
 import {
   AGENT_SESSION_CONVERSATION_STOP_RUNTIME_CAPABILITY,
   AGENT_SESSION_QUEUED_COMMANDS_RUNTIME_CAPABILITY,
   AGENT_SESSION_QUEUED_MESSAGE_EDIT_RUNTIME_CAPABILITY,
+  AGENT_SESSION_QUEUED_MESSAGE_REORDER_RUNTIME_CAPABILITY,
   AGENT_SESSION_QUEUED_MESSAGE_IMAGE_EDIT_RUNTIME_CAPABILITY,
   AGENT_SESSION_QUEUED_MESSAGES_RUNTIME_CAPABILITY,
   AGENT_SESSION_REWIND_RECOVERY_CAPABILITY,
@@ -36,19 +37,19 @@ export function useStructuredAgentSessionOwnPermissionState(
 ): StructuredAgentSessionHostCapabilityState {
   const capability = AGENT_SESSION_PERMISSION_OWN_RUNTIME_CAPABILITY
   const environmentId = target?.kind === 'environment' ? target.environmentId : null
-  const statuses = useAppStore((state) => state.runtimeStatusByEnvironmentId)
-  const remote = useMemo((): StructuredAgentSessionHostCapabilityState => {
+  // Select the verdict, not the map: unrelated host flips must not rerender every chat.
+  const remote = useAppStore((state): StructuredAgentSessionHostCapabilityState => {
     if (environmentId === null) {
       return 'unknown'
     }
-    const entry = statuses.get(environmentId)
+    const entry = state.runtimeStatusByEnvironmentId.get(environmentId)
     const status = isRuntimeHostContactRevoked(entry) ? null : lastVerifiedRuntimeStatus(entry)
     return status
       ? status.capabilities?.includes(capability)
         ? 'supported'
         : 'unsupported'
       : 'unknown'
-  }, [statuses, environmentId, capability])
+  })
   const local = useSyncExternalStore(
     subscribeLocalRuntimeCapabilityObservation,
     () => localCapabilityState(capability),
@@ -192,6 +193,16 @@ export function useStructuredAgentSessionHostEditsQueuedImages(
   return useStructuredAgentSessionHostCapability(
     target,
     AGENT_SESSION_QUEUED_MESSAGE_IMAGE_EDIT_RUNTIME_CAPABILITY
+  )
+}
+
+/** Whether queue order can be changed by message ID on the execution host. */
+export function useStructuredAgentSessionHostReordersQueuedMessages(
+  target: RuntimeClientTarget
+): boolean {
+  return useStructuredAgentSessionHostCapability(
+    target,
+    AGENT_SESSION_QUEUED_MESSAGE_REORDER_RUNTIME_CAPABILITY
   )
 }
 

@@ -24,7 +24,7 @@ import {
   USER_MESSAGE,
   PROVIDER_SESSION_ID
 } from '../../src/main/claude/claude-structured-session-test-support'
-import type { ClaudeStructuredSessionEvent } from '../../src/main/claude/claude-structured-session-state'
+import type { ClaudeStructuredSessionEvent } from '../../src/main/claude/structured/claude-structured-session-state'
 import { structuredClaudeLifecycleEvent } from '../../src/main/runtime/structured-claude-runtime-adapter'
 import {
   hostTestState,
@@ -121,6 +121,7 @@ function permissionConsumersFor(
         client,
         enabled: true,
         optionStamp: 'model|own',
+        turnId: null,
         hostSupport: {
           permissionModes: true,
           permissionOwn: true,

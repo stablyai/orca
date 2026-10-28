@@ -4,6 +4,7 @@ import { useClipboardWriter } from '../platform/clipboard'
 import { triggerError } from '../platform/haptics'
 import { Check, Copy, Pencil, Play, Trash2 } from 'lucide-react-native'
 import { colors, spacing, typography } from '../theme/mobile-theme'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { MobileAgentIcon } from '../components/MobileAgentIcon'
 import type { TerminalQuickCommand } from '../../../src/shared/terminal-quick-command-types'
 import {
@@ -11,6 +12,7 @@ import {
   getTerminalQuickCommandBody,
   isAgentQuickCommand
 } from '../terminal/quick-commands'
+import { themedStyleSheet } from '../theme/themed-styles'
 
 type QuickCommandRowProps = {
   command: TerminalQuickCommand
@@ -34,6 +36,7 @@ export function QuickCommandRow({
   onDelete,
   disabled
 }: QuickCommandRowProps) {
+  useMobileColorScheme()
   const clipboard = useClipboardWriter()
   const isAgent = isAgentQuickCommand(command)
   const body = getTerminalQuickCommandBody(command)
@@ -173,7 +176,7 @@ export function QuickCommandRow({
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   pressed: { backgroundColor: colors.bgRaised },
   disabled: { opacity: 0.45 },
   row: { flexDirection: 'row', alignItems: 'center' },
@@ -200,4 +203,4 @@ const styles = StyleSheet.create({
   rowPreview: { fontSize: 12, color: colors.textSecondary, marginTop: 1 },
   mono: { fontFamily: typography.monoFamily },
   rowAction: { width: 40, height: 44, alignItems: 'center', justifyContent: 'center' }
-})
+}))

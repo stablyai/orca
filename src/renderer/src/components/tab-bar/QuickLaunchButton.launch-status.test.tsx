@@ -1,7 +1,14 @@
 // @vitest-environment happy-dom
 
 import type { ReactNode } from 'react'
-import { cleanup, fireEvent, render, renderHook } from '@testing-library/react'
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render as renderElement,
+  renderHook,
+  screen
+} from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { StructuredLaunchState } from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
 import type { StructuredLaunchAttempt } from '@/lib/structured-agent-session-launch-request'
@@ -23,6 +30,11 @@ vi.mock('@/store', async () => {
     repos: [TEST_REPO],
     activeWorktreeId: 'worktree-1',
     tabsByWorktree: { 'worktree-1': [{ id: 'starting-tab', ptyId: null }] },
+    agentStatusByPaneKey: {},
+    agentStatusEpoch: 0,
+    unifiedTabsByWorktree: {},
+    terminalLayoutsByTabId: {},
+    runtimePaneTitlesByTabId: {},
     ptyIdsByTabId: {},
     openSettingsPage: vi.fn(),
     openSettingsTarget: vi.fn()
@@ -39,19 +51,6 @@ vi.mock('@/lib/agent-catalog', () => ({
   ],
   AgentIcon: ({ agent }: { agent: string }) => <span>{agent}</span>
 }))
-vi.mock('@/components/ui/dropdown-menu', () => ({
-  DropdownMenuItem: ({
-    children,
-    disabled,
-    title,
-    onSelect
-  }: { children: ReactNode } & DivProps) => (
-    <div aria-disabled={disabled ? 'true' : 'false'} title={title} onClick={onSelect}>
-      {children}
-    </div>
-  ),
-  DropdownMenuShortcut: ({ children }: { children: ReactNode }) => <span>{children}</span>
-}))
 vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, fallback: string, values?: Record<string, string>) =>
     fallback.replace('{{value0}}', values?.value0 ?? '')
@@ -63,9 +62,19 @@ vi.mock('sonner', () => ({
   toast: { error: toastError, message: toastMessage, success: vi.fn() }
 }))
 vi.mock('@/lib/launch-agent-in-new-tab', () => ({ launchAgentInNewTab: launchMock }))
+vi.mock('@/components/sidebar/useWorktreeAgentRows', () => ({ useWorktreeAgentRows: () => [] }))
+vi.mock('@/runtime/structured-chat-name-observation', () => ({
+  useStructuredChatTabNames: () => new Map(),
+  getStructuredChatTabNames: () => new Map()
+}))
+vi.mock('@/hooks/use-now', () => ({ useNow: () => 0 }))
 
-type DivProps = { disabled?: boolean; title?: string; onSelect?: () => void }
-
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu'
+import { ReviewNotesSendMenuContent } from '@/components/editor/ReviewNotesSendMenuContent'
 import { QuickLaunchAgentMenuItems, ProjectedAgentMenuItems } from './QuickLaunchButton'
 import { useTabBarCreateMenuController } from './use-tab-bar-create-menu-controller'
 import * as menuRows from './use-new-tab-agent-menu-rows'
@@ -75,6 +84,272 @@ import {
 } from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
 
 const WORKTREE_ID = 'worktree-1'
+
+function render(children: ReactNode, defaultOpen = true): ReturnType<typeof renderElement> {
+  return renderElement(
+    <DropdownMenu defaultOpen={defaultOpen} modal={false}>
+      <DropdownMenuTrigger>Agents</DropdownMenuTrigger>
+      <DropdownMenuContent>{children}</DropdownMenuContent>
+    </DropdownMenu>
+  )
+}
+
+function reopenMenu(): void {
+  fireEvent.pointerDown(screen.getByRole('button', { name: 'Agents' }), {
+    button: 0,
+    ctrlKey: false
+  })
+}
+
+function choiceModel(kind: 'cli' | 'chat'): menuRows.NewTabAgentMenuModel {
+  return {
+    state: 'settled',
+    rows: [
+      kind === 'cli'
+        ? { kind, agent: 'codex', chat: true, executionHostId: 'runtime:server' }
+        : { kind, agent: 'codex', executionHostId: 'runtime:server' }
+    ],
+    detection: {
+      detectedIds: ['codex'],
+      detectionFailed: false,
+      needsServerUpdate: false,
+      isLoading: false,
+      isRefreshing: false,
+      refresh: async () => ['codex']
+    }
+  }
+}
+
+function renderChoice(
+  kind: 'cli' | 'chat',
+  disabled = false,
+  defaultOpen = true
+): { row: HTMLElement; button: HTMLElement } {
+  vi.spyOn(menuRows, 'useNewTabAgentMenuRows').mockReturnValue(choiceModel(kind))
+  launchMock.mockReset().mockReturnValue({ surface: { kind: 'host-published' } })
+  render(
+    <QuickLaunchAgentMenuItems
+      worktreeId={WORKTREE_ID}
+      groupId="group-1"
+      onFocusTerminal={vi.fn()}
+      disabled={disabled}
+    />,
+    defaultOpen
+  )
+  if (!defaultOpen) {
+    reopenMenu()
+  }
+  return {
+    row: screen.getByRole('menuitem', {
+      name: kind === 'cli' ? 'Launch Codex in a new terminal' : 'Start a chat with Codex'
+    }),
+    button: screen.getByRole('button', {
+      name: kind === 'cli' ? 'Start a chat with Codex' : 'Launch Codex in a new terminal'
+    })
+  }
+}
+
+function hover(button: HTMLElement): void {
+  const matches = button.matches.bind(button)
+  vi.spyOn(button, 'matches').mockImplementation(
+    (selector) => selector === ':hover' || matches(selector)
+  )
+}
+
+function expectLaunch(surface: 'chat' | 'terminal'): void {
+  expect(launchMock).toHaveBeenCalledOnce()
+  expect(launchMock.mock.calls[0][0]).toMatchObject({
+    requestedSurface: surface,
+    selectedExecutionHostId: 'runtime:server'
+  })
+  expect(screen.queryByRole('menu')).toBeNull()
+}
+
+afterEach(() => {
+  cleanup()
+  vi.restoreAllMocks()
+})
+
+it.each(['cli', 'chat'] as const)(
+  'activates the focused %s control despite parked alternate hover (R1)',
+  async (kind) => {
+    for (const action of [
+      'return-left',
+      'return-up',
+      'space',
+      'row-click',
+      'button-click',
+      'button-enter',
+      'button-space',
+      'pointer'
+    ] as const) {
+      const { row, button } = renderChoice(kind)
+      if (action !== 'button-click') {
+        hover(button)
+      }
+      act(() => row.focus())
+      if (action === 'return-left' || action === 'return-up' || action.startsWith('button-')) {
+        fireEvent.keyDown(row, { key: 'ArrowRight' })
+        expect(document.activeElement).toBe(button)
+      }
+      if (action === 'return-left') {
+        fireEvent.keyDown(button, { key: 'ArrowLeft' })
+      }
+      if (action === 'return-up') {
+        fireEvent.keyDown(button, { key: 'ArrowDown' })
+        await vi.waitFor(() =>
+          expect(document.activeElement?.textContent).toContain('Agent settings')
+        )
+        fireEvent.keyDown(document.activeElement!, { key: 'ArrowUp' })
+        await vi.waitFor(() => expect(document.activeElement).toBe(row))
+      }
+      if (action === 'row-click') {
+        act(() => {
+          button.focus()
+          row.click()
+        })
+      } else if (action === 'button-click') {
+        act(() => {
+          row.focus()
+          button.click()
+        })
+      } else if (action === 'pointer') {
+        fireEvent.pointerDown(button, { pointerType: 'mouse' })
+        fireEvent.pointerUp(button, { pointerType: 'mouse' })
+        fireEvent.click(button)
+      } else {
+        const alternate = action.startsWith('button-')
+        if (!alternate) {
+          expect(document.activeElement).toBe(row)
+        }
+        fireEvent.keyDown(alternate ? button : row, {
+          key: action.endsWith('space') ? ' ' : 'Enter'
+        })
+      }
+      expectLaunch(
+        action.startsWith('button-') || action === 'pointer'
+          ? kind === 'cli'
+            ? 'chat'
+            : 'terminal'
+          : kind === 'cli'
+            ? 'terminal'
+            : 'chat'
+      )
+      cleanup()
+    }
+  }
+)
+
+it.each(['cli', 'chat'] as const)(
+  'keeps %s drag release exact-once, expires unused release, and respects disabled',
+  async (kind) => {
+    for (const alternate of [true, false]) {
+      const { row, button } = renderChoice(kind, false, false)
+      hover(button)
+      fireEvent.pointerUp(alternate ? button : row, { pointerType: 'mouse' })
+      expectLaunch(
+        alternate ? (kind === 'cli' ? 'chat' : 'terminal') : kind === 'cli' ? 'terminal' : 'chat'
+      )
+      cleanup()
+    }
+    for (const deferred of [false, true]) {
+      const { row, button } = renderChoice(kind)
+      hover(button)
+      act(() => {
+        fireEvent.pointerDown(row, { pointerType: 'mouse' })
+        fireEvent.pointerUp(button, { pointerType: 'mouse' })
+        expect(launchMock).not.toHaveBeenCalled()
+        if (!deferred) {
+          row.click()
+        }
+      })
+      if (deferred) {
+        await act(async () => {
+          await Promise.resolve()
+          row.click()
+        })
+      }
+      expectLaunch(kind === 'cli' ? 'terminal' : 'chat')
+      cleanup()
+    }
+    const { row, button } = renderChoice(kind, true)
+    hover(button)
+    fireEvent.pointerUp(button, { pointerType: 'mouse' })
+    fireEvent.click(button)
+    fireEvent.keyDown(button, { key: 'Enter' })
+    fireEvent.keyDown(button, { key: ' ' })
+    act(() => row.click())
+    expect(launchMock).not.toHaveBeenCalled()
+    expect(screen.queryByRole('menu')).not.toBeNull()
+  }
+)
+
+it.each(['chat', 'cli'] as const)(
+  'preserves notes inputs and failure outcomes on the %s row chat action',
+  async (kind) => {
+    vi.spyOn(menuRows, 'useNewTabAgentMenuRows').mockReturnValue(choiceModel(kind))
+    for (const outcome of ['delivered', 'unconfirmed', 'notified', 'no-command'] as const) {
+      const onPromptDelivered = vi.fn()
+      const onPromptHandedOff = vi.fn()
+      launchMock.mockReset().mockReturnValue(
+        outcome === 'no-command'
+          ? null
+          : {
+              surface: { kind: 'host-published' },
+              promptDeliveryResult: Promise.resolve({
+                delivered: outcome === 'delivered',
+                failureNotified: outcome === 'notified',
+                unconfirmed: outcome === 'unconfirmed'
+              })
+            }
+      )
+      toastError.mockClear()
+      const prompt = 'Review notes\nsrc/example.ts:5 — keep this context'
+      render(
+        <ReviewNotesSendMenuContent
+          worktreeId={WORKTREE_ID}
+          groupId="group-1"
+          prompt={prompt}
+          onPromptDelivered={onPromptDelivered}
+          onPromptHandedOff={onPromptHandedOff}
+        />
+      )
+      fireEvent.click(
+        screen.getByRole(kind === 'chat' ? 'menuitem' : 'button', {
+          name: 'Start a chat with Codex'
+        })
+      )
+      expectLaunch('chat')
+      expect(launchMock.mock.calls[0][0]).toMatchObject({
+        prompt,
+        promptDelivery: 'submit-after-ready',
+        launchSource: 'notes_send',
+        promptKeptByCaller: true,
+        groupId: 'group-1',
+        onPromptDelivered
+      })
+      if (outcome === 'no-command') {
+        expect(onPromptHandedOff).not.toHaveBeenCalled()
+      } else {
+        expect(onPromptHandedOff).toHaveBeenCalledOnce()
+        await expect(onPromptHandedOff.mock.calls[0][0]).resolves.toMatchObject({
+          delivered: outcome === 'delivered'
+        })
+      }
+      expect(toastError).toHaveBeenCalledTimes(
+        outcome === 'unconfirmed' || outcome === 'no-command' ? 1 : 0
+      )
+      if (outcome === 'unconfirmed') {
+        expect(toastError).toHaveBeenCalledWith(expect.stringContaining("Couldn't send to"), {
+          description: expect.stringContaining(
+            "Orca couldn't confirm your message reached the agent"
+          )
+        })
+      }
+      cleanup()
+    }
+  }
+)
 
 it('gives static/search no agent actions while loading, retaining settings and generic terminal', () => {
   const model = vi
@@ -189,10 +464,10 @@ function registerLaunch(
   } satisfies StructuredLaunchState)
 }
 
-function agentRowDisabled(label: string): string | null | undefined {
-  return document
-    .querySelector(`[title="Launch ${label} in a new terminal"]`)
-    ?.getAttribute('aria-disabled')
+function agentRowDisabled(label: string): string {
+  const row = screen.getByTitle(`Launch ${label} in a new terminal`)
+  expect(row.getAttribute('role')).toBe('menuitem')
+  return row.getAttribute('aria-disabled') ?? 'false'
 }
 
 describe('QuickLaunchAgentMenuItems launches', () => {
@@ -200,7 +475,6 @@ describe('QuickLaunchAgentMenuItems launches', () => {
     localStorage.clear()
     resetStructuredAgentLaunchRegistryForTests()
   })
-  afterEach(cleanup)
 
   it('keeps every agent launchable while chats start, fail or retry', () => {
     registerLaunch('claude', 'pending')
@@ -244,7 +518,8 @@ describe('QuickLaunchAgentMenuItems launches', () => {
     )
     const codexRow = document.querySelector('[title="Launch Codex in a new terminal"]')!
     fireEvent.click(codexRow)
-    fireEvent.click(codexRow)
+    reopenMenu()
+    fireEvent.click(document.querySelector('[title="Launch Codex in a new terminal"]')!)
 
     const requestIds = launchMock.mock.calls.map(([args]) => args.requestId)
     expect(requestIds).toHaveLength(2)
@@ -254,7 +529,7 @@ describe('QuickLaunchAgentMenuItems launches', () => {
 
   // Why: the notes menu holds what it sent until this result, so a second send leaves them out.
   it('opens the CLI once with notes from the row button, then the row itself starts a chat', async () => {
-    const model = vi.spyOn(menuRows, 'useNewTabAgentMenuRows').mockReturnValueOnce({
+    vi.spyOn(menuRows, 'useNewTabAgentMenuRows').mockReturnValue({
       state: 'settled',
       rows: [{ kind: 'chat', agent: 'codex', executionHostId: 'runtime:server' }],
       detection: {
@@ -284,7 +559,6 @@ describe('QuickLaunchAgentMenuItems launches', () => {
         onPromptHandedOff={onPromptHandedOff}
       />
     )
-    model.mockRestore()
     const terminalButton = document.querySelector<HTMLButtonElement>(
       'button[title="Launch Codex in a new terminal"]'
     )!
@@ -303,6 +577,7 @@ describe('QuickLaunchAgentMenuItems launches', () => {
     expect(launchMock.mock.calls.at(-1)?.[0].groupId).toBe('group-1')
     expect(onPromptHandedOff).toHaveBeenCalledOnce()
     await expect(onPromptHandedOff.mock.calls[0][0]).resolves.toEqual({ delivered: true })
+    reopenMenu()
     fireEvent.click(document.querySelector('[title="Start a chat with Codex"]')!)
     expect(launchMock).toHaveBeenCalledTimes(2)
     expect(launchMock.mock.calls[1][0]).toMatchObject({

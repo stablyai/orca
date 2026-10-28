@@ -70,7 +70,7 @@ export function admitWslHostDistro(args: {
     return {
       ok: false,
       kind: 'distro-stopped',
-      message: `${distro.name} is stopped. Start it to add it as a host.`
+      message: `${distro.name} stopped since the list was read. Choose Start and add to start it.`
     }
   }
   return { distro }

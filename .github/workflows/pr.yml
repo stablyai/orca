@@ -22,8 +22,8 @@ jobs:
   code_paths:
     if: github.event_name != 'pull_request' || github.event.pull_request.draft != true
     name: detect changes and check repository guards
-    # Start routing without waiting behind the GitHub-hosted test queue.
-    runs-on: blacksmith-2vcpu-ubuntu-2404
+    # Hosted runners start faster than Blacksmith's (~5s vs ~13s) and this sparse checkout fits one vCPU.
+    runs-on: ubuntu-slim
     timeout-minutes: 5
     permissions:
       contents: read
@@ -101,6 +101,7 @@ jobs:
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version-file: config/.bun-version
+          no-cache: true
 
       - name: Check required PR context ownership
         run: bun .github/scripts/check-required-pr-context.mjs
@@ -220,6 +221,7 @@ jobs:
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version-file: config/.bun-version
+          no-cache: true
 
       # Plan first: its ~10s single-threaded import-graph walk overlaps lint instead of trailing the job.
       - name: Plan unit selection
@@ -579,6 +581,7 @@ jobs:
       needs.code_paths.result == 'success' &&
       needs.code_paths.outputs.git_compatibility == 'true' &&
       needs.preflight.result == 'success'
+    # Three parallel lanes (two through Docker) exceed real-Git test timeouts on 4-vCPU hosted runners.
     runs-on: blacksmith-4vcpu-ubuntu-2404
 
     steps:
@@ -645,7 +648,7 @@ jobs:
       needs.code_paths.outputs.codex_index_heal_contract == 'true' &&
       needs.preflight.result == 'success'
     # Why ARM: @openai/codex ships @openai/codex-linux-arm64.
-    runs-on: blacksmith-4vcpu-ubuntu-2404-arm
+    runs-on: ubuntu-24.04-arm
     env:
       CODEX_CLI_VERSION: '0.150.1'
       # Why a second pin: --no-daemon only exists from 0.156, and Orca's codex wrapper relies on it.
@@ -740,7 +743,7 @@ jobs:
       needs.code_paths.outputs.xterm_patch_sync == 'true' &&
       needs.preflight.result == 'success'
     # Use ARM for four-package pristine/patched rebuild byte comparison: output generated on Linux x64 reproduces on darwin-arm64.
-    runs-on: blacksmith-4vcpu-ubuntu-2404-arm
+    runs-on: ubuntu-24.04-arm
 
     steps:
       - name: Checkout
@@ -772,7 +775,7 @@ jobs:
       needs.code_paths.outputs.shell_contracts == 'true' &&
       needs.preflight.result == 'success'
     # Exercise Linux ARM with the standalone aarch64 release and Ubuntu's zsh.
-    runs-on: blacksmith-4vcpu-ubuntu-2404-arm
+    runs-on: ubuntu-24.04-arm
     # Bound stalled prerequisite downloads instead of waiting for GitHub's 6-hour default.
     timeout-minutes: 15
     env:
@@ -885,6 +888,8 @@ jobs:
       node_versions: '["24"]'
       runner: blacksmith-8vcpu-ubuntu-2404
       phase_diagnostics: true
+      # Restore main's transform cache; the `ci:cold-unit-cache` label or ORCA_UNIT_MODULE_CACHE=off forces cold.
+      module_cache: ${{ (vars.ORCA_UNIT_MODULE_CACHE == 'off' || contains(github.event.pull_request.labels.*.name, 'ci:cold-unit-cache')) && 'off' || 'warm' }}
       shards: ${{ needs.preflight.outputs.shards }}
       run_shards: ${{ needs.code_paths.outputs.mobile_ci_tools != 'true' }}
       run_relay_integration: ${{ needs.code_paths.outputs.relay_integration != 'false' || needs.code_paths.outputs.orcad_browser == 'true' }}
@@ -901,7 +906,7 @@ jobs:
     name: mobile web app bundle
     needs: [code_paths]
     if: needs.code_paths.outputs.mobile_web_app == 'true'
-    runs-on: blacksmith-8vcpu-ubuntu-2404
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Checkout
@@ -969,7 +974,7 @@ jobs:
       needs.code_paths.outputs.cross-version-wire == 'true' &&
       needs.preflight.result == 'success'
     # Why ARM: source-only: tagged checkout plus in-process vitest, no docker or browser.
-    runs-on: blacksmith-4vcpu-ubuntu-2404-arm
+    runs-on: ubuntu-24.04-arm
 
     steps:
       # Fetch tags/full history for newest-release skew; shallow unit shards cannot supply it.
@@ -1012,7 +1017,7 @@ jobs:
       needs.code_paths.outputs.managed_hook_node18 == 'true' &&
       needs.preflight.result == 'success'
     # Retain the required check while sharing preflight's checkout and built packages.
-    runs-on: blacksmith-2vcpu-ubuntu-2404
+    runs-on: ubuntu-slim
     timeout-minutes: 5
 
     steps:
@@ -1029,7 +1034,7 @@ jobs:
     name: package
     needs: [code_paths, preflight]
     if: needs.code_paths.outputs.package == 'true'
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-24.04
     # Let the serial Docker gates reach their own deadlines and report cleanup failures.
     timeout-minutes: 90
 
@@ -1039,11 +1044,18 @@ jobs:
         with:
           persist-credentials: false
 
+      # Electron and builder releases fix what this downloads; the lockfile churns far more often.
+      - name: Resolve electron-builder download versions
+        id: eb-versions
+        shell: bash
+        run: node -p "const d = require('./package.json').devDependencies; 'versions=electron' + d.electron + '-builder' + d['electron-builder']" >> "$GITHUB_OUTPUT"
+
+      # The platform warmup seeds this on main.
       - name: Cache electron-builder downloads
         uses: actions/cache/restore@v5
         with:
           path: ~/.cache/electron-builder
-          key: electron-builder-linux-${{ hashFiles('pnpm-lock.yaml') }}
+          key: electron-builder-linux-${{ steps.eb-versions.outputs.versions }}
           restore-keys: |
             electron-builder-linux-
 
@@ -1098,6 +1110,11 @@ jobs:
           src/main/browser/browser-popup-adapter-compatibility.electron.test.ts
           src/main/browser/browser-popup-native-compatibility.electron.test.ts
           src/main/browser/browser-popup-background-compatibility.electron.test.ts
+          src/main/browser/extensions/browser-extension-api.electron.test.ts
+          src/main/browser/extensions/browser-extension-persistence.electron.test.ts
+          src/main/browser/extensions/browser-extension-lifecycle.electron.test.ts
+          src/main/browser/extensions/browser-extension-toolbar.electron.test.ts
+          src/main/browser/extensions/browser-extension-native-messaging.electron.test.ts
 
       - name: Restore native components
         id: linux-native-restore
@@ -1264,6 +1281,12 @@ jobs:
         with:
           persist-credentials: false
 
+      # Electron and builder releases fix what this downloads; the lockfile churns far more often.
+      - name: Resolve electron-builder download versions
+        id: eb-versions
+        shell: bash
+        run: node -p "const d = require('./package.json').devDependencies; 'versions=electron' + d.electron + '-builder' + d['electron-builder']" >> "$GITHUB_OUTPUT"
+
       - name: Cache electron-builder downloads
         uses: actions/cache/restore@v5
         with:
@@ -1271,7 +1294,7 @@ jobs:
             ~\AppData\Local\electron\Cache
             ~\AppData\Local\electron-builder\Cache
           # Release builds seed this exact path set; PR-local copies cannot serve other PRs.
-          key: electron-builder-win-${{ hashFiles('pnpm-lock.yaml') }}
+          key: electron-builder-win-${{ steps.eb-versions.outputs.versions }}
           restore-keys: |
             electron-builder-win-
 
@@ -1289,13 +1312,6 @@ jobs:
       # build resolves React Native and Expo from mobile/node_modules.
       - uses: ./.github/actions/install-mobile-dependencies
 
-      - name: Save compiled Node native modules
-        if: steps.deps.outputs.native-cache-hit != 'true'
-        uses: actions/cache/save@v5
-        with:
-          path: ${{ steps.deps.outputs.native-cache-path }}
-          key: ${{ steps.deps.outputs.native-cache-key }}
-
       # vitest runs here directly rather than through `pnpm test`, so the addon
       # assertions only hold once install-node-dependencies has rebuilt natives.
       - name: Test Windows installer process probe
@@ -1309,6 +1325,12 @@ jobs:
           config/scripts/nsis-process-check.test.mjs
           config/scripts/idle-cpu-process-sampling.test.mjs
 
+      - name: Resolve the Windows Rust build scope
+        id: rust-scope
+        shell: bash
+        run: node config/scripts/windows-rust-build-scope.mjs >> "$GITHUB_OUTPUT"
+
+      # Real inputs only: older restores are safe because the build re-checks each exe's fingerprint.
       - name: Cache Windows CLI launcher
         uses: actions/cache@v5
         with:
@@ -1319,7 +1341,9 @@ jobs:
             native/windows-agent-hook/.build
             native/windows-agent-hook/target
             ~/.cargo/registry
-          key: windows-cli-launcher-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('native/windows-cli-launcher/**', 'native/windows-agent-hook/**', 'config/scripts/build-windows-cli-launcher.mjs', 'config/scripts/build-windows-agent-hook.mjs', 'config/scripts/windows-rust-executable-build.mjs', 'resources/build/icon.ico', 'package.json') }}
+          key: windows-cli-launcher-v2-${{ runner.os }}-${{ runner.arch }}-${{ steps.rust-scope.outputs.toolchain }}-${{ steps.rust-scope.outputs.app-version }}-${{ hashFiles('native/windows-cli-launcher/src/**', 'native/windows-cli-launcher/build.rs', 'native/windows-cli-launcher/Cargo.toml', 'native/windows-cli-launcher/Cargo.lock', 'native/windows-cli-launcher/app.manifest', 'native/windows-cli-launcher/.cargo/**', 'native/windows-agent-hook/src/**', 'native/windows-agent-hook/build.rs', 'native/windows-agent-hook/Cargo.toml', 'native/windows-agent-hook/Cargo.lock', 'native/windows-agent-hook/app.manifest', 'native/windows-agent-hook/.cargo/**', 'config/scripts/build-windows-cli-launcher.mjs', 'config/scripts/build-windows-agent-hook.mjs', 'config/scripts/windows-rust-executable-build.mjs', 'config/scripts/windows-pe-imports.mjs', 'resources/build/icon.ico') }}
+          restore-keys: |
+            windows-cli-launcher-v2-${{ runner.os }}-${{ runner.arch }}-${{ steps.rust-scope.outputs.toolchain }}-
 
       # Require cargo early; otherwise packaged Rust launcher fails deep inside builder native hooks.
       - name: Ensure the Rust toolchain for the Windows CLI launcher
@@ -1423,9 +1447,12 @@ jobs:
       # Why the merge commit, unlike `e2e`: a gate must test what lands on main, not a stale head.
       ref: ${{ github.sha }}
       test_files: '["tests/e2e/workspace-layout-oracle-headless.spec.ts","tests/e2e/workspace-layout-oracle.spec.ts"]'
+      # Two ~3.6 min halves of the 21 window scenarios keep this gate off the PR's critical path.
+      changed_e2e_test_shards: '["1/2","2/2"]'
       run_changed_e2e: true
       needs_build: true
       artifact_suffix: -layout-oracle
+      fast_runners: true
 
   # Keep native IME advisory while PR reliability is established (nightly 20/20, 2026-08-09..29, p50 3m25s); do not hide red via continue-on-error. To gate, add verify.needs, TERMINAL_IME_NATIVE env and separate success-or-skipped validation.
   terminal_ime_native:
@@ -1455,7 +1482,7 @@ jobs:
       !cancelled() &&
       needs.code_paths.result == 'success' &&
       needs.code_paths.outputs.dependency_isolation == 'true'
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     env:
       ORCA_PNPM_FORCE_GLOBAL_VIRTUAL_STORE_IN_CI: '1'
@@ -1522,8 +1549,7 @@ jobs:
       - package_windows
       - layout_oracle
       - dependency_isolation
-    # Report settled results without competing with the GitHub-hosted test queue.
-    runs-on: blacksmith-2vcpu-ubuntu-2204
+    runs-on: ubuntu-slim
     timeout-minutes: 5
 
     steps:

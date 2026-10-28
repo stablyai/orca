@@ -2,7 +2,7 @@
 
 import type { AgentJournalMessageItem } from '../../../../shared/agent-session-journal-types'
 import {
-  queuedEditBaseText,
+  queuedEditHandOffTyping,
   queuedEditImagesPending,
   queuedEditKeptImages,
   queuedEditTextForKeptImages,
@@ -14,7 +14,6 @@ import type { NativeChatComposerImageAttachment } from './NativeChatComposerFiel
 import { appendNativeChatDraftCache } from './native-chat-draft-cache'
 import { isNativeChatImageAttachmentPath } from './native-chat-image-paste'
 import { imageReferenceInsertion } from '../../../../shared/native-chat-image-reference'
-import { stripSentImagePromptMarkers } from '../../../../shared/native-chat-image-transcript-markers'
 
 export type QueuedEditImageState = {
   /** The chat box this edit hands off to; the one it started in, never another. */
@@ -93,8 +92,7 @@ export function releaseQueuedEditImages(edit: QueuedEditImageState): void {
 
 /** Hand back unsaved text and settled additions atomically, excluding card-owned image markers; discard pending uploads with their edit, as mobile does. */
 export function handOffQueuedEdit(edit: QueuedEditImageState): boolean {
-  const unchanged = edit.text === queuedEditBaseText(edit.body, edit.kept)
-  const typing = unchanged ? '' : stripSentImagePromptMarkers(edit.text, edit.kept.length)
+  const typing = queuedEditHandOffTyping(edit.body, edit)
   const images = edit.added.flatMap((image) => (image.pending ? [] : [settled(image)]))
   const text =
     typing +

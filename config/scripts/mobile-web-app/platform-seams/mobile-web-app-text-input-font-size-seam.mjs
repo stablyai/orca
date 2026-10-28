@@ -269,16 +269,22 @@ function declarationOf(parsed, name) {
   return found
 }
 
+// Unwrap StyleSheet.create({...}) and themedStyleSheet(() => ({...})) to the object they build.
 function styleObjectOf(initializer) {
-  if (initializer === null) {
+  if (initializer === null || initializer === undefined) {
     return null
   }
   if (ts.isObjectLiteralExpression(initializer)) {
     return initializer
   }
+  if (ts.isParenthesizedExpression(initializer)) {
+    return styleObjectOf(initializer.expression)
+  }
+  if (ts.isArrowFunction(initializer) && !ts.isBlock(initializer.body)) {
+    return styleObjectOf(initializer.body)
+  }
   if (ts.isCallExpression(initializer) && initializer.arguments.length > 0) {
-    const first = initializer.arguments[0]
-    return ts.isObjectLiteralExpression(first) ? first : null
+    return styleObjectOf(initializer.arguments[0])
   }
   return null
 }

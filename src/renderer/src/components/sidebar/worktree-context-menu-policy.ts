@@ -214,6 +214,19 @@ export function preserveDeleteSiblingPosition(scope: HTMLElement | null): () => 
   }
 }
 
+/** The status every context worktree shares, or '' when they differ or there are none. */
+export function getSharedWorkspaceStatus(
+  worktrees: readonly Worktree[],
+  statusesFor: (worktree: Worktree) => readonly WorkspaceStatusDefinition[]
+): WorkspaceStatus {
+  const [first, ...rest] = worktrees
+  if (!first) {
+    return ''
+  }
+  const status = getWorkspaceStatus(first, statusesFor(first))
+  return rest.every((item) => getWorkspaceStatus(item, statusesFor(item)) === status) ? status : ''
+}
+
 export type WorkspaceStatusAssignmentPlan =
   | { readonly kind: 'board-sync'; readonly worktreeIds: readonly string[] }
   | { readonly kind: 'local-only'; readonly localWriteIds: readonly string[] }
@@ -222,14 +235,14 @@ export type WorkspaceStatusAssignmentPlan =
 export function planWorkspaceStatusAssignment(
   worktrees: readonly Worktree[],
   status: WorkspaceStatus,
-  workspaceStatuses: readonly WorkspaceStatusDefinition[],
+  statusesFor: (worktree: Worktree) => readonly WorkspaceStatusDefinition[],
   boardSyncEnabled: boolean
 ): WorkspaceStatusAssignmentPlan {
   if (boardSyncEnabled) {
     return { kind: 'board-sync', worktreeIds: worktrees.map((item) => item.id) }
   }
   const localWriteIds = worktrees
-    .filter((item) => getWorkspaceStatus(item, workspaceStatuses) !== status)
+    .filter((item) => getWorkspaceStatus(item, statusesFor(item)) !== status)
     .map((item) => item.id)
   return { kind: 'local-only', localWriteIds }
 }

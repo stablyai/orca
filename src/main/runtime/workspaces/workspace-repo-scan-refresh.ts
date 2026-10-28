@@ -17,6 +17,7 @@ import type { GitWorktreeInfo } from '../../../shared/worktree/types'
 import { listStoredWorktreeRowsForRepo } from '../repo-worktree-row-resolution'
 import type { ResolvedWorktree } from '../runtime-worktree-path-identity'
 import { getRepoExecutionHostId, getRepoSshConnectionId } from '../../../shared/execution-host'
+import { blockedWslDistroForPath, wslDistroForPath } from '../../wsl/wsl-unc-access-gate'
 
 const lastFingerprintUnknownWarnAt = new Map<string, number>()
 
@@ -45,6 +46,29 @@ export abstract class RuntimeWorkspaceRepoScanRefresh extends RuntimeWorkspaceCa
     cached: RuntimeWorktreeScanCache | null
   ): Promise<RuntimeWorktreeScanRefresh> {
     const scannedAt = Date.now()
+    // E9: the admin reads below and the Git scan both boot a stopped distro; keep known rows until it runs.
+    const wslDistro = getRepoSshConnectionId(repo)
+      ? undefined
+      : getLocalProjectWorktreeGitOptionsForRuntime(repo, projectRuntime).wslDistro
+    if (
+      !getRepoSshConnectionId(repo) &&
+      wslDistroForPath(repo.path, wslDistro) &&
+      (await blockedWslDistroForPath(repo.path, wslDistro))
+    ) {
+      return cached
+        ? {
+            result: cached.result,
+            adminFingerprint: cached.adminFingerprint,
+            adminFingerprintProbe: null,
+            scannedAt: cached.scannedAt
+          }
+        : {
+            result: { ok: false, worktrees: this.listStoredWorktreesForResolution(repo) },
+            adminFingerprint: null,
+            adminFingerprintProbe: null,
+            scannedAt
+          }
+    }
     // Fingerprint only on-host Git: executionHostId-only SSH and WSL paths cannot be described by local admin reads.
     const fingerprintCapable =
       !getRepoSshConnectionId(repo) &&

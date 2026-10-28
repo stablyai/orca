@@ -2,6 +2,7 @@ import { ORCAD_MIGRATION_BLOB_KIND_CONTRACTS } from '../../../shared/orcad-migra
 import type { OrcadMigrationManifest } from '../../../shared/orcad-migration/orcad-migration-manifest'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
+import { getDaemonHistoryDir } from '../../daemon/daemon-launch-paths'
 import { getHistoryRoot } from '../../terminal-history-paths'
 import type { StoreRuntimeState } from '../loading-store/store-runtime-state'
 import {
@@ -135,10 +136,12 @@ function installCommitted(
     root: runtime.orcadMigrationBlobRoot,
     terminalRestoreHints: runtime.orcadTerminalRestoreHints,
     shellHistoryRoot: getHistoryRoot(),
+    terminalHistoryRoot: getDaemonHistoryDir(),
     paneShellPath: () => runtime.paneShellPath(runtime.state.settings?.terminalDefaultShell),
     worktreeHasLiveShells: options.worktreeHasLiveShells,
     deferredShellHistoryWorktreeIds: runtime.deferredShellHistoryWorktreeIds,
     paneWorktreeId: (paneKey) => findPaneWorktreeId(runtime.state, paneKey),
+    workspacePath: (worktreeId) => findWorkspacePath(runtime.state, worktreeId),
     now: clock(options)
   })
 }
@@ -147,6 +150,16 @@ function clock(options: ClockOptions): number {
   return (options.now ?? (() => new Date()))().getTime()
 }
 
+// A git worktree id carries its path; a folder workspace's is on its record.
+function findWorkspacePath(state: PersistedState, worktreeId: string): string | null {
+  const separator = worktreeId.indexOf('::')
+  if (separator > 0) {
+    return worktreeId.slice(separator + 2) || null
+  }
+  return state.folderWorkspaces.find((folder) => folder.id === worktreeId)?.folderPath ?? null
+}
+
+// The commit merged the moved session in with its worktree ids unchanged.
 function findPaneWorktreeId(state: PersistedState, paneKey: string): string | null {
   const tabId = parsePaneKey(paneKey)?.tabId
   if (!tabId) {

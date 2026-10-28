@@ -61,12 +61,16 @@ function pruneLayoutNodeForGroups(
   return { ...root, first, second }
 }
 
-/** Tabs come from the tab bar alone; terminal rows it lacks are adopted later by reconciliation. */
+/**
+ * Tabs come from the tab bar alone; terminal rows it lacks are adopted later by reconciliation.
+ * A chat-only workspace (a project a WSL host now owns) keeps just its native chat tabs.
+ */
 export function buildHydratedTabState(
   session: WorkspaceSessionState,
   validWorktreeIds: Set<string>,
   /** A diff, conflict or check tab a frame build keeps: its frame carries the tab's view. */
-  keepsTransientTab: (worktreeId: string, entityId: string) => boolean = () => false
+  keepsTransientTab: (worktreeId: string, entityId: string) => boolean = () => false,
+  chatOnlyWorktreeIds: ReadonlySet<string> = new Set()
 ): HydratedTabState {
   const tabsByWorktree: Record<string, Tab[]> = {}
   const groupsByWorktree: Record<string, TabGroup[]> = {}
@@ -76,7 +80,8 @@ export function buildHydratedTabState(
   const persistedEditFileIdsByWorktree = getPersistedEditFileIdsByWorktree(session)
 
   for (const [worktreeId, tabs] of Object.entries(session.unifiedTabs ?? {})) {
-    if (!validWorktreeIds.has(worktreeId)) {
+    const chatOnly = chatOnlyWorktreeIds.has(worktreeId)
+    if (!validWorktreeIds.has(worktreeId) && !chatOnly) {
       continue
     }
     if (tabs.length === 0) {
@@ -120,6 +125,9 @@ export function buildHydratedTabState(
         }
       })
       .filter((tab) => {
+        if (chatOnly && tab.contentType !== 'agent-session') {
+          return false
+        }
         if (tab.contentType === 'terminal') {
           // Why: old web-client sessions could persist host surface ids
           // containing "::"; those are invalid pane-key tab ids.
@@ -138,7 +146,7 @@ export function buildHydratedTabState(
   }
 
   for (const [worktreeId, groups] of Object.entries(session.tabGroups ?? {})) {
-    if (!validWorktreeIds.has(worktreeId)) {
+    if (!validWorktreeIds.has(worktreeId) && !chatOnlyWorktreeIds.has(worktreeId)) {
       continue
     }
     if (groups.length === 0) {

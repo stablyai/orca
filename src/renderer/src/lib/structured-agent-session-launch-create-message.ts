@@ -1,7 +1,7 @@
 import {
   structuredLaunchCompatibleOptions,
   structuredLaunchRequestedOptions
-} from '../../../shared/native-chat-session-option-defaults'
+} from '../../../shared/native-chat/input/native-chat-session-option-defaults'
 import { structuredAgentSessionCreateFingerprint } from '../../../shared/structured-agent-session-mutation'
 import type { StructuredAgentSessionCreateParams } from '../../../shared/structured-agent-session-create'
 import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../../shared/agent-chat-permission-mode'

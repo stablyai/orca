@@ -2,6 +2,8 @@ import { useCallback, useState } from 'react'
 import { RefreshCw } from 'lucide-react-native'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { colors } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 
 export type NativeWebViewEngineEvent = {
   readonly nativeEvent?: object
@@ -75,6 +77,7 @@ export function TerminalWebViewEngineErrorOverlay({
   message,
   onReload
 }: TerminalWebViewEngineErrorOverlayProps) {
+  useMobileColorScheme()
   return (
     <View style={styles.errorOverlay}>
       <Text style={styles.errorTitle}>Terminal failed to load</Text>
@@ -82,21 +85,21 @@ export function TerminalWebViewEngineErrorOverlay({
         {message}
       </Text>
       <Pressable accessibilityRole="button" style={styles.reloadButton} onPress={onReload}>
-        <RefreshCw size={16} color={colors.terminalBg} />
+        <RefreshCw size={16} color={colors.bgBase} />
         <Text style={styles.reloadButtonText}>Reload</Text>
       </Pressable>
     </View>
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   errorOverlay: {
     ...StyleSheet.absoluteFillObject,
     alignItems: 'center',
     justifyContent: 'center',
     gap: 12,
     padding: 24,
-    backgroundColor: colors.terminalBg
+    backgroundColor: colors.bgBase
   },
   errorTitle: {
     color: colors.textPrimary,
@@ -120,8 +123,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surfaceBright
   },
   reloadButtonText: {
-    color: colors.terminalBg,
+    color: colors.bgBase,
     fontSize: 14,
     fontWeight: '700'
   }
-})
+}))

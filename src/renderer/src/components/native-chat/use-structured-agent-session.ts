@@ -1,21 +1,21 @@
+import type { StructuredAgentSessionViewArgs } from './structured-agent-session-view-contract'
 import { refreshStructuredAgentSessionCommands } from './structured-agent-session-command-refresh'
 import { useMemo, useRef } from 'react'
 import { useStructuredAgentSessionSendOptions } from './use-structured-agent-session-send-options'
 import { useStructuredAgentSessionSends } from './use-structured-agent-session-sends'
 import { useStructuredAgentSessionCommandWrite } from './use-structured-agent-session-command-write'
 import { structuredAgentSessionNewSendsQueue } from './structured-agent-session-queue-request'
-import type { AgentType } from '../../../../shared/agent-status-types'
 import type { AgentSessionCancelResult } from '../../../../shared/agent-session-wire'
-import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { structuredAgentLabel } from '@/lib/structured-agent-session-launch-label'
 import { useStructuredLegacyLaunchStop } from '@/lib/structured-agent-session-legacy-launch-stop'
 import {
   useStructuredAgentSessionHostQueuesCommands,
   useStructuredAgentSessionHostEditsQueuedMessages,
+  useStructuredAgentSessionHostReordersQueuedMessages,
   useStructuredAgentSessionHostEditsQueuedImages,
   useStructuredAgentSessionHostQueuesMessagesState
 } from '@/runtime/structured-agent-session-host-capability'
-import { structuredAgentSessionStopControl } from './structured-agent-session-stop-control'
+import { structuredAgentSessionStopControl } from '../../../../shared/structured-agent-session-stop-control'
 import type { AgentSessionPromptResponse } from '../../../../shared/agent-session-question-answer'
 import {
   respondToStructuredAgentSessionPrompt,
@@ -30,48 +30,21 @@ import { useStructuredAgentSessionTransportState } from './use-structured-agent-
 import { useStructuredAgentSessionStop } from './use-structured-agent-session-stop'
 import { useStructuredAgentSessionTransport } from './use-structured-agent-session-transport'
 import { useStructuredAgentSessionOptions } from './use-structured-agent-session-options'
-import type { StructuredAgentSessionLaunchView } from './use-native-chat-provisional-launch'
 import { useStructuredAgentSessionThreadGoal } from './use-structured-agent-session-thread-goal'
 import { useStructuredAgentSessionContextUsage } from './use-structured-agent-session-context-usage'
 import { useStructuredAgentSessionRailOutline } from './use-structured-agent-session-rail-outline'
 import { useStructuredAgentSessionQueuedMessages } from './use-structured-agent-session-queued-messages'
 import { structuredConversationCommandRunner } from './structured-conversation-command-send'
-import {
-  commandCardWaiting,
-  pendingSendsOutsideQueuedCards
-} from './structured-agent-session-queued-cards'
+import { structuredAgentSessionQueueEnabled } from '../../../../shared/structured-agent-session-queued-cards'
+import { pendingSendsOutsideQueuedCards } from './structured-agent-session-sending-queued-cards'
 import { hostStatesTurnScopes } from '../../../../shared/native-chat-turn-membership'
-import { pendingPromptsAllUnanswerableHere } from '../../../../shared/agent-session-approval-subject'
 import { withNativeChatCutTurnNotices } from '../../../../shared/native-chat-cut-turn-notice'
 import { useNativeChatContextClearFloor } from './use-native-chat-context-clear-floor'
 import { useStructuredAgentSessionRewind } from './use-structured-agent-session-rewind'
-import type { NativeChatRewindHost } from './use-native-chat-rewind'
 
 export type { StructuredPromptItem } from '../../../../shared/structured-agent-session-message-projection'
 
-export function useStructuredAgentSession(args: {
-  sessionId: string
-  target: RuntimeClientTarget
-  agent: AgentType
-  isVisible: boolean
-  transportEnabled?: boolean
-  /** The host has published the session but its provider has not answered startup yet. */
-  providerStarting?: boolean
-  /** The host runs the session's provider and its start is proven. */
-  providerRunning?: boolean
-  /** This view started the session; only then does the stored selection name what it runs. */
-  launch?: StructuredAgentSessionLaunchView
-  /** Composer destination for preserved text from queued-card edits. */
-  composerScopeKey?: string
-  /** The chat-wide "queue follow-ups" setting; off keeps mid-turn sends immediate. */
-  queueFollowUps?: boolean
-  /** The host says a person's Stop is still ending this session's work. */
-  hostStopping?: boolean
-  /** The option values the host's status carries; a change re-reads the chat's options. */
-  hostOptionStamp?: string
-  /** The host's rewind latch and what follows a message returned by a rewind. */
-  rewind?: NativeChatRewindHost
-}) {
+export function useStructuredAgentSession(args: StructuredAgentSessionViewArgs) {
   const {
     agent,
     hostStopping = false,
@@ -143,10 +116,8 @@ export function useStructuredAgentSession(args: {
   const stopControlInput = { sessionId, target, transportState, hostStopping, mutate }
   const stopControl = useStructuredAgentSessionStop(stopControlInput)
   const prompts = pendingStructuredSessionPrompts(transportState)
-  const promptsUnanswerableHere = pendingPromptsAllUnanswerableHere(prompts)
-  // Queue after waiting commands even with follow-ups off, unless unanswerable prompts would strand the queue; immediate sends enable prompt cancellation.
-  const commandWaiting = commandCardWaiting(transportState.queuedMessages)
-  const queueEnabled = (queueFollowUps || commandWaiting) && !promptsUnanswerableHere
+  // Immediate sends enable prompt cancellation.
+  const queueEnabled = structuredAgentSessionQueueEnabled(queueFollowUps, transportState, prompts)
   const queue = useMemo(
     () => ({ capability: queueCapability, enabled: queueEnabled }),
     [queueCapability, queueEnabled]
@@ -227,9 +198,10 @@ export function useStructuredAgentSession(args: {
   )
   const editCapable = useStructuredAgentSessionHostEditsQueuedMessages(target)
   const imagesCapable = useStructuredAgentSessionHostEditsQueuedImages(target)
+  const reorderCapable = useStructuredAgentSessionHostReordersQueuedMessages(target)
   const editTransport = useMemo(
-    () => ({ target, sessionId, capable: editCapable, imagesCapable, write }),
-    [editCapable, imagesCapable, sessionId, target, write]
+    () => ({ target, sessionId, capable: editCapable, imagesCapable, reorderCapable, write }),
+    [editCapable, imagesCapable, reorderCapable, sessionId, target, write]
   )
   const queuedController = useStructuredAgentSessionQueuedMessages({
     ...transportState,

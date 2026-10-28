@@ -11,13 +11,16 @@ import type {
 import type { AgentJournalSubmission } from '../../../../shared/agent-session-journal-types'
 import { agentSessionSendBodyFingerprint } from '../../../../shared/structured-agent-session-send-mutation'
 import {
+  queuedCardOnScreen,
+  queuedEditChangedNotice,
   queuedEditDirty,
   queuedEditInput,
   queuedEditSaveHeld,
+  queuedEditStanding,
   queuedMessageEditableText,
   queuedMessageWithEdit
 } from '../../../../shared/queued-message-edit'
-import { queuedEditChangedNotice, queuedEditNotice } from './queued-message-edit-notices'
+import { queuedEditNotice } from './queued-message-edit-notices'
 import {
   handOffQueuedEdit,
   queuedEditImageFields,
@@ -31,11 +34,7 @@ import {
   startQueuedEditLease,
   type QueuedEditLease
 } from './structured-agent-session-queued-edit-lease'
-import type { QueuedMessageCard } from './structured-agent-session-queued-cards'
-import {
-  queuedCardOnScreen,
-  queuedEditStanding
-} from './structured-agent-session-queued-edit-standing'
+import type { QueuedMessageCard } from '../../../../shared/structured-agent-session-queued-cards'
 import type { StructuredAgentSessionWrite } from './use-structured-agent-session-mutate'
 
 export type QueuedEditTransport = {
@@ -45,6 +44,7 @@ export type QueuedEditTransport = {
   capable: boolean
   /** The host advertises `agent-session.queued-message-image-edit.v1`: Save may replace images. */
   imagesCapable?: boolean
+  reorderCapable?: boolean
   write: StructuredAgentSessionWrite
 }
 
@@ -250,7 +250,11 @@ export function useStructuredAgentSessionQueuedEdit(args: {
         gone(edit)
       } else if (status === 'changed') {
         // Preserve typing after a competing edit, then reopen on the newer text; removal alone needs no handoff.
-        toast.error(queuedEditChangedNotice(handOffQueuedEdit(edit), latest.current.promptOpen))
+        toast.error(
+          queuedEditNotice(
+            queuedEditChangedNotice(handOffQueuedEdit(edit), latest.current.promptOpen)
+          )
+        )
         reopen.current = { scope, messageId: edit.messageId, stale: edit.baseFingerprint }
         close()
       } else {

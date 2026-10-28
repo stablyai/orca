@@ -101,7 +101,8 @@ describe('ACP process-owning connection', () => {
   })
 
   it('settles prompts and permission signals on proven exit with stdout still open', async () => {
-    const onExit = vi.fn()
+    const statusDuringExit: unknown[] = []
+    const onExit = vi.fn(() => statusDuringExit.push(connection.exitStatus))
     const onClose = vi.fn()
     const permission = deferred<AbortSignal>()
     const { connection, child, agent } = fixture({
@@ -132,6 +133,7 @@ describe('ACP process-owning connection', () => {
       expected: false,
       exit: { code: 7, signal: null, processless: false }
     })
+    expect(statusDuringExit).toEqual([{ code: 7, signal: null, processless: false }])
     const late = vi.fn()
     connection.onExit(late)
     expect(late).toHaveBeenCalledOnce()

@@ -6,7 +6,7 @@ import { sessionFor } from './claude-structured-dispatch-test-support'
 import { createClaudeJournalTranslator } from './claude-structured-journal-translation'
 import { setClaudeStructuredOption } from './claude-structured-options'
 import { adoptClaudeStructuredSpawnOptions } from './claude-structured-spawn-options'
-import type { ClaudeSession } from './claude-structured-session-state'
+import type { ClaudeSession } from './structured/claude-structured-session-state'
 
 function ringSession(catalog: unknown[] = []) {
   const session = sessionFor()
@@ -34,6 +34,7 @@ describe('the context ring after a session option write', () => {
   it('sizes a new session from the model it was launched with', () => {
     const s = ringSession()
     adoptClaudeStructuredSpawnOptions(s.session, {
+      sdkOptions: { model: 'opus[1m]' },
       options: new Map([['model', 'opus[1m]']]),
       fastModeAtStart: false
     })

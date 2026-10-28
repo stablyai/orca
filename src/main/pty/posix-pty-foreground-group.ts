@@ -1,5 +1,4 @@
-import { execFileSync } from 'node:child_process'
-import { notifySpawnObserver } from '@orca/process-host/spawn-observer'
+import { runProcess } from '@orca/process-host'
 
 const PROCESS_TABLE_LOOKUP_TIMEOUT_MS = 250
 const PROCESS_TABLE_QUERY_TIMEOUT_MS = PROCESS_TABLE_LOOKUP_TIMEOUT_MS / 2
@@ -8,7 +7,9 @@ const PROCESS_TABLE_MAX_BYTES = 64 * 1024
 export type PosixPtyForegroundGroupDeps = {
   platform?: NodeJS.Platform
   currentPid?: number
-  readProcessTable?: () => string
+  readProcessTable?: () => Promise<string>
+  /** False once the root has exited; a stale table could then name a recycled group. */
+  ownsRoot?: () => boolean
 }
 
 type ProcessRow = {
@@ -26,28 +27,26 @@ function hasUsableTty(tty: string): boolean {
   return tty !== '?' && tty !== '??' && tty !== '-'
 }
 
-function runPs(pid: number): string {
-  const args = ['-p', String(pid), '-o', 'pid=,tpgid=,tty=']
-  const startedAt = performance.now()
-  try {
-    return execFileSync('ps', args, {
-      encoding: 'utf8',
-      timeout: PROCESS_TABLE_QUERY_TIMEOUT_MS,
-      maxBuffer: PROCESS_TABLE_MAX_BYTES
-    })
-  } finally {
-    // Diagnostics only: execFileSync blocks the caller for the child's whole life.
-    notifySpawnObserver('ps', args, performance.now() - startedAt)
+async function runPs(pid: number): Promise<string> {
+  const result = await runProcess({
+    program: 'ps',
+    args: ['-p', String(pid), '-o', 'pid=,tpgid=,tty='],
+    timeoutMs: PROCESS_TABLE_QUERY_TIMEOUT_MS,
+    maxOutputBytes: PROCESS_TABLE_MAX_BYTES
+  })
+  if (result.code !== 0 || result.timedOut || result.outputTruncated) {
+    throw new Error('PTY foreground group is unavailable')
   }
+  return result.stdout
 }
 
 let ownRowCache: { pid: number; row: string } | null = null
 
-/** Cache the own-TTY guard row to avoid a second synchronous ps fork on every SIGWINCH. */
-function readOwnProcessRow(currentPid: number): string {
+/** Cache the own-TTY guard row to avoid a second ps fork on every SIGWINCH. */
+async function readOwnProcessRow(currentPid: number): Promise<string> {
   if (ownRowCache?.pid !== currentPid) {
     // Failed reads remain retryable and yield no group.
-    ownRowCache = { pid: currentPid, row: runPs(currentPid) }
+    ownRowCache = { pid: currentPid, row: await runPs(currentPid) }
   }
   return ownRowCache.row
 }
@@ -57,8 +56,8 @@ export function resetPosixPtyForegroundGroupOwnRowCache(): void {
 }
 
 /** macOS PID lists scan the whole table (~3.6s vs ~3ms for one PID), timing out into root-only delivery. */
-function readForegroundGroupTable(rootPid: number, currentPid: number): string {
-  return `${runPs(rootPid)}\n${readOwnProcessRow(currentPid)}`
+async function readForegroundGroupTable(rootPid: number, currentPid: number): Promise<string> {
+  return `${await runPs(rootPid)}\n${await readOwnProcessRow(currentPid)}`
 }
 
 function parseProcessRows(output: string): ProcessRow[] {
@@ -102,13 +101,13 @@ export function getPosixPtyForegroundGroup(
 
 /** Fall back to scoped root delivery if group proof is unavailable.
  * Callers limit this to SIGWINCH; destructive signals require descendant identity checks. */
-export function signalPosixPtyForegroundGroup(
+export async function signalPosixPtyForegroundGroup(
   rootPid: number,
   ptsName: string | undefined,
   signal: NodeJS.Signals | (string & {}),
   fallback: () => void,
   deps: PosixPtyForegroundGroupDeps = {}
-): void {
+): Promise<void> {
   if ((deps.platform ?? process.platform) === 'win32' || !ptsName) {
     fallback()
     return
@@ -117,13 +116,16 @@ export function signalPosixPtyForegroundGroup(
   let pgid: number | null
   try {
     pgid = getPosixPtyForegroundGroup(
-      (deps.readProcessTable ?? (() => readForegroundGroupTable(rootPid, currentPid)))(),
+      await (deps.readProcessTable ?? (() => readForegroundGroupTable(rootPid, currentPid)))(),
       rootPid,
       ptsName,
       currentPid
     )
   } catch {
     pgid = null
+  }
+  if (deps.ownsRoot && !deps.ownsRoot()) {
+    return
   }
   if (pgid === null) {
     fallback()

@@ -3,7 +3,7 @@ import { chmod, mkdir, mkdtemp, rm, symlink, writeFile, link } from 'node:fs/pro
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { NATIVE_CHAT_VISUAL_MAX_BYTES } from '../../shared/native-chat-visual-directive'
+import { NATIVE_CHAT_VISUAL_MAX_BYTES } from '../../shared/native-chat/native-chat-visual-directive'
 import { nativeChatScratchFolderFor } from './native-chat-scratch-folder'
 import { nativeChatVisualRevision, readNativeChatVisualFile } from './native-chat-visual-file-read'
 

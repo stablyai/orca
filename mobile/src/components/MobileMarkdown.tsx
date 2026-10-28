@@ -2,11 +2,12 @@ import { INLINE_TEXT_SELECTION } from './inline-text-selection'
 import { memo, useContext, useMemo, type ReactNode } from 'react'
 import { Text as NativeText, View } from 'react-native'
 import { MARKDOWN_TONES, scaledMarkdownText, styles } from './mobile-markdown-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { renderBlocks, type MarkdownBlockContext } from './mobile-markdown-blocks'
 import { MarkdownText } from './mobile-markdown-text'
 import { MarkdownTextContext, type MarkdownTextSetup } from './mobile-markdown-text-setup'
 import { useMobileMarkdownTree } from './use-mobile-markdown-tree'
-import type { NativeChatVisualDirective } from '../../../src/shared/native-chat-visual-directive'
+import type { NativeChatVisualDirective } from '../../../src/shared/native-chat/native-chat-visual-directive'
 
 type Props = {
   content?: string
@@ -25,7 +26,7 @@ type Props = {
   renderVisual?: (directive: NativeChatVisualDirective, index: number) => ReactNode
   // Close incomplete streaming markup like desktop; diagrams remain code until text stops.
   growing?: boolean
-  /** The surface under the text: `onBright` for your own message's light fill. */
+  /** The surface under the text: `userMessage` inside your own message's bubble. */
   tone?: keyof typeof MARKDOWN_TONES
 }
 
@@ -40,6 +41,7 @@ function MobileMarkdownContent({
   growing = false,
   tone: toneName = 'default'
 }: Props) {
+  useMobileColorScheme()
   // Interactive children own their touches and must forward the row action.
   const setup = useContext(MarkdownTextContext)
   const text = content?.trim() ?? ''

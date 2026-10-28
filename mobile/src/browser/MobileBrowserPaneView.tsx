@@ -12,6 +12,7 @@ import {
 } from 'react-native'
 import { ArrowUp, ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react-native'
 import { colors } from '../theme/mobile-theme'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { MobileBrowserAddressField } from './MobileBrowserAddressField'
 import { MobileBrowserKeyRow } from './MobileBrowserKeyRow'
 import { MobileBrowserLoadFailure } from './MobileBrowserLoadFailure'
@@ -77,6 +78,7 @@ type MobileBrowserPaneViewProps = {
 // Frame cap can leave viewport unpainted despite live stream; oversized frames are dropped, never fatal.
 // Area budget prevents starvation: C6.6 with budget disabled measured 299 dropped/6 applied and a persistent spinner.
 export function MobileBrowserPaneView(props: MobileBrowserPaneViewProps) {
+  useMobileColorScheme()
   const {
     addressFocused,
     addressValue,

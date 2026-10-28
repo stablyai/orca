@@ -34,6 +34,7 @@ import { performCancel, type AcceptedChatStop } from './structured-agent-session
 import { contextStructuredAgentSessionCurrentWork } from './structured-agent-session-current-work'
 import type { AgentSessionTurnContext, TurnOutcome } from './structured-agent-session-turns'
 import {
+  isStructuredAgentSessionCommandTurnId,
   structuredAgentSessionStopNoteIdentity,
   structuredAgentSessionCommandWasStopped
 } from './structured-agent-session-command-turn'
@@ -225,7 +226,9 @@ export function mutateWithChatStop<TValue>(
       return { ok: true, value: { ...named, cancelled: false } }
     }
     const previouslyStopped =
-      target.turnId !== null && structuredAgentSessionCommandWasStopped(ctx.journal, target.turnId)
+      target.turnId !== null &&
+      isStructuredAgentSessionCommandTurnId(target.turnId) &&
+      structuredAgentSessionCommandWasStopped(ctx.journal, target.turnId)
     const accepted = await accept(ctx, target)
     if (!accepted.ok) {
       return accepted

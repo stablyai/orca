@@ -15,7 +15,7 @@ import { buildSleepingAgentLaunchConfig } from './sleeping-agent-launch-config'
 import { planHermesStartupQuery } from './hermes-startup-query'
 import { inlineAgentDraftFitsPlatform } from './agent-draft-platform-limit'
 import type { TuiAgent } from './tui-agent'
-import type { SessionOptionValue } from './native-chat-session-options'
+import type { SessionOptionValue } from './native-chat/input/native-chat-session-options'
 import { resolveAgentLaunchCommand } from './tui-agent-launch-command'
 import { appliedSessionOptionProps, buildFlagPromptStartupPlan } from './flag-prompt-startup'
 

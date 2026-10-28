@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { Pressable, Text, View } from 'react-native'
 import {
   CalendarClock,
   CircleDot,
@@ -12,6 +12,8 @@ import {
   StickyNote
 } from 'lucide-react-native'
 import { colors, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { prStateColor } from '../components/WorktreeMetaGlyphs'
 import { hostScreenStyles } from './host-screen-styles'
 import { OptionRowList } from './workspace-option-rows'
@@ -50,6 +52,7 @@ const CHECK_LABELS: Record<string, string> = {
 }
 
 export function WorkspaceDetailsSheet(props: { row: Worktree; onOpenLink: (url: string) => void }) {
+  useMobileColorScheme()
   const { row, onOpenLink } = props
   const identity = getWorktreeGitIdentityDisplay({ branch: row.branch })
   const origin = buildWorkspaceOrigin(row)
@@ -110,6 +113,7 @@ function DetailRow(props: {
   onPress?: () => void
   accessibilityLabel?: string
 }) {
+  useMobileColorScheme()
   const body = (
     <>
       <View style={styles.icon}>{props.icon}</View>
@@ -133,6 +137,7 @@ function DetailRow(props: {
 }
 
 function ReviewIcon({ item }: { item: WorkspaceDetailLink }) {
+  useMobileColorScheme()
   const color = prStateColor(item.state ?? '')
   if (
     item.state === 'merged' ||
@@ -150,6 +155,7 @@ function ReviewIcon({ item }: { item: WorkspaceDetailLink }) {
 }
 
 function LinkIcon({ item }: { item: WorkspaceDetailLink }) {
+  useMobileColorScheme()
   if (item.type !== 'issue') {
     return <ReviewIcon item={item} />
   }
@@ -174,6 +180,7 @@ function linkMeta(item: WorkspaceDetailLink): string {
 }
 
 function LinkRow({ item, onOpen }: { item: WorkspaceDetailLink; onOpen: (url: string) => void }) {
+  useMobileColorScheme()
   const url = item.url
   const meta = linkMeta(item)
   return (
@@ -195,7 +202,7 @@ function LinkRow({ item, onOpen }: { item: WorkspaceDetailLink; onOpen: (url: st
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   header: {
     paddingHorizontal: spacing.xs,
     paddingBottom: spacing.md - 2
@@ -261,4 +268,4 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     color: colors.textSecondary
   }
-})
+}))

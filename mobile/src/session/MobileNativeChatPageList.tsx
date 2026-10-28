@@ -18,12 +18,13 @@ import type {
   ViewStyle
 } from 'react-native'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
-import type { MobileNativeChatRowKeys } from './mobile-native-chat-row-keys'
+import type { MobileNativeChatRowKeys } from './native-chat/transcript/mobile-native-chat-row-keys'
 import { MobileNativeChatPageScroll } from './MobileNativeChatPageScroll'
 import {
   mobileNativeChatReadingDrift,
   mobileNativeChatReadingPlace,
   mobileNativeChatRowAbove,
+  mobileNativeChatRowBoxProps,
   type MobileNativeChatReadingUnit,
   type MobileNativeChatScrollNode
 } from './mobile-native-chat-reading-place'
@@ -287,11 +288,12 @@ export function MobileNativeChatPageList({
     }
   })
 
-  // Image/inner-box resize bypasses React commits; restore nested scroll boxes first.
+  // Content and viewport resizes (e.g. the composer growing) bypass commits; restore nested scroll boxes first.
   useEffect(() => {
     const s = scroller()
+    const viewport: Element | null | undefined = scroll.current?.getScrollableNode()
     const content: Element | null | undefined = scroll.current?.getInnerViewNode()
-    if (!s || !content || typeof ResizeObserver === 'undefined') {
+    if (!s || !viewport || !content || typeof ResizeObserver === 'undefined') {
       return
     }
     const observer = new ResizeObserver(() => {
@@ -299,6 +301,7 @@ export function MobileNativeChatPageList({
       keepPlace(s)
       drawAndFetch(s)
     })
+    observer.observe(viewport)
     observer.observe(content)
     roots?.observeWith(observer)
     return () => {
@@ -374,7 +377,7 @@ export function MobileNativeChatPageList({
           emptyStateView
         ) : (
           // Key by chat to reset rows; persist disclosures above windowed rows. Block flow avoids relaying out every row for each streamed token.
-          <div key={rowKeys.scope}>
+          <div key={rowKeys.scope} {...mobileNativeChatRowBoxProps}>
             {rows.slice(first).map((item, at) => {
               const index = first + at
               return (

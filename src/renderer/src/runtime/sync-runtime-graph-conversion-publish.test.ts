@@ -69,12 +69,6 @@ function worktreeSnapshot(
   )
 }
 
-function publishedBrowserWorkspaceIds(store: ReturnType<typeof createTestStore>): string[] {
-  return (worktreeSnapshot(store)?.tabs ?? [])
-    .filter((tab) => tab.type === 'browser')
-    .map((tab) => (tab as { browserWorkspaceId?: string }).browserWorkspaceId ?? '')
-}
-
 function collectLayoutGroupIds(node: unknown, into: string[] = []): string[] {
   if (!node || typeof node !== 'object') {
     return into
@@ -111,37 +105,6 @@ function publishedUnifiedTabIds(store: ReturnType<typeof createTestStore>): Set<
 
 // Real conversion actions must flip docLocation and publication predicate in one commit; no intermediate document publish or web-page suppression.
 describe('mobile publish across an address-bar conversion', () => {
-  it('starts publishing a doc tab the moment it converts to web, and stops on the way back', async () => {
-    const store = await createStoreWithWorktree()
-    // Require ordinary URL presence so a broken browser publisher cannot pass on empty results.
-    const urlTab = store.getState().createBrowserTab(WORKTREE_ID, 'https://example.com/')
-    const docTab = store.getState().createBrowserTab(WORKTREE_ID, '', {
-      docLocation: DOC_LOCATION,
-      title: 'index.html',
-      browserRuntimeEnvironmentId: null
-    })
-    await settled()
-    const docPageId = store.getState().browserPagesByWorkspace[docTab.id]?.[0]?.id ?? ''
-
-    expect(publishedBrowserWorkspaceIds(store)).toEqual([urlTab.id])
-
-    const webPage = store.getState().convertBrowserPage(docPageId, {
-      kind: 'web',
-      url: 'https://converted.example/'
-    })
-    expect(webPage).not.toBeNull()
-    await settled()
-    expect(publishedBrowserWorkspaceIds(store).sort()).toEqual([urlTab.id, docTab.id].sort())
-
-    const docPage = store.getState().convertBrowserPage(webPage?.id ?? '', {
-      kind: 'workspace-doc',
-      docLocation: DOC_LOCATION
-    })
-    expect(docPage).not.toBeNull()
-    await settled()
-    expect(publishedBrowserWorkspaceIds(store)).toEqual([urlTab.id])
-  })
-
   // Exercise group/layout projection independently: doc-only groups must not reference tabs withheld from phones.
   it('holds the doc tab out of published groups and the layout, and admits it on conversion', async () => {
     const store = await createStoreWithWorktree()

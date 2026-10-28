@@ -1,3 +1,4 @@
+import './mobile-prompt-render-mocks'
 import { createElement } from 'react'
 import { Pressable } from 'react-native'
 import type { RpcClient } from '../../transport/rpc-client'
@@ -11,76 +12,7 @@ import { MobileNativeChatOverlay } from '../MobileNativeChatOverlay'
 import { MobileNativeChatAsk } from '../native-chat/input/MobileNativeChatAsk'
 import type { AskAnswerSelection } from '../../../../src/shared/native-chat-ask-answer'
 import { mobileNativeChatPromptDismissals } from '../native-chat/input/mobile-native-chat-prompt-dismissals'
-vi.mock('react-native', async () => {
-  const React = await import('react')
-  return {
-    ActivityIndicator: 'ActivityIndicator',
-    Image: 'Image',
-    Platform: { OS: 'ios' },
-    Keyboard: { dismiss: vi.fn() },
-    FlatList: React.forwardRef((props, ref) => {
-      React.useImperativeHandle(ref, () => ({ scrollToEnd: vi.fn(), scrollToOffset: vi.fn() }), [])
-      return React.createElement('FlatList', props)
-    }),
-    Pressable: 'Pressable',
-    ScrollView: 'ScrollView',
-    TextInput: 'TextInput',
-    StyleSheet: { create: (styles: unknown) => styles, hairlineWidth: 1 },
-    Text: 'Text',
-    View: 'View'
-  }
-})
-vi.mock('react-native-safe-area-context', () => ({
-  useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 })
-}))
-vi.mock('react-native-gesture-handler', () => {
-  type GestureChain = {
-    runOnJS: () => GestureChain
-    onStart: () => GestureChain
-    onUpdate: () => GestureChain
-  }
-  const chain: GestureChain = { runOnJS: () => chain, onStart: () => chain, onUpdate: () => chain }
-  return {
-    Gesture: { Simultaneous: () => ({}), Native: () => ({}), Pinch: () => chain },
-    GestureDetector: 'GestureDetector',
-    GestureHandlerRootView: 'GestureHandlerRootView'
-  }
-})
-vi.mock('lucide-react-native', () =>
-  Object.fromEntries(
-    [
-      'ArrowDown',
-      'ArrowUp',
-      'ChevronDown',
-      'ChevronUp',
-      'ChevronsDownUp',
-      'ChevronsUpDown',
-      'ShieldQuestion',
-      'ImagePlus',
-      'Plus',
-      'Mic',
-      'Square',
-      'X',
-      'Check',
-      'CircleHelp'
-    ].map((x) => [x, x])
-  )
-)
-vi.mock('../MobileNativeChatMessage', () => ({ MobileNativeChatMessage: 'ChatMessage' }))
-vi.mock('../MobileNativeChatRowOverlaysHost', () => ({ MobileNativeChatRowOverlaysHost: 'View' }))
-vi.mock('../MobileNativeChatVisual', () => ({ useMobileNativeChatVisualRenderer: () => null }))
-vi.mock('../../platform/use-reduced-motion', () => ({ useReducedMotionEnabled: () => null }))
-vi.mock('../MobileNativeChatLiveLine', () => ({ MobileNativeChatLiveLine: 'LiveStatus' }))
-vi.mock('../native-chat/input/MobileNativeChatAsk', () => ({ MobileNativeChatAsk: 'ChatAsk' }))
-vi.mock('../native-chat/input/MobileNativeChatSessionOptionPickers', () => ({
-  MobileNativeChatSessionOptionPickers: 'SessionOptions'
-}))
-vi.mock('../native-chat/composer/MobileNativeChatComposerMenu', () => ({
-  MobileNativeChatComposerMenu: 'Suggestions',
-  composerMenuInsertText: () => ''
-}))
-vi.mock('../../components/ActionSheetModal', () => ({ ActionSheetModal: 'ActionSheetModal' }))
-vi.mock('../../components/MobileMarkdown', () => ({ MobileMarkdown: 'Markdown' }))
+import { setMobileNativeChatDraftText } from '../native-chat/composer/mobile-native-chat-draft-store'
 export const visible = { value: true }
 const session = { messages: [], folded: [], status: 'ready', transcriptLoading: false }
 const structuredSession = {
@@ -114,9 +46,10 @@ vi.mock('../use-mobile-session-view-mode', () => ({
 vi.mock('../use-mobile-native-chat-session-lane', () => ({
   useMobileNativeChatSessionLane: () => ({ session, structuredSession, sessionCommands })
 }))
+setMobileNativeChatDraftText('draft', 'ordinary message')
 vi.mock('../native-chat/composer/use-mobile-native-chat-drafts', () => ({
   useMobileNativeChatDrafts: () => ({
-    composerText: 'ordinary message',
+    draftKey: 'draft',
     setComposerText: vi.fn(),
     getComposerEditGeneration: () => 0,
     appendComposerText: () => true,
@@ -143,9 +76,6 @@ vi.mock('../native-chat/composer/use-mobile-native-chat-file-search', () => ({
 vi.mock('../native-chat/composer/use-mobile-native-chat-composer-tray', () => ({
   NO_COMPOSER_TRAY: {},
   useMobileNativeChatComposerTray: () => ({})
-}))
-vi.mock('../native-chat/use-mobile-native-chat-streaming-bubble', () => ({
-  useMobileNativeChatStreamingBubble: () => null
 }))
 
 let tree: ReactTestRenderer | null = null
@@ -233,7 +163,8 @@ function Harness(props: HarnessProps) {
     sendSurfaceId: 'surface',
     sessionId: null,
     getSendCompletionGeneration: () => 0,
-    keyboardInset: 0
+    keyboardInset: 0,
+    hostName: null
   })
 }
 export async function render(props: HarnessProps = lastProps ?? {}) {

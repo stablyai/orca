@@ -13,7 +13,7 @@ import {
 import { useAppStore } from '../store'
 import { isWebClientLocation } from '../lib/web-client-location'
 import type { OnboardingState } from '../../../shared/onboarding-state-types'
-import { isInNativeChatUpgradeTipAudience } from '../../../shared/native-chat-upgrade-tip-audience'
+import { isInNativeChatUpgradeTipAudience } from '../../../shared/native-chat/native-chat-upgrade-tip-audience'
 
 export type OnboardingGate = ReturnType<typeof useOnboardingAndFeatureTips>
 

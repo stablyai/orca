@@ -61,7 +61,11 @@ export function LinkActionPopover<TRequest extends LinkActionRequest>({
 }: LinkActionPopoverProps<TRequest>): React.JSX.Element {
   const openSettingsPage = useAppStore((state) => state.openSettingsPage)
   const openSettingsTarget = useAppStore((state) => state.openSettingsTarget)
-  const copyableDestination = request?.kind === 'url' ? request.destination : ''
+  const isFilePath = request?.kind === 'file'
+  const canCopyDestination = isFilePath || request?.kind === 'url'
+  const copyableDestination = canCopyDestination
+    ? (request?.copyValue ?? request?.destination ?? '')
+    : ''
   const { copyText, status: copyStatus } = useClipboardTextCopyFeedback(copyableDestination)
   const copyInFlightRef = useRef(false)
   const contentRef = useRef<HTMLDivElement>(null)
@@ -103,7 +107,28 @@ export function LinkActionPopover<TRequest extends LinkActionRequest>({
   const copyLabel =
     copyStatus === 'copied'
       ? translate('auto.components.terminal.pane.TerminalLinkActionPopover.copied', 'Copied')
-      : translate('auto.components.terminal.pane.TerminalLinkActionPopover.copyLink', 'Copy link')
+      : isFilePath
+        ? translate(
+            'auto.components.terminal.pane.TerminalLinkActionPopover.copyFilePath',
+            'Copy file path'
+          )
+        : translate('auto.components.terminal.pane.TerminalLinkActionPopover.copyLink', 'Copy link')
+
+  const copiedMessage = isFilePath
+    ? translate(
+        'auto.components.terminal.pane.TerminalLinkActionPopover.copiedFilePath',
+        'Copied file path'
+      )
+    : translate('auto.components.terminal.pane.TerminalLinkActionPopover.copiedLink', 'Copied link')
+  const copyFailedMessage = isFilePath
+    ? translate(
+        'auto.components.terminal.pane.TerminalLinkActionPopover.copyFilePathFailed',
+        'Failed to copy file path'
+      )
+    : translate(
+        'auto.components.terminal.pane.TerminalLinkActionPopover.copyLinkFailed',
+        'Failed to copy link'
+      )
 
   const copyDestination = async (): Promise<void> => {
     if (copyInFlightRef.current) {
@@ -112,20 +137,10 @@ export function LinkActionPopover<TRequest extends LinkActionRequest>({
     copyInFlightRef.current = true
     try {
       if (await copyText()) {
-        toast.success(
-          translate(
-            'auto.components.terminal.pane.TerminalLinkActionPopover.copiedLink',
-            'Copied link'
-          )
-        )
+        toast.success(copiedMessage)
         return
       }
-      toast.error(
-        translate(
-          'auto.components.terminal.pane.TerminalLinkActionPopover.copyLinkFailed',
-          'Failed to copy link'
-        )
-      )
+      toast.error(copyFailedMessage)
     } finally {
       copyInFlightRef.current = false
     }
@@ -170,7 +185,7 @@ export function LinkActionPopover<TRequest extends LinkActionRequest>({
             >
               {request.destination}
             </span>
-            {request.kind === 'url' ? (
+            {canCopyDestination ? (
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button

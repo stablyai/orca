@@ -177,6 +177,11 @@ export class AcpAgentConnection extends AcpSessionRuntime {
     return this.managed.stderrTail().trim()
   }
 
+  /** First managed exit observation, including processless spawn failure. */
+  get exitStatus(): ProviderProcessExit | null {
+    return this.managed.exitStatus
+  }
+
   onExit(listener: (exit: ProviderProcessExit) => void): void {
     this.managed.onExit((exit) => {
       try {

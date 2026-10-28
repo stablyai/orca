@@ -1,3 +1,4 @@
+import { waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
 import { delimiter, isAbsolute, resolve as resolvePath } from 'node:path'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import type { TuiAgent } from '../../shared/tui-agent'
@@ -13,7 +14,7 @@ import {
   AgentSessionPreSpawnError,
   isAgentSessionPreSpawnError
 } from './agent-session-wire/structured-agent-session-adapter'
-import { guestNativePathEnv } from '../ipc/wsl-guest-windows-drive-path'
+import { guestNativePathEnv, resolveGuestNativeProgram } from '../ipc/wsl-guest-windows-drive-path'
 
 export type StructuredAgentCommandSettings = Partial<
   Pick<GlobalSettings, 'agentCmdOverrides' | 'agentDefaultEnv'>
@@ -50,11 +51,15 @@ export function resolveStructuredAgentCommand(
 ): string {
   if (!hasExplicitTuiLaunchCommand(settings, agent)) {
     // WSL PATH may contain drive-mounted Windows shims after native entries.
-    const pathEnv = guestNativePathEnv(options.pathEnv)
-    return (stock.resolve ?? resolveCliCommand)(
-      stock.command ?? agent,
-      pathEnv === options.pathEnv ? options : { ...options, pathEnv }
-    )
+    const command = stock.command ?? agent
+    const resolved = resolveGuestNativeProgram(command, options, stock.resolve)
+    if (resolved === null) {
+      throw new AgentSessionPreSpawnError(
+        `${command} is installed only on Windows, not in WSL ${process.env.WSL_DISTRO_NAME ?? 'distro'}`,
+        { reason: 'cliMissing' }
+      )
+    }
+    return resolved
   }
   const command = resolveOverride(agent, settings, options)
   if (!command || !spawnableOn(options.platform ?? process.platform, command)) {
@@ -66,6 +71,7 @@ export function resolveStructuredAgentCommand(
 }
 
 export type ProgramSearch<T> = {
+  signal?: AbortSignal
   env: (resolved: T) => NodeJS.ProcessEnv | undefined
   cwd?: () => Promise<string> | string
 }
@@ -86,7 +92,9 @@ async function foundNothing<T extends { command: string }>(
   if (relative.length === 0) {
     return true
   }
-  const from = (await search.cwd?.()) ?? process.cwd()
+  const from =
+    (await waitForPromiseWithSignal(Promise.resolve(search.cwd?.()), search.signal)) ??
+    process.cwd()
   const found = resolveCliCommand(resolved.command, {
     pathEnv: relative.map((entry) => resolvePath(from, entry)).join(delimiter),
     homePath: env?.HOME ?? env?.USERPROFILE
@@ -101,19 +109,25 @@ export async function resolveAgainAfterRefreshOnMissingProgram<T extends { comma
   search: ProgramSearch<T>
 ): Promise<T> {
   if (!refreshAfterMiss) {
-    return resolve()
+    return waitForPromiseWithSignal(resolve(), search.signal)
   }
   const askedAt = Date.now()
   try {
-    const resolved = await resolve()
+    const resolved = await waitForPromiseWithSignal(resolve(), search.signal)
     if (!(await foundNothing(resolved, search))) {
       return resolved
     }
   } catch (error) {
-    if (!isAgentSessionPreSpawnError(error) || error.reason !== 'agentCommandNotRunnable') {
+    // cliMissing: only a Windows copy was found; a refreshed shell may now show a WSL install.
+    if (
+      !isAgentSessionPreSpawnError(error) ||
+      (error.reason !== 'agentCommandNotRunnable' && error.reason !== 'cliMissing')
+    ) {
       throw error
     }
   }
-  await refreshAfterMiss(askedAt)
-  return resolve()
+  search.signal?.throwIfAborted()
+  await waitForPromiseWithSignal(refreshAfterMiss(askedAt), search.signal)
+  search.signal?.throwIfAborted()
+  return waitForPromiseWithSignal(resolve(), search.signal)
 }

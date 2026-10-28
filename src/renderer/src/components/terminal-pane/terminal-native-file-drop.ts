@@ -13,9 +13,9 @@ import {
 } from './terminal-drop-target'
 import {
   getTerminalTargetShellForWorktreePath,
-  isTerminalDropWindowsPathLike,
   resolveTerminalDropTargetShell
 } from './terminal-drop-shell'
+import { isTerminalDropWindowsPathLike } from '../../../../shared/image-path-paste'
 import { writeTerminalDropPathsToCapturedTarget } from './terminal-drop-path-writer'
 import { showTerminalDropWriteFailure } from './terminal-drop-write-failure'
 import { joinRuntimeTerminalDropDir } from './terminal-drop-worktree-path'
@@ -128,11 +128,17 @@ async function uploadRuntimeDropPaths(
   const targetShell = getTerminalTargetShellForWorktreePath(args.worktreePath)
   const destinationDir = joinRuntimeTerminalDropDir(args.worktreePath)
   const pending = toast.loading(
-    translate(
-      'auto.components.terminal.pane.terminal.drop.handler.29c031b49a',
-      'Uploading {{value0}} file{{value1}} to runtime…',
-      { value0: args.dataPaths.length, value1: args.dataPaths.length === 1 ? '' : 's' }
-    )
+    args.dataPaths.length === 1
+      ? translate(
+          'auto.components.terminal.pane.terminal.drop.handler.uploadingFileSingular',
+          'Uploading {{count}} file to runtime…',
+          { count: args.dataPaths.length }
+        )
+      : translate(
+          'auto.components.terminal.pane.terminal.drop.handler.uploadingFilePlural',
+          'Uploading {{count}} files to runtime…',
+          { count: args.dataPaths.length }
+        )
   )
   try {
     const { results } = await importExternalPathsToRuntime(
@@ -197,11 +203,17 @@ async function uploadRemoteDropPaths(
   args: NativeDropFlowArgs & { connectionId: string; targetShell: 'posix' | 'windows' }
 ): Promise<void> {
   const pending = toast.loading(
-    translate(
-      'auto.components.terminal.pane.terminal.drop.handler.29c031b49a',
-      'Uploading {{value0}} file{{value1}} to remote…',
-      { value0: args.dataPaths.length, value1: args.dataPaths.length === 1 ? '' : 's' }
-    )
+    args.dataPaths.length === 1
+      ? translate(
+          'auto.components.terminal.pane.terminal.drop.handler.uploadingFileToRemoteSingular',
+          'Uploading {{count}} file to remote…',
+          { count: args.dataPaths.length }
+        )
+      : translate(
+          'auto.components.terminal.pane.terminal.drop.handler.uploadingFileToRemotePlural',
+          'Uploading {{count}} files to remote…',
+          { count: args.dataPaths.length }
+        )
   )
   try {
     const { resolvedPaths, skipped, failed } = await window.api.fs.resolveDroppedPathsForAgent({

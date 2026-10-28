@@ -1,4 +1,4 @@
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
+import { Pressable, Text, TextInput, View } from 'react-native'
 import {
   CircleDot,
   ExternalLink,
@@ -10,6 +10,8 @@ import {
 import type { SmartNameSelection } from '../tasks/mobile-composer-source-types'
 import type { MobileComposerSource } from '../tasks/use-mobile-composer-source'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { TaskProviderLogo } from './TaskProviderLogo'
 import { TEXT_INPUT_FONT_SIZE } from '../platform/text-input-font-size'
 
@@ -25,6 +27,7 @@ type Props = {
 }
 
 function SelectionIcon({ kind }: { kind: SmartNameSelection['kind'] }) {
+  useMobileColorScheme()
   if (kind === 'github-pr') {
     return <GitPullRequest size={15} color={colors.textSecondary} />
   }
@@ -49,6 +52,7 @@ export function SmartWorkspaceSourceField({
   onBeforeOpen,
   onOpenDrawer
 }: Props) {
+  useMobileColorScheme()
   const selection = composer.smartNameSelection
 
   function openDrawer(): void {
@@ -109,7 +113,7 @@ export function SmartWorkspaceSourceField({
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   field: {
     marginBottom: spacing.md
   },
@@ -152,4 +156,4 @@ const styles = StyleSheet.create({
     fontSize: typography.bodySize,
     color: colors.textPrimary
   }
-})
+}))

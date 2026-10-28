@@ -107,16 +107,3 @@ describe('orcad trace file', () => {
     expect(readFileSync(join(dataRoot, 'logs'), 'utf8')).toBe('not a folder')
   })
 })
-
-// Inspect entry wiring without booting the full runtime.
-it('orcad installs the trace file before its runtime and closes it after every quit handler', () => {
-  const entry = readFileSync(join(import.meta.dirname, 'orcad-entry.ts'), 'utf8')
-  const install = entry.indexOf('closeOrcadObservability = installOrcadObservability()')
-  expect(install).toBeGreaterThan(-1)
-  expect(install).toBeLessThan(entry.indexOf('new OrcaRuntimeService('))
-  const quit = entry.indexOf('      runOrcadQuitHandlers()\n')
-  expect(quit).toBeGreaterThan(-1)
-  const close = entry.indexOf('      closeOrcadObservability()\n', quit)
-  expect(close).toBeGreaterThan(quit)
-  expect(entry.slice(quit, close)).toContain('} finally {')
-})

@@ -159,11 +159,13 @@ export class ExternalChromiumBrowserProcess {
       return this.session.run(['open', url])
     }
     if (method === 'browserEval') {
-      return this.session.run(['eval', String(params.expression ?? '')])
+      // eval reads a leading -b or --stdin as its own option; base64 never starts with "-".
+      const expression = Buffer.from(String(params.expression ?? '')).toString('base64')
+      return this.session.run(['eval', '-b', expression])
     }
     if (method === 'browserWait') {
       const { args, processTimeoutMs } = externalChromiumWaitCommand(params)
-      await this.session.run(args, processTimeoutMs)
+      await this.session.run(args, { timeoutMs: processTimeoutMs })
       return { waited: true }
     }
     if (method === 'browserSelectAll') {
@@ -184,7 +186,7 @@ export class ExternalChromiumBrowserProcess {
         `${method} is not supported by this browser provider.`
       )
     }
-    const result = await this.session.run(command)
+    const result = await this.session.run(command, { cliArgv: method === 'browserExec' })
     return normalizeExternalChromiumCommandResult(method, params, result)
   }
 

@@ -17,6 +17,8 @@ import { loadCustomKeys, saveCustomKeys, type CustomKey } from '../terminal/term
 import { DragReorderList } from './DragReorderList'
 import { useSerializedStoredState } from '../storage/use-serialized-stored-state'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import {
   TERMINAL_ACCESSORY_KEYS,
   type TerminalAccessoryKey
@@ -42,6 +44,7 @@ function ShortcutBarRow({
   visible: boolean
   onToggle: (visible: boolean) => void
 }): React.JSX.Element {
+  useMobileColorScheme()
   return (
     <View style={styles.reorderRowContent}>
       <View style={styles.keycap}>
@@ -78,6 +81,7 @@ export function TerminalShortcutSettings({
   scrollContentHeight,
   onDragActiveChange
 }: Props): React.JSX.Element {
+  useMobileColorScheme()
   const {
     value: customKeys,
     setValue: setCustomKeys,
@@ -288,7 +292,7 @@ export function TerminalShortcutSettings({
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   groupHeading: {
     fontSize: 11,
     fontWeight: '600',
@@ -385,4 +389,4 @@ const styles = StyleSheet.create({
   deleteButtonPressed: {
     backgroundColor: 'rgba(239, 68, 68, 0.2)'
   }
-})
+}))

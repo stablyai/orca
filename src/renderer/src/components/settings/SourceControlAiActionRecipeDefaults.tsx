@@ -25,7 +25,7 @@ import {
   type SourceControlActionRecipeOverrideSummary
 } from '../../../../shared/source-control-launch-agent-selection'
 import { SearchableSetting } from './SearchableSetting'
-import { getRepositorySourceControlAiActionRecipeSectionId } from './repository-settings-targets'
+import { getRepositorySourceControlAiActionRecipeSectionId } from './repository/repository-settings-targets'
 import { matchesSettingsSearch } from './settings-search'
 import { SourceControlActionRecipeRow } from './SourceControlActionRecipeRow'
 import { SourceControlActionRepoOverrideNote } from './SourceControlActionRepoOverrideNote'

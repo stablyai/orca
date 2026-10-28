@@ -14,6 +14,10 @@ const ERROR_LINE = /^(\S.*?)\(\d+,\d+\): error TS\d+:/
 // Require every on-disk test in program except these explicit exclusions: error-only diff cannot see excluded/shadowed tests.
 export const TESTS_OUTSIDE_PROGRAM = new Map([
   [
+    'src/session/mobile-native-command-discovery.test.tsx',
+    'Node-side: imports the desktop ACP command discovery source, checked against @types/node rather than RN libs'
+  ],
+  [
     'src/tasks/agent-launch-mobile-replay.test.ts',
     'Node-side: imports the desktop main process, checked against @types/node rather than RN libs'
   ],

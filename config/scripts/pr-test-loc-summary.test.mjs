@@ -245,8 +245,8 @@ describe('PR test LoC summary', () => {
     expect(result.stderr).toContain('--from-pr')
   })
 
-  it('is a no-checkout PR workflow on an ephemeral Blacksmith runner', () => {
-    expect(locJob['runs-on']).toBe('blacksmith-2vcpu-ubuntu-2404')
+  it('is a no-checkout PR workflow on the single-CPU hosted runner', () => {
+    expect(locJob['runs-on']).toBe('ubuntu-slim')
     expect(locJob.steps).toHaveLength(1)
     expect(locStep.run).toContain('gh api')
     expect(locStep.run).toContain('pr-test-loc-table.mjs')

@@ -54,10 +54,14 @@ export function getEditorPanelRenderModel({
       activeFile.diffSource === 'combined-uncommitted' ||
       activeFile.diffSource === 'combined-branch' ||
       activeFile.diffSource === 'combined-commit')
+  // Why: diff drafts vanish on save, so shebang detection there would flicker; diffs stay name-based.
   const resolvedLanguage =
     activeFile.mode === 'diff'
       ? detectLanguage(activeFile.relativePath)
-      : detectLanguage(activeFile.filePath)
+      : detectLanguage(
+          activeFile.filePath,
+          editorDrafts[activeFile.id] ?? fileContents[activeFile.id]?.content
+        )
   // Read-only artifact tabs require raw source viewers; retain real-language tokenization while suppressing rich/preview modes and their editing affordances.
   const rawReadOnly = activeFile.mode === 'edit' && activeFile.readOnly === true
   const viewerLanguage = rawReadOnly ? 'plaintext' : resolvedLanguage

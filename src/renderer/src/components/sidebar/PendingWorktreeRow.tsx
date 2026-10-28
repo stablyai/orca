@@ -10,7 +10,10 @@ import { translate } from '@/i18n/i18n'
 
 function statusLabel(entry: PendingWorktreeCreation): string {
   if (entry.status === 'error') {
-    return entry.error ?? 'Creation failed'
+    return (
+      entry.error ??
+      translate('auto.components.sidebar.PendingWorktreeRow.creationFailed', 'Creation failed')
+    )
   }
   return getCreationProgressLabel(entry)
 }

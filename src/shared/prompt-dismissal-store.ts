@@ -1,5 +1,5 @@
 // App-owned chat-scope dismissals survive view remounts; prompt changes or capacity bounds retire entries.
-import { setBoundedScopeCacheEntry } from './native-chat-scope-cache'
+import { setBoundedScopeCacheEntry } from './native-chat/native-chat-scope-cache'
 
 export type PromptDismissalStore<T> = {
   subscribe: (listener: () => void) => () => void

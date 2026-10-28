@@ -1,4 +1,4 @@
-import { normalizeNativeChatAppearanceSettings } from '../../../shared/native-chat-appearance-settings'
+import { normalizeNativeChatAppearanceSettings } from '../../../shared/native-chat/native-chat-appearance-settings'
 import { getDefaultVoiceSettings } from '../../../shared/constants'
 import { normalizePRBotAuthorOverrides } from '../../../shared/pr-bot-author-overrides'
 import { normalizeTerminalQuickCommands } from '../../../shared/terminal-quick-commands'
@@ -8,7 +8,7 @@ import { normalizeAppIconId } from '../../../shared/app-icon'
 import { normalizeTerminalCustomThemes } from '../../../shared/terminal-custom-themes'
 import { normalizeTerminalDefaultShell } from '../../../shared/terminal-default-shell'
 import { projectSourceControlAiToLegacyCommitMessageAi } from '../../../shared/source-control-ai'
-import { normalizeNativeChatShellEnvironmentVariables } from '../../../shared/native-chat-shell-environment'
+import { normalizeNativeChatShellEnvironmentVariables } from '../../../shared/native-chat/native-chat-shell-environment'
 import { publishedLegacyChatPermissionMode } from '../../../shared/agent-chat-permission-mode'
 import {
   savedChatUiWithTerminalDefaultView,

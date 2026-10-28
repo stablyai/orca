@@ -354,6 +354,22 @@ describe('assembleOrcadArtifact', () => {
     expect(readFileSync(join(first, 'orcad.js'), 'utf8')).toBe('corrupted-cache-entry')
   })
 
+  // Desktop templates omit drivers; the app's resources copy must still reach the slot (#33846).
+  it("copies the app's own driver into the slot when the template references it", async () => {
+    const fixture = createTemplate()
+    renameSync(
+      join(fixture.templateDir, ORCAD_TEMPLATE_TARGETS_DIR, TARGET, 'agent-browser-linux-x64'),
+      join(dirname(fixture.templateDir), 'agent-browser-linux-x64')
+    )
+    rewriteManifest(fixture.templateDir, (manifest) => {
+      Object.assign(manifest.targets[TARGET]!, { packagedBrowser: true })
+    })
+
+    const artifactDir = await assembleOrcadArtifact({ ...fixture, target: TARGET })
+
+    expect(readFileSync(join(artifactDir, 'agent-browser-linux-x64'), 'utf8')).toBe('browser')
+  })
+
   it('rejects an optional browser without a matching manifest checksum', async () => {
     const fixture = createTemplate()
     rewriteManifest(fixture.templateDir, (manifest) => {

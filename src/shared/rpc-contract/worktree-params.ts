@@ -70,7 +70,9 @@ export const WorktreeTeardownMissingTerminalsParams = WorktreeDetectedListParams
 export const WorktreePsParams = z.object({
   limit: OptionalFiniteNumber,
   afterSnapshotId: z.string().min(1).max(128).nullable().optional(),
-  supportsWorktreeVisibilitySourceDefaults: z.literal(true).optional()
+  supportsWorktreeVisibilitySourceDefaults: z.literal(true).optional(),
+  // Opt-in: wait lookups read screens and probe PTYs, too costly for pollers; older hosts omit agentWait.
+  includeAgentWait: z.literal(true).optional()
 })
 
 export const WorktreeSortOrder = z.object({

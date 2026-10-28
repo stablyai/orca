@@ -219,9 +219,7 @@ export async function resolveOrcadBrowserProvider(
     return declined(electronFailure ?? { reason: 'unconfigured' })
   }
 
-  const agentBrowserPath = options.resolveAgentBrowserBinary
-    ? options.resolveAgentBrowserBinary()
-    : resolveOrcadAgentBrowserBinary(environment)
+  const agentBrowserPath = (options.resolveAgentBrowserBinary ?? resolveOrcadAgentBrowserBinary)()
   if (!agentBrowserPath) {
     return declined({ reason: 'driver_missing' })
   }

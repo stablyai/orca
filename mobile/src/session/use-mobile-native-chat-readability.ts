@@ -7,12 +7,14 @@ import {
 } from './mobile-session-read-operations'
 import { isFloatingWorkspaceWorktreeId } from './floating-workspace'
 import { resumeFolderWorkspaceListRead } from '../agent-history/mobile-agent-history-operations'
-import {
-  isMobileFolderNativeChatReadable,
-  isMobileNativeChatTranscriptReadable
-} from './native-chat/mobile-native-chat-eligibility'
+import { isMobileFolderNativeChatReadable } from './native-chat/mobile-native-chat-eligibility'
+import { isNativeChatTranscriptLocalReadable } from '../../../src/shared/native-chat-transcript-readability'
 
-type ReadabilityState = { client: RpcClient | null; worktreeId: string; readable: boolean }
+type ReadabilityState = {
+  client: RpcClient | null
+  worktreeId: string
+  readable: boolean
+}
 
 export function useMobileNativeChatReadability(
   client: RpcClient | null,
@@ -69,7 +71,7 @@ export function useMobileNativeChatReadability(
         setState({
           client,
           worktreeId,
-          readable: repo ? isMobileNativeChatTranscriptReadable(repo.connectionId ?? null) : false
+          readable: repo ? isNativeChatTranscriptLocalReadable(repo.connectionId ?? null) : false
         })
       })
       .catch(() => {

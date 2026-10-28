@@ -1,4 +1,4 @@
-import type { NativeChatSessionOptionSettingsMutation } from '../../../../shared/native-chat-session-options'
+import type { NativeChatSessionOptionSettingsMutation } from '../../../../shared/native-chat/input/native-chat-session-options'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 

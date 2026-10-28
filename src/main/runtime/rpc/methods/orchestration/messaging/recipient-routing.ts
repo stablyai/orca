@@ -82,7 +82,11 @@ export function resolveRunBoundDispatchRecipient(
     return undefined
   }
   const recipient = `dispatch:${dispatchId}`
-  const mismatch = runMismatch(recipient, boundRun.id, explicitRunId)
+  // Naming the Dispatch's own Run is equivalent to omitting --run.
+  const mismatch =
+    explicitRunId === dispatch.run_id
+      ? undefined
+      : runMismatch(recipient, boundRun.id, explicitRunId)
   if (mismatch && !mismatch.ok) {
     throw new OrchestrationError(mismatch.code, mismatch.message)
   }

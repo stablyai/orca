@@ -4,7 +4,7 @@ import type { CommentMarkdownExtension } from '@/components/sidebar/CommentMarkd
 import {
   NATIVE_CHAT_VISUAL_TITLE_MAX_LENGTH,
   isNativeChatVisualFileName
-} from '../../../../shared/native-chat-visual-directive'
+} from '../../../../shared/native-chat/native-chat-visual-directive'
 import { NativeChatInlineVisual } from './NativeChatInlineVisual'
 import type { NativeChatVisualOwner } from './native-chat-visual-owner'
 import { useNativeChatVisualOwner } from './native-chat-visual-owner'

@@ -44,12 +44,7 @@ export async function importCookiesFromSafari(
       return { ok: false, reason: 'All Safari cookies are expired.' }
     }
 
-    return importValidatedCookies(
-      valid,
-      cookies.length,
-      cookieImportTarget(targetPartition),
-      'replace-imported-domains'
-    )
+    return importValidatedCookies(valid, cookies.length, cookieImportTarget(targetPartition))
   } catch (err) {
     diag(`  Safari import failed: ${String(err)}`)
     return { ok: false, reason: 'Could not import cookies from Safari.' }

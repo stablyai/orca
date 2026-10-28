@@ -47,7 +47,7 @@ import {
   resolveAgentArgsPlaceholderAgent
 } from './repository-source-control-ai-labels'
 import { hasOwnActionOverride } from './repository-source-control-ai-draft'
-import { getRepositorySourceControlAiActionRecipeSectionId } from '../../repository-settings-targets'
+import { getRepositorySourceControlAiActionRecipeSectionId } from '../repository-settings-targets'
 import { translate } from '@/i18n/i18n'
 import { SourceControlActionOptionField } from '../../SourceControlActionOptionField'
 import {

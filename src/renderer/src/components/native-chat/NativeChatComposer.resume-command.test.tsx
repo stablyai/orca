@@ -3,7 +3,7 @@
 import { act, cleanup, render } from '@testing-library/react'
 import type { RefObject } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { NativeChatPickerItem } from '../../../../shared/native-chat-picker-items'
+import type { NativeChatPickerItem } from '../../../../shared/native-chat/input/native-chat-picker-items'
 import type { NativeChatStructuredComposerTransport } from './native-chat-composer-types'
 
 type CommandItem = Extract<NativeChatPickerItem, { kind: 'command' }>

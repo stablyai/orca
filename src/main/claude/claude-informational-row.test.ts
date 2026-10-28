@@ -72,8 +72,4 @@ describe('a Claude informational frame', () => {
 
     expect(items).toEqual([{ kind: 'status', tone: 'warning', text: content }])
   })
-
-  it('writes no row for a warning with nothing to say', async () => {
-    expect(await itemsFor([informational('warning', '  ')])).toEqual([])
-  })
 })

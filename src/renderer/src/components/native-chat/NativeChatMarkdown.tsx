@@ -14,7 +14,7 @@ import CommentMarkdown, {
 } from '@/components/sidebar/CommentMarkdown'
 import { createDocumentCommentMarkdownComponents } from '@/components/sidebar/comment-markdown-element-renderers'
 import { cn } from '@/lib/utils'
-import { withoutPendingNativeChatVisualDirectiveTail } from '../../../../shared/native-chat-visual-directive'
+import { withoutPendingNativeChatVisualDirectiveTail } from '../../../../shared/native-chat/native-chat-visual-directive'
 import { NativeChatMarkdownRowKeyContext } from './native-chat-disclosure-store'
 import { useNativeChatVisualMarkdownExtension } from './native-chat-visual-markdown-extension'
 import { useNativeChatFileLinkExists } from './use-native-chat-file-link-existence'

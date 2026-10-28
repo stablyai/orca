@@ -62,6 +62,22 @@ describe('pasteMobileNativeChatImagePaths', () => {
     })
   })
 
+  it.each([
+    ['/tmp/my image.png', '/tmp/my\\ image.png'],
+    ['C:\\Users\\John Doe\\shot.png', '"C:\\Users\\John Doe\\shot.png"']
+  ])('escapes attachment-agent path %s like a terminal drop', async (path, pasted) => {
+    const client = clientWithResponses([sendResult(true), sendResult(true)])
+    await pasteMobileNativeChatImagePaths({
+      client,
+      terminal: 'term-1',
+      agent: 'claude',
+      deviceToken: null,
+      imagePaths: [path],
+      followedByText: false
+    })
+    expect(client.calls[1]?.params.text).toBe(`\x1b[200~${pasted}\x1b[201~`)
+  })
+
   it('clears the input line, then pastes each path as a bracketed, non-submitting terminal.send with the mobile client tag', async () => {
     const client = clientWithResponses([
       sendResult(true),

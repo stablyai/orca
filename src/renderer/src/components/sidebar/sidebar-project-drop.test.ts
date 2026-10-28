@@ -64,7 +64,35 @@ describe('routeSidebarProjectDrop', () => {
     ).toEqual({ kind: 'local', path: 'C:\\src\\app' })
     expect(
       routeSidebarProjectDrop({ path: 'C:\\src\\app', focusedRuntimeId: 'wsl:Ubuntu', wslHosts })
-    ).toEqual({ kind: 'windows-drive-on-wsl-host', distro: 'Ubuntu' })
+    ).toEqual({ kind: 'windows-drive-on-wsl-host', distro: 'Ubuntu', path: 'C:\\src\\app' })
+  })
+
+  it('with WSL hosts off, routes a drvfs UNC drop exactly as before', () => {
+    const path = '\\\\wsl.localhost\\Ubuntu\\mnt\\c\\proj'
+    expect(routeSidebarProjectDrop({ path, focusedRuntimeId: null, wslHosts: [] })).toEqual({
+      kind: 'local',
+      path
+    })
+    expect(routeSidebarProjectDrop({ path, focusedRuntimeId: 'server', wslHosts: [] })).toEqual({
+      kind: 'runtime-focused'
+    })
+  })
+
+  it.each([
+    '\\\\wsl.localhost\\Ubuntu\\mnt\\c\\src\\app',
+    // Any distro's drvfs mount, as the picker treats it.
+    '\\\\wsl$\\Arch\\mnt\\c\\src\\app',
+    '\\\\?\\UNC\\wsl.localhost\\Arch\\mnt\\c\\src\\app'
+  ])('treats a drvfs drop %j as the Windows drive folder it is', (path) => {
+    expect(routeSidebarProjectDrop({ path, focusedRuntimeId: null, wslHosts })).toEqual({
+      kind: 'local',
+      path: 'C:\\src\\app'
+    })
+    expect(routeSidebarProjectDrop({ path, focusedRuntimeId: 'wsl:Ubuntu', wslHosts })).toEqual({
+      kind: 'windows-drive-on-wsl-host',
+      distro: 'Ubuntu',
+      path: 'C:\\src\\app'
+    })
   })
 
   it('keeps refusing other drops while a server is focused', () => {
