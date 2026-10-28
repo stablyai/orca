@@ -22561,6 +22561,7 @@
       "workspaceRename": "Rename worktree",
       "workspaceDelete": "Delete Workspace",
       "workspaceOpenBoard": "Toggle Workspace Board",
+      "workspaceOpenUrl": "Open Workspace Link",
       "dashboardToggle": "Toggle Agent Dashboard",
       "workspaceSelectByIndex": "Select Workspace 1–9",
       "voiceDictation": "Dictation",
