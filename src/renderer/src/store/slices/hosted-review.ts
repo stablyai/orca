@@ -71,10 +71,11 @@ export const createHostedReviewSlice: StateCreator<AppState, [], [], HostedRevie
   hostedReviewCache: {},
 
   getHostedReviewCreationEligibility: async (args) => {
-    const repo = findHostedReviewRepoByPath(get().repos, args.repoPath, args.repoId)
+    const repo = findHostedReviewRepoForFetch(get().repos, args.repoPath, args)
     const target = hostedReviewRepoOwnerTarget(repo)
     if (target.kind === 'environment') {
-      const { repoPath: _repoPath, worktreePath, ...runtimeArgs } = args
+      const { repoOwnerExecutionHostId: _ownerHostId, ...requestArgs } = args
+      const { repoPath: _repoPath, worktreePath, ...runtimeArgs } = requestArgs
       void _repoPath
       return callRuntimeRpc<HostedReviewCreationEligibility>(
         target,

@@ -113,7 +113,13 @@ export const createRefreshEventActions = (
               : undefined
           // Why: a queued refresh finishing after the user unlinks an exact PR must not restore the manual-link UI.
           if (
-            isStaleExactLinkedPRLookup(s, alias.worktreeId, linkedPRNumber, worktreeLookupIndex)
+            isStaleExactLinkedPRLookup(
+              s,
+              alias.worktreeId,
+              linkedPRNumber,
+              aliasExecutionHostId,
+              worktreeLookupIndex
+            )
           ) {
             continue
           }

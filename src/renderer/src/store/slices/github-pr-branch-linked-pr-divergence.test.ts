@@ -263,7 +263,7 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
     expect(updateWorktreeMeta).toHaveBeenCalledWith(
       worktreeId,
       CLEARED_HOSTED_REVIEW_SELECTION_UPDATES,
-      { shouldApply: expect.any(Function) }
+      { executionHostId: 'local', shouldApply: expect.any(Function) }
     )
     expect(store.getState().worktreesByRepo[repoId]?.[0]?.linkedPR).toBeNull()
   })

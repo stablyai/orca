@@ -5,23 +5,56 @@ import type { Worktree } from '../../../../shared/worktree/types'
 import {
   getRepoExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
-  normalizeExecutionHostId
+  normalizeExecutionHostId,
+  toRuntimeExecutionHostId
 } from '../../../../shared/execution-host'
 import { isMacAppDataPath } from '@/lib/passive-macos-app-data-access'
-import { getGitHubRepoLookupIndex } from '../slices/github-repo-lookup-index'
+import {
+  findIndexedRepoOwner,
+  findIndexedRepoOwnerForHost,
+  worktreeOwnerHostIds
+} from '@/lib/worktree-runtime-owner-index'
 import { prCacheKey } from './cache-identity'
 import { settingsForGitHubRepoOwner } from './work-item-routing'
 import { githubHostedReviewFallbackPRNumber } from './pr-result-routing'
 import type { GitHubPRFallbackSource } from './cache-model'
 import { selectWorktreesByRepo } from '../workspace-record-selectors'
 
-export function findWorktreeById(state: AppState, worktreeId: string): Worktree | null {
-  return getWorktreeLookupIndex(state).byId.get(worktreeId)?.first ?? null
+export function findWorktreeById(
+  state: AppState,
+  worktreeId: string,
+  executionHostId?: string,
+  lookupIndex = getWorktreeLookupIndex(state)
+): Worktree | null {
+  const entry = lookupIndex.byId.get(worktreeId)
+  if (!entry) {
+    return null
+  }
+  const requestedHostId =
+    executionHostId ??
+    (state.activeWorktreeId === worktreeId ? state.activeWorkspaceExecutionHostId : null)
+  if (!requestedHostId) {
+    return entry.unique
+  }
+  const hostId = normalizeExecutionHostId(requestedHostId)
+  if (!hostId) {
+    return null
+  }
+  const matches = entry.owners.filter((worktree) => {
+    if (worktree.hostId || worktree.runtimeOwnerEnvironmentId) {
+      return worktreeOwnerHostIds(worktree).includes(hostId)
+    }
+    const repoHosts = lookupIndex.repoHostIdsByRepoId.get(worktree.repoId)
+    // Legacy rows inherit a sole repo owner, or remain local when that repo has host twins.
+    return repoHosts?.size === 1
+      ? repoHosts.has(hostId)
+      : hostId === LOCAL_EXECUTION_HOST_ID && (!repoHosts || repoHosts.has(hostId))
+  })
+  return matches.length === 1 ? matches[0] : null
 }
 
 type WorktreeLookupEntry = {
   owners: Worktree[]
-  first: Worktree
   unique: Worktree | null
 }
 
@@ -43,7 +76,7 @@ export function buildWorktreeLookupIndex(state: AppState): WorktreeLookupIndex {
         existing.owners.push(worktree)
         existing.unique = null
       } else {
-        byId.set(worktreeId, { owners: [worktree], first: worktree, unique: worktree })
+        byId.set(worktreeId, { owners: [worktree], unique: worktree })
       }
     }
   }
@@ -106,14 +139,13 @@ export function isStaleExactLinkedPRLookup(
   state: AppState,
   worktreeId: string | undefined,
   linkedPRNumber: number | null | undefined,
+  executionHostId?: string,
   lookupIndex?: WorktreeLookupIndex
 ): boolean {
   if (!worktreeId || linkedPRNumber == null) {
     return false
   }
-  const worktree = lookupIndex
-    ? (lookupIndex.byId.get(worktreeId)?.first ?? null)
-    : findWorktreeById(state, worktreeId)
+  const worktree = findWorktreeById(state, worktreeId, executionHostId, lookupIndex)
   return worktree?.linkedPR !== linkedPRNumber
 }
 
@@ -123,7 +155,14 @@ export function buildPRRefreshCandidate(
   repoPath?: string,
   repoOverride?: Repo
 ): GitHubPRRefreshCandidate | null {
-  const repo = repoOverride ?? getGitHubRepoLookupIndex(state.repos).findById(worktree.repoId)
+  const unqualifiedOwner = findIndexedRepoOwner(state.repos, worktree.repoId)
+  const hostId = worktree.runtimeOwnerEnvironmentId
+    ? toRuntimeExecutionHostId(worktree.runtimeOwnerEnvironmentId)
+    : (normalizeExecutionHostId(worktree.hostId) ??
+      (unqualifiedOwner ? getRepoExecutionHostId(unqualifiedOwner) : LOCAL_EXECUTION_HOST_ID))
+  const repo =
+    repoOverride ??
+    (hostId ? findIndexedRepoOwnerForHost(state.repos, worktree.repoId, hostId) : null)
   if (!repo) {
     return null
   }

@@ -101,9 +101,18 @@ export function getRefreshAliasExecutionHostId(alias: GitHubPRRefreshAlias): str
 export function findRepoForGitHubOwner(
   state: Partial<Pick<AppState, 'repos'>>,
   repoId: string | undefined,
-  repoPath: string
+  repoPath: string,
+  executionHostId?: string
 ): Repo | undefined {
-  return state.repos
-    ? getGitHubRepoLookupIndex(state.repos).findByIdOrPath(repoId, repoPath)
-    : undefined
+  const lookup = getGitHubRepoLookupIndex(state.repos)
+  if (!executionHostId) {
+    return lookup.findByIdOrPath(repoId, repoPath)
+  }
+  const repo = lookup.findOnHost(executionHostId, repoId, repoPath)
+  if (!repo || (repoId && repo.id !== repoId)) {
+    throw new Error(
+      'The repository is no longer available on its owning host. Reconnect and retry.'
+    )
+  }
+  return repo
 }

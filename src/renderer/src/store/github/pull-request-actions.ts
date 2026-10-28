@@ -1,11 +1,12 @@
 import { CLEARED_HOSTED_REVIEW_SELECTION_UPDATES } from '../../../../shared/worktree/hosted-review-links'
+import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { GitHubSlice } from './slice-types'
 import type { PRInfo } from '../../../../shared/github/pull-request-types'
 import type { GitHubPRFallbackSource } from './cache-model'
 import { getHostedReviewCacheKey } from '../slices/hosted-review-cache-identity'
-import { getGitHubRepoLookupIndex } from '../slices/github-repo-lookup-index'
+import { findRepoForGitHubOwner } from './repository-routing'
 import { prCacheKey } from './cache-identity'
 import { isFresh } from './cache-policy'
 import { buildGitHubPRRefreshStateClearToken } from './pr-refresh-state'
@@ -25,10 +26,12 @@ export const createPullRequestActions = (
   get: Parameters<StateCreator<AppState>>[1]
 ): Pick<GitHubSlice, 'fetchPRForBranch'> => ({
   fetchPRForBranch: async (repoPath, branch, options): Promise<PRInfo | null> => {
-    const repoLookup = getGitHubRepoLookupIndex(get().repos)
-    const repo = options?.repoId
-      ? repoLookup.findById(options.repoId)
-      : repoLookup.findByPath(repoPath)
+    const repo = findRepoForGitHubOwner(
+      get(),
+      options?.repoId,
+      repoPath,
+      options?.repoOwnerExecutionHostId
+    )
     const repoId = options?.repoId ?? repo?.id
     const requestSettings = settingsForGitHubRepoOwner(get().settings, repo)
     const cacheKey = prCacheKey(
@@ -79,7 +82,9 @@ export const createPullRequestActions = (
         linkedPRNumber != null &&
         cached?.data?.headDivergedFromMergedPRAtOid != null
       ) {
-        const currentHeadOid = findWorktreeById(get(), options.worktreeId)?.head ?? null
+        const executionHostId = repo ? getRepoExecutionHostId(repo) : undefined
+        const currentHeadOid =
+          findWorktreeById(get(), options.worktreeId, executionHostId)?.head ?? null
         if (
           shouldClearDivergedLinkedMergedPR({
             pr: cached.data,
@@ -91,6 +96,7 @@ export const createPullRequestActions = (
             options.worktreeId,
             CLEARED_HOSTED_REVIEW_SELECTION_UPDATES,
             {
+              executionHostId,
               shouldApply: (worktree) =>
                 shouldApplyDivergedLinkedPRClear({
                   worktree,

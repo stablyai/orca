@@ -1,3 +1,4 @@
+import { getRepoExecutionHostId } from '../../../../../shared/execution-host'
 import { useChecksDetailTimer } from './use-checks-detail-timer'
 import { ChecksDetailPollingPolicy } from './checks-detail-polling-policy'
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -111,6 +112,7 @@ export function useChecksPanelPolling(model: ChecksPanelPollingInput) {
             force,
             throwOnError: true,
             repoId: repo.id,
+            repoOwnerExecutionHostId: getRepoExecutionHostId(repo),
             ...(wakeWslDistro ? { wakeWslDistro: true } : {})
           }
         )

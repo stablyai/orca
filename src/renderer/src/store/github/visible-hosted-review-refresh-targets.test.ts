@@ -468,7 +468,7 @@ describe('visible hosted review refresh targets', () => {
     expect(visibleHostedReviewRefreshInputsChanged(next, previous)).toBe(true)
   })
 
-  it('does not send a colliding runtime owner through the legacy unqualified GitHub action', () => {
+  it('refreshes the selected runtime copy when repository and worktree IDs collide', async () => {
     const first: Repo = {
       ...repo,
       executionHostId: 'runtime:first',
@@ -489,11 +489,23 @@ describe('visible hosted review refresh targets', () => {
         second: [{ ...worktree, hostId: 'runtime:second' }]
       }
     })
-    expect(
-      getVisibleHostedReviewRefreshTargets(store.getState(), store.getState, { selectedOnly: true })
-    ).toEqual([])
+    runtimeEnvironmentCall.mockResolvedValue({
+      id: 'pr-second',
+      ok: true,
+      result: makePR({ number: 26 }),
+      _meta: { runtimeId: 'second' }
+    })
+    const selected = getVisibleHostedReviewRefreshTargets(store.getState(), store.getState, {
+      selectedOnly: true
+    })
+    expect(selected).toHaveLength(1)
+    expect(await selected[0].refresh()).toBe(true)
+    expect(store.getState().prCache[`runtime:second::${prKey}`]?.data?.number).toBe(26)
+    expect(store.getState().prCache[`runtime:first::${prKey}`]).toBeUndefined()
     expect(mockApi.gh.prForBranch).not.toHaveBeenCalled()
-    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
+      expect.objectContaining({ selector: 'second' })
+    )
   })
 
   it('lets normal hosted-review refreshes share the host cache but forces discovery', async () => {
