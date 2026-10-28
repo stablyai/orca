@@ -59,3 +59,9 @@ uploads the JSON report, plus Playwright traces on failure.
 The nightly schedule was removed on 2026-10-28. It had failed every night since
 at least 2026-10-18 because the workflow ran on Blacksmith, which the
 presented-frame guard rejects, and the JSON report hid the error.
+
+The first hosted dispatch afterwards (run 40632739161) passed five scenarios.
+It then failed "keeps active interactions responsive at 50 ACK-backpressured
+OpenCode PTYs": the median typing latency was 104 ms against a 75 ms budget,
+and the remaining scenarios were skipped. Reproduce locally before treating it
+as a regression rather than a 4-vCPU runner limit.
