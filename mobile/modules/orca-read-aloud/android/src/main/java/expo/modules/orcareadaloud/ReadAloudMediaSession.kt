@@ -14,8 +14,7 @@ import android.os.Looper
 internal object ReadAloudMediaSession {
   private const val RELEASE_PAUSED_AFTER_MS = 10 * 60_000L
   private const val ACTIONS = PlaybackState.ACTION_PLAY or PlaybackState.ACTION_PAUSE or
-    PlaybackState.ACTION_PLAY_PAUSE or PlaybackState.ACTION_SKIP_TO_NEXT or
-    PlaybackState.ACTION_SKIP_TO_PREVIOUS or PlaybackState.ACTION_STOP
+    PlaybackState.ACTION_PLAY_PAUSE or PlaybackState.ACTION_STOP
 
   private val handler = Handler(Looper.getMainLooper())
   private var session: MediaSession? = null
@@ -30,9 +29,13 @@ internal object ReadAloudMediaSession {
   }
 
   /** `state`: "idle", "reading" or "paused"; `title` is what a car's display shows. */
-  fun update(context: Context, state: String, title: String?) {
+  fun update(context: Context, state: String, title: String?, previous: Boolean, next: Boolean) {
     val app = context.applicationContext
-    handler.post { apply(app, state, title) }
+    // Skips only when there is somewhere to skip to, so a car can grey them out otherwise.
+    val actions = ACTIONS or
+      (if (previous) PlaybackState.ACTION_SKIP_TO_PREVIOUS else 0L) or
+      (if (next) PlaybackState.ACTION_SKIP_TO_NEXT else 0L)
+    handler.post { apply(app, state, title, actions) }
   }
 
   /** Gives the buttons back, e.g. when the app's JS goes away. */
@@ -49,7 +52,7 @@ internal object ReadAloudMediaSession {
     session = null
   }
 
-  private fun apply(context: Context, state: String, title: String?) {
+  private fun apply(context: Context, state: String, title: String?, actions: Long) {
     handler.removeCallbacks(releasePaused)
     if (state != "reading" && state != "paused") {
       release()
@@ -64,7 +67,7 @@ internal object ReadAloudMediaSession {
     val playing = state == "reading"
     media.setPlaybackState(
       PlaybackState.Builder()
-        .setActions(ACTIONS)
+        .setActions(actions)
         .setState(
           if (playing) PlaybackState.STATE_PLAYING else PlaybackState.STATE_PAUSED,
           PlaybackState.PLAYBACK_POSITION_UNKNOWN,

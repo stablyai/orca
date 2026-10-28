@@ -46,10 +46,13 @@ function emit(): void {
   const title = current?.title ?? null
   const status = readerStatus(state, hold, current, queue.length)
   const canRepeat = history.length > 0
-  const report = JSON.stringify([state, title, status, canRepeat])
+  // Greyed out when there is nowhere to go: no message before this one, none waiting after it.
+  const canPrevious = (current ? history.findIndex((kept) => kept.id === current?.id) : 0) > 0
+  const canNext = queue.length > 0
+  const report = JSON.stringify([state, title, status, canRepeat, canPrevious, canNext])
   if (report !== reported) {
     reported = report
-    voiceNativeModule()?.setReaderState(state, title, status, canRepeat)
+    voiceNativeModule()?.setReaderState(state, title, status, canRepeat, canPrevious, canNext)
   }
   for (const listener of listeners) {
     listener()

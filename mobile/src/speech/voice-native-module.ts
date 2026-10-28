@@ -55,7 +55,9 @@ export type VoiceNativeModule = {
     state: ReaderState,
     title: string | null,
     status: string | null,
-    canRepeat: boolean
+    canRepeat: boolean,
+    canPrevious: boolean,
+    canNext: boolean
   ): void
   /** Whether sound goes to headphones, a car or the like rather than the phone's own speaker. */
   isPrivateOutput(): boolean

@@ -125,7 +125,14 @@ class ReadAloudService : Service() {
     }
     val actions = buildList {
       if (readerState == "reading" || readerState == "paused") {
-        add(action(R.drawable.orca_read_aloud_previous, "Previous message", controlIntent(3, ACTION_PREVIOUS)))
+        // Dimmed and inert rather than left out, so the buttons keep their places.
+        add(
+          if (canPrevious) {
+            action(R.drawable.orca_read_aloud_previous, "Previous message", controlIntent(3, ACTION_PREVIOUS))
+          } else {
+            action(R.drawable.orca_read_aloud_previous_off, "No earlier message", null)
+          }
+        )
         add(
           if (readerState == "reading") {
             action(R.drawable.orca_read_aloud_pause, "Pause", controlIntent(4, ACTION_PAUSE))
@@ -133,7 +140,13 @@ class ReadAloudService : Service() {
             action(R.drawable.orca_read_aloud_play, "Resume", controlIntent(5, ACTION_PLAY))
           }
         )
-        add(action(R.drawable.orca_read_aloud_next, "Next message", controlIntent(6, ACTION_NEXT)))
+        add(
+          if (canNext) {
+            action(R.drawable.orca_read_aloud_next, "Next message", controlIntent(6, ACTION_NEXT))
+          } else {
+            action(R.drawable.orca_read_aloud_next_off, "No message waiting", null)
+          }
+        )
         add(action(R.drawable.orca_read_aloud_stop, "Stop reading", controlIntent(2, ACTION_STOP_READING)))
       } else if (canRepeat) {
         add(action(R.drawable.orca_read_aloud_replay, "Read the last message again", controlIntent(7, ACTION_REPEAT)))
@@ -164,7 +177,7 @@ class ReadAloudService : Service() {
       .build()
   }
 
-  private fun action(icon: Int, label: String, intent: PendingIntent): Notification.Action =
+  private fun action(icon: Int, label: String, intent: PendingIntent?): Notification.Action =
     Notification.Action.Builder(Icon.createWithResource(this, icon), label, intent).build()
 
   companion object {
@@ -198,6 +211,8 @@ class ReadAloudService : Service() {
     @Volatile private var readerState = "idle"
     @Volatile private var readerStatus: String? = null
     @Volatile private var canRepeat = false
+    @Volatile private var canPrevious = false
+    @Volatile private var canNext = false
     private var current: ReadAloudService? = null
 
     /** Shows the mute JS decided on, here and on the tile; a later start keeps showing it. */
@@ -212,8 +227,13 @@ class ReadAloudService : Service() {
     }
 
     /** The reader's state ("idle", "reading", "paused"), which picks the buttons and the text. */
-    fun showReader(state: String, status: String?, repeatable: Boolean) {
-      if (readerState == state && readerStatus == status && canRepeat == repeatable) return
+    fun showReader(state: String, status: String?, repeatable: Boolean, previous: Boolean, next: Boolean) {
+      if (
+        readerState == state && readerStatus == status && canRepeat == repeatable &&
+        canPrevious == previous && canNext == next
+      ) return
+      canPrevious = previous
+      canNext = next
       readerState = state
       readerStatus = status
       canRepeat = repeatable

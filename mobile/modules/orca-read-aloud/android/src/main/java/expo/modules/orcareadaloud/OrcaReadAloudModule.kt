@@ -124,12 +124,13 @@ class OrcaReadAloudModule : Module() {
     }
 
     /** The reader's state ("idle", "reading", "paused") for the notification and the headset. */
-    Function("setReaderState") { state: String, title: String?, status: String?, canRepeat: Boolean ->
-      ReadAloudService.showReader(state, status, canRepeat)
+    Function("setReaderState") { state: String, title: String?, status: String?, canRepeat: Boolean,
+      canPrevious: Boolean, canNext: Boolean ->
+      ReadAloudService.showReader(state, status, canRepeat, canPrevious, canNext)
       appContext.reactContext?.let {
         // Also here, in case there was no context yet when the module was created.
         ReadAloudOutput.watch(it)
-        ReadAloudMediaSession.update(it, state, title)
+        ReadAloudMediaSession.update(it, state, title, canPrevious, canNext)
       }
     }
 
