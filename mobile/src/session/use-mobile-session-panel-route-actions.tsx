@@ -152,26 +152,40 @@ export function useMobileSessionPanelRouteActions(scope: MobileSessionPresentati
     setSessionContentRowWidth((prev) => (prev === width ? prev : width))
   }, [])
 
-  const handlePanelTap = (tapped: Exclude<ActivePanel, null>) => {
-    const action = resolvePanelAction({ canDock: canDockPanel, tapped, current: activePanel })
-    if (action.kind === 'dock') {
-      setActivePanel(action.next)
-      return
-    }
-    const descriptor = panelRouteDescriptor(action.panel)
-    router.push({
-      pathname: descriptor.pathname,
-      params: {
-        hostId,
-        worktreeId,
-        name: worktreeName || '',
-        // Source-control/PR origin enables dismissal after diff open; Files must not inherit it.
-        ...(action.panel === 'sourceControl' || action.panel === 'pr' ? { origin: 'session' } : {}),
-        ...descriptor.params,
-        ...workspaceRouteParams(executionHost)
+  const handlePanelTap = useCallback(
+    (tapped: Exclude<ActivePanel, null>) => {
+      const action = resolvePanelAction({ canDock: canDockPanel, tapped, current: activePanel })
+      if (action.kind === 'dock') {
+        setActivePanel(action.next)
+        return
       }
-    })
-  }
+      const descriptor = panelRouteDescriptor(action.panel)
+      router.push({
+        pathname: descriptor.pathname,
+        params: {
+          hostId,
+          worktreeId,
+          name: worktreeName || '',
+          // Source-control/PR origin enables dismissal after diff open; Files must not inherit it.
+          ...(action.panel === 'sourceControl' || action.panel === 'pr'
+            ? { origin: 'session' }
+            : {}),
+          ...descriptor.params,
+          ...workspaceRouteParams(executionHost)
+        }
+      })
+    },
+    [
+      canDockPanel,
+      activePanel,
+      setActivePanel,
+      router,
+      hostId,
+      worktreeId,
+      worktreeName,
+      executionHost
+    ]
+  )
 
   const openAgentSessionHistory = () => {
     const params = new URLSearchParams({ name: worktreeName || '', origin: 'session' })

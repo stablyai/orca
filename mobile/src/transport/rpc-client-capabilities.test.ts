@@ -82,51 +82,62 @@ describe('mobile rpc-client capabilities', () => {
     globalThis.WebSocket = originalWebSocket
   })
 
-  it('waits for mobile capability acknowledgement before replaying streams', async () => {
-    const client = connect('ws://desktop.invalid', 'token', 'server-key')
-    const socket = mockSockets[0]!
-    client.subscribe('session.tabs.subscribe', { worktree: 'id:wt-1' }, () => {})
+  it.each(['session.tabs.subscribe', 'worktree.review.subscribe'])(
+    'acknowledges mobile capabilities before %s on initial connect and reconnect',
+    async (method) => {
+      const client = connect('ws://desktop.invalid', 'token', 'server-key')
+      client.subscribe(method, { worktree: 'id:wt-1' }, () => {})
+      for (const attempt of [0, 1]) {
+        const socket = mockSockets[attempt]!
 
-    socket.open()
-    socket.receive(JSON.stringify({ type: 'e2ee_ready' }))
-    socket.receive('encrypted:{"type":"e2ee_authenticated"}')
+        socket.open()
+        socket.receive(JSON.stringify({ type: 'e2ee_ready' }))
+        socket.receive('encrypted:{"type":"e2ee_authenticated"}')
 
-    const capabilityRequest = sentRequest(socket, 'runtime.clientCapabilities.update')
-    expect(capabilityRequest.params).toMatchObject({
-      clientCapabilities: expect.arrayContaining([
-        'agent-session.structured.v1',
-        'agent-session.pending-send-result.v1',
-        'agent-session.structured.claude.v1',
-        'agent-session.structured.hold.v1',
-        'agent-session.turn-item.v1',
-        'session-tabs.split-group-placement.v1',
-        'agent-session.structured.registered-agents.v1',
-        'agent-session.structured.pi-dialogs.v1',
-        'agent-session.options.optional-model.v1',
-        'agent.launch.v2',
-        'agent.launch.unstarted-tab.v1',
-        'agent.launch.tab-closed.v1'
-      ])
-    })
-    expect(capabilityRequest.params).toEqual({
-      clientCapabilities: [...MOBILE_RUNTIME_CLIENT_CAPABILITIES]
-    })
-    expect(socket.sent.some((payload) => payload.includes('session.tabs.subscribe'))).toBe(false)
+        const capabilityRequest = sentRequest(socket, 'runtime.clientCapabilities.update')
+        expect(capabilityRequest.params).toMatchObject({
+          clientCapabilities: expect.arrayContaining([
+            'agent-session.structured.v1',
+            'agent-session.pending-send-result.v1',
+            'agent-session.structured.claude.v1',
+            'agent-session.structured.hold.v1',
+            'agent-session.turn-item.v1',
+            'session-tabs.split-group-placement.v1',
+            'agent-session.structured.registered-agents.v1',
+            'agent-session.structured.pi-dialogs.v1',
+            'agent-session.options.optional-model.v1',
+            'agent.launch.v2',
+            'agent.launch.unstarted-tab.v1',
+            'agent.launch.tab-closed.v1',
+            'worktree.review-status.v1'
+          ])
+        })
+        expect(capabilityRequest.params).toEqual({
+          clientCapabilities: [...MOBILE_RUNTIME_CLIENT_CAPABILITIES]
+        })
+        expect(socket.sent.some((payload) => payload.includes(method))).toBe(false)
 
-    socket.receive(
-      `encrypted:${JSON.stringify({
-        id: capabilityRequest.id,
-        ok: true,
-        result: capabilityRequest.params,
-        _meta: { runtimeId: 'runtime-1' }
-      })}`
-    )
+        socket.receive(
+          `encrypted:${JSON.stringify({
+            id: capabilityRequest.id,
+            ok: true,
+            result: capabilityRequest.params,
+            _meta: { runtimeId: 'runtime-1' }
+          })}`
+        )
 
-    await vi.waitFor(() => expect(sentRequest(socket, 'session.tabs.subscribe')).toBeDefined())
-    expect(client.getState()).toBe('connected')
+        await vi.waitFor(() => expect(sentRequest(socket, method)).toBeDefined())
+        expect(client.getState()).toBe('connected')
 
-    client.close()
-  })
+        if (attempt === 0) {
+          socket.close()
+          client.notifyForeground('network-change')
+        }
+      }
+
+      client.close()
+    }
+  )
 
   it('replays streams when an older runtime rejects capability negotiation', async () => {
     const client = connect('ws://desktop.invalid', 'token', 'server-key')

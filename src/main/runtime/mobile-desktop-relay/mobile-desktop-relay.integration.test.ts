@@ -404,18 +404,20 @@ describe('mobile desktop relay: phone -> desktop -> server', () => {
     phone.send(
       'caps',
       'runtime.clientCapabilities.update',
-      { clientCapabilities: ['relay.test.v1'] },
+      { clientCapabilities: ['relay.test.v1', 'worktree.review-status.v1'] },
       null
     )
     expect(await phone.next('caps')).toMatchObject({
       ok: true,
-      result: { clientCapabilities: ['relay.test.v1'] }
+      result: { clientCapabilities: ['relay.test.v1', 'worktree.review-status.v1'] }
     })
     await vi.waitFor(() =>
       expect(
         passthroughOpens.hostReplies.some((frame) =>
           // Client-placed tabs require the declared capability.
-          frame.includes('"clientCapabilities":["relay.test.v1","browser.clientHost.v1"]')
+          frame.includes(
+            '"clientCapabilities":["relay.test.v1","worktree.review-status.v1","browser.clientHost.v1"]'
+          )
         )
       ).toBe(true)
     )

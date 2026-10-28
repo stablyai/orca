@@ -14,6 +14,7 @@ type MobileSessionHeaderIconButtonProps = {
   active?: boolean
   disabled?: boolean
   accessibilityLabel: string
+  iconColor?: string
   icon: ComponentType<HeaderIconProps>
   onPress: () => void
 }
@@ -23,6 +24,7 @@ export function MobileSessionHeaderIconButton({
   disabled = false,
   accessibilityLabel,
   icon: Icon,
+  iconColor,
   onPress
 }: MobileSessionHeaderIconButtonProps) {
   useMobileColorScheme()
@@ -40,7 +42,7 @@ export function MobileSessionHeaderIconButton({
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
     >
-      <Icon size={18} color={colors.textSecondary} strokeWidth={2.1} />
+      <Icon size={18} color={iconColor ?? colors.textSecondary} strokeWidth={2.1} />
     </Pressable>
   )
 }

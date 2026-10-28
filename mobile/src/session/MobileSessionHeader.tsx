@@ -1,6 +1,8 @@
+import { useCallback } from 'react'
 import { View, Text, Pressable } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { ChevronLeft, Folder, GitBranch, MoreHorizontal, PanelLeftOpen } from 'lucide-react-native'
+import { ChevronLeft, Folder, MoreHorizontal, PanelLeftOpen } from 'lucide-react-native'
+import { MobileSourceControlButton } from './MobileSourceControlButton'
 import { MobileSessionHeaderIconButton } from './MobileSessionHeaderIconButton'
 import { MobileSessionTabStrip } from './MobileSessionTabStrip'
 import { StatusDot } from '../components/StatusDot'
@@ -20,6 +22,9 @@ export function MobileSessionHeader({
   useMobileColorScheme()
   const {
     hostId,
+    client,
+    worktreeId,
+    prIsGithubRepo,
     isFolderWorkspaceRoute,
     isFloatingWorkspaceRoute,
     presentedConnState,
@@ -34,6 +39,7 @@ export function MobileSessionHeader({
     handlePanelTap,
     showHeaderMoreButton
   } = controller
+  const openSourceControl = useCallback(() => handlePanelTap('sourceControl'), [handlePanelTap])
   const revealSidebar = useHostSidebarReveal()
   // Why: a sideways phone is ~390pt tall, so the tabs share the top bar instead of taking a second row.
   const hasTabs = visibleTabs.length > 0
@@ -92,11 +98,12 @@ export function MobileSessionHeader({
           />
         )}
         {!isFolderWorkspaceRoute && !isFloatingWorkspaceRoute && (
-          <MobileSessionHeaderIconButton
+          <MobileSourceControlButton
+            client={client}
+            worktreeId={worktreeId}
+            enabled={prIsGithubRepo}
             active={activePanel === 'sourceControl'}
-            accessibilityLabel="Open source control"
-            icon={GitBranch}
-            onPress={() => handlePanelTap('sourceControl')}
+            onPress={openSourceControl}
           />
         )}
         {showHeaderMoreButton ? (

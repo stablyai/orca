@@ -59,8 +59,9 @@ function openSession() {
   })
 }
 
-async function confirmResume() {
+async function confirmResume(onSession?: (session: ReturnType<typeof openSession>) => void) {
   const session = openSession()
+  onSession?.(session)
   fakes.linkOptions!.onHello({
     type: 'relay-hello',
     ok: true,
@@ -188,11 +189,46 @@ describe('mobile relay RPC session', () => {
     expect(capabilityRequest).toMatchObject({
       method: 'runtime.clientCapabilities.update',
       params: {
-        clientCapabilities: expect.arrayContaining(['agent-session.structured.v1'])
+        clientCapabilities: expect.arrayContaining([
+          'agent-session.structured.v1',
+          'worktree.review-status.v1'
+        ])
       },
       deviceToken: 'device-token'
     })
     expect(session.getAttachDeadlineAt()).toEqual(expect.any(Number))
+  })
+
+  it('acknowledges review support before sending a queued execution-host review subscription', async () => {
+    const { session, capabilityRequest } = await confirmResume((client) => {
+      scopeRpcClientToExecutionHost(client, 'runtime:server-1').subscribe(
+        'worktree.review.subscribe',
+        { worktree: 'id:wt-1' },
+        () => {}
+      )
+    })
+    expect(capabilityRequest).toMatchObject({
+      method: 'runtime.clientCapabilities.update',
+      deviceToken: 'device-token',
+      params: { clientCapabilities: expect.arrayContaining(['worktree.review-status.v1']) }
+    })
+    expect(fakes.sendText).toHaveBeenCalledTimes(2)
+    fakes.linkOptions!.onText(
+      JSON.stringify({
+        id: capabilityRequest.id,
+        ok: true,
+        result: capabilityRequest.params,
+        _meta: { runtimeId: 'runtime-1' }
+      })
+    )
+    await vi.waitFor(() => expect(fakes.sendText).toHaveBeenCalledTimes(3))
+    expect(JSON.parse(fakes.sendText.mock.calls[2]![0])).toMatchObject({
+      method: 'worktree.review.subscribe',
+      params: { worktree: 'id:wt-1' },
+      executionHost: 'runtime:server-1',
+      deviceToken: 'device-token'
+    })
+    session.close()
   })
 
   it('connects when an older runtime rejects capability negotiation', async () => {

@@ -18,10 +18,12 @@ import {
   AGENT_LAUNCH_UNSTARTED_TAB_CLIENT_CAPABILITY
 } from '../../../src/shared/agent-launch-runtime-capability'
 import { AGENT_SESSION_OPTIONAL_MODEL_CLIENT_CAPABILITY } from '../../../src/shared/agent-session-optional-model-capability'
+import { WORKTREE_REVIEW_STATUS_RUNTIME_CAPABILITY } from '../../../src/shared/worktree-runtime-capabilities'
 import { remoteRuntimeClientCapabilities } from '../../../src/shared/remote-runtime/remote-runtime-client-capabilities'
 import { AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY } from '../../../src/shared/agent-session-create-capabilities'
 
 export const MOBILE_RUNTIME_CLIENT_CAPABILITIES = remoteRuntimeClientCapabilities([
+  WORKTREE_REVIEW_STATUS_RUNTIME_CAPABILITY,
   AGENT_SESSION_COHERENT_MODEL_CATALOG_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
   AGENT_SESSION_CURRENT_REQUESTS_CLIENT_CAPABILITY,
