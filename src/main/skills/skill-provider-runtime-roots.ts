@@ -20,7 +20,9 @@ const PROVIDER_HOME_ENVS = SKILL_INSTALL_PROVIDERS.flatMap((provider) =>
 )
 // Why $HOME first: unusable homes are judged against the guest's own home.
 const WSL_PROVIDER_HOMES_PROBE = buildWslCapturedLoginShellCommand(
-  `printf '%s\\0' "$HOME" ${PROVIDER_HOME_ENVS.map(({ name }) => `"\${${name}:-}"`).join(' ')}`
+  `printf '%s\\0' "$HOME" ${PROVIDER_HOME_ENVS.map(({ id, name }) =>
+    id === 'zeroclaw' ? `"\${ZEROCLAW_STATE_DIR:-\${${name}:-}}"` : `"\${${name}:-}"`
+  ).join(' ')}`
 )
 
 type HomePathApi = Pick<typeof posix, 'dirname' | 'isAbsolute' | 'relative' | 'sep'>
@@ -57,12 +59,25 @@ export function resolveEnvironmentSkillProviderRoots(
 ): SkillProviderRootOverrides {
   const roots: SkillProviderRootOverrides = {}
   for (const provider of SKILL_INSTALL_PROVIDERS) {
-    const home = provider.homeEnv ? normalizedRoot(env[provider.homeEnv]) : null
+    const rawHome =
+      provider.id === 'zeroclaw'
+        ? env.ZEROCLAW_STATE_DIR || env.ZEROCLAW_HOME
+        : provider.homeEnv
+          ? env[provider.homeEnv]
+          : undefined
+    const home = rawHome ? normalizedRoot(rawHome) : null
     if (home && isUsableProviderHome(home, resolve(userHome), path)) {
       roots[provider.id] = join(home, 'skills')
     }
   }
   return roots
+}
+
+export function resolveEnvironmentZeroClawSkillsRoot(
+  env: NodeJS.ProcessEnv = process.env
+): string | null {
+  const zeroclawHome = normalizedRoot(env.ZEROCLAW_STATE_DIR || env.ZEROCLAW_HOME)
+  return zeroclawHome ? join(zeroclawHome, 'skills') : null
 }
 
 // HERMES_HOME relocates profile trees; honor it without adding Hermes to install-provider overrides.

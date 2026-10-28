@@ -16,6 +16,7 @@ const CLAUDE_ROOT = join(HOME, '.claude', 'projects')
 const CLAUDE_SESSION_ENV_ROOT = join(HOME, '.claude', 'session-env')
 const ROVO_ROOT = join(HOME, '.rovodev', 'sessions')
 const GROK_ROOT = join(HOME, '.grok', 'sessions')
+const ZEROCLAW_ROOT = join(HOME, '.zeroclaw')
 
 describe('validateAiVaultSessionDeleteTarget', () => {
   it('plans whole session-directory removal for a canonical Cline manifest', () => {
@@ -168,6 +169,60 @@ describe('validateAiVaultSessionDeleteTarget', () => {
       rootOptions: { openclawStateDir: OPENCLAW_ROOT }
     })
     expect(result).toEqual({ allowed: false, agent: 'openclaw', reason: 'undiscoverable-path' })
+  })
+
+  it('allows a zeroclaw path under <stateDir>/sessions/... or <stateDir>/agents/.../sessions/... and plans subagents companion directory removal before the transcript', () => {
+    const directFilePath = join(ZEROCLAW_ROOT, 'sessions', 'session-1.jsonl')
+    const resultDirect = validateAiVaultSessionDeleteTarget({
+      agent: 'zeroclaw',
+      filePath: directFilePath,
+      executionHostId: 'local',
+      rootOptions: { zeroclawStateDir: ZEROCLAW_ROOT }
+    })
+    expect(resultDirect).toEqual({
+      allowed: true,
+      agent: 'zeroclaw',
+      resolvedPath: directFilePath,
+      removals: [
+        {
+          path: join(ZEROCLAW_ROOT, 'sessions', 'session-1', 'subagents'),
+          kind: 'directory',
+          roots: [ZEROCLAW_ROOT]
+        },
+        { path: directFilePath, kind: 'file', roots: [ZEROCLAW_ROOT] }
+      ]
+    })
+
+    const agentFilePath = join(ZEROCLAW_ROOT, 'agents', 'agent-1', 'sessions', 'session-1.jsonl')
+    const resultAgent = validateAiVaultSessionDeleteTarget({
+      agent: 'zeroclaw',
+      filePath: agentFilePath,
+      executionHostId: 'local',
+      rootOptions: { zeroclawStateDir: ZEROCLAW_ROOT }
+    })
+    expect(resultAgent).toEqual({
+      allowed: true,
+      agent: 'zeroclaw',
+      resolvedPath: agentFilePath,
+      removals: [
+        {
+          path: join(ZEROCLAW_ROOT, 'agents', 'agent-1', 'sessions', 'session-1', 'subagents'),
+          kind: 'directory',
+          roots: [ZEROCLAW_ROOT]
+        },
+        { path: agentFilePath, kind: 'file', roots: [ZEROCLAW_ROOT] }
+      ]
+    })
+  })
+
+  it('rejects a zeroclaw path missing the sessions segment', () => {
+    const result = validateAiVaultSessionDeleteTarget({
+      agent: 'zeroclaw',
+      filePath: join(ZEROCLAW_ROOT, 'agents', 'agent-1', 'session-1.jsonl'),
+      executionHostId: 'local',
+      rootOptions: { zeroclawStateDir: ZEROCLAW_ROOT }
+    })
+    expect(result).toEqual({ allowed: false, agent: 'zeroclaw', reason: 'undiscoverable-path' })
   })
 
   it('rejects an agent whose own registry would keep a dangling entry (codex)', () => {

@@ -7,10 +7,17 @@ export const SUBAGENT_DIR_NAME = 'subagents'
 export const SUBAGENT_TRANSCRIPT_PREFIX = 'agent-'
 
 export function isSubagentTranscriptFileName(name: string, isFile: boolean): boolean {
+  if (!isFile || name.toLowerCase().endsWith('.meta.json')) {
+    return false
+  }
+  const ext = extname(name).toLowerCase()
+  if (ext !== '.jsonl' && ext !== '.json') {
+    return false
+  }
   return (
-    isFile &&
-    name.startsWith(SUBAGENT_TRANSCRIPT_PREFIX) &&
-    extname(name).toLowerCase() === '.jsonl'
+    name.startsWith(SUBAGENT_TRANSCRIPT_PREFIX) ||
+    name.startsWith('subagent-') ||
+    name.startsWith('swarm-')
   )
 }
 
@@ -30,7 +37,33 @@ export async function countSubagentTranscripts(transcriptFilePath: string): Prom
   return entries.filter((entry) => isSubagentTranscriptFileName(entry.name, entry.isFile())).length
 }
 
+const SUBAGENT_DIRECT_CHILD_PATTERN =
+  /^(.*)[\\/]subagents[\\/](?:agent-|subagent-|swarm-)[^\\/]+\.(?:jsonl|json)$/i
+const SUBAGENT_SUBTREE_PATTERN = /[\\/]subagents[\\/]/i
+
 export type SubagentTranscriptPartition = {
   sessionFilePaths: string[]
   subagentTranscriptCounts: Map<string, number>
+}
+
+export function partitionSubagentTranscriptPaths(
+  paths: readonly string[]
+): SubagentTranscriptPartition {
+  const sessionFilePaths: string[] = []
+  const subagentTranscriptCounts = new Map<string, number>()
+  for (const path of paths) {
+    if (!SUBAGENT_SUBTREE_PATTERN.test(path)) {
+      sessionFilePaths.push(path)
+      continue
+    }
+    const directChild = SUBAGENT_DIRECT_CHILD_PATTERN.exec(path)
+    if (directChild) {
+      const parentTranscriptPath = `${directChild[1]}.jsonl`
+      subagentTranscriptCounts.set(
+        parentTranscriptPath,
+        (subagentTranscriptCounts.get(parentTranscriptPath) ?? 0) + 1
+      )
+    }
+  }
+  return { sessionFilePaths, subagentTranscriptCounts }
 }

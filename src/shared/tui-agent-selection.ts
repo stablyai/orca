@@ -47,6 +47,7 @@ export const TUI_AGENT_AUTO_PICK_ORDER = [
   'hermes',
   'devin',
   'openclaw',
+  'zeroclaw',
   'codebuddy',
   'jcode'
 ] as const satisfies readonly TuiAgent[]
