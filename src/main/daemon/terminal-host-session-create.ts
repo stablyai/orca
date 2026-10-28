@@ -11,6 +11,7 @@ import { enumerateDirectoryOnce } from './directory-enumeration-probe'
 import { normalizePtySize } from './daemon-pty-size'
 import { Session } from './session'
 import { shellPathSupportsPtyStartupBarrier } from './shell-ready'
+import { wslStartupCommandWaitsForShellReady } from '../pty/wsl-startup-shell-ready'
 import type { InternalCreateOrAttachOptions } from './terminal-host-agent-session-claim'
 import type { CreateOrAttachResult } from './terminal-host-create-contract'
 import type { TerminalHostOptions } from './terminal-host-options'
@@ -172,9 +173,16 @@ async function spawnAndPublishSession(
 
   let staging: StartupCommandStaging | undefined
   // Reconcile fallback-shell capability or its first command could remain queued until timeout.
-  const shellReadySupported =
+  const wrappedShellReadySupported =
     (opts.shellReadySupported ?? false) &&
     (subprocess.shellPath === undefined || shellPathSupportsPtyStartupBarrier(subprocess.shellPath))
+  // The WSL guest was asked for a ready marker at spawn; an earlier write is dropped (#24188).
+  const wslShellReadySupported = wslStartupCommandWaitsForShellReady({
+    shellPath: subprocess.shellPath,
+    command: opts.command,
+    startupCommandDeliveredInShellArgs: subprocess.startupCommandDeliveredInShellArgs
+  })
+  const shellReadySupported = wrappedShellReadySupported || wslShellReadySupported
   const session = new Session({
     sessionId: opts.sessionId,
     cols: size.cols,
@@ -265,7 +273,8 @@ async function spawnAndPublishSession(
     // Why: only Orca-wrapped shells advertise the paste-safe startup barrier.
     session.writeStartupCommand(
       buildStartupCommandSubmission(staging.command, {
-        bracketedPasteSafe: shellReadySupported
+        // An unwrapped WSL guest shell would echo ESC[200~.
+        bracketedPasteSafe: wrappedShellReadySupported
       })
     )
   }

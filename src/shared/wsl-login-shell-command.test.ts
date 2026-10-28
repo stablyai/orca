@@ -3,11 +3,13 @@ import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:f
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { getFishClaudeShellFunction } from './claude-shell-function'
 import {
   buildWslCapturedLoginShellCommand,
   buildWslExecArgs,
   buildWslInteractiveLoginShellCommand,
-  buildWslLoginShellCommand
+  buildWslLoginShellCommand,
+  WSL_FISH_SHELL_READY_INIT
 } from './wsl-login-shell-command'
 
 const WSL_TEST_COMMAND_TIMEOUT_MS = 10_000
@@ -189,5 +191,68 @@ describe('in-guest wrapper root resolution', () => {
     const result = spawnSync('sh', ['-c', probe], { encoding: 'utf8' })
     expect(result.status).toBe(0)
     expect(result.stdout).toBe('/mnt/c/ud/shell-wrappers/deadbeefdeadbeef/shell-ready')
+  })
+})
+
+// A marker sent before the shell's rc files would let them eat the command (#24188).
+describe('guest shell ready reporting', () => {
+  // Fish's init command spans lines, so output can't be split on newlines.
+  const ARGS_END = '<<orca-args-end>>'
+  const dispatch = (
+    shellName: string,
+    features: string | null,
+    wrapperRoot = ''
+  ): { args: string; features: string } => {
+    const dir = mkdtempSync(join(tmpdir(), 'orca-wsl-dispatch-'))
+    try {
+      const shell = join(dir, shellName).replace(/\\/g, '/')
+      writeFileSync(
+        shell,
+        `#!/bin/sh\nprintf '%s' "$*"\nprintf '${ARGS_END}%s' "\${ORCA_SHELL_FEATURES-unset}"\n`
+      )
+      chmodSync(shell, 0o755)
+      const script = buildWslInteractiveLoginShellCommand()
+      const probe = [
+        features === null ? 'unset ORCA_SHELL_FEATURES' : `export ORCA_SHELL_FEATURES=${features}`,
+        `_orca_wsl_shell=${quotePosixShell(shell)}`,
+        `_orca_shell_ready_root=${quotePosixShell(wrapperRoot)}`,
+        script.slice(script.indexOf('_orca_wsl_shell_name='))
+      ].join('\n')
+      const result = spawnSync('sh', ['-c', probe], { encoding: 'utf8' })
+      expect(result.status).toBe(0)
+      const [args = '', reported = ''] = result.stdout.split(ARGS_END)
+      return { args, features: reported }
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  }
+
+  it('never emits the marker ahead of the guest shell', () => {
+    expect(buildWslInteractiveLoginShellCommand()).not.toContain("printf '\\033]777")
+  })
+
+  it('starts fish with the prompt hook when ready was requested', () => {
+    const fish = dispatch('fish', 'ready')
+    expect(fish.args).toBe(`-l -C ${WSL_FISH_SHELL_READY_INIT}\n${getFishClaudeShellFunction()}`)
+    expect(fish.features).toBe('unset')
+    expect(dispatch('fish', null)).toEqual({
+      args: `-l -C ${getFishClaudeShellFunction()}`,
+      features: 'unset'
+    })
+  })
+
+  it('leaves a hookless shell to the host timeout and never leaks the channel', () => {
+    expect(dispatch('dash', 'ready')).toEqual({ args: '-l', features: 'unset' })
+  })
+
+  it('leaves a wrapped zsh to report and consume the channel itself', () => {
+    const root = mkdtempSync(join(tmpdir(), 'orca-wsl-root-'))
+    try {
+      mkdirSync(join(root, 'zsh'))
+      const zsh = dispatch('zsh', 'ready', root.replace(/\\/g, '/'))
+      expect(zsh).toEqual({ args: '-l', features: 'ready' })
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
   })
 })

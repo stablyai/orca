@@ -63,6 +63,7 @@ export function buildWslInteractiveLoginShellCommand(): string {
     '  _orca_shell_ready_root="${ORCA_USER_DATA_PATH%/}/shell-ready"',
     'fi',
     '_orca_wsl_shell_name=$(basename "$_orca_wsl_shell" | tr "[:upper:]" "[:lower:]")',
+    '_orca_wsl_shell_wrapped=""',
     'case "$_orca_wsl_shell_name" in',
     '  bash)',
     '    if [ -n "${_orca_shell_ready_root:-}" ] && [ -f "${_orca_shell_ready_root}/bash/rcfile" ]; then',
@@ -71,14 +72,32 @@ export function buildWslInteractiveLoginShellCommand(): string {
     '    ;;',
     // Why: a WSL fish pane gets no shell-ready wrapper or XDG handoff, so this is its only `claude`.
     '  fish)',
-    `    exec "$_orca_wsl_shell" -l -C ${quotePosixShell(getFishClaudeShellFunction())}`,
+    `    _orca_fish_init=${quotePosixShell(getFishClaudeShellFunction())}`,
+    '    case ",${ORCA_SHELL_FEATURES:-}," in',
+    '      *,ready,*)',
+    `        _orca_fish_init=${quotePosixShell(`${WSL_FISH_SHELL_READY_INIT}\n${getFishClaudeShellFunction()}`)}`,
+    '        ;;',
+    '    esac',
+    '    unset ORCA_SHELL_FEATURES',
+    '    exec "$_orca_wsl_shell" -l -C "$_orca_fish_init"',
     '    ;;',
     '  zsh)',
     '    if [ -n "${_orca_shell_ready_root:-}" ] && [ -d "${_orca_shell_ready_root}/zsh" ]; then',
     '      export ZDOTDIR="${_orca_shell_ready_root}/zsh"',
+    '      _orca_wsl_shell_wrapped=1',
     '    fi',
     '    ;;',
     'esac',
+    // Shells without a prompt hook can't report ready after their rc files; they wait out the cap.
+    '[ -n "$_orca_wsl_shell_wrapped" ] || unset ORCA_SHELL_FEATURES',
     'exec "$_orca_wsl_shell" -l'
   ].join('\n')
 }
+
+// Keep identical to getFishShellReadyInitCommand(SHELL_READY_MARKER_ESCAPED) in shell-templates.ts.
+export const WSL_FISH_SHELL_READY_INIT = [
+  'function __orca_shell_ready_marker --on-event fish_prompt',
+  '  builtin printf "\\033]777;orca-shell-ready\\007"',
+  '  functions -e __orca_shell_ready_marker',
+  'end'
+].join('\n')
