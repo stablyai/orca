@@ -1,3 +1,4 @@
+import { beginConditionalWorktreeGlobalUse } from '../../ipc/conditional-worktree-removal-lease'
 import type { WorkspaceAttachmentMutation } from '../../../shared/workspace-attachment-mutation'
 import { randomUUID } from 'node:crypto'
 import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
@@ -229,40 +230,45 @@ export function setWorktreeMetaForHost(
   requestedHostId: ExecutionHostId,
   meta: Partial<WorktreeMeta> & WorkspaceAttachmentMutation
 ): WorktreeMeta {
-  const state = runtime.state
-  const executionHostId = worktreeMetaHostFor(worktreeId, requestedHostId)
-  migrateLegacyWorktreeMetadata(state, worktreeId, executionHostId)
-  const alias = composeWorktreeHostIdentity(executionHostId, worktreeId)
-  const identityKeys = state.worktreeIdentityAliases?.[alias] ?? []
-  if (identityKeys.length > 1 && meta.instanceId === undefined) {
-    throw new Error('Worktree identity is ambiguous for this host and locator.')
+  const releaseConditionalUse = beginConditionalWorktreeGlobalUse()
+  try {
+    const state = runtime.state
+    const executionHostId = worktreeMetaHostFor(worktreeId, requestedHostId)
+    migrateLegacyWorktreeMetadata(state, worktreeId, executionHostId)
+    const alias = composeWorktreeHostIdentity(executionHostId, worktreeId)
+    const identityKeys = state.worktreeIdentityAliases?.[alias] ?? []
+    if (identityKeys.length > 1 && meta.instanceId === undefined) {
+      throw new Error('Worktree identity is ambiguous for this host and locator.')
+    }
+    const existingIdentityKey = resolveAliasIdentityKey(state, alias)
+    const existingIdentityMeta = existingIdentityKey
+      ? state.worktreeMetaByIdentity?.[existingIdentityKey]
+      : undefined
+    const legacy = state.worktreeMeta[worktreeId]
+    const existing =
+      existingIdentityMeta ??
+      (!legacy?.hostId || legacy.hostId === executionHostId ? legacy : undefined)
+    // Explicit instance IDs rotate identity; otherwise preserve the existing incarnation.
+    const instanceId = meta.instanceId ?? existing?.instanceId ?? randomUUID()
+    const identityKey = canonicalWorktreeIdentity({ worktreeId, executionHostId, instanceId })
+    const updated = mergeWorktreeMetaForWrite(existing, meta, {
+      instanceId,
+      hostId: executionHostId
+    })
+    state.worktreeMetaByIdentity ??= {}
+    state.worktreeIdentityAliases ??= {}
+    if (existingIdentityKey && existingIdentityKey !== identityKey) {
+      delete state.worktreeMetaByIdentity[existingIdentityKey]
+    }
+    state.worktreeMetaByIdentity[identityKey] = updated
+    state.worktreeIdentityAliases[alias] = [identityKey]
+    // Only the first known host owns the legacy locator projection.
+    if (!legacy || legacy.hostId === executionHostId) {
+      state.worktreeMeta[worktreeId] = updated
+    }
+    scheduleSave(scheduling, WORKTREE_METADATA_DOMAINS)
+    return updated
+  } finally {
+    releaseConditionalUse()
   }
-  const existingIdentityKey = resolveAliasIdentityKey(state, alias)
-  const existingIdentityMeta = existingIdentityKey
-    ? state.worktreeMetaByIdentity?.[existingIdentityKey]
-    : undefined
-  const legacy = state.worktreeMeta[worktreeId]
-  const existing =
-    existingIdentityMeta ??
-    (!legacy?.hostId || legacy.hostId === executionHostId ? legacy : undefined)
-  // Explicit instance IDs rotate identity; otherwise preserve the existing incarnation.
-  const instanceId = meta.instanceId ?? existing?.instanceId ?? randomUUID()
-  const identityKey = canonicalWorktreeIdentity({ worktreeId, executionHostId, instanceId })
-  const updated = mergeWorktreeMetaForWrite(existing, meta, {
-    instanceId,
-    hostId: executionHostId
-  })
-  state.worktreeMetaByIdentity ??= {}
-  state.worktreeIdentityAliases ??= {}
-  if (existingIdentityKey && existingIdentityKey !== identityKey) {
-    delete state.worktreeMetaByIdentity[existingIdentityKey]
-  }
-  state.worktreeMetaByIdentity[identityKey] = updated
-  state.worktreeIdentityAliases[alias] = [identityKey]
-  // Only the first known host owns the legacy locator projection.
-  if (!legacy || legacy.hostId === executionHostId) {
-    state.worktreeMeta[worktreeId] = updated
-  }
-  scheduleSave(scheduling, WORKTREE_METADATA_DOMAINS)
-  return updated
 }

@@ -1,8 +1,10 @@
 import { agentSessionConversationView } from '../../../shared/agent-session-conversation-view'
+import { openingMessageParams } from './structured-agent-session-create-options'
+import type { StructuredAgentSessionCreateOptions } from './structured-agent-session-create-options'
+export type { StructuredAgentSessionCreateOptions } from './structured-agent-session-create-options'
+import { withConditionalWorktreeUses } from '../../ipc/conditional-worktree-operation'
 import { isFloatingWorkspaceId } from '../../../shared/floating-workspace-worktree'
 import { isAgentSessionCreateAdmissionRefusal } from '../../../shared/agent-session-definitive-refusal'
-import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
-import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
 import {
   refuse,
   type AgentSessionAttachResult,
@@ -31,15 +33,6 @@ import { observedReceipt } from './structured-agent-session-operation-settlement
 import { attachStructuredAgentSession } from './structured-agent-session-attach-orchestration'
 import { readAgentSessionHydrationPage } from './agent-session-history-page'
 import { resolveAgentSessionReplayOutcome } from './structured-agent-session-replay-outcome'
-import type { AgentSessionExecutionOptions } from '../../../shared/agent-session-execution-options'
-
-export type StructuredAgentSessionCreateOptions = {
-  firstMessage?: { clientMessageId: string; body: AgentJournalMessageItem }
-  hostLaunchDirectory?: string
-  catalogModels?: Parameters<typeof reserveRequestFor>[0]['models']
-  /** Publish after durable creation, before agent delivery starts. */
-  publishTab?: () => Promise<void>
-}
 
 export function createStructuredAgentSession(
   context: StructuredAgentSessionAttachContext,
@@ -47,18 +40,25 @@ export function createStructuredAgentSession(
   params: AgentSessionAttachParams,
   options: StructuredAgentSessionCreateOptions = {}
 ): Promise<AgentSessionMutationResult<AgentSessionAttachResult>> {
-  return context.tasks.trackAttach(
-    context.serialize(params.envelope.sessionId, async () => {
-      try {
-        return await foundConversation(context, callerKey, params, options)
-      } catch (error) {
-        if (isAgentSessionRefusalError(error)) {
-          return { ok: false, refusal: error.refusal }
-        }
-        throw error
-      }
-    }),
-    { sessionId: params.envelope.sessionId, location: params.location }
+  return withConditionalWorktreeUses(
+    [{ workspaceId: params.location.workspaceId, hostId: params.location.executionHostId }],
+    () =>
+      context.tasks.trackAttach(
+        context.serialize(
+          params.envelope.sessionId,
+          async (): Promise<AgentSessionMutationResult<AgentSessionAttachResult>> => {
+            try {
+              return await foundConversation(context, callerKey, params, options)
+            } catch (error) {
+              if (isAgentSessionRefusalError(error)) {
+                return { ok: false, refusal: error.refusal }
+              }
+              throw error
+            }
+          }
+        ),
+        { sessionId: params.envelope.sessionId, location: params.location }
+      )
   )
 }
 
@@ -210,17 +210,7 @@ async function foundConversation(
             operationReceipt: observedReceipt(store, store.founding.receipt(request)),
             now: context.now
           },
-          {
-            ...first,
-            payloadFingerprint: computeAgentSessionPayloadFingerprint({
-              method: 'agentSession.send',
-              sessionId,
-              fields: { body: first.body }
-            }),
-            origin: 'client',
-            source: { kind: 'user' },
-            ...openingMessageOptions(candidate.record.options)
-          }
+          openingMessageParams(sessionId, first, candidate.record.options)
         )
         if (!sent.ok) {
           return sent
@@ -289,19 +279,15 @@ export function structuredAgentSessionEntryDelegates(
       caller: StructuredAgentSessionCaller,
       params: AgentSessionAttachParams,
       options?: Parameters<typeof attachStructuredAgentSession>[3]
-    ) => attachStructuredAgentSession(context(), caller.callerKey, params, options),
+    ) =>
+      withConditionalWorktreeUses(
+        [{ workspaceId: params.location.workspaceId, hostId: params.location.executionHostId }],
+        () => attachStructuredAgentSession(context(), caller.callerKey, params, options)
+      ),
     create: (
       caller: StructuredAgentSessionCaller,
       params: AgentSessionAttachParams,
       options?: StructuredAgentSessionCreateOptions
     ) => createStructuredAgentSession(context(), caller.callerKey, params, options)
   }
-}
-
-/** Opening messages retain creation-time model/effort choices like later sends. */
-function openingMessageOptions(options: Readonly<Record<string, string>> | undefined): {
-  options?: AgentSessionExecutionOptions
-} {
-  const { model, effort } = options ?? {}
-  return model ? { options: { model, ...(effort ? { effort } : {}) } } : {}
 }

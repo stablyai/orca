@@ -64,6 +64,10 @@ class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
   get sidebarFacts() {
     return sidebarFactsRuntime(this)
   }
+
+  protected conditionalRemovalUserIsViewing(worktreeId: string): boolean | null {
+    return this.sidebarFacts?.workspaceViewers.isViewing(worktreeId, null) ?? null
+  }
   // Idle without relay hosts; refresh only while a window or phone consumes sidebar state.
   readonly pairedServerRows = ORCA_SIDEBAR_INPUTS_IS_MAIN
     ? new PairedServerRowsProducer({

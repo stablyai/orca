@@ -1,3 +1,5 @@
+import { beginConditionalWorktreeGlobalUse } from '../../ipc/conditional-worktree-removal-lease'
+import { withConditionalWorktreeGlobalUse } from '../../ipc/conditional-worktree-operation'
 import { BROWSER_HOST_WEBVIEW_CAPABILITY } from './browser-host-capability-selection'
 import { browserHostClientProfileFor } from './browser-host-client-profile-metadata'
 import type { BrowserClientHostCommandResult } from '../../../shared/browser-client-host-protocol'
@@ -39,78 +41,80 @@ export async function createBrowserHostClientPage(
     executionHostGrants: Map<string, BrowserClientPageExecutionHostGrant>
   }
 ): Promise<RuntimeBrowserClientPlacement> {
-  const timeoutMs = clientPageCreationTimeout(options.timeoutMs)
-  const lease = dependencies.selectLease(options.browserHostClientId, [
-    BROWSER_HOST_WEBVIEW_CAPABILITY,
-    ...(options.requiredCapabilities ?? [])
-  ])
-  if (lease.pairedDeviceId !== options.pairedDeviceId) {
-    throw new Error('browser_host_lease_stale')
-  }
-  if (lease.pageCommandProtocolVersion !== 1 || lease.pageReconciliationProtocolVersion !== 1) {
-    throw new Error('browser_host_reconciliation_protocol_required')
-  }
-  if (dependencies.executionHostGrants.has(options.browserPageId)) {
-    throw new Error('browser_page_replacement_requires_retirement')
-  }
-  const state = dependencies.requireLeaseState(lease)
-  const ledger = state.commandLedger
-  if (!ledger) {
-    throw new Error('browser_host_command_protocol_required')
-  }
-  const reservation = dependencies.pagePlacements.reserveNewClientPage(options.browserPageId, {
-    browserHostClientId: lease.browserHostClientId,
-    browserHostGeneration: lease.browserHostGeneration
-  })
-  const grant = state.executionHostGrants.retain(options.executionHostKey)
-  let createIssued = false
-  try {
-    const command = {
-      type: 'createPage' as const,
-      browserProfileId: options.browserProfileId,
-      ...browserHostClientProfileFor(lease, options.browserProfileId),
-      executionHostKey: options.executionHostKey,
-      ...(options.workspaceId ? { workspaceId: options.workspaceId } : {})
+  return withConditionalWorktreeGlobalUse(async () => {
+    const timeoutMs = clientPageCreationTimeout(options.timeoutMs)
+    const lease = dependencies.selectLease(options.browserHostClientId, [
+      BROWSER_HOST_WEBVIEW_CAPABILITY,
+      ...(options.requiredCapabilities ?? [])
+    ])
+    if (lease.pairedDeviceId !== options.pairedDeviceId) {
+      throw new Error('browser_host_lease_stale')
     }
-    assertBrowserHostPageCommandAdmission(lease, command, (executionHostKey) =>
-      state.executionHostGrants.require(executionHostKey)
-    )
-    const issued = ledger.issue({
-      browserPageId: options.browserPageId,
-      pageHostGeneration: reservation.placement.pageHostGeneration,
-      command,
-      resultAdmission: 'reserved-page'
-    })
-    createIssued = true
-    const result = await waitForClientPageCreationResult(issued.result, timeoutMs)
-    if (result.status === 'failed') {
-      throw new Error(result.errorCode)
+    if (lease.pageCommandProtocolVersion !== 1 || lease.pageReconciliationProtocolVersion !== 1) {
+      throw new Error('browser_host_reconciliation_protocol_required')
     }
-    dependencies.requireLeaseState(lease)
-    const placement = dependencies.pagePlacements.commitClientPageReservation(reservation)
-    dependencies.executionHostGrants.set(options.browserPageId, {
-      placement,
-      executionHostKey: options.executionHostKey,
-      release: grant.release
+    if (dependencies.executionHostGrants.has(options.browserPageId)) {
+      throw new Error('browser_page_replacement_requires_retirement')
+    }
+    const state = dependencies.requireLeaseState(lease)
+    const ledger = state.commandLedger
+    if (!ledger) {
+      throw new Error('browser_host_command_protocol_required')
+    }
+    const reservation = dependencies.pagePlacements.reserveNewClientPage(options.browserPageId, {
+      browserHostClientId: lease.browserHostClientId,
+      browserHostGeneration: lease.browserHostGeneration
     })
-    return placement
-  } catch (error) {
+    const grant = state.executionHostGrants.retain(options.executionHostKey)
+    let createIssued = false
     try {
-      dependencies.pagePlacements.cancelClientPageReservation(reservation)
-      if (createIssued) {
-        closeUncommittedClientPage(state, options.browserPageId, reservation.placement)
-      } else {
-        retireUncommittedClientPage(
-          ledger,
-          options.browserPageId,
-          reservation.placement.pageHostGeneration
-        )
+      const command = {
+        type: 'createPage' as const,
+        browserProfileId: options.browserProfileId,
+        ...browserHostClientProfileFor(lease, options.browserProfileId),
+        executionHostKey: options.executionHostKey,
+        ...(options.workspaceId ? { workspaceId: options.workspaceId } : {})
       }
-    } finally {
-      grant.release()
+      assertBrowserHostPageCommandAdmission(lease, command, (executionHostKey) =>
+        state.executionHostGrants.require(executionHostKey)
+      )
+      const issued = ledger.issue({
+        browserPageId: options.browserPageId,
+        pageHostGeneration: reservation.placement.pageHostGeneration,
+        command,
+        resultAdmission: 'reserved-page'
+      })
+      createIssued = true
+      const result = await waitForClientPageCreationResult(issued.result, timeoutMs)
+      if (result.status === 'failed') {
+        throw new Error(result.errorCode)
+      }
+      dependencies.requireLeaseState(lease)
+      const placement = dependencies.pagePlacements.commitClientPageReservation(reservation)
+      dependencies.executionHostGrants.set(options.browserPageId, {
+        placement,
+        executionHostKey: options.executionHostKey,
+        release: grant.release
+      })
+      return placement
+    } catch (error) {
+      try {
+        dependencies.pagePlacements.cancelClientPageReservation(reservation)
+        if (createIssued) {
+          closeUncommittedClientPage(state, options.browserPageId, reservation.placement)
+        } else {
+          retireUncommittedClientPage(
+            ledger,
+            options.browserPageId,
+            reservation.placement.pageHostGeneration
+          )
+        }
+      } finally {
+        grant.release()
+      }
+      throw error
     }
-    throw error
-  }
+  })
 }
 
 export function clientPageCreationTimeout(timeoutMs: number | undefined): number {
@@ -152,6 +156,7 @@ export function closeUncommittedClientPage(
   browserPageId: string,
   placement: RuntimeBrowserClientPlacement
 ): void {
+  const releaseConditionalUse = beginConditionalWorktreeGlobalUse()
   const ledger = state.commandLedger
   if (!ledger) {
     return
@@ -173,7 +178,13 @@ export function closeUncommittedClientPage(
       resultAdmission: 'reserved-page'
     })
     void close.result.then(
-      () => retireUncommittedClientPage(ledger, browserPageId, placement.pageHostGeneration),
+      (result) => {
+        retireUncommittedClientPage(ledger, browserPageId, placement.pageHostGeneration)
+        // Failed cleanup cannot prove a late-created page is absent.
+        if (result.status !== 'failed') {
+          releaseConditionalUse()
+        }
+      },
       () => retireUncommittedClientPage(ledger, browserPageId, placement.pageHostGeneration)
     )
   } catch {

@@ -1,3 +1,4 @@
+import { withConditionalWorktreeGlobalUse } from '../ipc/conditional-worktree-operation'
 import { randomUUID } from 'node:crypto'
 import { BrowserWindow } from 'electron'
 import { ORCA_BROWSER_PARTITION } from '../../shared/constants'
@@ -32,83 +33,85 @@ export class OffscreenBrowserBackend implements BrowserBackend {
   ) {}
 
   async createTab(params: BrowserBackendCreateTab): Promise<{ browserPageId: string }> {
-    if (this.shutdownStarted) {
-      throw new Error('Offscreen browser backend is shutting down')
-    }
-    const browserPageId = params.browserPageId ?? randomUUID()
-    if (this.windowsByPageId.has(browserPageId)) {
-      throw new Error(`Browser page ${browserPageId} already exists`)
-    }
-    // Reuse desktop profile partitions to preserve cookies and storage.
-    const profile = params.profileId
-      ? browserSessionRegistry.getProfile(params.profileId)
-      : browserSessionRegistry.getDefaultProfile()
-    const partition = profile?.partition ?? ORCA_BROWSER_PARTITION
-
-    const win = new BrowserWindow({
-      show: false,
-      width: DEFAULT_VIEWPORT_WIDTH,
-      height: DEFAULT_VIEWPORT_HEIGHT,
-      webPreferences: {
-        ...ORCA_BROWSER_GUEST_WEB_PREFERENCES,
-        partition,
-        sandbox: true,
-        contextIsolation: true,
-        nodeIntegration: false
+    return withConditionalWorktreeGlobalUse(async () => {
+      if (this.shutdownStarted) {
+        throw new Error('Offscreen browser backend is shutting down')
       }
-    })
-
-    this.windowsByPageId.set(browserPageId, win)
-
-    // Do not wait for navigation: slow or failed loads must leave an operable tab.
-    const registered = this.browserManager.registerOffscreenGuest({
-      browserPageId,
-      worktreeId: params.worktreeId,
-      sessionProfileId: profile?.id ?? null,
-      webContentsId: win.webContents.id
-    })
-    if (!registered) {
-      // Registration installs guest policies; destroy refused windows before any navigation.
-      this.windowsByPageId.delete(browserPageId)
-      win.destroy()
-      throw new Error(`Browser page ${browserPageId} was refused`)
-    }
-
-    // Install teardown only after registration; a refused id may belong to a document preview.
-    win.webContents.once('destroyed', () => {
-      // Explicit close already removed ownership and awaits bridge retirement.
-      if (this.windowsByPageId.get(browserPageId) !== win) {
-        return
+      const browserPageId = params.browserPageId ?? randomUUID()
+      if (this.windowsByPageId.has(browserPageId)) {
+        throw new Error(`Browser page ${browserPageId} already exists`)
       }
-      void this.retirePageOwner(browserPageId)
-      this.windowsByPageId.delete(browserPageId)
-      this.browserManager.unregisterGuest(browserPageId)
+      // Reuse desktop profile partitions to preserve cookies and storage.
+      const profile = params.profileId
+        ? browserSessionRegistry.getProfile(params.profileId)
+        : browserSessionRegistry.getDefaultProfile()
+      const partition = profile?.partition ?? ORCA_BROWSER_PARTITION
+
+      const win = new BrowserWindow({
+        show: false,
+        width: DEFAULT_VIEWPORT_WIDTH,
+        height: DEFAULT_VIEWPORT_HEIGHT,
+        webPreferences: {
+          ...ORCA_BROWSER_GUEST_WEB_PREFERENCES,
+          partition,
+          sandbox: true,
+          contextIsolation: true,
+          nodeIntegration: false
+        }
+      })
+
+      this.windowsByPageId.set(browserPageId, win)
+
+      // Do not wait for navigation: slow or failed loads must leave an operable tab.
+      const registered = this.browserManager.registerOffscreenGuest({
+        browserPageId,
+        worktreeId: params.worktreeId,
+        sessionProfileId: profile?.id ?? null,
+        webContentsId: win.webContents.id
+      })
+      if (!registered) {
+        // Registration installs guest policies; destroy refused windows before any navigation.
+        this.windowsByPageId.delete(browserPageId)
+        win.destroy()
+        throw new Error(`Browser page ${browserPageId} was refused`)
+      }
+
+      // Install teardown only after registration; a refused id may belong to a document preview.
+      win.webContents.once('destroyed', () => {
+        // Explicit close already removed ownership and awaits bridge retirement.
+        if (this.windowsByPageId.get(browserPageId) !== win) {
+          return
+        }
+        void this.retirePageOwner(browserPageId)
+        this.windowsByPageId.delete(browserPageId)
+        this.browserManager.unregisterGuest(browserPageId)
+      })
+
+      const { worktreeId } = params
+      const { onPageNavigated } = this.options
+      if (worktreeId && onPageNavigated) {
+        const report = (): void =>
+          onPageNavigated({
+            worktreeId,
+            pageId: browserPageId,
+            url: win.webContents.getURL(),
+            title: win.webContents.getTitle()
+          })
+        // Persist at navigation milestones, avoiding writes for every dynamic title update.
+        win.webContents.on('did-navigate-in-page', report)
+        win.webContents.on('did-stop-loading', report)
+      }
+
+      const url = params.url || 'about:blank'
+      void this.loadUrl(win, url).catch((error) => {
+        console.warn(
+          '[offscreen-browser] page load failed:',
+          error instanceof Error ? error.message : String(error)
+        )
+      })
+
+      return { browserPageId }
     })
-
-    const { worktreeId } = params
-    const { onPageNavigated } = this.options
-    if (worktreeId && onPageNavigated) {
-      const report = (): void =>
-        onPageNavigated({
-          worktreeId,
-          pageId: browserPageId,
-          url: win.webContents.getURL(),
-          title: win.webContents.getTitle()
-        })
-      // Persist at navigation milestones, avoiding writes for every dynamic title update.
-      win.webContents.on('did-navigate-in-page', report)
-      win.webContents.on('did-stop-loading', report)
-    }
-
-    const url = params.url || 'about:blank'
-    void this.loadUrl(win, url).catch((error) => {
-      console.warn(
-        '[offscreen-browser] page load failed:',
-        error instanceof Error ? error.message : String(error)
-      )
-    })
-
-    return { browserPageId }
   }
 
   async closeTab(browserPageId: string): Promise<void> {

@@ -1,3 +1,4 @@
+import { beginConditionalWorktreeGlobalUse } from '../conditional-worktree-removal-lease'
 import { app, ipcMain } from 'electron'
 import { constants } from 'node:fs'
 import { copyFile, mkdir, writeFile } from 'node:fs/promises'
@@ -39,22 +40,27 @@ export function registerFilesystemMutationHandlers(store: Store): void {
       _event,
       args: { filePath: string; connectionId?: string } & SshMutationExpectation
     ): Promise<void> => {
-      assertSshMutationExpectation(
-        args.connectionId,
-        args.expectedSshTargetId,
-        args.expectedSshConnectionGeneration,
-        args.expectedExecutionHostId
-      )
-      if (args.connectionId) {
-        throw new SshHostNotServedError(args.connectionId)
-      }
-      const filePath = windowsFsPath(await resolveDesktopAuthorizedPath(args.filePath, store))
-      await mkdir(dirname(filePath), { recursive: true })
+      const releaseConditionalUse = beginConditionalWorktreeGlobalUse()
       try {
-        // Exclusive creation closes the existence-check race.
-        await writeFile(filePath, '', { encoding: 'utf-8', flag: 'wx' })
-      } catch (error) {
-        rethrowWithUserMessage(error, filePath)
+        assertSshMutationExpectation(
+          args.connectionId,
+          args.expectedSshTargetId,
+          args.expectedSshConnectionGeneration,
+          args.expectedExecutionHostId
+        )
+        if (args.connectionId) {
+          throw new SshHostNotServedError(args.connectionId)
+        }
+        const filePath = windowsFsPath(await resolveDesktopAuthorizedPath(args.filePath, store))
+        await mkdir(dirname(filePath), { recursive: true })
+        try {
+          // Exclusive creation closes the existence-check race.
+          await writeFile(filePath, '', { encoding: 'utf-8', flag: 'wx' })
+        } catch (error) {
+          rethrowWithUserMessage(error, filePath)
+        }
+      } finally {
+        releaseConditionalUse()
       }
     }
   )
@@ -65,18 +71,23 @@ export function registerFilesystemMutationHandlers(store: Store): void {
       _event,
       args: { dirPath: string; connectionId?: string } & SshMutationExpectation
     ): Promise<void> => {
-      assertSshMutationExpectation(
-        args.connectionId,
-        args.expectedSshTargetId,
-        args.expectedSshConnectionGeneration,
-        args.expectedExecutionHostId
-      )
-      if (args.connectionId) {
-        throw new SshHostNotServedError(args.connectionId)
+      const releaseConditionalUse = beginConditionalWorktreeGlobalUse()
+      try {
+        assertSshMutationExpectation(
+          args.connectionId,
+          args.expectedSshTargetId,
+          args.expectedSshConnectionGeneration,
+          args.expectedExecutionHostId
+        )
+        if (args.connectionId) {
+          throw new SshHostNotServedError(args.connectionId)
+        }
+        const dirPath = windowsFsPath(await resolveDesktopAuthorizedPath(args.dirPath, store))
+        await assertNotExists(dirPath)
+        await mkdir(dirPath, { recursive: true })
+      } finally {
+        releaseConditionalUse()
       }
-      const dirPath = windowsFsPath(await resolveDesktopAuthorizedPath(args.dirPath, store))
-      await assertNotExists(dirPath)
-      await mkdir(dirPath, { recursive: true })
     }
   )
 
@@ -92,23 +103,28 @@ export function registerFilesystemMutationHandlers(store: Store): void {
         access?: LocalFileAccess
       } & SshMutationExpectation
     ): Promise<void> => {
-      assertSshMutationExpectation(
-        args.connectionId,
-        args.expectedSshTargetId,
-        args.expectedSshConnectionGeneration,
-        args.expectedExecutionHostId
-      )
-      if (args.connectionId) {
-        throw new SshHostNotServedError(args.connectionId)
+      const releaseConditionalUse = beginConditionalWorktreeGlobalUse()
+      try {
+        assertSshMutationExpectation(
+          args.connectionId,
+          args.expectedSshTargetId,
+          args.expectedSshConnectionGeneration,
+          args.expectedExecutionHostId
+        )
+        if (args.connectionId) {
+          throw new SshHostNotServedError(args.connectionId)
+        }
+        // Preserve both leaves: rename acts on directory entries, including links; opened documents can move outside project roots.
+        const { from, to } = await resolveLocalRenamePaths(
+          args.oldPath,
+          args.newPath,
+          args.access,
+          store
+        )
+        await renameLocalPathSerializedByDestination(from, to)
+      } finally {
+        releaseConditionalUse()
       }
-      // Preserve both leaves: rename acts on directory entries, including links; opened documents can move outside project roots.
-      const { from, to } = await resolveLocalRenamePaths(
-        args.oldPath,
-        args.newPath,
-        args.access,
-        store
-      )
-      await renameLocalPathSerializedByDestination(from, to)
     }
   )
 
@@ -122,28 +138,33 @@ export function registerFilesystemMutationHandlers(store: Store): void {
         connectionId?: string
       } & SshMutationExpectation
     ): Promise<void> => {
-      assertSshMutationExpectation(
-        args.connectionId,
-        args.expectedSshTargetId,
-        args.expectedSshConnectionGeneration,
-        args.expectedExecutionHostId
-      )
-      if (args.connectionId) {
-        throw new SshHostNotServedError(args.connectionId)
+      const releaseConditionalUse = beginConditionalWorktreeGlobalUse()
+      try {
+        assertSshMutationExpectation(
+          args.connectionId,
+          args.expectedSshTargetId,
+          args.expectedSshConnectionGeneration,
+          args.expectedExecutionHostId
+        )
+        if (args.connectionId) {
+          throw new SshHostNotServedError(args.connectionId)
+        }
+        const sourcePath = await resolveDesktopAuthorizedPath(args.sourcePath, store, {
+          preserveSymlink: true
+        })
+        const destinationPath = await resolveDesktopAuthorizedPath(args.destinationPath, store, {
+          preserveSymlink: true
+        })
+        await mkdir(dirname(windowsFsPath(destinationPath)), { recursive: true })
+        // Keep deconflicted copy destinations exclusive against late collisions.
+        await copyFile(
+          windowsFsPath(sourcePath),
+          windowsFsPath(destinationPath),
+          constants.COPYFILE_EXCL
+        )
+      } finally {
+        releaseConditionalUse()
       }
-      const sourcePath = await resolveDesktopAuthorizedPath(args.sourcePath, store, {
-        preserveSymlink: true
-      })
-      const destinationPath = await resolveDesktopAuthorizedPath(args.destinationPath, store, {
-        preserveSymlink: true
-      })
-      await mkdir(dirname(windowsFsPath(destinationPath)), { recursive: true })
-      // Keep deconflicted copy destinations exclusive against late collisions.
-      await copyFile(
-        windowsFsPath(sourcePath),
-        windowsFsPath(destinationPath),
-        constants.COPYFILE_EXCL
-      )
     }
   )
 
@@ -159,36 +180,41 @@ export function registerFilesystemMutationHandlers(store: Store): void {
         access?: LocalFileAccess
       } & SshMutationExpectation
     ): Promise<{ results: ImportItemResult[] }> => {
-      assertSshMutationExpectation(
-        args.connectionId,
-        args.expectedSshTargetId,
-        args.expectedSshConnectionGeneration,
-        args.expectedExecutionHostId
-      )
-      if (args.connectionId) {
-        throw new SshHostNotServedError(args.connectionId)
-      }
-
-      // Authorize before copying; opened-document images may target that document's own folder.
-      const resolvedDest = await resolveLocalRequestPath(
-        args.destDir,
-        args.access,
-        store,
-        'import-into'
-      )
-
-      const results: ImportItemResult[] = []
-      const reservedNames = new Set<string>()
-
-      for (const sourcePath of args.sourcePaths) {
-        const result = await importOneSource(sourcePath, resolvedDest, reservedNames)
-        results.push(result)
-        if (result.status === 'imported') {
-          reservedNames.add(basename(result.destPath))
+      const releaseConditionalUse = beginConditionalWorktreeGlobalUse()
+      try {
+        assertSshMutationExpectation(
+          args.connectionId,
+          args.expectedSshTargetId,
+          args.expectedSshConnectionGeneration,
+          args.expectedExecutionHostId
+        )
+        if (args.connectionId) {
+          throw new SshHostNotServedError(args.connectionId)
         }
-      }
 
-      return { results }
+        // Authorize before copying; opened-document images may target that document's own folder.
+        const resolvedDest = await resolveLocalRequestPath(
+          args.destDir,
+          args.access,
+          store,
+          'import-into'
+        )
+
+        const results: ImportItemResult[] = []
+        const reservedNames = new Set<string>()
+
+        for (const sourcePath of args.sourcePaths) {
+          const result = await importOneSource(sourcePath, resolvedDest, reservedNames)
+          results.push(result)
+          if (result.status === 'imported') {
+            reservedNames.add(basename(result.destPath))
+          }
+        }
+
+        return { results }
+      } finally {
+        releaseConditionalUse()
+      }
     }
   )
 
@@ -198,17 +224,22 @@ export function registerFilesystemMutationHandlers(store: Store): void {
       _event,
       args: { sourcePaths: string[]; nameExtensionlessImages?: boolean }
     ): Promise<{ sources: StagedExternalImportSource[] }> => {
-      const sources: StagedExternalImportSource[] = []
-      // Apply the size ceiling across the whole drop, not separately to each source.
-      let totalBytes = 0
-      for (const sourcePath of args.sourcePaths) {
-        const source = await stageOneSourceForRuntimeUpload(sourcePath, totalBytes, {
-          nameExtensionlessImages: args.nameExtensionlessImages
-        })
-        totalBytes += stagedRuntimeUploadByteLength(source)
-        sources.push(source)
+      const releaseConditionalUse = beginConditionalWorktreeGlobalUse()
+      try {
+        const sources: StagedExternalImportSource[] = []
+        // Apply the size ceiling across the whole drop, not separately to each source.
+        let totalBytes = 0
+        for (const sourcePath of args.sourcePaths) {
+          const source = await stageOneSourceForRuntimeUpload(sourcePath, totalBytes, {
+            nameExtensionlessImages: args.nameExtensionlessImages
+          })
+          totalBytes += stagedRuntimeUploadByteLength(source)
+          sources.push(source)
+        }
+        return { sources }
+      } finally {
+        releaseConditionalUse()
       }
-      return { sources }
     }
   )
 
@@ -216,28 +247,33 @@ export function registerFilesystemMutationHandlers(store: Store): void {
   ipcMain.handle(
     'fs:uploadExternalFileToRuntime',
     async (event, args: RuntimeUploadFileStreamRequest): Promise<{ byteLength: number }> => {
-      const userDataPath = app.getPath('userData')
-      // Resolve selectors to the environment ID used by manual-disconnect checks.
-      const request = {
-        ...args,
-        environmentId: resolveEnvironment(userDataPath, args.environmentId).id
-      }
-      // Main-owned uploads must abort when the requesting renderer reloads or closes.
-      const lifetime = abortWhenRendererGone(event.sender)
+      const releaseConditionalUse = beginConditionalWorktreeGlobalUse()
       try {
-        return await streamExternalFileToRuntime({
-          ...request,
-          userDataPath,
-          signal: lifetime.signal
-        })
-      } catch (error) {
-        if (lifetime.signal.aborted) {
-          // The renderer cannot clean up its temp path after it disappears.
-          await sweepAbandonedRuntimeUploadTempPath(userDataPath, request)
+        const userDataPath = app.getPath('userData')
+        // Resolve selectors to the environment ID used by manual-disconnect checks.
+        const request = {
+          ...args,
+          environmentId: resolveEnvironment(userDataPath, args.environmentId).id
         }
-        throw error
+        // Main-owned uploads must abort when the requesting renderer reloads or closes.
+        const lifetime = abortWhenRendererGone(event.sender)
+        try {
+          return await streamExternalFileToRuntime({
+            ...request,
+            userDataPath,
+            signal: lifetime.signal
+          })
+        } catch (error) {
+          if (lifetime.signal.aborted) {
+            // The renderer cannot clean up its temp path after it disappears.
+            await sweepAbandonedRuntimeUploadTempPath(userDataPath, request)
+          }
+          throw error
+        } finally {
+          lifetime.dispose()
+        }
       } finally {
-        lifetime.dispose()
+        releaseConditionalUse()
       }
     }
   )

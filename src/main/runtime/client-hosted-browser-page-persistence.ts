@@ -1,3 +1,4 @@
+import { beginConditionalWorktreeGlobalUse } from '../ipc/conditional-worktree-removal-lease'
 import {
   CLIENT_HOSTED_BROWSER_PAGE_MAX_AGE_MS,
   CLIENT_HOSTED_BROWSER_PAGE_REFRESH_MS,
@@ -118,49 +119,54 @@ export function rehydrateClientHostedBrowserPages(
   registry: Pick<RuntimeBrowserPageRegistry, 'getPage' | 'publishClientPage'>,
   source: ClientHostedBrowserPageRehydrationSource
 ): readonly string[] {
-  const now = source.now?.() ?? Date.now()
-  const restored: string[] = []
-  for (const session of source.listWorkspaceSessions()) {
-    for (const [worktreeId, rows] of Object.entries(
-      session.clientHostedBrowserPagesByWorktree ?? {}
-    )) {
-      if (!Array.isArray(rows) || !source.isKnownWorktree(worktreeId)) {
-        continue
-      }
-      for (const row of rows) {
-        if (
-          row.workspaceId !== worktreeId ||
-          now - row.savedAt > CLIENT_HOSTED_BROWSER_PAGE_MAX_AGE_MS ||
-          registry.getPage(row.browserPageId) !== undefined
-        ) {
+  const releaseConditionalUse = beginConditionalWorktreeGlobalUse()
+  try {
+    const now = source.now?.() ?? Date.now()
+    const restored: string[] = []
+    for (const session of source.listWorkspaceSessions()) {
+      for (const [worktreeId, rows] of Object.entries(
+        session.clientHostedBrowserPagesByWorktree ?? {}
+      )) {
+        if (!Array.isArray(rows) || !source.isKnownWorktree(worktreeId)) {
           continue
         }
-        try {
-          registry.publishClientPage({
-            browserPageId: row.browserPageId,
-            workspaceId: row.workspaceId,
-            browserProfileId: row.browserProfileId,
-            executionHostKey: RESTORED_CLIENT_HOSTED_EXECUTION_HOST_KEY,
-            placement: RESTORED_CLIENT_HOSTED_BROWSER_PLACEMENT,
-            pairedDeviceId: row.pairedDeviceId,
-            url: row.url,
-            title: row.title,
-            // No host can finish an inherited load spinner.
-            loading: false,
-            // The returning host owns focus; do not deactivate its actual selected sibling.
-            active: false
-          })
-          restored.push(row.browserPageId)
-        } catch (error) {
-          console.warn('[browser-host-lease] client page rehydration rejected a row:', {
-            browserPageId: row.browserPageId,
-            error
-          })
+        for (const row of rows) {
+          if (
+            row.workspaceId !== worktreeId ||
+            now - row.savedAt > CLIENT_HOSTED_BROWSER_PAGE_MAX_AGE_MS ||
+            registry.getPage(row.browserPageId) !== undefined
+          ) {
+            continue
+          }
+          try {
+            registry.publishClientPage({
+              browserPageId: row.browserPageId,
+              workspaceId: row.workspaceId,
+              browserProfileId: row.browserProfileId,
+              executionHostKey: RESTORED_CLIENT_HOSTED_EXECUTION_HOST_KEY,
+              placement: RESTORED_CLIENT_HOSTED_BROWSER_PLACEMENT,
+              pairedDeviceId: row.pairedDeviceId,
+              url: row.url,
+              title: row.title,
+              // No host can finish an inherited load spinner.
+              loading: false,
+              // The returning host owns focus; do not deactivate its actual selected sibling.
+              active: false
+            })
+            restored.push(row.browserPageId)
+          } catch (error) {
+            console.warn('[browser-host-lease] client page rehydration rejected a row:', {
+              browserPageId: row.browserPageId,
+              error
+            })
+          }
         }
       }
     }
+    return restored
+  } finally {
+    releaseConditionalUse()
   }
-  return restored
 }
 
 /** Equality ignores savedAt; refresh coarse timestamps so live unchanged tabs do not expire as abandoned. */

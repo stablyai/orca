@@ -1,3 +1,4 @@
+import { tryAcquireConditionalWorktreeRemoval } from '../conditional-worktree-removal-lease'
 import { EventEmitter } from 'node:events'
 import { resolve } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -8,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   showSaveDialog: vi.fn(),
   stat: vi.fn(),
   open: vi.fn(),
+  writeFile: vi.fn(),
   rename: vi.fn(),
   rm: vi.fn()
 }))
@@ -19,7 +21,7 @@ vi.mock('electron', () => ({
       mocks.handlers.set(name, handler)
   }
 }))
-vi.mock('node:fs/promises', () => ({ ...mocks, writeFile: vi.fn() }))
+vi.mock('node:fs/promises', () => ({ ...mocks }))
 
 import { createFilesystemHandlerContext } from './filesystem-handler-context'
 import { registerFilesystemDownloadHandlers } from './filesystem-download-handlers'
@@ -93,6 +95,29 @@ afterEach(async () => {
   }
   vi.clearAllTimers()
   vi.useRealTimers()
+})
+
+describe('single download failure', () => {
+  it.each(['write', 'promotion'] as const)(
+    'preserves the %s error and releases removal admission',
+    async (phase) => {
+      const error = new Error(`${phase} failed`)
+      const operation = phase === 'write' ? mocks.writeFile : mocks.rename
+      operation.mockRejectedValueOnce(error)
+      await expect(
+        invoke('saveDownloadedFile', makeSender(), {
+          suggestedName: 'file.txt',
+          content: 'download contents'
+        })
+      ).rejects.toBe(error)
+      expect(mocks.rm).toHaveBeenCalledOnce()
+      const lease = tryAcquireConditionalWorktreeRemoval('/single-download-failure/checkout')
+      expect(lease.kind).toBe('acquired')
+      if (lease.kind === 'acquired') {
+        lease.release()
+      }
+    }
+  )
 })
 
 describe('chunked download renderer ownership', () => {
@@ -334,5 +359,37 @@ describe('chunked download renderer ownership', () => {
     expectNoListeners(sender)
     expect(mocks.rm).toHaveBeenCalledOnce()
     expect(handle.close).toHaveBeenCalledOnce()
+  })
+})
+
+describe('conditional removal download exclusion', () => {
+  it('holds the lease between chunks and releases it after cancellation', async () => {
+    const sender = makeSender()
+    const transferId = await start(sender)
+    expect(tryAcquireConditionalWorktreeRemoval(destination)).toEqual({ kind: 'busy' })
+    await invoke('appendDownloadedFileChunk', sender, { transferId, contentBase64: 'YQ==' })
+    expect(tryAcquireConditionalWorktreeRemoval(destination)).toEqual({ kind: 'busy' })
+    await invoke('cancelDownloadedFile', sender, { transferId })
+    const admission = tryAcquireConditionalWorktreeRemoval(destination)
+    if (admission.kind !== 'acquired') {
+      throw new Error('Download lease was not released')
+    }
+    try {
+      await expect(start(sender)).rejects.toMatchObject({
+        code: 'conditional_worktree_removal_in_progress'
+      })
+    } finally {
+      admission.release()
+    }
+  })
+
+  it('releases the lease when the download expires', async () => {
+    await start(makeSender())
+    await vi.advanceTimersByTimeAsync(DOWNLOAD_SESSION_TTL_MS)
+    const admission = tryAcquireConditionalWorktreeRemoval(destination)
+    if (admission.kind !== 'acquired') {
+      throw new Error('Expired download lease was not released')
+    }
+    admission.release()
   })
 })

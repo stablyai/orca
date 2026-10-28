@@ -11,6 +11,7 @@ export type DownloadSession = {
   destinationExisted: boolean
   handle: FileHandle
   cleanupTimer: ReturnType<typeof setTimeout>
+  releaseConditionalUse: () => void
   disposeRendererLifetime: () => void
 }
 
@@ -47,11 +48,15 @@ export function createFilesystemHandlerContext(
     downloadSessions.delete(transferId)
     session.disposeRendererLifetime()
     clearTimeout(session.cleanupTimer)
-    await session.handle.close().catch(() => {})
-    if (cleanupTemp) {
-      await cleanupLocalTransferPath(session.tempPath)
+    try {
+      await session.handle.close().catch(() => {})
+      if (cleanupTemp) {
+        await cleanupLocalTransferPath(session.tempPath)
+      }
+      return session
+    } finally {
+      session.releaseConditionalUse()
     }
-    return session
   }
 
   return {

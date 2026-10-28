@@ -99,6 +99,13 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
     load: async () => (await import('./handlers/worktree.js')).WORKTREE_HANDLERS
   },
   {
+    name: 'worktree-conditional-removal',
+    keys: ['worktree rm-idle', 'worktree removal-capabilities'],
+    load: async () =>
+      (await import('./handlers/worktree-conditional-removal.js'))
+        .WORKTREE_CONDITIONAL_REMOVAL_HANDLERS
+  },
+  {
     name: 'file',
     keys: ['file open', 'file diff', 'file open-changed'],
     load: async () => (await import('./handlers/file.js')).FILE_HANDLERS

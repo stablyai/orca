@@ -1,3 +1,6 @@
+/** Single-writer records/operation ledger in the host chat-journal database. */
+
+import { agentSessionWorkspacePresence } from './agent-session-workspace-presence'
 import { backfillAgentSessionPermissionModes } from './agent-session/ownership/agent-session-permission-backfill'
 import { createAgentSessionConversationReceipts } from './agent-session-conversation-receipts'
 import { pinAgentSessionRecordLaunchDirectory } from './agent-session-record-launch-directory'
@@ -125,17 +128,18 @@ export class AgentSessionRecordStore extends AgentSessionRecordPublication {
   backfillChatPermissionModes = (ranWithFullAccess: (provider: string) => boolean): Promise<void> =>
     backfillAgentSessionPermissionModes(this.transactions, ranWithFullAccess)
 
-  getRecord = (sessionId: string): AgentSessionRecord | null =>
-    this.state.records.get(sessionId) ?? null
+  getRecord = (sessionId: string) => this.state.records.get(sessionId) ?? null
 
   getConversation = (sessionId: string) => getAgentSessionConversation(this.state, sessionId)
   listConversations = () => listAgentSessionConversations(this.state)
-  selectWritableRecord = (sessionId: string) =>
-    selectWritableAgentSessionRecord(this.state, sessionId)
+  selectWritableRecord = (id: string) => selectWritableAgentSessionRecord(this.state, id)
   requireWritableRecord = (sessionId: string) =>
     requireWritableAgentSessionRecord(this.state, sessionId)
 
   listRecords = (): AgentSessionRecord[] => [...this.state.records.values()]
+
+  conditionalRemovalWorkspacePresence = (workspaceId: string, executionHostId = 'local') =>
+    agentSessionWorkspacePresence(this.state, this.readOnly, workspaceId, executionHostId)
 
   /** Replaced runtimes captured at load; absent for sessions this runtime created. */
   replacedRuntime = (sessionId: string) => this.transactions.replacedRuntimes.get(sessionId)

@@ -1,3 +1,4 @@
+import { withConditionalWorktreeUses } from '../../ipc/conditional-worktree-operation'
 import type {
   CommandOf,
   LayoutApplyOutcome,
@@ -86,34 +87,42 @@ export class LayoutCommandPersistence {
   ): Promise<LayoutApplyOutcome> {
     const context = this[layoutCommandPersistenceContext]
     const resolved = hostIds.length > 0 ? hostIds.map(resolveHostId) : [resolveHostId()]
-    let effects: LayoutEffects | undefined
-    const commit = raisingBindingGenerations(
-      context.runtime,
-      resolved,
-      (hostId) => context.sessions.getWorkspaceSession(hostId),
-      applyLayout(resolved, command, topologyCommitContext(context), {
-        live: run.live,
-        stopBeforeWrite: run.stopBeforeWrite,
-        noteEffects: (noted) => (effects = noted)
-      })
-    )
-    // Applied closes must stay closed even when persistence fails.
-    const applied: Promise<LayoutApplyOutcome> =
-      ORCA_LAYOUT_OWNER_IS_MAIN && context.writeLater && isTerminalClose(command)
-        ? keptOnWriteFailure(
-            (mutate) => context.runtime.runDurableMutation(mutate),
-            writingOnly(resolved, commit),
-            context.writeLater
-          )
-        : context.runtime.runDurableMutation(writingOnly(resolved, commit))
-    if (!run.onEffects) {
-      return applied
-    }
-    return applied.then((outcome) => {
-      if (outcome.ok && effects) {
-        run.onEffects?.(effects)
+    const targets = resolved.flatMap((hostId) => [
+      { workspaceId: command.workspace, hostId },
+      ...(command.type === 'moveTabToWorkspace'
+        ? [{ workspaceId: command.toWorkspace, hostId }]
+        : [])
+    ])
+    return withConditionalWorktreeUses(targets, () => {
+      let effects: LayoutEffects | undefined
+      const commit = raisingBindingGenerations(
+        context.runtime,
+        resolved,
+        (hostId) => context.sessions.getWorkspaceSession(hostId),
+        applyLayout(resolved, command, topologyCommitContext(context), {
+          live: run.live,
+          stopBeforeWrite: run.stopBeforeWrite,
+          noteEffects: (noted) => (effects = noted)
+        })
+      )
+      // Applied closes must stay closed even when persistence fails.
+      const applied: Promise<LayoutApplyOutcome> =
+        ORCA_LAYOUT_OWNER_IS_MAIN && context.writeLater && isTerminalClose(command)
+          ? keptOnWriteFailure(
+              (mutate) => context.runtime.runDurableMutation(mutate),
+              writingOnly(resolved, commit),
+              context.writeLater
+            )
+          : context.runtime.runDurableMutation(writingOnly(resolved, commit))
+      if (!run.onEffects) {
+        return applied
       }
-      return outcome
+      return applied.then((outcome) => {
+        if (outcome.ok && effects) {
+          run.onEffects?.(effects)
+        }
+        return outcome
+      })
     })
   }
 
@@ -159,40 +168,53 @@ export class LayoutCommandPersistence {
     const commit = topologyCommitContext(this[layoutCommandPersistenceContext])
     const [from, to] = [resolveHostId(fromHostId), resolveHostId(toHostId)]
     const { runtime } = this[layoutCommandPersistenceContext]
-    return runtime.runDurableMutation(() => {
-      const moved = moveTabAcrossPartitions(
-        {
-          hostId: from,
-          session: commit.getSession(from),
-          views: partitionEditorViewsOf(runtime, from)
-        },
-        { hostId: to, session: commit.getSession(to), views: partitionEditorViewsOf(runtime, to) },
-        command
-      )
-      if (!moved.sessions) {
-        return { value: moved.value, persist: false }
+    return withConditionalWorktreeUses(
+      [
+        { workspaceId: command.workspace, hostId: from },
+        { workspaceId: command.toWorkspace, hostId: to }
+      ],
+      () => {
+        return runtime.runDurableMutation(() => {
+          const moved = moveTabAcrossPartitions(
+            {
+              hostId: from,
+              session: commit.getSession(from),
+              views: partitionEditorViewsOf(runtime, from)
+            },
+            {
+              hostId: to,
+              session: commit.getSession(to),
+              views: partitionEditorViewsOf(runtime, to)
+            },
+            command
+          )
+          if (!moved.sessions) {
+            return { value: moved.value, persist: false }
+          }
+          const viewRestores = moved.views
+            ? [
+                keepPartitionEditorViews(runtime, from, moved.views.from),
+                keepPartitionEditorViews(runtime, to, moved.views.to)
+              ]
+            : []
+          const sessionRestores = (
+            [
+              [from, moved.sessions.from],
+              [to, moved.sessions.to]
+            ] as const
+          ).map(([hostId, session]) =>
+            writeRestorable(
+              () => commit.getSession(hostId),
+              (value) =>
+                commit.markDirty(assignWorkspaceSessionPartition(commit.state, hostId, value)),
+              keepFrozen(hostId, session, commit)
+            )
+          )
+          const restores = [...viewRestores, ...sessionRestores]
+          return { value: moved.value, rollback: () => restores.forEach((restore) => restore()) }
+        })
       }
-      const viewRestores = moved.views
-        ? [
-            keepPartitionEditorViews(runtime, from, moved.views.from),
-            keepPartitionEditorViews(runtime, to, moved.views.to)
-          ]
-        : []
-      const sessionRestores = (
-        [
-          [from, moved.sessions.from],
-          [to, moved.sessions.to]
-        ] as const
-      ).map(([hostId, session]) =>
-        writeRestorable(
-          () => commit.getSession(hostId),
-          (value) => commit.markDirty(assignWorkspaceSessionPartition(commit.state, hostId, value)),
-          keepFrozen(hostId, session, commit)
-        )
-      )
-      const restores = [...viewRestores, ...sessionRestores]
-      return { value: moved.value, rollback: () => restores.forEach((restore) => restore()) }
-    })
+    )
   }
 
   /** Runtime-only repair: transfer pane owners before persisting one-pane-per-terminal layouts. */

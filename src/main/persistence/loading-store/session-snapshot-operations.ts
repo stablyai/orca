@@ -1,3 +1,4 @@
+import { beginConditionalWorktreeSessionWrite } from '../../ipc/conditional-worktree-session-write'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type {
   WorkspaceSessionPatch,
@@ -56,38 +57,48 @@ export class SessionSnapshotOperations {
   }
 
   setWorkspaceSession(session: PersistedState['workspaceSession'], hostId?: string | null): void {
-    const resolved = resolveHostId(hostId)
-    const { runtime } = this[sessionSnapshotOperationsContext]
-    if (runtime.durableMutationPhase === 'rollback') {
-      this.assertSnapshotAdmission(true)
-      // The fieldwise rollback already preserves newer edits; renderer rebasing would undo it.
-      this.publishSession(
-        resolved === LOCAL_EXECUTION_HOST_ID
-          ? keepWslMoveFrozenSessionsForStore(session, runtime.state.workspaceSession)
-          : session,
-        resolved
-      )
-      return
+    const releaseConditional = beginConditionalWorktreeSessionWrite(session, resolveHostId(hostId))
+    try {
+      const resolved = resolveHostId(hostId)
+      const { runtime } = this[sessionSnapshotOperationsContext]
+      if (runtime.durableMutationPhase === 'rollback') {
+        this.assertSnapshotAdmission(true)
+        // The fieldwise rollback already preserves newer edits; renderer rebasing would undo it.
+        this.publishSession(
+          resolved === LOCAL_EXECUTION_HOST_ID
+            ? keepWslMoveFrozenSessionsForStore(session, runtime.state.workspaceSession)
+            : session,
+          resolved
+        )
+        return
+      }
+      if (resolved === LOCAL_EXECUTION_HOST_ID) {
+        this.assertSnapshotAdmission(true)
+        setLocalWorkspaceSession(this, session)
+        return
+      }
+      setHostWorkspaceSession(this[sessionSnapshotOperationsContext].sessions, resolved, session)
+    } finally {
+      releaseConditional()
     }
-    if (resolved === LOCAL_EXECUTION_HOST_ID) {
-      this.assertSnapshotAdmission(true)
-      setLocalWorkspaceSession(this, session)
-      return
-    }
-    setHostWorkspaceSession(this[sessionSnapshotOperationsContext].sessions, resolved, session)
   }
 
   stageWorkspaceSessionBeforeUnload(
     session: PersistedState['workspaceSession'],
     hostId?: string | null
   ): void {
-    const resolved = resolveHostId(hostId)
-    if (resolved === LOCAL_EXECUTION_HOST_ID) {
-      this.assertSnapshotAdmission()
-      setLocalWorkspaceSession(this, session, true)
-      return
+    const releaseConditional = beginConditionalWorktreeSessionWrite(session, resolveHostId(hostId))
+    try {
+      const resolved = resolveHostId(hostId)
+      if (resolved === LOCAL_EXECUTION_HOST_ID) {
+        this.assertSnapshotAdmission()
+        setLocalWorkspaceSession(this, session, true)
+        return
+      }
+      setHostWorkspaceSession(this[sessionSnapshotOperationsContext].sessions, resolved, session)
+    } finally {
+      releaseConditional()
     }
-    setHostWorkspaceSession(this[sessionSnapshotOperationsContext].sessions, resolved, session)
   }
 
   patchWorkspaceSession(patch: WorkspaceSessionPatch, hostId?: string | null): void {
@@ -116,21 +127,26 @@ export class SessionSnapshotOperations {
   }
 
   private publishSession(session: WorkspaceSessionState, hostId: ExecutionHostId): void {
-    session = orderTerminalRowsByTabGroups(session)
-    const { runtime, scheduling } = this[sessionSnapshotOperationsContext]
-    if (hostId === LOCAL_EXECUTION_HOST_ID) {
-      runtime.state.workspaceSession = session
-    } else {
-      runtime.state.workspaceSessionsByHostId = {
-        ...runtime.state.workspaceSessionsByHostId,
-        [hostId]: withRequiredWorkspaceSessionMaps(session)
+    const releaseConditional = beginConditionalWorktreeSessionWrite(session, hostId)
+    try {
+      session = orderTerminalRowsByTabGroups(session)
+      const { runtime, scheduling } = this[sessionSnapshotOperationsContext]
+      if (hostId === LOCAL_EXECUTION_HOST_ID) {
+        runtime.state.workspaceSession = session
+      } else {
+        runtime.state.workspaceSessionsByHostId = {
+          ...runtime.state.workspaceSessionsByHostId,
+          [hostId]: withRequiredWorkspaceSessionMaps(session)
+        }
       }
+      scheduleSave(
+        scheduling,
+        hostId === LOCAL_EXECUTION_HOST_ID ? ['workspaceSession'] : ['workspaceSessionsByHostId'],
+        hostId
+      )
+    } finally {
+      releaseConditional()
     }
-    scheduleSave(
-      scheduling,
-      hostId === LOCAL_EXECUTION_HOST_ID ? ['workspaceSession'] : ['workspaceSessionsByHostId'],
-      hostId
-    )
   }
 
   private assertSnapshotAdmission(allowAdmittedMutation = false): void {

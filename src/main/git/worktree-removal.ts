@@ -217,6 +217,9 @@ async function removeCheckoutLeftByGit(
     }
     throw error
   }
+  if (options.refuseFilesystemFallback) {
+    throw new Error('git_worktree_remove_left_checkout')
+  }
   console.warn(`[git] worktree remove left files at "${worktreePath}"; deleting them`)
   await removeHostTree(worktreePath, { signal: options.checkoutDeleteSignal })
 }

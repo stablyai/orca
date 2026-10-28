@@ -1,9 +1,19 @@
+import { tryAcquireConditionalWorktreeRemoval } from '../ipc/conditional-worktree-removal-lease'
 import { mkdir, mkdtemp, readFile, readlink, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeStore } from '../runtime/runtime-store-contract'
 import { createLocalFilesystemProvider } from './local-filesystem-provider'
+
+vi.mock('../ipc/local-worktree-runtime-options', () => ({
+  getLocalGitOptionsForRegisteredWorktree: vi.fn()
+}))
+vi.mock('../ipc/markdown-documents', () => ({ listMarkdownDocuments: vi.fn() }))
+vi.mock('../ripgrep/bundled-ripgrep-text-search', () => ({ runBundledRipgrepTextSearch: vi.fn() }))
+vi.mock('../ripgrep/bundled-ripgrep-wsl-routing', () => ({
+  resolveBundledRipgrepWslRouting: vi.fn()
+}))
 
 let root: string
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the provider reads only settings from the store; authorization is the injected stub.
@@ -79,4 +89,65 @@ describe('createLocalFilesystemProvider', () => {
       expect(await isAliasDir(false)).toBe(false)
     }
   )
+})
+
+describe('conditional removal file mutation exclusion', () => {
+  it('refuses each mutation before authorization while removal is closing', async () => {
+    const admission = tryAcquireConditionalWorktreeRemoval(root)
+    if (admission.kind !== 'acquired') {
+      throw new Error('Removal admission failed')
+    }
+    const fs = provider()
+    const path = join(root, 'file.txt')
+    try {
+      for (const operation of [
+        () => fs.writeFile(path, 'body'),
+        () => fs.writeFileWithDiskPrecondition(path, 'body', undefined),
+        () => fs.writeFileBase64(path, ''),
+        () => fs.writeFileBase64Chunk(path, '', true),
+        () => fs.createFile(path),
+        () => fs.createDir(path),
+        () => fs.createDirNoClobber(path),
+        () => fs.deletePath(path),
+        () => fs.renameNoClobber(path, join(root, 'renamed.txt')),
+        () => fs.copy(path, join(root, 'copied.txt'))
+      ]) {
+        await expect(operation()).rejects.toMatchObject({
+          code: 'conditional_worktree_removal_in_progress'
+        })
+      }
+      expect(authorize).not.toHaveBeenCalled()
+    } finally {
+      admission.release()
+    }
+  })
+
+  it('keeps admission busy until an already admitted write finishes or fails', async () => {
+    let resume: (() => void) | undefined
+    const pending = new Promise<void>((resolve) => {
+      resume = resolve
+    })
+    authorize.mockImplementationOnce(async (path) => {
+      await pending
+      return path
+    })
+    const write = provider().writeFile(join(root, 'saved.txt'), 'body')
+    expect(tryAcquireConditionalWorktreeRemoval(root)).toEqual({ kind: 'busy' })
+    resume?.()
+    await write
+    const admission = tryAcquireConditionalWorktreeRemoval(root)
+    if (admission.kind !== 'acquired') {
+      throw new Error('Mutation lease was not released')
+    }
+    admission.release()
+    authorize.mockRejectedValueOnce(new Error('authorization failed'))
+    await expect(provider().createFile(join(root, 'failed.txt'))).rejects.toThrow(
+      'authorization failed'
+    )
+    const afterFailure = tryAcquireConditionalWorktreeRemoval(root)
+    if (afterFailure.kind !== 'acquired') {
+      throw new Error('Failed mutation lease was not released')
+    }
+    afterFailure.release()
+  })
 })

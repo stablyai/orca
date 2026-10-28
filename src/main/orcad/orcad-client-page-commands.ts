@@ -1,3 +1,4 @@
+import { withConditionalWorktreeGlobalUse } from '../ipc/conditional-worktree-operation'
 // Paired desktops can host pages without a local engine; present engine and desktop pages as one tab list.
 import { BrowserError } from '../browser/browser-error'
 import type { RuntimeBrowserCommands } from '../runtime/browser/browser-commands'
@@ -88,44 +89,46 @@ function createTab(
   forward: Forward,
   engineAvailable: () => boolean
 ): unknown {
-  if (params?.placement?.kind === 'client') {
-    const placement = params.placement
-    return (async () => {
-      const worktree = params.worktree
-        ? await host.resolveBrowserWorkspace(params.worktree)
-        : undefined
-      return createBrowserClientPage(
+  return withConditionalWorktreeGlobalUse(() => {
+    if (params?.placement?.kind === 'client') {
+      const placement = params.placement
+      return withConditionalWorktreeGlobalUse(async () => {
+        const worktree = params.worktree
+          ? await host.resolveBrowserWorkspace(params.worktree)
+          : undefined
+        return createBrowserClientPage(
+          host,
+          { ...params, placement },
+          { worktree, browserProfileId: orcadBrowserProfileId(params.profileId), caller }
+        )
+      })
+    }
+    // Only this host’s CLI defaults to client pages; omitted paired-client placement means server.
+    if (
+      !params?.placement &&
+      !caller?.pairedDeviceId &&
+      !engineAvailable() &&
+      hasPairedPageHost(host)
+    ) {
+      return createBrowserPageOnPairedHost(
         host,
-        { ...params, placement },
-        { worktree, browserProfileId: orcadBrowserProfileId(params.profileId), caller }
+        params ?? {},
+        orcadBrowserProfileId(params?.profileId)
       )
+    }
+    if (
+      !engineAvailable() ||
+      !browserTabCreateClientPageStartsActive(params?.activate) ||
+      host.getRuntimeBrowserPageRegistry().listPages().length === 0
+    ) {
+      return Promise.resolve(forward([params, caller]))
+    }
+    return (async () => {
+      const created = await forward([params, caller])
+      await yieldClientPageSelection(host, params?.worktree)
+      return created
     })()
-  }
-  // Only this host’s CLI defaults to client pages; omitted paired-client placement means server.
-  if (
-    !params?.placement &&
-    !caller?.pairedDeviceId &&
-    !engineAvailable() &&
-    hasPairedPageHost(host)
-  ) {
-    return createBrowserPageOnPairedHost(
-      host,
-      params ?? {},
-      orcadBrowserProfileId(params?.profileId)
-    )
-  }
-  if (
-    !engineAvailable() ||
-    !browserTabCreateClientPageStartsActive(params?.activate) ||
-    host.getRuntimeBrowserPageRegistry().listPages().length === 0
-  ) {
-    return forward([params, caller])
-  }
-  return (async () => {
-    const created = await forward([params, caller])
-    await yieldClientPageSelection(host, params?.worktree)
-    return created
-  })()
+  })
 }
 
 function engineTabs(forward: Forward): BrowserEngineTabs {

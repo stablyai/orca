@@ -1,3 +1,4 @@
+import { beginConditionalWorktreeGlobalUse } from './conditional-worktree-removal-lease'
 import { ipcMain, webContents } from 'electron'
 import { browserCertificateTrustController, browserManager } from '../browser/browser-manager'
 import type { AgentBrowserBridge } from '../browser/agent-browser-bridge'
@@ -60,45 +61,50 @@ export function registerBrowserHandlers(): void {
     args: BrowserGuestArgs,
     repairPolicies: boolean
   ): boolean => {
-    if (!isTrustedBrowserRenderer(event.sender)) {
-      return false
-    }
-    if (
-      !args ||
-      typeof args.browserPageId !== 'string' ||
-      typeof args.workspaceId !== 'string' ||
-      typeof args.worktreeId !== 'string' ||
-      typeof args.webContentsId !== 'number'
-    ) {
-      return false
-    }
-    if (repairPolicies) {
-      const guest = webContents.fromId(args.webContentsId)
+    const releaseConditionalUse = beginConditionalWorktreeGlobalUse()
+    try {
+      if (!isTrustedBrowserRenderer(event.sender)) {
+        return false
+      }
       if (
-        !guest ||
-        guest.isDestroyed() ||
-        guest.getType() !== 'webview' ||
-        guest.hostWebContents?.id !== event.sender.id
+        !args ||
+        typeof args.browserPageId !== 'string' ||
+        typeof args.workspaceId !== 'string' ||
+        typeof args.worktreeId !== 'string' ||
+        typeof args.webContentsId !== 'number'
       ) {
         return false
       }
-      browserManager.attachGuestPolicies(guest)
+      if (repairPolicies) {
+        const guest = webContents.fromId(args.webContentsId)
+        if (
+          !guest ||
+          guest.isDestroyed() ||
+          guest.getType() !== 'webview' ||
+          guest.hostWebContents?.id !== event.sender.id
+        ) {
+          return false
+        }
+        browserManager.attachGuestPolicies(guest)
+      }
+      // Guest process swaps require retiring the old proxy; the next command recreates it.
+      const previousWcId = browserManager.getGuestWebContentsId(args.browserPageId)
+      const registered = browserManager.registerGuest({
+        ...args,
+        rendererWebContentsId: event.sender.id
+      })
+      if (!registered) {
+        return false
+      }
+      if (agentBrowserBridgeRef && previousWcId !== null && previousWcId !== args.webContentsId) {
+        agentBrowserBridgeRef.onProcessSwap(args.browserPageId, args.webContentsId, previousWcId)
+      }
+      resolveTabRegistrationWaiters(args.browserPageId, args.worktreeId)
+      announceRegisteredBrowserExtensionTab(args.browserPageId, args.webContentsId)
+      return true
+    } finally {
+      releaseConditionalUse()
     }
-    // Guest process swaps require retiring the old proxy; the next command recreates it.
-    const previousWcId = browserManager.getGuestWebContentsId(args.browserPageId)
-    const registered = browserManager.registerGuest({
-      ...args,
-      rendererWebContentsId: event.sender.id
-    })
-    if (!registered) {
-      return false
-    }
-    if (agentBrowserBridgeRef && previousWcId !== null && previousWcId !== args.webContentsId) {
-      agentBrowserBridgeRef.onProcessSwap(args.browserPageId, args.webContentsId, previousWcId)
-    }
-    resolveTabRegistrationWaiters(args.browserPageId, args.worktreeId)
-    announceRegisteredBrowserExtensionTab(args.browserPageId, args.webContentsId)
-    return true
   }
 
   ipcMain.handle('browser:registerGuest', (event, args: BrowserGuestArgs) =>

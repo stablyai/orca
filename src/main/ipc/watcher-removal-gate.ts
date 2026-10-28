@@ -1,3 +1,4 @@
+import { beginConditionalWorktreePathUse } from './conditional-worktree-removal-lease'
 import {
   isPathInsideOrEqual,
   normalizeRuntimePathForComparison
@@ -55,11 +56,24 @@ export function beginWatcherInstall(rootPath: string, connectionId?: string): ()
 }
 
 export function beginTerminalInstall(rootPath: string, connectionId?: string): () => void {
-  return beginRemovalSensitiveInstall(
+  const releaseConditional = beginConditionalWorktreePathUse(
     rootPath,
-    connectionId,
-    () => new TerminalRemovalInProgressError()
+    connectionId ? `ssh:${connectionId}` : 'local'
   )
+  try {
+    const release = beginRemovalSensitiveInstall(
+      rootPath,
+      connectionId,
+      () => new TerminalRemovalInProgressError()
+    )
+    return () => {
+      release()
+      releaseConditional()
+    }
+  } catch (error) {
+    releaseConditional()
+    throw error
+  }
 }
 
 function beginRemovalSensitiveInstall(
@@ -144,6 +158,31 @@ export function acquireWatcherRemovalGate(
       deleteIdleState(key, state)
     }
   }
+}
+
+export type IdleWatcherRemovalGateResult =
+  | { kind: 'acquired'; gate: Pick<WatcherRemovalGate, 'release'> }
+  | { kind: 'refused'; reason: 'install_in_progress' | 'removal_in_progress' }
+
+/** Unlike ordinary removal, automation must never wait out or abandon a user's opening surface. */
+export function tryAcquireIdleWatcherRemovalGate(
+  rootPath: string,
+  connectionId?: string
+): IdleWatcherRemovalGateResult {
+  const normalizedRoot = normalizeRuntimePathForComparison(rootPath)
+  const overlapping = matchingHostStates(connectionId).filter(
+    (state) =>
+      isPathInsideOrEqual(state.rootPath, normalizedRoot) ||
+      isPathInsideOrEqual(normalizedRoot, state.rootPath)
+  )
+  if (overlapping.some((state) => state.removalCount > 0)) {
+    return { kind: 'refused', reason: 'removal_in_progress' }
+  }
+  if (overlapping.some((state) => state.installs.size > 0)) {
+    return { kind: 'refused', reason: 'install_in_progress' }
+  }
+  const gate = acquireWatcherRemovalGate(rootPath, connectionId)
+  return { kind: 'acquired', gate: { release: gate.release } }
 }
 
 export function isWatcherRemovalInProgressError(

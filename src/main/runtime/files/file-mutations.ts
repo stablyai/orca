@@ -1,3 +1,4 @@
+import { beginConditionalWorktreeGlobalUse } from '../../ipc/conditional-worktree-removal-lease'
 import { assertRuntimeFileMutationExpectation } from './file-mutation-expectation'
 import {
   requireLocalRuntimeFileRoute,
@@ -31,18 +32,23 @@ export class RuntimeFileMutations {
     expectedExecutionHostId?: string,
     diskPrecondition?: FileWriteDiskPrecondition
   ): Promise<FileWriteResult> {
-    const target = await resolveFileExplorerPath(this.host, worktreeSelector, relativePath)
-    assertRuntimeFileMutationExpectation(
-      target.executionHostId,
-      expectedExecutionHostId,
-      expectedSshTargetId,
-      expectedSshConnectionGeneration
-    )
-    return requireRuntimeFileProvider(target, this.host).writeFileWithDiskPrecondition(
-      target.path,
-      content,
-      diskPrecondition
-    )
+    const releaseConditionalUse = beginConditionalWorktreeGlobalUse()
+    try {
+      const target = await resolveFileExplorerPath(this.host, worktreeSelector, relativePath)
+      assertRuntimeFileMutationExpectation(
+        target.executionHostId,
+        expectedExecutionHostId,
+        expectedSshTargetId,
+        expectedSshConnectionGeneration
+      )
+      return await requireRuntimeFileProvider(target, this.host).writeFileWithDiskPrecondition(
+        target.path,
+        content,
+        diskPrecondition
+      )
+    } finally {
+      releaseConditionalUse()
+    }
   }
 
   async writeFileExplorerFileBase64(
@@ -53,15 +59,23 @@ export class RuntimeFileMutations {
     expectedSshTargetId?: string,
     expectedExecutionHostId?: string
   ): Promise<{ ok: true }> {
-    const target = await resolveFileExplorerPath(this.host, worktreeSelector, relativePath)
-    assertRuntimeFileMutationExpectation(
-      target.executionHostId,
-      expectedExecutionHostId,
-      expectedSshTargetId,
-      expectedSshConnectionGeneration
-    )
-    await requireRuntimeFileProvider(target, this.host).writeFileBase64(target.path, contentBase64)
-    return { ok: true }
+    const releaseConditionalUse = beginConditionalWorktreeGlobalUse()
+    try {
+      const target = await resolveFileExplorerPath(this.host, worktreeSelector, relativePath)
+      assertRuntimeFileMutationExpectation(
+        target.executionHostId,
+        expectedExecutionHostId,
+        expectedSshTargetId,
+        expectedSshConnectionGeneration
+      )
+      await requireRuntimeFileProvider(target, this.host).writeFileBase64(
+        target.path,
+        contentBase64
+      )
+      return { ok: true }
+    } finally {
+      releaseConditionalUse()
+    }
   }
 
   async writeFileExplorerFileBase64Chunk(
@@ -73,19 +87,24 @@ export class RuntimeFileMutations {
     expectedSshTargetId?: string,
     expectedExecutionHostId?: string
   ): Promise<{ ok: true }> {
-    const target = await resolveFileExplorerPath(this.host, worktreeSelector, relativePath)
-    assertRuntimeFileMutationExpectation(
-      target.executionHostId,
-      expectedExecutionHostId,
-      expectedSshTargetId,
-      expectedSshConnectionGeneration
-    )
-    await requireRuntimeFileProvider(target, this.host).writeFileBase64Chunk(
-      target.path,
-      contentBase64,
-      append
-    )
-    return { ok: true }
+    const releaseConditionalUse = beginConditionalWorktreeGlobalUse()
+    try {
+      const target = await resolveFileExplorerPath(this.host, worktreeSelector, relativePath)
+      assertRuntimeFileMutationExpectation(
+        target.executionHostId,
+        expectedExecutionHostId,
+        expectedSshTargetId,
+        expectedSshConnectionGeneration
+      )
+      await requireRuntimeFileProvider(target, this.host).writeFileBase64Chunk(
+        target.path,
+        contentBase64,
+        append
+      )
+      return { ok: true }
+    } finally {
+      releaseConditionalUse()
+    }
   }
 
   async createFileExplorerFile(
@@ -95,15 +114,20 @@ export class RuntimeFileMutations {
     expectedSshTargetId?: string,
     expectedExecutionHostId?: string
   ): Promise<{ ok: true }> {
-    const target = await resolveFileExplorerPath(this.host, worktreeSelector, relativePath)
-    assertRuntimeFileMutationExpectation(
-      target.executionHostId,
-      expectedExecutionHostId,
-      expectedSshTargetId,
-      expectedSshConnectionGeneration
-    )
-    await requireRuntimeFileProvider(target, this.host).createFile(target.path)
-    return { ok: true }
+    const releaseConditionalUse = beginConditionalWorktreeGlobalUse()
+    try {
+      const target = await resolveFileExplorerPath(this.host, worktreeSelector, relativePath)
+      assertRuntimeFileMutationExpectation(
+        target.executionHostId,
+        expectedExecutionHostId,
+        expectedSshTargetId,
+        expectedSshConnectionGeneration
+      )
+      await requireRuntimeFileProvider(target, this.host).createFile(target.path)
+      return { ok: true }
+    } finally {
+      releaseConditionalUse()
+    }
   }
 
   async createFileExplorerDir(
@@ -113,15 +137,20 @@ export class RuntimeFileMutations {
     expectedSshTargetId?: string,
     expectedExecutionHostId?: string
   ): Promise<{ ok: true }> {
-    const target = await resolveFileExplorerPath(this.host, worktreeSelector, relativePath)
-    assertRuntimeFileMutationExpectation(
-      target.executionHostId,
-      expectedExecutionHostId,
-      expectedSshTargetId,
-      expectedSshConnectionGeneration
-    )
-    await requireRuntimeFileProvider(target, this.host).createDir(target.path)
-    return { ok: true }
+    const releaseConditionalUse = beginConditionalWorktreeGlobalUse()
+    try {
+      const target = await resolveFileExplorerPath(this.host, worktreeSelector, relativePath)
+      assertRuntimeFileMutationExpectation(
+        target.executionHostId,
+        expectedExecutionHostId,
+        expectedSshTargetId,
+        expectedSshConnectionGeneration
+      )
+      await requireRuntimeFileProvider(target, this.host).createDir(target.path)
+      return { ok: true }
+    } finally {
+      releaseConditionalUse()
+    }
   }
 
   async createFileExplorerDirNoClobber(
@@ -131,15 +160,20 @@ export class RuntimeFileMutations {
     expectedSshTargetId?: string,
     expectedExecutionHostId?: string
   ): Promise<{ ok: true }> {
-    const target = await resolveFileExplorerPath(this.host, worktreeSelector, relativePath)
-    assertRuntimeFileMutationExpectation(
-      target.executionHostId,
-      expectedExecutionHostId,
-      expectedSshTargetId,
-      expectedSshConnectionGeneration
-    )
-    await requireRuntimeFileProvider(target, this.host).createDirNoClobber(target.path)
-    return { ok: true }
+    const releaseConditionalUse = beginConditionalWorktreeGlobalUse()
+    try {
+      const target = await resolveFileExplorerPath(this.host, worktreeSelector, relativePath)
+      assertRuntimeFileMutationExpectation(
+        target.executionHostId,
+        expectedExecutionHostId,
+        expectedSshTargetId,
+        expectedSshConnectionGeneration
+      )
+      await requireRuntimeFileProvider(target, this.host).createDirNoClobber(target.path)
+      return { ok: true }
+    } finally {
+      releaseConditionalUse()
+    }
   }
 
   async commitFileExplorerUpload(
@@ -150,25 +184,31 @@ export class RuntimeFileMutations {
     expectedSshTargetId?: string,
     expectedExecutionHostId?: string
   ): Promise<{ ok: true }> {
-    const [tempTarget, finalTarget] = await resolveFileExplorerPaths(this.host, worktreeSelector, [
-      tempRelativePath,
-      finalRelativePath
-    ])
-    assertRuntimeFileMutationExpectation(
-      tempTarget.executionHostId,
-      expectedExecutionHostId,
-      expectedSshTargetId,
-      expectedSshConnectionGeneration
-    )
-    requireLocalRuntimeFileRoute(tempTarget)
-    // Commit resolved temp/final paths, not symlink-preserving spellings.
-    const store = this.host.requireStore()
-    const tempPath = await resolveRuntimeAuthorizedPath(tempTarget.path, store)
-    const finalPath = await resolveRuntimeAuthorizedPath(finalTarget.path, store)
-    await mkdir(dirname(finalPath), { recursive: true })
-    await copyFile(tempPath, finalPath, constants.COPYFILE_EXCL)
-    await rm(tempPath, { force: true })
-    return { ok: true }
+    const releaseConditionalUse = beginConditionalWorktreeGlobalUse()
+    try {
+      const [tempTarget, finalTarget] = await resolveFileExplorerPaths(
+        this.host,
+        worktreeSelector,
+        [tempRelativePath, finalRelativePath]
+      )
+      assertRuntimeFileMutationExpectation(
+        tempTarget.executionHostId,
+        expectedExecutionHostId,
+        expectedSshTargetId,
+        expectedSshConnectionGeneration
+      )
+      requireLocalRuntimeFileRoute(tempTarget)
+      // Commit resolved temp/final paths, not symlink-preserving spellings.
+      const store = this.host.requireStore()
+      const tempPath = await resolveRuntimeAuthorizedPath(tempTarget.path, store)
+      const finalPath = await resolveRuntimeAuthorizedPath(finalTarget.path, store)
+      await mkdir(dirname(finalPath), { recursive: true })
+      await copyFile(tempPath, finalPath, constants.COPYFILE_EXCL)
+      await rm(tempPath, { force: true })
+      return { ok: true }
+    } finally {
+      releaseConditionalUse()
+    }
   }
 
   async renameFileExplorerPath(
@@ -179,21 +219,26 @@ export class RuntimeFileMutations {
     expectedSshTargetId?: string,
     expectedExecutionHostId?: string
   ): Promise<{ ok: true }> {
-    const [oldTarget, newTarget] = await resolveFileExplorerPaths(this.host, worktreeSelector, [
-      oldRelativePath,
-      newRelativePath
-    ])
-    assertRuntimeFileMutationExpectation(
-      oldTarget.executionHostId,
-      expectedExecutionHostId,
-      expectedSshTargetId,
-      expectedSshConnectionGeneration
-    )
-    await requireRuntimeFileProvider(oldTarget, this.host).renameNoClobber(
-      oldTarget.path,
-      newTarget.path
-    )
-    return { ok: true }
+    const releaseConditionalUse = beginConditionalWorktreeGlobalUse()
+    try {
+      const [oldTarget, newTarget] = await resolveFileExplorerPaths(this.host, worktreeSelector, [
+        oldRelativePath,
+        newRelativePath
+      ])
+      assertRuntimeFileMutationExpectation(
+        oldTarget.executionHostId,
+        expectedExecutionHostId,
+        expectedSshTargetId,
+        expectedSshConnectionGeneration
+      )
+      await requireRuntimeFileProvider(oldTarget, this.host).renameNoClobber(
+        oldTarget.path,
+        newTarget.path
+      )
+      return { ok: true }
+    } finally {
+      releaseConditionalUse()
+    }
   }
 
   async copyFileExplorerPath(
@@ -204,22 +249,27 @@ export class RuntimeFileMutations {
     expectedSshTargetId?: string,
     expectedExecutionHostId?: string
   ): Promise<{ ok: true }> {
-    const [sourceTarget, destinationTarget] = await resolveFileExplorerPaths(
-      this.host,
-      worktreeSelector,
-      [sourceRelativePath, destinationRelativePath]
-    )
-    assertRuntimeFileMutationExpectation(
-      sourceTarget.executionHostId,
-      expectedExecutionHostId,
-      expectedSshTargetId,
-      expectedSshConnectionGeneration
-    )
-    await requireRuntimeFileProvider(sourceTarget, this.host).copy(
-      sourceTarget.path,
-      destinationTarget.path
-    )
-    return { ok: true }
+    const releaseConditionalUse = beginConditionalWorktreeGlobalUse()
+    try {
+      const [sourceTarget, destinationTarget] = await resolveFileExplorerPaths(
+        this.host,
+        worktreeSelector,
+        [sourceRelativePath, destinationRelativePath]
+      )
+      assertRuntimeFileMutationExpectation(
+        sourceTarget.executionHostId,
+        expectedExecutionHostId,
+        expectedSshTargetId,
+        expectedSshConnectionGeneration
+      )
+      await requireRuntimeFileProvider(sourceTarget, this.host).copy(
+        sourceTarget.path,
+        destinationTarget.path
+      )
+      return { ok: true }
+    } finally {
+      releaseConditionalUse()
+    }
   }
 
   async deleteFileExplorerPath(
@@ -230,15 +280,20 @@ export class RuntimeFileMutations {
     expectedSshTargetId?: string,
     expectedExecutionHostId?: string
   ): Promise<{ ok: true }> {
-    const target = await resolveFileExplorerPath(this.host, worktreeSelector, relativePath)
-    assertRuntimeFileMutationExpectation(
-      target.executionHostId,
-      expectedExecutionHostId,
-      expectedSshTargetId,
-      expectedSshConnectionGeneration
-    )
-    // Remote runtimes have no client Trash; callers confirm this permanent delete.
-    await requireRuntimeFileProvider(target, this.host).deletePath(target.path, recursive)
-    return { ok: true }
+    const releaseConditionalUse = beginConditionalWorktreeGlobalUse()
+    try {
+      const target = await resolveFileExplorerPath(this.host, worktreeSelector, relativePath)
+      assertRuntimeFileMutationExpectation(
+        target.executionHostId,
+        expectedExecutionHostId,
+        expectedSshTargetId,
+        expectedSshConnectionGeneration
+      )
+      // Remote runtimes have no client Trash; callers confirm this permanent delete.
+      await requireRuntimeFileProvider(target, this.host).deletePath(target.path, recursive)
+      return { ok: true }
+    } finally {
+      releaseConditionalUse()
+    }
   }
 }

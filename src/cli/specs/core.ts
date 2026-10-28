@@ -153,6 +153,24 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
     ]
   },
   {
+    path: ['worktree', 'removal-capabilities'],
+    summary: 'Show conditional workspace removal support on this runtime',
+    usage: 'orca worktree removal-capabilities [--json]',
+    allowedFlags: [...GLOBAL_FLAGS]
+  },
+  {
+    path: ['worktree', 'rm-idle'],
+    destructive: true,
+    summary: 'Remove one exact unused workspace without stopping sessions',
+    usage: 'orca worktree rm-idle --request-id <uuid> --expect-json <json> [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'request-id', 'expect-json'],
+    notes: [
+      'Requires complete immutable workspace and physical Git identities. Unsupported or busy runtimes refuse without stopping sessions.',
+      'Keeps the local branch and a retained commit ref. Retrying the same request only reads back its outcome; it never removes a replacement checkout.',
+      'Older runtimes do not support this method. Never fall back to worktree rm.'
+    ]
+  },
+  {
     path: ['worktree', 'ps'],
     summary: 'Show a compact orchestration summary across worktrees',
     usage: 'orca worktree ps [--limit <n>] [--agent-wait] [--json]',

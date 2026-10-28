@@ -1,3 +1,5 @@
+import { beginConditionalWorktreeGlobalUse } from '../ipc/conditional-worktree-removal-lease'
+import { withConditionalWorktreeGlobalUse } from '../ipc/conditional-worktree-operation'
 // List saved headless browser tabs immediately; start pages lazily on first use, never merely on host restart.
 
 import type { BrowserBackend } from '../browser/browser-backend'
@@ -116,12 +118,14 @@ export class ServeBrowserTabs {
 
   /** Start the named saved page or active workspace tab; false means no tab to report. */
   async start(worktreeId: string | undefined, pageId: string | undefined): Promise<boolean> {
-    const found = pageId
-      ? this.listRestorable(worktreeId).find((page) => page.pageId === pageId)
-      : worktreeId
-        ? this.activeIn(worktreeId)
-        : undefined
-    return found ? this.restore(found) : false
+    return withConditionalWorktreeGlobalUse(async () => {
+      const found = pageId
+        ? this.listRestorable(worktreeId).find((page) => page.pageId === pageId)
+        : worktreeId
+          ? this.activeIn(worktreeId)
+          : undefined
+      return found ? this.restore(found) : false
+    })
   }
 
   /** The tab a window shows for a worktree with no page running: the recorded one, else the first. */
@@ -187,6 +191,7 @@ export class ServeBrowserTabs {
     ) {
       return
     }
+    const releaseConditionalUse = beginConditionalWorktreeGlobalUse()
     this.pendingOpens.set(pageId, page)
     const command: LayoutCommand = {
       type: 'openBrowserTab',
@@ -195,21 +200,24 @@ export class ServeBrowserTabs {
       ...(page.profileId ? { profileId: page.profileId } : {}),
       ...(page.groupId ? { groupId: page.groupId } : {})
     }
-    void this.applyLogged(applyLayout, worktreeId, command).then((ok) => {
-      const latest = this.pendingOpens.get(pageId)
-      this.pendingOpens.delete(pageId)
-      if (ok && latest) {
-        this.write(worktreeId, (_hostId, next) => withServeBrowserPageRecord(next, latest))
-      } else if (ok) {
-        // Closed while main wrote it: a host's tab is named by its page.
-        void this.applyLogged(applyLayout, worktreeId, {
-          type: 'closeTabs',
-          workspace: worktreeId,
-          tabIds: [pageId],
-          force: true
-        })
-      }
-    })
+    void this.applyLogged(applyLayout, worktreeId, command)
+      .then((ok) => {
+        const latest = this.pendingOpens.get(pageId)
+        this.pendingOpens.delete(pageId)
+        if (ok && latest) {
+          this.write(worktreeId, (_hostId, next) => withServeBrowserPageRecord(next, latest))
+        } else if (ok) {
+          // Closed while main wrote it: a host's tab is named by its page.
+          return this.applyLogged(applyLayout, worktreeId, {
+            type: 'closeTabs',
+            workspace: worktreeId,
+            tabIds: [pageId],
+            force: true
+          })
+        }
+        return undefined
+      })
+      .finally(releaseConditionalUse)
   }
 
   private closeThroughLayout(

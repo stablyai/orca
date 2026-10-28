@@ -1,3 +1,4 @@
+import { beginConditionalWorktreeGlobalUse } from '../conditional-worktree-removal-lease'
 import { ipcMain, shell } from 'electron'
 import { lstat, rm } from 'node:fs/promises'
 import type { SshMutationExpectation } from '../../../shared/ssh-types'
@@ -36,27 +37,36 @@ export function registerFilesystemWriteHandlers(context: FilesystemHandlerContex
         diskPrecondition?: FileWriteDiskPrecondition
       } & SshMutationExpectation
     ): Promise<FileWriteResult> => {
-      assertSshMutationExpectation(
-        args.connectionId,
-        args.expectedSshTargetId,
-        args.expectedSshConnectionGeneration,
-        args.expectedExecutionHostId
-      )
-      if (args.connectionId) {
-        throw new SshHostNotServedError(args.connectionId)
-      }
-      const filePath = await resolveLocalWriteRequestPath(args.filePath, args.access, store)
+      const releaseConditionalUse = beginConditionalWorktreeGlobalUse()
       try {
-        const fileStats = await lstat(windowsFsPath(filePath))
-        if (fileStats.isDirectory()) {
-          throw new Error('Cannot write to a directory')
+        assertSshMutationExpectation(
+          args.connectionId,
+          args.expectedSshTargetId,
+          args.expectedSshConnectionGeneration,
+          args.expectedExecutionHostId
+        )
+        if (args.connectionId) {
+          throw new SshHostNotServedError(args.connectionId)
         }
-      } catch (error) {
-        if (!isENOENT(error)) {
-          throw error
+        const filePath = await resolveLocalWriteRequestPath(args.filePath, args.access, store)
+        try {
+          const fileStats = await lstat(windowsFsPath(filePath))
+          if (fileStats.isDirectory()) {
+            throw new Error('Cannot write to a directory')
+          }
+        } catch (error) {
+          if (!isENOENT(error)) {
+            throw error
+          }
         }
+        return await writeLocalTextFileWithDiskPrecondition(
+          filePath,
+          args.content,
+          args.diskPrecondition
+        )
+      } finally {
+        releaseConditionalUse()
       }
-      return writeLocalTextFileWithDiskPrecondition(filePath, args.content, args.diskPrecondition)
     }
   )
 
@@ -71,37 +81,42 @@ export function registerFilesystemWriteHandlers(context: FilesystemHandlerContex
         permanent?: boolean
       } & SshMutationExpectation
     ): Promise<void> => {
-      assertSshMutationExpectation(
-        args.connectionId,
-        args.expectedSshTargetId,
-        args.expectedSshConnectionGeneration,
-        args.expectedExecutionHostId
-      )
-      if (args.connectionId) {
-        throw new SshHostNotServedError(args.connectionId)
-      }
-      // Delete the symlink entry, not a realpath target that may be outside allowed roots.
-      const targetPath = await resolveDesktopAuthorizedPath(args.targetPath, store, {
-        preserveSymlink: true
-      })
-      // WSL UNC has no Recycle Bin; hard-delete inside the distro (#6415).
-      if (await tryDeleteWslUncPath(targetPath, { recursive: args.recursive })) {
-        return
-      }
-      if (args.permanent === true) {
-        await rm(windowsFsPath(targetPath), { recursive: args.recursive === true, force: true })
-        return
-      }
-      // Concurrent external deletion must leave UI deletion idempotent.
+      const releaseConditionalUse = beginConditionalWorktreeGlobalUse()
       try {
-        await shell.trashItem(targetPath)
-      } catch (error) {
-        if (isENOENT(error)) {
+        assertSshMutationExpectation(
+          args.connectionId,
+          args.expectedSshTargetId,
+          args.expectedSshConnectionGeneration,
+          args.expectedExecutionHostId
+        )
+        if (args.connectionId) {
+          throw new SshHostNotServedError(args.connectionId)
+        }
+        // Delete the symlink entry, not a realpath target that may be outside allowed roots.
+        const targetPath = await resolveDesktopAuthorizedPath(args.targetPath, store, {
+          preserveSymlink: true
+        })
+        // WSL UNC has no Recycle Bin; hard-delete inside the distro (#6415).
+        if (await tryDeleteWslUncPath(targetPath, { recursive: args.recursive })) {
           return
         }
-        // Tagged so the renderer can offer permanent deletion (e.g. drive with Recycle Bin disabled).
-        const reason = error instanceof Error ? error.message : String(error)
-        throw new Error(`${TRASH_DELETE_FAILED_MESSAGE}: ${reason}`)
+        if (args.permanent === true) {
+          await rm(windowsFsPath(targetPath), { recursive: args.recursive === true, force: true })
+          return
+        }
+        // Concurrent external deletion must leave UI deletion idempotent.
+        try {
+          await shell.trashItem(targetPath)
+        } catch (error) {
+          if (isENOENT(error)) {
+            return
+          }
+          // Tagged so the renderer can offer permanent deletion (e.g. drive with Recycle Bin disabled).
+          const reason = error instanceof Error ? error.message : String(error)
+          throw new Error(`${TRASH_DELETE_FAILED_MESSAGE}: ${reason}`)
+        }
+      } finally {
+        releaseConditionalUse()
       }
     }
   )

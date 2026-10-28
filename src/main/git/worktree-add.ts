@@ -1,3 +1,4 @@
+import { beginConditionalWorktreePathUse } from '../ipc/conditional-worktree-removal-lease'
 import { resolveWorktreeAddBaseRef } from '../../shared/worktree/base-ref'
 import type {
   LocalBaseRefRefreshResult,
@@ -189,6 +190,7 @@ export async function addWorktree(
   noCheckout = false,
   options: AddWorktreeOptions = {}
 ): Promise<AddWorktreeResult> {
+  const releaseConditional = beginConditionalWorktreePathUse(worktreePath)
   try {
     return await withRepoRefMaintenancePaused('worktree-add', () =>
       runWithGitReadCacheInvalidation(() =>
@@ -204,6 +206,7 @@ export async function addWorktree(
       )
     )
   } finally {
+    releaseConditional()
     bumpWorktreeScanGeneration(repoPath)
   }
 }

@@ -1,3 +1,4 @@
+import { withConditionalWorktreeGlobalUse } from '../../ipc/conditional-worktree-operation'
 import type { BrowserClientHostedPageInventory } from '../../../shared/browser-client-host-protocol'
 import type { BrowserHostLeaseState } from './browser-host-lease-records'
 import type { BrowserHostPagePlacementRegistry } from './browser-host-page-placement'
@@ -48,31 +49,33 @@ export class BrowserHostPageReconciliationOrchestrator {
       inventory: readonly BrowserClientHostedPageInventory[]
     ) => readonly BrowserClientHostedPageInventory[]
   ): Promise<BrowserHostPageReconciliationResult> {
-    const inventory = this.requireInventory(state)
-    if (this.attempts.has(state.token)) {
-      throw new Error('browser_host_page_reconciliation_pending')
-    }
-    if (this.consumedInventories.has(inventory)) {
-      throw new Error('browser_host_page_reconciliation_inventory_consumed')
-    }
-    const plan = planBrowserHostPageReconciliation(intents, scope(inventory), {
-      inventoryPairedDeviceId: state.lease.pairedDeviceId
-    })
-    this.assertPlanAuthority(state, plan)
-    const attempt = new BrowserHostPageReconciliationActions(state, this.placements, plan)
-    const removeAbort = forwardAbort(options.signal, attempt.controller)
-    this.consumedInventories.add(inventory)
-    this.attempts.set(state.token, attempt)
-    try {
-      return await executeBrowserHostPageReconciliation(plan, attempt.handlers, {
-        ...options,
-        signal: attempt.controller.signal
+    return withConditionalWorktreeGlobalUse(async () => {
+      const inventory = this.requireInventory(state)
+      if (this.attempts.has(state.token)) {
+        throw new Error('browser_host_page_reconciliation_pending')
+      }
+      if (this.consumedInventories.has(inventory)) {
+        throw new Error('browser_host_page_reconciliation_inventory_consumed')
+      }
+      const plan = planBrowserHostPageReconciliation(intents, scope(inventory), {
+        inventoryPairedDeviceId: state.lease.pairedDeviceId
       })
-    } finally {
-      removeAbort()
-      attempt.cancelReservations()
-      this.attempts.delete(state.token)
-    }
+      this.assertPlanAuthority(state, plan)
+      const attempt = new BrowserHostPageReconciliationActions(state, this.placements, plan)
+      const removeAbort = forwardAbort(options.signal, attempt.controller)
+      this.consumedInventories.add(inventory)
+      this.attempts.set(state.token, attempt)
+      try {
+        return await executeBrowserHostPageReconciliation(plan, attempt.handlers, {
+          ...options,
+          signal: attempt.controller.signal
+        })
+      } finally {
+        removeAbort()
+        attempt.cancelReservations()
+        this.attempts.delete(state.token)
+      }
+    })
   }
 
   fence(state: BrowserHostLeaseState): void {

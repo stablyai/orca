@@ -2,7 +2,7 @@ import type { LocalProjectWorktreeGitOptions } from '../../project-runtime-git-o
 import { isStaleLocalWorktreeRegistration } from './stale-worktree-registration-preflight'
 import type { RuntimeStore } from '../runtime-store-contract'
 import type { GitWorktreeInfo } from '../../../shared/worktree/types'
-import { OrcaRuntimeWithCreateManagedRemoteWorktree } from './workspace-metadata'
+import { OrcaRuntimeWithConditionalWorktreeRemoval } from './workspace-conditional-removal'
 import {
   resolveWorktreeRemovalMetadata,
   resolveWorktreeRemovalRepoOwner
@@ -38,7 +38,7 @@ import {
   isWslMoveSourceHost
 } from '../../persistence/moving-wsl-projects/wsl-move-scope-guard'
 
-export abstract class OrcaRuntimeWithRemoveManagedWorktree extends OrcaRuntimeWithCreateManagedRemoteWorktree {
+export abstract class OrcaRuntimeWithRemoveManagedWorktree extends OrcaRuntimeWithConditionalWorktreeRemoval {
   abstract removeWorktreeMetadataAndHistory(
     store: RuntimeStore,
     worktreeId: string,
@@ -52,12 +52,6 @@ export abstract class OrcaRuntimeWithRemoveManagedWorktree extends OrcaRuntimeWi
     worktreeId: string,
     options: RemoveManagedWorktreeOptions
   ): Promise<RemoveWorktreeResult> | undefined
-  protected abstract purgeRemovedWorktree(
-    store: RuntimeStore,
-    worktreeId: string,
-    repoId: string,
-    removalHostId?: ExecutionHostId
-  ): void
   protected abstract retryFailedRemoval(
     route: { kind: string },
     target: { id: string; path: string },

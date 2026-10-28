@@ -1,3 +1,4 @@
+import { beginConditionalWorktreeGlobalUse } from '../ipc/conditional-worktree-removal-lease'
 import {
   sameRuntimeBrowserPlacement,
   type RuntimeBrowserClientPlacement
@@ -63,32 +64,37 @@ export class RuntimeBrowserPageRegistry {
   }
 
   publishClientPage(input: RuntimeBrowserClientPageInput): RuntimeBrowserClientPage {
-    assertIdentity(input.browserPageId)
-    assertIdentity(input.workspaceId)
-    assertIdentity(input.browserProfileId)
-    assertIdentity(input.executionHostKey)
-    if (this.pages.has(input.browserPageId)) {
-      throw new Error('browser_page_replacement_requires_retirement')
+    const releaseConditionalUse = beginConditionalWorktreeGlobalUse()
+    try {
+      assertIdentity(input.browserPageId)
+      assertIdentity(input.workspaceId)
+      assertIdentity(input.browserProfileId)
+      assertIdentity(input.executionHostKey)
+      if (this.pages.has(input.browserPageId)) {
+        throw new Error('browser_page_replacement_requires_retirement')
+      }
+      if (this.pages.size >= this.maxPages) {
+        throw new Error('browser_runtime_page_capacity')
+      }
+      if (input.active) {
+        this.deactivateWorkspace(input.workspaceId)
+      }
+      const page = freezePage({
+        ...input,
+        placement: Object.freeze({ ...input.placement }),
+        title: input.title ?? 'Browser',
+        canGoBack: input.canGoBack ?? false,
+        canGoForward: input.canGoForward ?? false,
+        metadataRevision: input.metadataRevision ?? 0
+      })
+      this.pages.set(page.browserPageId, page)
+      if (page.active) {
+        this.globalActivePageId = page.browserPageId
+      }
+      return page
+    } finally {
+      releaseConditionalUse()
     }
-    if (this.pages.size >= this.maxPages) {
-      throw new Error('browser_runtime_page_capacity')
-    }
-    if (input.active) {
-      this.deactivateWorkspace(input.workspaceId)
-    }
-    const page = freezePage({
-      ...input,
-      placement: Object.freeze({ ...input.placement }),
-      title: input.title ?? 'Browser',
-      canGoBack: input.canGoBack ?? false,
-      canGoForward: input.canGoForward ?? false,
-      metadataRevision: input.metadataRevision ?? 0
-    })
-    this.pages.set(page.browserPageId, page)
-    if (page.active) {
-      this.globalActivePageId = page.browserPageId
-    }
-    return page
   }
 
   updatePage(

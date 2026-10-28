@@ -1,3 +1,4 @@
+import { WORKTREE_FORCE_DELETE_BRANCH_METHOD } from './worktree-force-delete-branch-method'
 import {
   finishAutomationWorkspaceProvenanceRequest,
   releaseAutomationWorkspaceProvenanceRequest,
@@ -21,7 +22,6 @@ import {
 } from '../../../../shared/rpc-contract/worktree-create-params'
 import {
   WorktreeActivate,
-  WorktreeForceDeleteBranch,
   WorktreeRemove,
   WorktreeResolveMrBase,
   WorktreeResolvePrBase,
@@ -284,28 +284,5 @@ export const WORKTREE_METHODS = [
       }
     }
   }),
-  defineMethod({
-    name: 'worktree.forceDeleteBranch',
-    permission: 'workspace',
-    params: WorktreeForceDeleteBranch,
-    handler: async (params, { runtime }) => {
-      const hostId = resolvePairedCallerHostId(
-        () => runtime.listRepos(),
-        params.worktree,
-        params.hostId
-      )
-      return hostId
-        ? runtime.forceDeletePreservedBranch(
-            params.worktree,
-            params.branchName,
-            params.expectedHead,
-            hostId
-          )
-        : runtime.forceDeletePreservedBranch(
-            params.worktree,
-            params.branchName,
-            params.expectedHead
-          )
-    }
-  })
+  WORKTREE_FORCE_DELETE_BRANCH_METHOD
 ]

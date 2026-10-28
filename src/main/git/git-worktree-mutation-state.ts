@@ -1,3 +1,4 @@
+import { beginConditionalWorktreeGlobalUse } from '../ipc/conditional-worktree-removal-lease'
 import { realpath } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { classifyGitCommand, findGitSubcommandIndex } from '../../shared/git-command-classification'
@@ -14,18 +15,26 @@ const pending = new Set<{ path: string; gitDir?: string; wslDistro?: string }>()
 
 export function trackGitWorktreeMutation(
   args: readonly string[],
-  options: GitRuntimeOptions & { cwd: string }
+  options: GitRuntimeOptions & {
+    cwd: string
+    conditionalRemovalToken?: symbol
+    env?: NodeJS.ProcessEnv
+  }
 ): () => void {
-  if (
-    classifyGitCommand(args) === 'read' ||
-    WORKTREE_NEUTRAL_SUBCOMMANDS.has(args[findGitSubcommandIndex(args)] ?? '')
-  ) {
+  if (classifyGitCommand(args) === 'read') {
     return () => {}
   }
   const command = resolveGitFetchHeadCommand(args, options.cwd)
+  const releaseConditional = beginConditionalWorktreeGlobalUse(options.conditionalRemovalToken)
+  if (WORKTREE_NEUTRAL_SUBCOMMANDS.has(args[findGitSubcommandIndex(args)] ?? '')) {
+    return releaseConditional
+  }
   const entry = { path: command.cwd, gitDir: command.gitDir, wslDistro: options.wslDistro }
   pending.add(entry)
-  return () => pending.delete(entry)
+  return () => {
+    pending.delete(entry)
+    releaseConditional()
+  }
 }
 
 /** Covers commands from every client of this host, including ones still queued for admission. */

@@ -1,3 +1,4 @@
+import { beginConditionalWorktreeGlobalUse } from '../ipc/conditional-worktree-removal-lease'
 import { constants, copyFile, lstat, mkdir, readdir, rm, stat, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import { throwIfSignalAborted, waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
@@ -70,27 +71,37 @@ export function createLocalFilesystemProvider(
       await resolveAuthorizedPath(path, options.requireStore(), { preserveSymlink: true })
     )
   const writeBase64 = async (filePath: string, contentBase64: string, append: boolean) => {
-    const content = Buffer.from(contentBase64, 'base64')
-    const authorizedPath = await authorize(filePath)
-    await mkdir(dirname(authorizedPath), { recursive: true })
-    await writeFile(authorizedPath, content, { flag: append ? 'a' : 'wx' })
+    const releaseConditionalUse = beginConditionalWorktreeGlobalUse()
+    try {
+      const content = Buffer.from(contentBase64, 'base64')
+      const authorizedPath = await authorize(filePath)
+      await mkdir(dirname(authorizedPath), { recursive: true })
+      await writeFile(authorizedPath, content, { flag: append ? 'a' : 'wx' })
+    } finally {
+      releaseConditionalUse()
+    }
   }
   const writeTextFile = async (
     filePath: string,
     content: string,
     precondition: FileWriteDiskPrecondition | undefined
   ): Promise<FileWriteResult> => {
-    const authorizedPath = await authorize(filePath)
+    const releaseConditionalUse = beginConditionalWorktreeGlobalUse()
     try {
-      if ((await lstat(authorizedPath)).isDirectory()) {
-        throw new Error('Cannot write to a directory')
+      const authorizedPath = await authorize(filePath)
+      try {
+        if ((await lstat(authorizedPath)).isDirectory()) {
+          throw new Error('Cannot write to a directory')
+        }
+      } catch (error) {
+        if (!isENOENT(error)) {
+          throw error
+        }
       }
-    } catch (error) {
-      if (!isENOENT(error)) {
-        throw error
-      }
+      return await writeLocalTextFileWithDiskPrecondition(authorizedPath, content, precondition)
+    } finally {
+      releaseConditionalUse()
     }
-    return writeLocalTextFileWithDiskPrecondition(authorizedPath, content, precondition)
   }
   return {
     readDir: async (dirPath, readOptions = {}) => {
@@ -120,35 +131,68 @@ export function createLocalFilesystemProvider(
       }
     },
     deletePath: async (targetPath, recursive) => {
-      await rm(await authorizeLink(targetPath), { recursive: recursive === true, force: true })
+      const releaseConditionalUse = beginConditionalWorktreeGlobalUse()
+      try {
+        await rm(await authorizeLink(targetPath), { recursive: recursive === true, force: true })
+      } finally {
+        releaseConditionalUse()
+      }
     },
     createFile: async (filePath) => {
-      const authorizedPath = await authorize(filePath)
-      await mkdir(dirname(authorizedPath), { recursive: true })
+      const releaseConditionalUse = beginConditionalWorktreeGlobalUse()
       try {
-        await writeFile(authorizedPath, '', { encoding: 'utf-8', flag: 'wx' })
-      } catch (error) {
-        rethrowWithUserMessage(error, authorizedPath)
+        const authorizedPath = await authorize(filePath)
+        await mkdir(dirname(authorizedPath), { recursive: true })
+        try {
+          await writeFile(authorizedPath, '', { encoding: 'utf-8', flag: 'wx' })
+        } catch (error) {
+          rethrowWithUserMessage(error, authorizedPath)
+        }
+      } finally {
+        releaseConditionalUse()
       }
     },
     createDir: async (dirPath) => {
-      const authorizedPath = await authorize(dirPath)
-      await assertNotExists(authorizedPath)
-      await mkdir(authorizedPath, { recursive: false })
+      const releaseConditionalUse = beginConditionalWorktreeGlobalUse()
+      try {
+        const authorizedPath = await authorize(dirPath)
+        await assertNotExists(authorizedPath)
+        await mkdir(authorizedPath, { recursive: false })
+      } finally {
+        releaseConditionalUse()
+      }
     },
     createDirNoClobber: async (dirPath) => {
-      await mkdir(await authorize(dirPath), { recursive: false })
+      const releaseConditionalUse = beginConditionalWorktreeGlobalUse()
+      try {
+        await mkdir(await authorize(dirPath), { recursive: false })
+      } finally {
+        releaseConditionalUse()
+      }
     },
     renameNoClobber: async (oldPath, newPath) => {
-      const authorizedOldPath = await authorizeLink(oldPath)
-      await renameLocalPathSerializedByDestination(authorizedOldPath, await authorizeLink(newPath))
+      const releaseConditionalUse = beginConditionalWorktreeGlobalUse()
+      try {
+        const authorizedOldPath = await authorizeLink(oldPath)
+        await renameLocalPathSerializedByDestination(
+          authorizedOldPath,
+          await authorizeLink(newPath)
+        )
+      } finally {
+        releaseConditionalUse()
+      }
     },
     copy: async (source, destination) => {
-      const authorizedSource = await authorizeLink(source)
-      const authorizedDestination = await authorizeLink(destination)
-      await mkdir(dirname(authorizedDestination), { recursive: true })
-      // Callers deconflict names; COPYFILE_EXCL preserves no-clobber if a destination appears meanwhile.
-      await copyFile(authorizedSource, authorizedDestination, constants.COPYFILE_EXCL)
+      const releaseConditionalUse = beginConditionalWorktreeGlobalUse()
+      try {
+        const authorizedSource = await authorizeLink(source)
+        const authorizedDestination = await authorizeLink(destination)
+        await mkdir(dirname(authorizedDestination), { recursive: true })
+        // Callers deconflict names; COPYFILE_EXCL preserves no-clobber if a destination appears meanwhile.
+        await copyFile(authorizedSource, authorizedDestination, constants.COPYFILE_EXCL)
+      } finally {
+        releaseConditionalUse()
+      }
     },
     search: async (searchOptions, { signal } = {}) => {
       throwIfSignalAborted(signal)

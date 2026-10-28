@@ -1,3 +1,4 @@
+import { withConditionalWorktreeGlobalUse } from '../ipc/conditional-worktree-operation'
 import { BROWSER_CLIENT_AUTOMATION_HOST_CAPABILITY } from '../../shared/browser-client-automation-protocol'
 import type {
   BrowserClientHostedPageInventory,
@@ -56,41 +57,43 @@ export async function recoverUnavailableRuntimeBrowserClientPages(options: {
   resolveExecutionHostKey?: (workspaceId: string) => Promise<BrowserExecutionHostKeyResolution>
   signal?: AbortSignal
 }): Promise<void> {
-  const inventory = options.lease.pageInventory
-  if (
-    options.lease.pageReconciliationProtocolVersion !== 1 ||
-    options.lease.pageInventoryProtocolVersion !== 1 ||
-    !inventory
-  ) {
-    return
-  }
-  const inventoryByPageId = new Map(inventory.map((page) => [page.browserPageId, page]))
-  const pages = options.pages
-    .listPages()
-    .filter(
-      (page) =>
-        isPlacedAsObservedAtAttach(page, options.pagePlacementsAtAttach) &&
-        !options.adoptedPageIds?.has(page.browserPageId) &&
-        isRecoverableByLease(page, options.lease) &&
-        !isActiveExactPage(page, inventoryByPageId.get(page.browserPageId), options.lease)
+  return withConditionalWorktreeGlobalUse(async () => {
+    const inventory = options.lease.pageInventory
+    if (
+      options.lease.pageReconciliationProtocolVersion !== 1 ||
+      options.lease.pageInventoryProtocolVersion !== 1 ||
+      !inventory
+    ) {
+      return
+    }
+    const inventoryByPageId = new Map(inventory.map((page) => [page.browserPageId, page]))
+    const pages = options.pages
+      .listPages()
+      .filter(
+        (page) =>
+          isPlacedAsObservedAtAttach(page, options.pagePlacementsAtAttach) &&
+          !options.adoptedPageIds?.has(page.browserPageId) &&
+          isRecoverableByLease(page, options.lease) &&
+          !isActiveExactPage(page, inventoryByPageId.get(page.browserPageId), options.lease)
+      )
+    await mapWithConcurrency(
+      pages,
+      MAX_RECOVERY_CONCURRENCY,
+      async (page) => {
+        try {
+          await recoverPage(page, inventoryByPageId.get(page.browserPageId), options)
+        } catch (error) {
+          // Contain page-scoped failures; rejecting attach would fence the lease and healthy pages too.
+          console.warn('[browser-host-lease] client page recovery failed:', {
+            browserPageId: page.browserPageId,
+            error
+          })
+          releaseUnhostablePage(page, options)
+        }
+      },
+      options.signal
     )
-  await mapWithConcurrency(
-    pages,
-    MAX_RECOVERY_CONCURRENCY,
-    async (page) => {
-      try {
-        await recoverPage(page, inventoryByPageId.get(page.browserPageId), options)
-      } catch (error) {
-        // Contain page-scoped failures; rejecting attach would fence the lease and healthy pages too.
-        console.warn('[browser-host-lease] client page recovery failed:', {
-          browserPageId: page.browserPageId,
-          error
-        })
-        releaseUnhostablePage(page, options)
-      }
-    },
-    options.signal
-  )
+  })
 }
 
 /** Readiness precedes recovery; skip placements created since this inventory or absent entries would wrongly trigger recreation. */
@@ -111,13 +114,10 @@ function isRecoverableByLease(
   page: RuntimeBrowserClientPage,
   lease: BrowserClientHostLeaseAuthority & { pairedDeviceId: string }
 ): boolean {
-  if (isRestoredClientHostedBrowserPlacement(page.placement)) {
-    return page.pairedDeviceId === lease.pairedDeviceId
-  }
-  return (
-    page.placement.browserHostClientId === lease.browserHostClientId &&
-    page.placement.browserHostGeneration <= lease.browserHostGeneration
-  )
+  return isRestoredClientHostedBrowserPlacement(page.placement)
+    ? page.pairedDeviceId === lease.pairedDeviceId
+    : page.placement.browserHostClientId === lease.browserHostClientId &&
+        page.placement.browserHostGeneration <= lease.browserHostGeneration
 }
 
 /** Keep routes minted by this runtime; restored pages re-resolve. Retire only workspace-gone; unavailable routes leave held rows for later attach. */

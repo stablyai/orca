@@ -16,12 +16,14 @@ import type {
   BrowserHostPageReconciliationPlan,
   BrowserHostRuntimePageIntent
 } from './browser-host-page-reconciliation-plan'
+import { beginConditionalWorktreeGlobalUse } from '../../ipc/conditional-worktree-removal-lease'
 
 export class BrowserHostPageReconciliationActions {
   readonly controller = new AbortController()
   readonly handlers: ActionHandlers
   private readonly reservations = new Map<string, BrowserClientPagePlacementReservation>()
   private readonly closePlacements = new Map<string, RuntimeBrowserPlacement | undefined>()
+  private readonly admissions = new Map<string, () => void>()
 
   constructor(
     private readonly state: BrowserHostLeaseState,
@@ -103,13 +105,16 @@ export class BrowserHostPageReconciliationActions {
     )
     const placement = this.closePlacements.get(page.browserPageId)
     if (!placement) {
+      this.releaseAdmission(page.browserPageId)
       return
     }
     if (this.placements.getPlacement(page.browserPageId) !== placement) {
       throw new Error('browser_page_placement_stale')
     }
     const retirement = this.placements.beginPageRetirement(page.browserPageId, placement)
-    this.placements.completePageRetirement(retirement)
+    if (this.placements.completePageRetirement(retirement)) {
+      this.releaseAdmission(page.browserPageId)
+    }
   }
 
   private async restorePage(
@@ -149,13 +154,37 @@ export class BrowserHostPageReconciliationActions {
     if (!ledger) {
       throw new Error('browser_host_command_protocol_required')
     }
-    const issued = ledger.issue({
-      browserPageId,
-      pageHostGeneration,
-      command,
-      resultAdmission: 'reconciliation'
+    const release = beginConditionalWorktreeGlobalUse()
+    let issued: ReturnType<typeof ledger.issue>
+    try {
+      issued = ledger.issue({
+        browserPageId,
+        pageHostGeneration,
+        command,
+        resultAdmission: 'reconciliation'
+      })
+    } catch (error) {
+      // Delivery failure may follow a send; all other ledger throws precede delivery.
+      if (!(error instanceof Error && error.message === 'browser_host_command_delivery_failed')) {
+        release()
+      }
+      throw error
+    }
+    this.admissions.set(browserPageId, release)
+    const settled = issued.result.then((result) => {
+      if (result.status === 'completed' && command.type === 'closePage') {
+        this.releaseAdmission(browserPageId)
+      } else if (
+        result.status === 'failed' &&
+        ['browser_client_page_executor_closed', 'browser_client_page_command_invalid'].includes(
+          result.errorCode
+        )
+      ) {
+        this.releaseAdmission(browserPageId)
+      }
+      return result
     })
-    const result = await waitForCommandResult(issued.result, signal)
+    const result = await waitForCommandResult(settled, signal)
     if (result.status === 'failed') {
       throw new Error(result.errorCode)
     }
@@ -169,6 +198,12 @@ export class BrowserHostPageReconciliationActions {
     }
     this.placements.commitClientPageReservation(reservation)
     this.reservations.delete(browserPageId)
+    this.releaseAdmission(browserPageId)
+  }
+
+  private releaseAdmission(browserPageId: string): void {
+    this.admissions.get(browserPageId)?.()
+    this.admissions.delete(browserPageId)
   }
 }
 

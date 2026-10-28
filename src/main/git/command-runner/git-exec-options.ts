@@ -7,6 +7,7 @@ export type { GitAdmissionTier }
 
 export type GitExecOptions = {
   cwd: string
+  conditionalRemovalToken?: symbol
   encoding?: BufferEncoding | 'buffer'
   maxBuffer?: number
   timeout?: number

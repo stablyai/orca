@@ -1,3 +1,4 @@
+import { beginConditionalWorktreeGlobalUse } from '../../ipc/conditional-worktree-removal-lease'
 import { randomUUID } from 'node:crypto'
 import { ipcMain } from 'electron'
 import type { RuntimeBrowserCommandHost } from './browser-command-contracts'
@@ -13,43 +14,61 @@ export async function createBrowserTabInRenderer(
   /** Used only when `worktreeId` is unset and no workspace is active in the renderer. */
   fallbackWorktreeId?: string
 ): Promise<{ browserPageId: string }> {
-  const rendererWebContents = host.getAuthoritativeWindow().webContents
-  const requestId = randomUUID()
+  const releaseConditionalUse = beginConditionalWorktreeGlobalUse()
+  let sendStarted = false
+  let replied = false
+  let cleanupRequest = (): void => {}
+  try {
+    const rendererWebContents = host.getAuthoritativeWindow().webContents
+    const requestId = randomUUID()
 
-  const browserPageId = await new Promise<string>((resolve, reject) => {
-    const timer = setTimeout(() => {
-      ipcMain.removeListener('browser:tabCreateReply', handler)
-      reject(new Error('Tab creation timed out'))
-    }, 10_000)
-
-    const handler = (
-      event: Electron.IpcMainEvent,
-      reply: { requestId: string; browserPageId?: string; error?: string }
-    ): void => {
-      if (event.sender !== rendererWebContents || reply.requestId !== requestId) {
-        return
+    const browserPageId = await new Promise<string>((resolve, reject) => {
+      let timer: ReturnType<typeof setTimeout> | undefined
+      const handler = (
+        event: Electron.IpcMainEvent,
+        reply: { requestId: string; browserPageId?: string; error?: string }
+      ): void => {
+        if (event.sender !== rendererWebContents || reply.requestId !== requestId) {
+          return
+        }
+        replied = true
+        cleanupRequest()
+        if (reply.error) {
+          reject(new Error(reply.error))
+        } else {
+          resolve(reply.browserPageId!)
+        }
       }
-      clearTimeout(timer)
-      ipcMain.removeListener('browser:tabCreateReply', handler)
-      if (reply.error) {
-        reject(new Error(reply.error))
-      } else {
-        resolve(reply.browserPageId!)
+      cleanupRequest = () => {
+        cleanupRequest = () => {}
+        clearTimeout(timer)
+        ipcMain.removeListener('browser:tabCreateReply', handler)
       }
-    }
-    ipcMain.on('browser:tabCreateReply', handler)
-    rendererWebContents.send('browser:requestTabCreate', {
-      requestId,
-      url,
-      worktreeId,
-      ...(requestedPageId ? { browserPageId: requestedPageId } : {}),
-      // undefined preserves renderer default-profile inheritance; null would override it.
-      sessionProfileId: profileId,
-      sessionPartition,
-      activate,
-      ...(fallbackWorktreeId ? { fallbackWorktreeId } : {})
+      timer = setTimeout(() => {
+        cleanupRequest()
+        reject(new Error('Tab creation timed out'))
+      }, 10_000)
+      ipcMain.on('browser:tabCreateReply', handler)
+      sendStarted = true
+      rendererWebContents.send('browser:requestTabCreate', {
+        requestId,
+        url,
+        worktreeId,
+        ...(requestedPageId ? { browserPageId: requestedPageId } : {}),
+        // undefined preserves renderer default-profile inheritance; null would override it.
+        sessionProfileId: profileId,
+        sessionPartition,
+        activate,
+        ...(fallbackWorktreeId ? { fallbackWorktreeId } : {})
+      })
     })
-  })
 
-  return { browserPageId }
+    return { browserPageId }
+  } finally {
+    cleanupRequest()
+    // Only pre-dispatch failure or an exact reply settles creation.
+    if (!sendStarted || replied) {
+      releaseConditionalUse()
+    }
+  }
 }

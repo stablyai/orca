@@ -1,3 +1,4 @@
+import { withConditionalWorktreeGlobalUse } from '../../ipc/conditional-worktree-operation'
 import { randomUUID } from 'node:crypto'
 import { BrowserError } from '../../browser/browser-error'
 import { browserNetworkExecutionHostKey } from '../../browser/browser-network-execution-route'
@@ -53,82 +54,86 @@ export async function createBrowserClientPage(
     caller: BrowserClientPageCaller | undefined
   }
 ): Promise<{ browserPageId: string }> {
-  const { worktree, browserProfileId, caller } = context
-  if (!caller?.pairedDeviceId) {
-    throw new BrowserError(
-      'forbidden',
-      'Client-hosted browser pages require an authenticated paired runtime.'
-    )
-  }
-  if (!worktree) {
-    throw new BrowserError(
-      'invalid_argument',
-      'Client-hosted browser pages require an explicit workspace.'
-    )
-  }
-  const url = params.url ?? 'about:blank'
-  const focus = resolveBrowserTabCreateFocus({
-    activate: params.activate,
-    navigation: params.navigation,
-    clientKind: caller.clientKind
-  })
-  const browserPageId = params.page ?? randomUUID()
-  const executionHost = await host.resolveBrowserNetworkExecutionHost(worktree)
-  const authority = host.getBrowserHostLeaseRegistry()
-  const created = await createRuntimeBrowserClientPage(authority, {
-    browserPageId,
-    browserHostClientId: params.placement.browserHostClientId,
-    pairedDeviceId: caller.pairedDeviceId,
-    browserProfileId,
-    executionHost,
-    workspaceId: worktree.id
-  })
-  const pages = host.getRuntimeBrowserPageRegistry()
-  pages.publishClientPage({
-    browserPageId,
-    workspaceId: worktree.id,
-    browserProfileId,
-    executionHostKey: browserNetworkExecutionHostKey(executionHost),
-    placement: created.placement,
-    pairedDeviceId: caller.pairedDeviceId,
-    url: 'about:blank',
-    loading: url !== 'about:blank',
-    active: focus.startsActive
-  })
-  publishCreatedBrowserSessionTab(host, {
-    placementKind: 'client',
-    browserPageId,
-    worktreeId: worktree.id,
-    focus,
-    clientNavigationId: caller.pairedDeviceId,
-    targetGroupId: params.targetGroupId
-  })
-  if (url !== 'about:blank') {
-    try {
-      await navigateRuntimeBrowserClientPage(authority, {
-        browserPageId,
-        placement: created.placement,
-        url
-      })
-      pages.updatePage(browserPageId, created.placement, { url, loading: false })
-    } catch {
-      pages.updatePage(browserPageId, created.placement, { loading: false })
+  return withConditionalWorktreeGlobalUse(async () => {
+    const { worktree, browserProfileId, caller } = context
+    if (!caller?.pairedDeviceId) {
+      throw new BrowserError(
+        'forbidden',
+        'Client-hosted browser pages require an authenticated paired runtime.'
+      )
     }
-    host.notifyHeadlessBrowserSessionTabsChanged?.(worktree.id)
-  }
-  return { browserPageId }
+    if (!worktree) {
+      throw new BrowserError(
+        'invalid_argument',
+        'Client-hosted browser pages require an explicit workspace.'
+      )
+    }
+    const url = params.url ?? 'about:blank'
+    const focus = resolveBrowserTabCreateFocus({
+      activate: params.activate,
+      navigation: params.navigation,
+      clientKind: caller.clientKind
+    })
+    const browserPageId = params.page ?? randomUUID()
+    const executionHost = await host.resolveBrowserNetworkExecutionHost(worktree)
+    const authority = host.getBrowserHostLeaseRegistry()
+    const created = await createRuntimeBrowserClientPage(authority, {
+      browserPageId,
+      browserHostClientId: params.placement.browserHostClientId,
+      pairedDeviceId: caller.pairedDeviceId,
+      browserProfileId,
+      executionHost,
+      workspaceId: worktree.id
+    })
+    const pages = host.getRuntimeBrowserPageRegistry()
+    pages.publishClientPage({
+      browserPageId,
+      workspaceId: worktree.id,
+      browserProfileId,
+      executionHostKey: browserNetworkExecutionHostKey(executionHost),
+      placement: created.placement,
+      pairedDeviceId: caller.pairedDeviceId,
+      url: 'about:blank',
+      loading: url !== 'about:blank',
+      active: focus.startsActive
+    })
+    publishCreatedBrowserSessionTab(host, {
+      placementKind: 'client',
+      browserPageId,
+      worktreeId: worktree.id,
+      focus,
+      clientNavigationId: caller.pairedDeviceId,
+      targetGroupId: params.targetGroupId
+    })
+    if (url !== 'about:blank') {
+      try {
+        await navigateRuntimeBrowserClientPage(authority, {
+          browserPageId,
+          placement: created.placement,
+          url
+        })
+        pages.updatePage(browserPageId, created.placement, { url, loading: false })
+      } catch {
+        pages.updatePage(browserPageId, created.placement, { loading: false })
+      }
+      host.notifyHeadlessBrowserSessionTabsChanged?.(worktree.id)
+    }
+    return { browserPageId }
+  })
 }
 
 export function openBrowserUrlOnClient(
   host: BrowserClientPageOpeningHost,
   params: { url: string; worktree: string }
 ): Promise<{ browserPageId: string }> {
-  assertClientOpenableUrl(params.url)
-  return createBrowserPageOnPairedHost(
-    host,
-    { url: params.url, worktree: params.worktree, activate: true, navigation: 'caller' },
-    DEFAULT_BROWSER_PROFILE_ID
-  )
+  return withConditionalWorktreeGlobalUse(() => {
+    assertClientOpenableUrl(params.url)
+    return createBrowserPageOnPairedHost(
+      host,
+      { url: params.url, worktree: params.worktree, activate: true, navigation: 'caller' },
+      DEFAULT_BROWSER_PROFILE_ID
+    )
+  })
 }
 
 export function assertClientOpenableUrl(url: string): void {
@@ -143,17 +148,19 @@ export async function createBrowserPageOnPairedHost(
   params: Omit<BrowserClientPageCreateParams, 'placement'> & { worktree?: string },
   browserProfileId: string
 ): Promise<{ browserPageId: string }> {
-  const lease = selectPairedPageHost(host)
-  const { worktree, ...rest } = params
-  return createBrowserClientPage(
-    host,
-    { ...rest, placement: { kind: 'client', browserHostClientId: lease.browserHostClientId } },
-    {
-      worktree: worktree ? await host.resolveBrowserWorkspace(worktree) : undefined,
-      browserProfileId,
-      caller: { pairedDeviceId: lease.pairedDeviceId, clientKind: 'runtime' }
-    }
-  )
+  return withConditionalWorktreeGlobalUse(async () => {
+    const lease = selectPairedPageHost(host)
+    const { worktree, ...rest } = params
+    return createBrowserClientPage(
+      host,
+      { ...rest, placement: { kind: 'client', browserHostClientId: lease.browserHostClientId } },
+      {
+        worktree: worktree ? await host.resolveBrowserWorkspace(worktree) : undefined,
+        browserProfileId,
+        caller: { pairedDeviceId: lease.pairedDeviceId, clientKind: 'runtime' }
+      }
+    )
+  })
 }
 
 /** Ambiguous selection still counts as an available paired host. */

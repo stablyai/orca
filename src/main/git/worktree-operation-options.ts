@@ -18,6 +18,7 @@ export type SparseWorktreeCreateError = Error & {
 }
 
 export type GitWorktreeExecOptions = {
+  conditionalRemovalToken?: symbol
   wslDistro?: string
   signal?: AbortSignal
   timeout?: number
@@ -44,6 +45,8 @@ export type AddWorktreeOptions = GitWorktreeExecOptions & {
 
 export type RemoveWorktreeOptions = GitWorktreeExecOptions & {
   deleteBranch?: boolean
+  /** Conditional automation never recursively removes a checkout Git left behind. */
+  refuseFilesystemFallback?: boolean
   forceBranchDelete?: boolean
   knownRemovedWorktree?: Pick<GitWorktreeInfo, 'branch' | 'head' | 'locked' | 'lockReason'> | null
   /** Stops only `git worktree remove`; a killed branch cleanup could strand a ref lock. */
@@ -80,6 +83,7 @@ export function resolveWorktreeAddTimeoutMs(env: NodeJS.ProcessEnv = process.env
 }
 
 export type GitExecOptionsForWorktree = {
+  conditionalRemovalToken?: symbol
   cwd: string
   wslDistro?: string
   signal?: AbortSignal
@@ -94,6 +98,9 @@ export function gitExecOptions(
 ): GitExecOptionsForWorktree {
   return {
     cwd,
+    ...(options.conditionalRemovalToken
+      ? { conditionalRemovalToken: options.conditionalRemovalToken }
+      : {}),
     ...(options.wslDistro ? { wslDistro: options.wslDistro } : {}),
     ...(options.signal ? { signal: options.signal } : {}),
     ...(options.timeout ? { timeout: options.timeout } : {}),
