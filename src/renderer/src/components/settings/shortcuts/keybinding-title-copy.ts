@@ -31,6 +31,8 @@ const STATIC_TITLE_COPY = {
   'workspace.rename': () => translate('keybindings.title.workspaceRename', 'Rename worktree'),
   'workspace.delete': () => translate('keybindings.title.1d2c86248c', 'Delete workspace'),
   'workspace.openBoard': () => translate('keybindings.title.1524825c2c', 'Toggle workspace board'),
+  'workspace.openUrl': () =>
+    translate('keybindings.title.workspaceOpenUrl', 'Open Workspace Link'),
   'dashboard.toggle': () => translate('keybindings.title.82c1bf448c', 'Toggle agent dashboard'),
   'workspace.selectByIndex': () =>
     translate('keybindings.title.0feb1f0496', 'Select workspace 1–9'),
