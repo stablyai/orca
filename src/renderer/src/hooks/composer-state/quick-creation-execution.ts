@@ -1,7 +1,5 @@
-import type { QuickCreationExecutionInput } from './composer-model'
-
 import {
-  getLinkedWorkItemPromptTemplate,
+  getDesktopLinkedWorkItemPromptTemplate,
   resolveQuickCreateLinkedWorkItemPrompt
 } from '@/lib/linked-work-item-context'
 import { useCallback } from 'react'
@@ -17,6 +15,7 @@ import { prepareQuickComposerStartup } from './quick-startup-plan'
 import { buildQuickCreationRequest, type QuickSubmitOptions } from './quick-creation-request'
 import type { PendingSmartGitHubSubmitResolution } from './source-selection-decisions'
 import { resolveAgentSessionLaunchRoute } from '@/lib/agent-session-launch-plan'
+import type { QuickCreationExecutionInput } from './composer-submit-model'
 
 export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
   const {
@@ -99,7 +98,11 @@ export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
         resolveQuickCreateLinkedWorkItemPrompt(
           promptLinkedWorkItem,
           trimmedNote,
-          getLinkedWorkItemPromptTemplate(useAppStore.getState(), repoId)
+          getDesktopLinkedWorkItemPromptTemplate(
+            useAppStore.getState(),
+            repoId,
+            workspaceRunContext?.hostId ?? selectedRepoExecutionHostId ?? undefined
+          )
         )
 
       const startupPolicySettlement = await settleComposerSubmit(
@@ -160,7 +163,7 @@ export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
         linkedWorkItem: submitLinkedWorkItem,
         note: trimmedNote,
         repoId,
-        executionHostId: selectedRepoExecutionHostId,
+        executionHostId: workspaceRunContext?.hostId ?? selectedRepoExecutionHostId,
         settings,
         launchHost: selectedRepoAgentLaunchFact,
         shell: selectedRepoStartupShell,
