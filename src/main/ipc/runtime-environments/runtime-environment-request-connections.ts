@@ -1,3 +1,7 @@
+import {
+  createRequestConnection,
+  trackWslHostRequestIdle
+} from './runtime-environment-request-connection-policy'
 import type { PairedRuntimeConnection } from '../../../shared/paired-runtime-connection'
 import { resolveEnvironment } from '../../../shared/runtime-environment-store'
 import { getPreferredPairedRuntimeConnection } from '../../../shared/runtime-environments'
@@ -9,7 +13,7 @@ import type {
   RuntimeOrchestrationEnvelope,
   RuntimeRpcResponse
 } from '../../../shared/runtime-rpc-envelope'
-import { RemoteRuntimeRequestConnection } from '../../../shared/remote-runtime/requests/remote-runtime-request-connection'
+import type { RemoteRuntimeRequestConnection } from '../../../shared/remote-runtime/requests/remote-runtime-request-connection'
 import { RemoteRuntimeSharedControlConnection } from '../../../shared/remote-runtime/control/remote-runtime-shared-control-connection'
 import { probeAllRemoteRuntimeSocketsNow } from '../../../shared/remote-runtime/remote-runtime-socket-liveness'
 import type {
@@ -115,16 +119,15 @@ export function sendRemoteRuntimeConnectionRequest<TResult>(
   let cached = requestConnections.get(environmentId)
   if (!cached || cached.pairingKey !== pairingKey) {
     cached?.connection.close()
-    cached = {
-      pairingKey,
-      connection: new RemoteRuntimeRequestConnection(
-        pairedConnection,
-        ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES
-      )
-    }
+    cached = { pairingKey, connection: createRequestConnection(pairedConnection) }
     requestConnections.set(environmentId, cached)
   }
-  return cached.connection.request(method, params, timeoutMs, signal)
+  const { connection } = cached
+  return trackWslHostRequestIdle(
+    environmentId,
+    connection,
+    connection.request(method, params, timeoutMs, signal)
+  )
 }
 
 export function closeRemoteRuntimeRequestConnection(environmentId: string): void {

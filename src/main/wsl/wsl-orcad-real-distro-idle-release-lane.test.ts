@@ -18,6 +18,7 @@ import { ORCAD_E2E_IDLE_TIMEOUT_ENV } from '../../shared/orcad-idle-exit'
 import { pairedRuntimeConnectionFromOffer } from '../../shared/paired-runtime-connection'
 import { parsePairingCode } from '../../shared/pairing'
 import { sendRemoteRuntimeRequest } from '../../shared/remote-runtime/remote-runtime-client'
+import { RemoteRuntimeSharedControlConnection } from '../../shared/remote-runtime/control/remote-runtime-shared-control-connection'
 import { execCommand } from '../ssh/remote-exec/remote-exec-command'
 import { readConfirmedRunningWslDistros } from '../wsl-background-distro-gate'
 import { readWindowsProcessTableFresh } from '../windows/windows-process-table'
@@ -180,6 +181,39 @@ async function guestMemory(): Promise<Receipt> {
 }
 
 /** Polls a real distro, whose state no fake clock moves. */
+/**
+ * What closing an idle request socket costs: a request on a new socket (a new wsl.exe bridge, its
+ * handshake and the RPC) against one on a socket already open.
+ */
+async function measureRequestRedial(connection: WslOrcadConnection): Promise<Receipt> {
+  const median = (values: number[]): number => values.toSorted((a, b) => a - b)[2] ?? 0
+  const cold: number[] = []
+  for (let i = 0; i < 5; i++) {
+    const started = performance.now()
+    await rpc(connection, 'status.get')
+    cold.push(Math.round(performance.now() - started))
+  }
+  const offer = parsePairingCode(connection.pairingOffer)
+  if (!offer) {
+    throw new Error('Unparseable pairing offer')
+  }
+  const open = new RemoteRuntimeSharedControlConnection(pairedRuntimeConnectionFromOffer(offer), {
+    clientCapabilities: ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES
+  })
+  const warm: number[] = []
+  try {
+    await open.request('status.get', undefined, 30_000)
+    for (let i = 0; i < 5; i++) {
+      const started = performance.now()
+      await open.request('status.get', undefined, 30_000)
+      warm.push(Math.round(performance.now() - started))
+    }
+  } finally {
+    open.close()
+  }
+  return { coldMs: cold, warmMs: warm, medianColdMs: median(cold), medianWarmMs: median(warm) }
+}
+
 function waitFor<T>(
   what: string,
   read: () => Promise<T | null>,
@@ -209,6 +243,7 @@ async function idleReleasePhase(): Promise<void> {
     'cat /proc/uptime; for p in $(ps -eo pid=,stat= | awk \'$2 ~ /^Z/ {print $1}\'); do echo "Z $p $(cut -d" " -f4-8,22 /proc/$p/stat)"; done; ps -eo pid,ppid,sid,stat,args'
   receipt.processesAfterEnsure = await guest(zombies)
   await rpc(connection, 'status.get')
+  receipt.requestLatency = await measureRequestRedial(connection)
   receipt.processesAfterLaunch = await guest(zombies)
   const repoPath = (await guest('cd "$HOME/wsl-orcad-lane-repo" && pwd')).trim()
   const created = await rpc<{ terminal: { handle: string } }>(connection, 'terminal.create', {
