@@ -191,6 +191,20 @@ describe('launchWorkItemDirect', () => {
           updatedAt: 1
         }
       ],
+      projectHostSetups: [
+        {
+          id: 'repo-1',
+          projectId: 'repo-1',
+          repoId: 'repo-1',
+          hostId: 'local',
+          path: '/repo',
+          displayName: 'Repo',
+          setupState: 'ready',
+          setupMethod: 'legacy-repo',
+          createdAt: 1,
+          updatedAt: 1
+        }
+      ],
       worktreesByRepo: {},
       settings: {
         defaultTuiAgent: 'codex',
@@ -486,7 +500,7 @@ describe('launchWorkItemDirect', () => {
     mocks.store.settings = {
       linkedWorkItemPromptTemplate: '/global-work {{url}}'
     }
-    mocks.store.endpointProjects = [
+    mocks.store.projects = [
       {
         id: 'repo-1',
         displayName: 'Repo',

@@ -49,8 +49,8 @@ it('retains the accepted route and resolves project task drafts for either launc
   const original = useAppStore.getState().settings
   const originalCatalog = {
     repos: useAppStore.getState().repos,
-    endpointProjects: useAppStore.getState().endpointProjects,
-    endpointProjectHostSetups: useAppStore.getState().endpointProjectHostSetups
+    projects: useAppStore.getState().projects,
+    projectHostSetups: useAppStore.getState().projectHostSetups
   }
   const prepare = vi.fn<() => Promise<PreparedQuickSubmit | null>>()
   const { result } = renderHook(() =>
@@ -133,7 +133,7 @@ it('retains the accepted route and resolves project task drafts for either launc
     useAppStore.setState({
       settings: { ...settings, linkedWorkItemPromptTemplate: '/global {{url}}' },
       repos: [{ id: 'repo-1', path: '/repo', displayName: 'Repo', badgeColor: '', addedAt: 1 }],
-      endpointProjectHostSetups: [
+      projectHostSetups: [
         {
           id: 'repo-1',
           projectId: 'project-1',
@@ -147,7 +147,7 @@ it('retains the accepted route and resolves project task drafts for either launc
           updatedAt: 1
         }
       ],
-      endpointProjects: [
+      projects: [
         {
           id: 'project-1',
           displayName: 'Repo',
