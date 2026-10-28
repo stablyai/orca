@@ -88,7 +88,7 @@ export function cachedGenerationWall(
   return blocked.kind === 'blocked' ? blocked : null
 }
 
-// Compare verdicts instead of rebuilt gate objects so unchanged reconnect/status events cannot resweep cache and flicker the spinner.
+// Compare verdicts instead of rebuilt gate objects so unchanged reconnect/status events cannot reread cache and flicker the spinner.
 export function gateKey(gates: MobileWebShellGates): string {
   return gateVerdict(gates).kind
 }

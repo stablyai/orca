@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
 import { createGenerationStore } from './generation-store'
 import { deriveHostCacheKey } from './host-cache-key'
@@ -117,29 +118,17 @@ describe('generation store', () => {
     expect(await store.readActiveGeneration(HOST)).toBeNull()
   })
 
-  it('drops the staged tree when a write fails', async () => {
+  it('keeps what a failed stage wrote, with no manifest and no generation', async () => {
     const fs = createFakeFileSystem()
     const store = createGenerationStore({ fileSystem: fs })
     fs.failWritesAt(`${HOST}/tmp/${BUILD}/assets/app.js`)
 
     await expect(store.stageGeneration(HOST, buildResult({}))).rejects.toThrow('disk-full')
 
-    expect(fs.paths().some((path) => path.includes(`tmp/${BUILD}`))).toBe(false)
+    expect(fs.paths().filter((path) => path.startsWith(`${HOST}/tmp/${BUILD}/`))).toEqual([
+      `${HOST}/tmp/${BUILD}/index.html`
+    ])
     expect(await store.readActiveGeneration(HOST)).toBeNull()
-  })
-
-  it('leaves no generation and no tmp for any host when a download is interrupted', async () => {
-    const fs = createFakeFileSystem()
-    const store = createGenerationStore({ fileSystem: fs })
-    const other = deriveHostCacheKey('host-b')
-
-    await store.stageGeneration(HOST, buildResult({}))
-    await store.stageGeneration(other, buildResult({}))
-    await store.sweepStagedGenerations()
-
-    expect(fs.paths().some((path) => path.includes('/tmp'))).toBe(false)
-    expect(await store.readActiveGeneration(HOST)).toBeNull()
-    expect(await store.readActiveGeneration(other)).toBeNull()
   })
 
   it('treats a second commit of the same build as a no-op', async () => {
@@ -251,20 +240,6 @@ describe('generation store', () => {
       `${staging}/assets/later.js`,
       `${staging}/manifest.json`
     ])
-    expect(fs.paths().filter((path) => path.startsWith(`${staging}/assets/`))).toEqual([
-      `${staging}/assets/later.js`
-    ])
-  })
-
-  it('drops residue from an earlier attempt instead of staging over it', async () => {
-    const fs = createFakeFileSystem()
-    const store = createGenerationStore({ fileSystem: fs })
-    const staging = `${HOST}/tmp/${BUILD}`
-    fs.seed(`${staging}/assets/orphan.js`, { kind: 'file', bytes: new Uint8Array(1) })
-
-    await store.stageGeneration(HOST, buildResult({}))
-
-    expect(fs.paths().some((path) => path.endsWith('orphan.js'))).toBe(false)
   })
 
   it('refuses a path that escapes the staged tree, and a host key that is not one', async () => {
@@ -349,7 +324,7 @@ describe('generation store', () => {
     }
   })
 
-  it('drops an aborted staging without touching the activation', async () => {
+  it('keeps an aborted staging as files only, without touching the activation', async () => {
     const fs = createFakeFileSystem()
     const store = createGenerationStore({ fileSystem: fs })
     await activate(store, HOST)
@@ -357,7 +332,10 @@ describe('generation store', () => {
     const staged = await store.stageGeneration(HOST, buildResult(SECOND))
     await store.abortStagedGeneration(staged)
 
-    expect(fs.paths().some((path) => path.includes(SECOND_BUILD))).toBe(false)
+    expect(fs.paths().filter((path) => path.includes(SECOND_BUILD))).toEqual([
+      `${HOST}/tmp/${SECOND_BUILD}`,
+      `${HOST}/tmp/${SECOND_BUILD}/index.html`
+    ])
     expect((await store.readActiveGeneration(HOST))?.buildId).toBe(BUILD)
   })
 
@@ -400,7 +378,6 @@ describe('generation store', () => {
     for (const host of hosts) {
       await activate(store, host)
     }
-    await store.sweepStagedGenerations()
     await store.deleteUnpairedHostCaches(async () => new Set(hosts))
 
     expect(fs.paths()).toContain('not-a-host-key/stray.txt')
@@ -425,10 +402,10 @@ describe('reusable assets for the next download', () => {
   it('matches cached assets by content, and checks them without reading them', async () => {
     const fs = createFakeFileSystem()
     const store = createGenerationStore({ fileSystem: fs })
-    expect((await store.openReusableAssets(HOST)).has(SCRIPT!)).toBe(false)
+    expect((await store.openReusableAssets(HOST, NEXT.manifest)).has(SCRIPT!)).toBe(false)
     await activate(store, HOST)
 
-    const reusable = await store.openReusableAssets(HOST)
+    const reusable = await store.openReusableAssets(HOST, NEXT.manifest)
 
     expect(reusable.has(SCRIPT!)).toBe(true)
     expect(reusable.has(PAGE!)).toBe(false)
@@ -465,7 +442,104 @@ describe('reusable assets for the next download', () => {
     await expect(store.stageGeneration(HOST, LEFT_TO_STAGE)).rejects.toThrow(
       'no longer holds the reused asset assets/app-2.js'
     )
-    expect(fs.paths().some((path) => path.includes(`tmp/${NEXT_BUILD}`))).toBe(false)
+    expect(fs.paths()).not.toContain(`${HOST}/tmp/${NEXT_BUILD}/manifest.json`)
+    expect(await store.readActiveGeneration(HOST)).toBeNull()
+  })
+})
+
+// Real hashes: kept files are hash-checked before reuse.
+describe('a download that kept assets before it was interrupted', () => {
+  function hashedBuild(files: Record<string, string>) {
+    const bytes = new Map(Object.entries(files).map(([path, text]) => [path, encoder.encode(text)]))
+    const assets = [...bytes].map(([path, content]) => ({
+      path,
+      sha256: createHash('sha256').update(content).digest('hex'),
+      byteLength: content.byteLength,
+      contentType: 'text/plain'
+    }))
+    const manifest = {
+      ...buildResult({}).manifest,
+      buildId: computeMobileWebBundleId(assets),
+      assets
+    }
+    return { manifest, bytes, assets }
+  }
+  const encoder = new TextEncoder()
+  const BUILT = hashedBuild({ 'index.html': '<h1>orca</h1>', 'assets/app.js': 'x=1' })
+  const [PAGE, SCRIPT] = BUILT.assets
+  const KEPT_PAGE = `${HOST}/tmp/${BUILT.manifest.buildId}/index.html`
+
+  async function keptPage() {
+    const fs = createFakeFileSystem()
+    const store = createGenerationStore({ fileSystem: fs })
+    const first = await store.openReusableAssets(HOST, BUILT.manifest)
+    expect(await first.keep(PAGE!, BUILT.bytes.get('index.html')!)).toBe(true)
+    return { fs, store }
+  }
+
+  it('offers what it kept to the next attempt at the build, and stages it without a rewrite', async () => {
+    const { fs, store } = await keptPage()
+
+    const next = await store.openReusableAssets(HOST, BUILT.manifest)
+    expect(next.has(PAGE!)).toBe(true)
+    expect(next.has(SCRIPT!)).toBe(false)
+    expect(await next.check(PAGE!)).toBe(true)
+    await activate(store, HOST, {
+      manifest: BUILT.manifest,
+      assets: new Map([['assets/app.js', BUILT.bytes.get('assets/app.js')!]]),
+      reused: ['index.html'],
+      totalBytes: 3,
+      elapsedMs: 1
+    })
+
+    const generation = `${HOST}/generations/${BUILT.manifest.buildId}`
+    expect(fs.text(`${generation}/index.html`)).toBe('<h1>orca</h1>')
+    expect(fs.text(`${generation}/assets/app.js`)).toBe('x=1')
+    expect(fs.writes.filter((path) => path.endsWith('index.html'))).toEqual([KEPT_PAGE])
+  })
+
+  it('downloads a kept file again when it is short or no longer hashes', async () => {
+    const { fs, store } = await keptPage()
+    fs.seed(KEPT_PAGE, { kind: 'file', bytes: encoder.encode('<h1>orca</h') })
+    expect((await store.openReusableAssets(HOST, BUILT.manifest)).has(PAGE!)).toBe(false)
+
+    fs.seed(KEPT_PAGE, { kind: 'file', bytes: encoder.encode('<h1>ORCA</h1>') })
+    const next = await store.openReusableAssets(HOST, BUILT.manifest)
+    expect(next.has(PAGE!)).toBe(true)
+    expect(await next.check(PAGE!)).toBe(false)
+    expect(fs.bytes(KEPT_PAGE)).toBeNull()
+  })
+
+  it('still offers the active generation when another build cannot be discarded', async () => {
+    const { fs, store } = await keptPage()
+    await activate(store, HOST)
+    const remove = fs.delete.bind(fs)
+    fs.delete = async (target) => {
+      if (target.includes(BUILT.manifest.buildId)) {
+        throw new Error('simulated stuck folder')
+      }
+      await remove(target)
+    }
+
+    const { manifest } = buildResult({
+      assets: [
+        { path: 'index.html', byteLength: 4 },
+        { path: 'assets/other.js', byteLength: 3 }
+      ]
+    })
+    const next = await store.openReusableAssets(HOST, manifest)
+
+    expect(next.has(manifest.assets[0]!)).toBe(true)
+  })
+
+  it('discards what it kept once the host offers another build', async () => {
+    const { fs, store } = await keptPage()
+    const other = deriveHostCacheKey('host-b')
+
+    await store.openReusableAssets(other, buildResult(SECOND).manifest)
+    expect(fs.bytes(KEPT_PAGE)).not.toBeNull()
+    await store.openReusableAssets(HOST, buildResult(SECOND).manifest)
+    expect(fs.paths().filter((path) => path.startsWith(`${HOST}/tmp/`))).toEqual([])
   })
 })
 

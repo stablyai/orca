@@ -98,6 +98,13 @@ export function createFakeGenerationFileSystem(): FakeGenerationFileSystem {
       const node = nodes.get(target)
       return node?.kind === 'file' ? new TextDecoder().decode(node.bytes) : null
     },
+    async readBytes(target) {
+      if (failReadAt !== null && target === uri(failReadAt)) {
+        throw new Error('simulated unreadable file')
+      }
+      const node = nodes.get(target)
+      return node?.kind === 'file' ? new Uint8Array(node.bytes) : null
+    },
     async fileExists(target) {
       return nodes.get(target)?.kind === 'file'
     },

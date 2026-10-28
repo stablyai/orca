@@ -1,5 +1,11 @@
-import type { MobileWebBundleReusableAssets } from '../transport/mobile-web-bundle-fetch'
-import type { MobileWebBundleAssetRead } from '../transport/mobile-web-bundle-reply-schemas'
+import {
+  sha256HexOf,
+  type MobileWebBundleReusableAssets
+} from '../transport/mobile-web-bundle-fetch'
+import type {
+  MobileWebBundleAssetRead,
+  MobileWebBundleManifestRead
+} from '../transport/mobile-web-bundle-reply-schemas'
 import { requireStorablePath } from './generation-asset-path'
 import { joinUri } from './generation-cache-uri'
 import type { ActiveGeneration } from './generation-store'
@@ -19,7 +25,7 @@ function cachedFileOf(
 export function reusableAssetsOf(
   fs: GenerationFileSystem,
   active: ActiveGeneration | null
-): MobileWebBundleReusableAssets {
+): Omit<MobileWebBundleReusableAssets, 'keep'> {
   return {
     has: (asset) => {
       try {
@@ -54,4 +60,45 @@ export async function copyCachedAsset(
   if ((await fs.fileSize(target)) !== asset.byteLength) {
     throw new Error(`the reused asset ${asset.path} did not copy whole`)
   }
+}
+
+// Lengths only: a kept file is hashed before reuse, since an interrupted write is what leaves it.
+export async function keptAssetPaths(
+  fs: GenerationFileSystem,
+  directory: string,
+  manifest: MobileWebBundleManifestRead
+): Promise<ReadonlySet<string>> {
+  const kept = new Set<string>()
+  for (const asset of manifest.assets) {
+    try {
+      if (
+        (await fs.fileSize(joinUri(directory, requireStorablePath(asset.path)))) ===
+        asset.byteLength
+      ) {
+        kept.add(asset.path)
+      }
+    } catch {
+      // An unreadable or unstorable path is downloaded again.
+    }
+  }
+  return kept
+}
+
+// Delete a mismatch so staging, which trusts any whole-length file here, cannot pick it up.
+export async function checkKeptAsset(
+  fs: GenerationFileSystem,
+  directory: string,
+  asset: MobileWebBundleAssetRead
+): Promise<boolean> {
+  const uri = joinUri(directory, requireStorablePath(asset.path))
+  try {
+    const bytes = await fs.readBytes(uri)
+    if (bytes?.byteLength === asset.byteLength && (await sha256HexOf(bytes)) === asset.sha256) {
+      return true
+    }
+  } catch {
+    // Unreadable counts as a mismatch.
+  }
+  await fs.delete(uri).catch(() => undefined)
+  return false
 }

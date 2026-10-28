@@ -27,6 +27,7 @@ import {
   traceShellStep
 } from './shell-lifecycle-log'
 import { shellPageFrame, type ShellPageFrame } from './shell-page-frame'
+import { useAppForegroundDispatch } from './use-app-foreground-dispatch'
 import {
   createMobileWebShellSession,
   reduceMobileWebShellSession
@@ -155,7 +156,7 @@ export function useMobileWebShellSession(args: {
       const send = (event: MobileWebShellSessionEvent) => dispatch(epoch, event)
       switch (effect.kind) {
         case 'delete-cache':
-          // No completion event needed: the store queue orders the following sweep/read after deletion.
+          // No completion event needed: the store queue orders the following read after deletion.
           await store.deleteHostCache(hostKey).catch(() => undefined)
           return
         case 'record-update-failure':
@@ -248,6 +249,8 @@ export function useMobileWebShellSession(args: {
   useEffect(() => {
     dispatch(epochRef.current, { type: 'layout-changed', wide })
   }, [dispatch, wide])
+
+  useAppForegroundDispatch(dispatch, epochRef)
 
   const { statusPending, statusReadable, hostCapabilities, hostProtocolWindow } = gates
   const reachability = readMobileWebShellReachability(connState, client)

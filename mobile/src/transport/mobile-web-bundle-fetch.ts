@@ -6,8 +6,11 @@ import type {
 } from './mobile-web-bundle-reply-schemas'
 import type { RpcClient } from './rpc-client'
 import { MobileWebBundleFetchError } from './mobile-web-bundle-fetch-refusal'
-import { markRpcDeliveryUnknown } from './rpc-delivery-ambiguity'
 import { runRpcOperation } from './rpc-operation'
+import {
+  createWindowStallClock,
+  MOBILE_WEB_BUNDLE_WINDOW_STALL_MS
+} from './mobile-web-bundle-window-stall-clock'
 import {
   mobileWebBundleWindowReader,
   type MobileWebBundleWindowHeader
@@ -16,8 +19,6 @@ import {
 // Limit concurrent windows across all assets to the host’s four slots; one reader per asset serializes large scripts.
 const MAX_CONCURRENT_WINDOW_READS = 4
 
-// Time fetch-wide inactivity; a queued read on a slow moving link can exceed a per-request stall budget (#29697).
-export const MOBILE_WEB_BUNDLE_WINDOW_STALL_MS = 30_000
 // Bound pending-read lifetimes so failed fetches release reassembly buffers after the queued-reply allowance.
 const WINDOW_READ_BACKSTOP_MS =
   (MAX_CONCURRENT_WINDOW_READS + 1) * MOBILE_WEB_BUNDLE_WINDOW_STALL_MS
@@ -32,7 +33,7 @@ export type MobileWebBundleFetchProgress = {
 export type MobileWebBundleFetchResult = {
   readonly manifest: MobileWebBundleManifestRead
   readonly assets: ReadonlyMap<string, Uint8Array>
-  // stageGeneration must copy every reused asset or fail rather than stage an incomplete tree.
+  // Already on disk (kept as it landed, or in the active generation); stageGeneration must place each or fail.
   readonly reused: readonly string[]
   readonly totalBytes: number
   readonly elapsedMs: number
@@ -46,11 +47,13 @@ type AssetReassembly = {
 
 type WindowRead = { readonly asset: AssetReassembly; readonly offset: number }
 
-// Reuse only matching content hash/length from immutable verified generations.
+// Reuse only matching content hash/length from verified files: the active generation or this build's interrupted download.
 export type MobileWebBundleReusableAssets = {
   readonly has: (asset: MobileWebBundleAssetRead) => boolean
-  // Stat without reading bytes; absent/short files fall back to download and checks never reject.
+  // Absent/short/mismatched files fall back to download and checks never reject.
   readonly check: (asset: MobileWebBundleAssetRead) => Promise<boolean>
+  // Persist a verified asset as it lands so an interrupted fetch resumes from it; false leaves it in memory.
+  readonly keep: (asset: MobileWebBundleAssetRead, bytes: Uint8Array) => Promise<boolean>
 }
 
 // Verify every asset hash before returning; report only wire bytes so reuse does not make progress jump then stall.
@@ -58,7 +61,8 @@ export async function fetchMobileWebBundle(args: {
   client: RpcClient
   signal?: AbortSignal
   onProgress?: (progress: MobileWebBundleFetchProgress) => void
-  reusable?: MobileWebBundleReusableAssets
+  // Opened per manifest so a resumed download of the same build can reuse what it kept.
+  openReusable?: (manifest: MobileWebBundleManifestRead) => Promise<MobileWebBundleReusableAssets>
 }): Promise<MobileWebBundleFetchResult> {
   const startedAt = Date.now()
   const stopped = new AbortController()
@@ -66,7 +70,8 @@ export async function fetchMobileWebBundle(args: {
   const opened = await runRpcOperation(args.client, mobileWebBundleManifestRead, null)
   const manifest = opened.manifest
   const reader = mobileWebBundleWindowReader(args.client, opened)
-  const reusable = args.reusable
+  // Unavailable reuse is a cache miss, not a download failure.
+  const reusable = await args.openReusable?.(manifest).catch(() => undefined)
   const candidates = new Set(
     reusable === undefined ? [] : manifest.assets.filter((entry) => reusable.has(entry))
   )
@@ -77,34 +82,7 @@ export async function fetchMobileWebBundle(args: {
   let downloadBytes = 0
   let downloadAssets = 0
   let downloadedAssets = 0
-  let stallTimer: ReturnType<typeof setTimeout> | null = null
-  let failStalled: (error: Error) => void = () => {}
-  const stalled = new Promise<never>((_, reject) => {
-    failStalled = reject
-  })
-  const disarmStallClock = (): void => {
-    if (stallTimer !== null) {
-      clearTimeout(stallTimer)
-      stallTimer = null
-    }
-  }
-  const armStallClock = (): void => {
-    disarmStallClock()
-    // A read that lands after the fetch settled must not leave a timer behind.
-    if (stopped.signal.aborted) {
-      return
-    }
-    stallTimer = setTimeout(() => {
-      stopped.abort()
-      failStalled(
-        markRpcDeliveryUnknown(
-          new Error(
-            `mobile web bundle fetch stalled: no window arrived in ${MOBILE_WEB_BUNDLE_WINDOW_STALL_MS}ms`
-          )
-        )
-      )
-    }, MOBILE_WEB_BUNDLE_WINDOW_STALL_MS)
-  }
+  const stallClock = createWindowStallClock(stopped)
   const reportProgress = (): void => {
     args.onProgress?.({
       completedAssets: downloadedAssets,
@@ -119,7 +97,7 @@ export async function fetchMobileWebBundle(args: {
       { buildId: manifest.buildId, path: asset.entry.path, offset },
       { timeoutMs: WINDOW_READ_BACKSTOP_MS }
     )
-    armStallClock()
+    stallClock.arm()
     // A sibling already failed the fetch; this reply is not worth checking, decoding or reporting.
     if (stopped.signal.aborted) {
       return
@@ -137,11 +115,20 @@ export async function fetchMobileWebBundle(args: {
     asset.outstandingWindows -= 1
     if (asset.outstandingWindows === 0) {
       const verified = await verifyReassembledAsset(asset)
+      // Keep verified bytes even after a sibling failed; skip once the caller left, as its host may since be removed.
+      const kept =
+        args.signal?.aborted !== true && reusable !== undefined
+          ? await reusable.keep(asset.entry, verified)
+          : false
       // A sibling failed while this hashed; the fetch already rejected with that failure.
       if (stopped.signal.aborted) {
         return
       }
-      assets.set(asset.entry.path, verified)
+      if (kept) {
+        reused.push(asset.entry.path)
+      } else {
+        assets.set(asset.entry.path, verified)
+      }
       downloadedAssets += 1
     }
     // Per window, not per asset: the largest asset goes first, so asset completions bunch at the end.
@@ -171,11 +158,14 @@ export async function fetchMobileWebBundle(args: {
       }
     }
     const workers = Math.min(MAX_CONCURRENT_WINDOW_READS, queue.length)
-    armStallClock()
+    stallClock.arm()
     try {
-      await Promise.race([Promise.all(Array.from({ length: workers }, () => worker())), stalled])
+      await Promise.race([
+        Promise.all(Array.from({ length: workers }, () => worker())),
+        stallClock.stalled
+      ])
     } finally {
-      disarmStallClock()
+      stallClock.disarm()
     }
   }
 
@@ -215,7 +205,7 @@ export async function fetchMobileWebBundle(args: {
     }
   } finally {
     stopped.abort()
-    disarmStallClock()
+    stallClock.disarm()
   }
   // The final window sends nothing after its last reply, so no worker would see this abort.
   throwIfCallerAborted(args.signal)
@@ -287,9 +277,13 @@ function assertWindowFillsItsSlot(
   )
 }
 
+// Native: hashing in JS held the JS thread for seconds, and React's progress renders waited on it.
+export async function sha256HexOf(bytes: Uint8Array<ArrayBuffer>): Promise<string> {
+  return toHex(new Uint8Array(await digest(CryptoDigestAlgorithm.SHA256, bytes)))
+}
+
 async function verifyReassembledAsset(asset: AssetReassembly): Promise<Uint8Array> {
-  // Native: hashing in JS held the JS thread for seconds, and React's progress renders waited on it.
-  const hashed = toHex(new Uint8Array(await digest(CryptoDigestAlgorithm.SHA256, asset.whole)))
+  const hashed = await sha256HexOf(asset.whole)
   if (hashed !== asset.entry.sha256) {
     throw new MobileWebBundleFetchError(
       'asset-checksum-mismatch',

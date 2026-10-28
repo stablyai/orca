@@ -20,6 +20,7 @@ export type GenerationFileSystem = {
   writeText(uri: string, text: string): Promise<void>
   // Return null only for absence; unreadable files must throw so transient I/O cannot make the store delete a valid cache.
   readText(uri: string): Promise<string | null>
+  readBytes(uri: string): Promise<Uint8Array<ArrayBuffer> | null>
   fileExists(uri: string): Promise<boolean>
   fileSize(uri: string): Promise<number | null>
   // Create destination parents; require an absent destination on both platforms and throw for unavailable sources.
@@ -110,6 +111,10 @@ export function createExpoGenerationFileSystem(): GenerationFileSystem {
       const file = new File(uri)
       // Propagate I/O and iOS data-protection failures instead of treating an unreadable file as absent.
       return file.exists ? await file.text() : null
+    },
+    async readBytes(uri) {
+      const file = new File(uri)
+      return file.exists ? await file.bytes() : null
     },
     async fileExists(uri) {
       return new File(uri).exists

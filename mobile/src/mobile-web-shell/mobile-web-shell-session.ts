@@ -15,11 +15,10 @@ import {
   type MobileWebShellUpdateFailureFacts
 } from './mobile-web-shell-update-failure'
 import { updateFailureOutcomeOf } from './mobile-web-shell-update-failure-outcome'
+import { reduceGateEvent, reduceUncachedDownloadFailed } from './mobile-web-shell-link-retry'
 import {
-  awaitsGates,
   cachedGenerationWall,
   CHECKING,
-  gateKey,
   gateState,
   gateVerdict,
   ROUTE_UNAVAILABLE
@@ -47,6 +46,7 @@ export function createMobileWebShellSession(
     state: CHECKING,
     retriedOnce: false,
     remountedOnce: false,
+    retryOnReconnect: false,
     pageReady: false,
     pagePainted: false,
     documentLoaded: false,
@@ -70,6 +70,7 @@ function startFlow(
   const base = {
     updateNotice: null,
     requestedBuildId: null,
+    retryOnReconnect: false,
     ...patch,
     gates,
     flow: session.flow + 1
@@ -78,7 +79,7 @@ function startFlow(
   if (gated !== null) {
     return step(session, { ...base, state: gated }, before)
   }
-  // Offline still sweeps/reads cache; onCacheRead skips only the host compatibility check.
+  // Offline still reads cache; onCacheRead skips only the host compatibility check.
   return step(session, { ...base, state: CHECKING }, [...before, { kind: 'open-cache' }])
 }
 
@@ -208,9 +209,7 @@ function decideDownloadFailed(
   const cached = session.cached
   const gates = session.gates
   if (cached === null || gates === null) {
-    return step(session, {
-      state: { kind: 'failed', reason: 'download-failed', retriedOnce: session.retriedOnce }
-    })
+    return reduceUncachedDownloadFailed(session, cause, startFlow)
   }
   // Read current gates because they can change while fetching without restarting the flow.
   const verdict = gateVerdict(gates)
@@ -249,10 +248,8 @@ export function reduceMobileWebShellSession(
   }
   switch (event.type) {
     case 'gates-changed':
-      return awaitsGates(session.state) &&
-        (session.gates === null || gateKey(session.gates) !== gateKey(event.gates))
-        ? startFlow(session, event.gates)
-        : step(session, { gates: event.gates })
+    case 'app-foregrounded':
+      return reduceGateEvent(session, event, startFlow)
     case 'cache-read':
       return onCacheRead(session, event.generation)
     case 'manifest-read':

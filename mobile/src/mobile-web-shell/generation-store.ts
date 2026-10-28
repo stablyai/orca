@@ -8,7 +8,12 @@ import type {
 } from '../transport/mobile-web-bundle-fetch'
 import { joinUri } from './generation-cache-uri'
 import { MANIFEST_FILE_NAME, requireStorablePath } from './generation-asset-path'
-import { copyCachedAsset, reusableAssetsOf } from './generation-reuse'
+import {
+  checkKeptAsset,
+  copyCachedAsset,
+  keptAssetPaths,
+  reusableAssetsOf
+} from './generation-reuse'
 import type { GenerationDirectoryEntry, GenerationFileSystem } from './generation-store-file-system'
 import { isHostCacheKey } from './host-cache-key'
 import type { MobileWebShellUpdateFailure } from './mobile-web-shell-update-failure'
@@ -37,11 +42,15 @@ export type StagedGeneration = {
 
 export type GenerationStore = {
   readActiveGeneration(hostKey: string): Promise<ActiveGeneration | null>
-  openReusableAssets(hostKey: string): Promise<MobileWebBundleReusableAssets>
+  // Drops the host's interrupted downloads of other builds: at most one build per host is ever resumable.
+  openReusableAssets(
+    hostKey: string,
+    manifest: MobileWebBundleManifestRead
+  ): Promise<MobileWebBundleReusableAssets>
   stageGeneration(hostKey: string, result: MobileWebBundleFetchResult): Promise<StagedGeneration>
   commitGeneration(staged: StagedGeneration): Promise<ActiveGeneration>
+  // Keeps the staged files so the next attempt at this build resumes from them.
   abortStagedGeneration(staged: StagedGeneration): Promise<void>
-  sweepStagedGenerations(): Promise<void>
   deleteHostCache(hostKey: string): Promise<void>
   // Bundles live as long as their pairing; a rejected read skips the sweep rather than guess.
   deleteUnpairedHostCaches(readPairedHostKeys: () => Promise<ReadonlySet<string>>): Promise<void>
@@ -114,20 +123,19 @@ export function createGenerationStore(options: {
       uri: joinUri(directory, requireStorablePath(asset.path)),
       bytes: reused.has(asset.path) ? null : requireExactBytes(result.assets.get(asset.path), asset)
     }))
-    // Copy reused assets on the stage queue so sweeps and concurrent downloads cannot remove their source mid-copy.
+    // Copy reused assets on the stage queue so concurrent downloads cannot remove their source mid-copy.
     const active = reused.size > 0 ? await readActive(hostKey) : null
-    // Discard prior residue; fresh writes over a partial tree would not form a verified generation.
-    await fs.delete(directory)
-    try {
-      for (const { asset, uri, bytes } of assets) {
-        await (bytes === null ? copyCachedAsset(fs, active, asset, uri) : fs.writeBytes(uri, bytes))
+    // A failure leaves the written files: every whole-length file here holds verified bytes the next attempt can resume from.
+    for (const { asset, uri, bytes } of assets) {
+      if (bytes !== null) {
+        await fs.writeBytes(uri, bytes)
+      } else if ((await fs.fileSize(uri)) !== asset.byteLength) {
+        await fs.delete(uri)
+        await copyCachedAsset(fs, active, asset, uri)
       }
-      // Write the manifest last so interrupted trees cannot appear activated.
-      await fs.writeText(joinUri(directory, MANIFEST_FILE_NAME), JSON.stringify(manifest))
-    } catch (error) {
-      await fs.delete(directory).catch(() => undefined)
-      throw error
     }
+    // Write the manifest last so interrupted trees cannot appear activated.
+    await fs.writeText(joinUri(directory, MANIFEST_FILE_NAME), JSON.stringify(manifest))
     const handle: StagedGeneration = { hostKey, buildId: manifest.buildId, directory, manifest }
     issuedHandles.add(handle)
     return handle
@@ -169,7 +177,7 @@ export function createGenerationStore(options: {
     }
     await fs.createDirectory(generations)
     await fs.moveDirectory(staged.directory, target)
-    // Below API 26, Expo Android FileSystemPath.kt moves directories via non-recursive copy/delete and can leave an empty target; failed source deletion leaves tmp for sweeping.
+    // Below API 26, Expo Android FileSystemPath.kt moves directories via non-recursive copy/delete and can leave an empty target; failed source deletion leaves a tmp tree the host's next download of another build discards.
     if (!(await fs.fileExists(joinUri(target, MANIFEST_FILE_NAME)))) {
       await fs.delete(target)
       throw new Error(`generation ${staged.buildId} did not carry its manifest through the rename`)
@@ -177,14 +185,32 @@ export function createGenerationStore(options: {
     return active
   }
 
-  async function openReusable(hostKey: string): Promise<MobileWebBundleReusableAssets> {
-    return reusableAssetsOf(fs, await readActive(hostKey))
-  }
-
-  async function sweep(): Promise<void> {
-    // Sweep every host’s tmp tree; interrupted downloads may belong to a host this launch never opens.
-    for (const host of await listHostDirectories()) {
-      await fs.delete(joinUri(fs.rootUri, host.name, STAGING_DIRECTORY_NAME))
+  async function openReusable(
+    hostKey: string,
+    manifest: MobileWebBundleManifestRead
+  ): Promise<MobileWebBundleReusableAssets> {
+    const active = reusableAssetsOf(fs, await readActive(hostKey))
+    const staging = stagingRoot(hostKey)
+    for (const entry of await fs.list(staging)) {
+      if (entry.name !== manifest.buildId) {
+        // A stuck folder costs space, not this download's reuse of the active generation.
+        await fs.delete(joinUri(staging, entry.name)).catch(() => undefined)
+      }
+    }
+    const directory = joinUri(staging, manifest.buildId)
+    const kept = await keptAssetPaths(fs, directory, manifest)
+    return {
+      has: (asset) => kept.has(asset.path) || active.has(asset),
+      check: async (asset) =>
+        (kept.has(asset.path) && (await serialize(() => checkKeptAsset(fs, directory, asset)))) ||
+        (await active.check(asset)),
+      keep: (asset, bytes) =>
+        serialize(() =>
+          fs.writeBytes(joinUri(directory, requireStorablePath(asset.path)), bytes)
+        ).then(
+          () => true,
+          () => false
+        )
     }
   }
 
@@ -211,12 +237,13 @@ export function createGenerationStore(options: {
 
   return {
     readActiveGeneration: (hostKey) => serialize(() => readActive(hostKey)),
-    openReusableAssets: (hostKey) => serialize(() => openReusable(hostKey)),
+    openReusableAssets: (hostKey, manifest) => serialize(() => openReusable(hostKey, manifest)),
     stageGeneration: (hostKey, result) => serialize(() => stage(hostKey, result)),
     commitGeneration: (staged) => serialize(() => commit(staged)),
     abortStagedGeneration: (staged) =>
-      serialize(() => fs.delete(requireIssuedHandle(staged).directory)),
-    sweepStagedGenerations: () => serialize(sweep),
+      serialize(() =>
+        fs.delete(joinUri(requireIssuedHandle(staged).directory, MANIFEST_FILE_NAME))
+      ),
     deleteHostCache: (hostKey) => serialize(() => dropHostTree(hostKey)),
     deleteUnpairedHostCaches: (readPairedHostKeys) =>
       serialize(() => deleteUnpairedHosts(readPairedHostKeys)),

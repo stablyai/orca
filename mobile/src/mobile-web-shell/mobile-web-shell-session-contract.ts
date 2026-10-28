@@ -81,7 +81,6 @@ export type MobileWebShellSessionState =
   | { readonly kind: 'offline' }
 
 export type MobileWebShellSessionEffect =
-  // Sweep all hosts before opening this cache; remain lazy so disabling the feature cannot sweep at app launch.
   | { readonly kind: 'open-cache' }
   | { readonly kind: 'read-manifest' }
   | { readonly kind: 'download' }
@@ -150,6 +149,8 @@ export type MobileWebShellSessionEvent =
   | { readonly type: 'page-ready-deadline'; readonly flow: number }
   | { readonly type: 'document-load-deadline'; readonly flow: number }
   | { readonly type: 'layout-changed'; readonly wide: boolean }
+  // Wall-clock read deadlines can fail a download while the app is away with the link still up.
+  | { readonly type: 'app-foregrounded' }
 
 // Keep retry/remount latches outside state because they must survive checking/ready replacements.
 export type MobileWebShellSession = {
@@ -168,6 +169,8 @@ export type MobileWebShellSession = {
   readonly state: MobileWebShellSessionState
   readonly retriedOnce: boolean
   readonly remountedOnce: boolean
+  // Set by a download the link cut off; the next reachable gates restart the flow, resuming from kept files.
+  readonly retryOnReconnect: boolean
   // Reset document facts on every new document; the previous page’s ready cannot prove this one ran.
   readonly pageReady: boolean
   readonly pagePainted: boolean

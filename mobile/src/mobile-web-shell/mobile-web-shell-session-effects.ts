@@ -19,8 +19,6 @@ export async function openCache(
   hostKey: string
 ): Promise<CachedGeneration | null> {
   try {
-    // Sweep lazily from mounted shells so disabling the feature leaves cache untouched.
-    await store.sweepStagedGenerations()
     const active = await store.readActiveGeneration(hostKey)
     return active === null
       ? null
@@ -100,13 +98,11 @@ export async function download(args: {
   // After verified fetch, failures belong to local staging/commit.
   let fetchedWhole = false
   try {
-    // Unavailable reuse is a cache miss, not a download failure.
-    const reusable = await store.openReusableAssets(hostKey).catch(() => undefined)
     const fetched = await fetchMobileWebBundle({
       client,
       signal: controller.signal,
       onProgress: (progress) => send({ type: 'fetch-progress', flow, ...progress }),
-      reusable
+      openReusable: (manifest) => store.openReusableAssets(hostKey, manifest)
     })
     // Recheck abort after fetch’s last read so an abandoned screen cannot stage a generation.
     if (controller.signal.aborted) {

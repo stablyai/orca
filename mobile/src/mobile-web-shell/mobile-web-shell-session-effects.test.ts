@@ -65,8 +65,11 @@ function storeThat(fail: 'stage' | 'commit' | null): GenerationStore {
         ? reject
         : async () => ({ buildId: MANIFEST.buildId, directory: 'd', manifest: MANIFEST }),
     abortStagedGeneration: async () => undefined,
-    openReusableAssets: async () => ({ has: () => false, check: async () => false }),
-    sweepStagedGenerations: async () => undefined,
+    openReusableAssets: async () => ({
+      has: () => false,
+      check: async () => false,
+      keep: async () => false
+    }),
     deleteHostCache: async () => undefined,
     deleteUnpairedHostCaches: async () => undefined,
     recordUpdateFailure: async () => undefined,
@@ -223,7 +226,7 @@ describe('the download', () => {
   })
 })
 
-// Use the real store queue: reused-asset copies must survive concurrent mounts sweeping staging during download.
+// Use the real store queue: reused-asset copies must survive leftovers and concurrent mounts during download.
 describe('a download that reuses the cached generation', () => {
   const HOST = deriveHostCacheKey('host-a')
 
@@ -279,14 +282,13 @@ describe('a download that reuses the cached generation', () => {
     return done.then(() => events)
   }
 
-  it('commits whole when another mount sweeps the staging trees mid-download', async () => {
+  it('commits whole over a short leftover of a reused asset', async () => {
     const { fileSystem, store } = await cachedStore()
     doubles.fetch = async () => {
       fileSystem.seed(`${HOST}/tmp/${UPDATE.manifest.buildId}/app.js`, {
         kind: 'file',
         bytes: new Uint8Array(1)
       })
-      await store.sweepStagedGenerations()
       return UPDATE
     }
 
@@ -297,6 +299,19 @@ describe('a download that reuses the cached generation', () => {
     expect(active?.buildId).toBe(UPDATE.manifest.buildId)
     expect(fileSystem.bytes(`${HOST}/generations/${UPDATE.manifest.buildId}/app.js`)).toEqual(
       new Uint8Array(2)
+    )
+  })
+
+  it('keeps what a download kept while another screen opens its cache', async () => {
+    const { fileSystem, store } = await cachedStore()
+    const kept = await store.openReusableAssets(HOST, UPDATE.manifest)
+    await kept.keep(UPDATE.manifest.assets[0]!, new Uint8Array(8))
+
+    await openCache(store, deriveHostCacheKey('host-b'))
+    await openCache(store, HOST)
+
+    expect(fileSystem.bytes(`${HOST}/tmp/${UPDATE.manifest.buildId}/index.html`)).toEqual(
+      new Uint8Array(8)
     )
   })
 

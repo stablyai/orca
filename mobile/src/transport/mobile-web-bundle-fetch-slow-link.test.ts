@@ -1,12 +1,14 @@
 import { sha256 } from '@noble/hashes/sha256'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { computeMobileWebBundleId } from '../../../src/shared/mobile-web-bundle/manifest-contract'
-import { MOBILE_WEB_BUNDLE_WINDOW_STALL_MS, fetchMobileWebBundle } from './mobile-web-bundle-fetch'
+import { fetchMobileWebBundle } from './mobile-web-bundle-fetch'
+import { MOBILE_WEB_BUNDLE_WINDOW_STALL_MS } from './mobile-web-bundle-window-stall-clock'
 import { isMobileWebBundleTransportFailure } from './mobile-web-bundle-operations'
 import type { RpcClient } from './rpc-client'
 import { RpcClientRequestTracker } from './rpc-client-request-tracker'
 import type { RpcRequestFrame } from './rpc-envelope-fields'
 import type { RpcResponse } from './types'
+import { recordSocketDeadlineAppState } from './socket-deadline-clock'
 
 // Hashed before it resolves, as the native module's synchronous digest is.
 vi.mock('expo-crypto', async () => {
@@ -190,5 +192,26 @@ describe('fetchMobileWebBundle over a slow link', () => {
     // Pending reads retain reassembly buffers and must settle soon after fetch failure.
     expect(host.pending()).toBe(0)
     expect(Date.now() - startedAt).toBeLessThanOrEqual(6 * MOBILE_WEB_BUNDLE_WINDOW_STALL_MS)
+  })
+
+  it('counts only foreground time against the stall budget', async () => {
+    const host = slowLinkHost(bundleFiles(), null)
+    let failed: unknown = null
+    recordSocketDeadlineAppState('background')
+    try {
+      void fetchMobileWebBundle({ client: host.client }).catch((error: unknown) => {
+        failed = error
+      })
+      await vi.advanceTimersByTimeAsync(3 * MOBILE_WEB_BUNDLE_WINDOW_STALL_MS)
+      expect(failed).toBeNull()
+
+      recordSocketDeadlineAppState('active')
+      await vi.advanceTimersByTimeAsync(MOBILE_WEB_BUNDLE_WINDOW_STALL_MS - 1_000)
+      expect(failed).toBeNull()
+      await vi.advanceTimersByTimeAsync(2_000)
+      expect(String(failed)).toContain('stalled')
+    } finally {
+      recordSocketDeadlineAppState('active')
+    }
   })
 })

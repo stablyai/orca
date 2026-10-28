@@ -10,6 +10,10 @@ import { MobileWebBundleFetchError } from './mobile-web-bundle-fetch-refusal'
 import { readMobileWebBundleErrorCode } from './mobile-web-bundle-operations'
 import type { RpcClient } from './rpc-client'
 import type { RpcResponse } from './types'
+import { markRpcDeliveryUnknown } from './rpc-delivery-ambiguity'
+import { createGenerationStore } from '../mobile-web-shell/generation-store'
+import { createFakeGenerationFileSystem } from '../mobile-web-shell/generation-file-system-fake'
+import { deriveHostCacheKey } from '../mobile-web-shell/host-cache-key'
 
 // Hashed before it resolves, as the native module's synchronous digest is.
 vi.mock('expo-crypto', async () => {
@@ -133,6 +137,14 @@ async function refusalOf(failed: Promise<unknown>): Promise<string | null> {
     (thrown: unknown) => thrown
   )
   return error instanceof MobileWebBundleFetchError ? error.refusal : null
+}
+
+function chunkPaths(calls: readonly HostCall[]): Set<unknown> {
+  return new Set(
+    calls
+      .filter((call) => call.method === 'mobileWeb.bundle.chunk')
+      .map((call) => paramField(call.params, 'path'))
+  )
 }
 
 function chunkCallCount(calls: readonly HostCall[]): number {
@@ -555,6 +567,39 @@ describe('fetchMobileWebBundle', () => {
     expect(error).not.toBeInstanceOf(MobileWebBundleFetchError)
   })
 
+  // The real store: what the cut-off attempt kept must be what the next one skips.
+  it('resumes a download the link cut off from the assets it kept', async () => {
+    const files = { 'assets/app.js': 'x=1;'.repeat(8), 'index.html': '<h1>orca</h1>' }
+    const store = createGenerationStore({ fileSystem: createFakeGenerationFileSystem() })
+    const hostKey = deriveHostCacheKey('host-a')
+    const openReusable = (manifest: Parameters<typeof store.openReusableAssets>[1]) =>
+      store.openReusableAssets(hostKey, manifest)
+    let linkUp = false
+    const host = bundleHost(files, {
+      chunkBytes: 64,
+      intercept: (call) => {
+        if (!linkUp && paramField(call.params, 'path') === 'index.html') {
+          throw markRpcDeliveryUnknown(new Error('socket closed'))
+        }
+        return undefined
+      }
+    })
+
+    await expect(fetchMobileWebBundle({ client: host.client, openReusable })).rejects.toThrow(
+      'socket closed'
+    )
+    linkUp = true
+    host.calls.length = 0
+    const resumed = await fetchMobileWebBundle({ client: host.client, openReusable })
+
+    expect(chunkPaths(host.calls)).toEqual(new Set(['index.html']))
+    // Both are on disk now: one kept by the cut-off attempt, one kept as it landed.
+    expect([...resumed.reused].sort()).toEqual(['assets/app.js', 'index.html'])
+    expect(resumed.totalBytes).toBe(13)
+    const active = await store.commitGeneration(await store.stageGeneration(hostKey, resumed))
+    expect(active.buildId).toBe(host.manifest.buildId)
+  })
+
   describe('with a cached generation to reuse', () => {
     function cacheOf(files: Record<string, string>, checked: string[], whole = true) {
       const hashes = new Map(
@@ -568,17 +613,10 @@ describe('fetchMobileWebBundle', () => {
         check: async (asset) => {
           checked.push(asset.path)
           return whole
-        }
+        },
+        keep: async () => false
       }
-      return reusable
-    }
-
-    function chunkPaths(calls: readonly HostCall[]): Set<unknown> {
-      return new Set(
-        calls
-          .filter((call) => call.method === 'mobileWeb.bundle.chunk')
-          .map((call) => paramField(call.params, 'path'))
-      )
+      return async () => reusable
     }
 
     it('reads only the changed assets over the wire, and counts only those', async () => {
@@ -589,7 +627,7 @@ describe('fetchMobileWebBundle', () => {
       const fetched = await fetchMobileWebBundle({
         client: host.client,
         onProgress: (update) => progress.push(update),
-        reusable: cacheOf({ 'assets/app.js': 'x=1' }, checked)
+        openReusable: cacheOf({ 'assets/app.js': 'x=1' }, checked)
       })
 
       expect(chunkPaths(host.calls)).toEqual(new Set(['index.html']))
@@ -618,7 +656,7 @@ describe('fetchMobileWebBundle', () => {
       const fetched = await fetchMobileWebBundle({
         client: host.client,
         onProgress: (update) => progress.push(update),
-        reusable: cacheOf({ 'assets/app.js': 'x=1' }, [], false)
+        openReusable: cacheOf({ 'assets/app.js': 'x=1' }, [], false)
       })
 
       expect(chunkPaths(host.calls)).toEqual(new Set(['index.html', 'assets/app.js']))

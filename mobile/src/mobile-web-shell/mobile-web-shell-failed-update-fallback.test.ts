@@ -237,7 +237,7 @@ describe('an update the shell refuses while the host is reachable', () => {
 
     expect(cachedBuildIds(fileSystem)).toEqual([GOOD_BUILD_ID])
     expect(generationTree(fileSystem)).toEqual(settled)
-    expect(fileSystem.paths().filter((path) => path.includes('/tmp'))).toEqual([])
+    expect(fileSystem.paths().filter((path) => path.includes('/tmp/'))).toEqual([])
   })
 
   it('walls as it always did when there is no generation to fall back to', async () => {

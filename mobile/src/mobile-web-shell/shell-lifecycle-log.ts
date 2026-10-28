@@ -67,6 +67,7 @@ export function traceShellStep(
     case 'page-ready-deadline':
     case 'document-load-deadline':
     case 'layout-changed':
+    case 'app-foregrounded':
       return trace
   }
 }
@@ -188,6 +189,7 @@ function eventLines(
     case 'remounted':
     case 'page-back-claim':
     case 'layout-changed':
+    case 'app-foregrounded':
     case 'retry-pressed':
       // Paint/stall details cover healthy signals without filling the bounded log.
       return []

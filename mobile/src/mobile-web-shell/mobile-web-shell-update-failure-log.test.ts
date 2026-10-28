@@ -144,7 +144,6 @@ describe('the generation store keeps the log', () => {
     const fileSystem = createFakeGenerationFileSystem()
     const store = createGenerationStore({ fileSystem })
     await store.recordUpdateFailure(failure('host-1', 1))
-    await store.sweepStagedGenerations()
     await store.deleteUnpairedHostCaches(async () => new Set())
     expect(fileSystem.text(LOG)).not.toBeNull()
   })
