@@ -6164,10 +6164,8 @@
           "oneWorkspace": "1 個工作區",
           "manyWorkspaces": "{{count}} 個工作區",
           "hostHasWorkspacesDefault": "從此電腦移除 {{value0}} 及其憑證。其 {{value1}} 保留在 Orca 中 — 遠端檔案不會被刪除。",
-          "alsoDeleteRemote": "同時在 {{value1}} 上刪除這些 {{value0}}",
           "alsoForgetLocal": "同時從 Orca 中移除這些 {{value0}}",
           "advanced": "進階",
-          "alsoDeleteRemoteHint": "永久刪除遠端 Git 工作樹及其分支。此操作不可復原。",
           "alsoForgetLocalHint": "僅從 Orca 中清除。遠端檔案、工作樹和分支不受影響。",
           "wslHostEndsTerminalsUnlessShared": "從 Orca 移除 {{value0}}。除非此電腦上開啟的另一個 Orca 正在使用它，否則也會結束其開啟的終端機，並停止該發行版中的 Orca 伺服器。發行版中的檔案不受影響。"
         },
@@ -6352,14 +6350,9 @@
           "sshImportSyncedSingular": "已將 {{count}} 台主機新增至 Orca。"
         },
         "ForgetSshWorkspaceDialog": {
-          "reconnectFailed": "重新連線失敗",
-          "forgetBody": "僅從 Orca 中移除此工作區。檔案、Git 工作樹和 {{host}} 上的分支保持不變。",
-          "title": "刪除「{{name}}」？",
-          "disconnectedBody": "此工作區的 SSH 主機未連線。重新連線以同時在遠端刪除，或僅從 Orca 中移除。",
           "ghostBody": "{{host}} 不再是已儲存的 SSH 主機，因此此工作區不再連線到活躍主機。只能從 Orca 中移除 — 遠端檔案和分支保持不變。",
           "cancel": "取消",
-          "forget": "從 Orca 中移除",
-          "reconnectAndDelete": "重新連線並刪除"
+          "forget": "從 Orca 中移除"
         },
         "MarkdownImageLightbox": {
           "image": "圖片",
@@ -17716,6 +17709,7 @@
         "agentCommandNotRunnable": "{{agent}} 在「設定 → 代理程式」中的命令必須是 Orca 能找到的程式路徑或名稱，且不能包含引數或變數。請修改或重設。",
         "runtimeNotInstalled": "執行此聊天的電腦上未安裝 {{agent}}。請在新版 Orca 中從聊天裡安裝。",
         "fullAccessAsRoot": "{{agent}} 以 root 身分執行時不會使用「完整存取權」。請在執行此聊天的電腦上，前往「設定 → 代理程式」為 {{agent}} 選擇其他權限，然後開始新的聊天。",
+        "launchPreparationFailed": "Orca 無法在執行此聊天的電腦上準備啟動 {{agent}}。",
         "conversationOpenElsewhere": "Codex 尚未關閉此對話。請稍後重試，或關閉其他 Codex 終端機。",
         "conversationOpenInTerminal": "{{agent}} 已在另一個終端機中執行此對話。請在該處結束 {{agent}} 或關閉該終端機，以便在此繼續。",
         "chooseClaudeAccount": "請在 Claude 帳戶設定中選擇或新增一個。",

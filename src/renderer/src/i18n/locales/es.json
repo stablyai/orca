@@ -5927,10 +5927,8 @@
           "oneWorkspace": "1 espacio de trabajo",
           "manyWorkspaces": "{{count}} espacios de trabajo",
           "hostHasWorkspacesDefault": "Elimina {{value0}} y sus credenciales de esta computadora. Sus {{value1}} permanecen en Orca — los archivos remotos no se tocan.",
-          "alsoDeleteRemote": "También eliminar estos {{value0}} en {{value1}}",
           "alsoForgetLocal": "También eliminar estos {{value0}} de Orca",
           "advanced": "Avanzado",
-          "alsoDeleteRemoteHint": "Elimina permanentemente los espacios de trabajo Git remotos y sus ramas. Esta acción no se puede deshacer.",
           "alsoForgetLocalHint": "Solo limpia de Orca. Los archivos, espacios de trabajo y ramas remotas permanecen intactos.",
           "wslHostEndsTerminalsUnlessShared": "Quita {{value0}} de Orca. Salvo que otro Orca abierto en este equipo lo esté usando, también cierra sus terminales abiertas y detiene el servidor de Orca en esa distro. Los archivos de la distro no se tocan."
         },
@@ -6086,14 +6084,9 @@
           "sshImportSyncedSingular": "Se agregó {{count}} host a Orca."
         },
         "ForgetSshWorkspaceDialog": {
-          "reconnectFailed": "Error de reconexión",
-          "forgetBody": "Elimina este espacio de trabajo solo de Orca. Los archivos, el worktree de Git y las ramas en {{host}} permanecen intactos.",
-          "title": "¿Eliminar “{{name}}”?",
-          "disconnectedBody": "El host SSH de este espacio de trabajo no está conectado. Reconéctalo para eliminarlo también en el remoto, o elimínalo solo de Orca.",
           "ghostBody": "{{host}} ya no es un host SSH guardado, por lo que este espacio de trabajo ya no está conectado a un host activo. Solo se puede eliminar de Orca — los archivos y ramas en el remoto permanecen intactos.",
           "cancel": "Cancelar",
-          "forget": "Eliminar de Orca",
-          "reconnectAndDelete": "Reconectar y eliminar"
+          "forget": "Eliminar de Orca"
         },
         "MarkdownImageLightbox": {
           "image": "Image",
@@ -17442,6 +17435,7 @@
         "agentCommandNotRunnable": "{{agent}}: el Comando en Ajustes → Agentes debe ser la ruta o el nombre de un programa que Orca pueda encontrar, sin argumentos ni variables. Cámbielo o restablézcalo con Reiniciar.",
         "runtimeNotInstalled": "{{agent}} no está instalado en el equipo que ejecuta este chat. Instálelo desde el chat en una versión actual de Orca.",
         "fullAccessAsRoot": "{{agent}} no usará Acceso total mientras se ejecute como root. Elija otro permiso para {{agent}} en Configuración → Agentes para el equipo que ejecuta este chat y luego inicie un chat nuevo.",
+        "launchPreparationFailed": "Orca no pudo preparar el inicio de {{agent}} en el equipo que ejecuta este chat.",
         "conversationOpenElsewhere": "Codex sigue manteniendo abierta esta conversación. Inténtalo de nuevo en un momento o cierra otras terminales de Codex.",
         "conversationOpenInTerminal": "{{agent}} ya está ejecutando esta conversación en otra terminal. Sal de {{agent}} allí o cierra esa terminal para continuar aquí.",
         "chooseClaudeAccount": "Elija o agregue una en la configuración de Cuentas de Claude.",

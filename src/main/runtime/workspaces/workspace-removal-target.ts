@@ -64,7 +64,7 @@ export abstract class OrcaRuntimeWithResolveWorktreeRemovalTarget extends OrcaRu
     return resolveRuntimeWorktreeRemovalTarget({
       selector: worktreeSelector,
       store: this.store,
-      resolveWorktree: (selector) => this.resolveWorktreeSelector(selector),
+      resolveWorktree: (selector) => this.resolveGitWorktreeSelector(selector),
       resolveExplicitWorktreeIdScoped: (worktreeId, hostId) =>
         this.resolveExplicitWorktreeIdScoped(worktreeId, hostId),
       ...(requiredHostId ? { requiredHostId } : {})

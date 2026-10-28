@@ -32,7 +32,12 @@ export function filePreviewForPath(filePath: string): FilePreview | null {
   return null
 }
 
-/** Viewers that read a URL by byte range, so a remote file streams instead of arriving whole. */
+/** Audio and video always stream by range; their players can't take base64. */
 export function streamsPreviewByRange(preview: FilePreview | null): boolean {
   return preview?.kind === 'audio' || preview?.kind === 'video'
+}
+
+/** Images and PDFs read a URL when their viewer asks, and base64 elsewhere (diffs, the web client). */
+export function isDocumentPreview(preview: FilePreview | null): boolean {
+  return preview?.kind === 'image' || preview?.kind === 'pdf'
 }

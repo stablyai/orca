@@ -13,7 +13,7 @@ import {
   type NativeChatSubagentGroupBlock,
   type NativeChatToolCallBlock
 } from '../../../../shared/native-chat-types'
-import { isRenderableSubagentGroup } from '../../../../shared/native-chat-subagent-summary'
+import { isRenderableSubagentGroup } from '../../../../shared/native-chat/transcript/native-chat-subagent-summary'
 import type { NativeChatDiffReveal } from './native-chat-turn-diffs'
 import { nativeChatToolRunSentence } from './native-chat-tool-run-label'
 import { NATIVE_CHAT_TOOL_ACTIVITY_COPY } from '../../../../shared/native-chat/tools/native-chat-tool-activity'

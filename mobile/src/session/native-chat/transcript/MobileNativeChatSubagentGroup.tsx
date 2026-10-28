@@ -6,7 +6,7 @@ import {
   sayNativeChatSubagentGroupEnglish as say,
   subagentStateLabel
 } from '../../../../../src/shared/native-chat/transcript/native-chat-subagent-group-header'
-import { normalizeSubagentState } from '../../../../../src/shared/native-chat-subagent-summary'
+import { normalizeSubagentState } from '../../../../../src/shared/native-chat/transcript/native-chat-subagent-summary'
 import { formatNativeChatDuration } from '../../../../../src/shared/native-chat-turn-status'
 import type {
   NativeChatSubagentGroupBlock,

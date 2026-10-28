@@ -5925,10 +5925,8 @@
           "oneWorkspace": "1つのワークスペース",
           "manyWorkspaces": "{{count}} 個のワークスペース",
           "hostHasWorkspacesDefault": "このコンピュータから {{value0}} とその認証情報を削除します。{{value1}} は Orca に残ります — リモートファイルは変更されません。",
-          "alsoDeleteRemote": "また、{{value1}} のこれらの {{value0}} も削除",
           "alsoForgetLocal": "また、Orca からこれらの {{value0}} も削除",
           "advanced": "詳細設定",
-          "alsoDeleteRemoteHint": "リモートの Git ワークツリーとそのブランチを完全に削除します。この操作は取り消せません。",
           "alsoForgetLocalHint": "Orca からのみ削除します。リモートのファイル、ワークツリー、ブランチはそのまま残ります。",
           "wslHostEndsTerminalsUnlessShared": "Orca から {{value0}} を削除します。このコンピューターで開いている別の Orca が使用していない場合は、開いているターミナルも終了し、そのディストリビューション内の Orca サーバーを停止します。ディストリビューション内のファイルは変更されません。"
         },
@@ -6084,14 +6082,9 @@
           "sshImportSyncedSingular": "{{count}} 個のホストを Orca に追加しました。"
         },
         "ForgetSshWorkspaceDialog": {
-          "reconnectFailed": "再接続に失敗しました",
-          "forgetBody": "このワークスペースを Orca からのみ削除します。ファイル、Git ワークツリー、{{host}}のブランチはそのまま残ります。",
-          "title": "「{{name}}」を削除しますか？",
-          "disconnectedBody": "このワークスペースの SSH ホストが接続されていません。再接続してリモートでも削除するか、Orca からのみ削除してください。",
           "ghostBody": "{{host}} は保存済みの SSH ホストではなくなったため、このワークスペースは稼働中のホストに接続されていません。Orca から削除することのみ可能です。リモート上のファイルとブランチはそのまま残ります。",
           "cancel": "キャンセル",
-          "forget": "Orca から削除",
-          "reconnectAndDelete": "再接続して削除"
+          "forget": "Orca から削除"
         },
         "MarkdownImageLightbox": {
           "image": "画像",
@@ -17472,6 +17465,7 @@
         "agentCommandNotRunnable": "[設定] → [Agent] にある {{agent}} の [コマンド] には、Orca が見つけられるプログラムのパスまたは名前を、引数や変数なしで指定する必要があります。変更するか、[リセット] してください。",
         "runtimeNotInstalled": "{{agent}} はこのチャットを実行しているコンピューターにインストールされていません。最新バージョンの Orca でチャットからインストールしてください。",
         "fullAccessAsRoot": "{{agent}} は root として実行されている間はフルアクセスを使用しません。このチャットを実行しているコンピューターの [設定 → Agent] で {{agent}} に別の権限を選択してから、新しいチャットを開始してください。",
+        "launchPreparationFailed": "Orca は、このチャットを実行しているコンピューターで {{agent}} の起動を準備できませんでした。",
         "conversationOpenElsewhere": "Codex がまだこの会話を開いたままにしています。少し待ってからもう一度試すか、ほかの Codex ターミナルを閉じてください。",
         "conversationOpenInTerminal": "{{agent}} は別のターミナルですでにこの会話を実行しています。そちらの {{agent}} を終了するか、そのターミナルを閉じて、ここで続けてください。",
         "chooseClaudeAccount": "Claude アカウントの設定で選択または追加してください。",

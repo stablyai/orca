@@ -7,9 +7,9 @@ import {
   deleteDictationModel,
   downloadDictationModel,
   fetchDictationSetup,
-  isDictationReady,
+  dictationNeedsSetup,
   isDictationSetupRequiredError,
-  isSpeechlessServerError,
+  dictationFailureMessage,
   isModelInFlight,
   setDictationConfig,
   type MobileSpeechModel,
@@ -186,10 +186,10 @@ describe('rpc wrappers', () => {
   })
 
   it('recognizes an old server refusing a dictation start', () => {
-    expect(isSpeechlessServerError('speech_unavailable: this host has no speech services')).toBe(
-      true
+    expect(dictationFailureMessage('speech_unavailable: this host has no speech services')).toBe(
+      'Update Orca on this server to use voice dictation.'
     )
-    expect(isSpeechlessServerError('voice_dictation_disabled')).toBe(false)
+    expect(dictationFailureMessage('voice_dictation_disabled')).toBe('voice_dictation_disabled')
   })
 
   it('keeps unrelated speech model failures specific', async () => {
@@ -228,38 +228,20 @@ describe('state helpers', () => {
     expect(isModelInFlight(model({ status: 'ready' }))).toBe(false)
   })
 
-  it('isDictationReady requires enabled + selected + ready', () => {
-    expect(
-      isDictationReady({
-        enabled: true,
-        selectedModelId: 'm1',
-        dictationMode: 'toggle',
-        models: [model({ status: 'ready' })]
-      })
-    ).toBe(true)
-    expect(
-      isDictationReady({
-        enabled: false,
-        selectedModelId: 'm1',
-        dictationMode: 'toggle',
-        models: [model({ status: 'ready' })]
-      })
-    ).toBe(false)
-    expect(
-      isDictationReady({
-        enabled: true,
-        selectedModelId: 'm1',
-        dictationMode: 'toggle',
-        models: [model({ status: 'not-downloaded' })]
-      })
-    ).toBe(false)
-    expect(
-      isDictationReady({
-        enabled: true,
-        selectedModelId: '',
-        dictationMode: 'toggle',
-        models: []
-      })
-    ).toBe(false)
+  it('dictationNeedsSetup mirrors the host start refusals', () => {
+    const setup = (enabled: boolean, selectedModelId: string, models: MobileSpeechModel[]) => ({
+      enabled,
+      selectedModelId,
+      dictationMode: 'toggle' as const,
+      models
+    })
+    expect(dictationNeedsSetup(setup(true, 'm1', [model({ status: 'ready' })]))).toBe(false)
+    expect(dictationNeedsSetup(setup(false, 'm1', [model({ status: 'ready' })]))).toBe(true)
+    expect(dictationNeedsSetup(setup(true, 'm1', [model({ status: 'not-downloaded' })]))).toBe(true)
+    expect(dictationNeedsSetup(setup(true, '', []))).toBe(true)
+    // A user model is absent from the host catalog; only the host can judge it.
+    expect(dictationNeedsSetup(setup(true, 'custom', [model({ status: 'ready' })]))).toBe(false)
+    // Older hosts may omit enabled and the selection.
+    expect(dictationNeedsSetup({ dictationMode: 'toggle', models: [] })).toBe(false)
   })
 })

@@ -13,6 +13,15 @@ export type FrameContext = {
 }
 
 const trackedWebContents = new WeakSet<Electron.WebContents>()
+const revisions = new WeakMap<Map<string, FrameContext>, number>()
+
+export function browserExtensionFrameRevision(frames: Map<string, FrameContext>): number {
+  return revisions.get(frames) ?? 0
+}
+
+function noteFrameChange(frames: Map<string, FrameContext>): void {
+  revisions.set(frames, browserExtensionFrameRevision(frames) + 1)
+}
 
 export function forgetBrowserExtensionFrame(
   frames: Map<string, FrameContext>,
@@ -23,6 +32,7 @@ export function forgetBrowserExtensionFrame(
     return
   }
   frames.delete(key)
+  noteFrameChange(frames)
   context.dispose()
 }
 
@@ -53,6 +63,7 @@ export function createBrowserExtensionFrameContext(
     }
   }
   frames.set(key, context)
+  noteFrameChange(frames)
   port1.once('close', retire)
   try {
     port1.start()

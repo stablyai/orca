@@ -31,23 +31,41 @@ export type OrcadLiveDaemonCrossing =
   | { state: 'strands-live-terminals'; unattachable: readonly number[] }
   | { state: 'unverifiable' }
 
-/** Hosts predating the protocol set report only a single-generation scalar. */
-function liveDaemonProtocols(census: OrcadTerminalCensus): readonly number[] | null {
+/** A counted census of live terminals from a host that predates the protocol set, so it cannot name mixed generations. */
+export function censusNeedsHostDaemonProtocols(census: OrcadTerminalCensus): boolean {
+  // An uncounted census may hide in-process terminals no daemon answer can vouch for.
+  return (
+    census.liveSessions !== null &&
+    census.liveSessions > 0 &&
+    census.daemonProtocolVersions === undefined &&
+    census.daemonProtocolVersion === null
+  )
+}
+
+function liveDaemonProtocols(
+  census: OrcadTerminalCensus,
+  hostDaemonProtocols: readonly number[] | undefined
+): readonly number[] | null {
   if (census.daemonProtocolVersions !== undefined) {
     return census.daemonProtocolVersions
   }
-  return census.daemonProtocolVersion === null ? null : [census.daemonProtocolVersion]
+  if (census.daemonProtocolVersion !== null) {
+    return [census.daemonProtocolVersion]
+  }
+  return censusNeedsHostDaemonProtocols(census) ? (hostDaemonProtocols ?? null) : null
 }
 
 /** An unknown session count or daemon protocol is planned for as live and unattachable. */
 export function assessOrcadLiveDaemonCrossing(
   census: OrcadTerminalCensus,
-  incoming: OrcadDaemonProtocolFacts
+  incoming: OrcadDaemonProtocolFacts,
+  /** Every daemon generation alive on the host, as the incoming build observed it. */
+  hostDaemonProtocols?: readonly number[]
 ): OrcadLiveDaemonCrossing {
   if (census.liveSessions === 0) {
     return { state: 'no-live-terminals' }
   }
-  const protocols = liveDaemonProtocols(census)
+  const protocols = liveDaemonProtocols(census, hostDaemonProtocols)
   if (protocols === null || protocols.length === 0) {
     return { state: 'unverifiable' }
   }

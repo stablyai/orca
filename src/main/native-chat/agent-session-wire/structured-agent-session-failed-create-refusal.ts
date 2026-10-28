@@ -26,6 +26,7 @@ import {
 import {
   startupAcquisitionRefusal,
   providerExitObserved,
+  startFailureDiagnosticOf,
   structuredAgentSessionStartFailure
 } from './structured-agent-session-failure-text'
 import { structuredAgentSessionFailureWordsContext } from './structured-agent-session-send-preparation'
@@ -36,7 +37,6 @@ import {
 import { argumentProblemOf } from '../structured-agent-arguments-error'
 import { agentCliInstallationProblemOf } from '../agent-cli-installation-error'
 import { agentCliInstallationFacts } from '../../../shared/agent-cli-installation-problem'
-import { providerDiagnosticOf } from '../../../shared/agent-session-failure'
 
 export type FailedAcquisitionWording = {
   record: AgentSessionRecord | null
@@ -54,7 +54,7 @@ function failedAcquisitionWireRefusal(
   const { reason } = structuredAgentSessionStartFailure(
     {
       refusal,
-      diagnostic: providerDiagnosticOf(error),
+      diagnostic: startFailureDiagnosticOf(error),
       argumentProblem: argumentProblemOf(error),
       ...(wording.newSession ? { newSession: true as const } : {})
     },

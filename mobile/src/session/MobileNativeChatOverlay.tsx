@@ -177,6 +177,7 @@ export function MobileNativeChatOverlay({
                     error={session.error}
                     readFailedFinally={session.readFailedFinally === true}
                     agent={controller.nativeChatAgent}
+                    sessionLive={controller.nativeChatSessionLive}
                     agentWorking={controller.nativeChatTurnActive}
                     awaitingInput={controller.nativeChatAwaitingInput}
                     canStop={controller.nativeChatCanStop}

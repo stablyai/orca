@@ -27,7 +27,7 @@ afterEach(() => {
   expect(unusedChatLeaves.openSender).not.toHaveBeenCalled()
 })
 
-import { subagentGroupFallbackText } from '../../../../shared/native-chat-subagent-summary'
+import { subagentGroupFallbackText } from '../../../../shared/native-chat/transcript/native-chat-subagent-summary'
 
 import type {
   NativeChatMessage,

@@ -6,7 +6,7 @@ export type JiraIssueSearchFailure = {
   auth: boolean
 }
 
-/** Run against one signal that trips on the caller's abort or the request deadline. */
+/** Bound a fully consumed read by caller cancellation and a deadline, then retire its signal. */
 export async function withJiraDeadline<T>(
   signal: AbortSignal | undefined,
   timeoutMs: number,
@@ -24,6 +24,7 @@ export async function withJiraDeadline<T>(
   } finally {
     clearTimeout(timer)
     signal?.removeEventListener('abort', abort)
+    controller.abort()
   }
 }
 

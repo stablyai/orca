@@ -2,6 +2,7 @@ import { defineMethod, defineStreamingMethod } from '../core'
 import { runFileWatchStream } from './file-watch-stream-lifecycle'
 import { FILE_MUTATION_METHODS } from './files-mutation-methods'
 import { dirListingPageCache } from './files-read-dir-page'
+import { FILE_STAGED_SAVE_METHODS } from './files-staged-save-methods'
 import {
   assertDirListingWithinRemoteBudget,
   remoteFileContentBudget
@@ -179,6 +180,7 @@ export const FILE_METHODS = [
     handler: async (params, { runtime }) => runtime.browseServerDir(params.path)
   }),
   ...FILE_MUTATION_METHODS,
+  ...FILE_STAGED_SAVE_METHODS,
   defineMethod({
     name: 'files.search',
     permission: 'workspace',

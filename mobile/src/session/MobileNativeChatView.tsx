@@ -26,6 +26,7 @@ import type { NativeChatResolvedPrompt } from '../../../src/shared/native-chat-r
 import { colors } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { styles } from './mobile-native-chat-view-styles'
+import { MobileNativeChatEmptyStateView } from './MobileNativeChatEmptyStateView'
 import { mobileNativeChatListFooter } from './mobile-native-chat-list-footer'
 import { mobileNativeChatListHeader } from './mobile-native-chat-list-header'
 import {
@@ -75,6 +76,7 @@ type Props = ComposerTrayProps & {
   // Permanent read failure replaces the pane because further chat actions cannot succeed.
   readFailedFinally?: boolean
   agent?: string | null
+  sessionLive?: boolean
   /** The turn is live: working, or waiting on the reader. */
   agentWorking?: boolean
   canStop?: boolean
@@ -150,6 +152,7 @@ export function MobileNativeChatView({
   error,
   readFailedFinally = false,
   agent,
+  sessionLive,
   agentWorking,
   canStop = agentWorking,
   awaitingInput = null,
@@ -310,7 +313,7 @@ export function MobileNativeChatView({
   // Changing text scale relays out every row, so preserve the page’s reading anchor.
   const layoutKey = `${fontScale}`
   const footer = mobileNativeChatListFooter(liveStatus, turns.waitingRows, renderItem)
-  const emptyState = mobileNativeChatEmptyState(status, agent ?? null, error)
+  const emptyState = mobileNativeChatEmptyState(status, agent ?? null, error, sessionLive)
 
   const lockReason = useSettledMobileNativeChatInputLock(inputLockReason)
   const composerPlaceholder = mobileNativeChatComposerPlaceholder(
@@ -320,12 +323,7 @@ export function MobileNativeChatView({
   // Lock only terminal-backed Send: it can answer an agent prompt, while drafting is harmless and structured sends queue.
   const expandedPromptOwnsSend =
     !structuredActivityUi && !collapsedPrompt && (ask ?? permission ?? question) != null
-  const emptyStateView = emptyState ? (
-    <View style={styles.center}>
-      <Text style={styles.emptyTitle}>{emptyState.title}</Text>
-      <Text style={styles.emptySubtitle}>{emptyState.subtitle}</Text>
-    </View>
-  ) : null
+  const emptyStateView = emptyState ? <MobileNativeChatEmptyStateView copy={emptyState} /> : null
 
   if (readFailedFinally && emptyStateView) {
     return <View style={[styles.root, { paddingBottom: bottomPad }]}>{emptyStateView}</View>

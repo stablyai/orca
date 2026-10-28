@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef } from 'react'
 import { useAppStore } from '@/store'
+import { getLocalAgentPreflightContext } from '@/lib/local-preflight-context'
+import { localAgentInventoryContextKey } from '@/lib/local-preflight-context-key'
 import { runtimeHostContactForEntry } from '../../../shared/runtime-host-contact'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import { getRuntimeAgentInventoryKey } from '@/store/slices/runtime-agent-inventory-key'
@@ -38,9 +40,10 @@ function normalizeAgentDetectionTarget(
   return target
 }
 
-/** One detected-agent inventory keeps launch surfaces synchronized. Accept legacy SSH IDs or host targets; null means local, undefined means unresolved/loading. */
+/** Local Settings requests a complete inventory; launch surfaces use enabled agents. Remote inventories remain complete. */
 export function useDetectedAgents(
-  connectionId: AgentDetectionTarget | string | null | undefined
+  connectionId: AgentDetectionTarget | string | null | undefined,
+  inventory: 'enabled' | 'all' = 'enabled'
 ): UseDetectedAgentsResult {
   const target = normalizeAgentDetectionTarget(connectionId)
   const observedRemoteTargetKeysRef = useRef<Set<string>>(new Set())
@@ -60,7 +63,17 @@ export function useDetectedAgents(
     targetKind === 'runtime' && targetId
       ? getRuntimeAgentInventoryKey(targetId, runtimeWorktreeId)
       : targetId
-  const localContextKey = target?.kind === 'local' ? target.contextKey : undefined
+  const includeDisabled = inventory === 'all'
+  const completeLocalContextKey = useAppStore((s) =>
+    targetKind === 'local' && includeDisabled
+      ? localAgentInventoryContextKey(
+          getLocalAgentPreflightContext(s, undefined, undefined, localWorktreeId),
+          true
+        )
+      : undefined
+  )
+  const localContextKey =
+    completeLocalContextKey ?? (target?.kind === 'local' ? target.contextKey : undefined)
   const remoteTargetKey =
     targetKind === 'ssh' && targetId
       ? `ssh:${targetId}`
@@ -166,8 +179,10 @@ export function useDetectedAgents(
     if (targetKind === 'ssh' && targetId) {
       return state.refreshRemoteDetectedAgents(targetId)
     }
-    return state.refreshDetectedAgents(localWorktreeId)
-  }, [isUnknown, localWorktreeId, runtimeWorktreeId, targetKind, targetId])
+    return includeDisabled
+      ? state.refreshAllDetectedAgents(localWorktreeId)
+      : state.refreshDetectedAgents(localWorktreeId)
+  }, [includeDisabled, isUnknown, localWorktreeId, runtimeWorktreeId, targetKind, targetId])
 
   useEffect(() => {
     if (isUnknown) {
@@ -212,10 +227,13 @@ export function useDetectedAgents(
       }
     } else {
       if (detectedIds === null && !localProbePending) {
-        void state.ensureDetectedAgents(localWorktreeId)
+        void (includeDisabled
+          ? state.ensureAllDetectedAgents(localWorktreeId)
+          : state.ensureDetectedAgents(localWorktreeId))
       }
     }
   }, [
+    includeDisabled,
     isUnknown,
     targetKind,
     targetId,

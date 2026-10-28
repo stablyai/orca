@@ -16,8 +16,8 @@ import { MobileQueuedMessageScrollList } from '../../MobileQueuedMessageScrollLi
 import { queuedMessageStyles as styles } from './mobile-native-chat-queued-message-styles'
 
 // Use NUL-prefixed header keys because message ids cannot contain NUL.
-const RESUME_KEY = '\u0000resume'
-const CLEAR_KEY = '\u0000clear'
+// Resume and Clear all share one key: a Resume would send the cards a Clear is deleting.
+const QUEUE_KEY = '\u0000queue'
 const MOVE_KEY = '\u0000move'
 
 export type MobileNativeChatQueuedMessagesProps = {
@@ -62,9 +62,9 @@ export function MobileNativeChatQueuedMessages({
   const run = (
     messageId: string,
     action?: (id: string) => Promise<boolean>,
-    resource?: string
+    resources: readonly string[] = []
   ): boolean => {
-    const keys = resource ? [messageId, resource] : [messageId]
+    const keys = [messageId, ...resources]
     if (keys.some((key) => inFlightRef.current.has(key)) || !action) {
       return false
     }
@@ -80,8 +80,10 @@ export function MobileNativeChatQueuedMessages({
     })()
     return true
   }
-  const resuming = busyIds.has(RESUME_KEY)
-  const clearing = busyIds.has(CLEAR_KEY)
+  const queueBusy = busyIds.has(QUEUE_KEY)
+  const messageIds = cards.map((card) => card.messageId)
+  // Clear all takes every card, so it waits for any card's own action rather than skip that card.
+  const clearBusy = queueBusy || messageIds.some((messageId) => busyIds.has(messageId))
   // Forget closed menu identity so a Stop-requeued draft with the same id cannot reopen it.
   const menuCard = cards.find((card) => card.messageId === menuFor)
   if (menuFor !== null && !menuCard) {
@@ -92,15 +94,15 @@ export function MobileNativeChatQueuedMessages({
       {onClearAll ? (
         <Pressable
           accessibilityRole="button"
-          accessibilityState={{ disabled: clearing }}
+          accessibilityState={{ disabled: clearBusy }}
           accessibilityLabel="Delete every queued message"
           style={({ pressed }) => [
             styles.headerAction,
             pressed && styles.pressed,
-            clearing && styles.disabled
+            clearBusy && styles.disabled
           ]}
-          disabled={clearing}
-          onPress={() => void run(CLEAR_KEY, () => onClearAll(cards.map((card) => card.messageId)))}
+          disabled={clearBusy}
+          onPress={() => void run(QUEUE_KEY, () => onClearAll(messageIds), messageIds)}
         >
           <Trash2 size={12} color={colors.textPrimary} strokeWidth={2} />
           <Text style={styles.actionLabel}>Clear all</Text>
@@ -108,15 +110,15 @@ export function MobileNativeChatQueuedMessages({
       ) : null}
       <Pressable
         accessibilityRole="button"
-        accessibilityState={{ disabled: resuming }}
+        accessibilityState={{ disabled: queueBusy }}
         accessibilityLabel="Resume sending the queued messages"
         style={({ pressed }) => [
           styles.headerAction,
           pressed && styles.pressed,
-          resuming && styles.disabled
+          queueBusy && styles.disabled
         ]}
-        disabled={resuming}
-        onPress={() => void run(RESUME_KEY, onResume && (() => onResume()))}
+        disabled={queueBusy}
+        onPress={() => void run(QUEUE_KEY, onResume && (() => onResume()))}
       >
         <Play size={12} color={colors.textPrimary} strokeWidth={2} />
         <Text style={styles.actionLabel}>Resume</Text>
@@ -203,7 +205,7 @@ export function MobileNativeChatQueuedMessages({
                   isMoveDisabled={(card) => busyIds.has(MOVE_KEY) || busyIds.has(card.messageId)}
                   rowPresentation="plain"
                   renderRow={renderRow}
-                  onMove={(move) => run(move.movedId, () => onMove(move), MOVE_KEY)}
+                  onMove={(move) => run(move.movedId, () => onMove(move), [MOVE_KEY])}
                   {...drag}
                 />
               ) : (

@@ -3533,9 +3533,6 @@
   "auto.components.sidebar.DeleteWorktreeWarningPanels.c4f96a6e18": {
     "ko": "메인 워크트리"
   },
-  "auto.components.sidebar.ForgetSshWorkspaceDialog.disconnectedBody": {
-    "ko": "이 워크스페이스의 SSH 호스트가 연결되어 있지 않습니다. 재연결하여 원격에서도 삭제하거나 Orca에서만 제거하세요."
-  },
   "auto.components.sidebar.HostRemoveDialog.1a2b3c4d5e": {
     "ko": "{{value0}} 제거됨"
   },

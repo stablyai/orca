@@ -5925,10 +5925,8 @@
           "oneWorkspace": "워크스페이스 1개",
           "manyWorkspaces": "워크스페이스 {{count}}개",
           "hostHasWorkspacesDefault": "이 컴퓨터에서 {{value0}}과(와) 해당 자격 증명을 제거합니다. {{value1}}은(는) Orca에 남아 있습니다 — 원격 파일은 변경되지 않습니다.",
-          "alsoDeleteRemote": "{{value1}}에서 이러한 {{value0}}도 삭제",
           "alsoForgetLocal": "Orca에서 이러한 {{value0}}도 제거",
           "advanced": "고급",
-          "alsoDeleteRemoteHint": "원격 Git 워크트리와 해당 브랜치를 영구적으로 삭제합니다. 이 작업은 되돌릴 수 없습니다.",
           "alsoForgetLocalHint": "Orca에서만 제거합니다. 원격 파일, 워크트리, 브랜치는 그대로 남아 있습니다.",
           "wslHostEndsTerminalsUnlessShared": "Orca에서 {{value0}}을(를) 제거합니다. 이 컴퓨터에서 열려 있는 다른 Orca가 사용 중이지 않다면 열린 터미널도 종료하고 해당 배포판의 Orca 서버를 중지합니다. 배포판의 파일은 변경되지 않습니다."
         },
@@ -6084,14 +6082,9 @@
           "sshImportSyncedSingular": "호스트 {{count}}개를 Orca에 추가했습니다."
         },
         "ForgetSshWorkspaceDialog": {
-          "reconnectFailed": "재연결 실패",
-          "forgetBody": "이 작업 공간을 Orca에서만 제거합니다. 파일, Git 워크트리, {{host}}의 브랜치는 그대로 유지됩니다.",
-          "title": "Delete “{{name}}”?",
-          "disconnectedBody": "이 워크스페이스의 SSH 호스트가 연결되어 있지 않습니다. 재연결하여 원격에서도 삭제하거나 Orca에서만 제거하세요.",
           "ghostBody": "{{host}}은(는) 더 이상 저장된 SSH 호스트가 아니므로 이 워크스페이스는 라이브 호스트에 연결되어 있지 않습니다. Orca에서 제거만 할 수 있으며, 원격의 파일과 브랜치는 그대로 유지됩니다.",
           "cancel": "취소",
-          "forget": "Orca에서 제거",
-          "reconnectAndDelete": "재연결 후 삭제"
+          "forget": "Orca에서 제거"
         },
         "MarkdownImageLightbox": {
           "image": "Image",
@@ -17472,6 +17465,7 @@
         "agentCommandNotRunnable": "{{agent}}의 설정 → 에이전트 → 명령은 Orca가 찾을 수 있는 프로그램 경로나 이름이어야 하며, 인수나 변수를 포함할 수 없습니다. 변경하거나 재설정하세요.",
         "runtimeNotInstalled": "{{agent}}이(가) 이 채팅을 실행하는 컴퓨터에 설치되어 있지 않습니다. 최신 버전의 Orca에서 채팅을 통해 설치하세요.",
         "fullAccessAsRoot": "{{agent}}은(는) root로 실행되는 동안 전체 액세스를 사용하지 않습니다. 이 채팅을 실행하는 컴퓨터의 설정 → 에이전트에서 {{agent}}에 다른 권한을 선택한 다음 새 채팅을 시작하세요.",
+        "launchPreparationFailed": "Orca가 이 채팅을 실행하는 컴퓨터에서 {{agent}} 시작을 준비하지 못했습니다.",
         "conversationOpenElsewhere": "Codex가 아직 이 대화를 열어 두고 있습니다. 잠시 후 다시 시도하거나 다른 Codex 터미널을 닫으세요.",
         "conversationOpenInTerminal": "{{agent}}이(가) 다른 터미널에서 이미 이 대화를 실행 중입니다. 그곳에서 {{agent}}을(를) 종료하거나 해당 터미널을 닫은 후 여기서 계속하세요.",
         "chooseClaudeAccount": "Claude 계정 설정에서 선택하거나 추가하세요.",

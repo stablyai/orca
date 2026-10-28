@@ -14,7 +14,7 @@ vi.mock('@/store/plugin-panels', () => ({ usePluginCommands: () => plugins.comma
 vi.mock('@/lib/plugin-command-execution', () => ({ executePluginCommand: vi.fn(async () => {}) }))
 vi.mock('@/lib/shortcut-platform', () => ({ getShortcutPlatform: () => 'win32' }))
 vi.mock('@/app-shell/app-window-chrome', () => ({ shortcutPlatform: 'win32' }))
-vi.mock('@/lib/native-chat-transcript-readability', () => ({
+vi.mock('../../../../shared/native-chat/transcript/native-chat-transcript-readability', () => ({
   isNativeChatTranscriptLocalReadable: () => true
 }))
 import { executePluginCommand } from '@/lib/plugin-command-execution'

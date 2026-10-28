@@ -413,6 +413,48 @@ describe('runtime file client', () => {
       expect(fsGrantRuntimeFilePreview).toHaveBeenCalledOnce()
     })
 
+    it('streams a remote PDF or image to its viewer the same way', async () => {
+      fsGrantRuntimeFilePreview.mockResolvedValue({
+        ...media,
+        mimeType: 'application/pdf',
+        isImage: true
+      })
+
+      await expect(
+        readRuntimeFileContent({
+          target: env,
+          filePath: '/remote/repo/docs/spec.pdf',
+          relativePath: 'docs/spec.pdf',
+          worktreeId: 'wt-1',
+          pageOversizedBinary: true
+        })
+      ).resolves.toMatchObject({ isImage: true, mediaUrl: 'orca-media://file/t' })
+      expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+    })
+
+    it('asks a local read for a URL only when a viewer renders the bytes', async () => {
+      fsReadFile.mockResolvedValue({ content: '', isBinary: true })
+      const local = { kind: 'local' as const }
+      await readRuntimeFileContent({
+        target: local,
+        filePath: '/repo/a.png',
+        relativePath: 'a.png',
+        worktreeId: 'wt-1'
+      })
+      await readRuntimeFileContent({
+        target: local,
+        filePath: '/repo/a.png',
+        relativePath: 'a.png',
+        worktreeId: 'wt-1',
+        pageOversizedBinary: true
+      })
+      expect(fsReadFile).toHaveBeenNthCalledWith(
+        1,
+        expect.not.objectContaining({ rangePreview: true })
+      )
+      expect(fsReadFile).toHaveBeenNthCalledWith(2, expect.objectContaining({ rangePreview: true }))
+    })
+
     it('streams a chat scratch video from its own address', async () => {
       fsGrantRuntimeFilePreview.mockResolvedValue(media)
       const root = `/state/chat-scratch/${'a'.repeat(32)}`

@@ -6,7 +6,10 @@ import {
   claimBackgroundTaskTwins
 } from './native-chat/input/native-chat-background-task-row'
 import { isWordlessProviderFrameBlock } from './native-chat/native-chat-provider-frame-summary'
-import { isReplacedSubagentGroupTwin, subagentGroupBlocks } from './native-chat-subagent-summary'
+import {
+  isReplacedSubagentGroupTwin,
+  subagentGroupBlocks
+} from './native-chat/transcript/native-chat-subagent-summary'
 import {
   isBackgroundTaskBlock,
   isSubagentGroupBlock,

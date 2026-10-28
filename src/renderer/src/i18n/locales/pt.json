@@ -10620,10 +10620,8 @@
           "oneWorkspace": "1 espaço de trabalho",
           "manyWorkspaces": "{{count}} espaços de trabalho",
           "hostHasWorkspacesDefault": "Remove {{value0}} e suas credenciais deste computador. Seus(Suas) {{value1}} permanecem no Orca — os arquivos remotos não são tocados.",
-          "alsoDeleteRemote": "Também excluir estes(as) {{value0}} em {{value1}}",
           "alsoForgetLocal": "Também remover estes(as) {{value0}} do Orca",
           "advanced": "Avançado",
-          "alsoDeleteRemoteHint": "Exclui permanentemente as worktrees Git remotas e suas branches. Não pode ser desfeito.",
           "alsoForgetLocalHint": "Limpa-os apenas do Orca. Os arquivos, worktrees e branches remotos permanecem intocados.",
           "wslHostEndsTerminalsUnlessShared": "Remove {{value0}} do Orca. A menos que outro Orca aberto neste computador o esteja usando, também encerra seus terminais abertos e para o servidor do Orca nessa distro. Os arquivos da distro não são alterados."
         },
@@ -10936,14 +10934,9 @@
           "6c07f3a91e": "{{value0}} em {{value1}}"
         },
         "ForgetSshWorkspaceDialog": {
-          "reconnectFailed": "Falha na reconexão",
-          "forgetBody": "Remove este espaço de trabalho apenas do Orca. Os arquivos, a worktree Git e as branches em {{host}} permanecem intocados.",
-          "title": "Excluir “{{name}}”?",
-          "disconnectedBody": "O host SSH deste espaço de trabalho não está conectado. Reconecte para excluí-lo também no remoto, ou remova-o somente do Orca.",
           "ghostBody": "{{host}} não é mais um host SSH salvo, então este espaço de trabalho não está mais conectado a um host ativo. Ele só pode ser removido do Orca — os arquivos e branches no remoto permanecem intocados.",
           "cancel": "Cancelar",
-          "forget": "Remover do Orca",
-          "reconnectAndDelete": "Reconectar e Excluir"
+          "forget": "Remover do Orca"
         },
         "RepoScanUnavailableIndicator": {
           "title": "Falha na varredura de worktree para {{value0}}",
@@ -18484,6 +18477,7 @@
         "agentCommandNotRunnable": "O Comando de {{agent}} em Configurações → Agentes deve ser o caminho ou nome de um programa que o Orca possa encontrar, sem argumentos nem variáveis. Altere-o ou redefina-o.",
         "runtimeNotInstalled": "{{agent}} não está instalado no computador que executa este chat. Instale-o pelo chat em uma versão atual do Orca.",
         "fullAccessAsRoot": "{{agent}} não usará Acesso total enquanto for executado como root. Escolha outra permissão para {{agent}} em Configurações → Agentes para o computador que executa este chat e inicie um novo chat.",
+        "launchPreparationFailed": "O Orca não conseguiu preparar a inicialização de {{agent}} no computador que executa este chat.",
         "chooseClaudeAccount": "Escolha ou adicione uma nas configurações de Contas do Claude.",
         "chooseClaudeAccountThenRunCommand": "Escolha ou adicione uma nas configurações de Contas do Claude e execute /{{command}} novamente.",
         "chooseClaudeAccountThenSend": "Escolha ou adicione uma nas configurações de Contas do Claude e envie sua mensagem novamente.",

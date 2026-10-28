@@ -169,6 +169,7 @@ export function screenModuleMocks(dependencies: ScreenDependencies) {
         // Keep preference identity stable like useState; fresh objects would rebuild the bridge on every render and settle pending requests.
         snapshot: SCREEN_SNAPSHOT,
         unreadable: dependencies.snapshotUnreadable,
+        retry: () => {},
         readStorage: () => ({ storage: {}, storageOversize: [] }),
         refreshStorage: () => {
           dependencies.storageRefreshes += 1

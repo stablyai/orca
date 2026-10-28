@@ -87,7 +87,7 @@ export function MobileTerminalInputActions({
             dictation.isRecording
               ? 'Stop voice dictation'
               : dictation.isProcessing
-                ? 'Cancel voice dictation'
+                ? 'Transcribing voice dictation'
                 : dictation.isStarting
                   ? 'Starting voice dictation'
                   : 'Start voice dictation'

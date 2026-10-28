@@ -62,4 +62,12 @@ describe('resolvePairConfirmRouteState', () => {
       errorMessage: 'Not a valid pairing code'
     })
   })
+
+  it('rejects repeated URL parameters instead of choosing a pairing offer', () => {
+    expect(resolvePairConfirmRouteState([encodeOffer(offer), encodeOffer(offer)])).toEqual({
+      kind: 'error',
+      offer: null,
+      errorMessage: 'Not a valid pairing code'
+    })
+  })
 })

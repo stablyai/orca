@@ -4,15 +4,17 @@ import { AppState } from 'react-native'
 import { useFocusEffect } from 'expo-router'
 import { useMobileDictation } from '../hooks/use-mobile-dictation'
 import { triggerError } from '../platform/haptics'
+import { useClipboardWriter } from '../platform/clipboard'
 import {
   appendBufferedDictation,
   routeDictationTranscript
 } from '../terminal/terminal-live-dictation-routing'
 import {
+  dictationFailureMessage,
+  dictationMicHidden,
+  dictationNeedsSetup,
   fetchDictationSetup,
-  isDictationSetupRequiredError,
-  isSpeechlessServerError,
-  SPEECHLESS_SERVER_MESSAGE
+  isDictationSetupRequiredError
 } from '../dictation/mobile-dictation-setup'
 import { useMobileNativeChatController } from './use-mobile-native-chat-controller'
 import { useMobileNativeChatReadability } from './use-mobile-native-chat-readability'
@@ -111,10 +113,20 @@ export function useMobileSessionNativeChatDictation(
         return
       }
       triggerError()
-      showToast(isSpeechlessServerError(message) ? SPEECHLESS_SERVER_MESSAGE : message)
+      showToast(dictationFailureMessage(message))
     },
     [setShowDictationSetup, showToast]
   )
+
+  const clipboard = useClipboardWriter()
+  // A transcript its target refused must not vanish: keep it on the clipboard and say so.
+  const keepUndeliveredDictation = (text: string) => {
+    triggerError()
+    void clipboard.writeText(text).then(
+      () => showToast("Couldn't insert dictation, so it was copied to the clipboard"),
+      () => showToast("Couldn't insert dictation")
+    )
+  }
 
   const chatDictationDestination = useRef<((text: string) => boolean | void) | undefined>(undefined)
   const dictationTargetReady = showNativeChat ? connState === 'connected' : canSend
@@ -128,6 +140,7 @@ export function useMobileSessionNativeChatDictation(
         chatDictationDestination.current = undefined
         if (insert) {
           if (insert(text) === false) {
+            keepUndeliveredDictation(text)
             return
           }
         } else {
@@ -146,19 +159,17 @@ export function useMobileSessionNativeChatDictation(
       )
       if (route.kind === 'live-insert') {
         const insertHandle = routeContext?.handle ?? activeHandleRef.current
-        if (!insertHandle) {
-          return
-        }
         void (async () => {
-          const flushedPendingInput = await flushPendingLiveInputBeforeExternalSend(insertHandle)
-          if (!flushedPendingInput) {
-            return
-          }
-          const sent = await sendLiveTerminalInput(insertHandle, route.text)
+          const sent =
+            insertHandle !== null &&
+            (await flushPendingLiveInputBeforeExternalSend(insertHandle)) &&
+            (await sendLiveTerminalInput(insertHandle, route.text))
           if (sent) {
             showToast('Dictation inserted')
+          } else {
+            keepUndeliveredDictation(route.text)
           }
-        })()
+        })().catch(() => keepUndeliveredDictation(route.text))
         return
       }
       setInput((current) => appendBufferedDictation(current, route.text))
@@ -170,7 +181,15 @@ export function useMobileSessionNativeChatDictation(
     }
   })
 
+  // Only a host setup read sets this; while false, the host's start refusal decides (older hosts, first tap before the read).
+  const dictationNeedsSetupRef = useRef(false)
+
   const startDictation = useCallback(() => {
+    if (dictationNeedsSetupRef.current) {
+      // Explain setup before the OS microphone prompt: mic access cannot help until the host can transcribe.
+      setShowDictationSetup(true)
+      return
+    }
     chatDictationDestination.current = captureMobileNativeChatTextDestination()
     const routeContext = activeHandle
       ? { handle: activeHandle, liveInputEnabled: liveInputTerminalHandles.has(activeHandle) }
@@ -182,7 +201,13 @@ export function useMobileSessionNativeChatDictation(
       }
       reportDictationFailure(err)
     })
-  }, [activeHandle, dictation, liveInputTerminalHandles, reportDictationFailure])
+  }, [
+    activeHandle,
+    dictation,
+    liveInputTerminalHandles,
+    reportDictationFailure,
+    setShowDictationSetup
+  ])
 
   const cancelDictation = useCallback(() => {
     dictationRouteContextRef.current = null
@@ -190,16 +215,14 @@ export function useMobileSessionNativeChatDictation(
   }, [dictation])
 
   const handleDictationToggle = useCallback(() => {
-    if (dictation.isProcessing) {
-      cancelDictation()
-    } else if (dictation.isStarting) {
-      // Ignore toggles until the start request settles.
+    if (dictation.isStarting || dictation.isProcessing) {
+      // Ignore toggles until start or finish settles; a tap must not discard what was said.
     } else if (dictation.isRecording) {
       void dictation.stop()
     } else {
       startDictation()
     }
-  }, [cancelDictation, dictation, startDictation])
+  }, [dictation, startDictation])
 
   const handleDictationPressIn = useCallback(() => {
     if (!dictation.isStarting && !dictation.isRecording && !dictation.isProcessing) {
@@ -226,12 +249,20 @@ export function useMobileSessionNativeChatDictation(
       const setup = await fetchDictationSetup(client)
       if (read === dictationSettingsReadRef.current) {
         setDictationMode(setup.dictationMode)
-        setDictationEnabled(setup.enabled !== false)
+        setDictationEnabled(!dictationMicHidden(setup))
+        dictationNeedsSetupRef.current = dictationNeedsSetup(setup)
       }
     } catch {
       // Keep the last settings when an older host cannot report them.
     }
   }, [client, connState, setDictationEnabled, setDictationMode])
+
+  // The sheet may have changed host setup: let the host judge taps until the fresh read lands.
+  const closeDictationSetup = useCallback(() => {
+    setShowDictationSetup(false)
+    dictationNeedsSetupRef.current = false
+    void refreshDictationMode()
+  }, [refreshDictationMode, setShowDictationSetup])
 
   useFocusEffect(
     useCallback(() => {
@@ -273,6 +304,7 @@ export function useMobileSessionNativeChatDictation(
     handleDictationToggle,
     handleDictationPressIn,
     handleDictationPressOut,
+    closeDictationSetup,
     refreshDictationMode
   }
 }

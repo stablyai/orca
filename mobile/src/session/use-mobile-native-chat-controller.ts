@@ -3,20 +3,17 @@ import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState } from '../transport/types'
 import type { MobileNativeChatTab } from './native-chat/mobile-native-chat-eligibility'
 import type { StructuredAgentSessionHostSupport } from './mobile-structured-agent-session-host-support'
-import { useMobileNativeChatAskDismiss } from './native-chat/input/use-mobile-native-chat-ask-dismiss'
 import { useMobileNativeChatDrafts } from './native-chat/composer/use-mobile-native-chat-drafts'
 import { useMobileNativeChatWorkspaceCatalog } from './native-chat/composer/use-mobile-native-chat-workspace-catalog'
 import { useMobileNativeChatMessageSend } from './native-chat/transcript/use-mobile-native-chat-message-send'
 import { useMobileNativeChatSessionOptionController } from './native-chat/input/use-mobile-native-chat-session-option-controller'
 import { useMobileNativeChatSessionLane } from './use-mobile-native-chat-session-lane'
 import { useMobileStructuredNativeChatSendBridge } from './use-mobile-structured-native-chat-send-bridge'
-import { useMobileNativeChatPrompts } from './native-chat/input/use-mobile-native-chat-prompts'
-import { useNativeChatAcceptedAction } from './use-native-chat-action-outcomes'
 import { useMobileNativeChatTerminalTurn } from './use-mobile-native-chat-terminal-turn'
 import type { MobileNativeChatController } from './mobile-native-chat-controller-contract'
 import { useMobileBridgeChatPromptWrites } from './use-mobile-bridge-chat-prompt-writes'
 import { useMobileNativeChatActiveResolution } from './use-mobile-native-chat-active-resolution'
-import { useMobileNativeChatPromptCards } from './native-chat/input/use-mobile-native-chat-prompt-cards'
+import { useMobileNativeChatPromptController } from './use-mobile-native-chat-prompt-controller'
 import { mobileNativeChatScopeKey } from './native-chat/mobile-native-chat-scope-key'
 
 export type { MobileNativeChatController } from './mobile-native-chat-controller-contract'
@@ -113,42 +110,12 @@ export function useMobileNativeChatController(args: {
     transcriptSettled: nativeChatSession.status === 'ready'
   })
 
-  const {
-    permission: legacyNativeChatPermission,
-    ask: nativeChatAskPrompt,
-    waitStartedAt: nativeChatPromptStartedAt,
-    structuredAnswer
-  } = useMobileNativeChatPrompts({
-    enabled: activeChatStructured || activeChatResolution != null,
-    structured: activeChatStructured ? structuredNativeChat : null,
-    status: nativeChatStatus,
-    messages: nativeChatSession.messages,
-    transcriptLoading: nativeChatSession.transcriptLoading
-  })
-  // A never-read transcript cannot prove that a dismissed prompt cleared.
-  const nativeChatTranscriptSettled =
-    nativeChatSession.status === 'ready' ||
-    (nativeChatSession.status === 'error' && nativeChatSession.messages.length > 0)
-  const promptScopeKey = mobileNativeChatScopeKey(hostId, worktreeId, activeSessionTabId)
-  const askDismissal = useMobileNativeChatAskDismiss({
-    ask: nativeChatAskPrompt,
-    startedAt: nativeChatPromptStartedAt,
-    scopeKey: promptScopeKey,
-    sessionKey: activeChatSessionId,
-    observing: showNativeChat && (nativeChatAskPrompt != null || nativeChatTranscriptSettled)
-  })
-
   // Require both input lease and live connection; remembered-only agents may now be shells and must never receive chat writes.
   const inputSendable = activeChatStructured
     ? client != null && activeChatSessionId != null && connState === 'connected'
     : nativeChatInputLeaseReady && connState === 'connected' && activeChatAgentConfirmed
 
-  const {
-    answerAsk: bridgeAnswerAsk,
-    cancelAsk: handleNativeChatCancelAsk,
-    respondPermission: legacyHandleNativeChatRespondPermission,
-    stop: handleNativeChatStop
-  } = useMobileBridgeChatPromptWrites({
+  const { stop: handleNativeChatStop, ...bridgePromptWrites } = useMobileBridgeChatPromptWrites({
     client,
     enabled: inputSendable && !activeChatStructured,
     handleRef: activeHandleRef,
@@ -159,12 +126,25 @@ export function useMobileNativeChatController(args: {
     onSendError
   })
 
+  const { hasPromptCard, ...prompts } = useMobileNativeChatPromptController({
+    enabled: activeChatStructured || activeChatResolution != null,
+    structured: activeChatStructured ? structuredNativeChat : null,
+    status: nativeChatStatus,
+    session: nativeChatSession,
+    scopeKey: mobileNativeChatScopeKey(hostId, worktreeId, activeSessionTabId),
+    sessionId: activeChatSessionId,
+    streamIdentity,
+    visible: showNativeChat,
+    terminal: bridgePromptWrites,
+    onSendResolved
+  })
+
   const terminalTurn = useMobileNativeChatTerminalTurn({
     status: nativeChatStatus,
     resolution: activeChatResolution,
     session: activeChatStructured ? null : nativeChatSession,
     latestPendingId: chatPending.at(-1)?.id ?? null,
-    hasPromptCard: (legacyNativeChatPermission ?? nativeChatAskPrompt) != null,
+    hasPromptCard,
     scopeKey: streamIdentity,
     stop: handleNativeChatStop
   })
@@ -234,20 +214,6 @@ export function useMobileNativeChatController(args: {
     recordSessionOptionCommandRef.current = recordNativeChatSessionOptionCommand
     appendComposerTextRef.current = appendComposerText
   }, [appendComposerText, recordNativeChatSessionOptionCommand])
-  const answerAsk = useNativeChatAcceptedAction(structuredAnswer ?? bridgeAnswerAsk, onSendResolved)
-  const cancelAsk = useNativeChatAcceptedAction(handleNativeChatCancelAsk, onSendResolved)
-  const promptCards = useMobileNativeChatPromptCards({
-    terminal: {
-      permission: legacyNativeChatPermission,
-      waitStartedAt: nativeChatPromptStartedAt,
-      scopeKey: promptScopeKey,
-      sessionKey: streamIdentity,
-      observing: showNativeChat && !activeChatStructured && nativeChatStatus != null,
-      respondPermission: legacyHandleNativeChatRespondPermission
-    },
-    structured: activeChatStructured ? structuredNativeChat : null,
-    onSendResolved
-  })
 
   return {
     reportQueuedEditError: onSendError,
@@ -259,6 +225,7 @@ export function useMobileNativeChatController(args: {
     showNativeChat,
     showNativeChatRef,
     nativeChatAgent: activeChatResolution?.agent ?? null,
+    nativeChatSessionLive: activeChatResolution?.sessionLive === true,
     chatDraftKey,
     setChatComposerText,
     getChatComposerEditGeneration,
@@ -286,14 +253,7 @@ export function useMobileNativeChatController(args: {
     nativeChatCommandRefusalCauses: structuredNativeChat.commandRefusalCauses,
     nativeChatCanStop: activeChatStructured ? structuredNativeChat.canStop : nativeChatAgentWorking,
     nativeChatStreamingText: terminalTurn.streamingText,
-    ...promptCards,
-    nativeChatAsk: askDismissal.showAsk || askDismissal.collapsedAsk ? nativeChatAskPrompt : null,
-    nativeChatAskKey: askDismissal.askKey,
-    dismissNativeChatAsk: askDismissal.dismissAsk,
-    collapseNativeChatAsk: askDismissal.collapseAsk,
-    nativeChatCollapsedPrompt: askDismissal.collapsedAsk ?? promptCards.nativeChatCollapsedPrompt,
-    handleNativeChatAnswerAsk: answerAsk,
-    handleNativeChatCancelAsk: cancelAsk,
+    ...prompts,
     handleNativeChatStop: activeChatStructured ? structuredNativeChat.cancel : terminalTurn.stop,
     nativeChatQueued: structuredNativeChat.queued,
     nativeChatBackgroundTasks: activeChatStructured ? structuredNativeChat.backgroundTasks : null,

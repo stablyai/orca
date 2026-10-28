@@ -25,7 +25,9 @@ vi.mock('@orca/expo-two-way-audio', () => ({
     return true
   },
   requestMicrophonePermissionsAsync: async () => ({ granted: true }),
-  tearDown: () => {},
+  tearDown: () => {
+    device.recording = false
+  },
   toggleRecording: (recording: boolean) => {
     device.recording = recording
     return true
@@ -34,6 +36,9 @@ vi.mock('@orca/expo-two-way-audio', () => ({
 vi.mock('expo-keep-awake', () => ({
   activateKeepAwakeAsync: async () => {},
   deactivateKeepAwake: async () => {}
+}))
+vi.mock('../platform/clipboard', () => ({
+  useClipboardWriter: () => ({ writeText: async () => {} })
 }))
 vi.mock('expo-router', () => ({ useFocusEffect: () => {} }))
 vi.mock('../platform/haptics', () => ({ triggerError: () => {} }))

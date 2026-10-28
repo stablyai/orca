@@ -54,6 +54,9 @@ function withFileDestinations(
 ): CommentMarkdownExtension {
   return {
     remarkPlugins: [...(visualExtension?.remarkPlugins ?? []), remarkNativeChatFileDestinations],
+    extraFlowSyntaxMarkers: visualExtension?.remarkPlugins.length
+      ? visualExtension.extraFlowSyntaxMarkers
+      : [],
     sanitizeAttributes: visualExtension?.sanitizeAttributes ?? {},
     components: visualExtension?.components ?? {}
   }

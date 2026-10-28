@@ -44,10 +44,13 @@ export type PreflightRuntimeContext = {
 
 export type PreflightApi = {
   check: (args?: PreflightRuntimeContext & { force?: boolean }) => Promise<PreflightStatus>
-  detectAgents: (args?: PreflightRuntimeContext) => Promise<string[]>
+  /** Complete by default; background callers opt into host-owned enabled preferences. */
+  detectAgents: (args?: PreflightRuntimeContext & { enabledOnly?: boolean }) => Promise<string[]>
   /** Cached in main for the process lifetime. */
   zcodeInteractiveCapability: () => Promise<ZCodeInteractiveCapability>
-  refreshAgents: (args?: PreflightRuntimeContext) => Promise<RefreshAgentsResult>
+  refreshAgents: (
+    args?: PreflightRuntimeContext & { enabledOnly?: boolean }
+  ) => Promise<RefreshAgentsResult>
   detectRemoteAgents: (args: { connectionId: string }) => Promise<string[]>
   detectRemoteWindowsTerminalCapabilities: (args: { connectionId: string }) => Promise<{
     wslAvailable: boolean

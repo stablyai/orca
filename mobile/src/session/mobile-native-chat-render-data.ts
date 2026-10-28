@@ -12,7 +12,7 @@ import {
   isUndrawnProviderFrameMessage
 } from '../../../src/shared/native-chat/tools/native-chat-tool-fold'
 import { projectNativeChatTaskListFrames } from '../../../src/shared/native-chat/input/native-chat-task-list-frames'
-import { foldSubagentItems } from '../../../src/shared/native-chat-subagent-items'
+import { foldSubagentItems } from '../../../src/shared/native-chat/transcript/native-chat-subagent-items'
 import { prepareNativeChatMessages } from '../../../src/shared/native-chat-message-preparation'
 import {
   isImageRefBlock,
@@ -24,14 +24,17 @@ import type { MobileNativeChatStatus } from './use-mobile-native-chat-session'
 export function mobileNativeChatEmptyState(
   status: MobileNativeChatStatus,
   agent: string | null,
-  error?: string
+  error?: string,
+  sessionLive = false
 ): NativeChatEmptyStateCopy | null {
   const agentLabel = agent ? formatAgentTypeLabel(agent) : 'the agent'
   switch (status) {
     // Missing history may mean new or unreadable; promise neither in the waiting copy.
     case 'waiting-session':
-    case 'awaiting-transcript':
       return formatNativeChatEmptyStateCopy('notFound', agentLabel)
+    // A session the running agent just reported has no file until its first prompt.
+    case 'awaiting-transcript':
+      return formatNativeChatEmptyStateCopy(sessionLive ? 'empty' : 'notFound', agentLabel)
     case 'ready':
       return formatNativeChatEmptyStateCopy('empty', agentLabel)
     case 'error': {

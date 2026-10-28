@@ -6210,10 +6210,8 @@
           "oneWorkspace": "1 Arbeitsbereich",
           "manyWorkspaces": "{{count}} Arbeitsbereiche",
           "hostHasWorkspacesDefault": "Entfernt {{value0}} und die zugehörigen Zugangsdaten von diesem Computer. Orca behält {{value1}} bei — entfernte Dateien bleiben unberührt.",
-          "alsoDeleteRemote": "Auch {{value0}} auf {{value1}} löschen",
           "alsoForgetLocal": "Auch {{value0}} aus Orca entfernen",
           "advanced": "Erweitert",
-          "alsoDeleteRemoteHint": "Löscht die entfernten Git-Worktrees und ihre Branches dauerhaft. Kann nicht rückgängig gemacht werden.",
           "alsoForgetLocalHint": "Entfernt sie nur aus Orca. Entfernte Dateien, Worktrees und Branches bleiben unberührt.",
           "wslHostEndsTerminalsUnlessShared": "Entfernt {{value0}} aus Orca. Sofern kein anderes auf diesem Computer geöffnetes Orca es verwendet, werden außerdem die offenen Terminals beendet und der Orca-Server in dieser Distribution gestoppt. Dateien in der Distribution bleiben unverändert."
         },
@@ -6398,14 +6396,9 @@
           "sshImportSyncedSingular": "{{count}} Host zu Orca hinzugefügt."
         },
         "ForgetSshWorkspaceDialog": {
-          "reconnectFailed": "Erneutes Verbinden fehlgeschlagen",
-          "forgetBody": "Entfernt diesen Arbeitsbereich nur aus Orca. Dateien, der Git-Worktree und Branches auf {{host}} bleiben unberührt.",
-          "title": "„{{name}}“ löschen?",
-          "disconnectedBody": "Der SSH-Host dieses Arbeitsbereichs ist nicht verbunden. Erneut verbinden, um den Arbeitsbereich auch auf dem Remote-Host zu löschen, oder ihn nur aus Orca entfernen.",
           "ghostBody": "{{host}} ist kein gespeicherter SSH-Host mehr. Daher ist dieser Arbeitsbereich nicht mehr mit einem aktiven Host verbunden. Er kann nur aus Orca entfernt werden — Dateien und Branches auf dem Remote-Host bleiben unverändert.",
           "cancel": "Abbrechen",
-          "forget": "Aus Orca entfernen",
-          "reconnectAndDelete": "Erneut verbinden und löschen"
+          "forget": "Aus Orca entfernen"
         },
         "MarkdownImageLightbox": {
           "image": "Bild",
@@ -17763,6 +17756,7 @@
         "agentCommandNotRunnable": "Der Befehl für {{agent}} unter Einstellungen → Agenten muss ein Programmpfad oder -name sein, den Orca finden kann, ohne Argumente oder Variablen. Den Befehl ändern oder zurücksetzen.",
         "runtimeNotInstalled": "{{agent}} ist auf dem Computer, auf dem dieser Chat läuft, nicht installiert. Die Installation über den Chat in einer aktuellen Orca-Version durchführen.",
         "fullAccessAsRoot": "{{agent}} verwendet keinen Vollzugriff, solange die Ausführung als root erfolgt. Unter Einstellungen → Agenten für den Computer, auf dem dieser Chat läuft, eine andere Berechtigung für {{agent}} auswählen und anschließend einen neuen Chat starten.",
+        "launchPreparationFailed": "Orca konnte den Start von {{agent}} auf dem Computer, auf dem dieser Chat läuft, nicht vorbereiten.",
         "conversationOpenElsewhere": "Codex hält diese Unterhaltung noch offen. In einem Moment erneut versuchen oder andere Codex-Terminals schließen.",
         "conversationOpenInTerminal": "{{agent}} führt diese Unterhaltung bereits in einem anderen Terminal aus. Dort {{agent}} beenden oder das Terminal schließen, um hier fortzufahren.",
         "chooseClaudeAccount": "In den Einstellungen unter Claude-Konten ein Konto auswählen oder hinzufügen.",

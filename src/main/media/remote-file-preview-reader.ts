@@ -1,3 +1,4 @@
+import { MAX_FILE_RANGE_READ_BYTES } from '../../shared/file-range-read'
 import type { RemoteFilePreviewAddress } from '../../shared/remote-file-preview-address'
 import type { RuntimeFileReadChunkResult } from '../../shared/runtime-file-contracts'
 import { callRuntimeEnvironment } from '../ipc/runtime-environments/runtime-environment-transport-routing'
@@ -142,4 +143,31 @@ export async function assertRemoteChunkReadsSupported(
     }
   }
   chunkReadVerdicts.add(key)
+}
+
+/** `length` bytes from `offset` (clipped to `size`), in chunks the host accepts; fewer at EOF. */
+export async function readRemotePreviewRange(
+  address: RemoteFilePreviewAddress,
+  offset: number,
+  length: number,
+  size: number,
+  signal: AbortSignal
+): Promise<Uint8Array> {
+  const end = Math.min(offset + length, size)
+  const range = new Uint8Array(Math.max(0, end - offset))
+  let read = 0
+  while (offset + read < end) {
+    const chunk = await readRemotePreviewChunk(
+      address,
+      offset + read,
+      Math.min(MAX_FILE_RANGE_READ_BYTES, end - offset - read),
+      signal
+    )
+    if (chunk.byteLength === 0) {
+      break
+    }
+    range.set(chunk, read)
+    read += chunk.byteLength
+  }
+  return range.subarray(0, read)
 }

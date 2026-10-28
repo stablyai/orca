@@ -85,24 +85,33 @@ export async function downloadWebStoreCrx(
     throw new Error('Extension download address is not a Chrome Web Store address')
   }
   const fetcher: Fetcher = options.fetcher ?? ((target, init) => net.fetch(target, init))
-  const response = await fetcher(url, { credentials: 'omit', redirect: 'follow' })
-  if (!response.ok) {
-    throw new Error(`Chrome Web Store download failed (${response.status})`)
+  const controller = new AbortController()
+  try {
+    const response = await fetcher(url, {
+      credentials: 'omit',
+      redirect: 'follow',
+      signal: controller.signal
+    })
+    if (!response.ok) {
+      throw new Error(`Chrome Web Store download failed (${response.status})`)
+    }
+    if (response.url && !isAllowedCrxDownloadUrl(response.url)) {
+      throw new Error('Extension download was redirected away from Google')
+    }
+    const bytes = await readCappedBody(response, MAX_CRX_BYTES)
+    if (options.size !== undefined && bytes.length !== options.size) {
+      throw new Error('Extension download is incomplete')
+    }
+    if (
+      options.sha256 !== undefined &&
+      createHash('sha256').update(bytes).digest('hex') !== options.sha256.toLowerCase()
+    ) {
+      throw new Error('Extension download does not match its checksum')
+    }
+    return verifyCrx3(bytes, { expectedExtensionId: extensionId, requirePublisherProof: true })
+  } finally {
+    controller.abort()
   }
-  if (response.url && !isAllowedCrxDownloadUrl(response.url)) {
-    throw new Error('Extension download was redirected away from Google')
-  }
-  const bytes = await readCappedBody(response, MAX_CRX_BYTES)
-  if (options.size !== undefined && bytes.length !== options.size) {
-    throw new Error('Extension download is incomplete')
-  }
-  if (
-    options.sha256 !== undefined &&
-    createHash('sha256').update(bytes).digest('hex') !== options.sha256.toLowerCase()
-  ) {
-    throw new Error('Extension download does not match its checksum')
-  }
-  return verifyCrx3(bytes, { expectedExtensionId: extensionId, requirePublisherProof: true })
 }
 
 /** The store's listing icon as a data URL for Orca's prompt (the renderer CSP blocks remote images). */
@@ -113,15 +122,24 @@ export async function fetchWebStoreIconDataUrl(
   if (!isAllowedWebStoreIconUrl(iconUrl)) {
     throw new Error('Invalid icon url')
   }
-  const response = await fetcher(iconUrl, { credentials: 'omit', redirect: 'follow' })
-  const mime = (response.headers.get('content-type') ?? '').split(';')[0].trim().toLowerCase()
-  if (
-    !response.ok ||
-    !ICON_MIME_TYPES.has(mime) ||
-    (response.url && !isAllowedWebStoreIconUrl(response.url))
-  ) {
-    throw new Error('Icon could not be loaded')
+  const controller = new AbortController()
+  try {
+    const response = await fetcher(iconUrl, {
+      credentials: 'omit',
+      redirect: 'follow',
+      signal: controller.signal
+    })
+    const mime = (response.headers.get('content-type') ?? '').split(';')[0].trim().toLowerCase()
+    if (
+      !response.ok ||
+      !ICON_MIME_TYPES.has(mime) ||
+      (response.url && !isAllowedWebStoreIconUrl(response.url))
+    ) {
+      throw new Error('Icon could not be loaded')
+    }
+    const bytes = await readCappedBody(response, MAX_ICON_BYTES)
+    return `data:${mime};base64,${bytes.toString('base64')}`
+  } finally {
+    controller.abort()
   }
-  const bytes = await readCappedBody(response, MAX_ICON_BYTES)
-  return `data:${mime};base64,${bytes.toString('base64')}`
 }

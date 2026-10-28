@@ -26,7 +26,7 @@ import type { PtySpawnOperationState, PtySpawnExecutionFacts } from './spawn-ope
 import { excludeReplacedPaneOwner } from './pane/replaced-pane-owner'
 import { attachViewWithoutOwner } from './pane/attach-only-view'
 import { wslBridgePtyPresence } from '../../agent-hooks/wsl-bridge-pty-presence'
-import { shouldSkipCodexHomeEnvForWindowsShell as isWslTerminalSpawn } from './host-env/codex-home'
+import { isWslTerminalSpawn } from './wsl-terminal-spawn'
 
 export async function executePtySpawn(
   ctx: PtySpawnOperationState,
@@ -251,7 +251,10 @@ export async function executePtySpawn(
       noteWslDistroWoken(spawnedWslDistro)
       noteWslDistrosRunning([spawnedWslDistro])
       wslBridgePtyPresence.noteLive(ctx.result.id, spawnedWslDistro)
-    } else if (!args.connectionId && isWslBridgeSpawn(ctx.spawnOptions)) {
+    } else if (
+      !args.connectionId &&
+      isWslTerminalSpawn(ctx.spawnOptions.shellOverride, ctx.spawnOptions.cwd)
+    ) {
       // A WSL shell whose distro the spawn didn't report runs in the default distro.
       wslBridgePtyPresence.noteLive(ctx.result.id, null)
     }
@@ -269,8 +272,4 @@ export async function executePtySpawn(
       ctx.deps.trustedTerminalHandleEnv.delete(facts.preAllocatedHandle)
     }
   }
-}
-
-function isWslBridgeSpawn(options: { shellOverride?: string; cwd?: string | null }): boolean {
-  return isWslTerminalSpawn(options.shellOverride, options.cwd ?? undefined)
 }

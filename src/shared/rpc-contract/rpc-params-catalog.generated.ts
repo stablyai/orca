@@ -237,6 +237,12 @@ import {
   ResolveTerminalPath,
   ServerDirectoryBrowse
 } from './files-params'
+import {
+  FileSaveAbort,
+  FileSaveBegin,
+  FileSaveChunk,
+  FileSaveCommit
+} from './files-staged-save-params'
 import { FileOpen, FileWatch, WorktreeSelector } from './files-target-params'
 import { TerminalArtifactFile, TerminalArtifactFileWrite } from './files-terminal-artifact-params'
 import {
@@ -969,6 +975,10 @@ export const RPC_PARAMS_BY_METHOD = {
   'files.readTerminalArtifactPreview': TerminalArtifactFile,
   'files.rename': FileRename,
   'files.resolveTerminalPath': ResolveTerminalPath,
+  'files.saveAbort': FileSaveAbort,
+  'files.saveBegin': FileSaveBegin,
+  'files.saveChunk': FileSaveChunk,
+  'files.saveCommit': FileSaveCommit,
   'files.search': FileSearch,
   'files.searchPaths': FilePathSearch,
   'files.stat': FileTreePath,

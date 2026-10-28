@@ -21,6 +21,8 @@ function failureMessage(reason: MobileWebShellFailureCause): string {
       return "This device's WebView is too old to open the workspace safely."
     case 'download-failed':
       return 'The latest app could not be downloaded from this host.'
+    case 'host-profile-unreadable':
+      return 'Could not read this host on your device. Try again.'
     case 'status-unreadable':
       return "Could not read this host's status. Go back and reopen it."
     case 'render-process-gone':

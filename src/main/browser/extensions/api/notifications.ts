@@ -93,12 +93,14 @@ function emit(caller: BrowserExtensionCaller, event: string, args: unknown[]): v
   )
 }
 
-function detach(entry: Shown): void {
+function detach(entry: Shown, closeNative = true): void {
   const { notification } = entry
   entry.notification = null
   if (notification) {
     notification.removeAllListeners()
-    notification.close()
+    if (closeNative) {
+      notification.close()
+    }
   }
 }
 
@@ -127,6 +129,8 @@ function show(caller: BrowserExtensionCaller, id: string, entry: Shown): void {
       : {})
   })
   notification.on('click', () => {
+    shownFor(caller).delete(id)
+    detach(entry, false)
     noteBrowserExtensionUserGesture(caller.session, caller.extension.id)
     emit(caller, 'onClicked', [id])
   })
@@ -137,6 +141,11 @@ function show(caller: BrowserExtensionCaller, id: string, entry: Shown): void {
   notification.on('close', (details) => {
     shownFor(caller).delete(id)
     emit(caller, 'onClosed', [id, details.reason !== 'timedOut'])
+  })
+  notification.once('failed', () => {
+    shownFor(caller).delete(id)
+    // Electron destroys the native notification after dispatching this failure.
+    detach(entry, false)
   })
   entry.notification = notification
   notification.show()

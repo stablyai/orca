@@ -59,7 +59,8 @@ export {
   AgentSessionPreSpawnError,
   AgentSessionPromptAnswerRejectedError,
   AgentSessionPromptUnavailableError,
-  isAgentSessionPreSpawnError
+  isAgentSessionPreSpawnError,
+  launchPreparationFailure
 } from './structured-agent-session-adapter-errors'
 export type { AgentSessionPreSpawnReason } from './structured-agent-session-adapter-errors'
 

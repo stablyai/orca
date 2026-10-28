@@ -473,6 +473,12 @@ importers:
       happy-dom:
         specifier: ^21.0.4
         version: 21.0.4
+      hast-util-from-html-isomorphic:
+        specifier: 2.0.0
+        version: 2.0.0
+      hast-util-to-text:
+        specifier: 4.0.2
+        version: 4.0.2
       hast-util-to-jsx-runtime:
         specifier: 2.3.6
         version: 2.3.6(supports-color@7.2.0)
@@ -620,6 +626,9 @@ importers:
       unified:
         specifier: ^11.0.5
         version: 11.0.5
+      unist-util-visit-parents:
+        specifier: 6.0.2
+        version: 6.0.2
       vite:
         specifier: ^8.3.5
         version: 8.3.5(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1)

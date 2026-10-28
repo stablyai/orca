@@ -203,7 +203,7 @@ function decodeChunk(contentBase64: unknown, bytesRead: unknown): Uint8Array {
   return bytes
 }
 
-function bytesToBase64(bytes: Uint8Array): string {
+export function bytesToBase64(bytes: Uint8Array): string {
   const parts: string[] = []
   // Why: a multiple of 3, so slices join without padding; small enough for fromCharCode's args.
   const slice = 0x2000 * 3

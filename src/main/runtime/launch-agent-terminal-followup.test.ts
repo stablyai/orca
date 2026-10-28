@@ -16,7 +16,7 @@ function makeRuntime() {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the launch reads only these protected members; each is assigned or stubbed before launchAgentTerminal runs.
   const internals = runtime as unknown as {
     store: Record<string, unknown>
-    resolveWorktreeSelector: (selector: string) => Promise<unknown>
+    resolveGitWorktreeSelector: (selector: string) => Promise<unknown>
     createTerminal: (selector: string, opts: unknown) => Promise<unknown>
     sendStartupFollowupWhenReady: (handle: string, followup: unknown) => void
   }
@@ -26,7 +26,7 @@ function makeRuntime() {
     getRepos: () => [repo],
     getRepo: (id: string) => (id === repo.id ? repo : undefined)
   }
-  vi.spyOn(internals, 'resolveWorktreeSelector').mockResolvedValue({
+  vi.spyOn(internals, 'resolveGitWorktreeSelector').mockResolvedValue({
     id: 'repo-1::/home/me/app-feature',
     repoId: 'repo-1',
     path: '/home/me/app-feature'

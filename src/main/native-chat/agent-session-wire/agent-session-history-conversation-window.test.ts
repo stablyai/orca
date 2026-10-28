@@ -20,7 +20,7 @@ import {
   readAgentSessionHydrationPage
 } from './agent-session-history-page'
 import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
-import { foldSubagentItems } from '../../../shared/native-chat-subagent-items'
+import { foldSubagentItems } from '../../../shared/native-chat/transcript/native-chat-subagent-items'
 import {
   subagentJournalBody,
   subagentJournalItemIdentity

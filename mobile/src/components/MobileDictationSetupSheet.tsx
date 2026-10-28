@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
-import { ActivityIndicator, Pressable, Switch, Text, View } from 'react-native'
+import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 import { Check, Download } from 'lucide-react-native'
 import { BottomDrawer } from './BottomDrawer'
+import { MobileSwitch } from './MobileSwitch'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
@@ -145,7 +146,11 @@ export function MobileDictationSetupSheet({ visible, client, onClose, onReady }:
           <>
             <View style={styles.enableRow}>
               <Text style={styles.enableLabel}>Dictation enabled</Text>
-              <Switch value={setup.enabled} onValueChange={(v) => void handleToggleEnabled(v)} />
+              <MobileSwitch
+                accessibilityLabel="Dictation enabled"
+                value={setup.enabled === true}
+                onValueChange={(v) => void handleToggleEnabled(v)}
+              />
             </View>
 
             {setup.models.map((model) => {

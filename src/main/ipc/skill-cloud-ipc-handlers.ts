@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
-import { app, BrowserWindow } from 'electron'
+import { app } from 'electron'
 import { z } from 'zod'
 import { SKILL_INSTALL_UPDATE_REQUIRED_MESSAGE } from '../../shared/skill-install-capability'
 import type { SkillDiscoveryResult, SkillDiscoveryTargetSchema } from '../../shared/skills'
@@ -66,13 +66,11 @@ function registerSharingHandlers(
       packageId: input.packageId
     })
   })
-  handleMainWindowSkillIpc('skills:publishShare', async (_event, value: unknown) => {
+  handleMainWindowSkillIpc('skills:publishShare', async (event, value: unknown) => {
     const input = skillSharePublishIpcSchema.parse(value)
     return preparations.publish(input, (progress) => {
-      for (const window of BrowserWindow.getAllWindows()) {
-        if (!window.isDestroyed()) {
-          window.webContents.send('skills:shareProgress', progress)
-        }
+      if (!event.sender.isDestroyed()) {
+        event.sender.send('skills:shareProgress', progress)
       }
     })
   })

@@ -70,7 +70,7 @@ type SidecarRequest = { method: string; params: Record<string, unknown>; authTok
 const host: RuntimeBrowserCommandHost = {
   getAgentBrowserBridge: () => null,
   // Distinct IDs prove registry fencing uses resolved workspaces, not caller selectors.
-  resolveWorktreeSelector: async (selector) => ({ id: `id-${selector}` }),
+  resolveWorkspaceSelector: async (selector) => ({ id: `id-${selector}` }),
   resolveBrowserWorkspace: async (selector) => ({ id: `id-${selector}` }),
   resolveBrowserNetworkExecutionHost: () => {
     throw new Error('No browser network execution host')
@@ -448,7 +448,7 @@ describe('ElectronServeBrowserProcess command routing', () => {
   it('scopes a folder workspace through the browser-workspace resolver', async () => {
     const folderHost: RuntimeBrowserCommandHost = {
       ...host,
-      resolveWorktreeSelector: async () => {
+      resolveWorkspaceSelector: async () => {
         throw new Error('selector_not_found')
       },
       resolveBrowserWorkspace: async () => ({ id: 'folder:docs' })

@@ -95,7 +95,7 @@ export async function confirmBundledOrcadStartupQualified(): Promise<void> {
 
 export async function runOrcadProfilePreflight(
   nonce: string | undefined,
-  options: { nativeFeatures?: boolean } = {}
+  options: { nativeFeatures?: boolean; servedUserDataPath?: string } = {}
 ): Promise<void> {
   const checkedNonce = z.string().uuid().parse(nonce)
   const directory = resolveBundledOrcadSlot()
@@ -118,9 +118,31 @@ export async function runOrcadProfilePreflight(
     runtime: 'node',
     runtimeVersion: process.versions.node,
     artifactVersion,
-    ...result
+    ...result,
+    ...(options.servedUserDataPath === undefined
+      ? {}
+      : { liveDaemonProtocols: await readServedDaemonProtocols(options.servedUserDataPath) })
   }
   console.log(JSON.stringify(response))
+}
+
+/** The served data root, never this probe's own, decides which daemons a restart must reach. */
+async function readServedDaemonProtocols(servedUserDataPath: string): Promise<number[] | null> {
+  // A failed probe leaves the crossing unverifiable; it must not fail the candidate itself.
+  try {
+    // Import lazily: startup preflight loads this module and needs no daemon code.
+    const [{ listLiveDaemonProtocols }, { daemonRuntimeDirFor }, protocol] = await Promise.all([
+      import('../daemon/daemon-generation-liveness'),
+      import('../daemon/daemon-runtime-dir'),
+      import('../daemon/daemon-protocol-version')
+    ])
+    return await listLiveDaemonProtocols(daemonRuntimeDirFor(servedUserDataPath), [
+      protocol.PROTOCOL_VERSION,
+      ...protocol.PREVIOUS_DAEMON_PROTOCOL_VERSIONS
+    ])
+  } catch {
+    return null
+  }
 }
 
 async function readInstalledVersion(directory: string): Promise<string> {
