@@ -35,6 +35,7 @@ import {
   type NeedsProjectHostOption,
   type NewWorkspaceComposerCardProps
 } from './new-workspace/new-workspace-composer-card-props'
+import { getMultiRepoBranchHelper } from './new-workspace/multi-repo-composer-status'
 import { getSshStatusLabel } from './new-workspace/new-workspace-composer-ssh-status'
 import { useNewWorkspaceComposerFileDrop } from './new-workspace/use-new-workspace-composer-file-drop'
 import { useComposerFileDragOver } from './new-workspace/use-composer-file-drag-over'
@@ -273,6 +274,11 @@ export default function NewWorkspaceComposerCard(
     },
     [updateSettings]
   )
+  const handleChooseHost = React.useCallback((): void => {
+    composerRef?.current
+      ?.querySelector<HTMLElement>('[data-multi-repo-host-field="true"] button')
+      ?.click()
+  }, [composerRef])
   const handleNamePlainEnter = React.useCallback((): void => {
     const agentTrigger = composerRef?.current?.querySelector<HTMLElement>(
       '[data-agent-combobox-root="true"][role="combobox"]'
@@ -327,6 +333,11 @@ export default function NewWorkspaceComposerCard(
           selectedProjectName={selectedProjectName}
         />
         <NewWorkspaceComposerNameSection {...props} onNamePlainEnter={handleNamePlainEnter} />
+        {props.multiRepo?.active && props.multiRepo.blockedCount === 0 ? (
+          <p className="-mt-2 text-[11px] text-muted-foreground">
+            {getMultiRepoBranchHelper(props.name, props.multiRepo.selectedProjectIds.length, 0)}
+          </p>
+        ) : null}
         <NewWorkspaceComposerAgentSection
           {...props}
           createDisabled={props.createDisabled || sparseEditing}
@@ -335,28 +346,31 @@ export default function NewWorkspaceComposerCard(
           defaultTuiAgent={defaultTuiAgent}
           handleSetDefaultAgent={handleSetDefaultAgent}
         />
-        <NewWorkspaceComposerAdvancedSection
-          {...props}
-          onSparseEditingChange={setSparseEditing}
-          sparseEditing={sparseEditing}
-          branchNameInputId={branchNameInputId}
-          setupConfigLabel={setupConfigLabel}
-          setupRunLabel={setupRunLabel}
-          setupAskLabel={setupAskLabel}
-          setupRunButtonLabel={setupRunButtonLabel}
-          setupSkipButtonLabel={setupSkipButtonLabel}
-          showSetupAgentStartupPolicy={showSetupAgentStartupPolicy}
-          parentWorktreeId={parentWorktreeId}
-          onParentWorktreeIdChange={onParentWorktreeIdChange}
-          selectedRepoExecutionHostId={selectedRepoExecutionHostId}
-          selectedRepoProjectId={selectedRepoProjectId}
-          activeFolderWorkspaceId={activeFolderWorkspaceId}
-        />
+        {props.multiRepo?.active ? null : (
+          <NewWorkspaceComposerAdvancedSection
+            {...props}
+            onSparseEditingChange={setSparseEditing}
+            sparseEditing={sparseEditing}
+            branchNameInputId={branchNameInputId}
+            setupConfigLabel={setupConfigLabel}
+            setupRunLabel={setupRunLabel}
+            setupAskLabel={setupAskLabel}
+            setupRunButtonLabel={setupRunButtonLabel}
+            setupSkipButtonLabel={setupSkipButtonLabel}
+            showSetupAgentStartupPolicy={showSetupAgentStartupPolicy}
+            parentWorktreeId={parentWorktreeId}
+            onParentWorktreeIdChange={onParentWorktreeIdChange}
+            selectedRepoExecutionHostId={selectedRepoExecutionHostId}
+            selectedRepoProjectId={selectedRepoProjectId}
+            activeFolderWorkspaceId={activeFolderWorkspaceId}
+          />
+        )}
       </div>
       {!sparseEditing ? (
         <div className="shrink-0 space-y-1">
           <NewWorkspaceComposerFooter
             {...props}
+            onChooseHost={handleChooseHost}
             submitShortcutModifierLabel={getScreenSubmitModifierLabel()}
           />
         </div>

@@ -23,6 +23,7 @@ import { WslMoveDialogHost } from '../components/wsl-move/WslMoveDialog'
 import { shouldRenderPetOverlay } from '../components/pet/pet-overlay-visibility'
 import { useAppStore } from '../store'
 import type { UpdateStatus } from '../../../shared/update-status-types'
+import { MultiRepoDeleteModalHost } from './MultiRepoDeleteModalHost'
 import { useLazyModalMounts } from './use-lazy-modal-mounts'
 import { usePreloadWorktreeJumpPalette, WorktreeJumpPalette } from './worktree-jump-palette-preload'
 import {
@@ -324,6 +325,7 @@ export const AppRootSurfaces = memo(function AppRootSurfaces(props: {
             <DeleteWorktreeDialog />
           </ModalBoundary>
         ) : null}
+        <MultiRepoDeleteModalHost />
         {activeModal === 'preserved-branch-review' ? (
           <ModalBoundary boundaryId="modal.preserved-branch-review" resetKey>
             <PreservedBranchBatchReviewModal />

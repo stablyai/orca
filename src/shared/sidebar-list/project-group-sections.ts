@@ -17,6 +17,7 @@ import {
   withRepoSectionDisplayLabels
 } from '../project-section-order'
 import { buildFolderWorkspaceRow } from './row-builders'
+import { isMultiRepoSystemProjectGroup } from './multi-repo-system-group'
 
 export function appendProjectGroupSections(
   ctx: SectionAppendContext,
@@ -81,9 +82,18 @@ export function appendProjectGroupSections(
     children.push(group)
     childGroupsByParentId.set(parentId, children)
   }
+  const isSystemGroup = (group: ProjectGroup): boolean =>
+    isMultiRepoSystemProjectGroup(
+      group,
+      (folderWorkspacesByProjectGroupId.get(group.id) ?? []).some(
+        (pair) => pair.folderWorkspace.multiRepo !== undefined
+      )
+    )
   for (const groups of childGroupsByParentId.values()) {
     groups.sort(
       (left, right) =>
+        // Cross-repo work is the high-frequency item: the Workspaces section takes the top slot.
+        Number(isSystemGroup(right)) - Number(isSystemGroup(left)) ||
         left.tabOrder - right.tabOrder ||
         compareSidebarText(left.name, right.name) ||
         compareCodePoints(left.executionHostId ?? '', right.executionHostId ?? '') ||
@@ -112,7 +122,8 @@ export function appendProjectGroupSections(
       count: getProjectGroupSubtreeCount(projectGroup.id),
       icon: { kind: 'project' },
       projectGroup,
-      projectGroupDepth: depth
+      projectGroupDepth: depth,
+      ...(isSystemGroup(projectGroup) ? { multiRepoSystemGroup: true } : {})
     })
     if (!collapsedGroups.has(key)) {
       for (const pair of folderWorkspacesByProjectGroupId.get(projectGroup.id) ?? []) {

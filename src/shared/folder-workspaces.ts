@@ -6,6 +6,7 @@ import { normalizeWorkspaceLinkedItem } from './workspace-linked-item'
 import { isWorkspaceLinkedItemSourceContextMatch } from './workspace-linked-item-source-context'
 import { normalizeWorkspaceCreatorProvenance } from './workspace-creator-provenance'
 import { getWorkspaceAttachments } from './workspace-attachments'
+import { normalizeMultiRepoWorkspace } from './multi-repo-workspace'
 import { isSmartTier } from './sidebar-list/sort-stamps'
 import { normalizeOrcadRetainedMarker } from './orcad-retained-marker'
 
@@ -59,6 +60,7 @@ export function normalizeFolderWorkspaces(
     const linkedTask = normalizeWorkspaceLinkedItem(raw.linkedTask)
     const linkedTaskSourceContext = normalizeStoredTaskSourceContext(raw.linkedTaskSourceContext)
     const creatorProvenance = normalizeWorkspaceCreatorProvenance(raw.creatorProvenance)
+    const multiRepo = normalizeMultiRepoWorkspace(raw.multiRepo)
     const orcadRetained = normalizeOrcadRetainedMarker(raw.orcadRetained)
     seen.add(raw.id)
     // Do not persist fetch-time executionHostId: it may name an unowned runtime authority and lacks a generation fence.
@@ -134,6 +136,7 @@ export function normalizeFolderWorkspaces(
       ...(Array.isArray(raw.externalConversations)
         ? { externalConversations: raw.externalConversations }
         : {}),
+      ...(multiRepo ? { multiRepo } : {}),
       ...(orcadRetained ? { orcadRetained } : {})
     })
   }

@@ -46,6 +46,7 @@ export function buildTerminalCreateWindow(args: {
         onJumpToTabIndex: () => () => {},
         onActivateWorktree: () => () => {},
         onWorktreeHistoryNavigate: () => () => {},
+        onSelectWorkspaceRepo: () => () => {},
         onCreateTerminal: (
           listener: (data: {
             requestId?: string

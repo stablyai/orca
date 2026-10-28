@@ -318,6 +318,19 @@ describe('keybindings', () => {
     expect(getEffectiveKeybindingsForAction(maximizeAction, 'win32')).toEqual([])
   })
 
+  it('leaves next/previous repo in workspace unbound by default', () => {
+    for (const platform of ['darwin', 'linux', 'win32'] as const) {
+      expect(getEffectiveKeybindingsForAction('workspace.nextRepo', platform)).toEqual([])
+      expect(getEffectiveKeybindingsForAction('workspace.previousRepo', platform)).toEqual([])
+      expect(
+        findKeybindingConflicts(platform, undefined, {
+          includeMainProcessInterception: true,
+          relevantActionIds: ['workspace.nextRepo', 'workspace.previousRepo']
+        })
+      ).toEqual([])
+    }
+  })
+
   it('captures and round-trips the macOS Option-composed maximize chord', () => {
     const maximizeAction = 'floatingWorkspace.maximize' as KeybindingActionId
 

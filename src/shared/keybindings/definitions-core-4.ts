@@ -21,6 +21,38 @@ export const KEYBINDING_DEFINITION_CORE_4: readonly KeybindingDefinition[] = [
     defaultBindings: platformBindings(['Mod+Shift+J'])
   },
   {
+    id: 'workspace.nextRepo',
+    title: 'Next Repo in Workspace',
+    group: 'Global',
+    scope: 'global',
+    searchKeywords: [
+      'shortcut',
+      'workspace',
+      'repo',
+      'repository',
+      'project',
+      'multi-repo',
+      'next'
+    ],
+    defaultBindings: platformBindings([])
+  },
+  {
+    id: 'workspace.previousRepo',
+    title: 'Previous Repo in Workspace',
+    group: 'Global',
+    scope: 'global',
+    searchKeywords: [
+      'shortcut',
+      'workspace',
+      'repo',
+      'repository',
+      'project',
+      'multi-repo',
+      'previous'
+    ],
+    defaultBindings: platformBindings([])
+  },
+  {
     id: 'sidebar.childWorkspaces.toggle',
     title: 'Toggle Child Workspaces',
     group: 'Global',

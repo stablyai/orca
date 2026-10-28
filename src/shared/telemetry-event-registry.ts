@@ -103,6 +103,11 @@ import {
   setupScriptPromptShownSchema,
   workspaceCreateFailedSchema
 } from './telemetry-repository-event-schemas'
+import {
+  multiRepoMemberRetrySchema,
+  multiRepoWorkspaceCreatedSchema,
+  multiRepoWorkspaceRemovedSchema
+} from './telemetry-multi-repo-workspace-event-schemas'
 import { sshRemoteRuntimeResolvedSchema } from './telemetry-ssh-runtime-event-schemas'
 import { wslUsageSnapshotSchema } from './telemetry-wsl-usage-event-schemas'
 import {
@@ -133,6 +138,9 @@ export const eventSchemas = {
   add_repo_nested_import_result: addRepoNestedImportResultSchema,
   workspace_created: workspaceCreatedSchema,
   workspace_create_failed: workspaceCreateFailedSchema,
+  multi_repo_workspace_created: multiRepoWorkspaceCreatedSchema,
+  multi_repo_workspace_removed: multiRepoWorkspaceRemovedSchema,
+  multi_repo_member_retry: multiRepoMemberRetrySchema,
   setup_script_prompt_shown: setupScriptPromptShownSchema,
   setup_script_prompt_action: setupScriptPromptActionSchema,
 

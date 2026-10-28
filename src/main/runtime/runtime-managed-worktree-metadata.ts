@@ -18,6 +18,7 @@ import {
   shouldDropWslMoveProjectUpdate,
   wslMoveProjectRefForWorkspace
 } from '../persistence/moving-wsl-projects/wsl-move-scope-guard'
+import { assertWorktreeNotMultiRepoMember } from './multi-repo-workspace/multi-repo-member-lock'
 import { RuntimeLineageError } from './runtime-worktree-lineage-resolution'
 import type { ResolvedWorktree } from './runtime-worktree-path-identity'
 
@@ -43,6 +44,9 @@ export async function updateRuntimeManagedWorktreeMetadata(args: {
 }): Promise<Worktree> {
   const worktree = await args.ports.resolveWorktree(args.selector)
   const { lineage, ...metaUpdates } = args.updates
+  if (lineage) {
+    assertWorktreeNotMultiRepoMember(args.store, worktree.id)
+  }
   const previousParentRepoId = lineage
     ? splitWorktreeId(args.store.getWorktreeLineage?.(worktree.id)?.parentWorktreeId ?? '')?.repoId
     : undefined

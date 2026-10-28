@@ -4,7 +4,10 @@ import { cn } from '@/lib/utils'
 import type { AppState } from '@/store/types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import type { Worktree } from '../../../../../../shared/worktree/types'
-import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
+import {
+  getWorktreeHostIdentity,
+  type HostScopedWorktreeKey
+} from '../../../../../../shared/worktree/host-qualified-identity'
 import { isActiveSidebarWorkspace } from '../../../../../../shared/sidebar-list/active-workspace'
 import WorktreeCard, { type ActiveSurfaceVariant } from '../../WorktreeCard'
 import { PINNED_GROUP_KEY } from '../../../../../../shared/sidebar-list/group-keys'
@@ -28,6 +31,8 @@ export type WorktreeItemRowContext = {
   settings: AppState['settings']
   groupBy: WorktreeGroupBy
   folderBackedProjectGroupIds: ReadonlySet<string>
+  /** Children of a multi-repo workspace: always labelled by repo, never dragged out. */
+  multiRepoMemberIdentities?: ReadonlySet<HostScopedWorktreeKey>
   groupKeyByRowKey: ReadonlyMap<string, string>
   groupIndexByRowKey: ReadonlyMap<string, number>
   agentSendTargetWorktreeId: string | null
@@ -117,8 +122,12 @@ export function renderWorktreeItemRow(
   const lineageChildrenStyle = lineageChildren
     ? getLineageChildrenInlineStyle(LINEAGE_CHILDREN_INLINE_OFFSET)
     : undefined
-  const worktreeDragGroupKey = ctx.groupKeyByRowKey.get(itemRow.rowKey)
   const worktreeIdentity = getWorktreeHostIdentity(itemRow.worktree)
+  const isMultiRepoMember = ctx.multiRepoMemberIdentities?.has(worktreeIdentity) === true
+  // A member cannot leave or be reordered inside its workspace, so it carries no drag identity.
+  const worktreeDragGroupKey = isMultiRepoMember
+    ? undefined
+    : ctx.groupKeyByRowKey.get(itemRow.rowKey)
   const isMultiSelected = ctx.selectedWorktreeIds.has(worktreeIdentity)
   const isLineageDropTarget =
     ctx.worktreeDragState.draggingWorktreeId &&
@@ -166,7 +175,9 @@ export function renderWorktreeItemRow(
         if (nested) {
           event.stopPropagation()
         }
-        ctx.onRowPointerDown(event, itemRow.worktree, itemRow.rowKey)
+        if (!isMultiRepoMember) {
+          ctx.onRowPointerDown(event, itemRow.worktree, itemRow.rowKey)
+        }
       }}
       style={{
         paddingLeft: surfaceInset > 0 ? `${surfaceInset}px` : undefined
@@ -199,12 +210,13 @@ export function renderWorktreeItemRow(
         onSelectionGesture={ctx.onSelectionGesture}
         onWorktreeCardClick={ctx.onWorktreeCardClick}
         onContextMenuSelect={ctx.onContextMenuSelect}
-        onCardDragStart={ctx.onCardDragStart}
+        onCardDragStart={isMultiRepoMember ? undefined : ctx.onCardDragStart}
         onCardDragEnd={ctx.onCardDragEnd}
-        hideRepoBadge={ctx.groupBy === 'repo' && !itemRow.showProjectName}
+        // Why: the branch repeats across a multi-repo workspace, so its repo badge is what tells rows apart.
+        hideRepoBadge={ctx.groupBy === 'repo' && !itemRow.showProjectName && !isMultiRepoMember}
         // Why: pinned worktrees mix repos; cross-repo children opt into the existing project-name badge.
         hostContextLabel={itemRow.hostContextLabel}
-        showProjectName={itemRow.showProjectName}
+        showProjectName={itemRow.showProjectName || isMultiRepoMember}
         inPinnedSection={itemRow.sectionKey === PINNED_GROUP_KEY}
         renameRowKey={itemRow.rowKey}
         lineageChildCount={itemRow.lineageChildCount}

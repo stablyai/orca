@@ -159,6 +159,8 @@ export function forwardGuestShortcutInput(
     } else {
       renderer.send('ui:jumpToTabIndex', action.index)
     }
+  } else if (action?.type === 'selectWorkspaceRepo') {
+    renderer.send('ui:selectWorkspaceRepo', action.selection)
   } else if (action?.type === 'dictationKeyDown') {
     if (!shouldForwardDictationShortcut?.()) {
       return false

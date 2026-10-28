@@ -21,6 +21,7 @@ import type { SshConnectionStatus } from '../../../../shared/ssh-types'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { MultiRepoComposerView } from './use-multi-repo-composer'
 
 export type RepoOption = React.ComponentProps<typeof RepoCombobox>['repos'][number]
 export type EphemeralVmRecipeOption = NonNullable<OrcaHooks['environmentRecipes']>[number]
@@ -136,6 +137,8 @@ export type NewWorkspaceComposerCardProps = {
   onSparseSelectPreset: (preset: SparsePreset | null) => void
   sparseControlsEnabled?: boolean
   onAddProjectOverride?: () => void
+  /** Present when the host offers multi-repo create; drives the picker, chips and footer. */
+  multiRepo?: MultiRepoComposerView
   onNestedDialogOpenChange?: (open: boolean) => void
 }
 

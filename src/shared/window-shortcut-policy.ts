@@ -9,6 +9,14 @@ import {
   type KeybindingOverrides,
   type PhysicalModifierToken
 } from './keybindings'
+import {
+  resolveWorkspaceRepoShortcut,
+  workspaceRepoSelectionActionId,
+  type WorkspaceRepoSelection
+} from './window-shortcut-workspace-repo'
+
+export type { WorkspaceRepoSelection }
+export { nativeZoomCommandMatchesKeybindings } from './window-shortcut-zoom'
 
 export type WindowShortcutInput = {
   type?: string
@@ -45,6 +53,7 @@ export type WindowShortcutAction =
   | { type: 'jumpToWorktreeIndex'; index: number }
   | { type: 'jumpToTabIndex'; index: number }
   | { type: 'worktreeHistoryNavigate'; direction: 'back' | 'forward' }
+  | { type: 'selectWorkspaceRepo'; selection: WorkspaceRepoSelection }
   | { type: 'dictationKeyDown' }
 
 type WindowShortcutResolveOptions = KeybindingMatchOptions
@@ -129,38 +138,6 @@ function actionMatches(
   options: WindowShortcutResolveOptions
 ): boolean {
   return keybindingMatchesAction(actionId, input, platform, keybindings, options)
-}
-
-export function nativeZoomCommandMatchesKeybindings(
-  direction: 'in' | 'out',
-  platform: NodeJS.Platform,
-  keybindings?: KeybindingOverrides,
-  options: KeybindingMatchOptions = {}
-): boolean {
-  const primary =
-    platform === 'darwin' ? { meta: true, control: false } : { meta: false, control: true }
-  const actionId = direction === 'in' ? 'zoom.in' : 'zoom.out'
-  const candidates =
-    direction === 'in'
-      ? [
-          { key: '=', code: 'Equal', shift: false },
-          { key: '+', code: 'Equal', shift: true },
-          { key: 'Add', code: 'NumpadAdd', shift: false }
-        ]
-      : [
-          { key: '-', code: 'Minus', shift: false },
-          { key: 'Subtract', code: 'NumpadSubtract', shift: false }
-        ]
-
-  return candidates.some((candidate) =>
-    keybindingMatchesAction(
-      actionId,
-      { ...primary, alt: false, ...candidate },
-      platform,
-      keybindings,
-      options
-    )
-  )
 }
 
 export function resolveWindowShortcutAction(
@@ -275,6 +252,11 @@ export function resolveWindowShortcutAction(
     return { type: 'jumpToTabIndex', index: tabIndex }
   }
 
+  const repoAction = resolveWorkspaceRepoShortcut(input, platform, keybindings, options)
+  if (repoAction) {
+    return repoAction
+  }
+
   if (actionMatches('tab.openQuickCommandsMenu', input, platform, keybindings, options)) {
     return { type: 'toggleQuickCommandsMenu' }
   }
@@ -327,6 +309,8 @@ export function getWindowShortcutActionId(action: WindowShortcutAction): Keybind
       return 'workspace.selectByIndex'
     case 'jumpToTabIndex':
       return 'tab.selectByIndex'
+    case 'selectWorkspaceRepo':
+      return workspaceRepoSelectionActionId(action.selection)
   }
 }
 

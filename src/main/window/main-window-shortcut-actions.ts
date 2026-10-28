@@ -65,5 +65,8 @@ export function sendResolvedWindowShortcutAction(
       return
     case 'worktreeHistoryNavigate':
       mainWindow.webContents.send('ui:worktreeHistoryNavigate', action.direction)
+      return
+    case 'selectWorkspaceRepo':
+      mainWindow.webContents.send('ui:selectWorkspaceRepo', action.selection)
   }
 }

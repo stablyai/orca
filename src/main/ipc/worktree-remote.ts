@@ -246,6 +246,15 @@ export function recordWorkspaceLineageForCreatedWorktree(
     console.warn(`[worktree-create] parent folder workspace disappeared: ${args.parentWorkspace}`)
     return NO_CREATED_WORKTREE_LINEAGE
   }
+  if (
+    parentScope.type === 'folder' &&
+    store.getFolderWorkspace(parentScope.folderWorkspaceId)?.multiRepo
+  ) {
+    console.warn(
+      `[worktree-create] ${args.parentWorkspace} is multi-repo; creating without a parent`
+    )
+    return NO_CREATED_WORKTREE_LINEAGE
+  }
   const parentWorktreeMeta =
     parentScope.type === 'worktree'
       ? ((worktree.hostId

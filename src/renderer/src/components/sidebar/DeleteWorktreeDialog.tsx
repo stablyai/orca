@@ -15,6 +15,7 @@ import { DeleteWorktreeLineageNotice } from './DeleteWorktreeLineageNotice'
 import { DeleteWorktreeSkipConfirmOption } from './DeleteWorktreeSkipConfirmOption'
 import { DeleteWorktreeDialogFooter } from './DeleteWorktreeDialogFooter'
 import { DeleteWorktreeDialogDescription } from './DeleteWorktreeDialogDescription'
+import { MultiRepoMemberDeleteNote } from '@/components/multi-repo/MultiRepoMemberNotices'
 import { DeleteWorktreeTargetPreview } from './DeleteWorktreeTargetPreview'
 import { DeleteWorktreeWarningPanels } from './DeleteWorktreeWarningPanels'
 import { persistDeleteWorktreeConfirmSkipPreference } from './delete-worktree-preference-toast'
@@ -352,6 +353,9 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
                 : deleteCopy.descriptionSuffix
             }
           />
+          {worktrees.length === 1 ? (
+            <MultiRepoMemberDeleteNote worktreeId={worktrees[0].id} />
+          ) : null}
         </DialogHeader>
 
         <div className="scrollbar-sleek max-h-[50vh] min-w-0 space-y-4 overflow-y-auto">

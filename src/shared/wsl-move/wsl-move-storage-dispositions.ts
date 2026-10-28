@@ -65,6 +65,7 @@ export const LOCAL_STORAGE_MODULE_DISPOSITIONS: Record<string, WslMoveFieldDispo
       'src/renderer/src/components/landing-preflight-dismissal.ts',
       'src/renderer/src/components/linear-issue-view-storage.ts',
       'src/renderer/src/components/native-chat/NativeChatStructuredSession.test-harness.tsx',
+      'src/renderer/src/components/new-workspace/multi-repo-last-set-storage.ts',
       'src/renderer/src/components/onboarding/onboarding-feature-setup.ts',
       'src/renderer/src/components/pet/PetOverlay.tsx',
       'src/renderer/src/components/right-sidebar/ai-vault-view-options-persistence.ts',

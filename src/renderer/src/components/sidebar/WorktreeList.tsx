@@ -15,6 +15,7 @@ import {
 } from '../../../../shared/execution-host'
 import { getActiveSidebarWorkspaceId } from '../../../../shared/workspace-scope'
 import { getPinnedWorktreeDisplayPolicy } from '../../../../shared/sidebar-list/row-types'
+import { isMultiRepoSystemProjectGroup } from '../../../../shared/sidebar-list/multi-repo-system-group'
 import { selectWorktreeListReviewCacheInputs } from './worktree-list/listing/review-cache-inputs'
 import type { VirtualizedScrollAnchor } from '@/hooks/useVirtualizedScrollAnchor'
 import { SidebarWorktreeListDialogs } from './worktree-list/rows/ProjectGroupDialogs'
@@ -197,12 +198,22 @@ const WorktreeList = React.memo(function WorktreeList({
       if (!projectGroup.parentPath) {
         return
       }
-      openModal('new-workspace-composer', {
-        initialProjectGroupId: projectGroup.id,
-        telemetrySource: 'sidebar'
-      })
+      const isSystemGroup = isMultiRepoSystemProjectGroup(
+        projectGroup,
+        folderWorkspaces.some(
+          (workspace) =>
+            workspace.projectGroupId === projectGroup.id && workspace.multiRepo !== undefined
+        )
+      )
+      // The Workspaces section creates across repos: no preselected project or folder group.
+      openModal(
+        'new-workspace-composer',
+        isSystemGroup
+          ? { telemetrySource: 'sidebar' }
+          : { initialProjectGroupId: projectGroup.id, telemetrySource: 'sidebar' }
+      )
     },
-    [openModal]
+    [folderWorkspaces, openModal]
   )
 
   useSidebarRevealRequests({

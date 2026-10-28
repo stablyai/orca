@@ -111,6 +111,8 @@ export const workspaceCreatedSchema = z
     source: workspaceSourceSchema,
     from_existing_branch: z.boolean(),
     nth_repo_added: nthRepoAddedSchema,
+    // Child creates of a multi-repo workspace; dashboards split on it so N children do not inflate create counts.
+    multi_repo_member: z.boolean().optional(),
     ...workspaceCreatedTimingProperties
   })
   .strict()

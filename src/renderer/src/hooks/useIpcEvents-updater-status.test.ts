@@ -112,6 +112,7 @@ describe('useIpcEvents updater integration', () => {
           onJumpToWorktreeIndex: () => () => {},
           onJumpToTabIndex: () => () => {},
           onWorktreeHistoryNavigate: () => () => {},
+          onSelectWorkspaceRepo: () => () => {},
           onActivateWorktree: () => () => {},
           onCreateTerminal: () => () => {},
           onRequestTerminalCreate: () => () => {},

@@ -37,4 +37,17 @@ describe('areStructurallyEqual', () => {
     expect(areStructurallyEqual(null, undefined)).toBe(false)
     expect(areStructurallyEqual(0, '0')).toBe(false)
   })
+
+  it('compares Sets by content, not as empty objects', () => {
+    expect(areStructurallyEqual(new Set(['a']), new Set(['b']))).toBe(false)
+    expect(areStructurallyEqual(new Set(['a', 'b']), new Set(['b', 'a']))).toBe(true)
+    expect(areStructurallyEqual({ retrying: new Set(['m1']) }, { retrying: new Set() })).toBe(false)
+    expect(areStructurallyEqual(new Set(), {})).toBe(false)
+  })
+
+  it('compares Maps by content', () => {
+    expect(areStructurallyEqual(new Map([['a', { n: 1 }]]), new Map([['a', { n: 1 }]]))).toBe(true)
+    expect(areStructurallyEqual(new Map([['a', { n: 1 }]]), new Map([['a', { n: 2 }]]))).toBe(false)
+    expect(areStructurallyEqual(new Map([['a', 1]]), new Map([['b', 1]]))).toBe(false)
+  })
 })

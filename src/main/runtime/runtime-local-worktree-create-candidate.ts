@@ -9,6 +9,7 @@ import {
   sanitizeWorktreeName,
   type getWorktreePathSettings
 } from '../ipc/worktree-logic'
+import { computePlacedWorktreePath } from '../ipc/worktree-placed-path'
 import { resolveWorktreeCreateDisplayNameRequest } from '../ipc/worktree-display-name'
 import { getBranchConflictKind } from '../git/repo'
 import {
@@ -35,6 +36,7 @@ import {
 import { runtimePathExists } from './runtime-worktree-filesystem'
 import { findPendingWorktreeRemovalConflict } from '../worktree-removal-table'
 import type { RuntimeStore } from './runtime-store-contract'
+import { PlacedWorktreePathOccupiedError } from './multi-repo-workspace/placed-worktree-path-occupied-error'
 import type { HostedReviewExecutionOptions } from '../source-control/hosted-review-git-options'
 
 export type RuntimeLocalWorktreeCreateCandidate = {
@@ -116,18 +118,27 @@ export async function resolveRuntimeLocalWorktreeCreateCandidate(args: {
       selectedRemoteBranchName = branchName
     }
   }
+  const placement = args.request.placement
   const pathIsAvailable = async (): Promise<boolean> => {
-    worktreePath = ensurePathWithinWorkspace(
-      computeWorktreePath(effectiveSanitizedName, args.repo.path, args.worktreePathSettings),
-      args.workspaceRoot
-    )
+    // A placed member lives under its group root, which a per-project base path need not contain.
+    worktreePath = placement
+      ? ensurePathWithinWorkspace(
+          computePlacedWorktreePath(placement, args.workspaceRoot),
+          placement.parentDir
+        )
+      : ensurePathWithinWorkspace(
+          computeWorktreePath(effectiveSanitizedName, args.repo.path, args.worktreePathSettings),
+          args.workspaceRoot
+        )
     // Orca owns the path until background removal settles.
     return (
       !findPendingWorktreeRemovalConflict(args.repo.path, { worktreePath }) &&
       !(await runtimePathExists(worktreePath))
     )
   }
-  for (let suffix = 1, attempts = 0; attempts < WORKTREE_CREATE_MAX_SUFFIX_ATTEMPTS; suffix += 1) {
+  // A placed member owns exactly one path and one branch; suffixed variants would drift from the persisted member.
+  const maxAttempts = placement ? 1 : WORKTREE_CREATE_MAX_SUFFIX_ATTEMPTS
+  for (let suffix = 1, attempts = 0; attempts < maxAttempts; suffix += 1) {
     effectiveSanitizedName = shouldRetireGeneratedName
       ? getGeneratedWorktreeCreateCandidate(
           sanitizedName,
@@ -245,6 +256,9 @@ export async function resolveRuntimeLocalWorktreeCreateCandidate(args: {
       throw new WorktreeCreateCollisionError(
         `Branch "${branchName}" already exists ${branchConflictKind === 'local' ? 'locally' : 'on a remote'}.`
       )
+    }
+    if (placement) {
+      throw new PlacedWorktreePathOccupiedError(worktreePath)
     }
     throw new Error(
       `Could not find an available worktree path for "${sanitizedName}". Pick a different worktree name.`

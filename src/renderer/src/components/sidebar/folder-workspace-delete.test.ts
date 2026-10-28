@@ -68,6 +68,23 @@ describe('deleteFolderWorkspaceUnlessUnsaved', () => {
     expect(mocks.toastError).not.toHaveBeenCalled()
   })
 
+  it('sends a multi-repo parent to its own dialog and deletes nothing here', () => {
+    const base = state(false)
+    const openModal = vi.fn()
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only these fields are read on the multi-repo path.
+    const s = {
+      ...base,
+      openModal,
+      folderWorkspaces: [{ id: 'notes', name: 'Notes', multiRepo: { members: [] } }]
+    } as unknown as AppState
+    expect(deleteFolderWorkspaceUnlessUnsaved(() => s, 'notes', 'ssh:box')).toBeNull()
+    expect(openModal).toHaveBeenCalledWith('delete-multi-repo-workspace', {
+      folderWorkspaceId: 'notes',
+      executionHostId: 'ssh:box'
+    })
+    expect(s.deleteFolderWorkspace).not.toHaveBeenCalled()
+  })
+
   it('deletes and clears the selection when it was the active workspace', async () => {
     const s = state(false)
     await expect(deleteFolderWorkspaceUnlessUnsaved(() => s, 'notes')).resolves.toBe(true)

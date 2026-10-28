@@ -9,6 +9,8 @@ const { rowRenders, agentRenders } = vi.hoisted(() => ({
   agentRenders: vi.fn()
 }))
 
+vi.mock('../components/MultiRepoDeleteSheet', () => ({ MultiRepoDeleteSheet: () => null }))
+vi.mock('../components/MultiRepoMemberRows', () => ({ MultiRepoMemberRows: () => null }))
 vi.mock('react-native', () => ({
   Platform: { OS: 'ios' },
   Pressable: 'Pressable',

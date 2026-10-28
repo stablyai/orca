@@ -28,6 +28,7 @@ import type {
   WorktreeLineage,
   WorktreeLineageWarning
 } from '../../../shared/worktree/lineage-types'
+import { withoutMultiRepoParent } from '../multi-repo-workspace/multi-repo-member-lock'
 import { recordCreatedWorktreeLineage as recordCreatedWorktreeLineageState } from '../runtime-worktree-lineage-recording'
 import {
   deliverStartupFollowupPrompt,
@@ -203,7 +204,8 @@ export abstract class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntime
     workspaceLineage: WorkspaceLineage | null
     warnings: WorktreeLineageWarning[]
   } {
-    return recordCreatedWorktreeLineageState(this.store, worktree, lineageResolution)
+    const resolution = withoutMultiRepoParent(this.store, lineageResolution)
+    return recordCreatedWorktreeLineageState(this.store, worktree, resolution)
   }
 
   protected pasteStartupDraftWhenReady(handle: string, draft: WorktreeStartupDraftPaste): void {

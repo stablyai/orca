@@ -34,6 +34,8 @@ import { getFolderWorkspacePrimaryActionLabel } from '@/components/sidebar/folde
 import type { WorkspaceCreationTargetHint } from '@/lib/project-host-workspace-target'
 import { useAgentMenuObservation } from '@/components/tab-bar/use-new-tab-agent-menu-rows'
 import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
+import { useMultiRepoComposer } from '@/components/new-workspace/use-multi-repo-composer'
+import { recordSingleProjectCreate } from '@/components/new-workspace/multi-repo-last-set-storage'
 
 // Keep Add Project’s clone/SSH machinery outside the composer entry render, matching App loading.
 const HostedAddRepoDialog = lazyWithRetry(() => import('@/components/sidebar/AddRepoDialog'), {
@@ -125,6 +127,8 @@ function QuickTabBody({
   active: boolean
 }): React.JSX.Element {
   const settings = useAppStore((s) => s.settings)
+  // Read at create time so the remembered-set counter sees the project that was actually submitted.
+  const singleProjectIdRef = useRef<string | null>(null)
   const {
     cardProps,
     composerRef,
@@ -148,7 +152,10 @@ function QuickTabBody({
     initialWorkspaceStatus: modalData.initialWorkspaceStatus,
     ...(modalData.initialBaseBranch ? { initialBaseBranch: modalData.initialBaseBranch } : {}),
     persistDraft: false,
-    onCreated: onClose,
+    onCreated: () => {
+      recordSingleProjectCreate(singleProjectIdRef.current)
+      onClose()
+    },
     isSubmissionCancelled,
     ...(modalData.telemetrySource ? { telemetrySource: modalData.telemetrySource } : {}),
     enableIssueAutomation: modalData.enableIssueAutomation === true
@@ -206,7 +213,29 @@ function QuickTabBody({
     cardProps.agentRows?.detectionTarget
   )
   const launchSelection = observation.selectionFor(quickAgent, quickAgentSurface)
-  const createDisabled = formDisabled || !launchSelection.ready
+  const singleCreateDisabled = formDisabled || !launchSelection.ready
+  useEffect(() => {
+    singleProjectIdRef.current = cardProps.selectedRepoProjectId ?? null
+  }, [cardProps.selectedRepoProjectId])
+  const multiRepo = useMultiRepoComposer({
+    primaryProjectId: cardProps.selectedRepoProjectId ?? null,
+    projectOptions: cardProps.projectOptions ?? [],
+    projectHostSetupOptions: cardProps.projectHostSetupOptions ?? [],
+    hostId: cardProps.selectedRepoExecutionHostId ?? null,
+    name: cardProps.name,
+    quickAgent,
+    onPrimaryProjectChange: cardProps.onProjectChange,
+    onProjectHostSetupChange: cardProps.onProjectHostSetupChange,
+    onCreated: onClose,
+    isSubmissionCancelled
+  })
+  const createDisabled = multiRepo.active
+    ? multiRepo.creating ||
+      multiRepo.blockedCount > 0 ||
+      multiRepo.supported === false ||
+      cardProps.name.trim() === '' ||
+      !launchSelection.ready
+    : singleCreateDisabled
 
   const handleQuickAgentChange = useCallback(
     (agent: TuiAgent | null, surface?: AgentLaunchSurface) => {
@@ -226,11 +255,15 @@ function QuickTabBody({
     if (createDisabled) {
       return
     }
+    if (multiRepo.active) {
+      await multiRepo.submit()
+      return
+    }
     await submitQuick(quickAgent, {
       setupOnly: quickSetupOnly,
       launchChoice: launchSelection.choice
     })
-  }, [createDisabled, quickAgent, launchSelection.choice, quickSetupOnly, submitQuick])
+  }, [createDisabled, multiRepo, quickAgent, launchSelection.choice, quickSetupOnly, submitQuick])
   // Layer Add Project without replacing the composer. Retain it for close animation and clone/scan cancellation; folder/non-Git navigation still tears down the modal.
   const [addProjectOpen, setAddProjectOpen] = useState(false)
   const [addProjectMounted, setAddProjectMounted] = useState(false)
@@ -336,6 +369,7 @@ function QuickTabBody({
         // Chips list offered agents, keeping a pick whose chat is still being learned.
         detectedAgentIds={chipAgentIds}
         createDisabled={createDisabled}
+        multiRepo={multiRepo}
         agentSurfaceRows={
           cardProps.agentRows
             ? {
@@ -347,7 +381,7 @@ function QuickTabBody({
               }
             : undefined
         }
-        primaryActionLabel={primaryActionLabel}
+        primaryActionLabel={multiRepo.active ? multiRepo.primaryActionLabel : primaryActionLabel}
         onOpenAgentSettings={() => setAgentSettingsOpen(true)}
         onCreate={() => void handleCreate()}
         onAddProjectOverride={handleOpenAddProject}

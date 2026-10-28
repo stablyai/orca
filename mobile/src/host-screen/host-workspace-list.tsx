@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useCallback, useMemo } from 'react'
 import {
   ActivityIndicator,
   Platform,
@@ -15,6 +15,7 @@ import { HostRouteNoticeBanner } from '../components/HostRouteNoticeBanner'
 import { MobileRepoIcon } from '../components/MobileRepoIcon'
 import { MobileSearchField } from '../components/MobileSearchField'
 import { NewWorkspaceFab, FAB_SIZE } from '../components/NewWorkspaceFab'
+import { MultiRepoDeleteSheet } from '../components/MultiRepoDeleteSheet'
 import { WorktreeListRow } from '../components/WorktreeListRow'
 import { colors, spacing } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
@@ -30,8 +31,10 @@ import { hostScreenStyles as styles } from './host-screen-styles'
 import { buildRepoLookById } from './host-repo-looks'
 import { HostPendingCreationRow } from './host-pending-creation-row'
 import { useSlowPendingKeys } from './use-slow-pending-keys'
+import { useMultiRepoWorkspaceActions } from './use-multi-repo-workspace-actions'
 import { projectGroupHeaderIndent } from '../worktree/project-group-indent'
 import type { HostScreenController } from './use-host-screen-controller'
+import type { Worktree } from '../worktree/workspace-list-types'
 
 export function HostWorkspaceList({ controller }: { controller: HostScreenController }) {
   const colorScheme = useMobileColorScheme()
@@ -67,6 +70,40 @@ export function HostWorkspaceList({ controller }: { controller: HostScreenContro
       () => new Set(pending.flatMap((change) => (change.kind === 'collapse' ? [change.key] : []))),
       [pending]
     )
+  )
+  const multiRepo = useMultiRepoWorkspaceActions({
+    client: controller.client,
+    hostCapabilities: controller.hostCapabilities,
+    openWorktree: actions.openWorktreeSession,
+    reportError: state.setActionError
+  })
+  const multiRepoRowActions = useMemo(
+    () => ({
+      retryingMemberIds: multiRepo.retryingMemberIds,
+      onOpenMember: multiRepo.openMember,
+      onRetryMember: multiRepo.retryMember
+    }),
+    [multiRepo.retryingMemberIds, multiRepo.openMember, multiRepo.retryMember]
+  )
+  const multiRepoMemberNames = useMemo(
+    () =>
+      new Map(
+        (multiRepo.deleteTarget?.multiRepo?.members ?? []).map((member) => [
+          member.memberId,
+          member.dirName
+        ])
+      ),
+    [multiRepo.deleteTarget]
+  )
+  const handleRowLongPress = useCallback(
+    (item: Worktree) => {
+      if (item.workspaceKind !== 'folder-workspace') {
+        state.setActionTarget(item)
+      } else if (item.multiRepo) {
+        multiRepo.openDelete(item)
+      }
+    },
+    [state.setActionTarget, multiRepo.openDelete]
   )
   const repoLookById = useMemo(() => buildRepoLookById(repoById), [repoById])
   const { worktreeCardProperties, compactWorktreeCards, newCardStyle } = state.view
@@ -259,14 +296,21 @@ export function HostWorkspaceList({ controller }: { controller: HostScreenContro
               onPress={actions.openWorktreeSession}
               onAgentPress={actions.openWorktreeSession}
               statusLive={connState === 'connected' && !item.hostContextHealthLabel}
-              onLongPress={
-                item.workspaceKind === 'folder-workspace' ? undefined : state.setActionTarget
-              }
+              onLongPress={handleRowLongPress}
               onToggleLineage={settings.toggleWorktreeLineage}
+              multiRepoActions={item.multiRepo ? multiRepoRowActions : undefined}
             />
           )}
         />
       )}
+
+      <MultiRepoDeleteSheet
+        client={multiRepo.deleteClient}
+        folderWorkspaceId={multiRepo.deleteTarget?.multiRepo?.folderWorkspaceId ?? null}
+        workspaceName={multiRepo.deleteTarget?.displayName ?? ''}
+        memberNames={multiRepoMemberNames}
+        onClose={multiRepo.closeDelete}
+      />
 
       {!embedded && (
         <NewWorkspaceFab

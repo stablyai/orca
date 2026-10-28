@@ -7,12 +7,17 @@ import type {
 } from '../../../src/shared/runtime-types'
 import type { ProjectSectionRepo } from '../../../src/shared/project-section-grouping'
 import type { WorkspaceRowFilters } from '../../../src/shared/workspace-view/workspace-row-filters'
+import type { MobileMultiRepoSummary } from './multi-repo-workspace-summary'
 
 export type Worktree = {
   sectionListKey?: string
   /** Show the existing project-name surface for a child from another repo. */
   showProjectName?: boolean
   workspaceKind?: 'git' | 'folder-workspace'
+  /** Folder rows of a multi-repo workspace; absent on plain folders and older hosts. */
+  multiRepo?: MobileMultiRepoSummary
+  /** Git rows that belong to a multi-repo workspace; absent on older hosts. */
+  multiRepoMemberOf?: { folderWorkspaceId: string; memberId: string }
   worktreeId: string
   repoId: string
   hostId?: ExecutionHostId

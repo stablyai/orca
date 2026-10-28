@@ -174,6 +174,7 @@ export async function useIpcEventsForCloseRouting({
         onJumpToWorktreeIndex: () => () => {},
         onJumpToTabIndex: () => () => {},
         onWorktreeHistoryNavigate: () => () => {},
+        onSelectWorkspaceRepo: () => () => {},
         onActivateWorktree: () => () => {},
         onCreateTerminal: () => () => {},
         onRequestTerminalCreate: () => () => {},

@@ -44,6 +44,7 @@ export function buildWindowApi(args: {
         onJumpToWorktreeIndex: () => () => {},
         onJumpToTabIndex: () => () => {},
         onWorktreeHistoryNavigate: () => () => {},
+        onSelectWorkspaceRepo: () => () => {},
         onActivateWorktree: () => () => {},
         onCreateTerminal: () => () => {},
         onRequestTerminalCreate: () => () => {},

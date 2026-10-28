@@ -162,6 +162,7 @@ describe('useIpcEvents browser tab create routing', () => {
           onJumpToWorktreeIndex: () => () => {},
           onJumpToTabIndex: () => () => {},
           onWorktreeHistoryNavigate: () => () => {},
+          onSelectWorkspaceRepo: () => () => {},
           onActivateWorktree: () => () => {},
           onCreateTerminal: () => () => {},
           onRequestTerminalCreate: () => () => {},

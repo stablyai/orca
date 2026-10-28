@@ -3,6 +3,7 @@ import { act, create as createRenderer, type ReactTestRenderer } from 'react-tes
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+vi.mock('../components/BottomDrawer', () => ({ BottomDrawer: 'BottomDrawer' }))
 vi.mock('react-native', () => ({
   ActivityIndicator: 'ActivityIndicator',
   Platform: { OS: 'ios' },

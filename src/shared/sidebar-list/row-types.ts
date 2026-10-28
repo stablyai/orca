@@ -39,6 +39,8 @@ export type GroupHeaderRow = {
   repo?: Repo
   projectGroup?: ProjectGroup | { id: null; name: 'Ungrouped'; tabOrder: number }
   projectGroupDepth?: number
+  /** Set on the host-created "Workspaces" group; its header offers no rename, delete or drag. */
+  multiRepoSystemGroup?: boolean
   hostId?: ExecutionHostId
   hostWorktreeCounts?: ReadonlyMap<ExecutionHostId, number>
   hostWorktreeIds?: ReadonlyMap<ExecutionHostId, readonly string[]>

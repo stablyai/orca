@@ -18,7 +18,22 @@ import {
 import type { WorktreeLineage } from '../worktree/lineage-types'
 import type { Worktree } from '../worktree/types'
 import { getWorkspaceRowKindFacts } from '../worktree/workspace-kinds'
+import { MULTI_REPO_MEMBER_FAILURE_CODES, MULTI_REPO_MEMBER_STATES } from '../multi-repo-workspace'
 import { SMART_TIERS } from './sort-stamps'
+
+const MultiRepoRowSummarySchema = z.object({
+  members: z.array(
+    z.object({
+      memberId: z.string(),
+      repoId: z.string(),
+      dirName: z.string(),
+      state: z.enum(MULTI_REPO_MEMBER_STATES),
+      worktreeId: z.string().optional(),
+      failureCode: z.enum(MULTI_REPO_MEMBER_FAILURE_CODES).optional()
+    })
+  ),
+  rootOwnedByOrca: z.boolean()
+})
 
 /** Catalog/metadata/sort stamps only; separate activity and review domains keep terminal output from invalidating rows. */
 export const WorkspaceRowSchema = z.object({
@@ -68,6 +83,10 @@ export const WorkspaceRowSchema = z.object({
   detachedHead: z.literal(true).optional(),
   /** Main-owned terminal platform. */
   terminalPlatform: z.string().optional(),
+  /** Folder rows of a multi-repo workspace; absent on plain folder workspaces and old hosts. */
+  multiRepo: MultiRepoRowSummarySchema.optional(),
+  /** Git rows that are a member of a multi-repo workspace; absent on old hosts. */
+  multiRepoMember: z.object({ folderWorkspaceId: z.string(), memberId: z.string() }).optional(),
   /** Host-owned sort stamps (sort-stamps.ts); old hosts omit tiers. */
   recentAt: z.number().optional(),
   smartTier: z.enum(SMART_TIERS).optional(),
@@ -88,7 +107,8 @@ function toWorkspaceRow(
   hostId: ExecutionHostId,
   kind: WorkspaceRow['kind'],
   repo: Repo | undefined,
-  lineage: WorktreeLineage | undefined
+  lineage: WorktreeLineage | undefined,
+  multiRepo?: Pick<WorkspaceRow, 'multiRepo' | 'multiRepoMember'>
 ): WorkspaceRow {
   const kindFacts = getWorkspaceRowKindFacts(worktree, repo)
   return {
@@ -124,6 +144,7 @@ function toWorkspaceRow(
     linkedGitLabIssue: worktree.linkedGitLabIssue ?? null,
     linkedItems: getWorkspaceAttachments(worktree),
     ...kindFacts,
+    ...multiRepo,
     defaultBranch: kindFacts.defaultBranch ?? false,
     recentAt: worktree.lastActivityAt,
     ...(worktree.smartTier !== undefined
@@ -195,18 +216,59 @@ export function buildWorkspaceRows(catalog: {
     worktree: Worktree,
     kind: WorkspaceRow['kind'],
     repo?: Repo,
-    lineage?: WorktreeLineage
+    lineage?: WorktreeLineage,
+    multiRepo?: Pick<WorkspaceRow, 'multiRepo' | 'multiRepoMember'>
   ): void => {
     const listed = listedRow(worktree, repo)
     if (listed) {
-      rows.set(listed.identity, toWorkspaceRow(worktree, listed.hostId, kind, repo, lineage))
+      rows.set(
+        listed.identity,
+        toWorkspaceRow(worktree, listed.hostId, kind, repo, lineage, multiRepo)
+      )
+    }
+  }
+  const memberByWorktreeId = new Map<string, { folderWorkspaceId: string; memberId: string }>()
+  for (const folderWorkspace of catalog.folderWorkspaces) {
+    for (const member of folderWorkspace.multiRepo?.members ?? []) {
+      if (member.worktreeId) {
+        memberByWorktreeId.set(member.worktreeId, {
+          folderWorkspaceId: folderWorkspace.id,
+          memberId: member.memberId
+        })
+      }
     }
   }
   for (const { worktree, repo } of withOwnerRepos(catalog.worktrees, catalog.repos)) {
-    add(worktree, 'git', repo, catalog.lineageById[worktree.id])
+    const member = memberByWorktreeId.get(worktree.id)
+    add(
+      worktree,
+      'git',
+      repo,
+      catalog.lineageById[worktree.id],
+      member && { multiRepoMember: member }
+    )
   }
   for (const folderWorkspace of catalog.folderWorkspaces) {
-    add(folderWorkspaceToWorktree(folderWorkspace), 'folder')
+    const multiRepo = folderWorkspace.multiRepo
+    add(
+      folderWorkspaceToWorktree(folderWorkspace),
+      'folder',
+      undefined,
+      undefined,
+      multiRepo && {
+        multiRepo: {
+          rootOwnedByOrca: multiRepo.rootOwnedByOrca,
+          members: multiRepo.members.map((member) => ({
+            memberId: member.memberId,
+            repoId: member.repoId,
+            dirName: member.dirName,
+            state: member.state,
+            ...(member.worktreeId ? { worktreeId: member.worktreeId } : {}),
+            ...(member.failure ? { failureCode: member.failure.code } : {})
+          }))
+        }
+      }
+    )
   }
   return rows
 }

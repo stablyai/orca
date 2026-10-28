@@ -7,6 +7,7 @@ import { folderWorkspaceToWorktree } from '../../../src/shared/folder-workspace-
 import { getFolderWorkspaceHostId } from '../../../src/shared/sidebar-list/folder-workspace-host-id'
 import type { HostSectionRow } from '../../../src/shared/sidebar-list/host-section-rows'
 import type { GroupHeaderRow } from '../../../src/shared/sidebar-list/row-types'
+import { MULTI_REPO_SYSTEM_GROUP_NAME } from '../../../src/shared/multi-repo-workspace'
 import { PR_GROUP_LABELS } from '../../../src/shared/workspace-view/workspace-pr-groups'
 import type { Worktree as HostWorktree } from '../../../src/shared/worktree/types'
 import { composeWorktreeHostIdentity } from '../../../src/shared/worktree/host-qualified-identity'
@@ -17,6 +18,8 @@ import {
 } from '../worktree/host-list-highlight'
 import { resolveWorktreeHostId } from '../worktree/worktree-host-context-labels'
 import { filterWorktrees } from '../worktree/workspace-list-sections'
+import { summarizeMultiRepoWorkspace } from '../worktree/multi-repo-workspace-summary'
+import { hoistMultiRepoWorkspaceSections } from './multi-repo-workspaces-section-order'
 import { rowFiltersForView, type MobileViewState } from '../worktree/workspace-view-settings'
 
 export type HostFeedListSources = {
@@ -131,10 +134,27 @@ export function buildHostFeedSections(sources: HostFeedListSources): Section[] {
 
   // Why: the desktop steps folder-scanned groups' rows by the compact header step; a group's header precedes its rows.
   const folderScanGroupIds = new Set<string>()
+  const workspaceSectionKeys = new Set<string>()
+  const hostHeaderKeys = new Set<string>()
+  const memberOfByWorktreeId = new Map<string, { folderWorkspaceId: string; memberId: string }>()
+  for (const row of sources.rows) {
+    if (row.type !== 'folder-workspace') {
+      continue
+    }
+    for (const member of row.folderWorkspace.multiRepo?.members ?? []) {
+      if (member.worktreeId) {
+        memberOfByWorktreeId.set(member.worktreeId, {
+          folderWorkspaceId: row.folderWorkspace.id,
+          memberId: member.memberId
+        })
+      }
+    }
+  }
   for (const row of sources.rows) {
     switch (row.type) {
       case 'host-header':
         sectionHostId = row.hostId
+        hostHeaderKeys.add(row.key)
         push({ key: row.key, title: row.label, count: row.count, data: [] })
         break
       case 'header':
@@ -144,6 +164,15 @@ export function buildHostFeedSections(sources: HostFeedListSources): Section[] {
           row.projectGroup.createdFrom === 'folder-scan'
         ) {
           folderScanGroupIds.add(row.projectGroup.id)
+        }
+        if (
+          row.projectGroup &&
+          !row.repo &&
+          'createdFrom' in row.projectGroup &&
+          row.projectGroup.name === MULTI_REPO_SYSTEM_GROUP_NAME &&
+          row.projectGroup.createdFrom === 'manual'
+        ) {
+          workspaceSectionKeys.add(row.collapseKey ?? row.key)
         }
         push({
           key: row.collapseKey ?? row.key,
@@ -160,8 +189,10 @@ export function buildHostFeedSections(sources: HostFeedListSources): Section[] {
         // Local as the fallback, as the phone resolves its own rows: the desktop's focus is not an owner.
         const hostId = getWorktreeExecutionHostId(row.worktree, row.repo, LOCAL_EXECUTION_HOST_ID)
         const drawn = rowOf(row.worktree, hostId, row.repo?.displayName, 'git')
+        const memberOf = memberOfByWorktreeId.get(row.worktree.id)
         current().data.push({
           ...drawn,
+          ...(memberOf ? { multiRepoMemberOf: memberOf } : {}),
           isActive: isLastVisitedWorktreeRow(
             { worktreeId: row.worktree.id, hostId },
             sources.lastVisited
@@ -191,8 +222,10 @@ export function buildHostFeedSections(sources: HostFeedListSources): Section[] {
           row.projectGroup,
           LOCAL_EXECUTION_HOST_ID
         )
+        const multiRepo = summarizeMultiRepoWorkspace(row.folderWorkspace)
         current().data.push({
           ...rowOf(worktree, hostId, row.projectGroup.name, 'folder-workspace'),
+          ...(multiRepo ? { multiRepo } : {}),
           isActive: isLastVisitedWorktreeRow(
             { worktreeId: worktree.id, hostId },
             sources.lastVisited
@@ -223,7 +256,8 @@ export function buildHostFeedSections(sources: HostFeedListSources): Section[] {
         break
     }
   }
-  return query ? narrowSections(sections, query) : sections
+  const ordered = hoistMultiRepoWorkspaceSections(sections, workspaceSectionKeys, hostHeaderKeys)
+  return query ? narrowSections(ordered, query) : ordered
 }
 
 // Older hosts with unreadable feeds still list filtered worktree.ps rows in served order without headers.

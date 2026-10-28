@@ -31,6 +31,10 @@ const STATIC_TITLE_COPY = {
     translate('keybindings.title.workspaceOpenBoard', 'Toggle Workspace Board'),
   'dashboard.toggle': () =>
     translate('keybindings.title.dashboardToggle', 'Toggle Agent Dashboard'),
+  'workspace.nextRepo': () =>
+    translate('keybindings.title.workspaceNextRepo', 'Next Repo in Workspace'),
+  'workspace.previousRepo': () =>
+    translate('keybindings.title.workspacePreviousRepo', 'Previous Repo in Workspace'),
   'workspace.selectByIndex': () =>
     translate('keybindings.title.workspaceSelectByIndex', 'Select Workspace 1–9'),
   'voice.dictation': () => translate('keybindings.title.voiceDictation', 'Dictation'),

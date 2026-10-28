@@ -6,6 +6,7 @@ import { getVisibleWorktreeShortcutTargets } from '@/components/sidebar/visible-
 import { activateAndRevealWorkspace } from '@/lib/worktree-activation'
 import { deleteHoveredWorkspaceImmediately } from '@/components/sidebar/hovered-workspace-delete'
 import { isFloatingWorkspacePanelFocused } from '@/lib/floating-workspace-terminal-actions'
+import { selectWorkspaceRepoFromShortcut } from '@/lib/multi-repo-workspace-repo-navigation'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import { useAppStore } from '../../store'
 import { toggleAgentDashboardFromShortcut } from './agent-dashboard-command'
@@ -126,6 +127,8 @@ export function registerWorkspaceShortcutIpcBridge(unsubs: (() => void)[]): void
       }
     })
   )
+
+  unsubs.push(window.api.ui.onSelectWorkspaceRepo(selectWorkspaceRepoFromShortcut))
 
   unsubs.push(
     window.api.ui.onToggleStatusBar(() => {

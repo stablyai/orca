@@ -30,6 +30,17 @@ export function deleteFolderWorkspaceUnlessUnsaved(
   folderWorkspaceId: string,
   executionHostId?: ExecutionHostId
 ): Promise<boolean> | null {
+  const target = selectFolderWorkspaces(getState()).find(
+    (workspace) => workspace.id === folderWorkspaceId
+  )
+  // A multi-repo parent owns several worktrees: it always goes through its own confirmation.
+  if (target?.multiRepo) {
+    getState().openModal('delete-multi-repo-workspace', {
+      folderWorkspaceId,
+      ...(executionHostId ? { executionHostId } : {})
+    })
+    return null
+  }
   const workspaceKey = folderWorkspaceKey(folderWorkspaceId)
   const name =
     selectFolderWorkspaces(getState()).find((workspace) => workspace.id === folderWorkspaceId)

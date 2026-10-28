@@ -10,6 +10,7 @@ import type {
 import type { MarkdownDocument } from '../../shared/filesystem-entry-types'
 import type { PersistedUIState } from '../../shared/persisted-ui-state-types'
 import type { TuiAgent } from '../../shared/tui-agent'
+import type { WorkspaceRepoSelection } from '../../shared/window-shortcut-policy'
 import type {
   AgentLaunchTabPublishReply,
   AgentLaunchTabViewerRule,
@@ -112,6 +113,7 @@ export type UiCommandEventApi = {
   onJumpToWorktreeIndex: (callback: (index: number) => void) => () => void
   onJumpToTabIndex: (callback: (index: number) => void) => () => void
   onWorktreeHistoryNavigate: (callback: (direction: 'back' | 'forward') => void) => () => void
+  onSelectWorkspaceRepo: (callback: (selection: WorkspaceRepoSelection) => void) => () => void
   onRequestTabCreate: (
     callback: (data: {
       requestId: string

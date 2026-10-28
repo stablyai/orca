@@ -20,6 +20,7 @@ import {
   runtimeVisibleFolderWorkspaces,
   runtimeVisibleProjectGroups
 } from './runtime-visible-catalog'
+import { MultiRepoWorkspaceError } from '../../shared/multi-repo-workspace'
 import { folderWorkspaceKey } from '../../shared/workspace-scope'
 import {
   assertWslMoveProjectWritable,
@@ -260,6 +261,12 @@ export class RuntimeProjectGroupController {
       throw new Error('runtime_unavailable')
     }
     const workspace = store.getFolderWorkspaces?.().find((entry) => entry.id === folderWorkspaceId)
+    if (workspace?.multiRepo && workspace.multiRepo.members.length > 0) {
+      throw new MultiRepoWorkspaceError(
+        'multi_repo_has_members',
+        'This workspace still has projects. Delete it with multiRepoWorkspace.delete.'
+      )
+    }
     if (workspace && isLocalWslMoveRow(workspace)) {
       assertWslMoveProjectWritable(store, { folderWorkspaceId })
     }

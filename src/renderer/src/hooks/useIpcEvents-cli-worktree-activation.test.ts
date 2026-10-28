@@ -124,6 +124,7 @@ describe('useIpcEvents CLI-created worktree activation', () => {
           onJumpToWorktreeIndex: () => () => {},
           onJumpToTabIndex: () => () => {},
           onWorktreeHistoryNavigate: () => () => {},
+          onSelectWorkspaceRepo: () => () => {},
           onActivateWorktree: (
             listener: (data: {
               repoId: string
@@ -395,6 +396,7 @@ describe('useIpcEvents CLI-created worktree activation', () => {
           onJumpToWorktreeIndex: () => () => {},
           onJumpToTabIndex: () => () => {},
           onWorktreeHistoryNavigate: () => () => {},
+          onSelectWorkspaceRepo: () => () => {},
           onActivateWorktree: () => () => {},
           onCreateTerminal: () => () => {},
           onRequestTerminalCreate: () => () => {},

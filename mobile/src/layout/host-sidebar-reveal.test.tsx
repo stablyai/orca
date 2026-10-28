@@ -8,6 +8,7 @@ import type { MobileSessionController } from '../session/use-mobile-session-cont
 import { MobileSessionHeader } from '../session/MobileSessionHeader'
 import HostGroupLayout from '../../app/h/_layout'
 
+vi.mock('../components/BottomDrawer', () => ({ BottomDrawer: 'BottomDrawer' }))
 vi.mock('react-native', () => ({
   View: 'View',
   Text: 'Text',
@@ -82,6 +83,7 @@ vi.mock(
 function headerController(): MobileSessionController {
   const controller: Partial<MobileSessionController> = {
     hostId: 'host',
+    hostCapabilities: [],
     isFolderWorkspaceRoute: true,
     isFloatingWorkspaceRoute: true,
     connState: 'connected',

@@ -129,6 +129,7 @@ export function renderWorktreeSectionHeaderRow(args: {
     (headerDrag.sidebarRepoHeaderIdsByBucket.get(repoHeaderBucketKey)?.length ?? 0) > 1
   )
   const isDraggableProjectGroupHeader = Boolean(
+    row.multiRepoSystemGroup !== true &&
     headerDrag.canReorderProjectGroupHeaders &&
     projectGroupIdForHeader &&
     projectGroupHeaderBucketKey &&
@@ -356,7 +357,10 @@ export function renderWorktreeSectionHeaderRow(args: {
               </div>
             ) : null}
 
-            {isProjectGroupHeader && !row.repo && projectGroupIdForHeader ? (
+            {isProjectGroupHeader &&
+            !row.repo &&
+            projectGroupIdForHeader &&
+            row.multiRepoSystemGroup !== true ? (
               <ProjectGroupHeaderMenu
                 groupId={projectGroupIdForHeader}
                 hostId={projectGroupHostIdForHeader}

@@ -322,6 +322,11 @@ export abstract class OrcaRuntimeWithGetStatus extends OrcaRuntimeWithGetRuntime
     this.emitClientEvent({ type: 'reposChanged' })
   }
 
+  /** Public entry for services that persist folder-workspace changes outside the project-group controller. */
+  publishReposChanged(): void {
+    this.notifyReposChanged()
+  }
+
   // Automation/IPC writes need a public stream entry; older clients drop this unknown event without negotiation.
   notifyAutomationsChanged(payload: AutomationsChangedPayload = {}): void {
     this.notifier?.automationsChanged?.(payload)

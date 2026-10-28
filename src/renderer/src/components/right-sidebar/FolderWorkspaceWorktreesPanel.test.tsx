@@ -69,6 +69,7 @@ vi.mock('@/i18n/i18n', () => ({
     values ? fallback.replace('{{value0}}', String(values.value0)) : fallback
 }))
 
+vi.mock('@/components/multi-repo/MultiRepoWorkspaceRootPanel', () => ({ default: () => null }))
 vi.mock('@/components/sidebar/WorktreeCard', () => ({
   default: (props: MockCardProps) => {
     testState.cardProps.push(props)

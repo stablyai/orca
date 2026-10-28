@@ -42,6 +42,7 @@ export const HOST_OPERATION_OWNERSHIP = {
   markdown: 'host',
   mobileRelay: 'host',
   mobileWeb: 'host',
+  multiRepoWorkspace: 'host',
   nativeChat: 'host',
   network: 'host',
   notifications: 'host',

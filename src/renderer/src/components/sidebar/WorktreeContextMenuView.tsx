@@ -33,9 +33,11 @@ import { WorkspaceSleepMenuItems } from './WorkspaceSleepMenuItems'
 import { isEventTargetInsideCurrentTarget } from './worktree-card-dom-events'
 import { translate } from '@/i18n/i18n'
 import { useOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
+import { useIsMultiRepoParent } from './use-is-multi-repo-parent'
 import type { WorktreeContextMenuModel } from './use-worktree-context-menu-model'
 import { WorktreeStatusMenuItems } from './WorktreeStatusMenuItems'
 import { WorktreeContextMenuOverlays } from './WorktreeContextMenuOverlays'
+import { RemoveFromWorkspaceMenuItem } from '@/components/multi-repo/MultiRepoMemberNotices'
 import {
   WORKTREE_CONTEXT_MENU_SCOPE_ATTR,
   getWorktreeParentPickerLabel,
@@ -47,6 +49,7 @@ import {
 import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/close-all-context-menus'
 
 export default function WorktreeContextMenuView({ model }: { model: WorktreeContextMenuModel }) {
+  const isMultiRepoParent = useIsMultiRepoParent(model.folderWorkspaceId)
   const {
     batchDeleteWorktrees,
     children,
@@ -285,6 +288,9 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
               )}
             </>
           )}
+          {!isMultiContext ? (
+            <RemoveFromWorkspaceMenuItem worktreeId={worktree.id} disabled={deletingContext} />
+          ) : null}
           {isMultiContext && hasAnyContextLineage ? (
             <>
               <DropdownMenuItem onSelect={handleRemoveParentLink} disabled={deletingContext}>
@@ -359,10 +365,15 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
               : isMultiContext
                 ? deleteLabel
                 : folderWorkspaceId
-                  ? translate(
-                      'auto.components.sidebar.WorktreeContextMenu.250de158fd',
-                      'Remove Workspace'
-                    )
+                  ? isMultiRepoParent
+                    ? translate(
+                        'auto.components.multiRepo.root.deleteWorkspace',
+                        'Delete workspace'
+                      )
+                    : translate(
+                        'auto.components.sidebar.WorktreeContextMenu.250de158fd',
+                        'Remove Workspace'
+                      )
                   : removesProject
                     ? translate(
                         'auto.components.sidebar.WorktreeContextMenu.f5ac91531d',
