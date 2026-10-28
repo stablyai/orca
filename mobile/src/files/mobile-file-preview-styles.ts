@@ -118,6 +118,10 @@ export const filePreviewStyles = themedStyleSheet(() => ({
     alignItems: 'flex-start',
     minHeight: 19
   },
+  sourceLineRowTarget: {
+    backgroundColor: colors.skillTokenSurface,
+    borderRadius: radii.button
+  },
   sourceLineNumber: {
     flexShrink: 0,
     paddingRight: 6,
@@ -126,6 +130,10 @@ export const filePreviewStyles = themedStyleSheet(() => ({
     fontFamily: typography.monoFamily,
     fontSize: 12,
     lineHeight: 19
+  },
+  sourceLineNumberTarget: {
+    color: colors.accentBlue,
+    fontWeight: '700'
   },
   sourceLineText: {
     flex: 1,

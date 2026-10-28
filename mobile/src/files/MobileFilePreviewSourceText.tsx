@@ -3,7 +3,7 @@ import { ScrollView, Text, View } from 'react-native'
 import { MobileSyntaxSegments } from '../components/MobileSyntaxSegments'
 import type { MobileSyntaxSegment } from '../session/mobile-file-syntax'
 import { formatPreviewByteLength } from './mobile-file-preview-request'
-import { scrollOffsetForPreviewLine } from './mobile-file-preview-line-column'
+import { estimateScrollOffsetForLine } from './mobile-file-preview-line-column'
 import { buildMobileFilePreviewSyntax } from './mobile-file-preview-syntax'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { filePreviewStyles as styles } from './mobile-file-preview-styles'
@@ -54,6 +54,9 @@ export function MobileFilePreviewSourceText({
   const layoutHeightRef = useRef(0)
   const revealedKeyRef = useRef<string | null>(null)
   const restoredRatioRef = useRef(false)
+  const hasUserScrolledRef = useRef(false)
+  const measuredTargetYRef = useRef<number | null>(null)
+  const containerTopRef = useRef(16)
   const initialScrollRatioRef = useRef(initialScrollRatio)
   const onScrollRatioChangeRef = useRef(onScrollRatioChange)
 
@@ -90,9 +93,11 @@ export function MobileFilePreviewSourceText({
     [content, relativePath]
   )
 
+  const shouldRenderLineRows = showLineNumbers || Boolean(initialLine)
+
   const lines = useMemo(
-    () => (showLineNumbers ? splitSyntaxSegmentsIntoLines(syntax.segments) : null),
-    [showLineNumbers, syntax.segments]
+    () => (shouldRenderLineRows ? splitSyntaxSegmentsIntoLines(syntax.segments) : null),
+    [shouldRenderLineRows, syntax.segments]
   )
 
   const lineNumberWidth = useMemo(() => {
@@ -107,17 +112,47 @@ export function MobileFilePreviewSourceText({
     ? `${relativePath}:${initialLine}:${initialLineSeq ?? 0}`
     : null
 
+  useEffect(() => {
+    revealedKeyRef.current = null
+    hasUserScrolledRef.current = false
+    measuredTargetYRef.current = null
+    if (contentHeightRef.current > 0) {
+      revealInitialLine(contentHeightRef.current)
+    }
+  }, [revealTargetKey])
+
+  const handleTargetLineLayout = (rowY: number) => {
+    measuredTargetYRef.current = rowY
+    if (!scrollRef.current || hasUserScrolledRef.current || !revealTargetKey) {
+      return
+    }
+    const targetY = initialLine && initialLine > 1 ? rowY : 0
+    scrollRef.current.scrollTo({
+      y: Math.max(0, targetY),
+      animated: false
+    })
+    revealedKeyRef.current = revealTargetKey
+  }
+
   const revealInitialLine = (height?: number) => {
     if (
       !initialLine ||
       !revealTargetKey ||
       revealedKeyRef.current === revealTargetKey ||
-      !scrollRef.current
+      !scrollRef.current ||
+      hasUserScrolledRef.current
     ) {
       return
     }
+    const targetY =
+      measuredTargetYRef.current !== null
+        ? initialLine > 1
+          ? measuredTargetYRef.current
+          : 0
+        : estimateScrollOffsetForLine(lines, initialLine)
+
     scrollRef.current.scrollTo({
-      y: scrollOffsetForPreviewLine(initialLine),
+      y: Math.max(0, targetY),
       animated: false
     })
     if (typeof height === 'number' && height > 0) {
@@ -135,9 +170,10 @@ export function MobileFilePreviewSourceText({
     <ScrollView
       ref={scrollRef}
       style={styles.scroll}
-      contentContainerStyle={
-        showLineNumbers && lines ? styles.textContentWithLines : styles.textContent
-      }
+      contentContainerStyle={showLineNumbers ? styles.textContentWithLines : styles.textContent}
+      onScrollBeginDrag={() => {
+        hasUserScrolledRef.current = true
+      }}
       onLayout={(event) => {
         layoutHeightRef.current = event.nativeEvent.layout.height
         restoreInitialRatio()
@@ -160,29 +196,47 @@ export function MobileFilePreviewSourceText({
       {truncated ? (
         <MobileFilePreviewTruncatedNote byteLength={byteLength ?? content.length} />
       ) : null}
-      {showLineNumbers && lines ? (
-        <View style={styles.sourceLinesContainer} accessibilityLabel="File preview">
-          {lines.map((lineSegments, lineIndex) => (
-            <View key={lineIndex} style={styles.sourceLineRow}>
-              <Text
-                style={[
-                  styles.sourceLineNumber,
-                  { width: lineNumberWidth, minWidth: lineNumberWidth, flexShrink: 0 }
-                ]}
-                accessibilityElementsHidden
-                importantForAccessibility="no"
+      {lines ? (
+        <View
+          style={styles.sourceLinesContainer}
+          accessibilityLabel="File preview"
+          onLayout={(event) => {
+            containerTopRef.current = event.nativeEvent.layout.y
+          }}
+        >
+          {lines.map((lineSegments, lineIndex) => {
+            const isTargetLine = initialLine !== undefined && lineIndex === initialLine - 1
+            return (
+              <View
+                key={lineIndex}
+                style={[styles.sourceLineRow, isTargetLine && styles.sourceLineRowTarget]}
+                onLayout={
+                  isTargetLine
+                    ? (event) => {
+                        handleTargetLineLayout(event.nativeEvent.layout.y)
+                      }
+                    : undefined
+                }
               >
-                {lineIndex + 1}
-              </Text>
-              <Text selectable style={styles.sourceLineText}>
-                {lineSegments.length > 0 ? (
-                  <MobileSyntaxSegments segments={lineSegments} />
-                ) : (
-                  ' '
-                )}
-              </Text>
-            </View>
-          ))}
+                {showLineNumbers ? (
+                  <Text
+                    style={[
+                      styles.sourceLineNumber,
+                      { width: lineNumberWidth, minWidth: lineNumberWidth, flexShrink: 0 },
+                      isTargetLine && styles.sourceLineNumberTarget
+                    ]}
+                    accessibilityElementsHidden
+                    importantForAccessibility="no"
+                  >
+                    {lineIndex + 1}
+                  </Text>
+                ) : null}
+                <Text selectable style={styles.sourceLineText}>
+                  {lineSegments.length > 0 ? <MobileSyntaxSegments segments={lineSegments} /> : ' '}
+                </Text>
+              </View>
+            )
+          })}
         </View>
       ) : (
         <Text selectable style={styles.textPreview} accessibilityLabel="File preview">

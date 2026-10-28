@@ -19,6 +19,7 @@ type Props = {
   client?: MobileFilePreviewRpcSender | null
   worktreeId?: string
   initialLine?: number
+  initialLineSeq?: number
   showLineNumbers?: boolean
   onToggleLineNumbers?: () => void
   onOpenFile?: (pathText: string) => void
@@ -30,6 +31,7 @@ export function MobileFileMarkdownPreview({
   truncated,
   byteLength,
   initialLine,
+  initialLineSeq,
   showLineNumbers,
   onToggleLineNumbers,
   client,
@@ -88,6 +90,7 @@ export function MobileFileMarkdownPreview({
           truncated={truncated}
           byteLength={byteLength}
           initialLine={initialLine}
+          initialLineSeq={initialLineSeq}
           showLineNumbers={showLineNumbers}
         />
       )}

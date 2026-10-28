@@ -70,6 +70,11 @@ export function MobileFilePreviewScreen({ route }: Props) {
     [routePreviewSource]
   )
   const previewSourceKeyRef = useRef(previewSourceKey)
+  const lineSeqRef = useRef(0)
+  const lineParam = previewParams?.line
+  useEffect(() => {
+    lineSeqRef.current += 1
+  }, [lineParam])
   const lineColumn = useMemo(
     () =>
       previewParams
@@ -257,7 +262,10 @@ export function MobileFilePreviewScreen({ route }: Props) {
           <View style={styles.topBarActions}>
             {isEditableTerminalArtifact ? (
               <Pressable
-                style={[styles.saveButton, (!canSaveArtifact || saving) && styles.saveButtonDisabled]}
+                style={[
+                  styles.saveButton,
+                  (!canSaveArtifact || saving) && styles.saveButtonDisabled
+                ]}
                 onPress={() => void saveArtifact()}
                 disabled={!canSaveArtifact || saving}
                 accessibilityLabel="Save terminal artifact"
@@ -278,6 +286,7 @@ export function MobileFilePreviewScreen({ route }: Props) {
         draftContent={draftContent}
         saveError={saveError}
         lineColumn={lineColumn}
+        initialLineSeq={lineSeqRef.current}
         showLineNumbers={showLineNumbers}
         onToggleLineNumbers={() => setShowLineNumbers((prev) => !prev)}
         imageWidth={Math.max(1, width - spacing.md * 2)}

@@ -22,8 +22,10 @@ vi.mock('./mobile-file-preview-styles', () => ({
     textContentWithLines: {},
     textPreview: {},
     sourceLinesContainer: {},
-    sourceLineRow: {},
+    sourceLineRow: { minHeight: 19 },
+    sourceLineRowTarget: { backgroundColor: 'rgba(59, 130, 246, 0.2)' },
     sourceLineNumber: {},
+    sourceLineNumberTarget: { fontWeight: '700' },
     sourceLineText: {},
     truncatedNote: {}
   }
@@ -79,5 +81,60 @@ describe('MobileFilePreviewSourceText line numbers', () => {
     const textNodes = findAllByHostType((renderer as ReactTestRenderer).root, 'Text')
     const numbers = textNodes.map((n) => n.props.children).filter((c) => typeof c === 'number')
     expect(numbers).toHaveLength(0)
+  })
+
+  it('highlights the target initialLine row and line number', async () => {
+    let renderer: ReactTestRenderer | null = null
+    await act(async () => {
+      renderer = create(
+        createElement(MobileFilePreviewSourceText, {
+          relativePath: 'test.md',
+          content: 'first\nsecond\nthird',
+          initialLine: 2,
+          showLineNumbers: true
+        })
+      )
+    })
+    if (!renderer) {
+      throw new Error('Component failed to render')
+    }
+    const viewNodes = findAllByHostType((renderer as ReactTestRenderer).root, 'View')
+    const targetRow = viewNodes.find((v) =>
+      [v.props.style].flat().some((s) => s?.backgroundColor === 'rgba(59, 130, 246, 0.2)')
+    )
+    expect(targetRow).toBeDefined()
+
+    const textNodes = findAllByHostType((renderer as ReactTestRenderer).root, 'Text')
+    const targetNumber = textNodes.find((n) => n.props.children === 2)
+    expect([targetNumber?.props.style].flat()).toContainEqual(
+      expect.objectContaining({ fontWeight: '700' })
+    )
+  })
+
+  it('scrolls accurately to target line onLayout measurement', async () => {
+    let renderer: ReactTestRenderer | null = null
+    await act(async () => {
+      renderer = create(
+        createElement(MobileFilePreviewSourceText, {
+          relativePath: 'test.md',
+          content: 'first\nsecond\nthird',
+          initialLine: 2,
+          showLineNumbers: true
+        })
+      )
+    })
+    if (!renderer) {
+      throw new Error('Component failed to render')
+    }
+    const viewNodes = findAllByHostType((renderer as ReactTestRenderer).root, 'View')
+    const targetRow = viewNodes.find((v) => typeof v.props.onLayout === 'function')
+    expect(targetRow).toBeDefined()
+
+    // Trigger onLayout with an exact measured y
+    await act(async () => {
+      targetRow?.props.onLayout({
+        nativeEvent: { layout: { x: 0, y: 154, width: 360, height: 38 } }
+      })
+    })
   })
 })
