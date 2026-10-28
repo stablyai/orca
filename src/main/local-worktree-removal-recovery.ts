@@ -42,16 +42,12 @@ function preservedBranchResult(
   }
 }
 
-function staleRegistrationRecoveryError(
-  error: unknown,
-  canonicalWorktreePath: string,
-  force: boolean
-): Error {
+function staleRegistrationRecoveryError(error: unknown, canonicalWorktreePath: string): Error {
   return new Error(
     `${formatWorktreeRemovalError(
       error,
       canonicalWorktreePath,
-      force
+      true
     )} Git still has stale worktree registration. Retry deletion after resolving the Git registration error.`
   )
 }
@@ -59,8 +55,7 @@ function staleRegistrationRecoveryError(
 async function verifyGitWorktreeRegistrationRemoved(
   repoPath: string,
   localWorktreeGitOptions: GitWorktreeExecOptions,
-  canonicalWorktreePath: string,
-  force: boolean
+  canonicalWorktreePath: string
 ): Promise<void> {
   try {
     const remainingWorktrees = await listWorktreesStrict(repoPath, localWorktreeGitOptions)
@@ -72,7 +67,7 @@ async function verifyGitWorktreeRegistrationRemoved(
       throw new Error('Git still reports the worktree registration after cleanup.')
     }
   } catch (error) {
-    throw staleRegistrationRecoveryError(error, canonicalWorktreePath, force)
+    throw staleRegistrationRecoveryError(error, canonicalWorktreePath)
   }
 }
 
@@ -95,12 +90,11 @@ export async function removeStaleLocalWorktreeRegistration(
     await verifyGitWorktreeRegistrationRemoved(
       args.repoPath,
       args.localWorktreeGitOptions,
-      args.canonicalWorktreePath,
-      true
+      args.canonicalWorktreePath
     )
   } catch (verificationError) {
     throw removalError
-      ? staleRegistrationRecoveryError(removalError, args.canonicalWorktreePath, true)
+      ? staleRegistrationRecoveryError(removalError, args.canonicalWorktreePath)
       : verificationError
   }
   // Preserve the branch when Git may have detached the row before reporting a filesystem error.
@@ -128,13 +122,6 @@ export async function recoverPartialLocalWorktreeRemoval(
   } catch (error) {
     throw new Error(formatWorktreeRemovalError(error, args.canonicalWorktreePath, args.force))
   }
-  // Git already dropped the row; a repo-wide prune could unregister checkouts on unmounted drives.
-  await verifyGitWorktreeRegistrationRemoved(
-    args.repoPath,
-    args.localWorktreeGitOptions,
-    args.canonicalWorktreePath,
-    args.force
-  )
   const { branch, head } = args.registeredWorktree
   // Same -d policy as a normal delete: merged branches go, unmerged ones are preserved.
   return deleteBranchOfUnregisteredWorktree(
