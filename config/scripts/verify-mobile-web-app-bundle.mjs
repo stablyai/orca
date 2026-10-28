@@ -62,21 +62,21 @@ export function mobileWebAppBundleBudgetBytes(manifest) {
 // Re-measure table when routes change; it is envelope’s only input, and pins must fail rather than permit arbitrary ceiling bumps.
 export const MOBILE_WEB_APP_BUNDLE_SCRIPT_SWEEP = [
   ['./_layout.tsx', 3],
-  ['./h/[hostId]/[...page].tsx', 6],
-  ['./h/[hostId]/accounts.tsx', 10],
-  ['./h/[hostId]/agent-history/[worktreeId].tsx', 15],
-  ['./h/[hostId]/edit.tsx', 20],
-  ['./h/[hostId]/files/[worktreeId].tsx', 24],
-  ['./h/[hostId]/files/preview/[worktreeId].tsx', 31],
-  ['./h/[hostId]/history/[worktreeId].tsx', 34],
+  ['./h/[hostId]/[...page].tsx', 7],
+  ['./h/[hostId]/accounts.tsx', 11],
+  ['./h/[hostId]/agent-history/[worktreeId].tsx', 16],
+  ['./h/[hostId]/edit.tsx', 21],
+  ['./h/[hostId]/files/[worktreeId].tsx', 25],
+  ['./h/[hostId]/files/preview/[worktreeId].tsx', 32],
+  ['./h/[hostId]/history/[worktreeId].tsx', 35],
   ['./h/[hostId]/index.tsx', 42],
-  ['./h/[hostId]/new-workspace.tsx', 49],
-  ['./h/[hostId]/pr/[worktreeId].tsx', 50],
-  ['./h/[hostId]/review/[worktreeId].tsx', 57],
-  ['./h/[hostId]/session/[worktreeId].tsx', 69],
-  ['./h/[hostId]/source-control/[worktreeId].tsx', 73],
-  ['./h/[hostId]/tasks.tsx', 87],
-  ['./h/_layout.tsx', 91]
+  ['./h/[hostId]/new-workspace.tsx', 51],
+  ['./h/[hostId]/pr/[worktreeId].tsx', 52],
+  ['./h/[hostId]/review/[worktreeId].tsx', 60],
+  ['./h/[hostId]/session/[worktreeId].tsx', 72],
+  ['./h/[hostId]/source-control/[worktreeId].tsx', 77],
+  ['./h/[hostId]/tasks.tsx', 92],
+  ['./h/_layout.tsx', 96]
 ]
 
 const sweptScripts = MOBILE_WEB_APP_BUNDLE_SCRIPT_SWEEP.map(([, scripts]) => scripts)

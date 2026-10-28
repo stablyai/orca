@@ -1,9 +1,12 @@
 import { Settings } from 'lucide-react-native'
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { Pressable, Text, View } from 'react-native'
 import { OrcaLogo } from '../components/OrcaLogo'
 import { colors, spacing } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 
 export function MobileHomeTopBar({ onOpenSettings }: { onOpenSettings: () => void }) {
+  useMobileColorScheme()
   return (
     <View style={styles.topBar}>
       <View style={styles.brandLockup}>
@@ -25,7 +28,7 @@ export function MobileHomeTopBar({ onOpenSettings }: { onOpenSettings: () => voi
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   topBar: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -45,4 +48,4 @@ const styles = StyleSheet.create({
     justifyContent: 'center'
   },
   iconButtonPressed: { backgroundColor: colors.bgRaised }
-})
+}))

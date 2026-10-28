@@ -6,6 +6,7 @@ import { bundledSkillSetupActionLabel } from '../settings/bundled-skill-setup-co
 import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRuntime'
 import { FeatureSetupInlineTerminal } from '../onboarding/FeatureSetupInlineTerminal'
 import { buildAgentFeatureSkillInstallCommand } from '@/lib/agent-feature-install-commands'
+import { buildSkillCommandForRuntime } from '../settings/CliSkillRuntimeSetup'
 import type { OnboardingFeatureSetupRuntimeContext } from '../onboarding/onboarding-feature-setup-runtime'
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { Check, Download, Globe2, Loader2, MonitorCog, Workflow } from 'lucide-react'
@@ -120,7 +121,9 @@ export function AgentCapabilitiesSetupAction(props: {
       // COMPAT(wsl-bridge): removed when WSL runs as an orcad host.
       if (legacyWsl) {
         const command = buildAgentFeatureSkillInstallCommand(result.skillNames)
-        await window.api.ui.writeClipboardText(command)
+        await window.api.ui.writeClipboardText(
+          buildSkillCommandForRuntime(command, activeRuntime.agentRuntime)
+        )
         setWslSetup({ command, runtime: activeRuntime, selection: featureSetup })
         return
       }

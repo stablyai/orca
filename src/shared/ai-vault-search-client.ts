@@ -42,17 +42,11 @@ export function createSessionSearchClient(
   call: (method: string, params: Record<string, unknown>) => Promise<unknown>,
   transport: SessionSearchTransport
 ): {
-  searchSessions(
-    request: AiVaultSearchRequest,
-    isActive?: () => boolean
-  ): Promise<AiVaultSearchResponse>
+  searchSessions(request: AiVaultSearchRequest): Promise<AiVaultSearchResponse>
   searchStatus(): Promise<AiVaultSearchStatus>
 } {
   return {
-    searchSessions: async (request, isActive = () => true) => {
-      if (!isActive()) {
-        throw new Error('Session search retired')
-      }
+    searchSessions: async (request) => {
       const parsed = AiVaultSearchRequestSchema.parse(request)
       let hostRequest = parsed
       let raw: unknown
@@ -65,9 +59,6 @@ export function createSessionSearchClient(
             return { kind: 'unavailable', reason: 'unsupported-agent' }
           }
           hostRequest = { ...parsed, filters: { ...parsed.filters, agents } }
-        }
-        if (!isActive()) {
-          throw new Error('Session search retired')
         }
         raw = await call('aiVault.searchSessions', {
           ...hostRequest,

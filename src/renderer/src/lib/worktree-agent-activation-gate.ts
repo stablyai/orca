@@ -48,7 +48,7 @@ export type WorktreeAgentActivationOutcome =
 const inFlightByWorktreeId = new Map<string, Promise<WorktreeAgentActivationOutcome>>()
 const WORKSPACE_SESSION_READY_TIMEOUT_MS = 30_000
 
-function waitForWorkspaceSessionReady(): Promise<boolean> {
+export function waitForWorkspaceSessionReady(): Promise<boolean> {
   const isReady = () => {
     const state = useAppStore.getState()
     return state.workspaceSessionReady && state.terminalStartupRestorationReady

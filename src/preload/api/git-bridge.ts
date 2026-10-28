@@ -194,6 +194,7 @@ export const gitApi = {
     worktreePath: string
     relativePath: string
     line: number
+    endLine?: number
     connectionId?: string
   }): Promise<string | null> => ipcRenderer.invoke('git:remoteFileUrl', args),
   remoteCommitUrl: (args: {

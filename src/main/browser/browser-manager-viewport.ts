@@ -22,18 +22,55 @@ export abstract class BrowserManagerViewport extends BrowserManagerDownloadLifec
     if (!guest) {
       return false
     }
-    if (options?.detach || !(await this.openDockedDevTools(browserTabId, guest))) {
-      await this.devToolsDock.close(guest.id)
-      if (guest.isDestroyed()) {
+    const renderer = this.resolveRendererForBrowserTab(browserTabId)
+    const operation = this.devToolsDock.beginOpen(
+      guest,
+      () =>
+        this.webContentsIdByTabId.get(browserTabId) === guest.id &&
+        !this.offscreenGuestIds.has(guest.id) &&
+        (!renderer ||
+          (this.resolveRendererForBrowserTab(browserTabId) === renderer && !renderer.isDestroyed()))
+    )
+    const notify = (docked: boolean): void => {
+      const currentGuestId = this.webContentsIdByTabId.get(browserTabId)
+      if (
+        renderer &&
+        !renderer.isDestroyed() &&
+        (currentGuestId === undefined ||
+          currentGuestId === guest.id ||
+          (!docked && !this.devToolsDock.isDocked(currentGuestId)))
+      ) {
+        renderer.send('browser:devToolsDockChanged', { browserPageId: browserTabId, docked })
+      }
+    }
+    try {
+      let docked = false
+      if (!options?.detach && renderer) {
+        docked = await this.devToolsDock.open(guest, () => notify(false), operation)
+        if (!operation.isCurrent()) {
+          return false
+        }
+      }
+      if (!docked && !(await this.devToolsDock.openDetached(guest, operation))) {
         return false
       }
-      guest.openDevTools({ mode: 'detach' })
+      if (!operation.isCurrent()) {
+        return false
+      }
+      if (docked) {
+        notify(true)
+      }
+      if (!operation.isCurrent()) {
+        return false
+      }
+      if (inspectAt) {
+        // Open first: inspectElement alone opens Electron's own DevTools and bypasses the dock.
+        guest.inspectElement(inspectAt.x, inspectAt.y)
+      }
+      return true
+    } finally {
+      operation.finish()
     }
-    if (inspectAt) {
-      // Open first: inspectElement alone opens Electron's own DevTools and bypasses the dock.
-      guest.inspectElement(inspectAt.x, inspectAt.y)
-    }
-    return true
   }
 
   closeDevTools(browserTabId: string): void {
@@ -53,7 +90,11 @@ export abstract class BrowserManagerViewport extends BrowserManagerDownloadLifec
       if (guest !== focused && guest.devToolsWebContents !== focused) {
         continue
       }
-      if (this.devToolsDock.isDocked(guest.id) || guest.isDevToolsOpened()) {
+      if (
+        this.devToolsDock.isOpening(guest.id) ||
+        this.devToolsDock.isDocked(guest.id) ||
+        guest.isDevToolsOpened()
+      ) {
         this.closeGuestDevTools(guest)
       } else {
         void this.openDevTools(browserTabId)
@@ -86,26 +127,6 @@ export abstract class BrowserManagerViewport extends BrowserManagerDownloadLifec
     }
     // Offscreen DevTools would open on the server desktop without a route back to the client.
     return this.offscreenGuestIds.has(webContentsId) ? null : guest
-  }
-
-  private async openDockedDevTools(
-    browserTabId: string,
-    guest: Electron.WebContents
-  ): Promise<boolean> {
-    const renderer = this.resolveRendererForBrowserTab(browserTabId)
-    if (!renderer) {
-      return false
-    }
-    const notify = (docked: boolean): void => {
-      if (!renderer.isDestroyed()) {
-        renderer.send('browser:devToolsDockChanged', { browserPageId: browserTabId, docked })
-      }
-    }
-    if (!(await this.devToolsDock.open(guest, () => notify(false)))) {
-      return false
-    }
-    notify(true)
-    return true
   }
 
   // Never detach here: other CDP clients, including the agent bridge, would lose their state.

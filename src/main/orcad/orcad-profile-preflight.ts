@@ -18,10 +18,19 @@ import { runProcess } from '@orca/process-host'
 import { preflightOrcadNativeRuntime } from './orcad-runtime-native-preflight'
 import { orcadCompileCacheEnv } from './orcad-compile-cache'
 import {
+  consumeOrcadStartupQualification,
+  discardOrcadStartupQualification,
+  isQualifiableOrcadSlot,
+  orcadStartupQualificationKey,
+  recordOrcadStartupQualification
+} from './orcad-startup-qualification'
+import {
   isRunningAsBundledOrcadRuntime,
   OrcadBundledRuntimeError,
   resolveBundledOrcadSlot
 } from './orcad-bundled-runtime'
+
+let pendingQualification: { directory: string; key: string } | null = null
 
 /** Qualify packaged startup before touching profile indexes, data-root locks or imports. */
 export async function preflightBundledOrcadStartup(): Promise<void> {
@@ -30,6 +39,27 @@ export async function preflightBundledOrcadStartup(): Promise<void> {
     return
   }
   const identity = await readInstalledVersion(directory)
+  // Windows' child also proves the process identity table, which depends on host services.
+  const key =
+    process.platform === 'win32' || !isQualifiableOrcadSlot(directory)
+      ? null
+      : await orcadStartupQualificationKey(directory, identity).catch(() => null)
+  if (key && (await consumeOrcadStartupQualification(directory, key))) {
+    pendingQualification = { directory, key }
+    return
+  }
+  try {
+    await runStartupPreflightChild(directory, identity)
+  } catch (error) {
+    if (key) {
+      await discardOrcadStartupQualification(directory)
+    }
+    throw error
+  }
+  pendingQualification = key ? { directory, key } : null
+}
+
+async function runStartupPreflightChild(directory: string, identity: string): Promise<void> {
   const nonce = randomUUID()
   // Keep disposable SQLite ownership and native state out of the serving process.
   const result = await runProcess({
@@ -54,9 +84,18 @@ export async function preflightBundledOrcadStartup(): Promise<void> {
   }
 }
 
+/** Call once readiness is published: only a launch that got there lets the next one skip. */
+export async function confirmBundledOrcadStartupQualified(): Promise<void> {
+  const qualified = pendingQualification
+  pendingQualification = null
+  if (qualified) {
+    await recordOrcadStartupQualification(qualified.directory, qualified.key)
+  }
+}
+
 export async function runOrcadProfilePreflight(
   nonce: string | undefined,
-  options: { nativeFeatures?: boolean } = {}
+  options: { nativeFeatures?: boolean; servedUserDataPath?: string } = {}
 ): Promise<void> {
   const checkedNonce = z.string().uuid().parse(nonce)
   const directory = resolveBundledOrcadSlot()
@@ -79,9 +118,31 @@ export async function runOrcadProfilePreflight(
     runtime: 'node',
     runtimeVersion: process.versions.node,
     artifactVersion,
-    ...result
+    ...result,
+    ...(options.servedUserDataPath === undefined
+      ? {}
+      : { liveDaemonProtocols: await readServedDaemonProtocols(options.servedUserDataPath) })
   }
   console.log(JSON.stringify(response))
+}
+
+/** The served data root, never this probe's own, decides which daemons a restart must reach. */
+async function readServedDaemonProtocols(servedUserDataPath: string): Promise<number[] | null> {
+  // A failed probe leaves the crossing unverifiable; it must not fail the candidate itself.
+  try {
+    // Import lazily: startup preflight loads this module and needs no daemon code.
+    const [{ listLiveDaemonProtocols }, { daemonRuntimeDirFor }, protocol] = await Promise.all([
+      import('../daemon/daemon-generation-liveness'),
+      import('../daemon/daemon-runtime-dir'),
+      import('../daemon/daemon-protocol-version')
+    ])
+    return await listLiveDaemonProtocols(daemonRuntimeDirFor(servedUserDataPath), [
+      protocol.PROTOCOL_VERSION,
+      ...protocol.PREVIOUS_DAEMON_PROTOCOL_VERSIONS
+    ])
+  } catch {
+    return null
+  }
 }
 
 async function readInstalledVersion(directory: string): Promise<string> {

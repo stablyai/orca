@@ -19,7 +19,7 @@ export function terminalPreviewUnavailableMessage(source: {
         'No preview for this remote session — open the workspace to view the terminal.'
       )
     : translate(
-        'dashboardPopout.terminal.closed',
-        "No live terminal — this agent's pane has closed."
+        'dashboardPopout.terminal.previewUnavailable',
+        'No preview available — open the workspace to view this agent.'
       )
 }

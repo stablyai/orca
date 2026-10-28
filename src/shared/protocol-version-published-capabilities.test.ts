@@ -41,6 +41,7 @@ const PUBLISHED_RUNTIME_CAPABILITIES = [
   'agent-session.question-answers.v1',
   'agent-session.queued-commands.v1',
   'agent-session.queued-message-edit.v1',
+  'agent-session.queued-message-reorder.v1',
   'agent-session.qwen-code-resume.v1',
   'agent-session.repeated-stop.v1',
   'agent-session.rewind-recovery.v1',

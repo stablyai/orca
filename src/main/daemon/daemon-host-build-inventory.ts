@@ -120,7 +120,7 @@ export function collectDaemonHostBuildInventory(
         sha256: hashDaemonHostFile(destPath(registryDir, relative))
       })
     }
-    files.sort((left, right) => left.path.localeCompare(right.path))
+    files.sort((left, right) => left.path.localeCompare(right.path, 'en'))
     const inventory = {
       runtimeVersion: runtimeVersion(),
       executableName: daemonHostExeName(sources.execPath),

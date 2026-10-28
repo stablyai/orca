@@ -30,6 +30,20 @@ const REACTION_LABEL: Record<GitHubReactionContent, string> = {
   eyes: 'eyes'
 }
 
+function reactionCountLabel(count: number, reaction: string): string {
+  return count === 1
+    ? translate(
+        'auto.components.GitHubItemDialog.reactionCountSingular',
+        '{{count}} {{reaction}} reaction',
+        { count, reaction }
+      )
+    : translate(
+        'auto.components.GitHubItemDialog.reactionCountPlural',
+        '{{count}} {{reaction}} reactions',
+        { count, reaction }
+      )
+}
+
 export function CommentReactions({
   reactions,
   className,
@@ -97,15 +111,7 @@ export function CommentReactions({
                 reaction.viewerHasReacted && 'border-ring bg-accent text-accent-foreground'
               )}
               aria-pressed={Boolean(reaction.viewerHasReacted)}
-              aria-label={translate(
-                'auto.components.GitHubItemDialog.a18f669c7a',
-                '{{value0}} {{value1}} reaction{{value2}}',
-                {
-                  value0: reaction.count,
-                  value1: REACTION_LABEL[reaction.content],
-                  value2: reaction.count === 1 ? '' : 's'
-                }
-              )}
+              aria-label={reactionCountLabel(reaction.count, REACTION_LABEL[reaction.content])}
               onClick={() =>
                 void changeReaction(
                   reaction.content,
@@ -121,15 +127,7 @@ export function CommentReactions({
           ) : (
             <span
               className="inline-flex h-6 items-center gap-1 rounded-full border border-border/60 bg-muted/35 px-2 text-[12px] leading-none text-foreground"
-              aria-label={translate(
-                'auto.components.GitHubItemDialog.a18f669c7a',
-                '{{value0}} {{value1}} reaction{{value2}}',
-                {
-                  value0: reaction.count,
-                  value1: REACTION_LABEL[reaction.content],
-                  value2: reaction.count === 1 ? '' : 's'
-                }
-              )}
+              aria-label={reactionCountLabel(reaction.count, REACTION_LABEL[reaction.content])}
             >
               <span aria-hidden="true">{REACTION_EMOJI[reaction.content]}</span>
               <span className="tabular-nums">{reaction.count}</span>

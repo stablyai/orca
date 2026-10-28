@@ -1,6 +1,6 @@
 import type { DashboardAgentRow } from './useDashboardData'
 import {
-  dashboardCardDisplayState,
+  dashboardCardBaseDisplayState,
   type DashboardBucket,
   type DashboardCardDotState
 } from '../../../../shared/dashboard-snapshot'
@@ -51,7 +51,7 @@ export function dashboardRowBucketProjection(
       : undefined
   const unseen = isAgentSubjectUnread(turnRecords, row.paneKey)
   const bucket = dashboardBucketForDotState(
-    dashboardCardDisplayState({ dotState, workingMode, unseen })
+    dashboardCardBaseDisplayState({ dotState, workingMode, unseen })
   )
 
   return { isTitleDerived, dotState, workingMode, unseen, bucket }

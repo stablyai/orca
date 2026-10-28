@@ -1,4 +1,7 @@
-import type { DropdownActionKind, DropdownEntry } from '../../source-control-dropdown-item-types'
+import type {
+  DropdownActionKind,
+  DropdownEntry
+} from '../../../../../../shared/source-control-dropdown-item-types'
 import type { PrimaryAction, RemoteOpKind } from '../../source-control-primary-action'
 import type { SourceControlPushRecovery } from '../sync/push-recovery'
 import type {

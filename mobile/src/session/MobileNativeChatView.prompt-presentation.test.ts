@@ -1,3 +1,4 @@
+import './MobileNativeChatView.harness.test-fixture'
 import { createElement, type ComponentProps } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { Pressable } from 'react-native'
@@ -6,6 +7,7 @@ import { MobileNativeChatView } from './MobileNativeChatView'
 import { MobileNativeChatAsk } from './native-chat/input/MobileNativeChatAsk'
 import { useMobileNativeChatPromptPresentation } from './native-chat/input/use-mobile-native-chat-prompt-presentation'
 import type { MobileChatPermission } from './native-chat/input/mobile-native-chat-permission'
+import { setMobileNativeChatDraftText } from './native-chat/composer/mobile-native-chat-draft-store'
 vi.mock('react-native', async () => {
   const React = await import('react')
   return {
@@ -60,8 +62,12 @@ vi.mock('lucide-react-native', () =>
     ].map((x) => [x, x])
   )
 )
-vi.mock('./MobileNativeChatMessage', () => ({ MobileNativeChatMessage: 'ChatMessage' }))
-vi.mock('./MobileNativeChatLiveLine', () => ({ MobileNativeChatLiveLine: 'LiveStatus' }))
+vi.mock('./native-chat/transcript/MobileNativeChatMessage', () => ({
+  MobileNativeChatMessage: 'ChatMessage'
+}))
+vi.mock('./native-chat/transcript/MobileNativeChatLiveLine', () => ({
+  MobileNativeChatLiveLine: 'LiveStatus'
+}))
 vi.mock('./native-chat/input/MobileNativeChatAsk', () => ({ MobileNativeChatAsk: 'ChatAsk' }))
 vi.mock('./native-chat/input/MobileNativeChatQuestion', () => ({
   MobileNativeChatQuestion: 'ChatQuestion'
@@ -70,12 +76,12 @@ vi.mock('./native-chat/input/MobileNativeChatSessionOptionPickers', () => ({
   MobileNativeChatSessionOptionPickers: 'SessionOptions'
 }))
 vi.mock('./native-chat/composer/MobileNativeChatComposerMenu', () => ({
-  MobileNativeChatComposerMenu: 'Suggestions',
-  composerMenuInsertText: () => ''
+  MobileNativeChatComposerMenu: 'Suggestions'
 }))
 vi.mock('../components/ActionSheetModal', () => ({ ActionSheetModal: 'ActionSheetModal' }))
 vi.mock('../components/MobileMarkdown', () => ({ MobileMarkdown: 'Markdown' }))
 let tree: ReactTestRenderer | null = null
+setMobileNativeChatDraftText('terminal-1', 'no, do X instead')
 const props = {
   messages: [],
   folded: [],
@@ -86,7 +92,7 @@ const props = {
   sendSurfaceId: 'terminal-1',
   getSendCompletionGeneration: () => 0,
   getComposerEditGeneration: () => 0,
-  composerText: 'no, do X instead',
+  draftKey: 'terminal-1',
   onComposerTextChange: vi.fn()
 }
 const permission: MobileChatPermission = {
@@ -244,3 +250,7 @@ describe('terminal prompt presentation with the production view, card and compos
     }
   )
 })
+
+vi.mock('./MobileQueuedMessageComposer', () => ({
+  MobileQueuedMessageComposer: 'QueuedMessageComposer'
+}))

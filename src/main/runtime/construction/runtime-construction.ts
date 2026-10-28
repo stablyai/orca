@@ -93,6 +93,8 @@ export abstract class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCo
   ): ProjectExecutionRuntimeResolution | undefined
   protected abstract ensureNativeWindowsConptyDa1Override(ptyId: string): void
 
+  readonly getSetupTerminalTitle: () => string
+
   protected readonly prepareClaudeAuth?: PrepareClaudeAuth
 
   readonly workspaceSleepPlatform: WorkspaceSleepPlatform | null
@@ -113,8 +115,11 @@ export abstract class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCo
     super()
     this.store = store
     this.machineName.start()
+    this.getSetupTerminalTitle = deps?.getSetupTerminalTitle ?? (() => 'Setup')
     this.prepareClaudeAuth = deps?.prepareClaudeAuth
     installRuntimeFileCommandSurface(this, this.fileCommands)
+    // Host start: drop what a crashed run's staged saves left in the staging folder.
+    this.fileCommands.stagedFileSaves.sweepOrphans()
     installRuntimeGitCommandSurface(this, this.gitCommands)
     installRuntimeRepositoryCommandSurface(this, {
       projectHostSetups: this.projectHostSetups,
@@ -229,14 +234,11 @@ export abstract class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCo
     this.dropAgentStatusForRemovedWorktreeFn = deps?.dropAgentStatusForRemovedWorktree ?? null
     this.canRecoverPersistentLocalPtysFn = deps?.canRecoverPersistentLocalPtys ?? (() => true)
     this.getPairedDeviceNameFn = deps?.getPairedDeviceName ?? (() => null)
-    // Why: configure the shared AiVault scan cache from a serve-mode-reachable
-    // seam so the aiVault.listSessions RPC includes managed-Codex + WSL sessions
-    // even on headless `orca serve` hosts where registerCoreHandlers never runs.
-    configureAiVaultSessionSources({
-      getProjectOwnershipCatalog: deps?.getProjectOwnershipCatalog,
-      getAdditionalCodexHomePaths: deps?.getAdditionalAiVaultCodexHomePaths
-    })
+    // Headless serve skips registerCoreHandlers but still needs managed-Codex/WSL AiVault sources.
     if (deps?.getAdditionalAiVaultCodexHomePaths) {
+      configureAiVaultSessionSources({
+        getAdditionalCodexHomePaths: deps.getAdditionalAiVaultCodexHomePaths
+      })
       configureHostReadableTranscriptPathSources({
         getAdditionalCodexHomePaths: deps.getAdditionalAiVaultCodexHomePaths
       })

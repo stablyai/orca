@@ -15,7 +15,7 @@ import {
   NATIVE_CHAT_VISUAL_DIRECTIVE_MAX_LINE_LENGTH,
   NATIVE_CHAT_VISUAL_MAX_PER_MESSAGE,
   parseNativeChatVisualDirectiveLine
-} from '../../../../shared/native-chat-visual-directive'
+} from '../../../../shared/native-chat/native-chat-visual-directive'
 
 const TOKEN_TYPE = 'nativeChatVisual'
 const COLON = 58

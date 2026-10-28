@@ -1,15 +1,12 @@
-// Show host-stated permission mode; never infer what is running.
+// A live agent's report wins; otherwise the chat's saved mode, never a guessed one for own.
 
 import {
   AGENT_CHAT_PERMISSION_MODE_OPTION_ID,
   agentChatPermissionModes,
-  chatModelSupportsAutoMode,
-  offeredChatPermissionModes,
   type AgentChatPermissionMode
 } from './agent-chat-permission-mode'
-import type { AgentSessionOptionCatalog } from './agent-session-option-catalog'
 import type { StructuredAgentSessionOptionRecord } from './structured-agent-session-option-state'
-import type { SessionOptionDescriptor } from './native-chat-session-options'
+import type { SessionOptionDescriptor } from './native-chat/input/native-chat-session-options'
 
 /** English names and descriptions for surfaces without a translation catalog. */
 const MODE_COPY: Readonly<Record<AgentChatPermissionMode, { label: string; description: string }>> =
@@ -54,22 +51,9 @@ function agentDescriptions(agent: string): Partial<Record<AgentChatPermissionMod
   return AGENT_DESCRIPTIONS.get(agent) ?? OTHER_AGENT_DESCRIPTIONS
 }
 
-function currentModelSupportsAutoMode(
-  catalog: AgentSessionOptionCatalog | null,
-  record: StructuredAgentSessionOptionRecord
-): boolean {
-  const model = record.values.model?.value
-  return (
-    catalog !== null &&
-    chatModelSupportsAutoMode(catalog.models, typeof model === 'string' ? model : undefined)
-  )
-}
-
 export function structuredAgentSessionPermissionDescriptor(state: {
-  catalog: AgentSessionOptionCatalog | null
   record: StructuredAgentSessionOptionRecord
   permissionMode: string | null
-  pendingId?: string | null
   permissionOwnSupported?: boolean | null
   reportedPermissionMode?: string | null
 }): SessionOptionDescriptor | null {
@@ -78,16 +62,13 @@ export function structuredAgentSessionPermissionDescriptor(state: {
   if (!support || (!own && !support.modes.some((mode) => mode === state.permissionMode))) {
     return null
   }
+  // Without a report an explicit chat shows the saved mode its next turn applies; own has none.
   const current =
-    state.reportedPermissionMode === undefined && !own && state.permissionOwnSupported !== true
-      ? (state.permissionMode ?? undefined)
-      : (state.reportedPermissionMode ?? undefined)
-  const offered = offeredChatPermissionModes(
-    support,
-    state.permissionMode === 'auto' ||
-      current === 'auto' ||
-      (state.pendingId !== 'model' && currentModelSupportsAutoMode(state.catalog, state.record))
-  )
+    state.reportedPermissionMode !== undefined
+      ? (state.reportedPermissionMode ?? undefined)
+      : own
+        ? undefined
+        : (state.permissionMode ?? undefined)
   const reported = support.modes.find((mode) => mode === current)
   const label = reported
     ? MODE_COPY[reported].label
@@ -104,7 +85,7 @@ export function structuredAgentSessionPermissionDescriptor(state: {
     kind: {
       type: 'select',
       currentValue: current,
-      choices: offered.map((value) => ({
+      choices: support.modes.map((value) => ({
         value,
         label: MODE_COPY[value].label,
         description: agentDescriptions(state.record.agent)[value] ?? MODE_COPY[value].description

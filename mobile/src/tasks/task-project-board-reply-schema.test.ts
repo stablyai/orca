@@ -1,4 +1,11 @@
+import { deepStrictEqual } from 'node:assert/strict'
 import { describe, expect, it } from 'vitest'
+import { projectRelationsTableFixture } from '../../../src/shared/github/project-relations.test-fixture'
+import { sortRows, groupRows } from '../../../src/shared/github/project-group-sort'
+import {
+  normalizeProjectTableForMobileSort,
+  projectFieldDisplayLabel
+} from './mobile-tasks-project-fields'
 import {
   taskProjectAccessibleListSchema,
   taskProjectAssignableUserListSchema,
@@ -119,6 +126,34 @@ describe('the board table', () => {
       }
     })
     expect(parsed.success).toBe(true)
+  })
+
+  it('preserves new and legacy content through schema, mobile projection and visible labels', () => {
+    const table = projectRelationsTableFixture()
+    const parsed = taskProjectViewTableSchema.parse(
+      JSON.parse(JSON.stringify({ ok: true, data: table }))
+    )
+    if (!parsed.ok) {
+      throw new Error('Expected accepted table')
+    }
+    const decoded = parsed.data
+    deepStrictEqual(decoded, table)
+    const projected = normalizeProjectTableForMobileSort(decoded, decoded.rows, null)
+    const groups = groupRows(projected, sortRows(projected, projected.rows))
+    expect(groups.map((group) => group.label)).toEqual(['1', '2'])
+    const rows = groups.flatMap((group) => group.rows)
+    expect(rows.map((row) => row.id)).toEqual(['legacy', 'populated'])
+    expect(rows[1].content).toEqual(table.rows[0].content)
+    expect(rows[0].content).not.toHaveProperty('linkedPullRequests')
+    expect(rows[0].content).not.toHaveProperty('subIssuesProgress')
+    expect(
+      rows.map((row) =>
+        projected.selectedView.fields.map((field) => projectFieldDisplayLabel(row, field))
+      )
+    ).toEqual([
+      ['1', 'Empty', 'Empty'],
+      ['2', 'Empty', 'Empty']
+    ])
   })
 
   it('refuses a table with no selectedView, which was a read on undefined', () => {

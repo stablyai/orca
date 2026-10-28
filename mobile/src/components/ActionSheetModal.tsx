@@ -2,6 +2,8 @@ import { useRef, type ReactNode } from 'react'
 import { ActivityIndicator, View, Text, Pressable, StyleSheet } from 'react-native'
 import { Edit3, Trash2, type LucideIcon } from 'lucide-react-native'
 import { colors, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { BottomDrawer } from './BottomDrawer'
 
 export type ActionSheetAction = {
@@ -45,6 +47,7 @@ type ContentProps = {
 }
 
 export function ActionSheetContent({ title, message, children, actions, onClose }: ContentProps) {
+  useMobileColorScheme()
   return (
     <>
       {(title || message) && (
@@ -146,7 +149,7 @@ export function ActionSheetModal({ visible, title, message, actions, onClose }: 
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   header: {
     paddingHorizontal: spacing.xs,
     paddingBottom: spacing.sm
@@ -204,4 +207,4 @@ const styles = StyleSheet.create({
     fontSize: typography.metaSize,
     color: colors.textMuted
   }
-})
+}))

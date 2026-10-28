@@ -38,7 +38,7 @@ export function createPurgeStaleRuntimeHostState(
       set,
       get,
       () =>
-        set((s) => {
+        get().updateAgentStatusState((s, changedPaneKeys) => {
           const repoIdsWithRemovedOwners = new Set<string>()
           const survivingRepoIds = new Set<string>()
           const repoIdsWithSurvivingOwners = new Set<string>()
@@ -56,7 +56,7 @@ export function createPurgeStaleRuntimeHostState(
 
           // Why: a repoId-less setup on the removed host can still split a surviving project group, so drop every setup it owns.
           const survivingSetups: ProjectHostSetup[] = []
-          for (const setup of s.endpointProjectHostSetups) {
+          for (const setup of s.projectHostSetups) {
             if (isRemovedRuntimeHostId(setup.hostId, removed)) {
               if (setup.repoId) {
                 repoIdsWithRemovedOwners.add(setup.repoId)
@@ -68,7 +68,7 @@ export function createPurgeStaleRuntimeHostState(
               }
             }
           }
-          const setupsChanged = survivingSetups.length !== s.endpointProjectHostSetups.length
+          const setupsChanged = survivingSetups.length !== s.projectHostSetups.length
           const projectGroups = dropRuntimeHostedCatalogRows(s.projectGroups, removed)
           const folderWorkspaces = dropRuntimeHostedCatalogRows(s.folderWorkspaces, removed)
           const groupsChanged =
@@ -215,7 +215,9 @@ export function createPurgeStaleRuntimeHostState(
           })
           // Why full: survivor ids were dropped above unless the session partition proves the bare-id state is the removed host's.
           const purgeState =
-            purgeTargets.length > 0 ? buildFullWorktreePurgeState(s, purgeTargets) : {}
+            purgeTargets.length > 0
+              ? buildFullWorktreePurgeState(s, purgeTargets, changedPaneKeys)
+              : {}
           const visitPurgeTargets = [
             ...removedWorktreeTargets,
             ...purgeTargets.filter(
@@ -278,7 +280,7 @@ export function createPurgeStaleRuntimeHostState(
           return {
             ...purgeState,
             ...(reposChanged ? { repos: survivingRepos } : {}),
-            ...(setupsChanged ? { endpointProjectHostSetups: survivingSetups } : {}),
+            ...(setupsChanged ? { projectHostSetups: survivingSetups } : {}),
             ...(groupsChanged ? { projectGroups, folderWorkspaces } : {}),
             ...(worktreesChanged ? { worktreesByRepo: worktreeDrop.rowsByRepo } : {}),
             ...(detectedChanged ? { detectedWorktreesByRepo } : {}),

@@ -1,10 +1,4 @@
 import { describe, expect, it } from 'vitest'
-import { projectHostSetupCompatibilityFromRepos } from '../../shared/project-host-setup-projection'
-import type { Repo } from '../../shared/repo-types'
-import {
-  compileSessionSearchProjectOwnership,
-  sessionSearchProjectOwns
-} from './session-search-project-ownership'
 import type { WorktreeMeta } from '../../shared/worktree/meta-types'
 import { sessionSearchScopeCatalogFromStore } from './session-search-store-scope-catalog'
 
@@ -25,22 +19,16 @@ function meta(hostId: WorktreeMeta['hostId']): WorktreeMeta {
 }
 
 function store() {
-  const repos: Repo[] = [
-    { id: 'local-repo', path: '/work/app', displayName: 'app', badgeColor: '', addedAt: 0 },
-    {
-      id: 'ssh-repo',
-      path: '/srv/app',
-      connectionId: 'box',
-      displayName: 'app',
-      badgeColor: '',
-      addedAt: 1
-    }
-  ]
-  const projection = projectHostSetupCompatibilityFromRepos(repos)
   return {
-    getRepos: () => repos,
-    getProjects: () => projection.projects,
-    getProjectHostSetups: () => projection.setups,
+    getRepos: () => [
+      { id: 'local-repo', path: '/work/app' },
+      { id: 'ssh-repo', path: '/srv/app', connectionId: 'box' }
+    ],
+    getProjects: () => [{ id: 'proj-1', sourceRepoIds: ['local-repo'] }],
+    getProjectHostSetups: () => [
+      { projectId: 'proj-1', hostId: 'local' as const, repoId: 'local-repo', path: '/work/app' },
+      { projectId: 'proj-1', hostId: 'ssh:box' as const, repoId: 'ssh-repo', path: '/srv/app' }
+    ],
     getAllWorktreeMeta: () => ({
       'local-repo::/work/one': meta('local'),
       'ssh-repo::/srv/one': meta('ssh:box')
@@ -50,19 +38,16 @@ function store() {
 }
 
 describe('scope catalog from the profile store', () => {
-  it('captures every Repo/setup before projection and applies filesystem eligibility afterwards', async () => {
+  it('keeps only the rows the addressed execution host owns', () => {
     const local = sessionSearchScopeCatalogFromStore(store(), 'local')
-    expect(local.repos.map((repo) => repo.id)).toEqual(['local-repo', 'ssh-repo'])
-    expect(local.projectHostSetups.map((setup) => setup.repoId)).toEqual(['local-repo', 'ssh-repo'])
-    const selection = await compileSessionSearchProjectOwnership(local, 'repo:local-repo')
-    expect(sessionSearchProjectOwns(selection, '/work/app', '/native/session')).toBe(true)
-    expect(sessionSearchProjectOwns(selection, '/srv/app', '/native/session')).toBe(false)
+    expect(local.repos.map((repo) => repo.id)).toEqual(['local-repo'])
+    expect(local.projectHostSetups.map((setup) => setup.repoId)).toEqual(['local-repo'])
     expect(Object.keys(local.worktreeMeta)).toEqual(['local-repo::/work/one'])
   })
 
   it('answers for an SSH host from that host’s own rows, not the desktop’s', () => {
     const remote = sessionSearchScopeCatalogFromStore(store(), 'ssh:box')
-    expect(remote.repos.map((repo) => repo.id)).toEqual(['local-repo', 'ssh-repo'])
+    expect(remote.repos.map((repo) => repo.id)).toEqual(['ssh-repo'])
     expect(Object.keys(remote.worktreeMeta)).toEqual(['ssh-repo::/srv/one'])
   })
 

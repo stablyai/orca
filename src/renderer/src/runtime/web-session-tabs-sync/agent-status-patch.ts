@@ -17,7 +17,7 @@ import type {
 import {
   isClientOwnedAgentStatus,
   isMirroredAgentStatusOwnedBy,
-  isFencedClientAgentStatus,
+  clientAgentStatusFencesHost,
   hostAgentStatusPiercesClientAuthority,
   isMirroredAgentPaneKeyForTabs,
   batchAgentPaneKeysForTabs,
@@ -93,11 +93,14 @@ export function buildMirroredAgentStatusPatch(
       existing.state !== 'done' &&
       existing.stateStartedAt > entry.stateStartedAt
     // Cross-machine clocks cannot arbitrate live byte ownership; keep client state except host-only classes, adopting host identity below.
-    const clientOwnsEntry =
-      isFencedClientAgentStatus(entry.paneKey, existing, now) &&
-      !hostAgentStatusPiercesClientAuthority(entry)
+    const hostPiercesAuthority = hostAgentStatusPiercesClientAuthority(entry)
+    const clientOwnsEntry = clientAgentStatusFencesHost(entry.paneKey, existing, entry, now)
     const nextEntry =
-      existing && (clientOwnsEntry || existing.updatedAt > entry.updatedAt)
+      existing &&
+      (clientOwnsEntry ||
+        (!hostPiercesAuthority &&
+          isAgentStatusFresh(existing, now) &&
+          existing.updatedAt > entry.updatedAt))
         ? {
             ...normalizeCompatibleAgentStatusEntryForOwner(existing, entry.agentType),
             ...(clientOwnsEntry && existing.state === 'working' && entry.state === 'working'

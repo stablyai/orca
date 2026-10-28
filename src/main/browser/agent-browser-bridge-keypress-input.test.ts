@@ -48,6 +48,7 @@ vi.mock('./cdp-ws-proxy', () => ({
 
 import { AgentBrowserBridge } from './agent-browser-bridge'
 import {
+  agentBrowserCommandsIn,
   createSucceedWith,
   mockBrowserManager,
   mockWebContents,
@@ -226,13 +227,7 @@ describe('AgentBrowserBridge keypress input', () => {
     })
 
     expect(keyEventCalls(wc)).toHaveLength(0)
-    const pressCall = execFileMock.mock.calls
-      .map(([, commandArgs]) => commandArgs)
-      .filter(isStringArray)
-      .find((commandArgs) => commandArgs.includes('press'))
-    expect(pressCall).toBeDefined()
-    const args = pressCall ?? []
-    expect(args[args.indexOf('press') + 1]).toBe('MediaPlayPause')
+    expect(agentBrowserCommandsIn(stdinWrites)).toContainEqual(['press', 'MediaPlayPause'])
   })
 
   it('rejects with tab not found when the page is gone', async () => {

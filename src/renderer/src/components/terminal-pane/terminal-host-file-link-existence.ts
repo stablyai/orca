@@ -32,8 +32,9 @@ export async function hostFileLinkTargetExists(
   let exists: boolean
   try {
     exists =
-      (await resolveHostWorkspaceFile(target.fileContext, target.absolutePath, terminalHandle)) !==
-      null
+      (await resolveHostWorkspaceFile(target.fileContext, target.absolutePath, {
+        terminalHandle
+      })) !== null
   } catch (error) {
     if (!(error instanceof HostFileRefusal)) {
       throw error

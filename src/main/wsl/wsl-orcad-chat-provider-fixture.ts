@@ -20,30 +20,62 @@ export async function writeChatFixtureFile(
   )
 }
 
-/** Install the existing SDK wire fixture with the guest's packaged runtime, never a Windows CLI. */
+/** Guest dir the lane's login profile puts first on PATH, before WSL's appended Windows entries. */
+export const WSL_CHAT_GUEST_BIN = 'orca-lane-chat-bin'
+
+/** Each guest CLI the lane installs: the provider fixture script it runs, from this repo. */
+const GUEST_CLI_FIXTURES = {
+  claude: 'src/main/claude/__fixtures__/claude-agent-sdk-scripted-cli.mjs',
+  codex: 'src/main/codex/__fixtures__/codex-app-server-scripted-cli.mjs',
+  grok: 'src/main/acp/__fixtures__/grok-acp-scripted-cli.mjs'
+} as const
+
+export type WslChatGuestAgent = keyof typeof GUEST_CLI_FIXTURES
+
+export type WslGuestCli = { script: string; cli: string }
+
+/** Where a scripted provider reports its launch and waits for the test to see its partial reply. */
+export type WslScriptedProviderInstall = WslGuestCli & {
+  agent: 'codex' | 'grok'
+  accountHome: string
+  reportPath: string
+  ackPath: string
+}
+
+/** Install each wire fixture as its agent's command on the guest's login PATH, run by the guest's packaged runtime. */
 export async function installWslChatFixture(lane: WslChatHost) {
   const home = (await lane.guest('printf %s "$HOME"')).trim()
   const root = `${home}/wsl chat fixture`
-  await lane.guest(`mkdir -p ${quotePosixShell(root)}`)
+  const dirs = [`${root}/codex-home`, `${root}/grok-home`, `${home}/${WSL_CHAT_GUEST_BIN}`]
+  await lane.guest(`mkdir -p ${dirs.map(quotePosixShell).join(' ')}`)
   const runtime = (await lane.guest(`readlink -f /proc/${lane.runtimePid}/exe`)).trim()
-  const script = `${root}/scripted.mjs`
-  const cli = `${root}/claude`
-  await writeChatFixtureFile(
-    lane,
-    script,
-    readFileSync(resolve('src/main/claude/__fixtures__/claude-agent-sdk-scripted-cli.mjs'), 'utf8')
-  )
-  await writeChatFixtureFile(
-    lane,
-    cli,
-    `#!/bin/sh\nexec ${quotePosixShell(runtime)} ${quotePosixShell(script)} "$@"\n`
-  )
-  await lane.guest(`chmod 700 ${quotePosixShell(cli)}`)
-  await lane.rpc('settings.mutateAgentLaunch', {
-    type: 'command',
-    agent: 'claude',
-    value: quotePosixShell(cli)
+  const installCli = async (agent: WslChatGuestAgent): Promise<WslGuestCli> => {
+    const script = `${root}/${agent}-scripted.mjs`
+    const cli = `${home}/${WSL_CHAT_GUEST_BIN}/${agent}`
+    await writeChatFixtureFile(
+      lane,
+      script,
+      readFileSync(resolve(GUEST_CLI_FIXTURES[agent]), 'utf8')
+    )
+    await writeChatFixtureFile(
+      lane,
+      cli,
+      `#!/bin/sh\nexport ORCA_LANE_CLI_WRAPPER="$0"\nexec ${quotePosixShell(runtime)} ${quotePosixShell(script)} "$@"\n`
+    )
+    await lane.guest(`chmod 700 ${quotePosixShell(cli)}`)
+    return { script, cli }
+  }
+  const claude = await installCli('claude')
+  const scripted = async (agent: 'codex' | 'grok'): Promise<WslScriptedProviderInstall> => ({
+    ...(await installCli(agent)),
+    agent,
+    accountHome: `${root}/${agent}-home`,
+    reportPath: `${root}/${agent}-report.json`,
+    ackPath: `${root}/${agent}-partial-observed`
   })
+  const codex = await scripted('codex')
+  const grok = await scripted('grok')
+  // No Command setting: orcad must find each CLI the way a user's install is found.
   await lane.rpc('settings.update', {
     nativeChatPermissionMode: 'ask',
     agentDefaultEnv: {
@@ -51,6 +83,16 @@ export async function installWslChatFixture(lane: WslChatHost) {
         ORCA_SDK_CONTRACT_SCENARIO_PATH: `${root}/scenario.json`,
         ORCA_SDK_CONTRACT_REPORT_PATH: `${root}/report.json`,
         ORCA_SDK_CONTRACT_TIMEOUT_MS: '120000'
+      },
+      codex: {
+        CODEX_HOME: codex.accountHome,
+        ORCA_CODEX_CONTRACT_REPORT_PATH: codex.reportPath,
+        ORCA_CODEX_CONTRACT_ACK_PATH: codex.ackPath
+      },
+      grok: {
+        GROK_HOME: grok.accountHome,
+        ORCA_ACP_CONTRACT_REPORT_PATH: grok.reportPath,
+        ORCA_ACP_CONTRACT_ACK_PATH: grok.ackPath
       }
     }
   })
@@ -64,7 +106,15 @@ export async function installWslChatFixture(lane: WslChatHost) {
     folderPath,
     name: 'WSL folder chat'
   })
-  return { home, root, folderPath, folderWorktree: folderWorkspaceKey(folder.folderWorkspace.id) }
+  return {
+    home,
+    root,
+    ...claude,
+    codex,
+    grok,
+    folderPath,
+    folderWorktree: folderWorkspaceKey(folder.folderWorkspace.id)
+  }
 }
 
 export const WslChatProviderReport = z.object({

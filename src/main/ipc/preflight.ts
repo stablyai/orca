@@ -1,4 +1,5 @@
 import { ipcMain } from 'electron'
+import type { Store } from '../persistence'
 import {
   detectRemoteWindowsTerminalCapabilities,
   runPreflightCheck
@@ -12,7 +13,18 @@ import type {
 
 import { readZCodeInteractiveCapability } from '../zcode/interactive-capability'
 
-export function registerPreflightHandlers(): void {
+type AgentDetectionRequest = PreflightRuntimeContext & { enabledOnly?: boolean }
+
+export function registerPreflightHandlers(store?: Pick<Store, 'getSettings'>): void {
+  const detectionOptions = (args?: AgentDetectionRequest) => {
+    if (!args?.enabledOnly) {
+      return undefined
+    }
+    if (!store) {
+      throw new Error('Agent detection settings unavailable')
+    }
+    return { disabledTuiAgents: store.getSettings().disabledTuiAgents }
+  }
   ipcMain.handle(
     'preflight:check',
     async (
@@ -23,16 +35,16 @@ export function registerPreflightHandlers(): void {
     }
   )
 
-  ipcMain.handle('preflight:detectAgents', async (_event, args?: PreflightRuntimeContext) =>
-    detectAgentsOnHost({ kind: 'local', context: args })
+  ipcMain.handle('preflight:detectAgents', async (_event, args?: AgentDetectionRequest) =>
+    detectAgentsOnHost({ kind: 'local', context: args }, detectionOptions(args))
   )
 
   ipcMain.handle('preflight:zcodeInteractiveCapability', async () =>
     readZCodeInteractiveCapability()
   )
 
-  ipcMain.handle('preflight:refreshAgents', async (_event, args?: PreflightRuntimeContext) => {
-    return refreshAgentsOnHost({ kind: 'local', context: args })
+  ipcMain.handle('preflight:refreshAgents', async (_event, args?: AgentDetectionRequest) => {
+    return refreshAgentsOnHost({ kind: 'local', context: args }, detectionOptions(args))
   })
 
   ipcMain.handle(

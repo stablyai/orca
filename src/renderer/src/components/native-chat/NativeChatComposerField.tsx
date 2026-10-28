@@ -5,7 +5,10 @@ import { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
 import { flushSync } from 'react-dom'
 import type { useImeEnterGestureOwnership } from '@/lib/ime-composition-keyboard-event'
 import { cn } from '@/lib/utils'
-import type { ComposerAutocomplete, NativeChatPickerItem } from './native-chat-composer-state'
+import type {
+  ComposerAutocomplete,
+  NativeChatPickerItem
+} from '../../../../shared/native-chat-composer-autocomplete'
 import { NativeChatMentionMenu, NativeChatPickerMenu } from './NativeChatAutocompleteMenus'
 import type { NativeChatMentionFiles } from './use-native-chat-mention-files'
 import { NativeChatComposerActions } from './NativeChatComposerActions'
@@ -19,7 +22,7 @@ import {
 import type {
   SessionOptionDescriptor,
   SessionOptionsSurface
-} from '../../../../shared/native-chat-session-options'
+} from '../../../../shared/native-chat/input/native-chat-session-options'
 import type { NativeChatOptionPickerRequest } from './native-chat-composer-types'
 import { NativeChatImageAttachmentPreview } from './NativeChatImageAttachmentPreview'
 import type { NativeChatComposerGoalMode } from './use-native-chat-composer-submit'
@@ -27,6 +30,7 @@ import { translate } from '@/i18n/i18n'
 import { useNativeChatComposerDraftUnsaved } from './use-native-chat-draft-unsaved'
 
 export type NativeChatComposerFieldProps = {
+  editSession?: { cancel: () => void }
   /** Own draft persistence and native-drop routing by this pane so drops cannot land in another composer. */
   draftScopeKey: string
   textareaRef: RefObject<NativeChatComposerInput | null>
@@ -114,6 +118,7 @@ function imeComposedSegment(base: string, settled: string): string {
 }
 
 export function NativeChatComposerField({
+  editSession,
   draftScopeKey,
   textareaRef,
   draft,
@@ -313,12 +318,14 @@ export function NativeChatComposerField({
                   : undefined
               }
               placeholder={
-                goalMode?.active
-                  ? translate(
-                      'components.native-chat.goal.placeholder',
-                      'Describe your goal, define measurable outcomes for best results'
-                    )
-                  : (unavailableHint ?? nativeChatComposerPlaceholder(hasPty, canSend, afterStop))
+                editSession
+                  ? translate('components.native-chat.queuedMessages.editMessage', 'Edit message')
+                  : goalMode?.active
+                    ? translate(
+                        'components.native-chat.goal.placeholder',
+                        'Describe your goal, define measurable outcomes for best results'
+                      )
+                    : (unavailableHint ?? nativeChatComposerPlaceholder(hasPty, canSend, afterStop))
               }
               // Let layout handle wrapping and touch targets; scroll after eight lines without JavaScript measurement.
               className={cn(
@@ -330,6 +337,7 @@ export function NativeChatComposerField({
             />
             <div className="flex flex-wrap items-center gap-2 pt-0.5">
               <NativeChatComposerActions
+                editSession={editSession}
                 attachDisabled={attachDisabled}
                 dictationDisabled={dictationDisabled}
                 sendDisabled={sendButtonDisabled}

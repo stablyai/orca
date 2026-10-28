@@ -4,6 +4,9 @@ import type { TerminalEngineError } from './document-host-seams'
 export type { TerminalEngineError } from './document-host-seams'
 
 export function notify(scope: TerminalDocumentScope, msg: Record<string, unknown>) {
+  if (!scope.interactionActive && (msg.type === 'terminal-input' || msg.type === 'terminal-tap')) {
+    return
+  }
   scope.postToHost(msg)
 }
 

@@ -7,6 +7,7 @@ import type { GitRemoteIdentity } from './git-remote-identity'
 import type { RepoSourceControlAiOverrides } from './source-control-ai-types'
 import type { RepoProjectHostSetupMethod } from './project-types'
 import type { JiraProjectReference } from './jira/jira-project-reference'
+import type { OrcadRetainedMarker } from './orcad-retained-marker'
 
 export type RepoKind = 'git' | 'folder'
 
@@ -95,6 +96,8 @@ export type Repo = {
   sourceControlAi?: RepoSourceControlAiOverrides
   /** Transitional source for ProjectHostSetup.setupMethod while Repo remains compatibility storage. */
   projectHostSetupMethod?: RepoProjectHostSetupMethod
+  /** Local row a WSL host now owns, kept for a downgrade; set only by the mover's retention pass. */
+  orcadRetained?: OrcadRetainedMarker
 }
 
 /** Shared IPC shape for repos:getBaseRefDefault across main/preload/renderer; remoteCount avoids a second hint lookup. */

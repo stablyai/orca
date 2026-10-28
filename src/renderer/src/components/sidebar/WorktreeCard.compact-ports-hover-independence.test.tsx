@@ -24,9 +24,6 @@ let settings: Partial<GlobalSettings> | null = { compactWorktreeCards: true }
 
 vi.mock('@/store', () => {
   const getState = () => ({
-    repos: [makeRepo()],
-    endpointProjects: [],
-    endpointProjectHostSetups: [],
     browserTabsByWorktree: {},
     agentActivityDisplayMode: undefined,
     createBrowserTab: vi.fn(),

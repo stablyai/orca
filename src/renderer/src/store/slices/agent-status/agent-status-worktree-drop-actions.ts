@@ -20,7 +20,7 @@ export function createAgentStatusWorktreeDropActions(
   return {
     dropAgentStatusByWorktree: (worktreeId, opts?: DropAgentStatusByWorktreeOptions) => {
       let hadLive = false
-      set((s) => {
+      set((s, changedPaneKeys) => {
         const tabPrefixes = (s.tabsByWorktree[worktreeId] ?? []).map((tab) => `${tab.id}:`)
         // An open chat's row is its host's: the chat tab's projection removes it on close.
         const chatTabIds = openNonTerminalTabIds(s, worktreeId)
@@ -118,6 +118,7 @@ export function createAgentStatusWorktreeDropActions(
         const nextLive =
           liveKeys.length > 0 ? { ...s.agentStatusByPaneKey } : s.agentStatusByPaneKey
         for (const key of liveKeys) {
+          changedPaneKeys.add(key)
           delete nextLive[key]
         }
         const nextLaunchConfigs =

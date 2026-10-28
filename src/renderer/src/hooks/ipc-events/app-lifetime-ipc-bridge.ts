@@ -1,4 +1,5 @@
 import { observeJiraImageHostStatus } from '@/runtime/runtime-jira-image-cache'
+import { observeRuntimeHostStatusForPendingRemovals } from '@/store/repos/pending-runtime-repo-removal-replay'
 import type { RuntimeHostStatusSnapshot } from '../../../../shared/runtime-host-status'
 import { getTabIdsAwaitingHostHydrationRemount } from '@/lib/parked-terminal-host-hydration'
 import { emitAutomationsChangedWindowEvent } from '@/lib/automations-changed-window-event'
@@ -8,7 +9,11 @@ import { resetAgentHookCompletionNotificationCoordinators } from '../agent-hook-
 import { useAppStore } from '../../store'
 import { registerAgentStatusIpcBridge } from './agent-status-ipc-bridge'
 import { registerBackgroundWorktreeRemovalBridge } from './background-worktree-removal-bridge'
-import { registerBrowserRequestIpcBridge } from './browser-request-ipc-bridge'
+import {
+  registerBrowserRequestIpcBridge,
+  signalBrowserTabRequestsReadyAfterRestore
+} from './browser-request-ipc-bridge'
+import { registerBrowserTabActivateIpcBridge } from './browser-tab-activate-ipc-bridge'
 import { registerBrowserStateIpcBridge } from './browser-state-ipc-bridge'
 import { registerContentCreationIpcBridge } from './content-creation-ipc-bridge'
 import { registerDirectSshStateIpcBridge } from './direct-ssh-state-ipc-bridge'
@@ -21,6 +26,7 @@ import { registerRateLimitIpcBridge } from './rate-limit-ipc-bridge'
 import { registerRuntimeClientIpcBridge } from './runtime-client-ipc-bridge'
 import { registerSessionTabIpcBridge } from './session-tab-ipc-bridge'
 import { registerSettingsAndSidebarIpcBridge } from './settings-sidebar-ipc-bridge'
+import { registerQuitAndStopAllSessionsIpcBridge } from './quit-and-stop-all-sessions-ipc-bridge'
 import { registerTabLifecycleIpcBridge } from './tab-lifecycle-ipc-bridge'
 import { registerTerminalPresentationIpcBridge } from './terminal-presentation-ipc-bridge'
 import { registerPtySourceDisownedIpcBridge } from './pty-source-disowned-ipc-bridge'
@@ -59,6 +65,7 @@ export function installAppLifetimeIpcEvents(): () => void {
   if (statusApi?.onStatusChanged) {
     const apply = (snapshot: RuntimeHostStatusSnapshot): void => {
       useAppStore.getState().applyRuntimeHostStatusSnapshot(snapshot)
+      observeRuntimeHostStatusForPendingRemovals(snapshot)
       remoteRuntimeTerminalColorPush.observeStatusSnapshot(snapshot)
       observeJiraImageHostStatus(snapshot)
     }
@@ -85,6 +92,7 @@ export function installAppLifetimeIpcEvents(): () => void {
     remountTerminalTabsAwaitingHostHydration
   )
   registerSettingsAndSidebarIpcBridge(unsubs)
+  registerQuitAndStopAllSessionsIpcBridge(unsubs)
   registerOrcaProfileAuthIpcBridge(unsubs)
   registerWorkspaceShortcutIpcBridge(unsubs)
   registerOsMarkdownFileOpenBridge(unsubs)
@@ -122,6 +130,8 @@ export function installAppLifetimeIpcEvents(): () => void {
   registerBrowserStateIpcBridge(unsubs, isRuntimeEnvironmentActive)
   registerContentCreationIpcBridge(unsubs, isRuntimeEnvironmentActive)
   registerBrowserRequestIpcBridge(unsubs)
+  signalBrowserTabRequestsReadyAfterRestore(unsubs)
+  registerBrowserTabActivateIpcBridge(unsubs)
   registerTabLifecycleIpcBridge(unsubs)
   registerRateLimitIpcBridge(unsubs)
   const stopDirectSshStateBridge = registerDirectSshStateIpcBridge(unsubs)

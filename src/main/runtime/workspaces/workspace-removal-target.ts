@@ -6,6 +6,7 @@ import type {
   RuntimeWorktreeRemovalTarget
 } from '../runtime-worktree-selection'
 import { resolveRuntimeWorktreeRemovalTarget } from '../runtime-worktree-removal-target'
+import type { LocalProjectWorktreeGitOptions } from '../../project-runtime-git-options'
 import type { RuntimeStore } from '../runtime-store-contract'
 import { splitWorktreeId, worktreeIdsEqual } from '../../../shared/worktree/id'
 import { hasWorktreeRemovalRepoOwnerOnOtherHost } from '../../worktree-removal-repo-owner'
@@ -63,7 +64,7 @@ export abstract class OrcaRuntimeWithResolveWorktreeRemovalTarget extends OrcaRu
     return resolveRuntimeWorktreeRemovalTarget({
       selector: worktreeSelector,
       store: this.store,
-      resolveWorktree: (selector) => this.resolveWorktreeSelector(selector),
+      resolveWorktree: (selector) => this.resolveGitWorktreeSelector(selector),
       resolveExplicitWorktreeIdScoped: (worktreeId, hostId) =>
         this.resolveExplicitWorktreeIdScoped(worktreeId, hostId),
       ...(requiredHostId ? { requiredHostId } : {})
@@ -87,12 +88,13 @@ export abstract class OrcaRuntimeWithResolveWorktreeRemovalTarget extends OrcaRu
     return waitForPendingWorktreeRemoval(worktreeId, parseExecutionHostId(options.hostId)?.id)
   }
 
-  /** Finish a failed local removal only while Git still omits the path and the directory is gone; refuse while it exists. */
+  /** Failed intent schedules a retry; current Git/filesystem proof still controls every deletion. */
   protected async retryFailedRemoval(
     route: { kind: string },
     target: { id: string; path: string },
     registeredWorktrees: readonly GitWorktreeInfo[],
-    options: RemoveManagedWorktreeOptions
+    options: RemoveManagedWorktreeOptions,
+    localOptions: LocalProjectWorktreeGitOptions
   ): Promise<boolean> {
     const store = this.store
     if (route.kind !== 'local' || !store) {
@@ -100,16 +102,25 @@ export abstract class OrcaRuntimeWithResolveWorktreeRemovalTarget extends OrcaRu
     }
     const hostId = parseExecutionHostId(options.hostId)?.id
     const allowUnverifiedPtyStop = options.allowUnverifiedPtyStop === true
-    return retryFailedRemovalUnlessRegistered(target.id, target.path, registeredWorktrees, () =>
-      retryFailedWorktreeRemoval(target.id, hostId, (record) =>
-        interruptedLocalWorktreeRemovalJob(record, {
-          ...this.localRemovalJobHost(store),
-          stopPtys: () =>
-            this.stopPtysForDestructiveWorktreeRemoval(record.worktreeId, {
-              allowUnverifiedStop: allowUnverifiedPtyStop
-            })
-        })
-      )
+    return retryFailedRemovalUnlessRegistered(
+      target.id,
+      target.path,
+      registeredWorktrees,
+      localOptions,
+      () =>
+        retryFailedWorktreeRemoval(
+          target.id,
+          hostId,
+          (record) =>
+            interruptedLocalWorktreeRemovalJob(record, {
+              ...this.localRemovalJobHost(store),
+              stopPtys: () =>
+                this.stopPtysForDestructiveWorktreeRemoval(record.worktreeId, {
+                  allowUnverifiedStop: allowUnverifiedPtyStop
+                })
+            }),
+          options.force === true
+        )
     )
   }
 

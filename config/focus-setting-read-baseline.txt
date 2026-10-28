@@ -3,7 +3,8 @@
 # This is a RATCHET: counts may only go DOWN. Only creation flows with no source row may read
 # the default host, through defaultCreationHost. Everything else routes by the owner.
 # Prune after removing reads: pnpm check:focus-read-ratchet --prune
-3 src/renderer/src/app-shell/use-app-shell-services.ts
+1 src/renderer/src/app-shell/ActiveWorkspaceSyncGate.tsx
+2 src/renderer/src/app-shell/use-app-shell-services.ts
 2 src/renderer/src/App.tsx
 1 src/renderer/src/component-fixtures/component-fixture-explorer.tsx # dev-only fixture page seeds default settings
 1 src/renderer/src/components/activity/activity-scope-filter-controls.tsx
@@ -138,7 +139,6 @@
 1 src/renderer/src/components/sidebar/worktree-filter-visibility.ts
 1 src/renderer/src/components/sidebar/worktree-list/listing/use-filters.ts
 1 src/renderer/src/components/sidebar/worktree-list/listing/use-section-rows.ts
-1 src/renderer/src/components/sidebar/worktree-list/listing/use-window-list-model.ts
 1 src/renderer/src/components/sidebar/worktree-list/rows/ProjectGroupDialogs.tsx
 1 src/renderer/src/components/sidebar/worktree-visibility-host-target.ts
 1 src/renderer/src/components/sidebar/WorktreeList.tsx
@@ -184,8 +184,8 @@
 4 src/renderer/src/components/terminal/terminal-tab-bulk-actions.ts
 2 src/renderer/src/components/terminal/terminal-tab-create.ts
 2 src/renderer/src/components/use-new-linear-issue-projects.ts
-4 src/renderer/src/components/use-task-page-jira-creation-metadata.ts
-4 src/renderer/src/components/use-task-page-jira-issue-creation.ts
+4 src/renderer/src/components/task-page/jira/use-task-page-jira-creation-metadata.ts
+4 src/renderer/src/components/task-page/jira/use-task-page-jira-issue-creation.ts
 1 src/renderer/src/components/use-task-page-jira-list-effects.ts
 2 src/renderer/src/components/task-page/use-task-page-provider-metadata.ts
 2 src/renderer/src/components/task-page/use-task-page-store-bindings.ts

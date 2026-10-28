@@ -181,8 +181,8 @@ function normalizeInterpolationVariables(value) {
     .join('|')
 }
 
-function formatInconsistentFallbackVariables(inconsistentFallbackVariables) {
-  return inconsistentFallbackVariables
+function formatFallbackReferenceGroups(groups) {
+  return groups
     .map(({ key, references }) => {
       const locations = references
         .map(
@@ -195,7 +195,7 @@ function formatInconsistentFallbackVariables(inconsistentFallbackVariables) {
     .join('\n\n')
 }
 
-function collectInconsistentFallbackVariables(references) {
+function groupFallbackReferencesByKey(references) {
   const byKey = new Map()
 
   for (const reference of references) {
@@ -206,8 +206,30 @@ function collectInconsistentFallbackVariables(references) {
     existing.push(reference)
     byKey.set(reference.key, existing)
   }
+  return byKey
+}
 
-  return [...byKey.entries()]
+// Why: the catalog holds one value per key, so a second sentence on the same key never renders.
+function collectReusedFallbackKeys(references) {
+  return [...groupFallbackReferencesByKey(references).entries()]
+    .filter(([, keyReferences]) => new Set(keyReferences.map((r) => r.fallback)).size > 1)
+    .map(([key, keyReferences]) => ({ key, references: keyReferences }))
+}
+
+/** Prints keys reused for different fallback text; returns true when any exist. */
+function reportReusedFallbackKeys(references) {
+  const reusedFallbackKeys = collectReusedFallbackKeys(references)
+  if (reusedFallbackKeys.length === 0) {
+    return false
+  }
+  console.error('Localization keys are reused for different fallback text; give each its own key.')
+  console.error('')
+  console.error(formatFallbackReferenceGroups(reusedFallbackKeys))
+  return true
+}
+
+function collectInconsistentFallbackVariables(references) {
+  return [...groupFallbackReferencesByKey(references).entries()]
     .map(([key, keyReferences]) => {
       const uniqueFallbackVariables = new Set(
         keyReferences.map((reference) => normalizeInterpolationVariables(reference.fallback))
@@ -262,19 +284,40 @@ function setCatalogEntry(catalog, key, value) {
   cursor[parts.at(-1)] = value
 }
 
-function collectLocaleParityIssues(enCatalog, localeCatalog) {
+// Locales with more CLDR plural categories than English (ru few/many) source those forms from `_other`.
+function resolveLocaleSourceKey(enEntries, localeName, key) {
+  if (enEntries.has(key)) {
+    return key
+  }
+  const plural = /^(.*)_(zero|one|two|few|many|other)$/.exec(key)
+  if (!plural || !localeName || !enEntries.has(`${plural[1]}_other`)) {
+    return undefined
+  }
+  try {
+    return new Intl.PluralRules(localeName).resolvedOptions().pluralCategories.includes(plural[2])
+      ? `${plural[1]}_other`
+      : undefined
+  } catch {
+    return undefined
+  }
+}
+
+function collectLocaleParityIssues(enCatalog, localeCatalog, localeName) {
   const enEntries = flattenCatalogEntries(enCatalog)
   const localeEntries = flattenCatalogEntries(localeCatalog)
   const missingInLocale = [...enEntries.keys()].filter((key) => !localeEntries.has(key))
-  const extraInLocale = [...localeEntries.keys()].filter((key) => !enEntries.has(key))
+  const extraInLocale = [...localeEntries.keys()].filter(
+    (key) => !resolveLocaleSourceKey(enEntries, localeName, key)
+  )
   const interpolationMismatches = []
 
-  for (const key of enEntries.keys()) {
-    if (!localeEntries.has(key)) {
+  for (const [key, localeValue] of localeEntries) {
+    const sourceKey = resolveLocaleSourceKey(enEntries, localeName, key)
+    if (!sourceKey) {
       continue
     }
-    const enVariables = collectInterpolationVariables(enEntries.get(key))
-    const localeVariables = collectInterpolationVariables(localeEntries.get(key))
+    const enVariables = collectInterpolationVariables(enEntries.get(sourceKey))
+    const localeVariables = collectInterpolationVariables(localeValue)
     if (enVariables.join('|') !== localeVariables.join('|')) {
       interpolationMismatches.push(key)
     }
@@ -400,7 +443,7 @@ async function readCatalogFile(catalogPath) {
 
 function verifyLocaleCatalog(enCatalog, localeName, localeCatalog) {
   const { enEntries, localeEntries, missingInLocale, extraInLocale, interpolationMismatches } =
-    collectLocaleParityIssues(enCatalog, localeCatalog)
+    collectLocaleParityIssues(enCatalog, localeCatalog, localeName)
   const genericTermRegressions = collectGenericTermRegressions(enEntries, localeEntries, localeName)
 
   // Feature PRs own English declarations; missing target translations use i18next fallback until localization supplies them.
@@ -551,6 +594,11 @@ export async function main(
   let catalogKeys = new Set(flattenCatalogKeys(catalog))
   const references = sharedReferences ?? (await collectLocalizationReferences(root))
 
+  // Why: runs before --fix so an ambiguous key never gets its first sentence written to en.json.
+  if (reportReusedFallbackKeys(references)) {
+    return 1
+  }
+
   const missing = references.filter((reference) => !catalogKeys.has(reference.key))
   if (missing.length > 0) {
     const missingFallbacks = referencesMissingFallbacks(missing)
@@ -587,7 +635,7 @@ export async function main(
   if (inconsistentFallbackVariables.length > 0) {
     console.error('Localization keys are used with inconsistent interpolation placeholders.')
     console.error('')
-    console.error(formatInconsistentFallbackVariables(inconsistentFallbackVariables))
+    console.error(formatFallbackReferenceGroups(inconsistentFallbackVariables))
     return 1
   }
 

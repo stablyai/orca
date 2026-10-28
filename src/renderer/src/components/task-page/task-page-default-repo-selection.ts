@@ -1,12 +1,10 @@
 import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import {
-  projectHostSetupProjectionFromRepos,
+  getProjectIdentityKey,
   hasProjectRemoteIdentity,
   isProjectRemoteIdentityPending
 } from '../../../../shared/project-host-setup-projection'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
-import type { ProjectHostSetup } from '../../../../shared/project-types'
-import { getProjectHostSetupLookup } from '../../../../shared/project-host-setup-lookup'
 import type { Repo } from '../../../../shared/repo-types'
 
 export type TaskProjectPickerGroup = {
@@ -25,10 +23,9 @@ export function getTaskEligibleRepos(repos: readonly Repo[]): Repo[] {
 }
 
 export function getDefaultTaskRepoSelection(repos: readonly Repo[]): Set<string> {
-  const setups = projectHostSetupProjectionFromRepos(repos).setups
   const selectedByProject = new Map<string, Repo>()
   for (const repo of repos) {
-    const projectKey = getTaskRepoProjectKey(repo, setups)
+    const projectKey = getTaskRepoProjectKey(repo)
     const current = selectedByProject.get(projectKey)
     if (!current || compareDefaultTaskRepoCandidate(repo, current) < 0) {
       selectedByProject.set(projectKey, repo)
@@ -41,10 +38,9 @@ export function getTaskProjectPickerGroups(
   repos: readonly Repo[],
   preferredSelection: ReadonlySet<string> = new Set()
 ): TaskProjectPickerGroup[] {
-  const setups = projectHostSetupProjectionFromRepos(repos).setups
   const groupsByProject = new Map<string, TaskProjectPickerGroup>()
   for (const repo of repos) {
-    const projectKey = getTaskRepoProjectKey(repo, setups)
+    const projectKey = getTaskRepoProjectKey(repo)
     const current = groupsByProject.get(projectKey)
     if (!current) {
       groupsByProject.set(projectKey, { projectKey, repo, sources: [repo] })
@@ -65,14 +61,13 @@ export function normalizeTaskRepoSelection(
   repos: readonly Repo[],
   selection: ReadonlySet<string>
 ): Set<string> {
-  const setups = projectHostSetupProjectionFromRepos(repos).setups
   const selectedByProject = new Map<string, Repo>()
   const selectedIds = new Set(selection)
   for (const repo of repos) {
     if (!selectedIds.has(repo.id)) {
       continue
     }
-    const projectKey = getTaskRepoProjectKey(repo, setups)
+    const projectKey = getTaskRepoProjectKey(repo)
     const current = selectedByProject.get(projectKey)
     if (!current || compareDefaultTaskRepoCandidate(repo, current) < 0) {
       selectedByProject.set(projectKey, repo)
@@ -84,13 +79,8 @@ export function normalizeTaskRepoSelection(
   return new Set([...selectedByProject.values()].map((repo) => repo.id))
 }
 
-export function getTaskRepoProjectKey(repo: Repo, setups: readonly ProjectHostSetup[]): string {
-  return (
-    getProjectHostSetupLookup(setups).projectId({
-      repoId: repo.id,
-      hostId: getRepoExecutionHostId(repo)
-    }) ?? `repo:${repo.id}`
-  )
+export function getTaskRepoProjectKey(repo: Repo): string {
+  return getProjectIdentityKey(repo)
 }
 
 function compareTaskProjectPickerCandidate(

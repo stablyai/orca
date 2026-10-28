@@ -7,7 +7,7 @@ import type { NativeChatBlock } from '../../../../shared/native-chat-types'
 import { NativeChatCopyButton } from './NativeChatCopyButton'
 import { NativeChatMessageTimestamp } from './NativeChatMessageTimestamp'
 import { nativeChatProviderFrameSummary } from '../../../../shared/native-chat/native-chat-provider-frame-summary'
-import { withoutNativeChatVisualDirectiveLines } from '../../../../shared/native-chat-visual-directive'
+import { withoutNativeChatVisualDirectiveLines } from '../../../../shared/native-chat/native-chat-visual-directive'
 import { PanZoomImageDialog } from '@/components/editor/PanZoomImageDialog'
 import {
   getLocalImageCacheKey,
@@ -17,7 +17,7 @@ import {
 } from '@/components/editor/useLocalImageSrc'
 import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
 import { copyableNativeChatImageSrc, keepPreviewOpenForChatMenu } from './native-chat-image-copy'
-import { isNativeChatPastedImagePath } from './native-chat-image-paste'
+import { isNativeChatPastedImagePath } from '../../../../shared/native-chat-image-label'
 import { nativeChatImageLabel } from './native-chat-image-label'
 import { chatImageAccess } from '@/lib/local-file-access'
 
@@ -202,7 +202,7 @@ export function NativeChatImageAttachments({
 }: {
   blocks: NativeChatBlock[]
   runtimeContext?: RuntimeFileOperationArgs | null
-  /** Keep legacy terminal chips unchanged until that lane opts into previews. */
+  /** Callers without an image owner get label-only chips. */
   enablePreview?: boolean
 }): React.JSX.Element | null {
   const images = blocks.filter((block) => block.type === 'image-ref')

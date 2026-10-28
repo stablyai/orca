@@ -3,7 +3,7 @@
 import type { CSSProperties, ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { tmpdir } from 'node:os'
-import { cleanup, render, waitFor } from '@testing-library/react'
+import { act, cleanup, render, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
@@ -58,6 +58,8 @@ vi.mock('./SetupScriptPromptCard', () => ({
 vi.mock('./WorktreeList', () => ({
   default: () => <div data-testid="worktree-list" />
 }))
+
+vi.mock('./WslMovedProjectsSection', () => ({ default: () => null }))
 
 vi.mock('./SidebarToolbar', () => ({
   default: () => <div data-testid="sidebar-toolbar" />
@@ -144,6 +146,24 @@ beforeEach(() => {
 afterEach(cleanup)
 
 describe('Sidebar', () => {
+  it('explains the incomplete workspace list until startup discovery finishes', () => {
+    vi.useFakeTimers()
+    try {
+      setSidebarState(getDefaultSettings(tmpdir()))
+      mocks.state = { ...mocks.state, startupWorktreeRefreshCompleted: false }
+      const view = render(sidebarElement())
+      expect(view.queryByRole('status')).toBeNull()
+      act(() => vi.advanceTimersByTime(200))
+      expect(view.getByRole('status').textContent).toContain('Discovering workspaces')
+      expect(view.getByRole('status').textContent).toContain('More workspaces may appear')
+      mocks.state = { ...mocks.state, startupWorktreeRefreshCompleted: true }
+      view.rerender(sidebarElement())
+      expect(view.queryByRole('status')).toBeNull()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('anchors the setup script popup to the bottom toolbar', () => {
     setSidebarState(getDefaultSettings(tmpdir()))
     const view = render(sidebarElement())

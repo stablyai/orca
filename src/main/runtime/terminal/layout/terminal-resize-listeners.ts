@@ -224,7 +224,7 @@ export abstract class OrcaRuntimeWithSubscribeToTerminalResize extends OrcaRunti
     return this.runWorktreeTerminalMutation(workspace.id, async () => {
       const resolvedWorkspace = workspace.folderWorkspace
         ? this.folderWorkspaceToResolvedWorktree(workspace.folderWorkspace)
-        : await this.resolveWorktreeSelector(`id:${workspace.id}`)
+        : await this.resolveGitWorktreeSelector(`id:${workspace.id}`)
       const inventory = await this.refreshPtyWorktreeRecordsWithControllerInventory(
         [resolvedWorkspace],
         workspace.id,

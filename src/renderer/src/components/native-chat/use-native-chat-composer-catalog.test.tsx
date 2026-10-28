@@ -1,19 +1,24 @@
 // @vitest-environment happy-dom
-import { renderHook } from '@testing-library/react'
+import { useState } from 'react'
+import { render, fireEvent, renderHook } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import {
   buildNativeChatPickerItems,
   classifyPickerCommands
-} from '../../../../shared/native-chat-picker-items'
+} from '../../../../shared/native-chat/input/native-chat-picker-items'
 import { useNativeChatComposerKeyDown } from './use-native-chat-composer-keydown'
 import { useNativeChatComposerCatalog } from './use-native-chat-composer-catalog'
 import type { NativeChatStructuredComposerTransport } from './native-chat-composer-types'
 import { getVerifiedNativeChatCommands } from '../../../../shared/native-chat-agent-profiles'
 import {
+  dispatchStructuredAgentSessionComposerCommand,
   isStructuredAgentSessionComposerCommand,
   STRUCTURED_AGENT_SESSION_SLASH_COMMANDS,
   structuredSlashCommands
 } from '../../../../shared/structured-agent-session-composer'
+import capture from '../../../../shared/__fixtures__/omp-native-commands.json'
+import { useNativeChatPickerState } from './use-native-chat-picker-state'
+import { dispatchNativeChatStructuredComposerText } from './native-chat-structured-composer-dispatch'
 import type { DiscoveredSkill } from '../../../../shared/skills'
 import { withNativeChatResumeCommand } from './use-native-chat-resume-command'
 
@@ -285,3 +290,110 @@ describe('OpenCode chat skills', () => {
     expect(isStructuredAgentSessionComposerCommand(picked[0]!.token, agent)).toBe(true)
   })
 })
+
+vi.mock('./use-native-chat-skills', () => ({
+  useNativeChatSkills: () => ({ status: 'idle', skills: [], retry: vi.fn() })
+}))
+vi.mock('@/lib/native-chat-telemetry', () => ({
+  emitNativeChatPickerItemAccepted: vi.fn(),
+  emitNativeChatPickerOpened: vi.fn()
+}))
+
+it.each([
+  ['skill:plan', 'command', []],
+  ['skill:team/plan', 'command', undefined],
+  ['skill:plan', 'skill', []]
+] as const)(
+  'inserts %s on Enter then sends its exact text after the catalog retires',
+  async (name, kind, retired) => {
+    const send = vi.fn(() => true)
+    const dispatch = vi.fn()
+    const row = capture.enabled.availableCommands.find((row) => row.name === 'skill:plan')!
+    const reported = [{ name, description: row.description, kind }]
+    function Composer({
+      catalog,
+      agent = 'omp'
+    }: {
+      catalog?: NativeChatStructuredComposerTransport['sessionCommands']
+      agent?: 'omp' | 'grok'
+    }) {
+      const [draft, setDraft] = useState('/skill:')
+      const [caret, setCaret] = useState(draft.length)
+      const nativeTransport = {
+        ...transport(catalog),
+        send,
+        dispatchCommand: (text: string) =>
+          dispatchStructuredAgentSessionComposerCommand(text, {
+            agent,
+            snapshot: [],
+            invokeAction: async () => false,
+            setOption: async () => false
+          })
+      }
+      const catalogState = useNativeChatComposerCatalog(agent, nativeTransport)
+      const picker = useNativeChatPickerState({
+        agent,
+        terminalTabId: 'omp',
+        draftScopeKey: 'omp',
+        draft,
+        caret,
+        ...catalogState,
+        recalledFromHistory: false,
+        disabled: false,
+        isComposing: () => false,
+        textareaRef: { current: null },
+        setDraft,
+        setCaret,
+        setActiveSuggestion: vi.fn()
+      })
+      const keyDown = useNativeChatComposerKeyDown({
+        autocomplete: picker.autocomplete,
+        mentionFiles: { files: [], loading: false, failed: false },
+        completeMention: vi.fn(),
+        activeSuggestion: 0,
+        draft,
+        isComposing: () => false,
+        completePickerItem: picker.completeItem,
+        dispatchPickerCommand: dispatch,
+        dismissPicker: vi.fn(),
+        interrupt: vi.fn(),
+        send: () => void dispatchNativeChatStructuredComposerText(nativeTransport, draft),
+        setActiveSuggestion: vi.fn(),
+        setDraft,
+        setCaret
+      })
+      return (
+        <input
+          aria-label="draft"
+          value={draft}
+          onKeyDown={keyDown}
+          onChange={(event) => {
+            setDraft(event.target.value)
+            setCaret(event.target.value.length)
+          }}
+        />
+      )
+    }
+    const view = render(<Composer catalog={reported} />)
+    const input = view.getByLabelText('draft')
+    fireEvent.keyDown(input, { key: 'Enter' })
+    expect(input).toHaveProperty('value', `/${name} `)
+    expect(dispatch).not.toHaveBeenCalled()
+    expect(send).not.toHaveBeenCalled()
+    view.rerender(<Composer catalog={retired} />)
+    fireEvent.change(input, { target: { value: `/${name} args` } })
+    fireEvent.keyDown(input, { key: 'Enter' })
+    await vi.waitFor(() => expect(send).toHaveBeenCalledWith(`/${name} args`, []))
+    fireEvent.change(input, { target: { value: `Please /${name.slice(0, -1)}` } })
+    view.rerender(<Composer catalog={reported} />)
+    fireEvent.keyDown(input, { key: 'Enter' })
+    expect(input).toHaveProperty('value', `Please /${name} `)
+    if (kind === 'command') {
+      view.rerender(<Composer catalog={reported} agent="grok" />)
+      fireEvent.change(input, { target: { value: '/skill:' } })
+      fireEvent.keyDown(input, { key: 'Enter' })
+      expect(dispatch).toHaveBeenCalledWith(expect.objectContaining({ kind: 'command', name }))
+    }
+    view.unmount()
+  }
+)

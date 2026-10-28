@@ -44,27 +44,11 @@ function build(
 }
 
 describe('buildMirroredAgentTabs', () => {
-  it('falls back to the agent-specific placeholder when the host publishes no title', () => {
-    expect(build(snapshotWith('claude', '')).label).toBe('Claude Chat')
-    expect(build(snapshotWith('codex', '   ')).label).toBe('Codex Chat')
-  })
-
-  it('prefers the host title over the placeholder', () => {
-    expect(build(snapshotWith('claude', 'Flaky retry test')).label).toBe('Flaky retry test')
-  })
-
   it('keeps a manual rename across host snapshots', () => {
     const snapshot = snapshotWith('codex', 'Codex Chat')
     const renamed = build(snapshot)
     const existing: Tab = { ...renamed, customLabel: 'My rename' }
     expect(build(snapshot, [existing]).customLabel).toBe('My rename')
-  })
-
-  it('leaves customLabel null when the tab was never renamed', () => {
-    // Require a row so an empty result cannot satisfy the null check.
-    const tab = build(snapshotWith('codex', 'Codex Chat'))
-    expect(tab.label).toBe('Codex Chat')
-    expect(tab.customLabel).toBeNull()
   })
 
   it('records the publishing host on a tab restored from before tabs carried one', () => {

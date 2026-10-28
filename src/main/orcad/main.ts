@@ -8,7 +8,11 @@ import {
   ORCAD_PROFILE_PREFLIGHT_FLAG,
   ORCAD_STARTUP_PREFLIGHT_FLAG
 } from '../../shared/orcad-profile-preflight'
-import { preflightBundledOrcadStartup, runOrcadProfilePreflight } from './orcad-profile-preflight'
+import {
+  confirmBundledOrcadStartupQualified,
+  preflightBundledOrcadStartup,
+  runOrcadProfilePreflight
+} from './orcad-profile-preflight'
 import { assertOrcadServerRuntime } from './orcad-bundled-runtime'
 import {
   formatOrcadNativePreflightReport,
@@ -76,11 +80,13 @@ function startOrcadProcess(): void {
         process.stdout.write(`${report}\n`, () => process.exit(0))
       }, failStartup)
     } else if (
-      (flag === ORCAD_PROFILE_PREFLIGHT_FLAG || flag === ORCAD_STARTUP_PREFLIGHT_FLAG) &&
-      process.argv.length === 4
+      (flag === ORCAD_STARTUP_PREFLIGHT_FLAG && process.argv.length === 4) ||
+      (flag === ORCAD_PROFILE_PREFLIGHT_FLAG &&
+        (process.argv.length === 4 || process.argv.length === 5))
     ) {
       void runOrcadProfilePreflight(process.argv[3], {
-        nativeFeatures: flag === ORCAD_PROFILE_PREFLIGHT_FLAG
+        nativeFeatures: flag === ORCAD_PROFILE_PREFLIGHT_FLAG,
+        servedUserDataPath: process.argv[4]
       })
         // The owner reads EOF; lingering native handles must not keep this probe alive.
         .then(() => process.stdout.write('', () => process.exit(0)))
@@ -94,6 +100,7 @@ function startOrcadProcess(): void {
           runOrcadNativePreflight()
           return main()
         })
+        .then(confirmBundledOrcadStartupQualified)
         .catch(failStartup)
     }
   } catch (error) {

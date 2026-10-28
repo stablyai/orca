@@ -19,7 +19,10 @@ import {
   UNVERIFIABLE_ORCAD_TERMINAL_CENSUS
 } from '../../shared/orcad-terminal-census'
 import { runFencedStop } from './orcad-fenced-stop'
-import { CURRENT_ORCAD_DAEMON_PROTOCOL } from './orcad-daemon-protocol-crossing'
+import {
+  censusNeedsHostDaemonProtocols,
+  CURRENT_ORCAD_DAEMON_PROTOCOL
+} from './orcad-daemon-protocol-crossing'
 import { ORCAD_LOG_FILENAME } from '../managed-server/install/orcad-remote-host-support'
 import { orcadSnapshotFailureReason } from '../managed-server/host-state/orcad-state-snapshot-space'
 import {
@@ -34,7 +37,7 @@ import {
 } from '../managed-server/host-state/orcad-state-snapshot'
 import { joinRemotePath } from './ssh-remote-platform'
 import { computeLocalOrcadBuildHash } from './orcad-local-build-hash'
-import { preflightInstalledOrcad } from '../managed-server/install/orcad-remote-preflight'
+import { preflightOrcadCandidate } from './orcad-candidate-preflight'
 import type { OrcadActivationLockControl } from '../managed-server/activation/orcad-activation-lock'
 import type { OrcadActivateTransaction } from '../managed-server/activation/orcad-activation-transaction'
 import {
@@ -101,13 +104,20 @@ export async function activateInstalledOrcad(
     reason
   })
   const record = await readOrcadActivationRecord(options)
-  const plan = planOrcadUpdate({
-    record,
-    candidateVersion: fullVersion,
-    census: censusForLockedRecord(options, record),
-    candidateDaemonProtocol: CURRENT_ORCAD_DAEMON_PROTOCOL,
-    ...(options.force !== undefined ? { force: options.force } : {})
-  })
+  const planFor = (
+    census: OrcadTerminalCensus,
+    hostDaemonProtocols?: readonly number[]
+  ): ReturnType<typeof planOrcadUpdate> =>
+    planOrcadUpdate({
+      record,
+      candidateVersion: fullVersion,
+      census,
+      candidateDaemonProtocol: CURRENT_ORCAD_DAEMON_PROTOCOL,
+      ...(hostDaemonProtocols ? { hostDaemonProtocols } : {}),
+      ...(options.force !== undefined ? { force: options.force } : {})
+    })
+  const census = censusForLockedRecord(options, record)
+  let plan = planFor(census)
   if (plan.action === 'noop') {
     return { outcome: 'already-active', fullVersion }
   }
@@ -115,22 +125,25 @@ export async function activateInstalledOrcad(
   if (refusal) {
     return notActivated(ORCAD_ACTIVATION_POLICY_REFUSED_CODE, refusal)
   }
-  if (plan.action === 'defer') {
+  // Hosts predating the census protocol set cannot name mixed generations; the candidate can.
+  const asksCandidate = censusNeedsHostDaemonProtocols(census)
+  if (
+    plan.action === 'defer' &&
+    !(asksCandidate && plan.code === 'orcad_update_daemon_protocol_unverifiable')
+  ) {
     return notActivated(plan.code, plan.reason)
   }
-
-  try {
-    await preflightInstalledOrcad({
-      ...options,
-      remoteInstallDir: remoteDir,
-      fullVersion
-    })
-  } catch (error) {
-    options.signal?.throwIfAborted()
-    return notActivated(
-      'orcad_candidate_preflight_failed',
-      `Candidate profile preflight failed; the incumbent was not stopped: ${errorMessage(error)}`
-    )
+  const preflight = await preflightOrcadCandidate(
+    { ...options, remoteInstallDir: remoteDir, fullVersion },
+    asksCandidate
+  )
+  if ('failure' in preflight) {
+    return notActivated('orcad_candidate_preflight_failed', preflight.failure)
+  }
+  const { hostDaemonProtocols } = preflight
+  plan = planFor(census, hostDaemonProtocols)
+  if (plan.action === 'defer') {
+    return notActivated(plan.code, plan.reason)
   }
 
   let incumbent: OrcadSlotIdentity | null = null
@@ -193,14 +206,8 @@ export async function activateInstalledOrcad(
           : Promise.reject(new Error('not the incumbent this update counted')),
       releaseIncumbentAdmission: options.releaseIncumbentAdmission,
       now: () => now().getTime(),
-      refuse: (census) => {
-        const plan = planOrcadUpdate({
-          record,
-          candidateVersion: fullVersion,
-          census,
-          candidateDaemonProtocol: CURRENT_ORCAD_DAEMON_PROTOCOL,
-          ...(options.force !== undefined ? { force: options.force } : {})
-        })
+      refuse: (recounted) => {
+        const plan = planFor(recounted, hostDaemonProtocols)
         return plan.action === 'defer' ? notActivated(plan.code, plan.reason) : null
       },
       prepare: () => writeOrcadActivationTransaction(options, transaction),

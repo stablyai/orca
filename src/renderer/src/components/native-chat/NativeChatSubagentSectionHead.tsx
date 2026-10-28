@@ -1,7 +1,7 @@
 import { Bot, ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
-import { normalizeSubagentState } from '../../../../shared/native-chat-subagent-summary'
+import { normalizeSubagentState } from '../../../../shared/native-chat/transcript/native-chat-subagent-summary'
 import type { NativeChatSubagentEntry } from '../../../../shared/native-chat-types'
 import { StatusDot } from './NativeChatSubagentRun'
 

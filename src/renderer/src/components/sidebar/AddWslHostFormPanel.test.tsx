@@ -43,6 +43,18 @@ describe('AddWslHostFormPanel', () => {
     expect([ubuntu, debian, legacy, added].map(canAddWslDistro)).toEqual([true, true, false, false])
   })
 
+  it('does not promise bridge projects stay put once they can move to the host', () => {
+    // "Use it for new projects; ... keep working as they are" contradicted the mover.
+    const html = render()
+    expect(html).not.toContain('Use it for new projects')
+    expect(html).toContain('until you move them to this host')
+  })
+
+  it('spells out the WSL 2 conversion for a WSL 1 distro the list cannot offer', () => {
+    expect(render()).toContain('wsl --set-version Legacy 2')
+    expect(render({ distros: [ubuntu] })).not.toContain('wsl --set-version')
+  })
+
   it('says this build cannot run WSL hosts and offers nothing to add', () => {
     const html = render({ selectedDistro: 'Ubuntu', serverFilesMissing: true })
     expect(html).toContain('This build of Orca can’t run WSL hosts (server files missing).')

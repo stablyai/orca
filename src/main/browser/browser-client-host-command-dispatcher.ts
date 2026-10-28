@@ -63,10 +63,7 @@ export class BrowserClientHostCommandDispatcher {
     this.maxActiveCommands = limits.maxActiveCommands
     this.maxConcurrentHandlers = limits.maxConcurrentHandlers
     this.maxQueuedCommandsPerPage = limits.maxQueuedCommandsPerPage
-    this.resultCache = new BrowserClientHostCommandResultCache(
-      limits.maxCachedResultsPerPage,
-      limits.maxCachedCommandResults
-    )
+    this.resultCache = new BrowserClientHostCommandResultCache(limits)
     this.joinTimeoutMs = limits.joinTimeoutMs
     this.closedSettlement = new Promise((resolve) => {
       this.resolveClosedSettlement = resolve

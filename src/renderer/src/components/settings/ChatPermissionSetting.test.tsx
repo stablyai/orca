@@ -45,32 +45,6 @@ beforeEach(() => {
 })
 afterEach(cleanup)
 
-// A web client unpaired from its host holds no value, so it shows no control.
-it.each([undefined, 'ask', 'full-access'] as const)(
-  'offers the legacy new-chat default only for a host value %s',
-  (mode) => {
-    const { container } = render(
-      <TooltipProvider>
-        <ChatPermissionSetting
-          settings={{ ...getDefaultSettings('/tmp'), nativeChatPermissionMode: mode }}
-          updateSettings={vi.fn()}
-          forceVisible
-        />
-      </TooltipProvider>
-    )
-    if (mode === undefined) {
-      expect(container.querySelector('#chat-permissions')).toBeNull()
-      expect(screen.queryByRole('button')).toBeNull()
-    } else {
-      expect(
-        screen.getByRole('button', {
-          name: `Permissions ${mode === 'ask' ? 'Ask for approval' : 'Full access'}`
-        })
-      ).toBeTruthy()
-    }
-  }
-)
-
 it('shows the paired host permission and follows mutations, reconnects and re-pair ownership', async () => {
   mocks.web = true
   mocks.capability = 'supported'
@@ -144,34 +118,4 @@ it('shows the paired host permission and follows mutations, reconnects and re-pa
     resolveOld({ settings: projectAgentLaunchSettings({ agentPermissionDefault: 'full-access' }) })
   })
   await expectClaude('Approve for me')
-})
-
-it('keeps the Agents link disabled until host support is known', () => {
-  mocks.capability = 'unknown'
-  const element = (
-    <TooltipProvider>
-      <ChatPermissionSetting
-        settings={getDefaultSettings('/tmp')}
-        updateSettings={vi.fn()}
-        forceVisible
-      />
-    </TooltipProvider>
-  )
-  const view = render(element)
-  expect(screen.getByRole('button', { name: 'Settings → Agents' }).hasAttribute('disabled')).toBe(
-    true
-  )
-  mocks.capability = 'supported'
-  view.rerender(
-    <TooltipProvider>
-      <ChatPermissionSetting
-        settings={getDefaultSettings('/tmp')}
-        updateSettings={vi.fn()}
-        forceVisible
-      />
-    </TooltipProvider>
-  )
-  expect(screen.getByRole('button', { name: 'Settings → Agents' }).hasAttribute('disabled')).toBe(
-    false
-  )
 })

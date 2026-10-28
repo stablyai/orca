@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
-  buildReactErrorBoundaryReportArgs,
   clearReactErrorBoundaryReportingForTest,
   reportReactErrorBoundaryCrash
 } from './react-error-boundary-reporting'
@@ -67,35 +66,6 @@ afterEach(() => {
 })
 
 describe('react error boundary reporting', () => {
-  it('builds a renderer error payload with low-cardinality app context', () => {
-    const args = buildReactErrorBoundaryReportArgs({
-      boundaryId: 'terminal.workbench',
-      surface: 'terminal-workbench',
-      error: new TypeError('Cannot render /Users/alice/project'),
-      errorInfo: { componentStack: 'at Terminal\nat App' },
-      context: {
-        activeView: 'terminal',
-        activeModal: 'none',
-        activeTabType: 'editor',
-        activeRightSidebarTab: 'source-control',
-        hasActiveWorktree: true
-      }
-    })
-
-    expect(args).toMatchObject({
-      boundaryId: 'terminal.workbench',
-      surface: 'terminal-workbench',
-      errorName: 'TypeError',
-      errorMessage: 'Cannot render /Users/alice/project',
-      componentStack: 'at Terminal\nat App',
-      activeView: 'terminal',
-      activeModal: 'none',
-      activeTabType: 'editor',
-      activeRightSidebarTab: 'source-control',
-      hasActiveWorktree: true
-    })
-  })
-
   it('derives #185 attribution from the error itself, without boundary opt-in', async () => {
     await reportReactErrorBoundaryCrash({
       boundaryId: 'page.settings',
@@ -106,16 +76,6 @@ describe('react error boundary reporting', () => {
     expect(mocks.recordRendererError).toHaveBeenCalledWith(
       expect.objectContaining({ attribution: 'unreliable' })
     )
-  })
-
-  it('omits attribution for ordinary render errors', () => {
-    const args = buildReactErrorBoundaryReportArgs({
-      boundaryId: 'page.settings',
-      surface: 'page',
-      error: new Error('render failed')
-    })
-
-    expect(args).not.toHaveProperty('attribution')
   })
 
   it('reports a caught render error once per boundary signature', async () => {

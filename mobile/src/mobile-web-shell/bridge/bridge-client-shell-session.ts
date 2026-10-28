@@ -6,6 +6,7 @@ import {
   type BridgeSafeAreaInsets
 } from './bridge-safe-area-insets'
 import type {
+  BridgeColorScheme,
   BridgeConnectionSnapshot,
   BridgeHostMessage,
   BridgeInitRoute
@@ -21,6 +22,7 @@ export type BridgeClientShellSession = {
   onRouteUpdate: (listener: (route: BridgeInitRoute | null) => void) => () => void
   onSafeAreaInsetsUpdate: (listener: (insets: BridgeSafeAreaInsets) => void) => () => void
   onKeyboardInsetUpdate: (listener: (height: number) => void) => () => void
+  onColorSchemeUpdate: (listener: (scheme: BridgeColorScheme) => void) => () => void
   close: () => void
 }
 
@@ -33,6 +35,7 @@ export function createBridgeClientShellSession(args: {
   const routeUpdateListeners = new Set<(route: BridgeInitRoute | null) => void>()
   const insetsListeners = new Set<(insets: BridgeSafeAreaInsets) => void>()
   const keyboardListeners = new Set<(height: number) => void>()
+  const schemeListeners = new Set<(scheme: BridgeColorScheme) => void>()
 
   return {
     current: () => session,
@@ -49,10 +52,18 @@ export function createBridgeClientShellSession(args: {
       const safeAreaInsets = held === null || movedInsets ? sent : held.safeAreaInsets
       const keyboardInset = message.keyboardInset ?? 0
       const movedKeyboard = held !== null && held.keyboardInset !== keyboardInset
+      const colorScheme = message.colorScheme ?? 'dark'
+      const movedScheme = held !== null && held.colorScheme !== colorScheme
       session =
         update === null
           ? { ...readShellSession(message), safeAreaInsets }
-          : { ...update, route: message.route ?? null, safeAreaInsets, keyboardInset }
+          : {
+              ...update,
+              route: message.route ?? null,
+              safeAreaInsets,
+              keyboardInset,
+              colorScheme
+            }
       // Reprime on every init to repair refused stale generations after client rebuild; identical pane-update snapshots emit no transition.
       args.prime(message.connection)
       for (const listener of readyListeners) {
@@ -67,6 +78,11 @@ export function createBridgeClientShellSession(args: {
       if (movedKeyboard) {
         for (const listener of keyboardListeners) {
           listener(keyboardInset)
+        }
+      }
+      if (movedScheme) {
+        for (const listener of schemeListeners) {
+          listener(colorScheme)
         }
       }
       // Publish only changed routes; repeated ready used for state repair must not retrigger the current pane.
@@ -104,6 +120,12 @@ export function createBridgeClientShellSession(args: {
       keyboardListeners.add(listener)
       return () => {
         keyboardListeners.delete(listener)
+      }
+    },
+    onColorSchemeUpdate: (listener) => {
+      schemeListeners.add(listener)
+      return () => {
+        schemeListeners.delete(listener)
       }
     },
     close: () => {

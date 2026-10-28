@@ -7,6 +7,8 @@ import {
   nativeChatEditFilePatchText
 } from '../../../src/shared/native-chat/tools/native-chat-edit-cards'
 import {
+  nativeChatEditFileBaseName,
+  nativeChatEditGutterChars,
   unifiedLineNumber,
   type NativeChatEditFile,
   type NativeChatEditLine
@@ -14,15 +16,16 @@ import {
 import { NATIVE_CHAT_TOOL_ROW_VERB_COPY } from '../../../src/shared/native-chat/tools/native-chat-tool-line-label'
 import { MobileSourceCopyButton } from '../components/MobileSourceCopyButton'
 import { colors } from '../theme/mobile-theme'
-import { useMobileNativeChatOpenedDetail } from './mobile-native-chat-opened-detail'
-import { useMobileNativeChatDisclosure } from './mobile-native-chat-disclosure-store'
-import { toolStyles as styles, toolType } from './mobile-native-chat-tool-styles'
-
-function baseName(path: string): string {
-  return path.split(/[\\/]/).at(-1) || path
-}
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { useMobileNativeChatOpenedDetail } from './native-chat/visual/mobile-native-chat-opened-detail'
+import { useMobileNativeChatDisclosure } from './native-chat/transcript/mobile-native-chat-disclosure-store'
+import {
+  toolStyles as styles,
+  toolType
+} from './native-chat/transcript/mobile-native-chat-tool-styles'
 
 function VerbIcon({ kind, size }: { kind: NativeChatEditFile['changeKind']; size: number }) {
+  useMobileColorScheme()
   const Icon = kind === 'added' ? FilePlus2 : kind === 'deleted' ? FileMinus2 : FilePen
   return <Icon size={size} color={colors.textMuted} strokeWidth={2} />
 }
@@ -36,6 +39,7 @@ function DiffRow({
   gutterChars: number
   type: ReturnType<typeof toolType>['code']
 }): React.JSX.Element {
+  useMobileColorScheme()
   if (line.kind === 'gap') {
     return (
       <Text style={[styles.diffGap, type]} accessibilityLabel={NATIVE_CHAT_DIFF_CARD_COPY.diffGap}>
@@ -93,13 +97,10 @@ function DiffCardRows({
   disclosureKey?: string
   rootIdentity?: string
 }) {
+  useMobileColorScheme()
   const onLayout = useMobileNativeChatOpenedDetail()
   const type = toolType(fontScale).code
-  // Leave unresolved gutters blank; snippet-relative numbers would imply real file positions.
-  const widest = file.lineNumbersKnown
-    ? file.lines.reduce((max, line) => Math.max(max, unifiedLineNumber(line) ?? 0), 0)
-    : 0
-  const gutterChars = file.lineNumbersKnown ? Math.max(3, String(widest).length + 1) : 0
+  const gutterChars = nativeChatEditGutterChars(file)
   const seen = new Map<string, number>()
   return (
     <MobileNativeChatOwnedScrollView
@@ -140,6 +141,7 @@ export function MobileNativeChatDiffCard({
   rootIdentity?: string
   onOpenFile?: (path: string) => void
 }): React.JSX.Element {
+  useMobileColorScheme()
   const [expanded, setExpanded] = useMobileNativeChatDisclosure(disclosureKey, false)
   const hasBody = file.lines.length > 0
   const copyText = useMemo(() => nativeChatEditFilePatchText(file.lines), [file.lines])
@@ -169,7 +171,7 @@ export function MobileNativeChatDiffCard({
                 numberOfLines={1}
                 accessibilityLabel={file.oldPath}
               >
-                {baseName(file.oldPath)}
+                {nativeChatEditFileBaseName(file.oldPath)}
               </Text>
               <Text style={[styles.lineWord, type.row]}>→</Text>
             </>
@@ -181,7 +183,7 @@ export function MobileNativeChatDiffCard({
             suppressHighlighting={!openFile}
             accessibilityRole={openFile ? 'link' : undefined}
           >
-            {baseName(file.path)}
+            {nativeChatEditFileBaseName(file.path)}
           </Text>
           <Text style={[styles.lineMeta, type.meta]}>
             {file.added > 0 ? <Text style={styles.countAdded}>{`+${file.added}`}</Text> : null}

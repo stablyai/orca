@@ -496,7 +496,7 @@ describe('AgentSkillSetupPanel', () => {
     await renderInteractivePanel()
     await clickButton('Install')
     expect(container?.querySelector('[data-testid="wsl-terminal"]')?.textContent).toBe(
-      `npx skills@1.7.2 add https://github.com/stablyai/orca/tree/${'0'.repeat(40)} --skill orca-cli --global`
+      `env LC_ALL=C npx skills@1.7.2 add https://github.com/stablyai/orca/tree/${'0'.repeat(40)} --skill orca-cli --global`
     )
     expect(mocks.plan).not.toHaveBeenCalled()
     expect(mocks.execute).not.toHaveBeenCalled()

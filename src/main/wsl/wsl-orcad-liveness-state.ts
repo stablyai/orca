@@ -19,7 +19,11 @@ export type WslOrcadLivenessDependencies = {
     WslOrcadConnectionManager,
     'ensure' | 'get' | 'publish' | 'close' | 'retireListener'
   >
-  readRunning: () => Promise<WslRunningDistrosRead>
+  /** `afterExit`: answer only from a probe started once that exit's settle window has passed. */
+  readRunning: (afterExit?: {
+    distro: string
+    exitedAt: number | null
+  }) => Promise<WslRunningDistrosRead>
   readIdentity: (distro: string, orcadPid: number | null) => Promise<WslGuestIdentity | null>
   openWatch: (connection: WslOrcadConnection) => Promise<WslOrcadWatch>
   collectCensus: (connection: WslOrcadConnection) => Promise<OrcadTerminalCensus>

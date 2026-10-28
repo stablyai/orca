@@ -48,6 +48,7 @@ import {
   runUnderRemoteCliPageAdmission
 } from './remote-cli-page-admission'
 import {
+  answerAgentBrowserCommands,
   createFakeAgentBrowserChild,
   mockBrowserManager,
   mockWebContents,
@@ -116,16 +117,13 @@ describe('AgentBrowserBridge under a host revocation', () => {
 
   it('holds the page against a running helper click once the host is revoked', async () => {
     const helperCallbacks: ExecFileCallback[] = []
-    execFileMock.mockImplementation(
-      (_bin: string, args: string[], _opts: unknown, cb: ExecFileCallback) => {
-        if (args.includes('click')) {
-          helperCallbacks.push(cb)
-        } else {
-          cb(null, JSON.stringify({ success: true, data: null }), '')
-        }
-        return createFakeAgentBrowserChild({ stdin: { on: vi.fn(), end: vi.fn() } })
+    answerAgentBrowserCommands(execFileMock, stdinWrites, (command, cb) => {
+      if (command[0] === 'click') {
+        helperCallbacks.push(cb)
+      } else {
+        cb(null, JSON.stringify({ success: true, data: null }), '')
       }
-    )
+    })
     const revoked = new AbortController()
 
     const click = runInRemoteCliBrowserScope(

@@ -26,7 +26,8 @@ import { isMainTerminalSideEffectAuthorityForPty } from '../terminal-side-effect
 import { isRendererHiddenPtyDeliveryGateEnabled } from '../terminal-hidden-delivery-gate'
 import {
   markRendererOwnedAgentStatusWrite,
-  registerRendererOwnedAgentStatusPane
+  registerRendererOwnedAgentStatusPane,
+  resolveRendererOwnedAgentStatusTiming
 } from '../renderer-owned-agent-status-registry'
 
 import { resolveLatestAgentDoneStartedAt } from './agent-done-started-at'
@@ -138,12 +139,15 @@ export function installPaneHostCapabilityFlags(session: ConnectPanePtySession): 
       : resolvedStatusTitle
     // Only actual byte-derived status proves authority to fence out host mirroring.
     markRendererOwnedAgentStatusWrite(session.cacheKey)
+    const timing = resolveRendererOwnedAgentStatusTiming(
+      currentState.agentStatusByPaneKey[session.cacheKey]
+    )
     if (session.launchToken) {
       currentState.setAgentStatus(
         session.cacheKey,
         observedStatusPayload,
         statusTitle,
-        undefined,
+        timing,
         routing,
         {
           launchToken: session.launchToken
@@ -154,7 +158,7 @@ export function installPaneHostCapabilityFlags(session: ConnectPanePtySession): 
         session.cacheKey,
         observedStatusPayload,
         statusTitle,
-        undefined,
+        timing,
         routing
       )
     }

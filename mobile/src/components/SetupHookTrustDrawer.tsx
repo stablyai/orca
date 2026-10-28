@@ -1,6 +1,8 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { Check } from 'lucide-react-native'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { BottomDrawer } from './BottomDrawer'
 
 export type SetupTrustPrompt = {
@@ -31,6 +33,7 @@ export function SetupHookTrustDrawer({
   onDontRun,
   onClose
 }: Props) {
+  useMobileColorScheme()
   return (
     <BottomDrawer visible={visible && prompt != null} onClose={onClose}>
       {prompt ? (
@@ -75,7 +78,7 @@ export function SetupHookTrustDrawer({
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   title: {
     fontSize: 15,
     fontWeight: '600',
@@ -132,4 +135,4 @@ const styles = StyleSheet.create({
     backgroundColor: colors.borderSubtle,
     marginHorizontal: spacing.md
   }
-})
+}))

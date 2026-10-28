@@ -1,3 +1,5 @@
+import { removeWorktree } from '../../../git/worktree-removal'
+import { usesNativeWindowsRemoval } from '../../../git/windows-worktree-removal'
 import type { Repo } from '../../../../shared/repo-types'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { RemoveWorktreeResult } from '../../../../shared/worktree/create-types'
@@ -60,22 +62,29 @@ export async function removeUnregisteredWorktree(
         toLocalWorktreeRuntimePath(worktreePath, localWorktreeGitOptions),
         toLocalWorktreeRuntimePath(repo.path, localWorktreeGitOptions),
         removalHome,
-        access.statPath,
-        access.readPath
+        access
       ))
   }
-  if (canCleanOrphanedDirectory) {
+  const native = usesNativeWindowsRemoval(worktreePath, localWorktreeGitOptions)
+  if (canCleanOrphanedDirectory || (native && removedMeta)) {
     assertWorktreeDoesNotContainRegisteredWorktree(worktreePath, registeredWorktrees)
-    if (!args.force) {
+    if (canCleanOrphanedDirectory && !args.force) {
       throw new Error(ORPHANED_WORKTREE_DIRECTORY_MESSAGE)
     }
+
     const removalGate = await runtime.acquireFileWatcherRemoval(worktreePath)
     let removalCompleted = false
     try {
       await stopPtysForDestructiveWorktreeRemoval(runtime, args.worktreeId, {
         allowUnverifiedStop: args.allowUnverifiedPtyStop
       })
-      await removeLocalWorktreePath(worktreePath, localWorktreeGitOptions)
+      await (usesNativeWindowsRemoval(worktreePath, localWorktreeGitOptions)
+        ? removeWorktree(repo.path, worktreePath, args.force ?? false, {
+            ...localWorktreeGitOptions,
+            deleteBranch: false,
+            knownRemovedWorktree: null
+          })
+        : removeLocalWorktreePath(worktreePath, localWorktreeGitOptions))
       removalCompleted = true
     } finally {
       await removalGate.finish(removalCompleted)

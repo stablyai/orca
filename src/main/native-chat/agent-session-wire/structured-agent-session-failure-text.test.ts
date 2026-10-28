@@ -12,9 +12,13 @@ import {
 import {
   AgentSessionAcquisitionExitProvenError,
   AgentSessionAcquisitionRefusal,
-  AgentSessionPreSpawnError
+  AgentSessionPreSpawnError,
+  launchPreparationFailure
 } from './structured-agent-session-adapter'
-import { withMissingProviderExecutable } from '../../provider-process/provider-executable-missing'
+import {
+  withMissingProviderExecutable,
+  withProviderSpawnAbsence
+} from '../../provider-process/provider-executable-missing'
 import { withProviderRequestTimeout } from '../../provider-process/provider-request-timeout'
 import { MAX_UNEXPECTED_EXIT_REASON_CHARS } from './structured-agent-session-dead-generation-settlement'
 import { StructuredAgentArgumentsError } from '../structured-agent-arguments-error'
@@ -99,6 +103,41 @@ describe('structuredAgentSessionStartFailure', () => {
       structuredAgentSessionStartFailure({ error: new Error('Not logged in. Run /login.') })
         .rejection
     ).toEqual({ kind: 'startFailed' })
+  })
+
+  it('words a working folder deleted under the chat as the folder, never a missing CLI', () => {
+    const gone = new AgentSessionAcquisitionExitProvenError(
+      withProviderSpawnAbsence(new Error('spawn claude ENOENT'), 'launchFolder')
+    )
+    expect(structuredAgentSessionStartFailure({ error: gone }, { agentName: 'Claude' })).toEqual({
+      reason: 'The folder this chat ran in no longer exists. Restore it to continue this chat.',
+      rejection: { kind: 'launchFolderMissing' }
+    })
+  })
+
+  it('names a failed launch preparation and keeps a withdrawn start generic', () => {
+    const failed = launchPreparationFailure(
+      new Error('resolve failed', { cause: new Error('selector_not_found') })
+    )
+    expect(structuredAgentSessionStartFailure({ error: failed }, { agentName: 'Claude' })).toEqual({
+      reason:
+        "Orca couldn't prepare Claude to start on the computer running this chat. Send your message to try again.",
+      rejection: {
+        kind: 'launchPreparationFailed',
+        detail: { text: 'selector_not_found', audience: 'log' }
+      }
+    })
+    const aborted = new AgentSessionPreSpawnError(
+      Object.assign(new Error('The operation was aborted.'), { name: 'AbortError' })
+    )
+    expect(structuredAgentSessionStartFailure({ error: aborted }).rejection).toEqual({
+      kind: 'startFailed'
+    })
+    const cyclic = new Error('cyclic')
+    cyclic.cause = cyclic
+    expect(
+      structuredAgentSessionStartFailure({ error: launchPreparationFailure(cyclic) }).rejection
+    ).toEqual({ kind: 'launchPreparationFailed', detail: { text: 'cyclic', audience: 'log' } })
   })
 
   it("words a CLI that was never found as the chat's notice does, with the step to take", () => {

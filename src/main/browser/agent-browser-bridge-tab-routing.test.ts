@@ -54,18 +54,15 @@ vi.mock('./cdp-bridge', () => ({
 
 import { AgentBrowserBridge } from './agent-browser-bridge'
 import {
-  createFakeAgentBrowserChild,
-  createSucceedWith,
+  answerAgentBrowserCommands,
   mockBrowserManager,
   mockWebContents,
   overrideBridgeWebContentsLookup,
   resetAgentBrowserBridgeMocks,
-  type ExecFileCallback
+  succeedRecordingAgentBrowserSpawns
 } from './agent-browser-bridge-test-harness'
 
 overrideBridgeWebContentsLookup(AgentBrowserBridge.prototype, webContentsFromIdMock)
-
-const succeedWith = createSucceedWith(execFileMock, stdinWrites)
 
 describe('AgentBrowserBridge', () => {
   let bridge: AgentBrowserBridge
@@ -94,17 +91,14 @@ describe('AgentBrowserBridge', () => {
     const b = new AgentBrowserBridge(mockBrowserManager(tabs))
     b.setActiveTab(1)
 
-    succeedWith({ snapshot: 'tree output' })
+    const spawns = succeedRecordingAgentBrowserSpawns(execFileMock, stdinWrites, {
+      snapshot: 'tree output'
+    })
     const result = await b.snapshot(undefined, 'tab-b')
 
-    const snapshotCall = execFileMock.mock.calls.find((c: unknown[]) =>
-      (c[1] as string[]).includes('snapshot')
-    )
-    expect(snapshotCall).toBeTruthy()
-    expect(snapshotCall![1]).toContain('--session')
-    expect(
-      (snapshotCall![1] as string[])[(snapshotCall![1] as string[]).indexOf('--session') + 1]
-    ).toBe('orca-tab-tab-b')
+    const snapshotArgs = spawns.find(({ command }) => command[0] === 'snapshot')?.args
+    expect(snapshotArgs).toContain('--session')
+    expect(snapshotArgs![snapshotArgs!.indexOf('--session') + 1]).toBe('orca-tab-tab-b')
     expect(result).toEqual({ browserPageId: 'tab-b', snapshot: 'tree output' })
     expect(b.getActiveWebContentsId()).toBe(1)
   })
@@ -298,20 +292,17 @@ describe('AgentBrowserBridge', () => {
     b.setActiveTab(1, 'wt-1')
 
     let releaseSnapshot: (() => void) | null = null
-    execFileMock.mockImplementation(
-      (_bin: string, args: string[], _opts: unknown, cb: ExecFileCallback) => {
-        if (args.includes('close')) {
-          cb(null, JSON.stringify({ success: true, data: null }), '')
-        } else if (args.includes('snapshot')) {
-          releaseSnapshot = () => {
-            cb(null, JSON.stringify({ success: true, data: { snapshot: 'tree' } }), '')
-          }
-        } else {
-          cb(null, JSON.stringify({ success: true, data: { ok: true } }), '')
+    answerAgentBrowserCommands(execFileMock, stdinWrites, (command, cb) => {
+      if (command.includes('close')) {
+        cb(null, JSON.stringify({ success: true, data: null }), '')
+      } else if (command[0] === 'snapshot') {
+        releaseSnapshot = () => {
+          cb(null, JSON.stringify({ success: true, data: { snapshot: 'tree' } }), '')
         }
-        return createFakeAgentBrowserChild({})
+      } else {
+        cb(null, JSON.stringify({ success: true, data: { ok: true } }), '')
       }
-    )
+    })
 
     const snapshot = b.snapshot('wt-1')
     const switched = b.tabSwitch(1, 'wt-1')

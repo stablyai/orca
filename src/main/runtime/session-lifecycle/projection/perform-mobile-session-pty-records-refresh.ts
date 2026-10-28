@@ -130,7 +130,8 @@ export abstract class OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh exten
     const navigation = opts.navigation ?? (opts.notifyClients === false ? 'caller' : 'all')
     const targetsHost = navigationTargetsHost(navigation)
     const explicitWorktreeId = this.getExplicitSessionWorktreeIdSelector(worktreeSelector)
-    let worktreeId = explicitWorktreeId ?? (await this.resolveWorktreeSelector(worktreeSelector)).id
+    let worktreeId =
+      explicitWorktreeId ?? (await this.resolveWorkspaceSelector(worktreeSelector)).id
     this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktreeId)
     await this.refreshMobileSessionPtyRecords(worktreeId)
     // Why: the renderer can publish the host's spelling while inventory refresh is pending.

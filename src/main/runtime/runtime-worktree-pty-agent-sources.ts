@@ -60,6 +60,7 @@ export function collectRuntimeWorktreePtyAgentSources(args: {
       ptyId: entry.terminalHandle
         ? args.connectedPtyEvidence.ptyIdByTerminalHandle.get(entry.terminalHandle)
         : undefined,
+      terminalHandle: entry.terminalHandle,
       tabId: entry.tabId,
       worktreeId: entry.worktreeId,
       connectionId: entry.connectionId,

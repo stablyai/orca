@@ -1,6 +1,8 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { ChevronUp } from 'lucide-react-native'
 import { colors, spacing, typography } from '../../../theme/mobile-theme'
+import { themedStyleSheet } from '../../../theme/themed-styles'
+import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 
 export function MobileNativeChatPromptStrip({
   title,
@@ -9,6 +11,7 @@ export function MobileNativeChatPromptStrip({
   title: string
   onExpand: () => void
 }): React.JSX.Element {
+  useMobileColorScheme()
   return (
     <View testID="native-chat-prompt-strip" style={styles.strip}>
       <Text style={styles.title} numberOfLines={1}>
@@ -27,7 +30,7 @@ export function MobileNativeChatPromptStrip({
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   action: { width: 28, height: 28, alignItems: 'center', justifyContent: 'center' },
   strip: {
     flexDirection: 'row',
@@ -41,4 +44,4 @@ const styles = StyleSheet.create({
     borderTopColor: colors.borderSubtle
   },
   title: { flex: 1, color: colors.textPrimary, fontSize: typography.bodySize, fontWeight: '600' }
-})
+}))

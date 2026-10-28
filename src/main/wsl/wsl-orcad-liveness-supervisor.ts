@@ -14,6 +14,8 @@ import {
   cancellableWait,
   defaultSchedule,
   ensureHolderQuietly,
+  probeOrcadPort,
+  scheduleSupervisedHeartbeat,
   subscribeWake
 } from './wsl-orcad-liveness-monitor'
 import {
@@ -156,6 +158,8 @@ export class WslOrcadLivenessSupervisor {
       }
       return
     }
+    // A holder that took the previous orcad's idle release just before this launch is gone now.
+    await ensureHolderQuietly(this.deps.ensureHolder, entry.distro)
     // Do not overwrite the timer owned by a superseding connect.
     if (entry.generation === generation) {
       this.scheduleHeartbeat(entry)
@@ -166,19 +170,16 @@ export class WslOrcadLivenessSupervisor {
     return attachSupervisedWatch(
       entry,
       () => this.deps.openWatch(connection),
-      (code) => this.trigger(entry, { source: 'bridge', code })
+      (code) => this.trigger(entry, { source: 'bridge', code }),
+      // Nothing proves orcad now: bring the next full check forward to the idle period.
+      () => this.scheduleHeartbeat(entry)
     )
   }
 
   private scheduleHeartbeat(entry: Supervised): void {
-    entry.timer?.cancel()
-    entry.lastBeatMs = this.now()
-    entry.timer = this.schedule(this.heartbeatMs, () => {
-      entry.timer = null
-      // Long-overdue ticks imply process/VM suspension; reverify all evidence.
-      const late = this.now() - entry.lastBeatMs > this.heartbeatMs * 2
-      this.trigger(entry, late ? { source: 'verify' } : 'heartbeat')
-    })
+    scheduleSupervisedHeartbeat(entry, this.schedule, this.now, this.heartbeatMs, (trigger) =>
+      this.trigger(entry, trigger)
+    )
   }
 
   private scheduleVerify(entry: Supervised): void {
@@ -225,12 +226,12 @@ export class WslOrcadLivenessSupervisor {
     if (isWatchOrHolderExit(trigger) && confirmsRunning(running, entry.key)) {
       // Stopping distros can still appear running; wait before exec accidentally boots them again.
       await new Promise<void>((resolve) => this.schedule(EXIT_SETTLE_MS, resolve))
-      running = await this.deps.readRunning()
+      running = await this.deps.readRunning({ distro: entry.distro, exitedAt: entry.lastExitMs })
       if (entry.generation !== generation) {
         return
       }
     }
-    if (trigger === 'heartbeat' && entry.watch && confirmsRunning(running, entry.key)) {
+    if (trigger === 'heartbeat' && entry.watch?.proving() && confirmsRunning(running, entry.key)) {
       await ensureHolderQuietly(this.deps.ensureHolder, entry.distro)
       this.scheduleHeartbeat(entry)
       return
@@ -246,9 +247,7 @@ export class WslOrcadLivenessSupervisor {
     const connection = this.deps.manager.get(entry.distro)
     await gatherWslLivenessEvidence(evidence, {
       readIdentity: () => this.deps.readIdentity(entry.distro, connection?.pid ?? null),
-      // A held watch proves the port; a fresh one probes it; a retired listener proves nothing.
-      probePort: async () =>
-        !connection ? 'refused' : entry.watch ? 'ready' : this.attachWatch(entry, connection)
+      probePort: () => probeOrcadPort(entry, connection, (held) => this.attachWatch(entry, held))
     })
     if (entry.generation === generation) {
       await this.act(entry, classifyWslOrcadLiveness(evidence))

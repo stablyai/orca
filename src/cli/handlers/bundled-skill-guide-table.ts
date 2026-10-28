@@ -9,7 +9,6 @@ export type BundledSkillGuide = {
   name: string
   description: string
   markdown: string
-  fullMarkdown: string
   aliases: readonly string[]
   references: readonly BundledSkillGuideReference[]
 }

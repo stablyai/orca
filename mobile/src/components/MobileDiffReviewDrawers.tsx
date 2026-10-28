@@ -3,6 +3,7 @@ import { KeyboardAvoidingView, Pressable, Text, TextInput, View } from 'react-na
 import { Check, Copy, FileText, Plus, Send, Trash2, X } from 'lucide-react-native'
 import type { DiffComment } from '../../../src/shared/diff-comment-types'
 import { colors } from '../theme/mobile-theme'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import type { ActionSheetAction } from './ActionSheetModal'
 import { ActionSheetContent } from './ActionSheetModal'
 import { ConfirmContent } from './ConfirmModal'
@@ -202,6 +203,7 @@ function sendSheetMessage(
 }
 
 function NoteComposerContent({ controller, composer }: Props & { composer: ComposerState }) {
+  useMobileColorScheme()
   return (
     <KeyboardAvoidingView behavior={hostOs() === 'ios' ? 'padding' : undefined}>
       <View style={styles.composerHeader}>
@@ -251,6 +253,7 @@ function composerLabel(
 }
 
 function DeleteNoteButton({ onPress }: { onPress: () => Promise<void> }) {
+  useMobileColorScheme()
   return (
     <Pressable
       style={({ pressed }) => [styles.secondaryButton, pressed && styles.buttonPressed]}
@@ -271,6 +274,7 @@ function SaveNoteButton({
   controller: ReturnType<typeof useMobileDiffReviewController>
   composer: ReturnType<typeof useMobileDiffReviewController>['composer']
 }) {
+  useMobileColorScheme()
   const disabled = controller.composerBody.trim().length === 0
   return (
     <Pressable
@@ -291,6 +295,7 @@ function SaveNoteButton({
 }
 
 function CompletionContent({ controller }: Props) {
+  useMobileColorScheme()
   const noteCount =
     controller.screenState.kind === 'ready' ? controller.screenState.comments.length : 0
   return (

@@ -29,10 +29,10 @@ export function buildWorkItemListRequest(args: {
   const { kind, ownerRepo, limit, query, page } = args
   const searchParts: string[] = []
 
+  // gh pr list adds repo: and type:pr itself; an extra is:pr empties private-repo results for ghu_ tokens.
   if (kind === 'issue') {
-    searchParts.push(`repo:${ownerRepo.owner}/${ownerRepo.repo}`)
+    searchParts.push(`repo:${ownerRepo.owner}/${ownerRepo.repo}`, 'is:issue')
   }
-  searchParts.push(kind === 'issue' ? 'is:issue' : 'is:pr')
 
   if (query.state === 'open') {
     searchParts.push('is:open')

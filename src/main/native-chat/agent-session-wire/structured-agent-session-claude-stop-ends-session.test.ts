@@ -18,7 +18,7 @@ import {
 } from '../../claude/claude-agent-sdk-control-requests'
 import { CLAUDE_STOP_GRACE_MS } from '../../claude/claude-request-end-wait'
 import { ClaudeStructuredSessionAdapter } from '../../claude/claude-structured-session-adapter'
-import type { ClaudeStructuredSessionEvent } from '../../claude/claude-structured-session-state'
+import type { ClaudeStructuredSessionEvent } from '../../claude/structured/claude-structured-session-state'
 import {
   claudeFrame as frame,
   claudeWasSent as wrote,

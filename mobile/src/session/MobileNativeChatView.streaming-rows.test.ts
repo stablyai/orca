@@ -13,13 +13,13 @@ import type {
 } from '../../../src/shared/native-chat-types'
 import { MobileNativeChatOverlay } from './MobileNativeChatOverlay'
 import type * as MobileNativeChatItemReadModule from './mobile-native-chat-item-read'
-import type * as MobileNativeChatRowPropsModule from './use-mobile-native-chat-row-props'
-import type * as MobileNativeChatRowProjectionModule from './mobile-native-chat-row-projection'
-import type * as MobileNativeChatMessageDetailModule from './use-mobile-native-chat-message-detail'
+import type * as MobileNativeChatRowPropsModule from './native-chat/transcript/use-mobile-native-chat-row-props'
+import type * as MobileNativeChatRowProjectionModule from './native-chat/transcript/mobile-native-chat-row-projection'
+import type * as MobileNativeChatMessageDetailModule from './native-chat/transcript/use-mobile-native-chat-message-detail'
 import type { MobileNativeChatController } from './mobile-native-chat-controller-contract'
 import { stubRpcClient } from '../transport/rpc-client-test-stub'
 import { MobileNativeChatView } from './MobileNativeChatView'
-import { MobileNativeChatRowContent } from './MobileNativeChatRowItemSource'
+import { MobileNativeChatRowContent } from './native-chat/transcript/MobileNativeChatRowItemSource'
 
 vi.mock('react-native', async () => ({
   ActivityIndicator: 'ActivityIndicator',
@@ -61,7 +61,7 @@ const operations = vi.hoisted(() => ({
   raw: new Array<string>(),
   state: new Array<string>()
 }))
-vi.mock('./use-mobile-native-chat-row-props', async (importOriginal) => {
+vi.mock('./native-chat/transcript/use-mobile-native-chat-row-props', async (importOriginal) => {
   const actual = await importOriginal<typeof MobileNativeChatRowPropsModule>()
   return {
     ...actual,
@@ -73,7 +73,7 @@ vi.mock('./use-mobile-native-chat-row-props', async (importOriginal) => {
     }
   }
 })
-vi.mock('./mobile-native-chat-row-projection', async (importOriginal) => {
+vi.mock('./native-chat/transcript/mobile-native-chat-row-projection', async (importOriginal) => {
   const actual = await importOriginal<typeof MobileNativeChatRowProjectionModule>()
   return {
     equalMobileNativeChatRowContent(
@@ -84,40 +84,44 @@ vi.mock('./mobile-native-chat-row-projection', async (importOriginal) => {
     }
   }
 })
-vi.mock('./use-mobile-native-chat-message-detail', async (importOriginal) => {
-  const actual = await importOriginal<typeof MobileNativeChatMessageDetailModule>()
-  return {
-    ...actual,
-    useMobileNativeChatMessageDetail(
-      ...args: Parameters<typeof actual.useMobileNativeChatMessageDetail>
-    ) {
-      const result = actual.useMobileNativeChatMessageDetail(...args),
-        detail = result.detail
-      return detail
-        ? {
-            ...result,
-            detail: {
-              ...detail,
-              raw: (id: string) => {
-                operations.raw.push(id)
-                return detail.raw(id)
-              },
-              state: (id: string) => {
-                operations.state.push(id)
-                return detail.state(id)
+vi.mock(
+  './native-chat/transcript/use-mobile-native-chat-message-detail',
+  async (importOriginal) => {
+    const actual = await importOriginal<typeof MobileNativeChatMessageDetailModule>()
+    return {
+      ...actual,
+      useMobileNativeChatMessageDetail(
+        ...args: Parameters<typeof actual.useMobileNativeChatMessageDetail>
+      ) {
+        const result = actual.useMobileNativeChatMessageDetail(...args),
+          detail = result.detail
+        return detail
+          ? {
+              ...result,
+              detail: {
+                ...detail,
+                raw: (id: string) => {
+                  operations.raw.push(id)
+                  return detail.raw(id)
+                },
+                state: (id: string) => {
+                  operations.state.push(id)
+                  return detail.state(id)
+                }
               }
             }
-          }
-        : result
+          : result
+      }
     }
   }
-})
+)
 const rendered = vi.hoisted(() => new Map<string, number>())
-vi.mock('./MobileNativeChatMessage', async () => {
+vi.mock('./native-chat/transcript/MobileNativeChatMessage', async () => {
   const React = await import('react')
   const { useMobileNativeChatFullMessage, MobileNativeChatToolOutput } =
     await import('./MobileNativeChatFullContent')
-  const { MobileNativeChatGroupedThought } = await import('./MobileNativeChatReasoningRow')
+  const { MobileNativeChatGroupedThought } =
+    await import('./native-chat/transcript/MobileNativeChatReasoningRow')
   return {
     MobileNativeChatMessage: React.memo(
       (props: { message: NativeChatMessage; workRun?: NativeChatMessage[] }) => {
@@ -159,7 +163,9 @@ vi.mock('./MobileNativeChatMessage', async () => {
 vi.mock('./native-chat/input/MobileNativeChatPromptCard', () => ({
   MobileNativeChatPromptCard: 'PromptCard'
 }))
-vi.mock('./MobileNativeChatLiveLine', () => ({ MobileNativeChatLiveLine: 'LiveStatus' }))
+vi.mock('./native-chat/transcript/MobileNativeChatLiveLine', () => ({
+  MobileNativeChatLiveLine: 'LiveStatus'
+}))
 vi.mock('./MobileAgentWorkingIndicator', () => ({
   MobileAgentWorkingIndicator: 'WorkingIndicator'
 }))
@@ -178,12 +184,14 @@ vi.mock('./native-chat/input/MobileNativeChatQueuedMessages', () => ({
 vi.mock('./native-chat/input/MobileNativeChatBackgroundTasks', () => ({
   MobileNativeChatBackgroundTasks: 'BackgroundTasks'
 }))
-vi.mock('./MobileNativeChatImageViewer', () => ({ MobileNativeChatImageViewer: 'ImageViewer' }))
-vi.mock('./MobileNativeChatMessageActionsSheet', () => ({
+vi.mock('./native-chat/visual/MobileNativeChatImageViewer', () => ({
+  MobileNativeChatImageViewer: 'ImageViewer'
+}))
+vi.mock('./native-chat/transcript/MobileNativeChatMessageActionsSheet', () => ({
   MobileNativeChatMessageActionsSheet: 'ActionsSheet'
 }))
 vi.mock('./native-chat/composer/MobileNativeChatComposer', () => ({
-  MobileNativeChatComposer: 'Composer'
+  MobileNativeChatDraftComposer: 'Composer'
 }))
 
 const stable = {
@@ -191,14 +199,13 @@ const stable = {
   sendSurfaceId: 'perf-chat',
   getSendCompletionGeneration: () => 0,
   getComposerEditGeneration: () => 0,
-  composerText: '',
+  draftKey: null,
   onComposerTextChange: () => {},
   pending: [
     {
       id: 'pending',
       text: 'follow up',
-      sentAt: 10,
-      baselineTailMessageId: 'live-user'
+      sentAt: 10
     }
   ],
   imagePreviewsByMessageId: { 'user-0': ['local:preview'] }
@@ -223,7 +230,7 @@ function Harness({
     nativeChatSession: { messages, status: 'ready' },
     nativeChatAgent: 'claude',
     nativeChatStructured: true,
-    nativeChatAgentWorking: true,
+    nativeChatTurnActive: true,
     nativeChatItemSource: source,
     nativeChatVisualSource: source,
     nativeChatSettledTurns: timing.settledTurns,
@@ -231,7 +238,7 @@ function Harness({
     nativeChatWorkingStartedAt: timing.workingStartedAt,
     chatPending: stable.pending,
     chatImagePreviewsByMessageId: stable.imagePreviewsByMessageId,
-    chatComposerText: '',
+    chatDraftKey: null,
     setChatComposerText: stable.onComposerTextChange,
     getChatComposerEditGeneration: stable.getComposerEditGeneration,
     nativeChatQueued: { cards: [], pause: null, sessionKey: 'session' }
@@ -257,7 +264,8 @@ function Harness({
     sendSurfaceId: source?.sessionId ?? stable.sendSurfaceId,
     sessionId: source?.sessionId ?? 'session',
     getSendCompletionGeneration: stable.getSendCompletionGeneration,
-    keyboardInset: 0
+    keyboardInset: 0,
+    hostName: null
   })
 }
 
@@ -325,6 +333,7 @@ const scroller = {
   addEventListener: (type: string, callback: () => void) => listeners.set(type, callback),
   removeEventListener: (type: string) => listeners.delete(type),
   querySelectorAll: () => [],
+  querySelector: () => null,
   getBoundingClientRect: () => ({ top: 0, bottom: 500 })
 }
 const nodeMock = (element: { type: unknown }) =>

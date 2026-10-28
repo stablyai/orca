@@ -18,6 +18,11 @@ import { prepareLocalWorktreeRootForRepo } from '../worktree-root-preparation'
 import type { RuntimeStore } from './runtime-store-contract'
 import { runtimePathsEqual } from './runtime-worktree-path-identity'
 import { runtimeRepoIsRegistrationCandidate } from './runtime-worktree-selection'
+import { refuseWslHostWindowsDrivePath } from './wsl-host-windows-drive-guard'
+import {
+  WslHostWindowsDriveRefusalError,
+  type WslHostWindowsDriveRefusal
+} from '../../shared/wsl-host-windows-drive-refusal'
 
 type RuntimeRepositoryRegistrationDependencies = {
   getStore: () => RuntimeStore | null
@@ -39,6 +44,7 @@ export class RuntimeRepositoryRegistrationController {
     if (!isAbsolute(path)) {
       throw new Error('Project path must be an absolute path')
     }
+    await refuseWslHostWindowsDrivePath(path)
     if (kind === 'git') {
       await awaitWindowsHostGitEnvironmentReady({ cwd: path })
     }
@@ -48,26 +54,16 @@ export class RuntimeRepositoryRegistrationController {
     }
     // Store Git's resolved toplevel; symlink aliases/subfolders hide the main checkout as external.
     const repoPath = gitInfo?.rootPath ?? path
-    const sameHostRepos = store
-      .getRepos()
-      .filter((repo) => runtimeRepoIsRegistrationCandidate(repo, executionHostId))
+    const sameHostRepos = (): Repo[] =>
+      store.getRepos().filter((repo) => runtimeRepoIsRegistrationCandidate(repo, executionHostId))
     // Resolved toplevel lets symlink aliases find existing registrations.
-    const existing =
-      sameHostRepos.find(
+    const findAtPath = (): Repo | undefined =>
+      sameHostRepos().find(
         (repo) => runtimePathsEqual(repo.path, path) || runtimePathsEqual(repo.path, repoPath)
-      ) ?? (await findProjectAtSameRealPath(sameHostRepos, repoPath))
+      )
+    const existing = findAtPath() ?? (await findProjectAtSameRealPath(sameHostRepos(), repoPath))
     if (existing) {
-      if (
-        existing.executionHostId == null &&
-        parseExecutionHostId(executionHostId)?.kind === 'runtime'
-      ) {
-        const adopted =
-          store.updateRepo(existing, { executionHostId }) ??
-          ({ ...existing, executionHostId } as Repo)
-        this.invalidate(existing.id)
-        return adopted
-      }
-      return existing
+      return this.reuseExisting(store, existing, executionHostId)
     }
     // This controller validated/read the path locally; runtime: is the paired-client address, not another machine.
     const detected = await detectRepoIconAndUpstream({
@@ -75,6 +71,11 @@ export class RuntimeRepositoryRegistrationController {
       kind,
       executionHostId: LOCAL_EXECUTION_HOST_ID
     })
+    // A concurrent add of the same folder can finish while the awaits above are pending.
+    const raceWinner = findAtPath()
+    if (raceWinner) {
+      return this.reuseExisting(store, raceWinner, executionHostId)
+    }
     const repo: Repo = {
       id: randomUUID(),
       path: repoPath,
@@ -92,11 +93,29 @@ export class RuntimeRepositoryRegistrationController {
     return store.getRepo(repo.id) ?? repo
   }
 
+  private reuseExisting(
+    store: RuntimeStore,
+    existing: Repo,
+    executionHostId: ExecutionHostId | null | undefined
+  ): Repo {
+    if (
+      existing.executionHostId == null &&
+      parseExecutionHostId(executionHostId)?.kind === 'runtime'
+    ) {
+      const adopted =
+        store.updateRepo(existing, { executionHostId }) ??
+        ({ ...existing, executionHostId } as Repo)
+      this.invalidate(existing.id)
+      return adopted
+    }
+    return existing
+  }
+
   async create(
     parentPath: string,
     name: string,
     kind: 'git' | 'folder' = 'git'
-  ): Promise<{ repo: Repo } | { error: string }> {
+  ): Promise<{ repo: Repo } | { error: string; windowsDriveRefusal?: WslHostWindowsDriveRefusal }> {
     const store = this.requireStore()
     const trimmedName = name.trim()
     const trimmedParentPath = parentPath.trim()
@@ -112,6 +131,14 @@ export class RuntimeRepositoryRegistrationController {
     }
     if (!isAbsolute(trimmedParentPath)) {
       return { error: 'Parent directory must be an absolute path' }
+    }
+    try {
+      await refuseWslHostWindowsDrivePath(trimmedParentPath)
+    } catch (error) {
+      // An optional field: older clients read only `error`.
+      return error instanceof WslHostWindowsDriveRefusalError
+        ? { error: error.message, windowsDriveRefusal: error.data }
+        : { error: error instanceof Error ? error.message : String(error) }
     }
     const targetPath = join(trimmedParentPath, trimmedName)
     // Qualify by host: identical SSH paths name another machine's directory.

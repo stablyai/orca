@@ -73,8 +73,9 @@ function buildTargetPackage(target) {
       packageDir
     ],
     cwd: root,
-    // Desktop template omits optional ~10MB browsers per target; seven copies would outweigh the rest.
-    env: { ...process.env, ORCAD_OMIT_AGENT_BROWSER: '1' },
+    // Desktop template omits optional ~10MB browsers per target; packaging references the app's own copy instead.
+    // A checkout has no app copy, so ORCAD_OMIT_AGENT_BROWSER=0 keeps drivers for local Chromium serve.
+    env: { ...process.env, ORCAD_OMIT_AGENT_BROWSER: process.env.ORCAD_OMIT_AGENT_BROWSER ?? '1' },
     stdio: 'inherit',
     timeoutMs: null
   })

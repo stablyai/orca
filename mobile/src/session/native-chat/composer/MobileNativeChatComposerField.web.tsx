@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { StyleSheet, Text, TextInput, View } from 'react-native'
 import { colors } from '../../../theme/mobile-theme'
+import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { mobileNativeChatInputStyles as inputStyles } from './mobile-native-chat-input-styles'
 import {
   mobileNativeChatComposerSkillStyles as skillStyles,
@@ -8,7 +9,9 @@ import {
 } from './mobile-native-chat-composer-field-skill'
 
 // Textareas cannot style tokens: hide their text under a styled copy while preserving the caret. RN types omit caretColor.
-const clearText = { field: { color: 'transparent', caretColor: colors.textPrimary } }
+function clearText() {
+  return { field: { color: 'transparent', caretColor: colors.textPrimary } }
+}
 
 function scrollTopOf(event: unknown): number {
   const target =
@@ -29,6 +32,7 @@ export function MobileNativeChatComposerField({
   ref,
   ...props
 }: MobileNativeChatComposerFieldProps) {
+  useMobileColorScheme()
   const [scrollTop, setScrollTop] = useState(0)
   // Keep one tree so adding/removing a skill cannot remount the field and drop focus.
   return (
@@ -47,7 +51,7 @@ export function MobileNativeChatComposerField({
       <TextInput
         ref={ref}
         value={value}
-        style={skillToken ? [inputStyles.input, clearText.field] : inputStyles.input}
+        style={skillToken ? [inputStyles.input, clearText().field] : inputStyles.input}
         onScroll={skillToken ? (event) => setScrollTop(scrollTopOf(event)) : undefined}
         {...props}
       />

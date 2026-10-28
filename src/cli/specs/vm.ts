@@ -1,5 +1,5 @@
 import type { CommandSpec } from '../args'
-import { GLOBAL_FLAGS } from '../args'
+import { LOCAL_COMMAND_FLAGS } from '../args'
 
 export const VM_COMMAND_SPECS: CommandSpec[] = [
   {
@@ -7,7 +7,7 @@ export const VM_COMMAND_SPECS: CommandSpec[] = [
     summary: 'Validate a per-workspace environment recipe without provisioning by default',
     usage:
       'orca vm recipe doctor <recipe-id> [--repo-path <path>] [--provision|--connect] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'recipe-id', 'repo-path', 'provision', 'connect'],
+    allowedFlags: [...LOCAL_COMMAND_FLAGS, 'recipe-id', 'repo-path', 'provision', 'connect'],
     positionalArgs: ['recipe-id'],
     notes: [
       'Reads environmentRecipes from orca.yaml in the repo path, validates the selected recipe, and reports agent-friendly checks.',

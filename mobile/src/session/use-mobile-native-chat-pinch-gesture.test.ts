@@ -1,7 +1,10 @@
 import { createElement } from 'react'
 import { act, create } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { FONT_SCALE_STEP, quantizeFontScale } from './mobile-native-chat-message-text'
+import {
+  FONT_SCALE_STEP,
+  quantizeFontScale
+} from './native-chat/transcript/mobile-native-chat-message-text'
 
 const handlers: { start?: () => void; update?: (e: { scale: number }) => void } = {}
 

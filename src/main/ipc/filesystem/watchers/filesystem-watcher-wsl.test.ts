@@ -6,8 +6,8 @@ const { spawnMock } = vi.hoisted(() => ({
   spawnMock: vi.fn()
 }))
 
-vi.mock('child_process', () => ({
-  spawn: spawnMock
+vi.mock('@orca/process-host', () => ({
+  spawnProcess: spawnMock
 }))
 
 import { createWslWatcher } from './filesystem-watcher-wsl'
@@ -19,8 +19,8 @@ import {
 } from '../watcher-process/parcel-watcher-child-registry'
 import type { WatchedRoot, WslWatcherDeps } from './filesystem-watcher-wsl'
 
-const SNAPSHOT_START = '\x1e'
-const SNAPSHOT_END = '\x1f'
+const SNAPSHOT_START = '\0\x1e\0'
+const SNAPSHOT_END = '\0\x1f\0'
 const ROOT_KEY = '\\\\wsl.localhost\\Ubuntu\\home\\me\\repo'
 
 class FakeChildProcess extends EventEmitter {
@@ -90,16 +90,13 @@ describe('createWslWatcher', () => {
 
     await promise
 
-    expect(spawnMock).toHaveBeenCalledWith(
-      'wsl.exe',
-      ['-d', 'Ubuntu', '--exec', 'sh', '-s', '--', '/home/me/repo'],
-      expect.objectContaining({
-        stdio: ['pipe', 'pipe', 'pipe'],
-        windowsHide: true,
-        // Explicit cwd survives deletion of Orca's inherited worktree (#16463).
-        cwd: expect.any(String)
-      })
-    )
+    expect(spawnMock).toHaveBeenCalledWith({
+      program: 'wsl.exe',
+      args: ['-d', 'Ubuntu', '--exec', 'sh', '-s', '--', '/home/me/repo'],
+      stdio: 'pipe',
+      // Explicit cwd survives deletion of Orca's inherited worktree (#16463).
+      cwd: expect.any(String)
+    })
   })
 
   it('counts WSL watcher processes against the global physical child cap', async () => {
@@ -174,6 +171,34 @@ describe('createWslWatcher', () => {
       { type: 'create', path: '\\\\wsl.localhost\\Ubuntu\\home\\me\\repo\\new.txt' },
       { type: 'delete', path: '\\\\wsl.localhost\\Ubuntu\\home\\me\\repo\\old.txt' }
     ])
+  })
+
+  it('preserves control characters in filenames across byte-split snapshot frames', async () => {
+    const { child, promise, deps } = startWatcher()
+    child.stdout.write(snapshotFrame([]))
+    const root = await promise
+    const names = [
+      'start\x1einside.txt',
+      'end\x1finside.txt',
+      'trailing\x1f',
+      'tab\tline\n漢字.txt'
+    ]
+    const frame = (mtime: string) =>
+      snapshotFrame(names.map((name) => ['f', mtime, `/home/me/repo/${name}`]))
+    for (const mtime of ['1.0', '2.0']) {
+      for (const byte of Buffer.from(frame(mtime))) {
+        child.stdout.write(Buffer.from([byte]))
+      }
+    }
+    child.stdout.write(snapshotFrame([]))
+
+    expect(root.batch.events).toEqual(
+      ['create', 'update', 'delete'].flatMap((type) =>
+        names.map((name) => ({ type, path: `${ROOT_KEY}\\${name}` }))
+      )
+    )
+    expect(deps.scheduleBatchFlush).toHaveBeenCalledTimes(3)
+    await root.subscription.unsubscribe()
   })
 
   it('turns watcher exit into an overflow refresh without retaining UNC paths', async () => {

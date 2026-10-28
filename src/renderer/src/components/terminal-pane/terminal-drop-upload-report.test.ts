@@ -32,7 +32,9 @@ describe('reportTerminalDropUploadSkipsAndFailures', () => {
     reportTerminalDropUploadSkipsAndFailures([{ reason: 'symlink' }, { reason: 'too_large' }], [])
     const mixedSkipKey = mocks.translate.mock.calls[0]?.[0]
 
-    expect(symlinkOnlyKey).toBe('auto.components.terminal.pane.terminal.drop.handler.53f015fd85')
+    expect(symlinkOnlyKey).toBe(
+      'auto.components.terminal.pane.terminal.drop.handler.skippedSymlinkSingular'
+    )
     expect(mixedSkipKey).toBe('auto.components.terminal.pane.terminal.drop.handler.b4cf68e889')
     expect(symlinkOnlyKey).not.toBe(mixedSkipKey)
     expect(toast.message).toHaveBeenCalledTimes(2)

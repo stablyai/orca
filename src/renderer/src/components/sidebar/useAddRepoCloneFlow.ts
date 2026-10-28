@@ -63,7 +63,7 @@ export function useAddRepoCloneFlow({
   // Reject stale callbacks after a clone flow is reset or superseded.
   const cloneGenRef = useRef(0)
   // Allow late settings hydration to fill the default once per clone-step entry.
-  const cloneStepAutoFilledRef = useRef(false)
+  const [cloneStepAutoFilled, setCloneStepAutoFilled] = useState(false)
 
   useEffect(() => {
     if (!isCloning) {
@@ -77,13 +77,15 @@ export function useAddRepoCloneFlow({
     cloneDestination,
     activeRuntimeEnvironmentId,
     workspaceDir,
-    cloneStepAutoFilled: cloneStepAutoFilledRef.current
+    cloneStepAutoFilled
   })
   if (step !== 'clone') {
-    cloneStepAutoFilledRef.current = false
+    if (cloneStepAutoFilled) {
+      setCloneStepAutoFilled(false)
+    }
   } else if (cloneDestinationAutoFill) {
     // Late defaults may seed local destinations; remote clone paths remain user-entered.
-    cloneStepAutoFilledRef.current = true
+    setCloneStepAutoFilled(true)
     setCloneDestination(cloneDestinationAutoFill.destination)
   }
 

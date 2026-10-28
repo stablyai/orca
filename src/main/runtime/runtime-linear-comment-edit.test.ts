@@ -89,7 +89,7 @@ function createCommands(emitClientEvent = vi.fn()): RuntimeLinearReadCommands {
     showTerminal: async () => {
       throw new Error('unused')
     },
-    resolveWorktreeSelector: async () => {
+    resolveWorkspaceSelector: async () => {
       throw new Error('unused')
     },
     listResolvedWorktrees: async () => [worktree],

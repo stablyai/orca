@@ -1,5 +1,5 @@
-import { EventEmitter } from 'node:events'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { createFakeSpawnedChild } from '../../shared/__fixtures__/fake-spawned-child'
 
 const { execFileMock, execFileSyncMock, spawnMock } = vi.hoisted(() => ({
   execFileMock: vi.fn(),
@@ -57,20 +57,8 @@ function fencedProbeStdout(command: unknown, payload: string): string {
 
 const LOGIN_ENVIRONMENT_FIELDS = `${LOGIN_ENVIRONMENT.path}\0${LOGIN_ENVIRONMENT.gitPath}\0${LOGIN_ENVIRONMENT.home}`
 
-type MockChild = EventEmitter & {
-  stdout: EventEmitter
-  stderr: EventEmitter
-  pid: number
-  kill: ReturnType<typeof vi.fn>
-}
-
-function createMockChild(): MockChild {
-  const child = new EventEmitter() as MockChild
-  child.stdout = new EventEmitter()
-  child.stderr = new EventEmitter()
-  child.pid = 1234
-  child.kill = vi.fn()
-  return child
+function createMockChild() {
+  return createFakeSpawnedChild(1234)
 }
 
 async function withPlatform<T>(platform: NodeJS.Platform, run: () => Promise<T>): Promise<T> {

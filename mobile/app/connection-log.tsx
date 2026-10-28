@@ -19,6 +19,7 @@ import {
   type DiagnosticsHostSelection
 } from '../src/diagnostics/connection-diagnostics-screen-data'
 import { connectionDiagnosticsScreenStyles as styles } from '../src/diagnostics/connection-diagnostics-screen-styles'
+import { useMobileColorScheme } from '../src/theme/use-mobile-color-scheme'
 import type { ConnectionLogEntry, HostProfile } from '../src/transport/types'
 
 // Keep empty snapshot identity stable or useSyncExternalStore rerenders forever.
@@ -26,6 +27,7 @@ const EMPTY_ENTRIES: readonly ConnectionLogEntry[] = []
 
 // Acquire client here so opening logs during host failure starts dialing and live logging.
 export default function NativeConnectionLogRoute() {
+  useMobileColorScheme()
   const clientContext = useRpcClientContext()
   const router = useRouter()
   const params = useLocalSearchParams<{ hostId?: string }>()

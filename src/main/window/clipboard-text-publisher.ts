@@ -40,21 +40,25 @@ export function createClipboardTextPublisher(
     if (text.length > CLIPBOARD_TEXT_WRITE_MAX_BYTES) {
       return Promise.reject(new Error(CLIPBOARD_TEXT_WRITE_TOO_LARGE_ERROR))
     }
-    if (!deps.isWayland()) {
-      return deps.validate(text).then((safeText) => deps.write(safeText, kind))
+    const wayland = deps.isWayland()
+    if (wayland) {
+      if (
+        count >= MAX_PENDING_CLIPBOARD_WRITES ||
+        text.length > CLIPBOARD_TEXT_WRITE_MAX_BYTES - queuedCodeUnits
+      ) {
+        return Promise.reject(new Error('Too many pending clipboard writes'))
+      }
+      count += 1
+      queuedCodeUnits += text.length
     }
-    if (
-      count >= MAX_PENDING_CLIPBOARD_WRITES ||
-      text.length > CLIPBOARD_TEXT_WRITE_MAX_BYTES - queuedCodeUnits
-    ) {
-      return Promise.reject(new Error('Too many pending clipboard writes'))
-    }
-    count += 1
-    queuedCodeUnits += text.length
     // Validate inside the queue: large copies yield and must not overwrite a later request.
     const next = pending
       .then(async () => {
         const safeText = await deps.validate(text)
+        if (!wayland) {
+          deps.write(safeText, kind)
+          return
+        }
         const result = await deps.run({
           program: await deps.helperPath(),
           input: safeText,
@@ -68,8 +72,10 @@ export function createClipboardTextPublisher(
         deps.clearCache()
       })
       .finally(() => {
-        count -= 1
-        queuedCodeUnits -= text.length
+        if (wayland) {
+          count -= 1
+          queuedCodeUnits -= text.length
+        }
       })
     pending = next.catch(() => undefined)
     return next

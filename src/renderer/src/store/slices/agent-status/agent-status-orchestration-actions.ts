@@ -22,7 +22,7 @@ export function createAgentStatusOrchestrationActions(
       entries: Record<string, AgentStatusOrchestrationContext>
     ) => {
       const generatedTitleUpdates: AgentStatusEntry[] = []
-      set((s) => {
+      set((s, changedPaneKeys) => {
         const runtimeMapChanged = !orchestrationMapsEqual(
           s.runtimeAgentOrchestrationByPaneKey,
           entries
@@ -45,6 +45,7 @@ export function createAgentStatusOrchestrationActions(
                 liveChanged = true
               }
               const nextEntry = { ...liveEntry, orchestration: merged }
+              changedPaneKeys.add(paneKey)
               nextLive[paneKey] = nextEntry
               // Why: only replace titles when labels match the live dispatch taskId; sticky completed context must not rename a later turn.
               if (

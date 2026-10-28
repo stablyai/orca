@@ -12,7 +12,7 @@ import type { ConnectionState } from '../transport/types'
 import {
   nextBranchCompareState,
   readBranchCompareOutcome,
-  type BranchCompareOutcome
+  type BranchCompareAttempt
 } from './mobile-branch-compare-outcome'
 import { gitStatusHostPayloadRead } from './mobile-git-read-operations'
 import {
@@ -53,6 +53,8 @@ export type MobileSourceControlLoaders = {
   setRootRef: (node: View | null) => void
   loadStatus: (options?: LoadStatusOptions) => Promise<boolean>
   settings: MobileSourceControlSettings
+  // Desktop's rebase target; kept apart from the compare so a failed or unsupported compare keeps it.
+  rebaseBaseRef: string | null
 }
 
 export function useMobileSourceControlLoaders(params: Params): MobileSourceControlLoaders {
@@ -65,12 +67,13 @@ export function useMobileSourceControlLoaders(params: Params): MobileSourceContr
   const [branchCompareState, setBranchCompareState] = useState<MobileBranchCompareState>({
     kind: 'idle'
   })
+  const [rebaseBaseRef, setRebaseBaseRef] = useState<string | null>(null)
   const currentStatusIdentityRef = useRef('')
   const loadGenerationRef = useRef(0)
   const mountedRef = useRef(true)
   const statusLoadInFlightRef = useRef<StatusLoadInFlight | null>(null)
   const branchCompare = useRef(
-    new GenerationScopedRequestOwner<BranchCompareParameters, BranchCompareOutcome>()
+    new GenerationScopedRequestOwner<BranchCompareParameters, BranchCompareAttempt>()
   ).current
   // Reset on identity change during render so retained ready state cannot expose another host/worktree for a frame.
   const lastResetIdentityRef = useRef(statusIdentityKey)
@@ -80,6 +83,7 @@ export function useMobileSourceControlLoaders(params: Params): MobileSourceContr
     branchCompare.reset()
     setScreenState({ kind: 'loading' })
     setBranchCompareState({ kind: 'idle' })
+    setRebaseBaseRef(null)
   }
   currentStatusIdentityRef.current = statusIdentityKey
 
@@ -126,6 +130,7 @@ export function useMobileSourceControlLoaders(params: Params): MobileSourceContr
         return false
       }
       const outcome = loaded.value
+      setRebaseBaseRef(outcome.effectiveBaseRef)
       setBranchCompareState((prev) =>
         nextBranchCompareState(outcome, prev, options.preserveReadyOnFailure)
       )
@@ -267,6 +272,7 @@ export function useMobileSourceControlLoaders(params: Params): MobileSourceContr
     mountedRef,
     setRootRef,
     loadStatus,
-    settings
+    settings,
+    rebaseBaseRef
   }
 }

@@ -70,7 +70,10 @@ describe('preflight RPC methods', () => {
     // An older client sends no workspace and keeps the host-default probe.
     expect(resolveAgentDetectionHost).toHaveBeenNthCalledWith(1, undefined, undefined)
     expect(resolveAgentDetectionHost).toHaveBeenNthCalledWith(2, undefined, undefined)
-    expect(detectInstalledAgentsWithShellPathHydrationMock).toHaveBeenCalledWith(undefined)
+    expect(detectInstalledAgentsWithShellPathHydrationMock).toHaveBeenCalledWith(
+      undefined,
+      undefined
+    )
     expect(refreshShellPathAndDetectAgentsMock).toHaveBeenCalledWith(undefined)
     expect(detected).toMatchObject({ ok: true, result: ['codex'] })
     expect(refreshed).toMatchObject({
@@ -112,7 +115,10 @@ describe('preflight RPC methods', () => {
       makeRequest('preflight.detectAgents', { worktreeId: 'repo-ssh::/srv/w' })
     )
 
-    expect(detectInstalledAgentsWithShellPathHydrationMock).toHaveBeenCalledWith({ projectRuntime })
+    expect(detectInstalledAgentsWithShellPathHydrationMock).toHaveBeenCalledWith(
+      { projectRuntime },
+      undefined
+    )
     expect(wsl).toMatchObject({ ok: true, result: ['codex'] })
     expect(detectInstalledAgentsWithShellPathHydrationMock).toHaveBeenCalledTimes(1)
     expect(ssh).toMatchObject({ ok: false, error: { message: SSH_HOST_NOT_SERVED_MESSAGE } })

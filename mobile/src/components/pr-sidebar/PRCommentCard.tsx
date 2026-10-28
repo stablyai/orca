@@ -8,6 +8,7 @@ import type {
   PRComment
 } from '../../../../src/shared/github/comment-types'
 import { colors } from '../../theme/mobile-theme'
+import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { canEditComment, isResolvableComment } from '../../session/pr-comment-actions'
 import { ConfirmModal } from '../ConfirmModal'
 import { CommentMarkdown } from './CommentMarkdown'
@@ -43,6 +44,7 @@ const REACTION_EMOJI: Record<GitHubReactionContent, string> = {
 }
 
 function Reactions({ reactions }: { reactions?: GitHubReaction[] }) {
+  useMobileColorScheme()
   const visible = (reactions ?? []).filter((r) => r.count > 0)
   if (visible.length === 0) {
     return null
@@ -71,6 +73,7 @@ export const PRCommentCard = memo(function PRCommentCard({
   actions?: PRCommentCardActions
   now: number
 }) {
+  useMobileColorScheme()
   const [replyOpen, setReplyOpen] = useState(false)
   const [editOpen, setEditOpen] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)

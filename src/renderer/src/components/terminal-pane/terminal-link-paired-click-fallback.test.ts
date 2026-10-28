@@ -341,6 +341,80 @@ describe('a modifier-click on a paired-server path followed by more paths', () =
     expect(asked).toEqual(['//server/share/other/report.txt'])
   })
 
+  it.each([
+    ['report', ['//server/share/report.md']],
+    ['details', []]
+  ])('never opens an unchecked guess past a share path when clicking %s', async (word, opened) => {
+    setPlatform('Windows')
+    runtimeEnvironmentCallMock.mockResolvedValue({
+      id: 'rpc-1',
+      ok: true,
+      result: { worktree: 'wt-1', relativePath: null, absolutePath: null, exists: false },
+      _meta: { runtimeId: 'remote-runtime' }
+    })
+    const line = 'See //server/share/report.md for details'
+    const buffer = makeBuffer([makeBufferLine(line)])
+
+    openFilePathLinkAtBufferPosition(buffer, { x: line.indexOf(word) + 1, y: 1 }, 80, {
+      startupCwd: '/srv/repo',
+      worktreeId: 'wt-1',
+      worktreePath: '/srv/repo',
+      runtimeEnvironmentId: 'env-1',
+      terminalHandle: 'term-1',
+      pathExistsCache: new Map()
+    })
+    await flushDoubleRaf()
+
+    const asked = runtimeEnvironmentCallMock.mock.calls.map(([args]) => args.params?.pathText)
+    expect(asked).toEqual(opened)
+  })
+
+  it('leaves a click on prose beside a path to the terminal', async () => {
+    setPlatform('Macintosh')
+    const line = '/tmp/report.md completed successfully'
+    const buffer = makeBuffer([makeBufferLine(line)])
+
+    const handled = openFilePathLinkAtBufferPosition(
+      buffer,
+      { x: line.indexOf('completed') + 1, y: 1 },
+      80,
+      {
+        startupCwd: '/srv/repo',
+        worktreeId: 'wt-1',
+        worktreePath: '/srv/repo',
+        runtimeEnvironmentId: 'env-1',
+        terminalHandle: 'term-1',
+        pathExistsCache: new Map()
+      }
+    )
+    await flushDoubleRaf()
+
+    expect(handled).toBe(false)
+    expect(runtimeEnvironmentCallMock).not.toHaveBeenCalled()
+  })
+
+  it('opens the joined path when its checks fail and the visible prefix is known missing', async () => {
+    setPlatform('Macintosh')
+    hostAnswers((path) => ({ exists: path === 'report.txt' }))
+    const answerOpen = runtimeEnvironmentCallMock.getMockImplementation()!
+    runtimeEnvironmentCallMock.mockImplementation((args) =>
+      args.method === 'files.pathsExist' ? Promise.reject(new Error('host busy')) : answerOpen(args)
+    )
+    const buffer = makeBuffer([
+      makeBufferLine('/srv/repo/report'),
+      makeBufferLine('.txt'),
+      makeBufferLine('.map')
+    ])
+
+    clickPairedPath(buffer, makeExistsCache([[runtimeKey('/srv/repo/report'), false]]))
+    await flushDoubleRaf()
+
+    expect(openFileMock).toHaveBeenCalledWith(
+      expect.objectContaining({ filePath: '/srv/repo/report.txt' }),
+      expect.anything()
+    )
+  })
+
   it('opens a wrapped share path whole even when its prefix is a known file', async () => {
     setPlatform('Windows')
     runtimeEnvironmentCallMock.mockResolvedValue({

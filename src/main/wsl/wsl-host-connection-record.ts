@@ -25,6 +25,18 @@ export function persistWslHostConnection(
   }
 }
 
+/** Saves the host's live connection's pairing and ports; transports on a changed pairing retire. */
+export function saveWslHostConnection(
+  deps: { userDataPath: () => string; pairingChanged: (environmentId: string) => void },
+  record: WslHostDeploymentRecord | null,
+  connections: { get(distro: string): WslOrcadConnection | null } | null
+): void {
+  const connection = record ? connections?.get(record.distro) : null
+  if (record && connection && persistWslHostConnection(deps.userDataPath(), record, connection)) {
+    deps.pairingChanged(record.environmentId)
+  }
+}
+
 export function toWslHostStatus(
   record: WslHostDeploymentRecord,
   status: WslOrcadConnectionStatus,

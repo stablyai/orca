@@ -32,24 +32,18 @@ import {
 import {
   getRepoExecutionHostId,
   isOwnedSshTargetId,
-  parseExecutionHostId,
-  toRuntimeExecutionHostId,
-  type ExecutionHostId
+  parseExecutionHostId
 } from '../../../shared/execution-host'
+import { listRuntimeSessionHostsForStartup } from './startup-runtime-session-hosts'
 import { mapWithConcurrency } from '../../../shared/map-with-concurrency'
+import { collectWslMovedWorkspaceKeysFromSession } from '../store/repos/wsl-moved-projects'
+import { wslMovedSessionReadApi } from '../store/repos/wsl-moved-local-session-rows'
 import type { OnboardingState } from '../../../shared/onboarding-state-types'
 import { ensureLocalRuntimeCapabilities } from '../runtime/local-runtime-capabilities'
-
-async function listRuntimeSessionHostIdsForStartup(): Promise<ExecutionHostId[]> {
-  try {
-    return (await window.api.runtimeEnvironments.list()).map((environment) =>
-      toRuntimeExecutionHostId(environment.id)
-    )
-  } catch (err) {
-    console.warn('Failed to list runtime session hosts for startup:', err)
-    return []
-  }
-}
+import {
+  finishStartupWorktreeHydration,
+  refreshStartupWorktrees
+} from '../startup/startup-worktree-refresh'
 
 /** Hydrate settings/UI/catalog/session, reconnect and restore terminals before unlocking saves. Failure boots in degraded no-save mode to protect disk state. */
 export function useAppStartupHydration(onOnboardingLoaded: (state: OnboardingState) => void): void {
@@ -107,9 +101,12 @@ export function useAppStartupHydration(onOnboardingLoaded: (state: OnboardingSta
         // Runtime session hosts need no repo state; overlap their IPC and handle rejection until the later await.
         const runtimeHostsPromise = timeRendererStartupStep(
           'list-runtime-session-hosts',
-          listRuntimeSessionHostIdsForStartup
+          listRuntimeSessionHostsForStartup
         )
         runtimeHostsPromise.catch(() => {})
+        // Before the session read: a moved project's local rows must leave before the host's merge in.
+        // Started before the repo list too; this startup load does not prune, so it need not wait.
+        const wslMovedProjectsPromise = useAppStore.getState().fetchWslMovedProjects()
         // Skip remote catalogs for first paint; saved runtimes may wait a full connect timeout.
         await timeRendererStartupStep('fetch-repos-local', () =>
           actions.fetchReposForAllHosts({ remoteHosts: 'skip' })
@@ -126,15 +123,18 @@ export function useAppStartupHydration(onOnboardingLoaded: (state: OnboardingSta
             actions.fetchFolderWorkspacesForAllHosts({ remoteHosts: 'skip' })
           )
         })()
-        const sessionReadPromise = runtimeHostsPromise.then((startupRuntimeHostIds) =>
-          // Restore cached runtime-host partitions without network waits; skip unreadable ones.
-          timeRendererStartupStep('session-get', () =>
-            fetchWorkspaceSessionWithRuntimeHostOwners(
-              window.api.session,
-              useAppStore.getState().repos,
-              startupRuntimeHostIds
+        const sessionReadPromise = Promise.all([runtimeHostsPromise, wslMovedProjectsPromise]).then(
+          ([startupRuntimeHosts]) =>
+            // Restore cached runtime-host partitions without network waits; skip unreadable ones.
+            timeRendererStartupStep('session-get', () =>
+              fetchWorkspaceSessionWithRuntimeHostOwners(
+                // A moved workspace's retained rows share tab ids with its host's live ones.
+                wslMovedSessionReadApi(useAppStore.getState().wslMovedProjects),
+                useAppStore.getState().repos,
+                startupRuntimeHosts.hostIds,
+                startupRuntimeHosts.sshHostIdByRuntimeHostId
+              )
             )
-          )
         )
         const hydrationSessionChain = sessionReadPromise.then(async (sessionRead) => {
           const hydrationRepoIds = collectWorktreeHydrationRepoIdsFromSession(
@@ -178,7 +178,14 @@ export function useAppStartupHydration(onOnboardingLoaded: (state: OnboardingSta
         )
         if (!cancelled) {
           const sessionHydrationOptions = {
-            additionalValidWorkspaceKeys: collectFolderWorkspaceKeysFromSession(sessionRead.session)
+            additionalValidWorkspaceKeys: collectFolderWorkspaceKeysFromSession(
+              sessionRead.session
+            ),
+            wslMovedChatWorkspaceKeys: collectWslMovedWorkspaceKeysFromSession(
+              sessionRead.session,
+              useAppStore.getState().wslMovedProjects,
+              sessionRead.runtimeHostIdByWorkspaceSessionKey
+            )
           }
           timeRendererStartupSyncStep('hydrate-session-stores', () => {
             // The read's host-ownership fields are named as the hydration options it feeds.
@@ -195,6 +202,8 @@ export function useAppStartupHydration(onOnboardingLoaded: (state: OnboardingSta
             )
           })
           restoreStructuredLaunchSurfaces()
+          // Discovery must not wait for terminal or SSH restoration.
+          const startupWorktreeRefresh = refreshStartupWorktrees(actions, () => cancelled)
           await timeRendererStartupStep('prepare-terminal-startup-restoration', () =>
             window.api.app.prepareTerminalStartupRestoration()
           )
@@ -267,6 +276,11 @@ export function useAppStartupHydration(onOnboardingLoaded: (state: OnboardingSta
           // Unlock writes only after all hydration/dependent steps succeed; never save partially restored state (#1158).
           actions.setHydrationSucceeded(true)
           actions.setTerminalStartupRestorationReady(true)
+          void startupWorktreeRefresh.then((results) => {
+            if (!cancelled) {
+              finishStartupWorktreeHydration(results)
+            }
+          })
           // Require opt-in dev seeding so empty profiles can exercise onboarding without selection hijacking.
           if (
             import.meta.env.DEV &&
@@ -279,40 +293,6 @@ export function useAppStartupHydration(onOnboardingLoaded: (state: OnboardingSta
           logRendererStartupDiagnostic('startup-hydration-done', {
             durationMs: Math.round(performance.now() - startupStartedAt)
           })
-          void (async () => {
-            try {
-              try {
-                // Wait for owner visibility defaults before exposing remote rows under fallback policy.
-                await timeRendererStartupStep('owner-visibility-defaults', () =>
-                  actions.awaitOwnerWorktreeVisibilityDefaultsHydration()
-                )
-                await timeRendererStartupStep('remote-catalog-refresh', async () => {
-                  await actions.fetchReposForAllHosts()
-                  await actions.fetchProjectGroupsForAllHosts()
-                  await actions.fetchFolderWorkspacesForAllHosts()
-                })
-              } catch (err) {
-                console.warn('Remote startup catalog refresh failed:', err)
-              }
-              if (!cancelled) {
-                try {
-                  await timeRendererStartupStep('remote-worktree-refresh', async () => {
-                    // Full scans are unnecessary for recovery; defer them past startup.
-                    await actions.fetchAllWorktrees()
-                    // Prune from deferred authoritative scans too; retain disconnected SSH visits because absence remains unproven.
-                    actions.pruneLastVisitedTimestamps()
-                    await actions.fetchWorktreeLineage()
-                  })
-                } catch (err) {
-                  console.warn('Deferred startup worktree refresh failed:', err)
-                }
-              }
-            } finally {
-              if (!cancelled) {
-                useAppStore.setState({ startupWorktreeRefreshCompleted: true })
-              }
-            }
-          })()
         }
       } catch (error) {
         await recoverFromDegradedStartup({

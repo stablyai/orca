@@ -1,6 +1,8 @@
-import { basename } from '@/lib/path'
 import { BINARY_PROBE_BYTES } from '../../../shared/binary-buffer'
-import { IMAGE_FILE_MIME_TYPES } from '../../../shared/image-file-extensions'
+import {
+  IMAGE_AND_PDF_PREVIEW_MIME_TYPES,
+  filePreviewExtension
+} from '../../../shared/file-preview-kind'
 import type {
   RuntimeFilePreviewResult,
   RuntimeFileReadChunkResult
@@ -103,6 +105,16 @@ export async function readFileInChunks(reader: ChunkedFileReader): Promise<Paged
   return { kind: 'ok', bytes }
 }
 
+/** A binary the host refused as text: only images and PDFs preview, so no other is fetched. */
+export async function readRemoteBinaryFile(
+  address: RuntimeRemoteFileAddress,
+  options: { pageOversized: boolean }
+): Promise<RuntimeFilePreviewResult> {
+  return previewableBinaryMimeType(address.relativePath)
+    ? readRemoteFilePreview(address, options)
+    : { content: '', isBinary: true }
+}
+
 /** `files.readPreview`, falling back to a chunked read when the file is too large for one reply. */
 export async function readRemoteFilePreview(
   address: RuntimeRemoteFileAddress,
@@ -156,15 +168,9 @@ export function pagedTextFileResult(bytes: Uint8Array): RuntimeFilePreviewResult
   return { content: new TextDecoder('utf-8', { ignoreBOM: true }).decode(bytes), isBinary: false }
 }
 
-/** Mirrors the host's RUNTIME_PREVIEWABLE_BINARY_MIME_TYPES, which drives `files.readPreview`. */
+/** The image/PDF previews the host's `files.readPreview` sends whole; one table for both sides. */
 export function previewableBinaryMimeType(relativePath: string): string | undefined {
-  const name = basename(relativePath)
-  const dot = name.lastIndexOf('.')
-  if (dot <= 0) {
-    return undefined
-  }
-  const extension = name.slice(dot).toLowerCase()
-  return extension === '.pdf' ? 'application/pdf' : IMAGE_FILE_MIME_TYPES[extension]
+  return IMAGE_AND_PDF_PREVIEW_MIME_TYPES[filePreviewExtension(relativePath)]
 }
 
 async function nullWhenUnsupported<TResult>(call: () => Promise<TResult>): Promise<TResult | null> {
@@ -197,7 +203,7 @@ function decodeChunk(contentBase64: unknown, bytesRead: unknown): Uint8Array {
   return bytes
 }
 
-function bytesToBase64(bytes: Uint8Array): string {
+export function bytesToBase64(bytes: Uint8Array): string {
   const parts: string[] = []
   // Why: a multiple of 3, so slices join without padding; small enough for fromCharCode's args.
   const slice = 0x2000 * 3

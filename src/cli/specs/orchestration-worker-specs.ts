@@ -79,6 +79,7 @@ export const ORCHESTRATION_WORKER_COMMAND_SPECS: CommandSpec[] = [
     allowedFlags: [...GLOBAL_FLAGS, 'dispatch', 'retry-request'],
     notes: [
       'A Dispatch created by orchestration dispatch is fenced without closing its unsupervised terminal process.',
+      'processAction closed_agent_terminal means Orca issued the close (do not also run terminal close); stop_unknown exits 1 and may still report it when the agent exit was not proven.',
       'Never deletes the worktree, setup terminal, configured tabs, or unrelated processes.'
     ]
   },

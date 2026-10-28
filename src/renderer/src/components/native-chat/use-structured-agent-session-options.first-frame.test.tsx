@@ -29,7 +29,7 @@ import type {
   AgentSessionModelCatalogResult,
   AgentSessionOptionsResult
 } from '../../../../shared/agent-session-wire'
-import type { SessionOptionDescriptor } from '../../../../shared/native-chat-session-options'
+import type { SessionOptionDescriptor } from '../../../../shared/native-chat/input/native-chat-session-options'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import {
   preloadHostModelCatalogSnapshots,

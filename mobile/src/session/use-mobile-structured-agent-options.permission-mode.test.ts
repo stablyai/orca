@@ -64,6 +64,7 @@ async function mountOptions(props: ProbeProps) {
       sessionId: 'session-1',
       enabled: true,
       fence: probe.fence,
+      turnId: null,
       mutate,
       optionStamp: probe.optionStamp,
       hostSupport:
@@ -282,7 +283,7 @@ function listingLandsLaterClient() {
 }
 
 describe('Approve for me on a phone chat opened before its account was listed', () => {
-  it('is offered once the listing lands', async () => {
+  it('is offered before and after the listing lands', async () => {
     const host = listingLandsLaterClient()
     const options = await mountOptions({
       client: host.client,
@@ -290,10 +291,10 @@ describe('Approve for me on a phone chat opened before its account was listed', 
       optionStamp: '',
       agent: 'claude'
     })
-    expect(options.offered()).toEqual(['ask', 'accept-edits', 'full-access'])
+    expect(options.offered()).toEqual(['ask', 'accept-edits', 'auto', 'full-access'])
     host.land()
     await options.rerender({})
-    expect(options.offered()).toContain('auto')
+    expect(options.offered()).toEqual(['ask', 'accept-edits', 'auto', 'full-access'])
     await options.unmount()
   })
 })

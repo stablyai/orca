@@ -3,7 +3,7 @@ import { getDeveloperPermissionsPaneSearchEntries } from '@/components/settings/
 import { getExperimentalPaneSearchEntries } from '@/components/settings/experimental-search'
 import { getPluginsPaneSearchEntries } from '@/components/settings/plugins-search'
 import { getPrivacyPaneSearchEntries } from '@/components/settings/privacy-search'
-import { getRepositoryPaneSearchEntries } from '@/components/settings/repository-search'
+import { getRepositoryPaneSearchEntries } from '@/components/settings/repository/repository-search'
 import { buildSettingsProjectList } from '@/components/settings/settings-project-list'
 import { getSshPaneSearchEntries } from '@/components/settings/ssh-search'
 import { translate } from '@/i18n/i18n'
@@ -158,7 +158,7 @@ export function buildRemoteSettingsSections(
       : []),
     // Collapse host-specific repo rows to one project entry using the same inputs as settings panes.
     ...buildSettingsProjectList(repos, projectGrouping).map((settingsProject) => {
-      const { project, representativeRepoId, setups } = settingsProject
+      const { project, representativeRepoId, setups, checkoutLabel } = settingsProject
       const representativeRepo = reposById.get(representativeRepoId) ?? repos[0]
       const hostSummary =
         setups.length > 1
@@ -170,7 +170,7 @@ export function buildRemoteSettingsSections(
           : (setups[0]?.path ?? representativeRepo.path)
       return {
         id: `repo-${representativeRepoId}`,
-        title: project.displayName,
+        title: checkoutLabel ?? project.displayName,
         description: `${getRepoKindLabel(project)} • ${hostSummary}`,
         icon: SlidersHorizontal,
         searchEntries: getRepositoryPaneSearchEntries(representativeRepo, {

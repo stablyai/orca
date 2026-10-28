@@ -1,8 +1,9 @@
 import { StyleSheet } from 'react-native'
 import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
+import { themedStyleSheet } from '../../theme/themed-styles'
 
 // Match desktop conflict section’s muted layout without growing shared sidebar styles.
-export const prConflictStyles = StyleSheet.create({
+export const prConflictStyles = themedStyleSheet(() => ({
   meta: {
     color: colors.textSecondary,
     fontSize: 11
@@ -97,4 +98,4 @@ export const prConflictStyles = StyleSheet.create({
     lineHeight: 15,
     marginTop: spacing.sm
   }
-})
+}))

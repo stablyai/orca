@@ -537,4 +537,16 @@ describe('issue source operations', () => {
       { cwd: '/repo-root', host: 'github.com' }
     )
   })
+
+  it('reports a failed close whose gh error mentions "already"', async () => {
+    getIssueOwnerRepoMock.mockResolvedValueOnce({ owner: 'stablyai', repo: 'orca' })
+    ghExecFileAsyncMock.mockRejectedValueOnce(
+      new Error('GraphQL: API rate limit already exceeded for user ID 1.')
+    )
+
+    await expect(updateIssue('/repo-root', 924, { state: 'closed' })).resolves.toEqual({
+      ok: false,
+      error: 'GitHub rate limit hit. Try again in a few minutes.'
+    })
+  })
 })

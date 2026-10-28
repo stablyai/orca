@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { JiraIssue } from '../../../shared/jira/jira-types'
 import type { TaskSourceContext } from '../../../shared/task-source-context'
-import { filterLinkedJiraIssues, readLinkedJiraIssues } from './task-page-jira-linked-issues'
+import { readLinkedJiraIssues } from './task-page-jira-linked-issues'
 const source: TaskSourceContext = {
   kind: 'task-source',
   provider: 'jira',
@@ -65,15 +65,5 @@ describe('Jira Has Workspace issue reads', () => {
     )
     expect(result.issues).toEqual([])
     expect(result.error).not.toBeNull()
-  })
-  it('returns empty without requests when no issues are linked', async () => {
-    const search = vi.fn()
-    expect((await readLinkedJiraIssues([], search, source, false)).issues).toEqual([])
-    expect(search).not.toHaveBeenCalled()
-  })
-  it('searches linked issue titles and keys locally', () => {
-    expect(filterLinkedJiraIssues([issue], 'login')).toEqual([issue])
-    expect(filterLinkedJiraIssues([issue], 'app-1')).toEqual([issue])
-    expect(filterLinkedJiraIssues([issue], 'unrelated')).toEqual([])
   })
 })

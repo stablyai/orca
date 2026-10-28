@@ -1,16 +1,94 @@
+import { runProcessSync } from '@orca/process-host'
 import fs from 'node:fs'
+import os from 'node:os'
 import path from 'node:path'
-import { describe, expect, it } from 'vitest'
-// Only the pure functions are under test; the tsc spawn is proven end to end by CI.
+import { describe, expect, it, vi } from 'vitest'
+import { removeTreeSync } from '../../src/shared/windows-transient-lock-removal'
 import {
   diffBaseline,
   diffCensus,
   hasTsNocheckDirective,
+  main,
   parseBaseline,
   parseFailingFiles,
   parseProgramTestFiles,
   TESTS_OUTSIDE_PROGRAM
 } from './check-tests-typecheck-ratchet.mjs'
+
+vi.mock('@orca/process-host', () => ({ runProcessSync: vi.fn() }))
+vi.mock('./mobile-typecheck-compiler.mjs', () => ({
+  resolveMobileTypecheckCommand: (project: string, cwd: string) => ({
+    program: 'compiler',
+    args: ['--project', project],
+    cwd
+  })
+}))
+
+describe('ratchet failure diagnostics', () => {
+  it.each([
+    { name: 'new failure', baseline: '', failed: true, exit: 1, printsDiagnostics: true },
+    { name: 'clean pass', baseline: '', failed: false, exit: 0, printsDiagnostics: false },
+    {
+      name: 'grandfathered failure',
+      baseline: 'src/value.test.ts\n',
+      failed: true,
+      exit: 0,
+      printsDiagnostics: false
+    },
+    {
+      name: 'stale baseline',
+      baseline: 'src/value.test.ts\n',
+      failed: false,
+      exit: 1,
+      printsDiagnostics: false
+    }
+  ])('preserves $name outcome and baseline', ({ baseline, failed, exit, printsDiagnostics }) => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'orca-pr31180-ratchet-'))
+    const diagnostic = 'src/value.test.ts(1,2): error TS2322: Type number is not assignable.'
+    const stderrDiagnostic = 'src/value.test.ts(2,3): error TS2345: Argument type mismatch.'
+    const detail = '  Type number is not assignable to type string.'
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const logs = vi.spyOn(console, 'log').mockImplementation(() => {})
+    try {
+      for (const file of [...TESTS_OUTSIDE_PROGRAM.keys(), 'src/value.test.ts']) {
+        fs.mkdirSync(path.dirname(path.join(root, file)), { recursive: true })
+        fs.writeFileSync(path.join(root, file), 'export {}\n')
+      }
+      const baselineFile = path.join(root, 'tests-typecheck-baseline.txt')
+      fs.writeFileSync(baselineFile, baseline)
+      const programFile = path.join(fs.realpathSync(root), 'src/value.test.ts')
+      vi.mocked(runProcessSync).mockReturnValue({
+        code: failed ? 2 : 0,
+        signal: null,
+        timedOut: false,
+        stdout: `${programFile}\n${failed ? `${diagnostic}\n${detail}\n` : ''}`,
+        stderr: failed ? `${stderrDiagnostic}\n` : ''
+      })
+
+      expect(main(root)).toBe(exit)
+      expect(runProcessSync).toHaveBeenCalledExactlyOnceWith({
+        program: 'compiler',
+        args: ['--project', 'tsconfig.test.json', '--listFiles'],
+        cwd: root,
+        timeoutMs: null,
+        maxOutputBytes: 64 * 1024 * 1024
+      })
+      expect(errors.mock.calls.some(([message]) => message === diagnostic)).toBe(printsDiagnostics)
+      expect(errors.mock.calls.some(([message]) => message === stderrDiagnostic)).toBe(
+        printsDiagnostics
+      )
+      expect(
+        errors.mock.calls.some(([message]) => message === detail || message === programFile)
+      ).toBe(false)
+      expect(fs.readFileSync(baselineFile, 'utf8')).toBe(baseline)
+    } finally {
+      vi.mocked(runProcessSync).mockReset()
+      errors.mockRestore()
+      logs.mockRestore()
+      removeTreeSync(root)
+    }
+  })
+})
 
 describe('the failing-file parser', () => {
   it('names each file once however many errors it carries', () => {

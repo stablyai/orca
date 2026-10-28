@@ -4,10 +4,11 @@ import { GET_SIZE_PROTOCOL_VERSION } from './daemon-protocol-version'
 import { readDaemonAppliedPtySize, type DaemonAppliedPtySize } from './daemon-pty-applied-size'
 import { FinalCheckpointWaitExpiredError } from './daemon-pty-lifecycle-errors'
 import { DaemonPtySessionInput } from './daemon-pty-session-input'
-import { remainingDaemonRequestTimeoutMs, teardownReadBudgetMs } from './daemon-request-deadline'
+import { remainingDaemonRequestTimeoutMs } from './daemon-request-deadline'
+import { readDaemonLiveSleepCwd } from './daemon-live-sleep-cwd'
 import type { ColdRestoreInfo } from './history-reader'
 import { normalizeWslColdRestoreCwd } from './wsl-cold-restore-cwd'
-import { readDaemonWslSleepCwd } from './daemon-wsl-sleep-cwd'
+import { describeSleepFolderRead, readDaemonWslSleepCwdWithFacts } from './daemon-wsl-sleep-cwd'
 import * as unlistedSession from './daemon-unlisted-session'
 import { SessionNotFoundError, type ListSessionsResult } from './types'
 import { resolveSafePtyDefaultCwd } from '../providers/pty-default-cwd'
@@ -17,7 +18,6 @@ export const LIVENESS_PROBE_TIMEOUT_MS = 2_000
 
 const MAX_TOMBSTONES = 1000
 // A busy daemon must not eat the final checkpoint's share of the Sleep deadline.
-const LIVE_SLEEP_CWD_BUDGET_MS = 1_500
 
 export abstract class DaemonPtySessionControl extends DaemonPtySessionInput {
   protected abstract adoptListedSessionForSleep(
@@ -141,28 +141,36 @@ export abstract class DaemonPtySessionControl extends DaemonPtySessionInput {
     if (opts.keepHistory) {
       const sleepWslDistro = this.wslDistrosBySessionId.get(id)
       const sleepPaneKey = this.wslPaneKeysBySessionId.get(id)
-      const sleepCwd =
+      const live = this.activeSessionIds.has(id)
+      const startedAt = Date.now()
+      const read =
         sleepWslDistro && sleepPaneKey
-          ? await readDaemonWslSleepCwd(
-              {
-                paneKey: sleepPaneKey,
-                wslDistro: sleepWslDistro,
-                // A live pane's own wsl.exe keeps its distro running.
-                live: this.activeSessionIds.has(id)
-              },
+          ? // A live pane's own wsl.exe keeps its distro running.
+            await readDaemonWslSleepCwdWithFacts(
+              { paneKey: sleepPaneKey, wslDistro: sleepWslDistro, live },
               opts.deadlineMs
             )
-          : await this.readLiveSleepCwd(id, opts.deadlineMs)
+          : { cwd: live ? await readDaemonLiveSleepCwd(this.client, id, opts.deadlineMs) : null }
+      const sleepCwd = read.cwd
+      // Device runs need to see why a WSL pane woke at its spawn folder (awin 5e).
+      console.info(
+        describeSleepFolderRead(id, read, {
+          wslDistro: sleepWslDistro,
+          paneKey: sleepPaneKey,
+          live,
+          elapsedMs: Date.now() - startedAt
+        })
+      )
       const committed = await this.runExclusiveCheckpoint(
         async () => {
           // Set inside: a caller past its deadline leaves this checkpoint running without it.
           if (sleepCwd) {
-            this.sleepShellCwds.set(id, sleepCwd)
+            this.probedShellCwds.set(id, sleepCwd)
           }
           try {
             await this.checkpointSessions([id], { final: true, teardown: true })
           } finally {
-            this.sleepShellCwds.delete(id)
+            this.probedShellCwds.delete(id)
           }
         },
         { callerDeadlineMs: opts.deadlineMs }
@@ -298,29 +306,6 @@ export abstract class DaemonPtySessionControl extends DaemonPtySessionInput {
       return result.cwd ?? ''
     } catch {
       return ''
-    }
-  }
-
-  /**
-   * A native shell's folder at Sleep (OSC 7, else its process's cwd). Bash prints no OSC 7, so
-   * without this the checkpoint keeps the spawn folder and Wake opens there (e.g. on a Linux host).
-   */
-  private async readLiveSleepCwd(id: string, deadlineMs?: number): Promise<string | null> {
-    // Windows has no process-cwd lookup (it would spawn a missing lsof); the snapshot's OSC 7 cwd stands.
-    const budget = teardownReadBudgetMs(LIVE_SLEEP_CWD_BUDGET_MS, deadlineMs)
-    if (process.platform === 'win32' || budget <= 0 || !this.activeSessionIds.has(id)) {
-      return null
-    }
-    try {
-      const { cwd } = await this.client.request<{ cwd: string | null }>(
-        'getCwd',
-        { sessionId: id },
-        budget
-      )
-      // A removed folder reads back from /proc as `<path> (deleted)`, which no shell can return to.
-      return cwd && !cwd.endsWith(' (deleted)') ? cwd : null
-    } catch {
-      return null
     }
   }
 

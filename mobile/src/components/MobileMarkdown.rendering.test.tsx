@@ -1,7 +1,7 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { colors, onBrightColors } from '../theme/mobile-theme'
+import { colors } from '../theme/mobile-theme'
 import { MobileMarkdown } from './MobileMarkdown'
 
 const openURL = vi.fn((_url: string) => Promise.resolve())
@@ -186,18 +186,14 @@ describe('MobileMarkdown tone', () => {
     return flattenStyle(span.props.style)
   }
 
-  it("draws your own message dark on its light fill, and leaves the agent's prose as it was", () => {
+  it("draws your own message in desktop's strong chat text, and leaves the agent's prose as it was", () => {
     const content = 'Plain **bold** [docs](https://example.com) `code`'
     act(() => {
-      renderer = create(createElement(MobileMarkdown, { content, tone: 'onBright' }))
+      renderer = create(createElement(MobileMarkdown, { content, tone: 'userMessage' }))
     })
     const own = renderer!.root
-    expect(styleOf(own, 'bold').color).toBe(colors.bgBase)
-    expect(styleOf(own, 'docs').color).toBe(onBrightColors.link)
-    expect(styleOf(own, 'code')).toMatchObject({
-      color: colors.bgBase,
-      backgroundColor: onBrightColors.codeBackground
-    })
+    expect(styleOf(own, 'bold').color).toBe(colors.chatForegroundStrong)
+    expect(styleOf(own, 'docs').color).toBe(colors.accentBlue)
 
     act(() => renderer!.update(createElement(MobileMarkdown, { content })))
     expect(styleOf(renderer!.root, 'bold').color).toBe(colors.textPrimary)
@@ -207,7 +203,7 @@ describe('MobileMarkdown tone', () => {
   it('keeps the default palette inside a table, which keeps its dark surface', () => {
     const content = '| **Head** | [docs](https://example.com) |\n| --- | --- |\n| a | b |'
     act(() => {
-      renderer = create(createElement(MobileMarkdown, { content, tone: 'onBright' }))
+      renderer = create(createElement(MobileMarkdown, { content, tone: 'userMessage' }))
     })
     expect(styleOf(renderer!.root, 'Head').color).toBe(colors.textPrimary)
     expect(styleOf(renderer!.root, 'docs').color).toBe(colors.accentBlue)

@@ -12,7 +12,7 @@ import type {
 import type {
   SessionOptionDescriptor,
   SessionOptionsSurface
-} from '../../../../shared/native-chat-session-options'
+} from '../../../../shared/native-chat/input/native-chat-session-options'
 import type { NativeChatLaunchDraft } from '@/lib/native-chat-launch-prompt'
 import type { NativeChatComposerImageAttachment } from './NativeChatComposerField'
 import type { NativeChatAfterStopSend } from './native-chat-composer-target'
@@ -83,6 +83,8 @@ export type NativeChatOptimisticSendOutcome = {
 export type NativeChatComposerProps = {
   /** Tab hosting the agent; used to resolve the live ptyId + runtime settings. */
   terminalTabId: string
+  /** Input-only edit session: every submit saves, Escape cancels, and send-only actions are absent. */
+  editSession?: { save: () => void; cancel: () => void; canSave: boolean }
   /** Stable split-leaf identity; unlike a PTY id, this survives reconnects. */
   paneKey: string
   /** Unsent-draft owner; defaults to paneKey, while structured chats share conversation scope. */
@@ -142,8 +144,10 @@ export type NativeChatLaunchSeed = {
 }
 
 export type NativeChatComposerHandle = {
+  isComposing?: () => boolean
   focus: () => boolean
   insertTypedText: (text: string) => boolean
+  insertPastedText?: (text: string) => boolean
   /** Whether the input is there and enabled, so text given to it lands. */
   acceptsText: () => boolean
   /** Append deduplicated text after a blank line and place the caret at its end. */

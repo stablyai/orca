@@ -3,10 +3,10 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { MobileNativeChatSendOutcome } from '../mobile-native-chat-send'
 import {
+  clearMobileSessionOptionRecordsForTests,
   useMobileNativeChatSessionOptions,
   type MobileNativeChatSessionOptionsController
 } from './use-mobile-native-chat-session-options'
-import { clearMobileSessionOptionRecordsForTests } from '../../mobile-session-option-records'
 
 type HookArgs = Parameters<typeof useMobileNativeChatSessionOptions>[0]
 
@@ -118,15 +118,107 @@ describe('useMobileNativeChatSessionOptions', () => {
     expect(model.kind).toMatchObject({ currentValue: 'opus' })
   })
 
-  it('keeps tracked truth when the dispatch is rejected', async () => {
-    dispatchCommand.mockResolvedValue('rejected')
-    mount()
-    let applied: boolean | undefined
+  it.each(['rejected', 'unknown'] as const)(
+    'keeps tracked truth when the write is %s',
+    async (outcome) => {
+      dispatchCommand.mockResolvedValue(outcome)
+      mount()
+      let applied: boolean | undefined
+      await act(async () => {
+        applied = await api!.setOption('model', 'opus')
+      })
+      expect(applied).toBe(false)
+      expect(api!.snapshot[0]).toMatchObject({ valueSource: 'unknown' })
+    }
+  )
+
+  it('offers Grok pickers and saves a pick as the host launch default', async () => {
+    const writeSettings = vi.fn()
+    mount({ agent: 'grok', writeSettings })
+    expect(api!.snapshot[0]).toMatchObject({ id: 'model', settable: true })
+    const model = api!.snapshot[0]!.kind
+    const target = model.type === 'select' ? model.choices[0]!.value : ''
     await act(async () => {
-      applied = await api!.setOption('model', 'opus')
+      expect(await api!.setOption('model', target)).toBe(true)
     })
-    expect(applied).toBe(false)
-    expect(api!.snapshot[0]).toMatchObject({ valueSource: 'unknown' })
+    expect(writeSettings).toHaveBeenCalledWith({
+      type: 'apply-picks',
+      agent: 'grok',
+      picks: [expect.objectContaining({ modelId: target, optionId: 'model', value: target })]
+    })
+  })
+
+  it('saves a Claude effort but never its unconfirmed model switch as a launch default', async () => {
+    const writeSettings = vi.fn()
+    mount({ reportedModel: 'claude-sonnet-5', writeSettings })
+    await act(async () => {
+      await api!.setOption('model', 'opus')
+      await api!.setOption('effort', 'low')
+    })
+    expect(writeSettings).toHaveBeenCalledTimes(1)
+    expect(writeSettings).toHaveBeenCalledWith({
+      type: 'apply-picks',
+      agent: 'claude',
+      picks: [expect.objectContaining({ optionId: 'effort', adoptModelAsLaunchDefault: false })]
+    })
+  })
+
+  it('starts over when the tab runs another agent and then a fresh session', async () => {
+    mount({ reportedModel: 'claude-sonnet-5' })
+    await act(async () => {
+      await api!.setOption('model', 'opus')
+    })
+    update({ agent: 'codex', reportedModel: null })
+    update({ agent: 'claude', reportedModel: 'claude-sonnet-5' })
+    expect(api!.snapshot[0]).toMatchObject({ valueSource: 'reported' })
+    expect(api!.snapshot[0]!.kind).toMatchObject({ currentValue: 'sonnet' })
+  })
+
+  it('drops a write that lands after the tab started another agent', async () => {
+    let resolveModel!: (outcome: MobileNativeChatSendOutcome) => void
+    dispatchCommand.mockImplementationOnce(
+      () =>
+        new Promise<MobileNativeChatSendOutcome>((resolve) => {
+          resolveModel = resolve
+        })
+    )
+    mount({ reportedModel: 'claude-sonnet-5' })
+    let picked!: Promise<boolean>
+    await act(async () => {
+      picked = api!.setOption('model', 'opus')
+      await Promise.resolve()
+    })
+    update({ agent: 'codex', reportedModel: 'gpt-5.5' })
+    await act(async () => {
+      resolveModel('accepted')
+      await expect(picked).resolves.toBe(false)
+    })
+    act(() => renderer!.unmount())
+    mount({ agent: 'codex', reportedModel: 'gpt-5.5' })
+    expect(api!.snapshot[0]!.kind).toMatchObject({ currentValue: 'gpt-5.5' })
+  })
+
+  it('shows a pick that lands after the user left the chat and came back', async () => {
+    let resolveModel!: (outcome: MobileNativeChatSendOutcome) => void
+    dispatchCommand.mockImplementationOnce(
+      () =>
+        new Promise<MobileNativeChatSendOutcome>((resolve) => {
+          resolveModel = resolve
+        })
+    )
+    mount({ reportedModel: 'claude-sonnet-5' })
+    let picked!: Promise<boolean>
+    await act(async () => {
+      picked = api!.setOption('model', 'opus')
+      await Promise.resolve()
+    })
+    update({ scopeKey: 'host\0worktree\0other-tab' })
+    update({ scopeKey: 'host\0worktree\0tab' })
+    await act(async () => {
+      resolveModel('accepted')
+      await picked
+    })
+    expect(api!.snapshot[0]!.kind).toMatchObject({ currentValue: 'opus' })
   })
 
   it('types the Codex picker command and switches to the terminal', async () => {

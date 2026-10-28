@@ -12,7 +12,6 @@ const LEGACY_PI_COMPATIBLE_TITLE_RE = /^\s*(?:[\u2800-\u28ff]\s+)?\u03C0(?:\s*[-
 // A leading spinner needs Orca's ` - ` working frame, so Claude tasks like `⠂ OMP: fix` stay Claude's.
 const PI_COMPATIBLE_SEPARATOR_RE =
   /^\s*(?:[\u2800-\u28ff]\s+(?=\S+\s+-(?:\s|$)))?(\u03C0|Pi|OMP)(?::|\s+([!>:\-\u2800-\u28ff]))(?=\s|$)/u
-const PI_COMPATIBLE_PERMISSION_TAIL_RE = /\baction required\b/i
 
 const PI_COMPATIBLE_LEADING_BRAND_RE = /^(\s*(?:[\u2800-\u28ff]\s+)?)(?:\u03C0|Pi|OMP)/u
 
@@ -77,8 +76,8 @@ export function getPiCompatibleTitleSeparatorStatus(
   if (!match) {
     return null
   }
-  // Synthetic action-required labels also use hyphens; guard the exported parser independently of caller ordering.
-  if (PI_COMPATIBLE_PERMISSION_TAIL_RE.test(title)) {
+  // The synthetic `OMP - action required` label also uses a hyphen; match only that label, never session text.
+  if (getPiCompatibleSyntheticAgentStatus(title) === 'permission') {
     return 'permission'
   }
   return match[2] === '!' ? 'permission' : 'idle'

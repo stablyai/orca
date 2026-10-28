@@ -9,7 +9,7 @@ import type {
 import { ClaudeJournalPrompts } from './claude-structured-journal-prompts'
 import { claudeQuestionItems } from './claude-structured-prompt-items'
 import type { ClaudePendingPrompt } from './claude-structured-prompt-replies'
-import type { ClaudeStructuredSessionEvent } from './claude-structured-session-state'
+import type { ClaudeStructuredSessionEvent } from './structured/claude-structured-session-state'
 import {
   USER_MESSAGE,
   acquired,

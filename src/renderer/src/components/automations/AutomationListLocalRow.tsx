@@ -57,6 +57,8 @@ import {
 import { isPortaledRowMenuClick, isRowActivationKey } from '@/lib/list-row-interaction'
 import { AutomationListStatusCell } from './AutomationListStatusCell'
 import { translate } from '@/i18n/i18n'
+import { useAppStore } from '@/store'
+import { wslMovedProjectForAutomation } from '@/store/repos/wsl-moved-projects'
 
 export type AutomationListLocalRowProps = {
   row: AutomationListRow
@@ -157,6 +159,9 @@ export function AutomationListLocalRow({
     ? formatAutomationDateTimeWithRelative(automation.nextRunAt, relativeNow)
     : translate('auto.components.automations.enablement.paused', 'Paused')
   const isSelected = isSelectedLocal && selectedRowKey === row.key
+  const movedToDistro = useAppStore(
+    (state) => wslMovedProjectForAutomation(state.wslMovedProjects, automation)?.distro ?? null
+  )
   const agentLabel = getAgentLabel(automation.agentId)
   const hostId =
     automation.runContext?.hostId ??
@@ -256,7 +261,7 @@ export function AutomationListLocalRow({
             {nextRunLabel}
           </span>
           <AutomationListLastRunCell snapshot={lastRunSnapshot} now={relativeNow} />
-          <AutomationListStatusCell enabled={automation.enabled} />
+          <AutomationListStatusCell enabled={automation.enabled} movedToDistro={movedToDistro} />
           <Tooltip>
             <TooltipTrigger asChild>
               <span

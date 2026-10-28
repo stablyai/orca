@@ -8,7 +8,7 @@ import {
 import { isBrowserIdentityModeStoreInitialized } from '../browser/browser-identity-mode-store'
 import { servesLocalWslMigrationSource } from '../orcad/orcad-migration-wsl-destination'
 import { ORCAD_MIGRATION_LOCAL_WSL_SOURCE_RUNTIME_CAPABILITY } from '../../shared/orcad-runtime-capabilities'
-import { advertisedOrcadMigrationBlobCapabilities } from '../../shared/orcad-migration/orcad-migration-blob-transfer'
+import { advertisedOrcadMigrationDestinationCapabilities } from '../orcad/orcad-migration-destination-capabilities'
 import type { RuntimeCapability } from '../../shared/protocol-version'
 import { USAGE_CREDENTIALS_RUNTIME_CAPABILITY } from '../../shared/account-runtime-capabilities'
 import {
@@ -125,7 +125,7 @@ export abstract class OrcaRuntimeWithGetStatus extends OrcaRuntimeWithGetRuntime
       capabilities.push(ORCAD_MIGRATION_LOCAL_WSL_SOURCE_RUNTIME_CAPABILITY)
     }
     // Advertise only installed blob kinds; senders refuse unsupported kinds instead of silently losing staged data.
-    capabilities.push(...advertisedOrcadMigrationBlobCapabilities())
+    capabilities.push(...advertisedOrcadMigrationDestinationCapabilities())
     // Certificate proceed belongs to whichever process hosts the page, renderer or offscreen.
     if (canBrowse) {
       capabilities.push(BROWSER_CERTIFICATE_TRUST_RUNTIME_CAPABILITY)

@@ -1,5 +1,7 @@
 // WSL-host orcad must ignore Windows CLI shims; identify mounts by type because the automount root is configurable.
 import { existsSync, readFileSync } from 'node:fs'
+import { isAbsolute } from 'node:path'
+import { resolveCliCommand } from '../../shared/node-cli-command-resolution'
 
 const WINDOWS_DRIVE_MOUNT_TYPES = new Set(['drvfs', '9p', 'virtiofs'])
 
@@ -77,6 +79,11 @@ export function readGuestWindowsDriveMounts(): readonly string[] {
   return mounts
 }
 
+/** Stand in for /proc/mounts so call-site tests can model a Windows drive; null re-reads. */
+export function _setGuestWindowsDriveMountsForTests(mounts: readonly string[] | null): void {
+  cachedGuestMounts = mounts
+}
+
 /** Keep CLI launches consistent with detection by removing Windows drive PATH entries only in WSL-host orcad. */
 export function guestNativePathEnv(
   pathEnv: string | null | undefined,
@@ -87,4 +94,39 @@ export function guestNativePathEnv(
   }
   const value = pathEnv ?? process.env.PATH ?? null
   return value === null ? null : withoutWindowsDriveMountDirs(value, mounts)
+}
+
+/** A one-shot agent child's env on a WSL-host orcad: its PATH lookup can't reach a Windows shim. */
+export function guestNativeSpawnEnv(
+  env: NodeJS.ProcessEnv,
+  mounts: readonly string[] = readGuestWindowsDriveMounts()
+): NodeJS.ProcessEnv {
+  if (mounts.length === 0) {
+    return env
+  }
+  const pathEnv = guestNativePathEnv(env.PATH ?? null, mounts)
+  return pathEnv === null || pathEnv === undefined ? env : { ...env, PATH: pathEnv }
+}
+
+/**
+ * Resolve an agent program as a WSL-host orcad must: never a Windows-drive copy. `null` means only a
+ * Windows copy exists; a bare name would reach it through the spawn's own PATH lookup.
+ */
+export function resolveGuestNativeProgram(
+  command: string,
+  options: NonNullable<Parameters<typeof resolveCliCommand>[1]>,
+  resolve: typeof resolveCliCommand = resolveCliCommand,
+  mounts: readonly string[] = readGuestWindowsDriveMounts()
+): string | null {
+  if (mounts.length === 0) {
+    return resolve(command, options)
+  }
+  const native = resolve(command, {
+    ...options,
+    pathEnv: guestNativePathEnv(options.pathEnv, mounts)
+  })
+  if (isAbsolute(native)) {
+    return native
+  }
+  return isAbsolute(resolve(command, options)) ? null : native
 }

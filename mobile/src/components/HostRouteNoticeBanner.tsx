@@ -1,6 +1,8 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { Pressable, Text, View } from 'react-native'
 import { X } from 'lucide-react-native'
 import { colors, spacing } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 
 // Monochrome notice reports vanished target; failure uses one red rule for action refusal without taking screen.
 // Announce inserted banners: failure uses alert/assertive, notice uses polite live region (RN has no status role).
@@ -13,6 +15,7 @@ export function HostRouteNoticeBanner({
   tone?: 'notice' | 'failure'
   onDismiss: () => void
 }) {
+  useMobileColorScheme()
   return (
     <View
       style={[styles.banner, tone === 'failure' && styles.failure]}
@@ -33,7 +36,7 @@ export function HostRouteNoticeBanner({
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   banner: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -47,4 +50,4 @@ const styles = StyleSheet.create({
   failure: { borderBottomColor: colors.statusRed },
   text: { flex: 1, color: colors.textSecondary, fontSize: 13 },
   dismiss: { padding: spacing.xs }
-})
+}))
