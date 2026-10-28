@@ -145,9 +145,8 @@ describe('packed-refs lock ownership', () => {
   })
 })
 
-describe('stranded per-ref locks', () => {
-  it('clears the empty refs/**/*.lock files its own dead process left behind', async () => {
-    // Git can die between O_EXCL creation and registering signal cleanup, leaving a persistent empty lock.
+describe('unattributed per-ref locks', () => {
+  it('preserves empty ref locks when only an old dead-owner marker exists', async () => {
     const commonDir = await gitCommonDir()
     const namespace = join(commonDir, 'refs', 'remotes', 'origin')
     await mkdir(namespace, { recursive: true })
@@ -157,7 +156,7 @@ describe('stranded per-ref locks', () => {
 
     await new PackRefsLockOwnership(commonDir).claim(laterBy(ABANDONED_LOCK_AGE_MS + 1))
 
-    await expect(exists(join(namespace, 'main.lock'))).resolves.toBe(false)
+    await expect(exists(join(namespace, 'main.lock'))).resolves.toBe(true)
     await expect(exists(join(namespace, 'main'))).resolves.toBe(true)
   })
 
