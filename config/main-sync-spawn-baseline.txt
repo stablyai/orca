@@ -6,7 +6,6 @@
 # conventions. This is a RATCHET: counts may only go DOWN.
 # Prune after removing launches: pnpm check:main-sync-spawn-ratchet --prune
 1 src/main/agent-hooks/installer-utils.ts
-2 src/main/browser/cookies/sources/browser-cookie-key.ts
 1 src/main/browser/browser-route-egress-electron-launch.ts
 1 src/main/browser/browser-route-partition-binding-store.ts
 1 src/main/claude-accounts/runtime-auth-service.ts

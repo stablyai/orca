@@ -29,6 +29,10 @@ import { recordActiveBrowserPage } from '../browser/extensions/browser-extension
 import { announceRegisteredBrowserExtensionTab } from '../browser/extensions/api/tabs-lifecycle'
 import { registerBrowserExtensionHandlers } from './browser-extensions'
 import { registerBrowserExtensionContextMenuHandlers } from './browser-extension-context-menu'
+import {
+  registerBrowserPasswordsHandlers,
+  type BrowserPasswordsSettingsSource
+} from './browser-passwords-ipc'
 
 let agentBrowserBridgeRef: AgentBrowserBridge | null = null
 
@@ -44,7 +48,7 @@ export function setAgentBrowserBridgeRef(bridge: AgentBrowserBridge | null): voi
   agentBrowserBridgeRef = bridge
 }
 
-export function registerBrowserHandlers(): void {
+export function registerBrowserHandlers(store: BrowserPasswordsSettingsSource): void {
   resetGrabModeState()
   ipcMain.removeHandler('browser:registerGuest')
   ipcMain.removeHandler('browser:isGuestRegistered')
@@ -251,4 +255,5 @@ export function registerBrowserHandlers(): void {
 
   registerBrowserExtensionHandlers()
   registerBrowserExtensionContextMenuHandlers()
+  registerBrowserPasswordsHandlers(store)
 }

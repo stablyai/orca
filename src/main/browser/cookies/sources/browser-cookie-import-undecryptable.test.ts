@@ -6,7 +6,7 @@ import type { CookiesGetFilter } from 'electron'
 const {
   appGetPathMock,
   createDecipherivMock,
-  runProcessSyncMock,
+  runProcessMock,
   sessionFromPartitionMock,
   dialogShowOpenDialogMock,
   setPendingCookieImportMock,
@@ -15,7 +15,7 @@ const {
 } = vi.hoisted(() => ({
   appGetPathMock: vi.fn(),
   createDecipherivMock: vi.fn(),
-  runProcessSyncMock: vi.fn(),
+  runProcessMock: vi.fn(),
   sessionFromPartitionMock: vi.fn(),
   dialogShowOpenDialogMock: vi.fn(),
   setPendingCookieImportMock: vi.fn(),
@@ -35,7 +35,7 @@ vi.mock('../../browser-session-registry', () => ({
   }
 }))
 vi.mock('@orca/process-host', () => ({
-  runProcessSync: runProcessSyncMock
+  runProcess: runProcessMock
 }))
 vi.mock('node:fs', async (importOriginal) => ({ ...(await importOriginal<typeof NodeFs>()) }))
 vi.mock('electron', () => ({
@@ -128,20 +128,18 @@ describe('importCookiesFromBrowser — undecryptable cookies', () => {
       getStoragePath: vi.fn().mockReturnValue(join(tmpDir, 'userData', 'Partitions', 'test'))
     })
     platformSpy = vi.spyOn(process, 'platform', 'get').mockReturnValue('linux')
-    runProcessSyncMock.mockImplementation(() => {
-      throw new Error('secret-tool: no such service')
-    })
+    runProcessMock.mockRejectedValue(new Error('secret-tool: no such service'))
   })
 
   afterEach(() => {
     try {
-      expect(runProcessSyncMock).toHaveBeenCalledTimes(2)
-      expect(runProcessSyncMock).toHaveBeenNthCalledWith(1, {
+      expect(runProcessMock).toHaveBeenCalledTimes(2)
+      expect(runProcessMock).toHaveBeenNthCalledWith(1, {
         program: 'secret-tool',
         args: ['lookup', 'service', 'Chrome Safe Storage', 'account', 'Chrome'],
         timeoutMs: 5_000
       })
-      expect(runProcessSyncMock).toHaveBeenNthCalledWith(2, {
+      expect(runProcessMock).toHaveBeenNthCalledWith(2, {
         program: 'secret-tool',
         args: ['lookup', 'application', 'chrome'],
         timeoutMs: 5_000
@@ -171,9 +169,9 @@ describe('importCookiesFromBrowser — undecryptable cookies', () => {
   }
 
   it('does not attempt v11 CBC decryption without a keyring, even with valid wrong-key padding', async () => {
-    runProcessSyncMock.mockImplementation(() => {
-      throw Object.assign(new Error('spawn secret-tool failed'), { code: 'ENOENT' })
-    })
+    runProcessMock.mockRejectedValue(
+      Object.assign(new Error('spawn secret-tool failed'), { code: 'ENOENT' })
+    )
     const sourceCookiesPath = seedProfile(
       encryptLinuxChromiumCookie('wrong-key-garbage', 'peanuts', 'v11')
     )

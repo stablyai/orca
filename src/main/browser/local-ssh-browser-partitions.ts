@@ -62,6 +62,12 @@ export function localSshBrowserPartitionForSession(webSession: Session): string 
   return partitionBySession.get(webSession) ?? null
 }
 
+/** The browser profile a session's prepared route partition belongs to, or null if unrouted. */
+export function localSshBrowserProfileIdForSession(webSession: Session): string | null {
+  const partition = partitionBySession.get(webSession)
+  return partition ? (preparedByPartition.get(partition)?.browserProfileId ?? null) : null
+}
+
 export function localSshBrowserTargetIdForSession(webSession: Session): string | null {
   const partition = partitionBySession.get(webSession)
   return partition ? (preparedByPartition.get(partition)?.targetId ?? null) : null

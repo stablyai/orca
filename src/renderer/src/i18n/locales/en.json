@@ -261,6 +261,24 @@
       "title": "History",
       "today": "Today",
       "yesterday": "Yesterday"
+    },
+    "passwords": {
+      "savePrompt": {
+        "open": "Saved password offer",
+        "updateTitle": "Update password?",
+        "saveTitle": "Save password?",
+        "username": "Username",
+        "password": "Password",
+        "never": "Never for this site",
+        "notNow": "Not now",
+        "update": "Update",
+        "save": "Save"
+      },
+      "fill": {
+        "noUsername": "(no username)",
+        "title": "Saved logins",
+        "otherLogins": "Other logins on this site"
+      }
     }
   },
   "editor": {
@@ -551,6 +569,87 @@
           "browse": "Browse the Chrome Web Store",
           "openFailed": "Open a workspace to browse the Chrome Web Store."
         }
+      },
+      "passwords": {
+        "searchKeywords": {
+          "passwords": "passwords",
+          "autofill": "autofill",
+          "vault": "vault",
+          "logins": "logins",
+          "import": "import",
+          "csv": "csv",
+          "touchId": "touch id"
+        },
+        "authFailed": "Could not confirm it was you",
+        "copied": "Password copied. Orca clears it from the clipboard in 2 minutes.",
+        "search": "Search {{count}} passwords",
+        "add": "Add",
+        "noMatches": "No saved passwords match.",
+        "noUsername": "(no username)",
+        "edit": "Edit",
+        "copy": "Copy password",
+        "delete": "Delete…",
+        "neverHeading": "Never saved for {{count}} sites",
+        "removeNever": "Remove",
+        "importFailed": "Could not import passwords",
+        "importDuplicates": "{{count}} already saved",
+        "importConflicts": "{{count}} kept because a different password is saved",
+        "importInvalid": "{{count}} unreadable rows",
+        "importUndecryptable": "{{count}} protected by the browser; export a CSV from it instead",
+        "imported": "Imported {{count}} passwords",
+        "deleteAllConfirmTitle": "Delete all password data?",
+        "deleteAllConfirmDescription": "Every saved password in the {{profile}} profile is permanently deleted. This can’t be undone.",
+        "deleteAll": "Delete data",
+        "deletedAll": "Password data deleted",
+        "form": {
+          "invalidSite": "Enter a website address, like example.com.",
+          "invalidPassword": "Enter a password.",
+          "duplicate": "A password for this username is already saved for this site.",
+          "unavailable": "Could not save this password.",
+          "editTitle": "Edit password",
+          "addTitle": "Add password",
+          "site": "Site",
+          "sitePlaceholder": "example.com",
+          "username": "Username",
+          "password": "Password",
+          "currentHint": "Save the password you use on this site today.",
+          "note": "Note",
+          "cancel": "Cancel",
+          "save": "Save",
+          "description": "Orca fills it when you pick it under a sign-in field on this site.",
+          "usernamePlaceholder": "Email or username",
+          "addNote": "Add a note"
+        },
+        "hide": "Hide password",
+        "show": "Show password",
+        "offerToSave": "Offer to save passwords",
+        "offerToSaveDescription": "After you sign in to a site in Orca’s browser, offer to save the login.",
+        "fillReauth": "Ask for Touch ID before filling",
+        "fillReauthDescription": "For a shared computer. Showing or copying a password already asks.",
+        "noReauth": "This computer can’t confirm it’s you with Touch ID, so passwords show and fill without a check.",
+        "import": "Import",
+        "importCsv": "From a CSV file…",
+        "deleteAllTitle": "Delete all password data",
+        "deleteAllDescription": "Every saved password, note and never-save site in the {{profile}} profile.",
+        "empty": "Orca offers to save a login after you sign in. You can also bring them from another browser or a CSV file.",
+        "account": "{{username}} on {{site}}",
+        "lastUsed": "Used {{when}}",
+        "copyFor": "Copy password for {{account}}",
+        "editFor": "Edit {{account}}",
+        "moreActions": "More actions for {{account}}",
+        "accountCount": "{{count}} accounts",
+        "deleteConfirmTitle": "Delete the {{site}} password for {{username}}?",
+        "deleteConfirmDescription": "Orca won’t fill it anymore. This can’t be undone.",
+        "deleteConfirm": "Delete",
+        "experimental": "Experimental",
+        "profileDescription": "Saved logins for the {{profile}} profile. Orca fills one only when you pick it under a sign-in field.",
+        "unavailableTitle": "Saved passwords are off on this computer",
+        "emptyTitle": "No saved passwords yet",
+        "searchLabel": "Search passwords",
+        "deleteAllAction": "Delete…",
+        "title": "Passwords",
+        "description": "Saved logins for Orca’s browser: add, import, edit and delete them.",
+        "httpSuffix": " · http"
       }
     },
     "agents": {
@@ -668,6 +767,13 @@
     "openInApp": {
       "preset": {
         "devinDesktop": "Devin Desktop"
+      }
+    },
+    "experimental": {
+      "browserPasswords": {
+        "title": "Saved passwords",
+        "description": "Orca’s browser offers to save a login after it works and fills it from a list under the field. Manage them in Settings › Browser › Passwords.",
+        "toggle": "Toggle saved passwords"
       }
     }
   },

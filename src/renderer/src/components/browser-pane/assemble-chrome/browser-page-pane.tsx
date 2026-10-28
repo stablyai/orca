@@ -370,6 +370,7 @@ export function BrowserPagePane({
       {pageViewport?.container
         ? createPortal(
             <BrowserPageViewportOverlays
+              isActive={isActive}
               markup={markup}
               browserZoomIndicatorState={browserZoomIndicatorState}
               browserZoomPercent={zoom.browserZoomPercent}

@@ -9,7 +9,7 @@ import { tmpdir } from 'node:os'
 const {
   appGetPathMock,
   sessionFromPartitionMock,
-  runProcessSyncMock,
+  runProcessMock,
   snapshotRootMock,
   setPendingCookieImportMock,
   clearPendingCookieImportMock,
@@ -24,7 +24,7 @@ const {
   return {
     appGetPathMock: vi.fn(),
     sessionFromPartitionMock: vi.fn(),
-    runProcessSyncMock: vi.fn(),
+    runProcessMock: vi.fn(),
     snapshotRootMock: vi.fn(),
     setPendingCookieImportMock: vi.fn(),
     clearPendingCookieImportMock: vi.fn(),
@@ -40,7 +40,7 @@ vi.mock('electron', () => ({
   session: { fromPartition: sessionFromPartitionMock }
 }))
 vi.mock('@orca/process-host', () => ({
-  runProcessSync: runProcessSyncMock
+  runProcess: runProcessMock
 }))
 vi.mock('../browser-session-registry', () => ({
   browserSessionRegistry: {
@@ -153,7 +153,7 @@ describe('Chromium import snapshot ownership', () => {
         set: vi.fn().mockRejectedValue(new Error('Unexpected target initialization'))
       }
     })
-    runProcessSyncMock.mockReturnValue({
+    runProcessMock.mockResolvedValue({
       code: 1,
       signal: null,
       stdout: '',
@@ -221,7 +221,7 @@ describe('Chromium import snapshot ownership', () => {
       })
       expectRefusalCleanup()
     }
-    expect(runProcessSyncMock).toHaveBeenCalledTimes(3)
+    expect(runProcessMock).toHaveBeenCalledTimes(3)
     expect(cleanupStates).toHaveLength(3)
   })
 
@@ -288,7 +288,7 @@ describe('Chromium import snapshot ownership', () => {
       for (let index = 0; index < rows; index++) {
         insert.run(`cookie${index}`, encrypted)
       }
-      runProcessSyncMock.mockReturnValue({
+      runProcessMock.mockResolvedValue({
         code: 0,
         signal: null,
         stdout: password,
@@ -319,7 +319,7 @@ describe('Chromium import snapshot ownership', () => {
         expect(snapshotRootMock).not.toHaveBeenCalled()
         expect(snapshotDirectories()).toEqual([])
         expect(openedDatabases).toHaveLength(databasesBefore)
-        expect(runProcessSyncMock).not.toHaveBeenCalled()
+        expect(runProcessMock).not.toHaveBeenCalled()
         expect(decrypt).not.toHaveBeenCalled()
         expect(writeCookieIdentityMock).not.toHaveBeenCalled()
 

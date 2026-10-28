@@ -6916,7 +6916,7 @@
       "src/preload/app-restart-checkpoint-routing.test.ts": 1596,
       "src/preload/browser-client-page-renderer-requests.test.ts": 204,
       "src/preload/browser-find-subscriptions.test.ts": 48,
-      "src/preload/browser-window-close.test.ts": 74,
+      "src/preload/browser-window-close-installation.test.ts": 74,
       "src/preload/close-active-tab-payload-admission.test.ts": 53,
       "src/preload/doc-preview-link-interception.test.ts": 211,
       "src/preload/gitlab-work-item-details.test.ts": 29,

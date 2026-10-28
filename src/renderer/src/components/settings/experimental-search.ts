@@ -1,12 +1,14 @@
 import type { SettingsSearchEntry } from './settings-search'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import { translate } from '@/i18n/i18n'
+import { isWebClientLocation } from '@/lib/web-client-location'
 import { translateSearchKeyword } from './settings-search-keywords'
 import { getNewWorktreeCardStyleSearchEntry } from './new-worktree-card-style-search-entry'
 import { getNativeChatExperimentalSearchEntry } from './native-chat-experimental-search-entry'
 import { getEphemeralVmsSearchEntry } from './ephemeral-vms-search'
 import { getBrowserExtensionsExperimentalSearchEntry } from './browser-extensions-experimental-search'
 import { getWslHostsExperimentalSearchEntry } from './wsl-hosts-experimental-search'
+import { getBrowserPasswordsExperimentalSearchEntry } from './browser-passwords-experimental-search'
 
 export const getExperimentalPaneSearchEntries = createLocalizedCatalog(
   (): SettingsSearchEntry[] => [
@@ -184,6 +186,7 @@ export const getExperimentalPaneSearchEntries = createLocalizedCatalog(
     getNewWorktreeCardStyleSearchEntry(),
     getEphemeralVmsSearchEntry(),
     getBrowserExtensionsExperimentalSearchEntry(),
+    ...(isWebClientLocation() ? [] : [getBrowserPasswordsExperimentalSearchEntry()]),
     // Index WSL toggles only on Windows desktops that expose them.
     ...(typeof window !== 'undefined' && window.api?.runtimeEnvironments?.wslHosts
       ? [getWslHostsExperimentalSearchEntry()]

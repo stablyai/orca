@@ -22,6 +22,8 @@ import { BrowserUserAgentSetting } from './BrowserUserAgentSetting'
 import { BrowserSitePermissionsSetting } from './BrowserSitePermissionsSetting'
 import { SettingsSubsectionHeader } from './SettingsFormControls'
 import { BrowserSessionCookiesSection } from './BrowserSessionCookiesSection'
+import { BrowserPasswordsSection } from './BrowserPasswordsSection'
+import { getBrowserPasswordsSearchEntry } from './browser-passwords-copy'
 import { BrowserNewProfileDialog } from './BrowserNewProfileDialog'
 import { BrowserExtensionsSection } from './BrowserExtensionsSection'
 import {
@@ -80,6 +82,9 @@ export function BrowserPane({
   const setDefaultBrowserSessionProfileId = useAppStore((s) => s.setDefaultBrowserSessionProfileId)
   const defaultProfile = browserSessionProfiles.find((p) => p.id === 'default')
   const selectedProfileId = defaultBrowserSessionProfileId ?? 'default'
+  const selectedProfileLabel =
+    browserSessionProfiles.find((profile) => profile.id === selectedProfileId)?.label ??
+    selectedProfileId
   const nonDefaultProfiles = browserSessionProfiles.filter((p) => p.scope !== 'default')
   const persistedHomePageDraft = browserDefaultUrl ?? ''
   const [homePageDraftState, setHomePageDraftState] = useState(() =>
@@ -124,6 +129,7 @@ export function BrowserPane({
   const showSitePermissions = matchesSettingsSearch(searchQuery, [browserSearchEntries[11]])
   const showProfileScope = matchesSettingsSearch(searchQuery, [browserSearchEntries[12]])
   const showLinkRoutingBackground = matchesSettingsSearch(searchQuery, [browserSearchEntries[13]])
+  const showPasswords = matchesSettingsSearch(searchQuery, [getBrowserPasswordsSearchEntry()])
   const showBrowserUse = matchesSettingsSearch(searchQuery, getBrowserUsePaneSearchEntries())
   const isMac = isMacUserAgent()
   const linkRoutingDescription = getBrowserLinkRoutingDescription(
@@ -334,15 +340,24 @@ export function BrowserPane({
         />
       ) : null}
 
+      {/* The vault lives on this computer only, so it follows the local host's profiles. */}
+      {showPasswords &&
+      settings.experimentalBrowserPasswords === true &&
+      selectedBrowserSessionHostId === LOCAL_EXECUTION_HOST_ID ? (
+        <BrowserPasswordsSection
+          browserProfileId={selectedProfileId}
+          profileLabel={selectedProfileLabel}
+          settings={settings}
+          updateSettings={updateSettings}
+        />
+      ) : null}
+
       {/* Why local only: release 1 runs extensions in this computer's browser profiles. */}
       {settings.experimentalBrowserExtensions === true &&
       selectedBrowserSessionHostId === LOCAL_EXECUTION_HOST_ID ? (
         <BrowserExtensionsSection
           profileId={selectedProfileId}
-          profileLabel={
-            browserSessionProfiles.find((profile) => profile.id === selectedProfileId)?.label ??
-            selectedProfileId
-          }
+          profileLabel={selectedProfileLabel}
         />
       ) : null}
 

@@ -84,7 +84,7 @@ export async function prepareChromiumCookieImport(
       )
     })
     const sourceKey = needsSourceKey
-      ? getEncryptionKey(browser.keychainService!, browser.keychainAccount!, browser)
+      ? await getEncryptionKey(browser.keychainService!, browser.keychainAccount!, browser)
       : null
     if (needsSourceKey && !sourceKey) {
       return {

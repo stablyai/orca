@@ -6,7 +6,7 @@ import { runInNewContext } from 'node:vm'
 import { installBrowserWindowCloseGuard } from './browser-window-close-installation'
 import { BROWSER_GUEST_WINDOW_CLOSE_CHANNEL } from '../shared/browser-guest-window-close'
 
-describe('browser window close preload', () => {
+describe('browser window close guard', () => {
   afterEach(() => {
     vi.unstubAllGlobals()
   })
@@ -29,7 +29,7 @@ describe('browser window close preload', () => {
     const nativeClose = vi.fn()
     const pageWindow = { close: nativeClose }
     const preload = buildSync({
-      entryPoints: [fileURLToPath(new URL('./browser-window-close.ts', import.meta.url))],
+      entryPoints: [fileURLToPath(new URL('./browser-guest.ts', import.meta.url))],
       bundle: true,
       platform: 'node',
       format: 'cjs',

@@ -6,7 +6,7 @@ import { CLI_MAIN_ENTRY_NAMES } from './plain-node-entry-guard'
 export const MAIN_BUILD_ENTRY_POINTS: Record<string, string> = {
   index: resolve('src/main/index.ts'),
   // Why: sandboxed webview preloads cannot load Rollup helper chunks.
-  'browser-window-close-preload': resolve('src/preload/browser-window-close.ts'),
+  'browser-guest-preload': resolve('src/preload/browser-guest.ts'),
   'doc-preview-link-preload': resolve('src/preload/doc-preview-link.ts'),
   'browser-extension-preload': resolve('src/preload/browser-extension-preload.ts'),
   'browser-extension-native-host-supervisor-entry': resolve(

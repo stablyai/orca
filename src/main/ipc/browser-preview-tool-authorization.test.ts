@@ -32,6 +32,7 @@ const {
   registrationWaitSpy: vi.fn()
 }))
 
+vi.mock('./browser-passwords-ipc', () => ({ registerBrowserPasswordsHandlers: vi.fn() }))
 vi.mock('electron', () => ({
   BrowserWindow: { fromWebContents: vi.fn() },
   ipcMain: { removeHandler: removeHandlerMock, handle: handleMock },
@@ -306,7 +307,7 @@ beforeEach(() => {
   captureSelectionScreenshotMock.mockResolvedValue(null)
   extractHoverPayloadMock.mockResolvedValue(null)
   setAnnotationViewportBridgeMock.mockResolvedValue(true)
-  registerBrowserHandlers()
+  registerBrowserHandlers({ getSettings: vi.fn() })
   // Fake timers settle registration waits for guests that never attach.
   vi.useFakeTimers()
 })
