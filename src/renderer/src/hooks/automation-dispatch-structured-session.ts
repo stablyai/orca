@@ -1,6 +1,5 @@
 import { listAutomationRunsForTarget } from '@/components/automations/automation-host-client'
 import { submitPromptToAgentPty } from '@/lib/agent-paste-draft'
-import { sendMessageToAgent } from '@/lib/agent-message-send'
 import { workspaceKindForWorktreeId } from '@/lib/agent-launch-route-input'
 import { observeExistingAutomationSession } from '@/lib/automation-session-observer'
 import {
@@ -51,6 +50,8 @@ export async function reuseStructuredAutomationSession(args: {
   paneKey: string
   prompt: string
 }): Promise<boolean> {
+  // Loaded late: its graph reaches the agent catalog, which the desktop dispatch path does not need.
+  const { sendMessageToAgent } = await import('@/lib/agent-message-send')
   const sent = await sendMessageToAgent({
     worktreeId: args.worktreeId,
     target: { kind: 'structured-session', sessionId: args.chatSessionId },
