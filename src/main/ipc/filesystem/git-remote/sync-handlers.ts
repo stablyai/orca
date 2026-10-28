@@ -17,6 +17,9 @@ import {
   ipcGitWorktreeTarget,
   materializeWorktreePushTargetRemote
 } from '../../worktrees/worktree-remote'
+import type { GitSubmoduleRepo } from '../../../../shared/git/status/git-submodule-repo-types'
+import { listSubmoduleRepos } from '../../../git/source-control/submodules/submodule-repos'
+import { resolveGitActionPath } from './submodule-action-target'
 import type { FilesystemHandlerContext } from '../filesystem-handler-context'
 import { requireReachableGitRoute } from '../../../providers/execution-host-provider-dispatch'
 import { getConnectionExecutionHostId } from '../../../../shared/execution-host/execution-host'
@@ -46,6 +49,26 @@ export function registerGitRemoteSyncHandlers(context: FilesystemHandlerContext)
   )
 
   ipcMain.handle(
+    'git:submoduleRepos',
+    async (
+      _event,
+      args: { worktreePath: string; connectionId?: string }
+    ): Promise<GitSubmoduleRepo[]> => {
+      requireReachableGitRoute(getConnectionExecutionHostId(args.connectionId))
+      // Background poll: its Git or UNC read would boot a stopped WSL distro (E9).
+      await assertWslUncPathRunning(args.worktreePath)
+      const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
+      const gitOptions = getLocalGitOptionsForRegisteredWorktree(
+        store,
+        args.worktreePath,
+        worktreePath
+      )
+      await assertWslUncPathRunning(worktreePath, gitOptions.wslDistro)
+      return listSubmoduleRepos(worktreePath, gitOptions)
+    }
+  )
+
+  ipcMain.handle(
     'git:fetch',
     async (
       _event,
@@ -54,15 +77,17 @@ export function registerGitRemoteSyncHandlers(context: FilesystemHandlerContext)
         worktreeId?: string
         connectionId?: string
         pushTarget?: GitPushTarget
+        submodulePath?: string
       }
     ): Promise<void> => {
       requireReachableGitRoute(getConnectionExecutionHostId(args.connectionId))
-      const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
+      const registeredPath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       const gitOptions = getLocalGitOptionsForRegisteredWorktree(
         store,
         args.worktreePath,
-        worktreePath
+        registeredPath
       )
+      const worktreePath = await resolveGitActionPath(args, registeredPath, gitOptions)
       const materializedPushTarget = args.pushTarget
         ? await materializeWorktreePushTargetRemote(
             worktreePath,

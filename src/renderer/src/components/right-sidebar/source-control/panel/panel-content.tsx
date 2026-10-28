@@ -5,6 +5,11 @@ import { shouldRenderCommitArea } from '../commit/component-gates'
 import { SourceControlBranchSection, branchSectionCountTitle } from '../listing/branch-section'
 import { SourceControlContentStatus } from '../listing/content-status'
 import { SourceControlUncommittedSections } from '../listing/uncommitted-sections'
+import { SourceControlSubmoduleReposSection } from '../listing/submodule-repos-section'
+import {
+  submoduleReposWorktreePath,
+  useSourceControlSubmoduleRepos
+} from '../listing/use-submodule-repos'
 import { CompareUnavailable } from '../sync/compare-summary'
 import { SourceControlCommitSurface } from './commit-surface'
 import { SourceControlForkPushNotice } from './fork-push-notice'
@@ -21,6 +26,7 @@ export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
   const {
     activeConnectionId,
     activeOpenRowKeys,
+    activeRepoTarget,
     branchEntries,
     branchSummary,
     changeScope,
@@ -49,6 +55,7 @@ export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
     handleUnstage,
     handleUnstagePaths,
     hasUncommittedEntries,
+    isFolder,
     isResolvingConflictsWithAI,
     isAbortingOperation,
     isCheckingRecoveryAdmission,
@@ -87,6 +94,16 @@ export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
   const recovery = useGitCommitActionsSupport(
     conflictOperation === 'revert' ? model.activeRepoTarget : null
   )
+  // Remote hosts are not served yet: the main process only resolves submodules of this machine's worktrees.
+  const submoduleRepos = useSourceControlSubmoduleRepos({
+    worktreePath: submoduleReposWorktreePath({
+      worktreePath,
+      isFolder,
+      activeRepoTarget,
+      activeConnectionId
+    }),
+    onChanged: refreshActiveGitStatus
+  })
   const hasFilteredUncommittedEntries = displaySections.length > 0
   const hasFilteredBranchEntries = filteredBranchEntries.length > 0
   const scopeKind = changeScope.kind
@@ -205,6 +222,8 @@ export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
           diffCommentCountByPath={diffCommentCountByPath}
         />
       )}
+
+      <SourceControlSubmoduleReposSection {...submoduleRepos} />
 
       {scopeKind === 'uncommitted' &&
       !hasUncommittedEntries &&

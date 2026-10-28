@@ -26,6 +26,7 @@ import type {
   GitHistoryResult
 } from '../../../shared/git/history/git-history-types'
 import type { PreloadApi } from '../../api-types'
+import type { GitSubmoduleRepo } from '../../../shared/git/status/git-submodule-repo-types'
 
 export const gitApi = {
   status: (args: {
@@ -117,11 +118,16 @@ export const gitApi = {
     connectionId?: string
     pushTarget?: GitPushTarget
   }): Promise<GitUpstreamStatus> => ipcRenderer.invoke('git:upstreamStatus', args),
+  submoduleRepos: (args: {
+    worktreePath: string
+    connectionId?: string
+  }): Promise<GitSubmoduleRepo[]> => ipcRenderer.invoke('git:submoduleRepos', args),
   fetch: (args: {
     worktreePath: string
     worktreeId?: string
     connectionId?: string
     pushTarget?: GitPushTarget
+    submodulePath?: string
   }): Promise<void> => ipcRenderer.invoke('git:fetch', args),
   syncFork: (args: {
     worktreePath: string
@@ -135,12 +141,14 @@ export const gitApi = {
     forceWithLease?: boolean
     connectionId?: string
     pushTarget?: unknown
+    submodulePath?: string
   }): Promise<void> => ipcRenderer.invoke('git:push', args),
   pull: (args: {
     worktreePath: string
     worktreeId?: string
     connectionId?: string
     pushTarget?: GitPushTarget
+    submodulePath?: string
   }): Promise<void> => ipcRenderer.invoke('git:pull', args),
   fastForward: (args: {
     worktreePath: string
