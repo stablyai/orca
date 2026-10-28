@@ -39,6 +39,7 @@ import type { ServeOptions } from './main-process-serve'
 import type { HangDetectionMarker } from '../hang-watchdog/hang-detection-marker'
 import { ServeReadinessPublisher } from '../server/serve-readiness'
 import { PluginInstallLinkState, SkillShareDeepLinkState } from './skill-share-deep-link-state'
+import { OrchestrationDeepLinkState } from './orchestration-deep-link-state'
 import { OsOpenedDocumentState } from './os-opened-documents'
 import {
   DEFAULT_GPU_CRASH_FALLBACK_THRESHOLD,
@@ -127,10 +128,14 @@ export const mainProcessState = {
   pendingQuitAndStopAllSessions: createWebContentsTimedFlag(),
   skillShareDeepLinks: new SkillShareDeepLinkState(),
   pluginInstallLinks: new PluginInstallLinkState(),
+  orchestrationDeepLinks: new OrchestrationDeepLinkState(),
   // Buffer OS Open With before any renderer listener exists.
   osOpenedDocuments: new OsOpenedDocumentState(),
   // Window existence does not prove listener readiness; only the renderer pull does, otherwise pushes silently vanish.
   osDocumentOpenListenerReady: false,
+  // Why a latch: a window can exist while starting or reloading before its ui:openOrchestrationDeepLink
+  // listener attaches. The renderer's ui:consumePendingOrchestrationDeepLink pull proves it is ready.
+  orchestrationDeepLinkListenerReady: false,
   firstWindowStartupServicesReady: Promise.resolve(),
   // Publish proxy readiness for fetchers; window creation can proceed behind the request guard.
   initialProxyApplicationReady: Promise.resolve(),
