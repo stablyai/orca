@@ -170,5 +170,31 @@ export function registerPtyConnectionForegroundFrameSchedulingTests(): void {
         restoreNavigator()
       }
     })
+
+    it('does not forward restored output mode controls to the PTY', async () => {
+      const { connectPanePty } = await import('../connect-pane-pty')
+      const agentTitleMocks12 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
+      const transport = createMockTransport('pty-1')
+      transportFactoryQueue.push(transport)
+
+      const pane = createPane(1)
+      connectPanePty(
+        ...mockPanePtyArgs(
+          pane,
+          createManager(1),
+          bindPaneAgentTitleMocks(createDeps(), agentTitleMocks12)
+        )
+      )
+      await flushAsyncTicks(6)
+      sendTerminalInputThroughPane(pane, '\x1b[?1002h\x1b[>4;2m')
+
+      expect(transport.sendInput).not.toHaveBeenCalled()
+
+      sendTerminalInputThroughPane(pane, '\x1b[A')
+
+      expect(transport.sendInput).toHaveBeenCalledWith('\x1b[A', 'query-reply')
+    })
   })
 }
