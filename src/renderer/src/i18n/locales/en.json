@@ -91,7 +91,7 @@
       "heading": "Google Cookies",
       "signInKeyword": "sign-in",
       "unavailable": "Unavailable for this profile on the selected host.",
-      "explanation": "Google stuck on the wrong account or keeps signing you out? Clear Google cookies from the active profile, then sign in to Google again in Orca. Other sites stay signed in. Orca never imports Google cookies from other browsers.",
+      "explanation": "Google ties its sign-ins to the browser they were made in, so Orca doesn't import Google cookies from other browsers. If Google is stuck on the wrong account or keeps signing you out, clear Google cookies from the active profile, then sign in to Google again in Orca. Other sites stay signed in.",
       "action": "Clear Google cookies…",
       "confirmTitle": "Clear Google cookies from {{profile}}?",
       "confirmDescription": "You'll be signed out of Google in Orca's browser for this profile. Other sites stay signed in.",
