@@ -14,20 +14,16 @@ import type {
   CodexSessionBackfillSummary
 } from './codex-session-backfill-types'
 
-// Why: bump to re-run the backfill for every host after a layout or semantics
-// change; the run itself stays skip-existing so re-runs never overwrite.
 const CODEX_SESSION_BACKFILL_MARKER_VERSION = 4
-// Why: v3 was only ever written after a certified full-tree walk, so it reads
-// as a v4 baseline and existing installs never pay one more full scan.
+// v3 certified a full walk; accept it as a baseline to avoid rescanning after upgrade.
 const MARKER_BASELINE_VERSIONS: ReadonlySet<number> = new Set([3, 4])
-// Why: bounds abnormal-exit recovery; past this many dates a full walk is the
-// cheaper certainty.
+// Use a full walk once abnormal-exit recovery exceeds this many dates.
 const MAX_PENDING_SCAN_DATES = 31
 
 let markerInvalidationGeneration = 0
 
 export type CodexSessionBackfillBaseline = {
-  /** Dates whose managed rollouts may not be published yet, widened through today. */
+  /** Dates that may still contain unpublished rollouts, widened after an active launch. */
   pendingScanDates: readonly CodexSessionBackfillDate[]
 }
 
@@ -35,12 +31,7 @@ export function captureCodexSessionBackfillMarkerGeneration(): number {
   return markerInvalidationGeneration
 }
 
-/**
- * Reads the certified full-history baseline for this target, if one exists.
- *
- * Null means no usable baseline, which is the only state that justifies a
- * full-tree walk. A baseline with pending dates still needs a bounded pass.
- */
+/** Certified history may still need bounded scans for pending dates. */
 export function readCodexSessionBackfillBaseline(
   markerPath: string,
   systemSessionsRoot: string,
@@ -50,13 +41,11 @@ export function readCodexSessionBackfillBaseline(
   if (!record?.hasBaseline || !matchesTargetRoot(record, systemSessionsRoot)) {
     return null
   }
-  // Why: an empty source can become populated after an early migration run;
-  // let the incremental async walk verify it without blocking the main thread.
+  // Previously empty sources may gain sessions and need another async scan.
   if (record.baselineScannedFiles === 0 || record.needsFullScan) {
     return null
   }
-  // Why: only a pane that was still running when the pass ended can have written
-  // dates nobody recorded — a pane held open across midnight, then force-quit.
+  // A pane active at completion may have written unrecorded dates before an abnormal exit.
   const pendingScanDates = record.launchActive
     ? expandCodexSessionBackfillDatesThroughToday(
         record.pendingScanDates,
@@ -80,27 +69,23 @@ export function writeCodexSessionBackfillMarker(
   summary: CodexSessionBackfillSummary,
   expectedGeneration: number,
   options: {
-    /** A full pass certifies the whole tree; a bounded one may only extend that. */
+    /** Bounded passes can extend but cannot establish a full-history baseline. */
     coverage: 'full' | 'bounded'
     coveredScanDates: readonly CodexSessionBackfillDate[]
-    /** A live Codex pane keeps writing into its own date, so it stays pending. */
+    /** Live panes can still write into these dates, so keep them pending. */
     retainPendingScanDates?: boolean
   }
 ): void {
   const record = readMarkerRecord(markerPath)
   const current = record && matchesTargetRoot(record, systemSessionsRoot) ? record : null
-  // Why: a date-limited pass cannot certify the dates it never looked at, so
-  // without an existing baseline it must publish nothing at all.
+  // A bounded pass cannot certify history it never scanned.
   if (options.coverage !== 'full' && !current?.hasBaseline) {
     return
   }
-  // Why: a launch that began during this pass can have written rollouts the
-  // walk had already gone past, so its dates must survive as pending.
+  // A racing launch can write behind the walk; preserve its pending dates.
   const generationCurrent = expectedGeneration === markerInvalidationGeneration
   const clearCovered = generationCurrent && options.retainPendingScanDates !== true
   const currentPendingScanDates = current?.pendingScanDates ?? []
-  // Why: a full walk speaks for every date, so it settles the whole pending set
-  // rather than only the dates a bounded pass was asked to look at.
   const coveredScanDates =
     options.coverage === 'full' ? currentPendingScanDates : options.coveredScanDates
   const pendingScanDates = clearCovered
@@ -110,17 +95,15 @@ export function writeCodexSessionBackfillMarker(
     ...current?.raw,
     version: CODEX_SESSION_BACKFILL_MARKER_VERSION,
     systemSessionsRoot,
-    // Why: only reached with a baseline in hand, so this records that a baseline
-    // exists, not the scope of this particular pass.
+    // Records the retained full-history baseline, including after a bounded pass.
     coverage: 'full',
     completedAt: Date.now(),
     launchActive: options.retainPendingScanDates === true,
-    // Why: only a full walk can speak for the whole tree, so a bounded pass
-    // that legitimately scanned nothing must not read back as an empty source.
+    // Empty bounded scans must not erase the count from the full-history baseline.
     baselineScannedFiles:
       options.coverage === 'full' ? summary.scannedFiles : current?.baselineScannedFiles,
     summary,
-    // Why: only a full walk that no later launch overtook can retire the demand.
+    // Clear full-scan demand only if no launch overtook the full walk.
     ...describePendingScanDates(
       pendingScanDates,
       current?.needsFullScan === true && !(generationCurrent && options.coverage === 'full')
@@ -128,25 +111,15 @@ export function writeCodexSessionBackfillMarker(
   })
 }
 
-/**
- * Records dates a launch may still be writing into, keeping the baseline.
- *
- * Why not delete: the marker is the only record that the full history was ever
- * published. Dropping it makes every launch re-walk the whole sessions tree.
- *
- * Returns whether a full walk is still owed for this target, so the caller can
- * fold that demand into its own in-memory state instead of losing it.
- */
+/** Retain the full-history baseline while adding dates; returns whether a full scan is owed. */
 export function markCodexSessionBackfillMarkerPending(
   markerPath: string,
   systemSessionsRoot: string,
   scanDates: readonly CodexSessionBackfillDate[]
 ): boolean {
-  // Why: an older in-flight pass must not clear dates recorded after it started.
+  // Prevent older in-flight passes from clearing these dates.
   markerInvalidationGeneration += 1
   const record = readMarkerRecord(markerPath)
-  // Why: a marker for a different history says nothing about this target, so
-  // only a full walk can certify it.
   if (record && !matchesTargetRoot(record, systemSessionsRoot)) {
     return true
   }
@@ -160,16 +133,14 @@ export function markCodexSessionBackfillMarkerPending(
       version: CODEX_SESSION_BACKFILL_MARKER_VERSION,
       systemSessionsRoot,
       coverage: 'bounded',
-      // Why: defaults only — an existing record keeps its own version and
-      // coverage, which is what preserves a v3 marker's implicit baseline.
+      // Preserve existing version/coverage, including v3's implicit full baseline.
       ...record?.raw,
       ...pending
     })
   } catch (error) {
     console.warn('[codex-session-backfill] Failed to record pending scan dates:', error)
     try {
-      // Why: fail closed — a full rescan costs one slow pass, while a silently
-      // unrecorded launch date hides its rollouts forever.
+      // Force a full rescan rather than lose an unrecorded launch date.
       rmSync(markerPath, { force: true })
     } catch (fallbackError) {
       throw new AggregateError(
@@ -189,7 +160,6 @@ type CodexSessionBackfillMarkerRecord = {
   pendingScanDates: CodexSessionBackfillDate[]
   needsFullScan: boolean
   launchActive: boolean
-  /** Files the last full-tree walk saw; a bounded pass must not overwrite it. */
   baselineScannedFiles: number | undefined
 }
 
@@ -220,12 +190,11 @@ function readMarkerRecord(markerPath: string): CodexSessionBackfillMarkerRecord 
     return {
       raw: parsed as Record<string, unknown>,
       systemSessionsRoot: marker.systemSessionsRoot,
-      // v3 predates `coverage` and was only written after a full-tree walk.
+      // v3 has an implicit full-history baseline.
       hasBaseline: marker.version === 3 || marker.coverage === 'full',
       pendingScanDates: parseCodexSessionBackfillDates(marker.pendingScanDates),
       needsFullScan: marker.needsFullScan === true,
       launchActive: marker.launchActive === true,
-      // v3 wrote only one summary, and it was always a full-tree one.
       baselineScannedFiles:
         typeof baselineScannedFiles === 'number' ? baselineScannedFiles : undefined
     }
@@ -234,9 +203,7 @@ function readMarkerRecord(markerPath: string): CodexSessionBackfillMarkerRecord 
   }
 }
 
-/** Why: changing the configured real Codex home must backfill the new target
- * instead of honoring a marker written for a different history — and Windows
- * spells one directory several ways, so compare normalized. */
+// Target changes require recertification; normalize Windows aliases of the same directory.
 function matchesTargetRoot(
   record: CodexSessionBackfillMarkerRecord,
   systemSessionsRoot: string
@@ -247,8 +214,7 @@ function matchesTargetRoot(
   )
 }
 
-/** Why: an unmet full-scan demand outlives the launch that raised it — only a
- * full walk may clear it, or the overflowed dates are never revisited. */
+// Full-scan demand must survive its originating launch or overflowed dates will never be revisited.
 function describePendingScanDates(
   pendingScanDates: readonly CodexSessionBackfillDate[],
   stillOwesFullScan: boolean

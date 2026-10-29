@@ -35,15 +35,13 @@ describe('serveOrcaApp: Electron serve preflight', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     spawnMock.mockReturnValue(new FakeChildProcess())
-    process.env.ORCA_APP_EXECUTABLE = '/opt/orca/orca'
-    process.env.ORCA_SERVE_RUNTIME = 'electron'
-    process.env.ORCA_USER_DATA_PATH = PROFILE
+    vi.stubEnv('ORCA_APP_EXECUTABLE', '/opt/orca/orca')
+    vi.stubEnv('ORCA_SERVE_RUNTIME', 'electron')
+    vi.stubEnv('ORCA_USER_DATA_PATH', PROFILE)
   })
 
   afterEach(() => {
-    delete process.env.ORCA_APP_EXECUTABLE
-    delete process.env.ORCA_SERVE_RUNTIME
-    delete process.env.ORCA_USER_DATA_PATH
+    vi.unstubAllEnvs()
   })
 
   it('never execs a second Electron main once the preflight refuses', async () => {

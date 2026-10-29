@@ -7,14 +7,7 @@ import { triggerSuccess, triggerError } from '../platform/haptics'
 import type { DirtyMarkdownDraft, MobileSessionTab } from './mobile-session-route-types'
 import type { MobileSessionDiffCommentsModel } from './use-mobile-session-diff-comments'
 
-/**
- * What these actions read, which is fourteen of the session model's two hundred and sixty-eight.
- *
- * Declared rather than taking the whole model, so the hook can be rendered on its own: its Back
- * claim is tested directly (ruling 33.2), and a probe that had to build the whole session to reach
- * it would be testing the session. `MobileSessionDiffCommentsModel` satisfies this by
- * construction, so the one caller is unchanged.
- */
+// Depend on the action’s narrow scope so Back behavior can be tested without constructing the whole session model.
 export type MobileSessionMarkdownActionsScope = Pick<
   MobileSessionDiffCommentsModel,
   | 'hostId'
@@ -75,9 +68,7 @@ export function useMobileSessionMarkdownActions(scope: MobileSessionMarkdownActi
       if (current?.status !== 'ready') {
         return
       }
-      // Caught here because the only caller is `void copyMarkdownLocalContent(...)`: the seam
-      // rejects when the pasteboard refused the text, and an uncaught rejection would leave
-      // "Copied" as the last word on a copy that did not happen.
+      // Contain fire-and-forget clipboard refusal so Copied cannot remain as false success feedback.
       try {
         await clipboard.writeText(current.localContent)
       } catch {
@@ -89,6 +80,19 @@ export function useMobileSessionMarkdownActions(scope: MobileSessionMarkdownActi
       showToast('Copied')
     },
     [clipboard, markdownDocs, showToast]
+  )
+
+  const copyMarkdownPath = useCallback(
+    async (tab: Extract<MobileSessionTab, { type: 'markdown' }>) => {
+      try {
+        await clipboard.writeText(tab.relativePath || tab.filePath)
+        showToast('Path copied')
+      } catch {
+        triggerError()
+        showToast("Couldn't copy path", 1500)
+      }
+    },
+    [clipboard, showToast]
   )
 
   const getDirtyMarkdownDrafts = useCallback(() => {
@@ -121,9 +125,7 @@ export function useMobileSessionMarkdownActions(scope: MobileSessionMarkdownActi
     setLeaveDrafts(dirtyDrafts)
   }, [getDirtyMarkdownDrafts, leaveSession])
 
-  // Native holds the key always: `leaveSession` replaces to the host at the root, where an
-  // unclaimed press would exit the app. On the page an unclaimed press is the shell's own pop,
-  // which is already "leave", so the claim is held only while there is a draft to ask about.
+  // Native always claims Back to avoid root exit; the web shell already pops, so only dirty drafts need a claim.
   const hasDirtyDraft = getDirtyMarkdownDrafts().length > 0
   useBackClaim(
     Platform.OS === 'web' && !hasDirtyDraft
@@ -240,6 +242,7 @@ export function useMobileSessionMarkdownActions(scope: MobileSessionMarkdownActi
   return {
     updateMarkdownLocalContent,
     copyMarkdownLocalContent,
+    copyMarkdownPath,
     getDirtyMarkdownDrafts,
     leaveSession,
     requestLeaveSession,

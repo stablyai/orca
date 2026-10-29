@@ -27,7 +27,7 @@ function makeStore(folderWorkspaces: FolderWorkspace[]): Store {
   return store as Store
 }
 
-// Why fresh modules: the hydrator memoizes its pass and the registry is module-scoped.
+// Reset both memoized hydration and the module-scoped registry.
 async function loadFresh() {
   vi.resetModules()
   const hydrateMod = await import('./hydrate-local-pty-registry')

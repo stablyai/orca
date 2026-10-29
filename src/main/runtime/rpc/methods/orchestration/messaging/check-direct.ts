@@ -19,7 +19,7 @@ export async function checkDirectMailbox(args: {
   signal: AbortSignal | undefined
 }): Promise<unknown> {
   const { params, runtime, db, handle, typeFilter, signal } = args
-  // Why: unread:false is honored for one release as a compat shim so in-flight callers don't break (design doc §5).
+  // Honor legacy unread:false callers for compatibility (design doc §5).
   const showAll = params.all === true || (params.unread === false && params.peek !== true)
   const consumeUnread = !showAll && params.peek !== true
   const readAndReturn = () => {
@@ -38,7 +38,7 @@ export async function checkDirectMailbox(args: {
     }
     let visibleMessages = messages
     if (consumeUnread && messages.length > 0) {
-      // Why: unread check is an authoritative read path for worker_done/heartbeat, so reconcile lifecycle messages here too.
+      // Unread check is authoritative for worker_done/heartbeat; reconcile lifecycle mail here too.
       visibleMessages = messages.map((message) => {
         const reconciled = reconcileLifecycleMessage(db, message)
         return reconciled.action === 'rejected'
@@ -61,7 +61,7 @@ export async function checkDirectMailbox(args: {
   if (result.count > 0 || !params.wait) {
     return result
   }
-  // Why: signal aborts this waiter when the client socket closes, freeing the long-poll slot immediately rather than after timeoutMs (design doc §3.1).
+  // Abort on socket close to release the long-poll slot immediately (design doc §3.1).
   const waitResult = await runtime.waitForMessage(handle, {
     typeFilter: typeFilter as string[] | undefined,
     timeoutMs: params.timeoutMs ?? undefined,

@@ -40,8 +40,7 @@ export function registerBitbucketHandlers(): void {
       }
       const result = await connectBitbucket(input)
       if (result.ok) {
-        // Preflight caches source-control status per session; reset so the card
-        // reflects the new connection without a relaunch.
+        // Refresh cached source-control preflight so reconnection needs no relaunch.
         _resetPreflightCache()
       }
       return result

@@ -5,9 +5,5 @@ export type ActivityThreadCollapseState = {
   onToggleGroupCollapse: (groupKey: string) => void
 }
 
-/**
- * Caller-owned collapse state for ActivityThreadListPane hosts that unmount the
- * pane (sidebar body switches) but should keep the user's collapsed groups.
- * Explicit collapsedGroupKeys/onToggleGroupCollapse props take precedence.
- */
+/** Retain caller-owned collapsed groups across pane unmounts; explicit collapse props take precedence. */
 export const ActivityThreadCollapseContext = createContext<ActivityThreadCollapseState | null>(null)

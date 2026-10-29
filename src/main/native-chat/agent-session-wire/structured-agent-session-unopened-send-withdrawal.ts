@@ -1,5 +1,4 @@
-// Which unanswered sends a person's Stop takes back as never sent, when Codex takes it or the child
-// ends, read from the journal at the settlement that lands, so a retried settle reads the same rows.
+// Derive withdrawals at settlement execution so retries read the same landed journal state.
 
 import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
 import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
@@ -11,7 +10,7 @@ import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { ResolveDispatchInput } from '../agent-session-journal/journal-store-contracts'
 
-/** What the derivation reads; absent members (a narrow double) withdraw nothing. */
+/** Missing methods withdraw nothing. */
 export type UnopenedSendJournal = {
   agent?: AgentType
   queuedMessages?: Pick<AgentSessionJournal['queuedMessages'], 'userStopInForce'>
@@ -28,8 +27,7 @@ export type UnopenedSendJournal = {
   resolveDispatch?: AgentSessionJournal['resolveDispatch']
 }
 
-/** A send a dying child can take back: one still being handed over, or one this process left in
- *  doubt (its answer was lost). Never a queued card's, nor a send an earlier process left behind. */
+/** Only in-flight or locally unknown sends; never unhanded cards or recovered sends from an earlier process. */
 export function sendStopCanTakeBack(
   entry: Pick<
     AgentJournalSubmission,
@@ -43,14 +41,8 @@ export function sendStopCanTakeBack(
   )
 }
 
-/**
- * Withdraws the sends a Codex child left unanswered when a person's Stop, in force since they were
- * sent, ends the child or is taken by Codex: each one that started its own turn (handed over with no turn running, so its
- * message belongs to no turn) when no turn has opened since. Codex records a prompt only once its
- * turn starts (core tasks/regular.rs:50, session/turn.rs:886-902), so they never ran. A send that
- * joined a running turn may be in it, so it, a send with no recorded place, and any other end stay
- * in doubt.
- */
+/** Codex records prompts when their turn starts; a handed-over turn-opening send with no later turn never ran.
+ * Only an effective personal Stop withdraws it; steers and sends without recorded handover remain uncertain. */
 export async function withdrawCodexSendsNoTurnOpenedFor(
   journal: UnopenedSendJournal,
   fence: number
@@ -76,8 +68,7 @@ export function codexUnopenedSendResolutions(
     const turn = readAgentJournalTurn(item.body)
     return turn ? [{ running: turn.state === 'running', sequence: item.sequence }] : []
   })
-  // Its message's place, recorded at handover: the turn it joined, or the conversation. A send
-  // that started its own turn has the conversation's; one with no turn recorded since then never ran.
+  // Thread-scoped handover opened its own turn; no turn since that position proves it never ran.
   const ownTurnHandover = (clientMessageId: string): number | undefined => {
     const handover = items.find(
       (item) => item.itemId === agentJournalSubmissionKey(clientMessageId)

@@ -21,7 +21,6 @@ describe('worktree create concurrency', () => {
     const third = beginWorktreeCreate()
     expect(second.end().otherCreates).toBe(2)
     expect(third.end().otherCreates).toBe(2)
-    // Peak, not count at the end: `first` once overlapped two others.
     expect(first.end().otherCreates).toBe(2)
   })
 

@@ -39,7 +39,7 @@ export function acpStartupFailure(
   error: unknown
 ): SubmissionRejectionFact | undefined {
   if (error instanceof AcpAgentError && acpAuthenticationRequired(session.spec.dialect, error)) {
-    // The agent's sign-in words, never log lines it wrote before refusing.
+    // Use the agent's sign-in answer, excluding preceding diagnostic output.
     return acpSignInRequiredFailure(session.spec.dialect, error)
   }
   return undefined

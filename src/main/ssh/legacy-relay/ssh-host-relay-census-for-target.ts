@@ -12,7 +12,6 @@ import {
   hostTerminalProofFromCensus
 } from './ssh-host-relay-terminals-on-connect'
 
-/** The host census a terminal proof falls back to when no relay session can be asked. */
 export function censusHostRelayTerminalsFor(target: SshTarget): CensusHostRelayTerminals {
   const census = async (): ReturnType<CensusHostRelayTerminals> => {
     const { connectionManager } = requireManagedOrcadInfrastructure()
@@ -35,7 +34,7 @@ async function censusOutsideConnect<T>(target: SshTarget, census: () => Promise<
   }
 }
 
-/** A transport this census opened that no connect or tunnel took over has no one to serve. */
+/** Release transports opened only for census unless a connect or tunnel adopted them. */
 async function closeUnadoptedCensusTransport(targetId: string, owner: symbol): Promise<void> {
   const { connectionManager } = requireManagedOrcadInfrastructure()
   const opened = connectionManager.getConnection(targetId)

@@ -1,19 +1,5 @@
 /** @vitest-environment happy-dom */
-/**
- * Cold-park verdict oscillation (crash cluster: React #185 in the terminal overlay).
- *
- * Why this shape: canWatcherCoverParkedTerminalTab is re-derived from store and
- * registry state that mounting/unmounting the very pane the verdict controls
- * rewrites, and the parked watchers write the tab model back. The pane stand-in
- * models that edge — mounted pane grants coverage, parked pane withdraws it,
- * and either transition re-mints the tab array the cold-park effect depends on.
- *
- * Why the store-write chain is parameterised: React bails on *commits*, not on
- * flips, so a damping threshold expressed in flips is only safe if it holds at
- * the real cycle's commits-per-flip cost (pane-connect updateTabPtyId, the
- * watcher-sync writes, the overlay's own subscriber renders). The chain models
- * that cost so the derived burst limit stays regression-tested.
- */
+/** Model mount/unmount changing watcher coverage and tab identity to provoke park oscillation. Parameterize commits per flip because React’s 50-commit limit can arrive before a flip-based damping threshold. */
 import { act, useEffect, useRef, useState } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -82,8 +68,7 @@ function terminalTab(id: string): TerminalTab {
 
 let tabModelRevision = 0
 
-// Models the store writes a pane mount/unmount produces — updateTabPtyId on
-// connect, parked-watcher title writes — both of which re-mint the tab array.
+// Model connect and parked-watcher writes that each remint the tab array.
 function rewriteTabModel(tabId: string): void {
   tabModelRevision += 1
   const revision = tabModelRevision
@@ -109,14 +94,7 @@ function TerminalPaneStandIn(): null {
   return null
 }
 
-/**
- * The store writes a park transition drags behind it — pane-connect
- * updateTabPtyId, then the watcher-sync writes that each only see the tab model
- * the previous write produced. Coverage is re-derived from the last of them, so
- * the verdict cannot flip until the whole chain has committed. Why staged
- * rather than batched: nested commits are what React counts against
- * NESTED_UPDATE_LIMIT, so this is the per-flip cost the damping must beat.
- */
+// Stage mount/watcher writes as separate commits: coverage observes their final state, and damping must beat React’s commit limit at this per-flip cost.
 function ParkTransitionStoreWrites({ parked }: { parked: boolean }): null {
   const pendingWritesRef = useRef(storeCommitsPerParkTransition)
   const lastParkedRef = useRef(parked)
@@ -224,18 +202,14 @@ describe('cold-park verdict oscillation', () => {
     root = createRoot(container)
     const thrown = renderOverlayHost(root)
 
-    // Damping must land inside the burst window and settle on the safe side:
-    // the pane stays mounted, so bells/titles/completions never go silent.
+    // Damp within the burst window and leave panes mounted so bells/titles/completions remain covered.
     expect(thrown).toBeNull()
     expect(parkVerdictFlipCount).toBeLessThanOrEqual(SETTLED_FLIP_BUDGET)
     expect(lastParkVerdict).toBe(false)
     expect(paneMountCount).toBeGreaterThan(0)
   })
 
-  // Why: the burst limit is derived from React's 50-commit bail divided by an
-  // assumed worst-case commits-per-flip. Running the loop at exactly that cost
-  // is what keeps the derivation honest — a limit tuned on a one-write-per-flip
-  // model pins only after React has already thrown #185.
+  // Exercise the assumed worst-case commits per flip; a one-write model could damp only after real cycles hit React #185.
   it('settles at the assumed worst-case commit cost per park transition', () => {
     storeCommitsPerParkTransition = TERMINAL_TAB_PARK_FLIP_COMMIT_COST
     root = createRoot(container)

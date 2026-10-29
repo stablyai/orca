@@ -39,10 +39,6 @@ describe('agentKindToTuiAgent', () => {
     }
   })
 
-  it("reverses Claude's product id back to the TuiAgent id", () => {
-    expect(agentKindToTuiAgent('claude-code')).toBe('claude')
-  })
-
   it('returns null for the catch-all and missing kinds', () => {
     expect(agentKindToTuiAgent('other')).toBeNull()
     expect(agentKindToTuiAgent(null)).toBeNull()

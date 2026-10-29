@@ -9,7 +9,6 @@ import type { AppState } from '../types'
 import type { Tab } from '../../../../shared/tab-types'
 import { drawTabsFromMain } from './tabs-drawn-from-main.test-fixture'
 
-// Main's answer to the window's layout commands, as a switch-on build sends them.
 vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
   (
     await import('@/runtime/layout-apply-test-transport.test-fixture')
@@ -252,8 +251,7 @@ describe('createEditorSlice recently closed editor tabs', () => {
       return reads
     }
 
-    // Why: resolving each closed tab's position by rescanning tab order and group membership
-    // made close-all cubic — 4x the tabs cost ~64x the scans and froze the renderer for seconds.
+    // Per-tab rescans made close-all cubic (~64x scans for 4x tabs); pin complexity without wall-clock timing.
     const small = await countEntityIdReads(20)
     expect(await countEntityIdReads(80)).toBeLessThanOrEqual(small * 8)
   })

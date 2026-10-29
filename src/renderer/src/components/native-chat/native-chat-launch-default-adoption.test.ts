@@ -3,28 +3,26 @@ import {
   clearNativeChatSessionOptionCacheForTests,
   seedNativeChatAppliedSessionOptions
 } from './native-chat-session-option-cache'
-import { createNativeChatPtySessionOptions } from './native-chat-pty-session-options'
+import { createNativeChatPtySessionOptions } from '../../../../shared/native-chat-pty-session-options'
 import {
   resolveNativeChatSessionOptionDefaults,
   updateNativeChatSessionOptionDefaults
-} from '../../../../shared/native-chat-session-option-defaults'
+} from '../../../../shared/native-chat/input/native-chat-session-option-defaults'
 import type {
   PersistedNativeChatSessionOptions,
   SessionOptionValue
-} from '../../../../shared/native-chat-session-options'
+} from '../../../../shared/native-chat/input/native-chat-session-options'
 
 describe('native chat launch-default adoption', () => {
   beforeEach(() => clearNativeChatSessionOptionCacheForTests())
 
-  // Why: current CLIs list `opus[1m]` and no plain `opus`, so this stands in for a host
-  // catalog that both adds an unseeded id and drops a seeded one.
+  // Model a host catalog that adds opus[1m] and drops the seeded opus id.
   const HOST_CLAUDE_MODELS = [
     { id: 'opus[1m]', label: 'Opus (1M context)', options: [] },
     { id: 'sonnet', label: 'Sonnet', options: [] }
   ]
 
-  /** Folds picker persists onto a durable record the way the settings writer does, so a
-   *  test reads the launch flag a later chat would actually emit rather than the flag. */
+  /** Apply picker persistence through settings so assertions see flags emitted for later chats. */
   const claudeLaunchDefaults = (): {
     read: () => PersistedNativeChatSessionOptions
     persistSelection: (args: {
@@ -44,10 +42,7 @@ describe('native chat launch-default adoption', () => {
   }
 
   it('does not adopt a launch-flag model no list carries as the persisted launch default', async () => {
-    // Regression: `worker-start --model claude-opus-5` seeds that id verbatim, and once
-    // discovery landed the gate waved anything through for a non-authoritative catalog.
-    // Re-picking the row it drew wrote the id into settings, so every later claude chat
-    // for this agent launched `-m claude-opus-5` — an id neither list has ever carried.
+    // Tracking an emitted launch flag does not validate its model id; unlisted ids must not become persisted defaults.
     seedNativeChatAppliedSessionOptions('pty-1', 'claude', { model: 'claude-opus-5' })
     const defaults = claudeLaunchDefaults()
     const surface = createNativeChatPtySessionOptions({
@@ -55,6 +50,7 @@ describe('native chat launch-default adoption', () => {
       scopeKey: 'pty-1',
       initialModels: HOST_CLAUDE_MODELS,
       mode: 'live',
+      modelLabel: 'Model',
       dispatchCommand: vi.fn().mockResolvedValue({ outcome: 'applied' }),
       persistSelection: defaults.persistSelection
     })!
@@ -66,14 +62,14 @@ describe('native chat launch-default adoption', () => {
   })
 
   it('does not adopt an unlisted launch-flag model before discovery either', async () => {
-    // The same raw flag read through the other branch: a tracked model is normally proof
-    // enough, but tracking says the flag was emitted, not that the id names anything.
+    // A tracked flag proves emission, not that a catalog recognizes the model.
     seedNativeChatAppliedSessionOptions('pty-1', 'claude', { model: 'claude-opus-5' })
     const defaults = claudeLaunchDefaults()
     const surface = createNativeChatPtySessionOptions({
       agent: 'claude',
       scopeKey: 'pty-1',
       mode: 'live',
+      modelLabel: 'Model',
       dispatchCommand: vi.fn().mockResolvedValue({ outcome: 'applied' }),
       persistSelection: defaults.persistSelection
     })!
@@ -91,6 +87,7 @@ describe('native chat launch-default adoption', () => {
       scopeKey: 'pty-1',
       initialModels: HOST_CLAUDE_MODELS,
       mode: 'live',
+      modelLabel: 'Model',
       dispatchCommand: vi.fn().mockResolvedValue({ outcome: 'applied' }),
       persistSelection: defaults.persistSelection
     })!
@@ -110,6 +107,7 @@ describe('native chat launch-default adoption', () => {
       scopeKey: 'pty-1',
       initialModels: HOST_CLAUDE_MODELS,
       mode: 'live',
+      modelLabel: 'Model',
       dispatchCommand: vi.fn(),
       persistSelection: defaults.persistSelection
     })!
@@ -129,6 +127,7 @@ describe('native chat launch-default adoption', () => {
       agent: 'claude',
       scopeKey: 'pty-1',
       mode: 'live',
+      modelLabel: 'Model',
       dispatchCommand: vi.fn(),
       persistSelection: defaults.persistSelection
     })!

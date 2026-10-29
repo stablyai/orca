@@ -13,8 +13,7 @@ function cancellationError(): Error {
   return new Error('plugin worker activation was cancelled')
 }
 
-/** Atomically leases the bounded worker slots and hands releases to queued
- * activations in FIFO order. */
+/** Hand bounded worker-slot leases to waiting activations in FIFO order. */
 export class PluginWorkerSlotPool {
   private readonly waiters: SlotWaiter[] = []
   private leased = 0

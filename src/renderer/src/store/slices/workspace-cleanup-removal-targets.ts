@@ -1,14 +1,4 @@
-/**
- * Host-qualified removal identity for workspace cleanup (STA-4343).
- *
- * A cleanup row's `worktreeId` is `repoId::path`, which two execution hosts can
- * both own. Selection, confirmation, preflight and removal therefore travel as
- * a (worktreeId, executionHostId) pair. Where the owner cannot be pinned — an
- * id-only row that the store knows on several hosts, a confirmation naming two
- * hosts at once, or a refreshed scan that no longer shows the row on the
- * confirmed host — the target resolves to a failure instead of a best guess:
- * deleting the wrong host's workspace destroys uncommitted work.
- */
+/** Carry confirmed (worktreeId, executionHostId) through cleanup; IDs repeat across hosts. Refuse ambiguous/hostless/missing refreshed owners rather than risk deleting another host’s uncommitted work (STA-4343). */
 import type { AppState } from '../types'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import {
@@ -42,10 +32,7 @@ const UNQUALIFIED_HOST_BUCKET = Symbol('unqualified-cleanup-host')
 export type WorkspaceCleanupRemovalTarget = {
   kind: 'target'
   worktreeId: string
-  /**
-   * The host the user confirmed. Null is reserved for legacy internal callers
-   * that did not supply confirmation candidates.
-   */
+  /** Confirmed owner; null only for legacy internal callers without confirmation candidates. */
   executionHostId: ExecutionHostId | null
   displayName: string
   approvedCandidate?: WorkspaceCleanupCandidate
@@ -118,13 +105,7 @@ export function resolveWorkspaceCleanupRemovalTargets(
     const requestedEveryApprovedRow = requestedCountByWorktreeId.get(worktreeId) === approved.length
     const confirmedCandidate = approved.length > 1 ? approved[cursor] : approved[0]
     const displayName = confirmedCandidate?.displayName ?? approved[0]?.displayName ?? worktreeId
-    // Why: one id with two confirmed hosts is ambiguous unless the caller also
-    // supplies two id occurrences, one for each explicitly approved row.
-    //
-    // Why the STRICT resolver: the display identity defaults a hostless row to
-    // `local`, so a hostless row and a genuine local row for the same id share an
-    // identity and this gate would not fire. Destructive code may not guess a
-    // host — an unqualified row is its own bucket here.
+    // Two confirmed hosts need two ID occurrences. Use strict owner buckets: display identity maps hostless to local and would hide destructive ambiguity.
     if (
       !requestedEveryApprovedRow &&
       new Set(
@@ -152,9 +133,7 @@ export function resolveWorkspaceCleanupRemovalTargets(
     if (confirmedCandidate) {
       return ambiguousHostFailure(worktreeId, displayName)
     }
-    // No host evidence on the row: accept it only while the store itself knows
-    // a single owner. This compatibility path is reachable only by internal
-    // callers that did not provide a confirmed candidate.
+    // Legacy internal callers without confirmation may proceed only with one known owner.
     const ownerHostIds = getWorktreeOperationOwnerHostIds(state, worktreeId)
     if (ownerHostIds.length > 1) {
       return ambiguousHostFailure(worktreeId, displayName)
@@ -181,8 +160,7 @@ export async function preflightWorkspaceCleanupCandidates(
     getConsentAttemptId?: (identity: string) => string | undefined
   } = {}
 ): Promise<WorkspaceCleanupPreflightResult[]> {
-  // Why: one batched scan per chunk replaces a git worktree-list + activity
-  // read per row; chunks stay under main's silent target truncation limit.
+  // Batch scans avoid per-row git/activity reads; chunk below main’s target truncation limit.
   const candidatesByIdentity = new Map<string, WorkspaceCleanupCandidate>()
   const identitiesByWorktreeId = new Map<string, Set<string>>()
   const scanErrors: WorkspaceCleanupScanError[] = []

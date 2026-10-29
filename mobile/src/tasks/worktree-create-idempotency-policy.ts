@@ -1,10 +1,10 @@
-// Why: old idempotent hosts omit policy, so preserve today's effective replay window.
+// Older idempotent hosts omit policy; retain their established replay window.
 export const WORKTREE_CREATE_DEDUPE_TTL_LEGACY_HOST_MS = 60_000
 
-// Why: a client must not trust a host advertisement beyond its tested ceiling.
+// Cap advertised support at the client’s tested ceiling.
 export const WORKTREE_CREATE_DEDUPE_TTL_CLIENT_CEILING_MS = 60_000
 
-// Why: the replay still has to reach the host before its dedupe record expires.
+// Leave time for replay to reach the host before its dedupe record expires.
 const WORKTREE_CREATE_REPLAY_FLIGHT_MARGIN_MS = 10_000
 
 export type WorktreeCreateIdempotencySupport = {

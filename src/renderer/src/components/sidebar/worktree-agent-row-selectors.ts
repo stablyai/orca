@@ -1,4 +1,5 @@
-import type { RetainedAgentEntry } from '@/store/slices/agent-status'
+import { getStructuredAgentSessionTabsByPaneKey } from '@/components/native-chat/structured-agent-session-tabs'
+import type { RetainedAgentEntry } from '@/store/slices/agent-status/agent-status-contract'
 import type { AppState } from '@/store/types'
 import type {
   AgentStatusEntry,
@@ -25,8 +26,7 @@ export const EMPTY_MIGRATION_UNSUPPORTED_ENTRIES = Object.freeze(
 export const EMPTY_RETAINED = Object.freeze([]) as unknown as RetainedAgentEntry[]
 export const EMPTY_TERMINAL_LAYOUTS: Record<string, TerminalLayoutSnapshot | undefined> =
   Object.freeze({})
-// Why: selector unit tests often pass partial store mocks; production state
-// owns these maps, but missing mock maps should behave like empty slices.
+// Partial test stores need missing maps to behave as stable empty slices.
 const EMPTY_RECORD = {}
 
 type WorktreeAgentRowsState = Pick<
@@ -65,9 +65,7 @@ let liveEntriesByWorktreeCache: LiveEntriesByWorktreeCache | null = null
 let migrationUnsupportedByWorktreeCache: MigrationUnsupportedByWorktreeCache | null = null
 let retainedEntriesByWorktreeCache: RetainedEntriesByWorktreeCache | null = null
 
-// Why exported: WorktreeList reuses this exact-equality identity check to keep
-// derived arrays referentially stable across order-preserving epoch bumps so
-// memo'd cards can bail out of re-render.
+// Share exact array reuse with WorktreeList so equal epoch-derived rows do not rerender cards.
 export function reuseArrayIfEqual<T>(previous: T[] | undefined, next: T[]): T[] {
   if (!previous || previous.length !== next.length) {
     return next
@@ -80,9 +78,7 @@ export function reuseArrayIfEqual<T>(previous: T[] | undefined, next: T[]): T[] 
   return previous
 }
 
-// Why exported: the Settings -> Repositories runtime summary needs the same
-// tab -> worktree index, and rebuilding it there would re-walk every tab bucket
-// on each store write.
+// Settings reuses this tab index to avoid rescanning every bucket on each store write.
 export function getTabIdToWorktreeId(
   tabsByWorktree: WorktreeAgentRowsState['tabsByWorktree']
 ): Map<string, string> {
@@ -134,6 +130,9 @@ function getLiveEntriesByWorktree(state: WorktreeAgentRowsState): Map<string, Ag
   }
 
   const tabIdToWorktreeId = getLiveTabIdToWorktreeId(tabsByWorktree, unifiedTabsByWorktree)
+  const represented = unifiedTabsByWorktree
+    ? getStructuredAgentSessionTabsByPaneKey(unifiedTabsByWorktree)
+    : undefined
   if (
     liveEntriesByWorktreeCache?.tabsByWorktree === tabsByWorktree &&
     liveEntriesByWorktreeCache.unifiedTabsByWorktree === unifiedTabsByWorktree
@@ -141,7 +140,8 @@ function getLiveEntriesByWorktree(state: WorktreeAgentRowsState): Map<string, Ag
     const patched = patchLiveEntriesByWorktree(
       liveEntriesByWorktreeCache,
       agentStatusByPaneKey,
-      tabIdToWorktreeId
+      tabIdToWorktreeId,
+      represented
     )
     if (patched) {
       liveEntriesByWorktreeCache = {
@@ -157,7 +157,7 @@ function getLiveEntriesByWorktree(state: WorktreeAgentRowsState): Map<string, Ag
   const previous = liveEntriesByWorktreeCache?.entriesByWorktree
   const entriesByWorktree = new Map<string, AgentStatusEntry[]>()
   for (const [paneKey, entry] of Object.entries(agentStatusByPaneKey)) {
-    const worktreeId = liveEntryWorktreeId(paneKey, entry, tabIdToWorktreeId)
+    const worktreeId = liveEntryWorktreeId(paneKey, entry, tabIdToWorktreeId, represented)
     if (!worktreeId) {
       continue
     }
@@ -273,10 +273,7 @@ export function selectRetainedAgentEntriesForWorktree(
   return getRetainedEntriesByWorktree(state).get(worktreeId) ?? EMPTY_RETAINED
 }
 
-// Why: reads a shared worktree-keyed index instead of rescanning every
-// orchestration context. Zustand re-runs each mounted card's selector on every
-// publication, so the old per-card scan was O(cards x contexts) on unrelated
-// traffic; only the first card through a given store version now pays a build.
+// Share one orchestration index across cards instead of scanning all contexts per card per publication.
 export function selectRuntimeAgentOrchestrationForWorktree(
   state: Pick<
     AppState,

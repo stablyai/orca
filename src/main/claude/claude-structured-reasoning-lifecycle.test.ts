@@ -1,10 +1,9 @@
-// Every way a streamed Claude reasoning row ends when its final frame never comes.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
 import type { AgentJournalItemBody } from '../../shared/agent-session-journal-types'
 import type { StructuredAgentSessionAppendOptions } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { createClaudeJournalTranslator } from './claude-structured-journal-translation'
-import type { ClaudeStructuredSessionEvent } from './claude-structured-session-state'
+import type { ClaudeStructuredSessionEvent } from './structured/claude-structured-session-state'
 
 type Write = {
   key: string
@@ -161,7 +160,6 @@ describe('a streamed reasoning row the provider never finishes', () => {
         )
       )
     }
-    // Text reaches the row on the coalescer's cadence, not once per tally.
     expect(reasoningWrites()).toEqual([])
     vi.advanceTimersByTime(100)
     expect(reasoningWrites()).toHaveLength(1)
@@ -195,7 +193,6 @@ describe('a streamed reasoning row the provider never finishes', () => {
     )
     const writes = reasoningWrites()
     expect(writes.length).toBeGreaterThan(0)
-    // Every write names the block's start, so whichever creates the row starts it there.
     expect(writes.every((write) => write.options.observedAt === 3_510)).toBe(true)
     expect(writes.at(-1)?.body).toMatchObject({ state: 'completed', completedAt: 8_160 })
   })

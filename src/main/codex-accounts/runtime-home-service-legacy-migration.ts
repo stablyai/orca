@@ -29,8 +29,7 @@ export abstract class CodexRuntimeHomeLegacyMigration extends CodexRuntimeHomePa
         systemCodexHome: getSystemCodexHomePath()
       })
     } catch (error) {
-      // Why: an inconclusive identity, ownership, or filesystem result must
-      // leave the marker absent so the next startup can retry safely.
+      // Leave completion unmarked on inconclusive results so the next startup can retry.
       console.warn('[codex-runtime-home] Failed to migrate legacy shared Codex auth:', error)
     }
   }
@@ -72,7 +71,7 @@ export abstract class CodexRuntimeHomeLegacyMigration extends CodexRuntimeHomePa
       this.migrateLegacySessions(managedHomePath, accountId)
     }
 
-    // Why: migration is one-shot; re-importing every startup would replay stale managed-home state into the shared runtime.
+    // Mark completion so later startups cannot replay stale managed-home state.
     writeFileAtomically(
       this.getMigrationMarkerPath(),
       `${JSON.stringify({ completedAt: Date.now(), migratedHomeCount: managedHomes.length })}\n`
@@ -180,7 +179,7 @@ export abstract class CodexRuntimeHomeLegacyMigration extends CodexRuntimeHomePa
   }
 
   protected appendListedFiles(target: string[], source: readonly string[]): void {
-    // Why: tolerate directories larger than V8's argument limit for spread calls.
+    // Avoid V8's argument limit for directories too large to append with spread.
     for (const filePath of source) {
       target.push(filePath)
     }
@@ -197,7 +196,7 @@ export abstract class CodexRuntimeHomeLegacyMigration extends CodexRuntimeHomePa
     try {
       appendFileSync(diagnosticsPath, `${JSON.stringify(record)}\n`, { encoding: 'utf-8' })
     } catch (error) {
-      // Why: diagnostics must not fail the one-shot migration after the session file is already preserved.
+      // Diagnostic failures must not abort migration after the session has been preserved.
       console.warn('[codex-runtime-home] Failed to append migration diagnostic:', error)
     }
   }

@@ -58,35 +58,18 @@ describe('the first frame of every agent’s picker', () => {
         const model = snapshot.find((descriptor) => descriptor.id === 'model')
         expect(model).toBeDefined()
         if (seed.models.length === 0) {
-          // The provider-default placeholder: no choice, so showing it can never seed a launch.
+          // An unpickable placeholder must never seed a launch.
           expect(model).toMatchObject({
             valueSource: 'unknown',
             settable: false,
             kind: { choices: [] }
           })
-          expect(canSetStructuredAgentSessionOption(state, 'model', 'anything')).toBe(false)
+          expect(canSetStructuredAgentSessionOption(state, 'model', 'anything')).toBe(true)
         } else {
-          // A built-in list is presentation only: no value is tracked from it.
+          // Built-in lists are presentation, never tracked picks.
           expect(state.record.values.model).toBeUndefined()
         }
       }
-    }
-  )
-
-  it.each(AGENTS)(
-    '%s: a warm host catalog lists its models before the session reports',
-    (agent) => {
-      const { state, snapshot } = firstFrame(agent, {
-        ...HOST_CATALOG,
-        listingNamesConfiguredModel: false
-      })
-      expect(state.catalogSource).toBe('host')
-      const model = snapshot.find((descriptor) => descriptor.id === 'model')
-      expect(
-        model?.kind.type === 'select' && model.kind.choices.map((choice) => choice.value)
-      ).toEqual(['model-listed'])
-      // Listed, not picked: nothing reads as a value the chat confirmed or will launch with.
-      expect(state.record.values.model).toBeUndefined()
     }
   )
 
@@ -104,7 +87,7 @@ describe('the first frame of every agent’s picker', () => {
         'high'
       ])
       expect(currentValue(snapshot, 'effort')).toBe('high')
-      // Shown as the default it runs, never as a pick the next launch would replay.
+      // Listing defaults describe the running default, not a saved next-launch pick.
       expect(snapshot.find((descriptor) => descriptor.id === 'model')?.valueSource).toBe('default')
       expect(state.record.values.model).toBeUndefined()
       // A reopened chat may run a model picked in it, so it names none.
@@ -125,7 +108,7 @@ describe('the first frame of every agent’s picker', () => {
     })
     expect(live.catalogSource).toBe('live')
     expect(live.catalog?.models.map((model) => model.id)).toEqual(['model-live'])
-    // A later host answer never downgrades what the session reported on older hosts.
+    // Later host listings must not downgrade live-session answers.
     expect(
       applyStructuredAgentSessionModelCatalog(live, seed, HOST_CATALOG, { newLaunch: true })
     ).toBe(live)

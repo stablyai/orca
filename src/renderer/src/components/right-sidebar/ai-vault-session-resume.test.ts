@@ -55,7 +55,7 @@ function makeTargetState(
     repos: [],
     worktreesByRepo: {},
     ...overrides
-  } as AiVaultSessionResumeTargetState
+  }
 }
 
 function makeFolderTargetState(

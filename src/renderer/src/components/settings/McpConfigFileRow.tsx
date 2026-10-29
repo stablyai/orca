@@ -15,18 +15,24 @@ type McpConfigFileRowProps = {
 
 function statusLabel(config: LoadedMcpConfigInspection): string {
   if (config.readError) {
-    return 'Unreadable'
+    return translate('settings.mcp.unreadable', 'Unreadable')
   }
   if (config.status === 'missing') {
-    return 'Not found'
+    return translate('settings.mcp.notFound', 'Not found')
   }
   if (config.status === 'invalid') {
-    return 'Invalid JSON'
+    return translate('settings.mcp.invalidJson', 'Invalid JSON')
   }
   if (config.servers.length === 0) {
-    return 'No servers'
+    return translate('settings.mcp.noServers', 'No servers')
   }
-  return `${config.servers.length} server${config.servers.length === 1 ? '' : 's'}`
+  return config.servers.length === 1
+    ? translate('settings.mcp.serverCount_one', '{{count}} server', {
+        count: config.servers.length
+      })
+    : translate('settings.mcp.serverCount_other', '{{count}} servers', {
+        count: config.servers.length
+      })
 }
 
 function statusClassName(config: LoadedMcpConfigInspection): string {
@@ -41,12 +47,12 @@ function statusClassName(config: LoadedMcpConfigInspection): string {
 
 function serverDetailLabel(server: LoadedMcpConfigInspection['servers'][number]): string {
   if (server.transport === 'http') {
-    return server.url ?? 'HTTP server'
+    return server.url ?? translate('settings.mcp.httpServer', 'HTTP server')
   }
   if (server.transport === 'stdio') {
-    return server.command ?? 'stdio server'
+    return server.command ?? translate('settings.mcp.stdioServer', 'stdio server')
   }
-  return server.issue ?? 'Invalid server'
+  return server.issue ?? translate('settings.mcp.invalidServer', 'Invalid server')
 }
 
 export function McpConfigFileRow({ config, onOpen }: McpConfigFileRowProps): React.JSX.Element {
@@ -60,7 +66,13 @@ export function McpConfigFileRow({ config, onOpen }: McpConfigFileRowProps): Rea
         )}
         <div className="min-w-0 flex-1">
           <div className="flex min-w-0 items-center gap-2">
-            <p className="truncate text-sm font-medium">{config.candidate.label}</p>
+            <p className="truncate text-sm font-medium">
+              {config.candidate.relativePath === '.mcp.json'
+                ? translate('settings.mcp.workspace', 'Workspace')
+                : config.candidate.relativePath === '.claude/mcp.json'
+                  ? translate('settings.mcp.claudeWorkspace', 'Claude workspace')
+                  : config.candidate.label}
+            </p>
             <p className="truncate font-mono text-[11px] text-muted-foreground">
               {config.candidate.relativePath}
             </p>

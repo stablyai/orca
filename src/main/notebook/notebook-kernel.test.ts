@@ -141,7 +141,6 @@ describe('createFrameReader', () => {
       { type: 'missing', externallyManaged: false },
       { type: 'done', status: '12', execution_count: null }
     ])
-    // The unreadable line is reported; a parsed record of an unknown shape is not.
     expect(reported).toBe(1)
   })
 
@@ -237,7 +236,6 @@ describe.skipIf(!python)('notebook kernel against a real ipykernel', () => {
     kernel.execute('import os; os._exit(1)')
     const death = await next('exit')
     expect(death).toMatchObject({ type: 'exit' })
-    // ipykernel's startup warning about unencrypted TCP is not why it died.
     expect(JSON.stringify(death)).not.toContain('without encryption')
   }, 60_000)
 })
@@ -247,7 +245,6 @@ const bare = process.env.ORCA_TEST_PYTHON_WITHOUT_IPYKERNEL
 describe.skipIf(!bare)('notebook kernel without ipykernel', () => {
   it('reports the missing package instead of starting', async () => {
     const { ready } = startNotebookKernel({ python: bare!, cwd: __dirname, onFrame: () => {} })
-    // A bare venv accepts pip installs, whatever its base interpreter does.
     expect(await ready).toEqual({ status: 'missing-ipykernel', externallyManaged: false })
   })
 })

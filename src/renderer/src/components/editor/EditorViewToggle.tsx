@@ -15,13 +15,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import type { MarkdownViewMode } from '@/store/slices/editor'
 import { translate } from '@/i18n/i18n'
 
-// Why: 'changes' is not a MarkdownViewMode in the store — it lives on the
-// orthogonal editorViewMode slice. This toggle unifies both dimensions into a
-// single segmented control because they are mutually exclusive at render time:
-// a file can show Source, Rich, Preview, Edit, OR Changes, but never two at
-// once. 'edit' is the code-file counterpart to markdown's 'source' — it means
-// "the normal editor for this file" without implying the markdown source/raw
-// distinction. See reviews/changes-view-mode-plan.md.
+// Combine markdown modes with orthogonal edit/changes state in one mutually exclusive toggle; edit is the non-markdown source counterpart.
 export type EditorToggleValue = MarkdownViewMode | 'edit' | 'changes'
 
 type ViewModeMetadata = { label: string; icon: LucideIcon; title?: string }
@@ -56,17 +50,13 @@ const DEFAULT_VIEW_MODE_METADATA: Record<EditorToggleValue, ViewModeMetadata> = 
       return translate('auto.components.editor.EditorViewToggle.4837f3f578', 'Changes')
     },
     icon: GitCompareArrows,
-    // Why: "Changes" collides with the Source Control sidebar's "Branch
-    // Changes" section, which diffs against the base ref. This toggle shows
-    // uncommitted changes (working tree vs HEAD), so disambiguate in the
-    // hover title without repeating the button label.
+    // Disambiguate uncommitted HEAD changes from the sidebar’s branch-base diff.
     get title() {
       return translate('auto.components.editor.EditorViewToggle.167f45888c', 'Uncommitted changes')
     }
   }
 }
 
-// CSV/TSV uses a table icon for both editable tables and read-only previews.
 export const CSV_VIEW_MODE_METADATA: Partial<Record<MarkdownViewMode, ViewModeMetadata>> = {
   rich: {
     get label() {
@@ -98,8 +88,7 @@ export default function EditorViewToggle({
   onChange,
   metadataOverride
 }: EditorViewToggleProps): React.JSX.Element {
-  // Why: metadata labels are lightweight getters, so subscribe this compact
-  // control to repaint when the active language changes.
+  // Metadata uses getters; subscribe here so language changes repaint labels.
   useTranslation()
   return (
     <TooltipProvider delayDuration={300}>
@@ -116,10 +105,7 @@ export default function EditorViewToggle({
         }}
       >
         {modes.map((viewMode) => {
-          // Why: metadataOverride is keyed by MarkdownViewMode (source/rich/preview)
-          // because only those slots have language-specific presentation variants
-          // (e.g. CSV's "Table" label on the 'rich' slot). 'edit'/'changes' are
-          // orthogonal toggle values and always use the default metadata.
+          // Only markdown modes accept presentation overrides; edit and changes keep default metadata.
           const override = (
             metadataOverride as Partial<Record<EditorToggleValue, ViewModeMetadata>> | undefined
           )?.[viewMode]

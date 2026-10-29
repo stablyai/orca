@@ -34,13 +34,11 @@ function encodeRemoteCommandForPrintf(command: string): string[] {
 export const REMOTE_COMMAND_DECODER_UNAVAILABLE_EXIT = 125
 export const REMOTE_COMMAND_DECODER_UNAVAILABLE = 'ORCA_COMMAND_DECODER_UNAVAILABLE'
 
-/** Wrap a POSIX snippet into one line that non-POSIX SSH login shells can forward. */
 export function wrapRemoteCommandForPosixShell(
   command: string,
   options: { compress?: boolean } = {}
 ): string {
-  // Why: csh/tcsh split multiline SSH exec strings before /bin/sh sees them.
-  // POSIX printf rebuilds bounded argument chunks without consuming relay stdin.
+  // csh/tcsh split multiline exec strings; rebuild bounded printf chunks without consuming relay stdin.
   const encodedChunks = encodeRemoteCommandForPrintf(command)
   const runDecoded = 'decoded=${decoded%_}; exec /bin/sh -c "$decoded"'
   const decodeAndRun = `decoded=$(printf %b "$@" && printf _) || exit $?; ${runDecoded}`
@@ -53,14 +51,12 @@ export function wrapRemoteCommandForPosixShell(
     return wrapped
   }
 
-  // Why: SSH gateways can truncate long exec requests, including activation's snapshot scripts.
+  // Compress long scripts before gateways can truncate the exec request.
   const compressed = gzipSync(Buffer.from(command), { level: 9 }).toString('base64')
   const compressedArguments = encodeRemoteCommandForPrintf(compressed)
     .map(quotePosixShell)
     .join(' ')
-  // Keep stdin for relay/upload bytes, and only execute after gzip validates the whole script.
-  // A host without the decoders exits before reading anything, so execCommand resends it plain.
-  // `base64 -D` is macOS before 13, whose `base64` rejects `-d` before reading stdin.
+  // Preserve payload stdin and execute only after gzip validation. Missing decoders consume nothing, permitting plain retry; macOS before 13 needs base64 -D.
   const decompressAndRun =
     'command -v base64 >/dev/null 2>&1 && command -v gzip >/dev/null 2>&1 || ' +
     `{ echo ${REMOTE_COMMAND_DECODER_UNAVAILABLE} >&2; exit ${REMOTE_COMMAND_DECODER_UNAVAILABLE_EXIT}; }; ` +

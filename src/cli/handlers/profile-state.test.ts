@@ -63,14 +63,15 @@ vi.mock('../runtime-client', () => {
 })
 
 const temporaryDirectories: string[] = []
+let previousExitCode: typeof process.exitCode
 
 afterEach(() => {
   for (const directory of temporaryDirectories.splice(0)) {
     rmSync(directory, { recursive: true, force: true })
   }
   vi.restoreAllMocks()
-  runtimeClientConstructorMock.mockReset()
-  process.exitCode = 0
+  vi.unstubAllEnvs()
+  process.exitCode = previousExitCode
 })
 
 function createProfile(): {
@@ -131,7 +132,13 @@ async function createDatabaseBackup(
 
 describe('profile-state CLI recovery', () => {
   beforeEach(() => {
-    getCliStatusMock.mockResolvedValue({
+    previousExitCode = process.exitCode
+    process.exitCode = 0
+    runtimeClientConstructorMock.mockReset()
+    getDefaultUserDataPathMock.mockReset()
+    vi.stubEnv('ORCA_PAIRING_CODE', undefined)
+    vi.stubEnv('ORCA_ENVIRONMENT', undefined)
+    getCliStatusMock.mockReset().mockResolvedValue({
       id: 'status',
       ok: true,
       result: {
@@ -195,6 +202,14 @@ describe('profile-state CLI recovery', () => {
     expect(JSON.parse(readFileSync(profile.dataFile, 'utf8'))).toEqual({
       settings: { theme: 'sqlite' }
     })
+    const retained = openProfileStateDatabaseReadOnly(profile.databaseFile, 'profile-cli-recovery')
+    try {
+      expect(JSON.parse(exportProfileStateJson(retained.db))).toEqual({
+        settings: { theme: 'sqlite' }
+      })
+    } finally {
+      retained.db.close()
+    }
     expect(String(vi.mocked(console.log).mock.calls.at(-1)?.[0])).toContain(
       'source: current SQLite'
     )
@@ -293,15 +308,18 @@ describe('profile-state CLI recovery', () => {
     getDefaultUserDataPathMock.mockReturnValue(profile.userDataPath)
     const unavailableExport = profileStateJsonExportPath(profile.dataFile, 2)
     mkdirSync(unavailableExport)
-    const original = readFileSync(profile.dataFile)
+    const sources = [
+      profile.dataFile,
+      profile.exportPath,
+      profile.databaseFile,
+      `${profile.databaseFile}-wal`
+    ]
+    const original = sources.map((path) => readFileSync(path))
 
     await main(['profile', 'state', 'rollback', '--revision', '1', '--json'], profile.userDataPath)
 
     expect(process.exitCode).toBe(1)
-    expect(readFileSync(profile.dataFile)).toEqual(original)
-    expect(existsSync(profile.exportPath)).toBe(true)
-    expect(existsSync(profile.databaseFile)).toBe(true)
-    expect(existsSync(`${profile.databaseFile}-wal`)).toBe(true)
+    expect(sources.map((path) => readFileSync(path))).toEqual(original)
   })
 
   it('falls back to restored settings when refreshing the marker fails', async () => {
@@ -386,8 +404,8 @@ describe('profile-state CLI recovery', () => {
         id: 'status',
         ok: true,
         result: {
-          app: { running: true, pid: 123 },
-          runtime: { state: 'ready', reachable: true, runtimeId: 'desktop' },
+          app: { running: false, pid: null },
+          runtime: { state: 'ready', reachable: true, runtimeId: 'headless' },
           graph: { state: 'ready' }
         },
         _meta: { runtimeId: 'test' }
@@ -495,6 +513,13 @@ describe('profile-state CLI recovery', () => {
   it('rejects escaping backup IDs without touching any recovery artifact', async () => {
     const profile = createProfile()
     getDefaultUserDataPathMock.mockReturnValue(profile.userDataPath)
+    const sources = [
+      profile.dataFile,
+      profile.exportPath,
+      profile.databaseFile,
+      `${profile.databaseFile}-wal`
+    ]
+    const original = sources.map((path) => readFileSync(path))
 
     await main(
       ['profile', 'state', 'rollback', '--backup', '../../outside', '--json'],
@@ -503,6 +528,7 @@ describe('profile-state CLI recovery', () => {
 
     expect(process.exitCode).toBe(1)
     expect(readFileSync(profile.databaseFile, 'utf8')).toBe('damaged sqlite primary')
+    expect(sources.map((path) => readFileSync(path))).toEqual(original)
     expect(String(vi.mocked(console.log).mock.calls.at(-1)?.[0])).toContain('backup is unavailable')
   })
 

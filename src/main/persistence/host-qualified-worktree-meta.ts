@@ -13,11 +13,7 @@ import {
   type HostWorktreeTarget
 } from '../../shared/worktree/host-qualified-identity'
 
-/**
- * The listing paths take partial store shapes (`Pick<Store, ...>`), so the
- * host-qualified accessors are optional here and fall back to the locator-keyed
- * ones. A real Store always has them.
- */
+/** Partial listing stores may lack host accessors; real Stores always provide them. */
 export type HostQualifiedWorktreeMetaStore = {
   getAllWorktreeMeta: () => Record<string, WorktreeMeta>
   getWorktreeMetaForHost?: (
@@ -27,16 +23,20 @@ export type HostQualifiedWorktreeMetaStore = {
   getAllWorktreeMetaForHost?: (executionHostId: ExecutionHostId) => Record<string, WorktreeMeta>
 }
 
-/** Canonical host snapshot, with a filtered legacy fallback for partial test/compatibility stores. */
-export function readAllWorktreeMetaForHost(
-  store: Pick<HostQualifiedWorktreeMetaStore, 'getAllWorktreeMeta' | 'getAllWorktreeMetaForHost'>,
+export function readAllWorktreeMetaForHost<
+  TMeta extends { hostId?: ExecutionHostId } = WorktreeMeta
+>(
+  store: {
+    getAllWorktreeMeta: () => Record<string, TMeta>
+    getAllWorktreeMetaForHost?: (executionHostId: ExecutionHostId) => Record<string, TMeta>
+  },
   executionHostId: ExecutionHostId
-): Record<string, WorktreeMeta> {
+): Record<string, TMeta> {
   const qualified = store.getAllWorktreeMetaForHost?.(executionHostId)
   if (qualified) {
     return qualified
   }
-  const projected: Record<string, WorktreeMeta> = {}
+  const projected: Record<string, TMeta> = {}
   for (const [worktreeId, meta] of Object.entries(store.getAllWorktreeMeta())) {
     if (!meta.hostId || meta.hostId === executionHostId) {
       projected[worktreeId] = meta
@@ -45,11 +45,7 @@ export function readAllWorktreeMetaForHost(
   return projected
 }
 
-/**
- * The row this host owns at `worktreeId`, or undefined. Deliberately does NOT fall back to the
- * locator-keyed read: that would hand one host's metadata to another's row, which is the collision
- * every caller here is trying to avoid. Callers keep their own same-id ownership guard as fallback.
- */
+/** Never fall back to locator-only reads: same-id rows on other hosts may own that metadata. */
 export function readWorktreeMetaForHost(
   store: Pick<HostQualifiedWorktreeMetaStore, 'getWorktreeMetaForHost'>,
   worktreeId: string,
@@ -58,11 +54,6 @@ export function readWorktreeMetaForHost(
   return store.getWorktreeMetaForHost?.(worktreeId, executionHostId)
 }
 
-/**
- * The same two reads keyed off a repo row, so the resolve-then-read pair lives in one place. Four
- * call sites had open-coded it identically, which is the shape that lets one copy drift from the
- * rest (F7/F8).
- */
 export function readAllWorktreeMetaForRepo(
   store: Pick<HostQualifiedWorktreeMetaStore, 'getAllWorktreeMeta' | 'getAllWorktreeMetaForHost'>,
   repo: Pick<Repo, 'connectionId' | 'executionHostId'>
@@ -78,10 +69,7 @@ export function readWorktreeMetaForRepo(
   return readWorktreeMetaForHost(store, worktreeId, getRepoExecutionHostId(repo))
 }
 
-/**
- * The row an id-only caller (an agent hook, a sort list) means: the id's own host stamp, else its
- * repo's only host. Undefined when same-id twins leave it ambiguous: callers skip, never guess.
- */
+/** Resolve stamped or sole-repo ownership; ambiguous same-id hosts remain undefined. */
 export function resolveWorktreeMetaOwner(
   store: {
     getWorktreeMeta: (worktreeId: string) => { hostId?: ExecutionHostId } | undefined
@@ -89,13 +77,13 @@ export function resolveWorktreeMetaOwner(
   },
   worktreeId: string
 ): HostWorktreeTarget | undefined {
-  // Why: no repo stands behind these ids, so without this their id-only writes were dropped.
+  // Local-only IDs have no backing repo from which to infer an owner.
   if (isLocalOnlyWorktreeMetaId(worktreeId)) {
     return hostWorktreeTarget({ id: worktreeId, hostId: LOCAL_EXECUTION_HOST_ID })
   }
   const repoId = getRepoIdFromWorktreeId(worktreeId)
   const owners = store.getRepos().filter((repo) => repo.id === repoId)
-  // Why: the raw-id row's stamp names whichever twin wrote first, not the twin the caller means.
+  // The first writer stamp cannot disambiguate same-id repos on multiple hosts.
   if (getRepoRegistrationHostIds(owners, repoId).size > 1) {
     return undefined
   }
@@ -106,7 +94,6 @@ export function resolveWorktreeMetaOwner(
   return owners[0] ? hostWorktreeTargetForRepo(worktreeId, owners[0]) : undefined
 }
 
-/** A worktree row's own host when it carries one; otherwise as `resolveWorktreeMetaOwner`. */
 export function worktreeRowTarget(
   store: Parameters<typeof resolveWorktreeMetaOwner>[0],
   worktree: { id: string; hostId?: ExecutionHostId }
@@ -116,7 +103,7 @@ export function worktreeRowTarget(
     : resolveWorktreeMetaOwner(store, worktree.id)
 }
 
-/** Removes by the caller's host, else the row's own stamp; only an unstamped row goes on every host. */
+/** Prefer explicit host, then saved stamp; only unstamped rows may be removed across all hosts. */
 export function removeWorktreeMetaRow(
   store: {
     getWorktreeMeta: (worktreeId: string) => WorktreeMeta | undefined

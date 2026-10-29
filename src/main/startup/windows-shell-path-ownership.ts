@@ -40,7 +40,7 @@ function externalAdditions(application: AppliedWindowsPath, currentValue: string
   if (currentValue === application.appliedValue) {
     return []
   }
-  // Why: forced Windows preflight appends newly installed registry paths after hydration.
+  // Forced Windows preflight may append newly installed registry paths after hydration.
   const appliedKeys = new Set(splitPath(application.appliedValue).map(windowsPathSegmentKey))
   return splitPath(currentValue).filter(
     (segment) => !appliedKeys.has(windowsPathSegmentKey(segment))

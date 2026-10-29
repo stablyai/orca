@@ -11,7 +11,6 @@ import type {
 import type { PreloadApi } from '../api-types'
 
 export const worktreesApi = {
-  list: (args) => ipcRenderer.invoke('worktrees:list', args),
   listRetiredNames: (args) => ipcRenderer.invoke('worktrees:listRetiredNames', args),
 
   listDetected: (args) => ipcRenderer.invoke('worktrees:listDetected', args),
@@ -23,8 +22,6 @@ export const worktreesApi = {
     ipcRenderer.invoke('worktrees:forgetRemovedForExecutionHost', args),
 
   cancelListDetected: (args) => ipcRenderer.invoke('worktrees:cancelListDetected', args),
-
-  listAll: () => ipcRenderer.invoke('worktrees:listAll'),
 
   create: (args) => ipcRenderer.invoke('worktrees:create', args),
 
@@ -44,6 +41,12 @@ export const worktreesApi = {
   resolveMrBase: (args) => ipcRenderer.invoke('worktrees:resolveMrBase', args),
 
   previewNestedRemoval: (args) => ipcRenderer.invoke('worktrees:previewNestedRemoval', args),
+
+  sleep: (request) => ipcRenderer.invoke('worktrees:sleep', request),
+  sleepReopened: (worktreeId) => ipcRenderer.invoke('worktrees:sleepReopened', worktreeId),
+  resumeSleptPane: (pane) => ipcRenderer.invoke('worktrees:resumeSleptPane', pane),
+  retireStrandedSleepRecord: (args) =>
+    ipcRenderer.invoke('worktrees:retireStrandedSleepRecord', args),
 
   remove: (args) => ipcRenderer.invoke('worktrees:remove', args),
 

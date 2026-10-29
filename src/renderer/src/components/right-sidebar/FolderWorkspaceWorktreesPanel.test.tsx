@@ -66,7 +66,9 @@ vi.mock('@/store', () => ({
 
 vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, fallback: string, values?: Record<string, unknown>) =>
-    values ? fallback.replace('{{value0}}', String(values.value0)) : fallback
+    fallback.replace(/\{\{(\w+)\}\}/g, (match, name: string) =>
+      values && name in values ? String(values[name]) : match
+    )
 }))
 
 vi.mock('@/components/sidebar/WorktreeCard', () => ({
@@ -529,7 +531,7 @@ describe('FolderWorkspaceWorktreesPanel', () => {
 
     renderPanel()
 
-    // Why: the lineage projection drops cyclic child ids upstream, so the panel only ever sees roots.
+    // The lineage projection removes cyclic child IDs upstream, leaving only roots here.
     const ids = renderedCardIds()
     expect(new Set(ids).size).toBe(ids.length)
     expect([...ids].sort()).toEqual([first.id, second.id])
@@ -575,7 +577,6 @@ describe('FolderWorkspaceWorktreesPanel', () => {
 
     renderPanel()
 
-    // Why: siblings sort by recent activity, so the leaf renders before the deeper sibling.
     const ids = renderedCardIds()
     expect(ids).toEqual([root.id, leafSibling.id, deepSibling.id, deepChild.id])
     expect(new Set(ids).size).toBe(ids.length)
@@ -586,7 +587,7 @@ describe('FolderWorkspaceWorktreesPanel', () => {
       cardFor(deepSibling.id)?.querySelector(`[data-worktree-id="${deepChild.id}"]`)
     ).not.toBeNull()
     expect(latestPropsFor(leafSibling.id)?.lineageChildCount).toBe(0)
-    // Why: an empty array is truthy downstream, so a childless leaf must pass undefined.
+    // Empty arrays are truthy downstream; childless leaves must pass undefined.
     expect(latestPropsFor(leafSibling.id)?.lineageChildren).toBeUndefined()
   })
 
@@ -664,7 +665,6 @@ describe('FolderWorkspaceWorktreesPanel', () => {
     renderPanel()
 
     const parentCard = cardFor(parent.id)
-    // Why: roots share the list container; only nested rows get their own suppression wrapper.
     expect(parentCard?.parentElement).toBe(cardFor(siblingRoot.id)?.parentElement)
     expect(cardFor(child.id)?.parentElement).not.toBe(parentCard)
     expect(cardFor(child.id)?.parentElement?.parentElement).toBe(parentCard)

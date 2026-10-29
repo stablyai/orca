@@ -18,8 +18,7 @@ export type MarkupKeyboardParams = {
   onCancel: () => void
 }
 
-// Window-level shortcuts for the markup overlay: Escape (close the open text box,
-// else exit markup) and platform-correct undo/redo.
+// Escape dismisses pending text before exiting; undo/redo follow platform shortcuts.
 export function useMarkupKeyboardShortcuts(params: MarkupKeyboardParams): void {
   const { pendingText, setPendingText, undo, redo, onCancel } = params
   useEffect(() => {

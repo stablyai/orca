@@ -51,7 +51,6 @@ describe('SettledDiffCache bounds', () => {
     expect(cache.get('hot', settledStamp('hot-stamp'))).toBeDefined()
   })
 
-  // One entry can legitimately hold megabytes, so an entry count alone bounds nothing.
   it('holds total retained content under the character budget', () => {
     const cache = new SettledDiffCache()
     const chunk = MAX_SETTLED_DIFF_CACHE_RESULT_CHARACTERS
@@ -107,9 +106,7 @@ describe('SettledDiffCache bounds', () => {
   })
 })
 
-// Why (#15036 review): the margin compares this host's clock to mtimes the WSL guest
-// wrote. A guest running ahead refuses every store for as long as the skew lasts, and
-// without its own counter that is indistinguishable from a repo nobody has touched.
+// Count WSL guest-clock skew separately from ordinary racy writes so repeated store refusals are observable.
 describe('settled diff cache clock skew', () => {
   const result: GitDiffResult = diffOfSize(10)
 
@@ -117,14 +114,12 @@ describe('settled diff cache clock skew', () => {
     const cache = new SettledDiffCache()
     const now = Date.now()
 
-    // Honestly fresh: written just now, margin not yet satisfied.
     cache.set(
       'fresh',
       { value: 'a', newestMtimeMs: now, capturedAtMs: now },
       result,
       cache.beginRead()
     )
-    // Skewed: mtime in this host's future, which no local write can produce.
     cache.set(
       'skewed',
       { value: 'b', newestMtimeMs: now + 60_000, capturedAtMs: now },

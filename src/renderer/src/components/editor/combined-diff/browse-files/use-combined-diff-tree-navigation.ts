@@ -14,7 +14,7 @@ export type CombinedDiffTreeNavigation = {
   viewedSectionKeys: Set<string>
 }
 
-// Why: navigation targets are passed in rather than imported so this stays a leaf of the tree folder.
+// Inject navigation targets to keep this module a leaf of the tree folder.
 export function useCombinedDiffTreeNavigation({
   ensureSectionLoaded,
   entrySignature,
@@ -30,7 +30,7 @@ export function useCombinedDiffTreeNavigation({
   entrySignature: string
   markDirectScrollInput: () => void
   scrollToIndex: (index: number) => void
-  // Why: hoisted to the viewer so the scroll anchor and the tree share one identity-stable map.
+  // Share one identity-stable map with the viewer’s scroll anchor.
   sectionIndexByKey: ReadonlyMap<string, number>
   sections: DiffSection[]
   sectionsRef: React.RefObject<DiffSection[]>
@@ -47,7 +47,7 @@ export function useCombinedDiffTreeNavigation({
   const activeTreeSectionKey =
     activeTreeSectionState.entrySignature === entrySignature ? activeTreeSectionState.key : null
   if (activeTreeSectionState.entrySignature !== entrySignature) {
-    // Why: the tree highlight belongs to one entry set; reset now so it can't flash on another before an Effect would.
+    // Reset before paint so another entry set cannot inherit a stale highlight.
     setActiveTreeSectionState({ entrySignature, key: null })
   }
   const viewedSectionCacheRef = useRef<{
@@ -82,12 +82,11 @@ export function useCombinedDiffTreeNavigation({
       if (!previousSection || !section) {
         continue
       }
-      // Why: a section load rewrites one element of a `prev.map(...)` copy, so identity settles
-      // every untouched row without re-deriving its viewed state.
+      // Loads replace only their own section; identical row objects need no viewed-state derivation.
       if (previousSection === section) {
         continue
       }
-      // Why: reordered keys can't be patched index by index — a later delete would drop an earlier add.
+      // Reordered keys require full recomputation or a later delete could erase an earlier addition.
       if (previousSection.key !== section.key) {
         return recomputeAllViewedKeys()
       }

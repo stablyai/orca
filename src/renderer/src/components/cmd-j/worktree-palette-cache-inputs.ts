@@ -16,8 +16,7 @@ export function selectWorktreePaletteCacheInputs(
   state: Pick<AppState, 'prCache' | 'issueCache' | 'hostedReviewCache'>,
   active: boolean
 ): WorktreePaletteCacheInputs {
-  // Why: the palette stays mounted while closed; cache replacement from Checks
-  // must not rerender it when no search results are visible.
+  // Closed palettes stay mounted; ignore Checks cache churn while their results are invisible.
   if (!active) {
     return EMPTY_WORKTREE_PALETTE_CACHE_INPUTS
   }

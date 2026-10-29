@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { WindowsProcessEvidence } from '../daemon/daemon-incarnation-evidence-types'
 import {
   buildWslDistroHolderArgs,
+  buildWslDistroHolderScript,
   isWslDistroHolderCommandLine,
   WSL_DISTRO_HOLDER_MARKER
 } from './wsl-distro-holder-command'
@@ -112,9 +113,12 @@ describe('holder command line', () => {
       '--exec',
       '/bin/sh',
       '-c',
-      'while :; do sleep 3600; done',
+      buildWslDistroHolderScript(),
       WSL_DISTRO_HOLDER_MARKER
     ])
+    // A holder that slept an hour between looks would keep an idle distro up that long.
+    expect(buildWslDistroHolderScript()).toContain('sleep 15\n')
+    expect(buildWslDistroHolderScript()).not.toContain('infinity')
   })
 
   it('matches only our holder for the same distro', () => {
@@ -185,6 +189,38 @@ describe('createWslDistroHolder', () => {
       { distro: 'Gone', state: 'exited' }
     ])
     expect(await recordFiles()).toEqual([])
+  })
+
+  it('releases every verified holder it recorded and nothing it cannot verify', async () => {
+    host.processes.set(77, { commandLine: HOLDER_COMMAND('Alpine'), startedAtMs: 5_000 })
+    await writeRecord(record())
+    // A reused pid now running something else must never be killed.
+    host.processes.set(88, { commandLine: 'C:\\Windows\\notepad.exe', startedAtMs: 6_000 })
+    await writeRecord(record({ distro: 'Debian', pid: 88, creationTimeMs: 6_000 }))
+    const released = await makeHolder().releaseAll()
+    expect(released.sort((a, b) => a.distro.localeCompare(b.distro))).toEqual([
+      { distro: 'alpine', state: 'exited' },
+      { distro: 'debian', state: 'exited' }
+    ])
+    expect(host.killed).toEqual([77])
+    expect(await recordFiles()).toEqual([])
+  })
+
+  it('never kills a holder whose record has no start time to rule out pid reuse', async () => {
+    host.processes.set(77, { commandLine: HOLDER_COMMAND('Alpine'), startedAtMs: 5_000 })
+    await writeRecord(record({ creationTimeMs: null }))
+    expect(await makeHolder().releaseAll()).toEqual([{ distro: 'alpine', state: 'unverifiable' }])
+    expect(host.killed).toEqual([])
+    expect(await recordFiles()).toHaveLength(1)
+  })
+
+  it('keeps a holder and its record when release cannot verify it', async () => {
+    host.processes.set(77, { commandLine: HOLDER_COMMAND('Alpine'), startedAtMs: 5_000 })
+    await writeRecord(record())
+    host.tableFails = true
+    expect(await makeHolder().releaseAll()).toEqual([{ distro: 'alpine', state: 'unverifiable' }])
+    expect(host.killed).toEqual([])
+    expect(await recordFiles()).toHaveLength(1)
   })
 
   it('keeps the record and reports unverifiable when the process table fails', async () => {

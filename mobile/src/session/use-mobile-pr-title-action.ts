@@ -21,10 +21,7 @@ export type PrTitleActionInput = {
   worktreeId: string
   prNumber: number
   prRepo?: GitHubPrRepoSlug | null
-  // Re-fetches authoritative PR data after a successful title edit so the new
-  // title appears (mobile keeps it simple with a full refetch, like the other actions).
   refetch: () => void | Promise<void>
-  // Test seam: inject fake mutations; defaults to the real github.* wrapper.
   mutations?: PrTitleMutations
 }
 
@@ -34,9 +31,6 @@ function realMutations(client: RpcOperationSender, worktreeId: string): PrTitleM
   }
 }
 
-// React adapter for the inline title edit. Tracks a single in-flight + error state,
-// fires haptics, and refetches on success. Empty/unchanged drafts short-circuit to a
-// successful no-op (the caller closes the editor) without a host round-trip.
 export function useMobilePrTitleAction(input: PrTitleActionInput) {
   const { client, connState, worktreeId, prNumber, prRepo, refetch } = input
   const [saving, setSaving] = useState(false)
@@ -52,15 +46,13 @@ export function useMobilePrTitleAction(input: PrTitleActionInput) {
   const setTitle = useCallback(
     async (draft: string, current: string): Promise<boolean> => {
       const params = buildUpdatePRTitleParams(prNumber, draft, current)
-      // No-op when empty/unchanged: report success so the editor closes silently.
       if (!params) {
         return true
       }
       if (inFlightRef.current) {
         return false
       }
-      // Why: surface an explicit error when offline/not-ready so Save doesn't
-      // silently no-op (the editor stays open with a reason instead of nothing).
+      // Offline Save must explain failure and leave the editor open rather than silently do nothing.
       if (!ready || !mutations) {
         setError('Not connected to desktop.')
         return false
@@ -79,8 +71,7 @@ export function useMobilePrTitleAction(input: PrTitleActionInput) {
         setError(outcome.error)
         return false
       } catch (err) {
-        // Why: updateTitle/refetch can throw; without this the `void save()`
-        // rejection is unhandled — set the error + error haptic and return false.
+        // Contain fire-and-forget save/refetch rejection and return false with feedback.
         triggerError()
         setError(err instanceof Error ? err.message : 'Failed to update title.')
         return false

@@ -50,11 +50,7 @@ function heartbeat(cell: (typeof cells)[number]) {
   }
 }
 
-// Why: every desktop control rebind used to take the fleet-wide relay_cells
-// FOR UPDATE lock, so a rebind on one cell queued behind whatever held any
-// other cell's row, until COMMIT (55P03 at the request bound). A rebind only
-// touches its own cell row, so it must proceed while another cell's row is
-// held elsewhere.
+// Same-cell rebind must proceed while another cell row is held; fleet-wide locking formerly waited to COMMIT and hit request 55P03.
 describePostgres('PostgreSQL control rebind under a held cell row', () => {
   const databases: RelayDatabase[] = []
 
@@ -132,62 +128,69 @@ describePostgres('PostgreSQL control rebind under a held cell row', () => {
       inventoryHeld()
       await inventoryReleased
     })
-    await inventoryHeldPromise
+    let deadline: ReturnType<typeof setTimeout> | undefined
+    let reboundWork: Promise<string> | undefined
+    try {
+      await inventoryHeldPromise
 
-    // A generation-2 rebind on cell A supersedes generation 1. It must not
-    // wait on cell B's row.
-    const startedAt = Date.now()
-    const blockedStatement = async (): Promise<string> => {
-      const rows = await databases[1]!.query(
-        `SELECT left(query, 160) AS q FROM pg_stat_activity
+      // A generation-2 rebind on cell A supersedes generation 1. It must not
+      // wait on cell B's row.
+      const startedAt = Date.now()
+      const blockedStatement = async (): Promise<string> => {
+        const rows = await databases[1]!.query(
+          `SELECT left(query, 160) AS q FROM pg_stat_activity
          WHERE datname = current_database() AND wait_event_type = 'Lock'`
-      )
-      return rows.map((row) => String(row.q)).join(' | ')
-    }
-    const timeout = new Promise<never>((_, reject) =>
-      setTimeout(
-        () =>
-          void blockedStatement().then((statement) =>
-            reject(new Error(`rebind on cell A blocked behind cell B's row: ${statement}`))
-          ),
-        2_000
-      )
-    )
-    const rebound = await Promise.race([
-      store.activateControl(identity, {
+        )
+        return rows.map((row) => String(row.q)).join(' | ')
+      }
+      const timeout = new Promise<never>((_, reject) => {
+        deadline = setTimeout(
+          () =>
+            void blockedStatement()
+              .then((statement) =>
+                reject(new Error(`rebind on cell A blocked behind cell B's row: ${statement}`))
+              )
+              .catch(reject),
+          2_000
+        )
+      })
+      reboundWork = store.activateControl(identity, {
         cellId: cells[0]!.id,
         assignmentEpoch: assignment.assignmentEpoch,
         generation: 2,
         connectionInclusionWatermark: 11
-      }),
-      timeout
-    ])
-    const elapsedMs = Date.now() - startedAt
-    releaseInventory()
-    await holder
+      })
+      const rebound = await Promise.race([reboundWork, timeout])
+      const elapsedMs = Date.now() - startedAt
 
-    expect(rebound).toBe(`control:${cells[0]!.id}:2`)
-    expect(elapsedMs).toBeLessThan(2_000)
-    const controls = await databases[0]!.query(
-      `SELECT activity_id FROM relay_assignment_activity_leases
+      expect(rebound).toBe(`control:${cells[0]!.id}:2`)
+      expect(elapsedMs).toBeLessThan(2_000)
+      const controls = await databases[0]!.query(
+        `SELECT activity_id FROM relay_assignment_activity_leases
        WHERE user_id = ? AND activity_kind = 'control' ORDER BY activity_id`,
-      [identity.userId]
-    )
-    expect(controls).toEqual([{ activity_id: `control:${cells[0]!.id}:2` }])
-    const reserved = await databases[0]!.query(
-      `SELECT reserved_requests FROM relay_cells WHERE cell_id = ?`,
-      [cells[0]!.id]
-    )
-    expect(Number(reserved[0]!.reserved_requests)).toBe(1)
+        [identity.userId]
+      )
+      expect(controls).toEqual([{ activity_id: `control:${cells[0]!.id}:2` }])
+      const reserved = await databases[0]!.query(
+        `SELECT reserved_requests FROM relay_cells WHERE cell_id = ?`,
+        [cells[0]!.id]
+      )
+      expect(Number(reserved[0]!.reserved_requests)).toBe(1)
+    } finally {
+      clearTimeout(deadline)
+      releaseInventory()
+      try {
+        await holder
+      } finally {
+        await Promise.allSettled(reboundWork ? [reboundWork] : [])
+      }
+    }
   }, 15_000)
 
-  // Why: a phone's activity id is client-chosen and can follow the host across
-  // a migration, so acquireActivity may touch two cell rows. Moving from the
-  // higher cell to the lower one is where an unordered lock cycles with
-  // placement's ascending inventory lock (reproduced live before this fix).
+  // Client activity IDs can migrate across cells; high→low moves expose lock cycles against ascending placement order.
   it('moves an activity from a higher cell to a lower one in cell_id order', async () => {
     await removeTestRows(databases[0]!)
-    const [cellA, cellB, cellC] = cells as [typeof cells[0], typeof cells[0], typeof cells[0]]
+    const [cellA, cellB, cellC] = cells as [(typeof cells)[0], (typeof cells)[0], (typeof cells)[0]]
     const store = new RelayAssignmentStore(databases[0]!, () => 100)
     await store.reconcileCells(cells)
     for (const cell of cells) await store.recordCellHeartbeat(heartbeat(cell))
@@ -203,9 +206,13 @@ describePostgres('PostgreSQL control rebind under a held cell row', () => {
     const migration = await store.startEvacuation(identity, cellB.id)
     expect(migration.targetCellId).toBe(cellB.id)
 
-    // Hold B elsewhere. An ordered move locks B first and queues here holding
-    // nothing else. Locking C first (the old lease's row, as an unordered move
-    // does) or the whole inventory (which takes A) shows up as a held row.
+    const movingDatabase = await openRelayDatabase({
+      databaseUrl,
+      dataDir: '',
+      applicationName: 'orca-relay/cloud3-rebind-move'
+    })
+    const moveStore = new RelayAssignmentStore(movingDatabase, () => 100)
+    // Hold B: ordered B→C move waits with no other lock; C-first or fleet-wide locking would hold C or A.
     let releaseRow!: () => void
     const rowReleased = new Promise<void>((resolve) => {
       releaseRow = resolve
@@ -230,17 +237,46 @@ describePostgres('PostgreSQL control rebind under a held cell row', () => {
       }
     })
     await rowHeldPromise
-    const move = store.acquireActivity(identity, { activityId, kind: 'splice', cellId: cellB.id })
+    const move = moveStore.acquireActivity(identity, {
+      activityId,
+      kind: 'splice',
+      cellId: cellB.id
+    })
     let moved = false
-    void move.then(() => {
+    const observedMove = move.then(() => {
       moved = true
     })
-    await new Promise((resolve) => setTimeout(resolve, 250))
-    expect(moved).toBe(false)
-    releaseRow()
-    await holder
-    await move
-    expect(heldWhileMoverWaits).toEqual([])
+    try {
+      await expect
+        .poll(
+          async () => {
+            const rows = await databases[0]!.query(
+              `SELECT count(*) AS waiting FROM pg_stat_activity
+        WHERE datname = current_database() AND application_name = ? AND wait_event_type = 'Lock'`,
+              ['orca-relay/cloud3-rebind-move']
+            )
+            return Number(rows[0]!.waiting)
+          },
+          { timeout: 2_000, interval: 10 }
+        )
+        .toBe(1)
+      expect(moved).toBe(false)
+      releaseRow()
+      await holder
+      await observedMove
+      expect(heldWhileMoverWaits).toEqual([])
+    } finally {
+      releaseRow()
+      try {
+        await holder
+      } finally {
+        try {
+          await observedMove
+        } finally {
+          await movingDatabase.close()
+        }
+      }
+    }
 
     const reservations = await databases[0]!.query(
       `SELECT cell_id, reserved_requests FROM relay_cells

@@ -148,7 +148,6 @@ describe('PluginVmRecipeRegistry', () => {
     const plugin = await recipePlugin('mutable', [
       { path: 'recipes/cloud.json', recipe: artifact('cloud') }
     ])
-    // Exercise the installed-tree identity as well as mutable dev previews.
     plugin.contentHash = plugin.consentContentHash ?? null
     const registry = new PluginVmRecipeRegistry()
 

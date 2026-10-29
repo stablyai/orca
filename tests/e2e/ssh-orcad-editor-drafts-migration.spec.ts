@@ -1,8 +1,4 @@
-/**
- * S10 live check: an unsaved editor draft on a relay-era SSH host, converted to a managed server.
- * Drafts stay on the desktop: after the converting connect and a reconnect the editor still holds
- * the exact bytes, and the host server's stored profile holds none of them.
- */
+// S10: preserve exact desktop-only drafts through relay→managed conversion, reconnect and restart; no draft bytes may enter the host profile.
 import { createHash } from 'node:crypto'
 import { mkdirSync, mkdtempSync, readdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'

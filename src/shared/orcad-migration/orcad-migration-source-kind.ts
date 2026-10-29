@@ -1,11 +1,5 @@
-/**
- * Which kind of source a migration manifest moves state out of.
- *
- * The relay-era SSH target is encoded by the ABSENCE of `source.kind`, so its manifests stay
- * byte-identical (and digest-identical) for destinations that predate the field. Every other kind
- * sets `kind` and must never carry `sshTargetId`: an older destination strips unknown fields, so a
- * non-SSH source without it fails that destination's parse instead of importing as an SSH host.
- */
+/** Legacy SSH omits source.kind to preserve signed bytes/digests. Other kinds must set kind and omit sshTargetId:
+ * older destinations strip unknown fields, then fail parsing instead of importing a non-SSH source as SSH. */
 import type {
   OrcadMigrationLocalWslManifestSource,
   OrcadMigrationManifestSource,
@@ -30,7 +24,6 @@ export const ORCAD_MIGRATION_SOURCE_KIND_UNKNOWN = 'orcad_migration_source_kind_
 /** A manifest source as it travels: this build may not know every field a newer peer signed. */
 export type OrcadMigrationWireSource = Readonly<Record<string, unknown>>
 
-/** Reads the wire discriminator; a source without one is the relay-era SSH source. */
 export function orcadMigrationManifestSourceKind(
   source: OrcadMigrationWireSource
 ): OrcadMigrationSourceKind {

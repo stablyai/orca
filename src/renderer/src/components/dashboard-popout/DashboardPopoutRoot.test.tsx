@@ -5,6 +5,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { APP_MENU_PASTE_EVENT } from '@/lib/app-menu-paste'
 import { APP_MENU_SELECTION_ACTION_EVENT } from '@/lib/app-menu-selection-actions'
 
+const useAgentDashboardTelemetry = vi.hoisted(() => vi.fn())
+vi.mock('./use-agent-dashboard-telemetry', () => ({ useAgentDashboardTelemetry }))
 vi.mock('./AgentKanbanBoard', () => ({ AgentKanbanBoard: () => null }))
 vi.mock('./useDashboardSnapshot', () => ({ useDashboardSnapshot: () => null }))
 
@@ -44,14 +46,14 @@ describe('DashboardPopoutRoot', () => {
     cleanup()
   })
 
-  // Why: this window has no App shell, so without the hooks the terminal
-  // preview's ownership listeners would never see a menu command at all.
+  // Without an App shell, these hooks alone translate menu IPC for preview ownership listeners.
   it('translates app-menu clipboard IPC into renderer ownership events', async () => {
     const onPaste = vi.fn()
     const onSelectionAction = vi.fn()
     window.addEventListener(APP_MENU_PASTE_EVENT, onPaste)
     window.addEventListener(APP_MENU_SELECTION_ACTION_EVENT, onSelectionAction)
     render(<DashboardPopoutRoot />)
+    expect(useAgentDashboardTelemetry).toHaveBeenCalledWith('popout')
     expect(emitAppMenuPaste).not.toBeNull()
     expect(emitAppMenuSelectionAction).not.toBeNull()
 

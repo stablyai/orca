@@ -79,7 +79,6 @@ function makeDeps(): PtyRuntimeControllerDeps {
   }
 }
 
-/** Runs the preflight and option build the way `spawnPtyFromRuntimeController` sequences them. */
 async function resolveSpawnOptions(
   args: RuntimePtySpawnArgs
 ): Promise<ReturnType<typeof createRuntimePtySpawnState>['spawnOptions']> {
@@ -105,11 +104,7 @@ describe('runtime pty spawn options: declared spawn intent', () => {
   })
 })
 
-/**
- * Behavioural twin of `pty-spawn-shell-override-parity.test.ts`: a local Windows runtime spawn
- * (`terminal create --shell`, headless serve) must hand the caller's shell to the provider, not
- * the host default with the request typed into it.
- */
+/** Runtime --shell must choose the provider shell, not type its name into the host default shell. */
 describe('runtime pty spawn preflight: requested shell on a local Windows host', () => {
   afterEach(() => {
     Object.defineProperty(process, 'platform', { configurable: true, value: hostPlatform })

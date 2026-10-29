@@ -7,8 +7,7 @@ export type HashAddressedPluginContent = {
 
 export type PluginContentIntegrityResult = { ok: true } | { ok: false; error: string }
 
-/** Whether a computed tree hash is the recorded identity. Early P0 installs used a
- * 128-bit SHA-256 prefix as the directory name; new installs use the full digest. */
+/** Accept legacy 128-bit SHA-256 directory prefixes alongside current full digests. */
 export function pluginTreeHashMatches(actual: string, expected: string): boolean {
   return actual === expected || (expected.length === 32 && actual.startsWith(expected))
 }
@@ -33,7 +32,6 @@ export async function verifyHashAddressedPluginContent(
   return { ok: true }
 }
 
-/** Deduplicates the first lazy verification for each discovered install. */
 export class PluginContentVerifier {
   private readonly verifications = new Map<string, Promise<PluginContentIntegrityResult>>()
 
@@ -42,8 +40,7 @@ export class PluginContentVerifier {
   }
 
   async verify(plugin: HashAddressedPluginContent & { pluginKey: string }): Promise<void> {
-    // Why: a refresh can replace one same-key install while its old hash is
-    // still being verified. Cache by immutable content identity, never key.
+    // Same-key installs can change during verification; cache by immutable content identity.
     const identity = JSON.stringify([plugin.pluginKey, plugin.rootDir, plugin.contentHash])
     let verification = this.verifications.get(identity)
     if (!verification) {
@@ -53,6 +50,14 @@ export class PluginContentVerifier {
     const result = await verification
     if (!result.ok) {
       this.verifications.delete(identity)
+      throw new Error(`plugin ${plugin.pluginKey} failed integrity verification: ${result.error}`)
+    }
+  }
+
+  /** Uncached integrity check for code about to run; bytes may have changed since `verify`. */
+  async verifyNow(plugin: HashAddressedPluginContent & { pluginKey: string }): Promise<void> {
+    const result = await verifyHashAddressedPluginContent(plugin)
+    if (!result.ok) {
       throw new Error(`plugin ${plugin.pluginKey} failed integrity verification: ${result.error}`)
     }
   }

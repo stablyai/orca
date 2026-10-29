@@ -280,7 +280,6 @@ describe('selective profile domain serialization', () => {
       '[]'
     )
 
-    // A missing section is a deletion in both paths: omitted from a full save, null when selected.
     Reflect.deleteProperty(state, 'migrationUnsupportedPtyEntries')
     expect(
       serialization

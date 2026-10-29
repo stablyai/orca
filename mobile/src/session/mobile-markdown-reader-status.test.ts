@@ -12,19 +12,28 @@ const readOnlyDoc = {
 }
 
 describe('markdownReaderStatusText', () => {
-  it('names a truncated preview and the full file size the way file tabs do', () => {
+  it('names a truncated preview with or without the full file size', () => {
     expect(
       markdownReaderStatusText({ ...readOnlyDoc, truncated: true, byteLength: 3_000_000 })
     ).toBe('Preview truncated. File size: 2.9 MB.')
+    expect(markdownReaderStatusText({ ...readOnlyDoc, truncated: true })).toBe('Preview truncated.')
   })
 
-  it('keeps read-only, stale, and save-error states as before', () => {
+  it('shows read-only, stale and save-error states, and no status for a clean editable document', () => {
+    expect(
+      markdownReaderStatusText({ ...readOnlyDoc, editable: true, readOnlyReason: undefined })
+    ).toBeNull()
     expect(markdownReaderStatusText(readOnlyDoc)).toBe('Read only')
     expect(
       markdownReaderStatusText({ ...readOnlyDoc, readOnlyReason: undefined, stale: true })
     ).toBe('Changed on desktop')
-    expect(markdownReaderStatusText({ ...readOnlyDoc, saveError: 'Save failed' })).toBe(
-      'Save failed'
-    )
+    expect(
+      markdownReaderStatusText({
+        ...readOnlyDoc,
+        editable: true,
+        readOnlyReason: undefined,
+        saveError: 'Save failed'
+      })
+    ).toBe('Save failed')
   })
 })

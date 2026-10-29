@@ -14,9 +14,6 @@ import {
 } from './session-search-indexer-test-fixture'
 import { SessionSearchStore } from './session-search-store'
 
-// The invariants this file exists to pin are written at the top of
-// session-search-deleted-sources.ts. Each one is named in the tests below.
-
 const CAN_DENY_READ = process.platform !== 'win32' && process.getuid?.() !== 0
 
 let harness: SessionSearchIndexerHarness
@@ -28,7 +25,6 @@ beforeEach(async () => {
   harness = await openSessionSearchIndexerHarness('ss-deleted-sources')
   removed = []
   store = new SessionSearchStore(harness.databasePath)
-  // Only the removal matters here; the store's own removal path has its own tests.
   store.removeFile = (path: string) => removed.push(path)
 })
 
@@ -37,7 +33,6 @@ afterEach(async () => {
   await harness.cleanup()
 })
 
-/** A reader that answers with whatever a stalled mount would, per directory. */
 function readerAnswering(
   answers: Record<string, SessionSearchDirectoryListing>
 ): SessionSearchDirectoryReader {
@@ -70,8 +65,6 @@ function retire(
   })
 }
 
-// I4: a file the user deleted retires on the first pass that proves it, with no
-// waiting period, because its directory listed and it was not in the listing.
 it('retires a deleted file the moment its own directory lists without it', async () => {
   const kept = join(harness.claudeProjectDir, 'kept.jsonl')
   await mkdir(harness.claudeProjectDir, { recursive: true })
@@ -81,14 +74,10 @@ it('retires a deleted file the moment its own directory lists without it', async
   const result = await retire([kept, deleted])
   expect(result.retired).toEqual([deleted])
   expect(removed).toEqual([deleted])
-  // A file that is still there is settled, not watched: it is neither retired
-  // nor carried into the next pass as unfinished business.
   expect(result.unverifiable).toEqual([])
   expect(result.degradedRoots).toEqual([])
 })
 
-// I4, the other shape: the directory itself is gone, so the question moves up
-// one level and the root answers it.
 it('retires a whole project directory the user deleted', async () => {
   const sibling = join(harness.roots.claudeProjectsDir ?? '', 'other', 'kept.jsonl')
   await mkdir(join(harness.roots.claudeProjectsDir ?? '', 'other'), { recursive: true })
@@ -100,10 +89,6 @@ it('retires a whole project directory the user deleted', async () => {
   expect(result.unverifiable).toEqual([])
 })
 
-// I1 and I2: a root that is not there proves nothing. The walk stops at the
-// configured root and never asks what is above it, so a home directory on an
-// unmounted volume — the shape a detached drive or a dropped SSH mount takes —
-// leaves every row exactly where it was.
 it('keeps every row under a root that is not there', async () => {
   const root = harness.roots.claudeProjectsDir ?? ''
   const held = [join(harness.claudeProjectDir, 'one.jsonl'), join(root, 'flat.jsonl')]
@@ -111,13 +96,9 @@ it('keeps every row under a root that is not there', async () => {
   const result = await retire(held)
   expect(result.retired).toEqual([])
   expect(result.unverifiable).toEqual(held)
-  // The root is named, once, so a caller can say which tree is unreachable.
   expect(result.degradedRoots).toEqual([{ root, reason: `${root} could not be listed.` }])
 })
 
-// I3: the same answer with no memory at all. Nothing here is carried from a
-// previous pass, which is what makes the first sweep after a restart — when a
-// volume is most likely to be missing — behave like every other pass.
 it('keeps a missing root on a pass that has seen nothing before it', async () => {
   const root = harness.roots.claudeProjectsDir ?? ''
   const held = join(harness.claudeProjectDir, 'one.jsonl')
@@ -127,8 +108,6 @@ it('keeps a missing root on a pass that has seen nothing before it', async () =>
   expect(second.degradedRoots.map((one) => one.root)).toEqual([root])
 })
 
-// I2: an unreadable directory is not an empty one. EACCES stops the walk where
-// it is rather than being walked up like a missing component.
 it.skipIf(!CAN_DENY_READ)('keeps rows under a directory that refuses to list', async () => {
   const blocked = join(harness.roots.claudeProjectsDir ?? '', 'blocked')
   await mkdir(blocked, { recursive: true })
@@ -145,9 +124,6 @@ it.skipIf(!CAN_DENY_READ)('keeps rows under a directory that refuses to list', a
   }
 })
 
-// I2, without needing a filesystem that can produce it: a stalled network mount
-// answers EIO or a WSL gate refusal, and neither is ENOENT. This is the SSH and
-// WSL case — loss of contact is never evidence of absence.
 it('keeps rows when a directory answers with a transport failure', async () => {
   const root = harness.roots.claudeProjectsDir ?? ''
   const held = join(harness.claudeProjectDir, 'one.jsonl')
@@ -164,9 +140,6 @@ it('keeps rows when a directory answers with a transport failure', async () => {
   }
 })
 
-// The one bit of memory, and the only thing it buys: a root that held
-// transcripts on the previous pass and lists empty on this one gets one pass of
-// grace, so a directory swapped out for a moment cannot retire a tree.
 it('holds a root that went from holding transcripts to empty in one pass', async () => {
   const root = harness.roots.claudeProjectsDir ?? ''
   await mkdir(root, { recursive: true })
@@ -176,15 +149,10 @@ it('holds a root that went from holding transcripts to empty in one pass', async
   expect(grace.retired).toEqual([])
   expect(grace.unverifiable).toEqual([held])
 
-  // The next pass has no transition to point at, so the empty listing is what
-  // it says it is: the user emptied the root.
   const after = await retire([held], { emptiedRoots: new Set() })
   expect(after.retired).toEqual([held])
 })
 
-// A flat-layout agent, where the mountpoint IS the session directory, is the
-// one shape the grace exists for: there is no intermediate directory whose
-// absence could stop the walk.
 it('holds a flat root that emptied in one pass, and retires it on the next', async () => {
   const root = harness.roots.copilotSessionsDir ?? ''
   await mkdir(root, { recursive: true })
@@ -196,9 +164,6 @@ it('holds a flat root that emptied in one pass, and retires it on the next', asy
   expect((await retire([held], { roots: [root] })).retired).toEqual([held])
 })
 
-// OpenClaw's discovery merges two directories into one delimiter-joined label.
-// Roots reach this function as the real directories behind that label, so one
-// of them being unreachable never touches the other's rows.
 it('judges each merged-root directory on its own', async () => {
   const current = join(harness.roots.openclawStateDir ?? '', 'agents')
   const legacy = join(harness.roots.openclawLegacyStateDir ?? '', 'agents')
@@ -212,9 +177,6 @@ it('judges each merged-root directory on its own', async () => {
   expect(result.degradedRoots.map((one) => one.root)).toEqual([current])
 })
 
-// A row under no configured root is judged by its own directory and nothing
-// above it, so a moved profile is never retired on the strength of a root that
-// no longer covers it.
 it('judges a row under no configured root by its own directory', async () => {
   const orphanDir = join(harness.root, 'moved-profile')
   await mkdir(orphanDir, { recursive: true })
@@ -224,14 +186,9 @@ it('judges a row under no configured root by its own directory', async () => {
 
   const result = await retire([gone, present], { roots: [] })
   expect(result.retired).toEqual([gone])
-  // No configured root owns it, so nothing is reported as degraded for it.
   expect(result.degradedRoots).toEqual([])
 })
 
-// I8. A synthetic row names a container and an entry inside it. Walking the
-// row's own path would report every one of them gone, and walking only the
-// container proves nothing about the entry: a session deleted inside a database
-// that is still there would never be retired at all.
 it('proves a synthetic row against its container, not against its own path', async () => {
   const db = join(harness.root, 'opencode.db')
   await writeFile(db, '')
@@ -249,16 +206,13 @@ it('keeps a synthetic row when this pass did not enumerate its container', async
   await writeFile(db, '')
   const row = `${db}#session-1`
 
-  // A cycle asks for the newest N per agent, so a row it did not return may be
-  // the one after them. It enumerates nothing and therefore proves nothing.
+  // A recency-capped scan cannot prove an unreturned database row was deleted.
   await expect(retire([row], { roots: [] })).resolves.toMatchObject({
     retired: [],
     unverifiable: [row]
   })
 
-  // An enumeration that returned nothing at all is not evidence either: a
-  // database whose schema this scanner no longer recognises reads as empty
-  // with no error, and believing it would retire every session in one pass.
+  // An unrecognized schema can enumerate empty, so an empty census cannot justify retirement.
   await expect(
     retire([row], { roots: [], enumeratedContainers: new Map([[db, new Set<string>()]]) })
   ).resolves.toMatchObject({ retired: [], unverifiable: [row] })
@@ -304,8 +258,6 @@ it('retires a synthetic row when the container it came from is gone', async () =
   })
 })
 
-// Round 12, F1. The cap counts directories because that is what costs: rows
-// sharing one are a single read and then map lookups.
 it('caps the directories one pass reads, not the rows it answers', async () => {
   const roots = [harness.claudeProjectDir]
   const inside = (folder: string, name: string): string =>
@@ -313,22 +265,16 @@ it('caps the directories one pass reads, not the rows it answers', async () => {
   for (const folder of ['one', 'two', 'three']) {
     await mkdir(join(harness.claudeProjectDir, folder), { recursive: true })
   }
-  // Four rows in each of three directories: three reads, twelve answers.
   const paths = ['one', 'two', 'three'].flatMap((folder) =>
     ['a', 'b', 'c', 'd'].map((name) => inside(folder, name))
   )
 
   const result = await retire(paths, { roots, directoryLimit: 2 })
 
-  // Two directories' worth answered, all eight of their rows, and the third
-  // directory's four left for the pass after this one.
   expect(result.retired).toEqual(paths.slice(0, 8))
   expect(result.unchecked).toEqual(paths.slice(8))
 })
 
-// The starvation this replaced: an unreadable directory answers `unverifiable`
-// for every row under it and never becomes readable, so a cap on rows let one
-// such directory hold the walk for as long as the permission stayed wrong.
 it.skipIf(!CAN_DENY_READ)(
   'is not starved by many rows under one unreadable directory',
   async () => {

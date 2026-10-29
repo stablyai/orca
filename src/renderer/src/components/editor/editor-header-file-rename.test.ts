@@ -44,8 +44,7 @@ describe('useEditorHeaderFileRename', () => {
     vi.stubGlobal('cancelAnimationFrame', vi.fn())
   })
 
-  // Unmounting the focused input emits a trailing focusout, so commitRename can
-  // still run after the active file changed — with the old input as ref target.
+  // Focused input removal emits focusout after file switches; stale blur commits must not rename the replacement file.
   it('ignores a blur-commit that arrives after the active file changed', () => {
     const { result, rerender } = renderHook((file: OpenFile) => useEditorHeaderFileRename(file), {
       initialProps: baseFile()

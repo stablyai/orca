@@ -125,6 +125,34 @@ describe('verify-localization-catalog', () => {
     await expect(verifyLocalizationCatalog(root, { fix: false })).resolves.toBe(0)
   })
 
+  it('rejects one key reused for two different sentences', async () => {
+    const { root } = makeProject({
+      sourceText:
+        "import { translate } from '@/i18n/i18n'\nexport const left = translate('auto.example.move', 'Move {{value0}} left', { value0: 'A' })\nexport const right = translate('auto.example.move', 'Move {{value0}} right', { value0: 'A' })\n",
+      enCatalog: { auto: { example: { move: 'Move {{value0}} left' } } }
+    })
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    await expect(verifyLocalizationCatalog(root, { fix: false })).resolves.toBe(1)
+    expect(error.mock.calls.flat().join('\n')).toContain('auto.example.move')
+    error.mockRestore()
+  })
+
+  it('refuses to --fix a missing key reused for two different sentences', async () => {
+    const { root, localesDir } = makeProject({
+      sourceText:
+        "import { translate } from '@/i18n/i18n'\nexport const left = translate('auto.example.move', 'Move left')\nexport const right = translate('auto.example.move', 'Move right')\n"
+    })
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await expect(verifyLocalizationCatalog(root, { fix: true })).resolves.toBe(1)
+    expect(readJson(path.join(localesDir, 'en.json'))).toEqual({})
+    expect(error.mock.calls.flat().join('\n')).toContain('auto.example.move')
+    error.mockRestore()
+    log.mockRestore()
+  })
+
   it('does not invent values for keys without string fallbacks', async () => {
     const { root, localesDir } = makeProject({
       sourceText:
@@ -133,6 +161,26 @@ describe('verify-localization-catalog', () => {
 
     await expect(verifyLocalizationCatalog(root, { fix: true })).resolves.toBe(1)
     expect(readJson(path.join(localesDir, 'en.json'))).toEqual({})
+  })
+
+  it('accepts Russian few/many forms only for an existing plural family', async () => {
+    const { root, localesDir } = makeProject({
+      sourceText: 'export {}\n',
+      enCatalog: { images_one: '{{count}} image', images_other: '{{count}} images' }
+    })
+    const russianPath = path.join(localesDir, 'ru.json')
+    writeJson(russianPath, {
+      images_few: '{{count}} изображения',
+      images_many: '{{count}} изображений'
+    })
+    await expect(verifyLocalizationCatalog(root)).resolves.toBe(0)
+
+    writeJson(russianPath, { unknown_many: '{{count}} изображений' })
+    await expect(verifyLocalizationCatalog(root)).resolves.toBe(1)
+    writeJson(russianPath, { images_many: '{{wrongCount}} изображений' })
+    await expect(verifyLocalizationCatalog(root)).resolves.toBe(1)
+    writeJson(russianPath, { images_two: '{{count}} изображения' })
+    await expect(verifyLocalizationCatalog(root)).resolves.toBe(1)
   })
 
   it('reports partial plugin catalog gaps but rejects malformed interpolation', async () => {
@@ -206,5 +254,25 @@ describe('verify-localization-catalog', () => {
         'zh'
       )
     ).toEqual([])
+  })
+
+  it('fails when a target catalog repeats a key', async () => {
+    const { root, localesDir } = makeProject({
+      sourceText:
+        "import { translate } from '@/i18n/i18n'\nexport const label = translate('auto.example.greeting', 'Hello')\n",
+      enCatalog: { auto: { example: { greeting: 'Hello' } } }
+    })
+    writeFileSync(
+      path.join(localesDir, 'es.json'),
+      '{\n  "auto": {\n    "example": {\n      "greeting": "Hola",\n      "greeting": "Hola"\n    }\n  }\n}\n',
+      'utf8'
+    )
+    const report = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      await expect(verifyLocalizationCatalog(root, { fix: false })).resolves.toBe(1)
+      expect(report).toHaveBeenCalledWith('- es.json:5 auto.example.greeting')
+    } finally {
+      report.mockRestore()
+    }
   })
 })

@@ -1,5 +1,13 @@
+import { agentSessionConversationView } from '../../../shared/agent-session-conversation-view'
 import { describe, expect, it, vi } from 'vitest'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import {
+  agentModelCatalogFingerprintForRecord,
+  agentModelCatalogScopeFingerprint
+} from './agent-model-catalog-fingerprint'
+import { retireAtRestCommandContext } from '../agent-session-wire/at-rest-command-context'
+import { structuredAgentSessionLaunchPermission } from '../agent-session-wire/structured-agent-session-launch-permission'
+import { claudeAndCodexDeclared } from '../agent-session-wire/structured-agent-session-adapter-router-test-support'
 import { agentSessionRecordFixture } from '../agent-session-record-test-fixture'
 import { createAgentModelCatalogService } from './agent-model-catalog-service'
 import {
@@ -49,6 +57,10 @@ function harness() {
   const probe: AgentModelCatalogProbe = Object.assign(async () => run(), { resolve })
   const service = createAgentModelCatalogService({
     store,
+    getConversation: (id) => {
+      const saved = record(id, id === 'a' ? 'old' : 'another')
+      return saved ? agentSessionConversationView(saved) : undefined
+    },
     getRecord: (id) => record(id, id === 'a' ? 'old' : 'another'),
     drivesRecord: () => true,
     resolveAccountHome: async () => HOME,
@@ -59,8 +71,8 @@ function harness() {
   return {
     store,
     service,
-    run,
     resolve,
+    run,
     update: (next: AgentModelCatalogSuccess) => {
       now += 120001
       installed = next
@@ -78,6 +90,7 @@ describe('independent installed CLI discovery', () => {
     const h = harness()
     await h.read('a', { waitForListing: true })
     h.update(listing('new', 'new'))
+    void h.service.demand({ agent: 'claude', sessionId: 'a' })
     const warm = await h.read()
     expect(warm).toMatchObject({ models: [{ id: 'old' }], listingInProgress: true })
     await h.read('a', { waitForListing: true })
@@ -103,7 +116,16 @@ describe('independent installed CLI discovery', () => {
       h.read('b', { waitForListing: true })
     ])
     expect(h.run).toHaveBeenCalledTimes(1)
-    expect(h.resolve.mock.calls.every((call) => call.length === 2)).toBe(true)
+    expect(h.resolve).toHaveBeenCalledWith(
+      HOME,
+      '/project',
+      'snapshot',
+      expect.objectContaining({
+        deadline: expect.any(Number),
+        current: expect.any(Function),
+        signal: expect.any(AbortSignal)
+      })
+    )
     expect(h.service.peek('a', true)).toBe(h.service.peek('b', true))
     expect(await h.read('b')).toMatchObject({
       models: [{ id: 'old', isDefault: true, defaultEffort: 'high' }]
@@ -183,4 +205,95 @@ describe('independent installed CLI discovery', () => {
     expect(h.service.peek('a', true)?.models[0]?.id).toBe('upgraded')
     h.service.stop()
   })
+})
+
+it('prepares hydrated catalog evidence independently of launch permission and shares it with an equivalent chat', async () => {
+  const first = record('cold-a', 'opus')
+  first.permissionMode = 'auto'
+  const seed = new AgentModelCatalogStore()
+  const probe = Object.assign(
+    vi.fn(async () => listing('opus')),
+    {
+      resolve: vi.fn(async () => ({
+        identity: 'saved-launch',
+        run: vi.fn(async () => listing('opus'))
+      }))
+    }
+  )
+  const deps = {
+    getConversation: (id: string) => {
+      const held = { ...first, sessionId: id }
+      return held ? agentSessionConversationView(held) : undefined
+    },
+    getRecord: (id: string) => ({ ...first, sessionId: id }),
+    drivesRecord: () => true,
+    resolveAccountHome: vi.fn(async () => HOME),
+    recordWorkspacePath: vi.fn(async () => '/project'),
+    probes: { claude: probe }
+  }
+  const key = agentModelCatalogScopeFingerprint(
+    agentModelCatalogFingerprintForRecord(first),
+    '/project',
+    'saved-launch'
+  )
+  const saved = seed.recordSuccess(
+    key,
+    'claude',
+    {
+      ...listing('opus'),
+      models: [{ id: 'opus', label: 'Opus', isDefault: true, efforts: [], supportsAutoMode: true }]
+    },
+    'discovery'
+  )!
+  const store = new AgentModelCatalogStore()
+  await store.attachPersistence({
+    load: async () => [saved],
+    save: () => {},
+    flush: async () => {}
+  })
+  const catalog = createAgentModelCatalogService({ ...deps, store })
+  probe.resolve.mockClear()
+  deps.resolveAccountHome.mockClear()
+  const params = {
+    agent: 'claude',
+    sessionId: first.sessionId,
+    inSessionWorkspace: true as const,
+    savedOnly: true
+  }
+  expect(await catalog.read(params)).toEqual({ origin: 'unknown' })
+  expect(probe.resolve).not.toHaveBeenCalled()
+  expect(
+    await structuredAgentSessionLaunchPermission({ agents: claudeAndCodexDeclared() }, first)
+  ).toBe('auto')
+  expect(probe.resolve).not.toHaveBeenCalled()
+  expect(await catalog.prepareSaved(params)).toMatchObject({
+    models: [{ id: 'opus', supportsAutoMode: true }]
+  })
+  expect(probe.resolve).toHaveBeenCalledWith(
+    HOME,
+    '/project',
+    'saved',
+    expect.objectContaining({
+      current: expect.any(Function),
+      signal: expect.any(AbortSignal),
+      deadline: expect.any(Number)
+    })
+  )
+  const resolutions = probe.resolve.mock.calls.length
+  expect(
+    await catalog.read({ ...params, workspacePath: '/project', inSessionWorkspace: undefined })
+  ).toMatchObject({
+    models: [{ id: 'opus', supportsAutoMode: true }]
+  })
+  retireAtRestCommandContext('unrelated-folder')
+  expect(await catalog.read({ ...params, sessionId: 'cold-b' })).toMatchObject({
+    models: [{ id: 'opus', supportsAutoMode: true }]
+  })
+  expect(
+    await structuredAgentSessionLaunchPermission({ agents: claudeAndCodexDeclared() }, first)
+  ).toBe('auto')
+  expect(probe.resolve).toHaveBeenCalledTimes(resolutions)
+  expect(probe).not.toHaveBeenCalled()
+  expect(deps.resolveAccountHome).not.toHaveBeenCalled()
+  catalog.stop()
 })

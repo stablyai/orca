@@ -1,5 +1,8 @@
 import { withDurableRuntimeStore } from '../runtime-durable-store-fixture'
+import { durableSessionLayoutApply } from '../__fixtures__/main-layout-close-fixture'
 import { describe, expect, it, vi } from 'vitest'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
+import { committingSpawn, registerLivePty } from '../bind-first-pane.test-fixture'
 import { OrcaRuntimeService, electronMocks } from '../orca-runtime-test-mocks.spec'
 import type { RuntimeMobileSessionTabsResult } from '../orca-runtime-test-mocks.spec'
 import {
@@ -18,7 +21,7 @@ describe('OrcaRuntimeService', () => {
     const spawn = vi.fn().mockResolvedValue({ id: 'laptop-created-pty' })
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({
-      spawn,
+      spawn: committingSpawn(runtime, spawn),
       write: () => true,
       kill: () => true,
       getForegroundProcess: async () => 'claude'
@@ -82,7 +85,6 @@ describe('OrcaRuntimeService', () => {
         title: 'claude agents'
       })
     )
-    // Stale "working" suppressed; agent identity retained for native chat.
     const suppressed = result.tabs[0]
     expect(suppressed?.type === 'terminal' && suppressed.agentStatus?.state).toBe('done')
     expect(suppressed?.type === 'terminal' && suppressed.agentStatus?.agentType).toBe('claude')
@@ -92,7 +94,7 @@ describe('OrcaRuntimeService', () => {
   it("publishes the desktop's tab name over the live agent title, and the live title without one", async () => {
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({
-      spawn: vi.fn().mockResolvedValue({ id: 'renamed-pty' }),
+      spawn: vi.fn(committingSpawn(runtime, async () => ({ id: 'renamed-pty' }))),
       write: () => true,
       kill: () => true,
       getForegroundProcess: async () => 'claude'
@@ -137,13 +139,24 @@ describe('OrcaRuntimeService', () => {
           }
         ]
       })
+    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+      // #31571: rename through main-owned layout, not window publication; generated names have separate coverage.
+      const [{ handle }] = (await runtime.listTerminals(`id:${TEST_WORKTREE_ID}`)).terminals
+      await runtime.renameTerminal(handle, 'Build fixer')
+      runtime.onPtyData('renamed-pty', '\x1b]0;⠂ Claude Code\x07', 124)
+      const named = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
+      expect(named.tabs[0]).toEqual(expect.objectContaining({ title: 'Build fixer' }))
+      await runtime.renameTerminal(handle, null)
+      const unnamed = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
+      expect(unnamed.tabs[0]).toEqual(expect.objectContaining({ title: '⠂ Claude Code' }))
+      return
+    }
     publish(1, { customTitle: 'Build fixer' })
     runtime.onPtyData('renamed-pty', '\x1b]0;⠂ Claude Code\x07', 124)
 
     const renamed = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
     expect(renamed.tabs[0]).toEqual(expect.objectContaining({ title: 'Build fixer' }))
 
-    // #30538: a generated name the desktop shows outranks every OSC frame, as it does there.
     publish(2, { customTitle: null, generatedTitle: 'Fix tab titles' })
     const generated = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
     expect(generated.tabs[0]).toEqual(expect.objectContaining({ title: 'Fix tab titles' }))
@@ -157,7 +170,7 @@ describe('OrcaRuntimeService', () => {
     const spawn = vi.fn().mockResolvedValue({ id: 'laptop-created-pty' })
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({
-      spawn,
+      spawn: committingSpawn(runtime, spawn),
       write: () => true,
       kill: () => true,
       getForegroundProcess: async () => null
@@ -221,7 +234,6 @@ describe('OrcaRuntimeService', () => {
         title: 'zsh'
       })
     )
-    // Stale "working" suppressed; agent identity retained for native chat.
     const suppressed = result.tabs[0]
     expect(suppressed?.type === 'terminal' && suppressed.agentStatus?.state).toBe('done')
     expect(suppressed?.type === 'terminal' && suppressed.agentStatus?.agentType).toBe('claude')
@@ -268,7 +280,7 @@ describe('OrcaRuntimeService', () => {
     const runtime = new OrcaRuntimeService(store)
     runtime.setNotifier({ closeTerminal } as never)
     runtime.setPtyController({
-      spawn,
+      spawn: committingSpawn(runtime, spawn),
       write: () => true,
       kill,
       getForegroundProcess: async () => null
@@ -300,7 +312,7 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('waits for renderer acknowledgement before returning a whole-tab close receipt', async () => {
-    const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(
+    const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(
       makeWorkspaceSessionWithHeadlessTerminal()
     )
     const acknowledged = makeDeferred()
@@ -333,8 +345,23 @@ describe('OrcaRuntimeService', () => {
         }
       ]
     })
+    registerLivePty(runtime, 'persisted-pty', TEST_WORKTREE_ID, null, {
+      tabId: 'host-tab',
+      leafId: HEADLESS_LEAF_ID
+    })
     const [terminal] = (await runtime.listTerminals()).terminals
     const pending = runtime.closeTerminalTab(terminal.handle)
+    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+      await expect(pending).resolves.toEqual({
+        handle: terminal.handle,
+        tabId: 'host-tab',
+        closeMode: 'tab',
+        ptyKilled: false
+      })
+      expect(closeTerminalTab).not.toHaveBeenCalled()
+      expect(getSession().terminalLayoutsByTabId['host-tab']).toBeUndefined()
+      return
+    }
     let settled = false
     void pending.finally(() => {
       settled = true
@@ -353,7 +380,7 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('leases renderer publication until a paired whole-tab close is acknowledged', async () => {
-    const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(
+    const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(
       makeWorkspaceSessionWithHeadlessTerminal()
     )
     const acknowledged = makeDeferred()
@@ -425,12 +452,19 @@ describe('OrcaRuntimeService', () => {
       reason: 'user',
       clientNavigationId: 'device-a'
     })
+    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+      await expect(pending).resolves.toEqual({ closed: true })
+      expect(closeTerminalTab).not.toHaveBeenCalled()
+      expect(setBackgroundThrottling).not.toHaveBeenCalled()
+      expect(getSession().terminalLayoutsByTabId['host-tab']).toBeUndefined()
+      return
+    }
     await vi.waitFor(() => expect(closeTerminalTab).toHaveBeenCalledWith('host-tab'))
     expect(setBackgroundThrottling.mock.calls).toEqual([[false]])
 
     acknowledged.resolve()
     await expect(pending).resolves.toEqual({ closed: true })
-    // The final release restores throttling on the next task, after any native destruction.
+    // Release restores throttling next task, after native destruction.
     await vi.waitFor(() => expect(setBackgroundThrottling.mock.calls).toEqual([[false], [true]]))
   })
 
@@ -509,6 +543,12 @@ describe('OrcaRuntimeService', () => {
       reason: 'user',
       clientNavigationId: 'device-a'
     })
+    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+      await expect(pending).resolves.toEqual({ closed: true })
+      expect(kill).toHaveBeenCalledWith('persisted-pty')
+      expect(closeTerminalTab).not.toHaveBeenCalled()
+      return
+    }
     await vi.waitFor(() => expect(closeTerminalTab).toHaveBeenCalledWith('host-tab'))
     const session = getSession()
     setSession({
@@ -553,7 +593,7 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('durably closes every split leaf without a renderer', async () => {
-    const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(
+    const { runtimeStore, getSession, setSession } = makeRuntimeStoreWithWorkspaceSession(
       makeWorkspaceSessionWithHeadlessTerminal({
         tabsByWorktree: {
           [TEST_WORKTREE_ID]: [
@@ -580,8 +620,14 @@ describe('OrcaRuntimeService', () => {
       .mockResolvedValueOnce({ id: 'headless-left' })
       .mockResolvedValueOnce({ id: 'headless-right' })
     const kill = vi.fn(() => true)
+    const durableStore = withDurableRuntimeStore({ ...runtimeStore, flushOrThrow })
     const runtime = new OrcaRuntimeService(
-      withDurableRuntimeStore({ ...runtimeStore, flushOrThrow })
+      Object.assign(durableStore, {
+        applyLayoutCommand: durableSessionLayoutApply(durableStore, {
+          get: getSession,
+          set: setSession
+        })
+      })
     )
     runtime.setPtyController({
       spawn,
@@ -640,7 +686,7 @@ describe('OrcaRuntimeService', () => {
     const spawn = vi.fn().mockResolvedValue({ id: 'laptop-created-pty' })
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({
-      spawn,
+      spawn: committingSpawn(runtime, spawn),
       write: () => true,
       kill: () => true,
       getForegroundProcess: async () => null

@@ -1,10 +1,4 @@
-/**
- * A phone reads and saves a Markdown tab on a headless server, from the server's own disk.
- *
- * A headless host lists the editor tabs its saved session holds (a converted SSH host's move
- * carries them in). With no window there is no editor to relay through, so the server answers
- * from the file itself and saves with a compare against the version the phone last read.
- */
+// With no editor window, serve must read/save Markdown from disk and compare saves against the phone’s last-read version.
 import { readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import type { RuntimeClient } from '../../src/cli/runtime/client'
@@ -28,7 +22,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
-/** Saves an open Markdown editor for the worktree, as a desktop or a move leaves it. */
 function saveMarkdownEditor(userDataDir: string, worktreeId: string, filePath: string): void {
   mutateStoppedProfileState(userDataDir, (state) => {
     const session = state.workspaceSession
@@ -117,7 +110,6 @@ for (const kind of HOSTS) {
       expect(saved).toMatchObject({ tabId, isDirty: false, content: '# from the phone\n' })
       expect(readFileSync(filePath, 'utf8')).toBe('# from the phone\n')
 
-      // A save over a version the disk no longer holds is refused, and the disk keeps its bytes.
       writeFileSync(filePath, '# edited on the server\n')
       await expect(
         phone.call('markdown.saveTab', {

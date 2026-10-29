@@ -5,7 +5,7 @@ import { translate } from '@/i18n/i18n'
 import type {
   SessionOptionDescriptor,
   SessionOptionsSurface
-} from '../../../../shared/native-chat-session-options'
+} from '../../../../shared/native-chat/input/native-chat-session-options'
 import { NativeChatSessionOptionPickers } from './NativeChatSessionOptionPickers'
 import { NativeChatComposerPermissionPicker } from './NativeChatPermissionModePicker'
 import { NativeChatComposerGoalChip } from './NativeChatComposerGoalChip'
@@ -14,6 +14,7 @@ import type { NativeChatContextUsageSummary } from './native-chat-context-usage-
 import type { NativeChatOptionPickerRequest } from './native-chat-composer-types'
 
 export type NativeChatComposerActionsProps = {
+  editSession?: { cancel: () => void }
   attachDisabled: boolean
   dictationDisabled: boolean
   sendDisabled: boolean
@@ -45,6 +46,7 @@ export type NativeChatComposerActionsProps = {
 }
 
 export function NativeChatComposerActions({
+  editSession,
   attachDisabled,
   dictationDisabled,
   sendDisabled,
@@ -70,8 +72,7 @@ export function NativeChatComposerActions({
 }: NativeChatComposerActionsProps): React.JSX.Element {
   const stops = isWorking
   const handleCriticalAction = (event: React.MouseEvent<HTMLButtonElement>): void => {
-    // A double-click commonly lands after the first send has started and the button has
-    // changed to Stop; ignore the second click instead of cancelling the new turn.
+    // Ignore a double-click’s second press after Send becomes Stop so it cannot cancel the newly started turn.
     if (event.detail > 1) {
       return
     }
@@ -85,7 +86,17 @@ export function NativeChatComposerActions({
     ? translate('components.native-chat.composer.stopDictation', 'Stop dictation')
     : translate('components.native-chat.composer.startDictation', 'Start dictation')
   const sendReason = stops ? null : (sendBlockedReason ?? null)
-  const sendButton = (
+  const sendButton = editSession ? (
+    <Button
+      type="button"
+      size="sm"
+      disabled={sendDisabled}
+      onMouseDown={(event) => event.preventDefault()}
+      onClick={handleCriticalAction}
+    >
+      {translate('components.native-chat.queuedMessages.save', 'Save')}
+    </Button>
+  ) : (
     <Button
       type="button"
       data-native-chat-critical-action={stops ? 'stop' : undefined}
@@ -137,8 +148,7 @@ export function NativeChatComposerActions({
         {onExitGoalMode ? <NativeChatComposerGoalChip onExit={onExitGoalMode} /> : null}
       </div>
       <div className="ml-auto flex items-center gap-1.5">
-        {/* Why: keep the session picker beside the actions it affects; only the
-        context ring separates it from dictation. */}
+        {/* Keep option pickers beside the session actions they affect. */}
         <NativeChatSessionOptionPickers
           surface={sessionOptionsSurface}
           snapshot={sessionOptionsSnapshot}
@@ -192,6 +202,11 @@ export function NativeChatComposerActions({
           </TooltipContent>
         </Tooltip>
         <DraftNotSavedIcon shown={draftNotSaved === true} />
+        {editSession ? (
+          <Button type="button" variant="ghost" size="sm" onClick={editSession.cancel}>
+            {translate('common.cancel', 'Cancel')}
+          </Button>
+        ) : null}
         {sendReason ? (
           <Tooltip>
             <TooltipTrigger asChild>
@@ -210,7 +225,6 @@ export function NativeChatComposerActions({
   )
 }
 
-/** Shown only after storage refused the draft, so it never appears on a normal save. */
 function DraftNotSavedIcon({ shown }: { shown: boolean }): React.JSX.Element | null {
   if (!shown) {
     return null

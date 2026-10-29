@@ -1,19 +1,4 @@
-/**
- * AppEnvironment abstracts the host-process facilities Orca's core reads from
- * Electron's `app`: data paths, version, packaged flag, and shutdown. The
- * desktop installs an Electron-backed implementation; a plain-Node host (the
- * headless runtime server) installs a Node one, so core modules never import
- * `electron`.
- *
- * Why a settable singleton rather than constructor injection: `getPath('userData')`
- * is read at module scope and through deep call chains in ~17 modules. Threading
- * an instance through all of them would be a rewrite, not a refactor. Ports that
- * already have an injection point (the browser backend) stay injected instead.
- *
- * This module must stay free of `node:` imports — `src/shared/**` is in the web
- * build graph (config/tsconfig.tc.web.json), so a require() here ships to the
- * renderer. Callers that need a Node-flavoured default install one explicitly.
- */
+/** Install Electron/Node host facilities before core modules resolve paths, keeping core Electron-free. A singleton supports module-scope/deep reads; existing injected ports stay injected. No node imports: shared enters the web build graph; Node callers install explicit defaults. */
 
 export type AppPathName = 'userData' | 'home' | 'appData' | 'temp' | 'downloads' | 'logs' | 'exe'
 
@@ -29,12 +14,7 @@ export type AppEnvironment = {
   /** Shutdown hook: electron `will-quit`, or SIGTERM/SIGINT on a Node host. */
   onWillQuit(handler: () => void): void
   exit(code?: number): void
-  /**
-   * Per-process Chromium metrics (electron `app.getAppMetrics`). A Node host has
-   * no Chromium processes to measure and returns []. Kept on the port rather than
-   * injected because `src/main/memory/collector.ts` is its only caller and reads
-   * it from module scope.
-   */
+  /** Return no Chromium metrics on Node. Keep this on the port because its sole consumer, memory/collector.ts, reads at module scope. */
   getAppMetrics(): AppProcessMetric[]
 }
 
@@ -47,12 +27,7 @@ export type AppProcessMetric = {
   [key: string]: unknown
 }
 
-/**
- * Why a global symbol and not a module-level `let`: `vi.resetModules()` gives the
- * re-imported graph a fresh copy of this module, so an environment installed before the
- * reset would silently read back as uninstalled. Anchoring to the realm keeps one
- * instance per process however often the module registry is rebuilt.
- */
+/** Anchor to the realm via a global symbol so vi.resetModules cannot lose an environment installed before reimport. */
 const SLOT = Symbol.for('orca.host.appEnvironment')
 
 type Slot = { [SLOT]?: AppEnvironment | null }
@@ -70,10 +45,7 @@ export function setAppEnvironment(environment: AppEnvironment): void {
   slot()[SLOT] = environment
 }
 
-/**
- * Whether an environment is installed. For callers that must work in BOTH the desktop
- * and a plain-Node fork — those legitimately have no app root and want null, not a throw.
- */
+/** Let desktop/Node-fork callers check availability when no app root is legitimate and should mean null. */
 export function hasAppEnvironment(): boolean {
   return read() !== null
 }
@@ -81,9 +53,7 @@ export function hasAppEnvironment(): boolean {
 export function getAppEnvironment(): AppEnvironment {
   const current = read()
   if (!current) {
-    // Why throw rather than fall back: a silent default answers `userData` with the
-    // wrong directory, and the caller writes real user state there before anyone
-    // notices. Failing at the first read makes a missing install() obvious.
+    // Fail at the first missing install instead of silently writing user state to the wrong userData directory.
     throw new Error(
       'AppEnvironment not initialized — call setAppEnvironment() during startup before resolving app paths'
     )

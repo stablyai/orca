@@ -128,27 +128,58 @@ describe('BrowserClientPageRendererBridgeRegistry', () => {
   it('fences a pending generation when an exact renderer is replaced with a reused ID', async () => {
     const harness = createHarness()
     const first = harness.registry.attachRenderer(harness.endpoint)
-    const pending = first.mountPage(page, new AbortController().signal)
+    const abort = new AbortController()
+    const pending = first.mountPage(page, abort.signal)
     const staleRequest = sentRequest(harness.endpoint)
     const replacementEndpoint = createEndpoint(harness.endpoint.id)
 
+    abort.abort()
     const replacement = harness.registry.attachRenderer(replacementEndpoint)
     await expect(pending).rejects.toThrow('browser_client_page_renderer_replaced')
     expect(first.isCurrent()).toBe(false)
     expect(replacement.isCurrent()).toBe(true)
 
+    const next = { ...page, pageHostGeneration: 8 }
+    const current = replacement.mountPage(next, new AbortController().signal)
+    harness.reply(harness.endpoint, {
+      type: 'mounted',
+      requestId: staleRequest.requestId,
+      page,
+      webContentsId: 92
+    })
     harness.reply(replacementEndpoint, {
       type: 'mounted',
       requestId: staleRequest.requestId,
       page,
       webContentsId: 92
     })
-    const current = replacement.mountPage(page, new AbortController().signal)
+    await expect(Promise.race([current, Promise.resolve('pending')])).resolves.toBe('pending')
     completeMount(harness, replacementEndpoint, 93)
     await expect(current).resolves.toEqual({ webContentsId: 93 })
   })
 
-  it('aborts mount admission and ignores a late reply', async () => {
+  it('rejects an already aborted mount before admission while preserving the renderer fence', async () => {
+    const harness = createHarness({ maxPending: 1 })
+    const renderer = harness.registry.attachRenderer(harness.endpoint)
+    const mounted = renderer.mountPage(page, new AbortController().signal)
+    const abort = new AbortController()
+    abort.abort()
+
+    await expect(renderer.mountPage(page, abort.signal)).rejects.toThrow(
+      'browser_client_page_renderer_request_aborted'
+    )
+    expect(harness.endpoint.send).toHaveBeenCalledTimes(1)
+    completeMount(harness)
+    await mounted
+
+    harness.registry.retireRenderer(harness.endpoint)
+    await expect(renderer.mountPage(page, abort.signal)).rejects.toThrow(
+      'browser_client_page_renderer_stale'
+    )
+    harness.registry.dispose()
+  })
+
+  it('retains an admitted canceled mount until its exact guest identity arrives', async () => {
     const harness = createHarness({ maxPending: 1 })
     const renderer = harness.registry.attachRenderer(harness.endpoint)
     const abort = new AbortController()
@@ -156,25 +187,65 @@ describe('BrowserClientPageRendererBridgeRegistry', () => {
     const staleRequest = sentRequest(harness.endpoint)
 
     abort.abort()
-    await expect(mounted).rejects.toThrow('browser_client_page_renderer_request_aborted')
+    await expect(Promise.race([mounted, Promise.resolve('pending')])).resolves.toBe('pending')
+    await expect(renderer.retirePage(page)).rejects.toThrow(
+      'browser_client_page_renderer_request_capacity'
+    )
     harness.reply(harness.endpoint, {
       type: 'mounted',
       requestId: staleRequest.requestId,
       page,
       webContentsId: 92
     })
+    await expect(mounted).resolves.toEqual({ webContentsId: 92 })
 
-    const current = renderer.mountPage(page, new AbortController().signal)
+    const current = renderer.mountPage(
+      { ...page, pageHostGeneration: 8 },
+      new AbortController().signal
+    )
+    harness.reply(harness.endpoint, {
+      type: 'mounted',
+      requestId: staleRequest.requestId,
+      page,
+      webContentsId: 92
+    })
+    await expect(Promise.race([current, Promise.resolve('pending')])).resolves.toBe('pending')
     completeMount(harness)
     await expect(current).resolves.toEqual({ webContentsId: 91 })
+  })
+
+  it('settles a sibling independently while a canceled mount awaits its reply', async () => {
+    const harness = createHarness({ maxPending: 2 })
+    const renderer = harness.registry.attachRenderer(harness.endpoint)
+    const abort = new AbortController()
+    const mounted = renderer.mountPage(page, abort.signal)
+    const request = sentRequest(harness.endpoint)
+    const sibling = renderer.mountPage(
+      { ...page, browserPageId: 'page-b' },
+      new AbortController().signal
+    )
+
+    abort.abort()
+    completeMount(harness, harness.endpoint, 93)
+    await expect(sibling).resolves.toEqual({ webContentsId: 93 })
+    await expect(Promise.race([mounted, Promise.resolve('pending')])).resolves.toBe('pending')
+    harness.reply(harness.endpoint, {
+      type: 'mounted',
+      requestId: request.requestId,
+      page,
+      webContentsId: 92
+    })
+    await expect(mounted).resolves.toEqual({ webContentsId: 92 })
   })
 
   it('retires only the exact renderer and rejects its pending work', async () => {
     const harness = createHarness()
     const renderer = harness.registry.attachRenderer(harness.endpoint)
-    const mounted = renderer.mountPage(page, new AbortController().signal)
+    const abort = new AbortController()
+    const mounted = renderer.mountPage(page, abort.signal)
     const staleRequest = sentRequest(harness.endpoint)
 
+    abort.abort()
     expect(harness.registry.retireRenderer(createEndpoint(harness.endpoint.id))).toBe(false)
     expect(renderer.isCurrent()).toBe(true)
     expect(harness.registry.retireRenderer(harness.endpoint)).toBe(true)
@@ -246,6 +317,71 @@ describe('BrowserClientPageRendererBridgeRegistry', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it('times out a canceled mount and fences its late reply from a successor', async () => {
+    vi.useFakeTimers()
+    const harness = createHarness({ maxPending: 1, timeoutMs: 25 })
+    try {
+      const renderer = harness.registry.attachRenderer(harness.endpoint)
+      const abort = new AbortController()
+      const timedOut = renderer.mountPage(page, abort.signal)
+      const staleRequest = sentRequest(harness.endpoint)
+      const timedOutResult = timedOut.catch((error: unknown) => error)
+
+      abort.abort()
+      await vi.advanceTimersByTimeAsync(24)
+      const blocked = Promise.resolve(renderer.retirePage(page)).catch((error: unknown) => error)
+      expect(harness.endpoint.send).toHaveBeenCalledTimes(1)
+      await expect(blocked).resolves.toHaveProperty(
+        'message',
+        'browser_client_page_renderer_request_capacity'
+      )
+      await vi.advanceTimersByTimeAsync(1)
+      await expect(timedOutResult).resolves.toHaveProperty(
+        'message',
+        'browser_client_page_renderer_request_timeout'
+      )
+
+      const successor = renderer.mountPage(
+        { ...page, pageHostGeneration: 8 },
+        new AbortController().signal
+      )
+      harness.reply(harness.endpoint, {
+        type: 'mounted',
+        requestId: staleRequest.requestId,
+        page,
+        webContentsId: 92
+      })
+      await expect(Promise.race([successor, Promise.resolve('pending')])).resolves.toBe('pending')
+      completeMount(harness, harness.endpoint, 93)
+      await expect(successor).resolves.toEqual({ webContentsId: 93 })
+    } finally {
+      harness.registry.dispose()
+      vi.useRealTimers()
+    }
+  })
+
+  it('still aborts rekey admission and ignores its late reply', async () => {
+    const harness = createHarness({ maxPending: 1 })
+    const renderer = harness.registry.attachRenderer(harness.endpoint)
+    const next = { ...page, pageHostGeneration: 8 }
+    const abort = new AbortController()
+    const rekeyed = renderer.rekeyPage!(page, next, abort.signal)
+    const staleRequest = sentRequest(harness.endpoint)
+
+    abort.abort()
+    await expect(rekeyed).rejects.toThrow('browser_client_page_renderer_request_aborted')
+    const current = renderer.mountPage(next, new AbortController().signal)
+    harness.reply(harness.endpoint, {
+      type: 'rekeyed',
+      requestId: staleRequest.requestId,
+      page,
+      nextPage: next
+    })
+    await expect(Promise.race([current, Promise.resolve('pending')])).resolves.toBe('pending')
+    completeMount(harness)
+    await expect(current).resolves.toEqual({ webContentsId: 91 })
   })
 
   it('releases admission when Electron send throws', async () => {

@@ -49,6 +49,10 @@ describe('external automation scope keys', () => {
   it('escapes components so a hostile ID cannot forge another key', () => {
     const forged = externalAutomationJobKey(local, 'job|extra')
     expect(forged).not.toBe(externalAutomationActionKey(local, 'job', 'run'))
+    expect(forged).not.toBe(externalAutomationJobKey(local, 'job%7Cextra'))
+    expect(externalAutomationActionKey(local, 'job|extra', 'run')).not.toBe(
+      externalAutomationActionKey(local, 'job%7Cextra', 'run')
+    )
     expect(forged.split('|')).toHaveLength(4)
   })
 

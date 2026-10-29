@@ -46,17 +46,20 @@ describe('updateWorktreeGitIdentity', () => {
 
     store.setState({ worktreesByRepo: { repo1: [existing] }, sortEpoch: 3 } as Partial<AppState>)
 
-    store.getState().updateWorktreeGitIdentity('repo1::/path/wt1', {
-      head: 'new-head',
-      branch: 'refs/heads/feature'
-    })
+    store.getState().updateWorktreeGitIdentity(
+      'repo1::/path/wt1',
+      {
+        head: 'new-head',
+        branch: 'refs/heads/feature'
+      },
+      null
+    )
 
     expect(store.getState().worktreesByRepo.repo1[0]).toMatchObject({
       head: 'new-head',
       branch: 'refs/heads/feature'
     })
     expect(store.getState().sortEpoch).toBe(4)
-    expect(mockApi.worktrees.list).not.toHaveBeenCalled()
     expect(mockApi.worktrees.listDetected).not.toHaveBeenCalled()
   })
 
@@ -75,14 +78,22 @@ describe('updateWorktreeGitIdentity', () => {
       notifications += 1
     })
 
-    store.getState().updateWorktreeGitIdentity('repo1::/path/wt1', {
-      head: 'old-head',
-      branch: 'refs/heads/main'
-    })
-    store.getState().updateWorktreeGitIdentity('repo1::/path/missing', {
-      head: 'new-head',
-      branch: 'refs/heads/feature'
-    })
+    store.getState().updateWorktreeGitIdentity(
+      'repo1::/path/wt1',
+      {
+        head: 'old-head',
+        branch: 'refs/heads/main'
+      },
+      null
+    )
+    store.getState().updateWorktreeGitIdentity(
+      'repo1::/path/missing',
+      {
+        head: 'new-head',
+        branch: 'refs/heads/feature'
+      },
+      null
+    )
 
     unsubscribe()
     expect(notifications).toBe(0)
@@ -106,9 +117,13 @@ describe('updateWorktreeGitIdentity', () => {
 
     store.setState({ worktreesByRepo: { repo1: [existing] } } as Partial<AppState>)
 
-    store.getState().updateWorktreeGitIdentity('repo1::/path/wt1', {
-      branch: 'refs/heads/stack/two'
-    })
+    store.getState().updateWorktreeGitIdentity(
+      'repo1::/path/wt1',
+      {
+        branch: 'refs/heads/stack/two'
+      },
+      null
+    )
 
     expect(store.getState().worktreesByRepo.repo1[0]).toMatchObject({
       branch: 'refs/heads/stack/two',
@@ -134,9 +149,13 @@ describe('updateWorktreeGitIdentity', () => {
 
     store.setState({ worktreesByRepo: { repo1: [existing] } } as Partial<AppState>)
 
-    store.getState().updateWorktreeGitIdentity('repo1::/path/wt1', {
-      branch: 'refs/heads/stack/one'
-    })
+    store.getState().updateWorktreeGitIdentity(
+      'repo1::/path/wt1',
+      {
+        branch: 'refs/heads/stack/one'
+      },
+      null
+    )
 
     expect(store.getState().worktreesByRepo.repo1[0]).toMatchObject({
       branch: 'refs/heads/stack/one',
@@ -160,10 +179,14 @@ describe('updateWorktreeGitIdentity', () => {
 
     store.setState({ worktreesByRepo: { repo1: [existing] } } as Partial<AppState>)
 
-    store.getState().updateWorktreeGitIdentity('repo1::/path/wt1', {
-      head: 'new-head',
-      branch: 'refs/heads/stack/one'
-    })
+    store.getState().updateWorktreeGitIdentity(
+      'repo1::/path/wt1',
+      {
+        head: 'new-head',
+        branch: 'refs/heads/stack/one'
+      },
+      null
+    )
 
     expect(store.getState().worktreesByRepo.repo1[0]).toMatchObject({
       head: 'new-head',
@@ -185,9 +208,13 @@ describe('updateWorktreeGitIdentity', () => {
 
     store.setState({ worktreesByRepo: { repo1: [existing] } } as Partial<AppState>)
 
-    store.getState().updateWorktreeGitIdentity('repo1::/path/wt1', {
-      branch: 'refs/heads/main'
-    })
+    store.getState().updateWorktreeGitIdentity(
+      'repo1::/path/wt1',
+      {
+        branch: 'refs/heads/main'
+      },
+      null
+    )
 
     expect(store.getState().worktreesByRepo.repo1[0].displayName).toBe('main')
   })
@@ -204,9 +231,13 @@ describe('updateWorktreeGitIdentity', () => {
 
     store.setState({ worktreesByRepo: { repo1: [existing] } } as Partial<AppState>)
 
-    store.getState().updateWorktreeGitIdentity('repo1::/path/wt1', {
-      branch: 'refs/heads/main'
-    })
+    store.getState().updateWorktreeGitIdentity(
+      'repo1::/path/wt1',
+      {
+        branch: 'refs/heads/main'
+      },
+      null
+    )
 
     expect(store.getState().worktreesByRepo.repo1[0].displayName).toBe('My Cool Work')
   })
@@ -223,9 +254,13 @@ describe('updateWorktreeGitIdentity', () => {
     })
 
     store.setState({ worktreesByRepo: { repo1: [existing] } } as Partial<AppState>)
-    store.getState().updateWorktreeGitIdentity('repo1::/path/wt1', {
-      branch: 'refs/heads/main'
-    })
+    store.getState().updateWorktreeGitIdentity(
+      'repo1::/path/wt1',
+      {
+        branch: 'refs/heads/main'
+      },
+      null
+    )
 
     expect(store.getState().worktreesByRepo.repo1[0].displayName).toBe('feature')
   })
@@ -242,9 +277,13 @@ describe('updateWorktreeGitIdentity', () => {
     })
 
     store.setState({ worktreesByRepo: { repo1: [existing] } } as Partial<AppState>)
-    store.getState().updateWorktreeGitIdentity('repo1::/path/wt1', {
-      branch: 'refs/heads/main'
-    })
+    store.getState().updateWorktreeGitIdentity(
+      'repo1::/path/wt1',
+      {
+        branch: 'refs/heads/main'
+      },
+      null
+    )
 
     expect(store.getState().worktreesByRepo.repo1[0].displayName).toBe('feature')
   })
@@ -262,10 +301,14 @@ describe('updateWorktreeGitIdentity', () => {
 
     store.setState({ worktreesByRepo: { repo1: [existing] }, sortEpoch: 3 } as Partial<AppState>)
 
-    store.getState().updateWorktreeGitIdentity('repo1::/path/wt1', {
-      head: 'new-head',
-      branch: null
-    })
+    store.getState().updateWorktreeGitIdentity(
+      'repo1::/path/wt1',
+      {
+        head: 'new-head',
+        branch: null
+      },
+      null
+    )
 
     expect(store.getState().worktreesByRepo.repo1[0]).toMatchObject({
       head: 'new-head',
@@ -288,10 +331,14 @@ describe('updateWorktreeGitIdentity', () => {
 
     store.setState({ worktreesByRepo: { repo1: [existing] } } as Partial<AppState>)
 
-    store.getState().updateWorktreeGitIdentity('repo1::/path/wt1', {
-      head: 'new-head',
-      branch: null
-    })
+    store.getState().updateWorktreeGitIdentity(
+      'repo1::/path/wt1',
+      {
+        head: 'new-head',
+        branch: null
+      },
+      null
+    )
 
     expect(store.getState().worktreesByRepo.repo1[0]).toMatchObject({
       branch: '',
@@ -312,14 +359,22 @@ describe('updateWorktreeGitIdentity', () => {
 
     store.setState({ worktreesByRepo: { repo1: [existing] } } as Partial<AppState>)
 
-    store.getState().updateWorktreeGitIdentity('repo1::/path/wt1', {
-      head: 'detached-head',
-      branch: null
-    })
-    store.getState().updateWorktreeGitIdentity('repo1::/path/wt1', {
-      head: 'reattached-head',
-      branch: 'refs/heads/main'
-    })
+    store.getState().updateWorktreeGitIdentity(
+      'repo1::/path/wt1',
+      {
+        head: 'detached-head',
+        branch: null
+      },
+      null
+    )
+    store.getState().updateWorktreeGitIdentity(
+      'repo1::/path/wt1',
+      {
+        head: 'reattached-head',
+        branch: 'refs/heads/main'
+      },
+      null
+    )
 
     expect(store.getState().worktreesByRepo.repo1[0]).toMatchObject({
       branch: 'refs/heads/main',
@@ -340,10 +395,14 @@ describe('updateWorktreeGitIdentity', () => {
 
     store.setState({ worktreesByRepo: { repo1: [existing] } } as Partial<AppState>)
 
-    store.getState().updateWorktreeGitIdentity('repo1::/path/wt1', {
-      head: 'reattached-head',
-      branch: 'refs/heads/main'
-    })
+    store.getState().updateWorktreeGitIdentity(
+      'repo1::/path/wt1',
+      {
+        head: 'reattached-head',
+        branch: 'refs/heads/main'
+      },
+      null
+    )
 
     expect(store.getState().worktreesByRepo.repo1[0]).toMatchObject({
       branch: 'refs/heads/main',

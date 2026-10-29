@@ -108,7 +108,7 @@ export const createDiffCommentsSlice: StateCreator<AppState, [], [], DiffComment
       return false
     }
 
-    // Why: distinguish "comment missing" (false; keep draft, likely edit-while-deleted) from "body unchanged" (true; close editor) before mutating.
+    // Missing notes return false to keep draft; unchanged body returns true to close editor without mutation.
     const existing = readDiffCommentsForChange(get(), worktreeId, [commentId])
     const existingIdx = existing.findIndex((c) => c.id === commentId)
     if (existingIdx === -1) {

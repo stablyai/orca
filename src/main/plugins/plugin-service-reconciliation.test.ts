@@ -300,7 +300,7 @@ describe('PluginService worker reconciliation', () => {
     )
   })
 
-  it('cancels the old generation when a worker spec changes without eager reactivation', async () => {
+  it('restarts a running worker once on its updated spec', async () => {
     const root = await pluginRoot()
     const harness = createHarness(root)
     await activate(harness.service)
@@ -312,10 +312,11 @@ describe('PluginService worker reconciliation', () => {
     await harness.service.refresh()
 
     expect(harness.workers[0]!.dispose).toHaveBeenCalledOnce()
-    expect(harness.factory).toHaveBeenCalledTimes(1)
+    await vi.waitFor(() => expect(harness.factory).toHaveBeenCalledTimes(2))
+    expect(harness.factory.mock.calls[1]?.[0].mainEntry).toBe('worker-v2.js')
+    await harness.service.refresh()
     await harness.service.invokeCommand(pluginKey, 'run')
     expect(harness.factory).toHaveBeenCalledTimes(2)
-    expect(harness.factory.mock.calls[1]?.[0].mainEntry).toBe('worker-v2.js')
   })
 
   it('cannot reactivate the old revision while refresh awaits worker shutdown', async () => {

@@ -112,9 +112,7 @@ function scheduleAuthFilesystemOperation<T>(
       return operation()
     })
   }
-  // Why: a few disconnected distros must not occupy libuv's entire default
-  // filesystem pool. Distro serialization also folds wsl$/wsl.localhost and
-  // case aliases without forcing healthy local auth reads through the queue.
+  // Share normalized distro lanes so disconnected UNC reads cannot consume the whole libuv fs pool; local auth stays unqueued.
   return scheduleWslAuthFilesystemOperation(
     wslInfo.distro.trim().toLowerCase(),
     neededSignal,
@@ -127,11 +125,7 @@ export type SharedAuthFilesystemOperation<T> = {
   wait: (signal: AbortSignal) => Promise<T>
 }
 
-/**
- * Shares one raw operation with all callers for an auth path. WSL paths also
- * serialize by normalized distro because one stuck UNC request per account can
- * otherwise exhaust libuv's filesystem threadpool.
- */
+/** Share each raw auth-path operation; WSL distro serialization bounds stuck UNC requests in the libuv fs pool. */
 export function createAuthFilesystemOperation<T>(
   authPath: string,
   operation: () => Promise<T>

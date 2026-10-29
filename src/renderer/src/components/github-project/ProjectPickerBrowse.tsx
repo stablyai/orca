@@ -8,10 +8,7 @@ import type {
   GitHubProjectSummary
 } from '../../../../shared/github/project-types'
 import type { GitHubProjectViewError } from '../../../../shared/github/project-result-types'
-import {
-  GITHUB_PROJECT_REF_INPUT_TOO_LARGE_ERROR,
-  isGitHubProjectRefInputTooLarge
-} from '../../../../shared/github/project-ref-input'
+import { isGitHubProjectRefInputTooLarge } from '../../../../shared/github/project-ref-input'
 import {
   githubProjectHost,
   githubProjectIdentityKey
@@ -216,7 +213,10 @@ function ProjectPasteInput(props: Props): React.JSX.Element {
             props.onPasteInputChange(
               input,
               isGitHubProjectRefInputTooLarge(input)
-                ? GITHUB_PROJECT_REF_INPUT_TOO_LARGE_ERROR
+                ? translate(
+                    'projectViews.error.inputTooLarge',
+                    'Project reference is too large to resolve.'
+                  )
                 : null
             )
           }}

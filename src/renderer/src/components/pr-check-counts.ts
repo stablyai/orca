@@ -17,14 +17,9 @@ export function getCheckConclusion(check: PRCheckDetail): NonNullable<PRCheckDet
   return check.status === 'completed' ? 'neutral' : 'pending'
 }
 
-/**
- * The check-tab breakdown shared by the PR page and the work-item dialog. Both panes used to keep
- * private copies, which is how one drifted from the Checks panel's own header.
- */
+/** Use one check breakdown across PR page/dialog and the sidebar header. */
 export function getCheckCounts(checks: readonly PRCheckDetail[]): PRCheckCounts {
-  // Why: every bucket is read off the shared rollup rather than re-derived, so these panes cannot
-  // disagree with the checks pill. action_required is the one split back out: it blocks merge like
-  // a failure but reads amber, not red.
+  // Use the shared rollup; split action_required back out because it blocks like failure but reads amber.
   const summary = summarizeProviderChecks(checks)
   const needsAction = checks.filter(
     (check) => getCheckConclusion(check) === 'action_required'
@@ -44,11 +39,7 @@ export type PRCheckCountChip = {
   label: string
 }
 
-/**
- * The count chips above the check list on the PR page and the work-item dialog. One builder so the
- * two panes cannot word the same bucket differently — the neutral bucket read "skipped" here while
- * the sidebar Checks panel called the identical checks "unresolved".
- */
+/** Share count-chip wording so neutral checks read unresolved consistently across surfaces. */
 export function getCheckCountChips(counts: PRCheckCounts): PRCheckCountChip[] {
   const chips: PRCheckCountChip[] = []
   if (counts.passing > 0) {
@@ -99,20 +90,52 @@ export function getCheckCountChips(counts: PRCheckCounts): PRCheckCountChip[] {
 export function getChecksSummaryLabel(checks: readonly PRCheckDetail[]): string {
   const counts = getCheckCounts(checks)
   if (checks.length === 0) {
-    return 'No checks found'
+    return translate('auto.components.prCheckCounts.noChecksFound', 'No checks found')
   }
   if (counts.failing > 0) {
-    return `${counts.failing} ${counts.failing === 1 ? 'check' : 'checks'} failing`
+    return counts.failing === 1
+      ? translate('auto.components.prCheckCounts.checksFailing_one', '{{count}} check failing', {
+          count: counts.failing
+        })
+      : translate('auto.components.prCheckCounts.checksFailing_other', '{{count}} checks failing', {
+          count: counts.failing
+        })
   }
   // Why: action_required (e.g. workflow awaiting approval) blocks merge but isn't a failure, so surface it distinctly.
   if (counts.needsAction > 0) {
-    return `${counts.needsAction} ${counts.needsAction === 1 ? 'check needs' : 'checks need'} action`
+    return counts.needsAction === 1
+      ? translate(
+          'auto.components.prCheckCounts.checksNeedAction_one',
+          '{{count}} check needs action',
+          { count: counts.needsAction }
+        )
+      : translate(
+          'auto.components.prCheckCounts.checksNeedAction_other',
+          '{{count}} checks need action',
+          { count: counts.needsAction }
+        )
   }
   if (counts.pending > 0) {
-    return `${counts.pending} ${counts.pending === 1 ? 'check' : 'checks'} pending`
+    return counts.pending === 1
+      ? translate('auto.components.prCheckCounts.checksPending_one', '{{count}} check pending', {
+          count: counts.pending
+        })
+      : translate('auto.components.prCheckCounts.checksPending_other', '{{count}} checks pending', {
+          count: counts.pending
+        })
   }
   if (counts.passing === checks.length) {
-    return 'All checks passing'
+    return translate('auto.components.prCheckCounts.allChecksPassing', 'All checks passing')
   }
-  return `${counts.passing} of ${checks.length} checks passing`
+  return checks.length === 1
+    ? translate(
+        'auto.components.prCheckCounts.checksPassingOfTotal_one',
+        '{{passing}} of {{count}} check passing',
+        { count: checks.length, passing: counts.passing }
+      )
+    : translate(
+        'auto.components.prCheckCounts.checksPassingOfTotal_other',
+        '{{passing}} of {{count}} checks passing',
+        { count: checks.length, passing: counts.passing }
+      )
 }

@@ -12,13 +12,7 @@ export const AGENT_SESSION_RESTART_ACTIVITY_MAX_PROMPTS = 4
 export const AGENT_SESSION_RESTART_ACTIVITY_MAX_TASKS = 16
 export const AGENT_SESSION_RESTART_ACTIVITY_MAX_LABEL_LENGTH = 200
 
-/**
- * What one session was doing at the stop-time snapshot that decided its offer — the description IS
- * the offer's own capture, never re-read from the journal, which the provider rewrites in its own
- * words on reattach. `state` is the MAIN agent's own state in the status-store vocabulary; live
- * child work is carried in `tasks`, not folded into it, so a settled lead with running subagents
- * reads `done` plus its tasks. No ids: this is display, and an id would tempt a reader to re-derive.
- */
+/** Capture display activity with the stop-time offer, never re-read rewritten history after reattach. state is the lead's own status; surviving children live in tasks (done lead plus running tasks). Omit IDs to prevent re-derivation. */
 export type AgentSessionRestartActivity = {
   state: AgentStatusState
   prompts: AgentSessionRestartPrompt[]

@@ -103,8 +103,6 @@ describe('PluginConsentDialog', () => {
   it('shows provenance, capabilities, worker warning, and focuses the safe default', async () => {
     await renderConsent(plugin, vi.fn().mockResolvedValue(undefined))
 
-    // Provenance leads with a short badge + a short trust chip; the full
-    // source URL and commit are tucked behind the "Source" details popover.
     expect(document.body.textContent).toContain(plugin.publisher)
     expect(document.body.textContent).toContain('Worker')
     expect(
@@ -239,9 +237,7 @@ describe('PluginConsentDialog', () => {
   it('labels re-consent generically and enables only after an explicit action', async () => {
     const onDecision = vi.fn().mockResolvedValue(undefined)
     await renderConsent({ ...plugin, needsReconsent: true }, onDecision)
-    expect(document.body.textContent).toContain(
-      'Permissions, the worker trust tier, or instructional content changed'
-    )
+    expect(document.body.textContent).toContain('This plugin changed since you approved it')
     const enable = Array.from(document.querySelectorAll('button')).find(
       (button) => button.textContent?.trim() === 'Enable plugin'
     )

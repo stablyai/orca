@@ -1,6 +1,8 @@
-import { Platform, StyleSheet, Switch, Text, TextInput, View } from 'react-native'
+import { Platform, Switch, Text, TextInput, View } from 'react-native'
 import type { MobileComposerSource } from '../tasks/use-mobile-composer-source'
 import { colors, radii, spacing } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { TEXT_INPUT_FONT_SIZE } from '../platform/text-input-font-size'
 
 type Props = {
@@ -8,10 +10,9 @@ type Props = {
   selectedRepoIsGit: boolean
 }
 
-// The Advanced-section source controls: the editable Name appears once a source
-// pill is shown (the field itself is no longer the name input); the branch-name
-// override and reuse toggle mirror the desktop composer's advanced branch fields.
+// Show editable Name after source pill; branch override/reuse follow desktop’s advanced composer fields.
 export function SmartWorkspaceAdvancedFields({ composer, selectedRepoIsGit }: Props) {
+  useMobileColorScheme()
   const selection = composer.smartNameSelection
   const showBranchOverride = selectedRepoIsGit && (!selection || selection.kind === 'branch')
   return (
@@ -66,7 +67,7 @@ export function SmartWorkspaceAdvancedFields({ composer, selectedRepoIsGit }: Pr
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   field: {
     marginBottom: spacing.md
   },
@@ -100,4 +101,4 @@ const styles = StyleSheet.create({
   reuseSwitch: {
     transform: [{ scaleX: 0.7 }, { scaleY: 0.7 }]
   }
-})
+}))

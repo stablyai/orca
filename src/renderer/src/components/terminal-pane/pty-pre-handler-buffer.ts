@@ -24,34 +24,23 @@ type BufferedPreHandlerPtyExit = {
 }
 
 const preHandlerPtyData = new Map<string, BufferedPreHandlerPtyState>()
-// Why one record per lifetime and not one per id: a recycled id can have its previous lifetime's
-// exit still in flight while the lifetime that just replaced it also dies pre-attach. With a single
-// slot the late stranger overwrites the real exit, and the identity discard below then removes the
-// only survivor — leaving a pane bound to a PTY that is dead and will never be reported dead.
+// Keep exits per lifetime: a late prior-owner exit cannot overwrite a newborn death before attach.
 const preHandlerPtyExit = new Map<string, BufferedPreHandlerPtyExit[]>()
 const consumedPreHandlerPtyExits = new Map<string, true>()
 const discardedPreHandlerPtyStates = new Map<string, ReturnType<typeof setTimeout>>()
 const DISCARDED_PRE_HANDLER_PTY_STATE_TTL_MS = 60_000
 
-// Why: Windows startup commands can emit output before pty:spawn resolves and
-// the pane registers its handler. Hold that tiny race window instead of ACKing
-// and dropping the first setup-script bytes.
+// Windows startup output can precede spawn reply/handler registration; buffer it rather than ACK and lose setup bytes.
 const PRE_HANDLER_PTY_DATA_MAX_BYTES = 512 * 1024
 const PRE_HANDLER_PTY_DATA_MAX_PTYS = 64
 const PRE_HANDLER_PTY_EXIT_MAX_PTYS = 64
-// Why small: only lifetimes racing the same pre-attach window can coexist, which in practice is the
-// outgoing one and the incoming one.
+// Only outgoing/incoming lifetimes normally overlap before attach, keeping the exit bound small.
 const PRE_HANDLER_PTY_EXIT_MAX_INCARNATIONS_PER_PTY = 4
-// Why: legit pre-attach windows drain within milliseconds and hold little
-// data. Sustained accumulation means a pane lost its data handler (the
-// frozen-pane detach/attach race) — leave a breadcrumb for trace capture.
+// Pre-attach buffering should drain in milliseconds; sustained growth signals a lost handler and needs a trace breadcrumb.
 const PRE_HANDLER_PTY_DATA_WARN_BYTES = 64 * 1024
 const warnedLostHandlerPtyIds = new Set<string>()
 
-// Why: pty ids are NOT unique over time — a redeployed SSH relay renumbers from pty-1, so a fresh
-// spawn can be handed an id whose previous incarnation left buffered state here. A monotonic
-// counter dates every record so a spawn can tell "arrived before I asked for this PTY" (someone
-// else's) from "arrived while it was starting" (mine).
+// Sequence records around spawn requests because relay IDs are reused; pre-request state belongs to an earlier lifetime.
 let preHandlerPtySequence = 0
 
 function nextPreHandlerPtySequence(): number {
@@ -63,8 +52,7 @@ export function currentPreHandlerPtySequence(): number {
   return preHandlerPtySequence
 }
 
-/** Map preserves insertion order, so the first key is the least recently admitted id.
- *  Returns the evicted id so the caller can drop state keyed alongside the entry. */
+/** Insertion order evicts the oldest admitted ID; return it so parallel keyed state can be released too. */
 function evictOldestPtyIfAtCap<V>(map: Map<string, V>, ptyId: string, cap: number): string | null {
   if (map.has(ptyId) || map.size < cap) {
     return null
@@ -77,25 +65,12 @@ function evictOldestPtyIfAtCap<V>(map: Map<string, V>, ptyId: string, cap: numbe
   return null
 }
 
-/** Drop a buffered exit proven to describe a different lifetime of `ptyId` than the one now
- *  attaching, whenever it arrived.
- *
- *  Why identity and not the sequence fence below: a fence is a clock, so it can only reject records
- *  dated before the spawn request left the renderer. An exit from the id's previous owner that
- *  arrives AFTER that — a relay that restarted mid-spawn and flushed it late — passes the fence and
- *  reports a brand-new shell as already dead. The incarnation says whose lifetime the exit
- *  describes, so it settles that case on evidence rather than timing.
- *
- *  Only a positive disagreement discards: both sides must name an incarnation. Absence is
- *  "unknown", never a mismatch, so an execution host that predates the field keeps the fence's
- *  behaviour exactly. Safe on a reattach and a cold restore too — those deliberately re-own an
- *  existing id, and re-owning incarnation X is still proof that W's exit was not theirs. */
+/** Reject positively foreign exit incarnations regardless of arrival time; sequence fences cannot catch late old-owner exits. Missing incarnation remains unknown for older hosts and reattach. */
 export function discardPreHandlerPtyExitFromForeignIncarnation(
   ptyId: string,
   incarnationId: unknown
 ): void {
-  // Why the shared guard and not a truthiness check: anything that is not a well-formed incarnation
-  // is evidence of nothing, and must read as "unknown" rather than disagree with everything.
+  // Only well-formed incarnation IDs supply evidence; malformed IDs remain unknown.
   if (!isPtyIncarnationId(incarnationId)) {
     return
   }
@@ -157,8 +132,7 @@ export function bufferPreHandlerPtyData(ptyId: string, data: string, meta?: PtyD
     ...(bufferedMeta ? { meta: bufferedMeta } : {})
   })
   state.bytes += chunk.bytes
-  // Why: a missing handler can accumulate many small chunks; a stored total
-  // and head index keep that failure path linear instead of rescanning/shifting.
+  // Maintain total bytes and a head index so many small lost-handler chunks cannot cause quadratic scans/shifts.
   while (state.bytes > PRE_HANDLER_PTY_DATA_MAX_BYTES && state.head < state.chunks.length - 1) {
     state.bytes -= state.chunks[state.head].bytes
     state.chunks[state.head] = { data: '', bytes: 0 }
@@ -224,8 +198,7 @@ export function bufferPreHandlerPtyExit(
     preHandlerPtyExit.set(ptyId, [exit])
     return
   }
-  // A duplicate exit for a lifetime replaces that lifetime's record rather than crowding out
-  // another one's; unnamed records share the single `undefined` slot, as they did before.
+  // Replace duplicates within their lifetime; unnamed exits keep the single legacy slot.
   const sameLifetime = exits.findIndex((entry) => entry.incarnationId === exit.incarnationId)
   if (sameLifetime !== -1) {
     exits[sameLifetime] = exit
@@ -237,18 +210,7 @@ export function bufferPreHandlerPtyExit(
   }
 }
 
-/** Drop pre-handler state a freshly spawned PTY inherited from an earlier owner of its id.
- *
- *  `fenceSequence` is read before the spawn request leaves the renderer, so anything at or below it
- *  was recorded when this PTY did not yet exist and cannot describe it. Bytes and exits recorded
- *  after the fence are kept: that is the real pre-attach race (a shell that dies instantly, or
- *  writes before the pane registers its handler) and losing it would blank a legitimate pane.
- *
- *  Still needed alongside `discardPreHandlerPtyExitFromForeignIncarnation`, which supersedes it
- *  wherever both sides name an incarnation. Two cases have none to compare and rest on the fence
- *  alone: buffered BYTES, because `pty:data` carries no incarnation at all; and exits from an
- *  execution host that predates the field or from a main-side path that synthesizes one without it
- *  (a relay dropping a stale PTY after a failed reattach sends `{ id, code: -1 }`). */
+/** Drop pre-request state inherited from recycled IDs; retain post-request startup races. Sequence remains necessary for bytes and legacy/synthetic exits lacking incarnation evidence. */
 export function discardPreHandlerPtyStateFromPriorIncarnation(
   ptyId: string,
   fenceSequence: number
@@ -259,14 +221,11 @@ export function discardPreHandlerPtyStateFromPriorIncarnation(
     preHandlerPtyData.delete(ptyId)
     warnedLostHandlerPtyIds.delete(ptyId)
   }
-  // Why: the id now names a different, live PTY, so a prior incarnation's consumed/discarded marks
-  // must not suppress this one's own exit — the same admission boundary a same-id reattach gets.
+  // New lifetime admission clears old consumed-exit marks so they cannot suppress this shell’s own death.
   clearConsumedPreHandlerPtyExit(ptyId)
 }
 
-// Why: primary handlers and pane-less parked owners have fully handled this
-// exit. Keep a bounded tombstone so duplicate IPC exits cannot be replayed to
-// a future mount or accumulate in the pre-handler map.
+// Retain bounded exit tombstones so duplicate IPC exits cannot replay to future mounts or grow pre-handler state.
 export function consumePreHandlerPtyState(ptyId: string): void {
   clearPreHandlerPtyState(ptyId)
   consumedPreHandlerPtyExits.set(ptyId, true)
@@ -278,9 +237,7 @@ export function consumePreHandlerPtyState(ptyId: string): void {
   }
 }
 
-// Why: a deliberate reconnect can reuse a live session id after a prior
-// incarnation's consumed-exit mark. Re-admit exits without discarding bytes
-// already buffered for the still-live session.
+// Same-ID live reconnect re-admits exits without discarding its still-valid buffered output.
 export function clearConsumedPreHandlerPtyExit(ptyId: string): void {
   consumedPreHandlerPtyExits.delete(ptyId)
   const discardTimer = discardedPreHandlerPtyStates.get(ptyId)
@@ -294,17 +251,14 @@ export function isPreHandlerPtyStateDiscarded(ptyId: string): boolean {
   return discardedPreHandlerPtyStates.has(ptyId)
 }
 
-// Why: removed worktrees have no future pane consumer. Suppress both delayed
-// kill data and exit until an explicit same-id reconnect establishes a new
-// admission boundary.
+// Removed worktrees have no consumers; suppress delayed kill data/exits until explicit same-ID reconnection.
 export function discardPreHandlerPtyState(ptyId: string): void {
   consumePreHandlerPtyState(ptyId)
   const priorTimer = discardedPreHandlerPtyStates.get(ptyId)
   if (priorTimer) {
     clearTimeout(priorTimer)
   }
-  // Why: a large worktree can remove more PTYs than the bounded data maps.
-  // Time retention protects every delayed kill flush without permanent growth.
+  // Time retention covers delayed kills from worktrees larger than the bounded maps without permanent growth.
   const timer = setTimeout(
     () => discardedPreHandlerPtyStates.delete(ptyId),
     DISCARDED_PRE_HANDLER_PTY_STATE_TTL_MS
@@ -312,12 +266,7 @@ export function discardPreHandlerPtyState(ptyId: string): void {
   discardedPreHandlerPtyStates.set(ptyId, timer)
 }
 
-/** The records for `ptyId` that could describe `incarnationId`'s lifetime.
- *
- *  Every read of the exit buffer goes through here, so a record proven to belong to a different
- *  lifetime is unreachable BY CONSTRUCTION rather than because each caller remembered to discard
- *  first. A caller that cannot name an incarnation — a reattach that has not round-tripped yet —
- *  still sees everything, which is the honest answer: it holds no evidence to discriminate with. */
+/** Filter every exit read by positive incarnation disagreement; callers without lifetime evidence retain unknown records. */
 function admissiblePreHandlerPtyExits(
   ptyId: string,
   incarnationId: unknown
@@ -340,8 +289,7 @@ export function drainPreHandlerPtyExit(
   handler: (code: number) => void,
   incarnationId?: unknown
 ): void {
-  // Newest admissible record: picking by sequence keeps the last-write-wins delivery a single-slot
-  // buffer always had, now scoped to the lifetime actually asking.
+  // Select the newest admissible lifetime record to preserve last-write-wins behavior.
   let exit: BufferedPreHandlerPtyExit | undefined
   for (const candidate of admissiblePreHandlerPtyExits(ptyId, incarnationId)) {
     if (!exit || candidate.sequence > exit.sequence) {
@@ -355,8 +303,7 @@ export function drainPreHandlerPtyExit(
   try {
     handler(exit.code)
   } finally {
-    // Why: draining transfers ownership to this handler. Even when it throws,
-    // a duplicate exit must not become a new pre-handler event.
+    // Draining transfers exit ownership despite handler throws; duplicates cannot become new pre-handler events.
     consumePreHandlerPtyState(ptyId)
   }
 }

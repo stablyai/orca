@@ -4,7 +4,6 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as TranscriptReader from './transcript-reader'
 
-// Spy on the underlying reader so we can assert cache hits issue zero reads.
 const readSpy = vi.hoisted(() => vi.fn())
 vi.mock('./transcript-reader', async (importOriginal) => {
   const actual = await importOriginal<typeof TranscriptReader>()
@@ -47,9 +46,7 @@ async function seedSession(sessionId: string, turns: number): Promise<string> {
   return filePath
 }
 
-// Writes a transcript file at an explicit path whose on-disk size is ~`bytes`
-// (padded via one big user message), returning the path. Read it back by passing
-// the path as `transcriptPath` so resolution doesn't depend on process.env.HOME.
+/** Seed explicit-path transcripts to keep resolution independent of the real user home. */
 async function seedBigFile(name: string, bytes: number): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), 'orca-native-chat-cache-bytes-'))
   tempRoots.push(root)
@@ -81,7 +78,6 @@ describe('readNativeChatTranscriptCached', () => {
     const first = await readNativeChatTranscriptCached('claude', 'sess-hit')
     const second = await readNativeChatTranscriptCached('claude', 'sess-hit')
     expect(readSpy).toHaveBeenCalledTimes(1)
-    // Same reference: the second call served the cached parse.
     expect(second).toBe(first)
   })
 
@@ -89,7 +85,6 @@ describe('readNativeChatTranscriptCached', () => {
     const filePath = await seedSession('sess-mtime', 2)
     await readNativeChatTranscriptCached('claude', 'sess-mtime')
     expect(readSpy).toHaveBeenCalledTimes(1)
-    // Bump mtime into the future to invalidate without changing content shape.
     const future = new Date(Date.now() + 5_000)
     await utimes(filePath, future, future)
     await readNativeChatTranscriptCached('claude', 'sess-mtime')
@@ -110,10 +105,6 @@ describe('readNativeChatTranscriptCached', () => {
     expect('error' in result && result.error).toBeTruthy()
   })
 
-  // Why: a just-created session's transcript can take up to minutes to exist on
-  // disk (#8401) — the miss must be marked notFound so watch/renderer callers
-  // retry instead of settling into a permanent error, and it must never be
-  // cached (a real error already isn't cached; this locks in the same for a miss).
   it('marks a resolve miss as notFound and does not cache it', async () => {
     await seedSession('present-2', 1)
     const first = await readNativeChatTranscriptCached('claude', 'absent-2')
@@ -123,11 +114,6 @@ describe('readNativeChatTranscriptCached', () => {
     expect(second).not.toBe(first)
   })
 
-  // Why: two worktrees can present the SAME (agent, sessionId) via different
-  // transcript files — e.g. the same session resumed into a second worktree,
-  // which writes a new transcript file. Keying the cache by sessionId let one
-  // worktree's cached parse be served to the other whenever their file mtimes
-  // coincided, leaking A's chat transcript into C's panel (#7326).
   it('never serves one file’s parse for a different file that shares a sessionId', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-native-chat-cache-xwt-'))
     tempRoots.push(root)
@@ -155,8 +141,7 @@ describe('readNativeChatTranscriptCached', () => {
         }
       ])
     )
-    // Force IDENTICAL mtimes so a sessionId-only key's mtime guard cannot rescue
-    // the collision — this is the intermittent, activity-driven case.
+    // Equal mtimes expose session-ID collisions that timestamp invalidation would otherwise hide.
     const when = new Date('2026-06-01T10:00:00.000Z')
     await utimes(fileA, when, when)
     await utimes(fileC, when, when)
@@ -172,48 +157,38 @@ describe('readNativeChatTranscriptCached', () => {
             .join(' ')
         : ''
 
-    // Same sessionId, different transcript files (worktree A resumed into C).
     const a = await readNativeChatTranscriptCached('claude', 'shared-session', fileA)
     const c = await readNativeChatTranscriptCached('claude', 'shared-session', fileC)
 
     expect(readText(a)).toContain('from-worktree-A')
     expect(readText(c)).toContain('from-worktree-C')
     expect(readText(c)).not.toContain('from-worktree-A')
-    // Distinct files must not share a cached parse object.
     expect(c).not.toBe(a)
   })
 
-  // Why: each cached entry is a FULL unwindowed transcript parse; heavy agent
-  // sessions are tens of MB, so the count-only cap let 50 entries retain multiple
-  // GB in the one process serving desktop + every paired client. The byte budget
-  // evicts the oldest large entries while always keeping the most-recent.
   it('evicts the oldest entry once total cached bytes exceed the budget', async () => {
-    // ~4 KB per file, budget 9 KB → holds 2, a third read evicts the oldest.
+    // Three 4-KB files exceed 9 KB, evicting the oldest.
     setNativeChatTranscriptCacheMaxBytesForTests(9 * 1024)
     const fileA = await seedBigFile('big-a', 4 * 1024)
     const fileB = await seedBigFile('big-b', 4 * 1024)
     const fileC = await seedBigFile('big-c', 4 * 1024)
 
-    await readNativeChatTranscriptCached('claude', 'sa', fileA) // spy 1
-    await readNativeChatTranscriptCached('claude', 'sb', fileB) // spy 2
-    await readNativeChatTranscriptCached('claude', 'sc', fileC) // spy 3, evicts A
-    expect(readSpy).toHaveBeenCalledTimes(3)
-
-    // C is the most-recent → still cached (no re-read).
+    await readNativeChatTranscriptCached('claude', 'sa', fileA)
+    await readNativeChatTranscriptCached('claude', 'sb', fileB)
     await readNativeChatTranscriptCached('claude', 'sc', fileC)
     expect(readSpy).toHaveBeenCalledTimes(3)
 
-    // A was evicted by the byte cap → this re-reads (and evicts B in turn).
+    await readNativeChatTranscriptCached('claude', 'sc', fileC)
+    expect(readSpy).toHaveBeenCalledTimes(3)
+
     await readNativeChatTranscriptCached('claude', 'sa', fileA)
     expect(readSpy).toHaveBeenCalledTimes(4)
 
-    // B is now evicted → also re-reads.
     await readNativeChatTranscriptCached('claude', 'sb', fileB)
     expect(readSpy).toHaveBeenCalledTimes(5)
   })
 
   it('keeps a single active transcript larger than the whole budget cached', async () => {
-    // A lone entry over budget must NOT be dropped, else every read re-parses.
     setNativeChatTranscriptCacheMaxBytesForTests(1024)
     const big = await seedBigFile('huge', 8 * 1024)
     await readNativeChatTranscriptCached('claude', 'huge', big)
@@ -231,7 +206,6 @@ describe('readNativeChatTranscriptCached', () => {
       await readNativeChatTranscriptCached('claude', `sess-${i}`, file)
     }
     expect(readSpy).toHaveBeenCalledTimes(3)
-    // Re-read all three: every one is still cached (byte budget never triggered).
     for (const [i, file] of files.entries()) {
       await readNativeChatTranscriptCached('claude', `sess-${i}`, file)
     }

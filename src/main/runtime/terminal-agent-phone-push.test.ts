@@ -130,6 +130,7 @@ describe('TerminalAgentPhonePush', () => {
         title: 'orca / feature - Claude finished',
         body: 'Fixed it.',
         worktreeId: WT,
+        paneKey: PANE,
         notificationId: ID,
         agentState: 'done',
         emittedAt: 11_500

@@ -1,14 +1,9 @@
-// Why: durable per-review refs avoid shared FETCH_HEAD races and keep the head
-// commit reachable between resolve and worktree create. Client (main) and relay
-// must agree on these paths, so both import from here rather than hardcoding.
+// Durable review refs avoid FETCH_HEAD races and keep commits reachable through worktree creation; main/relay share these paths.
 
-// Why: an unreachable or stalled remote must fail review-head resolve/create,
-// not hang it; client and relay fetches share one bound.
+// Bound review-head fetches on both client and relay so unreachable remotes cannot hang creation.
 export const REVIEW_HEAD_FETCH_TIMEOUT_MS = 60_000
 
-// Why: refs are keyed by hosting identity (remote name + URL hash), not just
-// PR/MR number — otherwise soft-keep after a failed fetch could serve PR #42
-// of a different project (repointed origin, switched preferred remote).
+// Include remote URL identity so failed-fetch fallback cannot serve another project’s same-numbered review.
 export function reviewHeadRemoteRefComponent(remote: string, remoteUrl: string): string {
   return `${sanitizeRemoteRefComponent(remote)}-${fnv1a64Hex(remoteUrl.trim())}`
 }
@@ -21,8 +16,7 @@ export function gitlabMergeRequestHeadLocalRef(remoteComponent: string, mrIid: n
   return `refs/orca/merge-requests/${remoteComponent}/${mrIid}`
 }
 
-// Why: remote names may hold chars invalid in a ref component; the URL hash
-// carries uniqueness, so lossy sanitization here is safe.
+// Lossy remote-name sanitization is safe because the URL hash supplies uniqueness.
 function sanitizeRemoteRefComponent(remote: string): string {
   const cleaned = remote.replace(/[^A-Za-z0-9_-]+/g, '-').replace(/^[-.]+|\.+$/g, '')
   return cleaned || 'remote'
@@ -37,8 +31,7 @@ function fnv1a64Hex(value: string): string {
   return hash.toString(16).padStart(16, '0')
 }
 
-// Why: PR/MR numbers are interpolated into refspecs; relay and local fetch
-// paths must reject non-integers with one shared guard.
+// One local/relay guard prevents non-integer review numbers reaching refspecs.
 export function isValidReviewHeadNumber(value: unknown): value is number {
   return typeof value === 'number' && Number.isSafeInteger(value) && value > 0
 }

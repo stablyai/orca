@@ -43,16 +43,13 @@ export {
   MAX_CODEX_ITEM_STREAM_PENDING_PATCHES,
   MAX_CODEX_ITEM_STREAM_STATES
 } from './codex-structured-item-stream-bounds'
-/** Delta-only item ids are provider input; retain only a deterministic recent window. */
-
 export function createCodexStructuredItemStreams(
   deps: CodexItemStreamDeps
 ): CodexStructuredItemStreams {
   const states = new CodexItemStreamRetention()
   const checkpointLengths = new Map<string, number>()
   const pendingCheckpoints = new Set<string>()
-  // Which thread and turn produced each stream, resolved to its attribution per append
-  // so a parent learned after the first checkpoint still reaches the row.
+  // Resolve attribution on each append so later-discovered parents reach existing rows.
   const producers = new Map<string, { threadId: string; turnId: string | null }>()
   const attributionOf = (key: string): AgentJournalRowAttribution => {
     const producer = producers.get(key)
@@ -60,9 +57,7 @@ export function createCodexStructuredItemStreams(
       ? deps.attributionFor(producer.threadId, producer.turnId)
       : { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
   }
-  // Patch updates are authoritative item snapshots. Keep the latest rejected
-  // snapshot until the journal admits it; unlike streamed deltas, there is no
-  // coalescer timer to retry these events for us.
+  // Retain rejected patch snapshots for retry; they have no coalescer timer.
   const pendingPatches = new Map<string, CodexPendingItemPatch>()
   let retainedPatchBytes = 0
 
@@ -87,8 +82,7 @@ export function createCodexStructuredItemStreams(
       }
       const pending = coalescer.snapshot(oldest)
       if (pending && pending.text.length > 0 && !persist(oldest, pending.text, true)) {
-        // Keep the state (and its buffered text) until the sink recovers. A
-        // bounded map is preferable to silently losing streamed output.
+        // Keep buffered output until its final checkpoint is accepted.
         break
       }
       forgetState(oldest)
@@ -114,7 +108,6 @@ export function createCodexStructuredItemStreams(
     if (!translated.body) {
       return true
     }
-    // A stream only ever carries an item that has not completed yet.
     const body = withJournalReasoningLifecycle(translated.body, { state: 'running' })
     return appendCodexItemAndPublish(deps.sink, state.identity, body, {
       ...attributionOf(key),
@@ -173,9 +166,13 @@ export function createCodexStructuredItemStreams(
     return state
   }
 
-  const flush = (): boolean => {
+  const flush = (threadId?: string): boolean => {
     let flushed = coalescer.flushAll()
     for (const key of pendingCheckpoints) {
+      // flushAll already placed every stream's first row; re-saving other threads would bypass their cadence.
+      if (threadId !== undefined && producers.get(key)?.threadId !== threadId) {
+        continue
+      }
       const snapshot = coalescer.snapshot(key)
       if (snapshot && checkpointLengths.get(key) !== snapshot.text.length) {
         flushed = persist(key, snapshot.text, true) && flushed

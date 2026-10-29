@@ -1,6 +1,5 @@
 import { useCallback } from 'react'
 import type { RpcClient } from '../transport/rpc-client'
-import { resolveMobileBranchCompareBaseRef } from './mobile-branch-base-ref'
 
 type GitStep = { method: string; params?: Record<string, unknown> }
 type SendGitRequest = <T>(method: string, params?: Record<string, unknown>) => Promise<T>
@@ -8,7 +7,6 @@ type RunGitWorkflow = (actionId: string, runner: () => Promise<void>) => Promise
 
 type Params = {
   client: RpcClient | null
-  worktreeId: string
   sendGitRequest: SendGitRequest
   runGitWorkflow: RunGitWorkflow
   runGitSequence: (actionId: string, steps: GitStep[]) => Promise<boolean>
@@ -19,12 +17,9 @@ type Params = {
   setShowActionSheet: (next: boolean) => void
 }
 
-// The action-sheet entry runners: each performs an action then dismisses the
-// sheet. Split from the main runners hook to stay under the line limit.
 export function useMobileSourceControlActionSheetRunners(params: Params) {
   const {
     client,
-    worktreeId,
     sendGitRequest,
     runGitWorkflow,
     runGitSequence,
@@ -66,19 +61,22 @@ export function useMobileSourceControlActionSheetRunners(params: Params) {
     setShowActionSheet(false)
   }, [runGitSync, setShowActionSheet])
 
-  const runActionSheetRebase = useCallback(async () => {
-    await runGitWorkflow('rebase', async () => {
-      if (!client) {
-        throw new Error('Waiting for desktop...')
-      }
-      const baseRef = await resolveMobileBranchCompareBaseRef(client, worktreeId)
-      if (!baseRef) {
-        throw new Error('No base branch to rebase onto')
-      }
-      await sendGitRequest<unknown>('git.rebaseFromBase', { baseRef })
-    })
-    setShowActionSheet(false)
-  }, [client, runGitWorkflow, sendGitRequest, setShowActionSheet, worktreeId])
+  // The row shows the base it rebases onto, so the press sends that same ref.
+  const runActionSheetRebase = useCallback(
+    async (baseRef: string | null) => {
+      await runGitWorkflow('rebase', async () => {
+        if (!client) {
+          throw new Error('Waiting for desktop...')
+        }
+        if (!baseRef) {
+          throw new Error('No base branch to rebase onto')
+        }
+        await sendGitRequest<unknown>('git.rebaseFromBase', { baseRef })
+      })
+      setShowActionSheet(false)
+    },
+    [client, runGitWorkflow, sendGitRequest, setShowActionSheet]
+  )
 
   return {
     runActionSheetCommit,

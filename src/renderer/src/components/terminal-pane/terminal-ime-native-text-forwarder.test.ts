@@ -53,8 +53,7 @@ describe('installTerminalImeNativeTextForwarder', () => {
   describe('the claim is structural', () => {
     it('claims every single printable key regardless of which character it is', () => {
       const { forwarder } = install()
-      // Punctuation, letters, digits, already-substituted CJK glyphs, Hangul
-      // jamo and a won sign are all the same case: one printable character.
+      // Treat all single printable characters equally, including punctuation, jamo and substituted CJK.
       for (const key of [
         ',',
         '.',
@@ -76,8 +75,7 @@ describe('installTerminalImeNativeTextForwarder', () => {
     })
 
     it('claims without reading any input source, so unknown IMEs work too', () => {
-      // Regression: the previous forwarder gated on a 23-term input-source
-      // allowlist, so third-party IMEs off that list were never claimed.
+      // Source allowlists missed third-party IMEs; claims must stay structural.
       const { forwarder, sendInput } = install()
       expect(forwarder.claimKeyEvent(keyEvent({ key: '\\', code: 'Backslash' }))).toBe(true)
       dispatchInsertText(textarea, '、')
@@ -157,8 +155,7 @@ describe('installTerminalImeNativeTextForwarder', () => {
     })
 
     it('forwards what the key binding substituted, not what the key said', () => {
-      // The won-sign key commits a backtick under DefaultKeyBinding.dict; the
-      // committed text wins because `key` is never consulted for identity.
+      // DefaultKeyBinding.dict commits backtick from the won-sign key; committed text owns character identity.
       const { forwarder, sendInput } = install()
       expect(forwarder.claimKeyEvent(keyEvent({ key: '₩', code: 'Backquote' }))).toBe(true)
       dispatchInsertText(textarea, '`')
@@ -180,8 +177,7 @@ describe('installTerminalImeNativeTextForwarder', () => {
       )
       dispatchInsertText(textarea, 'á')
 
-      // The keypress must be suppressed (it would double-send the ASCII 'a'), and so must the
-      // keyup — the forwarder owns the whole claimed lifecycle and emits any owed release itself.
+      // The forwarder owns keypress and keyup too; xterm must neither double-send text nor emit a second release.
       expect(forwarder.claimKeyEvent(keyEvent({ type: 'keyup', key: 'a', code: 'KeyA' }))).toBe(
         true
       )
@@ -241,11 +237,9 @@ describe('installTerminalImeNativeTextForwarder', () => {
         // First press is swallowed by the IME: no input event ever arrives.
         expect(forwarder.claimKeyEvent(keyEvent({ key: ',' }))).toBe(true)
         expect(forwarder.claimKeyEvent(keyEvent({ type: 'keyup', key: ',' }))).toBe(true)
-        // Time alone must change nothing — no deferral is armed.
         vi.advanceTimersByTime(5000)
         expect(vi.getTimerCount()).toBe(0)
 
-        // The next keydown re-arms, and its own commit is what gets forwarded.
         expect(forwarder.claimKeyEvent(keyEvent({ key: '.', code: 'Period' }))).toBe(true)
         dispatchInsertText(textarea, '。')
         expect(sendInput).toHaveBeenCalledExactlyOnceWith('。')
@@ -272,21 +266,16 @@ describe('installTerminalImeNativeTextForwarder', () => {
       expect(sendInput).toHaveBeenCalledExactlyOnceWith('á')
     })
 
-    // An app that negotiated kitty `report_event_types` expects a release for every press it
-    // received, but xterm's own kitty state is defensively reset while the application tracker
-    // stays active — so the forwarder keeps the keyup and encodes the release from the flags it
-    // read at commit time rather than delegating either decision to xterm.
+    // Application flags can outlive xterm’s defensive reset; encode the owed release using commit-time negotiation.
     it('keeps the keyup inside the forwarder once the press has reached the pty', () => {
       const { forwarder, sendInput } = install()
       expect(forwarder.claimKeyEvent(keyEvent({ key: ',' }))).toBe(true)
       dispatchInsertText(textarea, '，')
       expect(forwarder.claimKeyEvent(keyEvent({ type: 'keyup', key: ',' }))).toBe(true)
-      // Flags default to 0 here: no event types negotiated, so no release is owed.
       expect(sendInput).toHaveBeenCalledExactlyOnceWith('，')
     })
 
-    // The paired case: nothing reached the pty, so a release would describe a press the app
-    // never saw. This is the leak the unconditional claim was originally guarding against.
+    // Undelivered presses owe no release; unconditional forwarding would leak an orphan keyup.
     it('still swallows the keyup when the input source ate the press', () => {
       const { forwarder, sendInput } = install()
       expect(forwarder.claimKeyEvent(keyEvent({ key: ',' }))).toBe(true)
@@ -295,8 +284,7 @@ describe('installTerminalImeNativeTextForwarder', () => {
     })
 
     it('keeps the claim armed across a bare modifier keydown before the commit lands', () => {
-      // Fast typing: ',' is pressed and released, then Shift goes down for the
-      // NEXT character while the text system is still delivering '，'.
+      // Shift for the next character may precede the previous text commit; it must not retire that claim.
       const { forwarder, sendInput } = install()
       expect(forwarder.claimKeyEvent(keyEvent({ key: ',' }))).toBe(true)
       expect(forwarder.claimKeyEvent(keyEvent({ type: 'keyup', key: ',' }))).toBe(true)
@@ -309,8 +297,7 @@ describe('installTerminalImeNativeTextForwarder', () => {
 
     it('lets a chorded keyup reach xterm after a fresh chorded press of the same key', () => {
       const { forwarder, sendInput } = install()
-      // A claimed press whose input never arrived and whose keyup was swallowed
-      // elsewhere leaves a tombstone behind.
+      // An IME-swallowed press and missed keyup leave a tombstone.
       expect(forwarder.claimKeyEvent(keyEvent({ key: 'n', code: 'KeyN' }))).toBe(true)
       expect(forwarder.claimKeyEvent(keyEvent({ key: 'x', code: 'KeyX' }))).toBe(true)
       // Ctrl+N is xterm's press; its keyup must not be eaten by the stale tombstone.
@@ -387,11 +374,7 @@ describe('installTerminalImeNativeTextForwarder', () => {
       expect(getKittyKeyboardFlags).toHaveBeenCalledOnce()
     })
 
-    // A held key emits repeated keydowns. The protocol reports those as REPEAT (event type 2);
-    // encoding them all as PRESS would make one held key read as N separate strikes to an app
-    // that counts presses or filters repeats.
-    // Flags 8|2: the event type only appears on the wire when report_event_types is also
-    // negotiated, which is exactly the pane that can tell a repeat from a press.
+    // Held repeats must encode REPEAT, not separate presses; flags 8|2 make that distinction observable.
     it('encodes an auto-repeat commit as REPEAT, not as another PRESS', () => {
       const { forwarder, sendInput } = installWithFlags(() => 0b1010)
 
@@ -408,8 +391,7 @@ describe('installTerminalImeNativeTextForwarder', () => {
     })
 
     it('claims the keydown under bit 3 exactly as it does without it', () => {
-      // The predicate stays structural: the protocol changes what the commit
-      // writes, never whether the keystroke is owned.
+      // Protocol flags change commit encoding, never structural keystroke ownership.
       const { forwarder } = installWithFlags(() => 8)
       expect(forwarder.claimKeyEvent(keyEvent({ key: ',' }))).toBe(true)
     })
@@ -554,9 +536,7 @@ describe('installTerminalImeNativeTextForwarder', () => {
     })
 
     it('leaves a composing keystroke to the composition path even under bit 3', () => {
-      // Scope boundary: a composing IME (Hangul, kana) is never claimed here, so
-      // its commit is not this path's to re-encode. Bit 3 fidelity for
-      // composition commits would be a change to the composition path.
+      // Composing Hangul/kana stays outside this forwarder; composition CSI-u fidelity belongs to its own path.
       const { forwarder, sendInput } = installWithFlags(
         () => 8,
         () => true
@@ -568,12 +548,9 @@ describe('installTerminalImeNativeTextForwarder', () => {
 
     it('emits the owed release before a same-key re-claim when the input event never came', () => {
       const { forwarder, sendInput } = installWithFlags(() => 0b1010)
-      // The first press delivers and owes a release.
       expect(forwarder.claimKeyEvent(keyEvent({ key: ',' }))).toBe(true)
       dispatchInsertText(textarea, '，')
-      // An auto-repeat claim whose text the input source swallows absorbs the
-      // eventual keyup; the next fresh press must settle that owed release
-      // instead of deleting the record that holds it.
+      // A swallowed repeat cannot erase the earlier delivered press’s release obligation; settle it on the next fresh press.
       expect(forwarder.claimKeyEvent(keyEvent({ key: ',', repeat: true }))).toBe(true)
       expect(forwarder.claimKeyEvent(keyEvent({ type: 'keyup', key: ',' }))).toBe(true)
       expect(forwarder.claimKeyEvent(keyEvent({ key: ',' }))).toBe(true)
@@ -590,8 +567,7 @@ describe('installTerminalImeNativeTextForwarder', () => {
     })
 
     it('suppresses the owed release when the app popped kitty mode before the keyup', () => {
-      // A TUI that quits on the pressed key pops its negotiation before the
-      // keyup; a CSI-u release would land in the successor shell as junk.
+      // Popping negotiation before keyup must not leak CSI-u release into the successor shell.
       let flags = 0b1010
       const { forwarder, sendInput } = installWithFlags(() => flags)
       expect(forwarder.claimKeyEvent(keyEvent({ key: 'q', code: 'KeyQ' }))).toBe(true)
@@ -607,8 +583,7 @@ describe('installTerminalImeNativeTextForwarder', () => {
       const { forwarder, sendInput } = installWithFlags(() => 0b1010)
       expect(forwarder.claimKeyEvent(keyEvent({ key: ',' }))).toBe(true)
       dispatchInsertText(textarea, '，')
-      // Chromium reports 'Process' for IME-owned keys after a source switch
-      // mid-hold; `code` still identifies the physical press.
+      // Source switches can rewrite keyup to Process while code still identifies the physical press.
       expect(
         forwarder.claimKeyEvent(keyEvent({ type: 'keyup', key: 'Process', code: 'Comma' }))
       ).toBe(true)
@@ -616,7 +591,6 @@ describe('installTerminalImeNativeTextForwarder', () => {
     })
 
     it('writes the commit raw when the caller tracks no flags at all', () => {
-      // The preview bridge installs the forwarder with no pane to negotiate with.
       const sendInput = vi.fn()
       const forwarder = installTerminalImeNativeTextForwarder({
         terminalElement: element,

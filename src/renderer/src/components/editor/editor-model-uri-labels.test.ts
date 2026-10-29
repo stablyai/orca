@@ -1,6 +1,5 @@
 // @vitest-environment happy-dom
-// Why: peek, references and snippet variables label a model by Monaco's default label service,
-// which shows a non-file URI's path, so an owned model must keep the host's real path there.
+// Monaco’s default label service displays non-file URI paths; retain the real host path for Peek, references and snippets.
 import * as monaco from 'monaco-editor/esm/vs/editor/editor.api.js'
 import { ModelBasedVariableResolver } from 'monaco-editor/esm/vs/editor/contrib/snippet/browser/snippetVariables.js'
 import { StandaloneServices } from 'monaco-editor/esm/vs/editor/standalone/browser/standaloneServices.js'

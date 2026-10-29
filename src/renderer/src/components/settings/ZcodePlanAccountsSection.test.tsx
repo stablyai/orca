@@ -226,8 +226,7 @@ describe('ZcodePlanAccountsSection', () => {
       status: 'ok',
       error: null,
       planType: null,
-      // Why 47.5 minutes: the floor survives a minute-boundary crossing between
-      // mock setup and render, so the assertion stays deterministic.
+      // Use 47.5 minutes so flooring remains deterministic across a minute boundary before render.
       session: {
         usedPercent: 42,
         windowMinutes: 300,

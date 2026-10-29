@@ -1,8 +1,4 @@
-// Why: this stylesheet targets the *exported* PDF document, not the live Orca
-// pane. In-app CSS assumes sticky UI chrome, hover affordances, and app-shell
-// spacing that would look wrong when flattened to paper. Keeping export CSS
-// separate also means a future UI refactor can move live classes without
-// silently breaking PDF output.
+// Export needs paper layouts without sticky chrome or hover affordances; keep it independent of live app styles.
 export const EXPORT_CSS = `
 * { box-sizing: border-box; }
 

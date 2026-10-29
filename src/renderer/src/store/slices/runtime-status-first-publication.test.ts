@@ -42,10 +42,7 @@ afterEach(() => {
 
 describe('first runtime status publication', () => {
   it('does not advance the connection generation when no entry existed', () => {
-    // Regression (#19241): the first status for a paired environment counted as a
-    // connection change, so the generation fence retired worktree scans already in
-    // flight against that same connection. Those repos stayed absent from the sidebar
-    // until an unrelated refresh happened to run.
+    // First status must not advance the connection fence and discard same-connection startup scans (#19241).
     const store = createSliceStore()
     const before = getRuntimeEnvironmentConnectionGeneration('env-a')
     expect(store.getState().runtimeStatusByEnvironmentId.get('env-a')).toBeUndefined()

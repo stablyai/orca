@@ -95,8 +95,7 @@ vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, fallback: string) => fallback
 }))
 
-// Why: the menu reads live shortcut bindings; stub them to fixed labels so
-// the test asserts each assigned action surfaces its own shortcut chip.
+// Fix live shortcut labels so each action’s assigned shortcut remains independently observable.
 vi.mock('@/hooks/useShortcutLabel', () => ({
   useOptionalShortcutLabel: shortcutLabelMock
 }))

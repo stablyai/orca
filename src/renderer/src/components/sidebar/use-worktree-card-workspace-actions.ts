@@ -60,8 +60,7 @@ export function useWorktreeCardWorkspaceActions({
           )
           return
         }
-        // Why the host (STA-4343): this row is one of possibly two for the same
-        // `repoId::path`, so it has to name its own or the delete lands on the other.
+        // Qualify deletion with the row’s host so a twin with the same repo/path ID cannot be removed.
         runWorktreeDelete(worktree.id, worktree.hostId ? { expectedHostId: worktree.hostId } : {})
       }
     },
@@ -75,36 +74,41 @@ export function useWorktreeCardWorkspaceActions({
     },
     [setShowRenameErrorDialog]
   )
-  const unreadTooltip = worktree.isUnread ? 'Mark read' : 'Mark unread'
+  const unreadTooltip = worktree.isUnread
+    ? translate('auto.components.sidebar.useWorktreeCardWorkspaceActions.markRead', 'Mark read')
+    : translate('auto.components.sidebar.useWorktreeCardWorkspaceActions.markUnread', 'Mark unread')
   const lineageChildAriaLabel =
     lineageChildCount === 1
       ? lineageCollapsed
         ? translate(
-            'auto.components.sidebar.WorktreeList.20bebf9c7f',
-            'Show {{value0}} child workspace',
-            { value0: lineageChildCount }
+            'auto.components.sidebar.WorktreeList.showChildWorkspaces_one',
+            'Show {{count}} child workspace',
+            { count: lineageChildCount }
           )
         : translate(
-            'auto.components.sidebar.WorktreeList.e97297cb75',
-            'Hide {{value0}} child workspace',
-            { value0: lineageChildCount }
+            'auto.components.sidebar.WorktreeList.hideChildWorkspaces_one',
+            'Hide {{count}} child workspace',
+            { count: lineageChildCount }
           )
       : lineageCollapsed
         ? translate(
-            'auto.components.sidebar.WorktreeList.c1f4a31623',
-            'Show {{value0}} child workspaces',
-            { value0: lineageChildCount }
+            'auto.components.sidebar.WorktreeList.showChildWorkspaces_other',
+            'Show {{count}} child workspaces',
+            { count: lineageChildCount }
           )
         : translate(
-            'auto.components.sidebar.WorktreeList.0cd15956d4',
-            'Hide {{value0}} child workspaces',
-            { value0: lineageChildCount }
+            'auto.components.sidebar.WorktreeList.hideChildWorkspaces_other',
+            'Hide {{count}} child workspaces',
+            { count: lineageChildCount }
           )
-  const childWorkspaceShortLabel = `${lineageChildCount} ${
+  const childWorkspaceShortLabel =
     lineageChildCount === 1
-      ? translate('auto.components.sidebar.WorktreeList.0c6ee14f23', 'child')
-      : translate('auto.components.sidebar.WorktreeList.045a8aed48', 'children')
-  }`
+      ? translate('auto.components.sidebar.WorktreeList.childCount_one', '{{count}} child', {
+          count: lineageChildCount
+        })
+      : translate('auto.components.sidebar.WorktreeList.childCount_other', '{{count}} children', {
+          count: lineageChildCount
+        })
   const showLineageChildChip = lineageChildCount > 0 && onLineageToggle !== undefined
 
   const handleDragStart = useCallback(

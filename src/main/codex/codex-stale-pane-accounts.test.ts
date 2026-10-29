@@ -275,8 +275,6 @@ describe('codex pane account registry', () => {
     _internals.resetCache()
 
     expect(getCodexPaneAccount('pty-1')).toBeNull()
-    // Why: a corrupt file must not wedge the registry — the next spawn has to
-    // still be attributable, or fix-3 prompts silently die on one bad write.
     recordCodexPaneAccount('pty-1', { selectionKey: 'host', accountId: 'account-a' })
     _internals.resetCache()
     expect(getCodexPaneAccount('pty-1')).toEqual({ selectionKey: 'host', accountId: 'account-a' })
@@ -406,7 +404,6 @@ describe('listStaleCodexPanes', () => {
     forgetStaleCodexPanes(['pty-1'])
     _internals.resetCache()
 
-    // Why: the dismissal must outlive the app, or the startup sweep re-raises it.
     expect(
       listStaleCodexPanes({
         ptyIds: ['pty-1', 'pty-2'],
@@ -428,8 +425,6 @@ describe('listStaleCodexPanes', () => {
     expect(
       listStaleCodexPanes({
         ptyIds: ['pty-1', 'pty-2'],
-        // Why: switching the host account must not restart WSL panes, and one
-        // distro's switch must not restart another distro's panes.
         settings: settingsWithSelection('account-b', { Ubuntu: 'account-a', Debian: 'account-d' })
       })
     ).toEqual([

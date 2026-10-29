@@ -2,26 +2,21 @@ import { compareAppVersions, parseCliVersion } from '../shared/app-version'
 import { runProcess } from '@orca/process-host'
 import type { ProcessSpec } from '@orca/process-host/process-spec'
 
-/** One line naming why a probe said no; the binary's own words, bounded. */
 function warnRefused(program: string, why: string, output = ''): void {
   const said = output.trim().replace(/\s+/g, ' ').slice(0, 200)
   console.warn(`[agent-cli-version] ${program} --version: ${why}${said ? `: ${said}` : ''}`)
 }
 
-/** What one `--version` run says of the installed release. `unknown` (a slow, failed or wordless
- *  run) is no verdict, so a chat runs and any real start failure reports itself; `missing` is a
- *  program that did not start at all. */
+/** Unknown versions permit launch; missing means the program never started. */
 export type AgentCliVersionCheck =
   | { status: 'ready'; version: string }
   | { status: 'tooOld'; version: string; minimumVersion: string }
   | { status: 'unknown' | 'missing'; version: null }
 
-/** Reads a launch binary's `--version`; injectable so tests name the release. */
 export type AgentCliVersionReader = (
   input: Pick<ProcessSpec, 'program' | 'cwd' | 'env'>
 ) => Promise<{ version: string | null; started?: false }>
 
-/** Runs `<program> --version` on this host and holds what it prints to `minimumVersions`. */
 export async function checkAgentCliVersion(
   input: Pick<ProcessSpec, 'program' | 'cwd' | 'env'>,
   minimumVersions: readonly string[],
@@ -40,14 +35,11 @@ export async function checkAgentCliVersion(
   return { status: 'ready', version }
 }
 
-/** Create support's answer: only a too-old binary or one that does not start keeps the terminal. */
 export function launchableRelease(check: AgentCliVersionCheck): boolean {
   return check.status === 'ready' || check.status === 'unknown'
 }
 
-/** The release `version` must reach: the latest of the ascending `minimumVersions` on or below its
- *  major line, so a later major needs no entry (and one major holds one floor); the first below
- *  them all; none when none is listed. */
+/** Use the last floor at or below the release major, or the first floor for older majors. */
 export function agentCliMinimumVersion(
   version: string,
   minimumVersions: readonly string[]

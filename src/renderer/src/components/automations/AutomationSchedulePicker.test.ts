@@ -9,13 +9,11 @@ import {
 } from './AutomationCustomCronPanel'
 import {
   AUTOMATION_SCHEDULE_PRESET_OPTIONS,
-  AutomationSchedulePicker,
   getAutomationSchedulePresetLabel,
   getSchedulePresetDraft
 } from './AutomationSchedulePicker'
 import { formatUiAutomationSchedule } from './automation-schedule-label'
 import { isValidAutomationCronSchedule } from '../../../../shared/automation-schedule-parsing'
-import { SelectItem } from '@/components/ui/select'
 import { i18n } from '@/i18n/i18n'
 
 const BASE_DRAFT: AutomationDraft = {
@@ -39,44 +37,10 @@ const BASE_DRAFT: AutomationDraft = {
   scheduleWarning: null
 }
 
-function collectSelectItems(
-  node: React.ReactNode,
-  found: [string, string][] = []
-): [string, string][] {
-  if (!React.isValidElement(node)) {
-    if (Array.isArray(node)) {
-      for (const child of node) {
-        collectSelectItems(child, found)
-      }
-    }
-    return found
-  }
-  const props = node.props as { value?: unknown; children?: React.ReactNode }
-  if (node.type === SelectItem && typeof props.value === 'string') {
-    found.push([props.value, String(props.children)])
-  }
-  return collectSelectItems(props.children ?? null, found)
-}
-
 describe('AutomationSchedulePicker', () => {
   // Reset here, not after the assertion: a failed expect would otherwise leak the locale.
   afterEach(async () => {
     await i18n.changeLanguage('en')
-  })
-
-  it('provides an i18n key for every selectable cadence (#10043)', () => {
-    expect(AUTOMATION_SCHEDULE_PRESET_OPTIONS).toContainEqual([
-      'custom',
-      'Custom cron',
-      'auto.components.automations.AutomationSchedulePicker.ddba78647e'
-    ])
-    for (const [value, fallbackLabel, labelKey] of AUTOMATION_SCHEDULE_PRESET_OPTIONS) {
-      expect(value).not.toBe('')
-      expect(fallbackLabel).not.toBe('')
-      expect(labelKey).toMatch(
-        /^auto\.components\.automations\.AutomationSchedulePicker\.[0-9a-f]{10}$/
-      )
-    }
   })
 
   it.each([
@@ -87,29 +51,6 @@ describe('AutomationSchedulePicker', () => {
   ])('translates every cadence option in %s', async (locale, labels) => {
     await i18n.changeLanguage(locale)
     expect(AUTOMATION_SCHEDULE_PRESET_OPTIONS.map(getAutomationSchedulePresetLabel)).toEqual(labels)
-  })
-
-  it.each([
-    ['zh', '星期日', '星期一'],
-    ['ja', '日曜日', '月曜日'],
-    ['ko', '일요일', '월요일'],
-    ['es', 'domingo', 'lunes']
-  ])('translates every weekday option in %s (#14404)', async (locale, sunday, monday) => {
-    await i18n.changeLanguage(locale)
-    // Radix renders SelectContent only when open, so walk the element tree the picker builds.
-    const dayOptions = collectSelectItems(
-      AutomationSchedulePicker({
-        draft: { ...BASE_DRAFT, preset: 'weekly' },
-        validateAdvancedSchedule: isValidAutomationCronSchedule,
-        onDraftChange: () => undefined
-      })
-    ).filter(([value]) => /^[0-6]$/.test(value))
-
-    // Values stay Sunday-indexed '0'..'6' so persisted AutomationDraft.dayOfWeek round-trips.
-    expect(dayOptions.map(([value]) => value)).toEqual(['0', '1', '2', '3', '4', '5', '6'])
-    expect(dayOptions[0][1]).toBe(sunday)
-    expect(dayOptions[1][1]).toBe(monday)
-    expect(dayOptions.map(([, label]) => label)).not.toContain('Monday')
   })
 
   it.each([

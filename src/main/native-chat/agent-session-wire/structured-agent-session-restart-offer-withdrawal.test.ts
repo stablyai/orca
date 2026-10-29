@@ -1,7 +1,3 @@
-// A restart offer ends when the chat moves on after the restart: another message accepted, or its
-// agent started, other than by the offer's own continuation. Each case reads the offer list and the
-// capsule, never only an in-memory set.
-
 import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -36,11 +32,10 @@ afterEach(() => vi.restoreAllMocks())
 
 const SUPERSEDED = 'agent_session_restart_work_superseded'
 
-/** A start under a loaded machine: reconcile, acquire, hand over. */
 const COLD_START = { timeout: 10_000 }
 
 async function offered(work: 'turn' | 'submission' = 'turn') {
-  const state = await interruptedRestart(work, false)
+  const state = await interruptedRestart(work)
   expect(await state.host.restartResume.list()).toHaveLength(1)
   return state
 }
@@ -101,11 +96,10 @@ it("does not let the offer's own continuation withdraw it (R-03)", async () => {
 
   expect(result.continued).toMatchObject([{ outcome: 'continued' }])
   expect(dispatch).toHaveBeenCalledOnce()
-  // The start was the continuation's own: whatever asked, it withdrew nothing.
+  // The continuation’s own start must not withdraw its offer.
   for (const call of dismiss.mock.results) {
     expect(await call.value).toBe(0)
   }
-  // Ended by the success path instead.
   expect(await offersIn(root)).toEqual([])
 })
 
@@ -114,7 +108,6 @@ it('refuses the continuation when another start lands inside its action (R-03b)'
   Object.assign(host.deps.adapter, { compact: vi.fn(async () => ({})) })
   const send = host.send
   vi.spyOn(host, 'send').mockImplementationOnce(async (caller, params) => {
-    // Another client's /compact starts the agent after the action reserved the offer.
     expect(await host.conversationCommand(CALLER, compactParams())).toMatchObject({ ok: true })
     return send(caller, params)
   })
@@ -143,7 +136,7 @@ it('reads an older build’s marker whose message id no longer matches, and one 
   if (!marker) {
     throw new Error('missing interrupted restart marker')
   }
-  // The older build compared this id with the chat's newest message; nothing does now.
+  // Legacy markers used newest-message identity; current withdrawal must not depend on it.
   await host.restartResume.dismiss([SESSION])
   await new AgentSessionRecoveryCapsule(root).record(
     [{ ...marker, latestUserItemId: 'user-sent-under-the-older-build' }],
@@ -166,7 +159,6 @@ it('still writes the message id the previous build requires on every marker', as
   expect(capsule.entries[0]?.marker).toHaveProperty('latestUserItemId')
 })
 
-/** Sends a message whose start fails, and waits for it to be rejected. */
 async function sendWhoseStartFails(state: Awaited<ReturnType<typeof offered>>) {
   state.acquire.mockRejectedValueOnce(new Error('Not signed in'))
   const params = userSend('while signed out')
@@ -180,7 +172,6 @@ async function sendWhoseStartFails(state: Awaited<ReturnType<typeof offered>>) {
   )
 }
 
-// A message the user sent is activity even when its start then failed.
 it('withdraws the offer when the user sends a message whose start then fails (R-08)', async () => {
   const state = await offered()
   const { host, root, dispatch } = state
@@ -189,7 +180,6 @@ it('withdraws the offer when the user sends a message whose start then fails (R-
 
   expect(await host.restartResume.list()).toEqual([])
   await vi.waitFor(async () => expect(await offersIn(root)).toEqual([]), COLD_START)
-  // A click from a surface that still shows the offer finds nothing to act on.
   expect(await host.restartResume.continueAfterRestart([SESSION], 'stale-click')).toMatchObject({
     resumed: [],
     continued: []
@@ -197,8 +187,7 @@ it('withdraws the offer when the user sends a message whose start then fails (R-
   expect(dispatch).not.toHaveBeenCalled()
 })
 
-// The idle sweep closes a chat's open handle, and the next read opens a new one: the user's message
-// still counts, because it is read against where the journal stood when the offer was taken.
+// Compare persisted journal positions so idle eviction cannot resurrect a spent offer.
 it('keeps the offer withdrawn after the idle sweep closes the chat and it is read again', async () => {
   const state = await offered()
   const { host, root, clock } = state
@@ -210,11 +199,10 @@ it('keeps the offer withdrawn after the idle sweep closes the chat and it is rea
   await host.revealSession(SESSION)
 
   expect(await host.restartResume.list()).toEqual([])
-  // The listing retires what it finds moved on; the write trails the answer.
+  // Pruning is asynchronous after listing detects supersession.
   await vi.waitFor(async () => expect(await offersIn(root)).toEqual([]))
 })
 
-// A failure the chat moved on from is read from its journal like an offer is, open or not.
 it('keeps a failure not retryable after the user moved on and the sweep closed the chat', async () => {
   const state = await offered()
   const { host, clock } = state
@@ -233,7 +221,6 @@ it('keeps a failure not retryable after the user moved on and the sweep closed t
 
 const DAY_AND_AN_HOUR = 25 * 60 * 60 * 1000
 
-// An offer has no expiry; the ledger refuses a new id dated more than a day back.
 it('resumes more than a day after the quit', async () => {
   const state = await offered()
   const { host, clock, dispatch } = state
@@ -246,7 +233,6 @@ it('resumes more than a day after the quit', async () => {
   expect(await host.restartResume.listFailures()).toEqual([])
 })
 
-// The offer remembers its own continuations; nothing about them expires before the offer does.
 it('keeps a failed resume retryable more than a day later, after the ledger pruned its row', async () => {
   const state = await offered()
   const { host, clock, store } = state
@@ -254,7 +240,6 @@ it('keeps a failed resume retryable more than a day later, after the ledger prun
   const first = await host.restartResume.continueAfterRestart([SESSION], 'modal')
   expect(first.failed).toMatchObject([{ sessionId: SESSION, retryable: true }])
   clock.now += DAY_AND_AN_HOUR
-  // What an app restart does to the operation ledger a day on.
   await store.reconcileOnRestart({
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: reconciliation only reads the probe outcome.
     probe: async () => ({ outcome: 'pid-absent' }) as never,
@@ -268,8 +253,7 @@ it('keeps a failed resume retryable more than a day later, after the ledger prun
   expect(retried.continued).toMatchObject([{ sessionId: SESSION, outcome: 'continued' }])
 })
 
-// The start was the continuation's own even after the provider refused it: the child it started,
-// running or since stopped, is still the offer's, so the offer stays retryable.
+// The continuation retains ownership of its startup even if rejected later.
 it('keeps a resume retryable when its agent started but refused the continuation', async () => {
   const state = await offered()
   const { host, store } = state
@@ -298,7 +282,6 @@ it('keeps a resume retryable when its agent started but refused the continuation
   expect(await host.restartResume.listFailures()).toMatchObject([
     { sessionId: SESSION, retryable: true }
   ])
-  // The child the continuation started exits after proving its start.
   await host.handleAdapterEvent({
     type: 'ended',
     sessionId: SESSION,
@@ -314,12 +297,10 @@ it('keeps a resume retryable when its agent started but refused the continuation
   expect(retried.continued).toMatchObject([{ sessionId: SESSION, outcome: 'continued' }])
 })
 
-// A continuation handed to the agent may have landed even with no answer yet, so a retry could send
-// it twice: the failure it files is not retryable, as for one whose dispatch is in doubt.
 it('keeps an unanswered continuation the agent was handed from being sent again', async () => {
   const state = await offered()
   const { host } = state
-  // The agent took it and never answered; the wait for that answer ended first (too many waited).
+  // End the wait without delivery proof after provider admission.
   state.dispatch.mockResolvedValueOnce({ state: 'admitted' })
   const wait = host.waitForSendSettlement
   vi.spyOn(host, 'waitForSendSettlement').mockImplementation(async (...args) =>
@@ -338,7 +319,6 @@ it('keeps an unanswered continuation the agent was handed from being sent again'
   expect(state.dispatch).toHaveBeenCalledOnce()
 })
 
-// The rejected continuation is the chat's newest user message; the row still names the user's.
 it("names the user's prompt on a failed retry, not the rejected continuation", async () => {
   const state = await offered('submission')
   const { host } = state
@@ -354,8 +334,6 @@ it("names the user's prompt on a failed retry, not the rejected continuation", a
   ])
 })
 
-// Resume that runs by itself at launch goes through the same call a click does, and the same rule
-// decides: whichever of the two was accepted first since the restart wins.
 it("refuses an automatic continuation when the user's message was accepted first, and writes nothing", async () => {
   const { host, root, dispatch } = await offered()
   const events: AgentSessionSubscribeEvent[] = []
@@ -366,8 +344,7 @@ it("refuses an automatic continuation when the user's message was accepted first
   })
   const send = host.send
   vi.spyOn(host, 'send').mockImplementationOnce(async (caller, params) => {
-    // Both accepted before any start, the user's first: the continuation queues behind the user's
-    // acceptance, ahead of the start that acceptance wakes.
+    // Accept user work before continuation while startup remains queued behind both.
     let continuation: ReturnType<typeof send> | undefined
     const append = AgentSessionJournal.prototype.appendSubmission
     vi.spyOn(AgentSessionJournal.prototype, 'appendSubmission').mockImplementationOnce(
@@ -386,7 +363,6 @@ it("refuses an automatic continuation when the user's message was accepted first
   expect(result.continued).toMatchObject([{ outcome: 'refused', reason: SUPERSEDED }])
   await vi.waitFor(() => expect(dispatch).toHaveBeenCalledOnce(), COLD_START)
   expect(sentTexts(dispatch)).toEqual(['A new request'])
-  // Nothing the user did failed: no row but the quit's own about the cut, and nothing is kept.
   expect(await statusNotes(host)).toEqual([QUIT_CUT_NOTICE])
   expect(
     events.some(
@@ -481,16 +457,13 @@ describe('reading the chat against where the offer was taken', () => {
     const queued = { ...rejected, dispatchState: 'pending', handoverRecorded: true }
     expect(movedOn({ submissions: [rejected] })).toBe(false)
     expect(movedOn({ submissions: [queued] })).toBe(false)
-    // Handed over, it may have reached the agent, answered or not.
     expect(movedOn({ submissions: [{ ...queued, handedOverAt: NOW }] })).toBe(true)
     expect(movedOn({ submissions: [{ ...rejected, dispatchState: 'accepted' }] })).toBe(true)
-    // Another offer's continuation, and any other message, is the chat moving on.
     const other = restartContinuationId({ ...OFFER, teardownId: 'teardown-2' }, 'operation-1', NOW)
     expect(movedOn({ submissions: [{ ...rejected, clientMessageId: other }] })).toBe(true)
   })
 
-  // The retry's reservation lapses with the app, and the capsule hands back the failure's marker,
-  // written before the retry ran. The next launch rejects the retry's queued continuation.
+  // Crash lapses the retry reservation; retain its prior failure marker and reject queued continuation on reopen.
   it('keeps a failure retryable after the app crashed during its retry', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-crash-during-retry-'))
     try {

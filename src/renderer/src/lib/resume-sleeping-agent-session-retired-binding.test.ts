@@ -41,8 +41,7 @@ const record: SleepingAgentSessionRecord = {
   origin: 'quit'
 }
 
-// A pane in the layout with no terminal bound: either main cleared a gone terminal's binding
-// during the pane's reattach (a first visit after a reboot), or the pane's agent died in place.
+// No binding can mean main cleared a reattaching terminal, or that its agent died in place.
 function retiredBindingState(): void {
   useAppStore.setState({
     activeWorktreeId: 'wt-1',

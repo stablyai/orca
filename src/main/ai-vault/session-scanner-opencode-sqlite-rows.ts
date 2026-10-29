@@ -17,9 +17,7 @@ type SessionRow = {
   message_count: number
 }
 
-// Why guards and not casts: `SqliteStatement` hands back `Record<string, SQLOutputValue>`,
-// so the column types are only a claim about the query until something checks them. A row
-// from a schema that drifted, or from a database another tool wrote, reaches here too.
+// Validate returned column values: schema probes establish column names but cannot guarantee row types.
 export function readPartDataRow(row: SqliteRow): { part_data: string } | null {
   return typeof row.part_data === 'string' ? { part_data: row.part_data } : null
 }

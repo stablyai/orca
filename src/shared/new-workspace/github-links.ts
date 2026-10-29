@@ -16,10 +16,7 @@ export type GitHubLinkQuery = {
   tooLarge?: boolean
 }
 
-/**
- * Normalizes link-picker input so both raw issue/PR numbers and full GitHub
- * URLs resolve to a usable query + direct-number lookup.
- */
+/** Resolve issue/PR numbers or GitHub URLs into search query and direct-number lookup. */
 export function normalizeGitHubLinkQuery(raw: string): GitHubLinkQuery {
   if (isWorkItemLinkQueryTooLarge(raw)) {
     return { query: '', directNumber: null, tooLarge: true }
@@ -39,9 +36,7 @@ export function normalizeGitHubLinkQuery(raw: string): GitHubLinkQuery {
     return { query: trimmed, directNumber: null }
   }
 
-  // Why: any GitHub-shaped issue/pull URL is accepted by number regardless of
-  // slug, since fork checkouts can legitimately target upstream issues whose
-  // slug differs from the origin remote.
+  // Accept upstream numbers across differing fork/origin slugs.
   return {
     query: trimmed,
     directNumber: link.number,

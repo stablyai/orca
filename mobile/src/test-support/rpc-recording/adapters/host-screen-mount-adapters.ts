@@ -6,10 +6,6 @@ import type { operationModuleLoader } from '../operation-module-loader'
 
 const HOST = 'host-1'
 
-/**
- * The host screen's shared view settings, and the Home card's per-host stats read. Both belong to
- * the host list: one mirrors the desktop's workspace view store, the other fills the card's counts.
- */
 export function hostScreenMountAdapters(
   modules: ReturnType<typeof operationModuleLoader>
 ): Record<string, MountAdapter> {

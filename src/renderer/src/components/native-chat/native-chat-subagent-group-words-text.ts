@@ -1,12 +1,11 @@
-// Desktop words for a transcript roster row: each shared piece translated whole, with the shared
-// English as its fallback, so desktop and the phone never word one spawn group differently.
+// Translate shared roster phrases whole with shared English fallbacks to keep desktop/mobile wording aligned.
 
 import { translate } from '@/i18n/i18n'
 import {
   NATIVE_CHAT_SUBAGENT_GROUP_COPY as COPY,
   type NativeChatSubagentGroupCopyId,
   type NativeChatSubagentGroupSay
-} from '../../../../shared/native-chat-subagent-group-header'
+} from '../../../../shared/native-chat/transcript/native-chat-subagent-group-header'
 
 const PIECES: Record<
   NativeChatSubagentGroupCopyId,

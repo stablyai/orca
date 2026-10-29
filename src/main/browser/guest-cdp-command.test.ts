@@ -1,11 +1,14 @@
 import { describe, expect, it, vi } from 'vitest'
 import { BrowserError } from './browser-error'
 import { sendGuestCdpCommand } from './guest-cdp-command'
+import { isAgentInjectingInput } from './agent-input-injection'
 import { runInRemoteCliBrowserScope } from '../runtime/desktop-browser-bridge/remote-cli-browser-scope'
 
 function makeGuest(state: { crashed?: boolean; destroyed?: boolean } = {}) {
   const sendCommand = vi.fn(async () => ({ ok: true }))
   const guest = {
+    id: 3,
+    setIgnoreMenuShortcuts: vi.fn(),
     isDestroyed: vi.fn(() => state.destroyed ?? false),
     isCrashed: vi.fn(() => {
       if (state.destroyed) {
@@ -71,6 +74,20 @@ describe('sendGuestCdpCommand', () => {
     )
     await expect(sent).rejects.toMatchObject({ code: 'desktop_browser_bridge_unrouted' })
     expect(sendCommand).toHaveBeenCalledTimes(1)
+  })
+
+  it('marks input as agent input while it is in flight, so page handlers ignore it', async () => {
+    const { guest, sendCommand } = makeGuest()
+    let markedDuringSend = false
+    sendCommand.mockImplementation(async () => {
+      markedDuringSend = isAgentInjectingInput(guest)
+      return { ok: true }
+    })
+
+    await sendGuestCdpCommand(guest, 'Input.dispatchMouseEvent', { type: 'mousePressed' })
+
+    expect(markedDuringSend).toBe(true)
+    expect(isAgentInjectingInput(guest)).toBe(false)
   })
 
   it('keeps a host input that landed even when the host is revoked before it answers', async () => {

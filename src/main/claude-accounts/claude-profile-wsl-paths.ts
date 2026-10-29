@@ -1,7 +1,6 @@
 import { basename, posix } from 'node:path'
 import { describeClaudeProfile, type ClaudeProfileDescriptor } from './claude-profile-paths'
 
-/** A WSL account folder in the guest: the one spelling setup, launch and sign-in use. */
 export function wslClaudeProfile(
   guestHome: string,
   distro: string,
@@ -16,17 +15,13 @@ export function wslClaudeProfile(
   return { dataRoot, profile }
 }
 
-/**
- * The guest's which-account file, relative to the guest home: a pane spawn cannot ask the guest
- * for its home, so the pane value is `~/` plus this and the `claude` function expands it. Named
- * after the host data folder so a dev build and the packaged app never share one.
- */
+/** Keep pointers separate per build; the shell expands guest-home-relative paths without a WSL query. */
 export function wslClaudeProfilePointer(hostDataRoot: string): string {
   const build = basename(hostDataRoot).replace(/[^\w.-]/g, '_')
   return `.local/share/orca/claude-profiles/selected-wsl-${build}`
 }
 
-/** A saved WSL account's guest folder; null for an older Orca's folder, which holds no login. */
+/** Legacy layouts contain no managed login and return null. */
 export function savedWslClaudeAccountHome(account: {
   id: string
   wslLinuxAuthPath?: string | null

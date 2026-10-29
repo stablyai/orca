@@ -2,17 +2,25 @@ import React from 'react'
 import { AlertTriangle, ChevronDown, Loader2, Server, ServerOff } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
+import { translate } from '@/i18n/i18n'
 import type { HostHeaderRow } from '../../../../../../shared/sidebar-list/host-section-rows'
 import { HostSectionHeaderMenu } from '../../HostSectionHeaderMenu'
 import { stopRepoHeaderMenuEvent } from './header-event-guards'
 import { getHostHeaderDetail } from './host-header-detail'
 
-function formatSectionActivityLabel(count: number, label: string): string {
-  return `${count} ${label}${count === 1 ? '' : 's'}`
-}
-
 function SectionMetricsBadge({ count }: { count: number }): React.JSX.Element {
-  const totalLabel = formatSectionActivityLabel(count, 'workspace')
+  const totalLabel =
+    count === 1
+      ? translate(
+          'auto.components.sidebar.HostSectionHeader.workspaceCount_one',
+          '{{count}} workspace',
+          { count }
+        )
+      : translate(
+          'auto.components.sidebar.HostSectionHeader.workspaceCount_other',
+          '{{count}} workspaces',
+          { count }
+        )
 
   return (
     <span

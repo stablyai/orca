@@ -3,7 +3,7 @@ import { parseWslUncPath } from '../../../../shared/wsl-paths'
 import {
   isRemoteRuntimePtyId,
   parseRemoteRuntimePtyId
-} from '../../../../shared/remote-runtime-pty-id'
+} from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
 import type { WorktreeRuntimeOwnerState } from '@/lib/worktree-runtime-owner-state'
 import type { PtyTransport } from './pty-transport-types'

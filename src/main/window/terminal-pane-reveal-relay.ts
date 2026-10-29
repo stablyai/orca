@@ -6,6 +6,8 @@ import type {
   TerminalPaneRevealReply,
   TerminalPaneRevealTarget
 } from '../../shared/terminal-pane-reveal'
+import { addFanoutListener } from '../event-listener-fanout'
+import { abortWhenRendererGone } from '../ipc/renderer-lifetime-abort'
 import { focusExistingMainWindow } from './focus-existing-window'
 
 const TERMINAL_PANE_REVEAL_TIMEOUT_MS = 10_000
@@ -20,7 +22,7 @@ export async function revealTerminalPaneInWindow(
     focusExistingMainWindow({
       app,
       getWindow: () => mainWindow,
-      // Why: a reveal moves the window that answered; it never opens a replacement.
+      // Reveal only the answering window; never construct a replacement.
       canOpenWindow: () => false,
       openWindow: () => mainWindow
     })
@@ -38,27 +40,47 @@ function requestTerminalPaneRevealFromRenderer(
   const webContents = mainWindow.webContents
   const requestId = randomUUID()
   return new Promise<boolean>((resolve, reject) => {
+    let settled = false
+    const releaseListeners: (() => void)[] = []
     const finish = (error: Error | null, revealed = false): void => {
+      if (settled) {
+        return
+      }
+      settled = true
       clearTimeout(timeout)
-      ipcMain.removeListener('ui:terminalPaneRevealReply', onReply)
+      for (const release of releaseListeners) {
+        release()
+      }
       if (error) {
         reject(error)
       } else {
         resolve(revealed)
       }
     }
+    const onRendererUnavailable = (): void => finish(new Error('renderer_unavailable'))
     const timeout = setTimeout(
       () => finish(new Error('terminal_reveal_timeout')),
       TERMINAL_PANE_REVEAL_TIMEOUT_MS
     )
     const onReply = (event: Electron.IpcMainEvent, reply: TerminalPaneRevealReply): void => {
-      // Why: request ids are visible to renderer code; only the targeted window may answer.
+      // Visible request IDs confer no authority; only the targeted window can answer.
       if (event.sender !== webContents || reply.requestId !== requestId) {
         return
       }
       finish(null, reply.revealed === true)
     }
-    ipcMain.on('ui:terminalPaneRevealReply', onReply)
-    webContents.send('ui:revealTerminalPane', { ...target, requestId })
+    const lifetime = abortWhenRendererGone(webContents)
+    lifetime.signal.addEventListener('abort', onRendererUnavailable, { once: true })
+    releaseListeners.push(
+      lifetime.dispose,
+      () => lifetime.signal.removeEventListener('abort', onRendererUnavailable),
+      addFanoutListener(mainWindow, 'closed', onRendererUnavailable),
+      addFanoutListener(ipcMain, 'ui:terminalPaneRevealReply', onReply)
+    )
+    try {
+      webContents.send('ui:revealTerminalPane', { ...target, requestId })
+    } catch {
+      finish(new Error('renderer_unavailable'))
+    }
   })
 }

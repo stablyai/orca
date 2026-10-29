@@ -23,7 +23,6 @@ type ProbeResponse = {
   body: Buffer
 }
 
-/** GETs a loopback listener's root and reports whether it serves an HTML page, with its title and icon. */
 export async function probeWorkspacePortPage(
   request: WorkspacePortPageProbeRequest
 ): Promise<WorkspacePortPageProbeResult> {
@@ -39,7 +38,7 @@ export async function probeWorkspacePortPage(
     }
     if (response.status >= 300 && response.status < 400 && response.location) {
       const next = new URL(response.location, url)
-      // Why same origin only: the probe answers for this listener, not wherever it points.
+      // Redirects cannot turn a listener probe into a request to another origin.
       if (next.origin !== url.origin) {
         return NOT_PAGE
       }
@@ -80,7 +79,7 @@ function fetchLoopback(url: URL, maxBytes: number): Promise<ProbeResponse | null
       {
         agent: false,
         headers: { accept: 'text/html,image/*;q=0.9,*/*;q=0.8' },
-        // Why: loopback dev servers use self-signed certificates, and only a title and icon leave.
+        // Loopback development TLS may be self-signed; return only title/icon metadata.
         rejectUnauthorized: false,
         timeout: PROBE_TIMEOUT_MS
       },
@@ -97,7 +96,6 @@ function fetchLoopback(url: URL, maxBytes: number): Promise<ProbeResponse | null
         response.on('data', (chunk: Buffer) => {
           size += chunk.length
           chunks.push(chunk)
-          // A title sits near the top, so a large page is read only up to the cap.
           if (size >= maxBytes) {
             response.destroy()
             finish()
@@ -112,9 +110,26 @@ function fetchLoopback(url: URL, maxBytes: number): Promise<ProbeResponse | null
   })
 }
 
+// Tag scans only move forward: rescanning from every unclosed opener is quadratic on
+// a malformed page, and this parse blocks the main or runtime event loop.
 function extractHtmlTitle(html: string): string | null {
-  const match = /<title\b[^>]*>([\s\S]*?)<\/title>/i.exec(html)
-  const title = match ? decodeHtmlEntities(match[1]).replace(/\s+/g, ' ').trim() : ''
+  const open = /<title\b/gi
+  if (!open.test(html)) {
+    return null
+  }
+  const tagEnd = html.indexOf('>', open.lastIndex)
+  if (tagEnd === -1) {
+    return null
+  }
+  const close = /<\/title>/gi
+  close.lastIndex = tagEnd + 1
+  const end = close.exec(html)
+  if (!end) {
+    return null
+  }
+  const title = decodeHtmlEntities(html.slice(tagEnd + 1, end.index))
+    .replace(/\s+/g, ' ')
+    .trim()
   return title ? title.slice(0, 120) : null
 }
 
@@ -135,7 +150,14 @@ function decodeHtmlEntities(text: string): string {
 }
 
 function findIconHref(html: string): string | null {
-  for (const tag of html.match(/<link\b[^>]*>/gi) ?? []) {
+  const open = /<link\b/gi
+  while (open.test(html)) {
+    const end = html.indexOf('>', open.lastIndex)
+    if (end === -1) {
+      return null
+    }
+    const tag = html.slice(open.lastIndex, end)
+    open.lastIndex = end + 1
     const attributes = new Map<string, string>()
     for (const [, name, double, single, bare] of tag.matchAll(
       /\b(rel|href)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/gi
@@ -175,7 +197,7 @@ async function fetchFaviconDataUrl(html: string, pageUrl: URL): Promise<string |
     return null
   }
   const contentType = response.contentType.split(';')[0].trim().toLowerCase()
-  // Why the extension only for untyped bodies: SPA dev servers answer every path with index.html.
+  // SPA fallback HTML must not become an icon based only on its URL extension.
   const untyped = contentType === '' || contentType === 'application/octet-stream'
   const imageType = contentType.startsWith('image/')
     ? contentType

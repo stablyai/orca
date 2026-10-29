@@ -101,9 +101,6 @@ ghe.acme.io
   })
 
   it('recovers host from the Logged-in line when the section header is missing', () => {
-    // gh prints a colon after the host on some versions; we tolerate it,
-    // but if the regex ever fails to match the header we still want
-    // accounts attributed to the host from the inline message.
     const text = `  ✓ Logged in to github.acme.io account carol (keyring)
   - Active account: true
   - Token scopes: 'project'
@@ -143,8 +140,6 @@ ghe.acme.io
     expect(diag.requiredHost).toBe('ghe.acme.io')
     expect(diag.requiredHostAuthenticated).toBe(true)
     expect(diag.activeAccount?.user).toBe('bob')
-    // Why: bob's GHES token lacks project/read:org even though alice's
-    // github.com token has them — advice must reflect the required host.
     expect(diag.missingScopes).toEqual(['project', 'read:org'])
   })
 

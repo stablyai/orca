@@ -120,8 +120,7 @@ export function useFeatureWallCompletion(
     onTourDepthSummaryChange
   })
 
-  // Pull current account state once when the modal opens, then refresh on focus
-  // after a sign-in flow that happens outside the modal.
+  // Refresh on open and after external sign-in returns focus.
   useEffect(() => {
     if (isOpen) {
       void fetchRateLimits()
@@ -179,8 +178,7 @@ export function useFeatureWallCompletion(
     ]
   )
 
-  // Why: tour checkmarks are progress acknowledgements; once a user sees one
-  // turn green, later setup polling should not make it disappear.
+  // Keep acknowledged tour checkmarks sticky across later setup polls.
   useEffect(() => {
     if (!isOpen) {
       return

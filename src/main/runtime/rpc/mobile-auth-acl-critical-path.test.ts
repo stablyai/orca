@@ -1,7 +1,4 @@
-// Why: the E2EE auth handshake used to persist `lastSeenAt` inline, and on Windows every secure-file
-// write blocked the main thread on synchronous icacls spawns (~1-1.5s cold each). The ACL now
-// rides on the file's creation in-process; these tests pin how many secure writes land on the auth
-// critical path, not wall-clock, so they are deterministic under load.
+// Count secure writes on E2EE auth rather than timing: Windows synchronous icacls formerly blocked ~1–1.5s per write; ACLs now apply in-process at creation.
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -139,7 +136,7 @@ describe('mobile auth critical path', () => {
   it('emits e2ee_authenticated without a single secure write on the critical path', () => {
     const registry = new DeviceRegistry(userDataPath)
     const device = registry.addDevice('Phone', 'runtime')
-    // Why: a re-connecting device is the measured case; the first sighting is covered below.
+    // Reconnect is the measured case; first sighting is tested below.
     registry.updateLastSeen(device.deviceId)
     timeline.length = 0
 
@@ -164,7 +161,7 @@ describe('mobile auth critical path', () => {
 
     authenticate(registry, device)
 
-    // Why: rotatePendingDevice drops entries disk says were never scanned, so this write stays inline.
+    // Keep this write inline: rotatePendingDevice removes entries disk says were never scanned.
     expect(timeline).toEqual([
       'e2ee_ready',
       ...Array<TimelineEntry>(RESTRICTED_CREATES_PER_WRITE).fill('restricted-create'),

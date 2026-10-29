@@ -5,13 +5,7 @@ import type { PluginCapabilityKind } from '../../shared/plugins/plugin-capabilit
 import type { PluginPanelActionOutcome } from '../../shared/plugins/plugin-panel-bridge'
 import type { PluginAuditLog } from './plugin-audit-log'
 
-/**
- * Host API v0 handler bindings — the one place plugin-originated calls
- * (panel bridge, worker hostCall, serve RPC relay) execute. Handlers
- * delegate to runtime services through the structural `PluginHostServices`
- * interface, so this module stays electron-free and the relay conformance
- * suite can run the identical chokepoint against a fake service set.
- */
+// All plugin transports share these Electron-free host-policy checks and runtime bindings.
 
 export type { PluginHostServices } from './plugin-host-method-bindings'
 
@@ -20,7 +14,6 @@ export type ExecutePluginHostCallInput = {
   pluginId: string
   method: string
   params: unknown
-  /** True when the call arrives over the sandboxed panel bridge. */
   viaPanel: boolean
   /** Consented capability kinds; null = unknown/disabled/consent-stale. */
   grantedCapabilities: readonly PluginCapabilityKind[] | null
@@ -78,8 +71,7 @@ export async function executePluginHostCall(
       }
     }
     try {
-      // The intent is appended before the handler. If this write fails, the
-      // mutation is never attempted.
+      // Failed intent logging must prevent mutation.
       await auditMutation('attempt')
     } catch {
       return {
@@ -97,8 +89,7 @@ export async function executePluginHostCall(
     const validated = bound.spec.result.safeParse(value)
     if (!validated.success) {
       await auditMutation('error').catch(() => undefined)
-      // A result-schema mismatch is a host bug; fail the call rather than
-      // leaking an unvalidated shape into plugin-facing transports.
+      // Malformed host results must not leak unvalidated shapes through any plugin transport.
       return {
         ok: false,
         code: 'action_failed',
@@ -117,7 +108,6 @@ export async function executePluginHostCall(
   }
 }
 
-/** Bounded, content-free summaries for the audit log. */
 function summarizeParams(method: string, params: unknown): string {
   const record = (typeof params === 'object' && params !== null ? params : {}) as Record<
     string,

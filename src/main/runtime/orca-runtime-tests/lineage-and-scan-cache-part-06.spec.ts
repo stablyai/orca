@@ -1,3 +1,9 @@
+import {
+  makeRuntimeOrchestrationDb,
+  dispatchContextRow,
+  taskLineageRow,
+  coordinatorRunRow
+} from '../runtime-orchestration-db.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import {
   AGENT_STATUS_STALE_AFTER_MS,
@@ -28,21 +34,28 @@ describe('OrcaRuntimeService', () => {
       const workerLeafId = '66666666-6666-4666-8666-666666666666'
       const workerPaneKey = makePaneKey('tab-worker', workerLeafId)
       const workerHandle = runtime.preAllocateHandleForPty('pty-worker')
-      const getActiveCoordinatorRun = vi.fn(() => ({
-        id: 'run-unrelated',
-        coordinator_handle: 'term_unrelated'
-      }))
-      runtime.setOrchestrationDb({
-        getActiveDispatchForTerminal: vi.fn(() => undefined),
-        getLatestDispatchForTerminal: vi.fn(() => ({
+      const getActiveCoordinatorRun = vi.fn(() =>
+        coordinatorRunRow({
+          id: 'run-unrelated',
+          coordinator_handle: 'term_unrelated'
+        })
+      )
+      const orchestrationDb = makeRuntimeOrchestrationDb()
+      vi.spyOn(orchestrationDb, 'listSessionDispatchesForPresentation').mockImplementation(() => [])
+      vi.spyOn(orchestrationDb, 'getActiveDispatchForTerminal').mockImplementation(() => undefined)
+      vi.spyOn(orchestrationDb, 'getLatestDispatchForTerminal').mockImplementation(() =>
+        dispatchContextRow({
           id: 'ctx-settled',
           task_id: 'task-settled',
           assignee_handle: workerHandle,
           status: dispatchStatus,
           completed_at: new Date(Date.now()).toISOString()
-        })),
+        })
+      )
+      vi.spyOn(orchestrationDb, 'getActiveCoordinatorRun').mockImplementation(
         getActiveCoordinatorRun
-      } as never)
+      )
+      runtime.setOrchestrationDb(orchestrationDb)
       runtime.attachWindow(1)
 
       const result = runtime.syncWindowGraph(1, {
@@ -80,20 +93,22 @@ describe('OrcaRuntimeService', () => {
     const runtime = new OrcaRuntimeService(store)
     const workerLeafId = '77777777-7777-4777-8777-777777777777'
     const workerHandle = runtime.preAllocateHandleForPty('pty-worker')
-    runtime.setOrchestrationDb({
-      getActiveDispatchForTerminal: vi.fn(() => undefined),
-      getLatestDispatchForTerminal: vi.fn((handle: string) =>
+    const orchestrationDb = makeRuntimeOrchestrationDb()
+    vi.spyOn(orchestrationDb, 'listSessionDispatchesForPresentation').mockImplementation(() => [])
+    vi.spyOn(orchestrationDb, 'getActiveDispatchForTerminal').mockImplementation(() => undefined)
+    vi.spyOn(orchestrationDb, 'getLatestDispatchForTerminal').mockImplementation(
+      (handle: string) =>
         handle === workerHandle
-          ? {
+          ? dispatchContextRow({
               id: 'ctx-stale',
               task_id: 'task-stale',
               assignee_handle: workerHandle,
               status: 'completed',
               completed_at: new Date(Date.now() - AGENT_STATUS_STALE_AFTER_MS - 1).toISOString()
-            }
+            })
           : undefined
-      )
-    } as never)
+    )
+    runtime.setOrchestrationDb(orchestrationDb)
     runtime.attachWindow(1)
 
     const result = runtime.syncWindowGraph(1, {
@@ -257,13 +272,16 @@ describe('OrcaRuntimeService', () => {
     }
     const runtime = new OrcaRuntimeService(runtimeStore as never)
     const workerHandle = runtime.preAllocateHandleForPty('pty-worker')
-    runtime.setOrchestrationDb({
-      getDispatchContext: vi.fn(() => ({
+    const orchestrationDb = makeRuntimeOrchestrationDb()
+    vi.spyOn(orchestrationDb, 'listSessionDispatchesForPresentation').mockImplementation(() => [])
+    vi.spyOn(orchestrationDb, 'getDispatchContext').mockImplementation(() =>
+      dispatchContextRow({
         task_id: 'task_abc123',
         assignee_handle: workerHandle,
         status: 'completed'
-      }))
-    } as never)
+      })
+    )
+    runtime.setOrchestrationDb(orchestrationDb)
     runtime.attachWindow(1)
     runtime.syncWindowGraph(1, {
       tabs: [
@@ -355,13 +373,16 @@ describe('OrcaRuntimeService', () => {
     }
     const runtime = new OrcaRuntimeService(runtimeStore as never)
     const parentHandle = runtime.preAllocateHandleForPty('pty-parent')
-    runtime.setOrchestrationDb({
-      getDispatchContext: vi.fn(() => undefined),
-      getTask: vi.fn(() => ({
+    const orchestrationDb = makeRuntimeOrchestrationDb()
+    vi.spyOn(orchestrationDb, 'listSessionDispatchesForPresentation').mockImplementation(() => [])
+    vi.spyOn(orchestrationDb, 'getDispatchContext').mockImplementation(() => undefined)
+    vi.spyOn(orchestrationDb, 'getTask').mockImplementation(() =>
+      taskLineageRow({
         id: 'task_creator123',
         created_by_terminal_handle: parentHandle
-      }))
-    } as never)
+      })
+    )
+    runtime.setOrchestrationDb(orchestrationDb)
     runtime.attachWindow(1)
     runtime.syncWindowGraph(1, {
       tabs: [

@@ -22,6 +22,7 @@ import {
 } from './mobile-file-syntax'
 import { MobileHtmlPreview } from '../components/MobileHtmlPreview'
 import { colors } from '../theme/mobile-theme'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { styles } from './mobile-session-styles'
 import type { DiffComment } from '../../../src/shared/diff-comment-types'
 import type {
@@ -59,6 +60,7 @@ function FileReaderDocument({
   language,
   diffCommentActions
 }: FileReaderProps) {
+  useMobileColorScheme()
   const syntaxLanguage = useMemo(
     () => resolveMobileSyntaxLanguage(relativePath || title, language),
     [language, relativePath, title]
@@ -159,9 +161,8 @@ function FileReaderDocument({
       return undefined
     }
 
-    // Why: defer highlighting one tick so large files show as plain text immediately before colors are applied.
+    // Defer highlighting one tick so large files appear as plain text immediately.
     const timer = setTimeout(() => {
-      // file + html share the syntax-segment source view (html's "Source" toggle).
       if (doc.kind === 'file' || doc.kind === 'html') {
         setFileSyntax({
           doc,
@@ -177,7 +178,6 @@ function FileReaderDocument({
           lines: highlightMobileDiffLines(doc.lines, syntaxLanguage)
         })
       }
-      // image: no syntax highlighting.
     }, 0)
 
     return () => clearTimeout(timer)

@@ -80,8 +80,7 @@ describe('pr-refresh-coordinator', () => {
     reportVisiblePRRefreshCandidates([makeCandidate({ currentHeadOid: 'worktree-head-oid' })], 1, 1)
     await vi.runOnlyPendingTimersAsync()
 
-    // Why: without the head, a panel-supplied fallback number preserves a
-    // merged PR head-blind after the branch moves on to new work.
+    // Without the current head, fallback PR numbers could preserve a diverged merged review.
     expect(getPRForBranchOutcomeMock).toHaveBeenCalledWith(
       '/repo',
       'feature/test',
@@ -103,8 +102,7 @@ describe('pr-refresh-coordinator', () => {
     reportVisiblePRRefreshCandidates([makeCandidate({ currentHeadOid: 'worktree-head-oid' })], 1, 1)
     await vi.runOnlyPendingTimersAsync()
 
-    // Why: the renderer clear of a diverged merged linked PR is head-scoped, so
-    // the broadcast alias must carry the request-time head it was probed against.
+    // Diverged-link clears are head-scoped; broadcast the head used by this request.
     const outcomeEvent = sendMock.mock.calls
       .map(([, event]) => event)
       .find((event) => event.outcome)
@@ -127,7 +125,7 @@ describe('pr-refresh-coordinator', () => {
     expect(inFlight?.requestStartedAt).toBe(1_000)
     expect(outcome?.requestStartedAt).toBe(1_000)
     expect(outcome?.sequence).toBe(inFlight?.sequence)
-    // The renderer skips the reply as a repeat of the broadcast only if both carry this same outcome.
+    // Reply/broadcast deduplication needs identical outcomes.
     expect(result).toEqual(outcome?.outcome)
   })
 

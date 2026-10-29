@@ -12,10 +12,8 @@ export type MobileCommitRow = {
   relativeTime: string
 }
 
-// Short relative time for a commit list (just now / Xm / Xh / Xd / Xmo / Xy).
-// `timestampMs` is epoch ms, the unit GitHistoryItem.timestamp already carries.
 export function formatCommitTime(timestampMs: number | null | undefined, nowMs: number): string {
-  // Nullish — not falsy — so a real epoch-0 timestamp still formats.
+  // Epoch zero is valid; test nullishness instead of truthiness.
   if (timestampMs == null) {
     return ''
   }
@@ -65,7 +63,7 @@ export async function fetchMobileGitHistory(
   worktreeId: string,
   limit = 50
 ): Promise<MobileGitHistoryResult> {
-  // Not inside the try: a transport rejection must reach the caller as the original error object.
+  // Transport rejection must escape as its original error object.
   const reply = await gitHistoryRead.request(client, { worktree: `id:${worktreeId}`, limit })
   try {
     return gitHistoryRead.interpret(reply)

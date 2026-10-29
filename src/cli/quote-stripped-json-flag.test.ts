@@ -4,8 +4,7 @@ import { describeQuoteStrippedJsonFlag, looksQuoteStripped } from './quote-strip
 
 describe('quote-stripped JSON flag detection', () => {
   it('flags the exact shape measured from Windows PowerShell 5.1', () => {
-    // Measured on a real Windows host: ConvertTo-Json emitted
-    // ["task_b2a580db74d8","task_c3b691ec85e9"] and argv received the value below.
+    // PowerShell 5.1 passed this shape after ConvertTo-Json emitted quoted task ids.
     expect(looksQuoteStripped('[task_b2a580db74d8,task_c3b691ec85e9]')).toBe(true)
     expect(looksQuoteStripped('[a,b]')).toBe(true)
     expect(looksQuoteStripped('{a:b}')).toBe(true)
@@ -26,7 +25,6 @@ describe('quote-stripped JSON flag detection', () => {
   })
 
   it('requires a key:value pair per entry before calling an object stripped', () => {
-    // Quoting these cannot produce a valid object, so they are ordinary invalid JSON.
     expect(looksQuoteStripped('{a,b}')).toBe(false)
     expect(looksQuoteStripped('{a:b,c}')).toBe(false)
     expect(looksQuoteStripped('{:b}')).toBe(false)
@@ -40,14 +38,12 @@ describe('quote-stripped JSON flag detection', () => {
     expect(message).toContain('--payload is not valid JSON')
     expect(message).toContain('PowerShell 5.1')
     expect(message).toContain('$v')
-    // A payload can carry secrets, and this reaches --json output.
     expect(message).not.toContain('hunter2')
     expect(message).not.toContain('secret')
     expect(describeQuoteStrippedJsonFlag('options', '["a","b"]')).toBeNull()
   })
 
   it('hedges the shell attribution, since it inspects only the value shape', () => {
-    // The same shape occurs when a macOS/Linux user simply forgets to quote.
     expect(describeQuoteStrippedJsonFlag('options', '[a,b]')).toContain('If you ran this from')
   })
 })

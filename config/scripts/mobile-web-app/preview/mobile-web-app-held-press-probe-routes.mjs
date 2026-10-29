@@ -1,10 +1,5 @@
-/**
- * Scratch routes for the held-press check: the surfaces whose press must outlive Android WebView's
- * long-press. Each mounts the shipped component with stubbed effects; what is under test is the
- * press responder, so handlers only count.
- */
+// Mount shipped held-press surfaces with counting callbacks; Android WebView long-press must not end responder early.
 
-/** RN Web renders `nativeID` as the DOM `id`; the check touches each mic through it. */
 export const TERMINAL_MIC_ID = 'hold-probe-terminal-mic'
 export const CHAT_MIC_ID = 'hold-probe-chat-mic'
 
@@ -71,11 +66,6 @@ export default function HoldDictationProbeRoute() {
 export const REPEAT_KEY_LABEL = 'Arrow Up'
 export const TAP_KEY_LABEL = 'Escape'
 
-/**
- * The session's command dock with a stub controller, in buffered mode. The repeat cadence is
- * `use-mobile-session-accessory-selection.ts`'s (send on press-in, repeat after 400 ms, then every
- * 45 ms, stop on press-out), restated here because that hook is bound to the whole session.
- */
 export function commandDockProbeRouteSource({ commandDockModule, keyDefinitionsModule }) {
   return `import { useRef } from 'react'
 import { MobileSessionCommandDock } from ${JSON.stringify(commandDockModule)}
@@ -87,22 +77,15 @@ const IDLE = { isStarting: false, isRecording: false, isProcessing: false }
 
 export default function CommandDockProbeRoute() {
   const sentRef = useRef([])
-  const timersRef = useRef({ timeout: null, interval: null })
-  const stop = () => {
-    clearTimeout(timersRef.current.timeout)
-    clearInterval(timersRef.current.interval)
-  }
+  const repeatRef = useRef([])
   const send = (input) => {
     sentRef.current.push(input.bytes)
     return Promise.resolve()
   }
-  const start = (input) => {
-    stop()
-    timersRef.current.timeout = setTimeout(() => {
-      timersRef.current.interval = setInterval(() => void send(input), 45)
-    }, 400)
+  globalThis.__orcaHeldPressProbe = {
+    sent: () => [...sentRef.current],
+    repeats: () => [...repeatRef.current]
   }
-  globalThis.__orcaHeldPressProbe = { sent: () => [...sentRef.current] }
   const controller = {
     insets: { top: 0, bottom: 0, left: 0, right: 0 },
     bufferedTerminalDraftState: { input: '', setInput: noop },
@@ -136,8 +119,8 @@ export default function CommandDockProbeRoute() {
     handleAccessoryKey: send,
     dismissSoftwareKeyboard: noop,
     toggleLiveInput: noop,
-    stopAccessoryRepeat: stop,
-    startAccessoryRepeat: start,
+    stopAccessoryRepeat: () => repeatRef.current.push({ kind: 'stop' }),
+    startAccessoryRepeat: (input) => repeatRef.current.push({ kind: 'start', bytes: input.bytes }),
     handlePaste: () => Promise.resolve(),
     isAttaching: false,
     attachImage: () => Promise.resolve(),
@@ -153,11 +136,7 @@ export default function CommandDockProbeRoute() {
 
 export const BROWSER_VIEWPORT_ID = 'held-press-browser-viewport'
 
-/**
- * The browser pane's view with its real interactions hook, which owns the 550 ms long-press
- * right-click. The stub client records each request, so a right-click is read where the host would
- * see it, not only from the hook's "Right click" toast.
- */
+// Real interactions hook owns 550ms right-click; record host request rather than trusting hook toast.
 export function browserPaneProbeRouteSource({
   paneViewModule,
   interactionsModule,

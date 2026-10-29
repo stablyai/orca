@@ -1,7 +1,6 @@
-/* oxlint-disable react-doctor/no-adjust-state-on-prop-change -- Why: selection annotations are synchronized from Monaco editor selection and layout APIs, not derived React props. */
 import React, { useRef, useEffect, useLayoutEffect, useMemo, useState } from 'react'
 import Editor from '@monaco-editor/react'
-import type { editor } from 'monaco-editor'
+import type { editor, IRange } from 'monaco-editor'
 import type { MarkdownDocument } from '../../../../shared/filesystem-entry-types'
 import { useAppStore } from '@/store'
 import '@/lib/monaco-setup'
@@ -82,10 +81,10 @@ export default function MonacoEditor({
   languageRef.current = language
   const unregisterFileSearchSelectionRef = useRef<(() => void) | null>(null)
   const { setupCopy, toastNode } = useContextualCopySetup()
-  // Why: hold the throttle timer in a ref so unmount cleanup can cancel a pending write before snapshotting the final scroll position.
+  // Cancel pending throttled writes before snapshotting final scroll on unmount.
   const scrollThrottleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const propsRef = useRef({ relativePath, language, onSave, onContentChange })
-  // Why: assign during render so the ref is current before any handler reads it (a useEffect would leave a one-render stale window).
+  // Refresh during render so event handlers cannot read one-render-stale props.
   propsRef.current = { relativePath, language, onSave, onContentChange }
   const readOnlyRef = useRef(readOnly)
   readOnlyRef.current = readOnly
@@ -125,14 +124,13 @@ export default function MonacoEditor({
   const autoHeightLineHeight = Math.ceil(editorFontSize * 1.45)
   const autoHeightUsesInternalScroll =
     autoHeight && isMonacoAutoHeightCapped(renderedEditorHeight, autoHeightLineHeight)
-  // Why: @monaco-editor/react skips its value→model sync on the first post-remount render, so retained models need an explicit sync or they show stale text.
-  // Invariant: the mount path must read `contentRef.current` (guaranteed latest), never `lastSyncedContentRef.current` (may be stale pre-mount).
+  // The React wrapper skips first post-remount value sync; reconcile retained models from live contentRef, never the possibly stale lastSyncedContentRef.
   const contentRef = useRef(content)
   contentRef.current = content
-  // Gutter context menu state
   const [gutterMenuOpen, setGutterMenuOpen] = useState(false)
   const [gutterMenuPoint, setGutterMenuPoint] = useState({ x: 0, y: 0 })
   const [gutterMenuLine, setGutterMenuLine] = useState(1)
+  const [gutterMenuSelection, setGutterMenuSelection] = useState<IRange | null>(null)
   const isDark = useDocumentDarkTheme()
 
   const { queueReveal, cancelScheduledReveal, clearTransientRevealHighlight } =
@@ -156,10 +154,10 @@ export default function MonacoEditor({
     markdownAnnotationsEnabled
   })
 
-  // Why useLayoutEffect: cleanup runs before @monaco-editor/react disposes the editor, so getScrollTop() still reads valid state on unmount.
+  // Layout cleanup precedes the wrapper’s editor disposal, keeping final scroll readable.
   useLayoutEffect(() => {
     return () => {
-      // Why: cancel the pending throttled write so it can't fire after this snapshot and overwrite the final position with a stale value.
+      // Cancel throttled writes so stale positions cannot overwrite the final snapshot.
       if (scrollThrottleTimerRef.current !== null) {
         clearTimeout(scrollThrottleTimerRef.current)
         scrollThrottleTimerRef.current = null
@@ -172,7 +170,6 @@ export default function MonacoEditor({
     }
   }, [cancelScheduledReveal, clearTransientRevealHighlight, modelUri, viewStateKey])
 
-  // Update editor options when settings change
   useEffect(() => {
     if (!editorRef.current) {
       return
@@ -181,8 +178,6 @@ export default function MonacoEditor({
       fontSize: editorFontSize,
       fontFamily: editorFontFamily,
       ...buildFileEditorWordWrapOptions(editorWordWrap),
-      // Keep a retained Monaco instance aligned when a tab changes between
-      // a read-only surface and a normal editable file.
       readOnly
     })
   }, [editorFontFamily, editorFontSize, editorWordWrap, readOnly])
@@ -221,10 +216,14 @@ export default function MonacoEditor({
     contentSync,
     decorations,
     annotations,
-    gutterMenu: { setGutterMenuOpen, setGutterMenuPoint, setGutterMenuLine }
+    gutterMenu: {
+      setGutterMenuOpen,
+      setGutterMenuPoint,
+      setGutterMenuLine,
+      setGutterMenuSelection
+    }
   })
 
-  // Navigate to line and highlight match when requested (for already-mounted editor)
   useEffect(() => {
     if (!revealLine || !editorRef.current) {
       return
@@ -278,19 +277,16 @@ export default function MonacoEditor({
         key={modelUri}
         height={renderedEditorHeight === null ? '100%' : `${renderedEditorHeight}px`}
         language={language}
-        // Why: defaultValue, not controlled value — Orca owns post-mount content sync; a controlled path would double setValue.
+        // Use defaultValue because Orca owns later content sync; controlled values would duplicate setValue.
         defaultValue={content}
         theme={isDark ? 'vs-dark' : 'vs'}
         onChange={contentSync.handleChange}
         onMount={handleMount}
         options={{
           dropIntoEditor: { enabled: false },
-          // `IGlobalEditorOptions`, not per-editor: setting it here pins it for every
-          // Monaco surface (diff, Peek) too, so this is the only site that needs it.
-          // Defense-in-depth only — it does NOT guard the Monarch embed recursion,
-          // which overflowed at ~17_000 chars, under this cap. See the budget module.
+          // This global option also affects diff and Peek; it is defense in depth, not protection from Monarch embedding recursion below the cap.
           maxTokenizationLineLength: MAX_TOKENIZATION_LINE_LENGTH,
-          // Why: only the file editor honors this; Monaco 0.55 DiffEditor hard-overrides minimap.enabled=false on sub-editors (see diffEditorEditors._adjustOptionsForSubEditor).
+          // Monaco 0.55 forcibly disables diff sub-editor minimaps; only file editors honor this setting.
           minimap: { enabled: settings?.editorMinimapEnabled ?? false },
           scrollBeyondLastLine: false,
           ...buildFileEditorWordWrapOptions(editorWordWrap),
@@ -311,12 +307,12 @@ export default function MonacoEditor({
           cursorSmoothCaretAnimation: 'off',
           padding: { top: 0 },
           find: monacoFindOptions,
-          // Why: Monaco owns its rendered line surface, so align its selection-clipboard with the app opt-out (the global DOM hook can't).
+          // Monaco owns rendered lines, so its selection clipboard must enforce the app opt-out independently of the global DOM hook.
           selectionClipboard: settings?.primarySelectionMiddleClickPaste ?? isLinuxUserAgent()
         }}
-        // Why the helper: `@monaco-editor/react` calls `Uri.parse` on this, which mis-reads a Windows drive path as its own scheme.
+        // Build a model URI because the React wrapper’s Uri.parse treats Windows drive letters as schemes.
         path={modelUri}
-        // Why: Orca owns cursor/scroll restoration, so disable @monaco-editor/react's competing view-state Map.
+        // Orca owns cursor/scroll restoration; disable the wrapper’s competing view-state map.
         saveViewState={false}
         keepCurrentModel
       />
@@ -327,6 +323,7 @@ export default function MonacoEditor({
         onOpenChange={setGutterMenuOpen}
         point={gutterMenuPoint}
         line={gutterMenuLine}
+        selection={gutterMenuSelection}
         filePath={filePath}
         relativePath={relativePath}
       />

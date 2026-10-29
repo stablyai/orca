@@ -3,15 +3,7 @@ import { importReleaseCheckoutModule, materializeReleaseCheckout } from './relea
 import { projectStructuredAgentSessionStatusSummary } from '../../../src/shared/structured-agent-session-projection'
 import type { AgentJournalRenderItem } from '../../../src/shared/agent-session-journal-types'
 
-/**
- * A new host publishes what it observed of a turn's end when the provider gave no verdict:
- * `interruption` for a crash that cut the turn off, `unconfirmed` for an end it cannot prove. No
- * wire field is new, but the arms are, so every reader an older desktop runs on them must keep the
- * row and read the done it always did (Rule 3 and Rule 4 of the remote wire rules).
- *
- * The older build is pinned to the newest release whose status parser knew `mainAgent.outcome`,
- * so each reader here is one that validates the arm rather than one that never looks at it.
- */
+// Pin an older reader that validates mainAgent.outcome; new interruption/unconfirmed arms must retain its normal done fallback.
 const OLD_REF = 'v1.4.214'
 const SUITE_TIMEOUT_MS = 180_000
 // `superseded` is also journaled: a newer request replaced the turn, recorded at the replacement.

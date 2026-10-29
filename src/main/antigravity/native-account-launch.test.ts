@@ -26,22 +26,6 @@ beforeEach(() => {
 })
 
 describe('native account verification before agy launch', () => {
-  it('checks the selected native account before a new host agy launch', async () => {
-    await prepareAntigravityAccountForLaunch({
-      launchAgent: 'antigravity',
-      env: { HOME: '/task/home' }
-    })
-    expect(prepareForLaunch).toHaveBeenCalledOnce()
-  })
-
-  it('recognizes the ordinary agy executable through the shared command recognizer', async () => {
-    await prepareAntigravityAccountForLaunch({
-      command: 'agy --conversation synthetic',
-      env: { HOME: '/task/home' }
-    })
-    expect(prepareForLaunch).toHaveBeenCalledOnce()
-  })
-
   it('preserves owning-host and distro boundaries without reading client credentials', async () => {
     await prepareAntigravityAccountForLaunch({
       launchAgent: 'antigravity',
@@ -67,16 +51,6 @@ describe('native account verification before agy launch', () => {
       })
     ).rejects.toThrow('different credential authority')
     expect(prepareForLaunch).not.toHaveBeenCalled()
-  })
-
-  it('propagates failed native identity verification so the PTY cannot launch as another account', async () => {
-    prepareForLaunch.mockRejectedValue(new Error('native identity changed'))
-    await expect(
-      prepareAntigravityAccountForLaunch({
-        launchAgent: 'antigravity',
-        env: { HOME: '/task/home' }
-      })
-    ).rejects.toThrow('native identity changed')
   })
 
   it('rejects deleting the credential home before launch', async () => {

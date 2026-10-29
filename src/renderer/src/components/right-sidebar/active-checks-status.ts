@@ -5,8 +5,7 @@ import { getGitHubPRCacheKey } from '../../../../shared/github/github-cache-key'
 import { getHostedReviewCacheKey } from '../../store/slices/hosted-review-cache-identity'
 import { isGitHubPRSuppressed } from '../../../../shared/worktree/github-pr-suppression'
 
-// Why one list: the parameter type and the cache key both derive from it, so a new store field
-// cannot be read here (TS rejects it) without also invalidating the cache on it.
+// Derive input types and cache keys together so a newly read field must also invalidate the cache.
 const REQUIRED_INPUT_KEYS = [
   'activeWorktreeId',
   'worktreesByRepo',
@@ -33,8 +32,7 @@ function branchDisplayName(branch: string): string {
   return branch.replace(/^refs\/heads\//, '')
 }
 
-// Why cached: the right sidebar is always mounted, so this ran on every store write and rebuilt two
-// cache-key strings each time. Same single-entry, reference-keyed shape as selectFloatingVisibleTabCount.
+// The always-mounted sidebar runs this on every store write; cache by input references to avoid rebuilding keys.
 let activeChecksStatusCache: {
   inputs: ActiveChecksStatusInputs
   status: CheckStatus | null
@@ -85,8 +83,7 @@ function computeActiveChecksStatus(state: ActiveChecksStatusState): CheckStatus 
     return null
   }
 
-  // Why: PR refreshes are written under repo-id scoped keys so repo path
-  // changes and legacy duplicates cannot leave the activity indicator stale.
+  // Repo-ID-scoped refresh keys survive path changes and legacy duplicates.
   const prCacheKey = getGitHubPRCacheKey(
     activeRepo.path,
     activeRepo.id,

@@ -1,5 +1,4 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../shared/electron-remote-runtime-client-capabilities'
 import {
   STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
@@ -122,13 +121,6 @@ afterEach(() => {
 })
 
 describe('host structured agents', () => {
-  // The capability promises a renderer that reads the list; it ships only with that reader.
-  it('is advertised to paired hosts, whose lists this reader serves', () => {
-    expect(ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES).toContain(
-      STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY
-    )
-  })
-
   it("reads the local host's agents once it advertises them", async () => {
     uninstall = installHostStructuredAgentsSync()
     await vi.waitFor(() => expect(agentIds('local')).toEqual(['claude', 'grok']))

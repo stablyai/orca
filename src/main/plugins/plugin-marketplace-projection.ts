@@ -2,6 +2,7 @@ import type {
   PluginMarketplaceEntry,
   PluginMarketplaceGitSource
 } from '../../shared/plugins/plugin-marketplace'
+import type { PluginCatalogRelease } from '../../shared/plugins/plugin-catalog-release'
 
 export type PluginMarketplaceSourceState = {
   id: string
@@ -30,4 +31,6 @@ export type PluginMarketplaceListing = {
   official: boolean
   bundled: boolean
   blockedByKillList?: { reason: string; advisoryUrl?: string }
+  /** Exact release the catalog vouches for; absent for v1 catalogs. */
+  release?: PluginCatalogRelease
 }

@@ -33,7 +33,6 @@ function sinkState() {
   return { sink, items, tombstones }
 }
 
-/** `[recordId, state]` of every lifecycle append, in journal order. */
 function lifecycleAppends(
   items: { identity: AgentJournalItemIdentity; body: AgentJournalItemBody }[]
 ) {
@@ -64,10 +63,7 @@ function message(
   }
 }
 
-// Frames below follow the Claude Code 2.1.258 / SDK 0.3.251 partial-message
-// cadence captured from the real CLI: every stream_event carries its own uuid,
-// the final assistant frame for a block carries yet another, and only
-// message.id ties them together.
+// Claude Code 2.1.258 / SDK 0.3.251 capture: only message.id links partial and final frames.
 function streamEvent(uuid: string, event: Record<string, unknown>) {
   return {
     type: 'message' as const,
@@ -99,9 +95,6 @@ function resultFrame(subtype: string, fields: Record<string, unknown>) {
   }
 }
 
-/** One streamed text turn in wire order: message_start, the block's start frame,
- *  one delta per chunk, the block's final assistant frame, the stop frames and
- *  the success result. */
 function streamedTextTurn(input: {
   messageId: string
   startUuid: string
@@ -210,10 +203,11 @@ describe('Claude structured journal translation', () => {
       finalUuid: 'assistant-final-1',
       chunks: ['ST', 'REAMOK_ELEC_64E632']
     })
+    // The block's source, which its saved transcript row also carries; never a stream frame's uuid.
     const streamedIdentity = {
       provider: 'claude',
       sessionId: 'claude-session',
-      uuid: 'block-start-1'
+      uuid: 'block:msg_01:0'
     }
 
     for (const event of turn.start) {
@@ -299,7 +293,9 @@ describe('Claude structured journal translation', () => {
 
     const items: AgentJournalRenderItem[] = journal.snapshot().items
     const assistant = assistantMessages(items)
-    expect(assistant.map((item) => item.itemId)).toEqual(['claude:claude-session:count-start'])
+    expect(assistant.map((item) => item.itemId)).toEqual([
+      'claude:claude-session:block%3Amsg_count%3A0'
+    ])
     expect(assistant[0]?.body).toEqual({
       kind: 'message',
       role: 'assistant',
@@ -462,9 +458,6 @@ describe('Claude structured journal translation', () => {
     const translator = createClaudeJournalTranslator({ sink: state.sink })
 
     translator.handle(message('user', 'user-1', [{ type: 'text', text: 'summarize this' }]))
-    // The SDK models this as a SUCCESS-subtype result whose `result` string is the
-    // user-facing API error. Suppressing it as ordinary turn bookkeeping ends the
-    // turn with nothing shown at all.
     translator.handle(
       resultFrame('success', {
         is_error: true,
@@ -479,11 +472,7 @@ describe('Claude structured journal translation', () => {
       kind: 'status',
       text: 'API Error: 529 upstream overloaded'
     })
-    // The turn still settles: the error is an extra row, not a stuck lifecycle.
     expect(lifecycleAppends(state.items).at(-1)).toEqual(['turn-lifecycle:user-1', 'completed'])
-    // The arm stays `completed` on purpose — the host watched this turn finish —
-    // and `outcome` is the only thing that says it failed. Widening the arm
-    // instead would move every reader that switches on it.
     expect(state.items.findLast((item) => item.identity.provider === 'legacy')?.body).toMatchObject(
       { kind: 'turn', state: 'completed', outcome: 'failure' }
     )
@@ -513,19 +502,19 @@ describe('Claude structured journal translation', () => {
       }
       const run = scheduled as (() => void) | null
       run?.()
-      // The user interrupts: the result arrives with no final assistant frame,
-      // so nothing ever reconciles these blocks.
+      // Interrupts may deliver a result without a final assistant frame to reconcile streamed blocks.
       translator.handle(
         resultFrame('error_during_execution', {
           is_error: true,
           terminal_reason: 'aborted_streaming'
         })
       )
-      // The partial text is already journaled; only the live state is dropped.
       expect(translator.pendingStreamedBlocks).toBe(0)
     }
 
-    expect(assistantMessages(state.items)).toHaveLength(3)
+    expect(
+      new Set(assistantMessages(state.items).map((item) => agentJournalItemKey(item.identity))).size
+    ).toBe(3)
   })
 
   it('keeps an ordinary successful result off the timeline', () => {
@@ -625,7 +614,6 @@ describe('Claude structured journal translation', () => {
 
     translator.handle(message('assistant', 'assistant-thinking', [{ type: 'thinking', thinking }]))
 
-    // The frame also opens the turn it produced in, so pick the reasoning row itself.
     const reasoning = state.items.find(
       (item) => item.body.kind === 'message' && item.body.role === 'reasoning'
     )

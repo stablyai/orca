@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { installNetRequestFetchAdapter } from './updater-net-request.fixture'
 import { publishingIncident } from './updater-prerelease-feed-reproduction.fixture'
 import { loadUpdaterModule, warmUpdaterModule } from './updater-test-module-loader'
+import { updaterMainWindow } from './updater-test-main-window'
 
 const { netFetchMock, netRequestMock } = vi.hoisted(() => ({
   netFetchMock: vi.fn(),
@@ -178,10 +179,18 @@ describe('updater check failure handling', () => {
     killAllPtyMock.mockReset()
     vi.unstubAllGlobals()
     vi.useRealTimers()
-    netFetchMock.mockReset().mockResolvedValue({
-      ok: true,
-      status: 200,
-      text: () => Promise.resolve('<feed></feed>')
+    netFetchMock.mockReset().mockImplementation(async (url: string) => {
+      if (url.endsWith('/releases/latest')) {
+        return new Response(null, {
+          status: 302,
+          headers: { location: 'https://github.com/stablyai/orca/releases/tag/v1.0.51' }
+        })
+      }
+      return new Response(
+        url.endsWith('.atom')
+          ? '<feed></feed>'
+          : 'version: 1.0.51\nfiles:\n  - url: orca-windows-setup.exe\n'
+      )
     })
     netRequestMock.mockReset()
     installNetRequestFetchAdapter(netRequestMock, netFetchMock)
@@ -192,11 +201,11 @@ describe('updater check failure handling', () => {
     makeBenignCheckFailure('Unable to find latest version on GitHub')
 
     const sendMock = vi.fn()
-    const mainWindow = { webContents: { send: sendMock } }
+    const mainWindow = updaterMainWindow(sendMock)
 
     const { setupAutoUpdater, checkForUpdatesFromMenu } = await loadUpdaterModule()
 
-    setupAutoUpdater(mainWindow as never, { getLastUpdateCheckAt: () => Date.now() })
+    setupAutoUpdater(mainWindow, { getLastUpdateCheckAt: () => Date.now() })
     checkForUpdatesFromMenu()
 
     await vi.advanceTimersByTimeAsync(0)
@@ -226,11 +235,11 @@ describe('updater check failure handling', () => {
     makeBenignCheckFailure('Cannot find channel "latest-mac.yml" update info: HttpError: 404')
 
     const sendMock = vi.fn()
-    const mainWindow = { webContents: { send: sendMock } }
+    const mainWindow = updaterMainWindow(sendMock)
 
     const { setupAutoUpdater, checkForUpdatesFromMenu } = await loadUpdaterModule()
 
-    setupAutoUpdater(mainWindow as never, { getLastUpdateCheckAt: () => Date.now() })
+    setupAutoUpdater(mainWindow, { getLastUpdateCheckAt: () => Date.now() })
     checkForUpdatesFromMenu()
     await vi.waitFor(() => {
       const statuses = sendMock.mock.calls
@@ -269,10 +278,10 @@ describe('updater check failure handling', () => {
       respondWithNotReadyRelease({ assetStatus, manifestStatus, manifestText })
       const warnMock = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
       const sendMock = vi.fn()
-      const mainWindow = { webContents: { send: sendMock } }
+      const mainWindow = updaterMainWindow(sendMock)
       const { setupAutoUpdater, checkForUpdatesFromMenu } = await loadUpdaterModule()
 
-      setupAutoUpdater(mainWindow as never, { getLastUpdateCheckAt: () => Date.now() })
+      setupAutoUpdater(mainWindow, { getLastUpdateCheckAt: () => Date.now() })
       checkForUpdatesFromMenu()
 
       await vi.waitFor(() => {
@@ -294,11 +303,11 @@ describe('updater check failure handling', () => {
     makeBenignCheckFailure('Unable to find latest version on GitHub')
 
     const sendMock = vi.fn()
-    const mainWindow = { webContents: { send: sendMock } }
+    const mainWindow = updaterMainWindow(sendMock)
 
     const { setupAutoUpdater, checkForUpdates } = await loadUpdaterModule()
 
-    setupAutoUpdater(mainWindow as never, { getLastUpdateCheckAt: () => Date.now() })
+    setupAutoUpdater(mainWindow, { getLastUpdateCheckAt: () => Date.now() })
     checkForUpdates()
 
     await vi.advanceTimersByTimeAsync(0)
@@ -327,10 +336,10 @@ describe('updater check failure handling', () => {
     })
 
     const sendMock = vi.fn()
-    const mainWindow = { webContents: { send: sendMock } }
+    const mainWindow = updaterMainWindow(sendMock)
     const { setupAutoUpdater, checkForUpdates, getUpdateStatus } = await loadUpdaterModule()
 
-    setupAutoUpdater(mainWindow as never, { getLastUpdateCheckAt: () => Date.now() })
+    setupAutoUpdater(mainWindow, { getLastUpdateCheckAt: () => Date.now() })
     checkForUpdates()
     await vi.waitFor(() => {
       expect(netFetchMock).toHaveBeenCalledTimes(2)
@@ -352,32 +361,28 @@ describe('updater check failure handling', () => {
     makeBenignCheckFailure('Unable to find latest version on GitHub')
 
     const sendMock = vi.fn()
-    const mainWindow = { webContents: { send: sendMock } }
+    const mainWindow = updaterMainWindow(sendMock)
 
     const { setupAutoUpdater, checkForUpdates } = await loadUpdaterModule()
 
-    setupAutoUpdater(mainWindow as never, { getLastUpdateCheckAt: () => Date.now() })
+    setupAutoUpdater(mainWindow, { getLastUpdateCheckAt: () => Date.now() })
     checkForUpdates()
     await vi.advanceTimersByTimeAsync(0)
     expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(1)
 
-    // First retry keeps the fast 1h cadence for transient release-readiness failures.
     await vi.advanceTimersByTimeAsync(ONE_HOUR_MS)
     expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(2)
 
-    // Second retry doubles to 2h: nothing at +1h, fires by +2h.
     await vi.advanceTimersByTimeAsync(ONE_HOUR_MS)
     expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(2)
     await vi.advanceTimersByTimeAsync(ONE_HOUR_MS)
     expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(3)
 
-    // Third retry doubles to 4h.
     await vi.advanceTimersByTimeAsync(2 * ONE_HOUR_MS)
     expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(3)
     await vi.advanceTimersByTimeAsync(2 * ONE_HOUR_MS)
     expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(4)
 
-    // A completed check resets the backoff to the fast retry.
     autoUpdaterMock.checkForUpdates.mockImplementation(() => {
       autoUpdaterMock.emit('checking-for-update')
       queueMicrotask(() => {
@@ -395,5 +400,28 @@ describe('updater check failure handling', () => {
     expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(6)
     await vi.advanceTimersByTimeAsync(ONE_HOUR_MS)
     expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(7)
+  })
+
+  it('records check failures without touching a destroyed main window', async () => {
+    makeBenignCheckFailure('Unable to find latest version on GitHub')
+    // Electron throws from a destroyed BrowserWindow's webContents getter.
+    const mainWindow = {
+      isDestroyed: () => true,
+      get webContents(): never {
+        throw new TypeError('Object has been destroyed')
+      }
+    }
+
+    const { setupAutoUpdater, checkForUpdatesFromMenu, getUpdateStatus } = await loadUpdaterModule()
+
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the guard only reads isDestroyed/webContents, which this partial BrowserWindow covers.
+    setupAutoUpdater(mainWindow as never, { getLastUpdateCheckAt: () => Date.now() })
+    checkForUpdatesFromMenu()
+
+    await vi.waitFor(() => {
+      expect(getUpdateStatus()).toEqual(
+        expect.objectContaining({ state: 'error', userInitiated: true })
+      )
+    })
   })
 })

@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button'
 import { TabsContent } from '@/components/ui/tabs'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
-import type { GitLabWorkItem } from '../../../../shared/gitlab-types'
+import type { GitLabMRApprovalState, GitLabWorkItem } from '../../../../shared/gitlab-types'
 import {
   dedupeGitLabUsers,
   gitLabUserKey,
@@ -21,6 +21,38 @@ type Props = {
   state: GitLabItemDialogState
   detailsEditing: GitLabDetailsEditing
   reviewActions: GitLabReviewActions
+}
+
+function formatGitLabApprovalSummary(approvalState: GitLabMRApprovalState): string {
+  const count = approvalState.approvalsLeft ?? 0
+  if (approvalState.approvalsLeft === 0) {
+    return translate('auto.components.GitLabItemDialog.22511537d2', 'Approved')
+  }
+  const required = approvalState.approvalsRequired
+  if (typeof required === 'number') {
+    return count === 1
+      ? translate(
+          'auto.components.GitLabItemDialog.approvalsRemainingOfRequired_one',
+          '{{count}} approval remaining of {{required}} required',
+          { count, required }
+        )
+      : translate(
+          'auto.components.GitLabItemDialog.approvalsRemainingOfRequired_other',
+          '{{count}} approvals remaining of {{required}} required',
+          { count, required }
+        )
+  }
+  return count === 1
+    ? translate(
+        'auto.components.GitLabItemDialog.approvalsRemaining_one',
+        '{{count}} approval remaining',
+        { count }
+      )
+    : translate(
+        'auto.components.GitLabItemDialog.approvalsRemaining_other',
+        '{{count}} approvals remaining',
+        { count }
+      )
 }
 
 export function GitLabDescriptionTab({ item, state, detailsEditing, reviewActions }: Props) {
@@ -71,23 +103,7 @@ export function GitLabDescriptionTab({ item, state, detailsEditing, reviewAction
               </div>
               {approvalState ? (
                 <div className="mt-0.5 text-[11px] text-muted-foreground">
-                  {approvalState.approvalsLeft === 0
-                    ? translate('auto.components.GitLabItemDialog.22511537d2', 'Approved')
-                    : translate(
-                        'auto.components.GitLabItemDialog.40c56b95e2',
-                        '{{value0}} approval{{value1}} remaining',
-                        {
-                          value0: approvalState.approvalsLeft ?? 0,
-                          value1: approvalState.approvalsLeft === 1 ? '' : 's'
-                        }
-                      )}
-                  {typeof approvalState.approvalsRequired === 'number'
-                    ? translate(
-                        'auto.components.GitLabItemDialog.00f3bab87b',
-                        ' of {{value0}} required',
-                        { value0: approvalState.approvalsRequired }
-                      )
-                    : ''}
+                  {formatGitLabApprovalSummary(approvalState)}
                 </div>
               ) : null}
             </div>

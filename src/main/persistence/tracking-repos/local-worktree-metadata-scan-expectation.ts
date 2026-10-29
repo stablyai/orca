@@ -203,15 +203,7 @@ function aliasesStillMatch(
   })
 }
 
-/**
- * Whether the local host is structurally allowed to drop this row, ignoring concurrent-change checks.
- *
- * Pure over persisted state — no filesystem, no expectation — so a caller can decide *before* paying
- * for a `stat` whether a delete could ever accept the row. Several of these predicates reject the
- * same row on every pass forever (a locator also known on a remote host keeps a second alias; a
- * legacy row pinned to another host; identity rows that drifted or dangle), which is what turned the
- * prune into an unbounded no-progress loop in #17775.
- */
+/** Reject structurally unremovable rows before filesystem probes; repeated refusals caused #17775. */
 export function isLocallyRemovableWorktreeMetadataRow(
   state: PersistedState,
   worktreeId: string,

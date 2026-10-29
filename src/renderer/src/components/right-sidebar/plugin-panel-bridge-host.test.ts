@@ -13,8 +13,7 @@ function createFakePanelWindow(): FakePanelWindow {
 }
 
 function messageEvent(data: unknown, source: unknown): MessageEvent {
-  // The handler only reads .data and .source, so a plain object stands in for
-  // a real MessageEvent without needing a DOM environment.
+  // Only data/source are read; use a plain fixture without a DOM environment.
   return { data, source } as unknown as MessageEvent
 }
 
@@ -240,8 +239,7 @@ describe('createPanelBridgeMessageHandler', () => {
     handler(messageEvent({ type: 'invalid-hostile-message' }, panelWindow))
     handler(messageEvent({ type: 'orca-panel-pong', pingId: 7 }, panelWindow))
 
-    // The pong spends data budget too, so the reserved lane grants liveness
-    // without also granting a free channel for unmetered host work.
+    // Charge pongs to data too so reserved liveness cannot grant unmetered host work.
     expect(admit).toHaveBeenCalledTimes(2)
     expect(controlAdmit).toHaveBeenCalledTimes(1)
     expect(onPong).toHaveBeenCalledWith(7)
@@ -296,9 +294,7 @@ describe('createPanelBridgeMessageHandler', () => {
       now: () => clock
     })
 
-    // A hostile panel floods unsolicited pongs, then the real watchdog reply
-    // for this window arrives. Any per-window count on the reserved lane would
-    // have been spent by the flood and would drop pingId 99.
+    // Flood unsolicited pongs before the real reply; reserved liveness must not exhaust a per-window count.
     for (let i = 0; i < 500; i += 1) {
       handler(messageEvent({ type: 'orca-panel-pong', pingId: i }, panelWindow))
       clock += 1

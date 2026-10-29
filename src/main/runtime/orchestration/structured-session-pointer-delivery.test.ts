@@ -51,14 +51,11 @@ describe('structured session gate facts', () => {
   })
 
   it('reads a tombstoned turn as idle, since settlement removes the running row', () => {
-    // A healthy completed turn leaves no turnLifecycle row behind at all.
     expect(structuredSessionGateFacts([statusItem(undefined)])).toEqual(IDLE)
   })
 
   it('reads a worker that has finished a long turn as idle, however much history it has', () => {
-    // The steady state of a working agent: plenty of items, no lifecycle row anywhere. Answering
-    // this from a bounded tail page cannot distinguish it from a running turn whose lifecycle row
-    // was pushed off the end, which is why the facts come off the fully reduced timeline.
+    // Use the full timeline: idle history and a busy turn whose lifecycle scrolled off have identical tails.
     expect(structuredSessionGateFacts(transcript(120))).toEqual(IDLE)
   })
 

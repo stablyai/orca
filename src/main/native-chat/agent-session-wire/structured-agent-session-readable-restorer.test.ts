@@ -2,7 +2,11 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import {
+  agentSessionLeaseFixture,
+  agentSessionRecordFixture
+} from '../../../shared/agent-session-record.test-fixture'
+import { agentSessionConversationView } from '../../../shared/agent-session-conversation-view'
 import {
   closeTestJournalHostDatabases,
   openTestJournalHostDatabase
@@ -17,7 +21,6 @@ vi.mock('./structured-agent-session-restart-restore', () => ({
 import { StructuredAgentSessionReadableRestorer } from './structured-agent-session-readable-restorer'
 import { recordingStructuredAgentSessionLogger } from './structured-agent-session-logger-test-support'
 
-// The restore pool is mocked; the host database only fills the deps' shape.
 const stateDirectory = mkdtempSync(join(tmpdir(), 'orca-readable-restorer-'))
 afterAll(() => {
   closeTestJournalHostDatabases()
@@ -30,14 +33,15 @@ describe('StructuredAgentSessionReadableRestorer', () => {
   })
 
   it('passes targeted records to the restore pool in visible-first order', async () => {
-    const records = ['background-a', 'visible-b', 'visible-a', 'background-b'].map(
-      (sessionId) => ({ sessionId }) as AgentSessionRecord
+    const records = ['background-a', 'visible-b', 'visible-a', 'background-b'].map((sessionId) =>
+      agentSessionRecordFixture(agentSessionLeaseFixture({ sessionId }))
     )
     const restorer = new StructuredAgentSessionReadableRestorer({
       openDeps: {
         store: {
           getRecord: () => null,
-          listRecords: () => records,
+          getConversation: () => null,
+          listConversations: () => records.map(agentSessionConversationView),
           replacedRuntime: () => undefined
         },
         journalDatabase: openTestJournalHostDatabase(stateDirectory),

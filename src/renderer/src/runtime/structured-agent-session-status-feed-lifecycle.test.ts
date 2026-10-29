@@ -34,7 +34,9 @@ const done: AgentSessionStatusSummary = {
   ...owned,
   sessionId: 'completed',
   status: 'idle',
-  hostExecutionOwned: undefined
+  hostExecutionOwned: undefined,
+  hostExecutionPhase: undefined,
+  runtimePermission: null
 }
 
 function subscription(index = 0): Subscription {
@@ -81,7 +83,8 @@ describe('structured status feed execution authority lifecycle', () => {
     expect(feed.getSnapshot().get('running')).toEqual({
       ...owned,
       hostExecutionOwned: undefined,
-      hostExecutionPhase: undefined
+      hostExecutionPhase: undefined,
+      runtimePermission: null
     })
     expect(feed.getSnapshot().get('completed')).toBe(done)
     subscription().emit({ type: 'status', session: owned })

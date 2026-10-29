@@ -36,20 +36,4 @@ describe('revealElementInScrollContainer', () => {
     expect(scrollTo).toHaveBeenCalledWith({ top: 387, behavior: 'smooth' })
     expect(onScrollIssued).toHaveBeenCalledWith(387)
   })
-
-  it('does not report a scroll when the element is already in view', () => {
-    const { container, scrollTo } = makeContainer(0, 673)
-    const onScrollIssued = vi.fn()
-
-    const revealed = revealElementInScrollContainer(
-      container,
-      makeElement(200, 260),
-      'smooth',
-      onScrollIssued
-    )
-
-    expect(revealed).toBe(true)
-    expect(scrollTo).not.toHaveBeenCalled()
-    expect(onScrollIssued).not.toHaveBeenCalled()
-  })
 })

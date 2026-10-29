@@ -1,160 +1,79 @@
-// Render models for the host-held queued drafts shown above the composer.
-// The wire carries no hold copy on purpose: the caption is derived here from the
-// draft's own state plus the live facts the client already holds.
+import { stripSentImagePromptMarkers } from '../../../src/shared/native-chat/transcript/native-chat-image-transcript-markers'
+// The shared projection decides each card's hold; this layer words it for the phone.
 
-import {
-  readWholeAgentSessionFailureFact,
-  type AgentSessionFailureFact
-} from '../../../src/shared/agent-session-failure'
-import { agentSessionFailureStatedByRow } from '../../../src/shared/agent-session-visible-failures'
-import {
-  agentSessionWriteNotDoneParts,
-  agentSessionWriteNoticeEnglish
-} from '../../../src/shared/agent-session-refusal-notice'
+import type { AgentSessionFailureFact } from '../../../src/shared/agent-session-failure'
+import { agentSessionWriteNoticeEnglish } from '../../../src/shared/agent-session-refusal-notice'
 import type { AgentJournalSubmission } from '../../../src/shared/agent-session-journal-types'
-import { dispatchWasWithdrawn } from '../../../src/shared/structured-agent-session-dispatch-rejection'
-import { structuredAgentSessionAttemptFailureParts } from '../../../src/shared/structured-agent-session-rejection-words'
 import {
   QUEUED_MESSAGE_PAUSED_SEND_FAILED,
   type AgentSessionQueuedMessage
 } from '../../../src/shared/agent-session-wire'
-import { readAgentMessageSource } from '../../../src/shared/agent-session-message-source'
+import {
+  projectQueuedMessageCards,
+  queuedMessageCardLine,
+  queuedMessageCardNeedsAttention,
+  queuedMessageReturnedNotice,
+  type QueuedMessageCard
+} from '../../../src/shared/structured-agent-session-queued-cards'
 import { agentMessageAttribution } from './mobile-agent-message-attribution'
 
-export type MobileQueuedMessageCard = {
-  messageId: string
-  /** The draft's text blocks joined for display and for Edit's composer copy. */
-  text: string
-  state: 'waiting' | 'returned'
-  paused: boolean
-  /** Returned, or its own send failed: the row leads with an alert. */
+export type MobileQueuedMessageCard = QueuedMessageCard & {
+  /** The text, or for a card of images alone, the image's name or their count. */
+  line: string
   needsAttention: boolean
-  /** Status under the text; null for a card plainly waiting its turn, also behind an open
-   *  question or in a paused queue: the question and the pause row say why. */
+  // Leave plain waits uncaptioned; the question or queue-pause row already explains the hold.
   caption: string | null
-  /** "From <name>" on another agent's card; null on the person's. */
   attribution: string | null
-  /** A conversation command such as /compact: it never steers into a running turn. */
-  command?: true
-  /** A command card while the agent works: it offers no send until the agent is idle. */
-  waitsForAgent?: true
 }
 
-function queuedMessageBodyText(body: AgentSessionQueuedMessage['body']): string {
-  return body.blocks.flatMap((block) => (block.type === 'text' ? [block.text] : [])).join('\n')
-}
-
-function returnedCaption(
-  draft: Pick<AgentSessionQueuedMessage, 'returnedReason' | 'returnedRejection'>,
-  agentName?: string,
-  statedFailures: readonly AgentSessionFailureFact[] = []
-): string {
-  const reason = draft.returnedReason ?? null
-  const rejection = draft.returnedRejection
-  if (agentSessionFailureStatedByRow(rejection, statedFailures)) {
-    return agentSessionWriteNoticeEnglish(agentSessionWriteNotDoneParts('send'))
-  }
-  if (dispatchWasWithdrawn({ dispatchState: 'rejected', reason, rejection })) {
-    return 'Stopped before it was sent'
-  }
-  // Worded as the desktop card words it: a fact read whole decides, the host's reason is the
-  // fallback, and the card's own Send is the retry, so the words leave out sending again.
-  return agentSessionWriteNoticeEnglish(
-    structuredAgentSessionAttemptFailureParts(
-      { kind: 'rejected', reason },
-      { agentName, retryControl: true },
-      readWholeAgentSessionFailureFact(rejection)
-    )
-  )
-}
-
-/** One card's own hold: a failed conversion; the queue's pause is the list's header. */
-function pausedCaption(reason: string | undefined, waitsForAgent: boolean): string {
-  if (reason === QUEUED_MESSAGE_PAUSED_SEND_FAILED) {
-    return waitsForAgent
-      ? "Couldn't send — tap Send to retry once the agent finishes"
-      : "Couldn't send — tap Send to retry"
-  }
-  // Absent or unknown (newer host) marker: a plain pause, promising no release rule.
-  return 'Paused'
-}
-
-/** Whether Resume would send anything: a waiting card with no hold of its own, ahead of any
- *  returned card. The drain stops at a returned card, so cards behind one never go. */
-export function mobileQueueHasResumableCard(cards: readonly MobileQueuedMessageCard[]): boolean {
-  for (const card of cards) {
-    if (card.state === 'returned') {
-      return false
+function queuedMessageCardCaption(
+  card: QueuedMessageCard,
+  agentName: string | undefined,
+  statedFailures: readonly AgentSessionFailureFact[]
+): string | null {
+  switch (card.hold) {
+    case 'returned': {
+      const notice = queuedMessageReturnedNotice(card, agentName, statedFailures)
+      return notice === 'withdrawn'
+        ? 'Stopped before it was sent'
+        : agentSessionWriteNoticeEnglish(notice)
     }
-    if (!card.paused) {
-      return true
-    }
+    case 'paused':
+      // Absent or unknown (newer host) marker: a plain pause, promising no release rule.
+      if (card.pausedReason !== QUEUED_MESSAGE_PAUSED_SEND_FAILED) {
+        return 'Paused'
+      }
+      return card.waitsForAgent
+        ? "Couldn't send — tap Send to retry once the agent finishes"
+        : "Couldn't send — tap Send to retry"
+    case 'behind-returned':
+      return 'Waiting — a message ahead needs attention'
+    // The phone draws no card for a send still on its way.
+    case 'sending':
+    case 'turn':
+    case 'queue-paused':
+      return null
   }
-  return false
 }
 
-/** Cards in published order. A waiting card is hidden once a live hand-off of it arrived — a
- *  submission naming it as its `queuedMessageId` that was not rejected — as the desktop hides it:
- *  on a multi-page catch-up the shrunk list rides only the final page, so the bubble and the card
- *  would otherwise briefly show together. A rejected hand-off is what sent the draft back, so it
- *  hides nothing. Returned cards always show. */
 export function mobileQueuedMessageCards(
-  queuedMessages: readonly AgentSessionQueuedMessage[] | null,
-  submissions: readonly Pick<AgentJournalSubmission, 'queuedMessageId' | 'dispatchState'>[],
+  queuedMessages: readonly AgentSessionQueuedMessage[] | null | undefined,
+  submissions: readonly AgentJournalSubmission[],
   facts: {
     agentWorking?: boolean
+    queuePaused?: boolean
     agentName?: string
     statedFailures?: readonly AgentSessionFailureFact[]
   } = {}
 ): MobileQueuedMessageCard[] {
-  if (!queuedMessages || queuedMessages.length === 0) {
-    return []
-  }
-  const handedOff = new Set(
-    submissions.flatMap((submission) =>
-      submission.queuedMessageId !== undefined && submission.dispatchState !== 'rejected'
-        ? [submission.queuedMessageId]
-        : []
-    )
-  )
-  let behindReturned = false
-  const cards: MobileQueuedMessageCard[] = []
-  for (const draft of queuedMessages) {
-    if (draft.state !== 'returned' && handedOff.has(draft.messageId)) {
-      continue
-    }
-    const paused = draft.paused === true
-    const caption =
-      draft.state === 'returned'
-        ? returnedCaption(draft, facts.agentName, facts.statedFailures)
-        : paused
-          ? pausedCaption(
-              draft.pausedReason,
-              draft.body.command !== undefined && facts.agentWorking === true
-            )
-          : behindReturned
-            ? 'Waiting — a message ahead needs attention'
-            : null
-    cards.push({
-      messageId: draft.messageId,
-      text: queuedMessageBodyText(draft.body),
-      state: draft.state,
-      paused,
-      needsAttention:
-        draft.state === 'returned' ||
-        (paused && draft.pausedReason === QUEUED_MESSAGE_PAUSED_SEND_FAILED),
-      caption,
-      attribution: agentMessageAttribution('From', readAgentMessageSource(draft.body.from)),
-      ...(draft.body.command !== undefined
-        ? {
-            command: true as const,
-            ...(facts.agentWorking ? { waitsForAgent: true as const } : {})
-          }
-        : {})
-    })
-    if (draft.state === 'returned') {
-      behindReturned = true
-    }
-  }
-  return cards
+  return projectQueuedMessageCards(queuedMessages, submissions, facts).map((card) => ({
+    ...card,
+    line: queuedMessageCardLine({
+      ...card,
+      text: stripSentImagePromptMarkers(card.text, card.images?.length ?? 0)
+    }),
+    needsAttention: queuedMessageCardNeedsAttention(card),
+    caption: queuedMessageCardCaption(card, facts.agentName, facts.statedFailures ?? []),
+    attribution: agentMessageAttribution('From', card.from)
+  }))
 }

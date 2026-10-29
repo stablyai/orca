@@ -33,9 +33,7 @@ export async function searchSessionService(
   if (!current) {
     return { kind: 'unavailable', reason: 'no-service' }
   }
-  // The choke point every entry point funnels through, so every host kind
-  // resolves alike; the verdict goes to the service, which answers off and
-  // not-ready first.
+  // Let the service answer disabled/not-ready before scope errors.
   const { within, supportedAgents, supportsQoderHistory, supportsJcodeHistory, ...request } = parsed
   // Older clients reject the whole page when a hit has an unknown agent tag.
   const requestedAgents = request.filters?.agents

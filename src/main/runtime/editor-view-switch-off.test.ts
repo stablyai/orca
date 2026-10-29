@@ -1,4 +1,4 @@
-// A window-owned build: main's Store keeps no editor tab view, the window owns them.
+// Switch-off builds keep editor views in the window, outside main Store.
 
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'

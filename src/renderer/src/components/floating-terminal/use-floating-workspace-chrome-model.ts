@@ -9,12 +9,7 @@ import { resolveFloatingWorkspaceSurfaceModel } from './floating-workspace-surfa
 
 const EMPTY_TERMINAL_TABS: readonly TerminalTab[] = []
 
-/**
- * Shell chrome model for the floating panel: the shared per-group workspace model of the
- * FOCUSED floating group, plus the derived fields the panel's titlebar strip, shortcuts,
- * close policy and focus lifecycle read. The panel body renders every group through the
- * shared tree; only the shell's one titlebar strip needs a focused-group projection.
- */
+/** Project the focused group into the panel’s single titlebar; the body still renders all groups through the shared tree. */
 export function useFloatingWorkspaceChromeModel() {
   const surface = useAppStore(useShallow(resolveFloatingWorkspaceSurfaceModel))
   const focusedGroupId = surface.kind === 'workspace' ? surface.focusedGroupId : ''
@@ -23,8 +18,7 @@ export function useFloatingWorkspaceChromeModel() {
     worktreeId: FLOATING_TERMINAL_WORKTREE_ID
   })
   const { activeTab, group, groupTabs } = model
-  // Why filtered: the strip and the emptiness decision only count tabs whose terminal entity
-  // still exists — a stale unified entry must fall back to the empty state, not a blank pane.
+  // Exclude stale tabs without entities so the strip and empty state agree.
   const terminalEntities = useAppStore(
     (state) => state.tabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID] ?? EMPTY_TERMINAL_TABS
   )
@@ -62,8 +56,7 @@ export function useFloatingWorkspaceChromeModel() {
 
   const hasVisibleFloatingTabs = surface.kind === 'workspace'
 
-  // Visible-id order for tab-cycling shortcuts: strip order restricted to entries whose entity
-  // still resolves, so a shortcut never lands on a tab the strip is not showing.
+  // Cycle only through tabs whose entities still resolve and appear in the strip.
   const visibleFloatingTabOrder = useMemo(
     () =>
       model.tabBarOrder.filter((visibleId) => {

@@ -22,11 +22,7 @@ export function extractJpegFrames(
   chunk: Buffer<ArrayBufferLike>,
   maxPendingBytes = DEFAULT_MAX_PENDING_BYTES
 ): MjpegFrameParseResult {
-  // Why: when there are no leftover bytes the chunk already holds whole frames,
-  // so read it directly instead of copying — frames below are views consumed
-  // synchronously (the IPC layer copies into a transferable ArrayBuffer), and
-  // any retained `pending` is copied out via trimPendingBuffer, so no chunk
-  // memory is held across calls. At ~30fps this avoids a full-frame copy/frame.
+  // Reuse the input when possible: frames are consumed synchronously and retained pending bytes are copied.
   let cursor = pending.length > 0 ? Buffer.concat([pending, chunk]) : chunk
   const frames: Buffer[] = []
 
@@ -46,11 +42,47 @@ export function extractJpegFrames(
     }
 
     const nextOffset = frameEnd + JPEG_END.length
-    // A view, not a copy: the caller consumes each frame synchronously before
-    // the next chunk arrives, and `cursor` is only ever re-sliced (never mutated).
     frames.push(cursor.subarray(0, nextOffset))
     cursor = cursor.subarray(nextOffset)
   }
 
   return { frames, pending: Buffer.alloc(0) }
+}
+
+// Why: a frame spans many socket chunks; re-joining the growing tail on every chunk is
+// quadratic in chunks per frame, so hold chunks until one could complete the frame.
+export class MjpegFrameAccumulator {
+  private parts: Buffer<ArrayBufferLike>[] = []
+  private bytes = 0
+
+  constructor(private readonly maxPendingBytes = DEFAULT_MAX_PENDING_BYTES) {}
+
+  push(chunk: Buffer<ArrayBufferLike>): Buffer<ArrayBufferLike>[] {
+    if (chunk.length === 0) {
+      return []
+    }
+    const head = this.parts[0]
+    if (
+      head?.[0] === 0xff &&
+      head[1] === 0xd8 &&
+      !(this.parts.at(-1)?.at(-1) === 0xff && chunk[0] === 0xd9) &&
+      !chunk.includes(JPEG_END) &&
+      this.bytes + chunk.length <= this.maxPendingBytes
+    ) {
+      // Copied like extractJpegFrames' pending, so no caller chunk memory is retained.
+      this.parts.push(Buffer.from(chunk))
+      this.bytes += chunk.length
+      return []
+    }
+    const pending = this.parts.length === 1 ? this.parts[0] : Buffer.concat(this.parts, this.bytes)
+    const result = extractJpegFrames(pending, chunk, this.maxPendingBytes)
+    this.parts = result.pending.length > 0 ? [result.pending] : []
+    this.bytes = result.pending.length
+    return result.frames
+  }
+
+  reset(): void {
+    this.parts = []
+    this.bytes = 0
+  }
 }

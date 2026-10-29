@@ -1,4 +1,5 @@
 import type { AgentSessionContextUsage } from '../../../shared/agent-session-context-usage'
+import type { AgentSessionUsageLimit } from '../../../shared/agent-session-usage-limit'
 import type { AgentJournalToolCallItem } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionPromptResponse } from '../../../shared/agent-session-question-answer'
 import type {
@@ -15,31 +16,24 @@ export type AcpRequestPresentation = {
   reply(response: AgentSessionPromptResponse | null): unknown
 }
 
-/** A request the client answers at once, asking no one: the reply, and a plan it carried for the
- *  chat's existing plan row. */
 export type AcpRequestSettlement = { reply: unknown; plan?: string }
 
 export type AcpBackgroundTaskUpdate = Pick<NativeChatBackgroundTaskBlock, 'taskId' | 'state'> &
   Partial<Omit<NativeChatBackgroundTaskBlock, 'type' | 'taskId' | 'state'>> & {
-    /** Used only until a provider description is known. */
     fallbackLabel?: string
-    /** Used only until a frame names the task's kind. */
     fallbackKind?: NativeChatBackgroundTaskBlock['kind']
   }
 
-/** What the provider said about one subagent; absent fields are unchanged. */
+/** Omitted fields leave existing subagent state unchanged. */
 export type AcpSubagentUpdate = {
-  /** The provider's subagent id: the roster key, and where its own rows are filed. */
   id: string
   state?: NativeChatSubagentState
   label?: string
-  /** Latest total tokens the provider reported for this subagent. */
   tokens?: number
-  /** The provider turn that spawned it. */
+  /** Spawning provider turn. */
   turn?: string
-  /** The subagent's final reply, once it completed. */
   result?: string
-  /** For a report that cannot tell a subagent from a background task: applies only to a known one. */
+  /** Ambiguous task reports apply only to known subagents. */
   knownOnly?: true
 }
 
@@ -52,49 +46,50 @@ export type AcpDialectNotification =
       at?: number
       started?: boolean
       end?: Omit<AcpTurnEnding, 'at' | 'notSignedIn'>
-      /** The provider's own words for why `turn` failed, sent apart from its end. */
       failureDetail?: string
       usage?: AgentSessionContextUsage
       backgroundTasks?: AcpBackgroundTaskUpdate[]
       subagents?: AcpSubagentUpdate[]
     }
 
-/** A prompt hook refused the message: the turn ended, but the user did not stop it. */
+/** Hook denial completes the turn rather than recording a user Stop. */
 export type AcpHookBlock = { reason?: string }
 
-/** How a turn ended, as the agent reported it. */
 export type AcpTurnEnding = {
   stopReason: string
   at: number
   durationMs?: number
   failureDetail?: string
   notSignedIn?: boolean
+  usageLimit?: AgentSessionUsageLimit
   hookBlock?: AcpHookBlock
 }
 
-/** How a `/compact` the agent ended normally went, read from its reply; absent compacted. */
+/** Undefined means a normally ended /compact succeeded. */
 export type AcpCompactionReply = { outcome: 'skipped' | 'failed'; detail: string }
 
 /** Hooks interpret extensions; lifecycle and row identity stay shared. */
 export type AcpDialect = {
+  /** Effort replaces part of the native composite model selection. */
+  effortChangesModel?: true
   subagentStop?: {
-    /** Missing required target: proves the route exists without addressing any child. */
+    /** Probe without a target to establish support without cancelling a child. */
     probe: { method: string; params: unknown }
     recognizesProbeError(error: AcpAgentError): boolean
     request(sessionId: string, id: string): { method: string; params: unknown }
     response(value: unknown, id: string): { cancelled: boolean; state?: NativeChatSubagentState }
   }
   backgroundTaskStop?: {
-    /** Missing required target: proves the route exists without addressing any task. */
+    /** Probe without a target to establish support without killing a task. */
     probe: { method: string; params: unknown }
-    /** The agent refusing the route by name: the only answer that hides Stop. */
+    /** Only explicit route rejection hides Stop. */
     lacksRoute(error: AcpAgentError): boolean
     request(sessionId: string, taskId: string): { method: string; params: unknown }
-    /** `gone`: the agent no longer runs a task by that id; its own ending may still follow. */
+    /** A missing task may still report its own ending later. */
     response(value: unknown, taskId: string): 'killed' | 'gone' | 'refused'
   }
   injectedPromptIdentity?: true
-  /** A tool update in the shared shape (`rawOutput.stdout`, `rawOutput.exitCode`), read first. */
+  /** Normalize before reading tools: rawOutput.stdout and rawOutput.exitCode. */
   normalizeToolUpdate?(update: ToolCallUpdate): ToolCallUpdate
   toolName?(update: ToolCallUpdate): string | undefined
   toolBackgroundTasks?(
@@ -106,27 +101,27 @@ export type AcpDialect = {
   subagentSessionEnd?(method: string, params: unknown): 'completed' | 'stopped' | undefined
   notification?(method: string, params: unknown, at: number): AcpDialectNotification | undefined
   contextWindow?(models: unknown): number | undefined
-  /** A model's own effort menu and default, as the agent advertises them per model. */
   modelEfforts?(model: ModelInfo): { efforts: AgentSessionOptionChoice[]; defaultEffort?: string }
-  /** A request shown to the person; a permission request it claims is never auto-answered. */
+  /** The agent clamps an effort another model lacks, so unlisted models' menus are unknown, not empty. */
+  clampsUnlistedEffort?: true
+  /** Claimed permission requests are never auto-approved. */
   request?(method: string, params: unknown): AcpRequestPresentation | undefined
-  /** Requests answered at once instead of shown to the person. */
   settleRequest?(method: string, params: unknown): AcpRequestSettlement | undefined
-  /** The provider's words in a `session/prompt` error answer, when its message is generic. */
   promptErrorDetail?(error: AcpAgentError): string | undefined
+  promptFailure?(
+    error: AcpAgentError,
+    at: number
+  ): Pick<AcpTurnEnding, 'stopReason' | 'usageLimit'> | undefined
   authenticationRequired?(error: AcpAgentError): boolean
-  /** A hook's refusal, read from the `_meta` of the prompt's answer or of the turn's end. */
+  /** The agent dropped this session; only a new child can reopen it. */
+  sessionLost?(error: AcpAgentError, sessionId: string): boolean
   hookBlock?(meta: unknown): AcpHookBlock | undefined
-  /** The row for a failed turn the provider gave no words for. */
   failedTurnText?(stopReason: string): string
-  /** An agent that ends a `/compact` it did not do as a normal turn says so in its reply. */
   compactionReply?(text: string): AcpCompactionReply | undefined
-  /** The agent's own `/` commands a chat does not offer: hidden from its list, and a message
-   *  that is only one of them is refused before it reaches the agent. */
+  /** Hide these commands and reject command-only prompts before dispatch. */
   withheldCommands?: readonly string[]
 }
 
-/** Which of the dialect's stop routes this agent process proved it answers. */
 export type AcpChildStops = { subagents: boolean; backgroundTasks: boolean }
 
 export const GENERIC_ACP_DIALECT: AcpDialect = {}

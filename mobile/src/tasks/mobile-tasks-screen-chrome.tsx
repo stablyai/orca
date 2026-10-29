@@ -14,7 +14,6 @@ import { styles } from './mobile-tasks-legacy-styles'
 import { renderMobileTasksProviderControls } from './mobile-tasks-provider-controls'
 import { renderMobileTasksSearchControl } from './mobile-tasks-search-control'
 
-// Same wording as the desktop task page's icon buttons.
 const REFRESH_LABELS = {
   github: 'Refresh GitHub work',
   gitlab: 'Refresh GitLab work items',

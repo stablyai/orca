@@ -43,7 +43,6 @@ afterAll(() => {
 const conn = { getClient: () => ({}) } as unknown as SshConnection
 const bridge: OrcadStdioBridge = { command: 'bridge', mode: 'base64', wrapCommand: false }
 
-/** The real bridge, run locally through the Windows host script's base64 framing. */
 const localBridge = (): RemoteCommandChannel =>
   spawnLocalBridgeChannel(process.execPath, [script, 'stdio-bridge', String(echo.port)])
 

@@ -1,11 +1,5 @@
 // @vitest-environment happy-dom
-/**
- * The page's form of `keyboardShouldPersistTaps`, which react-native-web ignores.
- *
- * Measured on Pixel_API_37: a tap on a dock key or a session tab moves focus from the live input
- * to the Pressable (tabindex 0) on mousedown, and the IME closes. Natively a Pressable never takes
- * focus, so the same taps keep the keyboard up.
- */
+// RN Web ignores keyboardShouldPersistTaps; focusable Pressables take mousedown focus and close the IME.
 import { afterEach, describe, expect, it } from 'vitest'
 import { keepTextFocusThroughTaps } from './keyboard-persisting-taps'
 
@@ -23,7 +17,6 @@ function plant() {
   return { container, label, gap, field, liveInput }
 }
 
-/** Whether a mousedown on `target` was kept from moving focus. */
 function pressKeepsFocus(target: Element): boolean {
   const event = new MouseEvent('mousedown', { bubbles: true, cancelable: true })
   target.dispatchEvent(event)

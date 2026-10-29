@@ -28,9 +28,7 @@ describe('ReviewIcon', () => {
     expect(markup).not.toContain('lucide-git-merge')
   })
 
-  // Why: an open MR with no explicit check tone falls through to the emerald "open" colour, so a
-  // GitLab pipeline blocked on a manual gate must not resolve to a tone-less status — the card
-  // would read exactly like a passing pipeline while GitLab still refuses the merge.
+  // Manual-blocked GitLab pipelines need a check tone or the open-MR fallback would look passing.
   it('does not paint a manual-blocked GitLab pipeline like a passing one', () => {
     const status = derivePipelineStatus({ status: 'manual' })
     const blocked = renderToStaticMarkup(
@@ -45,8 +43,6 @@ describe('ReviewIcon', () => {
     expect(blocked).not.toBe(passing)
   })
 
-  // Why: #13088 — a draft with failing checks used the same glyph as every other
-  // review and was painted red, so it was indistinguishable from a closed PR.
   it('gives a draft its own glyph and never paints it with a check tone', () => {
     const draft = renderToStaticMarkup(
       <ReviewIcon
@@ -99,7 +95,6 @@ describe('ReviewIcon', () => {
     expect(merged).toContain('lucide-git-merge')
   })
 
-  // Why: a closed MR used to render the merge glyph, which read as "already merged".
   it('overrides the GitLab provider glyph for closed merge requests', () => {
     const closed = renderToStaticMarkup(
       <ReviewIcon review={{ ...gitlabReview, state: 'closed' }} className="size-3" />
@@ -109,9 +104,7 @@ describe('ReviewIcon', () => {
     expect(closed).not.toContain('lucide-git-merge')
   })
 
-  // Why: folder cards render a stateless row while a linked review loads or its
-  // details fail. There is no state glyph to contradict, so problems must still be
-  // visible — but a tone-less row must not be promoted to a passing green.
+  // Loading/failed folder review rows lack a state glyph; show problems without implying confirmed success.
   it('flags problems on a stateless row without ever claiming success', () => {
     const stateless = (status: 'failure' | 'pending' | 'success') =>
       renderToStaticMarkup(

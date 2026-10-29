@@ -4,11 +4,7 @@ import type { ConnectionState } from '../transport/types'
 import type { RpcClient } from '../transport/rpc-client'
 import { createBotAuthorOverrideSet } from '../../../src/shared/pr-bot-author-overrides'
 
-// Fetches the desktop's manual bot-author overrides (GlobalSettings.prBotAuthorOverrides,
-// marked from the desktop Comments panel) so the mobile Humans/Bots comment filter
-// classifies the same authors as bots. There is no settings-change stream over the
-// mobile RPC, so callers pass a refreshKey (e.g. the PR payload identity) to re-fetch
-// alongside PR data instead of holding a one-shot snapshot for the whole session.
+// Settings have no mobile change stream; refresh overrides alongside PR data so desktop bot classifications stay current.
 export function usePRBotAuthorOverrides(
   client: RpcClient | null,
   connState: ConnectionState,
@@ -24,8 +20,7 @@ export function usePRBotAuthorOverrides(
       return
     }
     if (sourceClientRef.current !== client) {
-      // Why: overrides belong to the connected runtime; never render a prior
-      // host's classification while the replacement host is still loading.
+      // Host replacement must not render the previous runtime’s bot overrides.
       sourceClientRef.current = client
       setLogins([])
     }
@@ -45,7 +40,7 @@ export function usePRBotAuthorOverrides(
         }
       })
       .catch(() => {
-        // Best-effort: without the setting the heuristics still classify most bots.
+        // Without overrides, retain heuristic bot classification.
       })
     return () => {
       stale = true

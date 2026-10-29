@@ -13,8 +13,7 @@ function workflowJobs(path) {
   return parse(readFileSync(path, 'utf8')).jobs
 }
 
-// Why verify.needs: a job left out of it (e2e, ime, wsl) can be red or skipped without blocking a merge.
-// Each gating job carries the code_paths output that decides whether it runs; a called workflow's jobs inherit the caller's.
+// Gating jobs must reach verify.needs or failures/skips cannot block merge; each needs code_paths selection, inherited by called workflows.
 function gatingJobs() {
   const jobs = workflowJobs('.github/workflows/pr.yml')
   return jobs.verify.needs.flatMap((name) => {

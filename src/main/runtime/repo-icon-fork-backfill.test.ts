@@ -96,9 +96,7 @@ describe('startup fork-upstream backfill', () => {
   })
 
   it('skips every row whose files sit on an SSH host', async () => {
-    // Why: the incumbent guard read `repo.connectionId`, so a row minted with only the unified
-    // spelling fell through and had its upstream read off this client's copy of the path. A
-    // runtime row's nested target holds its files too, and is equally not ours to read.
+    // Unified remote ownership, including nested runtime targets, must not read this client's same-path files.
     const runtime = new OrcaRuntimeService()
     const updateRepo = attachStore(runtime, [
       makeRepo({ id: 'repo-ssh', executionHostId: 'ssh:builder' }),

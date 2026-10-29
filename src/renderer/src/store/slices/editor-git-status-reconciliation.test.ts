@@ -51,6 +51,28 @@ describe('createEditorSlice conflict status reconciliation', () => {
     expect(store.getState().gitStatusHugeByWorktree['wt-huge']).toBeUndefined()
   })
 
+  it('keeps the last known changes while git status cannot be read', () => {
+    const store = createEditorStore()
+    const entries = [{ path: 'README.md', status: 'modified' as const, area: 'unstaged' as const }]
+    store.getState().setGitStatus('wt-1', { conflictOperation: 'unknown', entries })
+
+    store.getState().setGitStatus('wt-1', {
+      conflictOperation: 'merge',
+      entries: [],
+      readError: 'fatal: .git/index: index file smaller than expected'
+    })
+
+    expect(store.getState().gitStatusByWorktree['wt-1']).toEqual(entries)
+    expect(store.getState().gitConflictOperationByWorktree['wt-1']).toBe('merge')
+    expect(store.getState().gitStatusReadErrorByWorktree['wt-1']).toBe(
+      'fatal: .git/index: index file smaller than expected'
+    )
+
+    store.getState().setGitStatus('wt-1', { conflictOperation: 'unknown', entries })
+
+    expect(store.getState().gitStatusReadErrorByWorktree['wt-1']).toBeUndefined()
+  })
+
   it('preserves omitted conflict state when a capped result is incomplete', () => {
     const store = createEditorStore()
     const conflict = {

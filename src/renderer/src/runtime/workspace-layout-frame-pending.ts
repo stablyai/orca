@@ -1,6 +1,4 @@
-// What a workspace's records frames changed since the store last showed it, kept per record so a
-// flush shows only those records: panes' terminal bindings and live titles apply alone; any other
-// record kind takes a workspace build.
+// Accumulate per-record changes until flush. Bindings/live titles apply alone; other records require a workspace build.
 
 import type { WorkspaceLayoutCache } from '@/store/workspace-layout-cache'
 import { stableJson } from '../../../shared/workspace-layout/workspace-layout-load-report'
@@ -16,7 +14,6 @@ import type {
 } from '../../../shared/workspace-layout/workspace-layout-records'
 
 export type PendingWorkspaceChanges = {
-  /** Tab rows, the tab set or order, groups, a pane tree's shape, editor files or browser tabs. */
   rebuild: boolean
   /** Terminal entity id → the tab as the store last showed it, for tabs whose live titles changed. */
   titled: Map<string, PublishedTab>
@@ -24,7 +21,6 @@ export type PendingWorkspaceChanges = {
   rebound: Set<string>
 }
 
-/** The workspace's pending changes, started empty. */
 export function pendingWorkspaceChanges(
   pending: Map<string, PendingWorkspaceChanges>,
   key: string
@@ -104,10 +100,7 @@ function notePendingRecordChange(
   }
 }
 
-/**
- * Adds a records frame's changes, each against the cache's copy `before` it applied to. A
- * workspace new to the stream, sent whole or gone leaves `shown`: only a full build shows it.
- */
+/** Compare records against prior cache; new, whole or removed workspaces leave shown so next drawing uses a full build. */
 export function notePendingRecordsFrame(
   pending: Map<string, PendingWorkspaceChanges>,
   shown: Set<string>,

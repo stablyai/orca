@@ -1,21 +1,4 @@
-// Rows written before their producer had a final identity, and the correction
-// owed to each.
-//
-// A subagent's first frames can arrive before the `task_started` that names it.
-// The row is written anyway, stamped with the only handle that exists yet — the
-// spawn call's own id. It is not held: bookkeeping must never gate a user's
-// view of what an agent said, and a row withheld for an announcement that never
-// comes is output the user never sees.
-//
-// The stamp is then corrected in place. Re-appending the same `itemId` bumps
-// its revision and the reducer rebuilds the row's linkage from the newest one,
-// pinning `sequence` and `observedAt` so the correction refreshes attribution
-// without moving the bubble. That is the same mechanism the streamed-text
-// checkpoints and the subagent group row already use.
-//
-// What this must never do is make a row WORSE. Every exit either writes a
-// strictly better stamp or drops the correction untouched; losing one costs a
-// row the canonical id, never its content and never its author.
+// Publish before task_started using the spawn ID; correct attribution later without replacing content.
 
 import { agentJournalLinkageFields } from '../../shared/agent-session-journal-producer'
 import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
@@ -28,41 +11,27 @@ import type {
 import type { StructuredAgentSessionItemAppendOptions } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import type { ClaudeSubagentLinkageSource } from './claude-subagent-linkage'
 
-/**
- * Stamps one row with its producer, and remembers it when that producer's
- * identity is still provisional.
- *
- * The row is always written by the caller, immediately, with whatever this
- * returns. No site chooses — the envelope it came from already decided.
- */
 export type ClaudeRowStamp = (
   identity: AgentJournalItemIdentity,
   body: AgentJournalItemBody
 ) => StructuredAgentSessionItemAppendOptions
 
-/** Corrections outstanding at once, across every producer. */
 const MAX_OUTSTANDING_CORRECTIONS = 256
 
-/** Per producer, so one child talking hard before its announcement cannot push
- *  out every other child's corrections along with its own. */
+/** Limit each producer so one child cannot evict all others' corrections. */
 const MAX_CORRECTIONS_PER_REF = 128
 
 type OutstandingCorrection = {
   ref: string
   identity: AgentJournalItemIdentity
-  /** The newest body written under this identity. Two writes can share one —
-   *  a tool call and its result do — and a correction carrying the older body
-   *  would revert the row it is only meant to re-attribute. */
+  /** Keep the newest body so restamping cannot revert a tool call to its pre-result state. */
   body: AgentJournalItemBody
   stamped: StructuredAgentSessionItemAppendOptions
 }
 
 export type ClaudeProvisionalRowCorrectionsDeps = ClaudeSubagentLinkageSource & {
-  /** The turn a row written now belongs to: the open root turn, whoever produced the row. */
   turnScope: () => AgentJournalTurnScope
-  /** Re-appends a row under its own identity, which revises it in place.
-   *  Returns whether the write was ADMITTED: a sink under backpressure refuses,
-   *  and a correction dropped on a refusal is an obligation nothing re-derives. */
+  /** Revise in place; false means backpressure refused the correction and it still needs retrying. */
   rewrite: (
     identity: AgentJournalItemIdentity,
     body: AgentJournalItemBody,
@@ -72,11 +41,8 @@ export type ClaudeProvisionalRowCorrectionsDeps = ClaudeSubagentLinkageSource & 
 }
 
 export class ClaudeProvisionalRowCorrections {
-  /** Keyed by `itemId`, so a second write to one row replaces the correction
-   *  owed to it rather than queueing a stale body behind the fresh one. */
   private readonly outstanding = new Map<string, OutstandingCorrection>()
-  /** Producers whose correction was abandoned at the bound. Remembered so later
-   *  rows are not queued for a correction their siblings will never get. */
+  /** Stop queueing corrections for evicted producers so unresolved rows keep consistent IDs. */
   private readonly givenUp = new Set<string>()
 
   constructor(private readonly deps: ClaudeProvisionalRowCorrectionsDeps) {}
@@ -85,8 +51,6 @@ export class ClaudeProvisionalRowCorrections {
     return this.outstanding.size
   }
 
-  /** How rows from one envelope are attributed. A null reference is the
-   *  session's own agent; anything else is a child of it. */
   stampFor(parentToolUseId: string | null): ClaudeRowStamp {
     if (parentToolUseId === null) {
       return (identity) => {
@@ -106,18 +70,14 @@ export class ClaudeProvisionalRowCorrections {
     }
   }
 
-  /** An announcement may have named a producer rows are already stamped with.
-   *  Rewrites those whose stamp would now differ and forgets the rest. */
   retry(): void {
     let wrote = false
-    // Map iteration tolerates deletion of the entry just visited.
     for (const [itemId, correction] of this.outstanding) {
       if (this.deps.linkageFor(correction.ref).kind === 'pending') {
         continue
       }
       const outcome = this.settle(correction)
-      // Kept outstanding when the sink refused it, so `abandon` gets another
-      // go. Dropping it here would strand the row on a stamp nothing revisits.
+      // Retain refused corrections for another retry or the final abandon attempt.
       if (outcome !== 'refused') {
         this.outstanding.delete(itemId)
       }
@@ -128,14 +88,10 @@ export class ClaudeProvisionalRowCorrections {
     }
   }
 
-  /** Nothing further can name these producers, so no correction is coming. The
-   *  rows keep the stamp they already carry; at settle it is the same verdict,
-   *  so this writes nothing and burns no revision. */
+  /** Make a final correction attempt; unresolved identities keep their provisional stamps. */
   abandon(): void {
     let wrote = false
     for (const correction of this.outstanding.values()) {
-      // Last attempt. A refusal here ends it: the row keeps a usable id, and an
-      // obligation with no exit is worse than one that settles for less.
       wrote = this.settle(correction) === 'wrote' || wrote
     }
     this.outstanding.clear()
@@ -145,16 +101,7 @@ export class ClaudeProvisionalRowCorrections {
     }
   }
 
-  /**
-   * A settled write lands on a row a correction was owed to, so the correction
-   * goes.
-   *
-   * Dropped rather than re-bodied: a settled write already carries a FINAL
-   * verdict, so the correction could only restamp the row from a reference this
-   * write did not use — equal at best, and at worst the older body. One row can
-   * legitimately be written under two references (a call and its result), and
-   * this is what keeps a correction owed to the first from outliving the second.
-   */
+  /** A final write supersedes pending corrections, even when it uses another producer reference. */
   private supersede(identity: AgentJournalItemIdentity): void {
     this.outstanding.delete(agentJournalItemKey(identity))
   }
@@ -163,14 +110,12 @@ export class ClaudeProvisionalRowCorrections {
     return agentJournalLinkageFields(this.deps.settledLinkageFor(parentToolUseId).linkage)
   }
 
-  /** Writes the correction only when it actually changes the row's attribution.
-   *  A duplicate must not burn a revision. */
   private settle(correction: OutstandingCorrection): 'wrote' | 'unchanged' | 'refused' {
     const options = this.stamp(correction.ref)
     if (sameLinkage(options, correction.stamped)) {
       return 'unchanged'
     }
-    // A re-stamp revises the row, so its scope stays the one it was created with.
+    // Preserve the original turn scope when revising attribution.
     const restamped = { ...options, turnScope: correction.stamped.turnScope }
     return this.deps.rewrite(correction.identity, correction.body, restamped) ? 'wrote' : 'refused'
   }
@@ -185,8 +130,7 @@ export class ClaudeProvisionalRowCorrections {
       return
     }
     const itemId = agentJournalItemKey(identity)
-    // Re-inserted rather than updated in place, so the newest write is also the
-    // youngest — insertion order is what `giveUpOnOldest` reads.
+    // Reinsert so eviction order follows the newest write, not the first one.
     this.outstanding.delete(itemId)
     this.outstanding.set(itemId, { ref, identity, body, stamped })
     if (this.countFor(ref) > MAX_CORRECTIONS_PER_REF) {
@@ -197,15 +141,7 @@ export class ClaudeProvisionalRowCorrections {
     }
   }
 
-  /**
-   * Stops correcting one producer, and forgets what was owed it.
-   *
-   * WHOLESALE, never row by row. Correcting some of a child's rows and not the
-   * rest splits one child across two ids in the same session — worse than
-   * correcting none, because the rows left behind are the ones a reader would
-   * have to reconcile. Giving up leaves every one of them on the spawn call's
-   * id: still that child's, still not the parent's, and still all the same.
-   */
+  /** Abandon all pending rows for a producer to avoid splitting its attribution across IDs. */
   private giveUp(ref: string): void {
     this.givenUp.add(ref)
     for (const [itemId, entry] of this.outstanding) {

@@ -1,25 +1,5 @@
 // @vitest-environment happy-dom
-/**
- * The preedit overlay must be VISIBLE while the IME is still composing, not merely populated.
- *
- * Recorded shape: Windows 11 / MS Korean 2-Set typed into a WSL pane, captured as the DOM event
- * stream on the xterm helper textarea. Cited capture:
- * `.tmp/ime-handoff/evidence/11919-windows-wsl-current/11919-current-owner.json` (gitignored;
- * the subsequences below are copied verbatim from indices 240-253 and 79-92 of its `trace`).
- *
- * The capture contains a shape none of the Linux traces do: after `compositionend`, the IME
- * RESUMES the composition with a bare `compositionupdate` and **no second `compositionstart`**.
- * xterm hides the overlay in `compositionend` (`_finalizeComposition` drops `.active`) and only
- * ever re-adds it in `compositionstart`, so the resumed preedit is written into an element that
- * is still `display: none`. The syllable commits normally afterwards, which is exactly the
- * reported symptom: the committed text lands but the user types the next one blind.
- *
- * The first contract is the DISPLAYED overlay — the `active` class that CSS keys `display: block`
- * off, together with the text in it. The resumed update must also become a real transaction so its
- * later compositionend commits and cleans up normally.
- *
- * happy-dom performs no layout, so the cell size is supplied and geometry is not asserted.
- */
+/** Exercise synthetic resume-without-start ordering; resumed updates must reopen visible preedit and create a transaction that commits/cleans up. Real dispatch-only Windows traces cover balanced sessions separately; happy-dom supplies metrics without layout. */
 import { Terminal } from '@xterm/xterm'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -34,11 +14,7 @@ type RecordedEvent = {
   isComposing?: boolean
 }
 
-/**
- * Indices 240-253 of the capture: 네 commits, and the IME reopens on the next key with an
- * update alone. `keyCode: null` in the capture means the field was not recorded for that
- * event type, not that the event carried none.
- */
+// Synthetic update-only resume after 네 commits; null keyCode denotes an unrecorded field, not an absent browser value.
 const RESUMED_WITHOUT_START: RecordedEvent[] = [
   { type: 'keydown', key: 'Process', keyCode: 229, isComposing: true },
   { type: 'compositionupdate', data: '네' },
@@ -51,7 +27,7 @@ const RESUMED_WITHOUT_START: RecordedEvent[] = [
   { type: 'input', data: '네', isComposing: true }
 ]
 
-/** Indices 79-88: the same resume, this time across the Enter that committed 제. */
+// Synthetic update-only resume across the Enter committing 제.
 const RESUMED_ACROSS_ENTER: RecordedEvent[] = [
   { type: 'input', data: '제', isComposing: true },
   { type: 'compositionend', data: '제' },
@@ -158,7 +134,6 @@ function openTerminal(): Rig {
   return { compositionView, emitted, replay, terminal }
 }
 
-/** What the user sees: the class CSS keys `display: block` off, and the text inside it. */
 function displayedPreedit(view: HTMLElement): { preedit: string; shown: boolean } {
   return {
     preedit: (view.textContent ?? '').replaceAll('‎', ''),

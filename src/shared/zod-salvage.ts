@@ -50,8 +50,7 @@ function parseEntry<T extends z.ZodType>(
   }
 }
 
-/** parseEntry with `segment` on the diagnostic path. Takes the schema and value rather than a
- *  thunk: this runs once per persisted record, and a closure per entry is the dominant load cost. */
+/** Track the diagnostic path without a per-entry closure, a dominant persisted-load cost. */
 function parseEntryAt<T extends z.ZodType>(
   segment: string | number,
   schema: T,
@@ -65,10 +64,7 @@ function parseEntryAt<T extends z.ZodType>(
   }
 }
 
-/** The keys `z.record(z.string(), z.unknown())` would hand a transform, or null where it would
- *  reject: not a plain object, or carrying an enumerable symbol key its string key schema fails.
- *  Why: every entry is re-validated below anyway, so letting zod build a throwaway copy first is a
- *  second full traversal of the largest maps in the persisted session. */
+/** Match z.record string-key acceptance, rejecting non-plain objects/enumerable symbols, without allocating a throwaway copy before revalidating entries. */
 function recordEntryKeys(raw: unknown): string[] | null {
   if (!z.core.util.isPlainObject(raw)) {
     return null
@@ -81,14 +77,8 @@ function recordEntryKeys(raw: unknown): string[] | null {
   return Object.keys(raw)
 }
 
-/**
- * Enum whose arm set is a wire surface: an arm this build does not know degrades to `fallback`
- * instead of rejecting the reply. A non-string stays fatal, so this widens the vocabulary without
- * also accepting the wrong type. Not `.catch()`, which would swallow absence too.
- */
-// `readonly string[]` rather than a non-empty tuple so a hostUnionArms list can feed it; z.enum
-// takes the same, so the tuple constraint only excluded callers zod itself accepts. `const` keeps a
-// bare literal's arms, which the parsed type is built from.
+/** Accept unknown string arms as fallback, but reject absent/non-string values. catch would also swallow absence. */
+// Accept readonly arm lists like z.enum; const preserves literal-arm inference.
 export function openEnum<const T extends readonly string[], F extends T[number] | undefined>(
   values: T,
   fallback: F
@@ -96,15 +86,7 @@ export function openEnum<const T extends readonly string[], F extends T[number] 
   return z.enum(values).or(z.string().transform(() => fallback))
 }
 
-/**
- * The arms of a closed enum, spelled as a coverage record over the host's own union so tsc holds
- * the schema to that union both ways: an arm the host adds is a missing property here, one it drops
- * is an excess property. `NoInfer` keeps U from being read off the record, so omitting the type
- * argument leaves it at its `never` default and the parameter becomes `never` — the call fails to
- * compile rather than pinning the record only to itself. It belongs in the schema module rather
- * than its test because the list is what feeds `z.enum`: the coverage record and the arms the
- * schema actually accepts are then one object, and a test-side copy could drift from it.
- */
+/** Use the host union as an exhaustive record feeding z.enum directly. NoInfer plus the never default requires an explicit union; a test-side copy could drift from the accepted arms. */
 export function hostUnionArms<U extends string = never>(
   coverage: [U] extends [never] ? never : Readonly<Record<NoInfer<U>, true>>
 ): readonly U[] {
@@ -112,11 +94,7 @@ export function hostUnionArms<U extends string = never>(
   return Object.keys(coverage) as U[]
 }
 
-/** Array that drops the elements it cannot parse instead of failing.
- *  Absence stays fatal on its own: both containers issue on `undefined` and, being bare transforms,
- *  set neither optin nor optout, and zod only swallows an absent key's issues when a field is both.
- *  salvagedField/salvagedOptional wrap them for fallback semantics, not for absence detection.
- *  Pinned by zod-salvage-absence.test.ts. */
+/** Drop invalid elements; absence remains fatal. Bare transforms set neither optin nor optout, both required for Zod to suppress missing-key issues. Wrappers supply fallback semantics; zod-salvage-absence.test.ts pins this boundary. */
 export function salvagingArray<T extends z.ZodType>(item: T): z.ZodType<z.output<T>[], unknown> {
   return z.unknown().transform((raw, ctx) => {
     if (!Array.isArray(raw)) {
@@ -197,9 +175,6 @@ export function salvagedField<T extends z.ZodType>(
 export function salvagedOptional<T extends z.ZodType>(
   name: string,
   schema: T
-): z.ZodType<z.output<T> | undefined, unknown> {
-  return salvaged(name, schema, () => undefined).optional() as z.ZodType<
-    z.output<T> | undefined,
-    unknown
-  >
+): z.ZodOptional<z.ZodType<z.output<T> | undefined, unknown>> {
+  return salvagedField(name, schema.optional(), () => undefined).optional()
 }

@@ -1,5 +1,4 @@
-// A restored pane's history: the window's saved copy only with the switch off. Layout-owner
-// builds paint history only from the terminal's host (L236).
+// Layout-owner builds restore history from the terminal host; only switch-off uses the window’s saved copy (L236).
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const restoreScrollbackBuffers = vi.fn()

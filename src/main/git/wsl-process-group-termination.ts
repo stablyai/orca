@@ -42,8 +42,7 @@ export function createWslProcessGroupTermination(distro: string): WslProcessGrou
       `  sleep ${GUEST_TERMINATION_INTERVAL_SECONDS}`,
       'done'
     ].join('\n')
-    // loginPath 'none': the payload is builtins and coreutils on the default
-    // PATH, so a login probe would only add latency to a kill.
+    // Builtins/coreutils use the default PATH; a login probe only delays termination.
     const result = await runWslProcess({
       script,
       args: [String(processGroupId)],
@@ -64,10 +63,7 @@ export function createWslProcessGroupTermination(distro: string): WslProcessGrou
         `printf '%s%s\\n' ${quotePosixShell(marker)} "$$" >&2`,
         'exec "$@"'
       ].join('\n')
-      // Why probe rather than assume: BusyBox `setsid` has no `--wait`, so there
-      // the wrapper would fail the Git command outright. Without a new session the
-      // reported group is not ours to kill, so the fallback reports no identity
-      // and the caller falls back to waiting for the root exit.
+      // BusyBox setsid lacks --wait; without a new session, report no group to avoid killing another owner.
       const script = [
         'if setsid --wait true 2>/dev/null; then',
         `  exec setsid --wait sh -c ${quotePosixShell(reportGroup)} orca-wsl-process-group "$@"`,

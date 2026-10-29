@@ -19,12 +19,10 @@ export function useCombinedDiffFileTreeResize(collapsed: boolean): {
   const setStoredWidth = useAppStore((s) => s.setCombinedDiffFileTreeWidth)
   const [containerWidth, setContainerWidth] = useState<number | null>(null)
   const { maxWidth, minWidth } = computeCombinedDiffFileTreeWidthBounds(containerWidth ?? 0)
-  // Why: the container clamp is render-only — a pane that is hidden (0px) or temporarily
-  // narrowed must never write back and shrink the width the user chose.
+  // Clamp only rendered width; hidden or narrowed panes must not overwrite the user’s stored choice.
   const width = clampCombinedDiffFileTreeWidth(storedWidth, containerWidth ?? undefined)
   const { containerRef, onResizeStart } = useSidebarResize<HTMLElement>({
-    // Why: the tree unmounts while collapsed but this hook does not, so the toggle has to
-    // invalidate useSidebarResize's layout effect or the re-expanded aside keeps no width.
+    // The hook survives collapsed tree unmounts; isOpen must invalidate width application on reopening.
     isOpen: !collapsed,
     width,
     minWidth,
@@ -38,7 +36,7 @@ export function useCombinedDiffFileTreeResize(collapsed: boolean): {
     if (collapsed || !container) {
       return
     }
-    // Why: clientWidth ignores ancestor transforms, so a dialog's open animation can't mis-measure.
+    // clientWidth ignores ancestor transforms, including dialog opening animations.
     const measure = (): void => {
       setContainerWidth(container.clientWidth)
     }

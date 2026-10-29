@@ -4,8 +4,6 @@ import {
   fakeCodex,
   identityFor
 } from './codex-structured-session-adapter-fixture'
-// Only the Codex app-server child's own exit says Codex stopped; a close Orca made — a journal
-// sink that could not take a frame, a forced close — is Orca's.
 
 import { describe, expect, it, vi } from 'vitest'
 import { agentSessionFailureWords } from '../../shared/agent-session-failure-words'

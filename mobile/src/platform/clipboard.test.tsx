@@ -1,12 +1,11 @@
-/** The native form of the clipboard seam: the app's own `expo-clipboard`, and what it answers. */
 import { act, create } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { ClipboardReader, ClipboardWriter } from './clipboard'
+import type { ClipboardImage, ClipboardReader, ClipboardWriter } from './clipboard'
 
 const clipboard = vi.hoisted(() => ({
   setStringAsync: vi.fn(() => Promise.resolve(true)),
   getStringAsync: vi.fn(() => Promise.resolve('')),
-  getImageAsync: vi.fn(() => Promise.resolve(null)),
+  getImageAsync: vi.fn<() => Promise<ClipboardImage | null>>(() => Promise.resolve(null)),
   hasStringAsync: vi.fn(() => Promise.resolve(false)),
   hasImageAsync: vi.fn(() => Promise.resolve(false))
 }))
@@ -15,7 +14,6 @@ vi.mock('expo-clipboard', () => clipboard)
 
 import { useClipboardReader, useClipboardWriter } from './clipboard'
 
-/** The hook as a screen holds it; `react-test-renderer` is what every other seam test here uses. */
 function mountWriter(): ClipboardWriter {
   const held: { writer: ClipboardWriter | null } = { writer: null }
   function Screen(): null {
@@ -32,7 +30,6 @@ function mountWriter(): ClipboardWriter {
   return writer
 }
 
-/** The reader as a screen holds it, mounted the same way. */
 function mountReader(): ClipboardReader {
   const held: { reader: ClipboardReader | null } = { reader: null }
   function Screen(): null {
@@ -73,12 +70,10 @@ describe('writing the clipboard on a phone', () => {
     expect(clipboard.setStringAsync.mock.calls).toEqual([['copied']])
   })
 
-  it('rejects when the pasteboard refused it, rather than reporting a copy', async () => {
-    // `setStringAsync` answers whether the write landed, and a caller showing "Copied" over a
-    // write that did not is the failure this seam exists to avoid.
-    clipboard.setStringAsync.mockImplementation(() => Promise.resolve(false))
+  it('propagates a pasteboard write failure', async () => {
+    clipboard.setStringAsync.mockRejectedValue(new Error('Clipboard unavailable'))
     const writer = mountWriter()
-    await expect(writer.writeText('copied')).rejects.toThrow(/did not accept/)
+    await expect(writer.writeText('copied')).rejects.toThrow('Clipboard unavailable')
   })
 })
 
@@ -88,15 +83,20 @@ describe('reading the clipboard on a phone', () => {
     await expect(mountReader().readText()).resolves.toBe('pasted')
   })
 
-  it('asks for a PNG, which is the format the upload path re-encodes to', async () => {
-    await expect(mountReader().readImage()).resolves.toBeNull()
+  it('asks for PNG and returns the image and its dimensions', async () => {
+    clipboard.getImageAsync.mockResolvedValue({
+      data: 'data:image/png;base64,AQID',
+      size: { width: 3, height: 1 }
+    })
+    await expect(mountReader().readImage()).resolves.toEqual({
+      data: 'data:image/png;base64,AQID',
+      size: { width: 3, height: 1 }
+    })
     expect(clipboard.getImageAsync.mock.calls).toEqual([[{ format: 'png' }]])
   })
 
   it('starts both probes before either has answered', async () => {
-    // Awaiting them in turn puts an IPC round trip on the critical path of every mount, every
-    // foreground and every select-mode toggle, which is where these callers run. The order is the
-    // subject, so neither probe resolves until both have been called.
+    // Hold both probes open to prove they start in parallel; sequential awaits add IPC latency on mount/foreground/toggle.
     const started: string[] = []
     let releaseString = (): void => {}
     clipboard.hasStringAsync.mockImplementation(
@@ -108,8 +108,6 @@ describe('reading the clipboard on a phone', () => {
     )
     clipboard.hasImageAsync.mockImplementation(() => {
       started.push('image')
-      // The image probe answers first: with a sequential await this line is never reached, because
-      // nothing would have called it before the text probe settled.
       releaseString()
       return Promise.resolve(false)
     })
@@ -120,7 +118,7 @@ describe('reading the clipboard on a phone', () => {
   it('probes both kinds without reading either', async () => {
     clipboard.hasImageAsync.mockImplementation(() => Promise.resolve(true))
     await expect(mountReader().contents()).resolves.toEqual({ text: false, image: true })
-    // The probe is the whole point on iOS: reading to find out raises the paste-consent prompt.
+    // Probe without reading so iOS does not show paste consent just to enable a button.
     expect(clipboard.getStringAsync).not.toHaveBeenCalled()
     expect(clipboard.getImageAsync).not.toHaveBeenCalled()
   })

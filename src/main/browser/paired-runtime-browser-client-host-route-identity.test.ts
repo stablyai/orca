@@ -118,7 +118,6 @@ async function routeIdentity(
   return identity
 }
 
-/** Authority identity the client host records for `environment` under `authorityRuntimeId`. */
 async function connectionIdentity(
   environment: KnownRuntimeEnvironment,
   authorityRuntimeId: string
@@ -144,7 +143,6 @@ function pageIdentity(
   }
 }
 
-/** Partition a page for `identity` lands in, resolved the way page creation does it. */
 function resolvePartition(filePath: string, identity: ClientHostRouteIdentity): string {
   const store = new BrowserRoutePartitionBindingStore({ filePath })
   const derived = resolveBrowserRoutePartitionBinding({
@@ -180,7 +178,7 @@ function resolvePartition(filePath: string, identity: ClientHostRouteIdentity): 
   return derived.partition
 }
 
-/** The shipping build: derives from the pairing identity and reads only `fingerprint`. */
+/** Models the pre-alias format: pairing identity and fingerprint only. */
 function resolvePartitionAsOlderBuild(filePath: string, identity: ClientHostRouteIdentity): string {
   const derived = deriveBrowserRoutePartition(
     pageIdentity(
@@ -204,7 +202,7 @@ function resolvePartitionAsOlderBuild(filePath: string, identity: ClientHostRout
   return derived.partition
 }
 
-/** An older build's rewrite: its parser keeps only the fields it knows. */
+/** Older parsers discard unrecognized alias fields. */
 function rewriteAsOlderBuild(filePath: string): void {
   const persisted: {
     version: number
@@ -223,7 +221,6 @@ function rewriteAsOlderBuild(filePath: string): void {
   writeFileSync(filePath, JSON.stringify({ version: persisted.version, bindings }))
 }
 
-/** Seeds the jar an older build minted from `identity`'s pairing. */
 function seedOlderBuildJar(filePath: string, identity: ClientHostRouteIdentity): string {
   const derived = deriveBrowserRoutePartition(
     pageIdentity(
@@ -252,8 +249,6 @@ beforeEach(() => {
 })
 
 describe('client host authority connection identity', () => {
-  // Why: authorityRuntimeId is a per-process UUID. Hashing it into the current identity is the
-  // regression that minted a fresh partition on every remote restart and logged the user out.
   it('survives the remote restarting, and keeps the pre-migration identity distinct', async () => {
     configurePairedRuntimeBrowserClientHostsForOrcaProfile({ orcaProfileId: 'profile-a' })
     const environment = pairedEnvironment('environment-restart')
@@ -266,8 +261,6 @@ describe('client host authority connection identity', () => {
     expect(before.legacy).not.toBe(before.current)
   })
 
-  // Why: each of these names a different server or a different trust decision, so sharing an
-  // identity would serve one of them the other's cookies.
   it('separates environments, pairing revisions, and server keys', async () => {
     configurePairedRuntimeBrowserClientHostsForOrcaProfile({ orcaProfileId: 'profile-a' })
     const identities = [
@@ -362,15 +355,11 @@ describe('client host identity for a server Orca re-pairs in place', () => {
       const olderJar = seedOlderBuildJar(filePath, atRevisionOne)
 
       expect(resolvePartition(filePath, atRevisionOne)).toBe(olderJar)
-      // Why: a downgraded build reads only `fingerprint`, so it must reopen the same jar.
       expect(resolvePartitionAsOlderBuild(filePath, atRevisionOne)).toBe(olderJar)
       expect(resolvePartition(filePath, atRevisionTwo)).toBe(olderJar)
-      // The fingerprint follows the pairing, so a downgrade after the re-pair still finds it.
       expect(resolvePartitionAsOlderBuild(filePath, atRevisionTwo)).toBe(olderJar)
-      // An older build's rewrite drops the alias; the next upgrade re-adopts at that pairing.
       rewriteAsOlderBuild(filePath)
       expect(resolvePartition(filePath, atRevisionTwo)).toBe(olderJar)
-      // Why: a different server key is a different server, which never inherits the jar.
       expect(resolvePartition(filePath, withNewKey)).not.toBe(olderJar)
     }
   )
@@ -396,8 +385,6 @@ describe('client host identity for a server Orca re-pairs in place', () => {
     expect(resolvePartitionAsOlderBuild(filePath, atRevisionOne)).toBe(jar)
     expect(resolvePartition(filePath, atRevisionTwo)).toBe(jar)
     expect(resolvePartitionAsOlderBuild(filePath, atRevisionTwo)).toBe(jar)
-    // Why: the jar's name is derived from the stable identity, so losing its alias to an
-    // older build's rewrite must not turn it into a binding conflict.
     rewriteAsOlderBuild(filePath)
     expect(resolvePartition(filePath, atRevisionOne)).toBe(jar)
     expect(resolvePartitionAsOlderBuild(filePath, atRevisionOne)).toBe(jar)
@@ -444,7 +431,6 @@ describe('client host route identity lifetime', () => {
       expect(compositions.at(-1)?.closed).toEqual([failure])
     })
 
-    // Why: a cookie import must fall through to the server RPC, not target the dead partition.
     expect(getPairedRuntimeBrowserClientRouteIdentity(environment.id)).toBeNull()
   })
 })

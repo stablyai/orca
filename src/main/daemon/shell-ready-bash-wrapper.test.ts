@@ -15,7 +15,6 @@ import {
   expectBashOsc133Lifecycle,
   runInteractiveBashRcfile
 } from './daemon-bash-wrapper-osc133-fixture'
-// Why resolved rather than hardcoded: the wrapper tree is content-addressed.
 import { getShellReadyWrapperRoot } from './shell-ready'
 
 async function importFreshShellReady() {
@@ -39,7 +38,6 @@ const describePosix = process.platform === 'win32' ? describe.skip : describe
 const hasBash = process.platform !== 'win32' && spawnSync('bash', ['--version']).status === 0
 const itWithBash = hasBash ? it : it.skip
 
-// Split out of shell-ready.test.ts, which sits at the max-lines cap for tests.
 describePosix('daemon shell-ready bash wrapper', () => {
   let userDataPath: string
   let previousUserDataPath: string | undefined
@@ -99,14 +97,13 @@ describePosix('daemon shell-ready bash wrapper', () => {
     expect(result.stdout.split('\x1b]133;C\x07').join('').trim()).toBe(expectedLauncher)
   })
 
-  // Why: regression guard for issue #2422 — bash wrapper must emit OSC 133 C/D so SSH sessions clear stale 'working' agent rows.
+  // Remote agent status depends on the wrapper’s OSC 133 command start and completion markers.
   it('emits OSC 133 C/D markers in the daemon bash wrapper', async () => {
     const { getShellReadyLaunchConfig } = await importFreshShellReady()
 
     getShellReadyLaunchConfig('/bin/zsh')
     getShellReadyLaunchConfig('/bin/bash')
 
-    // Why .zshenv: the zsh markers live in the epilogue, behind `markers`.
     const zshrc = readFileSync(join(getShellReadyWrapperRoot(), 'zsh', '.zshenv'), 'utf8')
     const bashRc = readFileSync(join(getShellReadyWrapperRoot(), 'bash', 'rcfile'), 'utf8')
 
@@ -115,7 +112,7 @@ describePosix('daemon shell-ready bash wrapper', () => {
     expect(bashRc).toContain('printf "\\033]133;C\\007"')
     expect(bashRc).toContain('__orca_prepend_prompt_command "__orca_osc133_precmd"')
     expect(bashRc).toContain('__orca_append_prompt_command "__orca_osc133_epilogue"')
-    // DEBUG is armed after PROMPT_COMMAND setup so rcfile commands aren't seen as foreground; lastIndexOf skips the epilogue's re-arm.
+    // DEBUG must arm after prompt setup; use lastIndexOf to skip its epilogue re-arm.
     expect(bashRc.lastIndexOf("trap '__orca_osc133_preexec' DEBUG")).toBeGreaterThan(
       bashRc.indexOf('__orca_append_prompt_command "__orca_osc133_epilogue"')
     )
@@ -158,7 +155,7 @@ describePosix('daemon shell-ready bash wrapper', () => {
     'still emits 133;C when bash-preexec re-arms the DEBUG trap at first prompt',
     async () => {
       const { getDaemonBashShellReadyRcfileContent } = await importFreshDaemonBashRcfile()
-      // Minimal bash-preexec imitation: re-arms its own DEBUG trap from PROMPT_COMMAND at first prompt, silencing Orca's trap.
+      // Simulate bash-preexec replacing Orca’s DEBUG trap at the first prompt.
       writeFileSync(
         join(userDataPath, '.bash_profile'),
         [
@@ -184,7 +181,7 @@ describePosix('daemon shell-ready bash wrapper', () => {
     'dispatches a non-empty preexec_functions against the real command, not Orca hooks',
     async () => {
       const { getDaemonBashShellReadyRcfileContent } = await importFreshDaemonBashRcfile()
-      // Why: the epilogue chains bash-preexec's re-armed DEBUG trap, so a real preexec callback must fire against the user's command.
+      // A real callback verifies that chaining preserves the user’s preexec handler.
       writeFileSync(
         join(userDataPath, '.bash_profile'),
         [

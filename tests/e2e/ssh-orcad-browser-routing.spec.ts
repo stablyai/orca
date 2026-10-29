@@ -25,6 +25,7 @@ import { sshExecutionHostStorageIdentity } from '../../src/main/browser/browser-
 import { reconnect } from './helpers/orcad-convert-flow'
 import { navigateGuest } from './helpers/browser-split-guest-probes'
 import { ORCAD_TEMPLATE, skipUnlessManagedDockerHost } from './helpers/orcad-managed-workspace'
+import { getOrcadSshDeployment } from '../../src/shared/runtime-environments'
 
 skipUnlessManagedDockerHost()
 
@@ -117,8 +118,7 @@ test('retained and new browser tabs keep SSH routing and login cookies after man
     const cookieMarker = `cookie:${SSH_REMOTE_ONLY_COOKIE_NAME}=${SSH_REMOTE_ONLY_COOKIE_VALUE}`
     // The login cookie a relay-era session left in that host's browser storage.
     const partitionBefore = relayEraPartition(remote.targetId)
-    // A relay-era build bound the partition before any page stored a cookie in it; unbound
-    // partition data is refused as browser_route_partition_binding_store_invalid.
+    // Bind legacy storage before seeding cookies; unbound data is refused as browser_route_partition_binding_store_invalid.
     const bound = await page.evaluate(
       (targetId) =>
         window.api.browser.prepareSshWorkspacePartition({
@@ -153,7 +153,7 @@ test('retained and new browser tabs keep SSH routing and login cookies after man
     expect(JSON.parse(server)).toMatchObject({ kind: 'managed' })
     const environments = await page.evaluate(() => window.api.runtimeEnvironments.list())
     const environment = environments.find(
-      (entry) => entry.orcadDeployment?.sshTargetId === remote.targetId
+      (entry) => getOrcadSshDeployment(entry)?.sshTargetId === remote.targetId
     )
     if (!environment) {
       throw new Error('Missing managed environment')
@@ -262,7 +262,7 @@ test('retained and new browser tabs keep SSH routing and login cookies after man
       path: '/echo/control',
       cookie: `${SSH_REMOTE_ONLY_COOKIE_NAME}=${SSH_REMOTE_ONLY_COOKIE_VALUE}`
     })
-    const generation = environment.orcadDeployment?.sshTargetGeneration
+    const generation = getOrcadSshDeployment(environment)?.sshTargetGeneration
     if (generation === undefined) {
       throw new Error('Missing deployment registration')
     }

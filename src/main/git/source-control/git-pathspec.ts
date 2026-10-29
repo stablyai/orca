@@ -12,12 +12,7 @@ import type { GitRuntimeOptions } from '../git-runtime-options'
 /** Ceiling on argv entries per invocation; under WSL the byte budget bites first. */
 const BULK_CHUNK_SIZE = 100
 
-/**
- * POSIX hosts have no CreateProcess cap: ARG_MAX is 256KB on macOS and 2MB on
- * Linux, shared with the environment block. Half the macOS floor keeps a native
- * or SSH-host invocation clear of E2BIG without charging it the WSL wrapper's
- * quoting overhead, which is a different transport's problem.
- */
+// Use half macOS's 256KB ARG_MAX floor, leaving space for the environment on native and SSH hosts.
 const POSIX_COMMAND_LINE_BUDGET = 128_000
 
 export function literalPathspec(
@@ -25,29 +20,19 @@ export function literalPathspec(
   worktreePath: string,
   options: GitRuntimeOptions
 ): string {
-  // Why: Git inside WSL needs POSIX paths, but host paths must stay literal, so convert backslashes only for WSL.
-  // The runner also routes a WSL-UNC cwd into WSL when options carry no distro, so check the cwd too.
+  // Convert separators only for WSL, including UNC cwd routing; native host paths stay literal.
   const runsInWsl = options.wslDistro || wslDistroForCommand(worktreePath)
   const runtimePath = runsInWsl ? filePath.replace(/\\/g, '/') : filePath
   return `:(literal)${runtimePath}`
 }
 
-/**
- * Length of the line the OS will actually be handed, wrapper included.
- *
- * Why resolve rather than estimate: a WSL-routed write goes through the login
- * shell, which shell-quotes every pathspec, quotes the resulting command line
- * again, and embeds that three times (one branch per guest shell). The finished
- * line runs ~3.4x the raw pathspec bytes, and nothing about the path list says
- * so. Writes never take the direct-git lane, so this is the exact shape they
- * get; a read that does take it resolves shorter, so the estimate stays safe.
- */
+/** Measure the resolved line: WSL login wrappers quote and repeat pathspecs, multiplying raw argv length. */
 function finishedCommandLineLength(
   args: readonly string[],
   worktreePath: string,
   options: GitRuntimeOptions
 ): number {
-  // Why worst case: the Windows-checkout config can be prepended at spawn, after this chunking.
+  // Include config that Windows-checkout routing may add after chunking.
   const budgetArgs = options.wslDistro ? [...WINDOWS_CHECKOUT_GIT_CONFIG_ARGS, ...args] : [...args]
   const resolved = resolveGitCommandWithoutProbe(budgetArgs, {
     cwd: worktreePath,
@@ -57,20 +42,8 @@ function finishedCommandLineLength(
 }
 
 /**
- * Split a bulk pathspec operation into invocations the host can actually spawn.
- *
- * Why a byte budget and not a path count: 100 was chosen against a raw argv, but
- * a WSL-routed `git add` is folded into one login-shell command line, so 100
- * ordinary paths reached ~43,000 characters -- past the 32,767 CreateProcess cap
- * -- and the bulk stage failed with nothing staged. Cost is measured per
- * pathspec through the real resolver so the wrapper's quoting rules live in one
- * place.
- *
- * Chunks split only between whole pathspecs, and a pathspec that alone exceeds
- * the budget still ships alone rather than being dropped or truncated. If an
- * invocation fails partway through, the earlier chunks stay applied: every
- * operation here is idempotent and per-path, so `git status` shows the true
- * state and re-running converges.
+ * Split at whole pathspecs using the resolved command-line budget; oversized single paths still ship alone.
+ * Earlier chunks remain applied on failure; per-path operations are idempotent, so retrying converges.
  */
 export function bulkPathspecCommands(
   leadingArgs: readonly string[],

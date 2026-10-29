@@ -12,9 +12,13 @@ import {
 import {
   AgentSessionAcquisitionExitProvenError,
   AgentSessionAcquisitionRefusal,
-  AgentSessionPreSpawnError
+  AgentSessionPreSpawnError,
+  launchPreparationFailure
 } from './structured-agent-session-adapter'
-import { withMissingProviderExecutable } from '../../provider-process/provider-executable-missing'
+import {
+  withMissingProviderExecutable,
+  withProviderSpawnAbsence
+} from '../../provider-process/provider-executable-missing'
 import { withProviderRequestTimeout } from '../../provider-process/provider-request-timeout'
 import { MAX_UNEXPECTED_EXIT_REASON_CHARS } from './structured-agent-session-dead-generation-settlement'
 import { StructuredAgentArgumentsError } from '../structured-agent-arguments-error'
@@ -24,7 +28,6 @@ import {
 } from './structured-agent-session-failure-text'
 import { structuredAgentSessionStartFailureRow } from './structured-agent-session-start-failure-row'
 
-/** What Orca's own error text looks like: a code, a marker, a uuid, a path, an exception. */
 const ORCA_INTERNAL =
   /agent_session_|execution_owner|provider_[a-z_]+|[0-9a-f]{8}-[0-9a-f]{4}-|[/\\][\w.-]+[/\\]|Error:|ENOENT/
 
@@ -96,11 +99,45 @@ describe('structuredAgentSessionStartFailure', () => {
         rejection: { kind: 'startFailed', detail: { text: 'code 1\nboom', audience: 'log' } }
       }
     )
-    // Orca's own words, however provider-like, are never promoted to a detail.
     expect(
       structuredAgentSessionStartFailure({ error: new Error('Not logged in. Run /login.') })
         .rejection
     ).toEqual({ kind: 'startFailed' })
+  })
+
+  it('words a working folder deleted under the chat as the folder, never a missing CLI', () => {
+    const gone = new AgentSessionAcquisitionExitProvenError(
+      withProviderSpawnAbsence(new Error('spawn claude ENOENT'), 'launchFolder')
+    )
+    expect(structuredAgentSessionStartFailure({ error: gone }, { agentName: 'Claude' })).toEqual({
+      reason: 'The folder this chat ran in no longer exists. Restore it to continue this chat.',
+      rejection: { kind: 'launchFolderMissing' }
+    })
+  })
+
+  it('names a failed launch preparation and keeps a withdrawn start generic', () => {
+    const failed = launchPreparationFailure(
+      new Error('resolve failed', { cause: new Error('selector_not_found') })
+    )
+    expect(structuredAgentSessionStartFailure({ error: failed }, { agentName: 'Claude' })).toEqual({
+      reason:
+        "Orca couldn't prepare Claude to start on the computer running this chat. Send your message to try again.",
+      rejection: {
+        kind: 'launchPreparationFailed',
+        detail: { text: 'selector_not_found', audience: 'log' }
+      }
+    })
+    const aborted = new AgentSessionPreSpawnError(
+      Object.assign(new Error('The operation was aborted.'), { name: 'AbortError' })
+    )
+    expect(structuredAgentSessionStartFailure({ error: aborted }).rejection).toEqual({
+      kind: 'startFailed'
+    })
+    const cyclic = new Error('cyclic')
+    cyclic.cause = cyclic
+    expect(
+      structuredAgentSessionStartFailure({ error: launchPreparationFailure(cyclic) }).rejection
+    ).toEqual({ kind: 'launchPreparationFailed', detail: { text: 'cyclic', audience: 'log' } })
   })
 
   it("words a CLI that was never found as the chat's notice does, with the step to take", () => {
@@ -281,7 +318,6 @@ describe('structuredAgentSessionStartFailure', () => {
   it("holds any provider detail to the lease record's cap", () => {
     expect(MAX_UNEXPECTED_EXIT_REASON_CHARS).toBe(MAX_PROVIDER_DIAGNOSTIC_CHARS)
     const long = 'x'.repeat(4_000)
-    // However the caller built the detail, the fact stores at most the cap.
     const words = structuredAgentSessionStartFailure({
       diagnostic: { text: long, audience: 'log' }
     })
@@ -294,7 +330,7 @@ describe('structuredAgentSessionStartFailure', () => {
   })
 
   it('says the provider stopped only when an exit was observed', () => {
-    // An `exited` verdict says only that nothing runs now, not that the provider stopped.
+    // Exited proves present absence, not provider-caused failure.
     const gone = refuseUnclassified('agent_session_operation_invalid', 'thread gone', {
       ownerVerdict: 'exited'
     })
@@ -329,14 +365,13 @@ describe('structuredAgentSessionStartFailure', () => {
       reason: 'The agent stopped before it finished starting. Send your message to try again.',
       rejection: { kind: 'providerStartFailed', detail: { text: 'code 1', audience: 'log' } }
     })
-    // A start that threw proves nothing about the provider: it may be Orca's, or a failed spawn.
     expect(
       structuredAgentSessionStartFailure({ error: new Error('spawn claude ENOENT') }, {})
     ).toEqual({
       reason: "The agent couldn't start. Send your message to try again.",
       rejection: { kind: 'startFailed' }
     })
-    // The same error, once the adapter that observed the child's exit marked it, blames the provider.
+    // Only the observer’s explicit exit marker permits provider attribution.
     const exit = withObservedProviderExit(
       withProviderDiagnostic(new Error('exited (code 1)'), providerDiagnostic('code 1', 'log'))
     )

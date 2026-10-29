@@ -27,7 +27,7 @@ function originMatchesAgent(
   if (origin.hostId !== agent.hostId || (origin.agent && origin.agent !== agent.agent)) {
     return false
   }
-  // Why: pane keys are reused by later agents in the same pane, so only a session id proves the link.
+  // Pane keys are reused; only session identity proves the agent link.
   return Boolean(origin.sessionId && agent.sessionIds?.includes(origin.sessionId))
 }
 

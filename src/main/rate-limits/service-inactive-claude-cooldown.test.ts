@@ -248,7 +248,11 @@ beforeEach(async () => {
     writeFileSync(
       join(path, '.credentials.json'),
       JSON.stringify({
-        claudeAiOauth: { accessToken: `synthetic-${id}`, expiresAt: 1900000000000 }
+        claudeAiOauth: {
+          accessToken: `synthetic-${id}`,
+          refreshToken: `synthetic-refresh-${id}`,
+          expiresAt: 1900000000000
+        }
       })
     )
   }
@@ -401,6 +405,22 @@ it.each([401, 503])(
     expect(count('A')).toBe(3)
   }
 )
+
+it('keeps an idle account last-good usage when its access token expires overnight', async () => {
+  await service.fetchInactiveClaudeAccountsOnOpen()
+  const originalAt = cached('A')?.updatedAt
+  // Why: Orca never refreshes a Claude login, so an idle account's usage 401s until Claude runs in it.
+  fixture.now += 2 * 60 * 60 * 1000
+  fixture.status = 401
+  await service.fetchInactiveClaudeAccountsOnOpen()
+  expect(cached('A')).toMatchObject({
+    status: 'error',
+    updatedAt: originalAt,
+    session: { usedPercent: 21 },
+    weekly: { usedPercent: 11 },
+    usageMetadata: { failureKind: 'stale-token', authProvenance: 'profile:A' }
+  })
+})
 
 it.each([null, '0', '-5', 'soon'])(
   'does not invent a wait for Retry-After %s',

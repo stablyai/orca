@@ -44,8 +44,7 @@ export async function listRecentWorkItems(
         page
       })
     : null
-  // Why: unresolved sources must stay empty — an unscoped Search API would return other public repos' issues (#9660).
-  // Why: allSettled so a 403 on the issue side doesn't zero the PR half (partial results + banner).
+  // Isolate missing sources to avoid global searches, and retain successful halves on partial failure.
   const [issuesSettled, prsSettled] = await Promise.allSettled([
     issueOwnerRepo
       ? listIssueWorkItemPage({
@@ -92,8 +91,7 @@ export async function listRecentWorkItems(
       githubPRStackExecutionScope(connectionId, localGitOptions)
     )
   } else {
-    // Why: re-throw PR errors so the cross-repo aggregator counts the repo failed; this feature only fixes issue-side swallowing (#1076).
-    // Why: log issuesError first so a both-sides-failed case isn't blind to the classification we're about to drop.
+    // Log the issue error before propagating the PR failure to the cross-repo aggregator.
     if (issuesError) {
       console.warn(
         'listRecentWorkItems: both issue and PR sides failed; issuesError was classified:',
@@ -135,7 +133,7 @@ export async function listQueriedWorkItems(
   let availabilityError: unknown
   let prsError: ClassifiedError | undefined
 
-  // Why: surface the issue-side error separately for the IPC envelope; PR-side keeps prior swallow-and-log (parent doc §6).
+  // Preserve classified issue-side failure alongside partial PR results.
   const issueFetch = (async (): Promise<PartialWorkItemsResult> => {
     if (!issueScope) {
       return { items: [] }
@@ -216,7 +214,7 @@ export async function listQueriedWorkItems(
 
   const [issueResult, prItems] = await Promise.all([issueFetch, prFetch])
   if (availabilityError && successfulRequestCount === 0 && nonAvailabilityFailureCount === 0) {
-    // Why: when every half hit the same availability failure, propagate it so Tasks can distinguish an outage from no data.
+    // Shared availability failure across both halves means an outage, not an empty result.
     throw availabilityError
   }
   return {

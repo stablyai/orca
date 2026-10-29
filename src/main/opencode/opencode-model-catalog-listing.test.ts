@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { parseOpenCodeModelListing } from './opencode-model-catalog-listing'
 
-// What `opencode models --verbose` prints: each id, then `JSON.stringify(model, null, 2)`.
+// Match opencode models --verbose: ID followed by pretty-printed model JSON.
 function listing(models: Record<string, unknown>): string {
   return Object.entries(models)
     .map(([id, model]) => `${id}\n${JSON.stringify(model, null, 2)}\n`)
@@ -36,7 +36,7 @@ describe('OpenCode verbose model listing', () => {
           { value: 'max', label: 'Max' },
           { value: 'default', label: 'Default' }
         ],
-        // No `default` variant: a new session runs the first one, as OpenCode's own ACP does.
+        // With no default variant, OpenCode ACP selects the first variant.
         defaultEffort: 'high'
       },
       {

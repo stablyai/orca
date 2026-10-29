@@ -26,7 +26,6 @@ function supportWith(
   keyOf = async (command: string, cwd: string): Promise<string | null> => `${command}\n${cwd}`
 ) {
   const calls = vi.fn(probe)
-  // Real time plus whatever a test skips ahead.
   let skippedMs = 0
   const support = createClaudeCliFlagSupport({
     probe: calls,
@@ -37,7 +36,6 @@ function supportWith(
   return { support, calls, skip: (ms: number) => (skippedMs += ms) }
 }
 
-/** A probe the test answers by hand. */
 function heldProbe() {
   let answer: (version: string | null) => void = () => {}
   const probe: Probe = () =>
@@ -80,7 +78,6 @@ describe('whether a launch passes a Claude CLI flag', () => {
       let answer: () => Promise<string | null> = failure
       const { support, calls } = supportWith(() => answer())
       await expect(thinking(support, LAUNCH)).resolves.toBe(false)
-      // A loaded boot is exactly when probes fail; the next launch must not inherit that.
       answer = async () => '2.1.280'
       await expect(thinking(support, LAUNCH)).resolves.toBe(true)
       expect(calls).toHaveBeenCalledTimes(2)
@@ -96,7 +93,6 @@ describe('whether a launch passes a Claude CLI flag', () => {
       support.supports(CLAUDE_PLUGIN_DIR_FLAG, LAUNCH, 1_000),
       thinking(support, LAUNCH)
     ])
-    // One probe answers both; only the caller that allowed for it waited.
     expect(plugins).toBe(true)
     expect(thinkingDisplay).toBe(false)
     expect(calls).toHaveBeenCalledTimes(1)

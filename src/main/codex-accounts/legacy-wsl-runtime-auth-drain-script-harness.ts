@@ -1,5 +1,4 @@
-// Why: runs the real guest apply script under `sh` with shimmed coreutils so tests can inject
-// precise interference at chosen points.
+// Run the guest script under sh with coreutils shims that inject precisely timed interference.
 import { execFileSync, spawnSync } from 'node:child_process'
 import {
   chmodSync,
@@ -248,7 +247,7 @@ process.exit(result.status ?? 1)
           }
         )
       } catch {
-        // Recovery succeeds before inspect continues and emits the pending auth payload.
+        // Inspect can restore credentials before later validation fails.
       }
     }
     return {

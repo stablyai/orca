@@ -1,9 +1,4 @@
-// Every closed set a journal row is read against: a row kind, a lifecycle mutation kind, and each
-// enum, literal or discriminant in a body. A new row or mutation kind, or a bumped row version,
-// makes older builds refuse the chat as a newer Orca's ("Update Orca to open it"); a new value in a
-// body's closed set at the same version is damage to them ("Unable to load this chat"), where a
-// turn's context usage is dropped instead. This snapshot sits beside the row version so that a
-// change to either is deliberate.
+// New closed-set values can look corrupt to older clients; review them alongside row-version changes.
 
 import { expect, it } from 'vitest'
 import { z } from 'zod'
@@ -14,7 +9,6 @@ import { KNOWN_MUTATION_KINDS, KNOWN_ROW_KINDS } from './journal-row-schema'
 type ClosedValue = string | number | boolean | null
 type ClosedSets = Record<string, ClosedValue[]>
 
-/** Nodes that hold no closed set and nothing nested. */
 const LEAVES = new Set(['string', 'number', 'boolean', 'unknown', 'any', 'null', 'undefined'])
 
 function isClosedValue(value: unknown): value is ClosedValue {
@@ -26,10 +20,7 @@ function isClosedValue(value: unknown): value is ClosedValue {
   )
 }
 
-/** Walks a schema and collects, by path, every value a closed node allows. A plain union whose
- *  other arm takes any string for a discriminated arm's tag (blocks, goal states) is open there:
- *  older builds read a new tag as-is, so that path is listed apart. Throws on a node kind it does
- *  not know, so a new kind of schema cannot hide a closed set from this test. */
+/** Collect closed sets; catch-all union tags stay open. Reject unknown schema nodes to avoid coverage gaps. */
 function collectClosedSets(
   schema: z.core.$ZodType,
   path: string,
@@ -66,7 +57,6 @@ function collectClosedSets(
   }
 }
 
-/** Tags a discriminated arm keys on that another arm of the same union accepts as any string. */
 function catchAllTags(options: readonly z.core.$ZodType[]): string[] {
   const tags = options.flatMap((option) =>
     option instanceof z.ZodDiscriminatedUnion ? [option.def.discriminator] : []
@@ -88,11 +78,19 @@ function journalClosedSets() {
   return { v: AGENT_SESSION_JOURNAL_SCHEMA_VERSION, ...into }
 }
 
-/** Recorded with the row version it holds for. Change it only together with that decision. */
+// Changing closed sets requires an explicit row-version compatibility decision.
 const SNAPSHOT = {
-  v: 3,
+  v: 4,
   closed: {
-    'row.kind': ['dispatch', 'epoch', 'item', 'lifecycle-batch', 'submission', 'tombstone'],
+    'row.kind': [
+      'dispatch',
+      'epoch',
+      'item',
+      'lifecycle-batch',
+      'queue',
+      'submission',
+      'tombstone'
+    ],
     'row.mutations[].kind': ['item', 'tombstone'],
     'body.contextUsage.used.kind': ['estimate', 'report', 'unknown'],
     'body.contextUsage.used.categories[].deferred': [true]

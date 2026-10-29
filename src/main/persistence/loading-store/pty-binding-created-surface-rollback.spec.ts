@@ -1,5 +1,5 @@
 import { expect, it, vi } from 'vitest'
-import { TEST_LEAF_1, TEST_LEAF_2 } from '../../persistence-session-fixtures'
+import { TEST_LEAF_1, TEST_LEAF_2 } from '../persistence-session-fixtures'
 import { collectLayoutLeafIdsInOrder } from '../restoring-sessions/terminal-layout-normalization'
 import { ProfileStateWriterError } from '../profile-state/profile-state-writer-errors'
 import { fixture } from './profile-state-delayed-authority-fixture'
@@ -46,6 +46,7 @@ export function registerPtyBindingCreatedSurfaceRollbackTests(): void {
         }
         tab.ptyId = 'sibling-pty'
       }
+      const expectedRoot = structuredClone(layout.root)
       gate.finish.reject(
         new ProfileStateWriterError('test-disk-failure', 'disk refused', 'known-failure')
       )
@@ -64,7 +65,7 @@ export function registerPtyBindingCreatedSurfaceRollbackTests(): void {
         })
       )
       expect(persisted.terminalLayoutsByTabId[binding.tabId]).toMatchObject({
-        root: layout.root,
+        root: expectedRoot,
         ...(edit === 'pane title' ? { titlesByLeafId: { [binding.leafId]: 'new title' } } : {})
       })
       if (edit === 'new sibling') {

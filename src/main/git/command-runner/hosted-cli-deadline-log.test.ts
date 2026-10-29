@@ -1,6 +1,5 @@
-import { EventEmitter } from 'node:events'
-import type { ChildProcess } from 'node:child_process'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { createFakeSpawnedChild as mockChild } from '../../../shared/__fixtures__/fake-spawned-child'
 
 const { spawnMock } = vi.hoisted(() => ({ spawnMock: vi.fn() }))
 
@@ -12,21 +11,7 @@ vi.mock('node:child_process', async (importOriginal) => ({
 import { ghExecFileAsync } from './gh-exec-file'
 import { logHostedCliDeadlineKill } from './hosted-cli-deadline-log'
 
-function mockChild(pid = 4321): ChildProcess {
-  const child = new EventEmitter() as EventEmitter & Record<string, unknown>
-  child.pid = pid
-  child.kill = vi.fn(() => true)
-  child.stdin = Object.assign(new EventEmitter(), { end: vi.fn() })
-  child.stdout = new EventEmitter()
-  child.stderr = new EventEmitter()
-  return child as unknown as ChildProcess
-}
-
-/**
- * #18234 took four rounds of strace/perf/proc spelunking from the reporter
- * because a deadline kill produced no evidence at all. The resolved path is the
- * fact that names a self-recursive wrapper.
- */
+// A resolved path identifies recursive wrappers without logging secret-bearing arguments.
 describe('hosted CLI deadline logging', () => {
   let warn: ReturnType<typeof vi.spyOn>
 

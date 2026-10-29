@@ -1,32 +1,31 @@
-import { StyleSheet, Text, View } from 'react-native'
+import { Text, View } from 'react-native'
 import { colors, typography } from '../theme/mobile-theme'
-
-type DictationStatus = {
-  readonly isStarting: boolean
-  readonly isRecording: boolean
-  readonly isProcessing: boolean
-}
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import {
+  mobileDictationStatusTitle,
+  type MobileDictationStatusFlags
+} from './MobileDictationStatusAnnouncement'
 
 type MobileTerminalLiveInputStatusProps = {
-  readonly dictation: DictationStatus
+  readonly dictation: MobileDictationStatusFlags
+  readonly dictationMode: string | undefined
   readonly isAttaching: boolean
   readonly liveInputText: string
 }
 
 export function MobileTerminalLiveInputStatus({
   dictation,
+  dictationMode,
   isAttaching,
   liveInputText
 }: MobileTerminalLiveInputStatusProps) {
-  const title = dictation.isRecording
-    ? 'Listening'
-    : dictation.isProcessing
-      ? 'Processing'
-      : dictation.isStarting
-        ? 'Starting mic'
-        : 'Live input'
+  useMobileColorScheme()
+  const title = mobileDictationStatusTitle(dictation) ?? 'Live input'
   const detail = dictation.isRecording
-    ? 'Tap mic to stop'
+    ? dictationMode === 'hold'
+      ? 'Release mic to stop'
+      : 'Tap mic to stop'
     : dictation.isProcessing
       ? 'Transcribing on desktop'
       : dictation.isStarting
@@ -47,7 +46,7 @@ export function MobileTerminalLiveInputStatus({
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   status: {
     flex: 1,
     gap: 1
@@ -62,4 +61,4 @@ const styles = StyleSheet.create({
     fontSize: typography.metaSize,
     fontFamily: typography.monoFamily
   }
-})
+}))

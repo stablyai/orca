@@ -1,12 +1,15 @@
 import type { FsChangeEvent } from '../../../../shared/filesystem-entry-types'
 import { PhysicalExitTracker } from '../../../../shared/physical-exit-tracker'
 import { watch as watchFs } from 'node:fs'
-import { WatcherProcessFailure } from '../../../ipc/parcel-watcher-process-failure'
+import { WatcherProcessFailure } from '../../../ipc/filesystem/watcher-process/parcel-watcher-process-failure'
 import { watchBatchFlushDelayMs } from '../../../../shared/filesystem-watch-batch-window'
+import { WATCHER_IGNORE_DIRS } from '../../../ipc/filesystem/watchers/filesystem-watcher-ignore'
 
-// Why: each emit is a whole-tree overflow refresh, so pace it slower than precise watcher batches.
+const ignoredWatchDirectories = new Set(WATCHER_IGNORE_DIRS)
+
+// Whole-tree refreshes need a slower pace than precise batches.
 export const WINDOWS_RUNTIME_FILE_WATCH_REFRESH_MS = 500
-// Why: a one-off save after a quiet period still refreshes promptly.
+// Refresh isolated saves promptly after quiet periods.
 export const WINDOWS_RUNTIME_FILE_WATCH_LEADING_MS = 150
 export const WINDOWS_RUNTIME_FILE_WATCH_CLOSE_DEADLINE_MS = 10_000
 
@@ -34,7 +37,7 @@ export function watchWindowsRuntimeFileExplorer(
     if (disposed) {
       return
     }
-    // Why: never push an armed refresh back; a resetting debounce never fires under sustained writes.
+    // Do not reset armed timers: sustained writes would starve refresh.
     if (timer) {
       return
     }
@@ -49,8 +52,19 @@ export function watchWindowsRuntimeFileExplorer(
     )
   }
 
-  // Why: Parcel's Watchman probe can crash the headless server on Windows; use a conservative overflow refresh instead.
-  const watcher = watchFs(rootPath, { recursive: true }, scheduleOverflow)
+  // Parcel's Watchman probe can crash Windows serve; use conservative overflow refreshes.
+  const watcher = watchFs(rootPath, { recursive: true }, (_eventType, filename) => {
+    if (typeof filename === 'string') {
+      const components = filename.split(/[\\/]/)
+      // Keep changes to the directory itself visible, but discard churn within excluded trees.
+      for (let index = 0; index < components.length - 1; index++) {
+        if (ignoredWatchDirectories.has(components[index])) {
+          return
+        }
+      }
+    }
+    scheduleOverflow()
+  })
   const onClose = (): void => {
     watcher.removeListener('error', onError)
     physicalClose.markExited()
@@ -63,7 +77,7 @@ export function watchWindowsRuntimeFileExplorer(
     }
     watcher.removeListener('close', onClose)
     watcher.removeListener('error', onError)
-    // Why: Node nulls FSWatcher's native handle on error without a close event; treat the error as physical-exit proof.
+    // Node drops the native handle on error without close; count that as physical exit.
     physicalClose.markExited()
     if (!disposed) {
       try {
@@ -97,7 +111,7 @@ export function watchWindowsRuntimeFileExplorer(
         () => new Error('Windows watcher did not close before deletion deadline')
       )
     } catch (error) {
-      // Why: late Windows close still owns native dir handles; expose its completion so cleanup retains then clears the root.
+      // Late close still owns directory handles; expose completion before permitting root reuse.
       throw new WatcherProcessFailure(
         error instanceof Error ? error.message : String(error),
         'supervisor',

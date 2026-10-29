@@ -2,6 +2,7 @@ import { joinPath } from '@/lib/path'
 import { getExternalFileChangeRelativePath } from '@/components/right-sidebar/useFileExplorerWatch'
 import type { OpenFile } from '@/store/slices/editor'
 import type { FsChangedPayload } from '../../../../shared/filesystem-entry-types'
+import { externalChangePathKeyFor } from '@/store/slices/editor/buffers/editor-buffer-identity'
 import {
   getLocalWindowsWslPathIdentity,
   normalizeRuntimePathForComparison,
@@ -112,11 +113,14 @@ class IndexedOpenFileLookup {
   readonly indexedOpenFiles = new Map<string, IndexedOpenFile>()
   readonly hasCombinedDiffConsumer: boolean
 
+  private readonly directKey: (filePath: string) => string
+
   constructor(
     openFiles: OpenFile[],
     scope: WatchScope,
     private readonly allowAliases: boolean
   ) {
+    this.directKey = externalChangePathKeyFor(scope.worktreePath)
     let hasCombinedDiffConsumer = false
     for (const [index, file] of openFiles.entries()) {
       if (
@@ -148,7 +152,7 @@ class IndexedOpenFileLookup {
       const identity = pathIdentity(file.filePath, allowAliases)
       const indexedFile = { file, index, identity }
       this.indexedOpenFiles.set(file.id, indexedFile)
-      addToListMap(this.directEditors, file.filePath, indexedFile)
+      addToListMap(this.directEditors, this.directKey(file.filePath), indexedFile)
       if (allowAliases) {
         addToListMap(this.aliasEditors, identity.aliasComparisonPath, indexedFile)
         if (identity.isWslUnc) {
@@ -166,7 +170,7 @@ class IndexedOpenFileLookup {
         ? (this.aliasEditors.get(change.identity.aliasComparisonPath) ?? [])
         : (this.wslAliasEditors.get(change.identity.aliasComparisonPath) ?? [])
     return collectMatchingFiles(
-      this.directEditors.get(change.absolutePath) ?? [],
+      this.directEditors.get(this.directKey(change.absolutePath)) ?? [],
       aliases,
       this.diffsByRelativePath.get(change.relativePath) ?? []
     )

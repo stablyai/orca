@@ -47,7 +47,7 @@ export function useWorkspaceCleanupDialogLifecycle(): WorkspaceCleanupDialogLife
   const { removalInFlightRef, resetForReopen, resetRowFailures } = removal
 
   const onFreshOpen = useCallback(() => {
-    // Why: resetForReopen keeps an in-flight batch's view itself; an open agent-stop step must still drop.
+    // Reopening preserves in-flight batch progress but must drop stale agent-stop confirmation.
     resetForReopen()
     if (!removalInFlightRef.current) {
       setSelectedIds(new Set())

@@ -201,8 +201,7 @@ export const AccountsSnapshotSchema = z
         grok: ProviderRateLimitsSchema.nullable().optional(),
         cursor: ProviderRateLimitsSchema.nullable().optional(),
         zcode: ProviderRateLimitsSchema.nullable().optional(),
-        // Why: protocol-compatible hosts from before runtime targeting omit
-        // these fields; their account selection semantics were host-only.
+        // Older compatible hosts omit runtime target fields and retain host-only selection semantics.
         claudeTarget: RateLimitRuntimeTargetSchema.default(HostRateLimitRuntimeTarget),
         codexTarget: RateLimitRuntimeTargetSchema.default(HostRateLimitRuntimeTarget),
         inactiveClaudeAccounts: z.array(InactiveAccountUsageSchema),

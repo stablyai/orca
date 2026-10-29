@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest'
+import { performance } from 'node:perf_hooks'
+import { describe, expect, it, vi } from 'vitest'
 import { runInStickySlot, StickySlotStatements } from './sticky-slot-statements.js'
 import {
   ScriptedPoolClient,
@@ -75,13 +76,27 @@ describe('sticky slot statements', () => {
   })
 
   it('reports the pool wait apart from the statements', async () => {
-    const database = scriptedPostgresDatabase([new ScriptedPoolClient()], 30)
-    const slot = new StickySlotStatements()
-    await runInStickySlot(slot, async () => await database.query('SELECT 1'))
-
-    const sample = slot.close()
-    expect(sample.poolWaitMs).toBeGreaterThanOrEqual(20)
-    expect(sample.sqlMs).toBeLessThan(20)
+    let now = 0
+    const clock = vi.spyOn(performance, 'now').mockImplementation(() => now)
+    const database = scriptedPostgresDatabase(
+      [
+        new ScriptedPoolClient(async () => {
+          now += 7
+        })
+      ],
+      () => {
+        now += 30
+      }
+    )
+    try {
+      const slot = new StickySlotStatements()
+      await runInStickySlot(slot, async () => await database.query('SELECT 1'))
+      const sample = slot.close()
+      expect(sample.poolWaitMs).toBe(30)
+      expect(sample.sqlMs).toBe(7)
+    } finally {
+      clock.mockRestore()
+    }
   })
 
   it('names each pooled connection once, however often it is checked out', async () => {

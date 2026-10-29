@@ -1,11 +1,6 @@
 import { z } from 'zod'
 
-/**
- * One host's place in a merged walk. `c` is the host cursor that produced the
- * page being consumed (null for that host's first page), `e` is how many of that
- * page's hits the merge already emitted, and `g` is the host generation `e`
- * counts into. Refetch with `c`, skip `e`, and no hit is skipped or repeated.
- */
+/** Refetch host cursor c, skip e emitted hits within generation g; null c starts that host's walk. */
 export type MergedSearchCursorEntry = {
   c: string | null
   e: number
@@ -37,7 +32,7 @@ export function encodeMergedSearchCursor(cursor: MergedSearchCursor): string {
   return Buffer.from(JSON.stringify(payload), 'utf8').toString('base64url')
 }
 
-/** Null for anything that is not a cursor this module minted. */
+/** Reject malformed cursor shapes. */
 export function decodeMergedSearchCursor(raw: string): MergedSearchCursor | null {
   let parsed: unknown
   try {

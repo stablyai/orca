@@ -16,7 +16,7 @@ import type { RuntimeFileCommandHost } from './file-command-host'
 import type { RuntimeFileOpenResult } from '../../../shared/runtime-types'
 import type { RuntimeNavigationTarget } from '../../../shared/runtime-navigation'
 import { joinWorktreeRelativePath } from '../runtime-relative-paths'
-import { isENOENT } from '../../ipc/filesystem-path-containment'
+import { isENOENT } from '../../ipc/filesystem/filesystem-path-containment'
 import {
   requireRuntimeFileProvider,
   resolveFileExplorerPath,
@@ -24,6 +24,7 @@ import {
 } from './file-target'
 import { parseExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
 import type { FileStat } from '../../providers/filesystem-provider-contract'
+import { assertRuntimeReadWslDistroRunning } from '../runtime-wsl-background-read-gate'
 
 type RuntimeFileAccessHost = Pick<
   RuntimeFileCommandHost,
@@ -51,9 +52,9 @@ export class RuntimeFileAccess {
         : isMobileMarkdownPath(relativePath)
           ? 'markdown'
           : 'text'
-    // Why: `kind` only describes the file; the desktop editor opens binaries (e.g. PDFs) like the File Explorer.
+    // File kind does not limit the desktop editor: binaries such as PDFs can open too.
     const filePath = joinWorktreeRelativePath(worktree.path, relativePath)
-    // Why: CLI/agents treat opened:true as success; stat first so missing paths and directories fail the RPC instead of opening a ghost tab.
+    // Reject missing paths/directories before clients treat opened:true as success.
     await this.assertOpenTargetIsFile(filePath, target)
     await this.host.openFile(
       worktree.id,
@@ -126,6 +127,10 @@ export class RuntimeFileAccess {
   ): Promise<PathExistenceResult[]> {
     validatePathExistenceBatch(relativePaths)
     const targets = await resolveFileExplorerPaths(this.host, worktreeSelector, relativePaths)
+    // Link checks on render and retry timers: never start a stopped WSL distro (E9).
+    if (targets[0]) {
+      await assertRuntimeReadWslDistroRunning(targets[0])
+    }
     return readRuntimeFilePathExistence(targets, this.host)
   }
 

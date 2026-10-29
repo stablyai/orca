@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { AgentAwakeService } from './agent-awake-service'
 import type { AgentAwakeStatus } from './agent-awake-service'
 
@@ -25,15 +25,18 @@ function workingStatus(): AgentAwakeStatus {
 
 describe('AgentAwakeService status array ownership', () => {
   it('does not observe rows appended to the caller array after setStatuses', () => {
-    const service = new AgentAwakeService()
+    const service = createService()
     service.setMode('auto')
     const statuses: AgentAwakeStatus[] = [workingStatus()]
 
     service.setStatuses(statuses)
-    const before = service.getWorkingAgentCount()
-    statuses.push(workingStatus(), workingStatus())
+    expect(service.getWorkingAgentCount()).toBe(1)
+    statuses.push(
+      { ...workingStatus(), paneKey: 'pane-2' },
+      { ...workingStatus(), paneKey: 'pane-3' }
+    )
 
-    expect(service.getWorkingAgentCount()).toBe(before)
+    expect(service.getWorkingAgentCount()).toBe(1)
   })
 })
 
@@ -61,13 +64,23 @@ function createPlatformAssertion() {
   }
 }
 
+const services = new Set<AgentAwakeService>()
+
+afterEach(() => {
+  for (const service of services) {
+    service.dispose()
+  }
+  services.clear()
+  vi.useRealTimers()
+})
+
 function createService(
   blocker = createBlocker(),
   macosAssertion = createPlatformAssertion(),
   linuxAssertion = createPlatformAssertion(),
   platform: NodeJS.Platform = 'linux'
 ): AgentAwakeService {
-  return new AgentAwakeService({
+  const service = new AgentAwakeService({
     blocker,
     linuxAssertion,
     macosAssertion,
@@ -79,6 +92,8 @@ function createService(
       warn: vi.fn()
     }
   })
+  services.add(service)
+  return service
 }
 
 describe('AgentAwakeService platform assertions', () => {

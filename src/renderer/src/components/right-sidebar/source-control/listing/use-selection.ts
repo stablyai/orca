@@ -62,12 +62,12 @@ export function getSelectionRangeKeys(
 
 export function useSourceControlSelection({
   flatEntries,
-  onOpenFile,
+  onOpenDiff,
   shouldOpenAsSplit,
   containerRef
 }: {
   flatEntries: FlatEntry[]
-  onOpenFile: (entry: GitStatusEntry, event?: SourceControlRowOpenEvent) => void
+  onOpenDiff: (entry: GitStatusEntry, event?: SourceControlRowOpenEvent) => void
   shouldOpenAsSplit?: (event: SourceControlRowOpenEvent) => boolean
   containerRef: RefObject<HTMLElement | null>
 }) {
@@ -76,7 +76,7 @@ export function useSourceControlSelection({
   const flatEntriesRef = useRef(flatEntries)
   const anchorKeyRef = useRef<string | null>(anchorKey)
   const selectedKeysRef = useRef(selectedKeys)
-  const onOpenFileRef = useRef(onOpenFile)
+  const onOpenDiffRef = useRef(onOpenDiff)
   const shouldOpenAsSplitRef = useRef(shouldOpenAsSplit)
 
   useEffect(() => {
@@ -92,22 +92,20 @@ export function useSourceControlSelection({
   }, [selectedKeys])
 
   useEffect(() => {
-    onOpenFileRef.current = onOpenFile
-  }, [onOpenFile])
+    onOpenDiffRef.current = onOpenDiff
+  }, [onOpenDiff])
 
   useEffect(() => {
     shouldOpenAsSplitRef.current = shouldOpenAsSplit
   }, [shouldOpenAsSplit])
 
-  // Memoized: this hook re-runs on every Source Control panel render (commit-message keystrokes,
-  // status polls), but the reconciliation only moves when one of these three references does.
+  // Memoize reconciliation across keystrokes/polls; only selected/anchor/row references can change it.
   const reconciledSelection = useMemo(
     () => reconcileSourceControlSelectionState({ selectedKeys, anchorKey, flatEntries }),
     [selectedKeys, anchorKey, flatEntries]
   )
   if (reconciledSelection.selectedKeys !== selectedKeys) {
-    // Why: visible source-control rows can disappear after filtering, staging,
-    // or status refresh; prune stale bulk-action keys before children see them.
+    // Prune disappeared rows before children receive stale bulk-action keys.
     setSelectedKeys(new Set(reconciledSelection.selectedKeys))
   }
   if (reconciledSelection.anchorKey !== anchorKey) {
@@ -118,7 +116,7 @@ export function useSourceControlSelection({
     if (shouldOpenAsSplitRef.current?.(e)) {
       setSelectedKeys((prev) => (prev.size > 0 ? new Set() : prev))
       setAnchorKey(null)
-      onOpenFileRef.current(entry, e)
+      onOpenDiffRef.current(entry, e)
       return
     }
 
@@ -132,13 +130,10 @@ export function useSourceControlSelection({
         return
       }
 
-      // Why: when the anchor row disappears from the visible list because a
-      // section collapsed or status changed, the next Shift-click should
-      // fall back to the single-click behavior instead of selecting from a
-      // stale invisible anchor.
+      // If the anchor disappeared, Shift-click falls back to a plain click instead of selecting from an invisible row.
       setSelectedKeys(new Set())
       setAnchorKey(key)
-      onOpenFileRef.current(entry)
+      onOpenDiffRef.current(entry)
     } else if (isCmdOrCtrl) {
       if (selectedKeysRef.current.has(key)) {
         setSelectedKeys((prev) => {
@@ -155,7 +150,6 @@ export function useSourceControlSelection({
         setAnchorKey(key)
       }
     } else {
-      // Plain click
       setSelectedKeys((prev) => {
         if (prev.size > 0) {
           return new Set()
@@ -163,7 +157,7 @@ export function useSourceControlSelection({
         return prev
       })
       setAnchorKey(key)
-      onOpenFileRef.current(entry)
+      onOpenDiffRef.current(entry)
     }
   }, [])
 
@@ -205,8 +199,7 @@ export function useSourceControlSelection({
       clearSelection()
     }
 
-    // Why: use capture so outside clicks clear the selection before the next
-    // UI surface handles the pointer event, matching standard desktop list UX.
+    // Clear outside selections during capture before the destination surface handles the pointer.
     document.addEventListener('pointerdown', handlePointerDown, true)
     return () => document.removeEventListener('pointerdown', handlePointerDown, true)
   }, [selectedKeys.size, containerRef, clearSelection])

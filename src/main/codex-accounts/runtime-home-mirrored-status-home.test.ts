@@ -21,8 +21,7 @@ beforeEach(() => {
   vi.resetModules()
   testState.userData = mkdtempSync(join(tmpdir(), 'orca-codex-status-home-ud-'))
   testState.home = mkdtempSync(join(tmpdir(), 'orca-codex-status-home-'))
-  // Why: the real-home check consults CODEX_HOME and the shell rc, so a
-  // developer who exports one would otherwise fail this suite locally.
+  // Isolate routing checks from the developer's home overrides.
   for (const key of ['ORCA_USER_DATA_PATH', 'CODEX_HOME', 'ORCA_CODEX_HOME']) {
     previousEnv[key] = process.env[key]
     delete process.env[key]
@@ -69,10 +68,6 @@ function createManagedAccount(id: string): CodexManagedAccount {
   } as unknown as CodexManagedAccount
 }
 
-// Why: the config-sync status is only correct if it names the home the current
-// selection actually mirrors into. Nothing else pins that resolution, so a
-// change to the lane rules or the shared-home layout would silence the banner
-// with every other test still green.
 describe('CodexRuntimeHomeService.getMirroredHostHomePathForStatus', () => {
   it('returns null for the system default, which runs on the real home with no mirror', async () => {
     const { CodexRuntimeHomeService } = await import('./runtime-home-service')
@@ -98,8 +93,6 @@ describe('CodexRuntimeHomeService.getMirroredHostHomePathForStatus', () => {
     const { getOrcaManagedCodexHomePath } = await import('../codex/codex-home-paths')
     const service = new CodexRuntimeHomeService(createStore([], null) as never)
 
-    // Why: compare against the real helper, not a repeated literal, so the
-    // status cannot silently drift if the managed home layout ever moves.
     expect(service.getMirroredHostHomePathForStatus()).toEqual({
       kind: 'ready',
       homePath: getOrcaManagedCodexHomePath()

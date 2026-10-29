@@ -1,12 +1,29 @@
-// What the rest of a Claude session asks of its journal translator.
-
 import type { AgentSessionContextReport } from '../../shared/agent-session-context-usage'
-import type { StructuredAgentSessionSinkAdmission } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
+import type { AgentJournalTurnScope } from '../../shared/agent-session-journal-types'
+import type {
+  StructuredAgentSessionEventSink,
+  StructuredAgentSessionSinkAdmission
+} from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import type { ClaudeChildToolQueries } from './claude-child-tool-queries'
 import type { ClaudeContextReportPart, ClaudeContextReportTarget } from './claude-context-facts'
 import type { ClaudeJournalPrompts } from './claude-structured-journal-prompts'
-import type { ClaudeStructuredSessionEvent } from './claude-structured-session-state'
+import type { ClaudeStructuredSessionEvent } from './structured/claude-structured-session-state'
 import type { ClaudeCommandStart } from './claude-command-turn'
+
+import type { AgentSessionDeltaCoalescerDeps } from '../native-chat/agent-session-wire/agent-session-delta-coalescer'
+import type { ClaudeGoalBackgroundWork } from './claude-background-task-tracker'
+import type { AgentSessionAccountKind } from '../../shared/agent-session-availability'
+
+export type ClaudeJournalTranslatorDeps = {
+  sink: StructuredAgentSessionEventSink
+  bindPromptItemId?: (journalItemId: string, promptKey: string) => void
+  coalesceMs?: number
+  schedule?: AgentSessionDeltaCoalescerDeps['schedule']
+  fallbackIdPrefix?: string
+  onBackgroundTaskJournalFailure?: (error: Error) => void
+  account?: () => AgentSessionAccountKind | undefined
+  goalBackgroundWork?: () => ClaudeGoalBackgroundWork
+}
 
 export type ClaudeJournalTranslator = {
   handle: (event: ClaudeStructuredSessionEvent) => void
@@ -14,45 +31,39 @@ export type ClaudeJournalTranslator = {
     ClaudeJournalPrompts,
     'resolve' | 'handOver' | 'cancel' | 'openCards' | 'whenWritten'
   >
-  /** The open turn's provider id — the same id its journal row carries, and the one
-   *  a client's Stop names. Sole owner: no reader keeps a copy to disagree with. */
+  /** Canonical provider turn ID used by the journal row and client Stop requests. */
   readonly currentTurnId: string | null
-  /** The open turn's id while it is a conversation command's. */
+  readonly currentTurnScope: () => AgentJournalTurnScope
   readonly commandTurnId: string | null
-  /** Makes the host's command turn the open one until the command's result ends it. */
   beginCommand: (start: ClaudeCommandStart) => void
-  /** The command was never sent. */
   forgetCommand: (turnId: string) => void
-  /** Orca asked Claude to stop the command `turnId` names. */
   commandInterruptRequested: (turnId: string) => void
-  /** True while a turn is open and the provider's current request cycle has
-   *  done root work since its init — the state in which the CLI folds an
-   *  arriving send into the turn. */
+  /** Root work since cycle init makes the open turn eligible for folded sends. */
   readonly openTurnInLiveProviderCycle: boolean
+  readonly openTurnHasInputWork: boolean
   flush: () => void
   childToolOwner?: ClaudeChildToolQueries['childToolOwner']
   childActivity?: ClaudeChildToolQueries['childActivity']
   retryPendingTaskRows?: () => StructuredAgentSessionSinkAdmission
   retryPendingCancellations?: () => StructuredAgentSessionSinkAdmission
-  /** Streamed blocks still awaiting a final frame. A settled turn leaves none. */
+  /** Streamed blocks awaiting final frames; settlement clears them. */
   readonly pendingStreamedBlocks: number
-  /** Moves with the main conversation and each accepted send; a context report
-   *  asked for before it moved may no longer describe the context. */
+  /** Advances on conversation activity and accepted sends, invalidating older context requests. */
   readonly contextActivity: number
+  /** Every final snapshot and turn settlement this acquisition tried was admitted. */
+  readonly finalOutputAdmitted: boolean
   markContextActivity: () => void
-  /** Fires with the turn a fresh `/context` breakdown should be recorded on. */
   subscribeContextUsageRequests: (
     listener: (target: ClaudeContextReportTarget) => void
   ) => () => void
-  /** Record a requested breakdown, or only its window, on the turn its request named. */
   recordContextReport: (
     target: ClaudeContextReportTarget,
     report: AgentSessionContextReport,
     part: ClaudeContextReportPart
   ) => void
-  /** After a write that can change the model or its window; the ring waits for the new window. */
+  /** Defer context estimates until a model change yields a new window. */
   modelMayHaveChanged: () => void
-  /** After a model write the child applied; its name sizes estimates until a window is measured. */
+  /** Size interim estimates with the applied model until its window is measured. */
   modelWritten: (model: string) => void
   dispose: () => void
 }

@@ -1,4 +1,3 @@
-/** Starts the one stderr line a provider supervisor writes when it could not start its provider. */
 export const PROVIDER_SPAWN_FAILURE_MARKER = '[orca-provider-supervisor] spawn failed: '
 
 type SpawnFailureReport = { thrown: boolean; code: string; message: string }
@@ -25,10 +24,10 @@ function parseSpawnFailureReport(line: string): SpawnFailureReport | null {
   return { thrown: report.thrown, code: report.code, message: report.message }
 }
 
-/** A provider the supervisor could not start: `thrown` when a direct spawn would have thrown. */
+/** Preserve whether direct spawn would throw or emit its failure. */
 export type SupervisedProviderSpawnFailure = { thrown: boolean; error: NodeJS.ErrnoException }
 
-/** The failure a supervisor reported on its last stderr line before exiting 127; null otherwise. */
+/** Only exit 127 with a final supervisor report proves provider spawn failure. */
 export function supervisedProviderSpawnFailure(
   code: number | null,
   stderr: string
@@ -43,7 +42,7 @@ export function supervisedProviderSpawnFailure(
     : null
 }
 
-/** Provider stderr as a direct spawn leaves it: a supervisor's report reads as Node's spawn error. */
+/** Render supervisor-reported failures like direct Node spawn errors. */
 export function providerStderrForDisplay(stderr: string): string {
   return stderr
     .split('\n')

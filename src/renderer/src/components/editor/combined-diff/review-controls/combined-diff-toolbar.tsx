@@ -9,6 +9,52 @@ import type { DiffComment } from '../../../../../../shared/diff-comment-types'
 import { DiffNotesSendMenu } from '../../DiffNotesSendMenu'
 import { DiffNotesPreviewPopover } from './combined-diff-notes-popover'
 
+function changedFilesSummary(
+  count: number,
+  baseRef: string | null,
+  compareRef: string | null
+): string {
+  if (baseRef !== null) {
+    return count === 1
+      ? translate(
+          'auto.components.editor.CombinedDiffViewer.changedFilesVs_one',
+          '{{count}} changed file vs {{baseRef}}',
+          { count, baseRef }
+        )
+      : translate(
+          'auto.components.editor.CombinedDiffViewer.changedFilesVs_other',
+          '{{count}} changed files vs {{baseRef}}',
+          { count, baseRef }
+        )
+  }
+  if (compareRef !== null) {
+    return count === 1
+      ? translate(
+          'auto.components.editor.CombinedDiffViewer.changedFilesIn_one',
+          '{{count}} changed file in {{compareRef}}',
+          { count, compareRef }
+        )
+      : translate(
+          'auto.components.editor.CombinedDiffViewer.changedFilesIn_other',
+          '{{count}} changed files in {{compareRef}}',
+          { count, compareRef }
+        )
+  }
+  return count === 1
+    ? translate(
+        'auto.components.editor.CombinedDiffViewer.changedFiles_one',
+        '{{count}} changed file',
+        {
+          count
+        }
+      )
+    : translate(
+        'auto.components.editor.CombinedDiffViewer.changedFiles_other',
+        '{{count}} changed files',
+        { count }
+      )
+}
+
 export function CombinedDiffToolbar({
   activeGroupId,
   allSectionsCollapsed,
@@ -87,18 +133,11 @@ export function CombinedDiffToolbar({
           </Tooltip>
         )}
         <span className="truncate text-xs text-muted-foreground">
-          {sectionCount}{' '}
-          {translate('auto.components.editor.CombinedDiffViewer.7e7ca60816', 'changed files')}
-          {(isAllMode || isBranchMode) && branchCompare
-            ? translate('auto.components.editor.CombinedDiffViewer.6094135eec', ' vs {{value0}}', {
-                value0: branchCompare.baseRef
-              })
-            : ''}
-          {isCommitMode && commitCompare
-            ? translate('auto.components.editor.CombinedDiffViewer.724a13568d', ' in {{value0}}', {
-                value0: commitCompare.compareRef
-              })
-            : ''}
+          {changedFilesSummary(
+            sectionCount,
+            (isAllMode || isBranchMode) && branchCompare ? branchCompare.baseRef : null,
+            isCommitMode && commitCompare ? commitCompare.compareRef : null
+          )}
         </span>
         {diffCommentCount > 0 && (
           <div className="ml-1 flex shrink-0 items-center overflow-hidden rounded-full border border-border/70 bg-muted/40">
@@ -107,14 +146,19 @@ export function CombinedDiffToolbar({
                 <button
                   type="button"
                   className="inline-flex h-6 items-center gap-1 pl-2 pr-1.5 text-[11px] font-medium leading-none text-foreground/80 transition-colors hover:bg-accent hover:text-foreground"
-                  aria-label={translate(
-                    'auto.components.editor.CombinedDiffViewer.8f68ad9ca9',
-                    'Show {{value0}} AI {{value1}}',
-                    {
-                      value0: diffCommentCount,
-                      value1: diffCommentCount === 1 ? 'note' : 'notes'
-                    }
-                  )}
+                  aria-label={
+                    diffCommentCount === 1
+                      ? translate(
+                          'auto.components.editor.CombinedDiffViewer.showAiNotes_one',
+                          'Show {{count}} AI note',
+                          { count: diffCommentCount }
+                        )
+                      : translate(
+                          'auto.components.editor.CombinedDiffViewer.showAiNotes_other',
+                          'Show {{count}} AI notes',
+                          { count: diffCommentCount }
+                        )
+                  }
                 >
                   <Sparkles className="size-3 text-violet-500 dark:text-violet-400" />
                   <span>
@@ -139,7 +183,7 @@ export function CombinedDiffToolbar({
               worktreeId={file.worktreeId}
               groupId={activeGroupId ?? file.worktreeId}
               comments={diffCommentsForWorktree}
-              actionLabel="Send"
+              actionLabel={translate('auto.components.editor.CombinedDiffViewer.send', 'Send')}
               triggerClassName="h-6 gap-1 rounded-none border-l border-border/70 px-2 text-[11px] font-medium leading-none text-foreground/80 hover:bg-accent hover:text-foreground"
               iconClassName="size-3"
             />

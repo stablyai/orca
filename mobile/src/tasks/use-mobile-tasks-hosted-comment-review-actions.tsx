@@ -22,9 +22,7 @@ import {
 } from './mobile-task-item-state-operations'
 
 export function useMobileTasksHostedCommentReviewActions(model: HostedMetadataActionsModel) {
-  // The seam, not `expo-clipboard`: inside the shell the page's own clipboard needs a secure
-  // context, which the iOS custom scheme is not and Android's https is, so that path would work on
-  // one platform and silently not on the other.
+  // Use the native clipboard seam; iOS custom-scheme pages lack the secure context required by web clipboard APIs.
   const clipboard = useClipboardWriter()
   const {
     client,
@@ -56,8 +54,6 @@ export function useMobileTasksHostedCommentReviewActions(model: HostedMetadataAc
       setMutatingStatus(true)
       setError('')
       try {
-        // Three methods, one per provider and item type. Each arm sends its own operation rather
-        // than one call picking a method string and a matching params shape.
         const written =
           item.provider === 'github'
             ? githubIssueCommentWrite.interpret(
@@ -249,8 +245,6 @@ export function useMobileTasksHostedCommentReviewActions(model: HostedMetadataAc
           },
           { timeoutMs: 30_000 }
         )
-        // The reader answers an array of readable rows, so the hand-rolled shape test this call
-        // site kept is gone: a reply that is not one now names the method it came from.
         const checks = githubPullRequestChecksRead.interpret(reply)
         const checksSummary = buildGitHubCheckSummary(checks)
         setDetailPayload((current) =>

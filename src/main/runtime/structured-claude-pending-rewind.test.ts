@@ -1,5 +1,4 @@
-// A pending Claude rewind never strands the chat: one cut short still launches its fork, and an older
-// build's (it saved no fork) is settled refused while the chat resumes by session id.
+// Interrupted rewinds must launch their saved fork; legacy records without one refuse the rewind and resume by session id.
 
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -9,7 +8,7 @@ import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key
 import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session-mutation-envelope'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
 import type { AgentSessionRewindFork } from '../../shared/agent-session-rewind'
-import { claudeSessionIdForOrcaSession } from '../claude/claude-structured-launch-resolution'
+import { claudeSessionIdForOrcaSession } from '../claude/structured/claude-structured-session-id'
 import { fakeClaude } from '../claude/claude-structured-session-test-support'
 import { claudeAndCodexAgents } from '../native-chat/agent-session-wire/structured-agent-session-adapter-router-test-support'
 import { StructuredAgentSessionAdapterRouter } from '../native-chat/agent-session-wire/structured-agent-session-adapter-router'

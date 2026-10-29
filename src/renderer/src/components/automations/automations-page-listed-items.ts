@@ -1,9 +1,4 @@
-/**
- * What the page actually listed, read back from the mocked list panel.
- *
- * Tests act through the same authority-qualified keys and render order the
- * user's click carries, rather than synthesizing either.
- */
+/** Read authority-qualified row keys and render order from the mocked list panel, matching real clicks rather than synthesizing identity. */
 
 import type { AutomationListRow } from './automation-list-row-identity'
 import type { ExternalAutomationListEntry } from './external-automation-list-entries'

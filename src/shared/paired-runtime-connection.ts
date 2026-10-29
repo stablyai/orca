@@ -1,8 +1,7 @@
 import type { PairedE2EEAuthCredential } from './paired-e2ee-client-handshake'
 import type { PairingOffer } from './pairing'
 
-// What a client needs to connect to a paired host. Why not PairingOffer: an offer is
-// pairing input; a connection carries a credential that will not always be a token.
+// Connections carry credentials that may evolve beyond tokens; PairingOffer describes pairing input instead.
 export type PairedRuntimeConnection = {
   endpoint: string
   hostPublicKeyB64: string

@@ -163,10 +163,7 @@ function cjkEmojiFixture(targetBytes) {
   return parts.join('')
 }
 
-// Claude-Code-shaped workload: transcript lines scroll into scrollback while a
-// status block at the bottom repaints in place inside DEC 2026 synchronized
-// frames. This is the mix behind the "scrolling in Claude Code is slow"
-// complaint — NOT an alt-screen TUI.
+// Inline Claude-shaped transcript plus DEC 2026 bottom-status redraw, not an alt-screen TUI.
 function agentTuiFixture(targetBytes, cols, rows) {
   const rng = mulberry32(3)
   const statusRows = Math.min(10, Math.max(4, rows - 4))
@@ -183,8 +180,7 @@ function agentTuiFixture(targetBytes, cols, rows) {
     frame++
     push(`${ESC}[?2026h`)
     if (painted) {
-      // Erase the previous status block, letting transcript lines above it
-      // stand — mirrors how agent CLIs rewrite their bottom UI.
+      // Erase status only, retaining transcript above as agent CLIs do.
       push(`${ESC}[${statusRows}A${ESC}[0J`)
     }
     for (let t = 0; t < 2; t++) {
@@ -203,9 +199,7 @@ function agentTuiFixture(targetBytes, cols, rows) {
   return parts.join('')
 }
 
-// Pathological ceiling probe: every cell gets its own SGR. Ghostty's
-// maintainer explicitly calls this class of load unrepresentative; keep the
-// label honest when reading results.
+// Label per-cell SGR as a pathological ceiling probe, not representative workload.
 function stylesStressFixture(targetBytes, cols) {
   const rng = mulberry32(4)
   const parts = []
@@ -237,8 +231,6 @@ export function buildFixture(name, targetBytes, cols, rows) {
       throw new Error(`Unknown fixture: ${name}`)
   }
 }
-
-// --- stdin DSR reply plumbing -------------------------------------------------
 
 const dsrWaiters = []
 let stdinBuffer = ''
@@ -314,8 +306,6 @@ function stats(samples) {
   }
 }
 
-// --- benchmark phases ---------------------------------------------------------
-
 async function measureDsrIdle(count) {
   const samples = []
   let timeouts = 0
@@ -373,11 +363,8 @@ async function measureDsrUnderLoad(fixture, paceBytesPerSec, sampleCount) {
   return { paceBytesPerSec, ...stats(samples), timeouts }
 }
 
-// --- terminal state hygiene ---------------------------------------------------
-
 function restoreTerminal() {
-  // SGR reset, cursor visible, leave synchronized mode; keeps the host pane
-  // usable no matter where a run aborted.
+  // Always reset SGR, show cursor and leave synchronized mode, including aborted runs.
   process.stdout.write(`${ESC}[0m${ESC}[?25h${ESC}[?2026l\r\n`)
   if (process.stdin.isTTY) {
     process.stdin.setRawMode(false)
@@ -389,8 +376,6 @@ function cleanupAndExit(code) {
   restoreTerminal()
   process.exit(code)
 }
-
-// --- report mode ----------------------------------------------------------------
 
 function fmt(n, digits = 1) {
   return n === null || n === undefined ? '—' : n.toFixed(digits)
@@ -437,8 +422,6 @@ function runReport(labelFilter) {
   }
   console.log(`\n${rows.length} result file(s) from ${resultsDir}`)
 }
-
-// --- main -----------------------------------------------------------------------
 
 async function main() {
   const args = parseArgs(process.argv)
@@ -556,8 +539,7 @@ async function main() {
   process.exit(0)
 }
 
-// Why the guard: buildFixture is imported by sibling analysis scripts
-// (headless parse decomposition); importing must not start a benchmark run.
+// Sibling analysis scripts import buildFixture; import must not start the benchmark.
 const invokedDirectly =
   process.argv[1] && import.meta.url === new URL(`file://${process.argv[1]}`).href
 if (invokedDirectly) {

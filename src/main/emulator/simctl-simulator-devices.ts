@@ -55,8 +55,7 @@ function mapSimctlError(error: ExecFileException, stderr?: string | Buffer): Emu
     (lower.includes('unable to find utility') && lower.includes('simctl')) ||
     lower.includes('not a developer tool')
   ) {
-    // Why: xcrun exposes setup problems as raw execFile text; UI and CLI need
-    // the actionable Xcode fix instead of "Command failed: xcrun ...".
+    // Translate raw xcrun setup errors into an actionable Xcode message.
     return new EmulatorError('emulator_simctl_unavailable', SIMCTL_UNAVAILABLE_MESSAGE)
   }
   return new EmulatorError('emulator_error', raw.trim() || 'xcrun simctl command failed.')
@@ -96,9 +95,12 @@ export async function resolveSimulatorUdid(
   try {
     const devices = await listSimulatorDevices()
     const needle = deviceOrName.toLowerCase()
-    const match = devices.find(
-      (device) => device.name.toLowerCase().includes(needle) || device.udid === deviceOrName
-    )
+    // An exact name wins so `iPhone 17` cannot resolve to an earlier `iPhone 17e`.
+    const match =
+      devices.find((device) => device.name.toLowerCase() === needle) ??
+      devices.find(
+        (device) => device.name.toLowerCase().includes(needle) || device.udid === deviceOrName
+      )
     if (match) {
       return match.udid
     }
@@ -191,8 +193,7 @@ export async function shutdownSimulatorDevice(udid: string): Promise<void> {
           resolve()
           return
         }
-        // Why: execFile's message echoes the command line, so only the actual
-        // already-off state is idempotent; other current states are real failures.
+        // Match the actual shutdown state; execFile also echoes shutdown in the command text.
         const message = `${error.message}\n${stderr?.toString() ?? ''}`.toLowerCase()
         if (/\bcurrent state:\s*shutdown\b/.test(message)) {
           resolve()

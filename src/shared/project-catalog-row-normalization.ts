@@ -1,22 +1,9 @@
 import { LOCAL_EXECUTION_HOST_ID } from './execution-host'
 import type { Project, ProjectHostSetup } from './project-types'
 
-/**
- * Repairs untrusted `Project` / `ProjectHostSetup` rows so their declared field types are true.
- *
- * These rows reach typed code from persisted JSON and from remote Orca hosts running a different
- * version, where a field the type promises is a `string` can arrive `null`, missing, or another
- * type entirely — while consumers call `.trim()` on it unconditionally (crash 3bcc5be3). Call
- * these at every boundary such a row enters the app, so nothing downstream has to re-guard.
- *
- * Coercion only. A normalizer never drops a row, never adds or removes an optional key, and
- * returns its input reference untouched when it already conforms — callers keep row and array
- * identity, which selectors and `useMemo` deps depend on.
- *
- * The string-literal unions (`setupState`, `setupMethod`) are deliberately left alone: they are
- * only ever compared, so an unknown value degrades instead of crashing, and inventing a fallback
- * would silently change what a corrupt row claims about itself.
- */
+/** Normalize persisted/mixed-version Project/ProjectHostSetup rows at ingress; null/missing strings otherwise crash trim consumers
+ * (3bcc5be3). Coerce only: keep row membership, optional-key presence and valid references for selector/useMemo stability.
+ * Leave compared-only string unions unknown rather than inventing new state claims. */
 
 function isString(value: unknown): value is string {
   return typeof value === 'string'

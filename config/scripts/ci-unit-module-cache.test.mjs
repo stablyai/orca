@@ -83,7 +83,7 @@ describe('persistent unit module cache boundary', () => {
       expect(() => readFileSync(join(identity.path, 'untrusted'))).toThrow()
     }
   )
-  it('restores a matching cache from an earlier source without copying evaluated state', async () => {
+  it('restores a matching cache produced from an earlier source', async () => {
     const identity = moduleCacheIdentity(options())
     mkdirSync(identity.path)
     writeFileSync(
@@ -117,7 +117,7 @@ describe('persistent unit module cache boundary', () => {
   })
 })
 
-it('uses an optional exact restore after install and saves successful scoped producers', () => {
+it('restores the newest same-policy producer and saves only cold main or seeded producers', () => {
   const workflow = parse(readFileSync('.github/workflows/unit-tests.yml', 'utf8'))
   const steps = workflow.jobs.test.steps
   const dependencies = steps.findIndex(
@@ -134,20 +134,57 @@ it('uses an optional exact restore after install and saves successful scoped pro
   expect(prepare).toBeGreaterThan(restore)
   expect(tests).toBeGreaterThan(prepare)
   expect(steps[restore].uses).toBe('actions/cache/restore@v5')
-  expect(steps[restore].with['restore-keys']).toBeUndefined()
+  expect(steps[restore].with['restore-keys']).toBe('${{ steps.module-cache.outputs.key }}-')
   expect(steps[restore]['continue-on-error']).toBe(true)
-  expect(seal.if).toContain('success()')
-  expect(seal.if).toContain("github.event_name == 'pull_request'")
-  expect(seal.if).toContain("github.ref == 'refs/heads/main'")
-  expect(seal.if).toContain("github.event_name != 'pull_request'")
-  expect(seal.if).toContain("inputs.module_cache_seed && github.event_name == 'workflow_dispatch'")
+  const guard = seal.if.replaceAll(
+    'steps.module-cache.outputs.key',
+    'steps["module-cache"].outputs.key'
+  )
+  const producer = {
+    event: 'schedule',
+    ref: 'refs/heads/main',
+    success: true,
+    key: 'scoped',
+    mode: 'cold',
+    seed: false
+  }
+  for (const [name, update, expected] of [
+    ['successful main producer', {}, true],
+    ['PR', { event: 'pull_request', ref: 'refs/pull/1/merge' }, false],
+    ['warm main consumer', { mode: 'warm' }, false],
+    [
+      'successful manually seeded branch',
+      { event: 'workflow_dispatch', ref: 'refs/heads/experiment', seed: true },
+      true
+    ],
+    ['missing identity', { key: '' }, false],
+    ['ordinary branch push', { event: 'push', ref: 'refs/heads/experiment' }, false],
+    ['unseeded manual branch', { event: 'workflow_dispatch', ref: 'refs/heads/experiment' }, false],
+    [
+      'seed does not admit a nonmanual event',
+      { event: 'push', ref: 'refs/heads/experiment', seed: true },
+      false
+    ],
+    ['failed main producer', { event: 'push', ref: 'refs/heads/main', success: false }, false]
+  ]) {
+    const control = { ...producer, ...update }
+    const admitted = runInNewContext(guard, {
+      github: { event_name: control.event, ref: control.ref },
+      steps: {
+        'module-cache': { outputs: { key: control.key } }
+      },
+      inputs: { module_cache: control.mode, module_cache_seed: control.seed },
+      success: () => control.success
+    })
+    expect(admitted, name).toBe(expected)
+  }
   expect(save.if).toBe("steps.module-cache-seal.outputs.ready == 'true'")
-  expect(save.with.key).toBe(steps[restore].with.key)
+  expect(save.with.key.startsWith(steps[restore].with['restore-keys'])).toBe(true)
   expect(workflow.on.workflow_call.inputs.module_cache.default).toBe('off')
   expect(workflow.on.workflow_call.inputs.run_relay_integration.default).toBe(true)
 })
 
-it('retains four workers on ARM and the four-core Blacksmith unit runner', () => {
+it('retains four workers on ARM and the four-core x64 unit runners', () => {
   const workflow = parse(readFileSync('.github/workflows/unit-tests.yml', 'utf8'))
   const step = workflow.jobs.test.steps.find((step) => step.name === 'Test shard')
   const expression = [...step.run.matchAll(/\$\{\{(.+?)\}\}/g)].find((match) =>
@@ -156,18 +193,25 @@ it('retains four workers on ARM and the four-core Blacksmith unit runner', () =>
   for (const [arch, runner] of [
     ['ARM64', 'ubuntu-24.04-arm'],
     ['ARM64', 'blacksmith-4vcpu-ubuntu-2404-arm'],
-    ['X64', 'blacksmith-4vcpu-ubuntu-2404']
+    ['X64', 'blacksmith-4vcpu-ubuntu-2404'],
+    ['X64', 'ubuntu-24.04']
   ]) {
     expect(runInNewContext(expression, { runner: { arch }, inputs: { runner } })).toBe(
       '--maxWorkers=4'
     )
   }
   expect(
+    runInNewContext(expression, {
+      runner: { arch: 'X64' },
+      inputs: { runner: 'blacksmith-8vcpu-ubuntu-2404' }
+    })
+  ).toBe('--maxWorkers=8')
+  expect(
     runInNewContext(expression, { runner: { arch: 'X64' }, inputs: { runner: 'ubuntu-latest' } })
   ).toBe('')
 })
 
-it('runs full same-source controls serially with five four-worker shards and included producer costs', () => {
+it('runs baseline, producer and warm controls serially with matching runtimes and shards', () => {
   const workflow = parse(readFileSync('.github/workflows/unit-module-cache-benchmark.yml', 'utf8'))
   const { baseline, producer, warm } = workflow.jobs
   expect(producer.needs).toBe('baseline')

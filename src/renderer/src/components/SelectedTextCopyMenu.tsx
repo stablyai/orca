@@ -60,8 +60,7 @@ export function SelectedTextCopyMenu({
     window.addEventListener('pointerdown', close)
     addAppKeyListener('keydown', handleKeyDown)
     window.addEventListener('scroll', close, true)
-    // Why: a bare resize listener also fires on the main process's reveal reflow, which changes
-    // no dimensions — the menu would close on every window restore.
+    // Reveal repaint emits size-unchanged resize events; only real viewport changes should close the menu.
     const removeViewportListener = addViewportSizeChangeListener(close)
     return () => {
       window.removeEventListener('pointerdown', close)
@@ -77,8 +76,7 @@ export function SelectedTextCopyMenu({
       return
     }
 
-    // Why: allowing the event through reopens the workspace card menu. Render
-    // this through a body portal so transformed hovercards cannot offset it.
+    // Stop card-menu propagation; portal outside transformed hovercards to keep coordinates correct.
     event.preventDefault()
     event.stopPropagation()
     event.nativeEvent.stopImmediatePropagation()

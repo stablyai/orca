@@ -1,10 +1,4 @@
-/**
- * Stopping one remote orcad instance through its instance-bound request, never a signal.
- *
- * The client names the instance from two host records that must agree: the slot's readiness
- * payload (runtime ID, PID, capability) and the data root's instance lock (PID, start time,
- * nonce). The slot's own `orcad.js` then writes the request and proves exit on the host.
- */
+// Readiness and instance-lock records must agree before the slot's own build requests a stop.
 import { randomUUID } from 'node:crypto'
 import { quotePosixShell } from '../../../shared/shell-argument-quoting'
 import { selectOrcadSlotRuntimeCommand } from '../install/orcad-remote-runtime'
@@ -47,7 +41,6 @@ function refused(code: string, reason: string): OrcadManagedStopTarget {
   return { state: 'refused', verdict: 'unverifiable', code, reason }
 }
 
-/** Names the running instance of `version`, or says why the host could not prove which it is. */
 export async function readRemoteOrcadManagedStopTarget(
   options: OrcadSlotOptions,
   version: string
@@ -87,7 +80,7 @@ export async function readRemoteOrcadManagedStopTarget(
       instance: {
         pid: lock.pid,
         startedAtMs: lock.startedAtMs,
-        // Older slots drop these; newer ones prove identity without the drifting wall clock.
+        // Newer slots use boot/start ticks to avoid wall-clock drift; older readers drop them.
         ...(lock.linuxStartTicks && lock.bootId
           ? { linuxStartTicks: lock.linuxStartTicks, bootId: lock.bootId }
           : {}),
@@ -116,7 +109,7 @@ export async function cancelRemoteOrcadManagedStop(
   )
 }
 
-/** Runs the slot's own build, which owns the request format it is asked to write. */
+// The slot's own build owns its stop-request format.
 async function runSlotCommand(
   options: OrcadSlotOptions,
   request: OrcadManagedStopRequest,
@@ -142,14 +135,13 @@ async function runSlotCommand(
   if (typeof parsed !== 'object' || parsed === null) {
     throw new Error('orcad managed stop command returned no verifiable answer')
   }
-  // The answer must be about this exact request, not another transaction's.
   if (!('transactionId' in parsed) || parsed.transactionId !== request.transactionId) {
     throw new Error('orcad managed stop command answered another transaction')
   }
   return parsed
 }
 
-/** Windows passes the request as a staged file: JSON on a command line meets two quoting layers. */
+// Stage JSON on Windows to avoid two command-line quoting layers.
 async function runWindowsSlotCommand(
   options: OrcadSlotOptions,
   slotDir: string,
@@ -184,7 +176,7 @@ async function runWindowsSlotCommand(
       ])
     )
   } catch (error) {
-    // The command may still be reading it.
+    // Unconfirmed commands may still be reading the staged request.
     removeStaged = !isUnconfirmedSshCommandTermination(error)
     throw error
   } finally {

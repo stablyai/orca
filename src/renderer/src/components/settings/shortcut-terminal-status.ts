@@ -7,10 +7,6 @@ import {
 } from '../../../../shared/keybindings'
 import { translate } from '@/i18n/i18n'
 
-// Describes how a shortcut behaves while a terminal/TUI has keyboard focus,
-// surfaced as a badge on the command header. Lives in its own module so the
-// command-block, filter rail, and pane can share it without importing a
-// component file.
 export type ShortcutTerminalStatus = {
   label: string
   description: string

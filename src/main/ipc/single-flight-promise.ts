@@ -1,5 +1,4 @@
-/** Collapses concurrent callers onto one run; the slot clears on settle so a
- *  later caller starts fresh. Shared by both watcher fallbacks. */
+/** Concurrent callers share one run; settlement clears the slot for later calls. */
 export function createSingleFlight(): {
   run: (start: () => Promise<void>) => Promise<void>
   pending: () => Promise<void> | null
@@ -10,7 +9,7 @@ export function createSingleFlight(): {
       if (inFlight) {
         return inFlight
       }
-      // Self-comparison: a run settling after a newer one started must not clear it.
+      // A settling run must not clear its successor.
       const tracked: Promise<void> = start().finally(() => {
         if (inFlight === tracked) {
           inFlight = null

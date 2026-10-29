@@ -1,28 +1,28 @@
-import { useContext, useEffect, useState } from 'react'
+import { useContext, useEffect, useMemo, useState } from 'react'
 import { Pressable, Text, View, type TextStyle } from 'react-native'
+import { truncateToolDetail } from '../../../src/shared/native-chat/tools/native-chat-tool-summary'
 import {
-  truncateToolDetail,
-  MAX_TOOL_DETAIL_LENGTH
-} from '../../../src/shared/native-chat-tool-summary'
+  isNativeChatToolOutputClipped,
+  NATIVE_CHAT_TOOL_OUTPUT_COPY,
+  nativeChatToolFullPayload,
+  nativeChatToolOutputPartialSizes
+} from '../../../src/shared/native-chat/tools/native-chat-tool-output'
 import type {
   NativeChatMessage,
   NativeChatToolResultBlock
 } from '../../../src/shared/native-chat-types'
-import type {
-  AgentJournalBoundedPayload,
-  AgentJournalItemBody
-} from '../../../src/shared/agent-session-journal-types'
+import type { AgentJournalBoundedPayload } from '../../../src/shared/agent-session-journal-types'
 import { INLINE_TEXT_SELECTION } from '../components/inline-text-selection'
-import { styles } from './mobile-native-chat-message-styles'
-import { toolStyles } from './mobile-native-chat-tool-styles'
+import { styles } from './native-chat/transcript/mobile-native-chat-message-styles'
+import { toolStyles } from './native-chat/transcript/mobile-native-chat-tool-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { MobileNativeChatOwnedScrollView } from './MobileNativeChatOwnedScrollView'
 import {
   MobileNativeChatItemSourceContext,
   readMobileNativeChatItem
 } from './mobile-native-chat-item-read'
 
-// "Show full output" and "Show full message": a row the phone was sent a head of, read whole from
-// the host that keeps it. State is the row's own, so a live revision never fights it.
+// Keep full-content state per row so live transcript revisions cannot overwrite the reader’s requested expansion.
 
 type Load = 'idle' | 'loading' | 'failed'
 
@@ -35,6 +35,7 @@ function ShowFull({
   load: Load
   onPress: () => void
 }): React.JSX.Element {
+  useMobileColorScheme()
   return (
     <Pressable
       style={styles.showFull}
@@ -50,14 +51,6 @@ function ShowFull({
   )
 }
 
-function outputOf(body: AgentJournalItemBody | null): AgentJournalBoundedPayload | null {
-  if (body?.kind === 'tool-call') {
-    return body.output ?? null
-  }
-  return body?.kind === 'diff' ? body.patch : null
-}
-
-/** A tool's output in an opened line: its head, and the whole of it on request. */
 export function MobileNativeChatToolOutput({
   body,
   type,
@@ -69,6 +62,7 @@ export function MobileNativeChatToolOutput({
   rootIdentity: string
   positionKey: string
 }): React.JSX.Element {
+  useMobileColorScheme()
   const source = useContext(MobileNativeChatItemSourceContext)
   const { output, isError, fullOutputItemId } = body
   const client = source?.client,
@@ -93,9 +87,8 @@ export function MobileNativeChatToolOutput({
       ? detail
       : null
   const full = current?.full
-  const clipped =
-    !full &&
-    (fullOutputItemId !== undefined || (!expanded && output.length > MAX_TOOL_DETAIL_LENGTH))
+  const clipped = isNativeChatToolOutputClipped(body, { expanded, fullLoaded: Boolean(full) })
+  const partial = useMemo(() => (full ? nativeChatToolOutputPartialSizes(full) : null), [full])
   const showFull = (): void => {
     if (fullOutputItemId === undefined || source === null) {
       setExpanded(true)
@@ -111,7 +104,11 @@ export function MobileNativeChatToolOutput({
     }
     readMobileNativeChatItem(source, fullOutputItemId)
       .then((item) =>
-        finish(item?.itemId === fullOutputItemId ? (outputOf(item.body) ?? undefined) : undefined)
+        finish(
+          item?.itemId === fullOutputItemId
+            ? (nativeChatToolFullPayload(item.body) ?? undefined)
+            : undefined
+        )
       )
       .catch(() => finish())
   }
@@ -131,9 +128,11 @@ export function MobileNativeChatToolOutput({
           {full ? full.head : expanded ? output : truncateToolDetail(output)}
         </Text>
       </MobileNativeChatOwnedScrollView>
-      {full?.truncated ? (
+      {partial ? (
         <Text style={styles.showFullText}>
-          Showing {new TextEncoder().encode(full.head).length} of {full.byteLength} bytes.
+          {NATIVE_CHAT_TOOL_OUTPUT_COPY.partial
+            .replace('{{shown}}', partial.shown)
+            .replace('{{total}}', partial.total)}
         </Text>
       ) : null}
       {clipped ? (
@@ -143,12 +142,12 @@ export function MobileNativeChatToolOutput({
   )
 }
 
-/** `message` as drawn: whole once the reader asked for a reply the phone was sent shortened. */
 export function useMobileNativeChatFullMessage(message: NativeChatMessage): {
   shown: NativeChatMessage
   showFull: React.JSX.Element | null
   recovery: { load: Load; onPress: () => void } | null
 } {
+  useMobileColorScheme()
   const source = useContext(MobileNativeChatItemSourceContext)
   const detail = source?.messageDetail
   const client = source?.client,

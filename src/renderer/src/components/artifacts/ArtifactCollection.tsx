@@ -34,7 +34,7 @@ export function ArtifactCollection({
   isRefreshing: boolean
 }): React.JSX.Element {
   const [query, setQuery] = useState('')
-  // Why: clamp on the way in so a multi-MB paste never reaches state or filtering.
+  // Clamp before state/filtering so multi-MB pastes cannot reach either.
   const onQueryChange = (next: string): void => setQuery(clampArtifactListSearchQuery(next))
   const matches = useMemo(() => filterArtifactsBySearchQuery(artifacts, query), [artifacts, query])
   // Why: state, not a ref — the windowed rows need the scroller on their own mount pass.
@@ -54,8 +54,7 @@ export function ArtifactCollection({
           className={cn('scrollbar-sleek min-h-0 flex-1 overflow-auto', LIST_TABLE_CONTAINER_CLASS)}
         >
           <ArtifactListTableHeader />
-          {/* Why no width wrapper around the rows: a `w-fit` band sizes to the full scroll width,
-              painting every row's hover and selection wash past the viewport edge (376px -> 468px). */}
+          {/* Avoid w-fit row bands: they extend hover/selection washes to scroll width beyond the viewport. */}
           {matches.length > 0 ? (
             <ArtifactListRows
               artifacts={matches}

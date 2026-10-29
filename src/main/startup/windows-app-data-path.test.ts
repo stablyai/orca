@@ -96,7 +96,7 @@ describe('ensureWindowsAppDataPath', () => {
   })
 
   it('creates and sets appData from the environment before userData when the lookup throws', () => {
-    // Why a real dir: the fallback must mkdir a folder that a profile-less session never created.
+    // Use real missing directories to prove profileless sessions get their fallback created.
     const root = mkdtempSync(join(tmpdir(), 'orca-appdata-'))
     tempDirs.push(root)
     const missingAppData = join(root, 'missing', 'Roaming')

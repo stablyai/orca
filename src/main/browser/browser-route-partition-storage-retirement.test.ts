@@ -60,7 +60,7 @@ function stubHost(
     forgetPage: vi.fn(() => true),
     whenHandlersSettled: vi.fn(() => handlersSettled),
     refreshPageInventory: vi.fn(async () => {}),
-    // Why: an automation handler that outlives the join makes the composition defer executor close.
+    // A lingering automation handler defers executor closure.
     close: vi.fn(async () => false)
   }
 }
@@ -122,7 +122,7 @@ describe('browser route partition storage retirement', () => {
             legacyAuthorityConnectionIdentity: 'legacy-authority-a'
           },
           createRoutes: () => stubRoutes(),
-          // Why: releasing the page's partition is what the executor close does in production.
+          // Executor closure releases the page's partition in production.
           createExecutor: () =>
             stubExecutor(() => {
               order.push('close-executor')
@@ -151,8 +151,7 @@ describe('browser route partition storage retirement', () => {
       },
       retryDelayMs: 0
     })
-    // Why: the clear must still be waiting after the host close itself resolved, not merely be
-    // ordered behind it by microtask luck.
+    // Drain tasks to prove cleanup remains blocked after host close resolves.
     await drainTasks()
     expect(order).toEqual([])
 

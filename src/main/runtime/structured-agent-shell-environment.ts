@@ -1,16 +1,19 @@
+import { agentModelCatalogStore } from '../native-chat/agent-model-catalog/agent-model-catalog-store'
 import { resolveLoginShellEnvironment } from '../startup/login-shell-environment'
 import { refreshAtRestCommandContext } from '../native-chat/agent-session-wire/at-rest-command-context'
 import {
+  cachedPersistedWindowsPathSegments,
   mergePersistedWindowsPathAsync,
   readPersistedWindowsPathSegmentsAsync
 } from '../pty/windows-environment-path'
+import { mergeWindowsPathSegments, resolvePathEnvKey } from '../pty/windows-path-segment-merge'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import {
   nativeChatShellEnvironmentPolicy,
   type NativeChatShellEnvironmentPolicy
-} from '../../shared/native-chat-shell-environment'
+} from '../../shared/native-chat/native-chat-shell-environment'
 
-// Why: with the whole shell off, the child must still find its CLI and keep locale and agent socket.
+// Even with shell inheritance off, preserve CLI lookup, locale and agent socket.
 const BASELINE_SHELL_VARIABLES = ['PATH', 'LANG', 'LC_ALL', 'LC_CTYPE', 'SSH_AUTH_SOCK']
 
 function definedEnv(env: NodeJS.ProcessEnv): Record<string, string> {
@@ -79,33 +82,35 @@ export function structuredAgentBaseEnvironment(input: {
   )
 }
 
-// Why: long enough that a burst of starts shares one capture, short enough that a CLI
-// installed on the host reaches new chats without a restart.
+// Share one capture across launch bursts while discovering newly installed CLIs without restart.
 const SHELL_ENVIRONMENT_TTL_MS = 10_000
 
-/**
- * This host's shell env, from the shared login-shell cache: the last result at once, rerun in the
- * background past the TTL. Windows keeps a loaded PowerShell profile for good (only a failed load
- * is retried) and lays the saved PATH, where installers add themselves, over it on every read.
- */
-async function hostShellEnvironment(cachedOnly = false): Promise<NodeJS.ProcessEnv> {
+/** Serve cached shell env immediately and refresh after TTL; Windows retains a loaded profile, retrying failures, and overlays saved installer PATH on reads. */
+export async function hostShellEnvironment(cachedOnly = false): Promise<NodeJS.ProcessEnv> {
   const windows = process.platform === 'win32'
   const env = await resolveLoginShellEnvironment({
     cachedOnly,
     refreshAfterMs: SHELL_ENVIRONMENT_TTL_MS,
     keepCaptured: windows
   })
-  if (!windows || cachedOnly) {
+  if (!windows) {
     return env
   }
   const withSavedPath = { ...env }
-  await mergePersistedWindowsPathAsync(withSavedPath)
+  if (cachedOnly) {
+    mergeWindowsPathSegments(
+      withSavedPath,
+      cachedPersistedWindowsPathSegments(),
+      process.platform,
+      process.env
+    )
+  } else {
+    await mergePersistedWindowsPathAsync(withSavedPath)
+  }
   return withSavedPath
 }
 
-/** For a lookup that started at `askedAt` and found no program: waits for a shell run that started
- *  no earlier (on Windows, a saved PATH reread), so an agent installed before the lookup counts.
- *  The run's own shell timeout bounds the wait. */
+/** After a missing-program lookup, await a capture (Windows: saved PATH read) started no earlier than askedAt; the shell timeout bounds it. */
 export async function refreshHostAgentBaseEnvironmentAfterMiss(askedAt: number): Promise<void> {
   await (
     process.platform === 'win32'
@@ -114,18 +119,57 @@ export async function refreshHostAgentBaseEnvironmentAfterMiss(askedAt: number):
   ).catch(() => {})
 }
 
-/** Captures this host's shell env again now, so an explicit Refresh never reads a profile kept from
- *  before it (Windows keeps a loaded one for good). */
+/** Explicit Refresh must recapture the profile Windows otherwise retains indefinitely. */
 export async function recaptureHostShellEnvironment(): Promise<void> {
-  await refreshAtRestCommandContext(captureHostShellEnvironment)
+  await refreshAtRestCommandContext(() => captureHostShellEnvironment())
 }
 
-export async function captureHostShellEnvironment(): Promise<void> {
-  const startedAfter = Date.now()
-  await Promise.all([
-    resolveLoginShellEnvironment({ startedAfter }),
-    readPersistedWindowsPathSegmentsAsync({ forceRefresh: true, startedAfter })
-  ]).catch(() => {})
+type EnvironmentProjection = (shellEnv: NodeJS.ProcessEnv) => Map<string, string>
+const servingEnvironmentCaptures = new Set<() => EnvironmentProjection>()
+
+export function captureHostShellEnvironment(): Promise<void>
+export function captureHostShellEnvironment<T>(beforeCapture: () => Promise<T>): Promise<T>
+export async function captureHostShellEnvironment<T>(
+  beforeCapture?: () => Promise<T>
+): Promise<T | undefined> {
+  const cachedShell = resolveLoginShellEnvironment({ cachedOnly: true })
+  const cachedPath = cachedPersistedWindowsPathSegments()
+  const comparisons = [...servingEnvironmentCaptures].map((capture) => ({
+    capture,
+    project: capture()
+  }))
+  const before = { ...(await cachedShell) }
+  if (process.platform === 'win32') {
+    mergeWindowsPathSegments(before, cachedPath, process.platform, process.env)
+  }
+  const previous = comparisons.map(({ project }) => project(before))
+  try {
+    return await beforeCapture?.()
+  } finally {
+    const startedAfter = Date.now()
+    await Promise.all([
+      resolveLoginShellEnvironment({ startedAfter }),
+      readPersistedWindowsPathSegmentsAsync({ forceRefresh: true, startedAfter })
+    ]).catch(() => {})
+    const after = { ...(await resolveLoginShellEnvironment({ cachedOnly: true })) }
+    if (process.platform === 'win32') {
+      mergeWindowsPathSegments(
+        after,
+        cachedPersistedWindowsPathSegments(),
+        process.platform,
+        process.env
+      )
+    }
+    comparisons.forEach(({ capture }, index) => {
+      if (!servingEnvironmentCaptures.has(capture)) {
+        return
+      }
+      const next = capture()(after)
+      agentModelCatalogStore.expireLaunchScopes(
+        (agent) => previous[index].has(agent) && previous[index].get(agent) !== next.get(agent)
+      )
+    })
+  }
 }
 
 /** The base env every local agent launch on this host starts from, read from current settings. */
@@ -142,6 +186,8 @@ export async function resolveHostAgentBaseEnvironment(
 }
 
 export type StructuredAgentEnvironmentSources = {
+  prewarm?: boolean
+  processEnvironment?: NodeJS.ProcessEnv
   /** Replaces the host's shell env, read once when the resolvers are made; never reread. */
   resolveEnvironment?: () => Promise<NodeJS.ProcessEnv>
   resolveShellEnvironmentPolicy?: () => NativeChatShellEnvironmentPolicy
@@ -149,8 +195,7 @@ export type StructuredAgentEnvironmentSources = {
   resolveAgentLaunchEnv?: (agent: string) => Record<string, string>
 }
 
-/** Every agent's child env over the host's shell env. Policy and overlays are re-read per
- *  acquisition, so a settings change reaches the next chat without a restart. */
+/** Reread policy and agent overlays on each acquisition so settings changes reach new chats without restart. */
 export function createStructuredAgentEnvironmentResolvers(
   sources: StructuredAgentEnvironmentSources
 ): {
@@ -159,26 +204,77 @@ export function createStructuredAgentEnvironmentResolvers(
   /** The base with the user's overlay for `agent` laid over it. */
   resolveAgentEnvironment: (agent: string) => Promise<Record<string, string>>
   refreshAfterMissingProgram: (askedAt: number) => Promise<void>
+  bindCatalogSources: (agents: readonly string[]) => () => void
 } {
-  // Why: start as soon as the runtime exists so the first chat rarely waits for the profile.
+  // Start capture with the runtime so the first chat rarely waits for the shell profile.
   const injected = sources.resolveEnvironment?.()
   const shellEnvironment = injected ? () => injected : hostShellEnvironment
-  if (!injected) {
+  if (!injected && sources.prewarm !== false) {
     void hostShellEnvironment().catch(() => {})
   }
   const resolveBase = async (cachedOnly = false): Promise<Record<string, string>> =>
     structuredAgentBaseEnvironment({
       shellEnv: await shellEnvironment(cachedOnly),
-      policy: sources.resolveShellEnvironmentPolicy?.() ?? nativeChatShellEnvironmentPolicy(null)
+      policy: sources.resolveShellEnvironmentPolicy?.() ?? nativeChatShellEnvironmentPolicy(null),
+      processEnv: sources.processEnvironment
     })
   return {
     refreshAfterMissingProgram: injected
       ? async () => {}
       : refreshHostAgentBaseEnvironmentAfterMiss,
+    bindCatalogSources: (agents) => {
+      if (injected) {
+        return () => {}
+      }
+      const capture = (): EnvironmentProjection => {
+        const selectedPolicy =
+          sources.resolveShellEnvironmentPolicy?.() ?? nativeChatShellEnvironmentPolicy(null)
+        const policy = { ...selectedPolicy, names: [...selectedPolicy.names] }
+        const processEnv = { ...(sources.processEnvironment ?? process.env) }
+        const overlays = new Map(
+          agents.map((agent) => [agent, { ...sources.resolveAgentLaunchEnv?.(agent) }])
+        )
+        return (shellEnv) => {
+          const base = structuredAgentBaseEnvironment({ shellEnv, policy, processEnv })
+          return new Map(
+            agents.map((agent) => {
+              const effective = { ...base, ...overlays.get(agent) }
+              return [agent, structuredAgentEnvironmentIdentity(effective)]
+            })
+          )
+        }
+      }
+      servingEnvironmentCaptures.add(capture)
+      return () => {
+        servingEnvironmentCaptures.delete(capture)
+      }
+    },
     resolveBaseEnvironment: resolveBase,
     resolveAgentEnvironment: async (agent) => ({
       ...(await resolveBase()),
       ...sources.resolveAgentLaunchEnv?.(agent)
     })
   }
+}
+
+/** Compare the environment block the launcher reads, including Windows' first matching key. */
+export function structuredAgentEnvironmentIdentity(
+  env: NodeJS.ProcessEnv,
+  platform: NodeJS.Platform = process.platform
+): string {
+  const effective = new Map<string, string>()
+  const pathKey = resolvePathEnvKey(env, platform)
+  for (const [key, value] of Object.entries(env)) {
+    if (value === undefined) {
+      continue
+    }
+    const name = platform === 'win32' ? key.toUpperCase() : key
+    if (platform === 'win32' && name === 'PATH' && key !== pathKey) {
+      continue
+    }
+    if (!effective.has(name)) {
+      effective.set(name, value)
+    }
+  }
+  return JSON.stringify([...effective].sort(([a], [b]) => a.localeCompare(b)))
 }

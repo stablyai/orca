@@ -1,22 +1,15 @@
 import { lstat } from 'node:fs/promises'
 import { runProfileStateBackup } from './profile-state-backup-worker'
 
-/** `ready`: the copy exists, so a migration may rewrite saved data. `failed`: do not migrate. */
+/** Failed backups must block data migration. */
 export type ProfileStatePreMigrationBackup = 'ready' | 'failed'
 
-/**
- * Outside the `.backup.` namespace, so the hourly rotation never prunes it. Delete it, and any
- * `.tmp` a crash mid-copy left, when the boot-time layout migration is retired.
- */
+/** Outside hourly rotation; retire this artifact and crash temporaries with the layout migration. */
 export function profileStatePreMigrationBackupPath(databaseFile: string): string {
   return `${databaseFile}.pre-migration.db`
 }
 
-/**
- * Copy the profile once, before the first boot-time rewrite of saved data; later boots find the
- * copy and keep it, so it stays the pre-migration state. Call from the profile's single live owner
- * (the instance lock keeps desktop and orcad apart), before any rewrite of this boot reaches disk.
- */
+/** Single live owner only: copy once before boot-time rewrites and preserve that original across boots. */
 export async function ensureProfileStatePreMigrationBackup(
   databaseFile: string,
   profileId: string,
@@ -31,7 +24,7 @@ export async function ensureProfileStatePreMigrationBackup(
       throw error
     })
     if (existing !== undefined) {
-      // Only a validated, fsynced copy is ever renamed into place; never replace it.
+      // Only validated/fsynced copies are published; never replace the original.
       return existing.isFile() ? 'ready' : 'failed'
     }
     await runBackup({ databasePath: databaseFile, profileId, targetPath })

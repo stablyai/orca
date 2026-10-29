@@ -1,8 +1,8 @@
 // An ACP child's handshake, run after the host has published it: initialize, reopen the chat's
 // session or start a new one, then return its protocol facts to the host. A saved session the
 // agent cannot reopen is replaced by a new one, with a warning row that any later start writes if
-// this one never did; while a reopened session replays history the journal already holds, nothing
-// it sends is written except context usage.
+// this one never did; while a reopened session replays its history, nothing it sends is written
+// except context usage, and afterwards the turns of it the chat never saw are added once.
 
 import type { AgentSessionProviderHandleLink } from '../../shared/agent-session-provider-handle'
 import type { StructuredAgentSessionAcquireInput } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
@@ -12,6 +12,8 @@ import {
   acpReopenTakeover,
   acpSessionNotRestoredRow
 } from './acp-session-reopen-failure'
+import { catchUpAcpHistory } from './acp-history-catch-up'
+import type { AcpLoadHistoryFrame } from './acp-history-replay'
 import { ACP_HANDLE_TRANSPORT, acpAgentName } from './acp-structured-agent-definitions'
 import { probeAcpChildStops } from './acp-structured-child-stop'
 import type { AcpStructuredConnection } from './acp-structured-connection'
@@ -40,9 +42,11 @@ type AcpHandshakeInput = {
   lanes: {
     create: (providerSessionId: string, attaching?: boolean) => AcpStructuredLane
     clear: () => void
-    finishLoad: () => void
+    /** The attach window is over: what the agent replayed in it, when it was kept. */
+    finishLoad: () => AcpLoadHistoryFrame[] | null
   }
   onSettled: AcpStructuredTurnsDeps['settle']
+  onSessionLost: AcpStructuredTurnsDeps['sessionLost']
 }
 
 export async function initializeAcpStructuredSession(
@@ -57,7 +61,7 @@ export async function initializeAcpStructuredSession(
   assertStarting()
   const initialized = await connection.initialize()
   assertStarting()
-  // Chosen here, on the machine Grok runs on, from the environment it was launched with.
+  // Choose authentication using the execution host's launch environment.
   const authMethodId = spec.authMethod?.({
     advertised: (initialized.authMethods ?? []).map((method) => method.id),
     env: launch.env
@@ -67,6 +71,7 @@ export async function initializeAcpStructuredSession(
   let started: Awaited<ReturnType<AcpStructuredConnection['start']>> | null = null
   let liveLane: AcpStructuredLane | null = null
   let takeover: ReturnType<typeof acpReopenTakeover> | null = null
+  let replayed: AcpLoadHistoryFrame[] | null = null
   if (resume) {
     const attaching = input.lanes.create(resume.sessionId, true)
     liveLane = attaching
@@ -78,7 +83,7 @@ export async function initializeAcpStructuredSession(
         ...setup
       })
       assertStarting()
-      input.lanes.finishLoad()
+      replayed = input.lanes.finishLoad()
       attaching.translator.finishLoad()
     } catch (error) {
       assertStarting()
@@ -87,8 +92,6 @@ export async function initializeAcpStructuredSession(
         now: now(),
         warn: (fields) => deps.logger?.warn(ACP_REOPEN_FAILED, { ...fields, sessionId })
       })
-      // A new session takes the old one's place, with a new lane, so nothing of the failed
-      // attach's window outlives it.
     }
   }
   if (!started || !liveLane) {
@@ -98,13 +101,36 @@ export async function initializeAcpStructuredSession(
     assertStarting()
     liveLane = input.lanes.create(started.sessionId)
   }
+  // Only a load that reopened the chat's own conversation catches up, and only from what that
+  // conversation replayed; a replacement session has no history of the chat's to add.
+  if (
+    replayed &&
+    spec.historyCatchUp &&
+    !takeover &&
+    started.kind !== 'new' &&
+    started.sessionId === resume?.sessionId &&
+    acquire.events
+  ) {
+    await catchUpAcpHistory({
+      frames: replayed,
+      identity: spec.historyCatchUp,
+      sink: acquire.events,
+      sessionId,
+      agent: spec.agent,
+      providerSessionId: started.sessionId,
+      dialect: spec.dialect,
+      assertCurrent: assertStarting,
+      ...(deps.logger ? { logger: deps.logger } : {})
+    })
+    assertStarting()
+  }
   const childStops = await probeAcpChildStops(connection, spec.dialect)
   assertStarting()
   options.adoptSession(started.response, started.kind === 'new' ? 'new' : 'loaded')
   liveLane.apply(liveLane.translator.contextModels(started.response.models, now()))
   const mode = spec.permissionModeConfig
-  if (mode) {
-    // A refusal fails the start: the session would otherwise run another permission mode.
+  if (mode && acquire.permissionMode !== 'own') {
+    // Fail startup rather than silently use a different permission mode.
     const requested = mode.values[acquire.permissionMode ?? 'ask'] ?? mode.values.ask
     const configId = options.modeConfigId()
     const { configOptions } = await connection.setConfigOption(configId, requested)
@@ -140,7 +166,7 @@ export async function initializeAcpStructuredSession(
   if (connection.exited || connection.closed) {
     throw new Error(connection.stderrTail() || `${spec.command} exited while starting`)
   }
-  // The chat says once per lost conversation that the agent forgot it, this start's loss included.
+  // Include warning rows missed by earlier failed starts.
   const lost = [
     ...(launch.resume?.unannouncedLosses() ?? []),
     ...(takeover?.replaces ? [takeover.replaces.key] : [])
@@ -158,7 +184,8 @@ export async function initializeAcpStructuredSession(
       lane: liveLane,
       agentName,
       now,
-      settle: onSettled
+      settle: onSettled,
+      sessionLost: input.onSessionLost
     })
   })
   if (!isAcpReadySession(child)) {
@@ -166,7 +193,7 @@ export async function initializeAcpStructuredSession(
   }
   return {
     link,
-    reportedOptions: options.read().current,
+    reportedOptions: options.observedCurrent(spec.permissionModeConfig?.values),
     catalogListing: options.startListing()
   }
 }

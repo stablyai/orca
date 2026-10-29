@@ -4,10 +4,8 @@ import {
   continuedOutsideNotice,
   runHistoryCatchUp
 } from '../native-chat/agent-session-wire/structured-agent-session-history-catch-up'
-import {
-  DEFAULT_CODEX_REQUEST_TIMEOUT_MS,
-  type CodexAppServerConnection
-} from './codex-app-server-connection'
+import { DEFAULT_CODEX_REQUEST_TIMEOUT_MS } from './codex-app-server-connection'
+import type { CodexAppServerConnection } from './app-server/codex-app-server-connection-types'
 import { createCodexHistoryImportPlan } from './codex-history-import-plan'
 import { discoverCodexHistory, loadCodexHistory } from './codex-structured-thread-history-pages'
 import {
@@ -15,10 +13,7 @@ import {
   sameCodexHistoryJournalView
 } from './codex-history-journal-view'
 
-// A chat writes its conversation only while its own app-server holds Codex's writer lock, so turns
-// made anywhere else land only while the chat has no process; every process start opens here.
-
-/** Optional reconciliation never gates provider open; an abandoned invocation cannot later write. */
+/** Catch-up failures do not fail open; abandoned invocations cannot write. */
 export async function catchUpCodexThread(input: {
   connection: Pick<CodexAppServerConnection, 'request'>
   threadId: string

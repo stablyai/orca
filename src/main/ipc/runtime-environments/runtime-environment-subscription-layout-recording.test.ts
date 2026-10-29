@@ -22,7 +22,7 @@ const sender = {
   id: 1,
   isDestroyed: () => false,
   send: vi.fn(),
-  once: vi.fn(),
+  on: vi.fn(),
   removeListener: vi.fn()
 }
 const recordLayoutFrame = vi.fn()
@@ -63,7 +63,6 @@ it('records the window’s own stream after forwarding it unchanged, opening not
   const callbacks = await open('session.tabs.subscribeAll')
   callbacks.onEvent({ type: 'response', response: census })
 
-  // The window's subscription is the only request the server sees.
   expect(mocks.subscribe).toHaveBeenCalledOnce()
   expect(mocks.subscribe.mock.calls[0]?.[2]).toBe('session.tabs.subscribeAll')
   expect(sender.send).toHaveBeenCalledExactlyOnceWith('runtimeEnvironments:subscriptionEvent', {
@@ -85,7 +84,7 @@ it('offers the recorder only frames the window was sent', async () => {
   const callbacks = await open('session.tabs.subscribeAll')
   callbacks.onEvent({ type: 'binary', bytes: new Uint8Array([1]) })
   callbacks.onEvent({ type: 'error', code: 'lost', message: 'lost' })
-  // A replaced transport's late frame reaches neither the window nor the snapshot.
+  // Retired transport frames must reach neither window nor snapshot.
   advanceRuntimeEnvironmentTransportGeneration('env')
   sender.send.mockClear()
   callbacks.onEvent({ type: 'response', response: census })

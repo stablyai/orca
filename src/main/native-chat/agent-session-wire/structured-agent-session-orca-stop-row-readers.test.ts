@@ -1,12 +1,11 @@
-// The row about Orca's own stop, as each kind of client reads it. A client that predates the cause
-// prints today's row, red and on screen; this build names the cause, muted, and never folds it.
+// Legacy clients render stored Stop tone; current clients name the cause and leave the notice unfolded.
 
 import { describe, expect, it } from 'vitest'
 import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
 import type { AgentJournalRenderItem } from '../../../shared/agent-session-journal-types'
 import { withNativeChatCutTurnNotices } from '../../../shared/native-chat-cut-turn-notice'
-import { latestNativeChatOrcaStopCut } from '../../../shared/native-chat-orca-stop-cut'
-import { nativeChatTurnFold } from '../../../shared/native-chat-turn-fold'
+import { latestNativeChatOrcaStopCut } from '../../../shared/native-chat/native-chat-orca-stop-cut'
+import { nativeChatTurnFold } from '../../../shared/native-chat/transcript/native-chat-turn-fold'
 import { orcaStopRowBody } from './structured-agent-session-orca-stop-row'
 
 const LEGACY_TEXT =
@@ -73,7 +72,7 @@ describe('the row a host writes for a cut it knows the cause of', () => {
     expect(read.flatMap((item) => (item.body.kind === 'status' ? [item.body.text] : []))).toEqual([
       LEGACY_TEXT
     ])
-    // That client's fold reads only the stored tone: a red row is the turn's end, never folded.
+    // Legacy folds use stored tone: red turn-end rows stay unfolded.
     const rows = read.map((item) => ({
       turnKey: item.itemId === read[0]!.itemId ? undefined : TURN,
       role: item.body.kind === 'message' ? item.body.role : ('system' as const),

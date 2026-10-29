@@ -1,13 +1,6 @@
-/** The native form of the seam: the app's own `Linking`, and nothing between a screen and it. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-/**
- * `openURL` validates synchronously before it returns a promise, so an empty string throws past
- * any `.catch` attached to the result: `Linking.openURL` calls `_validateURL`, which is
- * `invariant(url, 'Invalid URL: cannot be empty')` (react-native 0.83.10,
- * `Libraries/Linking/Linking.js:117-123`). The double mirrors that, because a mock that only
- * rejects cannot reproduce the one failure that escapes a tap handler.
- */
+// Mirror RN 0.83.10 openURL’s synchronous empty-URL validation; a promise-only rejecting mock cannot expose throws that escape .catch.
 const linking = vi.hoisted(() => {
   const validatingOpen = (url: string): Promise<boolean> => {
     if (url === '') {
@@ -24,8 +17,7 @@ import { openExternalLink } from './external-link'
 
 beforeEach(() => {
   linking.openURL.mockReset()
-  // Restored, not replaced with a plain resolve: a double that skips the synchronous validation
-  // cannot reproduce the one failure that escapes a tap handler.
+  // Restore synchronous validation too so later tests can still reproduce the escaping throw.
   linking.openURL.mockImplementation(linking.validatingOpen)
 })
 
@@ -42,7 +34,6 @@ describe('opening a URL from a phone screen', () => {
   it('does not throw out of a tap handler when nothing can open the URL', async () => {
     linking.openURL.mockImplementation(() => Promise.reject(new Error('no activity found')))
     expect(() => openExternalLink('mailto:someone@example.com')).not.toThrow()
-    // The rejection is settled rather than left to the unhandled-rejection handler.
     await Promise.resolve()
   })
 
@@ -60,7 +51,13 @@ describe('a URL the platform refuses before it returns a promise', () => {
   it('names the refusal rather than failing silently', () => {
     const warned = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
     openExternalLink('')
-    expect(warned).toHaveBeenCalled()
+    expect(warned.mock.calls).toEqual([
+      [
+        '[platform] could not open a URL',
+        { url: '' },
+        expect.objectContaining({ message: 'Invalid URL: cannot be empty' })
+      ]
+    ])
     warned.mockRestore()
   })
 })

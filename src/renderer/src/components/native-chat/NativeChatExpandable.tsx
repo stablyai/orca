@@ -1,7 +1,6 @@
 import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible'
 
-/** Grows and shrinks its content so the rows around it move instead of jumping. Children
- *  mount only while open or closing, so open-only work belongs in a child component. */
+/** Mount children only while open or closing; keep open-only work inside a child component. */
 export function NativeChatExpandable({
   open,
   children

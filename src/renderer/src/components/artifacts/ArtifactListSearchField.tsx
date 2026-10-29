@@ -35,8 +35,7 @@ export function ArtifactListSearchField({
           'auto.components.artifacts.ArtifactListSearchField.placeholder',
           'Search...'
         )}
-        // Why: the page-level Escape handler blurs inputs; this opts out so the
-        // first Escape clears the query without also losing focus.
+        // Let the first Escape clear search without the page-level handler also blurring it.
         data-escape-clears-value={hasText ? 'true' : undefined}
         className={cn(
           'h-8 border-border bg-background pl-8 text-xs shadow-none focus-visible:border-ring/70 focus-visible:ring-0 dark:bg-background',

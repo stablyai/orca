@@ -1,14 +1,9 @@
 import type { GatedEmptyWorkspaceReseedIntent } from './worktree-initial-terminal-seeding'
 
-// Why: while a gated reseed waits on agent detection, or a chat launch waits on its host's answer,
-// that wait owns the workspace's first surface; any other seeder landing in it would put a shell
-// beside the chat about to open.
-// Why the intent: the detection wait seeds for the latest activation, so a later one must not be
-// dropped. A launch's wait replays nothing: its own answer opens the surface.
+// Detection/host waits own the first surface so other seeders cannot add a shell beside pending chat. Detection carries the latest activation intent; host launch waits replay nothing.
 const pendingIntentByWorkspace = new Map<string, GatedEmptyWorkspaceReseedIntent>()
 const launchWaitCountByWorkspace = new Map<string, number>()
 
-/** Holds the first surface for a chat launch until its host answers; the release is idempotent. */
 export function holdEmptyWorkspaceDefaultSurfaceForLaunch(workspaceKey: string): () => void {
   launchWaitCountByWorkspace.set(
     workspaceKey,
@@ -39,7 +34,6 @@ export function claimEmptyWorkspaceDefaultSurface(
   return !alreadyPending
 }
 
-/** Ends the wait and returns the latest activation's intent. */
 export function releaseEmptyWorkspaceDefaultSurface(
   workspaceKey: string
 ): GatedEmptyWorkspaceReseedIntent | undefined {

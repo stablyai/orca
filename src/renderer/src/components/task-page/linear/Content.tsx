@@ -1,7 +1,7 @@
-import type { TaskPageComposerActionsModel } from '../../use-task-page-composer-actions'
+import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
 import LinearIssueWorkspace from '@/components/LinearIssueWorkspace'
 import { LoaderCircle } from 'lucide-react'
-import { LinearIcon } from '@/components/task-page-localized-options'
+import { LinearIcon } from '@/components/task-page/task-page-localized-options'
 import { translate } from '@/i18n/i18n'
 import { Button } from '@/components/ui/button'
 import { TaskPageLinearProjectOverview } from './ProjectOverview'
@@ -34,7 +34,9 @@ export function TaskPageLinearContent({
     <LinearIssueWorkspace
       issue={selectedLinearIssue}
       variant="page"
-      backLabel={activeLinearIssueContextLabel ?? 'Linear list'}
+      backLabel={
+        activeLinearIssueContextLabel ?? translate('taskProviders.linear.listLabel', 'Linear list')
+      }
       onUse={handleUseLinearItem}
       onOpenIssue={openRelatedLinearIssue}
       onClose={closeTaskDetailPage}

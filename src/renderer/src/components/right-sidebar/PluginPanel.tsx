@@ -36,9 +36,7 @@ function PluginPanelMessage({ children }: { children: React.ReactNode }): React.
   )
 }
 
-/** Fills the shell placeholders main cannot know (theme class + token
- *  values). First-occurrence replace: the prelude parses before any plugin
- *  content, so a plugin echoing the placeholder string is inert. */
+/** Replace only the first shell placeholders, parsed before plugin content, so plugin echoes stay inert. */
 function fillPanelShell(html: string): string {
   return html
     .replace(PANEL_SHELL_COLOR_SCHEME_PLACEHOLDER, currentPanelColorScheme())
@@ -61,8 +59,7 @@ function PluginPanel({ tabKey }: PluginPanelProps): React.JSX.Element {
   const panelId = panel?.id ?? null
   const panelShell = entryState.status === 'ready' ? entryState.shellHtml : null
   const panelDocument = panelShell ? fillPanelShell(panelShell) : null
-  // Why: the shell bakes Orca's color scheme + design tokens into srcdoc, so the
-  // frame must be rebuilt when the app theme changes, not only when the document does.
+  // Theme values are baked into srcdoc, so theme changes must rebuild the frame.
   const panelFrameKey =
     entryState.status === 'ready'
       ? `${tabKey}:${entryState.documentRevision}:${themeRevision}`
@@ -103,8 +100,7 @@ function PluginPanel({ tabKey }: PluginPanelProps): React.JSX.Element {
     if (!panelFrameKey || loadedFrameKey !== panelFrameKey) {
       return
     }
-    // The srcdoc prelude must install its pong listener before the first ping;
-    // otherwise a healthy panel can lose the startup ping and be suspended.
+    // Install the srcdoc pong listener before pinging or a healthy panel may be suspended.
     watchdog.start()
     return () => watchdog.stop()
   }, [loadedFrameKey, panelFrameKey, watchdog])
@@ -140,8 +136,7 @@ function PluginPanel({ tabKey }: PluginPanelProps): React.JSX.Element {
             setEntryState({ status: 'error' })
             return
           }
-          // Session rotation rebinds authority without replacing an unchanged
-          // document or restarting its watchdog.
+          // Rotate authority without replacing unchanged content or restarting its watchdog.
           setSessionToken(entry.sessionToken)
           setPanelHealth(tabKey, 'healthy')
           if (entry.html !== currentHtml) {
@@ -173,8 +168,7 @@ function PluginPanel({ tabKey }: PluginPanelProps): React.JSX.Element {
     }
   }, [panelId, pluginKey, setPanelHealth, tabKey])
 
-  // Persisted plugin tabs can outlive their plugin (uninstalled/disabled);
-  // render a graceful empty state instead of a broken frame.
+  // Persisted tabs can outlive an uninstalled or disabled plugin.
   if (!panel) {
     return (
       <PluginPanelMessage>

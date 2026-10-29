@@ -1,5 +1,3 @@
-// Where a party named by its mailbox address is now, so a chat can open a message's sender.
-
 import type { OrchestrationPartyLocationResult } from '../../../shared/orchestration-caller-status'
 import type { OrcaSessionId } from '../../../shared/orca-session-address'
 import type { OrchestrationDb } from './db'
@@ -16,8 +14,7 @@ type PartyLocationDeps = {
   terminalHandleForPaneKey: (paneKey: string) => string | null
 }
 
-/** `messageIds`: the mail the message carried from this party, whose sender pane outlives a
- *  handle a previous run issued. */
+/** Locate through sender provenance in these messageIds, which survives handle reissue. */
 export function locateOrchestrationParty(
   address: string,
   deps: PartyLocationDeps,
@@ -30,8 +27,7 @@ export function locateOrchestrationParty(
   try {
     party = resolveOrchestrationParty(address, deps.db)
   } catch (error) {
-    // Only a worker this host proves it lost the identity of is gone; any other failure is the
-    // caller's to report as unreachable.
+    // Only proven lost worker identity means gone; other resolution failures remain unreachable.
     if (error instanceof OrchestrationError && error.code === CODES.notLive) {
       return { location: null, lost: 'chat' }
     }
@@ -45,8 +41,7 @@ export function locateOrchestrationParty(
     : { location: null, lost: 'terminal' }
 }
 
-/** A handle is issued per run, so one from an earlier run is found again through the pane its mail
- *  was sent from, as mail delivery finds it. */
+/** Recover previous-run handles through the pane recorded on their sent mail. */
 function locateTerminal(
   handle: string,
   deps: PartyLocationDeps,
@@ -66,10 +61,7 @@ function locateTerminal(
   return { location: null, lost: 'terminal' }
 }
 
-/** As mail to the dispatch is routed (mailbox-delivery-target.ts): its assignee's pane, else
- *  its recorded handle, else a remote attachment's. A dispatch whose worker this host does not run
- *  (a federated one, at its run's home) is unknown here, never gone: not seeing a worker is no
- *  evidence it stopped. */
+/** Resolve assignee pane, handle or remote attachment; absence at a federated Run home never proves worker exit. */
 function locateDispatchAssignee(
   dispatchId: string,
   deps: PartyLocationDeps

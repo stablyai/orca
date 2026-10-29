@@ -179,6 +179,53 @@ describe('GitHub PR refresh owner-host routing', () => {
     }
   )
 
+  it('routes PR refresh to the runtime repo id when an SSH row shares its path', async () => {
+    runtimeEnvironmentCall.mockResolvedValueOnce({
+      id: 'rpc-shared-path',
+      ok: true,
+      result: makePR({ number: 26 }),
+      _meta: { runtimeId: 'remote-runtime' }
+    })
+    const store = createTestStore()
+    const repoPath = '/shared/repo'
+    const branch = 'feature/shared-path'
+    seed(store, {
+      repos: [
+        makeRepo({
+          id: 'repo-ssh',
+          path: repoPath,
+          connectionId: 'ssh-1',
+          executionHostId: 'ssh:ssh-1'
+        }),
+        makeRepo({
+          id: 'repo-runtime',
+          path: repoPath,
+          executionHostId: 'runtime:env-1'
+        })
+      ],
+      worktreesByRepo: {
+        'repo-runtime': [makeWorktree('repo-runtime', branch, 'wt-runtime')]
+      }
+    })
+
+    store.getState().enqueueGitHubPRRefresh('wt-runtime', 'manual', 100)
+
+    await vi.waitFor(() => expect(runtimeEnvironmentCall).toHaveBeenCalledTimes(1))
+    expect(enqueuePRRefresh).not.toHaveBeenCalled()
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
+      selector: 'env-1',
+      method: 'github.prForBranch',
+      params: {
+        repo: 'repo-runtime',
+        branch,
+        linkedPRNumber: null,
+        currentHeadOid: 'head-oid',
+        reason: 'manual'
+      },
+      timeoutMs: 30_000
+    })
+  })
+
   it('keeps connected SSH PR refresh on the local coordinator even when a runtime is focused', () => {
     const store = createTestStore()
     const repoPath = '/ssh/repo'

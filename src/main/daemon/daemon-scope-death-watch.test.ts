@@ -27,7 +27,6 @@ describe('daemon scope death watch ownership', () => {
     expect(ownFreshDaemonScope(true, 'launch-a', own('orca-daemon-launch-a.scope'))).toBe(
       'orca-daemon-launch-a.scope'
     )
-    // An adopted scope, a migrated legacy one, another daemon's, or none (macOS, Windows).
     expect(ownFreshDaemonScope(false, 'launch-a', own('orca-daemon-launch-a.scope'))).toBeNull()
     expect(ownFreshDaemonScope(true, undefined, own('orca-daemon-launch-a.scope'))).toBeNull()
     for (const unit of [null, 'app-orca-123.scope', 'orca-daemon-other.scope']) {

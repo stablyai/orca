@@ -37,10 +37,17 @@ export const wslUsageSnapshotSchema = z
     projects_wsl_total: countBucketSchema,
     projects_wsl_distro_fs: countBucketSchema,
     projects_wsl_windows_drive: countBucketSchema,
+    /**
+     * Windows-drive WSL repos with a linked worktree WSL Git made: Git for Windows can't take
+     * them over (D1c). Optional, so older builds' payloads still validate.
+     */
+    projects_wsl_windows_drive_wsl_worktrees: countBucketSchema.optional(),
     projects_wsl_git: countBucketSchema,
     projects_wsl_folder: countBucketSchema,
     project_distros_used: countBucketSchema,
-    wsl_hosts_gate_open: z.boolean()
+    wsl_hosts_gate_open: z.boolean(),
+    /** open / serve-only / closed. Optional, so older builds' payloads still validate. */
+    wsl_hosts_gate_state: z.enum(['open', 'serve-only', 'closed']).optional()
   })
   .strict()
 

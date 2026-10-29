@@ -34,24 +34,9 @@ import {
   WORKTREE_VISIBILITY_SOURCE_DEFAULTS_RUNTIME_CAPABILITY
 } from './worktree-runtime-capabilities'
 
-// Why: declares the Orca runtime RPC compatibility contract. Desktop,
-// headless server, CLI, and mobile builds may drift in app version, but
-// they must agree on this protocol range before runtime RPCs are allowed.
-//
-// Bump RUNTIME_PROTOCOL_VERSION when:
-//   - You remove an RPC method or required parameter that clients use.
-//   - You change the meaning (units, nullability) of an existing field
-//     clients read.
-//   - You change encrypted framing, terminal stream framing, or auth.
-// Do NOT bump for:
-//   - Adding new RPC methods.
-//   - Adding new optional fields on existing methods.
-//   - Adding new ignorable event types.
-//
-// Bump MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION when a runtime server must
-// refuse older clients. Bump MIN_COMPATIBLE_RUNTIME_SERVER_VERSION when
-// this client build requires a newer server. Exact app-version equality is
-// never required; these numbers define the supported compatibility window.
+// Runtime protocol ranges permit app-version drift across desktop/server/CLI/mobile. Bump for removed methods/required params,
+// changed field meaning (units/nullability), framing or auth; optional fields, new methods and ignorable events are additive.
+// Raise minimum client/server versions to refuse unsupported peers; never require equal app versions.
 
 export const RUNTIME_PROTOCOL_VERSION = 3
 export const MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION = 2
@@ -65,7 +50,7 @@ export * from './ai-vault-runtime-capabilities'
 export * from './browser-runtime-capabilities'
 export * from './files-runtime-capabilities'
 export * from './host-runtime-capabilities'
-export * from './jira-detail-capabilities'
+
 export * from './mobile-runtime-capabilities'
 export * from './preflight-runtime-capabilities'
 export * from './source-control-runtime-capabilities'
@@ -87,6 +72,7 @@ export {
   STRUCTURED_AGENT_SESSION_HOLD_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_REVEAL_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_REGENERATE_NAME_RUNTIME_CAPABILITY,
+  STRUCTURED_AGENT_SESSION_RENAME_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY,
   PI_STRUCTURED_DIALOGS_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY,
@@ -134,7 +120,11 @@ export const NATIVE_REMOTE_RUNTIME_CLIENT_CAPABILITIES = [
 ] as const
 
 // Each area lists what it publishes in its own module; a new capability edits only that module.
+export const SAVED_RESUME_ORIGIN_RUNTIME_CAPABILITY =
+  'agent-session.saved-resume-origin.v1' as const
+
 export const RUNTIME_CAPABILITIES = [
+  SAVED_RESUME_ORIGIN_RUNTIME_CAPABILITY,
   ...HOST_RUNTIME_CAPABILITIES,
   ...DEVICE_KEY_RUNTIME_CAPABILITIES,
   ...MOBILE_RUNTIME_CAPABILITIES,

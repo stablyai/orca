@@ -1,5 +1,7 @@
 import { View, Text, StyleSheet, ActivityIndicator } from 'react-native'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import {
   getActiveAdditionalProviders,
   getAdditionalProviderUsageRows,
@@ -7,8 +9,7 @@ import {
   type AdditionalUsageProviderKey
 } from './account-usage-state'
 
-// Pure types and selectors live in account-usage-state.ts (no RN imports) so
-// they are unit-testable; re-exported here so existing import sites are stable.
+// Re-export pure account-usage-state selectors/types to keep imports stable and tests free of RN.
 export type {
   RateLimitWindow,
   ProviderRateLimits,
@@ -36,9 +37,7 @@ export {
   hasAnyRenderableUsage
 } from './account-usage-state'
 
-// Why: matches desktop StatusBar — bars show percent used (consumption), same
-// as Claude/Codex harness meters. Fresh account is empty/green; depleted is
-// full/red.
+// Match desktop/harness consumption meters: fresh empty/green, depleted full/red.
 export function UsageBar({
   label,
   usedPercent,
@@ -54,6 +53,7 @@ export function UsageBar({
   resetText?: string | null
   labelWidth?: number
 }) {
+  useMobileColorScheme()
   // Why: round then clamp so bar width, color, and label share one value (desktop parity).
   const used = usedPercent == null ? null : Math.max(0, Math.min(100, Math.round(usedPercent)))
   // Why: same consumption bands as desktop barColor (green <60, amber <80, red ≥80).
@@ -124,6 +124,7 @@ export function AdditionalProvidersUsageSections({
   snapshot: AccountsSnapshot
   now: number
 }) {
+  useMobileColorScheme()
   const providers = getActiveAdditionalProviders(snapshot)
   if (providers.length === 0) {
     return null
@@ -179,7 +180,7 @@ export function AdditionalProvidersUsageSections({
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   usageBarColumn: {
     flex: 1,
     gap: 2
@@ -214,8 +215,7 @@ const styles = StyleSheet.create({
   usageSpinner: {
     width: 36
   },
-  // Why: indented past the window label so the countdown aligns with the
-  // start of the track above it.
+  // Indent countdown past window label to align with track.
   usageResetText: {
     fontSize: typography.metaSize,
     color: colors.textMuted,
@@ -276,4 +276,4 @@ const styles = StyleSheet.create({
     fontSize: typography.metaSize,
     color: colors.statusRed
   }
-})
+}))

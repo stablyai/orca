@@ -5,8 +5,7 @@ export function assertPluginWorkerCommand(plugin: ValidDiscoveredPlugin, command
   if (!command) {
     throw new Error(`plugin ${plugin.pluginKey} does not contribute command ${commandId}`)
   }
-  // Declarative aliases are renderer-owned and must never cross the worker
-  // activation boundary, even if a compromised renderer invokes IPC directly.
+  // Renderer-owned action aliases cannot activate workers, even through direct IPC.
   if (command.action !== undefined) {
     throw new Error(`plugin ${plugin.pluginKey} command ${commandId} is a built-in action alias`)
   }

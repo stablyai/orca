@@ -4,6 +4,7 @@ import type { ConnectionState } from '../transport/types'
 import { refusedRpcMessageOrFallback } from '../transport/rpc-refusal-message'
 import { triggerError, triggerSelection } from '../platform/haptics'
 import { buildMobileDiffLines } from '../session/mobile-diff-lines'
+import { shouldIgnoreTrimWhitespace } from '../../../src/shared/diff-whitespace'
 import {
   highlightMobileDiffLines,
   resolveMobileSyntaxLanguage
@@ -23,6 +24,7 @@ import type {
 type Params = {
   client: RpcClient | null
   connState: ConnectionState
+  diffShowWhitespace: boolean
   hostId: string
   worktreeId: string
   origin: string
@@ -37,6 +39,7 @@ type Params = {
 export function useMobileBranchDiffPreview({
   client,
   connState,
+  diffShowWhitespace,
   hostId,
   worktreeId,
   origin,
@@ -130,7 +133,9 @@ export function useMobileBranchDiffPreview({
         if (result.kind !== 'text') {
           throw new Error('Binary branch diff preview unavailable on mobile')
         }
-        const diff = buildMobileDiffLines(result.originalContent, result.modifiedContent)
+        const diff = buildMobileDiffLines(result.originalContent, result.modifiedContent, {
+          ignoreTrimWhitespace: shouldIgnoreTrimWhitespace(diffShowWhitespace)
+        })
         const syntaxLanguage = resolveMobileSyntaxLanguage(entry.path)
         if (!isCurrentPreview()) {
           return
@@ -167,6 +172,7 @@ export function useMobileBranchDiffPreview({
       busyActionRef,
       client,
       connState,
+      diffShowWhitespace,
       mountedRef,
       openReviewScreen,
       openingPathRef,

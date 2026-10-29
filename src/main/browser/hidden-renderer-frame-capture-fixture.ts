@@ -1,6 +1,6 @@
 import type { Page } from 'playwright'
 
-// Setup-only budget: a cold runner's first frame took up to 14s across 28 measured runs.
+// Cold CI renderers can take seconds to produce their first frame.
 export const HIDDEN_RENDERER_FIRST_FRAME_TIMEOUT_MS = 45_000
 
 export async function startHiddenRendererFrameCapture(

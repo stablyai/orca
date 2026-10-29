@@ -224,8 +224,7 @@ function shouldOfferCreateReviewLoadingAction(
 export function resolveSourceControlCommitAreaPrimaryActionDecision(
   inputs: SourceControlPrimaryActionDecisionInputs
 ): SourceControlCommitAreaPrimaryActionDecision {
-  // Why: review creation is additive chrome. Commit/mobile bottom areas keep
-  // the local/remote action they would have without review eligibility.
+  // Review chrome must not replace the existing commit/mobile local or remote action.
   return resolveSourceControlPrimaryActionDecision({
     ...inputs,
     hostedReviewCreation: null,

@@ -1,7 +1,4 @@
-// Why: pure preview/search-text core for Agent Session History, lifted to
-// /shared so both the renderer and the mobile package (which cannot import
-// renderer modules) can build session previews from the same logic.
-// INVARIANT: /shared is a leaf — this module imports only types from /shared.
+// Share preview/search text with mobile, which cannot import renderer modules. Keep this shared leaf limited to shared type imports.
 import type { AiVaultSession, AiVaultSessionPreviewMessage } from './ai-vault-types'
 
 const CONVERSATION_ROLES = new Set<AiVaultSessionPreviewMessage['role']>(['user', 'assistant'])
@@ -123,8 +120,7 @@ function displayableSessionPreviewMessages(
     CONVERSATION_ROLES.has(message.role)
   )
 
-  // Why: search hits should be explainable by the preview UI; tool/system text is
-  // only searchable when it is the fallback preview shown for the session.
+  // Search tool/system text only as the displayed fallback preview so hits remain explainable.
   return conversationTurns.length > 0 ? conversationTurns : session.previewMessages
 }
 

@@ -4,14 +4,16 @@ import {
   getAgentSessionOptionCatalog,
   type CatalogModel
 } from '../../../../shared/agent-session-option-catalog'
-import { matchNativeChatCatalogModelId } from '../../../../shared/native-chat-session-option-state'
-import type { SessionOptionDescriptor } from '../../../../shared/native-chat-session-options'
+import { matchNativeChatCatalogModelId } from '../../../../shared/native-chat/input/native-chat-session-option-state'
+import { retireMissingModelMutation } from '../../../../shared/native-chat-discovered-catalog-models'
+import type { SessionOptionDescriptor } from '../../../../shared/native-chat/input/native-chat-session-options'
 import { useAppStore } from '../../store'
+import { sayNativeChatSessionOptionTranslated } from './native-chat-session-option-labels-text'
 import {
   createNativeChatPtySessionOptions,
   type NativeChatPtySessionOptionsSurface
-} from './native-chat-pty-session-options'
-import type { NativeChatSessionOptionDispatchCommand } from './native-chat-session-option-command-dispatch'
+} from '../../../../shared/native-chat-pty-session-options'
+import type { NativeChatSessionOptionDispatchCommand } from '../../../../shared/native-chat-session-option-dispatch'
 import {
   ensureNativeChatModelEnrichment,
   readNativeChatEnrichedModels,
@@ -31,28 +33,14 @@ const getEmptySnapshot = (): SessionOptionDescriptor[] => EMPTY_SNAPSHOT
 
 const CLIENT_SETTINGS_TARGET = { kind: 'local' } as const
 
-/**
- * Why: the picker drops a retired model, but the persisted default is what launches
- * become `-m <id>` — every launch site reads it, including the ones that never show
- * the picker. Left alone the id is invisible and still fatal, so an authoritative
- * probe that no longer lists it must retire it here too.
- */
 export async function retirePersistedModelMissingFromDiscovery(
   agent: AgentType,
   models: readonly CatalogModel[]
 ): Promise<void> {
-  if (!getAgentSessionOptionCatalog(agent)?.discoveredModelsAreAuthoritative) {
-    return
+  const mutation = retireMissingModelMutation(agent, models)
+  if (mutation) {
+    await enqueueSessionOptionSettingsWrite(CLIENT_SETTINGS_TARGET, mutation)
   }
-  // An empty list means the probe failed, not that the account has no models.
-  if (models.length === 0) {
-    return
-  }
-  await enqueueSessionOptionSettingsWrite(CLIENT_SETTINGS_TARGET, {
-    type: 'clear-model-if-missing',
-    agent,
-    availableModelIds: models.map((model) => model.id)
-  })
 }
 
 export function useNativeChatSessionOptions(args: {
@@ -62,8 +50,7 @@ export function useNativeChatSessionOptions(args: {
   dispatchCommand: NativeChatSessionOptionDispatchCommand
   onAgentPicker?: () => void
   readTerminalScreen?: () => string | null
-  /** Pane whose live agent status names the provider model, for agents whose hook
-   *  reports one (OMP). Claude's model comes from its terminal frame instead. */
+  /** OMP model evidence comes from its hook; Claude uses its terminal frame. */
   paneKey?: string
 }): {
   surface: NativeChatPtySessionOptionsSurface | null
@@ -78,27 +65,22 @@ export function useNativeChatSessionOptions(args: {
     readTerminalScreen,
     paneKey
   } = args
-  // Why: a primitive selector, so unrelated status pings on the pane rerender nothing.
   const reportedModel = useAppStore((state) =>
     paneKey ? (state.agentStatusByPaneKey[paneKey]?.model ?? null) : null
   )
   const canSwitchOmpModel = useAppStore((state) =>
     paneKey ? state.agentStatusByPaneKey[paneKey]?.modelSwitchCommand === 'orca-model' : false
   )
-  // The hook-reported model this surface last applied. Only a report that CHANGES
-  // is evidence: the same value is re-delivered on every status ping, and a
-  // session-start report cannot have observed a `/model` picked after it.
+  // Only changed hook models are new evidence; repeated status pings must not undo newer user picks.
   const appliedReportedModelRef = useRef<string | null>(null)
-  // The screen text that last parsed into reported values, so a later model
-  // discovery can re-resolve it against the host's real ids.
+  // Cache parsed screen text so late discovery can resolve real host model IDs.
   const reportedScreenRef = useRef<string | null>(null)
   const discoveryContext = useMemo(
     () => resolveNativeChatModelDiscoveryContext(terminalTabId),
     [terminalTabId]
   )
   const surface = useMemo(() => {
-    // Why: native chat currently attaches only after startup is already queued;
-    // exposing a draft picker here would claim it can still mutate that command.
+    // Chat attaches after startup is queued, so a draft picker could no longer change its command.
     if (!targetPtyId) {
       return null
     }
@@ -117,11 +99,10 @@ export function useNativeChatSessionOptions(args: {
       agent,
       scopeKey,
       ...(targetPtyId ? { fallbackScopeKey: terminalTabId } : {}),
-      // Why: the catalog seed carries version-neutral family labels, so it is
-      // safe on every host while the once-per-host probe runs or after it fails
-      // — without it the whole picker would pop in late or never appear.
+      // Version-neutral family seeds keep the picker available while host discovery runs or fails.
       ...(discoveryContext ? { initialModels: discoveredModels ?? undefined } : {}),
       mode: targetPtyId ? 'live' : 'draft',
+      modelLabel: sayNativeChatSessionOptionTranslated('model'),
       reportedValues,
       dispatchCommand,
       canSwitchOmpModel,
@@ -158,8 +139,7 @@ export function useNativeChatSessionOptions(args: {
           const snapshot = await window.api.pty.getMainBufferSnapshot(targetPtyId, {
             scrollbackRows: 0
           })
-          // Why: the API snapshots the main buffer, which is stale while a TUI
-          // owns the alternate screen. The mounted xterm is authoritative then.
+          // Main-buffer snapshots are stale during alternate-screen TUIs; use mounted xterm then.
           authoritativeScreen = snapshot?.alternateScreen ? null : (snapshot?.data ?? null)
         } catch {
           // The mounted renderer buffer remains a transport-neutral fallback.
@@ -176,9 +156,7 @@ export function useNativeChatSessionOptions(args: {
         if (!reportedValues) {
           continue
         }
-        // Why: discovery can land after this read. Keeping the screen that
-        // parsed lets it re-resolve against the host's real ids later, when the
-        // frame itself may have already scrolled out of the buffer.
+        // Retain parsed screen text for late discovery after the model frame scrolls away.
         if (cancelled) {
           return
         }
@@ -193,15 +171,13 @@ export function useNativeChatSessionOptions(args: {
     }
   }, [agent, discoveryContext, readTerminalScreen, surface, targetPtyId])
 
-  // Why: keyed on the scope, not the surface — the record survives a surface rebuild
-  // for the same pty, so re-applying the same report there would revert a user's pick.
+  // Scope survives surface rebuilds; reapplying an unchanged report would revert the user’s pick.
   useEffect(() => {
     appliedReportedModelRef.current = null
   }, [agent, targetPtyId, terminalTabId])
 
   useEffect(() => {
-    // Why: Claude's model is read off its terminal frame above; the hook path is
-    // for agents that stamp the model on their status posts and have no frame to read.
+    // Claude uses terminal-frame evidence; other agents report model IDs in status hooks.
     if (!surface || agent === 'claude' || !reportedModel) {
       return
     }
@@ -216,7 +192,9 @@ export function useNativeChatSessionOptions(args: {
     const matched =
       agent === 'omp'
         ? reportedModel.trim()
-        : matchNativeChatCatalogModelId({ ...catalog, models }, reportedModel)
+        : matchNativeChatCatalogModelId({ ...catalog, models }, reportedModel, {
+            allowUnlisted: agent === 'codex'
+          })
     if (!matched || appliedReportedModelRef.current === matched) {
       return
     }
@@ -240,12 +218,10 @@ export function useNativeChatSessionOptions(args: {
         if (reportedValues) {
           surface.reportSessionOptions(reportedValues)
         }
-        // A failed settings write must not surface as an unhandled rejection.
         void retirePersistedModelMissingFromDiscovery(agent, models).catch(() => undefined)
       }
     )
-    // Why: the subscription never replays, so a probe that settled before this
-    // pane mounted would leave a retired persisted model in place forever.
+    // Subscriptions do not replay; inspect cached discovery so pre-mount probes can retire stale defaults.
     const cached = readNativeChatEnrichedModels(agent, discoveryContext.hostKey)
     if (cached) {
       void retirePersistedModelMissingFromDiscovery(agent, cached).catch(() => undefined)

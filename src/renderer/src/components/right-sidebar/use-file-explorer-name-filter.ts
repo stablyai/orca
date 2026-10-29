@@ -20,7 +20,6 @@ type UseFileExplorerNameFilterResult = {
   handleClearNameFilter: () => void
 }
 
-/** Files-view name-filter query state and the projection source derived from it. */
 export function useFileExplorerNameFilter({
   isFilesViewActive,
   activeWorktreeId

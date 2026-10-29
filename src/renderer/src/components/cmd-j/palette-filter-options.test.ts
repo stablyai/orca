@@ -222,8 +222,7 @@ describe('resolveWorktreeFilterHostId', () => {
     ).toBe('runtime:env-1')
   })
 
-  // Guards the bucketing contract: the palette must land a workspace on the same
-  // host the sidebar does, including the host-less "inherit the focused runtime" case.
+  // Keep host bucketing aligned with the sidebar, including host-less rows inheriting the focused runtime.
   it('agrees with getWorktreeExecutionHostId for every default host', () => {
     const repoMap = new Map(repos.map((entry) => [entry.id, entry]))
     const cases = [

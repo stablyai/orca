@@ -28,10 +28,7 @@ export type ReadAiVaultFirstUserPromptArgs = {
 
 export type ReadAiVaultFirstUserPromptResult = AiVaultFirstUserPromptResult
 
-/**
- * Re-parse one session transcript under full first-prompt capture and return
- * the untruncated first real user ask for copy/reuse.
- */
+/** Reparse one transcript with full first-prompt capture instead of listing preview limits. */
 export async function readAiVaultFirstUserPrompt(
   args: ReadAiVaultFirstUserPromptArgs
 ): Promise<ReadAiVaultFirstUserPromptResult> {
@@ -40,8 +37,7 @@ export async function readAiVaultFirstUserPrompt(
     return { prompt: null }
   }
 
-  // Why: transcript bodies live on the session host. Remote rows are skipped
-  // (same posture as listSubagentSessions); UI falls back to preview text.
+  // Transcript bodies belong to their execution host; remote rows fall back to preview text.
   const executionHostId = args.executionHostId ?? LOCAL_EXECUTION_HOST_ID
   if (executionHostId !== LOCAL_EXECUTION_HOST_ID) {
     return { prompt: null }
@@ -50,8 +46,7 @@ export async function readAiVaultFirstUserPrompt(
     configureOpenCodeWslReaders(args.wslOpenCodeReaders)
   }
 
-  // Why: partial/corrupt transcripts make parsers throw. Resolve null like every
-  // other unavailable case instead of rejecting the IPC call.
+  // Treat corrupt or partial transcripts as unavailable instead of rejecting the IPC call.
   let session: AiVaultSession | null
   try {
     session = await withFullFirstUserPromptCapture(() =>
@@ -76,7 +71,7 @@ async function parseSessionForFullFirstUserPrompt(args: {
   sessionId?: string
   codexHome: string | null
 }): Promise<AiVaultSession | null> {
-  // Full capture belongs inside the reader, including the guest reader for WSL.
+  // Full capture must run in the actual reader, including WSL guests.
   if (args.agent === 'opencode' || args.agent === 'opencode2' || args.agent === 'zcode') {
     const parse =
       args.agent === 'opencode2'
@@ -122,9 +117,7 @@ async function fileWithMtimeForPath(
   filePath: string,
   agent: AiVaultAgent
 ): Promise<FileWithMtime | null> {
-  // OpenCode SQLite candidates use a synthetic `dbPath#sessionId` path that is
-  // not a real filesystem object; parsers that need it accept the path as-is.
-  // `#` is legal in real filenames, so gate on the agent and the synthetic shape.
+  // OpenCode dbPath#sessionId is synthetic; # in another agent's filename does not bypass stat.
   if (agent === 'opencode' && splitOpenCodeSqliteCandidate(filePath)) {
     return {
       path: filePath,
@@ -134,8 +127,7 @@ async function fileWithMtimeForPath(
   }
 
   try {
-    // 'scan' matches the parser this feeds, so the two halves of one re-parse
-    // share a lane instead of the stat jumping the live-transcript queue.
+    // Use the parser's scan lane so stat cannot jump the live-transcript queue.
     const info = await wslGatedStat(filePath, 'scan')
     return {
       path: filePath,

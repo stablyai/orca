@@ -1,5 +1,3 @@
-// What item, request and frame events do: admitted on the state, written against the journal.
-
 import { isDeepStrictEqual } from 'node:util'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
@@ -39,10 +37,7 @@ function pendingPrompt(body: AgentJournalItemBody | null): body is ProviderTimel
   )
 }
 
-/** Whether the row the journal holds refuses this write: a settled tool keeps its first terminal
- *  body (whoever settled it, the sweep included), a settled background task is never relit, and a
- *  turn that is over takes no new work that waits on a settlement. Work it still holds open (a
- *  person's Stop leaves the provider's running tools) takes the provider's updates until settled. */
+/** Preserve terminal tools/tasks; settled turns accept updates to open work, never new unsettled work. */
 function refusesItemWrite(
   journal: Journal,
   row: ProviderTimelineRowId,
@@ -130,7 +125,6 @@ export function decideRequest(
 ): ProviderTimelineDecision {
   const { state, journal, context } = input
   const key = requestKey(event.request)
-  // Pending here, unless a client's answer already settled it in the journal.
   if (state.items.has(key) && !(journal && state.settledInJournal(key, journal))) {
     return { dropped: 'request-duplicate' }
   }
@@ -160,10 +154,9 @@ export function decideRequest(
         lifecycle: true,
         options: { ...event.producer, turnScope: scope, lifecycle: true },
         resolve: (at) => {
-          // A reused id takes the next incarnation; a row already there is never overwritten.
+          // Reused request IDs need new incarnations; never overwrite existing rows.
           const row = context.rows.nextRequest(event.request, at)
           opened.row = row
-          // A turn another writer ended while the open was queued asks nothing more.
           if (turn !== null && providerTimelineTurnRowState(at, turn) === 'settled') {
             return null
           }
@@ -183,7 +176,7 @@ export function decideWithdrawal(
   const key = requestKey(event.request)
   const entry = state.items.get(key)
   const opened = entry?.kind === 'request' ? entry : null
-  // One its turn's end already let go is still the journal's newest row under its id.
+  // Released requests may still have their newest incarnation in the journal.
   if (!opened && journal && !context.rows.heldRequest(event.request, journal)) {
     return { dropped: 'request-unknown' }
   }
@@ -191,8 +184,7 @@ export function decideWithdrawal(
     settle: {
       what: 'request-withdrawn',
       resolve: (at) => {
-        // The open ran first and named its row. Only while it is pending: a client's answer, or
-        // the settlement of its turn, that landed first stands.
+        // Resolve after request-open; preserve client answers or turn settlement that landed first.
         const row = opened ? opened.row : context.rows.heldRequest(event.request, at)
         const held = row ? at.item(row.itemId) : null
         const cancelled =

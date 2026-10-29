@@ -1,14 +1,8 @@
 import type { ScrcpyVideoMeta } from './android/scrcpy-video-frame-parser'
 
-// In-memory pub/sub bridging a live scrcpy session (fed by AndroidEmulatorBackend)
-// to renderer subscribers (the video pane, via the emulator-video-stream IPC).
-// Caches the codec meta, the config (SPS/PPS) frame, and the current GOP
-// (keyframe + following deltas) so a late subscriber can initialize its WebCodecs
-// decoder and decode from the keyframe immediately, not after the next GOP.
+// Cache metadata, decoder config, and the current GOP for late subscribers.
 
-// scrcpy keyframes ~every 10s; high-motion content can otherwise buffer
-// hundreds of deltas. Cap the replayed GOP so memory stays bounded and a
-// late subscriber isn't flooded — always keep the keyframe at index 0.
+// Bound high-motion replay caches while retaining their leading keyframe.
 const MAX_GOP_FRAMES = 120
 
 export type ScrcpyVideoFrameMessage = {
@@ -58,14 +52,11 @@ class ScrcpyVideoRegistry {
     if (frame.config) {
       entry.config = frame
     } else if (frame.keyFrame) {
-      // A keyframe starts a fresh decodeable GOP; buffer it + the following
-      // deltas so a late subscriber can decode immediately on replay.
       entry.gop = [frame]
     } else if (entry.gop.length > 0) {
-      // Only buffer deltas once a keyframe anchors the GOP (a delta alone is
-      // undecodable); deltas before the first keyframe are still sent live below.
+      // Cache deltas only after a keyframe; pre-keyframe deltas are still delivered live.
       entry.gop.push(frame)
-      // Drop the oldest delta (never index 0, the keyframe) so replay stays decodable.
+      // Preserve the leading keyframe when bounding the cache.
       if (entry.gop.length > MAX_GOP_FRAMES) {
         entry.gop.splice(1, 1)
       }
@@ -75,8 +66,6 @@ class ScrcpyVideoRegistry {
     }
   }
 
-  // Subscribe a renderer; replays the cached meta + config so the decoder can
-  // start without waiting for the next keyframe. Returns an unsubscribe fn.
   subscribe(deviceId: string, subscriber: ScrcpyVideoSubscriber): () => void {
     const entry = this.entries.get(deviceId)
     if (!entry) {
@@ -88,7 +77,6 @@ class ScrcpyVideoRegistry {
     if (entry.config) {
       subscriber({ type: 'frame', frame: entry.config })
     }
-    // Replay the current GOP (keyframe + deltas) so the decoder starts now.
     for (const frame of entry.gop) {
       subscriber({ type: 'frame', frame })
     }

@@ -41,7 +41,6 @@ function AddServerMenuItem({
   )
 }
 
-/** Section-header actions for Remote Orca Servers: update-all and the Add server split button. */
 export function RuntimeServersHeaderActions({
   canGeneratePairingUrl
 }: {
@@ -65,7 +64,7 @@ export function RuntimeServersHeaderActions({
 
   return (
     <div data-settings-section="remote-server-updates" className="flex items-center gap-2">
-      {/* Why ≥2: a single update is one click on its own row. */}
+      {/* One update already takes one click on its own row. */}
       {remoteServerUpdatesRunning || availableCount >= 2 ? (
         <Button
           type="button"

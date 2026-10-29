@@ -18,7 +18,7 @@ vi.mock('./preflight-command-exec', async (importOriginal) => ({
 import { registerPreflightHandlers } from './preflight'
 import { detectAgentCommandsOnHost } from '../preflight/agent-detection'
 
-// Why: this process serves no SSH target; each probe must reject, never answer for this computer.
+// This process cannot answer for the SSH host; never substitute local results.
 describe('preflight on an SSH target', () => {
   it('refuses Qoder command selection without probing the local host', async () => {
     await expect(
@@ -27,7 +27,7 @@ describe('preflight on an SSH target', () => {
     expect(isCommandOnPathMock).not.toHaveBeenCalled()
   })
 
-  // Why (#25523): an empty list would be cached as "no agents installed" on that host.
+  // Empty results would be cached as no agents installed on that host (#25523).
   it.each(['preflight:detectRemoteAgents', 'preflight:detectRemoteWindowsTerminalCapabilities'])(
     '%s rejects instead of answering',
     async (channel) => {

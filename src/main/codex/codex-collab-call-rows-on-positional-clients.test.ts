@@ -1,15 +1,12 @@
-// A client that predates result call ids (an older mobile app, or an older desktop reading a newer
-// host) projects the journal itself and pairs each tool result with the oldest unanswered call.
-// So every finished collab call row must carry an output, or each later output in its run is drawn
-// under the call before its own.
+// Older desktop/mobile clients pair results by position, so every finished call needs output.
 
 import { describe, expect, it } from 'vitest'
 import type {
   AgentJournalItemBody,
   AgentJournalRenderItem
 } from '../../shared/agent-session-journal-types'
-import { pairToolBlocks } from '../../shared/native-chat-tool-fold'
-import { pairNativeChatToolResults } from '../../shared/native-chat-tool-pairing'
+import { pairToolBlocks } from '../../shared/native-chat/tools/native-chat-tool-pairs'
+import { pairNativeChatToolResults } from '../../shared/native-chat/tools/native-chat-tool-pairing'
 import { projectNativeChatTranscript } from '../../shared/native-chat-transcript-projection'
 import type { NativeChatBlock, NativeChatMessage } from '../../shared/native-chat-types'
 import { projectStructuredAgentSessionMessages } from '../../shared/structured-agent-session-message-projection'
@@ -31,7 +28,6 @@ import { THREAD_ID } from './codex-structured-session-adapter-fixture'
 
 type PairedOutput = [call: string, output: string | undefined]
 
-/** What a client without result call ids draws: each call with the output its pairing gives it. */
 function positionalRuns(rows: AgentJournalRenderItem[]): {
   mobile: PairedOutput[][]
   desktop: PairedOutput[][]
@@ -49,7 +45,6 @@ function positionalRuns(rows: AgentJournalRenderItem[]): {
   const transcript = projectNativeChatTranscript(
     projectStructuredAgentSessionMessages(rows, [], []).map(withoutCallIds)
   )
-  // The conversation's runs, then each helper's section's.
   const runs = [
     ...transcript.conversation,
     ...[...transcript.subagentRows.values()].flat().map((row) => row.message)
@@ -116,7 +111,6 @@ describe('Codex collab call rows on a client that pairs results by position', ()
       shell('item/started', THREAD_ID, PARENT_TURN, 'call-parent-shell-2', 'AFTER_CLOSE'),
       shell('item/completed', THREAD_ID, PARENT_TURN, 'call-parent-shell-2', 'AFTER_CLOSE')
     ])
-    // The parent's calls are one run; the helper's own shell is in the helper's section.
     const runs = [
       [
         ['spawn_agent', 'Spawned'],
@@ -196,7 +190,6 @@ describe('Codex collab call rows on a client that pairs results by position', ()
       turn('turn/started', THREAD_ID, PARENT_TURN),
       spawn('item/completed'),
       turn('turn/started', HELPER, HELPER_TURN),
-      // A spawn that created no thread names nothing.
       collab('item/completed', {
         id: 'call-spawn-failed',
         tool: 'spawnAgent',
@@ -241,7 +234,6 @@ describe('Codex collab call rows on a client that pairs results by position', ()
     const { mobile, desktop } = positionalRuns(rows)
     expect(mobile).toEqual(runs)
     expect(desktop).toEqual(runs)
-    // The wait keeps naming both helpers it waited on.
     expect(outputOf(rows, 'wait_agent')).toMatchObject({ input: { agents: [HELPER, OTHER] } })
   })
 })

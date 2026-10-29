@@ -1,5 +1,4 @@
-// Main's `layout.apply` on a stored partition, as the Store applies it, for runtime tests whose
-// store is a plain session map (a layout-owner build saves a chat's tab through it).
+// Apply layout record patches to plain session maps as Store does, including main-owned chat tabs.
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 import type { LayoutCommand } from '../../shared/workspace-layout/workspace-layout-command-types'
 import { applyCommandToSession } from '../persistence/terminal-topology/terminal-pane-admission'

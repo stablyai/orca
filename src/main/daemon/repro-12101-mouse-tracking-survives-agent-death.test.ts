@@ -4,34 +4,19 @@ import { join } from 'node:path'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { Terminal } from '@xterm/headless'
 import { Session } from './session'
+import { TerminalSessionTeardown } from './terminal-session-teardown'
 import { HistoryManager } from './history-manager'
 import { HistoryReader } from './history-reader'
 import { getRecoveredHistorySeedSegments } from './terminal-history-seed-segments'
 import { iterateTerminalHistorySeedChunks } from './terminal-history-seed-chunks'
 
-// Repro for #12101: a TUI that armed DECSET mouse tracking (Claude Code, vim,
-// htop) is force-killed and never emits the matching DECRST. Nothing in the
-// daemon substitutes the reset, so `TerminalModes.mouseTracking` is latched into
-// the on-disk checkpoint and then re-derived — from the DEAD process's own bytes —
-// into every subsequent fresh emulator. The revived pane runs a bare shell that
-// never armed mouse reporting, yet its snapshot re-arms it, so pointer motion
-// echoes literal SGR reports (^[[<35;col;rowM) into the prompt.
-//
-// This drives the REAL Session / HeadlessEmulator / buildRehydrateSequences /
-// HistoryManager / HistoryReader, with a fake
-// subprocess standing in for node-pty (a real PTY can't be SIGKILLed
-// deterministically mid-DECSET in vitest). The kill goes through Session.kill()'s
-// real teardown; only killWithDescendantSweep is stubbed so the test never
-// signals a real pid.
+// Guard fresh-shell restoration against mouse modes persisted before an agent died without disarming.
 
 const killWithDescendantSweepMock = vi.hoisted(() => vi.fn())
 vi.mock('../pty-descendant-termination', () => ({
   killWithDescendantSweep: killWithDescendantSweepMock
 }))
 
-// The variant `reattachReplayResetSequence` picks when the pane still looks like a
-// live agent, which is exactly the stale state a SIGKILLed agent leaves behind: it
-// deliberately OMITS RESET_MOUSE_REPORTING to keep real TUI scroll gestures alive.
 import { POST_REPLAY_LIVE_AGENT_REATTACH_RESET } from '../../shared/terminal-mode-reset-profiles'
 
 const ANY_MOTION_TRACKING_ON = '\x1b[?1003h'
@@ -61,15 +46,12 @@ function createFakeSubprocess(foregroundProcess: string) {
     onData: (cb: (data: string) => void) => void (onData = cb),
     onExit: (cb: (code: number) => void) => void (onExit = cb),
     dispose: () => {},
-    /** PTY output — same channel node-pty uses, so Session's real ingest runs. */
     emit: (data: string) => onData?.(data),
-    /** SIGKILL reaped: exit fires with no DECRST ever sent. */
     simulateKilledExit: () => onExit?.(-1)
   }
 }
 
-/** Session.emitSubprocessOutput awaits xterm's async parse; poll until the
- *  emulator has committed the bytes so snapshots are taken on a settled stream. */
+/** Wait for the asynchronous emulator parse before reading a snapshot. */
 async function waitForEmulatorParse(session: Session): Promise<void> {
   for (let i = 0; i < 200; i += 1) {
     await new Promise((resolve) => setTimeout(resolve, 1))
@@ -98,7 +80,6 @@ describe('#12101 mouse tracking survives the death of the process that armed it'
     const manager = new HistoryManager(dir)
     const reader = new HistoryReader(dir)
 
-    // 1. A live agent TUI arms any-motion tracking + SGR encoding.
     const agentPty = createFakeSubprocess('claude')
     const agent = new Session({
       sessionId,
@@ -117,24 +98,23 @@ describe('#12101 mouse tracking survives the death of the process that armed it'
     expect(armed?.modes.mouseTrackingMode).toBe('any')
     expect(armed?.rehydrateSequences).toContain(ANY_MOTION_TRACKING_ON)
 
-    // 2. Sleep/hibernation takes its final teardown checkpoint while the agent
-    //    is still alive with mouse armed (daemon-pty-adapter's {final,teardown}).
+    // Persist the still-armed checkpoint before simulating agent death.
     await manager.openSession(sessionId, { cwd: '/Users/dev/feature-branch', cols: 80, rows: 24 })
     await manager.checkpoint(sessionId, armed!)
 
-    // 3. Force-kill. Real Session teardown; the child is reaped without ever
-    //    emitting DECRST, and nothing writes one on its behalf.
-    agent.kill()
+    void new TerminalSessionTeardown(new Map([[sessionId, agent]])).killSession(
+      sessionId,
+      agent,
+      false
+    )
     agentPty.simulateKilledExit()
-    agent.dispose() // TerminalHost.reapSession
+    agent.dispose()
     expect(killWithDescendantSweepMock).toHaveBeenCalled()
     const teardownBytes = agentPty.written.join('')
     expect(teardownBytes).not.toContain(ANY_MOTION_TRACKING_OFF)
     expect(teardownBytes).not.toContain(SGR_ENCODING_OFF)
 
-    // 4. Wake: the session is still cold-restore eligible (killed with
-    //    keepHistory, so endedAt stays null) and a FRESH shell takes its place,
-    //    seeded with the recovered history exactly as daemon-server does.
+    // This fixture leaves history eligible and seeds a replacement shell from it.
     const restoreInfo = await reader.detectColdRestore(sessionId)
     expect(restoreInfo).not.toBeNull()
     const seedChunks = [
@@ -152,15 +132,10 @@ describe('#12101 mouse tracking survives the death of the process that armed it'
     })
     const revived = shell.getSnapshot()
     try {
-      // #12101: the replacement shell's OWN state says mouse tracking is on,
-      // so every snapshot it serves — reattach, checkpoint, mobile — re-arms it.
-      // Soft so one run reports both re-arming channels, not just the first.
       expect.soft(revived?.modes.mouseTracking).toBe(false)
       expect.soft(revived?.modes.mouseTrackingMode).toBe('none')
       expect.soft(revived?.rehydrateSequences).toBe('')
-      // Independent second channel: SerializeAddon's own mode trailer re-emits
-      // the DECSET from xterm's mouseTrackingMode, so dropping rehydrate alone
-      // would not disarm the pane.
+      // The serializer trailer must also be disarmed; clearing rehydrateSequences alone is insufficient.
       expect.soft(revived?.snapshotAnsi).not.toContain(ANY_MOTION_TRACKING_ON)
     } finally {
       shell.dispose()
@@ -186,7 +161,11 @@ describe('#12101 mouse tracking survives the death of the process that armed it'
 
     await manager.openSession(sessionId, { cwd: '/Users/dev/feature-branch', cols: 80, rows: 24 })
     await manager.checkpoint(sessionId, agent.getSnapshot()!)
-    agent.kill()
+    void new TerminalSessionTeardown(new Map([[sessionId, agent]])).killSession(
+      sessionId,
+      agent,
+      false
+    )
     agentPty.simulateKilledExit()
     agent.dispose()
 
@@ -204,11 +183,7 @@ describe('#12101 mouse tracking survives the death of the process that armed it'
     })
     const revived = shell.getSnapshot()!
 
-    // Reattach paint into a REAL renderer xterm, using the weakest profile in the
-    // family — the one a stale agent title used to select here. The renderer now
-    // forces the fresh-shell reset on a cold restore, so this pins the independent
-    // half: the seed alone must leave the revived session unarmed, because the
-    // daemon emulator's own state is what mobile and every other consumer read.
+    // Use the mouse-preserving live-agent reset to prove the recovered seed is already disarmed.
     const term = new Terminal({ cols: 80, rows: 24, allowProposedApi: true })
     try {
       await new Promise<void>((resolve) => term.write('\x1b[2J\x1b[3J\x1b[H', resolve))
@@ -218,8 +193,6 @@ describe('#12101 mouse tracking survives the death of the process that armed it'
       await new Promise<void>((resolve) =>
         term.write(POST_REPLAY_LIVE_AGENT_REATTACH_RESET, resolve)
       )
-      // The observable symptom: a bare `zsh` pane whose xterm reports pointer
-      // motion, so every mouse move types ^[[<35;col;rowM at the prompt.
       expect(term.modes.mouseTrackingMode).toBe('none')
     } finally {
       term.dispose()
@@ -249,7 +222,11 @@ describe('#12101 mouse tracking survives the death of the process that armed it'
 
     await manager.openSession(sessionId, { cwd: '/Users/dev/feature-branch', cols: 80, rows: 24 })
     await manager.checkpoint(sessionId, agent.getSnapshot()!)
-    agent.kill()
+    void new TerminalSessionTeardown(new Map([[sessionId, agent]])).killSession(
+      sessionId,
+      agent,
+      false
+    )
     agentPty.simulateKilledExit()
     agent.dispose()
 

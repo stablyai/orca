@@ -176,6 +176,9 @@ export async function getMentionParticipants(
   connectionId?: string | null,
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<GitHubAssignableUser[]> {
+  const resolvedLogins = new Set(
+    participants.filter((user) => user.avatarUrl).map((user) => user.login.toLowerCase())
+  )
   const visibleLogins = [
     item.author ?? '',
     ...(item.reviewRequests ?? []).map((user) => user.login),
@@ -185,7 +188,7 @@ export async function getMentionParticipants(
   ]
   const graphQlUsers = await getGitHubUsersByLogin(
     repoPath,
-    visibleLogins,
+    visibleLogins.filter((login) => !resolvedLogins.has(login.trim().toLowerCase())),
     repository,
     connectionId,
     localGitOptions

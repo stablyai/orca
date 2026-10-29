@@ -13,7 +13,6 @@ const file = (filePath: string): LayoutEditorFile => ({
 
 const DIFF_A = 'wt::diff::unstaged::a.ts'
 
-/** Editor tabs for a.ts and b.ts, a diff of a.ts, and a terminal. */
 function setup() {
   return build(testContext(), [
     { type: 'createTerminalTab', workspace: WS },

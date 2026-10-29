@@ -5,28 +5,24 @@ export const WORKSPACE_DELETED_ERROR = 'workspace_deleted'
 /** `unverifiable`: the execution host never confirmed the outcome, so the queue pauses. */
 export type LifecycleOutcome = 'settled' | 'unverifiable'
 
-/** Delete options: an equal delete joins the pending one, a different one is refused. */
+/** Equal pending deletes join; different options are refused. */
 export type LifecycleDeleteOptions = {
   key: string
-  /** The explicit waiver (Force Delete, `--force`): runs past a pause, as it always has. */
+  /** Force Delete/--force explicitly bypasses a paused queue. */
   force: boolean
-  /** Names the workspace in the "already in progress" refusal. */
   label: string
 }
 
 export type LifecycleCommand<T> = {
   kind: Exclude<WorkspaceLifecycleKind, 'create'>
   run: () => Promise<T>
-  /** Reads a reply; defaults to settled. */
   outcome?: (result: T) => LifecycleOutcome
   /** Whether a thrown error means contact was lost mid-run rather than a definite failure. */
   lostContact?: (error: unknown) => boolean
-  /** After an unconfirmed outcome: re-reads the owner's state, throwing while it cannot answer. */
   observe?: () => Promise<void>
   delete?: LifecycleDeleteOptions
 }
 
-/** Calls `done` once a listing that started after this call has applied. */
 export type LifecycleMembership = (done: () => void) => void
 
 export type LifecycleAttempt = {

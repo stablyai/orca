@@ -1,17 +1,10 @@
-/**
- * One long-lived `wsl.exe --exec sh` that runs stdin-free commands one after another, so a run of
- * short probes pays one wsl.exe start instead of one each (MEASURED ~180 ms each on win-lowspec).
- * Each command runs as `sh -c` in its own session with stdin at /dev/null; its stdout, stderr and
- * exit status come back base64-framed between per-loop markers.
- */
+/** Reuse one wsl.exe for sequential stdin-free probes (~180ms startup each on win-lowspec). Isolate each sh command in its own session with /dev/null stdin; base64-frame output/status with per-loop markers. */
 import { randomUUID } from 'node:crypto'
 import { Duplex, PassThrough, Writable } from 'node:stream'
 import type { PipedChildProcess } from '@orca/process-host/process-spec'
 import type { RemoteCommandChannel } from '../managed-server/install/remote-install-transport'
 
-// Why setsid: a `wsl.exe --exec` command leads its own session; without it every command
-// would share the loop's process group. Why fresh files per command: a backgrounded writer
-// keeps the unlinked one, never the next command's output.
+// setsid preserves per-command process-group isolation. Fresh output files keep background writers attached to old inodes, never the next command.
 export const WSL_COMMAND_LOOP_SCRIPT = [
   'm="$1"',
   'd=$(mktemp -d "${TMPDIR:-/tmp}/orca-wsl-exec.XXXXXX") || exit 97',
@@ -72,7 +65,7 @@ export function startWslCommandLoop(child: PipedChildProcess, marker: string): W
     markReady = resolve
     failReady = reject
   })
-  // Callers that never await `ready` must not see an unhandled rejection.
+  // Suppress unhandled readiness rejection when callers do not await it.
   ready.catch(() => {})
 
   const settle = (code: number | null, signal: NodeJS.Signals | null, error?: Error): void => {
@@ -94,7 +87,7 @@ export function startWslCommandLoop(child: PipedChildProcess, marker: string): W
       command.stderr.end(err.length > 0 ? err : undefined)
     }
     command.channel.emit('exit', code, signal)
-    // Like a wsl.exe child: `close` after its streams, so readers have their data first.
+    // Emit close after streams drain, matching a direct wsl.exe child.
     setImmediate(() => command.channel.emit('close', code, signal))
     if (alive && !error) {
       idleListener()
@@ -130,7 +123,7 @@ export function startWslCommandLoop(child: PipedChildProcess, marker: string): W
       return
     }
     if (!pending || pending.section === 'none') {
-      // Outside a frame: nothing the protocol writes, so ignore stray guest output.
+      // Ignore unframed stray guest output.
       return
     }
     if (!BASE64_LINE.test(line)) {
@@ -156,7 +149,7 @@ export function startWslCommandLoop(child: PipedChildProcess, marker: string): W
       newline = buffered.indexOf('\n')
     }
   })
-  // The loop's own stderr is never a command's; drain it so wsl.exe cannot block on it.
+  // Drain loop-owned stderr so it cannot block wsl.exe; it belongs to no command.
   child.stderr.resume()
   const ignore = (): void => {}
   child.stdin.on('error', ignore)

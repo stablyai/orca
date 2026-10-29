@@ -3,9 +3,11 @@
 import React, { act } from 'react'
 import { cleanup, createEvent, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { JiraIssue } from '../../../../shared/jira-types'
+import type { JiraIssue } from '../../../../shared/jira/jira-types'
 import SmartWorkspaceNameField from './SmartWorkspaceNameField'
 import type { SmartWorkspaceNameSelection } from './smart-workspace-name-field-model'
+import type * as ReactI18nextModule from 'react-i18next'
+import type * as I18nModule from '@/i18n/i18n'
 
 const jiraMock = vi.hoisted(() => ({
   retry: vi.fn(),
@@ -90,11 +92,13 @@ vi.mock('@/lib/local-preflight-context', () => ({
   localPreflightContextKey: () => 'test-preflight-context'
 }))
 
-vi.mock('react-i18next', () => ({
+vi.mock('react-i18next', async (importOriginal) => ({
+  ...(await importOriginal<typeof ReactI18nextModule>()),
   useTranslation: () => ({ t: (key: string, fallback?: string) => fallback ?? key })
 }))
 
-vi.mock('@/i18n/i18n', () => ({
+vi.mock('@/i18n/i18n', async (importOriginal) => ({
+  ...(await importOriginal<typeof I18nModule>()),
   translate: (_key: string, fallback: string) => fallback
 }))
 

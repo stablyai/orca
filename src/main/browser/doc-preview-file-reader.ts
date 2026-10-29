@@ -3,7 +3,6 @@ import type { RuntimeFilePreviewResult } from '../../shared/runtime-file-contrac
 import type { DocPreviewFileFailureReason } from '../../shared/doc-preview-scheme'
 import { FONT_FILE_MIME_TYPES } from '../../shared/font-file-extensions'
 import { callRuntimeEnvironment } from '../ipc/runtime-environments/runtime-environment-transport-routing'
-import { getCanonicalUserDataPath } from '../persistence'
 import { SSH_HOST_NOT_SERVED_MESSAGE } from '../providers/ssh-host-not-served-error'
 import {
   resolveDocPreviewAuthorityPaths,
@@ -13,20 +12,17 @@ import {
   toRuntimeWorktreeRelativePath,
   type DocPreviewGrant
 } from './doc-preview-grant-registry'
+import { getRuntimeEnvironmentRegistryRoot } from '../ipc/runtime-environments/runtime-environment-registry-root'
 
 const DOC_PREVIEW_READ_TIMEOUT_MS = 15_000
 
-/** Older hosts may refuse a binary format, so report the file type they cannot send. */
 const UNSERVABLE_ASSET_PREVIEW_MESSAGE = 'This workspace cannot send this file type to a preview.'
 
-/** `files.read` clamps text at the host's cap and reports it; serving the clamped bytes would
- *  render a silently half-finished document. */
+// Reject clamped text rather than rendering a partial document.
 const TRUNCATED_PREVIEW_MESSAGE = 'This document is too large for the server to send in full.'
 
-/** The paired host rejects an over-cap asset outright instead of clamping it. */
 const RUNTIME_TOO_LARGE_ERROR = 'file_too_large'
 
-/** Previews fail closed on a host without scoped reads. */
 const RUNTIME_DOC_PREVIEW_UPDATE_REQUIRED_MESSAGE =
   'Secure document previews require a newer Orca on the paired machine. Update it and try again.'
 
@@ -70,7 +66,7 @@ type PreviewFileBytes = {
   content: string
   isBinary: boolean
   truncated?: boolean
-  /** Set by every owner that agreed to serve the bytes, so it also survives a 0-byte file. */
+  /** Distinguishes a served empty binary from an unsupported format. */
   mimeType?: string
 }
 
@@ -84,9 +80,7 @@ function toOutcome(source: PreviewFileBytes, contentType: string): DocPreviewRea
   if (source.content) {
     return { ok: true, bytes: Buffer.from(source.content, 'base64'), contentType }
   }
-  // Why: an empty binary body is two different answers. A host that still named the file's type
-  // read a 0-byte file, and 0 bytes is what it should serve; a host that named no type declined
-  // the format outright and has nothing to send.
+  // Older hosts use empty binary content without a MIME type to signal an unsupported format.
   return source.mimeType
     ? { ok: true, bytes: Buffer.alloc(0), contentType }
     : {
@@ -105,7 +99,7 @@ async function readRuntimeDocPreviewFile(
   implicitRootRelativePath: string | null,
   authorizedRootRelativePaths: string[]
 ): Promise<PreviewFileBytes> {
-  const userDataPath = getCanonicalUserDataPath()
+  const userDataPath = getRuntimeEnvironmentRegistryRoot()
   const response = await callRuntimeEnvironment(
     userDataPath,
     environmentId,
@@ -120,8 +114,7 @@ async function readRuntimeDocPreviewFile(
     DOC_PREVIEW_READ_TIMEOUT_MS
   )
   if (!response.ok) {
-    // Why the rewrite: fail-closed on an old host is deliberate, so tell the reader what to do —
-    // the raw method_not_found wording reads as a broken preview, not an out-of-date machine.
+    // Old hosts lack scoped reads; report the required update instead of method_not_found.
     throw new Error(
       response.error.code === 'method_not_found'
         ? RUNTIME_DOC_PREVIEW_UPDATE_REQUIRED_MESSAGE
@@ -140,7 +133,6 @@ function notFoundOutcome(message = 'Not found'): DocPreviewReadOutcome {
   return { ok: false, status: 404, reason: 'unreadable', message }
 }
 
-/** Reads one in-grant path over the same channel the editor uses for that owner. */
 export async function readDocPreviewFile(
   grant: DocPreviewGrant,
   relativePath: string
@@ -182,7 +174,7 @@ export async function readDocPreviewFile(
       .map((root) => toRuntimeWorktreeRelativeDirectoryPath(runtimeOwner.worktreeRoot, root))
       .filter((root): root is string => root !== null)
     if (!worktreeRelativePath || !entryRelativePath) {
-      // Why: files.read is worktree-scoped, so a doc outside the worktree has no client-side channel.
+      // Runtime file reads cannot address documents outside the worktree.
       return notFoundOutcome()
     }
     return toOutcome(

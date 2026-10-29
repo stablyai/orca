@@ -113,7 +113,7 @@ export function useGitHubProviderSelection(input: GitHubProviderSelectionInput) 
       setBranchNameOverridePreservesNameEdits(false)
       setForkPushWarning(null)
       branchAutoNameRef.current = ''
-      // Why: provider items can come from a different source host than the run host — resolve refs against the run repo, keep item metadata for provider identity.
+      // Resolve checkout refs against the run repo while preserving provider metadata from its possibly different source host.
       const runRepo = selectedRepo ?? eligibleRepos.find((repo) => repo.id === item.repoId)
       applyLinkedWorkItem(normalizedItem)
       if (identity.type !== 'pr' || !runRepo) {
@@ -157,7 +157,7 @@ export function useGitHubProviderSelection(input: GitHubProviderSelectionInput) 
             result.compareBaseRef,
             { sourceAlreadyLinked: true }
           )
-          // Why: a fork PR push lands on the contributor's fork; without maintainer-edits allowed GitHub rejects it, so warn up front.
+          // Fork pushes require maintainer edits; warn before GitHub rejects them.
           setForkPushWarning(getForkPushWarning(result))
         })
         .catch((error: unknown) => {

@@ -29,7 +29,7 @@ describe('fetchPrHeadTrackingRef', () => {
 
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
       ['fetch', 'origin', '+refs/heads/feature/x:refs/remotes/origin/feature/x'],
-      { cwd: '/repo' }
+      { cwd: '/repo', timeout: REVIEW_HEAD_FETCH_TIMEOUT_MS }
     )
   })
 
@@ -54,7 +54,6 @@ describe('fetchPrHeadTrackingRef', () => {
       42
     )
 
-    // The fetch is bounded so a stalled remote can't hang PR resolution.
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
       ['fetch', '--no-tags', 'origin', `+refs/pull/42/head:refs/orca/pull/${ORIGIN_COMPONENT}/42`],
       { cwd: '/repo', timeout: REVIEW_HEAD_FETCH_TIMEOUT_MS }

@@ -41,14 +41,13 @@ const FIXES: Record<
   }
 }
 
-/** One sidebar-level notice for local Git toolchain failures that block every local repo at once. */
 export function LocalGitToolchainScanBanner(): React.JSX.Element | null {
   const repos = useAppStore((s) => s.repos)
   const detectedByRepo = useAppStore((s) => selectDetectedWorktreesByRepo(s))
   const block = findLocalToolchainBlock(repos, detectedByRepo)
   const [pending, setPending] = React.useState(false)
 
-  // Why: reads the store at call time so the focus listener below never needs re-subscribing.
+  // Read store state at call time so the focus listener can remain subscribed once.
   const rescan = React.useCallback(async () => {
     const state = useAppStore.getState()
     const blocked =
@@ -82,7 +81,7 @@ export function LocalGitToolchainScanBanner(): React.JSX.Element | null {
     if (!isBlocked) {
       return
     }
-    // Why: the fix happens in Terminal, so returning to Orca is the moment to check again.
+    // Users fix Git in Terminal; recheck when they return to Orca.
     const onFocus = (): void => void rescan()
     window.addEventListener('focus', onFocus)
     return () => window.removeEventListener('focus', onFocus)
@@ -99,11 +98,17 @@ export function LocalGitToolchainScanBanner(): React.JSX.Element | null {
           'Worktree scan paused for {{value0}}',
           { value0: block.repos[0].displayName }
         )
-      : translate(
-          'auto.components.sidebar.LocalGitToolchainScanBanner.affectedMany',
-          'Worktree scan paused for {{value0}} projects',
-          { value0: block.repos.length }
-        )
+      : block.repos.length === 1
+        ? translate(
+            'auto.components.sidebar.LocalGitToolchainScanBanner.affectedProjects_one',
+            'Worktree scan paused for {{count}} project',
+            { count: block.repos.length }
+          )
+        : translate(
+            'auto.components.sidebar.LocalGitToolchainScanBanner.affectedProjects_other',
+            'Worktree scan paused for {{count}} projects',
+            { count: block.repos.length }
+          )
 
   return (
     <section

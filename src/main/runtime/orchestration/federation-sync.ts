@@ -17,8 +17,7 @@ export { parseRelayedMessage } from './federation-sync-message'
 const FEDERATION_PULL_PAGE_SIZE = 50
 const MAX_FEDERATION_PULL_PAGES_PER_SYNC = 6
 
-// Peer payloads are untrusted input: decode them so a malformed page fails as an
-// orchestration error instead of a TypeError deep inside the import loop.
+// Decode untrusted peer pages before import to report malformed input as an orchestration error.
 const PulledRelayPage = z
   .object({
     runtimeEpoch: z.string().min(1),

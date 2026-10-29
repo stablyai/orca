@@ -26,9 +26,7 @@ export type RuntimeClientEvent =
   | { type: 'terminalSideEffects'; batch: TerminalSideEffectBatch }
   /** Only while this host's own phone reads the sidebar feed; every other reader drops it. */
   | SidebarInputsChangedEvent
-  // Why: SSH connections live on the runtime host; paired clients have no IPC
-  // channel for ssh:state-changed, so without this event their reconnect
-  // overlays never learn the host connected (STA-1468).
+  // Paired clients lack ssh:state-changed IPC; publish host SSH transitions so their reconnect overlays update (STA-1468).
   | { type: 'sshStateChanged'; targetId: string; state: SshConnectionState }
   | {
       type: 'worktreeTerminalSleepState'
@@ -38,13 +36,14 @@ export type RuntimeClientEvent =
       ptyIds: string[]
       terminalHandles: string[]
     }
-  // Why: automation stores are authority-owned, so clients cannot learn about a
-  // run/usage/definition write without the owning authority announcing it.
+  // Only the owning automation authority can announce definition/run/usage writes.
   | {
       type: 'automationsChanged'
       selector?: { kind: 'self' } | { kind: 'ssh'; targetId: string } | { kind: 'orphan' }
       reason?: 'definition' | 'run' | 'usage'
     }
+  // Why: browser profiles live on the host; old clients drop the unknown type and refetch on their old triggers.
+  | { type: 'browserProfilesChanged' }
   | {
       type: 'linearLinkedIssueUpdated'
       worktreeId: string

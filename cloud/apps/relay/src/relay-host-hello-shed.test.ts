@@ -74,7 +74,6 @@ describe('host hello shedding under database pool pressure', () => {
     vi.restoreAllMocks()
   })
 
-  // A cell whose pool holds `waiters` stuck queries, and a clock the test moves.
   async function startCell(waiters: number) {
     vi.spyOn(console, 'log').mockImplementation(() => undefined)
     const keys = await generateKeyPair('ES256')
@@ -129,7 +128,6 @@ describe('host hello shedding under database pool pressure', () => {
     }
   }
 
-  // Resolves with the refusal's status, or 101 once the upgrade is accepted.
   async function dial(
     cell: Awaited<ReturnType<typeof startCell>>
   ): Promise<{ status: number; retryAfter?: string }> {
@@ -170,8 +168,7 @@ describe('host hello shedding under database pool pressure', () => {
     cell.advance(HOST_HELLO_SHED_OLDEST_WAIT_MS)
 
     expect(await dial(cell)).toEqual({ status: 503, retryAfter: '2' })
-    // Shipped desktops dial with no unexpected-response listener, so the refusal
-    // reaches them as the ordinary connect error their retry backoff handles.
+    // Shipped desktops lack unexpected-response listeners; refusal must reach their ordinary connect-error backoff.
     const desktop = new WebSocket(cell.url, {
       headers: { authorization: `Bearer ${cell.token}` }
     })

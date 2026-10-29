@@ -1,10 +1,5 @@
-// Why: mobile's only entry to the host's params contract, and type-only on purpose.
-// The schemas behind these types must never reach the bundle: requiredString is
-// z.unknown().transform(...), so a client-side parse coerces a non-string to ''
-// instead of rejecting it, silently changing the bytes on the wire.
-//
-// RpcSendParams is the outgoing type; RpcParams is the shape the handler sees after
-// parsing, which is not what a sender may write (see rpc-send-params.ts).
+// Import types only: parsing the host’s coercing schemas on mobile would change outgoing bytes.
+// RpcSendParams describes wire input; RpcParams describes handler output after parsing.
 export type {
   RpcMethodName,
   RpcParams

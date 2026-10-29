@@ -14,8 +14,7 @@ async function ensureColorizationLanguage(language: string): Promise<void> {
   pythonLanguageRegistrationPromise ??=
     import('monaco-editor/esm/vs/basic-languages/python/python.js').then(
       ({ conf, language: pythonTokens }) => {
-        // Why: notebook excerpts colorize without mounting Monaco editors. Load
-        // Python tokens only on demand so non-notebook users do not pay at startup.
+        // Load Python tokens only for notebook excerpts so other users pay no startup cost.
         if (!monaco.languages.getLanguages().some((item) => item.id === 'python')) {
           monaco.languages.register({
             id: 'python',
@@ -34,6 +33,7 @@ async function ensureColorizationLanguage(language: string): Promise<void> {
 export function useMonacoColorizedLines(lines: string[], language: string): string[] {
   const isDark = useDocumentDarkTheme()
   const code = useMemo(() => lines.join('\n'), [lines])
+  const lineCount = lines.length
   const [htmlLines, setHtmlLines] = useState<string[]>(() => lines.map(() => ''))
 
   useEffect(() => {
@@ -42,30 +42,31 @@ export function useMonacoColorizedLines(lines: string[], language: string): stri
 
   // Why: colorize emits theme-specific token classes, so a theme switch must re-colorize.
   useEffect(() => {
-    if (lines.length === 0) {
+    if (lineCount === 0) {
       setHtmlLines([])
       return
     }
 
     let cancelled = false
-    // Why: notebook languages like Python are loaded lazily by Monaco. The
-    // async colorizer waits for that tokenizer; colorizeModelLine can render
-    // only default-token spans if called before the contribution finishes.
+    // Wait for lazy tokenizers before colorizing; colorizeModelLine would emit default tokens while contributions load.
     void ensureColorizationLanguage(language)
       .catch(() => undefined)
-      .then(() => monaco.editor.colorize(code, language, { tabSize: 2 }))
-      .then((html) => {
+      .then(async () => {
         if (cancelled) {
           return
         }
-        const nextLines = html.split('<br/>').slice(0, lines.length)
+        const html = await monaco.editor.colorize(code, language, { tabSize: 2 })
+        if (cancelled) {
+          return
+        }
+        const nextLines = html.split('<br/>').slice(0, lineCount)
         setHtmlLines(nextLines)
       })
 
     return () => {
       cancelled = true
     }
-  }, [code, language, lines, isDark])
+  }, [code, language, lineCount, isDark])
 
   return htmlLines
 }

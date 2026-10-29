@@ -92,9 +92,7 @@ function normalizeRoster(value: unknown): OrcaOrgMembersRoster {
   return {
     members,
     pendingInvites,
-    // Why: default to the least-privileged role so a malformed viewerRole can
-    // never widen the client-side management affordance; the server still
-    // enforces authorization on every mutation.
+    // Malformed roles must not widen UI permissions; the server still authorizes mutations.
     viewerRole: normalizeRole(record.viewerRole, 'member'),
     canManageMembers: record.canManageMembers === true
   }
@@ -115,14 +113,12 @@ async function extractErrorCode(response: Response): Promise<string | undefined>
       return (body as { error: string }).error.trim() || undefined
     }
   } catch {
-    // Non-JSON error body; the status code alone drives the caller's mapping.
+    // The status code suffices when error bodies are not JSON.
   }
   return undefined
 }
 
-// Why: these are fixed first-party endpoints bearing the profile's access token;
-// following a redirect would leak that token to another origin, and a stalled
-// server must not hang the renderer's awaited IPC call forever.
+// Reject redirects to avoid leaking access tokens; timeouts bound renderer IPC waits.
 function requestInit(method: 'GET' | 'POST', accessToken: string, body?: unknown): RequestInit {
   return {
     method,

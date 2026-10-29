@@ -298,8 +298,7 @@ describe('syncSystemConfigIntoManagedCodexHome', () => {
   })
 
   it('preserves an existing runtime config when the system config is blank', () => {
-    // Why: a 0-byte config.toml is what a half-written or unhydrated
-    // cloud-synced home shows, not a deliberate "erase all my settings".
+    // A zero-byte cloud-synced config may be half-written or unhydrated.
     mkdirSync(join(userDataDir, 'codex-runtime-home', 'home'), { recursive: true })
     const runtimeConfig = ['model = "runtime-model"', '', '[features]', 'hooks = true', ''].join(
       '\n'
@@ -572,8 +571,7 @@ describe('syncSystemConfigIntoManagedCodexHome', () => {
   })
 
   it('applies a case-drifted WSL system revocation to the runtime trusted block', () => {
-    // Why: configs written before WSL tails compared case-sensitively can hold
-    // the revocation under drifted casing; err toward revoked, not trusted.
+    // Legacy WSL configs can hold revocations under drifted casing.
     mkdirSync(join(userDataDir, 'codex-runtime-home', 'home'), { recursive: true })
     writeFileSync(
       getRuntimeConfigPath(),
@@ -594,9 +592,7 @@ describe('syncSystemConfigIntoManagedCodexHome', () => {
   })
 
   it('keeps runtime trust when the system config re-trusts the exact-cased WSL project', () => {
-    // Why: after a user re-grants trust, markCodexProjectTrusted appends an
-    // exact-cased trusted block beside a legacy drifted-case revocation; the
-    // loose revocation match must not revert that grant on every mirror pass.
+    // Re-grants append an exact-cased block beside legacy revocations.
     mkdirSync(join(userDataDir, 'codex-runtime-home', 'home'), { recursive: true })
     writeFileSync(
       getRuntimeConfigPath(),
@@ -914,8 +910,7 @@ describe('prepareSystemConfigForFreshRuntimeMirror', () => {
       '/home/alice/.codex'
     )
 
-    // Why: WSL configs are consumed inside the distro, so rewrites must use
-    // posix join semantics regardless of the host platform.
+    // WSL consumes the config inside Linux, so rewritten paths must use POSIX semantics.
     expect(prepared).toContain("model_instructions_file = '/home/alice/.codex/instructions.md'")
     expect(prepared).toContain('hooks = true')
     expect(prepared).not.toContain('codex_hooks')

@@ -6,12 +6,12 @@ import { translate } from '@/i18n/i18n'
 
 function getPrimaryBusyLabel(action: FeatureTipAction): string {
   if (action === 'setup-cli') {
-    return 'Installing...'
+    return translate('auto.components.feature.tips.FeatureTipActions.installing', 'Installing...')
   }
   if (action === 'enable-session-search') {
-    return 'Turning on...'
+    return translate('auto.components.feature.tips.FeatureTipActions.turningOn', 'Turning on...')
   }
-  return 'Working...'
+  return translate('auto.components.feature.tips.FeatureTipActions.working', 'Working...')
 }
 
 export function FeatureTipActions({

@@ -1,11 +1,7 @@
 import { beforeAll, describe, expect, it } from 'vitest'
 import { importReleaseCheckoutModule, materializeReleaseCheckout } from './release-checkout'
 
-/**
- * The host descriptor rides inside the pairing offer, which both sides parse with a schema. An old
- * client must still accept an offer from a new host (dropping the field), and a new client must
- * accept an offer from an old host that has none.
- */
+// Pairing-offer readers must tolerate a new host descriptor and its absence on old hosts.
 const RELEASE_REF = 'v1.4.224'
 const SUITE_TIMEOUT_MS = 180_000
 

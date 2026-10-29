@@ -1,6 +1,5 @@
 // @vitest-environment happy-dom
-// IME and Hangul commits bypass xterm's key path and enter through `terminal.input`. Main records
-// a run's first user input from xterm's user-input signal, so every commit route must carry it.
+// IME commits bypass xterm’s key path; every terminal.input route must signal user input so main records the run’s first interaction.
 import { Terminal } from '@xterm/xterm'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { IDisposable } from '@xterm/xterm'

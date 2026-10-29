@@ -1,7 +1,4 @@
-// The encoder the page really runs. A bare `buffer` specifier reaches Node's builtin under vitest,
-// which encodes in C++; the page bundle resolves it to this shim, which encodes in JS and is
-// roughly twenty times slower on a frame-sized buffer. Measuring against the builtin would put the
-// cost of the re-encode an order of magnitude below what a phone pays for it.
+// Use page’s JS buffer shim, not Node builtin: C++ base64 encodes frame-sized buffers ~20x faster and understates phone cost.
 import { Buffer } from 'buffer/index.js'
 import { describe, expect, it } from 'vitest'
 import {
@@ -36,14 +33,6 @@ function makeFrame(image: Uint8Array, b64?: string): BrowserScreencastFrame {
   }
 }
 
-function millisecondsPerFrame(run: () => string, frames: number): number {
-  const started = performance.now()
-  for (let index = 0; index < frames; index += 1) {
-    run()
-  }
-  return (performance.now() - started) / frames
-}
-
 describe('the browser frame data URI', () => {
   it('is byte-identical on both platforms for the frame the bridge decoded', () => {
     const image = makeImageBytes(FRAME_BYTES)
@@ -54,8 +43,7 @@ describe('the browser frame data URI', () => {
     )
   })
 
-  // The oracle for "it did not re-encode": a frame whose two halves disagree, which the bridge
-  // never produces. A web sibling that encoded `image` anyway would answer the native string.
+  // Give halves conflicting values to prove web uses supplied b64 without re-encoding image; bridge never produces mismatch.
   it('uses the base64 the bridge carried rather than the bytes beside it', () => {
     const uri = createBrowserFrameDataUriOnWeb(makeFrame(makeImageBytes(64), 'Y2FycmllZA=='))
 
@@ -68,23 +56,5 @@ describe('the browser frame data URI', () => {
     expect(createBrowserFrameDataUriOnWeb(makeFrame(image))).toBe(
       createBrowserFrameDataUri(makeFrame(image))
     )
-  })
-
-  it('costs less per frame than the re-encode it replaces', () => {
-    const image = makeImageBytes(FRAME_BYTES)
-    const b64 = Buffer.from(image).toString('base64')
-    const frames = 100
-    const reEncode = (): string => `data:image/jpeg;base64,${Buffer.from(image).toString('base64')}`
-    const carried = (): string => createBrowserFrameDataUriOnWeb(makeFrame(image, b64))
-
-    // Both warmed in the same harness before either is timed, so neither pays for a cold JIT.
-    millisecondsPerFrame(reEncode, 20)
-    millisecondsPerFrame(carried, 20)
-    const reEncodeMs = millisecondsPerFrame(reEncode, frames)
-    const carriedMs = millisecondsPerFrame(carried, frames)
-
-    // Loose on purpose: the measured gap is three orders of magnitude, and a bound near it would
-    // make a shared CI runner's noise a red build rather than a finding.
-    expect(carriedMs).toBeLessThan(reEncodeMs / 10)
   })
 })

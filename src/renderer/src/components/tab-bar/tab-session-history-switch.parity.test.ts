@@ -16,8 +16,7 @@ import {
   type TabSessionHistorySubject
 } from './tab-session-history-switch'
 
-// Only the host's answers are staged (its capabilities arrive over IPC at boot, and the chat
-// route's own feasibility is pinned elsewhere); the composition both surfaces share runs for real.
+// Stage host IPC capabilities only; run the shared panel/tab composition for real.
 vi.mock('@/runtime/local-runtime-capabilities', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   readLocalRuntimeCapabilitiesOrUnknown: () => [

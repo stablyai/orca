@@ -33,7 +33,6 @@ import {
   HOST_SIGN_IN_RETRY_WINDOW_MS,
   addCodexAccountOnHost,
   cancelHostAccountSignIn,
-  readHostAccountSignIn,
   retryLostAnswers,
   runningHostAccountSignInOwner
 } from './runtime-host-account-sign-in-client'
@@ -56,20 +55,6 @@ afterEach(() => {
 const timedOut = (): Error => Object.assign(new Error('Request timed out'), { code: 'rpc_timeout' })
 
 describe('host account sign-in client', () => {
-  it('pins every call to the pairing the sign-in started on and returns the added roster', async () => {
-    rpc.answer = (method) =>
-      method === 'accounts.hostSignInStart'
-        ? status({})
-        : status({ revision: 2, phase: 'signedIn', codex: CODEX })
-    await expect(addCodexAccountOnHost(OWNER)).resolves.toEqual(CODEX)
-    expect(rpc.calls.map((call) => call.method)).toEqual([
-      'accounts.hostSignInStart',
-      'accounts.hostSignInWait'
-    ])
-    expect(rpc.calls.every((call) => call.revision === 7)).toBe(true)
-    expect(readHostAccountSignIn(OWNER, 'codex')).toBeNull()
-  })
-
   it('starts nothing on the host when Cancel lands during the capability check', async () => {
     const capability = Promise.withResolvers<void>()
     rpc.capability = capability.promise

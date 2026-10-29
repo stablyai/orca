@@ -59,7 +59,6 @@ function recorder() {
   }
 }
 
-/** Fires the coalescing window on demand instead of on wall time. */
 function manualWindow() {
   const pending: (() => void)[] = []
   return {
@@ -315,7 +314,6 @@ describe('codex journal translation', () => {
     const mutations = batches.at(-1)?.mutations ?? []
     expect(mutations).toEqual(
       expect.arrayContaining([
-        // The host saw the child go, so the call it was running was cut short.
         expect.objectContaining({
           body: expect.objectContaining({
             kind: 'tool-call',
@@ -535,7 +533,6 @@ describe('codex journal translation', () => {
         ]
       }
     ])
-    // A completed turn proves no interruption.
     expect(batches[0]?.mutations[0]).not.toHaveProperty('body.endedAs')
   })
 
@@ -621,14 +618,11 @@ describe('codex journal translation', () => {
     ask('approval-a')
     ask('approval-b')
 
-    // Two asks, two answerable rows — keying by the tool item would have made the
-    // second ask overwrite the first, leaving the turn blocked.
     const approvals = tap.rows.slice(-2)
     expect(approvals.map((row) => row.key)).toEqual([
       'orca:codex-prompt%3Athread-abc%3Aapproval-a',
       'orca:codex-prompt%3Athread-abc%3Aapproval-b'
     ])
-    // Both still name the command the shared item announced.
     expect(approvals.every((row) => (row.body as { detail?: string }).detail === 'ls')).toBe(true)
     expect(tap.bound.map(([, , promptKey]) => promptKey)).toEqual(['approval-a', 'approval-b'])
   })

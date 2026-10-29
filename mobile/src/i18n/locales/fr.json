@@ -1,0 +1,22 @@
+{
+  "common": {
+    "back": "Retour"
+  },
+  "settings": {
+    "appearance": {
+      "language": {
+        "description": "L'option Système utilise la langue de cet appareil. Les demandes d'autorisation utilisent toujours la langue de l'appareil.",
+        "heading": "LANGUE",
+        "systemWithCurrent": "Système ({{language}})"
+      },
+      "theme": {
+        "dark": "Sombre",
+        "description": "L'option Système utilise le thème clair ou sombre de cet appareil.",
+        "heading": "THÈME",
+        "light": "Clair",
+        "system": "Système"
+      },
+      "title": "Apparence"
+    }
+  }
+}

@@ -19,8 +19,7 @@ function event(overrides: Partial<NonLatinControlChordEvent>): NonLatinControlCh
 }
 
 describe('resolveNonLatinControlChordInput', () => {
-  // Measured on macOS with UCKeyTranslate: physical A/U/C under Control produce
-  // U+0001/U+0015/U+0003 on 2SetHangul, Russian and Greek alike, matching ABC.
+  // UCKeyTranslate maps physical A/U/C to the same control bytes on Hangul, Russian, Greek and ABC.
   it.each([
     ['Korean 2-Set', 'ㅁ', 'KeyA', '\x01'],
     ['Korean 2-Set', 'ㅕ', 'KeyU', '\x15'],
@@ -45,8 +44,7 @@ describe('resolveNonLatinControlChordInput', () => {
     }
   })
 
-  // Ctrl+C is the interrupt policy's, and that policy declines off macOS when there is a
-  // selection so the copy binding wins. Claiming C here would send ETX in exactly that case.
+  // Ctrl+C belongs to interrupt policy, which yields to selection copy off macOS; claiming here would wrongly send ETX.
   it('leaves Ctrl+C to the interrupt policy', () => {
     expect(resolveNonLatinControlChordInput(event({ key: 'ㅊ', code: 'KeyC' }))).toBeNull()
   })
@@ -80,10 +78,7 @@ describe('resolveNonLatinControlChordInput', () => {
     expect(resolveNonLatinControlChordInput(event({ key: '' }))).toBeNull()
   })
 
-  // Any single non-ASCII codepoint on a letter key resolves positionally, astral included.
-  // No layout puts an emoji on KeyA, so this is unreachable in practice — it is pinned to
-  // record that the rule is "not ASCII" rather than a script allowlist that would need
-  // extending for every new writing system.
+  // Use a structural non-ASCII rule, including astral codepoints, rather than a script allowlist.
   it('treats any single non-ASCII codepoint uniformly', () => {
     expect(resolveNonLatinControlChordInput(event({ key: '😀' }))).toBe('\x01')
     expect(resolveNonLatinControlChordInput(event({ key: 'ア' }))).toBe('\x01')

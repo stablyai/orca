@@ -1,5 +1,3 @@
-// Opening editor, browser and agent-session tabs: the tab and its content record in one apply.
-
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../layout-owner-switch'
 import { applied, refuse, workspaceOrEmpty, type Applied } from './workspace-layout-command-steps'
 import type { CommandOf, LayoutContext } from './workspace-layout-command-types'
@@ -29,12 +27,7 @@ function contentTab(
   }
 }
 
-/**
- * An open tab for the same file in the target group is returned instead of a second one; a
- * non-preview open pins it, and the open's file record replaces the held one. Another group's tab
- * for the file does not count: a file opened in a second split gets its own tab there, as the
- * window does.
- */
+/** Reuse the same file in the target group, updating its record and pinning nonpreview opens. Other split groups may keep their own tab for that file. */
 export function openEditorTab(
   model: WorkspaceLayoutModel,
   command: CommandOf<'openEditorTab'>,
@@ -103,7 +96,6 @@ export function openEditorTab(
   })
 }
 
-/** The file's record, replacing any held for its path and owner. */
 function withEditorFile(
   model: WorkspaceLayoutModel,
   key: string,
@@ -174,10 +166,7 @@ export function openBrowserTab(
   )
 }
 
-/**
- * The same open again (a window's create resent) changes nothing; an id another tab or page holds
- * refuses it. Null when every id is free.
- */
+/** Resent drawn opens are idempotent; reject IDs held by another tab/page, and return null when free. */
 function takenBrowserTabIds(
   model: WorkspaceLayoutModel,
   key: string,
@@ -242,11 +231,7 @@ export function openAgentSessionTab(
   })
 }
 
-/**
- * An open naming a tab id: the same open again (a tab a window drew, then sent twice or saved
- * first) changes nothing; with `refuseTaken`, an id another tab holds refuses it. Null when the
- * open goes ahead.
- */
+/** Drawn tab IDs make resent or already-saved opens idempotent; refuseTaken rejects IDs held by another tab. Null proceeds with creation. */
 export function drawnTabOpen(
   model: WorkspaceLayoutModel,
   key: string,

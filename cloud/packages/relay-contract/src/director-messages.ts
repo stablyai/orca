@@ -21,8 +21,7 @@ export const AssignmentRequestSchema = z
   .object({
     v: z.literal(1),
     relayHostId: RelayHostIdSchema,
-    // Client-declared reconnection; the director verifies it against the
-    // durable assignment before granting fast-lane admission.
+    // Verify client-declared reconnect against durable assignment before fast-lane admission.
     reconnect: z.boolean().optional(),
     preferredRegion: RelayRegionSchema.optional(),
     regionCorrection: RegionCorrectionRequestSchema.optional()

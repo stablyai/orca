@@ -47,9 +47,7 @@ export function createTabsLabelActions(
       }
       return {
         ...tabPatch,
-        // Why the row too: viewMode is declared on both types and host-sync
-        // already writes it to the row. Only these local toggles skipped it, so
-        // readers had to OR the two indices to find out who owns the surface.
+        // Recovery reads terminal rows; mirror viewMode there to match host sync.
         ...rowPatch
       }
     })
@@ -272,7 +270,7 @@ export function createTabsLabelActions(
             ...state.unifiedTabsByWorktree,
             [worktreeId]: applyTabOrderSortValues(tabs, tabOrder)
           },
-          // Why: reconcile derives pin from the TerminalTab, so mirror it there too or a host snapshot recomputes isPinned:false and un-pins during the echo window.
+          // Reconciliation derives pin from terminal rows; mirror it there or host echoes unpin during the round trip.
           ...patchTerminalTabRow(state.tabsByWorktree, tabId, { isPinned: true }),
           groupsByWorktree: {
             ...state.groupsByWorktree,

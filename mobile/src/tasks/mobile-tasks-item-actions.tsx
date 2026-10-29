@@ -46,8 +46,7 @@ export function renderMobileTasksItemActions(model: ConnectionPresentationModel)
         disabled={creatingKey === actionItem.key}
         onPress={() =>
           taskDetailHandoff.closeThen(() => {
-            // Jira, like Linear, is not repo-scoped, so the target repo has to be asked for
-            // rather than defaulted to the first one.
+            // Jira and Linear are not repo-scoped; ask for the target repo instead of choosing the first.
             const needsRepoChoice =
               actionItem.provider === 'linear' || actionItem.provider === 'jira'
             if (needsRepoChoice && workspaceRepos.length > 1) {

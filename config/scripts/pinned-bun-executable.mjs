@@ -23,10 +23,7 @@ export function probeBunVersion(program, root, runProcessSync) {
   }
 }
 
-/**
- * Absolute path of the `bun` devDependency when it runs and is exactly the version in
- * config/.bun-version, otherwise null. Its binary is only real once the postinstall ran.
- */
+// Accept only installed, runnable devDependency at config/.bun-version; its binary is absent before postinstall.
 export function resolvePinnedBunExecutable(root, runProcessSync) {
   try {
     const manifestPath = createRequire(path.join(root, 'package.json')).resolve('bun/package.json')
@@ -48,10 +45,7 @@ function compareVersionCores(left, right) {
   return Number(a[1]) - Number(b[1]) || Number(a[2]) - Number(b[2]) || Number(a[3]) - Number(b[3])
 }
 
-/**
- * Whether a Bun of version `found` may run the tests pinned to `pinned`. Only an older Bun is
- * refused (it silently runs no tests in files that reach newer builtins); a newer one passes.
- */
+// Reject older Bun because unsupported builtins can silently run zero tests; newer Bun is allowed.
 export function checkBunVersion(found, pinned) {
   if (!found || !VERSION.test(found) || !VERSION.test(pinned)) {
     return {

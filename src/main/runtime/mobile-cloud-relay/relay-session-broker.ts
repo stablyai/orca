@@ -226,9 +226,7 @@ export class RelaySessionBroker {
       directorUrl: this.options.authConfig.relayDirectorUrl,
       relayToken: authorization.relayToken,
       relayHostId: this.relayHostId,
-      // Any previously paired host likely holds a durable assignment; the
-      // director verifies the claim, and first-ever pairing simply falls
-      // through to the placement lane.
+      // Director verifies durable-assignment claims; first-ever pairing falls through to placement.
       reconnect: true,
       preferredRegion,
       ...(this.regionRefresh
@@ -316,8 +314,7 @@ export class RelaySessionBroker {
     const cellUrl = this.originPool.activeAssignment?.cellUrl
     this.options.onStatus(status, relayStatusCellUrl(status, cellUrl))
     if (status === 'registered' && cellUrl) {
-      // Fire-and-forget: the listener may probe this cell, and nothing about the
-      // live session is allowed to wait on that.
+      // Cell probes must never delay the live session.
       this.options.onAssignedCellActive?.(cellUrl)
     }
   }

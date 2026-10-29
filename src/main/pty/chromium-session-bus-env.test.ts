@@ -1,20 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createDaemonPtyEnvironment } from '../daemon/pty-subprocess/spawn-environment'
-import { removeChromiumDisabledSessionBus } from './chromium-session-bus-env'
-
-describe('removeChromiumDisabledSessionBus', () => {
-  it("drops Chromium's no-bus marker", () => {
-    const env: Record<string, string> = { DBUS_SESSION_BUS_ADDRESS: 'disabled:', PATH: '/bin' }
-    removeChromiumDisabledSessionBus(env)
-    expect(env).toEqual({ PATH: '/bin' })
-  })
-
-  it('keeps a real address', () => {
-    const env = { DBUS_SESSION_BUS_ADDRESS: 'unix:path=/run/user/1000/bus' }
-    removeChromiumDisabledSessionBus(env)
-    expect(env.DBUS_SESSION_BUS_ADDRESS).toBe('unix:path=/run/user/1000/bus')
-  })
-})
 
 describe('daemon PTY environment', () => {
   afterEach(() => vi.unstubAllEnvs())

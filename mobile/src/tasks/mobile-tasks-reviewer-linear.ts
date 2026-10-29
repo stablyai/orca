@@ -142,7 +142,6 @@ export function groupLinearIssues(
   return groupOrderedLinearIssues(sortLinearIssues(issues, orderBy), groupBy)
 }
 
-/** The caller must sort issues by its selected order before grouping. */
 export function groupSortedLinearIssues(
   issues: readonly LinearIssue[],
   groupBy: LinearGroupBy
@@ -196,8 +195,7 @@ export function linearIssueSecondaryParts(
   return parts
 }
 
-// Why `unknown`: a host predating the desktop fix for 0a2b6e7f projects its
-// raw store value, which can be a string; that must read as sticky-all.
+// Older hosts may publish raw persisted strings; decode them as sticky-all.
 export function reconcileTeamSelection(teams: LinearTeam[], saved: unknown): Set<string> {
   if (!Array.isArray(saved)) {
     return new Set(teams.map((team) => team.id))

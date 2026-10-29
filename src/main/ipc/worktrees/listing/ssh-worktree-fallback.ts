@@ -64,8 +64,7 @@ export function createSshWorktreeMetaIndex(
   return index
 }
 
-// Why: scopes parseWorktreeId to one repo's keys. The entry list itself is still materialized for the whole
-// store, so this is cheaper per call than the unfiltered index, not free.
+// Scope ID parsing to one repo; enumerating the store snapshot still costs a full pass.
 export function createSshWorktreeMetaIndexForRepo(
   allMeta: Record<string, WorktreeMeta>,
   repoId: string
@@ -120,10 +119,7 @@ export function listDisconnectedSshWorktrees(
         ownershipUpdates
       )
     }
-    // Why: synthesized rows carry no branch, so the title would fall through to the DESKTOP's basename()
-    // applied to a REMOTE path — a Windows remote then renders its whole C:\... path as the name. Rows must
-    // stay per-directory (repo.displayName would title every row identically), so use the separator-agnostic
-    // basename instead.
+    // Remote Windows paths need separator-independent basenames; host basename or repo displayName mislabels rows.
     const worktree = mergeWorktree(
       repo.id,
       synthesizeSshGitWorktree(repo, candidate.path, meta),
@@ -145,10 +141,10 @@ export function buildDetectedGitWorktrees(
   const settings = store.getSettings()
   const knownOrcaLayouts = buildKnownOrcaWorkspaceLayouts(settings, repo)
   const isLegacyRepoForVisibility = isLegacyRepoForExternalWorktreeVisibility(repo)
-  // Why: a prunable registration has no working directory (issue #8389); only this listing omits it — cleanup flows list separately.
+  // Keep failed removals retryable; other prunable registrations stay hidden (#8389).
   const liveWorktrees = dedupeWorktreesByPath(
     preserveFolderUpgradeWorktreePath(repo, gitWorktrees).filter(
-      (gitWorktree) => !gitWorktree.prunable
+      (gitWorktree) => !gitWorktree.prunable || !!gitWorktree.removalError
     )
   )
   const worktreeVisibilitySourceMatcher = createWorktreeVisibilitySourceMatcher(
@@ -160,7 +156,7 @@ export function buildDetectedGitWorktrees(
   const repoOwnerCount = store.getRepos().filter((candidate) => candidate.id === repo.id).length
   const detected = liveWorktrees.map((gitWorktree) => {
     const worktreeId = `${repo.id}::${gitWorktree.path}`
-    // Why: the locator-keyed row is only a stand-in for a missing host snapshot, so don't read it when we have one.
+    // Locator-keyed metadata is only a compatibility fallback when no host snapshot exists.
     const legacyMeta = allMeta === undefined ? store.getWorktreeMeta?.(worktreeId) : undefined
     const metaById = allMeta ?? (legacyMeta ? { [worktreeId]: legacyMeta } : {})
     const meta =
@@ -187,7 +183,7 @@ export function buildDetectedGitWorktrees(
       allMeta,
       repoOwnerCount
     )
-    // Why: backfill hands back the same object when it wrote nothing, and both builders are pure over it.
+    // Unchanged backfill preserves object identity, letting pure builders reuse the classified row.
     if (backfilledMeta === meta) {
       return detected
     }
@@ -202,14 +198,4 @@ export function buildDetectedGitWorktrees(
     })
   })
   return projectWorktreeLineageWithHostPeers(store, repo, detected)
-}
-
-export function stampAndMergeVisibleDetectedWorktree(
-  store: Store,
-  repo: Repo,
-  detected: DetectedWorktree,
-  allMetaOverride?: Record<string, WorktreeMeta>
-) {
-  const meta = resolveWorktreeMetaWithDiscoveryBackfill(store, repo, detected.id, allMetaOverride)
-  return mergeWorktree(repo.id, detected, meta, repo.displayName)
 }

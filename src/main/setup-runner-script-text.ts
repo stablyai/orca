@@ -4,9 +4,7 @@ import {
   stripLeadingShebangLine
 } from '../shared/setup-script-shebang'
 
-// Why: cmd cannot run a POSIX script, and executing its interpreter-agnostic prefix (`pnpm
-// install`, `git submodule update`) before dying on the first bash-only line is worse than not
-// starting: half-applied setup looks like a working worktree.
+// Reject POSIX scripts before cmd can leave setup half-applied.
 const WINDOWS_RUNNER_SHEBANG_REFUSAL = [
   'echo Orca setup: this script starts with a "#!" interpreter line, so it needs a POSIX shell. 1>&2',
   'echo Orca setup: this worktree runs setup through cmd.exe, which cannot execute it. 1>&2',
@@ -16,8 +14,7 @@ const WINDOWS_RUNNER_SHEBANG_REFUSAL = [
 ].join('\r\n')
 
 export function buildWindowsRunnerScript(script: string): string {
-  // Why: launchers invoke this runner under `cmd /v:on`, and EnableExtensions does not reset an
-  // inherited delayed-expansion state — without this, every `!` in a user setup line is eaten.
+  // Inherited delayed expansion would consume literal ! characters in user scripts.
   const header = '@echo off\r\nsetlocal EnableExtensions DisableDelayedExpansion\r\n'
   let runnerScript = header
   let isFirstLine = true
@@ -35,7 +32,7 @@ export function buildWindowsRunnerScript(script: string): string {
       continue
     }
 
-    // Why: npm/pnpm are Windows batch files; `call` each line and bail on errorlevel for set -e fail-fast behavior.
+    // call returns from npm/pnpm batch shims; stop immediately on failure.
     runnerScript += `call ${command}\r\nif errorlevel 1 exit /b %errorlevel%\r\n`
   }
 
@@ -60,9 +57,7 @@ export function* iterateLfScriptLines(script: string): Generator<string> {
 }
 
 export function buildPosixRunnerScript(script: string): string {
-  // Why: the runner is always launched as `bash <path>`, so flags on the script's own `#!` line
-  // are never seen by the interpreter — replay them through `set` or a script that asked for
-  // `-euo pipefail` silently loses pipefail, and drop the now-duplicate interpreter line.
+  // bash <path> ignores shebang flags; replay them explicitly.
   const shebang = parseSetupScriptShebang(script)
   const declaredOptions = shebang?.shellOptions.length
     ? `set ${shebang.shellOptions.join(' ')}\n`

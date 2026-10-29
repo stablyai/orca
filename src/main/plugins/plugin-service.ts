@@ -24,7 +24,7 @@ import { bindPluginHostServices, type PluginRuntimeDelegate } from './plugin-hos
 import { PluginPanelController } from './plugin-panel-controller'
 import { PluginWorkerController } from './plugin-worker-controller'
 import { PluginServiceHousekeeping } from './plugin-service-housekeeping'
-import { collectApprovedWorkerSpecs } from './plugin-worker-reconciliation'
+import { collectApprovedWorkerSpecs, isApprovedWorkerSpec } from './plugin-worker-reconciliation'
 import type { PluginRunState } from './plugin-supervisor'
 import { isPluginApproved, snapshotPluginConsentLists } from './plugin-activation-policy'
 import { PluginContentPackRegistry } from './plugin-content-pack-registry'
@@ -67,11 +67,12 @@ export class PluginService {
       Boolean(this.options.getPluginKillListEntry?.(pluginKey))
     )
     this.audit = new PluginAuditLog(getPluginsDataDir(options.userDataPath))
+    const resolveApproved = (pluginKey: string, allowRefreshPause = false) => {
+      const plugin = this.findValidPlugin(pluginKey)
+      return plugin && this.canStartPluginWork(plugin, allowRefreshPause) ? plugin : null
+    }
     this.panels = new PluginPanelController({
-      resolveApprovedPlugin: (pluginKey) => {
-        const plugin = this.findValidPlugin(pluginKey)
-        return plugin && this.canStartPluginWork(plugin) ? plugin : null
-      },
+      resolveApprovedPlugin: resolveApproved,
       contentVerifier: this.contentVerifier,
       executeHostCall: (pluginKey, method, params) =>
         this.executeHostCall(pluginKey, method, params, { viaPanel: true }),
@@ -85,8 +86,8 @@ export class PluginService {
       registry: this.registry,
       contentVerifier: this.contentVerifier,
       capabilities: (pluginKey) => this.getGrantedCapabilities(pluginKey),
-      isCurrentApproved: (plugin) =>
-        this.findValidPlugin(plugin.pluginKey) === plugin && this.canStartPluginWork(plugin),
+      isCurrentApproved: (spec) => isApprovedWorkerSpec(spec, resolveApproved(spec.pluginKey)),
+      isApprovalKept: (spec) => isApprovedWorkerSpec(spec, resolveApproved(spec.pluginKey, true)),
       invokeCommand: (pluginKey, commandId, args) => this.invokeCommand(pluginKey, commandId, args),
       executeHostCall: (pluginKey, method, params) =>
         this.executeHostCall(pluginKey, method, params, { viaPanel: false }),
@@ -118,14 +119,12 @@ export class PluginService {
 
   async whenReady(): Promise<void> {
     await (this.initPromise ?? Promise.resolve()).catch(() => undefined)
-    // Client reads wait for the complete transaction so rollback-based content
-    // validation cannot expose a partially activated plugin between passes.
+    // Client reads must wait for rollback-based content validation to settle.
     await waitForPluginRefreshSettlement(() => this.refreshChain)
   }
 
   refresh(): Promise<void> {
-    // Snapshot settings at request time so a quick off→on sequence still
-    // processes the off transition and revokes old workers/panel sessions.
+    // Snapshot off→on transitions so reconciliation cannot miss worker/panel revocation.
     const enabled = this.options.isPluginSystemEnabled()
     const devPaths = this.options.getDevPluginPaths()
     const consentLists = snapshotPluginConsentLists(this.options)
@@ -170,7 +169,7 @@ export class PluginService {
     const nextSpecs = collectApprovedWorkerSpecs(next, (plugin) => this.isRuntimeApproved(plugin))
     // Notify before slow shutdown so feature-off unmounts panels immediately.
     this.notifyChanged(true)
-    await this.workerController.reconcile(nextSpecs)
+    await this.workerController.reconcile(nextSpecs, (key) => this.findValidPlugin(key))
     if (this.disposed) {
       return
     }
@@ -196,8 +195,7 @@ export class PluginService {
   }
 
   activationState(plugin: ValidDiscoveredPlugin): ReturnType<typeof getPluginActivationState> {
-    // The feature flag is an authority boundary, not only a discovery hint:
-    // callers fail closed immediately even before async reconciliation ends.
+    // Feature-off revokes authority immediately, before asynchronous reconciliation.
     if (!this.options.isPluginSystemEnabled()) {
       return 'disabled'
     }
@@ -207,13 +205,13 @@ export class PluginService {
     })
   }
 
-  private canStartPluginWork(plugin: ValidDiscoveredPlugin): boolean {
-    return !this.installed.isRemoving(plugin) && this.isRuntimeApproved(plugin)
+  private canStartPluginWork(plugin: ValidDiscoveredPlugin, allowRefreshPause = false): boolean {
+    return !this.installed.isRemoving(plugin) && this.isRuntimeApproved(plugin, allowRefreshPause)
   }
 
-  private isRuntimeApproved(plugin: ValidDiscoveredPlugin): boolean {
+  private isRuntimeApproved(plugin: ValidDiscoveredPlugin, allowRefreshPause = false): boolean {
     return (
-      this.contentPacksReady &&
+      (allowRefreshPause || this.contentPacksReady) &&
       this.activationState(plugin) === 'approved' &&
       !this.contentPacks.error(plugin.pluginKey) &&
       !this.options.getPluginKillListEntry?.(plugin.pluginKey)
@@ -233,8 +231,7 @@ export class PluginService {
     )
   }
 
-  /** Consented capability kinds for an approved plugin; null otherwise so
-   *  callers deny uniformly (no probe-able distinction). */
+  /** Null uniformly denies unapproved plugins without exposing why. */
   getGrantedCapabilities(pluginKey: string): PluginCapabilityKind[] | null {
     const plugin = this.findValidPlugin(pluginKey)
     return plugin && this.isRuntimeApproved(plugin)
@@ -242,8 +239,6 @@ export class PluginService {
       : null
   }
 
-  /** Host API chokepoint for both transports (worker fork IPC + panel
-   *  bridge); serve RPC reuses it through the same entry points. */
   async executeHostCall(
     pluginKey: string,
     method: string,
@@ -307,8 +302,7 @@ export class PluginService {
     this.notifyChanged(false)
   }
 
-  /** Reconciles live workers and client projections after consent or
-   * enablement changes without re-reading plugin files or starting workers. */
+  /** Reconcile consent/enablement without rereading files or starting workers. */
   async reconcileActivationState(): Promise<void> {
     const reconcile = this.refreshChain.then(() => this.performActivationStateReconciliation())
     this.refreshChain = reconcile.catch(() => undefined)
@@ -334,8 +328,8 @@ export class PluginService {
     this.disposed = true
     this.housekeeping.dispose()
     this.panels.dispose()
-    await this.refreshChain.catch(() => undefined)
-    await this.workerController.dispose()
+    // Why stop workers first: a refresh may be waiting on a worker slot only shutdown releases.
+    await Promise.all([this.workerController.dispose(), this.refreshChain.catch(() => undefined)])
     await this.audit.flush()
   }
 }

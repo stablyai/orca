@@ -21,10 +21,7 @@ function resolveRenderedAnchorId(
   return renderedWorktreeIds.find((id) => selectedWorktreeIds.has(id)) ?? null
 }
 
-// Why: board search hides cards without dropping them from the board, so range
-// and area gestures index the rendered subset while pruning still spans the
-// whole board — a card hidden by a query keeps its selection until a gesture
-// replaces it, and every action path narrows to the rendered cards anyway.
+// Search preserves hidden selections until replacement; gestures and actions use only rendered cards.
 export function useWorkspaceKanbanSelection(
   open: boolean,
   boardWorktrees: readonly Worktree[],
@@ -57,8 +54,7 @@ export function useWorkspaceKanbanSelection(
     }
   } else if (selectedWorktreeIds.size > 0 || selectionAnchorId !== null) {
     const pruned = pruneSelection(selectedWorktreeIds, selectionAnchorId, boardWorktreeIds)
-    // Why: the drawer can keep rendering while rows are filtered/reordered.
-    // Prune stale local selection before children see ids that no longer exist.
+    // Prune missing IDs before children render a filtered or reordered board.
     if (!areSelectionsEqual(selectedWorktreeIds, pruned.selectedIds)) {
       setSelectedWorktreeIds(pruned.selectedIds)
     }
@@ -70,10 +66,7 @@ export function useWorkspaceKanbanSelection(
   const updateSelectionForGesture = useCallback(
     (event: React.MouseEvent<HTMLElement>, worktreeId: string): boolean => {
       const intent = getSelectionIntent(event, navigator.userAgent.includes('Mac'))
-      // Why: a search can hide the anchor while leaving the rest of the
-      // selection on screen. updateSelection reads an anchor missing
-      // from visibleIds as "no anchor" and collapses the range to the click,
-      // so re-anchor onto the first still-rendered selected card instead.
+      // Reanchor ranges to a rendered selected card when search hides the original anchor.
       const anchorId =
         intent === 'range' && selectionAnchorId !== null
           ? (resolveRenderedAnchorId(renderedWorktreeIds, selectedWorktreeIds, selectionAnchorId) ??
@@ -86,9 +79,7 @@ export function useWorkspaceKanbanSelection(
         targetId: worktreeId,
         intent
       })
-      // Why: a range replaces the selection, exactly like a plain click and a
-      // non-additive marquee. Carrying hidden cards through it would leave the
-      // user with a selection they cannot see, count, or narrow.
+      // Range gestures replace hidden selections just like plain clicks and non-additive marquees.
       setSelectedWorktreeIds(result.selectedIds)
       setSelectionAnchorId(result.anchorId)
       return intent !== 'replace'

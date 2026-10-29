@@ -73,8 +73,7 @@ describe.skipIf(process.platform !== 'win32')('node-pty Windows input errors', (
       try {
         witness?.kill()
       } catch {}
-      // ConPTY's worker drains asynchronously; keep the guard installed through
-      // the delayed close so cleanup cannot reintroduce an unhandled error.
+      // Keep the guard through async ConPTY close so cleanup cannot leak an unhandled error.
       await new Promise((resolve) => setTimeout(resolve, 1_500))
       process.off('uncaughtException', uncaughtListener)
     }

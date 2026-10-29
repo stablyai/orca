@@ -2,11 +2,9 @@ import { useEffect, useRef, useState } from 'react'
 import { Search } from 'lucide-react'
 import { ZOOM_LEVEL_CHANGED_EVENT } from '@/lib/zoom-events'
 import type { ZoomLevelChangedEventDetail } from '@/lib/zoom-events'
+import { translate } from '@/i18n/i18n'
 
-// Why: the overlay must fully unmount after its fade-out completes so the
-// fixed-position container doesn't linger in the DOM and interfere with
-// Radix portal layering, click-outside detection, or focus management
-// used by dropdowns, context menus, and dialogs elsewhere in the app.
+// Unmount after fading so the fixed overlay cannot interfere with Radix layering, outside clicks or focus.
 const DISPLAY_MS = 1500
 const FADE_MS = 300
 
@@ -27,8 +25,7 @@ export function ZoomOverlay(): React.JSX.Element | null {
 
       hideTimerRef.current = window.setTimeout(() => {
         setVisible(false)
-        // Clear detail after the CSS fade-out transition finishes so the
-        // component fully unmounts and removes the fixed overlay from the DOM.
+        // Release the fixed overlay after its CSS fade completes.
         unmountTimerRef.current = window.setTimeout(() => {
           setDetail(null)
         }, FADE_MS)
@@ -48,7 +45,11 @@ export function ZoomOverlay(): React.JSX.Element | null {
   }
 
   const title =
-    detail.type === 'ui' ? 'UI Zoom' : detail.type === 'editor' ? 'Editor Zoom' : 'Terminal Zoom'
+    detail.type === 'ui'
+      ? translate('auto.components.ZoomOverlay.uiZoom', 'UI Zoom')
+      : detail.type === 'editor'
+        ? translate('auto.components.ZoomOverlay.editorZoom', 'Editor Zoom')
+        : translate('auto.components.ZoomOverlay.terminalZoom', 'Terminal Zoom')
 
   return (
     <div

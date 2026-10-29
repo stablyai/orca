@@ -159,8 +159,7 @@ export function useAutomationsPageDestinationForm({
   }
   const dialogRepos = editingAutomationId !== null ? editHostProjects : editorProjects
 
-  // A destination change can strand the chosen project on another host; clear
-  // it so the draft/default-target effect can select a project the host owns.
+  // Clear projects stranded by destination changes so defaults can select one the chosen host owns.
   useEffect(() => {
     if (!createOpen || editingAutomationId !== null) {
       return

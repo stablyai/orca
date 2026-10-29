@@ -44,8 +44,7 @@ async function dispatchCtrlCToActiveTerminalTextarea(
       return event
     }
 
-    // Why: Electron headless consumes real Ctrl+C before xterm in automation;
-    // synthetic DOM events still exercise Orca's installed xterm boundary.
+    // Electron can consume real Ctrl+C before xterm; synthetic events still exercise Orca’s installed boundary.
     const keydown = createEvent('keydown', true)
     textarea.dispatchEvent(keydown)
     const keyup = createEvent('keyup', dispatchOptions.keyupCtrlKey !== false)

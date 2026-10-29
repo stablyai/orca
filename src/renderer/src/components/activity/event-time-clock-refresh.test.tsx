@@ -32,8 +32,7 @@ describe('EventTime shared-clock refresh', () => {
   })
 
   it('derives the label from the shared clock, not a frozen render-time Date.now()', () => {
-    // Why: memo'd rows no longer re-render on unrelated store writes, so the label
-    // must follow the injected clock or "2m" would freeze at whatever render saw.
+    // Memoized rows skip unrelated writes; their time label must still follow the shared clock.
     const timestamp = clock.now - 2 * 60_000
     const render = (): void => {
       act(() => {

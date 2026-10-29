@@ -12,7 +12,6 @@ import type { SessionSearchScopeCatalog } from './session-search-scope-catalog'
 
 type ScopeRepo = SessionSearchScopeCatalog['repos'][number]
 
-/** Absolute paths in insertion order, deduplicated by the comparison key. */
 export class ScopePathSet {
   private readonly seen = new Set<string>()
   private readonly entries: string[] = []
@@ -30,8 +29,7 @@ export class ScopePathSet {
     this.entries.push(trimmed)
   }
 
-  // The index matches by prefix, so a contained path is one more SQL range for
-  // no extra rows.
+  // Prefix matching makes contained paths redundant SQL ranges.
   folded(): string[] {
     return this.entries.filter(
       (candidate) =>
@@ -40,14 +38,7 @@ export class ScopePathSet {
   }
 }
 
-/**
- * The directories Orca creates this repo's worktrees in, past and present, where
- * such a directory belongs to this repo alone.
- *
- * A global root counts only under nesting: flat placement makes it every
- * project's, and claiming it would widen a project search to the whole machine.
- * An empty result costs only the folding — every registered worktree is still listed.
- */
+/** Flat global roots belong to all projects; only repo-specific directories can narrow scope. */
 export function managedWorktreeDirectories(
   repo: ScopeRepo,
   settings: SessionSearchScopeCatalog['settings']

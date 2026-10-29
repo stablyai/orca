@@ -1,9 +1,6 @@
 import { useAppStore } from '@/store'
 
-/**
- * True where WSL distros can be hosts: a Windows desktop (or the e2e fake) launched with the internal
- * gate open. The preload omits the API otherwise, which hides every WSL host surface.
- */
+/** Preload exposes WSL-host APIs only when this desktop launch supports them. */
 export function wslHostsAvailable(): boolean {
   return typeof window !== 'undefined' && window.api?.runtimeEnvironments?.wslHosts !== undefined
 }
@@ -19,7 +16,18 @@ export function useWslHostsEnabled(): boolean {
   return enabled && wslHostsAvailable()
 }
 
-/** Settings → Experimental → WSL distros as hosts. */
+/** Enabled, and not serve-only: the entry points that add a host or move a project. */
+export function useWslHostsAcceptNewWork(): boolean {
+  const accepts = useAppStore((s) => s.wslHostsAcceptNewWork)
+  return useWslHostsEnabled() && accepts
+}
+
+/** Serve-only: saved hosts work, but adding hosts and moving projects is paused. */
+export function useWslHostsPaused(): boolean {
+  const paused = useAppStore((s) => s.wslHostsNewWorkPaused)
+  return paused && wslHostsAvailable()
+}
+
 export function openWslHostsExperimentalSetting(): void {
   const { openSettingsPage, openSettingsTarget } = useAppStore.getState()
   openSettingsPage()

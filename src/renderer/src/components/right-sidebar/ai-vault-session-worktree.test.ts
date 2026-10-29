@@ -12,13 +12,13 @@ import {
   aiVaultWorktreeJumpTooltip,
   canJumpToAiVaultSessionWorktree,
   isAiVaultSessionInCurrentWorktree,
-  extractWorktreePathFromSessionTitle,
   resolveAiVaultSessionWorktreeDisplay,
   resolveAiVaultSessionWorktreeInfo,
   shouldShowAiVaultWorktreeStatusBadge,
   shouldShowAiVaultSessionWorktreeLine,
   type AiVaultSessionWorktreeInfo
 } from './ai-vault-session-worktree'
+import { extractWorktreePathFromSessionTitle } from '../../../../shared/ai-vault-session-worktree'
 
 const baseSession: AiVaultSession = {
   id: 'codex:session-1',

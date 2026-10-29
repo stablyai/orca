@@ -1,12 +1,7 @@
 import { PLUGIN_EVENT_PAYLOAD_SCHEMAS } from '../../shared/plugins/plugin-events'
 import type { PluginEventName } from '../../shared/plugins/plugin-manifest'
 
-/**
- * Server-side event filtering: plugins receive only events they subscribed
- * to (manifest `contributes.events` or a runtime `events.subscribe` call) —
- * never a firehose. Manifest subscriptions are durable activation triggers;
- * dynamic subscriptions live only as long as the worker that made them.
- */
+// Manifest subscriptions activate durably; dynamic subscriptions die with their worker.
 
 export class PluginEventBus {
   private readonly dynamicSubscriptions = new Map<string, Set<PluginEventName>>()
@@ -24,12 +19,10 @@ export class PluginEventBus {
     return this.dynamicSubscriptions.get(pluginKey)?.has(event) ?? false
   }
 
-  /** Dynamic subscriptions die with the worker that registered them. */
   clear(pluginKey: string): void {
     this.dynamicSubscriptions.delete(pluginKey)
   }
 
-  /** Validates and bounds an event payload before it reaches any plugin. */
   projectPayload(
     event: PluginEventName,
     payload: unknown

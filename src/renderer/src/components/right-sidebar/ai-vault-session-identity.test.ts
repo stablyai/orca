@@ -2,9 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { AiVaultListResult, AiVaultSession } from '../../../../shared/ai-vault-types'
 import { EMPTY_AI_VAULT_SESSIONS, reuseAiVaultListResult } from './ai-vault-session-identity'
 
-// Why: production rows carry nested previewMessages + subagent. A scalar
-// {id, title} fixture reconciles even when the walker is broken, which is how
-// a scannedAt-only or Object.is fix stays green.
+// Use nested production fields so a broken walker or scannedAt/reference-only comparison cannot pass.
 function makeProductionSession(index: number, title = `session-${index}`): AiVaultSession {
   const id = `local:codex:session-${index}:/sessions/session-${index}.jsonl`
   const timestamp = new Date(Date.UTC(2026, 6, 1, 0, 0, index)).toISOString()
@@ -134,7 +132,6 @@ describe('reuseAiVaultListResult', () => {
 })
 
 describe('EMPTY_AI_VAULT_SESSIONS', () => {
-  // Every mounted hook returns this same array before its first scan lands.
   it('is frozen so one panel cannot mutate the sentinel for the others', () => {
     expect(EMPTY_AI_VAULT_SESSIONS).toHaveLength(0)
     expect(Object.isFrozen(EMPTY_AI_VAULT_SESSIONS)).toBe(true)

@@ -81,8 +81,7 @@ export function ActivityThreadVirtualRow({
       onMarkManyUnread={onMarkThreadsUnread}
     >
       {(menuOpen) => (
-        // Why the menu wraps this wrapper, not the row: the row is already the hover-card
-        // trigger, and stacking two Radix triggers on one node composes their refs.
+        // Wrap the row: stacking two Radix triggers on its hover target would compose their refs.
         <div className="pb-0.5">
           <ActivityThreadRow
             thread={item.thread}

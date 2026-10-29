@@ -13,7 +13,6 @@ vi.mock('sonner', () => ({
 vi.mock('@/runtime/structured-agent-session-tab-retirement', () => ({
   beginStructuredAgentSessionTabClose: mocks.beginClose
 }))
-// Main answers the window's chat-tab commands and its frames draw them (switch-on builds).
 vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
   (
     await import('@/runtime/layout-apply-test-transport.test-fixture')

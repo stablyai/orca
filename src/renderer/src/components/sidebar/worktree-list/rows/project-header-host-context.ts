@@ -64,7 +64,6 @@ export function getProjectHeaderHostContexts(args: {
   const sectionLabels = new Map<string, string>()
   const hostsByLabel = new Map<string, Set<ExecutionHostId>>()
   for (const row of args.rows) {
-    // Host sections already identify every following project header.
     if (row.type === 'host-header') {
       break
     }
@@ -81,7 +80,6 @@ export function getProjectHeaderHostContexts(args: {
     let ownerHostId: ExecutionHostId
     if (row.repo) {
       const projectHosts = hostsByProjectKey.get(row.key)
-      // A logical project can contain checkouts on several machines.
       if (projectHosts && projectHosts.size > 1) {
         const visibleRepoIds = args.visibleProjectRepoIdsBySection?.get(row.key)
         const visibleProjectHosts = visibleRepoIds

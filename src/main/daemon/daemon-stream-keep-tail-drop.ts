@@ -1,12 +1,4 @@
-/**
- * Keep-tail thinning for backgrounded sessions' queued stream data. Hidden
- * panes' stream copy is a monitoring feed (tail previews, agent status) — the
- * daemon emulator holds the complete model and reveal restores from its
- * snapshot. Once a backgrounded session's undelivered output exceeds the cap,
- * its OLDEST bytes are dropped down to the keep-tail and a dataGap event
- * takes their place, so the feed stays tail-fresh, daemon memory stays
- * bounded, and the producer is never paused (no reveal catch-up).
- */
+/** Thin the monitoring stream while retaining the complete daemon model for snapshot recovery. */
 import { clampToSafeSplitIndex } from './daemon-stream-data-split'
 import { recordDaemonStreamBacklogEvent } from './daemon-stream-backlog-probe'
 import type { DaemonEvent, DataGapEvent } from './types'
@@ -15,15 +7,11 @@ import {
   releaseDaemonStreamEntry
 } from './daemon-stream-entry-accounting'
 
-// A control entry carries a whole pre-shaped stream event (background marker,
-// data gap, transient fact) that must ride at its exact position in the
-// session's byte order; its data is always '' so it never counts against the
-// gate or drop caps, and drops never remove it.
+// Keep control events at their stream position; empty payloads do not exempt their metadata from backpressure.
 export type StreamQueueEntry = {
   sessionId: string
   data: string
-  /** Original PTY characters represented by data. Salvaged query copies are
-   * delivered bytes but represent zero new positions in the source stream. */
+  /** Source PTY characters represented; salvaged query copies advance the stream by zero. */
   sequenceChars?: number
   seq?: number
   transformed?: boolean
@@ -35,32 +23,19 @@ export type PendingStreamDataBatch = {
   timer: ReturnType<typeof setTimeout> | null
   queue: StreamQueueEntry[]
   queuedChars: number
-  // Per-session held totals so the flush hold can spare small talkers
-  // (echo/replies) from waiting behind other sessions' floods.
+  // Track each session so small replies can bypass other sessions' held floods.
   queuedCharsBySession: Map<string, number>
   queuedMetadataBytesBySession: Map<string, number>
-  // Membership is reconciled when queued data first appears and on rare
-  // background lifecycle changes, keeping steady-state enqueue constant-time.
+  // Cache membership to keep steady-state enqueue constant-time.
   droppableQueuedSessionIds: Set<string>
-  // Last droppable-sessions-with-queued-data count seen by the keep-tail
-  // logic: when it GROWS the shared budget tightens, and sessions that
-  // finished producing must be re-trimmed (they will never re-enqueue).
+  // Growth tightens the shared budget, requiring re-trimming even sessions that stopped producing.
   lastEvaluatedDroppableSessionCount?: number
 }
 
-// The keep-tail must comfortably cover a full TUI repaint (~cols×rows×SGR ≈
-// 100KB) so the delivered tail always re-renders a coherent screen.
-// Hysteresis (cap = 2× keep) bounds drop churn.
-// Kill switch: ORCA_DAEMON_BACKGROUND_STREAM_DROP=0 disables thinning.
+// Keep enough tail for a full TUI repaint; the 2x drop cap limits trimming churn.
 const BACKGROUND_SESSION_KEEP_TAIL_CHARS = 512 * 1024
 const BACKGROUND_SESSION_MIN_KEEP_TAIL_CHARS = 64 * 1024
-// Why a GLOBAL budget too: the per-session cap bounds each flood, but N
-// backgrounded sessions can still queue N×cap in aggregate — and a reveal
-// (worktree switch) then waits behind the whole aggregate at the gated drain
-// rate (~8MB/s event-loop-turn-bound; measured 9MB queued → 2.5s hidden
-// restore vs the 1.5s budget). Shrinking each session's keep-tail as more
-// backgrounded sessions queue keeps the total ~2MB, so any reveal drains in
-// ~250ms while every pane still keeps at least a full screen of tail.
+// Share the tail budget across sessions to limit aggregate backlog, subject to each session's minimum.
 const BACKGROUND_GLOBAL_KEEP_BUDGET_CHARS = 2 * 1024 * 1024
 
 export function backgroundSessionKeepTailChars(droppableSessionsWithQueuedData: number): number {
@@ -76,18 +51,10 @@ export function backgroundSessionKeepTailChars(droppableSessionsWithQueuedData: 
 export function backgroundSessionDropCapChars(droppableSessionsWithQueuedData: number): number {
   return backgroundSessionKeepTailChars(droppableSessionsWithQueuedData) * 2
 }
-// Mirrors main's DROPPED_QUERY_SALVAGE_MAX_CHARS: salvage past this means a
-// pathological query stream; keep the O(1) memory guarantee. A prior drop's
-// salvage entry is itself the oldest data and re-salvages through the next
-// drop, so query order is preserved across repeated drops.
+// Bound query salvage across repeated drops; re-salvage prior entries to retain query order.
 const DROPPED_QUERY_SALVAGE_MAX_CHARS = 4096
 
-/** Trim the session's OLDEST queued data down to the keep-tail and leave (or
- *  grow) a dataGap control entry where the dropped bytes were. Control
- *  entries are never dropped. Boundary note: the kept tail can start
- *  mid-escape-sequence — deliberate; the receiver treats a gap as a
- *  tail-preview reset and transient-fact scanning is daemon-authoritative
- *  for droppable sessions, so nothing downstream parses across the cut. */
+/** Gaps reset downstream previews, so kept tails may begin inside escapes; control events survive trimming. */
 export function dropOldestQueuedForSession(
   batch: PendingStreamDataBatch,
   sessionId: string,
@@ -183,8 +150,7 @@ export function dropOldestQueuedForSession(
     insertGapAt = Math.max(0, insertGapAt) + 1
   }
   if (salvaged.length > 0) {
-    // Salvaged query bytes ride as a tiny data entry at the gap position —
-    // the writing program is blocked on their replies.
+    // Deliver salvaged queries after the gap so programs waiting on their replies can proceed.
     const at = existingGap
       ? batch.queue.findIndex((e) => e.control === existingGap) + 1
       : insertGapAt

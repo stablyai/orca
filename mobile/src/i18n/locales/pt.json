@@ -1,0 +1,22 @@
+{
+  "common": {
+    "back": "Voltar"
+  },
+  "settings": {
+    "appearance": {
+      "language": {
+        "description": "A opção Sistema segue o idioma deste dispositivo. As solicitações de permissão sempre usam o idioma do dispositivo.",
+        "heading": "IDIOMA",
+        "systemWithCurrent": "Sistema ({{language}})"
+      },
+      "theme": {
+        "dark": "Escuro",
+        "description": "A opção Sistema segue a configuração de tema claro ou escuro deste dispositivo.",
+        "heading": "TEMA",
+        "light": "Claro",
+        "system": "Sistema"
+      },
+      "title": "Aparência"
+    }
+  }
+}

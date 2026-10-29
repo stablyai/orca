@@ -5,8 +5,7 @@ import {
 } from './paired-e2ee-client-handshake'
 import { NODE_PAIRED_E2EE_PRIMITIVES } from './paired-e2ee-node-primitives'
 
-// A legacy handshake whose channel uses a fixed shared key, so a test can seal
-// host frames without running ECDH.
+// Fixed legacy shared key lets tests seal host frames without ECDH.
 export function createFixedKeyLegacyHandshakeForTest(
   sharedKey: Uint8Array
 ): PairedE2EEClientHandshake {

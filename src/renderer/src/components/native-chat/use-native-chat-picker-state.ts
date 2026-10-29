@@ -19,8 +19,7 @@ import { getNativeChatAgentProfile } from '../../../../shared/native-chat-agent-
 import type {
   NativeChatSessionSkill,
   SlashCommandSuggestion
-} from '../../../../shared/native-chat-slash-commands'
-import { isStructuredAgentSessionComposerCommand } from '../../../../shared/structured-agent-session-composer'
+} from '../../../../shared/native-chat/input/native-chat-slash-commands'
 import {
   applyMentionSuggestion,
   applyPickerSuggestion,
@@ -31,8 +30,8 @@ import {
   type ComposerAutocomplete,
   type NativeChatPickerItem,
   type NativeChatSendClassification
-} from './native-chat-composer-state'
-import { classifyPickerCommands } from '../../../../shared/native-chat-picker-items'
+} from '../../../../shared/native-chat-composer-autocomplete'
+import { nativeChatPickerCommands } from '../../../../shared/native-chat-skill-visibility'
 import { useNativeChatSkills } from './use-native-chat-skills'
 import {
   emitNativeChatPickerItemAccepted,
@@ -66,8 +65,9 @@ export function useNativeChatPickerState(args: {
   disabled: boolean
   isComposing: () => boolean
   /** Skill names the running session reports; undefined keeps the host disk scan. */
+  commandAvailable?: (name: string) => boolean
   sessionSkills?: readonly NativeChatSessionSkill[]
-  /** Each opening of the `/` or `$` menu, so a resting chat's list can be brought up to date. */
+  /** Refresh host catalogs on every / or $ menu opening, even in resting chats. */
   onPickerOpened?: () => void
   textareaRef: RefObject<NativeChatComposerInput | null>
   setDraft: (value: string) => void
@@ -85,6 +85,7 @@ export function useNativeChatPickerState(args: {
     disabled,
     isComposing,
     sessionSkills,
+    commandAvailable,
     onPickerOpened,
     textareaRef,
     setDraft,
@@ -99,13 +100,8 @@ export function useNativeChatPickerState(args: {
   const skillPickerTriggered = !disabled && isSkillPickerTriggered(draft.slice(0, caret), profile)
   const discovery = useNativeChatSkills(agent, terminalTabId, skillPickerTriggered)
   const pickerCommands = useMemo(
-    () =>
-      classifyPickerCommands(agentCommands, discovery.skills, {
-        // A chat that keeps scanned skills (OpenCode) may report each as a command too.
-        reportMayListSkills: profile?.keepsScannedSkills === true,
-        isSendCommand: (name) => isStructuredAgentSessionComposerCommand(`/${name}`, agent)
-      }),
-    [agent, agentCommands, discovery.skills, profile]
+    () => nativeChatPickerCommands(agent, agentCommands, discovery.skills),
+    [agent, agentCommands, discovery.skills]
   )
   const listboxId = `native-chat-picker-${useId().replaceAll(':', '')}`
   const dismissalContext = `${draftScopeKey}:${agent}`
@@ -124,7 +120,8 @@ export function useNativeChatPickerState(args: {
             profile,
             discovery,
             dismissed?.context === dismissalContext ? dismissed.triggerKey : null,
-            sessionSkills
+            sessionSkills,
+            commandAvailable
           ),
     [
       caret,
@@ -136,14 +133,13 @@ export function useNativeChatPickerState(args: {
       pickerCommands,
       profile,
       recalledFromHistory,
-      sessionSkills
+      sessionSkills,
+      commandAvailable
     ]
   )
 
   useEffect(() => {
-    // Why: suppression is per-trigger-occurrence AND per-context. The composer
-    // is reused across pane/agent switches, so a stale dismissal must clear or
-    // the picker stays closed for an in-progress token when that context returns.
+    // Reset dismissal/origin on context changes so a reused composer cannot retain a prior pane’s suppression.
     skillOriginRef.current = null
     setDismissed(null)
   }, [dismissalContext])
@@ -220,9 +216,7 @@ export function useNativeChatPickerState(args: {
       if (!dismissed || dismissed.context !== dismissalContext) {
         return
       }
-      // Why: a single edit that replaces the dismissed token wholesale (e.g.
-      // select-all + paste) is a new trigger occurrence even though a trigger
-      // character lands back on the same draft position.
+      // Whole-token replacement starts a new trigger even at the same position (select-all/paste).
       if (editReplacesTriggerToken(draft, value, dismissed.triggerKey)) {
         setDismissed(null)
         return
@@ -235,13 +229,23 @@ export function useNativeChatPickerState(args: {
         profile,
         discovery,
         null,
-        sessionSkills
+        sessionSkills,
+        commandAvailable
       )
       if (next.mode === 'none' || next.triggerKey !== dismissed.triggerKey) {
         setDismissed(null)
       }
     },
-    [dismissalContext, dismissed, discovery, draft, pickerCommands, profile, sessionSkills]
+    [
+      dismissalContext,
+      dismissed,
+      discovery,
+      draft,
+      pickerCommands,
+      profile,
+      sessionSkills,
+      commandAvailable
+    ]
   )
 
   const classifySend = useCallback(

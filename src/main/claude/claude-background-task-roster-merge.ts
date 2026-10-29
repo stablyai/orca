@@ -11,7 +11,6 @@ export function combineClaudeBackgroundTaskRoster(
       combined.set(id, task)
     }
   }
-  // Preserve the provider's roster order.
   for (const [id, task] of roster) {
     combined.set(id, task)
   }

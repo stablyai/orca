@@ -33,9 +33,9 @@ export * from './activity-prototype-page-exports'
 export default function ActivityPrototypePage(): React.JSX.Element {
   const [query, setQuery] = useState('')
   const activityFilterInputRef = useRef<HTMLInputElement | null>(null)
-  // Why: bounds auto mark-read to one acknowledgement per selected thread turn.
+  // Auto-acknowledge each selected thread turn once.
   const autoAcknowledgedTurnRef = useRef<string | null>(null)
-  // Why store-backed: persisted preferences shared with the sidebar agents list.
+  // Share persisted read-filter preference with the sidebar agent list.
   const readFilter = useAppStore((s) => s.agentsReadFilter)
   const setReadFilter = useAppStore((s) => s.setAgentsReadFilter)
   const groupBy = useAppStore((s) => s.agentsGroupBy)
@@ -50,7 +50,7 @@ export default function ActivityPrototypePage(): React.JSX.Element {
     useState<ActivityTerminalPortalSlotId>('primary')
   const [primaryPortalTargetEl, setPrimaryPortalTargetEl] = useState<HTMLElement | null>(null)
   const [secondaryPortalTargetEl, setSecondaryPortalTargetEl] = useState<HTMLElement | null>(null)
-  // Why (default width): thread cards are the primary surface; 480px lets prompts fill line-clamp-3 and keeps the per-card actions readable.
+  // 480px keeps thread prompts/actions readable as the primary surface.
   const [threadListWidth, setThreadListWidth] = useState(480)
   const {
     containerRef: threadListRef,
@@ -75,7 +75,7 @@ export default function ActivityPrototypePage(): React.JSX.Element {
     visibleThreadGroups
   } = useAgentPaneThreads({ query, readFilter, groupBy, selectedPaneKey, showChildAgents })
   if (!selectedPaneKeyIsLive) {
-    // Why: rows disappear when agent retention or tab state changes; clear stale selection before detail/portal rendering targets it.
+    // Clear vanished pane selection before detail/portal rendering targets it.
     setSelectedPaneKey(null)
   }
 
@@ -86,7 +86,7 @@ export default function ActivityPrototypePage(): React.JSX.Element {
   const selectedWorktreeAvailable = selectedThread
     ? hasActivityThreadWorkspace(selectedThread, storeData)
     : false
-  // Why: repo-less terminal buckets can produce Activity rows, but the workspace Terminal tree only portals real worktrees.
+  // Repo-less terminal buckets can have activity rows but no workspace Terminal portal.
   const selectedHasLiveTab =
     selectedThread && selectedTabId && selectedWorktreeAvailable
       ? (storeData.tabsByWorktree[selectedThread.worktree.id] ?? []).some(
@@ -145,8 +145,7 @@ export default function ActivityPrototypePage(): React.JSX.Element {
     setSecondaryPortalTargetEl(target)
   }, [])
 
-  // Why (no flash): anchor the portal to the selected thread's ids; selectThread's multi-step store update can briefly reflect a stale "last active tab" (wrong-terminal flash).
-  // Why useMemo: stable descriptor identity so subscribers keep React.memo bail-outs; inactive descriptor stages the next terminal at the same size.
+  // Anchor portals to selected thread IDs to avoid stale-last-tab flashes. Memoize descriptors for subscriber bailouts and stage the next terminal at the same size.
   const portalDescriptors = useMemo(() => {
     const descriptors: ActivityTerminalPortalTarget[] = []
     if (visibleThread && activePortalTargetEl) {
@@ -183,7 +182,7 @@ export default function ActivityPrototypePage(): React.JSX.Element {
     visibleThread
   ])
 
-  // Why: swap-staged makes the displayed thread selected, so this branch cannot repeat by itself.
+  // A staged swap selects its displayed thread, preventing self-repetition.
   useLayoutEffect(() => {
     const swap = resolveActivityPortalSwap({
       selectedThread,
@@ -199,7 +198,7 @@ export default function ActivityPrototypePage(): React.JSX.Element {
       return
     }
     if (swap?.kind === 'swap-staged') {
-      // Why: a stale selected pane must swap to the unavailable state, not leave the previous pane visible under the new row.
+      // Swap stale selections to unavailable state rather than showing the previous pane under a new row.
       setActivePortalSlotId(inactivePortalSlotId)
       setDisplayedPaneKey(swap.paneKey)
       return
@@ -218,16 +217,14 @@ export default function ActivityPrototypePage(): React.JSX.Element {
     visibleThread
   ])
 
-  // Why useLayoutEffect (not useEffect): publish before paint so Terminal's portal subscriber rerenders in the same commit, else the stale target flashes on screen.
-  // Why no cleanup-to-null on each change: it forces the portal through null on every switch, flashing the workspace pane; null only on unmount (effect below).
-  // oxlint-disable-next-line react-doctor/no-derived-state-effect -- Why: this publishes portal descriptors to Terminal's external portal store before paint.
+  // Publish before paint to prevent stale-target flashes. Clear only on unmount; per-change null transitions flash the workspace pane.
   useLayoutEffect(() => {
     setActivityTerminalPortals(portalDescriptors)
   }, [portalDescriptors])
 
   const setActivityPageRef = useCallback((node: HTMLDivElement | null): void => {
     if (!node) {
-      // Why: portal cleanup must happen only on page unmount; clearing on descriptor changes flashes the workspace pane behind the activity slot.
+      // Clear portals only on unmount to avoid flashing behind changed descriptors.
       setActivityTerminalPortals([])
     }
   }, [])
@@ -296,10 +293,7 @@ export default function ActivityPrototypePage(): React.JSX.Element {
     ) {
       return
     }
-    // Why (React #185): a turn stamped ahead of this clock (SSH/remote execution host) can never
-    // have its unread cleared, and each retry lands on a later millisecond, so acknowledgeAgents'
-    // `prev < now` guard rewrites the ack map every time and re-enters here forever through
-    // storeData. Auto-read is once per turn, not a retry.
+    // Remote turn clocks may exceed local acknowledgement time and trigger endless store rewrites (React #185). Auto-read once per turn, never retry by unread status.
     const autoAcknowledgeKey = `${selectedThread.paneKey}:${selectedThread.latestTimestamp}`
     if (autoAcknowledgedTurnRef.current === autoAcknowledgeKey) {
       return
@@ -322,7 +316,7 @@ export default function ActivityPrototypePage(): React.JSX.Element {
     visibleThread
   ])
 
-  // Why (page padding): no top/horizontal padding so the page reaches the window edges; the titlebar and the right pane's title row (pt-2) supply the top spacing.
+  // Page content reaches window edges; titlebars supply top spacing.
   return (
     <div ref={setActivityPageRef} className="flex h-full min-h-0 flex-col bg-background pb-3">
       <main className="flex min-h-0 flex-1 overflow-hidden">

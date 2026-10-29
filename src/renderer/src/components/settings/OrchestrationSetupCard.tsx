@@ -1,28 +1,17 @@
 import type { JSX } from 'react'
-import {
-  ORCHESTRATION_SKILL_INSTALL_COMMAND,
-  ORCHESTRATION_SKILL_NAME
-} from '@/lib/agent-feature-install-commands'
+import { ORCHESTRATION_SKILL_NAME } from '@/lib/agent-feature-skill-names'
 import type { InstalledAgentSkillState } from '@/hooks/useInstalledAgentSkills'
 import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRuntime'
 import { AgentSkillSetupPanel } from './AgentSkillSetupPanel'
-import { buildSkillCommandForRuntime } from './CliSkillRuntimeSetup'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 
 export function OrchestrationSetupCard(props: {
   compact?: boolean
-  terminalHeightPx?: number
   skill: InstalledAgentSkillState
 }): JSX.Element {
-  const { compact, terminalHeightPx, skill } = props
+  const { compact, skill } = props
   const activeSkillRuntime = useActiveProjectSkillRuntime()
-  const installCommand = !activeSkillRuntime.installDisabledReason
-    ? buildSkillCommandForRuntime(
-        ORCHESTRATION_SKILL_INSTALL_COMMAND,
-        activeSkillRuntime.agentRuntime
-      )
-    : ORCHESTRATION_SKILL_INSTALL_COMMAND
 
   const setupPanel = (
     <AgentSkillSetupPanel
@@ -35,23 +24,17 @@ export function OrchestrationSetupCard(props: {
         'auto.components.settings.OrchestrationSetupCard.e7d2a5146c',
         'Enables agents to hand off context and coordinate work through Orca.'
       )}
-      command={installCommand}
-      terminalTitle="Orchestration setup"
-      terminalAriaLabel="Orchestration skill install terminal"
-      terminalWorktreeId="feature-wall-orchestration-skill-terminal"
-      terminalShellOverride={activeSkillRuntime.terminalShellOverride}
-      terminalRuntime={activeSkillRuntime.agentRuntime}
+      skillNames={[ORCHESTRATION_SKILL_NAME]}
       installed={skill.installed}
       loading={skill.loading}
       error={activeSkillRuntime.installDisabledReason ?? skill.error}
       installDisabled={Boolean(activeSkillRuntime.installDisabledReason)}
-      terminalHeightPx={terminalHeightPx}
-      onBeforeOpenTerminal={() => {
+      onBeforeInstall={() => {
         useAppStore.getState().recordFeatureInteraction('agent-orchestration-setup')
       }}
       onRecheck={skill.refresh}
       freshnessSkillName={
-        activeSkillRuntime.canUseLocalSkillFreshness ? ORCHESTRATION_SKILL_NAME : undefined
+        activeSkillRuntime.canUseSkillFreshness ? ORCHESTRATION_SKILL_NAME : undefined
       }
     />
   )

@@ -24,7 +24,6 @@ export type ProfileStateStartupFailureClass =
   | 'newer-schema'
   | 'publication-unavailable'
 
-/** Return the bounded failure class used by startup breadcrumbs and support diagnostics. */
 export function profileStateStartupFailureClass(
   error: unknown
 ): ProfileStateStartupFailureClass | undefined {
@@ -51,12 +50,10 @@ export function profileStateStartupFailureClass(
   return undefined
 }
 
-/** Both copies are readable and differ only because JSON changed outside SQLite. */
 export function isDivergedProfileStateFailure(error: unknown): boolean {
   return isProfileStateAuthorityFailure(error) && error.divergence === 'diverged-json'
 }
 
-/** Format profile-state startup failures without exposing a generic fatal-error path. */
 export function formatProfileStateStartupFailure(error: unknown): string | undefined {
   if (isProfileStateRecoveryFailure(error)) {
     const retainedBackups = !error.backupPaths?.length

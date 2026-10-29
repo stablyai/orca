@@ -279,7 +279,7 @@ describe('buildAgentStartupPlan', () => {
     })
   })
 
-  it('launches Devin first and injects the prompt after startup', () => {
+  it('launches Devin with the prompt on argv behind a -- separator', () => {
     expect(
       buildAgentStartupPlan({
         agent: 'devin',
@@ -290,9 +290,10 @@ describe('buildAgentStartupPlan', () => {
       })
     ).toEqual({
       agent: 'devin',
-      launchCommand: "devin '--permission-mode' 'bypass' '--respect-workspace-trust' 'false'",
+      launchCommand:
+        "devin '--permission-mode' 'bypass' '--respect-workspace-trust' 'false' -- 'Trace the failing test'",
       expectedProcess: 'devin',
-      followupPrompt: 'Trace the failing test',
+      followupPrompt: null,
       launchConfig: {
         agentCommand: "devin '--permission-mode' 'bypass' '--respect-workspace-trust' 'false'",
         agentArgs: '--permission-mode bypass --respect-workspace-trust false',
@@ -359,11 +360,7 @@ describe('buildAgentDraftLaunchPlan', () => {
   })
 
   it('uses ORCA_PI_PREFILL env var for pi (no CLI flag exists)', () => {
-    // Why: pi has no `--prefill` flag, and bracketed-paste-after-ready races
-    // against pi's lengthy startup output. The Orca overlay installs an
-    // `orca-prefill` extension that reads ORCA_PI_PREFILL on session_start
-    // and seeds the editor. Plan plumbs the env var without polluting the
-    // shell command (no `FOO='...' pi` prefix typed into the terminal).
+    // Pi has no --prefill and paste-after-ready races startup output. Its orca-prefill extension seeds from ORCA_PI_PREFILL on session_start; pass env separately from typed shell commands.
     expect(
       buildAgentDraftLaunchPlan({
         agent: 'pi',

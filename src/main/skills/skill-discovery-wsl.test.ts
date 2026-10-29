@@ -179,7 +179,7 @@ it('reuses one source collator while preserving locale, lexical numbers, and sta
   )
   const roots = labels.map((label, index) => ({ ...homeRoot, id: String(index), label }))
   const expected = [...roots].sort((a, b) =>
-    // oxlint-disable-next-line sort-comparator-performance/no-repeated-collator -- Preserve the old comparator as the parity oracle.
+    // ast-grep-ignore: no-repeated-collator -- Preserve the old comparator as the parity oracle.
     a.label.localeCompare(b.label, undefined, { sensitivity: 'base' })
   )
   const NativeCollator = Intl.Collator

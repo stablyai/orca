@@ -5,8 +5,7 @@ import type { RelayCellConfig } from './config.js'
 import { openRelayDatabase, type RelayDatabase } from './database.js'
 import { ReserveLedgerWriter } from './reserve-ledger-writer.js'
 
-// A host that lost its control leaves a capped reserve cell this director proves dead (stale
-// heartbeat + its own polls unanswered) without an operator fence; every live-cell case keeps it.
+// Only host-requested moves may leave a reserve cell proven dead by heartbeat and poll silence without a fence; live cells retain hosts.
 
 const databaseUrl = process.env.ORCA_RELAY_TEST_POSTGRES_URL
 const describePostgres = databaseUrl ? describe : describe.skip

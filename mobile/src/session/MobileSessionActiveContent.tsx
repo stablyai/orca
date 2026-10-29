@@ -3,11 +3,14 @@ import { saveTerminalTextScale } from '../storage/preferences'
 import { MobileBrowserPane } from '../browser/MobileBrowserPane'
 import { TerminalPaneView } from './TerminalPaneView'
 import { MobileNativeChatOverlay } from './MobileNativeChatOverlay'
-import { resolveMobileNativeChatSessionId } from './mobile-native-chat-eligibility'
+import { resolveMobileNativeChatSessionId } from './native-chat/mobile-native-chat-eligibility'
 import { colors } from '../theme/mobile-theme'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { styles } from './mobile-session-styles'
 import type { MobileSessionController } from './use-mobile-session-controller'
 import { useWorkspaceExecutionHost } from '../navigation/workspace-execution-host'
+import { useHostProfile } from '../transport/use-host-profile'
+import { useHostDisplay } from '../transport/use-host-display'
 import { FileReader } from './MobileSessionFileReader'
 import { MarkdownReader } from './MobileSessionMarkdownReader'
 
@@ -16,6 +19,7 @@ export function MobileSessionActiveContent({
 }: {
   controller: MobileSessionController
 }) {
+  useMobileColorScheme()
   const executionHost = useWorkspaceExecutionHost()
   const {
     hostId,
@@ -56,6 +60,7 @@ export function MobileSessionActiveContent({
     sendingDiffCommentIds,
     updateMarkdownLocalContent,
     copyMarkdownLocalContent,
+    copyMarkdownPath,
     discardMarkdownLocalContent,
     saveMarkdownTab,
     setTerminalWebViewRef,
@@ -70,6 +75,7 @@ export function MobileSessionActiveContent({
     handleSelectionMode,
     handleSelectionCopy,
     handleSelectionEvicted,
+    handleClipboardWrite,
     handleModesChanged,
     handleKeyboardAvoidanceMetrics,
     handleHaptic,
@@ -88,6 +94,8 @@ export function MobileSessionActiveContent({
     toastAnimatedStyle,
     createTabBusy
   } = controller
+  const hostProfile = useHostProfile(hostId)
+  const hostTitle = useHostDisplay(hostProfile).title
   const content = showLoadingState ? (
     <View style={styles.emptyState}>
       <ActivityIndicator size="small" color={colors.textSecondary} />
@@ -123,6 +131,7 @@ export function MobileSessionActiveContent({
         onChange={(content) => updateMarkdownLocalContent(activeMarkdownTab.id, content)}
         onSave={() => void saveMarkdownTab(activeMarkdownTab)}
         onCopy={() => void copyMarkdownLocalContent(activeMarkdownTab.id)}
+        onCopyPath={() => void copyMarkdownPath(activeMarkdownTab)}
         onDiscard={() => discardMarkdownLocalContent(activeMarkdownTab)}
         keyboardLift={keyboardLift}
       />
@@ -223,6 +232,7 @@ export function MobileSessionActiveContent({
           onSelectionMode={handleSelectionMode}
           onSelectionCopy={handleSelectionCopy}
           onSelectionEvicted={handleSelectionEvicted}
+          onClipboardWrite={handleClipboardWrite}
           onModesChanged={handleModesChanged}
           onKeyboardAvoidanceMetrics={handleKeyboardAvoidanceMetrics}
           onHaptic={handleHaptic}
@@ -240,7 +250,9 @@ export function MobileSessionActiveContent({
         images={nativeChatImages}
         structuredComposer={nativeChatStructuredComposer}
         onMicPress={dictationEnabled ? handleDictationToggle : undefined}
-        micActive={dictation.isRecording}
+        micActive={dictation.isStarting || dictation.isRecording}
+        micStarting={dictation.isStarting}
+        micProcessing={dictation.isProcessing}
         dictationMode={dictationMode}
         onMicPressIn={handleDictationPressIn}
         onMicPressOut={handleDictationPressOut}
@@ -251,6 +263,8 @@ export function MobileSessionActiveContent({
         sessionId={resolveMobileNativeChatSessionId(controller.activeSessionTab)}
         getSendCompletionGeneration={controller.getSendCompletionGeneration}
         keyboardInset={keyboardLift}
+        // A workspace routed to another server stops with that server, whose name the phone lacks.
+        hostName={executionHost === undefined && hostProfile ? hostTitle : null}
       />
       {toastMessage && (
         <Animated.View pointerEvents="none" style={[styles.toast, toastAnimatedStyle]}>

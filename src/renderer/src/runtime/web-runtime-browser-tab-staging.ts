@@ -15,12 +15,7 @@ export type StagedWebRuntimeBrowserTab = {
   tabId?: string
 }
 
-/**
- * Mint the local browser workspace/page/tab for a create that is still in flight, so the strip
- * shows the tab on click instead of after the host round-trip. The staged handle carries the
- * client-minted remote page id, which is what lets the host snapshot adopt these exact rows in
- * place (see findBrowserWorkspaceForRemotePage) rather than appending a second tab.
- */
+/** Stage before RPC for immediate tab display. The client-minted remote page ID lets findBrowserWorkspaceForRemotePage adopt these rows without a duplicate tab. */
 export function stageWebRuntimeBrowserTab(args: {
   environmentId: string
   worktreeId: string
@@ -40,13 +35,11 @@ export function stageWebRuntimeBrowserTab(args: {
       activate: args.activate,
       browserPageId: args.remotePageId,
       browserRuntimeEnvironmentId: args.environmentId,
-      // Why: the paired runtime owns this row; placement must not borrow the globally selected host.
+      // Use the paired owner, never the globally selected host.
       executionHostId: toRuntimeExecutionHostId(args.environmentId),
       ...(args.afterTabId ? { afterTabId: args.afterTabId } : {}),
       ...(args.title !== undefined ? { title: args.title } : {}),
-      ...(args.profileId !== undefined && args.profileId !== null
-        ? { sessionProfileId: args.profileId }
-        : {}),
+      ...(args.profileId !== undefined ? { sessionProfileId: args.profileId } : {}),
       ...(args.targetGroupId ? { targetGroupId: args.targetGroupId } : {}),
       ...(args.focusAddressBar !== undefined ? { focusAddressBar: args.focusAddressBar } : {})
     })
@@ -71,10 +64,10 @@ export function stageWebRuntimeBrowserTab(args: {
       clientHosted: args.clientHosted === true,
       ...(tabId ? { tabId } : {})
     }
-    noteClientHosting(args.environmentId, args.worktreeId, staged)
+    holdStagedBrowserTab(args.environmentId, args.worktreeId, staged)
     return staged
   } catch (error) {
-    // Why: staging is an optimization; a store-side refusal must not fail the create itself.
+    // Staging is optional; store refusal must not fail creation.
     console.warn(
       '[web-runtime-session] failed to stage browser tab:',
       error instanceof Error ? error.message : String(error)
@@ -91,11 +84,7 @@ export class StagedWebRuntimeBrowserTabCancelledError extends Error {
   }
 }
 
-/**
- * Whether the staged tab is still in the strip. The workspace row is the signal: an adopting
- * snapshot takes over that same row, while the strip's cleanup close removes it — a distinction the
- * handle's staged flag cannot make, because adoption clears the flag too.
- */
+/** Workspace presence distinguishes adoption from staged X; both clear the staged flag, but only close removes the row. */
 export function isStagedWebRuntimeBrowserTabLive(
   staged: StagedWebRuntimeBrowserTab,
   worktreeId: string
@@ -105,11 +94,7 @@ export function isStagedWebRuntimeBrowserTabLive(
   )
 }
 
-/**
- * Which group the staged tab is in right now. The create asked for one group, but the user may
- * have moved the tab since; waiting for materialization in the group they left would stall the
- * create for the whole wait and then log a bogus "landed outside the requested group".
- */
+/** Follow staged tabs to their current group after a user move or materialization waits time out in the abandoned group. */
 export function resolveStagedWebRuntimeBrowserTabGroupId(
   staged: StagedWebRuntimeBrowserTab,
   worktreeId: string
@@ -139,10 +124,7 @@ function findWorkspaceIdForRemotePage(args: {
   return null
 }
 
-/**
- * Point a staged tab at the page id the host actually minted, so the next snapshot adopts the
- * staged rows. Returns the still-staged tab, or null once it no longer needs tracking.
- */
+/** Rehome staging to the host-minted page ID for snapshot adoption; return null when tracking has ended. */
 export function rehomeStagedWebRuntimeBrowserTab(
   staged: StagedWebRuntimeBrowserTab,
   args: { environmentId: string; worktreeId: string; remotePageId: string }
@@ -153,8 +135,7 @@ export function rehomeStagedWebRuntimeBrowserTab(
   }
   const mirrored = findWorkspaceIdForRemotePage(args)
   if (mirrored !== null && mirrored !== staged.workspaceId) {
-    // Why: a snapshot already mirrored the host page under its own id while the create was in
-    // flight; keeping the staged tab too would leave the user with two tabs for one page.
+    // Snapshot already mirrored this page under host IDs; keeping staging would duplicate it.
     discardStagedWebRuntimeBrowserTab(staged)
     return null
   }
@@ -167,11 +148,7 @@ export function rehomeStagedWebRuntimeBrowserTab(
   return staged
 }
 
-/**
- * Re-mark a staged tab once the live placement is known. Staging has to predict client hosting from
- * the renderer's cached runtime status, which can lag a runtime upgrade; without this the pane would
- * mount the component the stale verdict chose and swap only after adoption.
- */
+/** Restage from live placement when cached capabilities lag upgrades, avoiding a component swap at adoption. */
 export function restageWebRuntimeBrowserTabHostingIntent(
   staged: StagedWebRuntimeBrowserTab,
   args: { environmentId: string; worktreeId: string; remotePageId: string; clientHosted: boolean }
@@ -189,42 +166,67 @@ export function restageWebRuntimeBrowserTabHostingIntent(
     staged: true,
     ...(args.clientHosted ? { stagedClientHosted: true } : {})
   })
-  const restaged = { ...staged, clientHosted: args.clientHosted }
-  noteClientHosting(args.environmentId, args.worktreeId, restaged)
-  return restaged
+  return { ...staged, clientHosted: args.clientHosted }
 }
 
-/** A client-hosted page never enters its server's layout, so that server's frames keep the tab (L274). */
-function noteClientHosting(
+const stagedTabIds = (staged: Pick<StagedWebRuntimeBrowserTab, 'workspaceId' | 'tabId'>) => [
+  staged.workspaceId,
+  ...(staged.tabId ? [staged.tabId] : [])
+]
+
+// Keep staging until server frames publish the page (L285); client-hosted pages never enter server layout (L274).
+function holdStagedBrowserTab(
   environmentId: string,
   worktreeId: string,
   staged: StagedWebRuntimeBrowserTab
 ): void {
-  // Switch point: only a server's frames, which a layout-owner build draws, need the record.
   if (!ORCA_LAYOUT_OWNER_IS_MAIN) {
     return
   }
-  // By both ids: its browser workspace and its tab-bar entry.
-  for (const id of [staged.workspaceId, ...(staged.tabId ? [staged.tabId] : [])]) {
-    if (staged.clientHosted) {
-      noteDesktopCreatedServerTab(environmentId, worktreeId, id)
-    } else {
-      forgetDesktopCreatedServerTab(id)
+  for (const id of stagedTabIds(staged)) {
+    noteDesktopCreatedServerTab(environmentId, worktreeId, id)
+  }
+}
+
+/** Once server layout lists the page, frames replace held/adopted staging with their own tab; in-flight creation reads that as handover (L284). */
+export function releaseHeldBrowserTabsTheServerLists(
+  environmentId: string,
+  serverPageIdsByWorkspace: ReadonlyMap<string, ReadonlySet<string>>
+): void {
+  const state = useAppStore.getState()
+  const listed = [...serverPageIdsByWorkspace.values()]
+  const pageIds = new Set(
+    Object.entries(state.remoteBrowserPageHandlesByPageId).flatMap(([pageId, handle]) =>
+      handle?.environmentId === environmentId && listed.some((ids) => ids.has(handle.remotePageId))
+        ? [pageId]
+        : []
+    )
+  )
+  if (pageIds.size === 0) {
+    return
+  }
+  for (const worktreeId of serverPageIdsByWorkspace.keys()) {
+    for (const workspace of state.browserTabsByWorktree[worktreeId] ?? []) {
+      if (!workspace.pageIds?.some((pageId) => pageIds.has(pageId))) {
+        continue
+      }
+      const tabId = state.unifiedTabsByWorktree[worktreeId]?.find(
+        (tab) => tab.contentType === 'browser' && tab.entityId === workspace.id
+      )?.id
+      for (const id of stagedTabIds({ workspaceId: workspace.id, ...(tabId ? { tabId } : {}) })) {
+        forgetDesktopCreatedServerTab(id)
+      }
     }
   }
 }
 
-/**
- * Remove a staged tab that never materialized. Adopted tabs are left alone — by then the rows
- * belong to the host snapshot, and the caller's own tabClose owns retiring the host page.
- */
+/** Remove only unmaterialized staging; adopted rows belong to the snapshot and caller tabClose owns host cleanup. */
 export function discardStagedWebRuntimeBrowserTab(staged: StagedWebRuntimeBrowserTab): void {
   const state = useAppStore.getState()
   if (state.remoteBrowserPageHandlesByPageId[staged.pageId]?.staged !== true) {
     return
   }
-  // Why: drop the handle first so the cleanup close cannot dispatch a second browser.tabClose
-  // for a page the create path is already retiring.
+  // Drop handle first to prevent cleanup dispatching a duplicate browser.tabClose.
   state.removeRemoteBrowserPageHandle(staged.pageId)
   useAppStore.getState().closeBrowserTab(staged.workspaceId, { reason: 'cleanup' })
 }

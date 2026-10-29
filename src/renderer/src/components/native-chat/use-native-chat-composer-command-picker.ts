@@ -1,3 +1,5 @@
+import { useCallback, useMemo } from 'react'
+import { prepareQueuedMessageEditText } from '../../../../shared/queued-message-edit-command'
 import { useNativeChatComposerCatalog } from './use-native-chat-composer-catalog'
 import {
   useNativeChatPickerState,
@@ -12,7 +14,6 @@ import type { NativeChatStructuredComposerTransport } from './native-chat-compos
 type PickerArgs = Parameters<typeof useNativeChatPickerState>[0]
 type ResumeArgs = Parameters<typeof useNativeChatResumeCommand>[0]
 
-/** The composer's `/` and `@` picker over its agent's catalog, with Orca's `/resume` taken first. */
 export function useNativeChatComposerCommandPicker(
   args: Omit<
     PickerArgs,
@@ -20,15 +21,27 @@ export function useNativeChatComposerCommandPicker(
   > &
     Pick<ResumeArgs, 'editor' | 'setNotice'> & {
       structuredTransport: NativeChatStructuredComposerTransport | undefined
+      editing?: boolean
     }
 ): { picker: NativeChatPickerState; resume: NativeChatResumeCommand } {
-  const { structuredTransport, editor, setNotice, ...pickerArgs } = args
+  const { structuredTransport, editor, setNotice, editing, ...pickerArgs } = args
   const { agent, terminalTabId } = pickerArgs
   const { agentCommands, sessionSkills } = useNativeChatComposerCatalog(agent, structuredTransport)
+  const reported = structuredTransport?.sessionCommands
+  const hostSetsGoals = structuredTransport?.threadGoal !== undefined
+  const acceptsText = useMemo(
+    () => prepareQueuedMessageEditText(agent, reported, hostSetsGoals),
+    [agent, reported, hostSetsGoals]
+  )
+  const commandAvailable = useCallback(
+    (name: string) => !editing || acceptsText(`/${name}`),
+    [editing, acceptsText]
+  )
   const picker = useNativeChatPickerState({
     ...pickerArgs,
     ...editor,
     agentCommands,
+    commandAvailable,
     sessionSkills,
     ...(structuredTransport?.refreshCommands
       ? { onPickerOpened: structuredTransport.refreshCommands }

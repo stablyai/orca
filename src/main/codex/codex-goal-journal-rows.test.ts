@@ -61,7 +61,6 @@ describe('codexGoalRowText', () => {
 
 describe('codexGoalRowSignature', () => {
   it('ignores the counters that climb on every turn', () => {
-    // Two frames one live turn apart: only accounting moved.
     const first = codexGoalRowSignature('thread/goal/updated', goalFrame())
     const later = codexGoalRowSignature(
       'thread/goal/updated',
@@ -102,7 +101,6 @@ describe('goal frames as journal rows', () => {
 
     expect(row?.classification).toBe('timeline-substantive')
     expect(row?.body.text).toBe('Goal set: Keep the current scratch directory tidy.')
-    // The raw frame stays available behind the row's disclosure.
     expect(row?.body.providerFrame?.kind).toBe('notification:thread/goal/updated')
   })
 

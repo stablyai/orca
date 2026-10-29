@@ -1,6 +1,4 @@
-// The one definition of a structured journal's tool actions: which rows the chat draws as a
-// tool call, and the block it draws. The status line reads the same definition, so the sidebar
-// names a tool exactly as the chat draws it.
+// Share tool-action projection between chat and sidebar so status names exactly the tool block the transcript draws.
 
 import type {
   AgentJournalDiffItem,
@@ -18,17 +16,14 @@ export function isStructuredAgentSessionToolAction(
   return body?.kind === 'tool-call' || body?.kind === 'diff'
 }
 
-/** A diff carries no lifecycle, so it reads as settled; otherwise a finished edit would stay the
- *  running call for the rest of its turn. */
+/** Diffs have no lifecycle and are settled, or completed edits would remain running all turn. */
 export function isRunningStructuredAgentSessionToolAction(
   action: StructuredAgentSessionToolAction
 ): boolean {
   return action.kind === 'tool-call' && action.state === 'running'
 }
 
-/** `itemId`: the journal row's, the call's id when the provider gave none. A call and its result
- *  are one row, so the result names its call by it; without an id a result pairs with the oldest
- *  unanswered call, which in a run of several rows can be another row's. */
+/** Use row itemId when provider call ID is absent so the result cannot pair with another row’s oldest unanswered call. */
 export function structuredAgentSessionToolCallBlock(
   action: StructuredAgentSessionToolAction,
   itemId: string

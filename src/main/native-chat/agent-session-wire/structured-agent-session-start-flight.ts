@@ -1,29 +1,25 @@
-// A session's agent start in flight, outside its serialize.
-//
-// The serialize is where messages are admitted, so a start that held it for its probes, resolvers,
-// spawn and drains made every send wait for the agent. A start instead registers here, in one short
-// step before its first wait; every wait after runs outside the lock, raced with the abort signal a
-// Stop, close or quit reaches it by, and every write is a commit that first re-checks the start is
-// still the session's. A start that loses that check is late: what it spawned is closed, never
-// handed anything.
+// Register before waits, then probe/spawn outside serialization so sends and Stop remain responsive.
+// Recheck current-flight identity at every commit; close late children without handing them input.
 
 import { throwIfSignalAborted, waitForPromiseWithSignal } from '../../../shared/abort-signal-reason'
 import type { StructuredAgentSessionAttachLock } from './structured-agent-session-attach-lock'
 import type { StructuredAgentSessionEndedEvent } from './structured-agent-session-adapter'
+import { sameProviderChild } from './structured-agent-session-provider-child'
+import type { StructuredAgentSessionProviderChildIdentity } from './structured-agent-session-host-types'
 import type { StructuredAgentSessionResumeOutcome } from './structured-agent-session-agent-start'
 
 export type StructuredAgentSessionStartFlight = {
-  /** The start's generation: the startup attempt it mints carries the same id. */
   readonly abort: () => void
   readonly attemptId: string
-  /** Settles once the start is over: its child published, refused, or aborted. */
+  signal?: AbortSignal
+  children?: StructuredAgentSessionProviderChildIdentity[]
+  /** Settles once the logical start is ready, refused, or aborted. */
   readonly outcome: Promise<StructuredAgentSessionResumeOutcome>
 }
 
-/** One start per session: a second asker joins the one in flight. */
 export class StructuredAgentSessionStartFlights {
   private readonly flying = new Map<string, StructuredAgentSessionStartFlight>()
-  /** Exits reported for a start's child before its publish put it on record. */
+  /** Buffer exits before child publication. */
   private readonly exits = new Map<string, StructuredAgentSessionEndedEvent[]>()
 
   get(sessionId: string): StructuredAgentSessionStartFlight | undefined {
@@ -42,6 +38,22 @@ export class StructuredAgentSessionStartFlights {
     this.flying.set(sessionId, flight)
   }
 
+  published(sessionId: string, child: StructuredAgentSessionProviderChildIdentity): void {
+    const flight = this.get(sessionId)
+    if (flight && !this.ownsChild(sessionId, child)) {
+      ;(flight.children ??= []).push({ generation: child.generation, fence: child.fence })
+    }
+  }
+
+  ownsChild(sessionId: string, child: StructuredAgentSessionProviderChildIdentity): boolean {
+    return this.get(sessionId)?.children?.some((owned) => sameProviderChild(owned, child)) === true
+  }
+
+  projectsStarting(sessionId: string): boolean {
+    const flight = this.get(sessionId)
+    return !!flight?.children?.length && !flight.signal?.aborted
+  }
+
   end(sessionId: string, attemptId: string): void {
     if (this.isCurrent(sessionId, attemptId)) {
       this.flying.delete(sessionId)
@@ -49,7 +61,6 @@ export class StructuredAgentSessionStartFlights {
     }
   }
 
-  /** Held for the publish when a start is in flight; false when none is. */
   deferExit(event: StructuredAgentSessionEndedEvent): boolean {
     if (!this.flying.has(event.sessionId)) {
       return false
@@ -58,7 +69,6 @@ export class StructuredAgentSessionStartFlights {
     return true
   }
 
-  /** The exit reported for the child a start is publishing, if any. */
   takeExit(
     sessionId: string,
     child: { generation: string | null; fence: number }
@@ -71,7 +81,6 @@ export class StructuredAgentSessionStartFlights {
   }
 }
 
-/** The start was not the session's by the time it committed: its result is discarded. */
 export class StructuredAgentSessionLateStartError extends Error {
   constructor() {
     super('the agent start was superseded before it committed')
@@ -79,7 +88,7 @@ export class StructuredAgentSessionLateStartError extends Error {
   }
 }
 
-/** The lock a start runs its attach under; its fence is the start's own registration. */
+/** Authorize commits only for the currently registered start. */
 export function structuredAgentSessionStartFlightLock(input: {
   sessionId: string
   attemptId: string
@@ -93,7 +102,6 @@ export function structuredAgentSessionStartFlightLock(input: {
     wait: (work) => waitForPromiseWithSignal(work, signal),
     commit: (step) =>
       input.serialize(sessionId, async () => {
-        // A close of the conversation, like a Stop or quit, aborts the start first.
         throwIfSignalAborted(signal)
         if (!input.flights.isCurrent(sessionId, attemptId)) {
           throw new StructuredAgentSessionLateStartError()

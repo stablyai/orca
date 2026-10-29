@@ -152,8 +152,7 @@ describe.runIf(process.platform !== 'win32')('supervised Codex app-server sessio
 
     const readPids = rig.readPids
     const reported: { pids?: { provider: number; grandchild: number } } = {}
-    // The deadline starts at spawn, so it outlasts the stand-in's whole start budget: a slow host
-    // fails the pid read inside that budget instead of stopping a stand-in that never armed.
+    // Let PID discovery fail before the session deadline if a slow host never arms the stand-in.
     const startBudgetMs = 8_000
     const session = runCodexAppServerSession(
       {
@@ -175,7 +174,7 @@ describe.runIf(process.platform !== 'win32')('supervised Codex app-server sessio
     if (!pids) {
       return
     }
-    // Graceful first: the old deadline SIGKILLed the root, which a Codex mid-write cannot survive.
+    // Graceful shutdown protects Codex mid-write.
     expect(existsSync(rig.signalFile) && readFileSync(rig.signalFile, 'utf8')).toBe('SIGTERM')
     expect(alive(pids.provider)).toBe(false)
     // The group ladder reaches a descendant that ignores SIGTERM; a root-only kill misses it.
@@ -201,7 +200,7 @@ describe.runIf(process.platform !== 'win32')('supervised Codex app-server sessio
         PROVIDER_SUPERVISOR_MAX_STOP_MS + 1_000
       )
     ).toBe(true)
-    // A gone owner gets the close its owner makes: the stdin end, its grace, and only then SIGTERM.
+    // Owner death still allows stdin EOF grace before SIGTERM.
     const events = rig.readEvents()
     expect(events['stdin-end']).toBeDefined()
     expect((events.SIGTERM ?? 0) - (events['stdin-end'] ?? 0)).toBeGreaterThanOrEqual(

@@ -1,4 +1,5 @@
 import { getDefaultVoiceSettings } from '../../shared/constants'
+import { MOBILE_DICTATION_RECONNECT_GRACE_MS } from '../../shared/rpc-contract/speech-params'
 import { getSpeechModelManager, getSpeechSttService } from '../speech/speech-runtime-service'
 import { getCatalogModel, isLocalSpeechModel } from '../speech/model-catalog'
 import {
@@ -10,12 +11,16 @@ import type { RuntimeStore } from './runtime-store-contract'
 type MobileDictationSession = {
   id: string
   owner: string
-  clientId?: string
-  connectionId?: string
+  clientId: string
   state: 'starting' | 'active' | 'closing'
   partialText: string
   finalTexts: string[]
   errors: string[]
+  // Bumped by each transcript event; chunks arrive far more often, so replies carry text only after a bump or a second.
+  textVersion: number
+  reportedVersion: number
+  reportedAt: number
+  abandonTimer?: ReturnType<typeof setTimeout>
 }
 
 export class RuntimeMobileDictationController {
@@ -27,7 +32,6 @@ export class RuntimeMobileDictationController {
     dictationId: string
     modelId?: string
     clientId?: string
-    connectionId?: string
   }): Promise<{ dictationId: string; modelId: string }> {
     const store = this.requireStore()
     const voice = store.getSettings().voice ?? getDefaultVoiceSettings()
@@ -49,6 +53,10 @@ export class RuntimeMobileDictationController {
     if (!params.clientId) {
       throw new Error('dictation_requires_mobile_client')
     }
+    if (this.session?.clientId === params.clientId && this.session.state === 'active') {
+      // A phone runs one dictation at a time, so its new start retires one it lost track of (app relaunch inside the grace).
+      await this.stopSession(this.session)
+    }
     if (this.session) {
       throw new Error('dictation_already_active')
     }
@@ -58,11 +66,13 @@ export class RuntimeMobileDictationController {
       id: params.dictationId,
       owner,
       clientId: params.clientId,
-      connectionId: params.connectionId,
       state: 'starting',
       partialText: '',
       finalTexts: [],
-      errors: []
+      errors: [],
+      textVersion: 0,
+      reportedVersion: 0,
+      reportedAt: 0
     }
     try {
       await getSpeechSttService(store).startDictation(
@@ -75,6 +85,12 @@ export class RuntimeMobileDictationController {
         throw new Error('dictation_canceled')
       }
       this.session.state = 'active'
+      const session = this.session
+      // Owned by the phone, not its socket; it streams continuously, so this long without a request means it is gone.
+      session.abandonTimer = setTimeout(
+        () => void this.stopSession(session).catch(() => undefined),
+        MOBILE_DICTATION_RECONNECT_GRACE_MS
+      )
     } catch (error) {
       if (this.session?.id === params.dictationId) {
         this.session = null
@@ -89,8 +105,7 @@ export class RuntimeMobileDictationController {
     audioBase64: string
     sampleRate: number
     clientId?: string
-    connectionId?: string
-  }): { dictationId: string } {
+  }): { dictationId: string; text?: string } {
     const session = this.requireOwnedSession(params)
     if (session.state !== 'active') {
       throw new Error('dictation_stream_closing')
@@ -104,66 +119,37 @@ export class RuntimeMobileDictationController {
       samples[i] = pcm.readInt16LE(i * 2) / 32768
     }
     getSpeechSttService(this.requireStore()).feedAudio(samples, params.sampleRate, session.owner)
-    return { dictationId: params.dictationId }
+    // The text so far lets the phone keep it if the connection never comes back; resent each second in case a reply was lost.
+    const now = Date.now()
+    if (session.reportedVersion === session.textVersion && now - session.reportedAt < 1000) {
+      return { dictationId: params.dictationId }
+    }
+    session.reportedVersion = session.textVersion
+    session.reportedAt = now
+    return { dictationId: params.dictationId, text: transcriptOf(session) }
   }
 
   async finish(params: {
     dictationId: string
     clientId?: string
-    connectionId?: string
   }): Promise<{ dictationId: string; text: string }> {
     const session = this.requireOwnedSession(params)
-    session.state = 'closing'
-    try {
-      await getSpeechSttService(this.requireStore()).stopDictation(session.owner)
-      if (session.errors.length > 0) {
-        throw new Error(session.errors[0])
-      }
-      return {
-        dictationId: params.dictationId,
-        text: [...session.finalTexts, session.partialText].join(' ').trim()
-      }
-    } finally {
-      if (this.session?.id === session.id) {
-        this.session = null
-      }
+    await this.stopSession(session)
+    if (session.errors.length > 0) {
+      throw new Error(session.errors[0])
     }
+    return { dictationId: params.dictationId, text: transcriptOf(session) }
   }
 
   async cancel(params: {
     dictationId: string
     clientId?: string
-    connectionId?: string
   }): Promise<{ dictationId: string }> {
     const session = this.session
-    if (
-      session?.id === params.dictationId &&
-      params.clientId &&
-      session.clientId === params.clientId &&
-      (!session.connectionId || session.connectionId === params.connectionId)
-    ) {
-      session.state = 'closing'
-      try {
-        await getSpeechSttService(this.requireStore()).stopDictation(session.owner)
-      } finally {
-        if (this.session?.id === session.id) {
-          this.session = null
-        }
-      }
+    if (session?.id === params.dictationId && session.clientId === params.clientId) {
+      await this.stopSession(session)
     }
     return { dictationId: params.dictationId }
-  }
-
-  cancelForConnection(connectionId: string): void {
-    if (this.session?.connectionId === connectionId) {
-      this.cancelSession(this.session)
-    }
-  }
-
-  cancelForClient(clientId: string): void {
-    if (this.session?.clientId === clientId) {
-      this.cancelSession(this.session)
-    }
   }
 
   private acceptEvent(
@@ -176,11 +162,13 @@ export class RuntimeMobileDictationController {
     }
     if (event.type === 'partial') {
       session.partialText = event.text ?? ''
+      session.textVersion += 1
     } else if (event.type === 'final') {
       const text = event.text?.trim()
       if (text) {
         session.finalTexts.push(text)
         session.partialText = ''
+        session.textVersion += 1
       }
     } else if (event.type === 'error') {
       session.errors.push(event.error ?? 'Speech worker error')
@@ -190,33 +178,30 @@ export class RuntimeMobileDictationController {
   private requireOwnedSession(params: {
     dictationId: string
     clientId?: string
-    connectionId?: string
   }): MobileDictationSession {
     const session = this.session
     if (!session || session.id !== params.dictationId) {
       throw new Error('dictation_stream_not_started')
     }
-    if (!params.clientId || session.clientId !== params.clientId) {
+    if (session.clientId !== params.clientId) {
       throw new Error('dictation_owner_mismatch')
     }
-    if (session.connectionId && session.connectionId !== params.connectionId) {
-      throw new Error('dictation_owner_mismatch')
+    if (session.state === 'active') {
+      session.abandonTimer?.refresh()
     }
     return session
   }
 
-  private cancelSession(session: MobileDictationSession): void {
-    if (session.state === 'closing') {
-      return
-    }
+  private async stopSession(session: MobileDictationSession): Promise<void> {
+    clearTimeout(session.abandonTimer)
     session.state = 'closing'
-    void getSpeechSttService(this.requireStore())
-      .stopDictation(session.owner)
-      .finally(() => {
-        if (this.session?.id === session.id) {
-          this.session = null
-        }
-      })
+    try {
+      await getSpeechSttService(this.requireStore()).stopDictation(session.owner)
+    } finally {
+      if (this.session?.id === session.id) {
+        this.session = null
+      }
+    }
   }
 
   private requireStore(): RuntimeStore {
@@ -226,4 +211,8 @@ export class RuntimeMobileDictationController {
     }
     return store
   }
+}
+
+function transcriptOf(session: MobileDictationSession): string {
+  return [...session.finalTexts, session.partialText].join(' ').trim()
 }

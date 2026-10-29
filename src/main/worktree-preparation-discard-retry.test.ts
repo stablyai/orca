@@ -46,8 +46,7 @@ describe('worktree preparation discard retries', () => {
     unremovable.add(leakedHere)
     unremovable.add(leakedElsewhere)
 
-    // Evict through each host's own arming: eviction prefers the incoming workspace's oldest
-    // entry, so preparing for `repo` no longer reaches across and takes `otherRepo`'s.
+    // Evict within each host's pool; one repo cannot evict the other repo's preparation.
     for (const base of ['origin/one', 'origin/two']) {
       await prepareWorktreeCreateForRepo(store, repo, base)
     }
@@ -148,8 +147,7 @@ describe('worktree preparation discard retries', () => {
     unremovable.add(leakedOnUbuntu)
     unremovable.add(leakedOnDebian)
 
-    // Evict through each distro's own arming: the eviction scope includes the distro, so arming
-    // under Ubuntu no longer reaches across and takes the Debian entry.
+    // Evict within each distro's pool so Ubuntu cannot consume Debian's slot.
     mocks.getWorktreeOptions.mockReturnValue({ wslDistro: 'Ubuntu' })
     for (const base of ['origin/one', 'origin/two']) {
       await prepareWorktreeCreateForRepo(store, repo, base)
@@ -196,7 +194,6 @@ describe('worktree preparation discard retries', () => {
       await prepareWorktreeCreateForRepo(store, repo, base)
     }
     await _resetWorktreeCreatePreparationsForTests()
-    // Past the rejection timer: the reset must have absorbed the failure, not raced ahead of it.
     await flushBackgroundWork(20)
 
     mocks.discard.mockClear()

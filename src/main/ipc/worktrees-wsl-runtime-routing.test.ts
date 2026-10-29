@@ -1,3 +1,4 @@
+import { REVIEW_HEAD_FETCH_TIMEOUT_MS } from '../../shared/review-head-tracking-ref'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   setPlatform,
@@ -26,6 +27,11 @@ import {
 } from './worktrees-test-fixtures'
 import type { HostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
 
+// The WSL distros these fixtures route through count as running, so the boot gate lets Git run.
+vi.mock('../wsl-background-distro-gate', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  readWslDistroRunningState: async () => 'running'
+}))
 vi.mock('electron', async () =>
   (await import('./worktrees-test-module-mocks')).electronModuleMock()
 )
@@ -103,8 +109,7 @@ vi.mock('./pty/provider/state-cleanup', async () =>
   (await import('./worktrees-test-module-mocks')).ptyStateCleanupModuleMock()
 )
 
-/** Every create-path git call, including the base-ref probe now shared with the
- *  speculative prefetch, must read the distro's ref store rather than host git's. */
+/** Check all create/prefetch probes against the distro ref store, including shared base-ref resolution. */
 function expectEveryGitCallRoutedTo(wslDistro: string): void {
   const callDistros = new Set(
     gitExecFileAsyncMock.mock.calls.map(
@@ -223,7 +228,6 @@ describe('registerWorktreeHandlers', () => {
       base: 'origin/main'
     })
     gitExecFileAsyncMock.mockResolvedValue({ stdout: 'abc123\n', stderr: '' })
-    // A persisted base that differs from the detected default also drives the usability probe.
     store.getRepo.mockReturnValue({ ...harnessRepo, worktreeBaseRef: 'custom-base' })
     listWorktreesMock.mockResolvedValue([
       {
@@ -243,10 +247,6 @@ describe('registerWorktreeHandlers', () => {
     expectEveryGitCallRoutedTo('Ubuntu')
   })
 
-  // Was "routes fork push target setup ... through create": create used to mint the
-  // fork remote (and route it to the selected WSL distro) unconditionally. It now
-  // defers to first sync (#17828) -- split in two so each half stays true to a single
-  // claim: create stays a no-op even for a WSL-routed repo, sync still routes to the distro.
   it('does not mint a fork remote at create time for a WSL-routed worktree', async () => {
     mockSelectedWslProjectRuntime()
     listWorktreesMock.mockResolvedValue([
@@ -286,10 +286,7 @@ describe('registerWorktreeHandlers', () => {
     )
   })
 
-  // Companion to the deferral test above: `materializeWorktreePushTargetRemote` is
-  // exactly what `git:push`/`git:pull`'s local dispatch calls (with the repo's resolved
-  // wslDistro) before syncing, so this is "first sync" without needing that IPC handler
-  // registered in this harness.
+  // Call the same materializer as push/pull to test first-sync routing without registering those handlers.
   it('routes fork push target materialization through the selected WSL project runtime', async () => {
     gitExecFileAsyncMock.mockResolvedValue({ stdout: '', stderr: '' })
     const target = {
@@ -312,9 +309,7 @@ describe('registerWorktreeHandlers', () => {
       ['check-ref-format', '--branch', 'contributor/wsl-fork'],
       wslRoutingOptions
     )
-    // Mint: `-t <branch> --no-tags` (see #17828) keeps the remote's own default off the
-    // wide wildcard, then `ensureRemoteTracksBranchNarrowly` rewrites it to the trailing-`*`
-    // form immediately after -- both routed through the same WSL project runtime.
+    // Creation and trailing-* refspec rewriting must both use the selected distro.
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
       [
         'remote',
@@ -348,10 +343,7 @@ describe('registerWorktreeHandlers', () => {
       ['config', 'remote.pr-contributor-orca.orca-created', 'true'],
       wslRoutingOptions
     )
-    // Why: the mint's fetch is the one call in this sequence that talks to the network --
-    // bounded the same as the deferred short-circuit's fetch (see DEFERRED_PUSH_TARGET_FETCH_TIMEOUT_MS)
-    // so a hung credential prompt can't wedge it forever. Every other call here is local-only
-    // and stays untimed, per `wslRoutingOptions` above.
+    // Only fetch talks to the network; bound credential hangs while leaving local calls untimed.
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
       [
         'fetch',
@@ -360,7 +352,6 @@ describe('registerWorktreeHandlers', () => {
       ],
       { ...wslRoutingOptions, timeout: expect.any(Number) }
     )
-    // wslDistro threaded through every subprocess this materialize made, not just the adds.
     const distros = new Set(
       gitExecFileAsyncMock.mock.calls.map(
         ([, options]) => (options as { wslDistro?: string } | undefined)?.wslDistro
@@ -452,7 +443,7 @@ describe('registerWorktreeHandlers', () => {
         'origin',
         '+refs/heads/feature/add-feature:refs/remotes/origin/feature/add-feature'
       ],
-      { cwd: '/workspace/repo', wslDistro: 'Ubuntu' }
+      { cwd: '/workspace/repo', wslDistro: 'Ubuntu', timeout: REVIEW_HEAD_FETCH_TIMEOUT_MS }
     )
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
       ['rev-parse', '--verify', 'origin/feature/add-feature'],

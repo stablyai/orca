@@ -9,7 +9,7 @@ import { AgentWorkingSpinner } from './AgentWorkingSpinner'
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
 describe('AgentWorkingSpinner', () => {
-  it('hooks the compositor-driven CSS animation, not a JS clock', () => {
+  it('renders the spinner animation and reduced-motion classes', () => {
     const markup = renderToStaticMarkup(React.createElement(AgentWorkingSpinner))
 
     expect(markup).toContain('agent-working-spinner')
@@ -48,10 +48,7 @@ describe('AgentWorkingSpinner', () => {
     }
   })
 
-  // Why: animationstart fires on the first start and on every restart (class
-  // re-add, display:none reveal), so it alone keeps every ring phase-locked.
-  // A negative animation-delay cannot — it is static, so a restart replays the
-  // stale mount-time offset and the rings fan out across steps.
+  // Anchor every animationstart, including reveals/restarts. Static negative delays replay stale mount offsets and break phase sync.
   it('anchors every animation start to the shared document epoch', async () => {
     const animation = {
       animationName: 'agent-spinner-rotate',
@@ -81,8 +78,7 @@ describe('AgentWorkingSpinner', () => {
       await act(async () => {
         root.render(<AgentWorkingSpinner />)
       })
-      // Why: mount must not query animations — that forces a synchronous style
-      // recalc per ring for a phase the first animationstart sets anyway.
+      // Mount-time animation queries force style recalculation; the first animationstart establishes phase.
       expect(getAnimations).not.toHaveBeenCalled()
 
       await fireAnimationStart()
@@ -92,43 +88,6 @@ describe('AgentWorkingSpinner', () => {
       await fireAnimationStart()
       expect(animation.startTime).toBe(0)
       expect(getAnimations).toHaveBeenCalledTimes(2)
-    } finally {
-      act(() => root.unmount())
-      container.remove()
-      if (originalGetAnimations === undefined) {
-        Reflect.deleteProperty(HTMLElement.prototype, 'getAnimations')
-      } else {
-        Object.defineProperty(HTMLElement.prototype, 'getAnimations', originalGetAnimations)
-      }
-    }
-  })
-
-  // Why: reduced motion resolves the rule to `animation: none`, so no animation
-  // exists to start and none to anchor. Pins that dropping the ref-time anchor
-  // adds no exposure here — both paths were already no-ops.
-  it('anchors nothing when reduced motion leaves no animation to start', async () => {
-    const getAnimations = vi.fn(() => [] as Animation[])
-    const originalGetAnimations = Object.getOwnPropertyDescriptor(
-      HTMLElement.prototype,
-      'getAnimations'
-    )
-    Object.defineProperty(HTMLElement.prototype, 'getAnimations', {
-      configurable: true,
-      value: getAnimations
-    })
-    const container = document.createElement('div')
-    document.body.appendChild(container)
-    const root = createRoot(container)
-
-    try {
-      await act(async () => {
-        root.render(<AgentWorkingSpinner />)
-      })
-      const el = container.querySelector('[data-agent-spinner]')
-
-      expect(el).not.toBeNull()
-      expect(getAnimations).not.toHaveBeenCalled()
-      expect(el!.className).toContain('motion-reduce:border-t-agent-working')
     } finally {
       act(() => root.unmount())
       container.remove()

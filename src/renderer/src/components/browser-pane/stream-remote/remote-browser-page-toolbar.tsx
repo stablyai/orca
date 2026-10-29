@@ -51,8 +51,7 @@ export function RemoteBrowserPageToolbar({
   return (
     <BrowserNavigationControlRow
       controls={{
-        // Why: remote pages report no history depth, so the arrows stay live and a
-        // dead-end back/forward RPC is simply a no-op on the host.
+        // Hosts report no history depth; keep arrows enabled and let dead-end RPCs no-op.
         canGoBack: true,
         canGoForward: true,
         goBack: onBack,
@@ -81,8 +80,7 @@ export function RemoteBrowserPageToolbar({
         />
       }
       reloadControl={
-        // Why: no ignore-cache RPC exists for remote pages, and this pane binds no reload chord, so there is
-        // nothing truthful to put in a menu or a shortcut hint here — tooltip only.
+        // Remote reload chords share browser.reload; no ignore-cache RPC exists to offer a distinct hard-reload menu action.
         <Tooltip>
           <TooltipTrigger asChild>
             <Button

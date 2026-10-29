@@ -17,9 +17,7 @@ describe('AI Vault full first-user-prompt normalization', () => {
     expect(normalizeFullFirstUserPromptText('ship it 😀')).toBe('ship it 😀')
   })
 
-  // Why this matters: the bootstrap probe runs on the bounded slice. That is only
-  // safe because the envelope strip is unbounded, so a query past the cap is still
-  // unwrapped and never reaches the probe as a bare user_info dump.
+  // Envelope extraction must precede the size cap or a late user_query looks like a bootstrap dump.
   it('unwraps a user_query that lands past the safety limit', () => {
     const raw = `<user_info>\n${'context '.repeat(SAFETY_LIMIT / 4)}\n<user_query>ship it</user_query>`
 

@@ -305,14 +305,43 @@ while (!existsSync(${JSON.stringify(finished)}) || reads === 0) {
 
   it('serializes builds so a later source snapshot is the one published', async () => {
     const packageDir = fixture(undefined, seededDist)
-    // Hold the build lock while the source changes, as an in-flight earlier build would.
+    const attempted = join(packageDir, 'lock-contended')
+    const script = join(packageDir, 'observe-lock-attempt.mjs')
+    writeFileSync(
+      script,
+      `import fs from 'node:fs'
+import lockfile from ${JSON.stringify(pathToFileURL(packageRequire.resolve('proper-lockfile')).href)}
+const lock = lockfile.lock
+lockfile.lock = (file, options) => lock(file, {
+  ...options,
+  fs: {
+    ...fs,
+    mkdir(path, callback) {
+      fs.mkdir(path, (error) => {
+        if (path === options.lockfilePath && error?.code === 'EEXIST') {
+          fs.writeFileSync(${JSON.stringify(attempted)}, '')
+        }
+        callback(error)
+      })
+    }
+  }
+})
+const { buildPackageDist } = await import(${JSON.stringify(pathToFileURL(buildScript).href)})
+await buildPackageDist(process.argv[2])
+`
+    )
     mkdirSync(join(packageDir, '.dist-build.lock'))
-    const waiting = runBuild(packageDir)
-    await new Promise((resolveDelay) => setTimeout(resolveDelay, 500))
-    writeFileSync(join(packageDir, 'src', 'internal.ts'), 'export const value = 9\n')
-    rmSync(join(packageDir, '.dist-build.lock'), { recursive: true })
+    const waiting = runBuild(packageDir, { script })
+    let result
+    try {
+      await expect.poll(() => existsSync(attempted), { timeout: 15_000 }).toBe(true)
+      writeFileSync(join(packageDir, 'src', 'internal.ts'), 'export const value = 9\n')
+    } finally {
+      rmSync(join(packageDir, '.dist-build.lock'), { recursive: true, force: true })
+      result = await waiting
+    }
 
-    expect(await waiting).toMatchObject({ code: 0, stderr: '' })
+    expect(result).toMatchObject({ code: 0, stderr: '' })
     expect(readFileSync(join(packageDir, 'dist', 'internal.js'), 'utf8')).toContain('value = 9')
   })
 

@@ -1,12 +1,8 @@
-/** The project groups a managed server already holds, so a relink keeps its record of them. */
 import { isRepoOnCatalogHost } from '../../shared/execution-host'
 import type { OrcadMigrationCatalogPayload } from '../../shared/orcad-migration/orcad-migration-manifest'
 import type { OrcadServerFolderCatalog } from './orcad-server-folder-workspaces'
 
-/**
- * Incoming groups the server holds under the same id on its own machine: its copy from an earlier
- * move, found even when no server row sits in it. One it keeps for another host isn't the same.
- */
+/** Same-id groups match only on the server's own host, even when empty. */
 export function projectGroupsHeldByServer(
   incoming: readonly { id: string }[],
   server: Pick<OrcadServerFolderCatalog, 'projectGroups'>
@@ -21,12 +17,7 @@ type ServerRow = {
   executionHostId?: string | null
 }
 
-/**
- * Source groups whose record the server's wins over this desktop's retained, perhaps stale, copy.
- * With the server's group list that is exactly the groups it holds: any other moves, so it is never
- * recorded as the server's. Without it, the groups the server's rows sit in and their ancestors,
- * less an ancestor a moving row needs, since the server may lack it.
- */
+/** Prefer server-owned groups over retained copies. Without a group catalog, infer from server rows/ancestors but retain ancestors needed by moving rows: the server may lack them. */
 export function serverHeldProjectGroups(
   payload: Pick<
     OrcadMigrationCatalogPayload,

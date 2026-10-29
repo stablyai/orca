@@ -1,28 +1,25 @@
-// Envelope forwarding and death handling for one live WSL relay link.
-// Extracted from the manager so its state machine stays readable; the manager
-// decides what a dead link means (cooldown, restart), this module guarantees
-// it finds out exactly once, whichever signal fires first.
 import type { ChildProcessWithoutNullStreams } from 'node:child_process'
 
 import type { SshChannelMultiplexer } from '../ssh/ssh-channel-multiplexer'
 import { AGENT_HOOK_NOTIFICATION_METHOD } from '../../shared/agent-hook-relay'
 import { wslHookRelayConnectionId } from '../../shared/wsl-hook-relay-contract'
+import { CLAUDE_AGENT_VIEW_RELAY_METHOD } from '../../shared/claude-agent-view'
 
 export type WslRelayLinkOptions = {
   mux: SshChannelMultiplexer
   child: ChildProcessWithoutNullStreams
   distro: string
   ingest: (envelope: Record<string, unknown>, connectionId: string) => void
+  /** Runs before the link's first envelope: each link talks to a freshly started guest. */
+  beginSession?: (connectionId: string) => void
+  receiveClaudeAgentView?: (body: unknown) => unknown
   bindInterruptReconciliation?: (
     mux: SshChannelMultiplexer,
     connectionId: string,
     isCurrent: () => boolean
   ) => () => void
   warn: (message: string) => void
-  /** Called exactly once when the link dies — from EITHER a mux dispose
-   *  (protocol error, keepalive timeout) or the child exiting. A mux death
-   *  without child death would otherwise blackhole every later envelope
-   *  while the guest keeps returning 204 to hook clients. */
+  /** Notify once on mux or child death; a dead mux can otherwise silently discard hook events. */
   onDead: (reason: string) => void
 }
 
@@ -30,6 +27,10 @@ export function wireWslRelayLink(options: WslRelayLinkOptions): void {
   const { mux, child, distro, ingest, warn, onDead } = options
   const connectionId = wslHookRelayConnectionId(distro)
   let dead = false
+  options.beginSession?.(connectionId)
+  mux.onRequest(CLAUDE_AGENT_VIEW_RELAY_METHOD, ({ body }) =>
+    dead ? {} : (options.receiveClaudeAgentView?.(body) ?? {})
+  )
   const unbindInterrupt = options.bindInterruptReconciliation?.(mux, connectionId, () => !dead)
 
   mux.onNotification((method, params) => {
@@ -45,8 +46,7 @@ export function wireWslRelayLink(options: WslRelayLinkOptions): void {
         `[agent-hooks] WSL relay envelope (${distro}): pane=${p.paneKey} state=${p.payload?.state ?? '?'}`
       )
     }
-    // Trust boundary: ingestRemote re-validates paneKey/tabId and
-    // re-normalizes the payload, same as the SSH relay path.
+    // Revalidate identifiers and payload at ingest, just as for SSH relays.
     ingest(params, connectionId)
   })
 

@@ -193,7 +193,12 @@ describe('relay routing after a host edit', () => {
     expect(storage.get('orca:hosts')).toBe(hostsAfterEdit)
     expect(SecureStore.setItemAsync).not.toHaveBeenCalled()
     const [host] = await loadHosts()
-    expect(host).toMatchObject({ name: 'Renamed', endpoint: NEW_ENDPOINT, relay: moved })
+    expect(host).toMatchObject({
+      name: 'Renamed',
+      endpoint: NEW_ENDPOINT,
+      deviceToken: 'device-token',
+      relay: moved
+    })
   })
 
   it('does not rewrite storage when relay resolution repeats the stored routing', async () => {

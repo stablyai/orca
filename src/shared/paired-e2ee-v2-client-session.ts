@@ -99,7 +99,12 @@ export class PairedE2EEV2ClientSession {
       return null
     }
     const plaintext = this.open(frame, 'text')
-    return plaintext ? new TextDecoder().decode(plaintext) : null
+    if (!plaintext) {
+      return null
+    }
+    return this.primitives.decodeUtf8
+      ? this.primitives.decodeUtf8(plaintext)
+      : new TextDecoder().decode(plaintext)
   }
 
   openBinary(frame: Uint8Array): Uint8Array | null {
@@ -124,7 +129,8 @@ export class PairedE2EEV2ClientSession {
       sessionId: this.schedule.sessionId,
       direction: 'desktop-to-mobile',
       payloadKind,
-      expectedCounter: this.inboundCounter
+      expectedCounter: this.inboundCounter,
+      openSecretbox: this.primitives.openSecretbox
     })
     if (plaintext) {
       this.inboundCounter++
@@ -149,6 +155,9 @@ export class PairedE2EEV2ClientSession {
   }
 
   private decodeCanonicalBase64(value: string): Uint8Array | null {
+    if (this.primitives.decodeCanonicalBase64) {
+      return this.primitives.decodeCanonicalBase64(value)
+    }
     try {
       const bytes = this.primitives.decodeBase64(value)
       return this.primitives.encodeBase64(bytes) === value ? bytes : null

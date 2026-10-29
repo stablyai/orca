@@ -2,10 +2,7 @@
 <html>
   <head>
     <meta charset="utf-8" />
-    <!-- Security test fixture: every attempt below MUST be contained by the
-         host-injected CSP, the iframe sandbox, and the bridge budgets. Each
-         probe reports pass/fail into the DOM so the containment run is
-         directly observable in the panel. -->
+    <!-- Hostile fixture: CSP, sandbox and bridge budgets must contain each probe; DOM verdicts expose failures. -->
   </head>
   <body>
     <h1>Hostile panel fixture</h1>
@@ -76,8 +73,7 @@
         }
       }, 3000)
 
-      // Navigation probes are opt-in so a failed attempt cannot erase the
-      // network and bridge evidence before the harness observes it.
+      // Opt-in navigation preserves network/bridge evidence until the harness reads it.
       document.getElementById('navigate-top').addEventListener('click', function () {
         markNavigationInvocation('top-navigation')
         try {
@@ -166,8 +162,7 @@
           report('oversized-message', false, 'host sent no refusal')
         }, 2000)
 
-        // Probe 8: invalid, pong, and binary floods must all spend rate budget
-        // before parsing; the final valid call is the observable oracle.
+        // Invalid, pong and binary floods must spend rate budget before parsing; the final valid call proves it.
         setTimeout(function () {
           for (var i = 0; i < 40; i++) {
             var payload =
@@ -193,8 +188,7 @@
         }, 150)
       })
 
-      // Probe 9: opt-in busy loop. The watchdog should demote the panel while
-      // Chromium keeps the sandboxed frame in its isolated renderer process.
+      // Opt-in busy loop: watchdog must demote the panel while Chromium isolates its renderer.
       function enterBusyLoop() {
         report('busy-loop', true, 'watchdog should suspend this panel')
         while (true) {

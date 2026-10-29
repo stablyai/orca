@@ -1,4 +1,3 @@
-/** Binds managed idle exit to this orcad's RPC server, PTY provider and terminal daemon. */
 import { getAppEnvironment } from '../../shared/app-environment'
 import type { RuntimeRpcClientActivity } from '../runtime/runtime-rpc/runtime-rpc-shutdown'
 import type { OrcadIdleExitEvidence } from './orcad-idle-exit-monitor'
@@ -18,12 +17,17 @@ import {
   writeOrcadIdleStopRecord
 } from './orcad-idle-stop-record'
 import type { OrcadShutdownTrigger } from './orcad-lifecycle'
+import {
+  idleStopMayReleaseWslHolder,
+  requestOrcadWslHolderRelease,
+  withdrawOrcadWslHolderRelease
+} from './orcad-wsl-holder-release'
 import type { OrcadIdleStopRecord } from '../../shared/orcad-idle-exit'
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 
 let requestIdleShutdown: OrcadShutdownTrigger | null = null
 
-/** main binds its shutdown once signal handling exists; the quiet period outlasts that gap. */
+/** Signal handling binds later; the quiet period must outlast the startup gap. */
 export function bindOrcadIdleShutdown(request: OrcadShutdownTrigger): void {
   requestIdleShutdown = request
 }
@@ -33,18 +37,17 @@ type OrcadIdleExitRuntimePorts = {
   agentStates: () => readonly { state: string }[]
   hasStagedMigration: () => boolean
   automationsBusy: () => boolean
-  /** Shutdown stops the monitor first, so a signal stop is never recorded as an idle one. */
+  emulatorsBusy: () => Promise<boolean>
+  /** Stop the monitor before recording signal-driven shutdown. */
   registerCleanup: (cleanup: () => void) => void
 }
 
-/**
- * Runs under the instance lock at startup: reads the previous run's idle-stop record before
- * anything this run does could be mistaken for it. Inert for an orcad no client launched.
- */
+/** Under the startup lock, consume previous idle-stop evidence before this run can overwrite it. */
 export function beginOrcadIdleExit(userDataPath: string): {
   previousIdleStop: OrcadIdleStopRecord | null | undefined
   start: (ports: OrcadIdleExitRuntimePorts) => Promise<void>
 } {
+  withdrawOrcadWslHolderRelease(userDataPath)
   const config = resolveOrcadManagedIdleExit(process.env)
   if (!config) {
     return { previousIdleStop: undefined, start: async () => {} }
@@ -84,9 +87,10 @@ async function startOrcadManagedIdleExit(
     hasChatProviders,
     hasStagedMigration: input.hasStagedMigration,
     automationsBusy: input.automationsBusy,
+    emulatorsBusy: input.emulatorsBusy,
     activationFenceExists
   }
-  // Work that an exit would end; clients and terminals are excluded, as the stop already weighed them.
+  // Client/terminal evidence is already checked; recheck other work exit would destroy.
   const nonTerminalWorkProbes = createOrcadIdleProbes(input.config, ports).filter(
     (probe) => probe.name !== 'clients' && probe.name !== 'terminals'
   )
@@ -106,10 +110,10 @@ async function startOrcadManagedIdleExit(
     config: input.config,
     ports,
     stop: async (evidence) => {
-      // Read first: a replacement may stop only the incarnation that agreed to retire.
+      // Replacement must target only the daemon incarnation that agreed to retire.
       const retiringPid = getCurrentDaemonPid()
       const outcome = await stopForIdle(input, evidence, retireOrcadDaemonIfIdle)
-      // Clients or providers may return while daemon retirement awaits its reply.
+      // Clients/providers can return while the retirement reply is pending.
       const activity = input.rpc.readClientActivity()
       if (
         hasChatProviders() ||
@@ -132,9 +136,15 @@ async function startOrcadManagedIdleExit(
         if (daemon === 'serving' || (await hasNonTerminalWork())) {
           return false
         }
-        // The returning client's reconnect relaunches a server that can run terminals.
         idleRecord.requestShutdown(requestIdleShutdown)
         return true
+      }
+      if (idleStopMayReleaseWslHolder(process.env, outcome)) {
+        try {
+          requestOrcadWslHolderRelease(input.userDataPath)
+        } catch (error) {
+          console.error('[orcad] could not release the WSL distro holder:', error)
+        }
       }
       idleRecord.requestShutdown(requestIdleShutdown)
       return true
@@ -146,20 +156,20 @@ async function startOrcadManagedIdleExit(
   })
 }
 
-/**
- * A stop that fails or overruns is not clean, and one another source (a signal, a stop request)
- * took over is not idle; the next start must report neither as an idle stop. `onShutdown` runs
- * in every stop's cleanup, so a takeover that finishes before the idle request is handled too.
- */
+/** Discard failed, overdue and externally superseded idle stops, including cleanup before request completion. */
 export function createIdleStopRecordOwnership(userDataPath: string): {
   requestShutdown(request: OrcadShutdownTrigger | null): void
   onShutdown(): void
 } {
   let idleOwnsStop = false
-  const discard = (): void => discardOrcadIdleStopRecord(userDataPath)
+  // The holder release rides on the idle stop: a stop that is not idle must not end the distro.
+  const discard = (): void => {
+    discardOrcadIdleStopRecord(userDataPath)
+    withdrawOrcadWslHolderRelease(userDataPath)
+  }
   return {
     requestShutdown: (request) => {
-      // Set first: the stop this starts may run its cleanup before the trigger returns.
+      // Cleanup may run before the trigger returns, so establish ownership first.
       idleOwnsStop = true
       if (request?.('idle', discard) !== true) {
         idleOwnsStop = false
@@ -185,7 +195,7 @@ async function stopForIdle(
   } catch (error) {
     console.error('[orcad] could not record the idle stop:', error)
   }
-  // The daemon leaves only if it proves itself empty; a busy one stays up with its terminals.
+  // Only the daemon’s atomic empty census can authorize retirement.
   const outcome = await retireDaemon().catch((error: unknown): OrcadDaemonRetirement => ({
     retirement: 'unverifiable',
     liveSessions: null,

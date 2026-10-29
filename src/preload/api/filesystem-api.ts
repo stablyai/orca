@@ -19,6 +19,7 @@ import type {
 } from '../../shared/local-log-tail-types'
 import type { SshMutationExpectation } from '../../shared/ssh-types'
 import type { LocalFileAccess } from '../../shared/local-file-access'
+import type { RemoteFilePreviewAddress } from '../../shared/remote-file-preview-address'
 import type {
   FileWriteDiskPrecondition,
   FileWriteResult
@@ -59,25 +60,43 @@ export type FilesystemApi = {
       access?: LocalFileAccess
       offset: number
       length: number
+      wakeWslDistro?: boolean
     }) => Promise<RuntimeFileReadChunkResult>
     readDir: (args: {
       dirPath: string
       connectionId?: string
       followSymlinks?: boolean
+      /** A user act (open or Retry); may start a stopped WSL distro. */
+      wakeWslDistro?: boolean
     }) => Promise<DirEntry[]>
     readFile: (args: {
       filePath: string
       connectionId?: string
       includeLocalLogMetadata?: boolean
       access?: LocalFileAccess
+      /** A user act (open, expand, Retry); may start a stopped WSL distro. */
+      wakeWslDistro?: boolean
+      /** A viewer that reads images and PDFs by URL; other readers keep their base64. */
+      rangePreview?: boolean
     }) => Promise<{
       content: string
       isBinary: boolean
       mediaUrl?: string
+      size?: number
       isImage?: boolean
       mimeType?: string
       fileIdentity?: string
     }>
+    /** A PDF preview's bytes, for the renderer that minted its orca-media URL only. */
+    readPreviewRange: (args: { url: string; offset: number; length: number }) => Promise<Uint8Array>
+    grantRuntimeFilePreview: (args: RemoteFilePreviewAddress) => Promise<{
+      content: string
+      isBinary: true
+      mimeType: string
+      mediaUrl: string
+      isImage?: true
+      size?: number
+    } | null>
     readLocalLogTail: (args: LocalLogTailReadArgs) => Promise<LocalLogTailReadResult>
     startLocalLogTail: (args: LocalLogTailWatchArgs) => Promise<void>
     stopLocalLogTail: (args: { subscriptionId: string }) => Promise<void>
@@ -154,12 +173,14 @@ export type FilesystemApi = {
         targetPath: string
         connectionId?: string
         recursive?: boolean
+        permanent?: boolean
       } & SshMutationExpectation
     ) => Promise<void>
     stat: (args: {
       filePath: string
       connectionId?: string
       access?: LocalFileAccess
+      wakeWslDistro?: boolean
     }) => Promise<{ size: number; isDirectory: boolean; mtime: number }>
     pathsExist?: (args: {
       filePaths: string[]
@@ -211,7 +232,7 @@ export type FilesystemApi = {
         connectionId?: string
       } & SshMutationExpectation
     ) => Promise<ResolveDroppedPathsResult>
-    /** Uploads client-local files into a paired server's store for one structured chat. */
+    /** Uploads client-local files to the paired server owning the chat. */
     uploadPathsToAgentSessionAttachments: (
       args: AgentSessionAttachmentUploadTarget & { paths: string[] }
     ) => Promise<AgentSessionAttachmentPathUploadResult>

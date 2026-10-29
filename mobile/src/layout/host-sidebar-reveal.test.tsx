@@ -20,7 +20,10 @@ vi.mock('react-native', () => ({
   PanResponder: { create: () => ({ panHandlers: {} }) },
   StyleSheet: { create: (styles: unknown) => styles, hairlineWidth: 1 }
 }))
-vi.mock('react-native-safe-area-context', () => ({ SafeAreaView: 'SafeAreaView' }))
+vi.mock('react-native-safe-area-context', () => ({
+  SafeAreaView: 'SafeAreaView',
+  useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 })
+}))
 vi.mock('lucide-react-native', () => ({
   ChevronLeft: 'ChevronLeft',
   Folder: 'Folder',
@@ -41,7 +44,6 @@ vi.mock('./responsive-layout', () => ({
   useResponsiveLayout: () => ({ isWideLayout: true, width: 1024 })
 }))
 vi.mock('../storage/preferences', () => ({
-  HOST_SIDEBAR_DEFAULT_WIDTH: 320,
   HOST_SIDEBAR_MIN_WIDTH: 240,
   HOST_SIDEBAR_MAX_WIDTH: 480,
   loadHostSidebarWidth: async () => 320,
@@ -58,7 +60,8 @@ vi.mock('../host-screen/HostScreen', () => ({
     })
 }))
 vi.mock('../navigation/host-stack', () => ({
-  HostStack: () => createElement(MobileSessionHeader, { controller: headerController() })
+  HostStack: () =>
+    createElement(MobileSessionHeader, { controller: headerController(), backInRail: false })
 }))
 vi.mock('../components/MobileAgentIcon', () => ({ MobileAgentIcon: () => null }))
 vi.mock('../platform/haptics', () => ({ triggerMediumImpact: () => {} }))
@@ -95,10 +98,14 @@ function headerController(): MobileSessionController {
 
 describe('host sidebar reveal in the session header', () => {
   let renderer: ReactTestRenderer | null = null
+  let activePair: ReturnType<typeof createFakeBridgePortPair> | null = null
 
   afterEach(() => {
     act(() => renderer?.unmount())
     renderer = null
+    activePair?.client.close()
+    activePair?.host.dispose()
+    activePair = null
   })
 
   function tree(): ReactTestRenderer {
@@ -113,6 +120,7 @@ describe('host sidebar reveal in the session header', () => {
       route: { pathname: '/h/host/session/workspace' },
       ownsHostArea
     })
+    activePair = pair
     await pair.flush()
     const client = pair.client
     await act(async () => {

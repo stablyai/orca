@@ -1,19 +1,8 @@
-/**
- * STA-4343: the same repo at the same path on two hosts is TWO workspaces.
- *
- * `worktreeId` is `repoId::path` with no host component, so a repo registered on
- * both the local host and an SSH host publishes the SAME id twice. Every id-keyed
- * projection therefore has to decide what a second row means. Collapsing them
- * leaves the user one row for two workspaces — and no way to confirm the other
- * one, which makes correct host-qualified routing unreachable.
- *
- * The dedup these indices were built for is a different thing: a race between
- * createWorktree (which appends) and fetchWorktrees (which replaces) can leave
- * two IDENTICAL entries in one repo array. That still collapses.
- */
+/** STA-4343: repoId::path collides across hosts, so retain both workspaces for host-qualified selection. Deduplicate only same-host create/fetch races. */
 import { describe, expect, it } from 'vitest'
 import type { Worktree } from '../../../shared/worktree/types'
 import type { AppState } from './types'
+import { getWorktreeOnHostFromState } from './selectors'
 import {
   getIndexedAllWorktrees,
   getIndexedWorktreeMap,
@@ -89,5 +78,23 @@ describe('id-keyed worktree projections keep distinct hosts distinct', () => {
     expect(getIndexedWorktreeMap(worktreesByRepo).get(SHARED_ID)).toBe(
       buildWorktreeByIdIndex(worktreesByRepo).get(SHARED_ID)
     )
+  })
+})
+
+describe('getWorktreeOnHostFromState refuses a lookup that still matches two copies', () => {
+  const colliding = { worktreesByRepo: byRepo(localRow, sshRow) }
+
+  it('answers undefined for an unqualified id two hosts share', () => {
+    expect(getWorktreeOnHostFromState(colliding, SHARED_ID, undefined)).toBeUndefined()
+  })
+
+  it('answers the named host copy', () => {
+    expect(getWorktreeOnHostFromState(colliding, SHARED_ID, 'ssh:build-box')).toBe(sshRow)
+  })
+
+  it('answers a lone copy without a host', () => {
+    expect(
+      getWorktreeOnHostFromState({ worktreesByRepo: byRepo(sshRow) }, SHARED_ID, undefined)
+    ).toBe(sshRow)
   })
 })

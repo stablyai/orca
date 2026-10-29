@@ -8,8 +8,7 @@ import {
 
 const NO_FACTS: readonly AgentSessionFailureFact[] = []
 
-/** What the loaded start-failure rows state, read only while `enabled`. Held while unchanged, so a
- *  streaming turn does not rebuild every row's delivery notice. */
+/** Read start failures only while enabled; retain unchanged facts so streaming cannot rebuild delivery notices. */
 export function useStructuredAgentSessionStartFailureFacts(
   items: readonly AgentJournalRenderItem[],
   enabled: boolean
@@ -25,7 +24,6 @@ export function useStructuredAgentSessionStartFailureFacts(
     previous.every((fact, index) => sameAgentSessionFailureFact(fact, facts[index]))
       ? previous
       : facts
-  // Written after commit, so render stays pure.
   useEffect(() => {
     previousRef.current = stable
   }, [stable])

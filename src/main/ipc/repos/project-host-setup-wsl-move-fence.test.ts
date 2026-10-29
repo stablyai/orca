@@ -3,7 +3,7 @@ import { BrowserWindow } from 'electron'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { closeTestStores, createStore, testState } from '../../persistence-test-harness'
+import { closeTestStores, createStore, testState } from '../../persistence/persistence-test-harness'
 import type { Store } from '../../persistence'
 import type { Repo } from '../../../shared/repo-types'
 import { wslMoveCutoverFixture as cutover } from '../../persistence/__fixtures__/wsl-mover/wsl-move-cutover-fixture'
@@ -183,7 +183,8 @@ describe('repo settings on another host under a WSL move', () => {
       forgetTerminalTopology: vi.fn(),
       invalidateResolvedWorktrees: vi.fn(),
       invalidateWorktreeScan: vi.fn(),
-      notifyReposChanged: vi.fn()
+      notifyReposChanged: vi.fn(),
+      notifyWorktreesChanged: vi.fn()
     })
 
     await expect(controller.setBaseRef('repo-1', 'origin/dev')).resolves.toBe(onHost)
