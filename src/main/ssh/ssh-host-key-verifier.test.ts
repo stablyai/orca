@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { parseKnownHosts } from './config/ssh-known-hosts'
 import {
   createHostKeyVerifier,
-  DEFAULT_SERVER_HOST_KEY_ALGORITHMS,
+  getDefaultServerHostKeyAlgorithms,
   hostKeyFingerprintOf,
   orderServerHostKeyAlgorithms,
   type HostKeyVerifierDeps
@@ -200,18 +200,18 @@ describe('the ssh2 default algorithm list', () => {
   }
 
   it('is read from ssh2, not guessed', () => {
-    expect(DEFAULT_SERVER_HOST_KEY_ALGORITHMS).toEqual(ssh2Constants.DEFAULT_SERVER_HOST_KEY)
+    expect(getDefaultServerHostKeyAlgorithms()).toEqual(ssh2Constants.DEFAULT_SERVER_HOST_KEY)
   })
 
   it('proposes nothing ssh2 would refuse', () => {
-    for (const algorithm of DEFAULT_SERVER_HOST_KEY_ALGORITHMS ?? []) {
+    for (const algorithm of getDefaultServerHostKeyAlgorithms() ?? []) {
       expect(ssh2Constants.SUPPORTED_SERVER_HOST_KEY).toContain(algorithm)
     }
   })
 
   // Keep all RSA signature names so one known ssh-rsa key can be promoted under every negotiated algorithm.
   it('contains the RSA signature algorithms the ordering maps onto', () => {
-    expect(DEFAULT_SERVER_HOST_KEY_ALGORITHMS ?? []).toEqual(
+    expect(getDefaultServerHostKeyAlgorithms() ?? []).toEqual(
       expect.arrayContaining(['ssh-rsa', 'rsa-sha2-256', 'rsa-sha2-512'])
     )
   })

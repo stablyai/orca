@@ -78,6 +78,14 @@
         "anti-slop/no-module-mocking": "off"
       }
     },
+    // Test-only setup: product code requires ssh2 lazily, so route that load through import
+    // where each suite's vi.mock('ssh2') applies instead of rewriting 21 suites' mocks.
+    {
+      "files": ["**/vitest-ssh2-lazy-load-setup.ts"],
+      "rules": {
+        "anti-slop/no-module-mocking": "off"
+      }
+    },
     // Mobile's test-only setup supplies SVG host primitives without loading native Flow code.
     // The shared fixture preserves native module boundaries in Node-based render tests.
     {
