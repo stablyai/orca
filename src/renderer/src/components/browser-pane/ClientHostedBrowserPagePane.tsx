@@ -20,23 +20,20 @@ import { useClientHostedBrowserIntroTour } from './use-client-hosted-browser-int
 import { ClientHostedBrowserUnavailableNotice } from './client-hosted-browser-unavailable-notice'
 import { watchBrowserClientPageGuestLoss } from './host-guest/browser-client-page-guest-loss'
 import { useRestoredClientHostedRecoveryWindow } from './restored-client-hosted-recovery-window'
-import { useClientHostedBrowserMarkup } from './annotate/use-client-hosted-browser-markup'
+import { useClientHostedBrowserGuestTools } from './annotate/use-client-hosted-browser-guest-tools'
 import BrowserFind from './assemble-chrome/BrowserFind'
-import { BrowserNavigationControlRow } from './assemble-chrome/browser-navigation-control-row'
-import BrowserAddressBar from './assemble-chrome/BrowserAddressBar'
+import { ClientHostedBrowserPageToolbar } from './assemble-chrome/client-hosted-browser-page-toolbar'
 import { BrowserPageContextMenu } from './assemble-chrome/browser-page-context-menu'
 import { useBrowserPageChromeFocus } from './assemble-chrome/use-browser-page-chrome-focus'
 import { useBrowserAddressBarEditSession } from './assemble-chrome/use-browser-address-bar-edit-session'
 import { useBrowserPageFindShortcuts } from './assemble-chrome/use-browser-page-find-shortcuts'
 import { useWebviewGuestFocus } from './assemble-chrome/browser-page-guest-focus'
-import { RemoteRuntimeEgressIndicator } from './assemble-chrome/browser-egress-indicator'
 import { getBrowserPageZoomIndicatorState } from './host-guest/browser-page-zoom'
-import { useBrowserPageWebviewShortcuts } from './host-guest/use-browser-page-webview-shortcuts'
+import { useBrowserPageKeyboardShortcuts } from './host-guest/use-browser-page-keyboard-shortcuts'
 import { useBrowserPageZoomFeedback } from './host-guest/use-browser-page-zoom-feedback'
 import { isPageDocumentNavigationStart } from './host-guest/browser-page-webview-navigation-handlers'
 import { ClientHostedBrowserLoadFailure } from './client-hosted-browser-load-failure'
 import { useClientHostedPageUrlSubmission } from './navigate/use-client-hosted-page-url-submission'
-import { convertBrowserPageToWorkspaceDoc } from '@/lib/file-preview'
 import { isBlankBrowserUrl } from '@/lib/browser-palette-search'
 import { BrowserNewTabPage } from './new-tab/BrowserNewTabPage'
 import { useBrowserPageReloadActions } from './navigate/use-browser-page-reload-actions'
@@ -81,6 +78,20 @@ export function ClientHostedBrowserPagePane({
     environmentId: runtimeEnvironmentId,
     placementPending: placement === null
   })
+  const showFailureOverlay = !attachmentError && Boolean(browserTab.loadError)
+  const tools = useClientHostedBrowserGuestTools({
+    browserPageId: browserTab.id,
+    worktreeId,
+    webviewRef,
+    viewportRef,
+    runtimeEnvironmentId,
+    placement,
+    isActive,
+    unavailable: Boolean(attachmentError) || restoredPageUnrecovered,
+    showFailureOverlay,
+    documentUrl: browserTab.url
+  })
+  const bindAnnotationDocument = useEffectEvent(tools.bindAnnotationDocument)
   // Main owns this guest; guest loss requires reopening on the server rather than local recreation.
   const retryGuestRecoveryRef = useRef<() => void>(() => {})
   useLayoutEffect(() => {
@@ -120,12 +131,13 @@ export function ClientHostedBrowserPagePane({
   // Only consume the one-time tour after placement and attachment make its controls usable.
   useClientHostedBrowserIntroTour(isActive && !attachmentError && placement !== null)
   useBrowserPageFindShortcuts({ ...shortcutOwner, setFindOpen })
-  useBrowserPageWebviewShortcuts({
+  useBrowserPageKeyboardShortcuts({
     ...shortcutOwner,
     isActiveRef,
     webviewRef,
     showBrowserZoomFeedback: zoom.showBrowserZoomFeedback,
-    reloadWebviewOrRecoverGuest: reload.reloadWebviewOrRecoverGuest
+    reloadWebviewOrRecoverGuest: reload.reloadWebviewOrRecoverGuest,
+    ...tools.shortcutBindings
   })
 
   const navigateToUrl = useClientHostedPageUrlSubmission({
@@ -256,7 +268,9 @@ export function ClientHostedBrowserPagePane({
       }
     )
     const unbind = bindBrowserClientPageGuestEvents(webview, onStart, syncNavigation, onFailLoad)
+    const unbindAnnotationDocument = bindAnnotationDocument(webview)
     const cleanupGuest = (): void => {
+      unbindAnnotationDocument()
       unbind()
       guestLoss.dispose()
       publisher.dispose()
@@ -280,19 +294,8 @@ export function ClientHostedBrowserPagePane({
     setAddressBarValueFromPage
   ])
 
-  const showFailureOverlay = !attachmentError && Boolean(browserTab.loadError)
   const browserZoomIndicatorState = getBrowserPageZoomIndicatorState({
     feedbackVisible: zoom.browserZoomFeedbackVisible
-  })
-
-  const markup = useClientHostedBrowserMarkup({
-    webviewRef,
-    browserPageId: browserTab.id,
-    runtimeEnvironmentId,
-    placement,
-    isActive,
-    unavailable: Boolean(attachmentError) || restoredPageUnrecovered,
-    showFailureOverlay
   })
 
   // Unrecovered pages have no pending load that could ever clear a loading indicator.
@@ -313,42 +316,23 @@ export function ClientHostedBrowserPagePane({
         onReload={() => reload.reloadWebviewOrRecoverGuest(false)}
       />
       <div data-contextual-tour-target="client-hosted-browser-controls">
-        <BrowserNavigationControlRow
-          controls={{
-            canGoBack: browserTab.canGoBack,
-            canGoForward: browserTab.canGoForward,
-            goBack: () => webviewRef.current?.goBack(),
-            goForward: () => webviewRef.current?.goForward(),
-            reload: () => reload.runReloadTrigger('button'),
-            navigate: navigateToUrl
-          }}
-          addressSlot={
-            <BrowserAddressBar
-              pageId={browserTab.id}
-              value={addressBarValue}
-              onChange={setAddressBarValue}
-              onSubmit={() => navigateToUrl(addressBarValue)}
-              onNavigate={navigateToUrl}
-              onOpenWorkspaceDoc={(docLocation) =>
-                convertBrowserPageToWorkspaceDoc(browserTab.id, docLocation)
-              }
-              inputRef={addressBarInputRef}
-              editSession={addressBarEditSession}
-              leadingIcon={
-                <RemoteRuntimeEgressIndicator
-                  runtimeEnvironmentId={runtimeEnvironmentId}
-                  presentation="client-hosted"
-                />
-              }
-              loading={loading}
-              loadFailed={browserTab.loadError !== null}
-            />
-          }
-          reloadLabel={reload.reloadButtonLabel}
-          reloadShowsStop={reload.reloadButtonLabelKind === 'stop'}
-        >
-          {markup.drawButton}
-        </BrowserNavigationControlRow>
+        <ClientHostedBrowserPageToolbar
+          browserPageId={browserTab.id}
+          runtimeEnvironmentId={runtimeEnvironmentId}
+          canGoBack={browserTab.canGoBack}
+          canGoForward={browserTab.canGoForward}
+          loading={loading}
+          loadFailed={browserTab.loadError !== null}
+          webviewRef={webviewRef}
+          reload={reload}
+          navigate={navigateToUrl}
+          addressBarValue={addressBarValue}
+          onAddressBarChange={setAddressBarValue}
+          addressBarInputRef={addressBarInputRef}
+          addressBarEditSession={addressBarEditSession}
+          elementTools={tools.elementTools}
+          markup={tools.markupTool}
+        />
       </div>
       <div className={BROWSER_DEVTOOLS_DOCK_SPLIT_CLASS_NAME}>
         <div
@@ -356,7 +340,7 @@ export function ClientHostedBrowserPagePane({
           className="relative min-h-0 min-w-0 flex-1 overflow-hidden bg-background"
           style={devToolsPageFlex === null ? undefined : { flex: devToolsPageFlex }}
         >
-          {markup.overlay}
+          {tools.overlay}
           <BrowserPageZoomIndicator
             state={browserZoomIndicatorState}
             percent={zoom.browserZoomPercent}
