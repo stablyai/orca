@@ -20,8 +20,8 @@ import type { BridgeSafeAreaInsets } from './bridge/bridge-safe-area-insets'
 import type { BridgeFoldDivision } from './bridge/bridge-fold-division'
 import type { BridgeHapticsKind } from './bridge/bridge-haptics-notify'
 import { createBridgeHost, type BridgeHost } from './bridge-host'
-import { subscribeMirroredKey } from '../storage/mirrored-storage-keys'
-import { MARKDOWN_TEXT_SCALE_KEY } from '../storage/preferences'
+import { BridgeViewGoneError } from './bridge-host-errors'
+import { subscribeMarkdownTextScale } from './bridge-host-storage'
 import type { BridgeSessionBack } from './bridge-host-back'
 import type { BridgeNavigateBackOutcome } from './bridge-host-contract'
 import type { BridgeNativeVerb } from './bridge/bridge-native-verbs'
@@ -29,13 +29,6 @@ import type { BridgeErrorCapture } from './bridge/bridge-error-capture'
 import type { MobileWebShellSessionState } from './mobile-web-shell-session-contract'
 import type { PageHostSnapshot } from './use-page-host-snapshot'
 import type { PageStorageForInit } from './page-storage-keys'
-
-class BridgeViewGoneError extends Error {
-  constructor() {
-    super('the shell view for this session is not mounted')
-    this.name = 'BridgeViewGoneError'
-  }
-}
 
 // Stamp both refs with their session: React attaches replacement refs before retired cleanup, which must not post teardown frames into the new page.
 type MountedView = { sessionId: string; handle: OrcaMobileWebShellViewHandle }
@@ -224,15 +217,10 @@ export function useMobileWebShellBridge(args: MobileWebShellBridgeArgs): MobileW
     }
   }, [buildId, client, sessionId, snapshot, args.pageGeometry])
 
-  useLayoutEffect(() => {
-    const mounted = hostRef.current
-    if (mounted === null || mounted.sessionId !== sessionId) {
-      return
-    }
-    return subscribeMirroredKey(MARKDOWN_TEXT_SCALE_KEY, (value) => {
-      mounted.host.publishStorageUpdate(MARKDOWN_TEXT_SCALE_KEY, value)
-    })
-  }, [buildId, client, sessionId, snapshot])
+  useLayoutEffect(
+    () => subscribeMarkdownTextScale(hostRef.current, sessionId),
+    [buildId, client, sessionId, snapshot]
+  )
 
   // A rebuilt host already starts from the latest scheme; this re-sends init when it changes under a live page.
   const colorScheme = args.colorScheme

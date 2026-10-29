@@ -18,6 +18,7 @@ import { createBridgeHostFrames } from './bridge-host-frames'
 import { createBridgeHostBack } from './bridge-host-back'
 import { createBridgeNotifyForwarder } from './bridge-host-notify'
 import { createBridgeHostRoute } from './bridge-host-route'
+import { trackPageStorageWrites } from './bridge-host-storage'
 import { pageStorageForReader } from './page-storage-keys'
 import { BRIDGE_TERMINAL_KEY_FRAME } from './bridge/bridge-terminal-key'
 import { readBridgeConnectionSnapshot } from './bridge/bridge-connection-snapshot'
@@ -192,8 +193,9 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
     railOwner = claimed ? inputOwner : undefined
     options.onTerminalKeyRailClaim?.(claimed, inputOwner, toolbar)
   }
+  const storageWrites = trackPageStorageWrites(options)
   const forwardNotify = createBridgeNotifyForwarder({
-    options,
+    options: storageWrites.options,
     granted,
     initSent: () => initSent,
     route: () => routes.current(),
@@ -306,7 +308,7 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
     },
     publishRoute: (next) => routes.publish(next, serving && initSent),
     publishStorageUpdate: (key, value) => {
-      if (deliverable() && pageStorageKeys?.includes(key)) {
+      if (!storageWrites.isApplyingPageWrite() && deliverable() && pageStorageKeys?.includes(key)) {
         send({ v: BRIDGE_PROTOCOL_VERSION, type: 'storage', key, value })
       }
     },

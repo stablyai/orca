@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
 import { harness } from './bridge-host-test-harness'
 import { clientFrame } from './bridge-host-test-fakes'
+import { createPageReadyFrame } from './bridge/bridge-client-init-handshake'
 
 const SPLIT_KEY = 'orca:terminalSplitLayout'
 const STORAGE = { [SPLIT_KEY]: 'stacked', 'orca:pins:host-a': '["wt-1"]' }

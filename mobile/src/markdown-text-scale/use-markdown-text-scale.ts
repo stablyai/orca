@@ -10,11 +10,12 @@ import { MARKDOWN_TEXT_SCALES, snapMarkdownTextScale } from './markdown-text-sca
 // One module store so every Markdown surface (file preview, session tab) shows the same size.
 let current = 1
 let loadStarted = false
-let changedByUser = false
+// Set by a pick or a mirrored value; either is newer than what the pending load read.
+let newerThanLoad = false
 const listeners = new Set<() => void>()
 
 function setCurrent(scale: number) {
-  changedByUser = true
+  newerThanLoad = true
   if (scale === current) {
     return
   }
@@ -29,14 +30,17 @@ function ensureLoaded() {
   loadStarted = true
   subscribeMirroredKey(MARKDOWN_TEXT_SCALE_KEY, (value) => {
     const parsed = Number(value)
-    if (MARKDOWN_TEXT_SCALES.some((scale) => scale === parsed) && parsed !== current) {
+    if (!MARKDOWN_TEXT_SCALES.some((scale) => scale === parsed)) {
+      return
+    }
+    newerThanLoad = true
+    if (parsed !== current) {
       current = parsed
       listeners.forEach((listener) => listener())
     }
   })
   void loadMarkdownTextScale().then((saved) => {
-    // A pick made while the load was in flight is newer than what the load read.
-    if (!changedByUser && saved !== current) {
+    if (!newerThanLoad && saved !== current) {
       current = saved
       listeners.forEach((listener) => listener())
     }

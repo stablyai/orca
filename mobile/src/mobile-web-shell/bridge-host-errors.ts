@@ -80,3 +80,10 @@ export function readShellRefusalCode(error: unknown): BridgeNativeRefusalCode | 
   const read = shellRefusalSchema.safeParse(error)
   return read.success ? read.data.code : null
 }
+
+export class BridgeViewGoneError extends Error {
+  constructor() {
+    super('the shell view for this session is not mounted')
+    this.name = 'BridgeViewGoneError'
+  }
+}
