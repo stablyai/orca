@@ -197,18 +197,24 @@ describe('visible hosted review refresh targets', () => {
     )
   })
 
-  it.each(['github', 'gitlab'] as const)(
-    'selects a paired SSH workspace and refreshes %s through its runtime owner',
-    async (provider) => {
+  it.each(
+    (['github', 'gitlab'] as const).flatMap((provider) => [
+      { provider, stamped: true },
+      { provider, stamped: false }
+    ])
+  )(
+    'selects a paired SSH workspace and refreshes $provider through its runtime owner (owner stamped: $stamped)',
+    async ({ provider, stamped }) => {
       const owner: Repo = {
         ...repo,
         connectionId: 'builder',
         executionHostId: 'runtime:owner-server'
       }
+      // Older paired listings named only the physical SSH host.
       const paired = {
         ...worktree,
         hostId: 'ssh:builder' as const,
-        runtimeOwnerEnvironmentId: 'owner-server',
+        ...(stamped ? { runtimeOwnerEnvironmentId: 'owner-server' } : {}),
         ...(provider === 'github' ? { linkedPR: 12 } : { linkedGitLabMR: 8 })
       }
       const store = setup(owner)
@@ -260,6 +266,43 @@ describe('visible hosted review refresh targets', () => {
       expect(targets(store)).toEqual([])
     }
   )
+
+  it('rejects an older paired SSH workspace that rival servers both proxy', () => {
+    const first: Repo = { ...repo, connectionId: 'builder', executionHostId: 'runtime:first' }
+    const store = setup(first)
+    store.setState({
+      repos: [first, { ...first, executionHostId: 'runtime:second' }],
+      worktreesByRepo: { [repo.id]: [{ ...worktree, hostId: 'ssh:builder', linkedPR: 12 }] },
+      activeWorktreeId: worktree.id,
+      activeWorkspaceExecutionHostId: 'ssh:builder',
+      sshConnectionStates: new Map([
+        ['builder', { targetId: 'builder', status: 'connected', error: null, reconnectAttempt: 0 }]
+      ])
+    })
+    expect(targets(store)).toEqual([])
+    store.getState().refreshGitHubForWorktree(worktree.id, 'runtime:first')
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+    expect(mockApi.gh.enqueuePRRefresh).not.toHaveBeenCalled()
+  })
+
+  it('keeps an older SSH workspace on its direct repo when a server also proxies it', async () => {
+    const direct: Repo = { ...repo, connectionId: 'builder' }
+    const store = setup(direct)
+    store.setState({
+      repos: [{ ...direct, executionHostId: 'runtime:owner-server' }, direct],
+      worktreesByRepo: { [repo.id]: [{ ...worktree, hostId: 'ssh:builder' }] },
+      sshConnectionStates: new Map([
+        ['builder', { targetId: 'builder', status: 'connected', error: null, reconnectAttempt: 0 }]
+      ])
+    })
+    const rows = targets(store)
+    expect(rows.map((row) => row.key)).toEqual([`ssh:builder::${repo.id}::${worktree.branch}`])
+    await rows[0].refresh()
+    expect(mockApi.hostedReview.forBranch).toHaveBeenCalledWith(
+      expect.objectContaining({ repoOwnerExecutionHostId: 'ssh:builder' })
+    )
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+  })
 
   it('excludes folders, bare, archived, detached, missing and disconnected SSH workspaces', () => {
     const store = setup()

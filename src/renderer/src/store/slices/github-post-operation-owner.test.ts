@@ -71,19 +71,28 @@ describe('post-operation review refresh ownership', () => {
   )(
     '$operation refreshes its owner after switching (same-ID twin: $selectTwin)',
     async ({ operation, selectTwin }) => {
-      for (const host of ['local', 'ssh', 'runtime'] as const) {
+      // A paired SSH row from an older listing names only its physical host, not its server owner.
+      for (const host of ['local', 'ssh', 'runtime', 'paired-ssh'] as const) {
         const store = createTestStore()
+        const paired = host === 'paired-ssh'
         const owner: Repo = {
           ...repo,
-          ...(host === 'ssh' ? { connectionId: 'builder' } : {}),
-          ...(host === 'runtime' ? { executionHostId: 'runtime:server' } : {})
+          ...(host === 'ssh' || paired ? { connectionId: 'builder' } : {}),
+          ...(host === 'runtime' || paired ? { executionHostId: 'runtime:server' } : {})
         }
         const hostId = getRepoExecutionHostId(owner)
         const target: RuntimeClientTarget =
-          host === 'runtime' ? { kind: 'environment', environmentId: 'server' } : { kind: 'local' }
+          host === 'runtime' || paired
+            ? { kind: 'environment', environmentId: 'server' }
+            : { kind: 'local' }
         const twinHost = host === 'local' ? 'runtime:other' : 'local'
         const twin: Repo = { ...repo, executionHostId: twinHost }
-        const worktree = makePRRefreshWorktree({ id: 'same-id', repoId: repo.id, branch, hostId })
+        const worktree = makePRRefreshWorktree({
+          id: 'same-id',
+          repoId: repo.id,
+          branch,
+          hostId: paired ? 'ssh:builder' : hostId
+        })
         const ownerKey = `${host === 'local' ? '' : `${hostId}::`}${repo.id}::${branch}`
         const twinKey = `${twinHost === 'local' ? '' : `${twinHost}::`}${repo.id}::${branch}`
         const oldEntry = { data: makePR({ number: 11 }), fetchedAt: Date.now() }
@@ -96,7 +105,7 @@ describe('post-operation review refresh ownership', () => {
           repos: [twin, owner],
           worktreesByRepo: { [repo.id]: [{ ...worktree, hostId: twinHost }, worktree] },
           activeWorktreeId: worktree.id,
-          activeWorkspaceExecutionHostId: hostId,
+          activeWorkspaceExecutionHostId: worktree.hostId,
           sshConnectionStates: new Map([
             [
               'builder',

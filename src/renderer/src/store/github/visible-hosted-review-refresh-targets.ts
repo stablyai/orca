@@ -68,9 +68,10 @@ export function* getVisibleHostedReviewWorkspaces(
       ) {
         continue
       }
+      // Why: an older paired SSH row stamps only ssh:<target>; its recovered server owner still selects it.
       const hostIds =
         worktree.hostId || worktree.runtimeOwnerEnvironmentId
-          ? worktreeOwnerHostIds(worktree)
+          ? [...new Set([...worktreeOwnerHostIds(worktree), hostId])]
           : [hostId]
       const activeHost = state.activeWorkspaceExecutionHostId
       const selected =

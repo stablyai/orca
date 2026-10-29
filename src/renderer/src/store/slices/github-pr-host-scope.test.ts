@@ -395,6 +395,35 @@ describe('PR panel with local and remote copies of one project', () => {
     }
   )
 
+  it('keeps a manual linked-PR result for a paired SSH row that predates owner stamps', async () => {
+    const pairedRepo: Repo = {
+      ...localRepo,
+      path: '/remote/project',
+      connectionId: 'builder',
+      executionHostId: 'runtime:server'
+    }
+    const { store, worktree } = setup(pairedRepo)
+    store.setState({
+      worktreesByRepo: { project: [{ ...worktree, hostId: 'ssh:builder' }] },
+      activeWorkspaceExecutionHostId: 'ssh:builder'
+    })
+
+    const pr = await store.getState().fetchPRForBranch(pairedRepo.path, branch, {
+      force: true,
+      repoId: pairedRepo.id,
+      repoOwnerExecutionHostId: getRepoExecutionHostId(pairedRepo),
+      worktreeId: worktree.id,
+      linkedPRNumber: remotePR.number,
+      reason: 'manual'
+    })
+
+    expect(pr?.number).toBe(remotePR.number)
+    expect(store.getState().prCache[`runtime:server::project::${branch}`]?.data?.number).toBe(
+      remotePR.number
+    )
+    expect(store.getState().prCache[`project::${branch}`]?.data).toEqual(localPR)
+  })
+
   it('refuses a missing owner instead of loading the local copy', async () => {
     const { store } = setup({ ...localRepo, executionHostId: 'runtime:server' })
     await expect(

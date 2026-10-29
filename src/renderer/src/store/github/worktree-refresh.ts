@@ -6,9 +6,12 @@ import {
   getRepoExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
   normalizeExecutionHostId,
-  toRuntimeExecutionHostId
+  parseExecutionHostId,
+  toRuntimeExecutionHostId,
+  type ExecutionHostId
 } from '../../../../shared/execution-host'
 import { isMacAppDataPath } from '@/lib/passive-macos-app-data-access'
+import { resolveExactWorktreeRoute } from '@/lib/worktree-owner-route'
 import {
   findIndexedRepoOwner,
   findIndexedRepoOwnerForHost,
@@ -42,7 +45,10 @@ export function findWorktreeById(
   }
   const matches = entry.owners.filter((worktree) => {
     if (worktree.hostId || worktree.runtimeOwnerEnvironmentId) {
-      return worktreeOwnerHostIds(worktree).includes(hostId)
+      return (
+        worktreeOwnerHostIds(worktree).includes(hostId) ||
+        legacyPairedRepoOwnerHostId(state, worktree) === hostId
+      )
     }
     const repoHosts = lookupIndex.repoHostIdsByRepoId.get(worktree.repoId)
     // Legacy rows inherit a sole repo owner, or remain local when that repo has host twins.
@@ -51,6 +57,24 @@ export function findWorktreeById(
       : hostId === LOCAL_EXECUTION_HOST_ID && (!repoHosts || repoHosts.has(hostId))
   })
   return matches.length === 1 ? matches[0] : null
+}
+
+/**
+ * Older paired listings stamped only the physical `ssh:` host. Recover the one server whose repo
+ * proxies that target, as operation routing does; a direct repo keeps the row, rival proxies stay unowned.
+ */
+function legacyPairedRepoOwnerHostId(state: AppState, worktree: Worktree): ExecutionHostId | null {
+  const host = parseExecutionHostId(worktree.hostId)
+  if (
+    worktree.runtimeOwnerEnvironmentId?.trim() ||
+    host?.kind !== 'ssh' ||
+    findIndexedRepoOwnerForHost(state.repos, worktree.repoId, host.id)
+  ) {
+    return null
+  }
+  const owner = resolveExactWorktreeRoute(state, worktree)
+  const environmentId = owner.kind === 'resolved' ? owner.route.runtimeEnvironmentId : null
+  return environmentId ? toRuntimeExecutionHostId(environmentId) : null
 }
 
 type WorktreeLookupEntry = {
@@ -158,7 +182,8 @@ export function buildPRRefreshCandidate(
   const unqualifiedOwner = findIndexedRepoOwner(state.repos, worktree.repoId)
   const hostId = worktree.runtimeOwnerEnvironmentId
     ? toRuntimeExecutionHostId(worktree.runtimeOwnerEnvironmentId)
-    : (normalizeExecutionHostId(worktree.hostId) ??
+    : (legacyPairedRepoOwnerHostId(state, worktree) ??
+      normalizeExecutionHostId(worktree.hostId) ??
       (unqualifiedOwner ? getRepoExecutionHostId(unqualifiedOwner) : LOCAL_EXECUTION_HOST_ID))
   const repo =
     repoOverride ??
