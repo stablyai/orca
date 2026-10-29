@@ -60,7 +60,8 @@ export {
 } from './terminal-advanced-platform-search'
 export {
   getManageSessionsSearchEntries,
-  getTerminalWindowSearchEntries
+  getTerminalWindowSearchEntries,
+  getTerminalShellCommandWrapperSearchEntries
 } from './terminal-window-setup-search'
 
 type TerminalAppearanceSearchOptions = {

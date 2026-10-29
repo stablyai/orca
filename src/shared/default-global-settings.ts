@@ -226,6 +226,8 @@ export function buildDefaultSettings(args: {
     zcodePlanSite: 'zai',
     geminiCliOAuthEnabled: false,
     agentCmdOverrides: {},
+    // Why: empty keeps launches direct; users opt into devenv/nix wrappers via $CMD.
+    shellCommandWrapper: '',
     // Arguments hold only the user's own text; the permission flag comes from the choice below.
     agentDefaultArgs: {},
     agentDefaultEnv: {},

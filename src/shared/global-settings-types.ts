@@ -370,6 +370,12 @@ export type GlobalSettings = GlobalSettingsBase & {
   geminiCliOAuthEnabled: boolean
   /** Per-agent CLI command overrides. A missing key means use the catalog default binary name. */
   agentCmdOverrides: Partial<Record<TuiAgent, string>>
+  /**
+   * Opt-in shell wrapper template for agent/terminal launch commands.
+   * Use `$CMD` (or `$COMMAND` / `{command}`) where the launch command should
+   * appear, e.g. `devenv shell -- $CMD`. Empty/undefined disables wrapping.
+   */
+  shellCommandWrapper?: string
   /** Off keeps each Codex home's history to itself: Orca links no sessions between accounts or
    *  into ~/.codex, and removes nothing already linked (#24511). Absent means on (#10770). */
   codexShareHistoryAcrossAccounts?: boolean
