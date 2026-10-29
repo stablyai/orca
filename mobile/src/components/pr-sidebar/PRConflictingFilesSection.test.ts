@@ -25,6 +25,8 @@ vi.mock('lucide-react-native', () => ({
 
 vi.mock('../../platform/clipboard', () => ({ useClipboardWriter: () => clipboard }))
 
+vi.mock('../AgentLaunchButton', () => ({ AgentLaunchButton: () => null }))
+
 vi.mock('./PRSection', () => ({
   PRSection: ({ children }: { children: unknown }) => children
 }))

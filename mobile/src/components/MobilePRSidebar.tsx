@@ -47,8 +47,6 @@ type Props = {
   bottomInset?: number
   // Hub chrome already shows open-on-web; hide the in-body icon there.
   showOpenOnWeb?: boolean
-  /** Named when an AI button's agent starts; the branch stands in when absent. */
-  workspaceLabel: string | null
 }
 
 // Mutation hooks run unconditionally here and gate internally until a PR is ready.
@@ -63,11 +61,9 @@ export function MobilePRSidebar({
   gitStatus,
   headSha,
   bottomInset = 0,
-  showOpenOnWeb = true,
-  workspaceLabel
+  showOpenOnWeb = true
 }: Props) {
   useMobileColorScheme()
-  const launchWorkspaceLabel = workspaceLabel || gitBranch
   const branch = prSidebarRenderBranch(state)
   const prNumber = state.kind === 'ready' ? state.data.pr.number : 0
   // Keep stable PRInfo.prRepo identity; cloning owner/repo thrashes mutation/comment/title hooks.
@@ -102,7 +98,6 @@ export function MobilePRSidebar({
     client,
     connState,
     worktreeId,
-    workspaceLabel: launchWorkspaceLabel,
     hostCapabilities,
     hostStatusPending: statusPending,
     hostStatusReadable: statusReadable
@@ -137,7 +132,6 @@ export function MobilePRSidebar({
         commentActions={commentActions}
         titleAction={titleAction}
         triage={triage}
-        workspaceLabel={launchWorkspaceLabel}
         botAuthorOverrides={botAuthorOverrides}
         showOpenOnWeb={showOpenOnWeb}
       />
@@ -159,7 +153,6 @@ function PrSidebarContent({
   commentActions,
   titleAction,
   triage,
-  workspaceLabel,
   showOpenOnWeb,
   botAuthorOverrides
 }: {
@@ -176,7 +169,6 @@ function PrSidebarContent({
   commentActions: MobilePrCommentActions
   titleAction: MobilePrTitleAction
   triage: MobilePrAiTriage
-  workspaceLabel: string | null
   showOpenOnWeb: boolean
   botAuthorOverrides: ReadonlySet<string>
 }) {
@@ -237,7 +229,6 @@ function PrSidebarContent({
         gitBranch={gitBranch}
         gitStatus={gitStatus}
         connState={connState}
-        workspaceLabel={workspaceLabel}
         onCreated={refetch}
       />
     )

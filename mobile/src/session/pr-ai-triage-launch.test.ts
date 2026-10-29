@@ -1,3 +1,4 @@
+import type { AgentLaunchResult } from '../../../src/shared/agent-launch-intent'
 import { describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
 import type { RpcResponse } from '../transport/types'
@@ -12,7 +13,6 @@ import { AgentLaunchReplay } from '../../../src/shared/rpc-contract/agent-launch
 import { AGENT_LAUNCH_UPDATE_REQUIRED_MESSAGE } from './mobile-existing-agent-launch'
 import {
   AGENT_PROMPT_NOT_SENT_MESSAGE,
-  agentStartedMessage,
   launchAgentWithPrompt,
   promptedLaunchNotice
 } from './pr-ai-triage-launch'
@@ -112,7 +112,10 @@ describe('launchAgentWithPrompt', () => {
       settings: { defaultTuiAgent: 'codex' },
       launch: launchedWith({ delivery: 'submit', outcome: 'handed-to-terminal' })
     })
-    await expect(run(client)).resolves.toEqual({ kind: 'sent' })
+    await expect(run(client)).resolves.toMatchObject({
+      kind: 'sent',
+      launch: { worktreeId: 'repo-1::/w', outcome: { kind: 'terminal', handle: 'term-1' } }
+    })
     expect(launchParams(sendRequest)).toMatchObject({
       agent: 'codex',
       target: { kind: 'existing', worktree: 'id:repo-1::/w' },
@@ -171,7 +174,7 @@ describe('launchAgentWithPrompt', () => {
       settings: { defaultTuiAgent: 'codex', disabledTuiAgents: [] },
       launch: launchedWith({ delivery: 'submit', outcome: 'handed-to-terminal' })
     })
-    await expect(run(client)).resolves.toEqual({ kind: 'sent' })
+    await expect(run(client)).resolves.toMatchObject({ kind: 'sent' })
     expect(launchParams(sendRequest)).toMatchObject({
       agent: 'codex',
       prompt: { text: 'Fix the failing checks' }
@@ -220,7 +223,7 @@ describe('launchAgentWithPrompt', () => {
       launch: launchedWith({ delivery: 'submit', outcome: 'handed-to-terminal' })
     })
     const capabilities = [...LAUNCH_CAPABILITIES, 'agent.launch.chat-options.v1']
-    await expect(run(client, [...capabilities, 'agent.launch.surface.v1'])).resolves.toEqual({
+    await expect(run(client, [...capabilities, 'agent.launch.surface.v1'])).resolves.toMatchObject({
       kind: 'sent'
     })
     const params = AgentLaunchReplay.parse(launchParams(sendRequest))
@@ -243,7 +246,7 @@ describe('launchAgentWithPrompt', () => {
     expect(startup?.launchCommand).not.toContain('gpt-5.3-codex')
 
     sendRequest.mockClear()
-    await expect(run(client, capabilities)).resolves.toEqual({ kind: 'sent' })
+    await expect(run(client, capabilities)).resolves.toMatchObject({ kind: 'sent' })
     const olderHostParams = AgentLaunchReplay.parse(launchParams(sendRequest))
     expect(olderHostParams).not.toHaveProperty('surface')
     expect(olderHostParams).not.toHaveProperty('agentArgs')
@@ -287,7 +290,7 @@ describe('launchAgentWithPrompt', () => {
     const { client } = hostClient({
       launch: launchedWith({ delivery: 'submit', outcome: 'not-delivered' })
     })
-    await expect(run(client)).resolves.toEqual({
+    await expect(run(client)).resolves.toMatchObject({
       kind: 'prompt-not-sent',
       prompt: 'Fix the failing checks'
     })
@@ -300,9 +303,9 @@ describe('launchAgentWithPrompt', () => {
         '  launch arguments were ignored  '
       )
     })
-    await expect(run(client)).resolves.toEqual({
+    await expect(run(client)).resolves.toMatchObject({
       kind: 'sent',
-      warning: 'launch arguments were ignored'
+      launch: { warning: '  launch arguments were ignored  ' }
     })
   })
 
@@ -323,65 +326,39 @@ describe('launchAgentWithPrompt', () => {
 })
 
 describe('promptedLaunchNotice', () => {
-  it('keeps the prompt only when the agent started without it', () => {
-    expect(promptedLaunchNotice({ kind: 'prompt-not-sent', prompt: 'p' })).toEqual({
-      succeeded: false,
-      success: null,
+  const launch: AgentLaunchResult = {
+    outcome: { kind: 'structured', sessionId: 'claude_s1', handle: 'h', tabId: 'chat-1' },
+    worktreeId: 'wt-1',
+    receipt: { mode: 'structured', preferred: 'structured', reason: 'user_default', detail: 'd' },
+    warning: 'The host ignored terminal-only arguments.'
+  }
+
+  it('retains the launched surface and prompt for recovery when delivery fails', () => {
+    expect(promptedLaunchNotice({ kind: 'prompt-not-sent', prompt: 'p', launch })).toEqual({
+      launch,
       error: AGENT_PROMPT_NOT_SENT_MESSAGE,
-      warning: null,
       undeliveredPrompt: 'p'
     })
-    expect(promptedLaunchNotice({ kind: 'sent' })).toEqual({
-      succeeded: true,
-      success: 'Agent started',
+  })
+
+  it('retains host warnings without treating them as launch errors', () => {
+    expect(promptedLaunchNotice({ kind: 'sent', launch })).toEqual({
+      launch,
       error: null,
-      warning: null,
-      undeliveredPrompt: null
-    })
-    expect(promptedLaunchNotice({ kind: 'unconfirmed', message: 'm' })).toEqual({
-      succeeded: false,
-      success: null,
-      error: 'm',
-      warning: null,
       undeliveredPrompt: null
     })
   })
 
-  it('never reports the host warning on a launch that went ahead as an error', () => {
-    expect(promptedLaunchNotice({ kind: 'sent', warning: 'arguments were ignored' })).toEqual({
-      succeeded: true,
-      success: 'Agent started',
-      error: null,
-      warning: 'arguments were ignored',
-      undeliveredPrompt: null
-    })
-    expect(
-      promptedLaunchNotice({
-        kind: 'prompt-not-sent',
-        prompt: 'p',
-        warning: 'arguments were ignored'
+  it.each(['not-started', 'unconfirmed'] as const)(
+    'offers no destination for %s launches',
+    (kind) => {
+      expect(promptedLaunchNotice({ kind, message: 'm' })).toEqual({
+        launch: null,
+        error: 'm',
+        undeliveredPrompt: null
       })
-    ).toEqual({
-      succeeded: false,
-      success: null,
-      error: AGENT_PROMPT_NOT_SENT_MESSAGE,
-      warning: 'arguments were ignored',
-      undeliveredPrompt: 'p'
-    })
-  })
-})
-
-describe('agentStartedMessage', () => {
-  it('names the workspace the agent started in', () => {
-    expect(promptedLaunchNotice({ kind: 'sent' }, 'feature-login').success).toBe(
-      'Agent started in feature-login'
-    )
-  })
-
-  it('still confirms the launch when the screen knows no workspace name', () => {
-    expect(agentStartedMessage(null)).toBe('Agent started')
-    expect(agentStartedMessage('   ')).toBe('Agent started')
-  })
+    }
+  )
 })
 
 it.each([undefined, '', '--add-dir /extra'])(
@@ -411,9 +388,9 @@ it.each([undefined, '', '--add-dir /extra'])(
           ...LAUNCH_CAPABILITIES,
           ...(capable ? ['agent.launch.surface.v1'] : [])
         ])
-        expect(result).toEqual({
+        expect(result).toMatchObject({
           kind: 'sent',
-          warning: 'The host ignored terminal-only arguments.'
+          launch: { warning: 'The host ignored terminal-only arguments.' }
         })
         const params = launchParams(sendRequest)
         if (agentArgs === undefined) {
@@ -426,7 +403,6 @@ it.each([undefined, '', '--add-dir /extra'])(
         } else {
           expect(params).not.toHaveProperty('surface')
         }
-        expect(promptedLaunchNotice(result).succeeded).toBe(true)
       }
     }
   }

@@ -11,17 +11,14 @@ import { resolveConflictDisplay } from './pr-conflict-presentation'
 import { prConflictStyles as styles } from './pr-conflict-styles'
 import { prAiTriageStyles as triageStyles } from './pr-ai-triage-styles'
 import { AgentLaunchNotice } from '../AgentLaunchNotice'
+import type { PromptedLaunchNotice } from '../../session/pr-ai-triage-launch'
 import type { MobileAgentLaunchAvailability } from '../../session/mobile-agent-launch-availability'
 
 // Launches the "Resolve conflicts with AI" agent. Absent for display-only usages.
-export type PrConflictsTriage = {
+export type PrConflictsTriage = PromptedLaunchNotice & {
   resolveConflicts: () => void
   isBusy: boolean
   availability: MobileAgentLaunchAvailability
-  success: string | null
-  error: string | null
-  warning: string | null
-  undeliveredPrompt: string | null
 }
 
 type Props = {
@@ -215,9 +212,8 @@ export function PRConflictingFilesSection({ pr, isRefreshing = false, triage }: 
           </Pressable>
           <AgentLaunchNotice
             availability={triage.availability}
-            success={triage.success}
+            launch={triage.launch}
             error={triage.error}
-            warning={triage.warning}
             undeliveredPrompt={triage.undeliveredPrompt}
             errorStyle={triageStyles.triageError}
           />

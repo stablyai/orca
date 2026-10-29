@@ -51,6 +51,7 @@ vi.mock('react-native', () => ({
   TextInput: 'TextInput',
   View: 'View'
 }))
+vi.mock('../components/AgentLaunchButton', () => ({ AgentLaunchButton: () => null }))
 vi.mock('expo-clipboard', () => ({ setStringAsync: async () => {} }))
 vi.mock('lucide-react-native', () => ({
   ArrowDown: 'ArrowDown',
@@ -143,8 +144,7 @@ function initialState(): MobileSourceControlContentState {
       launching: false,
       availability: 'available',
       launchError: null,
-      launchWarning: null,
-      launchSuccess: null,
+      launchedAgent: null,
       undeliveredPrompt: null,
       launch: unusedAsync
     },

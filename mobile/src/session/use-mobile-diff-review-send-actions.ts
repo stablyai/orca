@@ -159,7 +159,8 @@ export function useMobileDiffReviewSendActions(input: SendActionsInput) {
       await markNotesSent(comments)
       triggerSuccess()
       // Warnings describe successful launches, so append them to success feedback.
-      setActionError(result.warning ? `Review notes sent. ${result.warning}` : 'Review notes sent')
+      const warning = result.launch.warning?.trim()
+      setActionError(warning ? `Review notes sent. ${warning}` : 'Review notes sent')
     },
     [client, closeSheet, connState, hostCapabilities, markNotesSent, setActionError, worktreeId]
   )

@@ -146,6 +146,28 @@
       "ordinal": 6,
       "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"preflight.detectAgents\",\"params\":{\"worktreeId\":\"repo-9::/w\"}}"
     },
+    "81ea447193eb": {
+      "launched": {
+        "kind": "sent",
+        "launch": {
+          "outcome": {
+            "handle": "term-1",
+            "kind": "terminal"
+          },
+          "prompt": {
+            "delivery": "submit",
+            "outcome": "handed-to-terminal"
+          },
+          "receipt": {
+            "detail": "Started a terminal agent, the default for new agent tabs in your settings.",
+            "mode": "terminal",
+            "preferred": "terminal",
+            "reason": "user_default"
+          },
+          "worktreeId": "repo-9::/w"
+        }
+      }
+    },
     "9270aeb7d9c6": {
       "status": "pending",
       "startedAt": 0
@@ -255,11 +277,6 @@
       "value": {
         "$rpc": "undefined"
       }
-    },
-    "eb8d47f90956": {
-      "launched": {
-        "kind": "sent"
-      }
     }
   },
   "recording": {
@@ -285,7 +302,7 @@
           "settlements": {
             "launch": "eb79a9b3682a"
           },
-          "state": "eb8d47f90956",
+          "state": "81ea447193eb",
           "effects": []
         }
       }

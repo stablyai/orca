@@ -332,7 +332,7 @@ describe('useMobileDiffReviewSendActions', () => {
   it('keeps saying the notes were sent when the host adds a warning', async () => {
     await mount(
       launchClient('handed-to-terminal', async () =>
-        launchedReply('handed-to-terminal', 'the requested arguments were ignored.')
+        launchedReply('handed-to-terminal', '  the requested arguments were ignored.  ')
       ).client
     )
     await act(async () => {

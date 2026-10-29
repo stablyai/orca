@@ -73,7 +73,6 @@ describe('useMobileCommitFailureRecovery', () => {
         client,
         connState: 'connected',
         worktreeId: 'wt-1',
-        workspaceLabel: 'feature-login',
         failure: props.failure
       })
       return null
@@ -85,7 +84,7 @@ describe('useMobileCommitFailureRecovery', () => {
       act(() => renderer?.update(createElement(Harness, { failure: next })))
   }
 
-  it('reports the host warning on a launch that went ahead as a warning, not an error', async () => {
+  it('retains the launched surface and host warning for this failure', async () => {
     const rerender = mount(hostClient(async () => LAUNCHED_WITH_WARNING).client)
     let succeeded: boolean | undefined
     await act(async () => {
@@ -93,11 +92,13 @@ describe('useMobileCommitFailureRecovery', () => {
     })
     expect(succeeded).toBe(true)
     expect(recovery?.launchError).toBeNull()
-    expect(recovery?.launchWarning).toBe('the requested arguments were ignored.')
-    expect(recovery?.launchSuccess).toBe('Agent started in feature-login')
+    expect(recovery?.launchedAgent).toMatchObject({
+      worktreeId: 'wt-1',
+      outcome: { kind: 'terminal', handle: 'term-1' },
+      warning: 'the requested arguments were ignored.'
+    })
     rerender({ ...FAILURE, error: 'another hook failed' })
-    expect(recovery?.launchWarning).toBeNull()
-    expect(recovery?.launchSuccess).toBeNull()
+    expect(recovery?.launchedAgent).toBeNull()
   })
 
   it('starts one agent for two taps before the first one re-renders', async () => {
@@ -119,5 +120,44 @@ describe('useMobileCommitFailureRecovery', () => {
     expect(
       sendRequest.mock.calls.filter(([method]) => method === 'agent.launchReplay')
     ).toHaveLength(1)
+  })
+
+  it.each([
+    {
+      name: 'launch refusal',
+      response: {
+        id: 'rpc',
+        ok: false,
+        error: { code: 'agent_not_available', message: 'Agent is unavailable' },
+        _meta: { runtimeId: 'r' }
+      } satisfies RpcResponse
+    },
+    {
+      name: 'undelivered prompt',
+      response: rpcReply({
+        outcome: { kind: 'terminal', handle: 'term-1' },
+        worktreeId: 'wt-1',
+        receipt: { mode: 'terminal', preferred: 'terminal', reason: 'user_default', detail: 'd' },
+        prompt: { delivery: 'submit', outcome: 'not-delivered' }
+      })
+    }
+  ])('keeps a delayed $name attached to its original failure', async ({ response }) => {
+    const reply = Promise.withResolvers<RpcResponse>()
+    const rerender = mount(hostClient(() => reply.promise).client)
+    let launched: Promise<boolean> | undefined
+    await act(async () => {
+      launched = recovery?.launch()
+    })
+    rerender({ ...FAILURE, error: 'another hook failed' })
+    await act(async () => {
+      reply.resolve(response)
+      expect(await launched).toBe(false)
+    })
+    expect(recovery?.launchError).toBeNull()
+    expect(recovery?.launchedAgent).toBeNull()
+    expect(recovery?.undeliveredPrompt).toBeNull()
+
+    rerender(FAILURE)
+    expect(recovery?.launchError).toBeTruthy()
   })
 })

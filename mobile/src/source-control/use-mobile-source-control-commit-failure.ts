@@ -11,15 +11,9 @@ type Params = {
   client: RpcClient | null
   connState: ConnectionState
   worktreeId: string
-  worktreeLabel: string | null
 }
 
-export function useMobileSourceControlCommitFailure({
-  client,
-  connState,
-  worktreeId,
-  worktreeLabel
-}: Params): {
+export function useMobileSourceControlCommitFailure({ client, connState, worktreeId }: Params): {
   commitFailureRecovery: MobileCommitFailureRecovery | null
   commitFailureRecoveryAction: ReturnType<typeof useMobileCommitFailureRecovery>
   recordCommitFailure: RecordMobileCommitFailure
@@ -31,7 +25,6 @@ export function useMobileSourceControlCommitFailure({
     client,
     connState,
     worktreeId,
-    workspaceLabel: worktreeLabel,
     failure: commitFailureRecovery
   })
   return { commitFailureRecovery, commitFailureRecoveryAction, recordCommitFailure }

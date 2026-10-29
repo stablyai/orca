@@ -28,17 +28,14 @@ import { PRCheckDetailView, type DetailEntry } from './PRCheckDetail'
 import { mobilePrSidebarStyles as styles } from './mobile-pr-sidebar-styles'
 import { prAiTriageStyles as triageStyles } from './pr-ai-triage-styles'
 import { AgentLaunchNotice } from '../AgentLaunchNotice'
+import type { PromptedLaunchNotice } from '../../session/pr-ai-triage-launch'
 import type { MobileAgentLaunchAvailability } from '../../session/mobile-agent-launch-availability'
 
 // Launches the "Fix checks with AI" agent. Absent for display-only usages.
-export type PrChecksTriage = {
+export type PrChecksTriage = PromptedLaunchNotice & {
   fixChecks: () => void
   isBusy: boolean
   availability: MobileAgentLaunchAvailability
-  success: string | null
-  error: string | null
-  warning: string | null
-  undeliveredPrompt: string | null
 }
 
 type Props = {
@@ -293,9 +290,8 @@ export function PRChecksSection({
       {triage ? (
         <AgentLaunchNotice
           availability={summary.failed > 0 ? triage.availability : 'available'}
-          success={triage.success}
+          launch={triage.launch}
           error={triage.error}
-          warning={triage.warning}
           undeliveredPrompt={triage.undeliveredPrompt}
           errorStyle={triageStyles.triageError}
         />

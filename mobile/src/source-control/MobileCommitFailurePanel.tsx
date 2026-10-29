@@ -71,9 +71,8 @@ export function MobileCommitFailurePanel({ failure, action }: Props) {
       ) : null}
       <AgentLaunchNotice
         availability={action.availability}
-        success={action.launchSuccess}
+        launch={action.launchedAgent}
         error={action.launchError}
-        warning={action.launchWarning}
         undeliveredPrompt={action.undeliveredPrompt}
         errorStyle={styles.commitFailureLaunchError}
       />

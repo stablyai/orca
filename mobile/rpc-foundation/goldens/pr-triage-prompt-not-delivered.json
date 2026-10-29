@@ -147,16 +147,33 @@
         }
       }
     },
-    "3fde28ed6a57": {
-      "launched": {
-        "kind": "prompt-not-sent",
-        "prompt": "Fix the failing checks"
-      }
-    },
     "742db574bda3": {
       "name": "preflight.detectAgents#1",
       "ordinal": 6,
       "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"preflight.detectAgents\",\"params\":{\"worktreeId\":\"repo-9::/w\"}}"
+    },
+    "89073fa237d3": {
+      "launched": {
+        "kind": "prompt-not-sent",
+        "launch": {
+          "outcome": {
+            "handle": "term-1",
+            "kind": "terminal"
+          },
+          "prompt": {
+            "delivery": "submit",
+            "outcome": "not-delivered"
+          },
+          "receipt": {
+            "detail": "Started a terminal agent, the default for new agent tabs in your settings.",
+            "mode": "terminal",
+            "preferred": "terminal",
+            "reason": "user_default"
+          },
+          "worktreeId": "repo-9::/w"
+        },
+        "prompt": "Fix the failing checks"
+      }
     },
     "e0eef7c9fafe": {
       "name": "repo.list#1",
@@ -215,7 +232,7 @@
           "settlements": {
             "launch": "eb79a9b3682a"
           },
-          "state": "3fde28ed6a57",
+          "state": "89073fa237d3",
           "effects": []
         }
       }

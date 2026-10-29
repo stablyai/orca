@@ -365,6 +365,28 @@
         }
       }
     },
+    "81ea447193eb": {
+      "launched": {
+        "kind": "sent",
+        "launch": {
+          "outcome": {
+            "handle": "term-1",
+            "kind": "terminal"
+          },
+          "prompt": {
+            "delivery": "submit",
+            "outcome": "handed-to-terminal"
+          },
+          "receipt": {
+            "detail": "Started a terminal agent, the default for new agent tabs in your settings.",
+            "mode": "terminal",
+            "preferred": "terminal",
+            "reason": "user_default"
+          },
+          "worktreeId": "repo-9::/w"
+        }
+      }
+    },
     "8a72d3d14d44": {
       "name": "repo.list#1",
       "ordinal": 1,
@@ -591,11 +613,6 @@
         "$rpc": "undefined"
       }
     },
-    "eb8d47f90956": {
-      "launched": {
-        "kind": "sent"
-      }
-    },
     "f1d579dd459c": {
       "name": "repo.list#1",
       "ordinal": 1,
@@ -655,7 +672,7 @@
           "settlements": {
             "launch": "eb79a9b3682a"
           },
-          "state": "eb8d47f90956",
+          "state": "81ea447193eb",
           "effects": []
         }
       },

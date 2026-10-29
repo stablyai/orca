@@ -1,6 +1,7 @@
 import { createElement, type ReactNode } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import type { AgentLaunchResult } from '../../../src/shared/agent-launch-intent'
 
 vi.mock('react-native', async () => {
   const React = await import('react')
@@ -11,18 +12,35 @@ vi.mock('react-native', async () => {
       React.createElement('Text', props, children),
     View: ({ children, ...props }: { children?: ReactNode }) =>
       React.createElement('View', props, children),
-    StyleSheet: { create: (styles: unknown) => styles }
+    StyleSheet: { create: (styles: unknown) => styles, hairlineWidth: 1 }
   }
 })
+const navigation = vi.hoisted(() => ({ navigate: vi.fn() }))
+const writeText = vi.hoisted(() => vi.fn(async (_text: string) => {}))
+vi.mock('expo-router', () => ({
+  useLocalSearchParams: () => ({ hostId: 'host/1', name: 'My workspace' })
+}))
+vi.mock('../navigation/route-handoff', () => ({ useRouteHandoff: () => navigation }))
+vi.mock('lucide-react-native', () => ({ MessageSquare: () => null, Terminal: () => null }))
 vi.mock('../platform/clipboard', () => ({
-  useClipboardWriter: () => ({ writeText: async () => {} })
+  useClipboardWriter: () => ({ writeText })
 }))
 
 import { AgentLaunchNotice } from './AgentLaunchNotice'
 import { AGENT_LAUNCH_UPDATE_REQUIRED_MESSAGE } from '../session/mobile-existing-agent-launch'
 import type { MobileAgentLaunchAvailability } from '../session/mobile-agent-launch-availability'
+import { WorkspaceExecutionHostContext } from '../navigation/workspace-execution-host'
+import { notificationPaneTab } from '../session/notification-pane-tab'
 
 const ERROR_STYLE = { color: 'red' }
+const LEAF = '12345678-1234-4123-a123-123456789abc'
+const LAUNCH: AgentLaunchResult = {
+  outcome: { kind: 'structured', sessionId: 'claude_s1', handle: 'h', tabId: 'chat-1' },
+  worktreeId: 'folder::/my workspace',
+  receipt: { mode: 'structured', preferred: 'structured', reason: 'user_default', detail: 'd' }
+}
+const WARNING =
+  'Started a structured chat session using saved agent Arguments; the per-launch argument override was ignored.'
 
 describe('AgentLaunchNotice', () => {
   let renderer: ReactTestRenderer | null = null
@@ -30,65 +48,141 @@ describe('AgentLaunchNotice', () => {
   afterEach(() => {
     act(() => renderer?.unmount())
     renderer = null
+    vi.clearAllMocks()
   })
 
-  function lines(props: {
+  function mount(props: {
     availability?: MobileAgentLaunchAvailability
-    success?: string | null
+    launch?: AgentLaunchResult | null
     error?: string | null
-    warning?: string | null
-  }): { text: string; isError: boolean }[] {
+    undeliveredPrompt?: string | null
+  }) {
     act(() => {
       renderer = create(
-        createElement(AgentLaunchNotice, {
-          availability: props.availability ?? 'available',
-          success: props.success ?? null,
-          error: props.error ?? null,
-          warning: props.warning ?? null,
-          undeliveredPrompt: null,
-          errorStyle: ERROR_STYLE
-        })
+        createElement(
+          WorkspaceExecutionHostContext.Provider,
+          { value: 'ssh:box' },
+          createElement(AgentLaunchNotice, {
+            availability: props.availability ?? 'available',
+            launch: props.launch ?? null,
+            error: props.error ?? null,
+            undeliveredPrompt: props.undeliveredPrompt ?? null,
+            errorStyle: ERROR_STYLE
+          })
+        )
       )
     })
-    return (renderer?.root.findAll((node) => String(node.type) === 'Text') ?? []).map((node) => ({
-      text: String(node.props.children),
-      isError: node.props.style === ERROR_STYLE
-    }))
   }
 
-  it('shows the host warning on a launch that went ahead as secondary text, not an error', () => {
-    expect(lines({ warning: 'the requested arguments were ignored.' })).toEqual([
-      { text: 'the requested arguments were ignored.', isError: false }
-    ])
-  })
+  function lines() {
+    return (renderer?.root.findAll((node) => String(node.type) === 'Text') ?? []).map((node) =>
+      String(node.props.children)
+    )
+  }
 
-  it('keeps a real failure in the error style beside a warning', () => {
+  async function press(label: string) {
+    const button = renderer?.root.findAll(
+      (node) => String(node.type) === 'Pressable' && node.props.accessibilityLabel === label
+    )[0]
+    expect(button).toBeDefined()
+    await act(async () => button?.props.onPress())
+  }
+
+  function destination(): URL {
+    expect(navigation.navigate).toHaveBeenCalledOnce()
+    return new URL(navigation.navigate.mock.calls[0][0], 'https://orca.test')
+  }
+
+  it('preserves host warnings alongside the button that opens the exact chat', async () => {
+    mount({ launch: { ...LAUNCH, warning: WARNING } })
+    expect(lines()).toEqual([WARNING, 'Open chat'])
+    await press('Open chat')
+    const route = destination()
+    expect(route.pathname).toBe('/h/host%2F1/session/folder%3A%3A%2Fmy%20workspace')
+    expect(route.searchParams.get('name')).toBe('My workspace')
+    expect(route.searchParams.get('executionHost')).toBe('ssh:box')
     expect(
-      lines({ error: "The agent started, but the prompt wasn't sent.", warning: 'w' })
-    ).toEqual([
-      { text: "The agent started, but the prompt wasn't sent.", isError: true },
-      { text: 'w', isError: false }
+      notificationPaneTab(
+        [
+          {
+            id: 'chat-1',
+            type: 'agent-session',
+            sessionId: 'claude_s1',
+            agent: 'claude',
+            title: 'Chat',
+            isActive: false
+          }
+        ],
+        route.searchParams.get('paneKey') ?? ''
+      )?.id
+    ).toBe('chat-1')
+  })
+
+  it('opens a chat from older hosts that omit the host tab id', async () => {
+    mount({
+      launch: { ...LAUNCH, outcome: { kind: 'structured', sessionId: 'claude_s1', handle: 'h' } }
+    })
+    await press('Open chat')
+    expect(
+      notificationPaneTab(
+        [
+          {
+            id: 'legacy-chat',
+            type: 'agent-session',
+            sessionId: 'claude_s1',
+            agent: 'claude',
+            title: 'Chat',
+            isActive: false
+          }
+        ],
+        destination().searchParams.get('paneKey') ?? ''
+      )?.id
+    ).toBe('legacy-chat')
+  })
+
+  it('labels and selects a terminal launch using its pane identity', async () => {
+    mount({
+      launch: {
+        ...LAUNCH,
+        outcome: { kind: 'terminal', handle: 'term-1', paneKey: `tab-1:${LEAF}` }
+      }
+    })
+    expect(lines()).toEqual(['Open terminal'])
+    await press('Open terminal')
+    expect(destination().searchParams.get('paneKey')).toBe(`tab-1:${LEAF}`)
+  })
+
+  it('opens the workspace when an older terminal host supplies no pane identity', async () => {
+    mount({ launch: { ...LAUNCH, outcome: { kind: 'terminal', handle: 'term-1' } } })
+    expect(lines()).toEqual(['Open workspace'])
+    await press('Open workspace')
+    expect(destination().searchParams.has('paneKey')).toBe(false)
+  })
+
+  it('keeps prompt recovery beside the navigation button when delivery fails', async () => {
+    mount({
+      launch: { ...LAUNCH, warning: WARNING },
+      error: "The agent started, but the prompt wasn't sent.",
+      undeliveredPrompt: 'Fix the failing checks'
+    })
+    expect(lines()).toEqual([
+      "The agent started, but the prompt wasn't sent.",
+      WARNING,
+      'Open chat',
+      'Copy prompt'
     ])
+    await press('Copy prompt')
+    expect(writeText).toHaveBeenCalledWith('Fix the failing checks')
+    expect(lines()).toContain('Copied')
   })
 
-  it('drops a stale warning while the host cannot take a launch', () => {
-    expect(lines({ availability: 'update-required', warning: 'w' })).toEqual([
-      { text: AGENT_LAUNCH_UPDATE_REQUIRED_MESSAGE, isError: true }
-    ])
+  it('keeps an unavailable host actionable without showing launch diagnostics', () => {
+    mount({ availability: 'update-required' })
+    expect(lines()).toEqual([AGENT_LAUNCH_UPDATE_REQUIRED_MESSAGE])
   })
 
-  it('confirms a launch that went ahead, with any host note beneath it', () => {
-    expect(lines({ success: 'Agent started in feature-login', warning: 'w' })).toEqual([
-      { text: 'Agent started in feature-login', isError: false },
-      { text: 'w', isError: false }
-    ])
-  })
-
-  it('never confirms beside an error', () => {
-    expect(lines({ success: 'Agent started', error: 'e' })).toEqual([{ text: 'e', isError: true }])
-  })
-
-  it('renders nothing with nothing to say', () => {
-    expect(lines({})).toEqual([])
+  it('renders nothing before a launch', () => {
+    mount({})
+    expect(lines()).toEqual([])
   })
 })

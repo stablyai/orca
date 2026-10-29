@@ -15,6 +15,12 @@ const bridge = vi.hoisted(() => {
   return held
 })
 
+const localRoute = vi.hoisted(() => ({ paneKey: '', router: { setParams: vi.fn() } }))
+vi.mock('expo-router', () => ({
+  useLocalSearchParams: () => ({ paneKey: localRoute.paneKey }),
+  useRouter: () => localRoute.router
+}))
+
 vi.mock('../transport/client-context.web', () => ({
   usePageBridgeClient: () => ({
     getShellSession: () => ({ route: bridge.route }),
@@ -94,6 +100,8 @@ function deliver(paneKey: string): void {
 }
 
 beforeEach(() => {
+  localRoute.paneKey = ''
+  localRoute.router.setParams.mockClear()
   bridge.route = null
   bridge.listeners = []
   bridge.cleared.length = 0
@@ -190,4 +198,17 @@ describe('the page pane hook', () => {
     render(true)
     expect(switched).toEqual([])
   })
+})
+
+it('selects an in-page launch link after its tab inventory arrives', () => {
+  localRoute.paneKey = `tab-b:${LEAF}`
+  const tree = render(false)
+  expect(switched).toEqual([])
+  expect(localRoute.router.setParams).toHaveBeenCalledWith({ paneKey: '' })
+  localRoute.paneKey = ''
+  act(() => tree.update(createElement(Probe, { terminalsLoaded: true })))
+  expect(switched.map((tab) => tab.id)).toEqual(['second'])
+  act(() => tree.update(createElement(Probe, { terminalsLoaded: true })))
+  expect(switched).toHaveLength(1)
+  act(() => tree.unmount())
 })

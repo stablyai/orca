@@ -75,7 +75,7 @@ export function useMobileSourceControlState(params: MobileSourceControlStatePara
   const worktreeLabel = getWorktreeLabel(name, worktreeId)
   const statusIdentityKey = `${hostId}\0${worktreeId}`
   const { commitFailureRecovery, commitFailureRecoveryAction, recordCommitFailure } =
-    useMobileSourceControlCommitFailure({ client, connState, worktreeId, worktreeLabel })
+    useMobileSourceControlCommitFailure({ client, connState, worktreeId })
   const clearCommitFailureRecovery = useCallback(() => {
     recordCommitFailure(null)
   }, [recordCommitFailure])

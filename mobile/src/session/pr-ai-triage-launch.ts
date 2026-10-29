@@ -1,3 +1,4 @@
+import type { AgentLaunchResult } from '../../../src/shared/agent-launch-intent'
 import type { SourceControlLaunchActionId } from '../../../src/shared/source-control-ai-actions'
 import type { RpcClient } from '../transport/rpc-client'
 import {
@@ -15,9 +16,9 @@ import { projectSourceControlActionLaunch } from '../../../src/shared/source-con
 // Have the host launch and deliver AI prompts; mobile must never type them into a shell.
 
 export type MobilePromptedAgentLaunch =
-  | { kind: 'sent'; warning?: string }
+  | { kind: 'sent'; launch: AgentLaunchResult }
   /** The agent started but `prompt`, the text as sent, did not reach it; the caller offers it. */
-  | { kind: 'prompt-not-sent'; prompt: string; warning?: string }
+  | { kind: 'prompt-not-sent'; prompt: string; launch: AgentLaunchResult }
   /** Nothing started; `message` says why. */
   | { kind: 'not-started'; message: string }
   /** The agent may be running; do not launch again until the user has looked. */
@@ -79,11 +80,9 @@ export async function launchAgentWithPrompt(args: {
   })
   switch (launched.kind) {
     case 'launched': {
-      const warning = launched.result.warning?.trim()
-      const extra = warning ? { warning } : {}
       return launched.promptDelivered
-        ? { kind: 'sent', ...extra }
-        : { kind: 'prompt-not-sent', prompt: text, ...extra }
+        ? { kind: 'sent', launch: launched.result }
+        : { kind: 'prompt-not-sent', prompt: text, launch: launched.result }
     }
     case 'unsupported':
       return { kind: 'not-started', message: AGENT_LAUNCH_UPDATE_REQUIRED_MESSAGE }
@@ -95,46 +94,31 @@ export async function launchAgentWithPrompt(args: {
   }
 }
 
-export function agentStartedMessage(workspaceLabel: string | null | undefined): string {
-  const label = workspaceLabel?.trim()
-  return label ? `Agent started in ${label}` : 'Agent started'
+export type PromptedLaunchNotice = {
+  launch: AgentLaunchResult | null
+  error: string | null
+  undeliveredPrompt: string | null
 }
 
-// Host warnings describe completed launches and must not become failure notices.
-export function promptedLaunchNotice(
-  result: MobilePromptedAgentLaunch,
-  workspaceLabel?: string | null
-): {
-  succeeded: boolean
-  success: string | null
-  error: string | null
-  warning: string | null
-  undeliveredPrompt: string | null
-} {
+export function promptedLaunchNotice(result: MobilePromptedAgentLaunch): PromptedLaunchNotice {
   switch (result.kind) {
     case 'sent':
       return {
-        succeeded: true,
-        success: agentStartedMessage(workspaceLabel),
+        launch: result.launch,
         error: null,
-        warning: result.warning ?? null,
         undeliveredPrompt: null
       }
     case 'prompt-not-sent':
       return {
-        succeeded: false,
-        success: null,
+        launch: result.launch,
         error: AGENT_PROMPT_NOT_SENT_MESSAGE,
-        warning: result.warning ?? null,
         undeliveredPrompt: result.prompt
       }
     case 'not-started':
     case 'unconfirmed':
       return {
-        succeeded: false,
-        success: null,
+        launch: null,
         error: result.message,
-        warning: null,
         undeliveredPrompt: null
       }
   }
