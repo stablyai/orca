@@ -3,7 +3,6 @@ import { fakeTui } from './opencode-tui-session-fixture'
 
 export type LegacyTuiEvent = { type: string; properties: Record<string, unknown> }
 
-/** The 1.18.30 public TUI API backed by the existing session-data fixture. */
 export function fakeLegacyTui() {
   const tui = fakeTui('1.18.30')
   const data = tui.ctx.data.session

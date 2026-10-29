@@ -17,9 +17,7 @@ export function ActivityTitlebarControls(): React.JSX.Element {
         className="flex min-w-0 items-center gap-2"
         style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
       >
-        {/* Why: Activity hides the worktree sidebar (full-page surface), so the
-            sidebar's nav row isn't available as the back path. This Back button
-            is the dedicated exit, mirroring Settings' onBack pattern. */}
+        {/* Activity hides sidebar navigation, so provide a dedicated Back action as Settings does. */}
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
@@ -47,8 +45,17 @@ export function ActivityTitlebarControls(): React.JSX.Element {
           {translate('auto.components.activity.ActivityTitlebarControls.d6a8de3934', 'agents')}
         </span>
         <Badge variant="secondary" className="h-5 px-1.5 text-[11px] font-normal">
-          {unreadCount}{' '}
-          {translate('auto.components.activity.ActivityTitlebarControls.f915168c8e', 'unread')}
+          {unreadCount === 1
+            ? translate(
+                'auto.components.activity.ActivityTitlebarControls.unreadCount_one',
+                '{{count}} unread',
+                { count: unreadCount }
+              )
+            : translate(
+                'auto.components.activity.ActivityTitlebarControls.unreadCount_other',
+                '{{count}} unread',
+                { count: unreadCount }
+              )}
         </Badge>
       </div>
     </div>

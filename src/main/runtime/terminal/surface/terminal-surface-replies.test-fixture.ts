@@ -1,5 +1,4 @@
-// One desktop scenario and the replies CLI, paired desktops and orcad read about it, normalised so
-// a switch-off capture and a switch-on run compare byte for byte.
+// Normalize one desktop scenario's CLI, paired and orcad replies for byte-identical comparison across layout ownership modes.
 import { readFileSync } from 'node:fs'
 import { vi } from 'vitest'
 import { OrcaRuntimeService } from '../../orca-runtime-test-mocks.spec'
@@ -17,6 +16,7 @@ import type { WorkspaceSessionState } from '../../../../shared/workspace-session
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { LayoutCommand } from '../../../../shared/workspace-layout/workspace-layout-command-types'
 import { applyCommandToSession } from '../../../persistence/terminal-topology/terminal-pane-admission'
+import { partialRuntimeStore } from '../../runtime-store-partial-fixture'
 
 export const SURFACE_TAB_ID = '44444444-4444-4444-8444-444444444444'
 export const SURFACE_PTYS = { [HEADLESS_LEAF_ID]: 'pty-a', [HEADLESS_SECOND_LEAF_ID]: 'pty-b' }
@@ -67,7 +67,7 @@ export function surfaceRuntime(
     })
   )
   // The Store's write notice, which main's terminal list follows.
-  const written = new Set<(hostId: string | null) => void>()
+  const written = new Set<(hostId: ExecutionHostId | null) => void>()
   const setSession = (next: WorkspaceSessionState): void => {
     harness.setSession(next)
     for (const listener of written) {
@@ -76,7 +76,9 @@ export function surfaceRuntime(
   }
   const runtimeStore = {
     ...harness.runtimeStore,
-    getWorkspaceSessionHostIds: () => ['local'],
+    // The runtime's own session write, as the Store applies it: then tells its write listeners.
+    setWorkspaceSession: vi.fn((next: WorkspaceSessionState) => setSession(next)),
+    getWorkspaceSessionHostIds: (): ExecutionHostId[] => ['local'],
     // A terminal's binding write, as the Store applies it: then tells its write listeners.
     persistPtyBinding: async (
       ...args: Parameters<typeof harness.runtimeStore.persistPtyBinding>
@@ -87,7 +89,7 @@ export function surfaceRuntime(
       }
       return persisted
     },
-    onWorkspaceSessionWritten: (listener: (hostId: string | null) => void) => {
+    onWorkspaceSessionWritten: (listener: (hostId: ExecutionHostId | null) => void) => {
       written.add(listener)
       return () => written.delete(listener)
     },
@@ -100,8 +102,7 @@ export function surfaceRuntime(
       return change.value
     }
   }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the shared runtime spec fixture store implements every method these paths call.
-  const runtime = new OrcaRuntimeService(runtimeStore as never)
+  const runtime = new OrcaRuntimeService(partialRuntimeStore(runtimeStore))
   const killed: string[] = []
   runtime.setPtyController({
     write: () => true,
@@ -171,10 +172,7 @@ function normaliseHandles(value: unknown, ignored: readonly string[]): unknown {
   })
 }
 
-/**
- * Every reply the scenario's readers get, in one JSON document. `ignore` drops fields a newer host
- * adds, which older readers skip, so the fields they do read compare byte for byte.
- */
+/** Capture every reply, omitting newer fields only when modeling readers that skip them; compare all older wire fields byte for byte. */
 export async function captureSurfaceReplies(
   runtime: Runtime,
   opts: { ignore?: readonly string[] } = {}

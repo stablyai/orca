@@ -15,15 +15,12 @@ export function useResolvedHostPlatform(
   return state.hostPlatform ?? descriptorPlatform
 }
 
-/** The rows the host list renders: the live or last-known catalog with display state and host badges. */
 export function useHostDisplayWorktrees(
   connState: ConnectionState,
   state: HostScreenState,
-  /** Metadata reads it only for a mixed desktop catalog; server rows mix it too. */
   hostPlatform: NodeJS.Platform | null
 ) {
   const { serverWorkspaces } = state
-  // Why: a server's label and health come with its rows, alongside the desktop's SSH ones.
   const hostLabelById = useMemo(
     () => withServerHosts(state.hostLabelById, serverWorkspaces.hosts, (host) => host.label),
     [state.hostLabelById, serverWorkspaces.hosts]
@@ -33,8 +30,7 @@ export function useHostDisplayWorktrees(
     [state.hostHealthById, serverWorkspaces.hosts]
   )
   return useMemo(() => {
-    // Why: live `worktrees` is authoritative only while connected; under the amber
-    // mount default, connecting/handshaking must keep the pre-reconnect list too.
+    // Use live rows only while connected; connecting/handshaking must preserve the cached list too.
     const base = connState === 'connected' ? state.worktrees : state.lastKnownWorktrees
     const rows = [...base, ...serverWorkspaces.worktrees]
     return applyWorktreeHostContextLabels(

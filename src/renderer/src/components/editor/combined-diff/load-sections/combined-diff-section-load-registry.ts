@@ -5,7 +5,7 @@ import {
   type CombinedDiffLoadScheduler
 } from './combined-diff-load-scheduler'
 
-// Why: git rewrites a path several times during a rebase; refetch at most once per window.
+// Coalesce repeated rebase writes to the same path into one refetch window.
 export const COMBINED_DIFF_SECTION_RELOAD_COALESCE_MS = 300
 
 export function clearPendingSectionReloadTimers(timers: Map<number, number>): void {
@@ -15,8 +15,7 @@ export function clearPendingSectionReloadTimers(timers: Map<number, number>): vo
   timers.clear()
 }
 
-// Why: one owner for the load bookkeeping the loader, retry and revalidation hooks all mutate,
-// and for the callback refs that break the loader <-> retry cycle.
+// Share loader/retry/revalidation bookkeeping and callback refs that break the loader–retry cycle.
 export type CombinedDiffSectionLoadRegistry = {
   generationRef: React.RefObject<number>
   deferredLoadRequestsRef: React.RefObject<Set<number>>
@@ -41,11 +40,11 @@ export function useCombinedDiffSectionLoadRegistry(
   const deferredLoadRequestsRef = useRef<Set<number>>(new Set())
   const sectionsRef = useRef<DiffSection[]>([])
   const generationRef = useRef(0)
-  // Why: per-section reload token, so a sibling's reload can't discard this section's in-flight load.
+  // Per-section tokens keep sibling reloads from discarding unrelated in-flight loads.
   const sectionLoadTokensRef = useRef<Map<number, number>>(new Map())
   const renderedIndicesRef = useRef<Set<number>>(new Set())
   const reloadTimersRef = useRef<Map<number, number>>(new Map())
-  // Why: sections whose last load was discarded for a mid-flight invalidation; the next one commits.
+  // After one mid-flight invalidation discards a load, allow the next result to commit.
   const supersededLoadIndicesRef = useRef<Set<number>>(new Set())
   const loadSectionRef = useRef<(index: number) => Promise<void>>(async () => {})
   const retrySectionRef = useRef<(index: number) => void>(() => {})
@@ -57,7 +56,7 @@ export function useCombinedDiffSectionLoadRegistry(
   sectionsRef.current = sections
 
   useEffect(() => {
-    // Why: React StrictMode replays effect cleanup in dev; reset revives the scheduler for the replayed mount.
+    // Reset revives the scheduler after Strict Mode’s cleanup replay.
     const scheduler = loadSchedulerRef.current
     const reloadTimers = reloadTimersRef.current
     scheduler.reset()

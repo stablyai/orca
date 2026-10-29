@@ -1,6 +1,4 @@
-/** Interactive chrome living inside the draggable titlebar. `[data-tab-id]` and the
- *  client-hosted row marker cover every tab kind: a press
- *  on a tab starts a dnd-kit reorder, so it must never also move the panel. */
+/** Tab presses start reordering and interactive controls handle their own input; neither may drag the panel. */
 const FLOATING_TERMINAL_NO_DRAG_SELECTOR =
   'button,input,textarea,select,[role="menuitem"],[data-tab-id],[data-client-hosted-browser-row-id],[data-floating-terminal-no-drag]'
 

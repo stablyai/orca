@@ -5,12 +5,11 @@ export type HostMachineDescriptor = {
   platform: NodeJS.Platform | null
 }
 
-// The live half of descriptor state: what this process last decoded from each host. The durable
-// half is the stored host profile's lastKnown* fields; host-descriptor-recorder.ts writes both.
+// Live descriptor state complements stored lastKnown fields; host-descriptor-recorder writes both.
 const descriptorByHostId = new Map<string, HostMachineDescriptor>()
 const listenersByHostId = new Map<string, Set<() => void>>()
 
-/** Records every readable status reply, including one that omitted either descriptor field. */
+// Record omissions too so readable status replies can clear stale fields.
 export function recordHostDescriptor(hostId: string, descriptor: HostMachineDescriptor): void {
   const previous = descriptorByHostId.get(hostId)
   if (
@@ -47,7 +46,6 @@ function subscribe(hostId: string, listener: () => void): () => void {
   }
 }
 
-/** The descriptor this host last reported to this app process, or null before any read. */
 export function useHostDescriptor(hostId: string | undefined): HostMachineDescriptor | null {
   const read = useCallback(
     () => (hostId ? (descriptorByHostId.get(hostId) ?? null) : null),

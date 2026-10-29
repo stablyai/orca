@@ -1,6 +1,4 @@
-// A preview tab's promotion in a layout-owner build when main routes a twin workspace's tab to a
-// paired server (host_not_owned): the window ends the preview in its own copy, as the switch-off
-// window does for every tab.
+// host_not_owned routes twin-workspace promotion to the window copy, matching window-owned preview behavior.
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Tab } from '../../../../../shared/tab-types'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'

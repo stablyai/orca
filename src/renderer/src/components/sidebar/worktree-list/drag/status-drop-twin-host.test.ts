@@ -25,7 +25,6 @@ const SSH: ExecutionHostId = 'ssh:build-box'
 const initialState = useAppStore.getInitialState()
 const updateWorktreesMeta = vi.fn().mockResolvedValue(undefined)
 
-// The same worktree id published by this computer and by an SSH host: two sidebar cards.
 function seedTwins(extra: Worktree[] = []): { local: Worktree; ssh: Worktree; dragged: Worktree } {
   const local = makeWorktree(TWIN_ID, 'app', { repoId: REPO_ID, hostId: 'local' })
   const ssh = makeWorktree(TWIN_ID, 'app', { repoId: REPO_ID, hostId: SSH })

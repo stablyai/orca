@@ -103,7 +103,6 @@ export function useComposerAsyncState(input: ComposerAsyncStateInput) {
 
   const [createError, setCreateError] = useState<WorkspaceCreateErrorDisplay | null>(null)
 
-  // Why: when checked, a successful create keeps the modal open and resets identity fields so the user can queue another worktree.
   const [createMultiple, setCreateMultiple] = useState(false)
 
   const [advancedOpen, setAdvancedOpen] = useState(
@@ -143,10 +142,10 @@ export function useComposerAsyncState(input: ComposerAsyncStateInput) {
 
   const branchAutoNameRef = useRef<string>('')
 
-  // Why: the note we auto-prefilled from a Start-from PR pick, so a later PR change can replace it without clobbering user-typed text.
+  // Track auto-prefilled PR notes separately so source changes never overwrite user text.
   const lastAutoNoteRef = useRef<string>('')
 
-  // Why: let handleBaseBranchPrSelect read the latest note without adding it to deps (would rebuild the callback on every keystroke).
+  // Read the latest note without rebuilding PR-selection callbacks on every keystroke.
   const noteRef = useRef<string>(note)
 
   useEffect(() => {
@@ -154,9 +153,7 @@ export function useComposerAsyncState(input: ComposerAsyncStateInput) {
     noteRef.current = note
   }, [name, note])
 
-  // Why: PR checkout refs resolve async, so submit can still see the linked PR as a checkout source if Create fires before the resolver settles.
-  // Why useState and not `useRef(expr)`: the seed legitimately resolves to null, so a nullish
-  // guard would keep re-running it; useState's initializer runs once without writing in render.
+  // Retain PR checkout intent while async refs resolve; lazy state accepts null without repeatedly seeding during render.
   const [initialSmartGitHubPrStartPointSelection] =
     useState<SmartGitHubPrStartPointSelection | null>(() =>
       getInitialGitHubPrStartPointSelection({
@@ -195,7 +192,7 @@ export function useComposerAsyncState(input: ComposerAsyncStateInput) {
 
   const nameInputRef = useRef<HTMLInputElement | null>(null)
 
-  // Why: mirror agentPrompt into a ref so the once-mounted file-drop listener reads it fresh without re-subscribing, which would reorder composerDropStack.
+  // Keep the once-mounted drop listener fresh without resubscribing and reordering composerDropStack.
   const agentPromptRef = useRef(agentPrompt)
 
   const connectionIdRef = useRef(connectionId)

@@ -1,11 +1,4 @@
-// Verbatim replay of FULL captures recorded through Orca's own adapter against
-// the real CLI (`__fixtures__/claude-adapter-capture-*.jsonl`): every frame the
-// adapter saw — hook proof, per-cycle init, command_lifecycle, session-state,
-// stream events — in the recorded order, with the recorded dispatch points.
-// The oracle is the provider's own membership fact: each result's
-// `user_message_uuids` must equal the sends that settled into the turn that
-// result closed. Nothing here asserts design internals, so a rule change or a
-// CLI drift that breaks membership fails these tests whatever the mechanism.
+// Replay real adapter captures in recorded frame/dispatch order; results define send membership.
 
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -21,13 +14,13 @@ import { ClaudeStructuredSessionAdapter } from './claude-structured-session-adap
 import type {
   ClaudeLateDispatchOutcome,
   ClaudeStructuredSessionAdapterDeps
-} from './claude-structured-session-state'
+} from './structured/claude-structured-session-state'
 import {
   fakeClaude,
   identityFor,
-  PROVIDER_SESSION_ID,
-  claudeStartupSettled
+  PROVIDER_SESSION_ID
 } from './claude-structured-session-test-support'
+import { claudeStartupSettled } from './claude-structured-startup-settled-test-support'
 
 type CapturedEvent =
   | { at: number; kind: 'meta'; providerSessionId: string }
@@ -86,7 +79,7 @@ type Replay = {
   resultMemberships: string[][]
   /** clientMessageId -> provider uuid its delivery settled under. */
   settledUuids: Map<string, string>
-  /** Live dispatch uuid -> turn id its send landed in (turn open at settlement). */
+  /** Client-message ID -> UUID minted at dispatch. */
   liveUuidByClient: Map<string, string>
 }
 
@@ -154,7 +147,6 @@ async function replayCapture(name: string): Promise<Replay> {
     nowMs = 1_700_000_200_000 + event.at
     if (event.kind === 'dispatch') {
       if (!startedAwaited) {
-        // The proof frames have been delivered by now; startup can settle.
         await claudeStartupSettled(adapter, 'session-1')
         startedAwaited = true
       }
@@ -205,8 +197,6 @@ describe.each(['fold', 'early-steer', 'miss'])('adapter capture replay: %s', (na
   it('keeps turn membership equal to each result’s user_message_uuids', async () => {
     const replay = await replayCapture(name)
 
-    // One turn per result, each opened by that result's first member, and no
-    // turn ever marked interrupted (no capture interrupts one).
     expect([...replay.finalTurns.keys()]).toEqual(
       replay.resultMemberships.map((members) => members[0])
     )
@@ -215,8 +205,6 @@ describe.each(['fold', 'early-steer', 'miss'])('adapter capture replay: %s', (na
       expect(turn.state).toBe('completed')
     }
 
-    // Every send settled accepted under a provider uuid named by exactly the
-    // result whose turn it belongs to — the provider's membership fact.
     const allMembers = new Set(replay.resultMemberships.flat())
     for (const [clientMessageId, liveUuid] of replay.liveUuidByClient) {
       expect(replay.settledUuids.get(clientMessageId)).toBe(liveUuid)
@@ -224,7 +212,6 @@ describe.each(['fold', 'early-steer', 'miss'])('adapter capture replay: %s', (na
     }
     for (const [index, members] of replay.resultMemberships.entries()) {
       for (const member of members) {
-        // A member of result i must not have opened any OTHER turn.
         const owner = [...replay.finalTurns.keys()].indexOf(member)
         if (owner !== -1) {
           expect(owner).toBe(index)
@@ -238,8 +225,6 @@ describe('adapter capture replay: slash-goal', () => {
   it('opens the turn for the send even though Claude answers the command before echoing it', async () => {
     const replay = await replayCapture('slash-goal')
 
-    // `/goal` answers with a local reply before its echo; that reply must not
-    // open a turn of the provider's own, beside the one the send is waiting for.
     expect([...replay.finalTurns.values()]).toEqual([
       expect.objectContaining({
         userItemId: agentJournalSubmissionKey('client-A'),

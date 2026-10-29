@@ -57,7 +57,11 @@ export function renderResourceUsagePopoverBody({
   runtimeHostNotices: readonly string[]
 }): React.JSX.Element {
   return (
-    <div ref={setPopoverBodyNode} tabIndex={-1} className="flex h-[420px] flex-col outline-none">
+    <div
+      ref={setPopoverBodyNode}
+      tabIndex={-1}
+      className="flex min-h-0 flex-1 flex-col outline-none"
+    >
       {(unifiedRepos.length > 0 || resourceSnapshot) && (
         <div className="flex items-center justify-between px-3 py-1 bg-muted/30 border-b border-border/50 text-[10px] uppercase tracking-wide shrink-0">
           <button
@@ -111,7 +115,7 @@ export function renderResourceUsagePopoverBody({
         </div>
       )}
 
-      <div className="flex-1 overflow-y-auto scrollbar-sleek">
+      <div className="min-h-0 flex-1 overflow-y-auto scrollbar-sleek">
         {runtimeHostNotices.map((notice) => (
           <div
             key={notice}
@@ -198,14 +202,14 @@ export function renderResourceUsagePopoverFooter({
         >
           {orphanCount === 1
             ? translate(
-                'auto.components.status.bar.ResourceUsageStatusSegment.c7e3b1a0d9f2',
-                'End {{value0}} orphan terminal',
-                { value0: orphanCount }
+                'auto.components.status.bar.ResourceUsageStatusSegment.endOrphanTerminals_one',
+                'End {{count}} orphan terminal',
+                { count: orphanCount }
               )
             : translate(
-                'auto.components.status.bar.ResourceUsageStatusSegment.d8f4c2b1e0a3',
-                'End {{value0}} orphan terminals',
-                { value0: orphanCount }
+                'auto.components.status.bar.ResourceUsageStatusSegment.endOrphanTerminals_other',
+                'End {{count}} orphan terminals',
+                { count: orphanCount }
               )}
         </button>
       ) : null}

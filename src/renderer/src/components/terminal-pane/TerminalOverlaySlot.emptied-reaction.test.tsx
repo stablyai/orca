@@ -73,8 +73,7 @@ function renderFloatingSlot(): void {
   })
 }
 
-// Closing the last floating pane from inside the panel keeps keyboard ownership for the next
-// Cmd/Ctrl+T — the same as closing its tab.
+// Emptying the floating panel retains keyboard ownership for the next Cmd/Ctrl+T, as tab closes do.
 describe('closing the last floating terminal pane', () => {
   beforeEach(() => {
     container = document.createElement('div')

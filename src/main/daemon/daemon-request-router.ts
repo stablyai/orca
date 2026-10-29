@@ -1,3 +1,5 @@
+import { handleDaemonTerminalKill } from './daemon-terminal-kill'
+import { handleDaemonFencedTermination } from './daemon-fenced-termination'
 import { performance } from 'node:perf_hooks'
 import { setPtyOwnerHostColors } from '../../shared/pty-owner-color-query-colors'
 import type { ConnectedDaemonClient, DaemonClientConnections } from './daemon-client-connections'
@@ -99,7 +101,14 @@ export class DaemonRequestRouter {
           request.payload.background === true
         )
       case 'kill':
-        return this.kill(clientId, request.payload.sessionId, request.payload.immediate)
+        if (
+          request.payload.expectedIncarnationId !== undefined ||
+          request.payload.requireNoAgentOwner !== undefined ||
+          request.payload.requireUnattached !== undefined
+        ) {
+          return handleDaemonFencedTermination(request.payload, this.options)
+        }
+        return handleDaemonTerminalKill(clientId, request.payload, this.options)
       case 'signal':
         this.options.host.signal(request.payload.sessionId, request.payload.signal)
         return {}
@@ -199,30 +208,6 @@ export class DaemonRequestRouter {
       }
       throw error
     }
-    return {}
-  }
-
-  private async kill(
-    clientId: string,
-    sessionId: string,
-    immediate: boolean | undefined
-  ): Promise<Record<string, never>> {
-    const canceledPendingSpawn = this.options.preparations.cancel(sessionId)
-    this.options.attachments.clearInput(sessionId)
-    const attribution = { sessionId, immediate: immediate === true, clientId }
-    try {
-      await this.options.host.kill(sessionId, { immediate })
-    } catch (error) {
-      if (!(canceledPendingSpawn && error instanceof SessionNotFoundError)) {
-        this.options.log.log('session-kill-failed', {
-          ...attribution,
-          errorName: error instanceof Error ? error.name : typeof error,
-          error: error instanceof Error ? error.message : String(error)
-        })
-        throw error
-      }
-    }
-    this.options.log.log('session-killed', attribution)
     return {}
   }
 

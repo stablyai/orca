@@ -16,12 +16,7 @@ function entry(
   }
 }
 
-/**
- * #19 guard: the narrowed `useShallow(findTabAgentEntry(...))` selector must
- * resolve to exactly the same pane entry — and thus the same
- * resolveNativeChatSession result — as the old whole-map scan. These tests lock
- * the selector's resolution semantics so the perf narrowing can't drift.
- */
+// Keep narrowed selector resolution aligned with tab-level pane lookup (#19).
 describe('findTabAgentEntry (#19 selector)', () => {
   it('returns the entry whose paneKey carries the tab id prefix', () => {
     const target = entry({ paneKey: 'tab-1:leaf-a', agentType: 'claude' })
@@ -54,7 +49,6 @@ describe('findTabAgentEntry (#19 selector)', () => {
     const map: Record<string, AgentStatusEntry> = {
       'tab-10:leaf-a': entry({ paneKey: 'tab-10:leaf-a' })
     }
-    // `tab-1:` prefix must not match `tab-10:` — the colon delimiter guards this.
     expect(findTabAgentEntry(map, 'tab-1')).toBeUndefined()
   })
 
@@ -70,7 +64,6 @@ describe('findTabAgentEntry (#19 selector)', () => {
       [paneKey]: target
     }
 
-    // Old path: scan whole map, then fall back to `${tabId}:` when absent.
     const oldEntry = findTabAgentEntry(map, 'tab-1')
     const oldResolution = resolveNativeChatSession({
       paneKey: oldEntry?.paneKey ?? 'tab-1:',
@@ -79,7 +72,6 @@ describe('findTabAgentEntry (#19 selector)', () => {
       ptyId: null
     })
 
-    // New path: narrowed selector returns the same entry; same resolution.
     const newEntry = findTabAgentEntry(map, 'tab-1')
     const newResolution = resolveNativeChatSession({
       paneKey: newEntry?.paneKey ?? 'tab-1:',

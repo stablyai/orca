@@ -114,7 +114,6 @@ describe('shared child execution projection', () => {
       expect(h.tracker.state).toBeNull()
       h.send(turn('turn/started', CHILD, 'child-2'))
       h.send(turn('turn/completed', PRIMARY, parent))
-      // One entry per child: the follow-up reopens the child that was spawned.
       expect(h.tracker.state?.tasks).toHaveLength(1)
       h.send(turn('turn/completed', CHILD, 'child-1'))
       h.send(turn('turn/started', CHILD, 'child-1'))

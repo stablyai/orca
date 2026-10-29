@@ -73,7 +73,7 @@ vi.mock('node:fs/promises', () => ({
   default: { writeFile: fsWriteFileMock, mkdir: fsMkdirMock }
 }))
 
-vi.mock('../ipc/filesystem-auth', () => ({
+vi.mock('../ipc/filesystem/filesystem-auth', () => ({
   PATH_ACCESS_DENIED_MESSAGE:
     'Access denied: path resolves outside allowed directories. If this blocks a legitimate workflow, please file a GitHub issue.',
   resolveAuthorizedPath: resolveAuthorizedPathMock
@@ -186,7 +186,7 @@ describe('registerClipboardHandlers', () => {
     fsMkdirMock.mockReset()
     fsMkdirMock.mockResolvedValue(undefined)
     fsOpendirMock.mockReset()
-    // Why: handler registration kicks off the expired-staging sweep; an empty temp root keeps it inert.
+    // Registration starts expired-staging cleanup; an empty temp root keeps it inert.
     fsOpendirMock.mockImplementation(async () => ({
       async *[Symbol.asyncIterator]() {},
       close: vi.fn().mockResolvedValue(undefined)
@@ -209,7 +209,7 @@ describe('registerClipboardHandlers', () => {
     randomUUIDMock.mockReset()
     randomUUIDMock.mockReturnValue('00000000-0000-4000-8000-000000000000')
     callRuntimeEnvironmentMock.mockReset()
-    setTrustedClipboardRendererWebContentsId(null)
+    setTrustedClipboardRendererWebContentsId(17)
   })
 
   afterEach(() => {
@@ -314,7 +314,7 @@ describe('registerClipboardHandlers', () => {
     expect(runProcessMock).not.toHaveBeenCalled()
   })
 
-  it('rejects clipboard IPC from destroyed, browser, and mismatched dev-origin senders', async () => {
+  it('rejects clipboard IPC from unpinned file://, destroyed, browser, and mismatched dev-origin senders', async () => {
     registerClipboardHandlers({} as never)
 
     const handlers = getRegisteredHandlers()
@@ -324,6 +324,12 @@ describe('registerClipboardHandlers', () => {
     await expect(
       handlers.get('clipboard:readText')?.(makeClipboardEvent({ getType: () => 'webview' }))
     ).rejects.toThrow('Unauthorized clipboard IPC sender')
+
+    setTrustedClipboardRendererWebContentsId(null)
+    vi.stubEnv('ELECTRON_RENDERER_URL', '')
+    await expect(handlers.get('clipboard:readText')?.(makeClipboardEvent())).rejects.toThrow(
+      'Unauthorized clipboard IPC sender'
+    )
 
     vi.stubEnv('ELECTRON_RENDERER_URL', 'http://localhost:5173')
 

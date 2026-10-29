@@ -86,12 +86,17 @@ export function DiffNotesPreviewPopover({
         ))}
         {remainingCount > 0 && (
           <div className="px-2 py-1 text-[11px] text-muted-foreground">
-            {remainingCount}{' '}
-            {translate('auto.components.editor.CombinedDiffViewer.e3b9a6ce02', 'more')}
             {remainingCount === 1
-              ? translate('auto.components.editor.CombinedDiffViewer.8ab3248fd8', 'note')
-              : translate('auto.components.editor.CombinedDiffViewer.0fb870a0fe', 'notes')}{' '}
-            {translate('auto.components.editor.CombinedDiffViewer.35cc27aeb2', 'in Source Control')}
+              ? translate(
+                  'auto.components.editor.CombinedDiffViewer.moreNotesInSourceControl_one',
+                  '{{count}} more note in Source Control',
+                  { count: remainingCount }
+                )
+              : translate(
+                  'auto.components.editor.CombinedDiffViewer.moreNotesInSourceControl_other',
+                  '{{count}} more notes in Source Control',
+                  { count: remainingCount }
+                )}
           </div>
         )}
       </div>
@@ -129,15 +134,17 @@ export function ClearDiffNotesDialog({
             {translate('auto.components.editor.CombinedDiffViewer.948a5fd6c8', 'Clear Notes')}
           </DialogTitle>
           <DialogDescription className="text-xs">
-            {translate('auto.components.editor.CombinedDiffViewer.84898c548d', 'Clear')}{' '}
-            {diffCommentCount}{' '}
             {diffCommentCount === 1
-              ? translate('auto.components.editor.CombinedDiffViewer.8ab3248fd8', 'note')
-              : translate('auto.components.editor.CombinedDiffViewer.0fb870a0fe', 'notes')}{' '}
-            {translate(
-              'auto.components.editor.CombinedDiffViewer.80a286d8f5',
-              'from this worktree?'
-            )}
+              ? translate(
+                  'auto.components.editor.CombinedDiffViewer.clearNotesConfirm_one',
+                  'Clear {{count}} note from this worktree?',
+                  { count: diffCommentCount }
+                )
+              : translate(
+                  'auto.components.editor.CombinedDiffViewer.clearNotesConfirm_other',
+                  'Clear {{count}} notes from this worktree?',
+                  { count: diffCommentCount }
+                )}
           </DialogDescription>
         </DialogHeader>
         <DialogFooter>

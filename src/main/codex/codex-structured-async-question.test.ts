@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { extractPendingAsk } from '../../shared/native-chat-ask'
+import { extractPendingAsk } from '../../shared/native-chat/input/native-chat-ask'
 import { codexItemBody } from './codex-structured-item-translation'
 
 describe('Codex async question items', () => {

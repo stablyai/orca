@@ -116,7 +116,7 @@ describe('readAuthorizedDocPreviewFile', () => {
     ).rejects.toThrow(DOC_PREVIEW_PATH_AUTHORIZATION_ERROR)
   })
 
-  // Why the skip: FIFOs are a POSIX shape; Windows has no mkfifo and no equivalent hazard here.
+  // FIFO hazards are POSIX-only; Windows has no mkfifo.
   it.skipIf(process.platform === 'win32')(
     'refuses a writer-less FIFO instead of blocking the open forever',
     async () => {

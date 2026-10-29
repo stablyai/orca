@@ -41,8 +41,7 @@ function AgentRow({
           aria-label={name}
           onCheckedChange={(value) => onCheckedChange?.(value === true)}
         />
-        {/* Why: a fixed name column lines the paths up, so the eye reads one
-            list of destinations instead of a ragged edge. */}
+        {/* Align destination paths with a fixed agent-name column. */}
         <span className="w-28 shrink-0 truncate font-medium text-foreground">{name}</span>
         <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-muted-foreground">
           {directory}
@@ -57,10 +56,7 @@ function AgentRow({
   )
 }
 
-/**
- * Explains canonical .agents/skills consumers in a dedicated header card, while
- * offering clean selectable checkboxes for agents with custom directory placements.
- */
+/** Explain canonical .agents/skills consumers separately from selectable custom placements. */
 export function SkillInstallAgentPicker({
   id,
   scope,
@@ -150,14 +146,21 @@ export function SkillInstallAgentPicker({
                 ) : (
                   <>
                     <span className="font-medium text-foreground">
-                      {translate(
-                        'auto.components.skills.install.agentsCountLabel',
-                        '{{count}} {{label}}',
-                        {
-                          count: chosen.length,
-                          label: chosen.length === 1 ? 'agent' : 'agents'
-                        }
-                      )}
+                      {chosen.length === 1
+                        ? translate(
+                            'auto.components.skills.install.agentCount_one',
+                            '{{count}} agent',
+                            {
+                              count: chosen.length
+                            }
+                          )
+                        : translate(
+                            'auto.components.skills.install.agentCount_other',
+                            '{{count}} agents',
+                            {
+                              count: chosen.length
+                            }
+                          )}
                     </span>
                     <span className="text-muted-foreground"> · {chosen.join(', ')}</span>
                   </>

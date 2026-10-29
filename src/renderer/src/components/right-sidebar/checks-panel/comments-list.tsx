@@ -49,7 +49,8 @@ export function PRCommentsList(props: PRCommentsListProps): React.JSX.Element {
     onResolve,
     onEditComment,
     onDeleteComment,
-    onSetReaction
+    onSetReaction,
+    onOpenLocation
   } = props
   const {
     presentation,
@@ -78,12 +79,10 @@ export function PRCommentsList(props: PRCommentsListProps): React.JSX.Element {
   } = useCommentsListState(props)
   return (
     <div className="border-t border-border">
-      {/* Header */}
       <div
         className={cn(
           presentation.sectionHeader,
-          // Why: the checks sidebar scrolls as one column; pinning this header keeps
-          // filter and add-comment actions reachable while reading long threads.
+          // Keep filters and Add Comment reachable while the sidebar scrolls through long threads.
           'sticky top-0 z-10 bg-sidebar/95 backdrop-blur-sm'
         )}
       >
@@ -140,11 +139,19 @@ export function PRCommentsList(props: PRCommentsListProps): React.JSX.Element {
                           variant="default"
                           size="icon-xs"
                           className="relative"
-                          aria-label={translate(
-                            'auto.components.right.sidebar.checks.panel.content.d91f2a6c39',
-                            'Send {{value0}} queued comments to AI',
-                            { value0: selectedCommentQueueCount }
-                          )}
+                          aria-label={
+                            selectedCommentQueueCount === 1
+                              ? translate(
+                                  'auto.components.right.sidebar.checks.panel.content.sendQueuedCommentsToAi_one',
+                                  'Send {{count}} queued comment to AI',
+                                  { count: selectedCommentQueueCount }
+                                )
+                              : translate(
+                                  'auto.components.right.sidebar.checks.panel.content.sendQueuedCommentsToAi_other',
+                                  'Send {{count}} queued comments to AI',
+                                  { count: selectedCommentQueueCount }
+                                )
+                          }
                           disabled={
                             selectedCommentQueueCount === 0 ||
                             commentsLoading ||
@@ -166,11 +173,17 @@ export function PRCommentsList(props: PRCommentsListProps): React.JSX.Element {
                       <TooltipContent side="top" sideOffset={4}>
                         {resolveCommentsWithAIDisabled && resolveCommentsWithAIDisabledReason
                           ? resolveCommentsWithAIDisabledReason
-                          : translate(
-                              'auto.components.right.sidebar.checks.panel.content.d91f2a6c39',
-                              'Send {{value0}} queued comments to AI',
-                              { value0: selectedCommentQueueCount }
-                            )}
+                          : selectedCommentQueueCount === 1
+                            ? translate(
+                                'auto.components.right.sidebar.checks.panel.content.sendQueuedCommentsToAi_one',
+                                'Send {{count}} queued comment to AI',
+                                { count: selectedCommentQueueCount }
+                              )
+                            : translate(
+                                'auto.components.right.sidebar.checks.panel.content.sendQueuedCommentsToAi_other',
+                                'Send {{count}} queued comments to AI',
+                                { count: selectedCommentQueueCount }
+                              )}
                       </TooltipContent>
                     </Tooltip>
                     <Tooltip>
@@ -311,7 +324,6 @@ export function PRCommentsList(props: PRCommentsListProps): React.JSX.Element {
         )}
       </div>
 
-      {/* List */}
       {commentsLoading && comments.length === 0 ? (
         <div className="flex items-center justify-center py-6">
           <LoaderCircle className="size-4 animate-spin text-muted-foreground" />
@@ -371,6 +383,7 @@ export function PRCommentsList(props: PRCommentsListProps): React.JSX.Element {
                 onEditComment={onEditComment}
                 onDeleteComment={onDeleteComment}
                 onSetReaction={onSetReaction}
+                onOpenLocation={onOpenLocation}
               />
             </>
           )}

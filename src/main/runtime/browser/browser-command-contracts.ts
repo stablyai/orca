@@ -24,8 +24,9 @@ export type ResolvedBrowserPageWebContents = {
 }
 
 export type RuntimeBrowserCommandHost = {
+  getRuntimeId(): string
   getAgentBrowserBridge(): AgentBrowserBridge | null
-  resolveWorktreeSelector(selector: string): Promise<{
+  resolveWorkspaceSelector(selector: string): Promise<{
     id: string
     repoId?: string
     hostId?: ExecutionHostId
@@ -44,17 +45,16 @@ export type RuntimeBrowserCommandHost = {
   getRuntimeBrowserPageRegistry(): RuntimeBrowserPageRegistry
   getAuthoritativeWindow(): BrowserWindow
   getAvailableAuthoritativeWindow(): BrowserWindow | null
-  // Why: headless serve backs pages with a main-process offscreen backend; null when the environment can't support offscreen browsing.
+  /** Headless offscreen backend, or null where unsupported. */
   getOffscreenBrowserBackend(): BrowserBackend | null
-  // Why: the session-tab snapshot owns focus, so a headless create must mark itself active or paired clients snap back to a terminal.
+  // Update snapshot focus or paired clients snap back to a terminal.
   markHeadlessBrowserSessionTabActive?(
     worktreeId: string | undefined,
     browserPageId: string,
     options?: BrowserSessionTabSelectionOptions
   ): void
   notifyHeadlessBrowserSessionTabsChanged?(worktreeId: string): void
-  /** True when a runtime-owned session row for that page existed and was retired. */
   retireRuntimeOwnedBrowserSessionTab?(worktreeId: string, browserPageId: string): boolean | void
-  /** Saved browser tabs on a host with no window; their writes and starts do nothing with one. */
+  /** Persist/start only when no host window exists. */
   serveBrowserTabs?: Pick<ServeBrowserTabs, 'opened' | 'start'>
 }

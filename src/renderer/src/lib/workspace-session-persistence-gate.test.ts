@@ -12,8 +12,7 @@ describe('shouldPersistWorkspaceSession', () => {
   })
 
   it('returns false when the UI is ready but hydration failed', () => {
-    // Why: the error path mounts the UI but must keep the session writer
-    // closed so an empty in-memory session cannot overwrite disk.
+    // Error UI may mount, but persistence must remain closed or empty memory overwrites disk.
     expect(
       shouldPersistWorkspaceSession({
         workspaceSessionReady: true,

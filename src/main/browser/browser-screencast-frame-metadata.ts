@@ -30,9 +30,7 @@ function selectFrameDeviceSize(
   imageSize: number | undefined
 ): number | undefined {
   if (requestedCssSize) {
-    // Why: paired clients own the remote browser viewport. If Chromium briefly
-    // reports the host BrowserView size, publishing that size makes the client
-    // compensate with crop/contain math and exposes blank compositor space.
+    // Client viewport dimensions take precedence over transient host-surface dimensions.
     return requestedCssSize
   }
   return reportedSize ?? imageSize

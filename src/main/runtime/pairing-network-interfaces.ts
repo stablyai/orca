@@ -16,12 +16,11 @@ export type NetworkInterface = {
 export type DefaultRouteInterfaceLookup = () => Promise<ReadonlySet<string> | null>
 
 function isUsableIPv6Address(address: string): boolean {
-  // Why: link-local IPv6 needs an unadvertised scope id, so a QR hostname cannot connect to it.
+  // Link-local IPv6 needs a scope id the QR hostname cannot advertise.
   return !/^fe[89ab][0-9a-f]:/i.test(address)
 }
 
-// Why: Node's `0.0.0.0` listener never accepts IPv6, so a v6 interface would mint a link nothing
-// answers (#31161); only an IPv6 bind (`::` is dual-stack by default) serves both families.
+// 0.0.0.0 cannot accept IPv6; only an IPv6 bind can offer both families (#31161).
 function listenerServesFamily(listenerHost: string, family: 'IPv4' | 'IPv6'): boolean {
   const listenerFamily = isIP(listenerHost)
   if (listenerFamily === 6 && /^[0:]+$/.test(listenerHost)) {
@@ -42,7 +41,7 @@ export async function getPairingNetworkInterfaces(
   const result: NetworkInterface[] = []
   const interfaces = networkInterfaces()
   const hasHyperVInterface = Object.keys(interfaces).some((name) => /^vEthernet /i.test(name))
-  // Why: an unavailable route query is unknown, so no vEthernet adapter receives reachability proof.
+  // Unknown default route cannot attest vEthernet reachability.
   const defaultRouteInterfaceNames = hasHyperVInterface
     ? await getDefaultRouteInterfaceNames()
     : new Set<string>()

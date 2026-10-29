@@ -1,4 +1,4 @@
-import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime-pty-id'
+import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import type { ManagedPaneInternal } from '@/lib/pane-manager/pane-manager-types'
 import { safeFit } from '@/lib/pane-manager/pane-tree-ops'
 import { requestStablePaneFit } from '@/lib/pane-manager/pane-fit-resize-observer'
@@ -29,9 +29,7 @@ export function installPtyResizeGeometry(session: ConnectPanePtySession): void {
     session.pendingPaneGeometryChanged = false
     const currentPtyId = session.transport.getPtyId()
     if (!currentPtyId) {
-      // Why: ResizeObserver may deliver its initial measurement before the
-      // remote binding completes; retain that passive baseline for the first
-      // real focused resize instead of swallowing the user's first claim.
+      // Initial ResizeObserver measurements can precede binding; retain them so the first focused resize still claims ownership.
       const proposed = session.readProposedTerminalGrid()
       if (proposed) {
         session.lastObservedDesktopGrid = proposed
@@ -41,8 +39,7 @@ export function installPtyResizeGeometry(session: ConnectPanePtySession): void {
     const fitOverride = getFitOverrideForPty(currentPtyId)
     if (!fitOverride) {
       if (session.pane.terminal.cols > 0 && session.pane.terminal.rows > 0) {
-        // Why: record the local grid before a later remote hold parks xterm;
-        // the first real window/split resize can then claim immediately.
+        // Record the local grid before remote holding so the next genuine layout change can claim immediately.
         session.lastObservedDesktopGrid = {
           cols: session.pane.terminal.cols,
           rows: session.pane.terminal.rows
@@ -79,9 +76,7 @@ export function installPtyResizeGeometry(session: ConnectPanePtySession): void {
           documentFocused: document.hasFocus()
         })
       ) {
-        // Why: a focused, visible layout change is genuine activity; release
-        // the park and update xterm before claiming so the owner does not keep
-        // rendering the prior owner's stale grid.
+        // A focused visible layout change releases parking; update xterm before claiming to avoid rendering the previous owner’s grid.
         session.suppressViewportClaimTerminalResize = true
         try {
           session.pane.terminal.resize(proposed.cols, proposed.rows)
@@ -119,25 +114,12 @@ export function installPtyResizeGeometry(session: ConnectPanePtySession): void {
             session.handleObservedPaneGeometry
           )
         })
-  // Why: pane.xtermContainer is created later in pane-lifecycle's
-  // attachWebgl/initial-fit path; pane.container is always present at the
-  // moment connectPanePty runs (it's the .pane element). Both report the
-  // same layout signal — when the outer pane resizes, the inner xterm
-  // container resizes too — so this is the safe element to observe.
+  // Observe pane.container, which exists at connect; the inner xterm container is created later but follows the same layout.
   if (session.geometryReportObserver && session.pane.container instanceof Element) {
     session.geometryReportObserver.observe(session.pane.container)
   }
 
-  // Why: the deferred-rAF fit can spawn the PTY at a stale width when the pane's
-  // real (e.g. split/narrower) layout has not settled by the first frame — the
-  // PTY is born at the wide window width while xterm later reflows to the pane
-  // width. The corrective onResize is then dropped (isRendererPtyResizeAuthoritative()
-  // is false mid-mount), pinning process.stdout.columns forever and garbling
-  // TUIs. The reconcile re-fits across frames until the grid settles and forces
-  // the PTY to xterm's dimensions; the spawn-time sync is authoritative by
-  // definition so it bypasses the visibility gate (but not the mobile-fit
-  // override, which legitimately parks the PTY at phone dims). See
-  // pty-size-reconcile.ts for the convergence loop.
+  // Deferred first fit can spawn at stale width while visibility suppresses correction; reconcile across frames, bypassing visibility but honoring mobile ownership (pty-size-reconcile.ts).
   session.ptySizeReconcileHandle = null
   session.liveScrollbackRestore = null
   session.reconcilePtySizeAfterSpawn = (
@@ -150,12 +132,9 @@ export function installPtyResizeGeometry(session: ConnectPanePtySession): void {
       spawnCols,
       spawnRows,
       isAlive: () => !session.disposed && session.transport.getPtyId() === ptyId,
-      // Mobile legitimately parks the PTY at phone dims; skip those frames
-      // (neither fit nor forward) instead of cancelling the reconcile window.
+      // Skip mobile-owned frames without cancelling the reconcile window.
       isParked: () => Boolean(getFitOverrideForPty(ptyId)) || isPtyLocked(ptyId),
-      // Once the renderer resize is authoritative (pane visible), the live
-      // onResize owns future corrections, so the reconcile can hand off after
-      // the grid stabilizes. While hidden it keeps watching for a late settle.
+      // Hand off only after visible grid stability; hidden mounts still need late-layout correction.
       isAuthoritative: () => session.isRendererPtyResizeAuthoritative(),
       measure: () => {
         if (!safeFit(session.pane)) {
@@ -170,12 +149,7 @@ export function installPtyResizeGeometry(session: ConnectPanePtySession): void {
           session.transport.resize(cols, rows)
         }
       },
-      // Why: confirm the PTY actually applied the size we forwarded before the
-      // reconcile hands off. transport.resize is fire-and-forget for daemon/SSH
-      // PTYs, so the loop can otherwise settle on a size the PTY dropped, leaving
-      // it pinned wide while xterm shows narrow — the mount-time desync. Skip
-      // remote-runtime PTYs (separate viewport channel; pty:getSize never tracks
-      // them) so they fall back to the grid-stable handoff.
+      // Verify applied size before handoff because daemon/SSH resize is fire-and-forget; remote-runtime hosts use their separate viewport channel.
       getAppliedSize: isRemoteRuntimePtyId(ptyId) ? undefined : () => window.api.pty.getSize(ptyId),
       requestFrame: (callback) => requestAnimationFrame(callback),
       cancelFrame: (handle) => {

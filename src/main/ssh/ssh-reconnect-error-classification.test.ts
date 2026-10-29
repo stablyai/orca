@@ -13,7 +13,7 @@ import { HostKeyVerificationError } from './ssh-host-key-decision'
 describe('isTransientReconnectError', () => {
   it('treats the system SSH connect timeout as recoverable', () => {
     const err = new Error('System SSH connection timed out')
-    // Guards the split: widening isTransientError would spend 5 connect() attempts on this.
+    // Keep initial retries narrow; widening them would spend five connect attempts before ladder backoff.
     expect(isTransientError(err)).toBe(false)
     expect(isTransientReconnectError(err)).toBe(true)
   })
@@ -48,8 +48,7 @@ describe('isTransientReconnectError', () => {
     expect(isTransientReconnectError(err)).toBe(true)
   })
 
-  // A server-side rejection prints the same verb without "remote"; retrying it forever would hide a
-  // real misconfiguration behind the ladder.
+  // Bare Connection closed by also describes server rejection; do not retry it indefinitely.
   it('keeps a bare "Connection closed by <host> port <n>" permanent', () => {
     expect(
       isTransientReconnectError(
@@ -61,7 +60,7 @@ describe('isTransientReconnectError', () => {
   })
 
   it('treats a pre-banner socket close as recoverable on the ladder only', () => {
-    // ssh2 attaches no errno here, so the code table alone stranded hosts in 'error' after an outage.
+    // ssh2 banner loss has no errno; reconnect must still recover after outage.
     const err = Object.assign(new Error('Connection lost before handshake'), { level: 'protocol' })
     expect(isTransientError(err)).toBe(false)
     expect(isTransientReconnectError(err)).toBe(true)
@@ -112,23 +111,19 @@ describe('isTransientReconnectError', () => {
     expect(isTransientReconnectError(new Error('something went wrong'))).toBe(false)
   })
 
-  // Retrying re-derives the same verdict, so this would back off against an already-refused host
-  // until the ladder gave up — with the reason buried under nine failed attempts.
+  // Host-key refusal is final, not transient network failure.
   it('never retries a refused host key', () => {
     expect(isTransientReconnectError(new HostKeyVerificationError('key changed', 'mismatch'))).toBe(
       false
     )
   })
 
-  // The classifier is otherwise substring-driven, so a reason that happened to contain network
-  // wording would silently become retryable. The type is what decides.
+  // Typed host-key denial must override any network-like words in its reason.
   it('never retries a refused host key whose reason reads like a network fault', () => {
     const err = new HostKeyVerificationError('connection reset while checking the key', 'mismatch')
     expect(isTransientReconnectError(err)).toBe(false)
   })
 })
-
-// ── isTransientError ─────────────────────────────────────────────────
 
 describe('isTransientError', () => {
   it('returns true for ETIMEDOUT code', () => {
@@ -197,8 +192,6 @@ describe('isTransientError', () => {
   })
 })
 
-// ── isSystemSshFallbackError ─────────────────────────────────────────
-
 describe('isSystemSshFallbackError', () => {
   it('returns true for local reachability errors that system ssh may bypass', () => {
     const hostErr = new Error('host unreachable') as NodeJS.ErrnoException
@@ -218,8 +211,6 @@ describe('isSystemSshFallbackError', () => {
     expect(isSystemSshFallbackError(new Error('connect ETIMEDOUT 1.2.3.4:22'))).toBe(false)
   })
 })
-
-// ── isGssapiSystemSshFallbackCandidate ───────────────────────────────
 
 describe('isGssapiSystemSshFallbackCandidate', () => {
   const authErr = new Error('All configured authentication methods failed')
@@ -262,8 +253,6 @@ describe('isGssapiSystemSshFallbackCandidate', () => {
   })
 })
 
-// ── isAuthError ──────────────────────────────────────────────────────
-
 describe('isAuthError', () => {
   it('returns true for "All configured authentication methods failed"', () => {
     expect(isAuthError(new Error('All configured authentication methods failed'))).toBe(true)
@@ -301,8 +290,6 @@ describe('isAuthError', () => {
     expect(isAuthError(new Error('Permission denied (os error 13)'))).toBe(false)
   })
 })
-
-// ── isAgentFallbackError ────────────────────────────────────────────
 
 describe('isAgentFallbackError', () => {
   it('returns true for ssh2 agent-level failures', () => {

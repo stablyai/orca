@@ -32,9 +32,7 @@ export function TerminalInteractionSection({
   updateSettings,
   searchQuery
 }: TerminalInteractionSectionProps): React.JSX.Element {
-  // Why: the context-menu escape hatch is gated on the Control key on every
-  // platform (see use-terminal-pane-context-menu), so macOS wording is
-  // "Control-click" while Windows/Linux keep "Ctrl+right-click".
+  // Context-menu escape always uses Control; call it Control-click on macOS and Ctrl+right-click elsewhere.
   const isMac = isMacPlatform()
   const rightClickPasteDescription = isMac
     ? translate(

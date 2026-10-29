@@ -52,7 +52,7 @@ type TerminalAppearanceSectionProps = {
 type TerminalThemeTarget = 'dark' | 'light'
 
 function scoreThemeTargetIntent(searchQuery: string, entries: SettingsSearchEntry[]): number {
-  // Why: descriptions mention dark/light incidentally; target intent should come from labels and aliases.
+  // Infer dark/light target from labels/aliases, not incidental description mentions.
   return scoreSettingsSearch(
     searchQuery,
     entries.map(({ title, keywords }) => ({ title, keywords }))
@@ -100,8 +100,7 @@ export function TerminalAppearanceSection({
   const lightThemeTargetScore = scoreThemeTargetIntent(searchQuery, lightThemeSearchEntries)
   const preferredThemeTarget = getPreferredThemeTarget(darkThemeTargetScore, lightThemeTargetScore)
 
-  // Why: low-frequency knobs are force-opened during search; render each group
-  // only when its own search matches so an active query never leaves a dangling header.
+  // Filter each advanced group independently so search cannot leave empty headers.
   const typographyMatches = matchesSettingsSearch(
     searchQuery,
     getTerminalAdvancedTypographySearchEntries()
@@ -172,9 +171,7 @@ export function TerminalAppearanceSection({
 
   return (
     <div className="space-y-5">
-      {/* Primary: font + theme + previews. The expanded section column is far
-          narrower than the xl breakpoint, so the preview grids inside the
-          theme catalog already stack full-width below their controls. */}
+      {/* Preview grids stack full-width because this expanded column stays narrower than xl. */}
       {showPrimaryTypography ? (
         <section className="space-y-3 pt-2">
           <SettingsSubsectionHeader

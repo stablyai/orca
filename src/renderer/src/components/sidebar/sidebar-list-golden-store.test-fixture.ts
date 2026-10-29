@@ -16,7 +16,6 @@ import {
   wt
 } from './sidebar-list-golden-factories.test-fixture'
 
-// Hosts: local, an SSH box, and a paired Orca server (runtime environment).
 const orca = repo('orca', 'orca', { projectGroupId: 'pg-work' })
 const orcaSsh = repo('orca-ssh', 'orca', { connectionId: 'gpu-vm' })
 const api = repo('api', 'api', { executionHostId: 'runtime:env-1' })
@@ -56,7 +55,6 @@ const aY = wt(api, 'api-y', {
 })
 const lMain = mainWt(lab, { sortOrder: 3 })
 const lMr = wt(lab, 'gitlab-mr', { sortOrder: 25, linkedGitLabMR: 7 })
-// The same workspace id published by two hosts.
 const sLocal = wt(shared, 'same', { sortOrder: 15, hostId: 'local' })
 const sSsh: Worktree = { ...sLocal, hostId: 'ssh:gpu-vm', isPinned: true, sortOrder: 16 }
 const eMain = mainWt(ext, { sortOrder: 2 })
@@ -126,7 +124,6 @@ export type GoldenView = Pick<
   pinnedInGroups: boolean
 }
 
-/** Store state for one golden capture; scenario overrides land on top. */
 export function buildGoldenStoreState(
   view: GoldenView,
   overrides: Partial<AppState> = {}

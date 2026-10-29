@@ -2,8 +2,10 @@ import { describe, expect, it, vi } from 'vitest'
 import type { AppState } from '../types'
 import { GRAB_BUDGET, type BrowserPageAnnotation } from '../../../../shared/browser-grab-types'
 import { makeAnnotation } from './browser-annotation-test-fixture'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
+import { FLOATING_TERMINAL_WORKTREE_ID, getDefaultSettings } from '../../../../shared/constants'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import type { BrowserSessionProfile } from '../../../../shared/browser-workspace-types'
+import type { ManagedBrowserProfileOwner } from '../../../../shared/browser-profile-scope'
 import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
 import {
   createBrowserMockApi,
@@ -77,6 +79,23 @@ describe('createBrowserSlice annotations', () => {
     })
   })
 
+  it('announces a tab that creation activates, but not one opened in the background', async () => {
+    const { store } = await createTestStoreDrawnFromMain()
+    mockApi.browser.notifyActiveTabChanged.mockClear()
+
+    const background = store
+      .getState()
+      .createBrowserTab('wt-1', 'https://background.example.com', { activate: false })
+    const active = store.getState().createBrowserTab('wt-1', 'https://active.example.com')
+
+    expect(mockApi.browser.notifyActiveTabChanged).not.toHaveBeenCalledWith({
+      browserPageId: background.activePageId
+    })
+    expect(mockApi.browser.notifyActiveTabChanged).toHaveBeenLastCalledWith({
+      browserPageId: active.activePageId
+    })
+  })
+
   it('keeps a requested canonical page identity distinct from its workspace', async () => {
     const { store, main } = await createTestStoreDrawnFromMain()
     const tab = store.getState().createBrowserTab('wt-1', 'about:blank', {
@@ -122,27 +141,6 @@ describe('createBrowserSlice annotations', () => {
       url: 'https://accounts.google.com/',
       sessionProfileId: 'profile-1'
     })
-  })
-
-  it('retains saved page annotations while retiring geometry when the URL changes', async () => {
-    const { store, main } = await createTestStoreDrawnFromMain()
-    const tab = store.getState().createBrowserTab('wt-1', 'https://example.com')
-    await main.settle()
-    const pageId = tab.activePageId
-    if (!pageId) {
-      throw new Error('Expected a new browser page')
-    }
-
-    store.getState().addBrowserPageAnnotation(makeAnnotation(pageId))
-    expect(store.getState().browserAnnotationsByPageId[pageId]).toHaveLength(1)
-
-    const saved = store.getState().browserAnnotationsByPageId[pageId]
-    store.getState().setBrowserPageUrl(pageId, 'https://example.com/next')
-    store.getState().setBrowserPageUrl(pageId, 'https://example.com')
-
-    expect(store.getState().browserAnnotationsByPageId[pageId]).toBe(saved)
-    expect(saved?.[0]?.payload.page.sanitizedUrl).toBe('https://example.com')
-    expect(store.getState().browserAnnotationMarkerIdsByPageId[pageId]).toBeUndefined()
   })
 
   it('can commit a navigation URL without hiding an active recovery error', async () => {
@@ -283,6 +281,68 @@ describe('createBrowserSlice annotations', () => {
     expect(remoteTab.sessionProfileId).toBe('runtime-profile')
   })
 
+  it('gives each repo its own profile under the per-repo scope and holds pages until main has it', async () => {
+    const created = new Map<string, (profile: BrowserSessionProfile) => void>()
+    const ensureMock = vi.fn(
+      ({ owner }: { owner: ManagedBrowserProfileOwner }) =>
+        new Promise<BrowserSessionProfile>((resolve) => created.set(owner.id, resolve))
+    )
+    Object.assign(mockApi.browser, { sessionEnsureManagedProfile: ensureMock })
+    const { store, main } = await createTestStoreDrawnFromMain({
+      repos: [],
+      settings: { ...getDefaultSettings('/tmp'), browserProfileScope: 'repo' },
+      defaultBrowserSessionProfileId: 'user-default'
+    })
+
+    const first = store.getState().createBrowserTab('repo-a::/a/one', 'about:blank')
+    const sibling = store.getState().createBrowserTab('repo-a::/a/two', 'about:blank')
+    const other = store.getState().createBrowserTab('repo-b::/b/one', 'about:blank')
+    await main.settle()
+
+    const placeholderId = first.sessionProfileId ?? ''
+    expect(sibling.sessionProfileId).toBe(placeholderId)
+    expect(other.sessionProfileId).not.toBe(placeholderId)
+    expect(placeholderId).not.toBe('user-default')
+    expect(ensureMock.mock.calls.map(([args]) => args.owner)).toEqual([
+      { kind: 'repo', id: 'repo-a' },
+      { kind: 'repo', id: 'repo-b' }
+    ])
+    expect(store.getState().managedBrowserProfileStatusById[placeholderId]).toBe('pending')
+    // A placeholder that outlives this run must load nowhere, never on the shared Default jar.
+    expect(first.sessionPartition).toBe(`persist:orca-browser-unminted-${placeholderId}`)
+    store.getState().closeBrowserTab(sibling.id)
+    await main.settle()
+
+    const profile: BrowserSessionProfile = {
+      id: 'minted-by-main',
+      scope: 'isolated',
+      partition: 'persist:orca-browser-session-minted-by-main',
+      label: 'Repo: repo-a',
+      source: null,
+      owner: { kind: 'repo', id: 'repo-a' }
+    }
+    created.get('repo-a')?.(profile)
+    await vi.waitFor(() =>
+      expect(store.getState().managedBrowserProfileStatusById[placeholderId]).toBeUndefined()
+    )
+    // A tab closed while it waited reopens on the profile main made, not the placeholder.
+    expect(store.getState().reopenClosedBrowserTab('repo-a::/a/two')).not.toBeNull()
+    await main.settle()
+    const repoATabs = ['repo-a::/a/one', 'repo-a::/a/two'].flatMap(
+      (worktreeId) => store.getState().browserTabsByWorktree[worktreeId] ?? []
+    )
+    expect(repoATabs.map((tab) => tab.sessionPartition ?? null)).toEqual([null, null])
+    expect(repoATabs.map((tab) => tab.sessionProfileId)).toEqual([
+      'minted-by-main',
+      'minted-by-main'
+    ])
+    expect(store.getState().browserSessionProfilesByHostId.local).toEqual([profile])
+
+    const later = store.getState().createBrowserTab('repo-a::/a/three', 'about:blank')
+    expect(later.sessionProfileId).toBe('minted-by-main')
+    expect(store.getState().managedBrowserProfileStatusById['minted-by-main']).toBeUndefined()
+  })
+
   it('preserves browser map references when a page-state update is unchanged', async () => {
     const { store, main } = await createTestStoreDrawnFromMain()
     const tab = store.getState().createBrowserTab('wt-1', 'https://example.com', {
@@ -371,14 +431,49 @@ describe('createBrowserSlice annotations', () => {
     const removed = store.getState().removeBrowserHistoryEntry(visited!.normalizedUrl)
     expect(removed).toBe(visited)
     expect(store.getState().browserUrlHistory).toEqual([])
-    store.getState().restoreBrowserHistoryEntry(removed!)
+    store
+      .getState()
+      .restoreBrowserHistory({ browserUrlHistory: [removed!], workspaceDocHistory: [] })
     expect(store.getState().browserUrlHistory).toEqual([visited])
 
     store.getState().removeBrowserHistoryEntry(visited!.normalizedUrl)
     store.getState().addBrowserHistoryEntry('https://example.com', 'Example')
     const revisited = store.getState().browserUrlHistory
-    store.getState().restoreBrowserHistoryEntry(removed!)
+    store
+      .getState()
+      .restoreBrowserHistory({ browserUrlHistory: [removed!], workspaceDocHistory: [] })
     expect(store.getState().browserUrlHistory).toBe(revisited)
+  })
+
+  it('clears pages and documents visited since a time, and Undo puts back exactly those', () => {
+    vi.useFakeTimers()
+    try {
+      const store = createTestStore()
+      const doc = { kind: 'workspace-doc' as const, worktreeId: 'wt-1', filePath: '/repo/a.html' }
+      vi.setSystemTime(1_000)
+      store.getState().addBrowserHistoryEntry('https://old.example', 'Old')
+      vi.setSystemTime(5_000)
+      store.getState().addBrowserHistoryEntry('https://new.example', 'New')
+      store.getState().recordWorkspaceDocVisit(doc, 'Doc')
+
+      const removed = store.getState().clearBrowserHistory(5_000)
+      expect(store.getState().browserUrlHistory.map((e) => e.title)).toEqual(['Old'])
+      expect(store.getState().workspaceDocHistory).toEqual([])
+
+      store.getState().restoreBrowserHistory(removed)
+      expect(
+        store
+          .getState()
+          .browserUrlHistory.map((e) => e.title)
+          .sort()
+      ).toEqual(['New', 'Old'])
+      expect(store.getState().workspaceDocHistory.map((e) => e.title)).toEqual(['Doc'])
+
+      store.getState().clearBrowserHistory()
+      expect(store.getState().browserUrlHistory).toEqual([])
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('repairs a stale active browser unified-tab label on an otherwise unchanged title update', async () => {

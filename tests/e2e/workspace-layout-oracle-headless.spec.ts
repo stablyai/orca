@@ -1,18 +1,6 @@
-/**
- * Layout oracle scenarios on a headless `orca serve` (orcad and Electron serve), driven only through
- * runtime RPC from paired clients and the local CLI. After every step the runtime's live layout
- * (its `layout.subscribe` stream) is checked against the model rules, what each client is told,
- * the expected panes per tab and, across restarts, the layout from before; its saved profile
- * against the disk-format rules and the round trip. #12723 needs SSH and is not covered.
- *
- * `ORCA_LAYOUT_ORACLE_RECORD=1` records without failing; `ORCA_LAYOUT_ORACLE_REPEAT=<n>` repeats;
- * `ORCA_LAYOUT_ORACLE_HEADLESS_HOSTS=orcad,electron` picks the hosts (both by default).
- *
- * Run:
- *   ORCA_BACKGROUND_LAUNCH=1 SKIP_BUILD=1 pnpm exec playwright test \
- *     tests/e2e/workspace-layout-oracle-headless.spec.ts --config tests/playwright.config.ts \
- *     --project electron-headless --workers=1
- */
+// Drive orcad/Electron serve with paired clients and CLI; after each step compare live layout rules, client views and expected panes, plus restart/disk round trips.
+// #12723 needs SSH and is not covered. ORCA_LAYOUT_ORACLE_RECORD=1 records without failing; ORCA_LAYOUT_ORACLE_REPEAT=<n> repeats; ORCA_LAYOUT_ORACLE_HEADLESS_HOSTS=orcad,electron chooses hosts (both default).
+// Run ORCA_BACKGROUND_LAUNCH=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/workspace-layout-oracle-headless.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1.
 
 import { mkdirSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
@@ -155,11 +143,8 @@ async function groupsOf(run: Run): Promise<GroupView[]> {
   }))
 }
 
-/**
- * Moves a tab through the phone/CLI path, then checks the groups' tab orders and selection: the
- * moved tab is selected where it lands; any other group keeps its selection while that tab stays,
- * else moves on as the desktop's move does, by the tabs client A showed (`shown`, most recent last).
- */
+// Move through phone/CLI: select the moved tab in its destination; other groups keep surviving selection or advance as desktop does.
+// shown carries client A’s tabs, most recent last.
 async function moveTab(
   run: Run,
   step: string,

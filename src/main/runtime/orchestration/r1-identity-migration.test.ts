@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import Database from '../../sqlite/sync-database'
 import { OrchestrationDb } from './db'
+import { DROP_REMOVED_WORK_TRIGGERS_SQL } from './db/reset/removed-orchestration-work-store'
 import { SCHEMA_VERSION } from './db/contract-constants'
 
 const DISPATCH_IDENTITY_COLUMNS = [
@@ -51,6 +52,7 @@ describe('R1 identity migration', () => {
     db = undefined
 
     const v30 = new Database(dbPath)
+    v30.exec(DROP_REMOVED_WORK_TRIGGERS_SQL)
     v30.exec(
       'DROP INDEX IF EXISTS idx_dispatch_retry_of; DROP INDEX IF EXISTS idx_dispatch_resource;'
     )

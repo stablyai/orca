@@ -1,4 +1,4 @@
-import { OrcaRuntimeWithWriteTerminalAgentPrompt } from './terminal-agent-prompt'
+import { OrcaRuntimeWithSubmitTerminalAgentPrompt } from './terminal-agent-prompt-submit'
 import {
   CLAUDE_AGENT_PROMPT_RENDER_MARKER,
   CLAUDE_AGENT_PROMPT_RENDER_QUIET_MS,
@@ -10,7 +10,7 @@ import type {
 } from '../../../../shared/runtime-types'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 
-export abstract class OrcaRuntimeWithCreateAgentPromptRenderGate extends OrcaRuntimeWithWriteTerminalAgentPrompt {
+export abstract class OrcaRuntimeWithCreateAgentPromptRenderGate extends OrcaRuntimeWithSubmitTerminalAgentPrompt {
   protected createAgentPromptRenderGate(
     ptyId: string,
     pasteIngestMs: number
@@ -27,8 +27,7 @@ export abstract class OrcaRuntimeWithCreateAgentPromptRenderGate extends OrcaRun
     let observedMarker = false
     let settled = false
     let ingested = pasteIngestMs <= 0
-    // Why absolute: the ingest clock starts once, here, but the cap is armed twice (at arm()
-    // and again on the marker). Re-adding the whole window would charge ingest twice.
+    // Arm and marker both set this cap; use an absolute deadline to avoid charging ingest twice.
     const ingestDeadlineAt = Date.now() + pasteIngestMs
     let markerCarry = ''
     let quietTimer: NodeJS.Timeout | null = null
@@ -62,8 +61,7 @@ export abstract class OrcaRuntimeWithCreateAgentPromptRenderGate extends OrcaRun
       resolveRender()
     }
     const armQuietTimer = (): void => {
-      // Why: the quiet window measures the agent going still after a *complete* paste.
-      // Silence during ingest is not settlement, so it cannot start the clock.
+      // Quiet starts after complete ingestion; silence during paste cannot settle it.
       if (!ingested) {
         return
       }

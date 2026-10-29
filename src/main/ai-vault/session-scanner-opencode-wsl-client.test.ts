@@ -3,11 +3,18 @@ import { createAccumulator, finalizeSession } from './session-scanner-accumulato
 import type { OpenCodeSqliteProcessOptions } from './session-scanner-opencode-sqlite-process-client'
 
 const mocks = vi.hoisted(() => ({
-  running: vi.fn(async (paths: readonly string[]) => [...paths]),
+  running: vi.fn(async (paths: readonly string[], _options?: { requireConfirmed?: boolean }) => [
+    ...paths
+  ]),
   create: vi.fn((_options: OpenCodeSqliteProcessOptions) => ({ dispose: vi.fn() }))
 }))
-vi.mock('../wsl-running-path-filter', () => ({
-  filterPathsToRunningWslDistrosAsync: mocks.running
+// The admission gate asks the running list for the path's distro; `running` stands in for it.
+vi.mock('../native-chat/wsl-transcript-running-admission', () => ({
+  admitWslTranscriptPath: async (path: string) => {
+    if ((await mocks.running([path], { requireConfirmed: true })).length === 0) {
+      throw new Error('WSL distro is not running.')
+    }
+  }
 }))
 vi.mock('./session-scanner-opencode-sqlite-process-client', () => ({
   createOpenCodeSqliteProcessClient: mocks.create

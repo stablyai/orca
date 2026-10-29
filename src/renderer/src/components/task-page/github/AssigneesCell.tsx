@@ -14,7 +14,7 @@ import { githubProjectHost } from '../../../../../shared/github/project-identity
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
 import { cn } from '@/lib/utils'
 import { LoaderCircle, ChevronDown, Check } from 'lucide-react'
-import type { TaskPageGitHubWorkItemMutationRunner } from '../../task-page-linear-jira-list-model'
+import type { TaskPageGitHubWorkItemMutationRunner } from '../linear/task-page-linear-jira-list-model'
 import { GitHubAssigneeAvatar } from './Avatars'
 import { GitHubUserAvatar } from '@/components/github/github-user-avatar'
 export function GHAssigneesCell({
@@ -146,7 +146,12 @@ export function GHAssigneesCell({
               }
               return res
             }
-            throw new Error('No GitHub repository context available for this issue.')
+            throw new Error(
+              translate(
+                'auto.components.TaskPage.noGitHubRepositoryContext',
+                'No GitHub repository context available for this issue.'
+              )
+            )
           }
         })
       } finally {

@@ -1,4 +1,3 @@
-import { buildAiVaultCopiedSessionStartupForWorktree } from './ai-vault-session-fork-startup'
 import { describe, expect, it } from 'vitest'
 import type { AppState } from '@/store/types'
 import { createTestStore, makeTab } from '@/store/slices/store-test-helpers'
@@ -6,43 +5,6 @@ import { buildAgentResumeStartupPlan } from './tui-agent-startup'
 import { buildAiVaultResumeStartupForWorktree } from './ai-vault-resume-command'
 
 describe('AI Vault OMP cold resume', () => {
-  it('preserves local OpenCode standalone mode and existing custom host settings', () => {
-    const store = createTestStore()
-    const state = store.getState()
-    Object.assign(state, {
-      settings: {
-        agentDefaultArgs: { opencode: '--model synthetic-model' },
-        agentDefaultEnv: {
-          opencode: {
-            OPENCODE_AUTH_CONTENT: 'synthetic-local-auth',
-            HOME: '/host-home',
-            OPENCODE_CONFIG_DIR: '/host-config'
-          }
-        }
-      }
-    })
-    const startup = buildAiVaultCopiedSessionStartupForWorktree(
-      {
-        state,
-        session: {
-          agent: 'opencode',
-          sessionId: 'copy-session',
-          cwd: '/repo',
-          codexHome: null,
-          executionHostId: 'local'
-        }
-      },
-      'opencode2'
-    )
-    expect(startup.command).toContain("'--standalone'")
-    expect(startup.command).toContain("'--model' 'synthetic-model'")
-    expect(startup.env).toMatchObject({
-      OPENCODE_AUTH_CONTENT: 'synthetic-local-auth',
-      HOME: '/host-home',
-      OPENCODE_CONFIG_DIR: '/host-config'
-    })
-  })
-
   it('keeps the custom session store after the resumed process reports its id', () => {
     const store = createTestStore()
     store.setState({

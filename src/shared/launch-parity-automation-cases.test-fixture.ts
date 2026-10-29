@@ -1,6 +1,4 @@
-// Test-only (never imported by production code): the row 5 desktop-automation parity table.
-// The renderer suite asserts launchAgentBackgroundSession sends `request`; the main suite feeds the
-// same request to pty:spawn. C7 (automations onto agent.launch) and C5 check against it.
+// Desktop automation parity (row 5): renderer asserts the request, main feeds it to pty:spawn. C7/C5 compare against this table.
 import {
   LAUNCH_LEAF_ID,
   LAUNCH_TAB_ID,
@@ -48,8 +46,7 @@ const automation = (name: string, fields: AutomationCaseFields): AutomationLaunc
   ...fields
 })
 
-// Only a local \\wsl$ workspace sends a shellOverride. Quoting follows the execution host's OS, the
-// same rule a window tab uses; the shell does not.
+// Only local WSL workspaces send shellOverride; quote for the execution host’s OS, independently of shell, matching window tabs.
 export const AUTOMATION_LAUNCH_CASES: AutomationLaunchCase[] = [
   automation('macOS repo', {
     client: 'darwin',

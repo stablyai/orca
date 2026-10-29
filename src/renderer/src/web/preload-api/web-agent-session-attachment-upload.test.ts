@@ -18,7 +18,12 @@ vi.mock('./web-runtime-session', () => ({
 }))
 vi.mock('@/lib/browser-uuid', () => ({ createBrowserUuid: () => 'uuid-1' }))
 
-import { saveClipboardImageAsWebAgentSessionAttachment } from './web-agent-session-attachment-upload'
+import {
+  saveClipboardImageAsWebAgentSessionAttachment,
+  uploadBrowserFilesToWebAgentSessionAttachments
+} from './web-agent-session-attachment-upload'
+import { holdBrowserAttachmentFiles } from '@/lib/browser-attachment-files'
+import { AGENT_SESSION_ATTACHMENT_CHUNK_BYTES } from '../../../../shared/agent-session-attachments'
 
 const target = {
   environmentId: 'env-1',
@@ -77,5 +82,49 @@ describe('saveClipboardImageAsWebAgentSessionAttachment', () => {
       })
     ).rejects.toThrow('Unknown Orca runtime environment')
     expect(mocks.callEnvironmentEnvelope).not.toHaveBeenCalled()
+  })
+})
+
+describe('uploadBrowserFilesToWebAgentSessionAttachments', () => {
+  it('uploads a held browser file chunk by chunk at byte offsets and reports its stored path', async () => {
+    const appends: { offset: number; contentBase64: string }[] = []
+    mocks.callEnvironmentEnvelope.mockImplementation(
+      async (_env: string, method: string, params: { offset: number; contentBase64: string }) => {
+        if (method === 'agentSessionAttachment.uploadStart') {
+          return reply({ uploadId: 'u1' })
+        }
+        if (method === 'agentSessionAttachment.uploadAppend') {
+          appends.push({ offset: params.offset, contentBase64: params.contentBase64 })
+          return reply({ receivedBytes: 0 })
+        }
+        return reply({ path: '/srv/agent-session-attachments/u1/notes.txt', name: 'notes.txt' })
+      }
+    )
+    const bytes = Buffer.alloc(AGENT_SESSION_ATTACHMENT_CHUNK_BYTES + 5, 7)
+    const [token] = holdBrowserAttachmentFiles([new File([bytes], 'notes.txt')])
+
+    const result = await uploadBrowserFilesToWebAgentSessionAttachments({
+      ...target,
+      paths: [token!, 'orca-browser-file:gone/old.txt']
+    })
+
+    expect(token).toMatch(/\/notes\.txt$/)
+    expect(mocks.callEnvironmentEnvelope).toHaveBeenCalledWith(
+      'env-1',
+      'agentSessionAttachment.uploadStart',
+      { sessionId: 'session-1', name: 'notes.txt', byteLength: bytes.length },
+      expect.any(Number)
+    )
+    expect(appends.map(({ offset }) => offset)).toEqual([0, AGENT_SESSION_ATTACHMENT_CHUNK_BYTES])
+    expect(
+      Buffer.concat(appends.map(({ contentBase64 }) => Buffer.from(contentBase64, 'base64')))
+    ).toEqual(bytes)
+    expect(result.uploaded).toEqual([
+      { sourcePath: token, path: '/srv/agent-session-attachments/u1/notes.txt' }
+    ])
+    // A token is claimed once; one nothing holds fails instead of attaching nothing silently.
+    expect(result.failed.map(({ sourcePath }) => sourcePath)).toEqual([
+      'orca-browser-file:gone/old.txt'
+    ])
   })
 })

@@ -5,11 +5,6 @@ import {
 
 export type BrowserNetworkRouteAddress = { host: string; port: number }
 
-/**
- * Retries one route's reconnect under jittered backoff until it succeeds, the grace deadline
- * passes, or the caller aborts. Shared so registry-driven recovery and a route recovering its
- * own dead transport retry on identical terms.
- */
 export async function retryBrowserNetworkRouteReconnect(options: {
   reconnect: () => Promise<BrowserNetworkRouteAddress>
   signal: AbortSignal

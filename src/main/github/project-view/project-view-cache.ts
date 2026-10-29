@@ -3,9 +3,6 @@ import { githubProjectHost } from '../../../shared/github/project-identity'
 
 export const PROJECT_VIEW_OWNER_CACHE_MAX_ENTRIES = 512
 
-// ─── Module-scope caches (reset on HMR — intentional) ──────────────────
-
-// Why: owners are user-controlled over a long session; bound cache entries to avoid unbounded retention while keeping the hot-owner fast path.
 function rememberProjectViewCacheEntry<K, V>(
   cache: Map<K, V>,
   key: K,
@@ -34,18 +31,16 @@ function getProjectViewCacheEntry<K, V>(cache: Map<K, V>, key: K): V | undefined
   return value
 }
 
-// Why: plain module locals so HMR code swaps re-run capability probes instead of carrying a stale "unsupported" flag.
+// Module reloads must discard stale capability results.
 const ownerTypeCache = new Map<string, GitHubProjectOwnerType | null>()
-// Why: keyed per owner (not a process-global flag) so one owner's capability gap doesn't poison others that DO support Issue.parent (bug-scan finding 2).
-const parentFieldRetriedByOwner = new Map<string, true>()
+// One owner's unsupported parent field must not poison another owner's capability.
+export type OptionalProjectItemField = 'parent' | 'subIssuesSummary' | 'linkedPullRequests'
+const unsupportedItemFieldsByOwner = new Map<string, ReadonlySet<OptionalProjectItemField>>()
 const parentFieldWarningLoggedByOwner = new Map<string, true>()
-// Why: in-flight promise per owner so concurrent fetchAllItems callers share one probe instead of each racing a duplicate first-page probe.
+// Share first-page capability probes per owner.
 export const parentFieldProbeInFlight = new Map<string, Promise<void>>()
 
-// Why: GHES owners are a separate namespace and capability surface from
-// github.com owners with the same login — scope cache keys by host so one
-// host's probe result can't leak into another. Normalize github.com so
-// host-less callers share the same probe state as explicitly pinned calls.
+// Isolate same-name owners across hosts; normalize implicit and explicit github.com to one scope.
 export function ownerScopeKey(
   owner: string,
   ownerType: GitHubProjectOwnerType,
@@ -74,12 +69,17 @@ export function getCachedOwnerType(
   return getProjectViewCacheEntry(ownerTypeCache, ownerTypeCacheKey(owner, host))
 }
 
-export function markParentFieldRetried(scopeKey: string): void {
-  rememberProjectViewCacheEntry(parentFieldRetriedByOwner, scopeKey, true)
+export function markItemFieldsUnsupported(
+  scopeKey: string,
+  fields: readonly OptionalProjectItemField[]
+): void {
+  const unsupported = new Set(getUnsupportedItemFields(scopeKey))
+  fields.forEach((field) => unsupported.add(field))
+  rememberProjectViewCacheEntry(unsupportedItemFieldsByOwner, scopeKey, unsupported)
 }
 
-export function hasParentFieldRetried(scopeKey: string): boolean {
-  return getProjectViewCacheEntry(parentFieldRetriedByOwner, scopeKey) === true
+export function getUnsupportedItemFields(scopeKey: string): ReadonlySet<OptionalProjectItemField> {
+  return getProjectViewCacheEntry(unsupportedItemFieldsByOwner, scopeKey) ?? new Set()
 }
 
 export function markParentFieldWarningLogged(scopeKey: string): void {
@@ -92,7 +92,7 @@ export function hasParentFieldWarningLogged(scopeKey: string): boolean {
 
 export function _resetProjectViewCachesForTests(): void {
   ownerTypeCache.clear()
-  parentFieldRetriedByOwner.clear()
+  unsupportedItemFieldsByOwner.clear()
   parentFieldWarningLoggedByOwner.clear()
   parentFieldProbeInFlight.clear()
 }
@@ -105,7 +105,7 @@ export function _getProjectViewCacheSizesForTests(): {
 } {
   return {
     ownerTypes: ownerTypeCache.size,
-    parentFieldRetries: parentFieldRetriedByOwner.size,
+    parentFieldRetries: unsupportedItemFieldsByOwner.size,
     parentFieldWarnings: parentFieldWarningLoggedByOwner.size,
     parentFieldProbes: parentFieldProbeInFlight.size
   }
@@ -130,12 +130,12 @@ export function _getProjectViewOwnerTypeForTests(
 
 /** @internal - exposed for cache-bound tests only. */
 export function _markProjectViewParentFieldRetriedForTests(scopeKey: string): void {
-  markParentFieldRetried(scopeKey)
+  markItemFieldsUnsupported(scopeKey, ['parent'])
 }
 
 /** @internal - exposed for cache-bound tests only. */
 export function _hasProjectViewParentFieldRetriedForTests(scopeKey: string): boolean {
-  return hasParentFieldRetried(scopeKey)
+  return getUnsupportedItemFields(scopeKey).has('parent')
 }
 
 /** @internal - exposed for cache-bound tests only. */

@@ -9,6 +9,8 @@ import {
 import { readCodexTopLevelModelProvider } from '../codex/codex-model-provider-config'
 import type { Store } from '../persistence'
 import { toWindowsWslPath } from '../wsl'
+import { wasWslDistroLastSeenRunningSettled } from '../wsl-background-distro-gate'
+import { WSL_UNC_RUNNING_LEASE_MS } from '../wsl/wsl-unc-access-gate'
 
 export type CanonicalCodexConfig = {
   contents: string
@@ -65,8 +67,7 @@ export class CodexConfigMirror {
     }
 
     try {
-      // Why: the config is read over UNC but consumed by Codex inside WSL, so
-      // path rewrites must anchor to the Linux-side ~/.codex, not the UNC path.
+      // Read over UNC while anchoring rewritten paths to the guest-side config directory.
       return {
         contents: readFileSync(configPath, 'utf-8'),
         sourceHomePath: toWindowsWslPath(`${wslHome}/.codex`, wslInfo.distro),
@@ -86,8 +87,7 @@ export class CodexConfigMirror {
       return
     }
 
-    // Why: mirroring a custom-provider pin into an OAuth managed home makes
-    // the new OAuth credentials inert; fail before login and leave user config intact.
+    // A custom-provider pin would prevent the new OAuth credentials from being used.
     throw new Error(
       `Orca cannot add a Codex OAuth account while ~/.codex/config.toml pins the custom provider ${JSON.stringify(modelProvider)}. Keep using the system-default account for this provider, or remove model_provider (or set it to "openai") before adding an OAuth account. Orca left your config unchanged.`
     )
@@ -95,6 +95,14 @@ export class CodexConfigMirror {
 
   private syncToManagedHomes(): void {
     for (const account of this.store.getSettings().codexManagedAccounts) {
+      const distro = parseWslUncPath(account.managedHomePath)?.distro
+      // Its UNC reads boot a stopped distro (E9); launch preparation syncs that home before use.
+      if (
+        distro &&
+        !wasWslDistroLastSeenRunningSettled(distro, { maxAgeMs: WSL_UNC_RUNNING_LEASE_MS })
+      ) {
+        continue
+      }
       try {
         this.syncIntoManagedHome(account.managedHomePath, undefined, account.id)
       } catch (error) {
@@ -109,16 +117,14 @@ export class CodexConfigMirror {
     expectedAccountId?: string
   ): void {
     if (canonicalConfig === null) {
-      // Why: with no ~/.codex/config.toml there is nothing to mirror, but Codex still cannot start in a long home without the daemon guard.
-      // WSL homes are skipped: their ownership check is a blocking wsl.exe call (startup, account switch), and WSL launch prep guards the home it launches.
+      // Guard long host homes even without source config; WSL launch preparation guards guest homes.
       if (!parseWslUncPath(managedHomePath)) {
         ensureCodexDaemonSocketGuard(this.assertManagedHomePath(managedHomePath, expectedAccountId))
       }
       return
     }
     const trustedManagedHomePath = this.assertManagedHomePath(managedHomePath, expectedAccountId)
-    // Why: every account home is Codex's own CODEX_HOME. Preserve trust Codex
-    // granted there while refreshing ordinary settings from the lane's source.
+    // Refresh ordinary settings without replacing approvals owned by this runtime home.
     syncSystemConfigIntoManagedCodexHome({
       runtimeHomePath: trustedManagedHomePath,
       systemHomePath: canonicalConfig.sourceHomePath,

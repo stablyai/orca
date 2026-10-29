@@ -12,7 +12,7 @@ import {
   canUseGitHubRepoContext,
   getGitHubSourceRuntimeHost
 } from '@/lib/github-source-runtime-context'
-import { getBrokenChecks } from '@/components/pr-checks-fix-prompt'
+import { getBrokenChecks } from '../../../../../shared/pr-checks-fix-prompt'
 import { githubRepoIdentityKey } from '../../../../../shared/github/repository-identity-key'
 import type { PRCheckDetail } from '../../../../../shared/github/check-types'
 import type {

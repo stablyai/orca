@@ -138,7 +138,14 @@ describe('preserveAgentAuthBeforeRestart', () => {
       store: { flushPendingOrThrowAsync: vi.fn(() => new Promise<void>(() => {})) }
     })
 
-    await vi.advanceTimersByTimeAsync(2_000)
+    let settled = false
+    void preservation.then(() => {
+      settled = true
+    })
+    await vi.advanceTimersByTimeAsync(1_999)
+    expect(settled).toBe(false)
+    expect(warn).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(1)
     await preservation
 
     expect(warn).toHaveBeenCalledWith(

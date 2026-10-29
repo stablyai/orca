@@ -32,7 +32,9 @@ describe('native Antigravity credential format', () => {
         issuer: 'https://accounts.google.com',
         subject: 'synthetic-subject',
         email: 'test@example.invalid'
-      }
+      },
+      accessToken: 'synthetic-access',
+      refreshToken: 'synthetic-refresh'
     })
   })
 
@@ -88,7 +90,9 @@ describe('native Antigravity credential format', () => {
     expect(parseAntigravityNativeCredential(contents)).toEqual({
       contents,
       authMethod: 'future',
-      identity: null
+      identity: null,
+      accessToken: 'synthetic',
+      refreshToken: null
     })
   })
 })

@@ -2,7 +2,7 @@ import { isDeepStrictEqual } from 'node:util'
 import { isAlias, isMap, isNode, isScalar, isSeq, parseDocument, visit } from 'yaml'
 import type { Document, YAMLMap, YAMLSeq } from 'yaml'
 import type { HermesConfig } from './hermes-config-yaml'
-import { applyHermesPluginSourceEdits } from './hermes-config-source-edits'
+import { HERMES_EDITED_LISTS, applyHermesPluginSourceEdits } from './hermes-config-source-edits'
 
 function preserveRemovedComments(sequence: YAMLSeq, removed: unknown[], first: unknown): void {
   const comments = removed.flatMap((node) =>
@@ -17,27 +17,32 @@ function preserveRemovedComments(sequence: YAMLSeq, removed: unknown[], first: u
   }
 }
 
-function updateStringSequence(plugins: YAMLMap, key: string, values: unknown): void {
+function updateStringSequence(
+  section: YAMLMap,
+  sectionKey: string,
+  key: string,
+  values: unknown
+): void {
   if (values === undefined) {
     return
   }
   if (!Array.isArray(values) || values.some((value) => typeof value !== 'string')) {
-    throw new Error(`Hermes plugins.${key} must be a string list`)
+    throw new Error(`Hermes ${sectionKey}.${key} must be a string list`)
   }
-  const sequence = plugins.get(key, true)
+  const sequence = section.get(key, true)
   if (sequence === undefined) {
-    plugins.set(key, values)
+    section.set(key, values)
     return
   }
   if (!isSeq(sequence)) {
-    throw new Error(`Hermes plugins.${key} must be a string list`)
+    throw new Error(`Hermes ${sectionKey}.${key} must be a string list`)
   }
   const remaining = [...values]
   const removed: unknown[] = []
   const first = sequence.items[0]
   sequence.items = sequence.items.filter((item) => {
     if (!isScalar(item) || typeof item.value !== 'string') {
-      throw new Error(`Hermes plugins.${key} must contain plain string entries`)
+      throw new Error(`Hermes ${sectionKey}.${key} must contain plain string entries`)
     }
     const index = remaining.indexOf(item.value)
     if (index === -1) {
@@ -55,6 +60,7 @@ function updateStringSequence(plugins: YAMLMap, key: string, values: unknown): v
 
 export function updateHermesPluginDocument(
   content: string,
+  previous: HermesConfig,
   next: HermesConfig
 ): { content: string | null; detail?: string } {
   try {
@@ -83,46 +89,50 @@ export function updateHermesPluginDocument(
       throw new Error('Cannot safely edit a merged Hermes root')
     }
 
-    let plugins = document.get('plugins', true)
-    if (plugins === undefined) {
-      document.set('plugins', document.createNode({}))
-      plugins = document.get('plugins', true)
-    }
-    if (!isMap(plugins)) {
-      throw new Error('Hermes plugins must be a plain mapping')
-    }
-    // Aliases into a changed subtree could silently change unrelated settings.
-    visit(plugins, {
-      Node: (_key, node) => {
-        if (isAlias(node) || node.anchor || node.tag) {
-          throw new Error('Cannot safely edit Hermes plugins with anchors, aliases or tags')
+    for (const [sectionKey, keys] of HERMES_EDITED_LISTS) {
+      const nextSection = next[sectionKey]
+      if (isDeepStrictEqual(previous[sectionKey], nextSection)) {
+        continue
+      }
+      let section = document.get(sectionKey, true)
+      if (section === undefined) {
+        document.set(sectionKey, document.createNode({}))
+        section = document.get(sectionKey, true)
+      }
+      if (!isMap(section)) {
+        throw new Error(`Hermes ${sectionKey} must be a plain mapping`)
+      }
+      if (section.anchor || section.tag || section.has('<<')) {
+        throw new Error(`Cannot safely edit Hermes ${sectionKey} with anchors, tags or merge keys`)
+      }
+      for (const key of keys) {
+        const existing = section.get(key, true)
+        if (existing === undefined) {
+          continue
         }
-      },
-      Pair: (_key, pair) => {
-        if (isScalar(pair.key) && pair.key.value === '<<') {
-          throw new Error('Cannot safely edit Hermes plugins with YAML merge keys')
+        // Aliases into an edited list could silently change unrelated settings.
+        visit(existing, (_key, node) => {
+          if (isAlias(node) || (isNode(node) && (node.anchor || node.tag))) {
+            throw new Error(
+              `Cannot safely edit Hermes ${sectionKey}.${key} with anchors, aliases or tags`
+            )
+          }
+        })
+        if (
+          !isSeq(existing) ||
+          existing.items.some((item) => !isScalar(item) || typeof item.value !== 'string')
+        ) {
+          throw new Error(`Hermes ${sectionKey}.${key} must be a string list`)
         }
       }
-    })
-    for (const key of ['enabled', 'disabled']) {
-      const existing = plugins.get(key, true)
-      if (
-        existing !== undefined &&
-        (!isSeq(existing) ||
-          existing.items.some((item) => !isScalar(item) || typeof item.value !== 'string'))
-      ) {
-        throw new Error(`Hermes plugins.${key} must be a string list`)
+      if (typeof nextSection !== 'object' || nextSection === null) {
+        throw new Error(`Hermes ${sectionKey} must be a mapping`)
       }
-    }
-    const nextPlugins = next.plugins
-    if (typeof nextPlugins !== 'object' || nextPlugins === null) {
-      throw new Error('Hermes plugins must be a mapping')
-    }
-    if ('enabled' in nextPlugins) {
-      updateStringSequence(plugins, 'enabled', nextPlugins.enabled)
-    }
-    if ('disabled' in nextPlugins) {
-      updateStringSequence(plugins, 'disabled', nextPlugins.disabled)
+      for (const key of keys) {
+        if (key in nextSection) {
+          updateStringSequence(section, sectionKey, key, nextSection[key])
+        }
+      }
     }
     const output = applyHermesPluginSourceEdits(content, document)
     // Re-parse to reject edits that would change any unrelated alias-resolved value.

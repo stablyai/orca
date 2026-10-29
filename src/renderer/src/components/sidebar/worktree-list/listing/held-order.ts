@@ -1,7 +1,4 @@
-/**
- * The order shown while the pointer is over the list or a drag runs: rows keep their places, rows
- * that left go, and new rows enter where the new order puts them. Same set, same array.
- */
+/** While engaged, retain existing positions, remove departed rows and insert arrivals by next order; reuse equal arrays. */
 export function mergeHeldOrder(held: string[], next: readonly string[]): string[] {
   const nextIds = new Set(next)
   const heldIds = new Set(held)

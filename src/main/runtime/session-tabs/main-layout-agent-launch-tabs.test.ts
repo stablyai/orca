@@ -4,7 +4,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { WORKTREE_ID, setupMainOwnedWorkspace } from '../main-owned-workspace-runtime-fixture'
 import { publishAgentLaunchTabEarly } from '../rpc/methods/agent-launch-tab-publication'
 import { resetAgentLaunchPanesForTests } from '../../agent-launch/agent-launch-pane-attachment'
-import type { RpcContext } from '../rpc/core'
 
 vi.mock('../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
 
@@ -18,8 +17,7 @@ function launchHost() {
   Object.assign(fixture.runtime, {
     showTerminalWorkspaceLaunchScope: async () => ({ id: WORKTREE_ID, path: '/workspace' })
   })
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the early tab reads only the runtime off its context.
-  const context = { runtime: fixture.runtime } as unknown as RpcContext
+  const context = { runtime: fixture.runtime }
   const launch = () =>
     publishAgentLaunchTabEarly(
       {
@@ -78,8 +76,7 @@ describe("an agent launch's early tab in a workspace main owns, with a window at
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the early tab reads only this notice.
     fixture.runtime.setNotifier({ publishAgentLaunchTab } as never)
     Object.assign(fixture.runtime, { getAvailableAuthoritativeWindow: () => ({}) })
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the early tab reads only the runtime off its context.
-    const context = { runtime: fixture.runtime } as unknown as RpcContext
+    const context = { runtime: fixture.runtime }
 
     await publishAgentLaunchTabEarly(
       {

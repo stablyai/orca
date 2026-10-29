@@ -1,8 +1,4 @@
-/**
- * Destination half of the `shell-history` blob: a pre-commit check that each file names a worktree
- * of the migrated catalog, and the post-commit install into this host's history root at the path
- * a zsh/bash pane in that worktree gets as HISTFILE (`<root>/<hash>/<shell>_history`).
- */
+// Validate histories before catalog commit; install into this host's HISTFILE paths afterward.
 import { createHash } from 'node:crypto'
 import {
   closeSync,
@@ -48,7 +44,6 @@ type ShellHistoryCatalog = Pick<
   'repositories' | 'projectGroups' | 'folderWorkspaces'
 >
 
-/** Throws unless the staged file is a well-formed history for a worktree this catalog moves. */
 export function assertOrcadMigrationShellHistoryValid(
   key: string,
   path: string,
@@ -59,8 +54,7 @@ export function assertOrcadMigrationShellHistoryValid(
     readHead(path, ORCAD_MIGRATION_SHELL_HISTORY_HEADER_SCAN_BYTES),
     statSync(path).size
   )
-  // Refused, not dropped: only a sender bug names a worktree outside the catalog, and dropping
-  // the file would lose that history without anyone noticing.
+  // Refuse foreign-worktree history before commit to avoid silently losing it.
   if (!catalogOwnsWorktree(catalog, worktreeId)) {
     throw new Error('orcad_migration_shell_history_worktree_not_migrated')
   }
@@ -69,23 +63,16 @@ export function assertOrcadMigrationShellHistoryValid(
 export type OrcadShellHistoryInstall = {
   migration: OrcadMigrationRequestIdentity
   root: string
-  /** This host's `getHistoryRoot()`. */
+  /** This host's getHistoryRoot(). */
   historyRoot: string
-  /** The shell binary a new pane on this host would actually run; see `resolveNewPaneShellPath`. */
+  /** Resolve as a new pane would; see resolveNewPaneShellPath. */
   paneShellPath: () => string
-  /** True while a shell runs in the worktree. */
   worktreeHasLiveShells: (worktreeId: string) => boolean
-  /** Worktrees whose install waits for their live shells to exit. */
   deferredWorktreeIds: Set<string>
   now: number
 }
 
-/**
- * Installs every received history file, then deletes it. Already installed (meta.json records the
- * blob) only deletes. A worktree with a live shell keeps its blob: that shell would overwrite the
- * file from its own memory on exit. A write failure keeps the blob for the next retry and is
- * rethrown once the others had their turn.
- */
+/** Defer live-shell histories to avoid exit-time overwrite; retain failed blobs and retry other files. */
 export function installOrcadMigrationShellHistory(install: OrcadShellHistoryInstall): void {
   let firstError: unknown = null
   for (const key of listOrcadMigrationReceivedBlobNames(
@@ -133,14 +120,14 @@ function installOne(install: OrcadShellHistoryInstall, key: string): void {
       history: withFinalNewline(bytes.subarray(header.byteLength))
     }
   } catch (error) {
-    // The pre-commit check passed these bytes, so only a damaged file lands here.
+    // Pre-commit validation passed, so these received bytes were damaged afterward.
     console.error(`[orcad-migration] dropped unreadable shell history ${key}:`, error)
     removeReceived(path)
     return
   }
   const directory = join(install.historyRoot, moved.worktreeHash)
   const meta = readHistoryMeta(directory)
-  // Keyed by sha alone, so a pane shell that changed between attempts cannot install it twice.
+  // Hash-only markers prevent reinstallation if the pane shell changes between retries.
   if (meta?.installedMigrationBlobs?.some((blob) => blob.sha256 === moved.sha256)) {
     removeReceived(path)
     return
@@ -149,7 +136,6 @@ function installOne(install: OrcadShellHistoryInstall, key: string): void {
     install.deferredWorktreeIds.add(moved.worktreeId)
     return
   }
-  // Owner-only, like the history directories terminal-history.ts creates.
   mkdirSync(directory, { recursive: true, mode: 0o700 })
   writeHistoryFile(join(directory, shellHistoryFileName(moved.shell)), moved.history)
   writeMeta(directory, moved, install.now)
@@ -162,11 +148,7 @@ function withFinalNewline(history: Buffer): Buffer {
   return history.at(-1) === 0x0a ? history : Buffer.concat([history, Buffer.from('\n')])
 }
 
-/**
- * The host normally has no history for a worktree that just arrived. If it has some, nothing is
- * overwritten: the moved history goes first (it is older) and the host's own lines follow, so the
- * newest commands stay at the end where shells read them back from.
- */
+// Prepend older moved history so this host's newest commands remain last.
 function writeHistoryFile(path: string, moved: Buffer): void {
   const existing = readExisting(path)
   // A crash between this write and the meta.json marker leaves the moved bytes already in front.
@@ -213,20 +195,13 @@ function writeMeta(directory: string, moved: ReceivedShellHistory, now: number):
   writeFileDurableSync(durableWriteTempPath(path), path, JSON.stringify(meta), 0o600)
 }
 
-/**
- * A login-shell history from the WSL bridge (see the header's `loginShell`) lands under the file a
- * new pane on this host reads: `zsh_history` or `bash_history` when that pane runs zsh or bash,
- * `bash_history` for any other shell.
- */
+/** Map login history to the pane's bash/zsh shell; null lets the caller preserve the source format. */
 function paneHistoryShell(paneShellPath: () => string): OrcadMigrationShellHistoryShell | null {
   const kind = resolveShellKind(paneShellPath())
   return kind === 'zsh' || kind === 'bash' ? kind : null
 }
 
-/**
- * The shell a new pane spawns, resolved as the spawn does: the host's default-shell setting, then
- * SHELL, then the first executable fallback. With no executable shell at all, no pane runs here.
- */
+/** Resolve like pane spawn: host setting, SHELL, then executable fallback. */
 export function resolveNewPaneShellPath(defaultShell: string | undefined): string {
   try {
     return resolveUnixShellPath(resolveUnixPaneShellPath({}, undefined, defaultShell))

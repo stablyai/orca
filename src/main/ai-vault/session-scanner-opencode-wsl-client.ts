@@ -4,7 +4,7 @@ import { buildWslExecArgs } from '../../shared/wsl-login-shell-command'
 import { parseWslUncPath } from '../../shared/wsl-paths'
 import { resolveWslExecutablePath } from '../wsl/wsl-executable-path'
 import { resolveWslInteropSpawnCwd } from '../wsl-interop-spawn-directory'
-import { filterPathsToRunningWslDistrosAsync } from '../wsl-running-path-filter'
+import { admitWslTranscriptPath } from '../native-chat/wsl-transcript-running-admission'
 import { createOpenCodeSqliteProcessClient } from './session-scanner-opencode-sqlite-process-client'
 import type { OpenCodeSqliteWorkerClient } from './session-scanner-opencode-sqlite-worker-client'
 import type { OpenCodeWslRuntime } from './session-scanner-opencode-wsl-runtime'
@@ -62,13 +62,8 @@ export async function openCodeWslClient(
       cwd: resolveWslInteropSpawnCwd(),
       env: { ...buildRelayAiVaultServiceEnv(), WSL_UTF8: '1' },
       async beforeSpawn(spawnSignal) {
-        const running = await waitForPromiseWithSignal(
-          filterPathsToRunningWslDistrosAsync([dbPath], { requireConfirmed: true }),
-          spawnSignal
-        )
-        if (running.length === 0) {
-          throw new Error(`WSL distro ${distro} is not running. Start it to read its history.`)
-        }
+        // A `--exec` of a stopped distro boots it; every respawn asks again.
+        await waitForPromiseWithSignal(admitWslTranscriptPath(dbPath), spawnSignal)
       }
     })
     clients.set(key, client)

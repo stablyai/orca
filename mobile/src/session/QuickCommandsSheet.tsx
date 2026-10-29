@@ -1,15 +1,13 @@
 import { useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { Alert, View, Text, Pressable, StyleSheet } from 'react-native'
+import { Alert, View, Text, Pressable } from 'react-native'
 import { ChevronLeft } from 'lucide-react-native'
 import { colors, spacing } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { BottomDrawer } from '../components/BottomDrawer'
 import type { RpcClient } from '../transport/rpc-client'
 import type { TerminalQuickCommand } from '../../../src/shared/terminal-quick-command-types'
-import {
-  getQuickCommandPreview,
-  MAX_QUICK_COMMANDS,
-  quickCommandMatchesRepo
-} from '../terminal/quick-commands'
+import { getQuickCommandPreview, quickCommandMatchesRepo } from '../terminal/quick-commands'
 import { useQuickCommands } from './use-quick-commands'
 import { QuickCommandEditorForm } from './QuickCommandEditorForm'
 import { QuickCommandAgentPicker, QuickCommandsList } from './QuickCommandsList'
@@ -26,7 +24,6 @@ type Props = {
   client: RpcClient | null
   repoId: string | null
   repoName: string | null
-  /** The host's agent-prompt cap. */
   agentPromptMaxLength: number | null
   onLaunch: (command: TerminalQuickCommand) => boolean
 }
@@ -42,6 +39,7 @@ export function QuickCommandsSheet({
   agentPromptMaxLength,
   onLaunch
 }: Props) {
+  useMobileColorScheme()
   const { commands, loading, ready, error, persist } = useQuickCommands({
     client,
     enabled: visible
@@ -96,11 +94,6 @@ export function QuickCommandsSheet({
   const globalCommands = visibleCommands.filter((command) => command.scope?.type !== 'repo')
 
   const openEditor = (command?: TerminalQuickCommand) => {
-    // Why: the host rejects full-list updates above this cap; existing rows
-    // must remain editable/deletable when creation is no longer possible.
-    if (!command && commands.length >= MAX_QUICK_COMMANDS) {
-      return
-    }
     draftRevisionRef.current += 1
     editorGenerationRef.current += 1
     setDraft(
@@ -213,7 +206,6 @@ export function QuickCommandsSheet({
           query={query}
           loading={loading}
           disabled={!ready}
-          canAdd={commands.length < MAX_QUICK_COMMANDS}
           error={error}
           onQueryChange={setQuery}
           onLaunch={handleLaunch}
@@ -263,7 +255,7 @@ export function QuickCommandsSheet({
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   header: { flexDirection: 'row', alignItems: 'center', paddingBottom: spacing.sm },
   backButton: {
     width: 30,
@@ -283,4 +275,4 @@ const styles = StyleSheet.create({
   pressed: { backgroundColor: colors.bgRaised },
   editorDesc: { paddingHorizontal: spacing.xs, paddingBottom: spacing.sm },
   descText: { fontSize: 12, color: colors.textMuted }
-})
+}))

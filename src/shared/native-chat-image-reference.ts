@@ -1,5 +1,4 @@
-// A composer image chip's text form. It names which attached image it means, never a number: the
-// number is drawn from the thumbnail row on screen and worked out once at send.
+// Image chip tokens retain attachment identity; thumbnail order supplies numbers only at send.
 
 const IMAGE_REFERENCES = /\[Image\]\(orca-image:([A-Za-z0-9._:-]{1,200})\)/g
 
@@ -20,7 +19,6 @@ export function imageReferenceInsertion(
   return `${before && !/\s$/.test(before) ? ' ' : ''}${tokens}${/^\s/.test(after) ? '' : ' '}`
 }
 
-/** The text's runs and the images its tokens name, in order; empty runs are left out. */
 export function splitImageReferences(text: string): (string | { attachmentId: string })[] {
   const parts: (string | { attachmentId: string })[] = []
   let last = 0
@@ -37,7 +35,6 @@ export function splitImageReferences(text: string): (string | { attachmentId: st
   return parts
 }
 
-/** Replaces every token with what `replace` gives for the image it names. */
 export function replaceImageReferences(
   text: string,
   replace: (attachmentId: string) => string

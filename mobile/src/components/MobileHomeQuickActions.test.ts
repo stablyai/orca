@@ -3,6 +3,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { HostProfile } from '../transport/types'
 import { MobileHomeQuickActions } from './MobileHomeQuickActions'
+import { findAllByHostType } from '../test-support/react-test-renderer-host-nodes'
 
 vi.mock('react-native', () => ({
   Pressable: 'Pressable',
@@ -42,7 +43,7 @@ describe('MobileHomeQuickActions', () => {
   }
 
   function newWorkspaceButton() {
-    return renderer!.root.findAllByType('Pressable')[1]
+    return findAllByHostType(renderer!.root, 'Pressable')[1]
   }
 
   it('disables workspace creation without a connected host', async () => {

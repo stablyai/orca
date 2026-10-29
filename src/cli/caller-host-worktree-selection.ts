@@ -14,7 +14,7 @@ type CatalogRow = Pick<RuntimeWorktreeRecord, 'id' | 'path' | 'hostId'> & {
   identity?: { key: string }
 }
 
-/** The execution host this CLI process runs on: the SSH target its relay stamped, else this machine. */
+/** SSH relays stamp the caller host; otherwise use this machine. */
 export function getCallerExecutionHostId(
   env: Readonly<Record<string, string | undefined>> = process.env
 ): ExecutionHostId {
@@ -22,9 +22,7 @@ export function getCallerExecutionHostId(
   return host?.kind === 'ssh' ? toSshExecutionHostId(host.targetId) : LOCAL_EXECUTION_HOST_ID
 }
 
-// Why: the catalog lists SSH hosts' worktrees too and two hosts can hold the same path, so an SSH
-// caller may only take its own host's rows and a local caller none of an SSH host's. `runtime:*`
-// rows in this runtime's catalog are checkouts it holds itself, and unstamped rows predate stamping.
+// Paths may exist on multiple hosts; runtime:* and unstamped rows belong to this runtime.
 function isOnCallerHost(row: CatalogRow, callerHostId: ExecutionHostId): boolean {
   const rowHostId = row.hostId ?? LOCAL_EXECUTION_HOST_ID
   return parseExecutionHostId(callerHostId)?.kind === 'ssh'
@@ -32,21 +30,20 @@ function isOnCallerHost(row: CatalogRow, callerHostId: ExecutionHostId): boolean
     : parseExecutionHostId(rowHostId)?.kind !== 'ssh'
 }
 
-// Why: `id:` keeps repo inference and the runtime's scoped fast path; only a bare id that another
-// host's row shares needs the exact identity, or the runtime would refuse it as ambiguous.
+// Prefer id: for repo inference; shared IDs need an exact host-qualified identity.
 function toHostScopedSelector(row: CatalogRow, catalog: readonly CatalogRow[]): string {
   const sharedId = catalog.some((other) => other !== row && other.id === row.id)
   return sharedId && row.identity?.key ? `identity:${row.identity.key}` : `id:${row.id}`
 }
 
-/** A host-scoped selector plus the worktree id it names, which an `identity:` selector hides. */
 export type HostScopedWorktreeSelection = { selector: string; worktreeId: string }
 
-/** The caller host's innermost worktree enclosing `cwd`; undefined when none does. */
+/** Prefer the innermost enclosing worktree on the caller's host. */
 export function selectEnclosingWorktreeSelectionOnHost(
   catalog: readonly CatalogRow[],
   cwd: string,
-  hostId: ExecutionHostId
+  hostId: ExecutionHostId,
+  callerWorktreeId?: string
 ): HostScopedWorktreeSelection | undefined {
   const currentPath = resolvePath(cwd)
   let enclosing: CatalogRow | undefined
@@ -56,7 +53,14 @@ export function selectEnclosingWorktreeSelectionOnHost(
       continue
     }
     const rowPath = resolvePath(row.path)
-    if (!isPathInsideOrEqual(rowPath, currentPath) || rowPath.length <= enclosingPathLength) {
+    if (!isPathInsideOrEqual(rowPath, currentPath)) {
+      continue
+    }
+    // Folder workspaces share their project's path, so only the caller's pane can break the tie.
+    if (
+      rowPath.length < enclosingPathLength ||
+      (rowPath.length === enclosingPathLength && row.id !== callerWorktreeId)
+    ) {
       continue
     }
     enclosing = row
@@ -67,7 +71,6 @@ export function selectEnclosingWorktreeSelectionOnHost(
     : undefined
 }
 
-/** The caller host's innermost worktree enclosing `cwd`, as a selector; undefined when none does. */
 export function selectEnclosingWorktreeOnHost(
   catalog: readonly CatalogRow[],
   cwd: string,
@@ -76,7 +79,6 @@ export function selectEnclosingWorktreeOnHost(
   return selectEnclosingWorktreeSelectionOnHost(catalog, cwd, hostId)?.selector
 }
 
-/** Scopes a pane's forwarded bare worktree id to the caller's host; undefined when it has none. */
 export function selectWorktreeIdOnHost(
   catalog: readonly CatalogRow[],
   worktreeId: string,
@@ -86,7 +88,6 @@ export function selectWorktreeIdOnHost(
   return match ? toHostScopedSelector(match, catalog) : undefined
 }
 
-/** Scopes a pane's forwarded bare `ORCA_WORKTREE_ID` to the caller's host before it is used. */
 export async function resolveCallerPaneWorktreeSelector(
   worktreeId: string,
   client: RuntimeClient

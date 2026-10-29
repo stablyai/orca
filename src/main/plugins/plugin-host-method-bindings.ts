@@ -14,8 +14,6 @@ export type PluginWorktreeContext = {
   displayName: string
 }
 
-/** Structural service surface the facade delegates to. Desktop main binds it
- *  over runtime services; relay policy and conformance tests bind fakes. */
 export type PluginHostServices = {
   resolveActiveWorktreeContext(): Promise<PluginWorktreeContext | null>
   listWorktreeTerminals(worktreeId: string): Promise<{ id: string }[]>
@@ -75,8 +73,7 @@ const HANDLERS = new Map<string, BoundPluginHostMethod>([
       return null
     }
     const terminals = await services.listWorktreeTerminals(context.worktreeId)
-    // Why: Orca worktree ids embed provider paths, so the public projection
-    // must select safe fields instead of spreading the internal context.
+    // Worktree IDs embed provider paths; explicitly project safe public fields.
     return {
       branch: context.branch.slice(0, PLUGIN_WORKSPACE_LABEL_MAX_LENGTH),
       displayName: context.displayName.slice(0, PLUGIN_WORKSPACE_LABEL_MAX_LENGTH),
@@ -99,8 +96,7 @@ const HANDLERS = new Map<string, BoundPluginHostMethod>([
     if (!context) {
       throw new Error('no active worktree is available for terminal input')
     }
-    // Why: terminal handles are provider-owned and can outlive focus changes;
-    // re-list the resolved worktree immediately before routing plugin input.
+    // Handles outlive focus changes; revalidate current workspace membership before terminal input.
     const terminals = await services.listWorktreeTerminals(context.worktreeId)
     if (!terminals.some((terminal) => terminal.id === terminalId)) {
       throw new Error('terminal is outside the active worktree')
@@ -170,8 +166,7 @@ const HANDLERS = new Map<string, BoundPluginHostMethod>([
   })
 ])
 
-// Why: adding a facade schema without a binding must fail at module load,
-// before a plugin can observe transport-specific behavior.
+// Missing bindings must fail before transports expose inconsistent API behavior.
 if (HANDLERS.size !== PLUGIN_HOST_API_V0.length) {
   throw new Error('plugin host API spec table and handler bindings are out of sync')
 }

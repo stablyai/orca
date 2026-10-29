@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   acknowledgeAgents: vi.fn(),
+  subscribeAgentStatusChanges: vi.fn(() => vi.fn()),
   setActiveWorktree: vi.fn(),
   subscribeStore: vi.fn((_listener: (state: unknown, previousState: unknown) => void) => vi.fn()),
   onRevealAgent: vi.fn(),
@@ -29,11 +30,18 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@/store', () => ({
   useAppStore: {
     getState: () => ({
+      ...makeSnapshotWatchState(),
       acknowledgeAgents: mocks.acknowledgeAgents,
+      subscribeAgentStatusChanges: mocks.subscribeAgentStatusChanges,
       setActiveWorktree: mocks.setActiveWorktree
     }),
     subscribe: mocks.subscribeStore
   }
+}))
+
+vi.mock('@/runtime/structured-chat-name-observation', () => ({
+  subscribeStructuredChatTabNames: () => () => {},
+  getStructuredChatTabNames: () => new Map()
 }))
 
 vi.mock('@/lib/activate-tab-and-focus-pane', () => ({
@@ -55,10 +63,8 @@ import {
   repoIconsUnchanged,
   useDashboardPopoutBridge
 } from './useDashboardPopoutBridge'
-import type { DashboardSnapshotState } from './build-dashboard-snapshot'
-import type { AppState } from '@/store/types'
 
-type DashboardSnapshotWatchState = DashboardSnapshotState & Pick<AppState, 'agentStatusEpoch'>
+type DashboardSnapshotWatchState = Parameters<typeof dashboardSnapshotInputsChanged>[0]
 
 function makeSnapshotWatchState(): DashboardSnapshotWatchState {
   return {
@@ -76,8 +82,7 @@ function makeSnapshotWatchState(): DashboardSnapshotWatchState {
     acknowledgedAgentsByPaneKey: {},
     settings: null,
     agentStatusEpoch: 0,
-    // Why: seeded with real identities so the profile assertions below compare
-    // two distinct values — omitting them would pass against `undefined`.
+    // Seed distinct real identities so host-profile comparisons cannot pass against undefined.
     sshConnectionStates: new Map(),
     sshStateByEnvironment: new Map(),
     runtimeStatusByEnvironmentId: new Map(),
@@ -89,8 +94,12 @@ function makeSnapshotWatchState(): DashboardSnapshotWatchState {
     restoredRuntimeHostIdByWorkspaceSessionKey: {},
     runtimeEnvironments: [],
     runtimeEnvironmentCatalogHydrated: false,
+    activeWorktreeId: null,
+    activeWorkspaceExecutionHostId: null,
+    activeRepoId: null,
+    projects: [],
     removedRuntimeEnvironmentIds: new Set()
-  } as DashboardSnapshotWatchState
+  }
 }
 
 function Harness({ enabled }: { enabled: boolean }): null {
@@ -141,8 +150,7 @@ describe('useDashboardPopoutBridge', () => {
     expect(mocks.subscribeStore).not.toHaveBeenCalled()
   })
 
-  // The whole lazy design exists so an enabled-but-closed pop-out costs nothing:
-  // a live subscriber would rebuild a cross-worktree snapshot on store writes.
+  // Closed pop-outs must not subscribe and rebuild cross-worktree snapshots on store writes.
   it('subscribes to the store only while the pop-out is open', async () => {
     await act(async () => root.render(<Harness enabled />))
 
@@ -179,8 +187,7 @@ describe('useDashboardPopoutBridge', () => {
       })
     )
 
-    // Bare setActiveWorktree skips the terminal view switch, initial-terminal seeding and
-    // sleeping-session resume, so a parked pane is never revived (#16731).
+    // Shared activation revives parked workspaces and their terminal view before pane focus.
     expect(mocks.activateAndRevealWorkspace).toHaveBeenCalledWith('shared-worktree', {
       executionHostId: 'runtime:env-1'
     })
@@ -271,9 +278,7 @@ describe('useDashboardPopoutBridge', () => {
       )
     ).toBe(true)
 
-    // Why: each card's preview terminal keys against a host-input profile
-    // derived from these. Not republishing leaves the pop-out encoding bytes
-    // for the host the pty used to run on.
+    // Host-profile inputs must republish independently; otherwise idle boards keep encoding for the PTY’s former host.
     const profileInputs: Partial<DashboardSnapshotWatchState>[] = [
       { sshConnectionStates: new Map() },
       { sshStateByEnvironment: new Map() },
@@ -336,8 +341,7 @@ describe('repoIconsUnchanged', () => {
 
   it('matches on reference, not deep value, so an unchanged repo skips the resend', () => {
     expect(repoIconsUnchanged({ r1: icon }, { r1: icon })).toBe(true)
-    // Why: a structurally identical but freshly allocated icon means the store
-    // record was rebuilt, so the pop-out's copy may genuinely be stale.
+    // Rebuilt immutable icon objects may represent new content; reference replacement must trigger publication.
     expect(repoIconsUnchanged({ r1: { ...icon } }, { r1: icon })).toBe(false)
   })
 
@@ -359,8 +363,7 @@ describe('useDashboardPopoutBridge repo icon publishing', () => {
   const icons: Record<string, RepoIcon> = {
     r1: { type: 'image', src: 'data:image/png;base64,AAAA', source: 'upload' }
   }
-  // Longer than PUBLISH_THROTTLE_MS, so the next store change publishes on the
-  // leading edge instead of parking on the trailing timer.
+  // Cross the throttle boundary so changes publish immediately rather than wait on a trailing timer.
   const PAST_THROTTLE_MS = 1_000
   const WITHIN_THROTTLE_MS = 50
   let root: Root
@@ -438,8 +441,7 @@ describe('useDashboardPopoutBridge repo icon publishing', () => {
     await mountAndOpen()
     expect(mocks.publishSnapshot).toHaveBeenCalledTimes(1)
 
-    // Past the throttle, so an ungated write would publish on the leading edge
-    // rather than silently parking on the trailing timer.
+    // Assert beyond the throttle so an ungated publish cannot hide on its trailing timer.
     now += PAST_THROTTLE_MS
     notifyUnrelatedStoreWrite()
 
@@ -459,8 +461,7 @@ describe('useDashboardPopoutBridge repo icon publishing', () => {
     expect(mocks.publishSnapshot).not.toHaveBeenCalled()
   })
 
-  // A burst collapses onto the trailing timer, so that edge carries most of the
-  // republishes this PR exists to slim down.
+  // Bursts publish on the trailing timer; that path must omit unchanged icons too.
   it('omits the icon map on the throttled trailing republish', async () => {
     await mountAndOpen()
     // Date.now stays spied — only the throttle's timer is faked.

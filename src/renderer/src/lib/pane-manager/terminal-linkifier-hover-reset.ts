@@ -47,30 +47,11 @@ export function refreshStaleTerminalLinkifierHover(terminal: Terminal): boolean 
   }
 }
 
-/**
- * Force xterm's linkifier to re-run link providers on the next mousemove.
- *
- * Why: when a terminal is hidden (worktree/tab switch) the browser fires
- * `mouseleave`, which clears the linkifier's current link but leaves its
- * `_lastBufferCell` cache set. On reveal the pointer usually returns to the
- * same cell, so xterm's mousemove handler short-circuits (position unchanged)
- * and never re-linkifies — the link (file path, URL, term_* handle, OSC-8)
- * stays dead until a scroll shifts the buffer position. Clearing the cell/line
- * cache makes the next mousemove re-evaluate providers so the link and its
- * hover underline recover without a scroll.
- *
- * Reaches into xterm internals (`@xterm/xterm` 6.1.0-beta.287 `Linkifier`)
- * because there is no public API to invalidate the hover cache. Guarded so a
- * future xterm build that renames these fields degrades to the pre-fix
- * behavior (link recovers on the next genuine cell change) instead of throwing.
- */
+/** mouseleave clears links but retains xterm’s cell cache, so reveal at the same cell skips providers. Invalidate cell/line caches for the next move. No public API exists; guard pinned Linkifier internals so upgrades degrade to recovery on a real cell change. */
 export function resetTerminalLinkifierHoverState(terminal: Terminal): void {
   try {
     const linkifier = (terminal as unknown as TerminalCoreWithLinkifier)._core?.linkifier
-    // Why: window blur can strand xterm's active link without another mouse
-    // event, so invoke its own leave path before invalidating the cache. Its
-    // own try: this runs provider leave() callbacks, and a throwing one must
-    // not skip the cache invalidation below.
+    // Window blur can strand active links; invoke provider leave separately so its failure cannot skip cache invalidation.
     try {
       linkifier?._clearCurrentLink?.()
     } catch {
@@ -85,8 +66,7 @@ export function resetTerminalLinkifierHoverState(terminal: Terminal): void {
     if (linkifier && '_activeLine' in linkifier) {
       linkifier._activeLine = -1
     }
-    // Why: keep the cursor recoverable if a future xterm build omits the
-    // private cleanup method or has no last mouse event for it to use.
+    // Restore the cursor even if private cleanup or its last mouse event is unavailable.
     terminal.element
       ?.querySelector<HTMLElement>('.xterm-screen')
       ?.classList.remove('xterm-cursor-pointer')
@@ -95,16 +75,7 @@ export function resetTerminalLinkifierHoverState(terminal: Terminal): void {
   }
 }
 
-/**
- * True while xterm is actively showing a hovered link.
- *
- * Why: callers that invalidate the hover cache on a timer (streamed output)
- * must skip while a link is hovered — clearing the cache makes the next
- * mousemove clear and (for async providers like file paths) re-query the active
- * link, flickering its underline/tooltip. Guarded like {@link
- * resetTerminalLinkifierHoverState} so a renamed field degrades to "not
- * hovering" rather than throwing.
- */
+/** Timers must defer invalidation while hovering or async providers flicker underline/tooltips. Missing private state degrades to not hovering, as with resetTerminalLinkifierHoverState. */
 export function isTerminalLinkifierHoverActive(terminal: Terminal): boolean {
   try {
     const linkifier = (terminal as unknown as TerminalCoreWithLinkifier)._core?.linkifier

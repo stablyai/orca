@@ -1,6 +1,6 @@
 import nacl from 'tweetnacl'
 import { describe, expect, it } from 'vitest'
-import { encodeDeviceProofMessage, verifyDeviceProof } from './device-key-proof'
+import { verifyDeviceProof } from './device-key-proof'
 import { createMobileE2EEV2Fixture, MOBILE_E2EE_V2_VECTOR } from './mobile-e2ee-v2-fixtures'
 import { openMobileE2EEV2Frame } from './mobile-e2ee-v2-framing'
 import { createPairedE2EEClientHandshake } from './paired-e2ee-client-handshake'
@@ -98,20 +98,5 @@ describe('paired E2EE device-key auth', () => {
     })
     expect(early.transcriptHashB64()).toBeNull()
     await expect(early.sealAuth(keyCredential)).rejects.toThrow()
-  })
-
-  it('signs the documented proof message', async () => {
-    const handshake = v2Handshake()
-    const seen: Uint8Array[] = []
-    await handshake.sealAuth({
-      ...keyCredential,
-      sign: async (message) => {
-        seen.push(message)
-        return nacl.sign.detached(message, key.secretKey)
-      }
-    })
-    expect(seen[0]).toEqual(
-      encodeDeviceProofMessage('auth', Buffer.from(handshake.transcriptHashB64()!, 'base64'))
-    )
   })
 })

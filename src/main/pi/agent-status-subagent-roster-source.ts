@@ -1,5 +1,4 @@
-// Why: Pi settles its own turn while pi-subagents children keep running, so the
-// generated extension holds the pane's completion until every child it saw start is gone.
+// Hold Pi completion until its observed subagents finish.
 
 import type { PiAgentKind } from '../../shared/pi-agent-kind'
 import { HOOK_REQUEST_MAX_BYTES } from '../../shared/agent-hook-listener/request-body'
@@ -8,25 +7,21 @@ import {
   AGENT_TYPE_MAX_LENGTH
 } from '../../shared/agent-status-field-normalization'
 
-// Module scope: post() reads the roster when a body is built, so a coalesced or
-// retried post always carries the children live at delivery.
+// Build retried/coalesced posts from the roster live at delivery.
 export function getPiSubagentSnapshotSourceLines(): string[] {
   return [
     'type SubagentDetail = { agentType?: string; description?: string; startedAt: number; workflow?: boolean; parent?: string; registration?: object }',
     'type SubagentRoster = { active: Set<string>; exited?: Set<string>; details?: Map<string, SubagentDetail>; waiting: boolean; ownsPane?: boolean; runGeneration?: number; endedRunGeneration?: number; completionPostedGeneration?: number; parked?: Map<string, Map<string, SubagentDetail>>; onEvent?: (event: unknown, forcedStatus?: string) => void; listener?: (event: unknown) => void; onRunnerExit?: (event: unknown) => void; runnerExitListener?: (event: unknown) => void; runnerExitCheck?: ReturnType<typeof setTimeout> | null; onRunnerExitSettled?: () => void }',
-    // Why: the host refuses an oversized body whole. Half its limit also keeps the roster under
-    // the host's JSON structure-token limit; interpolated so it cannot drift from the host's.
+    // Half the host body limit also bounds roster JSON structure tokens.
     `const HOOK_BODY_BUDGET_BYTES = ${Math.floor(HOOK_REQUEST_MAX_BYTES / 2)}`,
     'const SUBAGENTS_FIELD_BYTES = Buffer.byteLength(\',"subagents":[]\')',
     'let subagentRoster: SubagentRoster | null = null',
     '',
-    // Why: an exited runner is already gone, and a pi-subagents workflow run is the lead
-    // coordinating children that post their own rows; both still hold the pane.
+    // Exited runners and workflow leads hold the pane without contributing visible child rows.
     'function isVisibleSubagent(roster: SubagentRoster, id: string): boolean {',
     '  return roster.active.has(id) && !roster.exited?.has(id) && roster.details?.get(id)?.workflow !== true',
     '}',
     '',
-    // Match the host's bounded single-line previews before reserving body bytes.
     'function subagentPreview(value: string | undefined, maxLength: number): string | undefined {',
     "  if (typeof value !== 'string') return undefined",
     "  let preview = value.slice(0, maxLength * 8 + 64).trimStart().replace(/[\\r\\n\\u2028\\u2029]+/g, ' ').slice(0, maxLength)",
@@ -35,7 +30,7 @@ export function getPiSubagentSnapshotSourceLines(): string[] {
     '  return preview || undefined',
     '}',
     '',
-    // Only the posted rows are fitted to the body; the active set keeps every child.
+    // Payload truncation must not discard active children from ownership tracking.
     'function subagentPayload(byteBudget: number): Record<string, unknown> {',
     '  if (!subagentRoster) return {}',
     '  const subagents: Record<string, unknown>[] = []',
@@ -47,7 +42,6 @@ export function getPiSubagentSnapshotSourceLines(): string[] {
     `    const description = subagentPreview(detail?.description, ${AGENT_STATUS_TOOL_INPUT_MAX_LENGTH})`,
     "    const subagent = { id, state: 'working', startedAt: detail?.startedAt ?? 0, ...(agentType ? { agentType } : {}), ...(description ? { description } : {}) }",
     '    const rowBytes = Buffer.byteLength(JSON.stringify(subagent)) + (subagents.length > 0 ? 1 : 0)',
-    // A row that doesn't fit is skipped, not a stop: a later, shorter row may still fit.
     '    if (bytes + rowBytes > byteBudget) continue',
     '    bytes += rowBytes',
     '    subagents.push(subagent)',
@@ -58,33 +52,27 @@ export function getPiSubagentSnapshotSourceLines(): string[] {
   ]
 }
 
-// The run state (children, the hold, the turn counters) has to outlive a registration: Pi hands
-// each one a fresh `pi.events` and evaluates this module again on /reload, so only globalThis
-// survives there. OMP and Prime keep one bus for the session.
+// Pi replaces registrations/buses and reloads modules; globalThis retains run state. OMP/Prime retain their bus.
 export function getPiSubagentRosterSetupSourceLines(kind: PiAgentKind): string[] {
   return [
     '  const piEventBus = (pi as { events?: { __orcaPiSubagents?: SubagentRoster; __orcaPiSubagentsHeard?: boolean; __orcaPiRunnerExitsHeard?: boolean; on?: (name: string, handler: (event: unknown) => void) => void } }).events',
     kind === 'pi'
       ? '  const runStateHome: { __orcaPiSubagents?: SubagentRoster } | undefined = isOmpRuntime() ? piEventBus : (globalThis as { __orcaPiSubagents?: SubagentRoster })'
       : '  const runStateHome: { __orcaPiSubagents?: SubagentRoster } | undefined = piEventBus',
-    // Why: a roster an older in-process build left on this bus is adopted, with the subscriptions it made.
+    // Adopt older in-process rosters with their existing subscriptions.
     '  const busRoster = piEventBus?.__orcaPiSubagents',
     '  const lifecycleState: SubagentRoster = busRoster ?? runStateHome?.__orcaPiSubagents ?? { active: new Set<string>(), waiting: false }',
     '  if (runStateHome) runStateHome.__orcaPiSubagents = lifecycleState',
-    // Why: optional on the shared roster so one created by an older in-process build gains them on /reload.
+    // Reload upgrades rosters created by older in-process builds.
     '  const subagentDetails = (lifecycleState.details ??= new Map<string, SubagentDetail>())',
-    // Why: completion is a per-RUN fact. A sibling extension (the memory reminder is one) can
-    // start the next run from inside its own agent_settled handler, so this extension sees that
-    // run's agent_start BEFORE its own agent_settled for the run that just ended; a boolean
-    // "already posted" latch would eat the newer run's completion.
+    // A sibling may start the next run before this run settles; completion needs a per-run counter.
     '  lifecycleState.runGeneration ??= 0',
     '  lifecycleState.endedRunGeneration ??= 0',
     '  lifecycleState.completionPostedGeneration ??= -1',
-    // Why: an OMP task child runs this factory again on its own bus. Posts keep describing the
-    // lead's children, and the child's own subagents must not settle the lead's pane.
+    // OMP task children get separate buses; their subagents must not settle the lead pane.
     '  subagentRoster ??= lifecycleState',
     '  const ownsPaneRoster = subagentRoster === lifecycleState',
-    // Tells the children this registration saw start from the ones a /reload handed it.
+    // Distinguish children observed here from those inherited through reload.
     '  const registration = {}',
     '  function resetSubagentRoster(): void {',
     '    clearRunnerExitCheck()',
@@ -93,7 +81,7 @@ export function getPiSubagentRosterSetupSourceLines(kind: PiAgentKind): string[]
     '    subagentDetails.clear()',
     '    lifecycleState.waiting = false',
     '  }',
-    // Why: one subscription per bus object; Pi drops a replaced registration's own.
+    // Replaced Pi registrations lose their subscriptions; subscribe once per bus.
     '  if (ownsPaneRoster && piEventBus?.on && !piEventBus.__orcaPiSubagentsHeard && !busRoster?.listener) {',
     '    piEventBus.__orcaPiSubagentsHeard = true',
     "    piEventBus.on('task:subagent:lifecycle', (event: unknown) => lifecycleState.onEvent?.(event))",
@@ -107,12 +95,9 @@ export function getPiSubagentRosterSetupSourceLines(kind: PiAgentKind): string[]
   ]
 }
 
-// Expects post() and postAgentEndOnce() from the handler scope; the latter prunes
-// exited runners, then returns whether it settled the pane.
 export function getPiSubagentRosterEventSourceLines(): string[] {
   return [
-    // Why: a run that reports its own completion does so ~150ms after its runner exits;
-    // the grace lets that path (and the wake turn it triggers) settle the pane first.
+    // Runner exit can precede self-reported completion by ~150ms; allow that path and its wake turn first.
     '  const RUNNER_EXIT_GRACE_MS = 2000',
     '  function clearRunnerExitCheck(): void {',
     '    if (lifecycleState.runnerExitCheck != null) clearTimeout(lifecycleState.runnerExitCheck)',
@@ -123,9 +108,39 @@ export function getPiSubagentRosterEventSourceLines(): string[] {
     '    lifecycleState.exited?.delete(id)',
     '    subagentDetails.delete(id)',
     '  }',
-    // Why: a child can end with no lead event to carry it; a queued post already reads the new roster.
+    // Child exit may have no lead event; queued posts already read the live roster.
     '  function postSubagentsUpdate(): void {',
     "    if (!hasQueuedPost()) post('subagents_update')",
+    '  }',
+    // OMP lifecycle frames can invert or lose a terminal; its job list and child sessions know which children still run.
+    '  function forgetFinishedOmpSubagents(ctx): boolean {',
+    '    const live = new Set<unknown>()',
+    '    try {',
+    '      const running = ctx?.getAsyncJobSnapshot?.()?.running',
+    '      if (!Array.isArray(running)) return false',
+    // Older snapshots omit agentId, and workpool batch labels are not child ids.
+    '      for (const job of running) {',
+    "        if (job?.type !== 'task') continue",
+    "        if (typeof job.agentId !== 'string') return false",
+    '        live.add(job.agentId)',
+    '      }',
+    // Woken or resumed children run outside the root's jobs.
+    '      const registry = pi.pi?.AgentRegistry?.global?.()',
+    "      if (typeof registry?.get !== 'function') return false",
+    '      for (const id of lifecycleState.active) {',
+    '        const session = registry.get(id)?.session',
+    '        if (session?.isStreaming === true || session?.hasPendingAsyncWork?.() === true) live.add(id)',
+    '      }',
+    '    } catch {',
+    '      return false',
+    '    }',
+    '    let wasVisible = false',
+    '    for (const id of lifecycleState.active) {',
+    '      if (live.has(id)) continue',
+    '      wasVisible ||= isVisibleSubagent(lifecycleState, id)',
+    '      forgetSubagent(id)',
+    '    }',
+    '    return wasVisible',
     '  }',
     "  const readLabel = (value: unknown): string | undefined => typeof value === 'string' && value.trim() ? value : undefined",
     '  lifecycleState.onEvent = (event: unknown, forcedStatus?: string): void => {',
@@ -137,10 +152,9 @@ export function getPiSubagentRosterEventSourceLines(): string[] {
     '    if (isOmpRuntime() && !lifecycleState.ownsPane) return',
     "    if (status === 'started') {",
     '      lifecycleState.active.add(id)',
-    // Why: pi-subagents redacts task prompts, so only the agent name, OMP's short label and a
-    // workflow child's step key are shown. The key tells apart siblings that share an agent.
-    "      if (!subagentDetails.has(id)) subagentDetails.set(id, { agentType: readLabel(record.agent), description: readLabel(record.description) ?? readLabel(record.workflowKey), startedAt: Date.now(), workflow: record.mode === 'workflow', parent: readLabel(record.parentWorkflowRunId), registration })",
-    // Why: Pi re-opens only a posted completion; an earlier child must leave the idle check intact.
+    // Use labels/step keys because pi-subagents redacts task prompts; keys and OMP's named ids distinguish same-agent siblings.
+    "      if (!subagentDetails.has(id)) subagentDetails.set(id, { agentType: readLabel(record.agent), description: readLabel(record.description) ?? readLabel(record.workflowKey) ?? (isOmpRuntime() ? id : undefined), startedAt: Date.now(), workflow: record.mode === 'workflow', parent: readLabel(record.parentWorkflowRunId), registration })",
+    // Pi reopens only posted completions; earlier children must preserve the idle check.
     '      if (!isTurnInFlight() && (isOmpRuntime() || lifecycleState.runGeneration === 0 || lifecycleState.completionPostedGeneration === lifecycleState.runGeneration)) {',
     '        lifecycleState.waiting = true',
     '        lifecycleState.completionPostedGeneration = -1',
@@ -151,8 +165,7 @@ export function getPiSubagentRosterEventSourceLines(): string[] {
     "    if (status !== 'completed' && status !== 'failed' && status !== 'aborted') return",
     '    let wasVisible = isVisibleSubagent(lifecycleState, id)',
     '    forgetSubagent(id)',
-    // Why: Pi drops the runner-exit events of runs started before a /reload, so a finished run
-    // takes the children it launched back then with it.
+    // Reload loses old runner-exit delivery; finishing their parent must retire those children.
     '    for (const [childId, detail] of subagentDetails) {',
     '      if (detail.parent !== id || detail.registration === registration) continue',
     '      wasVisible ||= isVisibleSubagent(lifecycleState, childId)',
@@ -161,8 +174,7 @@ export function getPiSubagentRosterEventSourceLines(): string[] {
     '    if (lifecycleState.waiting && postAgentEndOnce()) return',
     '    if (wasVisible) postSubagentsUpdate()',
     '  }',
-    // Why: awaited workflow children never get subagent:async-complete; their runner
-    // exiting is the only end signal pi-subagents publishes for them.
+    // Awaited workflow children publish only runner exit, never async-complete.
     '  lifecycleState.onRunnerExitSettled = (): void => {',
     '    if (lifecycleState.waiting) postAgentEndOnce()',
     '  }',

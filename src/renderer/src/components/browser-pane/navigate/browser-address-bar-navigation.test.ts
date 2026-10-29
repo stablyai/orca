@@ -27,6 +27,22 @@ describe('resolveBrowserAddressBarSubmission', () => {
     })
   })
 
+  it('opens a typed extension page only where the pane hosts extension pages', () => {
+    const page = 'chrome-extension://nngceckbapebfimnlniiiahkandclblb/popup/index.html#/tabs'
+    expect(resolveBrowserAddressBarSubmission(page, { allowExtensionPages: true })).toEqual({
+      status: 'navigate',
+      url: page
+    })
+    // Elsewhere it is not a URL Orca opens.
+    expect(resolveBrowserAddressBarSubmission(page)).toMatchObject({ status: 'invalid' })
+    // A malformed extension id is never treated as an extension page.
+    expect(
+      resolveBrowserAddressBarSubmission('chrome-extension://not-an-id/page.html', {
+        allowExtensionPages: true
+      })
+    ).not.toEqual({ status: 'navigate', url: 'chrome-extension://not-an-id/page.html' })
+  })
+
   it('falls back to the configured search engine instead of parsing a query as a host', () => {
     storeState.browserDefaultSearchEngine = 'google'
     expect(resolveBrowserAddressBarSubmission('google maps')).toEqual({

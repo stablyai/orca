@@ -18,7 +18,7 @@ import {
 import {
   isRecoverableRemoteRuntimeConnectionError,
   toRemoteRuntimeClientErrorLike
-} from '../../../shared/remote-runtime-client-error-classification'
+} from '../../../shared/remote-runtime/remote-runtime-client-error-classification'
 import {
   callRuntimeFileMutationWithCapabilities,
   isRuntimeConnectionChangedError

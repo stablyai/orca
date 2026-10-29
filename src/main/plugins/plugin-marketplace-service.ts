@@ -107,8 +107,7 @@ export class PluginMarketplaceService {
     if (removed) {
       this.sourceErrors.delete(sourceId)
       if (this.officialSeedRequested) {
-        // Why: an existing profile may already occupy every source slot. Once
-        // the user frees one, recover the managed source without a restart.
+        // Recover the managed source when a full profile frees a slot, without restart.
         await this.seedOfficialSource().catch(() => undefined)
       }
     }
@@ -122,8 +121,7 @@ export class PluginMarketplaceService {
       this.officialSeedPromise = seed
       void seed.catch(() => {
         if (this.officialSeedPromise === seed) {
-          // Why: a transient store failure or full source list must not poison
-          // every marketplace read or prevent a later recovery attempt.
+          // Store/full-list failures must permit later seeding attempts.
           this.officialSeedPromise = null
         }
       })
@@ -156,8 +154,7 @@ export class PluginMarketplaceService {
     return states
       .flatMap(({ source, snapshot }) =>
         snapshot.marketplace.plugins
-          // Why: hide packs whose contribution kind this build no longer
-          // supports (themes/icons/skills) so users never reach a dead install.
+          // Exclude unsupported contribution kinds before users reach install.
           .filter((entry) => isMarketplaceListingSupported(entry.categories))
           .map((entry) => this.listingFromEntry(source, snapshot, entry))
       )
@@ -179,9 +176,7 @@ export class PluginMarketplaceService {
       return null
     }
     const snapshot = await this.store.readSnapshot(source.id)
-    // Why: preview and install resolve listings through here, so an unsupported
-    // pack must be unreachable by key too — hiding only the catalog card would
-    // move the dead install one click later instead of removing it.
+    // Preview/install key lookups must reject unsupported packs too.
     const entry = snapshot?.marketplace.plugins.find(
       (plugin) => plugin.id === pluginKey && isMarketplaceListingSupported(plugin.categories)
     )
@@ -221,8 +216,7 @@ export class PluginMarketplaceService {
     try {
       return await this.performRefresh(source.id)
     } catch (error) {
-      // Why: the official source remains configured offline so a later manual
-      // or startup refresh can recover without asking the user for its URL.
+      // Keep official source configuration offline so later refreshes need no user-supplied URL.
       const message = pluginMarketplaceErrorMessage(error)
       this.sourceErrors.set(source.id, message)
       return this.stateFromSnapshot(source, null, true, message)
@@ -283,6 +277,7 @@ export class PluginMarketplaceService {
       categories: entry.categories,
       official,
       bundled: false,
+      ...(entry.release ? { release: entry.release } : {}),
       ...(blocked
         ? {
             blockedByKillList: {

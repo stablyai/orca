@@ -4,9 +4,7 @@ import type { RpcCompatibleReader } from './rpc-operation-contract'
 import { rpcResultVariant, rpcResultVariants } from './rpc-operation-result-reader'
 import { defineRpcOperation } from './rpc-operation'
 
-// Operation families used by the rpc-operation suites and by the compile fence. Kept in one
-// place so the tests and the fence assert against the same descriptors, and so tsc sees them
-// (the app tsconfig excludes *.test.ts). No app code imports this module.
+// Share descriptors with the compile fence outside *.test.ts so the app typecheck includes them.
 
 export const WORKSPACE_ROWS_SCHEMA = z.object({
   worktrees: z.array(z.object({ id: z.string() }))
@@ -19,7 +17,7 @@ export type LegacyWorkspaceRows = z.output<typeof LEGACY_WORKSPACE_ROWS_SCHEMA>
 
 export const workspaceRowsReader = rpcResultVariant('rows', WORKSPACE_ROWS_SCHEMA)
 
-/** Two semantic variants: the modern envelope, then a host that answered a bare array. */
+// Accept the modern envelope before the legacy bare-array variant.
 export const workspaceRowsOrLegacyReader: RpcCompatibleReader<
   unknown,
   'rows' | 'legacy-array',
@@ -37,8 +35,7 @@ export const workspaceListOrThrow = defineRpcOperation({
   read: workspaceRowsOrLegacyReader
 })
 
-// Same method, a different family: main's callers disagreed about acceptance, so both rules
-// stay named rather than being unified behind one descriptor.
+// Keep distinct acceptance families even when they use the same method.
 export const workspaceListOrNull = defineRpcOperation({
   name: 'test.workspaceListOrNull',
   method: 'worktree.ps',
@@ -54,7 +51,6 @@ export const worktreePsProbe = defineRpcOperation({
   barrier: 'on-settle'
 })
 
-/** A method the catalog declares with no params at all, so `RpcSendParams` reads `void`. */
 export const pushTestWithoutParams = defineRpcOperation({
   name: 'test.pushTestWithoutParams',
   method: 'notifications.testPush',

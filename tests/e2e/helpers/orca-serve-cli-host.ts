@@ -1,7 +1,4 @@
-/**
- * `orca serve` through the real CLI (`out/cli/index.js`), so the host it picks is the CLI's own
- * selection: orcad by default, Electron on `ORCA_SERVE_RUNTIME=electron` or a fallback.
- */
+// Launch the real CLI so runtime selection exercises its orcad default and Electron override/fallback.
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { spawnProcess } from '@orca/process-host'

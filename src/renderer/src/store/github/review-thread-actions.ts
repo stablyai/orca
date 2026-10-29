@@ -79,7 +79,6 @@ export const createReviewThreadActions = (
       ok = false
     }
     if (!ok && prev) {
-      // Revert optimistic update on failure
       set((s) => ({
         commentsCache: {
           ...s.commentsCache,

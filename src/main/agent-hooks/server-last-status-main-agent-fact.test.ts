@@ -24,8 +24,6 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-// The main agent fact rides inside the persisted payload. Without these pins the field would look
-// shipped while dying at every restart: hydration rebuilds only the fields it is taught.
 describe('The main agent fact across a restart', () => {
   let userDataPath: string
 
@@ -83,7 +81,7 @@ describe('The main agent fact across a restart', () => {
         restoredUnconfirmed: true,
         mainAgent: live?.mainAgent
       })
-      // The seeded main agent record is what lets the child's drain settle the pane, verdict intact.
+      // The restored main-agent fact lets child drain settle the pane without losing its verdict.
       await postHookEvent(
         server,
         buildBody({ hook_event_name: 'SubagentStop', agent_id: 'arestored-child' })
@@ -102,7 +100,7 @@ describe('The main agent fact across a restart', () => {
     }
   })
 
-  // Current Claude sends no hook on a cancel, so the inferred Ctrl+C is the path users take.
+  // Captured Claude cancellation emits no hook; exercise the inferred Ctrl+C path.
   it('round-trips an inferred cancel held open by a child through disk and back', async () => {
     const firstServer = new AgentHookServer()
     await firstServer.start({ env: 'production', userDataPath })

@@ -1,6 +1,8 @@
-import { StyleSheet, Text, View } from 'react-native'
+import { Text, View } from 'react-native'
 import type { HomeStatsSummary } from '../stats/home-stats-total'
 import { colors, spacing } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { MobileHomeAppUpdateCard } from './MobileHomeAppUpdateCard'
 
 function formatDuration(ms: number): string {
@@ -16,6 +18,7 @@ function formatDuration(ms: number): string {
 }
 
 export function MobileHomeListHeader({ stats }: { stats: HomeStatsSummary | null }) {
+  useMobileColorScheme()
   return (
     <View>
       <View style={styles.hero}>
@@ -43,7 +46,7 @@ export function MobileHomeListHeader({ stats }: { stats: HomeStatsSummary | null
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   hero: { paddingTop: spacing.xs, paddingBottom: spacing.md },
   heroTitle: {
     color: colors.textPrimary,
@@ -54,7 +57,7 @@ const styles = StyleSheet.create({
   statsRow: { flexDirection: 'row', gap: 10, marginBottom: spacing.lg },
   statCard: {
     flex: 1,
-    backgroundColor: 'rgba(26,26,26,0.6)',
+    backgroundColor: colors.bgPanel,
     borderWidth: 1,
     borderColor: colors.borderSubtle,
     borderRadius: 10,
@@ -77,4 +80,4 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
     paddingHorizontal: spacing.xs
   }
-})
+}))

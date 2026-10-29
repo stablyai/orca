@@ -5,12 +5,12 @@ import { performance as nodePerformance } from 'node:perf_hooks'
 import { updateActiveGitStatusRefBinding } from './worktree-git-status-ref-watch'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { subscribeViaWatcherProcess } from './parcel-watcher-process'
-import { WatcherProcessFailure } from './parcel-watcher-process-failure'
+import { subscribeViaWatcherProcess } from './filesystem/watcher-process/parcel-watcher-process'
+import { WatcherProcessFailure } from './filesystem/watcher-process/parcel-watcher-process-failure'
 import type {
   WatcherProcessCallback,
   WatcherProcessHooks
-} from './parcel-watcher-process-subscription'
+} from './filesystem/watcher-process/parcel-watcher-process-subscription'
 import type { WorktreeBaseWatchTarget } from './worktree-base-directory-event-filter'
 import type {
   WorktreeBasePollEvent,
@@ -18,10 +18,9 @@ import type {
 } from './worktree-base-directory-poller'
 import { startGitCommonWatch } from './worktree-git-common-watch'
 
-vi.mock('./parcel-watcher-process', () => ({
+vi.mock('./filesystem/watcher-process/parcel-watcher-process', () => ({
   subscribeViaWatcherProcess: vi.fn()
 }))
-// Records every stat target so a test can assert which paths a parked poll stopped touching.
 const { statCalls } = vi.hoisted(() => ({ statCalls: [] as string[] }))
 
 vi.mock('node:fs/promises', async (importOriginal) => {
@@ -36,11 +35,9 @@ vi.mock('node:fs/promises', async (importOriginal) => {
 })
 
 const POLL_MS = 25
-// Reconciliation runs every 15 poll ticks. Fake timers keep native re-arm tests
-// independent of host load while preserving the production interval.
+// Fake timers preserve production reconciliation cadence without depending on host load.
 const RECONCILIATION_TICKS = 15
-// Advance one extra reconciliation window so the fake performance clock crosses the
-// 15-tick boundary even when timer and filesystem-promise scheduling differ by a tick.
+// Allow one extra window for timer/filesystem scheduling around the reconciliation boundary.
 const alwaysVisible: WorktreePollerWindowVisibility = {
   isWindowVisible: () => true,
   onWindowBecameVisible: () => () => {}
@@ -55,11 +52,7 @@ async function replaceWorktreesRoot(
 ): Promise<void> {
   const previousInode = (await stat(worktreesDir)).ino
   await rm(worktreesDir, { recursive: true })
-  // Linux reuses freed directory inodes, and removing the tree frees several at
-  // once, so the recreated root can land back on its own old inode and look
-  // unchanged to reconciliation. Park inodes in HELD siblings until the root
-  // genuinely differs — verifying beats guessing how many to reserve. The
-  // siblings live next to `worktrees`, which no poll or watch path enumerates.
+  // Linux can reuse the old root inode; retain sibling inodes until replacement identity actually differs.
   for (let attempt = 0; attempt < 16; attempt++) {
     await mkdir(retainedEntry, { recursive: true })
     if ((await stat(worktreesDir)).ino !== previousInode) {
@@ -225,8 +218,7 @@ describe('worktree git-common narrow watch (local native platforms)', () => {
   )
 
   it('detects a common config write via the shallow primary-metadata watcher', async () => {
-    // Why: an external `git push -u` rewrites only the common config (plus
-    // remote-tracking refs) — outside the narrow worktrees/ stream.
+    // External push -u changes common config outside the narrow worktrees stream.
     installSubscribeMock()
     const commonDir = await makeCommonDir(true)
     const configPath = join(commonDir, 'config')
@@ -255,7 +247,6 @@ describe('worktree git-common narrow watch (local native platforms)', () => {
     await startWatch(commonDir, received)
     expect(primarySubscription().dir).toBe(commonDir)
 
-    // The shallow child owns the fast path: ordinary ticks must not re-stat these.
     statCalls.length = 0
     await vi
       .waitFor(
@@ -269,8 +260,7 @@ describe('worktree git-common narrow watch (local native platforms)', () => {
       (path) => path === headPath || path === configPath
     ).length
 
-    // ...but a bounded backstop must still re-stat them, or a watcher that goes
-    // silently lossy would leave primary metadata stale forever.
+    // Silent native loss must still converge through the bounded primary backstop.
     statCalls.length = 0
     await vi.waitFor(
       () => {
@@ -321,7 +311,6 @@ describe('worktree git-common narrow watch (local native platforms)', () => {
         async () => 'refs/remotes/origin/main'
       )
 
-    // Bind then unbind repeatedly: each cycle must hand back whatever it took.
     for (let round = 0; round < 4; round++) {
       await bind('main')
       await vi.waitFor(() => {
@@ -387,7 +376,6 @@ describe('worktree git-common narrow watch (local native platforms)', () => {
     })
     expect(received.flat()).toContainEqual({ type: 'delete', path: worktreesDir })
 
-    // The existence poll re-subscribes once a new first worktree recreates it.
     await mkdir(worktreesDir)
     await vi.waitFor(() => {
       expect(subscribeMock).toHaveBeenCalledTimes(3)
@@ -406,10 +394,8 @@ describe('worktree git-common narrow watch (local native platforms)', () => {
     await vi.waitFor(() => {
       expect(narrowSubscription().unsubscribe).toHaveBeenCalledTimes(1)
     })
-    // The error is surfaced as a structural change so worktrees re-sync.
     expect(received.flat()).toContainEqual({ type: 'update', path: worktreesDir })
 
-    // The dir still exists, so the existence poll re-subscribes.
     await vi.waitFor(() => {
       expect(subscribeMock).toHaveBeenCalledTimes(3)
     })
@@ -421,7 +407,7 @@ describe('worktree git-common narrow watch (local native platforms)', () => {
     ])
     narrowSubscription().hooks.onInterruption?.()
 
-    // A replaced watch cannot tear down its successor or report stale events.
+    // Retired watchers must not tear down successors or publish late events.
     expect(received).toHaveLength(receivedAfterRearm)
     expect(narrowSubscriptions()[1].unsubscribe).not.toHaveBeenCalled()
   })
@@ -462,10 +448,7 @@ describe('worktree git-common narrow watch (local native platforms)', () => {
       ),
       []
     )
-    // Narrow fallback + primary backstop, with the narrow existence poll retired.
-    // No upstream ref is selected here, so no selected-ref poll is scheduled at
-    // all. Waiting on the exact count is what guarantees the fallback has
-    // baselined before the entry below is created.
+    // Wait for fallback baselining; no selected upstream means only narrow fallback and primary backstop polls.
     await vi.waitFor(() => {
       expect(narrowSubscription().unsubscribe).toHaveBeenCalledOnce()
       expect(visibility.listenerCount()).toBe(3)
@@ -522,7 +505,6 @@ describe('worktree git-common narrow watch (local native platforms)', () => {
 
     narrowSubscription().hooks.onInterruption?.()
     expect(received.flat()).toContainEqual({ type: 'update', path: worktreesDir })
-    // The supervisor resubscribed the same record; no teardown should happen.
     expect(narrowSubscription().unsubscribe).not.toHaveBeenCalled()
   })
 
@@ -547,8 +529,7 @@ describe('worktree git-common narrow watch (local native platforms)', () => {
     narrowSubscription().hooks.onOverflow?.()
 
     expect(onOverflow).toHaveBeenCalledOnce()
-    // The dedicated callback owns the refresh; the generic event/error paths
-    // must not also fire so the caller cannot double-count the same loss.
+    // Dedicated overflow callbacks must not duplicate generic event/error notifications.
     expect(received).toEqual([])
     expect(narrowSubscription().unsubscribe).not.toHaveBeenCalled()
   })
@@ -622,7 +603,6 @@ describe('worktree git-common narrow watch (local native platforms)', () => {
     expect(subscribeMock).toHaveBeenCalledTimes(1)
 
     visibility.show()
-    // Promptly: the re-check stats on show, not a poll interval later.
     expect(statCalls.filter((path) => path === worktreesDir)).toHaveLength(1)
     await vi.waitFor(() => {
       expect(subscribeMock).toHaveBeenCalledTimes(2)
@@ -676,8 +656,7 @@ describe('worktree git-common narrow watch (local native platforms)', () => {
       visibility.source
     )
 
-    // Narrow existence and the primary backstop park on window visibility. No
-    // upstream ref is selected, so no selected-ref poll exists to park.
+    // Only existence and primary backstop polls exist without a selected upstream ref.
     expect(visibility.listenerCount()).toBe(2)
     await watch.unsubscribe()
     expect(visibility.listenerCount()).toBe(0)
@@ -733,8 +712,7 @@ describe('worktree git-common narrow watch (local native platforms)', () => {
 
       await replaceWorktreesRoot(commonDir, worktreesDir, retainedEntry)
       await vi.advanceTimersByTimeAsync(POLL_MS * RECONCILIATION_TICKS * 4)
-      // Reconciliation's snapshot is real filesystem work, so advancing the fake
-      // clock schedules it but does not guarantee it has settled.
+      // Advancing fake timers starts reconciliation; wait separately for real filesystem work.
       await vi.waitFor(
         () => {
           expect(subscribeMock).toHaveBeenCalledTimes(3)
@@ -791,8 +769,7 @@ describe('worktree git-common narrow watch (local native platforms)', () => {
       const stalePendingSubscription = narrowSubscriptions()[1]
       await replaceWorktreesRoot(commonDir, worktreesDir, retainedEntry)
       await vi.advanceTimersByTimeAsync(POLL_MS * RECONCILIATION_TICKS * 4)
-      // Reconciliation's snapshot is real filesystem work, so advancing the fake
-      // clock schedules the second replacement's tick but does not settle it.
+      // Timer advancement starts the replacement check; wait separately for its filesystem work.
       await vi.waitFor(
         () => {
           expect(

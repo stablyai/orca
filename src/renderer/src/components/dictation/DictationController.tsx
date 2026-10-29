@@ -44,8 +44,7 @@ export function DictationController() {
   const erroredSessionIdsRef = useRef(new Set<string>())
   const intentionalTargetCancellationRef = useRef(false)
   const insertedFinalTranscriptRef = useRef('')
-  // Why: push-to-talk restarts capture per utterance; toast once per preference,
-  // not once per press, while the selected mic stays gone.
+  // Push-to-talk restarts per utterance; report a missing preferred microphone once per preference.
   const micFallbackNotifiedForRef = useRef<string | null>(null)
   const stopDictationRef = useRef<(() => void) | null>(null)
 
@@ -63,9 +62,7 @@ export function DictationController() {
       } catch {
         // Swallow stop errors — the worker may already be torn down.
       }
-      // Why: stopDictation() resolves on main-process completion, while final
-      // transcript delivery is renderer IPC. Wait for this session's stopped
-      // event so old finals cannot be mistaken for the next dictation run.
+      // Main stop completion can precede renderer final-text IPC; wait for this session’s stopped event before accepting the next run.
       await waitForStoppedSession(sessionId, stoppedSessionIdsRef, stoppedResolversRef)
       const sessionErrored = erroredSessionIdsRef.current.delete(sessionId)
       if (!sessionErrored && !finalTranscriptReceivedRef.current && getCapturedChunkCount() > 0) {
@@ -99,6 +96,8 @@ export function DictationController() {
     const modelId = settings?.voice?.sttModel
     if (!modelId) {
       toast('No speech model selected. Download one in Settings > Voice.', {
+        // Held keys and repeated presses replace this toast instead of stacking it.
+        id: 'dictation-no-model',
         action: {
           label: translate(
             'auto.components.dictation.DictationController.bb7f599ee7',
@@ -134,8 +133,7 @@ export function DictationController() {
     let captureStarted = false
 
     try {
-      // Why: worker startup can take seconds after idle teardown. Capture first
-      // and buffer locally so speech during "Starting..." is not discarded.
+      // Capture and buffer before slow worker startup so speech during Starting is retained.
       const preferredMicrophoneDeviceId = settings?.voice?.microphoneDeviceId ?? null
       const captureResult = await startCapture({
         bufferAudio: true,
@@ -157,8 +155,7 @@ export function DictationController() {
       })
       captureStarted = true
       if (captureResult?.fellBackToDefaultMicrophone) {
-        // Why: a stop requested during startup tears this capture down below, so the
-        // notice would describe a fallback that never records anything.
+        // Suppress fallback notices when a queued stop will tear down this startup capture.
         if (
           !stopRequestedDuringStartRef.current &&
           micFallbackNotifiedForRef.current !== preferredMicrophoneDeviceId
@@ -274,12 +271,10 @@ export function DictationController() {
     await finishDictationSession(sessionId)
   }, [finishDictationSession, setDictationState, stopCapture])
 
-  // Why: capture-loss fires from a stream opened before stopDictation exists;
-  // route through a ref so the two callbacks do not depend on each other.
+  // Capture opens before stopDictation exists; bridge through a ref to avoid cyclic callback dependencies.
   stopDictationRef.current = () => void stopDictation()
 
-  // Toggle mode: use IPC from main process (before-input-event intercepts
-  // the keyDown so Cmd+E doesn't reach xterm or trigger system shortcuts).
+  // Toggle mode uses intercepted main IPC so the chord cannot reach xterm or system shortcuts.
   useEffect(() => {
     const mode = settings?.voice?.dictationMode ?? 'toggle'
     if (mode !== 'toggle') {
@@ -287,11 +282,7 @@ export function DictationController() {
     }
 
     const handleKeyDown = (): void => {
-      if (
-        !settings?.voice?.enabled ||
-        !settings.voice.sttModel ||
-        dictationStateRef.current === 'stopping'
-      ) {
+      if (!settings?.voice?.enabled || dictationStateRef.current === 'stopping') {
         return
       }
       if (dictationStateRef.current === 'listening' || dictationStateRef.current === 'starting') {
@@ -303,16 +294,10 @@ export function DictationController() {
 
     const cleanup = window.api.ui.onDictationKeyDown(handleKeyDown)
     return cleanup
-  }, [
-    settings?.voice?.dictationMode,
-    settings?.voice?.enabled,
-    settings?.voice?.sttModel,
-    startDictation,
-    stopDictation
-  ])
+  }, [settings?.voice?.dictationMode, settings?.voice?.enabled, startDictation, stopDictation])
 
   useEffect(() => {
-    const canDictate = (): boolean => Boolean(settings?.voice?.enabled && settings.voice.sttModel)
+    const canDictate = (): boolean => Boolean(settings?.voice?.enabled)
     const handleControl = (event: Event): void => {
       if (!canDictate() || dictationStateRef.current === 'stopping') {
         return
@@ -338,7 +323,7 @@ export function DictationController() {
     }
     document.addEventListener(DICTATION_CONTROL_EVENT, handleControl)
     return () => document.removeEventListener(DICTATION_CONTROL_EVENT, handleControl)
-  }, [settings?.voice?.enabled, settings?.voice?.sttModel, startDictation, stopDictation])
+  }, [settings?.voice?.enabled, startDictation, stopDictation])
 
   useHoldDictationGesture({
     dictationStateRef,

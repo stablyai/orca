@@ -21,7 +21,7 @@ export function persistRewindRecord(
   fence: number,
   rewind: AgentSessionRewindRecord
 ): Promise<unknown> {
-  // An older build's record copied the kept history; the journal holds it, so it is never rewritten.
+  // Drop legacy copied history; the retained journal remains authoritative.
   const { retained: _retained, hydrationVerified: _hydrationVerified, ...current } = rewind
   return store.transitionHandoff(sessionId, (record) => {
     if (record.lease.runtimeFence !== fence) {
@@ -31,10 +31,7 @@ export function persistRewindRecord(
   })
 }
 
-/**
- * A Claude rewind from a build before rewinds forked never ran, so it is settled refused rather
- * than proven. Bookkeeping only: the chat is already attached either way.
- */
+/** Pre-fork Claude rewinds never ran; refuse them without blocking the already-attached chat. */
 async function settleUnsupportedClaudeRewind(
   { store, logger }: RewindRecoveryDeps,
   sessionId: string,
@@ -67,16 +64,14 @@ type RecoveredRewind = Awaited<
   ReturnType<NonNullable<StructuredAgentSessionAdapter['recoverRewind']>>
 >
 
-/** What the provider says about a rewind in doubt, read with no journal or record write, so a
- *  caller can read it outside the session's serialize and apply it inside. Null: none in doubt. */
+/** Read provider evidence outside serialization; apply journal/record changes inside it. */
 export type StructuredRewindRecoveryEvidence = {
   rewind: AgentSessionRewindRecord
   turns?: { beforeTurnId: string; keptTurnId: string | null }
   recovered?: RecoveredRewind
 } | null
 
-// Only this rewind moves a chat to a new epoch once it has history (imports run at creation), so
-// a moved epoch is its own replacement, committed before the crash.
+// Only rewind replaces an existing epoch, so a changed epoch proves replacement committed.
 function rewindJournalCut(
   record: AgentSessionRecord | null,
   journal: AgentSessionJournal,
@@ -121,7 +116,7 @@ export async function recoverStructuredRewind(
   await applyStructuredRewindRecovery(deps, sessionId, journal, fence, evidence, receipt)
 }
 
-/** `record` is the one the apply will see, when a caller's commit before it changes the record. */
+/** Supply the record a pending commit will expose to apply. */
 export async function readStructuredRewindRecovery(
   { store }: RewindRecoveryDeps,
   sessionId: string,
@@ -159,8 +154,7 @@ export async function readStructuredRewindRecovery(
   return recovered ? { rewind, turns, recovered } : { rewind, turns }
 }
 
-/** The journal and record writes the evidence proves; a rewind or cut that moved since the read
- *  is not this evidence's to settle. */
+/** Apply only while the saved rewind and cut still match the evidence. */
 export async function applyStructuredRewindRecovery(
   deps: RewindRecoveryDeps,
   sessionId: string,
@@ -191,7 +185,6 @@ export async function applyStructuredRewindRecovery(
     throw new Error('agent_session_rewind:invalid-target')
   }
   if (rewind.phase === 'prepared' && rewind.providerFork) {
-    // New forks are durable already; older records leave the copy to their next launch.
     rewind = { ...rewind, phase: 'provider-succeeded' }
     await persistRewindRecord(store, sessionId, fence, rewind)
   } else if (rewind.phase === 'prepared') {
@@ -206,8 +199,7 @@ export async function applyStructuredRewindRecovery(
     }
     const { recovered } = evidence
     if (!recovered?.ok) {
-      // The target is still in the provider's history, and the journal is replaced only once the
-      // revert is proven, so both still hold it even when the provider acknowledged the revert.
+      // Keep both histories until revert is proven, even after provider acknowledgement.
       if (recovered?.reason === 'provider-refused') {
         await persistRewindRecord(store, sessionId, fence, {
           ...rewind,

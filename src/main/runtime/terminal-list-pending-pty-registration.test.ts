@@ -8,6 +8,7 @@ import {
   PTY,
   WORKTREE
 } from './pty-inventory-lifecycle-fixture'
+import { registerBoundPty } from './bind-first-pane.test-fixture'
 
 const TAB = '40000000-0000-4000-8000-000000000001'
 const LEAF = '40000000-0000-4000-8000-000000000002'
@@ -60,7 +61,7 @@ describe('terminal listing while a spawn binding is being persisted', () => {
       }
       // Spawn commit awaits durable binding persistence before publishing the runtime surface.
       const commit = bindingPersisted.promise.then(() => {
-        runtime.registerPty(ptyId, WORKTREE, connectionId, {
+        registerBoundPty(runtime, ptyId, WORKTREE, connectionId, {
           tabId: TAB,
           leafId: LEAF,
           incarnationId: PREDECESSOR

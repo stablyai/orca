@@ -46,8 +46,7 @@ function titleFromName(name: string): string {
   return stem.charAt(0).toUpperCase() + stem.slice(1)
 }
 
-// Why: template names can originate from pasted/remote filenames; title display
-// only needs collapsed whitespace, not a whole-string whitespace regex pass.
+// Template names may be large pasted/remote filenames; collapse only enough whitespace for display.
 function foldMarkdownTemplateTitleWhitespace(value: string): string {
   let normalized = ''
   let pendingWhitespace = false
@@ -136,8 +135,7 @@ export async function listMarkdownDocumentTemplates(
   const templates: MarkdownDocumentTemplate[] = []
   const rootPath = joinPath(worktreePath, MARKDOWN_TEMPLATE_ROOT)
 
-  // Why: missing template directories are the normal case. Probe quietly first
-  // so Electron does not log an IPC handler error for an optional feature.
+  // Missing template directories are normal; probe quietly to avoid optional-feature IPC errors.
   if (!(await runtimePathExists(context, rootPath))) {
     return []
   }

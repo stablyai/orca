@@ -22,11 +22,7 @@ export function TerminalWindowSection({
   updateSettings
 }: TerminalWindowSectionProps): React.JSX.Element {
   const [colorOverridesExpanded, setColorOverridesExpanded] = useState(false)
-  // Why: windowBackgroundBlur is only read by createMainWindow() at startup
-  // (macOS vibrancy / Windows acrylic both require window creation options),
-  // so the UI has to ask the user to restart for the change to take effect.
-  // Snapshot the value on first render and compare to the live setting to
-  // show a "Restart required" banner only when they differ.
+  // Blur is a startup window option on macOS/Windows; compare against mount state to request restart only after changes.
   const blurAtMountRef = useRef<boolean>(settings.windowBackgroundBlur ?? false)
   const blurPendingRestart = (settings.windowBackgroundBlur ?? false) !== blurAtMountRef.current
   const [relaunchingBlur, setRelaunchingBlur] = useState(false)
@@ -235,8 +231,6 @@ export function TerminalWindowSection({
           className="flex items-center justify-between gap-4 py-2"
         >
           <div className="space-y-0.5">
-            {/* Why: helper text dropped per copy audit — near-verbatim restatement
-              of the label; the search index keeps the longer phrasing. */}
             <Label>
               {translate(
                 'auto.components.settings.TerminalWindowSection.3530908ef9',

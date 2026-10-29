@@ -1,6 +1,4 @@
-// Grouping, naming, and state words for the background-tasks strip. Pure functions over the wire
-// roster so every surface (desktop strip, phone strip) groups and words one roster the same way;
-// each passes its own `say` for the words.
+// Share desktop/mobile grouping and state policy over wire rosters; each surface supplies its own translation function.
 
 import type {
   AgentSessionBackgroundTask,
@@ -48,8 +46,7 @@ export function backgroundTaskKindLabel(kind: TaskKind, say: BackgroundTaskSay):
   }
 }
 
-/** The transcript row's name: description → name → kind label. Empty-after-trim and
- *  placeholder values fall through, so the row always renders something. */
+/** Fall back through nonblank/nonplaceholder description, name and kind so rows always have a label. */
 export function resolveBackgroundTaskName(
   task: AgentSessionBackgroundTask,
   say: BackgroundTaskSay
@@ -101,9 +98,7 @@ const REPORTED_ROW_CONTEXT: AgentChildRowContext = {
   hostClockOffsetMs: 0
 }
 
-/** Kind groups from the host's child views: the main agent's work at the top, each child's own
- *  work nested beneath it rather than counted again in its kind's group. Pass the context the
- *  sidebar builds for the same parent (`agentChildRowContextForParent`) so both read one verdict. */
+/** Use the sidebar's parent context for the same verdict. Group lead work first and nest owned work under its child instead of counting it twice. */
 export function buildBackgroundTaskGroupsFromViews(
   views: readonly AgentChildWorkView[],
   context: AgentChildRowContext = REPORTED_ROW_CONTEXT
@@ -147,8 +142,7 @@ export function backgroundTaskStateReason(state: RunState, say: BackgroundTaskSa
   }
 }
 
-/** A count and its state ("2 agents waiting"), one whole sentence per state so a language can
- *  agree the state with the count. */
+/** Translate count/state as a whole sentence so languages can agree their forms. */
 export function backgroundTaskCountedState(
   counted: string | number,
   state: RunState,
@@ -192,8 +186,7 @@ function tokenScaleText(value: number): string {
   return Number.isInteger(value) ? value.toFixed(0) : value.toFixed(1)
 }
 
-/** Compact token meta per the mock ("18.2k"). Locale-neutral on purpose:
- *  it sits in a mono meta slot beside elapsed, like other technical literals. */
+/** Locale-neutral compact token literals (18.2k) match the technical mono metadata slot. */
 export function formatBackgroundTaskTokens(totalTokens: number): string {
   if (totalTokens < 1_000) {
     return String(totalTokens)
@@ -221,8 +214,7 @@ function rowsTick(rows: readonly AgentChildRowModel[]): boolean {
   return rows.some((row) => backgroundTaskRowTicks(row) || rowsTick(row.owned))
 }
 
-/** Whether the strip needs a 1 Hz clock: some live row's elapsed moves, and it shows, because the
- *  list is open or the collapsed header times one live shell. Finished work never wakes it. */
+/** Tick at 1Hz only for visible live elapsed values (open rows or one collapsed live shell); finished work never wakes the clock. */
 export function backgroundTasksStripTicks(
   groups: readonly BackgroundTaskGroup[],
   expanded: boolean
@@ -253,9 +245,7 @@ export function backgroundTaskRowMeta(row: AgentChildRowModel, now: number): str
     .join(' · ')
 }
 
-/** The provider id a row's Stop targets, or null when the row offers none. Only an explicit `false`
- *  withholds it: a Stop on a row the host cannot target resolves to an empty list and silently
- *  reports nothing cancelled. */
+/** Only explicit false withholds Stop for compatibility; unsupported targets otherwise silently resolve to an empty cancellation list. */
 export function backgroundTaskRowStopId(
   row: AgentChildRowModel,
   supportsTaskStop: boolean

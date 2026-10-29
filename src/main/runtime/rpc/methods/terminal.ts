@@ -2,6 +2,7 @@ import { TERMINAL_LIFECYCLE_METHODS } from './terminal/terminal-lifecycle-method
 import { TERMINAL_MULTIPLEX_METHODS } from './terminal/terminal-multiplex-method'
 import { TERMINAL_QUERY_METHODS } from './terminal/terminal-query-methods'
 import { TERMINAL_SEND_METHODS } from './terminal/terminal-send-method'
+import { TERMINAL_CLAUDE_AGENT_VIEW_METHODS } from './terminal/terminal-claude-agent-view-method'
 import { TERMINAL_SUBSCRIBE_METHODS } from './terminal/terminal-subscribe-method'
 import {
   TERMINAL_VIEWPORT_METHODS_AFTER_STREAMS,
@@ -9,8 +10,7 @@ import {
 } from './terminal/terminal-viewport-methods'
 import { TERMINAL_VIEWER_COLORS_METHODS } from './terminal/terminal-viewer-colors-method'
 
-// The manifest order is part of the released RPC contract. Keep composition here so the
-// public entry point owns registration rather than forwarding an aggregated child export.
+// Preserve released manifest order; keep registration composition owned by this public entry point.
 export const TERMINAL_METHODS = [
   ...TERMINAL_QUERY_METHODS,
   ...TERMINAL_SEND_METHODS,
@@ -19,5 +19,6 @@ export const TERMINAL_METHODS = [
   ...TERMINAL_MULTIPLEX_METHODS,
   ...TERMINAL_SUBSCRIBE_METHODS,
   ...TERMINAL_VIEWPORT_METHODS_AFTER_STREAMS,
-  ...TERMINAL_VIEWER_COLORS_METHODS
+  ...TERMINAL_VIEWER_COLORS_METHODS,
+  ...TERMINAL_CLAUDE_AGENT_VIEW_METHODS
 ]

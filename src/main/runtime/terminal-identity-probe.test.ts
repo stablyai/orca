@@ -22,8 +22,7 @@ function probes(overrides: { structured?: boolean; livePty?: boolean; leafError?
 
 describe('the terminal identity probe', () => {
   it('answers live for a structured worker without touching the PTY graph', () => {
-    // The defect this pins: the sender validator asked `terminal.show`, whose leaf lookup misses
-    // for a session that never had a pane, and reported a live worker's own handle as stale.
+    // Structured workers have no leaf; PTY-only terminal.show falsely labels their live handle stale.
     const { calls, probes: p } = probes({ structured: true })
     expect(resolveTerminalIdentityFromProbes('structworker_1', p)).toEqual({
       handle: 'structworker_1',
@@ -38,9 +37,7 @@ describe('the terminal identity probe', () => {
   })
 
   it('runs the full leaf check for a handle with no live PTY', () => {
-    // `getLiveLeafForHandle` is the one that re-checks `rendererGraphEpoch`, and that check is the
-    // entire reason the sender is validated: a long-lived shell keeps a stale
-    // `ORCA_TERMINAL_HANDLE` across a window reload. A cheaper probe would start passing it.
+    // Keep the rendererGraphEpoch leaf check: shells can retain stale handles across window reload.
     const { calls, probes: p } = probes({})
     expect(resolveTerminalIdentityFromProbes('term_1', p).live).toBe(true)
     expect(calls.assertLiveLeaf).toHaveBeenCalledTimes(1)
@@ -55,9 +52,7 @@ describe('the terminal identity probe', () => {
   })
 
   it('propagates "could not look" rather than reporting it as a dead handle', () => {
-    // A graph that is not ready yet is not evidence the handle died, and `terminal.show` lets that
-    // error through today. Answering `live: false` here would make a command refuse its own sender
-    // during startup instead of failing loudly.
+    // Graph startup is no proof of a dead handle; propagate inability to observe.
     const { probes: p } = probes({ leafError: new Error('graph_not_ready') })
     expect(() => resolveTerminalIdentityFromProbes('term_1', p)).toThrow('graph_not_ready')
   })

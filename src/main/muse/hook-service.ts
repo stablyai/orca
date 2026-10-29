@@ -1,8 +1,7 @@
 import { existsSync, readFileSync, unlinkSync } from 'node:fs'
 import type { SFTPWrapper } from 'ssh2'
 
-// Muse runs managed hooks with an explicit environment allowlist. The installer
-// persists Orca's hook coordinates in that allowlist so events stay attributed.
+// Muse allowlists hook environment variables; persist Orca coordinates to preserve attribution.
 import type { AgentHookInstallState, AgentHookInstallStatus } from '../../shared/agent-hook-types'
 import {
   buildWindowsAgentHookCurlPostCommand,
@@ -18,8 +17,7 @@ import {
 import {
   buildPosixHookPayloadCapture,
   buildPosixHookSpoolLines,
-  buildWindowsHookEnvironmentGuardLines,
-  buildWindowsHookStdinDrainEpilogue
+  buildWindowsHookEnvironmentGuardLines
 } from '../agent-hooks/hook-stdin-contract'
 import { buildPosixAgentHookPostCommand } from '../agent-hooks/hook-post-command'
 import {
@@ -52,7 +50,6 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
       ...buildWindowsHookEnvironmentGuardLines(),
       buildWindowsAgentHookCurlPostCommand('muse'),
       'exit /b 0',
-      ...buildWindowsHookStdinDrainEpilogue(),
       ''
     ].join('\r\n')
   }
@@ -61,8 +58,7 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
     '#!/bin/sh',
     ...buildPosixHookPayloadCapture(),
     ...buildPosixHookSpoolLines('muse'),
-    // Why: endpoint file holds the live port/token; PTYs that outlive an Orca restart carry stale env, so source it to reach the new server (else PTY env).
-    // Why: silence the `.` builtin (2>/dev/null + `|| :`) so a TOCTOU race can't leak shell parse errors into agent transcripts (fail-open).
+    // Reload live coordinates for PTYs surviving restarts; silence source-file races to keep hooks fail-open.
     'if [ -n "$ORCA_AGENT_HOOK_ENDPOINT" ] && [ -r "$ORCA_AGENT_HOOK_ENDPOINT" ]; then',
     '  . "$ORCA_AGENT_HOOK_ENDPOINT" 2>/dev/null || :',
     'fi',
@@ -70,7 +66,7 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
     '  spool_hook_event',
     '  exit 0',
     'fi',
-    // Why: redirect on `fi` covers the whole if-statement (both transport branches); `|| spool` keeps the fail-open spool fallback.
+    // Redirect the entire transport branch and spool failed posts without blocking agents.
     ...buildPosixAgentHookPostCommand('muse').map((line, index, lines) =>
       index === lines.length - 1 ? `${line} >/dev/null 2>&1 || spool_hook_event` : line
     ),
@@ -209,7 +205,7 @@ export class MuseHookService {
     }
     const scriptPath = getMuseManagedScriptPath()
     const command = getMuseManagedCommand(scriptPath)
-    // Write the script and managed hooks file first so settings.json never points at missing files.
+    // Publish script/hooks before settings can point at them.
     writeManagedScript(scriptPath, getManagedScript())
     writeHooksJson(
       managedHooksPath,
@@ -225,7 +221,6 @@ export class MuseHookService {
     return this.getStatus()
   }
 
-  // Install the Muse hook on an SSH execution host, where the shell contract is POSIX.
   async installRemote(sftp: SFTPWrapper, remoteHome: string): Promise<AgentHookInstallStatus> {
     const remoteConfigPath = getMuseRemoteConfigPath(remoteHome)
     const remoteScriptPath = `${remoteHome.replace(/\/$/, '')}/.orca/agent-hooks/muse-hook.sh`
@@ -254,7 +249,7 @@ export class MuseHookService {
         }
       }
       const command = getMuseRemoteManagedCommand(remoteScriptPath)
-      // Write the script and managed hooks file first so settings.json never points at missing files.
+      // Publish script/hooks before settings can point at them.
       await writeManagedScriptRemote(sftp, remoteScriptPath, getManagedScript('posix'))
       await writeTextFileRemoteAtomic(
         sftp,
@@ -307,9 +302,7 @@ export class MuseHookService {
       if (existsSync(managedHooksPath)) {
         unlinkSync(managedHooksPath)
       }
-    } catch {
-      // best effort
-    }
+    } catch {}
     return this.getStatus()
   }
 }

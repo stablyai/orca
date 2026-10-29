@@ -2,14 +2,12 @@ import type { AiVaultAgent } from '../../shared/ai-vault-types'
 import type { AiVaultScanWork } from '../../shared/ai-vault-scan-progress'
 import { AiVaultScanTally } from './ai-vault-scan-tally'
 
-// Keyed by the request's cancel signal, which every work site already receives,
-// so the index loop or an interactive read through the same readers never counts.
+// Request signals distinguish scans from index-loop and interactive reads through the same readers.
 const reporters = new WeakMap<AbortSignal, { workChanged: () => void; tally: AiVaultScanTally }>()
 
 // Rate-limited because a cold scan lists thousands of folders and files.
 export const AI_VAULT_SCAN_PROGRESS_INTERVAL_MS = 1_000
 
-/** Reports this scan's work at most once per interval until stop is called. */
 export function trackAiVaultScanProgress(
   signal: AbortSignal,
   report: (work: AiVaultScanWork) => void,
@@ -55,12 +53,11 @@ function tallyFor(signal: AbortSignal | undefined): AiVaultScanTally | undefined
   return signal ? reporters.get(signal)?.tally : undefined
 }
 
-/** What the scan owning `signal` has found and read; null for untracked work. */
 export function aiVaultScanWork(signal: AbortSignal | undefined): AiVaultScanWork | null {
   return tallyFor(signal)?.snapshot() ?? null
 }
 
-/** Marks one of an agent's folders or databases as being listed until the returned close. */
+/** Source discovery remains open until the returned callback closes it. */
 export function openAiVaultScanSource(
   signal: AbortSignal | undefined,
   agent: AiVaultAgent
@@ -95,7 +92,6 @@ export function noteAiVaultScanDatabases(
   reporter?.workChanged()
 }
 
-/** The scan has registered all candidate opportunities. */
 export function noteAiVaultScanReading(signal: AbortSignal | undefined): void {
   const reporter = signal ? reporters.get(signal) : undefined
   reporter?.tally.startReading()
@@ -106,7 +102,6 @@ export function aiVaultScanWorkload(signal: AbortSignal | undefined) {
   return tallyFor(signal)?.workload
 }
 
-/** Sends the tally after a batch of files was counted. */
 export function noteAiVaultScanWorkChanged(signal: AbortSignal | undefined): void {
   if (signal) {
     reporters.get(signal)?.workChanged()

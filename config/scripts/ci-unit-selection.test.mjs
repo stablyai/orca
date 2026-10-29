@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { buildUnitDependencyGraph } from './ci-unit-dependency-graph.mjs'
+import { UNIT_SETUP_FILES } from './ci-unit-files.mjs'
 import {
   FULL_SHARD_COUNT,
   auditUnitSelection,
@@ -26,6 +27,52 @@ const graph = { ...buildUnitDependencyGraph(sources), files: new Set(sources.key
 const files = [...sources.keys()].filter((file) => file.endsWith('.test.ts')).sort()
 
 describe('conservative unit selection', () => {
+  it.each([
+    'config/vitest.config.ts',
+    'config/scripts/run-vitest.mjs',
+    ...UNIT_SETUP_FILES,
+    'config/scripts/vitest-node-runtime-worker.mjs'
+  ])('retains every test for a transitive dependency of %s', (runtime) => {
+    const sources = new Map([
+      ['src/input.ts', 'export const value = 1'],
+      ['config/scripts/setup-forward.ts', "export * from '../../src/input'"],
+      [
+        runtime,
+        `import '${runtime === 'config/vitest.config.ts' ? './scripts' : '.'}/setup-forward'`
+      ],
+      ['src/direct.test.ts', "import './input'"],
+      ['src/unrelated.test.ts', 'export const value = 1']
+    ])
+    const files = ['src/direct.test.ts', 'src/unrelated.test.ts']
+    const graph = { ...buildUnitDependencyGraph(sources), files: new Set(sources.keys()) }
+    expect(selectUnitFiles(files, ['src/input.ts'], graph)).toMatchObject({ full: true, files })
+    expect(
+      planUnitSelection({
+        files,
+        changed: ['src/input.ts'],
+        graph,
+        timings: {},
+        mode: 'selected',
+        event: { pull_request: { draft: true } }
+      })
+    ).toMatchObject({ mode: 'shadow', executionFiles: files, selectionAvailable: false })
+  })
+
+  it('does not mistake a Vitest harness test for a shared runtime entry point', () => {
+    const sources = new Map([
+      ['src/input.ts', 'export const value = 1'],
+      ['config/scripts/vitest-harness.test.mjs', "import '../../src/input'"],
+      ['src/direct.test.ts', "import './input'"],
+      ['src/unrelated.test.ts', 'export const value = 1']
+    ])
+    expect(
+      selectUnitFiles(['src/direct.test.ts', 'src/unrelated.test.ts'], ['src/input.ts'], {
+        ...buildUnitDependencyGraph(sources),
+        files: new Set(sources.keys())
+      })
+    ).toMatchObject({ full: false, files: ['src/direct.test.ts'] })
+  })
+
   it('follows re-exports, literal dynamic imports and requires, retaining indirect readers', () => {
     expect(selectUnitFiles(files, ['src/leaf.ts'], graph).files).toEqual([
       'src/consumer.test.ts',

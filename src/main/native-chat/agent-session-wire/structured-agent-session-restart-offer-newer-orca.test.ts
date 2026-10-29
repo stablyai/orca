@@ -21,13 +21,10 @@ import {
   HOST_TEST_SESSION as SESSION
 } from './structured-agent-session-host-test-data'
 
-// Nothing here can continue a chat a newer Orca saved, so it is not offered after a restart and
-// nothing is counted. Its offer is kept: the offers file is shared by every Orca on the host, and
-// the newer one can still act on it. Nothing here writes to that file for such a chat.
+// Preserve newer-chat offers byte-for-byte for a compatible build; this host cannot act on them.
 
 afterEach(() => vi.restoreAllMocks())
 
-/** Writes a row of a kind this build does not know into the chat's journal, as a newer Orca would. */
 function newerOrcaRow(root: string, sessionId: string = SESSION): void {
   const { db } = openTestJournalHostDatabase(root)
   const last = liveTestJournalRows(db, sessionId).at(-1)
@@ -57,7 +54,6 @@ function offersFile(root: string): Promise<Buffer> {
   return readFile(join(root, AGENT_SESSION_RECOVERY_CAPSULE_FILE))
 }
 
-/** Lists and acts with nothing offered, run or counted, and the offers file left byte-identical. */
 async function keptWithoutAWord(
   host: Awaited<ReturnType<typeof interruptedRestart>>['host'],
   root: string,
@@ -81,7 +77,6 @@ it('keeps the offer of a chat whose journal a newer Orca wrote, and offers, runs
   await keptWithoutAWord(host, root, acquire)
 })
 
-// A newer Orca's whole database: every chat in it is a newer Orca's, even one whose tables changed.
 it('keeps the offer of every chat in a newer Orca database, and offers, runs and counts nothing', async () => {
   const { host, root, acquire } = await interruptedRestart()
   const database = openTestJournalHostDatabase(root)
@@ -90,8 +85,6 @@ it('keeps the offer of every chat in a newer Orca database, and offers, runs and
   await keptWithoutAWord(host, root, acquire)
 })
 
-// However a newer Orca's refusal reaches a send (a journal first opened when sending), it files
-// nothing and the offer is reopened.
 it('keeps the offer and files nothing when the send is refused as a newer Orca chat', async () => {
   const { host, root } = await interruptedRestart()
   await host.restartResume.list()
@@ -114,7 +107,6 @@ it('keeps the offer and files nothing when the send is refused as a newer Orca c
   expect(await host.restartResume.listFailures()).toEqual([])
 })
 
-// A failure filed before the chat became a newer Orca's stays for that Orca, and is not shown here.
 it('keeps a failure already filed for a chat a newer Orca saved since, but does not show it', async () => {
   const { host, root, acquire } = await interruptedRestart()
   await host.restartResume.list()
@@ -130,8 +122,6 @@ it('keeps a failure already filed for a chat a newer Orca saved since, but does 
   ).toEqual([SESSION])
 })
 
-// What listing does with a journal that throws for another reason: a damaged chat stays offered,
-// and acting on it files the failure, which names the damage.
 it('still offers a damaged chat, and files its failure when acting on it', async () => {
   const { host, root, acquire } = await interruptedRestart()
   updateTestJournalRowJson(openTestJournalHostDatabase(root).db, SESSION, 1, '}{')
@@ -151,19 +141,14 @@ it('still offers a damaged chat, and files its failure when acting on it', async
   ])
 })
 
-// "Dismiss all" ends what the person was shown. A newer Orca's offer was never shown here, so it
-// stays, byte for byte, for the Orca that can act on it.
 it.each([
   ['after the dialog listed the offers', true, undefined],
   ['on a host that has not listed them yet', false, undefined],
-  // A remote client that cannot show every agent dismisses through its audience.
   ['for a client shown only Codex', false, (agent: string) => agent === 'codex']
 ])(
   "dismisses every listed offer and leaves a newer Orca's hidden one as it was, %s",
   async (_when, listFirst, audience) => {
     const NEWER = 'session-newer-orca'
-    // A second chat, made before the restart; a newer Orca then saves it with a row this build
-    // can't place.
     const created = await hostTestState().host.attach(
       CALLER,
       attachParams({ envelope: { ...attachParams().envelope, sessionId: NEWER } })

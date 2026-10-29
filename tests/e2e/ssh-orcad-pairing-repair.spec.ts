@@ -1,9 +1,5 @@
-/**
- * A managed SSH host whose server dropped this desktop's pairing (its device removed host-side,
- * then the server restarted) is paired again over SSH, and the open pane answers typing again on
- * its own. A server that now holds another host key is never paired: connecting reports another
- * server, and the saved pairing is kept.
- */
+// After host-side device removal/restart, re-pair over SSH and restore pane input automatically.
+// A changed host key must refuse repair and retain the saved pairing.
 import type { Page } from '@stablyai/playwright-test'
 import { expect, test } from './helpers/orca-app'
 import { readPairedPaneContent } from './helpers/paired-host-terminal'
@@ -123,8 +119,7 @@ test('a server that now holds another host key is never paired, and connecting s
   })
 })
 
-// Relaunches the server exactly as it ran, with the network to the host down, so the desktop's
-// first look at it is the refusal, and the offer it reads over SSH is the one this test leaves.
+// Restart behind the network cut so the first client observation is the refusal from the deliberately staged offer.
 const CAPTURE_LAUNCH =
   'f=$(ls /root/.orca-remote/orcad-*/.orcad-pid) && pid=$(cat "$f") && echo "$pid" > /tmp/orcad-old-pid && dirname "$f" > /tmp/orcad-dir && ' +
   "tr '\\0' '\\n' < /proc/$pid/cmdline > /tmp/orcad-cmd && tr '\\0' '\\n' < /proc/$pid/environ > /tmp/orcad-env"

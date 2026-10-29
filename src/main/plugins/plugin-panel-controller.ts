@@ -50,10 +50,14 @@ export class PluginPanelController {
   async open(
     ownerKey: string,
     pluginKey: string,
-    panelId: string
+    panelId: string,
+    isCurrent?: () => boolean
   ): Promise<PluginPanelEntry | null> {
+    if (isCurrent?.() === false) {
+      return null
+    }
     const loaded = await this.load(pluginKey, panelId)
-    if (!loaded) {
+    if (!loaded || isCurrent?.() === false) {
       return null
     }
     return {

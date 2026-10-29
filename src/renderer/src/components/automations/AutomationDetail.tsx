@@ -7,7 +7,11 @@ import { getAgentCatalog, AgentIcon } from '@/lib/agent-catalog'
 import type { Automation, AutomationRun } from '../../../../shared/automations-types'
 import { formatUiAutomationSchedule } from './automation-schedule-label'
 import { formatAutomationPrecheckTimeout } from '../../../../shared/automation-precheck'
-import { formatAutomationDateTimeWithRelative } from './automation-page-parts'
+import {
+  AutomationRunErrorNotice,
+  formatAutomationDateTimeWithRelative
+} from './automation-page-parts'
+import { indexLatestAutomationRuns } from './automation-list-last-run'
 import {
   formatAutomationCost,
   formatAutomationTokens,
@@ -58,13 +62,31 @@ function DetailMetric({
 
 function formatGrace(minutes: number): string {
   if (minutes <= 0) {
-    return 'No grace'
+    return translate('auto.components.automations.AutomationDetail.noGrace', 'No grace')
   }
   if (minutes < 60) {
-    return `${minutes} minutes`
+    return minutes === 1
+      ? translate(
+          'auto.components.automations.AutomationDetail.graceMinutes_one',
+          '{{count}} minute',
+          { count: minutes }
+        )
+      : translate(
+          'auto.components.automations.AutomationDetail.graceMinutes_other',
+          '{{count}} minutes',
+          { count: minutes }
+        )
   }
   const hours = minutes / 60
-  return `${hours} ${hours === 1 ? 'hour' : 'hours'}`
+  return hours === 1
+    ? translate('auto.components.automations.AutomationDetail.graceHours_one', '{{count}} hour', {
+        count: hours
+      })
+    : translate(
+        'auto.components.automations.AutomationDetail.graceHours_other',
+        '{{count}} hours',
+        { count: hours }
+      )
 }
 
 function ToolbarIconButton({
@@ -127,15 +149,27 @@ export function AutomationDetail({
   const usageSummary = summarizeAutomationRunUsage(runs)
   const usageCoverage =
     usageSummary.knownRuns > 0
-      ? `${usageSummary.knownRuns}/${runs.length} runs`
+      ? runs.length === 1
+        ? translate(
+            'auto.components.automations.AutomationDetail.usageCoverageRuns_one',
+            '{{known}}/{{count}} run',
+            { known: usageSummary.knownRuns, count: runs.length }
+          )
+        : translate(
+            'auto.components.automations.AutomationDetail.usageCoverageRuns_other',
+            '{{known}}/{{count}} runs',
+            { known: usageSummary.knownRuns, count: runs.length }
+          )
       : usageSummary.unavailableRuns > 0
-        ? 'Unavailable'
-        : 'No runs'
+        ? translate('auto.components.automations.AutomationDetail.usageUnavailable', 'Unavailable')
+        : translate('auto.components.automations.AutomationDetail.noRuns', 'No runs')
   const agentLabel =
     getAgentCatalog().find((agent) => agent.id === automation.agentId)?.label ?? automation.agentId
   const runLocationLabel =
     automation.workspaceMode === 'new_per_run'
-      ? (automation.baseBranch ?? projectDefaultBaseRef ?? 'Project default')
+      ? (automation.baseBranch ??
+        projectDefaultBaseRef ??
+        translate('auto.components.automations.AutomationDetail.projectDefault', 'Project default'))
       : workspaceName
   const sourceDisplay = getAutomationSourceDisplay(automation.sourceContext, hostLabelById)
   const hostDisplay = getAutomationHostDetailDisplay({
@@ -144,6 +178,8 @@ export function AutomationDetail({
     hostLabelById
   })
   const runNowDisabled = runNowAvailability?.canRunNow === false
+  const latestRun = indexLatestAutomationRuns(runs).get(automation.id)
+  const latestRunError = latestRun?.status === 'dispatch_failed' ? latestRun.error : null
 
   return (
     <div className="flex w-full flex-col gap-4">
@@ -235,6 +271,16 @@ export function AutomationDetail({
         </div>
       ) : null}
 
+      {latestRunError ? (
+        <AutomationRunErrorNotice
+          label={translate(
+            'auto.components.automations.AutomationDetail.lastRunFailed',
+            'Last run failed.'
+          )}
+          error={latestRunError}
+        />
+      ) : null}
+
       <div className="grid grid-cols-[repeat(auto-fit,minmax(9rem,1fr))] gap-5 rounded-md border border-border/50 bg-muted/30 px-4 py-3 shadow-sm">
         <DetailMetric
           label={translate('auto.components.automations.AutomationDetail.18763ded26', 'Schedule')}
@@ -245,7 +291,7 @@ export function AutomationDetail({
           value={
             automation.enabled
               ? formatAutomationDateTimeWithRelative(automation.nextRunAt, now)
-              : 'Paused'
+              : translate('auto.components.automations.AutomationsPage.paused', 'Paused')
           }
         />
         <DetailMetric
@@ -263,7 +309,17 @@ export function AutomationDetail({
         />
         <DetailMetric
           label={translate('auto.components.automations.AutomationDetail.15ea446b93', 'Session')}
-          value={automation.reuseSession ? 'Reuse live session' : 'Fresh each run'}
+          value={
+            automation.reuseSession
+              ? translate(
+                  'auto.components.automations.AutomationDetail.reuseLiveSession',
+                  'Reuse live session'
+                )
+              : translate(
+                  'auto.components.automations.AutomationDetail.freshEachRun',
+                  'Fresh each run'
+                )
+          }
         />
         {sourceDisplay ? (
           <DetailMetric
@@ -280,8 +336,12 @@ export function AutomationDetail({
           label={translate('auto.components.automations.AutomationDetail.e353ab9516', 'Precheck')}
           value={
             automation.precheck
-              ? `Enabled, ${formatAutomationPrecheckTimeout(automation.precheck.timeoutSeconds)}`
-              : 'None'
+              ? translate(
+                  'auto.components.automations.AutomationDetail.precheckEnabled',
+                  'Enabled, {{timeout}}',
+                  { timeout: formatAutomationPrecheckTimeout(automation.precheck.timeoutSeconds) }
+                )
+              : translate('auto.components.automations.AutomationDetail.precheckNone', 'None')
           }
         />
         <div className="min-w-0">

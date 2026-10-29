@@ -1,13 +1,6 @@
 #!/usr/bin/env node
-/**
- * Busy-spins one CPU core to emulate a loaded machine during latency benches
- * (the "every workspace is running an agent and the whole box is hot" case).
- * Spawn N of these to occupy N cores; kill to release.
- *
- * Usage: node cpu-pressure-worker.mjs [maxDurationMs]
- * The duration failsafe (default 10 min) prevents orphaned spinners if the
- * spawning bench dies without cleanup.
- */
+// Occupy one CPU core per worker for loaded-machine latency benches; kill to release.
+// Usage: node cpu-pressure-worker.mjs [maxDurationMs]; default 10min failsafe prevents orphaned spins after benchmark failure.
 const maxDurationMs = Number(process.argv[2]) > 0 ? Number(process.argv[2]) : 10 * 60 * 1000
 const deadline = Date.now() + maxDurationMs
 

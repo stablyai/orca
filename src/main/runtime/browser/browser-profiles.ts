@@ -1,3 +1,4 @@
+import { clearGoogleCookiesForRuntimeProfile } from '../../browser/cookies/browser-google-cookie-clear'
 import { createBrowserTabInRenderer } from './browser-tab-renderer-create'
 import type {
   BrowserDetectProfilesResult,
@@ -20,7 +21,7 @@ import {
   detectInstalledBrowsers,
   importCookiesFromBrowser,
   selectBrowserProfile
-} from '../../browser/browser-cookie-import'
+} from '../../browser/cookies/browser-cookie-import'
 import type {
   BrowserCommandTargetParams,
   RuntimeBrowserCommandHost
@@ -33,6 +34,7 @@ export class RuntimeBrowserProfiles {
   constructor(
     private readonly host: Pick<
       RuntimeBrowserCommandHost,
+      | 'getRuntimeId'
       | 'getAuthoritativeWindow'
       | 'getRuntimeBrowserPageRegistry'
       | 'getBrowserHostLeaseRegistry'
@@ -53,7 +55,6 @@ export class RuntimeBrowserProfiles {
       profileId: string
     } & BrowserCommandTargetParams
   ): Promise<BrowserTabSetProfileResult> {
-    // Why: 'default' is a synthetic id; fall back to the registry's default profile when not registered.
     const profile =
       browserSessionRegistry.getProfile(params.profileId) ??
       (params.profileId === 'default' ? browserSessionRegistry.getDefaultProfile() : null)
@@ -64,7 +65,7 @@ export class RuntimeBrowserProfiles {
       )
     }
 
-    // Why first: the server-local target path cannot resolve folder workspaces or remote guests.
+    // Resolve client pages first: server-local targets cannot resolve folder workspaces/remote guests.
     const clientPage = await this.catalog.resolveClientHostedBrowserPage(params)
     if (clientPage) {
       const { browserPageId } = clientPage
@@ -94,7 +95,7 @@ export class RuntimeBrowserProfiles {
           pageHostGeneration: clientPage.placement.pageHostGeneration
         },
         { id: profile.id, label: profile.label, scope: profile.scope },
-        // Why: a switch that finished after the caller's timeout still moved the page.
+        // Late success still changed the page after the caller timed out.
         publish
       )
       publish(placement)
@@ -109,7 +110,7 @@ export class RuntimeBrowserProfiles {
       throw new BrowserError('browser_no_tab', 'No browser tab open in this worktree')
     }
 
-    // Why: short-circuit no-op switches so the renderer doesn't needlessly tear down and remount the webview.
+    // No-op switches must not tear down/remount the webview.
     const currentProfileId = browserManager.getSessionProfileIdForTab(browserPageId) ?? 'default'
     if (currentProfileId === profile.id) {
       return {
@@ -151,11 +152,11 @@ export class RuntimeBrowserProfiles {
       })
     })
 
-    // Why: profile change remounts the webview; wait for re-register so follow-up commands see the new profile and an attached guest.
+    // Profile changes remount the guest; wait until follow-up commands can use it.
     try {
       await waitForTabRegistration(browserPageId)
     } catch {
-      // Best-effort: re-register won't fire while the worktree is hidden; downstream commands retry once the pane re-mounts.
+      // Hidden worktrees may register only on their next mount.
     }
 
     return {
@@ -206,12 +207,10 @@ export class RuntimeBrowserProfiles {
       profile.id,
       profile.partition
     )
-    // Why: wait for the cloned tab's webview to register so the returned browserPageId is operable by the next CLI call.
+    // Do not return an inoperable clone before its webview registers.
     try {
       await waitForTabRegistration(created.browserPageId)
-    } catch {
-      // Best-effort: registration may not fire if the worktree is hidden.
-    }
+    } catch {}
     return {
       browserPageId: created.browserPageId,
       sourceBrowserPageId,
@@ -221,7 +220,10 @@ export class RuntimeBrowserProfiles {
   }
 
   async browserProfileList(): Promise<BrowserProfileListResult> {
-    return { profiles: browserSessionRegistry.listProfiles() }
+    return {
+      profiles: browserSessionRegistry.listProfiles(),
+      executorRuntimeId: this.host.getRuntimeId()
+    }
   }
 
   async browserProfileCreate(params: {
@@ -242,7 +244,7 @@ export class RuntimeBrowserProfiles {
 
   async browserProfileDetectBrowsers(): Promise<BrowserDetectProfilesResult> {
     return {
-      // Why: expose only display metadata; filesystem paths and keychain identifiers stay on the runtime server.
+      // Expose display metadata only; retain paths/keychain identifiers on the server.
       browsers: detectInstalledBrowsers().map((browser) => ({
         family: browser.family,
         label: browser.label,
@@ -301,7 +303,11 @@ export class RuntimeBrowserProfiles {
       profileName,
       importedAt: Date.now()
     })
-    return { ...result, profileId: params.profileId }
+    return { ...result, profileId: params.profileId, executorRuntimeId: this.host.getRuntimeId() }
+  }
+
+  async browserProfileClearGoogleCookies(params: { profileId: string; executorRuntimeId: string }) {
+    return clearGoogleCookiesForRuntimeProfile(params, this.host.getRuntimeId())
   }
 
   async browserProfileClearDefaultCookies(): Promise<BrowserProfileClearDefaultCookiesResult> {

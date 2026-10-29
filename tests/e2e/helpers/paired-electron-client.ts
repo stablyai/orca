@@ -36,12 +36,7 @@ export type PairedElectronClient = {
   captureDirectSshAttempts: () => Promise<void>
   /** Closes the app AND deletes the profile. For a restart, use `quitPreservingProfile`. */
   dispose: () => Promise<void>
-  /** Quit for a relaunch on the same profile: everything `dispose` does except `removeProfile`.
-   *  Why named rather than left to callers: composing it wrong is silent and expensive. Calling
-   *  `dispose` and relaunching with `reuseUserDataDir` yields a FIRST RUN on an empty profile, so
-   *  every persistence assertion after it reads empty and looks exactly like data loss — that
-   *  produced a phantom data-loss report once. Reaching for a bare `app.close()` instead hangs:
-   *  it lacks the timeout and force-kill fallback that `closeElectronAppForE2E` wraps around it. */
+  // Keep the profile and bounded shutdown path for restart; dispose deletes persistence and bare app.close can hang.
   quitPreservingProfile: () => Promise<void>
   getDirectSshAttemptTargetIds: () => Promise<string[]>
   installDirectSshAttemptProbe: () => Promise<void>
@@ -172,8 +167,7 @@ export async function launchPairedElectronClient(
   offer: RuntimeDesktopPairingOffer,
   testInfo: TestInfo,
   name: string,
-  // reuseUserDataDir relaunches on an existing profile, so its stored pairing credential — and
-  // therefore its pairedDeviceId — survives the restart, as it does for a real force-quit reopen.
+  // Reuse the stored pairing credential/device id across relaunch, matching a real reopen.
   options: { extraEnv?: Record<string, string>; reuseUserDataDir?: string } = {}
 ): Promise<PairedElectronClient> {
   const reusedProfile = options.reuseUserDataDir !== undefined
@@ -205,8 +199,7 @@ export async function launchPairedElectronClient(
     }
   })
 
-  // Why before the home assert: forwarding starts here, so a client that fails during startup
-  // otherwise reaches CI as a bare Playwright error with none of its own output attached.
+  // Forward logs before the home assertion so startup failures retain app diagnostics.
   forwardElectronProcessLogs(app, testInfo)
   try {
     assertElectronResolvedIsolatedHome(

@@ -130,8 +130,7 @@ describe('DiffNavigationProvider', () => {
     expect(captured?.changeCount).toBe(4)
     expect(oldEditor.disposeUpdate).toHaveBeenCalledOnce()
 
-    // A stale update from the old editor must not flip the count back: registering
-    // the new editor disposed the old subscription, so its callback no longer fires.
+    // Replacing registration must dispose the old subscription so stale updates cannot restore its count.
     act(() => {
       oldEditor.setLineChanges(9)
       oldEditor.fireUpdate()
@@ -140,7 +139,6 @@ describe('DiffNavigationProvider', () => {
 
     act(() => registration?.unregisterDiffEditor(oldEditor))
 
-    // New editor's count is intact and nav still routes to it.
     expect(captured?.changeCount).toBe(4)
     act(() => captured?.goToNextDiff())
     expect(newEditor.goToDiff).toHaveBeenCalledWith('next')

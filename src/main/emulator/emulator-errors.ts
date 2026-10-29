@@ -1,4 +1,4 @@
-// Why: shared error codes for emulator (mirrors BrowserErrorCode in shared/runtime-types; used by bridge, runtime, dispatcher, CLI handlers, skill examples). Keep codes stable for agents.
+// Keep error codes stable: agents and CLI callers depend on them.
 export class EmulatorError extends Error {
   code: EmulatorErrorCode
   constructor(code: EmulatorErrorCode, message: string) {

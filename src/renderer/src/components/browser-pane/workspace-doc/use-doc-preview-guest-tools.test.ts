@@ -1,9 +1,5 @@
 // @vitest-environment happy-dom
-//
-// One id runs through this hook, and it is the browser page. A re-mint replaces the guest under
-// that page rather than renaming the surface, so annotations stay addressable and the tool target
-// keeps naming something main can resolve — the two used to be separate ids, and swapping them was
-// invisible until a preview re-minted.
+// Use stable browser page IDs for tools and annotations; re-mint replaces the guest without renaming its surface.
 import { act, createElement, useRef } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -135,9 +131,7 @@ describe('useDocPreviewGuestTools ids', () => {
     expect(calls.grabMode.at(-1)).toBe(PREVIEW_ID)
   })
 
-  // Why a re-mint is still worth a test with one id: main re-points the page at the replacement
-  // guest, so the surface the reader is looking at must keep the same name through it. A hook that
-  // rebuilt its target from the grant would orphan annotations under an id nothing reads again.
+  // Grant-derived targets would orphan annotations after re-mint; main resolves the replacement guest by page ID.
   it('keeps naming the same surface across a re-mint', () => {
     render(FIRST_GRANT)
     render(SECOND_GRANT)
@@ -151,9 +145,7 @@ describe('useDocPreviewGuestTools ids', () => {
     expect(calls.viewportBridge.at(-1)?.toolTargetId).toBe(PREVIEW_ID)
   })
 
-  // Why an empty target and not the page id: before a grant exists no guest has committed to this
-  // page, so naming it would park every tool request in the registration wait for a document the
-  // reader may never get.
+  // Before grant commit no guest is registered; an empty target avoids parking requests for an unavailable document.
   it('names no tool target before a grant exists', () => {
     render(null)
 

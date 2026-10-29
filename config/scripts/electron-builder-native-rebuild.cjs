@@ -26,8 +26,7 @@ function runElectronBuilderNativeRebuild(context, runner = execFileSync, runtime
     stdio: 'inherit'
   })
 
-  // Why: returning false tells electron-builder that native deps were handled
-  // externally, avoiding its all-module rebuild of optional cpu-features.
+  // Return false to skip electron-builder’s all-module rebuild of optional cpu-features.
   return false
 }
 

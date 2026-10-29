@@ -68,12 +68,7 @@ type Joined = {
   scannedRepoKeys: ResolvedWorktreeScanJoin['scannedRepoKeys']
 }
 
-/**
- * This host's workspace rows: cached per-repo scans joined with the store's metadata at read, so a
- * read is synchronous and a metadata write publishes without waiting on git; scans refresh apart.
- * The revision moves on catalog changes, applied scans and saves that may touch metadata; session
- * saves never move it.
- */
+/** Join cached repo scans with current metadata synchronously; refresh scans separately. Catalog/applied-scan/metadata revisions publish, session saves do not. */
 export class WorkspaceRowsProducer {
   readonly revision = new ProducerRevision()
   readonly gitIdentity = new WorkspaceGitIdentity()

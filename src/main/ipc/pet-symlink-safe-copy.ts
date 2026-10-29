@@ -2,7 +2,7 @@ import { copyFile, lstat, open } from 'node:fs/promises'
 import { constants as fsConstants, createWriteStream } from 'node:fs'
 import { pipeline } from 'node:stream/promises'
 
-// Why: TOCTOU symlink-swap defense — O_NOFOLLOW makes open() fail on a symlink; Windows lacks it, so fall back to copyFile.
+// O_NOFOLLOW rejects source symlink swaps where available; otherwise copyFile provides no such protection.
 export async function copyFileNoFollow(src: string, dest: string): Promise<void> {
   const noFollow = typeof fsConstants.O_NOFOLLOW === 'number' ? fsConstants.O_NOFOLLOW : 0
   if (noFollow === 0) {

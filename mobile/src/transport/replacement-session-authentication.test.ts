@@ -22,6 +22,9 @@ class FakeSession implements RpcClient {
     this.listeners.add(listener)
     return () => this.listeners.delete(listener)
   }
+  listenerCount(): number {
+    return this.listeners.size
+  }
   setState(state: ConnectionState): void {
     this.state = state
     for (const listener of this.listeners) {
@@ -64,11 +67,11 @@ describe('waitForAuthenticated', () => {
     const outcome = await settle(waiting)
     expect(outcome.error).toBeInstanceOf(ReplacementAuthenticationTimeoutError)
     expect(outcome.error?.message).toBe('replacement session authentication timed out')
+    expect(session.listenerCount()).toBe(0)
+    expect(vi.getTimerCount()).toBe(0)
   })
 
-  // The 2026-09-03 incident: the cell accepted relay-auth and spent 14–16s in its
-  // lock-contended assignment transactions. The flat 12s bound hung up 2–4s before
-  // the cell finished, five dials in a row, while the desktop was live the whole time.
+  // Allow lock-contended cell assignment past the opening deadline through per-stage budgets.
   it('re-arms the bound per stage once the cell holds the dial', async () => {
     const session = new FakeRelaySession()
     const waiting = waitForAuthenticated(session, 12_000)
@@ -85,6 +88,8 @@ describe('waitForAuthenticated', () => {
     await vi.advanceTimersByTimeAsync(20_000)
     session.setState('connected')
     await expect(waiting).resolves.toBeUndefined()
+    expect(session.listenerCount()).toBe(0)
+    expect(vi.getTimerCount()).toBe(0)
   })
 
   it('bounds a cell that took the dial and never answers, naming the stage', async () => {
@@ -98,22 +103,35 @@ describe('waitForAuthenticated', () => {
     await vi.advanceTimersByTimeAsync(1)
     const outcome = await settle(waiting)
     expect(outcome.error).toBeInstanceOf(ReplacementAuthenticationTimeoutError)
-    expect((outcome.error as ReplacementAuthenticationTimeoutError).stage).toBe('awaiting-hello')
+    if (!(outcome.error instanceof ReplacementAuthenticationTimeoutError)) {
+      throw new Error('Expected a stage timeout')
+    }
+    expect(outcome.error.stage).toBe('awaiting-hello')
     expect(outcome.error?.message).toBe(
       'replacement session authentication timed out (awaiting-hello, 30s)'
     )
+    expect(session.listenerCount()).toBe(0)
+    expect(vi.getTimerCount()).toBe(0)
   })
 
   it('keeps the caller bound while the socket never opens', async () => {
     const session = new FakeRelaySession()
     const waiting = waitForAuthenticated(session, 12_000)
     waiting.catch(() => {})
-    await vi.advanceTimersByTimeAsync(12_000)
+    await vi.advanceTimersByTimeAsync(11_999)
+    expect((await settle(waiting)).status).toBe('pending')
+    await vi.advanceTimersByTimeAsync(1)
     const outcome = await settle(waiting)
-    expect((outcome.error as ReplacementAuthenticationTimeoutError).stage).toBe('opening')
+    expect(outcome.error).toBeInstanceOf(ReplacementAuthenticationTimeoutError)
+    if (!(outcome.error instanceof ReplacementAuthenticationTimeoutError)) {
+      throw new Error('Expected an opening timeout')
+    }
+    expect(outcome.error.stage).toBe('opening')
     expect(outcome.error?.message).toBe(
       'replacement session authentication timed out (opening, 12s)'
     )
+    expect(session.listenerCount()).toBe(0)
+    expect(vi.getTimerCount()).toBe(0)
   })
 
   it('ignores stage advances after the wait has settled', async () => {
@@ -121,6 +139,7 @@ describe('waitForAuthenticated', () => {
     const waiting = waitForAuthenticated(session, 12_000)
     session.setState('disconnected')
     await expect(waiting).rejects.toThrow('replacement session disconnected')
+    expect(session.listenerCount()).toBe(0)
     session.dialStage.advance('awaiting-hello')
     expect(vi.getTimerCount()).toBe(0)
   })

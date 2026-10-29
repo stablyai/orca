@@ -45,26 +45,16 @@ export async function readHostKeyTrustSources(
     sshGSuppressedSiteConfig
       ? withTimeout(siteConfigMayRestrictHostKeys(), HOST_KEY_SOURCE_READ_TIMEOUT_MS, true)
       : Promise.resolve(false),
-    // Why bounded: these reads sit AHEAD of client.connect, and readyTimeout only covers the
-    // handshake — nothing else wraps attemptConnect. A home directory on a stalled NFS or SMB
-    // mount makes readFile hang indefinitely, which left the connection wedged in `connecting`
-    // with no ladder entry and no recovery. The fallback is the one an unreadable file already
-    // produces: evidence withheld, so we connect as ssh does but record nothing, rather than the
-    // far worse "no hosts known" that would let a changed key through as first contact.
+    // Bound pre-handshake NFS/SMB reads separately from readyTimeout. On silence retain unreadable evidence: connect without recording trust, never pretend all hosts are unknown.
     withTimeout(
       resolveKnownHostsFiles(hostKeyResolved).then(loadKnownHostsEvidence),
       HOST_KEY_SOURCE_READ_TIMEOUT_MS,
       { entries: [], unreadableFileCount: 1 }
     ),
-    // The catch sits INSIDE the timeout on purpose: withTimeout absorbs rejections into its
-    // fallback, so wrapping the other way round would silently swallow the warning below — the
-    // one signal that the store is unwired rather than merely slow.
+    // Catch inside withTimeout so its rejection fallback cannot swallow the unwired-store warning.
     withTimeout(
       loadTrustedHostKeys().catch((err) => {
-        // Losing our own records is not a security regression: known_hosts is still consulted,
-        // so a changed key is still refused. A host trusted only by us degrades to first contact
-        // and is re-recorded, which reaches the same decision. Loud because it means the store
-        // is unwired.
+        // Warn loudly on unwired store; known_hosts still applies, while store-only hosts return to first contact.
         console.warn('[ssh] host key store unavailable; falling back to known_hosts only:', err)
         return []
       }),
@@ -86,7 +76,11 @@ type Ssh2HostKeyVerificationHost = {
 }
 
 /** The denial this attempt's verifier recorded; local to one attempt so a stale one cannot leak. */
-type Ssh2HostKeyVerdict = { rejection: HostKeyVerificationError | null }
+type Ssh2HostKeyVerdict = {
+  rejection: HostKeyVerificationError | null
+  /** Orca's own store holds a key for this endpoint, which system OpenSSH never consults. */
+  pinnedByOrcaStore: boolean
+}
 
 /** Installs the host verifier and key-type order on `config` before ssh2 dials. */
 export async function installSsh2HostKeyVerification(
@@ -98,65 +92,52 @@ export async function installSsh2HostKeyVerification(
     hostKeyResolved,
     config.host ?? ''
   )
-  // `-F` suppresses /etc/ssh/ssh_config, so a site-wide StrictHostKeyChecking is invisible to us
-  // on that path. Joined below with the other way a source can go silent: an unreadable file.
-  //
-  // Gated on `ssh -G` having actually produced something. sshGArgsForHost only reports which args
-  // WOULD be used, so without this a machine where ssh is missing, broken or timed out was judged
-  // by whether it happens to have a ~/.ssh/config — incoherently, since the same broken machine
-  // WITHOUT one was fully permissive. The flag is a claim about a config file we could not read,
-  // and when ssh never ran there is no such claim to make.
+  // Only successful ssh -G output can claim -F hid site config; missing/broken probes must not invent suppression from argv alone.
   const sshGSuppressedSiteConfig =
     hostKeyResolved !== null &&
     sshGArgsForHost(host.target.configHost || host.target.label).includes('-F')
-  // Being blind to the site policy is only a reason to refuse if the site config could actually be
-  // setting one. ssh cannot answer that — `-F` excludes the system config as surely as the user's,
-  // and `-F /dev/null` reports built-in defaults rather than inverting the exclusion — so the file
-  // is read instead, conservatively: any doubt keeps the refusal.
+  // Inspect site config conservatively: -F excludes it and /dev/null cannot recover it; any uncertainty retains refusal.
   const { siteMayRestrict, knownHostsEvidence, trustedHostKeys } =
     await host.loadTrustSources(sshGSuppressedSiteConfig)
   const siteConfigSuppressed = siteMayRestrict
   const knownHostsEntries = knownHostsEvidence.entries
-  // Null means ssh2's own list was unreadable, so there is nothing safe to reorder against and
-  // ssh2 keeps proposing whatever it supports.
+  const storedKeyTypes = storedKeyTypesForEndpoint(
+    trustedHostKeys,
+    hostKeyLookupHost,
+    config.port ?? 22
+  )
+  // If ssh2's own algorithm list is unreadable, keep its defaults rather than guessing a reorder.
   const serverHostKeyOrder = DEFAULT_SERVER_HOST_KEY_ALGORITHMS
     ? orderServerHostKeyAlgorithms(
         knownHostsEntries,
         hostKeyLookupHost,
         config.port ?? 22,
         DEFAULT_SERVER_HOST_KEY_ALGORITHMS,
-        storedKeyTypesForEndpoint(trustedHostKeys, hostKeyLookupHost, config.port ?? 22),
+        storedKeyTypes,
         isHostKeyAlias
       )
     : undefined
-  // Local to this attempt: an instance field would let a superseded attempt's rejection replace
-  // the live attempt's error, and substituting a new Error drops ssh2's `code`, so a transient
-  // ECONNRESET would stop being classified as retryable.
-  const verdict: Ssh2HostKeyVerdict = { rejection: null }
+  // Keep denial attempt-local and retain original ssh2 error codes so stale attempts and transient failures stay distinguishable.
+  const verdict: Ssh2HostKeyVerdict = {
+    rejection: null,
+    pinnedByOrcaStore: storedKeyTypes.length > 0
+  }
 
-  // Why the fingerprint is still recorded: the relay uses the negotiated server key to isolate
-  // shared-home install locks without comparing PIDs from an unrelated SSH host. Its format is
-  // load-bearing across versions, which is a second reason never to set ssh2's `hostHash`.
+  // Accepted server fingerprints isolate shared-home relay locks across hosts; preserve mixed-version format and leave hostHash unset.
   config.hostVerifier = createHostKeyVerifier({
     host: hostKeyLookupHost,
     port: config.port ?? 22,
-    // The name we looked up, not the label: the mismatch message prints `ssh-keygen -R <host>`
-    // and a label removes nothing from known_hosts.
+    // Print the lookup host in ssh-keygen -R guidance; the Orca label would remove no trusted entry.
     displayHost: hostKeyLookupHost,
     hostKeyStoreFile: boundSshHostKeyStoreFile() ?? undefined,
     strictHostKeyChecking: hostKeyResolved?.strictHostKeyChecking ?? 'ask',
     isHostKeyAlias,
     policy: hostKeyPolicyForOwner(host.target.owner),
     siteConfigSuppressed,
-    // A file that EXISTS and will not open is the absence of evidence, not evidence of a new
-    // host — the entry that would have said "this key changed" may be in it. An ABSENT file is
-    // not this: that is the normal state for a fresh profile and genuinely means nothing is
-    // known. The decision connects anyway, as ssh does, but records nothing.
+    // Existing unreadable sources withhold evidence; connect as SSH does but record nothing. Absent files remain normal first-contact evidence.
     knownHostsUnreadable: knownHostsEvidence.unreadableFileCount > 0,
     entries: knownHostsEntries,
-    // The store's own matcher, against records preloaded above because ssh2's verifier decides
-    // synchronously. Reimplementing the comparison here is exactly how the type downgrade got
-    // in, and how the host normalisation drifted from the one used to write the records.
+    // Use the store matcher on preloaded records; duplicating it risks downgrade/normalization drift inside the synchronous verifier.
     isTrusted: (query) => matchTrustedHostKeys(trustedHostKeys, query),
     rememberHostKey: (record) => {
       void trustHostKey({
@@ -165,18 +146,13 @@ export async function installSsh2HostKeyVerification(
         keyType: record.keyType,
         key: record.key
       }).catch((err) => {
-        // A failed write must not fail the connection: we verified the key, we just could not
-        // record it, so the next connect re-derives the same answer from known_hosts.
+        // Recording failure cannot revoke a verified connection; later connects derive trust again.
         console.warn('[ssh] failed to record accepted host key:', err)
       })
     },
     isCurrentAttempt: host.isCurrentAttempt,
     onDecision: (decision) => {
-      // Empty when the blob was not a readable host key: there is nothing to identify, and the
-      // relay uses this fingerprint to isolate install locks, so blanking it would be worse
-      // than leaving the previous one. A REJECTED key is excluded for the same reason read the
-      // other way: we refused to talk to that host, so adopting its fingerprint would scope the
-      // relay's locks to a host we never accepted.
+      // Only readable accepted keys from the current attempt may scope relay locks; rejected or malformed keys must not replace the prior fingerprint.
       if (decision.fingerprint && decision.action !== 'reject' && host.isCurrentAttempt()) {
         host.onAcceptedFingerprint(decision.fingerprint)
       }

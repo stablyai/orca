@@ -1,7 +1,4 @@
-/**
- * Adopts a recipe-provisioned project root that this host runs, as the desktop does for a direct
- * SSH root: the root becomes the main worktree's workspace, and no linked worktree is created.
- */
+/** Use the host-run recipe root as main workspace, as for direct SSH adoption; create no linked worktree. */
 import type { Repo } from '../../shared/repo-types'
 import type { CreateWorktreeResult } from '../../shared/worktree/create-types'
 import type { GitWorktreeInfo, Worktree } from '../../shared/worktree/types'

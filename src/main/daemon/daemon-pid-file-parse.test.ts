@@ -9,7 +9,6 @@ describe('salvagePidFromCorruptDaemonRecord', () => {
   })
 
   it('refuses digits at end-of-bytes: a tear inside the digits leaves a different pid', () => {
-    // Pid 42420 torn mid-digits — the surviving prefix 4242 must not be mistaken for a pid.
     expect(salvagePidFromCorruptDaemonRecord('{"pid":4242')).toBe(null)
     expect(salvagePidFromCorruptDaemonRecord('{"pid":4')).toBe(null)
   })

@@ -15,10 +15,7 @@ export type SeededSshWorkspaces = {
   worktreeIds: Record<string, string>
 }
 
-/**
- * An SSH host with one project and the workspaces main stores for it, seeded into a stopped profile.
- * Nothing listens on its port, so the next launch lists exactly these stored rows.
- */
+// Seed a stopped profile with an unreachable SSH host so launch lists exactly its stored workspaces.
 function seedUnreachableSshWorkspaces(
   userDataDir: string,
   input: { label: string; workspaces: { name: string; displayName: string }[] }
@@ -57,10 +54,7 @@ function seedUnreachableSshWorkspaces(
   return { targetId, hostId, repoId: repo.id, worktreeIds }
 }
 
-/**
- * A desktop with the local test repo and an unreachable SSH host's seeded workspaces, both held by
- * main as a user's would be. `dispose` closes the app and removes the profile.
- */
+// Launch local and unreachable SSH workspaces from main’s stored state; dispose removes the app and profile.
 export async function launchWithUnreachableSshWorkspaces(
   testInfo: TestInfo,
   localRepoPath: string,

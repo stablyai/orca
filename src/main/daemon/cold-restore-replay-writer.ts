@@ -18,7 +18,7 @@ export class ColdRestoreReplayWriter {
       }
       const remainingBudget = REPLAY_CHARS_PER_TURN - this.chars
       let end = Math.min(data.length, offset + remainingBudget)
-      // Why: xterm must receive UTF-16 surrogate pairs together when a replay slice lands between them.
+      // Keep UTF-16 surrogate pairs together across xterm replay slices.
       const leftCodeUnit = data.charCodeAt(end - 1)
       const rightCodeUnit = data.charCodeAt(end)
       const splitsSurrogatePair =

@@ -16,7 +16,6 @@ import { SearchableSetting } from './SearchableSetting'
 import { matchesSettingsSearch, normalizeSettingsSearchQuery } from './settings-search'
 import { translate } from '@/i18n/i18n'
 
-/** Open the proxy fields automatically when a search matches this section. */
 export function shouldOpenNetworkProxyConfig(searchQuery: string): boolean {
   return (
     normalizeSettingsSearchQuery(searchQuery) !== '' &&
@@ -24,7 +23,7 @@ export function shouldOpenNetworkProxyConfig(searchQuery: string): boolean {
   )
 }
 
-/** A configured proxy should also reveal the fields, so users see the value. */
+/** Reveal configured proxies so saved values cannot remain hidden. */
 export function hasConfiguredNetworkProxy(settings: GlobalSettings): boolean {
   return Boolean(
     settings.httpProxyUrl?.trim() ||
@@ -64,8 +63,7 @@ export function updateHttpProxyUrlDraftState(
   draft: string
 ): HttpProxyUrlDraftState {
   return {
-    // Why: settings persistence is async, so edits after an external settings
-    // reload must build on the latest persisted proxy source.
+    // Persistence is async; edits after external reload must build on the latest proxy source.
     ...resolveHttpProxyUrlDraftState(state, httpProxyUrl),
     draft,
     error: null
@@ -130,8 +128,6 @@ export function AdvancedNetworkSettingsSection({
 }: AdvancedNetworkSettingsSectionProps): React.JSX.Element {
   const searchQuery = useAppStore((s) => s.settingsSearchQuery)
   const [proxyConfigOpen, setProxyConfigOpen] = useState(false)
-  // Reveal the fields when searching for proxy terms or when a proxy is set,
-  // so the value is never hidden behind a collapsed trigger.
   const proxyConfigForcedOpen =
     shouldOpenNetworkProxyConfig(searchQuery) || hasConfiguredNetworkProxy(settings)
   const proxyConfigExpanded = proxyConfigOpen || proxyConfigForcedOpen
@@ -148,8 +144,7 @@ export function AdvancedNetworkSettingsSection({
     settings.httpProxyUrl
   )
   if (resolvedHttpProxyUrlDraftState !== httpProxyUrlDraftState) {
-    // Why: Settings can change outside this pane; reconcile the proxy draft
-    // before paint so stale network values do not briefly appear.
+    // Reconcile external settings before paint so stale network values cannot flash.
     setHttpProxyUrlDraftState(resolvedHttpProxyUrlDraftState)
   }
   const httpProxyUrlDraft = resolvedHttpProxyUrlDraftState.draft
@@ -160,8 +155,7 @@ export function AdvancedNetworkSettingsSection({
     settings.httpProxyBypassRules
   )
   if (resolvedHttpProxyBypassRulesDraftState !== httpProxyBypassRulesDraftState) {
-    // Why: Proxy bypass rules are local input state, but settings reloads can
-    // replace their source while this pane is mounted.
+    // Reconcile local bypass drafts when external settings reload replaces their source.
     setHttpProxyBypassRulesDraftState(resolvedHttpProxyBypassRulesDraftState)
   }
   const httpProxyBypassRulesDraft = resolvedHttpProxyBypassRulesDraftState.draft

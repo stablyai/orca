@@ -7,6 +7,7 @@ import * as ownerIdentity from '../agent-hooks/managed-hook-owner-identity'
 import { CODEX_READ_ONLY_APP_SERVER_ARGS } from '../codex-cli/codex-read-only-app-server-args'
 import {
   _internals,
+  hasCodexStateDbBackfillRecoveryGivenUp,
   resolveCodexBackfillSupervisorLockRoot,
   runCodexStateDbBackfillRecovery,
   startCodexStateDbBackfillRecoveryInBackground,
@@ -50,6 +51,7 @@ afterEach(async () => {
 describe('Codex state DB backfill recovery', () => {
   it('does not restart an exhausted supervisor when later triggers arrive', async () => {
     vi.spyOn(console, 'info').mockImplementation(() => {})
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
     const run = vi.fn(async () => ({ outcome: 'gave-up' as const, spawnCount: 5 }))
     const withLock = vi.fn(
       async (_home: string, _signal: AbortSignal | undefined, claim: () => Promise<unknown>) =>
@@ -70,6 +72,7 @@ describe('Codex state DB backfill recovery', () => {
     expect(dependencies.isPending).toHaveBeenCalledTimes(1)
     expect(withLock).toHaveBeenCalledTimes(1)
     expect(run).toHaveBeenCalledTimes(1)
+    expect(hasCodexStateDbBackfillRecoveryGivenUp('/managed-home')).toBe(true)
   })
 
   it('does not start a supervisor for an unreadable index', async () => {
@@ -409,7 +412,7 @@ describe('Codex state DB backfill recovery', () => {
       string[],
       { cwd?: string; env?: NodeJS.ProcessEnv }
     ]
-    // Why: spawnProcess resolves a recognised npm shim past cmd.exe; pre-wrapping hides the shim.
+    // Pre-wrapping hides the npm shim from spawnProcess resolution.
     expect(spawnFile).toBe(codexCommand)
     expect(spawnArgs).toEqual([
       '-c',
@@ -422,7 +425,6 @@ describe('Codex state DB backfill recovery', () => {
     ])
     expect(spawnOptions.cwd).toBe('C:\\Users\\alice\\.codex')
     expect(spawnOptions.env?.CODEX_HOME).toBe('C:\\Users\\alice\\.codex')
-    // Windows has no supervisor: the drain-first probe termination stays its stop.
     expect(spawnOptions).not.toHaveProperty('detached')
     expect(terminate).toHaveBeenCalledWith(child, false)
   })

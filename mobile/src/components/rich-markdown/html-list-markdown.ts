@@ -1,11 +1,6 @@
 import { inlineChildren } from './html-inline-markdown'
 
-/**
- * An item's own text: its label and any nested list taken off first.
- *
- * On a copy, because both belong to the live document — the label carries the checkbox the user
- * ticks, and the nested lists are serialized separately at their own indentation.
- */
+// Remove checkbox label/nested lists on clone only: live checkbox must remain, nested lists serialize at own indentation.
 export function listItemText(item: Element): string {
   const clone = item.cloneNode(true)
   // `cloneNode` is typed as returning a `Node`; an element's deep copy is an element.
@@ -22,22 +17,12 @@ export function directNestedLists(item: Element): Element[] {
   return Array.from(item.querySelectorAll('ul, ol')).filter((list) => list.closest('li') === item)
 }
 
-/**
- * Whether an element carries a list that no list item owns, and so is a block of its own.
- *
- * The mirror of `directNestedLists`: a list under an `li` is that item's, serialized at its own
- * indentation, and any other list is a block wherever the engine put it — including inside a `<p>`.
- */
+// Non-li-owned lists are standalone blocks wherever engine placed them, including inside p; li-owned nested lists serialize at own indentation.
 export function holdsUnownedList(element: Element): boolean {
   return Array.from(element.querySelectorAll('ul, ol')).some((list) => list.closest('li') === null)
 }
 
-/**
- * A list element as markdown, two spaces deeper per level of nesting.
- *
- * An ordered item's own number is preferred over its position, because the browser renumbers a
- * pasted or split item in the markup, and the source has to say what the surface shows.
- */
+// Indent two spaces per list level; prefer markup item number over position to preserve pasted/split browser renumbering.
 export function listMarkdown(element: Element, depth: number): string {
   const tag = element.tagName.toLowerCase()
   const isTask = element.getAttribute('data-type') === 'taskList'

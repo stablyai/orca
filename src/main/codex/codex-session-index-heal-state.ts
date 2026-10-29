@@ -7,17 +7,10 @@ import {
 import { writeFileAtomically } from '../codex-accounts/fs-utils'
 import { streamCodexSessionLedgerRecords } from './codex-session-ledger-stream'
 
-// State files for the session index heal: which backfilled rollouts exist
-// (the backfill audit ledger), which thread ids this pass already processed
-// (the heal ledger), and the completion marker that makes steady-state
-// startups a two-stat no-op.
-
-// Bump to re-drive the heal for every host after a semantics change; already
-// processed thread ids are re-read because ledger lines are version-scoped.
+// Bump after semantics changes to retry outcomes recorded under older versions.
 export const CODEX_SESSION_INDEX_HEAL_VERSION = 3
 
-// Why: an unsupported CLI stays unsupported until upgraded; re-probing once a
-// day is enough to notice an upgrade without a per-startup spawn.
+// Daily probes detect CLI upgrades without spawning on every startup.
 const HEAL_UNSUPPORTED_RETRY_INTERVAL_MS = 24 * 60 * 60 * 1000
 const HEAL_FAILED_THREAD_RETRY_INTERVAL_MS = 24 * 60 * 60 * 1000
 
@@ -47,10 +40,6 @@ export type HealMarkerSummary = {
   failedThreads: number
 }
 
-/**
- * Diffs the backfill audit ledger against the heal ledger: every hardlinked or
- * copied rollout whose thread id has not been processed yet, most recent first.
- */
 export async function collectPendingHealThreads(
   paths: CodexSessionIndexHealPaths
 ): Promise<PendingHealThread[]> {
@@ -65,8 +54,7 @@ export async function collectPendingHealThreads(
     if (typeof line.target !== 'string') {
       continue
     }
-    // Why: the append-only audit can contain runs for several custom Codex
-    // homes; only thread/read ids whose rollout lives in this invocation's DB.
+    // The audit spans custom homes; only index rollouts in this invocation's target.
     if (!isPathInsideOrEqual(paths.systemSessionsRoot, line.target)) {
       continue
     }
@@ -83,8 +71,7 @@ export async function collectPendingHealThreads(
         : processed.legacyHealedThreadIds.has(threadId) ||
           processed.legacyMissingThreadIds.has(threadId)
     ) {
-      // Why: only the newest publication event for a thread matters. A later
-      // processed event must displace an older pending event from this scan.
+      // A newer processed publication displaces any older pending event for this thread.
       pendingByThreadId.delete(threadId)
       continue
     }
@@ -95,7 +82,6 @@ export async function collectPendingHealThreads(
   )
 }
 
-/** Thread id (lower-cased) and timestamp segment encoded in a rollout file name. */
 export function parseCodexRolloutThreadId(
   filePath: string
 ): { threadId: string; rolloutStamp: string } | null {
@@ -158,8 +144,7 @@ export function appendHealLedgerRecord(
     mkdirSync(dirname(paths.healLedgerPath), { recursive: true })
     appendFileSync(
       paths.healLedgerPath,
-      // Why: a killed process can leave a torn tail. Start on a fresh line so
-      // the durable outcome cannot be swallowed by that corrupt fragment.
+      // A leading newline isolates this outcome from a torn ledger tail.
       `\n${JSON.stringify({
         v: CODEX_SESSION_INDEX_HEAL_VERSION,
         systemSessionsRoot: paths.systemSessionsRoot,
@@ -171,8 +156,7 @@ export function appendHealLedgerRecord(
     )
     return true
   } catch (error) {
-    // Why: the completion marker may only cover durably recorded outcomes;
-    // otherwise its audit-size fast path permanently suppresses the retry.
+    // Certifying an unrecorded outcome would permanently suppress its retry.
     console.warn('[codex-session-index-heal] Failed to append heal ledger record:', error)
     return false
   }
@@ -209,8 +193,7 @@ export function isHealMarkerCurrent(
       unsupportedAt?: unknown
       retryableFailureAt?: unknown
     }
-    // Why: one Windows directory has several spellings (drive case, separators),
-    // so a raw compare re-drives the whole heal for what is the same target.
+    // Normalize Windows path spellings to avoid repeating a heal for the same target.
     if (
       marker.version !== CODEX_SESSION_INDEX_HEAL_VERSION ||
       typeof marker.systemSessionsRoot !== 'string' ||
@@ -223,15 +206,13 @@ export function isHealMarkerCurrent(
       return Date.now() - marker.unsupportedAt < HEAL_UNSUPPORTED_RETRY_INTERVAL_MS
     }
     if (typeof marker.retryableFailureAt === 'number') {
-      // Why: malformed or still-growing rollouts must be retried eventually,
-      // but a permanently bad file must not spawn an app-server every launch.
+      // Throttle bad-rollout retries to avoid an app-server spawn on every launch.
       return (
         marker.auditBytes === auditBytes &&
         Date.now() - marker.retryableFailureAt < HEAL_FAILED_THREAD_RETRY_INTERVAL_MS
       )
     }
-    // Why: the audit ledger is append-only, so an unchanged byte size means no
-    // new backfilled sessions since this marker was written.
+    // The append-only audit changes size when new sessions are published.
     return marker.auditBytes === auditBytes
   } catch {
     return false

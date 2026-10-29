@@ -9,8 +9,7 @@ export function cloneResolvedConfig(config: SshResolvedConfig | null): SshResolv
   if (!config) {
     return null
   }
-  // Every array field needs its own copy — a shared reference lets one connection's clone mutate
-  // another's view of which files were consulted.
+  // Clone array fields separately so one connection cannot mutate another's consulted-source list.
   return {
     ...config,
     identityFile: [...config.identityFile],

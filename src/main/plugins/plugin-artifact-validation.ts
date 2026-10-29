@@ -12,6 +12,8 @@ const PLUGIN_ICON_MAX_BYTES = 2 * 1024 * 1024
 export const PLUGIN_LANGUAGE_PACK_MAX_BYTES = 5 * 1024 * 1024
 export const PLUGIN_VM_RECIPE_MAX_BYTES = 256 * 1024
 const PLUGIN_AGENT_PROFILE_MAX_BYTES = 1024 * 1024
+// Why 16 KiB: a theme is a few dozen tokens or palette slots.
+export const PLUGIN_THEME_MAX_BYTES = 16 * 1024
 
 type DeclaredArtifact =
   | { label: string; path: string; kind: 'file'; maxBytes: number }
@@ -21,7 +23,6 @@ function declaredFile(label: string, path: string | undefined, maxBytes: number)
   return path === undefined ? [] : [{ label, path, kind: 'file' as const, maxBytes }]
 }
 
-/** One line per contribution family that names a file. */
 function declaredArtifactPaths(manifest: PluginManifest): DeclaredArtifact[] {
   const c = manifest.contributes
   return [
@@ -38,6 +39,12 @@ function declaredArtifactPaths(manifest: PluginManifest): DeclaredArtifact[] {
     ),
     ...c.agents.flatMap((agent) =>
       declaredFile('agent profile', agent.path, PLUGIN_AGENT_PROFILE_MAX_BYTES)
+    ),
+    ...c.themes.flatMap((theme) =>
+      declaredFile(`theme "${theme.id}"`, theme.path, PLUGIN_THEME_MAX_BYTES)
+    ),
+    ...c.terminalThemes.flatMap((theme) =>
+      declaredFile(`terminal theme "${theme.id}"`, theme.path, PLUGIN_THEME_MAX_BYTES)
     )
   ]
 }
@@ -139,7 +146,6 @@ export async function validateDeclaredPluginArtifacts(
   return { ok: true }
 }
 
-/** Parses declared VM recipe artifacts at the immutable install boundary. */
 export async function validatePluginInstallContent(
   rootDir: string,
   manifest: PluginManifest

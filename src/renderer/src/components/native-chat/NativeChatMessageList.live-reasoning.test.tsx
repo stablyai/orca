@@ -2,7 +2,8 @@
 
 import '@testing-library/jest-dom/vitest'
 
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { cleanup, fireEvent, screen, within } from '@testing-library/react'
+import { render } from './native-chat-tooltip-test-harness'
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import type {
   AgentJournalItemBody,
@@ -13,7 +14,7 @@ import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 import { projectStructuredItemToNativeChat } from '../../../../shared/structured-agent-session-projection'
 import { NativeChatMessageList } from './NativeChatMessageList'
 import { installNativeChatMessageListTestViewport } from './native-chat-message-list-test-viewport'
-import { projectNativeChatTaskListFrames } from '../../../../shared/native-chat-task-list-frames'
+import { projectNativeChatTaskListFrames } from '../../../../shared/native-chat/input/native-chat-task-list-frames'
 import { openToolRunMembers } from './native-chat-tool-run-members-test-support'
 import { projectStructuredQuestionMessages } from '../../../../shared/structured-agent-question-projection'
 import type { NativeChatLiveSession } from './use-native-chat-live-session'
@@ -47,7 +48,6 @@ import type { NativeChatLiveSession } from './use-native-chat-live-session'
     }
   }
 
-  /** The journal that says the turn runs and what its newest content is. */
   function journal(rows: readonly NativeChatMessage[]): AgentJournalRenderItem[] {
     return [
       {
@@ -153,7 +153,6 @@ import type { NativeChatLiveSession } from './use-native-chat-live-session'
       const { rerender } = render(list([reasoning('r-1', 'Weighing two approaches', 'running')]))
       fireEvent.click(screen.getByRole('button', { name: 'Thinking' }))
       rerender(list([reasoning('r-1', 'Weighing two approaches', 'completed')]))
-      // The line no longer discloses anything; the row does, still open.
       expect(screen.queryByRole('button', { name: /Thinking|Working/ })).toBeNull()
       expect(screen.getByRole('button', { name: 'Reasoning: Thought for 12s' })).toHaveAttribute(
         'aria-expanded',
@@ -162,8 +161,7 @@ import type { NativeChatLiveSession } from './use-native-chat-live-session'
       expect(screen.getByText('Weighing two approaches')).toBeInTheDocument()
     })
 
-    // The body owns its colour: inherited, it read full foreground under the line and muted in the row,
-    // so the text dimmed as the block landed.
+    // Body-owned color prevents reasoning from dimming when it moves from the live line into its row.
     it('draws the same body, in its own quieter tone, live and once landed', () => {
       const body = () =>
         screen.getByText('Weighing two approaches').closest('[data-native-chat-message-tone]')
@@ -212,7 +210,6 @@ import type { NativeChatLiveSession } from './use-native-chat-live-session'
       )
     })
 
-    // The open block can sit on a slot kept for its turn's bar or diff rollup; only the slot stays.
     it('draws no row for the open block under a diff rollup on its turn', () => {
       const edit: NativeChatMessage = {
         id: 'edit-1',
@@ -388,7 +385,7 @@ import type { NativeChatLiveSession } from './use-native-chat-live-session'
       const active = frame(2, 'inProgress')
       const last = frame(3, 'completed')
       const { rerender, container } = render(transcript([first]))
-      const toggle = screen.getByRole('button', { name: 'Tasks 0 of 1 tasks completed' })
+      const toggle = screen.getByRole('button', { name: 'Tasks 0 of 1 task completed' })
       const viewport = container.querySelector('.overflow-y-auto')!
       expect(viewport.contains(toggle)).toBe(false)
       fireEvent.click(toggle)
@@ -400,13 +397,13 @@ import type { NativeChatLiveSession } from './use-native-chat-live-session'
       rerender(transcript([last]))
       expect(
         within(
-          screen.getByRole('button', { name: 'Tasks 1 of 1 tasks completed' }).parentElement!
+          screen.getByRole('button', { name: 'Tasks 1 of 1 task completed' }).parentElement!
         ).getByText('Verify')
       ).toHaveClass('line-through')
       expect(screen.getAllByText('Keep verification visible')).toHaveLength(2)
       rerender(transcript([first, active, last]))
       expect(screen.getAllByText('Verify')).toHaveLength(2)
-      expect(screen.getByRole('button', { name: 'Tasks 1 of 1 tasks completed' })).toBe(toggle)
+      expect(screen.getByRole('button', { name: 'Tasks 1 of 1 task completed' })).toBe(toggle)
       expect(screen.getByText('Started Verify')).toBeInTheDocument()
       expect(screen.queryByText('notification:turn/plan/updated')).toBeNull()
       expect(projectNativeChatTaskListFrames([last])[0]).toBe(
@@ -420,7 +417,6 @@ import type { NativeChatLiveSession } from './use-native-chat-live-session'
         role: 'assistant',
         timestamp: 1,
         source: 'transcript',
-        // Journalled like the frames it sits between.
         journalPosition: { sequence: 1, index: 0 },
         blocks: [
           {
@@ -431,11 +427,11 @@ import type { NativeChatLiveSession } from './use-native-chat-live-session'
         ]
       }
       render(transcript([tool, frame(3, 'completed')]))
-      fireEvent.click(screen.getByRole('button', { name: 'Tasks 1 of 1 tasks completed' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Tasks 1 of 1 task completed' }))
       expect(screen.getAllByText('Verify')).toHaveLength(2)
       expect(
         within(
-          screen.getByRole('button', { name: 'Tasks 1 of 1 tasks completed' }).parentElement!
+          screen.getByRole('button', { name: 'Tasks 1 of 1 task completed' }).parentElement!
         ).getByText('Verify')
       ).toHaveClass('line-through')
     })
@@ -457,7 +453,6 @@ import type { NativeChatLiveSession } from './use-native-chat-live-session'
       const projected = projectNativeChatTaskListFrames(messages)
       projected.forEach((message, index) => expect(message).toBe(messages[index]))
       render(transcript([truncated]))
-      // Unreadable as a list and wordless, so it is neither a checklist nor a raw row.
       expect(screen.queryByText('notification:turn/plan/updated')).toBeNull()
       expect(screen.queryByText('Tasks')).toBeNull()
     })
@@ -474,7 +469,7 @@ import type { NativeChatLiveSession } from './use-native-chat-live-session'
       expect(screen.queryByText('notification:future/event')).toBeNull()
       expect(screen.getByText('codex · notification:future/failure')).toBeInTheDocument()
       expect(
-        screen.getByRole('button', { name: 'Tasks 0 of 1 tasks completed' })
+        screen.getByRole('button', { name: 'Tasks 0 of 1 task completed' })
       ).toBeInTheDocument()
     })
 
@@ -491,7 +486,7 @@ import type { NativeChatLiveSession } from './use-native-chat-live-session'
       }
       render(transcript([frame(1, 'pending'), command]))
       expect(
-        screen.getByRole('button', { name: 'Tasks 0 of 1 tasks completed' })
+        screen.getByRole('button', { name: 'Tasks 0 of 1 task completed' })
       ).toBeInTheDocument()
       openToolRunMembers()
       expect(screen.getByText('Verification failed', { selector: 'pre' })).toHaveClass(

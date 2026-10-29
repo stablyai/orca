@@ -4,8 +4,7 @@ import { test, expect } from './helpers/orca-app'
 import { waitForSessionReady } from './helpers/store'
 import { createRestartSession } from './helpers/orca-restart'
 
-// Why: mirrors FLOATING_TERMINAL_WORKTREE_ID in src/shared/constants.ts.
-// E2E specs avoid importing renderer/shared modules into the Playwright runner.
+// Mirror FLOATING_TERMINAL_WORKTREE_ID without loading renderer/shared modules into Playwright.
 const FLOATING_WORKTREE_ID = 'global-floating-terminal'
 const OPEN_PANEL_SELECTOR = '[data-floating-terminal-panel][aria-hidden="false"]'
 const PANEL_SELECTOR = '[data-floating-terminal-panel]'
@@ -80,8 +79,7 @@ async function openFloatingPanel(page: Page): Promise<void> {
     PANEL_SELECTOR,
     { timeout: 30_000 }
   )
-  // Why: the panel's open flag is persisted (floating-terminal-panel-view-state), so
-  // after a restart it reopens on its own and a blind toggle would close it again.
+  // The panel’s open state persists; a blind toggle after restart would close it.
   const alreadyOpen = await page.evaluate(
     (selector) => Boolean(document.querySelector(selector)),
     OPEN_PANEL_SELECTOR

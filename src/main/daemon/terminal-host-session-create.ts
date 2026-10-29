@@ -21,8 +21,15 @@ import type { LegacyRestoreDetails } from './legacy-restore-records'
 import { resolveDaemonSessionScrollbackRows } from './daemon-session-scrollback-window'
 import { TerminalAttachCanceledError } from './daemon-errors'
 import { waitForTerminalAttachOperation } from './terminal-attach-cancellation'
+import { sharedPromiseSettlementWaiters } from '../../shared/promise-settlement-waiters'
 import { SessionNotFoundError } from './types'
 import { resolveWslSessionContext } from './wsl-session-context'
+import { recordSessionSpawnPaneKey } from './terminal-host-session-listing'
+import {
+  attachSessionInputViewer,
+  isSessionInputClosed,
+  trackSessionInput
+} from './session-input-path'
 
 type TerminalHostSessionCreateDependencies = {
   sessions: Map<string, Session>
@@ -45,17 +52,12 @@ export async function createOrAttachTerminalSession(
   opts.onSessionResolved?.(opts.sessionId)
   let existing = deps.sessions.get(opts.sessionId)
 
-  // Why: descendant capture must finish before attach or recreation, or the
-  // caller could receive a doomed session while teardown owns its process.
+  // Finish descendant capture before attaching to or replacing a session owned by teardown.
   if (deps.sessionTeardown.get(opts.sessionId) || existing?.isTerminating) {
-    // An attach must not adopt a doomed session; its caller retires the pane and respawns.
     if (opts.attachOnly) {
       throw new SessionNotFoundError(opts.sessionId)
     }
-    // A create can wait teardown out instead, and must: a pane respawning onto its own stable id
-    // reaches this a beat after the attach that retired it, and refusing surfaced the raw
-    // SessionNotFoundError to the user. Windows makes it the common case, where the plain-shell
-    // sweep holds the claim across an OS identity probe and taskkill (#18046).
+    // Respawn on the same stable ID must wait for teardown to release its previous owner.
     await waitForTerminalAttachOperation(
       deps.sessionTeardown.settle(opts.sessionId),
       opts.cancelSignal,
@@ -63,22 +65,19 @@ export async function createOrAttachTerminalSession(
     )
     deps.assertCreateAllowed()
     existing = deps.sessions.get(opts.sessionId)
-    // Unkillable child, or a fresh teardown claimed it while we waited: still nobody's to recreate.
+    // A live terminating owner still reserves the ID, including if teardown began again while waiting.
     if (existing?.isAlive && existing.isTerminating) {
       throw new SessionNotFoundError(opts.sessionId)
     }
   }
 
-  // Why no ownership settle here: attach is synchronous by contract. A viewer
-  // connecting inside an in-flight recovery proof (~100ms) gets the pre-reset
-  // snapshot and the injected reset arrives in-order over its stream — a
-  // self-healing first frame. Waiting instead created a race window (cancel,
-  // exit, kill during the await) that produced repeated regressions. Checkpoint
-  // readers that need a settled owner use getSettledSnapshot.
+  // Attach synchronously: in-flight recovery resets arrive after the snapshot in stream order.
+  // Checkpoint readers that require settled ownership use getSettledSnapshot.
   if (existing && existing.isAlive && !existing.isTerminating) {
     const snapshot = existing.getSnapshot()
     existing.detachAllClients()
     const token = existing.attachClient(opts.streamClient)
+    attachSessionInputViewer(existing, opts.streamClient)
     return {
       isNew: false,
       snapshot,
@@ -86,18 +85,17 @@ export async function createOrAttachTerminalSession(
       shellState: existing.shellState,
       incarnationId: existing.incarnationId,
       ...getDaemonSessionResultMetadata(existing),
+      ...(isSessionInputClosed(existing) ? { inputClosed: true as const } : {}),
       attachToken: token
     }
   }
 
   if (existing?.isAlive && existing.isTerminating) {
-    // Why: replacing a SIGKILLed-but-unreaped child could hide two live
-    // generations behind the same public session id.
+    // Wait for physical exit to avoid hiding two live generations behind one public ID.
     throw new Error(`Session "${opts.sessionId}" is terminating`)
   }
   if (opts.attachOnly) {
-    // Why: an adopted claim proves only one owner generation; it must never
-    // turn an exit race into permission to spawn an unclaimed shell.
+    // An adopted claim cannot authorize spawning an unclaimed shell after an exit race.
     throw new SessionNotFoundError(opts.sessionId)
   }
 
@@ -130,7 +128,7 @@ export async function createOrAttachTerminalSession(
   }
   try {
     if (paced) {
-      // Why: a paced wait can outlast the host's shutdown fence or the caller's cancellation.
+      // Pacing can outlast shutdown or cancellation; recheck before spawning.
       deps.assertCreateAllowed()
     }
     return await spawnAndPublishSession(opts, deps, { size, wslDistro }, (publishedId, isAlive) =>
@@ -148,9 +146,12 @@ async function spawnAndPublishSession(
   onPublished: (sessionId: string, isAlive: boolean) => void
 ): Promise<CreateOrAttachResult> {
   const { size, wslDistro } = ctx
-  // Why before the fork: the shell's own cwd may already have fallen back, so probe the requested path.
+  // Only macOS needs the TCC probe; other hosts must not pin extra filesystem workers.
   const cwdReadableByDaemon =
-    opts.cwd && !wslDistro ? await isCwdReadableByThisProcess(opts.cwd) : null
+    process.platform === 'darwin' && opts.cwd && !wslDistro
+      ? await isCwdReadableByThisProcess(opts.cwd, opts)
+      : null
+  deps.assertCreateAllowed()
   const subprocess = await deps.spawnSubprocess({
     sessionId: opts.sessionId,
     cols: size.cols,
@@ -170,8 +171,7 @@ async function spawnAndPublishSession(
   })
 
   let staging: StartupCommandStaging | undefined
-  // Why: a fallback shell does not emit the preferred shell's ready marker;
-  // retaining the stale capability would indefinitely queue its first command.
+  // Reconcile fallback-shell capability or its first command could remain queued until timeout.
   const shellReadySupported =
     (opts.shellReadySupported ?? false) &&
     (subprocess.shellPath === undefined || shellPathSupportsPtyStartupBarrier(subprocess.shellPath))
@@ -204,11 +204,14 @@ async function spawnAndPublishSession(
       ? { shellReadyTimeoutMs: opts.shellReadyTimeoutMs }
       : {})
   })
+  recordSessionSpawnPaneKey(session, opts.env?.ORCA_PANE_KEY)
+
+  trackSessionInput(session, subprocess, deps.reportReadinessEvent)
 
   if (opts.isCanceled?.()) {
     // Retain cleanup ownership if the native child refuses to exit.
     deps.sessions.set(opts.sessionId, session)
-    // Why: a child that refuses to die stays charged against the live cap until it is reaped.
+    // Retain the live-cap charge until physical exit.
     onPublished(opts.sessionId, session.isAlive)
     await session.forceKillAndDisposeSubprocess()
     if (deps.sessions.get(opts.sessionId) === session) {
@@ -224,11 +227,11 @@ async function spawnAndPublishSession(
   deps.onSessionCreated(opts.sessionId, opts.agentSessionGeneration, session.isAlive)
   onPublished(opts.sessionId, session.isAlive)
   const token = session.attachClient(opts.streamClient)
+  attachSessionInputViewer(session, opts.streamClient)
 
   const startupCommandWritten =
     Boolean(opts.command) && !subprocess.startupCommandDeliveredInShellArgs
-  // Why: without this, a missing command and a lost one log identically.
-  // Length, never the text -- launches can carry credentials.
+  // Distinguish absent from undelivered commands; log only length because command text may contain credentials.
   try {
     deps.reportReadinessEvent?.('startup-command-delivery', {
       sessionId: opts.sessionId,
@@ -260,7 +263,7 @@ async function spawnAndPublishSession(
       }
     }
     // Why: only Orca-wrapped shells advertise the paste-safe startup barrier.
-    session.write(
+    session.writeStartupCommand(
       buildStartupCommandSubmission(staging.command, {
         bracketedPasteSafe: shellReadySupported
       })
@@ -274,6 +277,7 @@ async function spawnAndPublishSession(
     shellState: session.shellState,
     incarnationId: session.incarnationId,
     ...getDaemonSessionResultMetadata(session),
+    ...(isSessionInputClosed(session) ? { inputClosed: true as const } : {}),
     ...(cwdReadableByDaemon !== null ? { cwdReadableByDaemon } : {}),
     attachToken: token
   }
@@ -293,7 +297,7 @@ function createSessionExitHandler(
   }
 }
 
-/** What an agent launch resumes, never its environment, which can carry credentials. */
+/** Describe restore identity without including environment values that may contain credentials. */
 function describeAgentRestore(
   opts: InternalCreateOrAttachOptions
 ): LegacyRestoreDetails | undefined {
@@ -310,9 +314,22 @@ function describeAgentRestore(
   }
 }
 
-// Why enumeration: a shell's cwd listing is what TCC withholds, and it can withhold it while
-// `access()` still passes. Only a proven permission refusal reads as denial — a missing path or an
-// unexpected error reads as readable so it can never masquerade as one.
-async function isCwdReadableByThisProcess(cwd: string): Promise<boolean> {
-  return (await enumerateDirectoryOnce(cwd)) !== 'denied'
+// TCC may reject directory enumeration despite successful access(); only explicit permission denial counts.
+async function isCwdReadableByThisProcess(
+  cwd: string,
+  opts: Pick<InternalCreateOrAttachOptions, 'sessionId' | 'cancelSignal'>
+): Promise<boolean | null> {
+  const outcome = await sharedPromiseSettlementWaiters(enumerateDirectoryOnce(cwd))
+    .wait({
+      timeoutMs: 1_000,
+      signal: opts.cancelSignal,
+      createAbortError: () => new TerminalAttachCanceledError(opts.sessionId)
+    })
+    .catch((error: unknown) => {
+      if (error instanceof TerminalAttachCanceledError) {
+        throw error
+      }
+      return null
+    })
+  return outcome === null ? null : outcome !== 'denied'
 }

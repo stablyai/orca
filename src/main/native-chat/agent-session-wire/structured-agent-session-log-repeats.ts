@@ -1,14 +1,12 @@
-// Keeps one failure that recurs on a timer (lease renewal, idle sweep) or on every publication
-// (status feed) from flooding the shared, rotated trace file and erasing the history around it.
+// Suppress recurring failures so rotated traces retain surrounding history.
 
-/** How long a repeated entry stays quiet after it is written. */
 export const STRUCTURED_AGENT_SESSION_LOG_REPEAT_WINDOW_MS = 5 * 60_000
 const MAX_TRACKED_REPEATS = 256
 
 type TrackedRepeat = { writtenAt: number; suppressed: number }
 
 export type StructuredAgentSessionLogRepeats = {
-  /** `null` swallows this entry; a number writes it, carrying the repeats swallowed since the last. */
+  /** null suppresses; otherwise return suppressed count since the previous write. */
   admit: (key: string) => number | null
 }
 
@@ -20,7 +18,7 @@ export function createStructuredAgentSessionLogRepeats(options?: {
   const now = options?.now ?? Date.now
   const windowMs = options?.windowMs ?? STRUCTURED_AGENT_SESSION_LOG_REPEAT_WINDOW_MS
   const maxTracked = options?.maxTracked ?? MAX_TRACKED_REPEATS
-  // Insertion order is write order, so the first key is the one written longest ago.
+  // Map insertion order tracks last-write age for eviction.
   const tracked = new Map<string, TrackedRepeat>()
 
   const makeRoom = (at: number): void => {

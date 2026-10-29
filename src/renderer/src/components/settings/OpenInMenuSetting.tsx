@@ -244,8 +244,7 @@ export function OpenInMenuSetting({
 
   const resolvedDraftState = resolveOpenInApplicationsDraftState(draftState, applications)
   if (resolvedDraftState !== draftState) {
-    // Why: the Open menu rows are editable local drafts, but Settings can
-    // reload from persistence while this pane is mounted.
+    // Reconcile local menu drafts when settings reload from persistence.
     setDraftState(resolvedDraftState)
   }
   const draft = resolvedDraftState.draft

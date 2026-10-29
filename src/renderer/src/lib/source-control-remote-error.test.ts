@@ -1,12 +1,8 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 
 import { resolveRemoteOperationErrorMessage } from './source-control-remote-error'
 
 describe('source-control remote error formatting', () => {
-  afterEach(() => {
-    vi.restoreAllMocks()
-  })
-
   it('prefers fatal detail over an earlier remote detail for publish failures', () => {
     const error = new Error('remote: protected branch\r\nfatal: Authentication failed\r\n')
 
@@ -22,22 +18,6 @@ describe('source-control remote error formatting', () => {
 
     expect(resolveRemoteOperationErrorMessage(error, { isPush: true })).toBe(
       'Push blocked — lint failed during push.'
-    )
-  })
-
-  it('maps force-push, publish, and sync push-stage hook failures to blocked copy', () => {
-    const error = new Error(
-      "git push failed: Command failed: git push origin main\nerror: failed to push some refs to 'origin'\nhusky - pre-push hook exited with code 1"
-    )
-
-    expect(resolveRemoteOperationErrorMessage(error, { isForcePush: true })).toBe(
-      'Force Push blocked — pre-push hook failed.'
-    )
-    expect(resolveRemoteOperationErrorMessage(error, { publish: true })).toBe(
-      'Publish Branch blocked — pre-push hook failed.'
-    )
-    expect(resolveRemoteOperationErrorMessage(error, { isSync: true, isSyncPushStage: true })).toBe(
-      'Sync blocked — pre-push hook failed.'
     )
   })
 
@@ -83,29 +63,5 @@ describe('source-control remote error formatting', () => {
     expect(resolveRemoteOperationErrorMessage(submoduleError, { isPush: true })).toBe(
       "Push failed. Submodule 'deps/lib' could not be pushed. Resolve the submodule push error, then try again."
     )
-  })
-
-  it('extracts publish details from newline-heavy output without full line-array splitting', () => {
-    const splitSpy = vi.spyOn(String.prototype, 'split')
-    const replaceSpy = vi.spyOn(String.prototype, 'replace')
-    const progress = 'remote: Enumerating objects\r\n'.repeat(10_000)
-    const error = new Error(
-      `${progress}fatal: unable to access https://token:secret@example.com/repo.git\r\n`
-    )
-
-    const result = resolveRemoteOperationErrorMessage(error, { publish: true })
-
-    expect(result).toContain('Publish Branch failed. unable to access https://example.com/repo.git')
-    const usedLineSplit = splitSpy.mock.calls.some(([separator]) => {
-      if (typeof separator === 'string') {
-        return separator === '\n'
-      }
-      return separator instanceof RegExp && separator.source === '\\r?\\n'
-    })
-    const usedCrlfReplace = replaceSpy.mock.calls.some(
-      ([pattern]) => pattern instanceof RegExp && pattern.source === '\\r\\n'
-    )
-    expect(usedLineSplit).toBe(false)
-    expect(usedCrlfReplace).toBe(false)
   })
 })

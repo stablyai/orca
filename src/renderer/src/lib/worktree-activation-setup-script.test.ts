@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
-import { SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV } from '../../../shared/setup-agent-sequencing'
+import {
+  SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV,
+  SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV
+} from '../../../shared/setup-agent-sequencing'
 import { ensureWorktreeHasInitialTerminal } from './worktree-initial-terminal-seeding'
 import {
   createMockStore,
@@ -9,6 +12,13 @@ import {
 } from './worktree-activation.test-fixture'
 
 registerWorktreeActivationReset()
+
+function sequencedSetup(env: Record<string, string>, runnerCommand: string): unknown {
+  return {
+    command: `bash -lc 'eval "\${${SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV}:?missing}"'`,
+    env: { ...env, [SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV]: expect.stringContaining(runnerCommand) }
+  }
+}
 
 describe('ensureWorktreeHasInitialTerminal', () => {
   it('creates a background Setup tab for newly created worktrees by default', () => {
@@ -112,14 +122,7 @@ describe('ensureWorktreeHasInitialTerminal', () => {
     expect(result).toBe('tab-1')
     expect(createTab).toHaveBeenCalledTimes(1)
     expect(createdTabStartups(store)['tab-2']).toEqual(
-      expect.objectContaining({
-        command: expect.stringContaining('bash /tmp/repo/.git/orca/setup-runner.sh')
-      })
-    )
-    expect(createdTabStartups(store)['tab-2']).toEqual(
-      expect.objectContaining({
-        command: expect.stringContaining('printf')
-      })
+      sequencedSetup({ ORCA_ROOT_PATH: '/tmp/repo' }, 'bash /tmp/repo/.git/orca/setup-runner.sh')
     )
   })
 
@@ -145,6 +148,43 @@ describe('ensureWorktreeHasInitialTerminal', () => {
       }
     })
   })
+
+  it.each([true, false])(
+    'keeps a blank shell and queues setup-gated Codex in a new terminal (activate=%s)',
+    (activateCreatedTabs) => {
+      let createdIndex = 1
+      const store = createMockStore({
+        tabsByWorktree: { 'wt-1': [{ id: 'tab-1' }] },
+        createTab: vi.fn(() => ({ id: `tab-${++createdIndex}` })),
+        reconcileWorktreeTabModel: vi.fn(() => ({ renderableTabCount: 1 }))
+      })
+
+      const result = ensureWorktreeHasInitialTerminal(
+        store,
+        'wt-1',
+        { command: 'codex', launchAgent: 'codex' },
+        { runnerScriptPath: '/tmp/setup.sh', envVars: {}, waitForAgentStartup: true },
+        undefined,
+        undefined,
+        { createNewTerminalForStartup: true, activateCreatedTabs }
+      )
+
+      expect(result).toBe('tab-2')
+      const startups = createdTabStartups(store)
+      expect(Object.keys(startups)).toEqual(['tab-2', 'tab-3'])
+      expect(startups['tab-2']).toEqual(
+        expect.objectContaining({
+          env: expect.objectContaining({
+            [SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV]: expect.stringContaining('exec codex')
+          })
+        })
+      )
+      expect(startups['tab-3']).toEqual(sequencedSetup({}, 'bash /tmp/setup.sh'))
+      if (!activateCreatedTabs) {
+        expect(store.setActiveTab).not.toHaveBeenCalled()
+      }
+    }
+  )
 
   it('gates startup behind setup completion when both are provided in new-tab mode', () => {
     setLegacySetupScriptLaunchMode('new-tab')
@@ -180,14 +220,7 @@ describe('ensureWorktreeHasInitialTerminal', () => {
       })
     )
     expect(createdTabStartups(store)['tab-2']).toEqual(
-      expect.objectContaining({
-        command: expect.stringContaining('printf')
-      })
-    )
-    expect(createdTabStartups(store)['tab-2']).toEqual(
-      expect.objectContaining({
-        command: expect.stringContaining('bash /tmp/repo/.git/orca/setup-runner.sh')
-      })
+      sequencedSetup({ ORCA_ROOT_PATH: '/tmp/repo' }, 'bash /tmp/repo/.git/orca/setup-runner.sh')
     )
   })
 
@@ -238,14 +271,9 @@ describe('ensureWorktreeHasInitialTerminal', () => {
         })
       })
     )
-    expect(createdTabStartups(store)['tab-2']).toEqual({
-      command: expect.stringContaining('bash /tmp/repo/.git/orca/setup-runner.sh'),
-      env: { ORCA_ROOT_PATH: '/tmp/repo' }
-    })
-    expect(createdTabStartups(store)['tab-2']).toEqual({
-      command: expect.stringContaining('printf'),
-      env: { ORCA_ROOT_PATH: '/tmp/repo' }
-    })
+    expect(createdTabStartups(store)['tab-2']).toEqual(
+      sequencedSetup({ ORCA_ROOT_PATH: '/tmp/repo' }, 'bash /tmp/repo/.git/orca/setup-runner.sh')
+    )
   })
 
   it('keeps WSL setup shell metadata when gating startup behind setup completion', () => {
@@ -273,10 +301,9 @@ describe('ensureWorktreeHasInitialTerminal', () => {
         })
       })
     )
-    expect(createdTabStartups(store)['tab-2']).toEqual({
-      command: expect.stringContaining('bash /mnt/c/repo/.git/orca/setup-runner.sh'),
-      env: { ORCA_ROOT_PATH: 'C:\\repo' }
-    })
+    expect(createdTabStartups(store)['tab-2']).toEqual(
+      sequencedSetup({ ORCA_ROOT_PATH: 'C:\\repo' }, 'bash /mnt/c/repo/.git/orca/setup-runner.sh')
+    )
   })
 
   it.each(['split-vertical', 'split-horizontal', 'new-tab', null] as const)(

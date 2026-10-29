@@ -15,7 +15,7 @@ export async function pathExists(pathValue: string): Promise<boolean> {
 
 export async function validateLocalPathTarget(
   pathValue: string,
-  // Why injectable: a WSL host's paths are Windows UNC paths, and only exist on win32.
+  // Injectable path rules allow checking Windows-only WSL UNC paths.
   pathApi: { normalize: (path: string) => string; isAbsolute: (path: string) => boolean } = {
     normalize,
     isAbsolute
@@ -31,17 +31,14 @@ export async function validateLocalPathTarget(
   return { ok: true, path: normalizedPath }
 }
 
-// Why: the path's owner decides, never the focused server; an absent owner is refused.
+// Route by path owner, never the focused server; missing ownership must fail.
 export function isLocallyOwned(ownerHostId: unknown): boolean {
   return (
     typeof ownerHostId === 'string' && parseRoutableExecutionHostId(ownerHostId)?.kind === 'local'
   )
 }
 
-/**
- * The path this computer opens for `ownerHostId`: the path itself when local, its
- * `\\wsl.localhost` spelling when a WSL host owns it (D5), refused for every other owner.
- */
+/** Resolve local paths or WSL-owner UNC paths; refuse other owners. */
 export async function resolveOwnedPathTarget(
   pathValue: string,
   ownerHostId: unknown

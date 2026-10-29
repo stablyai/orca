@@ -50,7 +50,7 @@ export async function adoptProvisionedRootSshCheckout(args: {
     throw new Error('The recipe projectRoot does not match the imported Git checkout root.')
   }
 
-  // Why: this process serves no SSH git, so a provisioned SSH checkout is never adopted here.
+  // This process cannot adopt SSH checkouts because it serves no SSH Git.
   throw new Error('The recipe-created SSH connection is no longer available.')
 }
 

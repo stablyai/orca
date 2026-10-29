@@ -18,9 +18,14 @@ import { piRpcProviderLink, type PiRpcResolvedLaunch } from './rpc-launch-resolu
 import { piModelOptionId, readPiRpcCommands, readPiRpcSessionOptions } from './rpc-options'
 import { piRpcStateSchema, type PiRpcState } from './rpc-protocol'
 import type { PiRpcConnection, PiRpcSessionDeps } from './rpc-session'
+import { catchUpPiSession } from './rpc-history-catch-up'
+import type { PiHistoryAnchor } from './rpc-history-capture'
+import { decodePiHistoryClaim, encodePiHistoryClaim } from './rpc-history-journal-view'
 
 export class PiRpcSessionStartup {
   commands?: AgentSessionSlashCommand[]
+  /** Continue capture only from a claim reconciled to Pi's current leaf. */
+  historyAnchor?: PiHistoryAnchor
 
   constructor(
     private readonly input: StructuredAgentSessionAcquireInput,
@@ -29,10 +34,10 @@ export class PiRpcSessionStartup {
     /** A new Pi session starts on its config's model; a resumed or forked one keeps its own. */
     private readonly resolvesConfig: boolean,
     private readonly setState: (state: PiRpcState) => void,
-    private readonly failedCause: () => Error | undefined
+    private readonly failedCause: () => Error | undefined,
+    private readonly prepareObservation: () => (options: AgentSessionOptionsResult) => boolean
   ) {}
 
-  /** Ready once Pi reports its state: only an unknown provider fails the start. */
   async run(
     launch: PiRpcResolvedLaunch,
     signal: AbortSignal
@@ -51,23 +56,56 @@ export class PiRpcSessionStartup {
       Date.now()
     )
     this.setState(state)
+    // Replacement sessions cannot inherit the prior conversation's history claim.
+    const continued = launch.sessionFile !== undefined || launch.forkFile !== undefined
+    const history = await this.wait(
+      catchUpPiSession({
+        connection: this.connection,
+        sessionId: this.input.identity.sessionId,
+        sessionFile: state.sessionFile,
+        lineage: new Set([...(launch.lineage ?? []), state.sessionFile]),
+        claim: continued ? decodePiHistoryClaim(launch.previous?.handle.resumeCursor) : null,
+        sink: this.input.events,
+        signal,
+        assertCurrent: () => this.assertLive(signal),
+        logger: this.deps.logger
+      }),
+      signal
+    )
+    this.assertLive(signal)
+    if (history.current) {
+      this.historyAnchor = { entry: history.claim?.entry ?? null }
+    }
     const current: AgentSessionOptionsResult['current'] = {
       model: state.model ? piModelOptionId(state.model.provider, state.model.id) : '',
       ...(state.thinkingLevel ? { effort: state.thinkingLevel } : {})
     }
     this.assertLive(signal)
     current.confirmed = [...(current.model ? ['model'] : []), ...(current.effort ? ['effort'] : [])]
-    return { link, reportedOptions: current }
+    const claimed = history.claim
+      ? { ...link, handle: { ...link.handle, resumeCursor: encodePiHistoryClaim(history.claim) } }
+      : link
+    return { link: claimed, reportedOptions: current }
+  }
+
+  reportAfterOpen(generation: string, opening: AgentSessionOptionsResult['current']): void {
+    void this.readAfterOpen(generation, opening).catch((error: unknown) =>
+      this.warn('Pi startup reports failed', 'pi-startup-reports', error)
+    )
   }
 
   /** After the open: the listing and the `/` commands reach the host as later reports, and a read
    *  that fails only leaves the chat without them. */
-  async readAfterOpen(
+  private async readAfterOpen(
     generation: string,
     opening: AgentSessionOptionsResult['current']
   ): Promise<void> {
-    const options = await this.readListing()
+    let observe: ((options: AgentSessionOptionsResult) => boolean) | undefined
+    const options = await this.readListing(() => {
+      observe = this.prepareObservation()
+    })
     if (options && !this.failedCause() && !this.connection.closed) {
+      const adopted = observe?.(options) === true
       // What it started on names its config's default once; a later switch teaches nothing.
       const { catalogListing } = withLiveCatalogListing(
         options,
@@ -78,21 +116,31 @@ export class PiRpcSessionStartup {
           current: opening
         })
       )
-      this.deps.onLifecycle({
-        type: 'options-reported',
-        sessionId: this.input.identity.sessionId,
-        fence: this.input.fence,
-        acquisitionGeneration: generation,
-        reportedOptions: options.current,
-        ...(catalogListing ? { catalogListing } : {})
-      })
+      this.reportOptions(generation, adopted ? options.current : {}, catalogListing)
     }
     await this.readCommands()
   }
 
-  private async readListing(): Promise<AgentSessionOptionsResult | undefined> {
+  reportOptions(
+    generation: string,
+    reportedOptions: AgentSessionOptionsResult['current'],
+    catalogListing?: ReturnType<typeof withLiveCatalogListing>['catalogListing']
+  ): void {
+    this.deps.onLifecycle({
+      type: 'options-reported',
+      sessionId: this.input.identity.sessionId,
+      fence: this.input.fence,
+      acquisitionGeneration: generation,
+      reportedOptions,
+      ...(catalogListing ? { catalogListing } : {})
+    })
+  }
+
+  private async readListing(
+    beforeStateRead: () => void
+  ): Promise<AgentSessionOptionsResult | undefined> {
     try {
-      return await readPiRpcSessionOptions(this.connection)
+      return await readPiRpcSessionOptions(this.connection, beforeStateRead)
     } catch (error) {
       this.warn('Pi options could not be read', 'pi-options', error)
       return undefined

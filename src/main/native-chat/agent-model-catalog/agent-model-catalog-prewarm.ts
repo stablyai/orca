@@ -3,11 +3,8 @@ import type {
   AgentModelCatalogService,
   AgentModelCatalogServiceDeps
 } from './agent-model-catalog-service-contract'
-import type { AgentModelCatalogProbe, AgentModelCatalogSuccess } from './agent-model-catalog-store'
 import { agentModelCatalogFingerprint } from './agent-model-catalog-fingerprint'
-import { independentAgentModelCatalog } from './agent-model-catalog-discovery'
 
-/** The catalog a new chat of `agent` would read: the account a launch would pin right now. */
 export async function newChatCatalogKey(
   deps: AgentModelCatalogServiceDeps,
   agent: string,
@@ -43,33 +40,19 @@ async function runBounded<T>(
 export async function prewarmAgentModelCatalog(
   deps: AgentModelCatalogServiceDeps,
   signal: AbortSignal,
-  read: AgentModelCatalogService['read'],
-  listWith: (
-    probe: AgentModelCatalogProbe,
-    home: AgentSessionAccountHome
-  ) => () => Promise<AgentModelCatalogSuccess>
+  read: AgentModelCatalogService['read']
 ): Promise<void> {
   if (signal.aborted) {
     return
   }
   const probes = deps.probes ?? {}
-  // An agent never used here waits for its first chat, which shows the quiet placeholder.
+  // Unused agents wait for their first chat instead of spawning speculative probes.
   const used = Object.keys(probes).filter(
     (agent) =>
       !deps.listsInChatFolder?.has(agent) &&
       (deps.store.hasEntryForAgent(agent) || deps.hasChatRecords?.(agent) === true)
   )
   await runBounded(used, 2, signal, async (agent) => {
-    if (independentAgentModelCatalog(agent)) {
-      await read({ agent, waitForListing: true })
-      return
-    }
-    const probe = probes[agent]
-    const key = probe ? await newChatCatalogKey(deps, agent) : null
-    // A fresh entry, a listing already running, or a recent failure each mean nothing to do.
-    if (!probe || !key || signal.aborted || !deps.store.probeDue(key.fingerprint)) {
-      return
-    }
-    await deps.store.refresh(key.fingerprint, agent, probe, listWith(probe, key.accountHome))
+    await read({ agent, waitForListing: true })
   })
 }

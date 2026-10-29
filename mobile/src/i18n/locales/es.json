@@ -1,0 +1,22 @@
+{
+  "common": {
+    "back": "Atrás"
+  },
+  "settings": {
+    "appearance": {
+      "language": {
+        "description": "La opción Sistema usa el idioma de este dispositivo. Las solicitudes de permiso siempre usan el idioma del dispositivo.",
+        "heading": "IDIOMA",
+        "systemWithCurrent": "Sistema ({{language}})"
+      },
+      "theme": {
+        "dark": "Oscuro",
+        "description": "La opción Sistema usa el modo claro u oscuro de este dispositivo.",
+        "heading": "TEMA",
+        "light": "Claro",
+        "system": "Sistema"
+      },
+      "title": "Apariencia"
+    }
+  }
+}

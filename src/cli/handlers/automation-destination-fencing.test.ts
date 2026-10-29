@@ -13,19 +13,14 @@ function ok(result: unknown): unknown {
   return { id: 'request-1', ok: true, result, _meta: { runtimeId: 'runtime-1' } }
 }
 
-/**
- * Stands in for the storing authority: it answers the reads the CLI makes and
- * enforces the destination exactly where persistence does — with the real
- * assertions, and only when the client actually supplies one.
- */
+/** Exercise the real destination assertions at write time, only when the client supplies a fence. */
 function authority(options: {
-  /** What `ssh.listTargetSummaries` reports while the CLI captures its destination. */
   registered: SshRegistration[]
   /** Generation the same target carries by the time the write lands. */
   generationAtWrite?: number
   repoConnectionId?: string | null
   targetSummaryError?: Error
-  /** A host predating `ssh.listTargetSummaries`, which answers only `ssh.listTargets`. */
+  /** Older hosts expose only ssh.listTargets. */
   legacyHost?: boolean
 }): { call: ReturnType<typeof vi.fn>; writes: { method: string; params: unknown }[] } {
   const writes: { method: string; params: unknown }[] = []
@@ -82,10 +77,7 @@ const CREATE_FLAGS: [string, string][] = [
 
 afterEach(() => vi.restoreAllMocks())
 
-// The expected owner only fences the host the record is leaving. Without the
-// destination the arrival is never checked, so a move onto a host that is gone —
-// or gone and re-registered as a different machine under the same id — is
-// accepted and only surfaces later, at dispatch, as a dead automation.
+// Source-owner checks cannot protect a destination removed or re-registered before the write.
 describe('CLI automation writes fence the host they land on', () => {
   it('refuses a selector-moving edit onto an SSH host the authority no longer registers', async () => {
     const { call, writes } = authority({ registered: [], repoConnectionId: 'box-1' })
@@ -208,8 +200,7 @@ describe('CLI automation writes fence the host they land on', () => {
     })
   })
 
-  // A host that predates SSH generations has no incarnation to capture, so the
-  // write must still land — failing closed there would break a host that is only old.
+  // Older hosts cannot provide generations; omit the fence to preserve compatibility.
   it('omits the destination when the authority registers the target without a generation', async () => {
     const { call, writes } = authority({
       registered: [{ id: 'box-1', label: 'box 1' }],
@@ -244,7 +235,6 @@ describe('CLI automation writes fence the host they land on', () => {
     expect(writes[0]?.params).toMatchObject({ destination: { selector: { kind: 'self' } } })
   })
 
-  // Nothing moves, so there is no arrival to fence and no reason to spend the reads.
   it('sends no destination when the edit names no project or workspace', async () => {
     const { call, writes } = authority({ registered: [] })
     vi.spyOn(console, 'log').mockImplementation(() => undefined)

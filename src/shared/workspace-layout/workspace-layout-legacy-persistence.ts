@@ -1,5 +1,4 @@
-// The one update of the legacy persistence record, run after every apply: which workspaces'
-// terminal rows this partition owns, and the topology revision older builds' save merge defers to.
+// Maintain terminal-row ownership and the topology revision older builds defer to when merging saves.
 
 import { getRepoIdFromWorktreeId } from '../worktree/id'
 import { collectLayoutLeafIdsInOrder } from './terminal-pane-tree'
@@ -17,13 +16,8 @@ function paneKeys(workspace: WorkspaceLayout): string[] {
   )
 }
 
-/**
- * A workspace that holds a terminal tab owns its rows from then on, even after its last tab
- * closes; a removed workspace no longer does. A repo whose terminal panes changed advances its
- * revision once, as does one `retiredWorktreeIds` names (an exit retirement or legacy tombstone
- * advances it even when the pane was already gone). Panes leaving with a removed workspace, or
- * moving with a renamed one, advance nothing.
- */
+/** Retain row ownership after the last terminal closes; remove it with the workspace.
+ * Bump each changed or explicitly retired repo once, including already-absent panes. Workspace removal or rename alone does not bump it. */
 export function updateLegacyPersistence(
   before: WorkspaceLayoutModel,
   after: WorkspaceLayoutModel,

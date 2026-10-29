@@ -32,8 +32,7 @@ import type { ActivityBarItem } from './activity-bar-buttons'
 
 type PluginPanelIcon = ActivityBarItem['icon']
 
-// Why: importing lucide's full `icons` map would bundle every icon and defeat
-// tree-shaking, so plugin manifests pick from this curated set (fallback: Plug).
+// Curate manifest icons; importing lucide's full icons map defeats tree shaking.
 const PLUGIN_PANEL_ICONS: Record<string, PluginPanelIcon> = {
   activity: Activity,
   barchart3: BarChart3,
@@ -70,14 +69,12 @@ export function resolvePluginPanelIcon(iconName: string | undefined): PluginPane
   }
   // Accept both lucide naming styles ('file-text' and 'FileText').
   const normalized = iconName.replaceAll('-', '').toLowerCase()
-  // Own-key only: a manifest icon named `constructor` must not resolve to an
-  // inherited member and crash the sidebar with a non-component "icon".
+  // Reject inherited keys such as constructor, which would resolve to non-components and crash the sidebar.
   return Object.hasOwn(PLUGIN_PANEL_ICONS, normalized)
     ? (PLUGIN_PANEL_ICONS[normalized] ?? Plug)
     : Plug
 }
 
-/** Maps active plugin panel contributions onto right-sidebar activity items. */
 export function getPluginPanelActivityItems(
   panels: ActivePluginPanel[],
   panelErrors: Readonly<Record<string, true>> = {}
@@ -85,8 +82,7 @@ export function getPluginPanelActivityItems(
   return panels.map((panel) => ({
     id: panel.tabKey,
     icon: resolvePluginPanelIcon(panel.icon),
-    // Why: panel titles come from plugin manifests, not the app catalog, so
-    // they render untranslated by design.
+    // Manifest titles are plugin-owned and render without app-catalog translation.
     title: panel.title,
     shortcut: '',
     ...(panelErrors[panel.tabKey] ? { statusIndicator: 'failure' as const } : {})

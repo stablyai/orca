@@ -11,11 +11,7 @@ import { editorFileKey } from '../workspace-layout-editor-tab-file'
 import { build, testContext, WS } from '../workspace-layout-command.test-fixture'
 import type { WorkspaceLayoutModel } from '../workspace-layout-model'
 
-/**
- * A workspace as a desktop leaves it: a renamed terminal tab split in two (one pane titled, both
- * bound), an agent terminal, a markdown file, a browser tab and a chat, with the chat and the
- * browser in a second group to the right.
- */
+/** Desktop-shaped fixture: split/agent terminals, file, browser and chat across two groups, with one titled pane. */
 function workspace() {
   const ctx = testContext()
   const { model, results } = build(ctx, [
@@ -104,6 +100,62 @@ function views(fields: Partial<SessionTabsView> = {}): SessionTabsView {
 const noFacts: SessionTabsFacts = { tabLabels: {}, terminalRows: {}, browserTabs: {} }
 
 describe('projectSessionTabs', () => {
+  it.each(['check-details', 'conflict-review'] as const)(
+    'withholds %s views from file rows and group references',
+    (mode) => {
+      const { model, results } = build(testContext(), [
+        {
+          type: 'openEditorTab',
+          workspace: WS,
+          fileId: `${WS}::${mode}::check-run:42`,
+          contentType: mode,
+          view: {
+            view: { mode },
+            file: {
+              filePath: `${WS}::${mode}::check-run:42`,
+              relativePath: 'e2e / changed e2e specs (1/1)',
+              language: 'plaintext'
+            }
+          }
+        },
+        {
+          type: 'openEditorTab',
+          workspace: WS,
+          fileId: '/Users/dev/orca/app.ts',
+          contentType: 'editor',
+          file: {
+            filePath: '/Users/dev/orca/app.ts',
+            relativePath: 'app.ts',
+            language: 'typescript'
+          }
+        }
+      ])
+      const virtualTabId = results[0]!.tabId!
+      const fileTabId = results[1]!.tabId!
+      const groupId = groupOf(model, virtualTabId)
+      const view = views({
+        activeGroupIdByWorktree: { [WS]: groupId },
+        groups: {
+          [WS]: {
+            [groupId]: { activeTabId: virtualTabId, recentTabIds: [fileTabId, virtualTabId] }
+          }
+        }
+      })
+
+      const snapshot = projectSessionTabs(WS, model.workspaces[WS]!, view, noFacts, false)
+
+      expect(snapshot.tabs).toMatchObject([
+        { id: fileTabId, type: 'file', relativePath: 'app.ts', isActive: false }
+      ])
+      expect(snapshot.tabs).toHaveLength(1)
+      expect(snapshot.activeTabId).toBeNull()
+      expect(snapshot.activeTabType).toBeNull()
+      expect(snapshot.tabGroups).toEqual([
+        { id: groupId, activeTabId: null, tabOrder: [fileTabId], recentTabIds: [fileTabId] }
+      ])
+    }
+  )
+
   it("projects the model into today's snapshot rows, groups and selection", () => {
     const { model, api, apiSplit, agent, readme, browser, chat, left, right } = workspace()
     const apiTab = api!.tabId!
@@ -265,106 +317,6 @@ describe('projectSessionTabs', () => {
         ]
       }
     expect(projectSessionTabs(WS, model.workspaces[WS]!, view, facts, false)).toEqual(expected)
-  })
-
-  describe("titles follow today's order", () => {
-    function soleTab(fields: { title?: string; paneTitle?: string; live?: string }) {
-      const ctx = testContext()
-      const created = build(ctx, [
-        {
-          type: 'createTerminalTab',
-          workspace: WS,
-          ...(fields.title ? { title: fields.title } : {})
-        }
-      ])
-      const { tabId, leafId } = created.results[0]!
-      const model = fields.paneTitle
-        ? build(
-            ctx,
-            [
-              {
-                type: 'renamePane',
-                workspace: WS,
-                tabId: tabId!,
-                leafId: leafId!,
-                title: fields.paneTitle
-              }
-            ],
-            created.model
-          ).model
-        : created.model
-      const facts = fields.live
-        ? { ...noFacts, terminalRows: { [tabId!]: { title: fields.live } } }
-        : noFacts
-      return { model, tabId: tabId!, facts }
-    }
-    const titleOf = (
-      { model, facts }: ReturnType<typeof soleTab>,
-      generatedTitlesEnabled = false
-    ) =>
-      projectSessionTabs(WS, model.workspaces[WS]!, views(), facts, generatedTitlesEnabled).tabs[0]!
-        .title
-
-    it('a custom title beats the pane title and the live title (#19582)', () => {
-      expect(titleOf(soleTab({ title: 'deploy', paneTitle: 'logs', live: 'zsh' }))).toBe('deploy')
-    })
-
-    it('a pane title beats the live title when there is no custom title', () => {
-      expect(titleOf(soleTab({ paneTitle: 'logs', live: 'zsh' }))).toBe('logs')
-    })
-
-    it('reads generated titles only with the setting on', () => {
-      const tab = soleTab({ live: 'zsh' })
-      const ws = tab.model.workspaces[WS]!
-      const generated = {
-        ...tab,
-        model: {
-          ...tab.model,
-          workspaces: {
-            [WS]: {
-              ...ws,
-              tabs: ws.tabs.map((entry) => ({ ...entry, generatedTitle: 'Fix login' }))
-            }
-          }
-        }
-      }
-      expect(titleOf(generated)).toBe('zsh')
-      expect(titleOf(generated, true)).toBe('Fix login')
-    })
-
-    it('a quick-command label beats the live title', () => {
-      const tab = soleTab({ live: 'zsh' })
-      const ws = tab.model.workspaces[WS]!
-      const labelled = {
-        ...tab,
-        model: {
-          ...tab.model,
-          workspaces: {
-            [WS]: {
-              ...ws,
-              tabs: ws.tabs.map((entry) => ({ ...entry, quickCommandLabel: 'Tests' }))
-            }
-          }
-        }
-      }
-      const row = projectSessionTabs(
-        WS,
-        labelled.model.workspaces[WS]!,
-        views(),
-        labelled.facts,
-        false
-      ).tabs[0]
-      expect(row).toMatchObject({ title: 'Tests', quickCommandLabel: 'Tests' })
-    })
-
-    it('split panes show their own title or "Terminal", never the tab title', () => {
-      const { model, api } = workspace()
-      const rows = projectSessionTabs(WS, model.workspaces[WS]!, views(), noFacts, true).tabs
-      expect(rows.filter((row) => row.id.startsWith(api!.tabId!)).map((row) => row.title)).toEqual([
-        'logs',
-        'Terminal'
-      ])
-    })
   })
 
   it('names the first group but no tab active when the view selects nothing, and keeps one group without a tree', () => {

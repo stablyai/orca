@@ -63,7 +63,6 @@ describe('runClaudePastedCodeLogin', () => {
     const { value } = channel(Promise.resolve('the-code#state'))
     const runCommand = vi.fn<RunCommand>(async (_args, _config, _timeout, options) => {
       options?.onStdin?.((text) => written.push(text))
-      // Split mid-link, as a pipe may deliver it.
       options?.onStdout?.(TRANSCRIPT.slice(0, 200))
       options?.onStdout?.(TRANSCRIPT.slice(200))
       await vi.waitFor(() => expect(written).toEqual(['the-code#state\n']))

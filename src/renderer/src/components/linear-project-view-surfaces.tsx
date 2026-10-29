@@ -1,3 +1,4 @@
+import { taskProviderErrorText } from '@/lib/task-provider-error-copy'
 import React from 'react'
 import { ArrowLeft, ArrowRight, ExternalLink, Layers3, LoaderCircle, RefreshCw } from 'lucide-react'
 
@@ -31,11 +32,80 @@ type LinearProjectOverviewProps = {
   onOpenIssues?: () => void
 }
 
+type LinearCollectionKind = 'views' | 'projects' | 'projectIssues' | 'viewIssues' | 'issues'
+
+function linearCollectionTruncatedText(kind: LinearCollectionKind, count: number): string {
+  const values = { count }
+  const one = count === 1
+  switch (kind) {
+    case 'views':
+      return one
+        ? translate(
+            'taskProviders.linear.truncated.views_one',
+            'Showing the first {{count}} view. Search or open Linear for the full set.',
+            values
+          )
+        : translate(
+            'taskProviders.linear.truncated.views_other',
+            'Showing the first {{count}} views. Search or open Linear for the full set.',
+            values
+          )
+    case 'projects':
+      return one
+        ? translate(
+            'taskProviders.linear.truncated.projects_one',
+            'Showing the first {{count}} project. Search or open Linear for the full set.',
+            values
+          )
+        : translate(
+            'taskProviders.linear.truncated.projects_other',
+            'Showing the first {{count}} projects. Search or open Linear for the full set.',
+            values
+          )
+    case 'projectIssues':
+      return one
+        ? translate(
+            'taskProviders.linear.truncated.projectIssues_one',
+            'Showing the first {{count}} project issue. Search or open Linear for the full set.',
+            values
+          )
+        : translate(
+            'taskProviders.linear.truncated.projectIssues_other',
+            'Showing the first {{count}} project issues. Search or open Linear for the full set.',
+            values
+          )
+    case 'viewIssues':
+      return one
+        ? translate(
+            'taskProviders.linear.truncated.viewIssues_one',
+            'Showing the first {{count}} view issue. Search or open Linear for the full set.',
+            values
+          )
+        : translate(
+            'taskProviders.linear.truncated.viewIssues_other',
+            'Showing the first {{count}} view issues. Search or open Linear for the full set.',
+            values
+          )
+    case 'issues':
+      return one
+        ? translate(
+            'taskProviders.linear.truncated.issues_one',
+            'Showing the first {{count}} issue. Search or open Linear for the full set.',
+            values
+          )
+        : translate(
+            'taskProviders.linear.truncated.issues_other',
+            'Showing the first {{count}} issues. Search or open Linear for the full set.',
+            values
+          )
+  }
+}
+
 type LinearCollectionNoticeProps = {
   errors?: LinearWorkspaceError[]
   hasMore?: boolean
   count: number
-  label: string
+  kind: LinearCollectionKind
   onLoadMore?: () => void
   loading?: boolean
   loadMoreLabel?: string
@@ -45,7 +115,7 @@ export function LinearCollectionNotice({
   errors,
   hasMore,
   count,
-  label,
+  kind,
   onLoadMore,
   loading = false,
   loadMoreLabel = 'Load more'
@@ -61,31 +131,19 @@ export function LinearCollectionNotice({
           {errors.map((error) => (
             <Badge key={`${error.workspaceId}-${error.type}`} variant="outline">
               {error.workspaceName ?? error.workspaceId}:{' '}
-              {isIntegrationCredentialDecryptionError(error.message)
+              {isIntegrationCredentialDecryptionError(taskProviderErrorText(error.message))
                 ? translate(
                     'auto.components.linear.project.view.surfaces.linearLoginUnreadable',
                     'Unable to read saved Linear login. Reconnect it in Settings.'
                   )
-                : error.message}
+                : taskProviderErrorText(error.message)}
             </Badge>
           ))}
         </div>
       ) : null}
       {hasMore ? (
         <div className="flex flex-wrap items-center justify-center gap-2 px-4 py-3">
-          {onLoadMore ? null : (
-            <span>
-              {translate(
-                'auto.components.linear.project.view.surfaces.06b887d622',
-                'Showing first'
-              )}{' '}
-              {count} {label}
-              {translate(
-                'auto.components.linear.project.view.surfaces.98730088a6',
-                '. Search or open Linear for the full set.'
-              )}
-            </span>
-          )}
+          {onLoadMore ? null : <span>{linearCollectionTruncatedText(kind, count)}</span>}
           {onLoadMore ? (
             <Button
               type="button"

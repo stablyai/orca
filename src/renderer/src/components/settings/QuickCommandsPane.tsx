@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { TerminalQuickCommand } from '../../../../shared/terminal-quick-command-types'
 import { getTerminalQuickCommandScope } from '../../../../shared/terminal-quick-commands'
@@ -125,10 +125,8 @@ export function QuickCommandsPane({
   const hostOptions = getTerminalQuickCommandHostOptions(settings, runtimeEnvironments)
 
   const [editor, setEditor] = useState<EditorState>(null)
-  const consumedAddIntentSignalRef = useRef(0)
-  // Why: `null` means "show all" (sticky-all), independent of the current repo
-  // list — mirrors the tasks-page repo combobox so newly added repos appear
-  // automatically rather than being silently excluded.
+  const [consumedAddIntentSignal, setConsumedAddIntentSignal] = useState(0)
+  // Null means sticky All so newly added repos appear automatically, matching Tasks filtering.
   const [scopeSelection, setScopeSelection] = useState<ReadonlySet<string> | null>(null)
   const [scopePopoverOpen, setScopePopoverOpen] = useState(false)
   const [query, setQuery] = useState('')
@@ -179,10 +177,7 @@ export function QuickCommandsPane({
   const visibleCommands = searchTerminalQuickCommands(scopedCommands, query)
 
   const createDraftForCurrentFilter = useCallback((): TerminalQuickCommand => {
-    // Why: when the user has narrowed to a single repo scope, the natural
-    // intent for "Add Command" is to create one in that repo. When the filter
-    // is narrowed to Global-only, honor that. Otherwise prefer the active
-    // workspace repo; fall back to global when there's no active repo.
+    // Create in a sole selected repo/global scope; otherwise prefer the active repo, then global.
     if (!showAll) {
       const selectedRepoIds = [...effectiveSelection].filter((key) => key !== GLOBAL_SCOPE_KEY)
       if (selectedRepoIds.length === 1 && !effectiveSelection.has(GLOBAL_SCOPE_KEY)) {
@@ -201,11 +196,10 @@ export function QuickCommandsPane({
   const intentSignal = addCommandIntentSignal
   if (
     typeof intentSignal === 'number' &&
-    shouldOpenQuickCommandAddIntent(intentSignal, consumedAddIntentSignalRef.current)
+    shouldOpenQuickCommandAddIntent(intentSignal, consumedAddIntentSignal)
   ) {
-    // Why: Settings deep-links use this one-shot signal to open the add dialog;
-    // consume it before paint so the pane never flashes without the editor.
-    consumedAddIntentSignalRef.current = intentSignal
+    // Consume deep-link add intent before paint so the editor opens without a pane-only flash.
+    setConsumedAddIntentSignal(intentSignal)
     setEditor({
       mode: 'add',
       command: createDraftForCurrentFilter(),
@@ -217,8 +211,7 @@ export function QuickCommandsPane({
   const toggleScope = (key: string): void => {
     const current = new Set(effectiveSelection)
     if (current.has(key)) {
-      // Why: forbid the empty selection — every command would disappear and
-      // there'd be no signal that the filter caused it.
+      // Keep at least one scope; an empty set would hide every command without explanation.
       if (current.size <= 1) {
         return
       }
@@ -231,8 +224,7 @@ export function QuickCommandsPane({
 
   const handleSelectAll = (): void => {
     if (showAll) {
-      // Why: tasks-page parity — clicking "All" while everything is selected
-      // collapses to a single scope rather than emitting an empty set.
+      // Match Tasks: clicking active All collapses to Global instead of an empty set.
       setScopeSelection(new Set([GLOBAL_SCOPE_KEY]))
       return
     }

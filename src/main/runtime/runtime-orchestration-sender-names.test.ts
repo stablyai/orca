@@ -1,6 +1,5 @@
-// A sender's name snapshot, read from the sources production fills: dispatch tasks in the
-// orchestration database, the chat tabs and terminal tabs of the workspace session this host
-// mirrors, and the terminal's own pty.
+import { agentSessionConversationView } from '../../shared/agent-session-conversation-view'
+// Name senders from production-owned Dispatch tasks, mirrored workspace chat/terminal tabs and PTY records.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
@@ -151,7 +150,13 @@ beforeEach(() => {
   records = new Map([[CHAT, { ...base, location: { ...base.location, workspaceId: WORKTREE } }]])
   hostRef.current = {
     deps: {
-      store: { getRecord: (id: string) => records.get(id) ?? null, listRecords: () => [] }
+      store: {
+        getConversation: (id: string) => {
+          const record = records.get(id)
+          return record ? agentSessionConversationView(record) : null
+        },
+        listConversations: () => []
+      }
     }
   }
 })

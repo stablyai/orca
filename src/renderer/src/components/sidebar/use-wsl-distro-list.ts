@@ -1,11 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { WslHostDistro } from '../../../../shared/wsl-host-types'
 
-/**
- * The registered WSL distros while the add dialog is open. Re-read when the window regains focus
- * or becomes visible (a distro imported meanwhile shows up) and on demand; never on a timer, since
- * each read spawns reg.exe and `wsl.exe --list --running`.
- */
+/** Refresh WSL distros on focus, visibility or demand; avoid polling that repeatedly spawns Windows processes. */
 export function useWslDistroList(enabled: boolean): {
   distros: WslHostDistro[]
   loading: boolean

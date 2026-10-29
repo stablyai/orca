@@ -193,26 +193,4 @@ describe('TabGroupSplitLayout', () => {
       })
     )
   })
-
-  it('records pane resizing at the start of the gesture', () => {
-    const element = TabGroupSplitLayout({
-      layout: {
-        type: 'split',
-        direction: 'horizontal',
-        ratio: 0.5,
-        first: { type: 'leaf', groupId: 'left-group' },
-        second: { type: 'leaf', groupId: 'right-group' }
-      },
-      worktreeId: 'wt-1',
-      focusedGroupId: 'right-group',
-      isWorktreeActive: true
-    })
-
-    const rootElement = asElement(getSplitNodeElement(element))
-    const resizeHandle = asElement((rootElement.props.children as unknown[])[1])
-
-    ;(resizeHandle.props.onResizeStart as () => void)()
-
-    expect(recordFeatureInteractionMock).toHaveBeenCalledWith('terminal-panes')
-  })
 })

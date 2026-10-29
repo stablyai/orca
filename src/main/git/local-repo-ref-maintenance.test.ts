@@ -49,9 +49,7 @@ afterEach(() => {
 
 describe('local repo ref maintenance target', () => {
   it('never hands the pack child an abort signal', async () => {
-    // Killing a `pack-refs` strands a `refs/**` lock about one time in five, and
-    // on Windows a force-kill inside the rewrite strands `packed-refs.lock`
-    // every time. The child must always be allowed to finish.
+    // Killing pack-refs can strand packed-refs or per-ref locks; let the child finish.
     readRepoCommonDirFromGitMock.mockResolvedValue('/repo/.git')
     gitExecFileAsyncMock.mockResolvedValue({ stdout: '', stderr: '' })
 
@@ -117,7 +115,6 @@ describe('local repo ref maintenance target', () => {
   })
 
   it('translates a WSL repo answer back to the UNC path the main process can open', async () => {
-    // Git answers in its own execution space, which for WSL is a Linux path.
     readRepoCommonDirFromGitMock.mockResolvedValue('/home/dev/repo/.git')
 
     await expect(target('Ubuntu').resolveRefsDirectory(NO_ABORT)).resolves.toBe(
@@ -151,7 +148,6 @@ describe('local repo ref maintenance scheduling', () => {
   })
 
   it('is free when nothing has ever been armed', async () => {
-    // The common case by far: no timers, no instance, no reason to pay anything.
     await expect(withRepoRefMaintenancePaused('git-fetch', async () => 'done')).resolves.toBe(
       'done'
     )

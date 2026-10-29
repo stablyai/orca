@@ -35,7 +35,7 @@ export type ProfileStateJsonRecovery = {
   removedDatabaseFiles: readonly string[]
 }
 
-/** Restore an explicitly selected JSON export after preserving a failed SQLite authority. */
+/** Preserve failed SQLite authority before restoring the explicitly selected JSON export. */
 export function restoreProfileStateJsonExport(
   options: ProfileStateJsonRecoveryOptions
 ): ProfileStateJsonRecovery {
@@ -60,7 +60,7 @@ export function restoreProfileStateJsonExport(
     recoveryFiles
   )
 
-  // Invalidate authority-dependent caches while the database and recovery exports still exist.
+  // Invalidate caches before removing database/export evidence.
   options.beforeRestore?.()
   mkdirSync(dirname(options.dataFile), { recursive: true })
   writeFileDurableSync(durableWriteTempPath(options.dataFile), options.dataFile, rawJson)
@@ -71,8 +71,7 @@ export function restoreProfileStateJsonExport(
   for (const path of removedDatabaseFiles) {
     rmSync(path)
   }
-  // Removing the reserved exports completes the authority transition back to JSON. Keeping one
-  // would make established startup correctly reject the restored legacy state as a stale mirror.
+  // Reserved exports must go or startup would reject restored JSON as a stale mirror.
   const retainedArtifacts = [...retainedBackups, ...retainedExports]
   for (const path of retainedArtifacts) {
     if (path !== options.exportPath) {

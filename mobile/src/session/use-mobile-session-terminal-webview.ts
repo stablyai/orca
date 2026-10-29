@@ -28,7 +28,7 @@ export function useMobileSessionTerminalWebview(scope: MobileSessionTabSwitching
     notifyTerminalFrameHeight,
     notifyTerminalFrameWidth
   } = scope
-  // Why: only store the ref; subscribe on web-ready to avoid the blank-terminal race (init queued before xterm.js loaded).
+  // Store the ref but subscribe only after web-ready so init cannot precede xterm loading.
   const setTerminalWebViewRef = useCallback((handle: string, ref: TerminalWebViewHandle | null) => {
     terminalDiagnosticsRef.current.webViewRef(handle, ref != null)
     if (ref) {
@@ -56,18 +56,17 @@ export function useMobileSessionTerminalWebview(scope: MobileSessionTabSwitching
         handle === activeHandleRef.current
       )
       if (wasAlreadyReady && initializedHandlesRef.current.has(handle)) {
-        // Why: WebView reloaded (hot reload / Android churn); old xterm buffer is gone, so resubscribe for a fresh scrollback.
+        // Reload loses the xterm buffer; request fresh scrollback.
         unsubscribeTerminal(handle)
         if (handle === activeHandleRef.current) {
           subscribeToTerminal(handle)
         }
         return
       }
-      // Why: a just-created tab can lose activeHandleRef to a lagging snapshot; honor the pending marker so its web-ready subscribe still fires.
+      // Lagging snapshots can clear a new tab’s active handle; its pending marker still authorizes ready subscribe.
       const isIntendedActive =
         handle === activeHandleRef.current ||
         pendingSelectionWantsHandle(pendingSelectionRef.current, handle)
-      // Why: web-ready carried the cell box xterm laid out, so subscribeToTerminal sizes this subscribe.
       if (isIntendedActive && !terminalUnsubsRef.current.has(handle)) {
         subscribeToTerminal(handle)
       }
@@ -82,19 +81,17 @@ export function useMobileSessionTerminalWebview(scope: MobileSessionTabSwitching
     }
   }, [activeHandleRef, pendingSelectionRef, subscribeToTerminal, terminalUnsubsRef])
 
-  /** The terminal frame React Native laid out: kept in the one frame ref, then what it changed. */
   const notifyTerminalFrame = useCallback(
     (frame: TerminalFrame) => {
-      // Why: notify height imperatively so dock settling re-fits the PTY without rerendering SessionScreen.
+      // Imperative frame-height notification refits the PTY without rerendering SessionScreen.
       notifyTerminalFrameHeight(Math.round(frame.height))
-      // Why: the page reports a hidden frame as 0x0; it keeps the box it was laid out at.
+      // Hidden pages report 0x0; preserve their last laid-out box.
       if (frame.width <= 0) {
         return
       }
       const previous = terminalFrameRef.current
       terminalFrameRef.current = frame
       if (!previous) {
-        // Why: a ready document held back for its frame subscribes on the first layout.
         subscribeIntendedActiveTerminal()
       } else if (frame.width !== previous.width) {
         notifyTerminalFrameWidth()

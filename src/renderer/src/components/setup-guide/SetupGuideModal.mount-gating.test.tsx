@@ -152,7 +152,7 @@ describe('SetupGuideModal mount gating', () => {
     expect(testContainer.querySelector('[data-setup-guide-dialog="true"]')).toBeNull()
     expect(activeContentSubscriptions()).toBe(1)
     expect(contentProbe.telemetryOpenStates).toHaveBeenLastCalledWith(false)
-    // Why: dropping progress inputs mid-fade would flip completed rows back to "not done yet".
+    // Retain progress inputs mid-fade so completed rows cannot flash incomplete.
     expect(contentProbe.refreshEnabledStates).toHaveBeenLastCalledWith(true)
 
     await act(async () => vi.advanceTimersByTimeAsync(299))
@@ -183,9 +183,7 @@ describe('SetupGuideModal mount gating', () => {
     expect(testContainer.querySelector('[data-setup-guide-dialog="true"]')).not.toBeNull()
     expect(activeContentSubscriptions()).toBe(1)
 
-    // Why: an uncancelled timer from the first close would have already cleared the
-    // linger flag, collapsing this second close into a synchronous unmount that
-    // reports 'interrupted' instead of 'dismissed'.
+    // An uncanceled first-close timer would collapse this later close and report Interrupted instead of Dismissed.
     await act(async () => useAppStore.getState().closeModal())
     expect(activeContentSubscriptions()).toBe(1)
     await act(async () => vi.advanceTimersByTimeAsync(299))

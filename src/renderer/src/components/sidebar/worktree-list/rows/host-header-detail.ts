@@ -4,7 +4,7 @@ import type { HostHeaderRow } from '../../../../../../shared/sidebar-list/host-s
 export function getHostHeaderDetail(
   row: Pick<HostHeaderRow, 'health' | 'blockedReason' | 'connectionStatus' | 'kind' | 'detail'>
 ): { text: string; isWarning: boolean } | null {
-  // Why: a host that revoked this client's pairing needs a new link, not an update.
+  // Revoked pairing requires a new link rather than a host update.
   if (row.health === 'blocked' && row.blockedReason === 'access-revoked') {
     return {
       text: translate(
@@ -14,14 +14,14 @@ export function getHostHeaderDetail(
       isWarning: true
     }
   }
-  // Why: a blocked compatibility verdict earns a compact warning so the host stands out.
+  // Warn compactly when compatibility blocks a host.
   if (row.health === 'blocked') {
     return {
       text: translate('auto.components.sidebar.WorktreeList.7a8b9c0d1e', 'Update required'),
       isWarning: true
     }
   }
-  // Why: auth-failed needs a worded status; the health icon alone doesn't tell the user to re-auth.
+  // Name authentication failure because the health icon cannot explain how to recover.
   if (row.connectionStatus === 'auth-failed') {
     return {
       text: translate(
@@ -37,7 +37,7 @@ export function getHostHeaderDetail(
       isWarning: false
     }
   }
-  // Why: show the transport detail only for remote hosts; it's noise under the local label.
+  // Transport details add context only for remote hosts.
   if (row.kind !== 'local') {
     return { text: row.detail, isWarning: false }
   }

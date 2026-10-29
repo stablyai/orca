@@ -27,16 +27,13 @@ export function registerOrcaRuntimeHeadlessHydrationRepoGateTests(): void {
     }
   }
 
-  // The repo gate (#9343) skips persisted session keys whose repo is gone. These
-  // pin the two ways that gate must not overreach.
+  // #9343: skip sessions for removed repos without treating unavailable inventory as universal removal.
   describe('headless mobile session hydration repo gate', () => {
     it('hydrates when the store cannot report repos at all', async () => {
       const runtime = new OrcaRuntimeService({
         getWorkspaceSession: () => makeSession(WORKTREE_ID)
       } as never)
 
-      // No getRepos on the store: an unavailable inventory must not read as
-      // "every repo is gone" and silently drop every persisted tab.
       const result = await runtime.listMobileSessionTabs(`id:${WORKTREE_ID}`)
       expect(result.tabs.length).toBeGreaterThan(0)
     })
@@ -55,13 +52,11 @@ export function registerOrcaRuntimeHeadlessHydrationRepoGateTests(): void {
       const getRepos = vi.fn(() => [{ id: REPO_ID, path: '/repo', name: 'repo' }])
       const runtime = new OrcaRuntimeService({
         getWorkspaceSession: () => makeSession(FLOATING_TERMINAL_WORKTREE_ID),
-        // A separator-less id is validated against getRepo (singular) first.
         getRepo: () => null,
         getRepos
       } as never)
 
-      // Floating terminals carry no `repoId::path` identity, and this hydrate runs
-      // on a hot poll path — it must not enumerate repos.
+      // Floating terminals lack repo-derived identity; never enumerate repos on this hot poll path.
       await runtime.listMobileSessionTabs(`id:${FLOATING_TERMINAL_WORKTREE_ID}`)
       expect(getRepos).not.toHaveBeenCalled()
     })

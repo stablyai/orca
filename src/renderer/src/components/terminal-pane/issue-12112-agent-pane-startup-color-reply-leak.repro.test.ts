@@ -6,17 +6,7 @@ import { installTerminalCapabilityReplyHandlers } from './terminal-capability-re
 import { createIpcPtyTransport } from './pty-transport'
 import type { PtyTransport } from './pty-transport-types'
 
-// Regression for #12112: a NEW opencode agent tab on Linux prints the literal
-// `10;rgb:ffff/ffff/ffff` / `11;rgb:2828/2c2c/3434` text and opencode never
-// initializes, while a plain Ctrl+T tab running the same program is clean.
-//
-// The divergence is the main-side PtyStartupIngress: only agent panes arm it
-// (terminal-startup-color-query-replies.ts), and on `posix-pty` it answers the
-// query synchronously inside node-pty's onData — before the querying program
-// has finished entering raw mode — with no echo suppression. The suppression
-// exists but is gated on `ownerBackend === 'windows-conpty'`
-// (pty-startup-ingress.ts:26-29, 247-252), so the cooked-mode echo of Orca's
-// own reply is forwarded to the renderer verbatim and rendered as text.
+// Guard agent startup color replies against cooked-mode echo leaks; plain tabs and agent ingress must deliver replies without rendering them.
 
 // opencode/OpenTUI's unconditional startup burst (BEL-terminated, not ST).
 const OPENCODE_STARTUP_QUERY_BURST = '\x1b]10;?\x07\x1b]11;?\x07\x1b]4;0;?\x07'
@@ -29,12 +19,7 @@ const LEAKED_COLOR_REPLY_TEXT = /\d\d;rgb:[0-9a-f]{4}\//
 const PTY_ID = 'pty-12112'
 let dispatchPtyData: (payload: { id: string; data: string }) => void = () => {}
 
-/**
- * bash/readline echo projection: `\e]` is an unbound binding, so readline eats
- * ESC + `]` and beeps, then self-inserts the rest; the ST is eaten the same way.
- * Verified against a real `bash --norc -i` behind node-pty, and it reproduces
- * the reported string exactly once rendered by xterm.
- */
+/** Model measured readline echo: unbound ESC ]/ST are swallowed while the reply payload renders as literal text. */
 function readlineEchoOf(reply: string): string {
   return reply.replaceAll('\x1b]', '\x07').replaceAll('\x1b\\', '')
 }
@@ -48,14 +33,7 @@ type StartupTty = {
   emitStartupBurst: () => void
 }
 
-/**
- * Models the single fact that decides this bug: the tty is still line
- * disciplined (shell prompt / program mid-`tcsetattr`) during the turn that
- * carries the startup burst, and raw immediately after. A writer answering
- * synchronously inside that turn is echoed; one answering a turn later reaches
- * the program. Both arms of this test share this exact model, so the divergence
- * comes from Orca's code, not from the harness.
- */
+/** Model cooked tty during startup callback and raw tty immediately after; both arms share the same echo timing. */
 function createStartupTty(): StartupTty {
   let raw = false
   let received = ''
@@ -66,12 +44,7 @@ function createStartupTty(): StartupTty {
         received += data
         return
       }
-      // A cooked-mode master write is BOTH echoed and delivered: ECHO copies the bytes
-      // to the master without consuming them from the slave's input queue, so a program
-      // arming raw mode with TCSANOW/TCSADRAIN (libuv's setRawMode, hence every Node
-      // agent) still reads them. Measured on a real pty: TCSANOW receives the reply,
-      // only TCSAFLUSH discards it. The leak #12112 reported is the ECHO, which the
-      // projections below suppress — not a delivery failure.
+      // ECHO copies master writes without consuming slave input; TCSANOW/TCSADRAIN preserve delivery, while TCSAFLUSH discards it.
       received += data
       sink(readlineEchoOf(data))
     },
@@ -81,8 +54,7 @@ function createStartupTty(): StartupTty {
     },
     emitStartupBurst: () => {
       sink(OPENCODE_STARTUP_QUERY_BURST)
-      // Why microtask: opencode finishes entering raw mode essentially at once,
-      // but not inside its writer's synchronous callback.
+      // Enter raw mode just after the synchronous startup writer callback.
       queueMicrotask(() => {
         raw = true
       })
@@ -173,9 +145,7 @@ describe('#12112 opencode startup OSC 10/11 replies on the local path', () => {
     const tty = createStartupTty()
     stubPtyApi(tty)
     const pane = await createRendererPane()
-    // A Ctrl+T tab has no launch agent, so shouldReplyToStartupTerminalColorQueries
-    // (terminal-startup-color-query-replies.ts) is false, main arms no startup
-    // ingress, and the pane's own xterm is the sole responder.
+    // Plain tabs have no main startup ingress; xterm alone answers their probes.
     expect(isTuiAgent(undefined)).toBe(false)
     tty.onPtyOutput(pane.deliver)
 
@@ -196,8 +166,7 @@ describe('#12112 opencode startup OSC 10/11 replies on the local path', () => {
     stubPtyApi(tty)
     const pane = await createRendererPane()
 
-    // opencode is a TUI agent, so main arms spawnOptions.startupIngress for this
-    // pane and only this pane (pty.ts:4024, terminal-startup-color-query-replies.ts).
+    // TUI agent launches arm main startup ingress.
     expect(isTuiAgent('opencode')).toBe(true)
     const ingress = new PtyStartupIngress({
       intent: { colors: ORCA_TERMINAL_THEME, deadlineMs: 5_000 },
@@ -221,10 +190,7 @@ describe('#12112 opencode startup OSC 10/11 replies on the local path', () => {
   })
 
   it('renders no reply text when the tty echo is coalesced with program output', () => {
-    // The reported topology: the agent is launched by writing `opencode\n` into an
-    // interactive shell, so bash's echo of Orca's reply shares a read with the shell's
-    // own echo and the agent's first frame. It is never at the head of a chunk, and a
-    // read carrying no echo at all comes first.
+    // Coalesce bash reply echoes with shell/program output after an initial echo-free read; echoes need not start a chunk.
     vi.useFakeTimers()
     const echoLayouts = [
       (replies: readonly string[]) =>
@@ -255,8 +221,7 @@ describe('#12112 opencode startup OSC 10/11 replies on the local path', () => {
   })
 
   it('suppresses its own cooked echo on POSIX and ConPTY', () => {
-    // No xterm, no transport: the asymmetry alone, with each backend's observed
-    // cooked echo handed straight back the way its line discipline would.
+    // Exercise backend cooked echoes directly without xterm or transport adaptation.
     vi.useFakeTimers()
     const forward = (ownerBackend: 'posix-pty' | 'windows-conpty') => {
       const echoOf =
@@ -275,8 +240,7 @@ describe('#12112 opencode startup OSC 10/11 replies on the local path', () => {
         onEmission: (emission) => emitted.push(emission.data)
       })
       ingress.accept(OPENCODE_STARTUP_QUERY_BURST)
-      // Why: the posix write is deferred, so draining first would make this arm
-      // assert on a stream where no reply was ever sent.
+      // Drain the deferred POSIX write before asserting, or this arm would see no sent reply.
       vi.advanceTimersByTime(0)
       ingress.drainAndClose()
       return { visible: emitted.join(''), writes }

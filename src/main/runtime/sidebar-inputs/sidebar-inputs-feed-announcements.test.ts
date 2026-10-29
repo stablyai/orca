@@ -1,11 +1,8 @@
-// The announcement census (design §9.4): every domain names the writers of what it reads, and each
-// writer, called through the real store, announces a change. No domain is re-read on a phone read.
+// Exercise every domain's real store writers and announcements (design §9.4); phone reads must not re-read domains.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeClientEvent } from '../../../shared/runtime-client-events'
 import type { Repo } from '../../../shared/repo-types'
 import type { PRInfo } from '../../../shared/github/pull-request-types'
-import type { ResolvedWorktree } from '../runtime-worktree-path-identity'
-import type { RuntimeStore } from '../runtime-store-contract'
 import type { WslHostService } from '../../wsl/wsl-host-service'
 import { setWslHostService } from '../../wsl/wsl-host-service-instance'
 import { getGitHubPRCacheKeyCandidates } from '../../../shared/github/github-cache-key'
@@ -94,13 +91,11 @@ async function host() {
     workspaceRows: {
       revision: revisions.rows,
       snapshot: () => ({ revision: 0, rows: {} }),
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: review facts read only these fields.
-      resolvedWorktrees: () => [worktree as unknown as ResolvedWorktree],
+      resolvedWorktrees: () => [worktree],
       ready: async () => {}
     } as unknown as SidebarInputsFeedSources['workspaceRows'],
     repoIcons: { idsByRepo: () => ({}) },
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the real Store is a RuntimeStore.
-    store: () => store as unknown as RuntimeStore,
+    store: () => store,
     onClientEvent: (listener) => {
       clientEvents.add(listener)
       return () => clientEvents.delete(listener)

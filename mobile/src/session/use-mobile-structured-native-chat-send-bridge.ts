@@ -1,17 +1,25 @@
 import { useCallback } from 'react'
 import type { StructuredAgentId } from '../../../src/shared/agent-session-provider-handle'
+import type { AgentSessionSlashCommand } from '../../../src/shared/agent-session-wire'
 import { isStructuredAgentSessionComposerCommand } from '../../../src/shared/structured-agent-session-composer'
-import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
-import type { MobileNativeChatSendOrigin } from './use-mobile-native-chat-drafts'
+import type { MobileNativeChatSendOutcome } from './native-chat/mobile-native-chat-send'
+import type { MobileNativeChatSendOrigin } from './native-chat/mobile-native-chat-pending-echo'
 import type { StructuredMobileSendAttachment } from './use-mobile-structured-send-with-outcome'
+import type { AgentJournalSkillRef } from '../../../src/shared/agent-session-journal-types'
+import {
+  readMobileNativeChatPickedSkills,
+  restoreMobileNativeChatPickedSkills
+} from './native-chat/composer/mobile-native-chat-draft-store'
 
 export function useMobileStructuredNativeChatSendBridge(args: {
   agent: StructuredAgentId | undefined
+  sessionCommands?: readonly AgentSessionSlashCommand[]
   sendStructured: (
     text: string,
     images?: string[],
     deadline?: number,
-    attachments?: readonly StructuredMobileSendAttachment[]
+    attachments?: readonly StructuredMobileSendAttachment[],
+    skills?: readonly AgentJournalSkillRef[]
   ) => Promise<MobileNativeChatSendOutcome>
   captureSendOrigin: (text: string) => MobileNativeChatSendOrigin | null
   clearDraftForSend: (origin: MobileNativeChatSendOrigin, text: string) => void
@@ -32,7 +40,8 @@ export function useMobileStructuredNativeChatSendBridge(args: {
     clearDraftForSend,
     onSendError,
     restoreRejectedDraft,
-    sendStructured
+    sendStructured,
+    sessionCommands
   } = args
   const sendWithOutcome = useCallback(
     async (
@@ -46,24 +55,26 @@ export function useMobileStructuredNativeChatSendBridge(args: {
         onSendError('Message not sent (disconnected)')
         return 'rejected'
       }
-      const isHostCommand = isStructuredAgentSessionComposerCommand(text, agent)
+      const isHostCommand = isStructuredAgentSessionComposerCommand(text, agent, sessionCommands)
+      const skills = readMobileNativeChatPickedSkills(origin.draftKey)
       clearDraftForSend(origin, text)
-      const outcome =
-        attachments !== undefined
-          ? await sendStructured(text, images, deadline, attachments)
-          : deadline !== undefined
-            ? await sendStructured(text, images, deadline)
-            : images !== undefined
-              ? await sendStructured(text, images)
-              : await sendStructured(text)
-      // The structured session draws or holds a message the host took; a command's lost answer
-      // comes back instead.
+      const outcome = await sendStructured(text, images, deadline, attachments, skills)
+      // Accepted messages remain host-owned; restore commands whose reply was lost.
       if (outcome === 'rejected' || (outcome === 'unknown' && isHostCommand)) {
         restoreRejectedDraft(origin, text)
+        restoreMobileNativeChatPickedSkills(origin.draftKey, skills)
       }
       return outcome
     },
-    [agent, captureSendOrigin, clearDraftForSend, onSendError, restoreRejectedDraft, sendStructured]
+    [
+      agent,
+      captureSendOrigin,
+      clearDraftForSend,
+      onSendError,
+      restoreRejectedDraft,
+      sendStructured,
+      sessionCommands
+    ]
   )
   const send = useCallback(
     async (

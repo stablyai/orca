@@ -11,8 +11,7 @@ vi.mock('./runner', () => ({
 
 const gitExecFileAsyncMock = vi.mocked(gitExecFileAsync)
 
-/** check-ignore echoes back every stdin path present in `ignored` (all requested
- *  when unset); exit code 1 with empty stdout means "none ignored". */
+/** Unset input ignores every requested path; exit 1 with empty stdout means none ignored. */
 function mockCheckIgnore(ignored?: string[]): void {
   gitExecFileAsyncMock.mockImplementation(async (args, execOptions) => {
     if (!args.includes('check-ignore')) {
@@ -94,7 +93,6 @@ describe('resolveWorktreeIncludePaths', () => {
     writeFileSync(join(repo, '.env'), 'A=1')
     mockCheckIgnore(['.env'])
 
-    // node_modules absent (not installed yet) → not stat-able → not requested from git.
     await expect(resolveWorktreeIncludePaths(repo)).resolves.toEqual(['.env'])
   })
 

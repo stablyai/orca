@@ -1,8 +1,11 @@
 import { isAbsolute, resolve } from 'node:path'
-import { parse, stringify } from 'devalue'
 import type { PoolOptions, PoolWorker, WorkerRequest } from 'vitest/node'
 import { spawnProcess } from '@orca/process-host'
 import type { ChildProcessHandle } from '@orca/process-host/process-spec'
+import {
+  decodeNodeRuntimeMessage,
+  encodeNodeRuntimeMessage
+} from './vitest-node-runtime-ipc-codec.mjs'
 
 class NodeRuntimeWorker implements PoolWorker {
   readonly name = 'node-runtime'
@@ -63,14 +66,14 @@ class NodeRuntimeWorker implements PoolWorker {
   }
 
   send(message: WorkerRequest): void {
-    this.worker.send(stringify(message))
+    this.worker.send(encodeNodeRuntimeMessage(message))
   }
 
   deserialize(data: unknown): unknown {
     if (typeof data !== 'string') {
       throw new Error('Invalid Node Vitest worker message')
     }
-    return parse(data)
+    return decodeNodeRuntimeMessage(data)
   }
 
   async stop(): Promise<void> {

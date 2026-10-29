@@ -17,12 +17,11 @@ export function attachControlResponseReader(
   onResponse: (response: RpcResponse) => void,
   remainder: Buffer = Buffer.alloc(0)
 ): () => void {
-  // Why: control responses may contain terminal/startup data with multibyte
-  // text; keep incomplete UTF-8 bytes until the next socket chunk.
+  // Preserve multibyte UTF-8 sequences split across socket chunks.
   const decoder = new StringDecoder('utf8')
   const parser = createNdjsonParser(
     (msg) => onResponse(msg as RpcResponse),
-    () => {} // Ignore parse errors on control socket
+    () => {}
   )
 
   const onData = (chunk: Buffer) => parser.feed(decoder.write(chunk))
@@ -47,8 +46,7 @@ export function attachStreamEventReader(
     const reader = createBinaryStreamFrameReader(onEvent, (error) => socket.destroy(error))
     return attachTurnBoundedSocketReader(socket, (chunk) => reader.feed(chunk), remainder)
   }
-  // Why: PTY output streams include emoji/box-drawing tables; socket chunks
-  // can split those UTF-8 sequences across packets.
+  // PTY output can split multibyte UTF-8 sequences across socket chunks.
   const decoder = new StringDecoder('utf8')
   const parser = createNdjsonParser(
     (msg) => {
@@ -57,7 +55,7 @@ export function attachStreamEventReader(
         onEvent(event)
       }
     },
-    () => {} // Ignore parse errors on stream socket
+    () => {}
   )
   return attachTurnBoundedSocketReader(
     socket,

@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ProcessResult, ProcessSpec } from '@orca/process-host/process-spec'
 import {
   assertClipboardTextWriteWithinLimitWithYield,
+  CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS,
   CLIPBOARD_TEXT_WRITE_MAX_BYTES
 } from '../../shared/clipboard-text'
 import { createClipboardTextPublisher } from './clipboard-text-publisher'
@@ -124,6 +125,37 @@ describe('terminal clipboard writes', () => {
       await expect(writer(true, validate)(text)).rejects.toThrow('Clipboard text must be a string')
       expect(validate).not.toHaveBeenCalled()
       expect(run).not.toHaveBeenCalled()
+    }
+  )
+
+  it.each([false, true])(
+    'keeps a newer copy after yielding validation (Wayland=%s)',
+    async (wayland) => {
+      vi.useFakeTimers()
+      try {
+        const copy = writer(wayland)
+        const large = 'x'.repeat(CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS * 2)
+        const first = copy(large, 'terminal')
+        const second = copy('newer', 'ordinary')
+
+        await vi.runAllTimersAsync()
+        await Promise.all([first, second])
+
+        if (wayland) {
+          expect(run.mock.calls.map(([spec]) => spec.input === large)).toEqual([true, false])
+          expect(run.mock.calls[1]?.[0].input).toBe('newer')
+          expect(write).not.toHaveBeenCalled()
+        } else {
+          expect(write.mock.calls.map(([text, kind]) => [text === large, kind])).toEqual([
+            [true, 'terminal'],
+            [false, 'ordinary']
+          ])
+          expect(write.mock.calls[1]?.[0]).toBe('newer')
+          expect(run).not.toHaveBeenCalled()
+        }
+      } finally {
+        vi.useRealTimers()
+      }
     }
   )
 

@@ -15,11 +15,7 @@ import {
   type AccountOwner
 } from '@/lib/wsl-host-account-owner'
 
-/**
- * Runtime target that owns `worktreeId`, which is not always the globally
- * focused runtime — acting on the focused one scans the wrong host and reports
- * that workspace as having no ports. Direct-SSH owners return null.
- */
+/** Target the workspace owner rather than the focused host or port scans hit the wrong machine. Direct-SSH owners return null. */
 export function useWorktreeRuntimeTarget(
   worktreeId: string | null | undefined
 ): RuntimeClientTarget | null {
@@ -35,7 +31,7 @@ export function useFileOwnerRuntimeTarget(
   worktreeId: string | null | undefined,
   runtimeEnvironmentId: string | null | undefined
 ): RuntimeClientTarget | null {
-  // Why a string: a fresh target object per store write would re-render on every change.
+  // Fresh target objects would rerender on every store write; select a stable string.
   const ownerKey = useAppStore((state) => {
     const target = getRuntimeTargetForFileOwner(state, worktreeId, runtimeEnvironmentId)
     return target ? (target.kind === 'environment' ? target.environmentId : '') : null
@@ -48,7 +44,7 @@ export function useFileOwnerRuntimeTarget(
 
 /** {@link getActiveWorkspaceOwnerTarget}, else `fallback`; stable across renders. */
 export function useActiveWorkspaceOwnerTarget(fallback: RuntimeClientTarget): RuntimeClientTarget {
-  // Why a string: a fresh target object per store write would re-render on every change.
+  // Fresh target objects would rerender on every store write; select a stable string.
   const ownerKey = useAppStore((state) => {
     const target = getActiveWorkspaceOwnerTarget(state)
     return target ? (runtimeTargetEnvironmentId(target) ?? '') : null

@@ -1,6 +1,4 @@
-// The markup editor's document plus its in-flight pointer gesture, advanced by
-// pure transitions. Keeping both in one value lets a release commit from the
-// latest state, and keeps the transitions safe to run twice under StrictMode.
+// Keep document and gesture in one pure state so releases see current ink and transitions tolerate StrictMode replay.
 
 import {
   canRedo,
@@ -22,8 +20,7 @@ import {
 
 export type DraggedShape = Exclude<MarkupShape, TextShape>
 
-// Why pointerId: a second pointer (another finger) must not restart or steer a
-// gesture the first one owns.
+// A second pointer must not restart or steer the first pointer’s gesture.
 export type MarkupGesture =
   | { kind: 'draw'; pointerId: number; shape: DraggedShape }
   | {
@@ -60,8 +57,7 @@ export function beginEraseGesture(
   if (settled.gesture) {
     return settled
   }
-  // Why: a click takes only the mark on top. Leaving the slop makes it a drag,
-  // and that sweep starts at the press point, so it takes the rest under it too.
+  // Clicks erase only topmost ink; crossing the slop starts a sweep from the original press, erasing underlying marks too.
   const topmost = topmostShapeAt(settled.doc.shapes, point, measureTextInkBox)
   return {
     ...settled,
@@ -76,9 +72,7 @@ export function beginEraseGesture(
   }
 }
 
-// Why: a pointer cannot press twice without releasing, so a press from the
-// gesture's own pointer means its release was lost; settle it as that release
-// would have, instead of letting it block the new press and steer from a stale point.
+// A repeated press from the owning pointer implies a lost release; settle it before starting the new gesture.
 function settleMissedRelease(state: MarkupEditorState, pointerId: number): MarkupEditorState {
   return state.gesture?.pointerId === pointerId ? endGesture(state, pointerId) : state
 }
@@ -111,8 +105,7 @@ export function moveGesture(
   return { ...state, gesture: { ...gesture, shape: dragShapeTo(gesture.shape, point) } }
 }
 
-// Commits the gesture as one undoable step. A gesture with no visible result
-// leaves history untouched so Undo never has a step with no visible effect.
+// Commit as one undo step; invisible gestures leave history untouched.
 export function endGesture(state: MarkupEditorState, pointerId: number): MarkupEditorState {
   const { doc, gesture } = state
   if (gesture?.pointerId !== pointerId) {
@@ -128,17 +121,12 @@ export function endGesture(state: MarkupEditorState, pointerId: number): MarkupE
   }
 }
 
-// Why: a cancelled pointer (an OS gesture or palm rejection took it) was not a
-// deliberate release, so its gesture is discarded rather than committed.
+// OS cancellation or palm rejection is not a deliberate release; discard the gesture.
 export function cancelGesture(state: MarkupEditorState, pointerId: number): MarkupEditorState {
   return state.gesture?.pointerId === pointerId ? { ...state, gesture: null } : state
 }
 
-// Why: Undo mid-gesture takes back only that gesture, as the newest step, so the
-// next Undo takes back the last committed mark rather than both at once. A gesture
-// that shows nothing yet (an erase hiding nothing, an unmoved shape press) is no
-// step, so Undo goes to the document. Either way the gesture is dropped, so the
-// rest of that drag does nothing until the next press.
+// Undo visible held ink before committed history; drop the gesture either way so the remaining drag cannot change the result.
 export function undoMarkup(state: MarkupEditorState): MarkupEditorState {
   if (gestureHasEffect(state.gesture)) {
     return { ...state, gesture: null }
@@ -158,8 +146,7 @@ function gestureHasEffect(gesture: MarkupGesture | null): boolean {
   return gesture.kind === 'draw' ? !hasNoSize(gesture.shape) : gesture.erasedIds.size > 0
 }
 
-// Why: a rectangle, ellipse or arrow pressed without dragging paints nothing; saved,
-// it would be an invisible topmost mark that soaks up the next eraser click there.
+// Unmoved non-pen shapes paint nothing and would invisibly intercept the next eraser click.
 function hasNoSize(shape: DraggedShape): boolean {
   return (
     shape.kind !== 'pen' &&
@@ -196,8 +183,7 @@ function sweepEraser(
     point,
     measureTextInkBox
   )
-  // Why: keep the same Set when nothing new was hit so the cached canvas layer
-  // is not re-rasterized on every pointermove.
+  // Preserve Set identity when no new ink is hit to avoid re-rasterizing on every pointermove.
   const erasedIds =
     touched.length === 0
       ? gesture.erasedIds

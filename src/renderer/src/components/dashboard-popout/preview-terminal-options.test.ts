@@ -58,8 +58,7 @@ describe('buildPreviewTerminalOptions', () => {
     scrollback: 1000
   }
 
-  // #10754: the dashboard preview renders the agent's live buffer, so it has to reproduce the same
-  // contrast floor the pane used or a Powerline statusline looks different in the popout.
+  // Match the pane’s automatic contrast floor so the same live Powerline buffer renders consistently.
   it('mirrors the automatic contrast floor when no override is set', () => {
     expect(
       buildPreviewTerminalOptions({

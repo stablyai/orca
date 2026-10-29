@@ -5,12 +5,12 @@ import type { ExecutionHostId } from '../../shared/execution-host'
 import type { FileWithMtime, SessionAccumulator } from './session-scanner-types'
 import type { TranscriptMessageSink } from './session-transcript-consumers'
 import {
-  addPreviewContent,
   createAccumulator,
   finalizeSession,
   sessionIdFromFileName,
   updateTimeline
 } from './session-scanner-accumulator'
+import { addSessionContent } from './session-scanner-messages'
 import {
   arrayValue,
   asRecord,
@@ -40,7 +40,6 @@ export async function parseHermesSessionFile(
   )
 }
 
-/** Remote transcript content, streamed from a host that has no reader attached. */
 export async function parseHermesSessionContent(
   file: FileWithMtime,
   content: string,
@@ -91,7 +90,7 @@ export function consumeHermesSessionMessage(
     if (role === 'user') {
       accumulator.title ??= extractContentText(messageRecord?.content)
     }
-    addPreviewContent(accumulator, role, messageRecord?.content)
+    addSessionContent(accumulator, role, messageRecord?.content)
   }
 }
 

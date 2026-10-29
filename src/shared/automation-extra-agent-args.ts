@@ -27,8 +27,7 @@ type ExtraAgentArgOption = {
 const MODEL_OPTION = { kind: 'model', aliases: ['--model'] } as const
 const MODEL_OR_M_OPTION = { kind: 'model', aliases: ['-m', '--model'] } as const
 
-// Why an allowlist: extras come from any paired client, so they must not reach the host's
-// permission posture or flags Orca owns (prompt, resume, cwd, print mode, config, MCP).
+// Allowlist paired-client extras so they cannot alter permissions or Orca-owned prompt/resume/cwd/print/config/MCP flags.
 const EXTRA_AGENT_ARG_OPTIONS: Partial<Record<TuiAgent, readonly ExtraAgentArgOption[]>> = {
   claude: [
     MODEL_OPTION,
@@ -210,10 +209,7 @@ function removeDefaultsFor(
   return result
 }
 
-/**
- * Combines the host's default Arguments with an automation's saved extras into one
- * Arguments string: defaults that extras replace are removed, then extras are appended.
- */
+/** Remove defaults overridden by saved extras before appending them to one launch Arguments string. */
 export function mergeExtraAgentArgs(args: {
   agent: TuiAgent
   defaultArgs: string | null | undefined

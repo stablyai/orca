@@ -15,8 +15,7 @@ export type DiffNavigationContextValue = {
 
 const noop = (): void => {}
 
-// Why: registration stays separate from changeCount so diff recomputation only
-// rerenders the header controls, not the heavy Monaco DiffViewer consumer.
+// Separate registration from counts so diff recomputation rerenders header controls without waking Monaco consumers.
 const DiffEditorRegistrationContext = createContext<DiffEditorRegistrationContextValue>({
   registerDiffEditor: noop,
   unregisterDiffEditor: noop
@@ -39,34 +38,27 @@ export function DiffNavigationProvider({
 }): React.JSX.Element {
   const editorRef = useRef<editor.IStandaloneDiffEditor | null>(null)
   const updateSubRef = useRef<{ dispose: () => void } | null>(null)
-  // Why: F7/Shift+F7 change navigation shares the registered editor with the
-  // header buttons, so the keyboard listener lives here rather than in DiffViewer.
+  // Share the registered editor across header buttons and F7/Shift+F7 shortcuts.
   const shortcutCleanupRef = useRef<(() => void) | null>(null)
-  // Why: changeCount must be state, not a ref — the header is a sibling consumer
-  // and only re-renders (enabling the buttons) when the value object identity
-  // changes on the 0 -> N flip once the diff computation lands.
+  // Use state so sibling header controls repaint when diff computation changes their enabled state.
   const [changeCount, setChangeCount] = useState(0)
 
   const registerDiffEditor = useCallback((diffEditor: editor.IStandaloneDiffEditor) => {
     editorRef.current = diffEditor
-    // Hold at most one update subscription; replace any prior editor's.
     updateSubRef.current?.dispose()
     updateSubRef.current = diffEditor.onDidUpdateDiff(() => {
-      // Why: ignore updates from an editor that is no longer current so a stale
-      // subscription in the fast-swap case can't write a wrong count.
+      // Ignore stale editor callbacks after a fast registration swap.
       if (editorRef.current === diffEditor) {
         setChangeCount(countChanges(diffEditor))
       }
     })
-    // Hold at most one keyboard listener; replace any prior editor's.
     shortcutCleanupRef.current?.()
     shortcutCleanupRef.current = installMonacoDiffChangeNavigationShortcut(diffEditor)
     setChangeCount(countChanges(diffEditor))
   }, [])
 
   const unregisterDiffEditor = useCallback((diffEditor: editor.IStandaloneDiffEditor) => {
-    // Why: identity guard for the fast-swap race — a stale dispose carrying the
-    // old editor must not wipe a freshly-registered new one.
+    // A stale disposal must not clear a newly registered replacement editor.
     if (editorRef.current !== diffEditor) {
       return
     }

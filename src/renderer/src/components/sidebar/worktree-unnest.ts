@@ -2,14 +2,7 @@ import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import type { AppState } from '@/store/types'
 
-/**
- * Clear the parent link on each worktree and report a single failure toast.
- *
- * Shared by the context menu's "Remove parent link" and the drag-to-reorder un-nest. Both
- * fire-and-forget, and `updateWorktreeLineage` rejects when the owner route can't be resolved,
- * so neither may call it bare — the rejection would surface as an unhandled promise rejection
- * and the action would look like it succeeded.
- */
+/** Both callers fire-and-forget; catch owner-routing failures and toast once so unnest cannot silently fail or reject unhandled. */
 export async function unnestWorktrees(
   worktreeIds: readonly string[],
   updateWorktreeLineage: AppState['updateWorktreeLineage']

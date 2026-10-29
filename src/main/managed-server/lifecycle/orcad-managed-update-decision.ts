@@ -1,8 +1,4 @@
-/**
- * Whether a connect may put this app's orcad build on a host, shared by SSH and WSL: a host a
- * newer Orca activated is never downgraded, and a build the host rolled back from or that already
- * failed is not retried. The fenced activation applies it again, so a race cannot bypass it.
- */
+import { compareAppVersions, isValidAppVersion } from '../../../shared/app-version'
 import type { OrcadActivationRecord } from '../activation/orcad-activation-record'
 import {
   refuseOrcadHostDowngrade,
@@ -17,12 +13,7 @@ export type ManagedOrcadAutoUpdateSkip =
   | 'migrating'
   | OrcadHostVersionRefusal
 
-/**
- * Why a host's orcad build may change, the same three for SSH and WSL. A connect applies every
- * skip. An explicit Update lifts only this host's own skips (rolled back, failed before), still
- * behind the terminal census, so it never downgrades a host a newer Orca runs. Force lifts every
- * skip and passes the census.
- */
+/** Connect honors all skips; Update retries local failures/rollbacks; Force also lifts version skips. */
 export type OrcadUpdateIntent = 'connect' | 'update' | 'force'
 
 export type ManagedOrcadAutoUpdatePlan =
@@ -31,10 +22,8 @@ export type ManagedOrcadAutoUpdatePlan =
 
 export function planManagedOrcadAutoUpdate(input: {
   record: OrcadActivationRecord
-  /** This app's bundled build for the host's target; null when the template lacks it. */
   candidateVersion: string | null
   appVersion: string
-  /** An update to this app version already failed on this host. */
   failedBefore: boolean
 }): ManagedOrcadAutoUpdatePlan {
   const { record, candidateVersion } = input
@@ -51,7 +40,7 @@ export function planManagedOrcadAutoUpdate(input: {
   if (refusal) {
     return { action: 'skip', reason: refusal }
   }
-  // Why no `failedBefore` skip on a stopped host: nothing serves, so retrying is the only way back.
+  // A stopped host has no serving fallback; retry even after a prior failed attempt.
   if (record.active === null && record.previous !== null) {
     return { action: 'update' }
   }
@@ -72,7 +61,6 @@ export function planOrcadUpdateForIntent(
   return planManagedOrcadAutoUpdate({ ...input, record, failedBefore: false })
 }
 
-/** The fenced activation's admission for an intent: why it refuses the record, or null. */
 export function admitOrcadRecordForIntent(
   intent: OrcadUpdateIntent,
   appVersion: string
@@ -91,7 +79,6 @@ export function admitOrcadRecordForIntent(
     )
 }
 
-/** Why a fenced activation refuses a build the plan skips; null when it may activate. */
 export function orcadUpdateSkipRefusal(
   plan: ManagedOrcadAutoUpdatePlan,
   record: OrcadActivationRecord,
@@ -106,4 +93,33 @@ export function orcadUpdateSkipRefusal(
         'it again; choose Update or Force to retry it.'
     : `Orca ${record.activeAppVersion} last ran this host's server, newer than this ` +
         `Orca (${appVersion}). Update Orca to start it.`
+}
+
+/** Content hashes cannot order updates: compare Orca versions, or for legacy hosts offer only this desktop's previously deferred build. */
+export function availableManagedOrcadUpdate(input: {
+  record: OrcadActivationRecord
+  candidateVersion: string | null
+  appVersion: string
+  /** The build this desktop's last Update or connect deferred on this host. */
+  deferredCandidateVersion: string | null
+}): string | null {
+  const { record, candidateVersion, appVersion } = input
+  const hostAppVersion = record.activeAppVersion
+  if (!candidateVersion || record.active === null || !isValidAppVersion(appVersion)) {
+    return null
+  }
+  const ordered = hostAppVersion
+    ? isValidAppVersion(hostAppVersion) && compareAppVersions(appVersion, hostAppVersion) >= 0
+    : input.deferredCandidateVersion === candidateVersion
+  if (!ordered) {
+    return null
+  }
+  // Connect rules: a build the user rolled back from is not advertised again.
+  const plan = planManagedOrcadAutoUpdate({
+    record,
+    candidateVersion,
+    appVersion,
+    failedBefore: false
+  })
+  return plan.action === 'update' ? candidateVersion : null
 }

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { computeTrustedHash, type CodexTrustEntry } from './config-toml-trust'
 
-// Why: captured from a real Codex 0.129 `/hooks` approval; fails loudly if Codex's serialization drifts.
+// Captured from a real Codex 0.129 /hooks approval.
 const REAL_APPROVED_COMMAND = '/bin/sh "/tmp/orca-case-b-mCmCe6/agent-hooks/codex-hook.sh"'
 const REAL_APPROVED_HASH = 'sha256:bc013489dba495431d3790fda62ee5a7d907a7c491e29ad26238c3a5d6d2b163'
 
@@ -111,7 +111,6 @@ describe('computeTrustedHash', () => {
   })
 
   it('drops the matcher on user_prompt_submit/stop like matcher_pattern_for_event', () => {
-    // Why: Codex hashes these two events WITHOUT the matcher, so `"matcher": ""` must hash like no matcher.
     for (const eventLabel of ['user_prompt_submit', 'stop'] as const) {
       const base: CodexTrustEntry = {
         sourcePath: '/x/hooks.json',
@@ -127,7 +126,7 @@ describe('computeTrustedHash', () => {
   })
 
   it('pins the matcher-omitted hash for a Stop entry that carries an empty matcher', () => {
-    // Why: regression pin (real Codex 0.140 config) — Stop uses the matcher-omitted hash even with `"matcher": ""`.
+    // Hash captured from a real Codex 0.140 config.
     expect(
       computeTrustedHash({
         sourcePath: '/home/user/.codex/hooks.json',

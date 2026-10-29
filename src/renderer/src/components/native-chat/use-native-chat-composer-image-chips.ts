@@ -12,8 +12,7 @@ import {
 } from './native-chat-pending-attachment-cache'
 import { useNativeChatComposerAttachmentPreviews } from './use-native-chat-composer-attachment-previews'
 
-/** The composer's image chips: the draft's images and those still on their way, in the order they
- *  were attached, each with the clipboard preview this composer minted for it. */
+/** Interleave saved/pending images by attachment order with this composer’s own clipboard previews. */
 export function useNativeChatComposerImageChips(attachmentScopeKey: string): {
   imageAttachments: NativeChatComposerImageAttachment[]
 } & Omit<ReturnType<typeof useNativeChatComposerAttachmentPreviews>, 'previews'> {
@@ -25,14 +24,12 @@ export function useNativeChatComposerImageChips(attachmentScopeKey: string): {
     subscribe,
     () => readNativeChatComposerDraft(attachmentScopeKey).images
   )
-  // Why: a restored paste shows only once main confirms it is still kept, so until the restore
-  // check is done it waits like a chip still saving, instead of flashing before a placeholder.
+  // Wait for main’s retained-file check before revealing restored images to avoid flashing missing thumbnails.
   const restoringImages = useRestoredNativeChatComposerDraftImageCheck(
     attachmentScopeKey,
     subscribe
   )
-  // Chips still on their way live outside the composer, so one a prompt card unmounted comes back
-  // still pending and settles into the draft whichever composer is showing.
+  // Keep pending chips outside the composer so prompt-card unmounts cannot cancel their draft settlement.
   const pending = useNativeChatPendingAttachments(attachmentScopeKey)
   const { previews, ...previewActions } = useNativeChatComposerAttachmentPreviews(settled, pending)
   const imageAttachments = useMemo(() => {

@@ -1,19 +1,9 @@
 <#
-  window-watch.ps1 — poll visible top-level windows and record every NEW one.
-
-  Runs a tight loop (default 500ms) that diffs the current visible top-level
-  windows against a baseline snapshot, appending any window handle it has not
-  seen before to a JSONL file as one event per line:
+  Poll visible windows (default 500ms), recording new handles and title changes as JSONL:
     { "ts": "<iso>", "handle": <n>, "pid": <n>, "processName": "...", "title": "..." }
-
-  It stops when -DurationSec elapses or -StopFile appears (whichever comes
-  first), so the orchestrator can end the watch deterministically after the
-  post-relaunch soak window.
-
-  Attribution is by owner process + title only (see window-enum.ps1 for why
-  conhost heuristics are invalid). Classification of which new windows count as
-  "unexpected" (canary title, terminal/console owner) is done by the JS
-  assertions layer against this raw event log — this probe records everything.
+  Stop at -DurationSec or -StopFile so the orchestrator controls the post-relaunch soak.
+  Record all process/title evidence; JS classifies unexpected consoles/canaries. See window-enum.ps1
+  for why conhost heuristics cannot establish visibility.
 #>
 param(
   [Parameter(Mandatory = $true)][string]$BaselinePath,
@@ -31,10 +21,7 @@ if (-not $EnumScript) {
 }
 . $EnumScript
 
-# Seed the baseline handle set so pre-existing windows never register. Their
-# later title churn (clocks, tab names) is irrelevant noise, so baseline
-# handles are excluded outright. Baseline JSON is { windows: [ { handle, ... } ] };
-# tolerate the PS 5.1 single-element unwrap by wrapping with @().
+# Ignore baseline handles even after title churn; wrap { windows: [...] } for PS 5.1’s single-result unwrap.
 $baselineHandles = New-Object System.Collections.Generic.HashSet[long]
 if (Test-Path $BaselinePath) {
   $baseline = Get-Content -Raw $BaselinePath | ConvertFrom-Json
@@ -45,11 +32,7 @@ if (Test-Path $BaselinePath) {
   }
 }
 
-# Track the last-seen title of each NEW window. A window is emitted on first
-# sighting ("appear") and again whenever its title changes ("retitle"): a real
-# flashing console often opens with a generic title (e.g. WindowsTerminal's
-# "Terminal") and only later shows our child's canary title, so title evolution
-# must be captured or canary attribution is missed.
+# Emit appear/retitle: flashing consoles can gain their canary title after a generic Terminal title.
 $titleByHandle = @{}
 
 # Truncate/create the output file up front so the reader can always open it.

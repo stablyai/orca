@@ -17,14 +17,7 @@ type UseFileExplorerAutoRevealParams = {
   virtualizer: Virtualizer<HTMLDivElement, Element>
 }
 
-/**
- * Auto-reveal: when the active editor file changes, scroll the explorer to show it.
- * This mirrors VS Code's explorer.autoReveal behavior.
- *
- * For files already visible in the tree, scrolls directly (no flash).
- * For files whose ancestors are collapsed, triggers the reveal machinery
- * to expand ancestors and scroll, but skips the flash animation.
- */
+/** Follow active editor files without flashing; expand collapsed ancestors through the reveal machinery. */
 export function useFileExplorerAutoReveal({
   activeFileId,
   activeWorktreeId,
@@ -64,9 +57,7 @@ export function useFileExplorerAutoReveal({
       return
     }
 
-    // Why: markdown preview tabs are separate UI surfaces, but they still map
-    // to one concrete file on disk and should keep Explorer selection in sync
-    // just like a normal edit tab. Diffs and conflict-review tabs do not.
+    // Markdown previews own concrete files and sync selection; diff/conflict surfaces do not.
     const activeFile = openFiles.find((f) => f.id === activeFileId)
     if (
       !activeFile ||
@@ -82,7 +73,6 @@ export function useFileExplorerAutoReveal({
     }
 
     if (rowProjection.hasPath(filePath)) {
-      // File is already visible in the tree — just scroll to it and select
       setSelectedPath(filePath)
       const targetIndex = rowProjection.getIndexByPath(filePath)
       if (targetIndex !== null) {
@@ -93,8 +83,6 @@ export function useFileExplorerAutoReveal({
         })
       }
     } else {
-      // File's ancestor folders aren't expanded — use the reveal machinery
-      // to expand them and scroll, but skip the flash animation.
       useAppStore.setState({
         pendingExplorerReveal: {
           worktreeId: activeWorktreeId,

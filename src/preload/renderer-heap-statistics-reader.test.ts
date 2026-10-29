@@ -35,9 +35,6 @@ describe('readRendererHeapStatistics', () => {
   })
 
   it('keeps the exact V8 read when only the Blink metric throws', () => {
-    // Why: Blink's number is supplementary. Discarding the V8 read over its
-    // absence would send callers back to the quantized `performance.memory`
-    // this reader exists to replace — silently defeating the whole feature.
     const result = readRendererHeapStatistics(
       source({
         blink: () => {
@@ -68,7 +65,6 @@ describe('readRendererHeapStatistics', () => {
         })
       )
     ).toBeNull()
-    // Why: no reason to pay for the auxiliary call once the result is unusable.
     expect(blink).not.toHaveBeenCalled()
   })
 })

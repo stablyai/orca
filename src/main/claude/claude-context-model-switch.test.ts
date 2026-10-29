@@ -18,7 +18,6 @@ const PLAN_USAGE = {
   [`${OPUS}[1m]`]: { contextWindow: 1_000_000 }
 }
 
-/** `get_context_usage` answers the model the CLI holds now, turn or no turn. */
 const answer = (model: string, totalTokens: number, rawMaxTokens: number) => ({
   model,
   totalTokens,
@@ -26,7 +25,6 @@ const answer = (model: string, totalTokens: number, rawMaxTokens: number) => ({
   categories: []
 })
 
-/** A translator whose report requests go through the real capture, drop rule included. */
 function session(init: string) {
   const t = setup({ init })
   const pending: ((value: unknown) => void)[] = []
@@ -40,7 +38,6 @@ function session(init: string) {
       await Promise.resolve()
     }
   }
-  /** Answer one request, the newest by default. */
   const reply = async (value: unknown, request = pending.length - 1): Promise<void> => {
     pending[request]?.(value)
     await settle()
@@ -60,7 +57,6 @@ describe('the context ring across a model change', () => {
   ])('divides an estimate by the window the report states (%s)', async (model, window, share) => {
     const s = session(model)
     s.handle(userFrame('turn-a', 1_000))
-    // A local command's turn: its result carries no per-model usage, so only the report states the window.
     s.handle(resultFrame(2_000))
     await s.reply(answer(model, 50_000, window))
     s.handle(initFrame(model, 2_900))
@@ -73,7 +69,6 @@ describe('the context ring across a model change', () => {
       estimated: true,
       categories: []
     })
-    // Neither fact names a model: pairing them is the writer's job.
     expect(readAgentJournalTurn(s.turnRow('turn-a')!.body)?.contextUsage?.window).toEqual({
       tokens: window,
       capturedAt: 90_000
@@ -107,7 +102,6 @@ describe('the context ring across a model change', () => {
     await s.reply(answer(`${SONNET}[1m]`, 151_000, 1_000_000))
     expect(s.ring()).toMatchObject({ usedTokens: 151_000, windowTokens: 1_000_000 })
 
-    // Responses name both windows alike; the new one is already on the journal.
     s.handle(initFrame(`${SONNET}[1m]`, 3_900))
     s.handle(userFrame('turn-b', 4_000))
     s.handle(assistantFrame('reply-b', 5_000, 160_000, undefined, SONNET))
@@ -133,7 +127,6 @@ describe('the context ring across a model change', () => {
     expect(s.ring()).toBeNull()
     await s.reply(answer(`${OPUS}[1m]`, 51_000, 1_000_000))
     expect(s.ring()).toMatchObject({ windowTokens: 1_000_000, estimated: false })
-    // The init keeps naming the resting model while plan mode answers on Opus.
     s.handle(initFrame(SONNET, 3_900))
     s.handle(userFrame('turn-b', 4_000))
     s.handle(assistantFrame('reply-b', 5_000, 60_000, undefined, OPUS))
@@ -171,7 +164,6 @@ describe('the context ring across a model change', () => {
     s.handle(assistantFrame('reply-b3', 7_000, 130_000, undefined, SONNET))
     expect(s.unknownWrites()).toBe(1)
     expect(s.turnRow('turn-b')?.body).toMatchObject({ contextUsage: { used: { kind: 'unknown' } } })
-    // The turn moved past the count it asked for, but not past the window: the next response restores the ring.
     await s.reply(answer(SONNET, 121_000, 200_000), requests)
     expect(s.turnRow('turn-b')?.body).toMatchObject({
       contextUsage: { window: { tokens: 200_000 }, used: { kind: 'unknown' } }
@@ -195,7 +187,6 @@ describe('the context ring across a model change', () => {
     s.handle(userFrame('turn-b', 4_000))
     s.handle(assistantFrame('reply-b1', 5_000, 60_000, undefined, SONNET))
 
-    // A permission-mode write mid-turn whose report never comes back.
     s.translator.modelMayHaveChanged()
     const unanswered = s.pending.length - 1
     s.handle(assistantFrame('reply-b2', 6_000, 70_000, undefined, SONNET))
@@ -206,7 +197,6 @@ describe('the context ring across a model change', () => {
     expect(s.pending).toHaveLength(unanswered + 1)
 
     s.handle(resultFrame(8_000, { [SONNET]: { contextWindow: 200_000 } }))
-    // The report the result asks for fails too.
     await s.reply(undefined)
     expect(s.ring()).toBeNull()
     s.handle(userFrame('turn-c', 9_000))
@@ -223,7 +213,6 @@ describe('the context ring across a model change', () => {
     await s.reply(answer(`${SONNET}[1m]`, 141_000, 1_000_000))
     expect(s.ring()).toMatchObject({ windowTokens: 1_000_000 })
 
-    // The CLI runs the 200k window next turn with no option write, and that turn's report fails.
     s.handle(initFrame(SONNET, 3_900))
     s.handle(userFrame('turn-b', 4_000))
     s.handle(assistantFrame('reply-b', 5_000, 150_000, undefined, SONNET))
@@ -247,12 +236,10 @@ describe('the context ring across a model change', () => {
 
     s.translator.modelMayHaveChanged()
     const switched = s.pending.length - 1
-    // The send lands before the switch's report does.
     s.translator.markContextActivity()
     s.handle(initFrame(`${SONNET}[1m]`, 3_900))
     s.handle(userFrame('turn-b', 4_000))
     await s.reply(answer(`${SONNET}[1m]`, 151_000, 1_000_000), switched)
-    // Its count describes the context before the send, so only the window lands.
     expect(s.ring()).toBeNull()
     expect(s.turnRow('turn-b')?.body).toMatchObject({
       contextUsage: { window: { tokens: 1_000_000 } }
@@ -280,7 +267,6 @@ describe('the context ring across a model change', () => {
     s.handle(assistantFrame('reply-b3', 7_000, 160_000, undefined, SONNET))
     expect(s.ring()).toMatchObject({ usedTokens: 160_000, windowTokens: 200_000, percentage: 80 })
 
-    // The result keys both windows, and the turn's init still names the 1M one.
     s.handle(
       resultFrame(8_000, {
         [`${SONNET}[1m]`]: { contextWindow: 1_000_000 },
@@ -288,7 +274,6 @@ describe('the context ring across a model change', () => {
       })
     )
     expect(s.ring()).toMatchObject({ usedTokens: 160_000, windowTokens: 200_000, percentage: 80 })
-    // The user sends before the result's report lands; its window still does.
     s.translator.markContextActivity()
     await s.reply(answer(SONNET, 161_000, 200_000))
     s.handle(initFrame(SONNET, 8_900))

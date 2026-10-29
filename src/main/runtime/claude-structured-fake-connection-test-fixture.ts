@@ -1,5 +1,3 @@
-// A fake Claude stream-json child for the structured-session integration suite.
-
 import type {
   ClaudeStreamJsonConnection,
   ClaudeStreamJsonConnectionHandlers,
@@ -19,7 +17,6 @@ export type FakeClaudeConnection = Omit<ClaudeStreamJsonConnection, 'closed' | '
 export function fakeClaude(providerSession: string) {
   const connections: FakeClaudeConnection[] = []
   let initializeAccount: unknown
-  /** A child that dies during start, with the close verdict its ladder observed. */
   let selfExit: { message: string; exitVerdict: ClaudeStreamJsonConnection['exitVerdict'] } | null =
     null
   let contextUsage: () => Promise<unknown> = async () => ({})

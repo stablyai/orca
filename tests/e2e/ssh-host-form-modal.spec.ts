@@ -1,8 +1,4 @@
-/**
- * STA-3067: SSH host add/edit form must open as a modal dialog so fields stay
- * in the viewport when the host list is long (instead of mounting inline below
- * the list).
- */
+// STA-3067: keep add/edit fields in a viewport-bound modal even with a long SSH host list.
 
 import type { Page } from '@stablyai/playwright-test'
 import { expect, test } from './helpers/orca-app'
@@ -10,14 +6,12 @@ import { waitForSessionReady } from './helpers/store'
 
 test.use({ seedTestRepo: false })
 
-// Why: afterEach deletes every target carrying this prefix, so two workers loading
-// the module in the same millisecond must not collide on a shared Date.now().
+// Use unique cleanup prefixes so workers cannot delete each other’s targets.
 const HOST_PREFIX = `e2e-ssh-modal-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
 
 async function dismissTransientAnnouncement(page: Page): Promise<void> {
   const maybeLaterButton = page.getByRole('button', { name: 'Maybe Later' })
-  // Why: isVisible() is one-shot (its timeout is ignored); the retrying assertion
-  // gives a late-rendering announcement a chance to appear before we move on.
+  // Retry announcement visibility; isVisible ignores its timeout and can miss late render.
   const visible = await expect(maybeLaterButton)
     .toBeVisible({ timeout: 1_000 })
     .then(() => true)
@@ -122,7 +116,6 @@ test.describe('SSH host add/edit modal', () => {
       await expect(sshSection.getByText(label, { exact: true })).toBeVisible()
     }
 
-    // ── Add flow ────────────────────────────────────────────────────
     await sshSection.getByRole('button', { name: 'Add host' }).click()
 
     const addDialog = orcaPage.getByRole('dialog', { name: 'Add SSH host' })
@@ -140,8 +133,7 @@ test.describe('SSH host add/edit modal', () => {
     await expect(addDialog.getByRole('heading', { name: 'Add SSH host' })).toBeInViewport()
     await expect(addDialog.getByRole('button', { name: 'Add host' })).toBeInViewport()
 
-    // Collapse before save so the dialog body is quieter; Advanced state is
-    // re-checked on the next open session.
+    // Collapse before save; the next open separately verifies initial Advanced state.
     await addDialog.getByRole('button', { name: 'Advanced' }).click()
 
     const createdLabel = `${HOST_PREFIX}-created`
@@ -157,7 +149,6 @@ test.describe('SSH host add/edit modal', () => {
     })
     await expect(sshSection.getByText('alice@created.example.test:2222')).toBeVisible()
 
-    // ── Edit flow stays in viewport even with a long list above ─────
     const createdCard = sshSection.locator(
       `[data-ssh-target-card][data-ssh-target-label="${createdLabel}"]`
     )

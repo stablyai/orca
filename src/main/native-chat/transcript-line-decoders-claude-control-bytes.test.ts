@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   normalizeNativeChatUserText,
   normalizedNativeChatUserMessageText
-} from '../../shared/native-chat-image-transcript-markers'
+} from '../../shared/native-chat/transcript/native-chat-image-transcript-markers'
 import { decodeClaudeTranscriptLine } from './transcript-line-decoders-claude'
 
 const COMPOSER_TEXT = 'line 000 xxxxxxxxxx\nline 001 xxxxxxxxxx\nline 002 xxxxxxxxxx'

@@ -21,7 +21,12 @@ if test "$__orca_codex_type" = file
     if test "$ORCA_CODEX_ISOLATE" != 0; and not string match -qr -- '^(agents|queue|--remote|--no-daemon|--remote=.*)$' $argv; and command codex --help 2>/dev/null </dev/null | string match -q -- '*--no-daemon*'
       set argv --no-daemon $argv
     end
-    command codex $argv
+    if test "$ORCA_REMOTE_VIEWER_CLIPBOARD" = 1; and not set -q SSH_CONNECTION; and not set -q SSH_TTY
+      set -lx SSH_CONNECTION '127.0.0.1 0 127.0.0.1 0'
+      command codex $argv
+    else
+      command codex $argv
+    end
   end
 end
 set -e __orca_codex_type

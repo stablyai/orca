@@ -7,7 +7,7 @@ export type GitHubApiRepositoryResolution =
   | undefined
   | (() => Promise<GitHubOwnerRepo | null>)
 
-// Why: renderer/RPC overrides reach authenticated REST paths.
+// Untrusted renderer/RPC slugs become authenticated REST paths.
 const OWNER_SLUG_RE = GITHUB_OWNER_SLUG_RE
 const REPOSITORY_SLUG_RE = /^[A-Za-z0-9._-]+$/
 

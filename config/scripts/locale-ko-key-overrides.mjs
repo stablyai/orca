@@ -1,9 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 
-// Korean key-specific overrides (reviewed in full UI context: product names, git terms, and
-// labels MT mistranslated). Stored as a JSON data file — too many entries to inline under the
-// .mjs max-lines limit — and loaded here so the catalog scripts keep a single ko key-override source.
+// Load context-reviewed Korean key overrides from one JSON source to stay under module line cap.
 const jsonPath = path.join(import.meta.dirname, 'locale-ko-key-overrides.json')
 
 let parsed

@@ -48,7 +48,7 @@ export function useDiffCommentDraftZone({
   onAddCommentClick
 }: UseDiffCommentDraftZoneArgs): DiffCommentDraftZoneHandle {
   const draftZoneRef = useRef<DraftZoneEntry | null>(null)
-  // The only copy of a draft between its card being torn down and the replacement mounting.
+  // Retain the only draft copy between card teardown and replacement.
   const pendingDraftRef = useRef<CarriedDraft | null>(null)
   const previousModelIdentityRef = useRef(monacoModelIdentity)
   const reanchorFrameRef = useRef<number | null>(null)
@@ -56,7 +56,7 @@ export function useDiffCommentDraftZone({
     (args: { lineNumber: number; startLine?: number; top: number }) => void
   >(() => {})
 
-  // A save can settle after unmount; without this its retry would mount a card nobody disposes.
+  // A save settling after unmount must not restore an undisposable retry card.
   const unmountedRef = useRef(false)
   const onCreateCommentRef = useRef(onCreateComment)
   const onLegacyAddCommentClickRef = useRef(onAddCommentClick)
@@ -99,13 +99,12 @@ export function useDiffCommentDraftZone({
     }
   }, [])
 
-  // Latest openDraft for callers that outlive a render: the re-anchor frame and a settling submit.
+  // Re-anchor frames and settling submits need the latest opener.
   const openDraftRef = useRef<(draft: DiffCommentDraft, initialBody?: string) => boolean>(
     () => false
   )
 
-  // A save that failed after its card was torn down (model swap, editor refresh) brings the text
-  // back for a retry; an open card means the user already moved on, and the failure toast covers it.
+  // Restore failed submissions after teardown unless another card now owns the composer; the toast covers displaced failures.
   const restoreFailedSubmit = useCallback((draft: DiffCommentDraft, body: string): void => {
     if (unmountedRef.current || draftZoneRef.current || openDraftRef.current(draft, body)) {
       return
@@ -199,8 +198,7 @@ export function useDiffCommentDraftZone({
               entry.submitting = false
               if (succeeded) {
                 if (draftZoneRef.current === entry) {
-                  // Hand focus back to Monaco only if the card still holds it: a slow save can
-                  // settle after the user has clicked away, and stealing focus back is worse.
+                  // Restore Monaco focus only if this card still owns it when the save settles.
                   disposeDraftZone(entry.domNode.contains(document.activeElement))
                 }
               } else if (draftZoneRef.current !== entry) {
@@ -210,7 +208,7 @@ export function useDiffCommentDraftZone({
           }
         })
       })
-      // Report what actually mounted: the re-anchor frame drops its only copy of the draft on true.
+      // The re-anchor frame drops its draft only after a card actually mounts.
       return draftZoneRef.current !== null
     },
     [
@@ -227,8 +225,7 @@ export function useDiffCommentDraftZone({
     openDraftRef.current = openDraft
   }, [openDraft])
 
-  // The stash is only cleared once a card actually mounts: the editor may still be mid-refresh
-  // when the frame fires, and a later editor/identity change re-schedules from the same stash.
+  // Keep the stash until mounting succeeds; the editor may still be refreshing on the first frame.
   const scheduleReanchor = useCallback((): void => {
     if (reanchorFrameRef.current !== null) {
       return
@@ -256,7 +253,7 @@ export function useDiffCommentDraftZone({
       // A submitting card's text is already on its way to the store; carrying it would post it twice.
       const carriedBody =
         (current && !current.submitting ? current.body : '') || pending?.body || ''
-      // The user picked a new anchor, so a scheduled re-anchor must not move the card back afterwards.
+      // A new anchor must cancel any frame that would move the card back.
       cancelReanchorFrame()
       pendingDraftRef.current = null
       if (!openDraft({ lineNumber: args.lineNumber, startLine: args.startLine }, carriedBody)) {
@@ -278,8 +275,7 @@ export function useDiffCommentDraftZone({
     cancelReanchorFrame()
     const current = draftZoneRef.current
     if (current) {
-      // A save in flight owns its text: the settling submit disposes on success and re-opens on
-      // failure, so carrying it here would mount a second card that could submit the same note.
+      // In-flight saves restore their own failures; carrying their text would allow duplicate submission.
       if (!current.submitting) {
         pendingDraftRef.current = { draft: current.draft, body: current.body }
       }
@@ -290,8 +286,7 @@ export function useDiffCommentDraftZone({
     }
   }, [cancelReanchorFrame, disposeDraftZone, monacoModelIdentity, scheduleReanchor])
 
-  // A combined-diff model refresh can briefly clear the editor ref before the replacement mounts.
-  // Re-anchor any carried draft when that replacement becomes available.
+  // Combined-diff refreshes briefly clear the editor ref; retry carried drafts when its replacement arrives.
   useEffect(() => {
     if (!editor || !canOpenDraft || !pendingDraftRef.current) {
       return

@@ -31,7 +31,7 @@ export function useSourceControlEntryMutations({
   worktreePath: string | null
   refreshActiveGitStatusAfterMutation: () => Promise<void>
 }) {
-  // Why: named function expression so the failure toast's Retry can re-enter the same attempt.
+  // Name the callback so Retry can reenter the same attempt.
   const runEntryMutation = useCallback(
     async function runEntryMutation(
       operation: 'stage' | 'unstage',
@@ -45,7 +45,7 @@ export function useSourceControlEntryMutations({
         const connectionId = getConnectionId(activeWorktreeId ?? null) ?? undefined
         await mutate(
           {
-            // Why: route the mutation by the repo OWNER host, not the focused runtime.
+            // Route mutations through workspace ownership rather than focused runtime.
             target: requireGitOwnerTarget(activeRepoTarget),
             worktreeId: activeWorktreeId,
             worktreePath,
@@ -67,10 +67,9 @@ export function useSourceControlEntryMutations({
         })
         return
       }
-      // Why: the mutation landed, so clear any failure this worktree's attempts left in the slot —
-      // a failure another worktree raised meanwhile is not ours to dismiss.
+      // Clear only this worktree's failure slot; another worktree may have filled it while this attempt ran.
       dismissSourceControlEntryFailureToast(activeWorktreeId)
-      // Why: refreshing outside the try keeps a refresh failure from being reported as "Failed to stage"; the refresher reports its own.
+      // Refresh outside the mutation catch so its errors cannot be mislabeled as stage failures.
       await refreshActiveGitStatusAfterMutation()
     },
     [activeRepoTarget, worktreePath, activeWorktreeId, refreshActiveGitStatusAfterMutation]
@@ -93,7 +92,7 @@ export function useSourceControlEntryMutations({
     [runEntryMutation]
   )
 
-  // Why: discardSingle throws so bulk callers can aggregate failures into one toast; the per-row caller reports its own.
+  // Throw for bulk callers to aggregate; per-row callers report their own failures.
   const discardSingle = useCallback(
     async (filePath: string) => {
       if (!worktreePath || !activeWorktreeId) {
@@ -101,19 +100,19 @@ export function useSourceControlEntryMutations({
       }
       const runtimeEnvironmentId =
         activeRepoTarget?.kind === 'environment' ? activeRepoTarget.environmentId : null
-      // Why: quiesce pending editor autosaves first so a delayed save can't recreate the discarded edits after git restores the file.
+      // Hold pending autosaves so delayed writes cannot recreate edits after Git restores the file.
       const releaseAutoSave = await requestEditorSaveQuiesce({
         worktreeId: activeWorktreeId,
         worktreePath,
         relativePath: filePath,
         runtimeEnvironmentId
       })
-      // Why finally: autosave of this file stays held, in every workspace, until git has finished.
+      // Release in finally so every workspace holds autosave until Git finishes.
       try {
         const connectionId = getConnectionId(activeWorktreeId) ?? undefined
         await discardRuntimeGitPath(
           {
-            // Why: route the discard by the repo OWNER host, not the focused runtime.
+            // Route discard through workspace ownership rather than focused runtime.
             target: requireGitOwnerTarget(activeRepoTarget),
             worktreeId: activeWorktreeId,
             worktreePath,
@@ -141,7 +140,7 @@ export function useSourceControlEntryMutations({
       }
       const runtimeEnvironmentId =
         activeRepoTarget?.kind === 'environment' ? activeRepoTarget.environmentId : null
-      // Why: quiesce matching editor autosaves first so a delayed save can't recreate edits after git mutates the files.
+      // Quiesce matching editors so delayed autosaves cannot recreate edits after Git mutates files.
       const quiesced = await Promise.allSettled(
         filePaths.map((relativePath) =>
           requestEditorSaveQuiesce({
@@ -156,7 +155,7 @@ export function useSourceControlEntryMutations({
         result.status === 'fulfilled' ? [result.value] : []
       )
       const failed = quiesced.find((result) => result.status === 'rejected')
-      // Why: one path that can't be quiesced stops the whole discard; free the holds the rest took.
+      // If any path cannot quiesce, stop the whole discard and release all holds already acquired.
       if (failed) {
         for (const release of releases) {
           release()
@@ -167,7 +166,7 @@ export function useSourceControlEntryMutations({
         const connectionId = getConnectionId(activeWorktreeId) ?? undefined
         await bulkDiscardRuntimeGitPaths(
           {
-            // Why: route the discard by the repo OWNER host, not the focused runtime.
+            // Route discard through workspace ownership rather than focused runtime.
             target: requireGitOwnerTarget(activeRepoTarget),
             worktreeId: activeWorktreeId,
             worktreePath,

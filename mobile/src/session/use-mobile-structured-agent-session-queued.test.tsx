@@ -1,11 +1,7 @@
-// The mid-turn queue on mobile: `delivery` rides only capability-gated sends,
-// published drafts render as cards (never optimistic bubbles), and card actions
-// map to the queued-message RPCs. Stop never touches the queue — its cards
-// stay on the host under a queue-level pause, lifted by Resume, and no text
-// travels back over the wire.
-// Older hosts retain the copy-before-delete fallback; capable hosts edit in place.
+// Test capability-gated queue writes with authoritative cards; Stop preserves host-held drafts and legacy Edit copies before deleting.
 
 import { createElement } from 'react'
+import { agentJournalSubmissionKey } from '../../../src/shared/agent-session-journal-item-key'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { structuredAgentSessionPayloadFingerprint } from '../../../src/shared/structured-agent-session-mutation'
@@ -116,13 +112,11 @@ describe('mobile structured queued messages', () => {
     return sendRequest.mock.calls.filter(([calledMethod]) => calledMethod === method)
   }
 
-  /** Params of the `index`th `method` request, and its envelope. */
   function requestOf(method: string, index = 0) {
     const params = fieldsOf(calls(method)[index]?.[1])
     return { params, envelope: fieldsOf(params.envelope) }
   }
 
-  /** Global invocation order of the first `method` request, for cross-spy ordering. */
   function callOrderOf(method: string): number | undefined {
     return sendRequest.mock.invocationCallOrder.find(
       (_, index) => sendRequest.mock.calls[index]?.[0] === method
@@ -148,6 +142,49 @@ describe('mobile structured queued messages', () => {
   afterEach(() => {
     vi.useRealTimers()
     unmountSession()
+  })
+
+  it('reverts an optimistic relative move when the host reports a changed queue', async () => {
+    const mail = queuedDraft({
+      messageId: 'mail',
+      body: {
+        kind: 'message',
+        role: 'user',
+        blocks: [],
+        from: { kind: 'agent', senders: [], orchestration: null }
+      }
+    })
+    const messages = [mail, queuedDraft({ messageId: 'b', position: 2 })]
+    await mountSession(CAPABLE, snapshotEvent({ queuedMessages: messages }))
+    expect(hook!.queued.move).toBeUndefined()
+    expect(calls('agentSession.queuedMessageMove')).toHaveLength(0)
+    unmountSession()
+    await mountSession(
+      { ...CAPABLE, queuedMessageReorder: true },
+      snapshotEvent({ queuedMessages: messages })
+    )
+    let finish: (response: RpcResponse) => void = () => {}
+    sendRequest.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve
+        })
+    )
+    let moving!: Promise<boolean>
+    await act(async () => {
+      moving = hook!.queued.move!({ movedId: 'mail', afterId: 'b' })
+    })
+    expect(hook!.queued.cards.map((card) => card.messageId)).toEqual(['b', 'mail'])
+    expect(hook!.queued.cards[1]?.from).toBeDefined()
+    expect(requestOf('agentSession.queuedMessageMove').params).toMatchObject({
+      messageId: 'mail',
+      afterMessageId: 'b'
+    })
+    await act(async () => {
+      finish(mutationOk({ messageId: 'mail', status: 'stale' }))
+      expect(await moving).toBe(false)
+    })
+    expect(hook!.queued.cards.map((card) => card.messageId)).toEqual(['mail', 'b'])
   })
 
   describe('capability-gated delivery', () => {
@@ -195,6 +232,30 @@ describe('mobile structured queued messages', () => {
         })
       )
       expect(asyncStorage.setItem).not.toHaveBeenCalled()
+    })
+
+    it("sends straight into the turn when the host's Queue follow-ups is off, as the desktop does", async () => {
+      sendRequest.mockImplementation(async (method) => {
+        if (method === 'settings.get') {
+          return ok({ settings: { nativeChatQueueFollowUps: false } })
+        }
+        if (method === 'agentSession.send') {
+          return mutationOk({
+            clientMessageId: 'client-1',
+            submission: acceptedSubmission('client-1')
+          })
+        }
+        return method === 'agentSession.options' ? ok({ models: [], current: {} }) : ok({})
+      })
+      await mountSession(CAPABLE)
+      await vi.waitFor(() =>
+        expect(sendRequest.mock.calls.map(([method]) => method)).toContain('settings.get')
+      )
+      await act(async () => {})
+      await act(async () => {
+        await hook!.sendWithOutcome('steer me')
+      })
+      expect('delivery' in requestOf('agentSession.send').params).toBe(false)
     })
 
     it('keeps today’s request exactly against an incapable host', async () => {
@@ -297,15 +358,16 @@ describe('mobile structured queued messages', () => {
       expect(hook!.queued.cards).toEqual([
         {
           messageId: 'draft-1',
+          position: 1,
           text: 'text of draft-1',
+          line: 'text of draft-1',
           state: 'waiting',
-          paused: false,
+          hold: 'turn',
           needsAttention: false,
           caption: null,
           attribution: null
         }
       ])
-      // A frame without the field leaves the list alone; null empties it.
       act(() => listener?.(batchEvent()))
       expect(hook!.queued.cards).toHaveLength(1)
       act(() => listener?.(batchEvent(null)))
@@ -320,6 +382,19 @@ describe('mobile structured queued messages', () => {
             queuedDraft({ messageId: 'drained' }),
             queuedDraft({ messageId: 'still-waiting' })
           ],
+          items: [
+            {
+              itemId: agentJournalSubmissionKey('fresh-hand-off-id'),
+              revision: 1,
+              sequence: 1,
+              observedAt: 10,
+              body: {
+                kind: 'message',
+                role: 'user',
+                blocks: [{ type: 'text', text: 'sent message' }]
+              }
+            }
+          ],
           submissions: [acceptedSubmission('fresh-hand-off-id', 'drained')]
         })
       )
@@ -331,14 +406,26 @@ describe('mobile structured queued messages', () => {
         CAPABLE,
         snapshotEvent({
           queuedMessages: [queuedDraft({ messageId: 'same-id' })],
+          items: [
+            {
+              itemId: agentJournalSubmissionKey('same-id'),
+              revision: 1,
+              sequence: 1,
+              observedAt: 10,
+              body: {
+                kind: 'message',
+                role: 'user',
+                blocks: [{ type: 'text', text: 'sent message' }]
+              }
+            }
+          ],
           submissions: [acceptedSubmission('same-id')]
         })
       )
       expect(hook!.queued.cards.map((card) => card.messageId)).toEqual(['same-id'])
     })
 
-    // A host that does not queue sends still keeps a message it accepted and never sent across a
-    // restart or a close, and publishes it as a card; only queueing a new send is gated.
+    // Any host may publish retained drafts after restart even if it cannot queue fresh sends.
     it('shows the cards a host that does not queue sends publishes', async () => {
       await mountSession(LEGACY)
       act(() =>
@@ -353,7 +440,6 @@ describe('mobile structured queued messages', () => {
           )
         )
       )
-      // Plain waiting cards: the host holds them until the chat's next turn, and shows no row.
       expect(hook!.queued.cards.map(({ messageId, caption }) => ({ messageId, caption }))).toEqual([
         { messageId: 'kept-1', caption: null },
         { messageId: 'behind', caption: null }
@@ -368,7 +454,6 @@ describe('mobile structured queued messages', () => {
         if (method === 'agentSession.queuedMessageSend') {
           return mutationOk({
             clientMessageId: 'draft-1',
-            // Every hand-off goes out under a fresh id and names its draft.
             submission: {
               clientMessageId: 'hand-off-1',
               queuedMessageId: 'draft-1',
@@ -466,14 +551,11 @@ describe('mobile structured queued messages', () => {
       await act(async () => {
         expect(await hook!.queued.edit!('draft-1')).toBe(true)
       })
-      // The copy comes from the card the user is looking at, not from any answer.
       expect(appendText.mock.calls).toEqual([['text of draft-1']])
-      // Copy-first: the text was in the composer before the delete RPC left, so
-      // no Delete outcome can lose it.
+      // Copy before Delete leaves no outcome that can lose card text.
       expect(appendText.mock.invocationCallOrder[0]).toBeLessThan(
         callOrderOf('agentSession.queuedMessageDelete')!
       )
-      // A plain delete: only the message id goes out, and nothing durable is written.
       expect(requestOf('agentSession.queuedMessageDelete').params.messageId).toBe('draft-1')
       expect(asyncStorage.setItem).not.toHaveBeenCalled()
     })
@@ -492,8 +574,7 @@ describe('mobile structured queued messages', () => {
       await act(async () => {
         expect(await hook!.queued.edit!('draft-1')).toBe(false)
       })
-      // The user sees both copies — composer text and the surviving card — and
-      // can press Delete again; nothing is lost and nothing is restored twice.
+      // Failed delete leaves both visible copies without restoring text a second time.
       expect(appendText.mock.calls).toEqual([['text of draft-1']])
       expect(hook!.queued.cards.map((card) => card.messageId)).toEqual(['draft-1'])
     })
@@ -513,7 +594,7 @@ describe('mobile structured queued messages', () => {
         expect(await hook!.queued.edit!('draft-1')).toBe(false)
       })
       expect(appendText.mock.calls).toEqual([['text of draft-1']])
-      // The copy is still in the composer: say so, or it reads as unsent and goes out twice.
+      // Report that the copy remains in the composer so users do not resend it as though nothing happened.
       expect(onSendError).toHaveBeenCalledWith('Already sent — your text is still in the composer.')
     })
 
@@ -555,24 +636,21 @@ describe('mobile structured queued messages', () => {
       await act(async () => {
         expect(await hook!.cancelPrompt()).toBe(true)
       })
-      // Exactly today's cancel: no withdrawal ask, no text owed back, nothing durable.
       const { params } = requestOf('agentSession.cancel')
       expect(Object.keys(params).sort()).toEqual(['envelope', 'turnId'])
       expect(params.turnId).toBe('turn-1')
       expect(appendText).not.toHaveBeenCalled()
       expect(asyncStorage.setItem).not.toHaveBeenCalled()
       expect(hook!.queued.cards.map((card) => card.messageId)).toEqual(['draft-1'])
-      // The host's pause is the queue's, published beside the list; the card itself is not held.
       act(() =>
         listener?.(batchEvent([queuedDraft({ messageId: 'draft-1' })], [], { reason: 'stopped' }))
       )
       expect(hook!.queued.pause).toEqual({ reason: 'stopped' })
       expect(hook!.queued.cards[0]).toMatchObject({
         messageId: 'draft-1',
-        paused: false,
+        hold: 'queue-paused',
         caption: null
       })
-      // A frame without the list leaves the pause alone; one that publishes the list states it.
       act(() => listener?.(batchEvent()))
       expect(hook!.queued.pause).toEqual({ reason: 'stopped' })
       act(() => listener?.(batchEvent([queuedDraft({ messageId: 'draft-1' })], [], null)))

@@ -60,8 +60,7 @@ export function RuntimePairingUrlGenerator({
 
   const setContainerNode = useCallback(
     (node: HTMLDivElement | null): void => {
-      // Why: copy feedback timers are owned by this settings surface; clear
-      // them when Settings collapses or navigates away.
+      // Cancel surface-owned copy timers when Settings detaches.
       if (!node) {
         clearCopiedTargetResetTimer()
       }
@@ -189,15 +188,13 @@ export function RuntimePairingUrlGenerator({
       const result = await window.api.mobile.getRuntimePairingUrl({
         address,
         rotate: true,
-        // Why: main gates the one-way network widen on this, so the declared choice must travel with the
-        // address — the address alone cannot tell "This computer only" from a loopback tunnel front-end.
+        // Send declared reach with the address; loopback alone cannot distinguish local-only intent from a tunnel frontend.
         reach: runtimePairingReachForIntent(intent)
       })
       if (!result.available) {
         clearGeneratedUrls()
         if (mountedRef.current) {
-          // Why: STA-2370 — surface the specific network-exposure guidance when the widen failed; fall back
-          // to the generic message for other unavailable cases (e.g. no reachable address).
+          // Prefer specific exposure guidance after widening failure, with generic fallback for other unavailable cases (STA-2370).
           toast.error(
             result.guidance ??
               translate(

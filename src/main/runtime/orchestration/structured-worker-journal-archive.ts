@@ -1,11 +1,4 @@
-/**
- * Freezing and re-reading a structured worker's journal.
- *
- * The terminal path archives a redacted PTY tail; there is no PTY here, so the durable evidence is
- * the journal projected into the same message shape `worker-read --source transcript` already
- * serves. It gets its own archive kind because its identity is a session, not a transcript file on
- * disk, and because the read side must be able to say which of the three it is holding.
- */
+/** Archive structured journals as transcript-shaped evidence with session identity, rather than pretending a PTY or file exists. */
 
 import type { AgentType, NativeChatMessage } from '../../../shared/native-chat-types'
 import { projectStructuredItemsToNativeChat } from '../../../shared/structured-agent-session-projection'
@@ -25,16 +18,7 @@ export type WorkerStructuredJournalArchive = {
   warnings: string[]
 }
 
-/**
- * Project a journal page into messages and bound it NEWEST-first.
- *
- * One newest-first pass, never the forward wire bound first: that one keeps the HEAD, so a long
- * worker's archive ended at its early exploration and dropped the answer it was released for —
- * under a warning that said the OLDEST messages had gone. The same reasoning holds for any reader
- * that wants a worker's RECENT output, which is why this is shared rather than inlined below.
- *
- * Redacts dispatch capabilities and clips oversized blocks, exactly as the transcript path does.
- */
+/** Redact and bound newest-first so final answers survive; forward wire bounding first would discard them. */
 export function boundStructuredJournalTail(items: readonly AgentJournalRenderItem[]): {
   messages: NativeChatMessage[]
   limited: boolean

@@ -1,5 +1,4 @@
-// Commands that start, restart, sleep or wake terminals. Their layout effect is small (bindings
-// and sleeping records); the runtime runs the returned effects after replying.
+// Return terminal process effects separately from bindings/sleeping records; the runtime runs them after replying.
 
 import { isPaneSleepRecord } from '../agent-session-resume'
 import { omitStoredFields } from './stored-record-fields'
@@ -20,7 +19,6 @@ import {
 } from './workspace-layout-model'
 import { withWorkspace } from './workspace-layout-removal'
 
-/** Every pane of the workspace: its key (what commands name) and its leaf (what keys its data). */
 function workspacePanes(workspace: WorkspaceLayout): { paneKey: string; leafId: string }[] {
   return workspace.tabs.flatMap((tab) =>
     tab.kind === 'terminal'
@@ -29,18 +27,11 @@ function workspacePanes(workspace: WorkspaceLayout): { paneKey: string; leafId: 
   )
 }
 
-/** A slept pane's record or a running agent's resume record: either says how its agent resumes. */
 function hasResumeRecord(leaf: LayoutLeaf | undefined): boolean {
   return leaf?.sleeping !== undefined || leaf?.resume !== undefined
 }
 
-/**
- * Idempotent: starts or restores a pane that has no live terminal. A bound pane is live unless the
- * runtime knows otherwise (a start status, or an ended terminal), so its binding names what it
- * restores from; a live pane, or one whose start is in flight, is left alone, and only
- * restartPane replaces a terminal. The runtime's start
- * resumes the agent a pane's sleeping record names, so a slept pane starts from its record.
- */
+/** Start or restore idempotently from the pane’s retained binding/resume record. Assume bindings live unless runtime evidence says otherwise; only restartPane replaces a live terminal. */
 export function startPane(
   model: WorkspaceLayoutModel,
   command: CommandOf<'startPane'>,
@@ -55,7 +46,7 @@ export function startPane(
   if (leaf?.ptyId && context.retiresBinding?.(command.paneKey, leaf.ptyId)) {
     return restartPane(model, { ...command, type: 'restartPane' })
   }
-  // A live terminal comes first: a running agent's resume record does not make its pane asleep.
+  // A running agent’s resume record does not make a live terminal asleep.
   const live = leaf?.ptyId && (context.isBindingLive?.(command.paneKey, leaf.ptyId) ?? true)
   if (live || context.isStarting?.(pane.leafId)) {
     return applied(model)
@@ -113,10 +104,7 @@ export function sleep(model: WorkspaceLayoutModel, command: CommandOf<'sleep'>):
   )
 }
 
-/**
- * Without `recordOnly`, starts the slept panes and keeps their records: the runtime's start resumes
- * from them and keeps them in the pane-owned form, so a failed start or a host crash resumes again.
- */
+/** Start slept panes unless recordOnly; retain resume records so failed starts or host crashes can retry. */
 export function wake(model: WorkspaceLayoutModel, command: CommandOf<'wake'>): Applied {
   let workspace = model.workspaces[command.workspace]!
   // A recordOnly wake drops either record (how a live one is cleared); a start wakes only slept panes.

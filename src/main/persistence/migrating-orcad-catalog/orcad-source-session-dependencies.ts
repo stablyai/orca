@@ -14,7 +14,6 @@ type SessionScope = {
   ownerMatches: (ownerKey: string, partitionHostId: string) => boolean
 }
 
-/** The terminal tabs and PTYs the target's sessions own, across every partition. */
 export function inspectOrcadMigrationSourceSessions(
   state: PersistedState,
   scope: SessionScope

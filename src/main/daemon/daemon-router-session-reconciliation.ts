@@ -11,8 +11,7 @@ export async function reconcileDaemonRouterSessions(
   const aliveProviders = new Map<string, Set<DaemonPtyAdapter>>()
   for (const adapter of adapters) {
     const result = await adapter.reconcileOnStartup(validWorktreeIds)
-    // Why: daemon startup can reconcile many restored sessions; spreading
-    // those arrays into push can exceed JavaScript's argument limit.
+    // Avoid the argument limit when reconciling large restored-session inventories.
     for (const id of result.alive) {
       alive.push(id)
     }

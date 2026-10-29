@@ -9,11 +9,7 @@ import type {
   WorktreePollerWindowVisibility
 } from './worktree-base-directory-poller'
 
-// Why: measure the fan-out this poller issues per scan (peak concurrent `stat`
-// calls, `readdir` call count as a proxy for "a tick ran") without depending on
-// real disk timing (#17828). `entryZeroStatCalls` tracks every stat under a
-// specific pre-existing entry (its dir plus every leaf), used to prove the
-// entry-dir signature gate keeps an unchanged entry to one stat per tick.
+// Measure per-tick fanout with stat/readdir hooks; unchanged entries should need only one directory stat.
 type StatHook = { current: ((path: unknown) => Promise<void>) | null }
 const { statDelayMs, statHook, readdirCalls, concurrency, entryZeroStatCalls } = vi.hoisted(() => {
   const statHook: StatHook = { current: null }
@@ -103,9 +99,6 @@ describe('startGitCommonPolling fan-out bounds (#17828)', () => {
     dirsToRemove.push(commonDir)
     const sub = await startGitCommonPolling(commonDir, () => {}, 100_000, alwaysVisible)
     cleanups.push(() => sub.unsubscribe())
-    // 200 entries x ~6 concurrent structural stats each would peak near 1,200
-    // unbounded; bounding to 8 in-flight entries keeps the peak independent of
-    // entry count instead of scaling with it.
     expect(concurrency.peak).toBeLessThan(80)
   })
 
@@ -117,8 +110,7 @@ describe('startGitCommonPolling fan-out bounds (#17828)', () => {
     const sub = await startGitCommonPolling(commonDir, () => {}, pollIntervalMs, alwaysVisible)
     cleanups.push(() => sub.unsubscribe())
     readdirCalls.count = 0
-    // ~60 would-be 5ms ticks elapse in this window while every stat takes 20ms;
-    // the ticking guard must serialize scans, not launch overlapping ones.
+    // Slow stats must serialize ticks rather than launching overlapping scans.
     await new Promise((resolve) => setTimeout(resolve, 300))
     expect(readdirCalls.count).toBeLessThan(10)
   })
@@ -140,10 +132,7 @@ describe('startGitCommonPolling fan-out bounds (#17828)', () => {
       },
       { timeout: 2_000 }
     )
-    // Without the entry-dir signature gate, an unchanged entry still costs ~6
-    // stats every tick (HEAD/gitdir/locked/config.worktree/logs/HEAD/index).
-    // With the gate, only the entry dir itself is stat'd once nothing changed —
-    // one stat per tick, in lockstep with the readdir tripwire.
+    // Unchanged entry stats should track ticks, not the number of structural leaves.
     expect(entryZeroStatCalls.count).toBeLessThanOrEqual(readdirCalls.count + 1)
     expect(entryZeroStatCalls.count).toBeGreaterThanOrEqual(readdirCalls.count - 1)
   })
@@ -193,17 +182,12 @@ describe('startGitCommonPolling fan-out bounds (#17828)', () => {
 
     const entryDir = join(commonDir, 'worktrees', 'wt-0')
     const gitdirPath = join(entryDir, 'gitdir')
-    // `gitdir` is the one structural leaf git rewrites in place (worktree move/repair),
-    // so the entry dir's own signature never moves — the periodic ungated backstop
-    // (INDEX_BACKSTOP_TICKS = 15) is the only thing that catches it.
+    // In-place gitdir repair bypasses directory signatures; only the periodic ungated backstop detects it.
     await writeFile(gitdirPath, `${join(commonDir, 'checkout-moved', '.git')}\n`)
 
-    // Not caught by the next several ticks: the gate stays closed since nothing
-    // moved the entry dir's own signature.
     await new Promise((resolve) => setTimeout(resolve, pollIntervalMs * 5))
     expect(events.flat()).not.toContainEqual({ type: 'update', path: gitdirPath })
 
-    // Eventually caught regardless of the gate, once tick 15 forces the periodic backstop.
     await vi.waitFor(
       () => {
         expect(events.flat()).toContainEqual({ type: 'update', path: gitdirPath })

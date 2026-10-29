@@ -26,12 +26,13 @@ export const preflightApi = {
     }
     linear: { connected: boolean }
   }> => ipcRenderer.invoke('preflight:check', args),
-  detectAgents: (args?: PreflightRuntimeContext): Promise<string[]> =>
+  detectAgents: (args?: PreflightRuntimeContext & { enabledOnly?: boolean }): Promise<string[]> =>
     ipcRenderer.invoke('preflight:detectAgents', args),
   zcodeInteractiveCapability: (): Promise<ZCodeInteractiveCapability> =>
     ipcRenderer.invoke('preflight:zcodeInteractiveCapability'),
-  refreshAgents: (args?: PreflightRuntimeContext): Promise<RefreshAgentsResult> =>
-    ipcRenderer.invoke('preflight:refreshAgents', args),
+  refreshAgents: (
+    args?: PreflightRuntimeContext & { enabledOnly?: boolean }
+  ): Promise<RefreshAgentsResult> => ipcRenderer.invoke('preflight:refreshAgents', args),
   detectRemoteAgents: (args: { connectionId: string }): Promise<string[]> =>
     ipcRenderer.invoke('preflight:detectRemoteAgents', args),
   detectRemoteWindowsTerminalCapabilities: (args: {

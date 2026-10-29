@@ -1,20 +1,5 @@
-/**
- * Boots the BUILT terminal daemon (out/main/daemon-entry.js) under plain Node —
- * the exact way production forks it (ELECTRON_RUN_AS_NODE = a plain-Node
- * process) — and asserts it starts, serves a real PTY, and stops.
- *
- * Why this exists: native-smoke CI (and packaging) went green while
- * v1.4.129-rc.1 shipped a daemon that exited code 1 at module load because an
- * electron `require` leaked into its bundle graph. Nothing executed the built
- * entry under plain Node, so the outage was invisible until an adopted old
- * daemon died in the field. This runs on every PR that touches the daemon.
- *
- * Hard assertions (fail the job):
- *   - the daemon signals `{ type: 'ready' }` over IPC within the timeout, and
- *   - it terminates when asked (no hang / zombie).
- * Best-effort (logged skip, never fails): an end-to-end `ptySpawnHealth` RPC,
- * because node-pty spawn can be flaky on constrained CI runners.
- */
+// Run built daemon under plain Node: an Electron import escaped CI and broke v1.4.129-rc.1 at module load.
+// Require IPC ready and clean shutdown; PTY health is best-effort because constrained CI spawning can be flaky.
 import { fork } from 'node:child_process'
 import { connect } from 'node:net'
 import { randomUUID } from 'node:crypto'
@@ -33,8 +18,7 @@ function log(message) {
   process.stdout.write(`[daemon-boot-smoke] ${message}\n`)
 }
 
-// Why: the daemon rejects a hello whose protocol version differs, so read the
-// current version from source rather than hardcoding a number that can drift.
+// Read protocol from source; daemon rejects mismatched hello versions.
 function readProtocolVersion() {
   const protocolSourcePath = 'src/main/daemon/daemon-protocol-version.ts'
   const source = readFileSync(join(projectDir, protocolSourcePath), 'utf8')
@@ -46,8 +30,7 @@ function readProtocolVersion() {
 }
 
 function makeSocketPath(userDataDir) {
-  // Why: Windows AF_UNIX-style IPC uses named pipes; POSIX uses a filesystem
-  // socket kept under the scratch userData dir so cleanup removes it.
+  // Windows uses named pipes; POSIX socket stays under scratch userData for cleanup.
   if (process.platform === 'win32') {
     return `\\\\.\\pipe\\orca-daemon-smoke-${process.pid}-${randomUUID()}`
   }
@@ -175,9 +158,7 @@ async function main() {
       'daemon-boot-smoke'
     ],
     {
-      // Plain Node: no ELECTRON_RUN_AS_NODE. process.execPath is already node in
-      // CI, and this is exactly the runtime where a leaked `require("electron")`
-      // throws MODULE_NOT_FOUND — the failure this smoke exists to catch.
+      // Use Node directly, without ELECTRON_RUN_AS_NODE, to expose leaked Electron dependencies at startup.
       stdio: ['ignore', 'ignore', 'pipe', 'ipc'],
       env: { ...process.env, ORCA_USER_DATA_PATH: userDataDir }
     }
@@ -192,9 +173,7 @@ async function main() {
     if (child.exitCode === null && child.signalCode === null && child.pid) {
       try {
         child.kill('SIGKILL')
-      } catch {
-        // already gone
-      }
+      } catch {}
     }
     rmSync(userDataDir, { recursive: true, force: true })
   }
@@ -284,15 +263,11 @@ async function main() {
     if (existsSync(pidPath)) {
       throw new Error('daemon left its PID ownership record behind after shutdown')
     }
-    // Why not "the entry is gone": a departing daemon deliberately leaves its endpoint behind
-    // for the next publisher to replace in one rename. What must be true is that nothing
-    // answers there any more.
+    // Canonical entry survives shutdown for atomic replacement; assert no responder rather than path absence.
     if (process.platform !== 'win32' && (await probeEndpoint(socketPath)) === 'connected') {
       throw new Error('daemon still answers its endpoint after shutdown')
     }
-    // The private bind name is consumed by the publish, and nothing sweeps the runtime dir any
-    // more, so a leak here is permanent. Match what the code actually generates rather than a
-    // literal prefix: this check silently matched nothing after the namespace moved from .b.
+    // Private bind paths are consumed at publish and never swept; derive their namespace from source or renames silently disable leak detection.
     const leaked = readdirSync(userDataDir).filter((entry) => /^\.[a-z][0-9a-f]{10}$/.test(entry))
     if (leaked.length > 0) {
       throw new Error(`daemon leaked private bind names: ${leaked.join(', ')}`)

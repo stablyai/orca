@@ -8,7 +8,6 @@ import {
   runAgentModelCatalogSession
 } from './agent-model-catalog-probe-runner'
 
-// Every child here is this test's own Node, never an agent CLI.
 const folders: string[] = []
 afterEach(() => {
   for (const folder of folders.splice(0)) {

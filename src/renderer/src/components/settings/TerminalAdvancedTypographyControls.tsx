@@ -23,9 +23,7 @@ type TerminalAdvancedTypographyControlsProps = {
   updateSettings: (updates: Partial<GlobalSettings>) => void
 }
 
-/** Low-frequency terminal typography knobs (weight, line height, ligatures).
- *  Split out of the primary font controls so the default Terminal scan stays
- *  compact while these stay searchable inside the Advanced disclosure. */
+/** Keep rare typography controls searchable under Advanced without crowding the primary font controls. */
 export function TerminalAdvancedTypographyControls({
   settings,
   updateSettings
@@ -141,8 +139,7 @@ export function TerminalAdvancedTypographyControls({
             'auto.components.settings.TerminalAppearanceSection.be8da35e7f',
             'Font Ligatures'
           )}
-          // Why: "ligatures" is jargon; the per-state gloss tells the user whether
-          // Auto resolves on/off for their current font.
+          // Explain whether Auto enables ligatures for the current font.
           description={
             settings.terminalLigatures === 'on'
               ? translate(

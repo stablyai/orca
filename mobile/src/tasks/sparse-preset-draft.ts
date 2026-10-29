@@ -36,7 +36,7 @@ export function parseSparsePresetDirectories(value: string): SparsePresetDirecto
     .map((entry) => entry.trim())
     .filter((entry) => entry.length > 0)
 
-  // Why: absolute paths can look repo-relative after slash normalization.
+  // Check absolute paths before normalization can make them look repo-relative.
   if (rawEntries.some(isAbsoluteSparseDirectoryPath)) {
     return {
       directories: [],

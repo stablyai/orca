@@ -24,9 +24,7 @@ const inFlightEvent = (sequence: number) => ({
 })
 
 describe('applyGitHubPRRefreshEvent no-op updates', () => {
-  // Why a listener count: zustand bails out only on Object.is(next, state), so a
-  // `return {}` no-op branch still rebuilds the root and wakes every selector in the
-  // app. The state looks unchanged afterwards, which is exactly why it goes unnoticed.
+  // Count notifications: return {} looks unchanged but wakes every selector; Zustand no-op requires identical root state.
   it('does not notify subscribers when a stale sequence changes nothing', () => {
     const store = createTestStore()
     store.getState().applyGitHubPRRefreshEvent(inFlightEvent(4))

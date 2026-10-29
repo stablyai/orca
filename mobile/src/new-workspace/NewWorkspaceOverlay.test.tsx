@@ -1,6 +1,7 @@
 import { createElement, useEffect, type ReactNode } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { createDownloadProgressFeed } from '../mobile-web-shell/download-progress-feed'
 import type { ShellOverlayDownload, ShellOverlayLoad } from '../mobile-web-shell/shell-overlay-load'
 
 type LoadingDrawerProps = {
@@ -65,8 +66,9 @@ describe("the New Workspace overlay's loading drawer", () => {
     })
     expect(layer().props).toMatchObject({ visible: true, download: null })
 
-    act(() => shell.report!({ kind: 'loading', download: { receivedBytes: 1, totalBytes: 8 } }))
-    expect(layer().props.download).toEqual({ receivedBytes: 1, totalBytes: 8 })
+    const download = { receivedBytes: 1, totalBytes: 8, feed: createDownloadProgressFeed() }
+    act(() => shell.report!({ kind: 'loading', download }))
+    expect(layer().props.download).toBe(download)
     act(() => shell.report!({ kind: 'loading', download: null }))
     expect(layer().props.download).toBeNull()
     expect(layerMounts.count).toBe(1)

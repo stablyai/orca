@@ -1,60 +1,110 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { Mock } from 'vitest'
 import { subscribeConnectionRevivalTriggers } from './connection-revival-triggers'
-import { startSocketDeadlineClock } from './socket-deadline-clock'
+import { recordSocketDeadlineAppState, startSocketDeadlineClock } from './socket-deadline-clock'
 
+type RevivalNudge = Parameters<typeof subscribeConnectionRevivalTriggers>[0]
 type AppStateListener = (next: string) => void
 type NetworkSnapshot = { isConnected?: boolean; type?: string }
 type NetworkListener = (state: NetworkSnapshot) => void
 
-let appStateListener: AppStateListener | null = null
-let networkListener: NetworkListener | null = null
+const appStateListeners = new Map<string, Set<AppStateListener>>()
+const networkListeners = new Set<NetworkListener>()
+const subscriptions = new Set<() => void>()
 let seededNetworkState: NetworkSnapshot = { isConnected: true, type: 'WIFI' }
+let readNetworkState = () => Promise.resolve(seededNetworkState)
 const appStateRemove = vi.fn()
 const networkRemove = vi.fn()
 
 vi.mock('react-native', () => ({
   AppState: {
     currentState: 'active',
-    addEventListener: (_event: string, listener: AppStateListener) => {
-      appStateListener = listener
-      return { remove: appStateRemove }
+    addEventListener: (event: string, listener: AppStateListener) => {
+      const listeners = appStateListeners.get(event) ?? new Set<AppStateListener>()
+      appStateListeners.set(event, listeners)
+      listeners.add(listener)
+      return {
+        remove: () => {
+          appStateRemove()
+          listeners.delete(listener)
+        }
+      }
     }
   }
 }))
 
 vi.mock('expo-network', () => ({
-  getNetworkStateAsync: () => Promise.resolve(seededNetworkState),
+  getNetworkStateAsync: () => readNetworkState(),
   addNetworkStateListener: (listener: NetworkListener) => {
-    networkListener = listener
-    return { remove: networkRemove }
+    networkListeners.add(listener)
+    return {
+      remove: () => {
+        networkRemove()
+        networkListeners.delete(listener)
+      }
+    }
   }
 }))
 
-// Why: the baseline seed resolves on a microtask; flush it so listener
-// events in the test observe the same ordering as a real subscription.
-async function subscribeAndSeed(nudge: () => void): Promise<() => void> {
-  const unsubscribe = subscribeConnectionRevivalTriggers(nudge)
+async function subscribeAndSeed(nudge: RevivalNudge): Promise<() => void> {
+  const unsubscribe = subscribe(nudge)
   await Promise.resolve()
   return unsubscribe
 }
 
+function subscribe(nudge: RevivalNudge): () => void {
+  const unsubscribe = subscribeConnectionRevivalTriggers(nudge)
+  subscriptions.add(unsubscribe)
+  return () => {
+    subscriptions.delete(unsubscribe)
+    unsubscribe()
+  }
+}
+
+function emitAppState(next: string): void {
+  expect(appStateListeners.get('change')?.size).toBe(1)
+  for (const listener of appStateListeners.get('change') ?? []) {
+    listener(next)
+  }
+}
+
+function emitNetwork(state: NetworkSnapshot): void {
+  expect(networkListeners.size).toBe(1)
+  for (const listener of networkListeners) {
+    listener(state)
+  }
+}
+
 describe('subscribeConnectionRevivalTriggers', () => {
-  let nudge: ReturnType<typeof vi.fn>
+  let nudge: Mock<RevivalNudge>
 
   beforeEach(() => {
     vi.clearAllMocks()
-    appStateListener = null
-    networkListener = null
+    appStateListeners.clear()
+    networkListeners.clear()
+    readNetworkState = () => Promise.resolve(seededNetworkState)
     seededNetworkState = { isConnected: true, type: 'WIFI' }
-    nudge = vi.fn()
+    nudge = vi.fn<RevivalNudge>()
+  })
+
+  afterEach(() => {
+    for (const unsubscribe of subscriptions) {
+      unsubscribe()
+    }
+    subscriptions.clear()
+    expect([...appStateListeners.values()].every((listeners) => listeners.size === 0)).toBe(true)
+    expect(networkListeners.size).toBe(0)
+    recordSocketDeadlineAppState('active')
+    vi.restoreAllMocks()
   })
 
   it('nudges when the app returns to the foreground, not on background', async () => {
     await subscribeAndSeed(nudge)
-    appStateListener?.('background')
+    emitAppState('background')
     expect(nudge).not.toHaveBeenCalled()
-    appStateListener?.('active')
+    emitAppState('active')
     expect(nudge).toHaveBeenCalledTimes(1)
+    expect(nudge).toHaveBeenLastCalledWith('app-resume')
   })
 
   it('keeps elapsed background time when a device sleep pauses the monotonic clock', async () => {
@@ -65,12 +115,13 @@ describe('subscribeConnectionRevivalTriggers', () => {
     const unsubscribe = await subscribeAndSeed(nudge)
     const elapsed = startSocketDeadlineClock()
     try {
-      appStateListener?.('background')
+      emitAppState('background')
       wall += 3 * 60 * 60_000
       monotonic += 12_000
-      appStateListener?.('active')
+      emitAppState('active')
       expect(elapsed()).toBe(3 * 60 * 60_000)
       expect(nudge).toHaveBeenCalledTimes(1)
+      expect(nudge).toHaveBeenLastCalledWith('app-resume')
     } finally {
       unsubscribe()
       wallClock.mockRestore()
@@ -80,37 +131,51 @@ describe('subscribeConnectionRevivalTriggers', () => {
 
   it('nudges when the network comes back online', async () => {
     await subscribeAndSeed(nudge)
-    networkListener?.({ isConnected: false, type: 'NONE' })
+    emitNetwork({ isConnected: false, type: 'NONE' })
     expect(nudge).not.toHaveBeenCalled()
-    networkListener?.({ isConnected: true, type: 'WIFI' })
+    emitNetwork({ isConnected: true, type: 'WIFI' })
     expect(nudge).toHaveBeenCalledTimes(1)
+    expect(nudge).toHaveBeenLastCalledWith('network-change')
   })
 
   it('nudges when the app started offline and the first event is the recovery', async () => {
     seededNetworkState = { isConnected: false, type: 'NONE' }
     await subscribeAndSeed(nudge)
-    networkListener?.({ isConnected: true, type: 'WIFI' })
+    emitNetwork({ isConnected: true, type: 'WIFI' })
     expect(nudge).toHaveBeenCalledTimes(1)
+    expect(nudge).toHaveBeenLastCalledWith('network-change')
   })
 
   it('nudges on a Wi-Fi to cellular handoff that never reports offline', async () => {
     await subscribeAndSeed(nudge)
-    networkListener?.({ isConnected: true, type: 'CELLULAR' })
+    emitNetwork({ isConnected: true, type: 'CELLULAR' })
     expect(nudge).toHaveBeenCalledTimes(1)
+    expect(nudge).toHaveBeenLastCalledWith('network-change')
   })
 
   it('stays quiet when the network state matches the seeded baseline', async () => {
     await subscribeAndSeed(nudge)
-    networkListener?.({ isConnected: true, type: 'WIFI' })
-    networkListener?.({ isConnected: true, type: 'WIFI' })
+    emitNetwork({ isConnected: true, type: 'WIFI' })
+    emitNetwork({ isConnected: true, type: 'WIFI' })
     expect(nudge).not.toHaveBeenCalled()
   })
 
-  it('ignores a stale seed that resolves after unsubscribe', async () => {
-    seededNetworkState = { isConnected: false, type: 'NONE' }
-    const unsubscribe = subscribeConnectionRevivalTriggers(nudge)
-    unsubscribe()
+  it('keeps a newer network event when a stale seed resolves later', async () => {
+    let finishSeed: (state: NetworkSnapshot) => void = () => {}
+    const pendingSeed = new Promise<NetworkSnapshot>((resolve) => {
+      finishSeed = resolve
+    })
+    readNetworkState = () => pendingSeed
+    const unsubscribe = subscribe(nudge)
+    emitNetwork({ isConnected: true, type: 'CELLULAR' })
+    finishSeed({ isConnected: true, type: 'WIFI' })
     await Promise.resolve()
+    emitNetwork({ isConnected: true, type: 'CELLULAR' })
+    expect(nudge).not.toHaveBeenCalled()
+    emitNetwork({ isConnected: true, type: 'WIFI' })
+    expect(nudge).toHaveBeenCalledTimes(1)
+    expect(nudge).toHaveBeenLastCalledWith('network-change')
+    unsubscribe()
     expect(appStateRemove).toHaveBeenCalledTimes(1)
     expect(networkRemove).toHaveBeenCalledTimes(1)
   })

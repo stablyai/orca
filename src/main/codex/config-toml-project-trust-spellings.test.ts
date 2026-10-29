@@ -11,7 +11,6 @@ import {
 } from './config-toml-runtime-owned-sections'
 import { upsertProjectTrustLevelInContent } from './config-toml-trust'
 
-// Why (#22592): Codex's settings screen writes these spellings; each is the same TOML key as Orca's.
 const PROJECT = '/Users/me/Projects/agentic-WPS'
 const HEADER_SPELLINGS = [
   `["projects"."${PROJECT}"]`,

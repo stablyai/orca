@@ -6,7 +6,7 @@ const OWNED_SCHEME = 'vscode-remote'
 const OWNED_SCHEME_PREFIX = /^vscode-remote:/i
 const UNC_AUTHORITY_SUFFIX = '-unc'
 
-/** Two FNV-1a lanes: a short, stable authority per owner, so different owners don't collide. */
+/** Two FNV-1a lanes produce a compact, stable owner authority. */
 function ownerAuthority(ownerKey: string): string {
   let a = 0x811c9dc5
   let b = 0x01000193
@@ -18,19 +18,10 @@ function ownerAuthority(ownerKey: string): string {
   return a.toString(16).padStart(8, '0') + b.toString(16).padStart(8, '0')
 }
 
-/**
- * The single filesystem-path -> Monaco model key function. Monaco keys its model registry by
- * `uri.toString()`, so creation, lookup and ownership comparison must all go through this.
- *
- * Why not `Uri.parse`: it reads `C:\src\a.ts` as scheme `c`, which fails the scheme gate in
- * `modelService._schemaShouldMaintainUndoRedoElements`, so closed-file undo is dropped for every
- * file on Windows. `Uri.file` always yields the `file:` scheme that gate allows, and the result
- * re-parses to itself, so a consumer that can only take a string (the `path` prop of
- * `@monaco-editor/react`, which calls `Uri.parse` internally) lands on the same key.
- */
+/** Use one round-trippable key for creation, lookup and ownership. Uri.file preserves Windows file schemes and closed-file undo; Uri.parse would treat drive letters as schemes. */
 export function toEditorModelUri(filePath: string, ownerKey = ''): string {
   if (OWNED_SCHEME_PREFIX.test(filePath)) {
-    // An existing owned key: its authority is its owner, its path the host's path.
+    // Preserve the existing owned key’s authority and real host path.
     const owned = URI.parse(filePath)
     if (!ownerKey) {
       return owned.toString()
@@ -43,11 +34,7 @@ export function toEditorModelUri(filePath: string, ownerKey = ''): string {
   if (!ownerKey) {
     return local.with({ fragment: parsed.fragment }).toString()
   }
-  // Equal paths on different owners must not share text or undo history. Why the owner is the
-  // authority of its own scheme: the TypeScript service names files by URI and treats
-  // `scheme://authority/` as a root, so the file name stays last (TSX detection) and `..` can't
-  // climb into another owner's tree or into local `file:` models.
-  // The re-parse applies `toString`'s drive-letter fold.
+  // Owner authorities form TypeScript import roots: .. cannot reach other hosts or local models, and real extensions remain last for TSX detection. Reparse to apply drive-letter folding.
   const folded = URI.parse(local.toString())
   return folded.authority
     ? ownedModelUri(ownerKey, `/${folded.authority}${folded.path}`, true)
@@ -55,8 +42,7 @@ export function toEditorModelUri(filePath: string, ownerKey = ''): string {
 }
 
 function ownedModelUri(ownerKey: string, path: string, unc: boolean): string {
-  // Why UNC marks the authority, not the path: the TypeScript worker looks models up by its
-  // normalized name, which collapses a `//server` path, and `/server/...` is a different file.
+  // Tag UNC identity in the authority; worker path normalization collapses //server and would conflate it with a local /server path.
   const authority = ownerAuthority(ownerKey) + (unc ? UNC_AUTHORITY_SUFFIX : '')
   return URI.from({ scheme: OWNED_SCHEME, authority, path }).toString()
 }

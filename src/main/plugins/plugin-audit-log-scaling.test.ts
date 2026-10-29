@@ -41,7 +41,7 @@ it('preserves blank, malformed, unterminated and unusual-limit selection', async
   }
 })
 
-/** The pre-scan `split/filter/slice` selection, as the differential oracle. */
+/** Retain the original split-based selection as the differential oracle. */
 function referenceRecentLines(text: string, limit: number): string[] {
   return text
     .split('\n')
@@ -66,8 +66,6 @@ it('selects the identical line set as the full split over randomized log shapes'
     const lineCount = Math.floor(random() * 12)
     for (let i = 0; i < lineCount; i += 1) {
       const kind = random()
-      // Blank lines, whitespace-only lines, CRLF rows, non-JSON rows and multi-byte
-      // payloads all have to land on the same boundaries the split-based scan found.
       if (kind < 0.15) {
         pieces.push('')
       } else if (kind < 0.25) {
@@ -80,7 +78,6 @@ it('selects the identical line set as the full split over randomized log shapes'
         pieces.push(JSON.stringify({ ts: i, actor: 'plugin:x' }))
       }
     }
-    // Half the corpora end without a trailing newline (a torn final append).
     source.content = pieces.join('\n') + (random() < 0.5 ? '\n' : '')
 
     for (const limit of [1, 2, 3, 5, 200]) {
@@ -101,8 +98,6 @@ it('selects the identical line set as the full split over randomized log shapes'
 })
 
 it('never yields a record split across a line boundary', async () => {
-  // A 200-record window from the tail of a file whose records are long and carry
-  // escaped newlines: every returned line must still parse to one whole record.
   source.content = `${Array.from({ length: 3000 }, (_, ts) =>
     JSON.stringify({ ts, summary: `line\\nwith escapes ${'x'.repeat(200)}` })
   ).join('\n')}\n`

@@ -1,6 +1,6 @@
 import '../unused-default-rpc-methods.test-fixture'
 import { expect, it, vi } from 'vitest'
-import { WatcherProcessFailure } from '../../../ipc/parcel-watcher-process-failure'
+import { WatcherProcessFailure } from '../../../ipc/filesystem/watcher-process/parcel-watcher-process-failure'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { RpcRequest } from '../core'
 import { RpcDispatcher } from '../dispatcher'

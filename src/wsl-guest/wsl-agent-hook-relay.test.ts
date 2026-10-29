@@ -1,5 +1,3 @@
-// Guest-side WSL hook relay pieces: host-given port/token binding with
-// ephemeral fallback, and the shared endpoint-path contract.
 import { createServer } from 'node:net'
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -17,8 +15,7 @@ import {
 const LEAF_ID = '22222222-2222-4222-8222-222222222222'
 const PANE_KEY = makePaneKey('tab-2', LEAF_ID)
 
-// Parse an endpoint file tolerantly across platforms: POSIX writes `KEY=value`,
-// Windows writes `set KEY=value`. Strips the optional `set ` prefix.
+// Read both POSIX KEY=value and Windows set KEY=value endpoint files.
 function parseEndpointFile(contents: string): Record<string, string> {
   const env: Record<string, string> = {}
   for (const rawLine of contents.split(/\r?\n/)) {
@@ -68,6 +65,30 @@ describe('RelayAgentHookServer host-given coordinates (WSL relay)', () => {
     expect(server.usedPortFallback).toBe(false)
   })
 
+  it('authenticates the Claude view route and returns its host reply', async () => {
+    const forwardClaudeAgentView = vi.fn(async () => ({ requestId: 'request', agentId: 'child' }))
+    server = new RelayAgentHookServer({
+      endpointDir: tmpDir,
+      token: 'test-token',
+      forward: () => {},
+      forwardClaudeAgentView
+    })
+    await server.start()
+    const { port } = server.getCoordinates()
+    const body = { action: 'take', paneKey: PANE_KEY, sessionId: 'session', instanceId: 'instance' }
+    const post = (token: string) =>
+      fetch(`http://127.0.0.1:${port}/claude/agent-view`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-orca-agent-hook-token': token },
+        body: JSON.stringify(body)
+      })
+    expect((await post('wrong')).status).toBe(403)
+    expect(forwardClaudeAgentView).not.toHaveBeenCalled()
+    const response = await post('test-token')
+    expect(await response.json()).toEqual({ requestId: 'request', agentId: 'child' })
+    expect(forwardClaudeAgentView).toHaveBeenCalledWith(body)
+  })
+
   it('falls back to an ephemeral port when the preferred port is occupied', async () => {
     const occupant = createServer()
     const occupiedPort = await new Promise<number>((resolve) => {
@@ -89,7 +110,6 @@ describe('RelayAgentHookServer host-given coordinates (WSL relay)', () => {
       const bound = server.getCoordinates().port
       expect(bound).toBeGreaterThan(0)
       expect(bound).not.toBe(occupiedPort)
-      // Fallback still authenticates with the host-issued token.
       expect(server.getCoordinates().token).toBe('host-issued-token')
     } finally {
       await new Promise<void>((resolve) => occupant.close(() => resolve()))
@@ -155,9 +175,7 @@ describe('RelayAgentHookServer host-given coordinates (WSL relay)', () => {
       const { port, token, endpointFilePath } = server.getCoordinates()
       expect(port).not.toBe(occupiedPort)
 
-      // The endpoint file is the client re-coordination contract: surviving
-      // agents re-source it and MUST see the actual fallback port, not the
-      // occupied preferred port.
+      // Surviving agents re-source this endpoint file, so it must publish the actual fallback port.
       const published = parseEndpointFile(readFileSync(endpointFilePath, 'utf8'))
       expect(published.ORCA_AGENT_HOOK_PORT).toBe(String(port))
       expect(published.ORCA_AGENT_HOOK_PORT).not.toBe(String(occupiedPort))

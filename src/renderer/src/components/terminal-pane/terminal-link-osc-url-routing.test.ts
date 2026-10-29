@@ -153,10 +153,7 @@ describe('handleOscLink', () => {
     expect(openUrlMock).toHaveBeenCalledWith('https://example.com/')
     expect(createBrowserTabMock).not.toHaveBeenCalled()
     expect(preventDefault).toHaveBeenCalled()
-    // Why: we intentionally do NOT stopPropagation — xterm's SelectionService
-    // relies on the mouseup bubbling to ownerDocument to detach its drag-select
-    // mousemove listener. Stopping propagation was causing phantom selections
-    // after Cmd+clicking a link and then moving the mouse back over the terminal.
+    // Let mouseup bubble so xterm SelectionService detaches drag listeners; stopping it causes phantom selections after link clicks.
     expect(stopPropagation).not.toHaveBeenCalled()
   })
 
@@ -226,8 +223,11 @@ describe('handleOscLink', () => {
     expect(getTerminalFileOpenHint()).toBe(
       'Click for actions, ⌘+click to open, or ⇧⌘+click for default app'
     )
-    expect(getTerminalHtmlFileOpenHint()).toBe(
-      'Click for actions, ⌘+click to open, or ⇧⌘+click for default browser'
+    expect(getTerminalHtmlFileOpenHint({ primary: 'system', alternate: 'orca' })).toBe(
+      'Click for actions, ⌘+click to open, or ⇧⌘+click to open in Orca'
+    )
+    expect(getTerminalHtmlFileOpenHint({ primary: 'orca', alternate: 'system' })).toBe(
+      'Click for actions, ⌘+click to open, or ⇧⌘+click for system browser'
     )
     expect(getTerminalUrlOpenHint()).toBe(
       'Click for actions, ⌘+click to open, or ⇧⌘+click for system browser'
@@ -237,8 +237,8 @@ describe('handleOscLink', () => {
     expect(getTerminalFileOpenHint()).toBe(
       'Click for actions, Ctrl+click to open, or Shift+Ctrl+click for default app'
     )
-    expect(getTerminalHtmlFileOpenHint()).toBe(
-      'Click for actions, Ctrl+click to open, or Shift+Ctrl+click for default browser'
+    expect(getTerminalHtmlFileOpenHint({ primary: 'system', alternate: 'orca' })).toBe(
+      'Click for actions, Ctrl+click to open, or Shift+Ctrl+click to open in Orca'
     )
     expect(getTerminalUrlOpenHint()).toBe(
       'Click for actions, Ctrl+click to open, or Shift+Ctrl+click for system browser'
@@ -248,8 +248,8 @@ describe('handleOscLink', () => {
   it('omits plain-click actions from hover hints when the popover is disabled', () => {
     setPlatform('Macintosh')
     expect(getTerminalFileOpenHint(false)).toBe('⌘+click to open, or ⇧⌘+click for default app')
-    expect(getTerminalHtmlFileOpenHint(false)).toBe(
-      '⌘+click to open, or ⇧⌘+click for default browser'
+    expect(getTerminalHtmlFileOpenHint({ primary: 'system', alternate: 'orca' }, false)).toBe(
+      '⌘+click to open, or ⇧⌘+click to open in Orca'
     )
     expect(getTerminalUrlOpenHint({ showActions: false })).toBe(
       '⌘+click to open, or ⇧⌘+click for system browser'

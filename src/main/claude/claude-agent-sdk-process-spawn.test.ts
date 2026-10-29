@@ -46,7 +46,6 @@ describe('claude agent SDK process spawn', () => {
     expect(child).toBe(process.child)
     expect(spawn.child).toBe(process.child)
     expect(spawn.pid).toBe(4321)
-    // Windows has no supervisor: Claude itself is the child.
     expect(spawn.supervised).toBe(false)
     expect(process.specs[0]).toEqual({
       program: '/usr/local/bin/claude',
@@ -84,8 +83,7 @@ describe('claude agent SDK process spawn', () => {
       const supervisorSpec = JSON.parse(
         Buffer.from(String(spec.env?.ORCA_PROVIDER_SUPERVISOR_SPEC), 'base64').toString()
       )
-      // A gone Orca closes Claude as its own close does (stdin end and SIGTERM), not with the
-      // root-only stdin-end drain a managed provider gets by default.
+      // Orca exit must trigger Claude's close ladder, including descendant cleanup.
       expect(vi.mocked(createProviderSpawnSpec)).toHaveBeenLastCalledWith(
         expect.anything(),
         expect.anything(),
@@ -97,7 +95,6 @@ describe('claude agent SDK process spawn', () => {
         cwd: '/work/repo',
         ownerPid: globalThis.process.pid
       })
-      // The supervisor passes its env to Claude minus its own two keys.
       expect(spec.env).toMatchObject({ PATH: '/usr/bin', CLAUDE_CONFIG_DIR: '/accounts/one' })
     }
   )
@@ -124,7 +121,6 @@ describe('claude agent SDK process spawn', () => {
       if (!managed) {
         throw new Error('Claude spawner did not retain its managed child')
       }
-      // Claude leaves shortly after stdin ends, before the forced stop.
       process.child.stdin.on('finish', () =>
         setTimeout(() => process.child.emit('exit', 0, null), 10)
       )
@@ -137,7 +133,6 @@ describe('claude agent SDK process spawn', () => {
       await expect(proveClaudeChildExitWithReaper({ managed, tree }, () => tree)).resolves.toBe(
         true
       )
-      // SIGTERM to an unsupervised Claude on Windows is TerminateProcess; a skipped one leaves it running.
       if (specSupervised) {
         expect(process.child.kill).toHaveBeenCalledWith('SIGTERM')
       } else {
@@ -151,8 +146,6 @@ describe('claude agent SDK process spawn', () => {
     const controller = new AbortController()
     createClaudeCodeProcessSpawn(process.spawnImpl).spawn(sdkOptions({ signal: controller.signal }))
 
-    // Node's spawn({signal}) kills the child on abort; Orca's ladder must be the
-    // only thing that can end this process, or close() would report an assumed exit.
     expect(process.specs[0]).not.toHaveProperty('signal')
   })
 

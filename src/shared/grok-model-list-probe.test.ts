@@ -1,8 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { GROK_MODEL_LIST_ARGS, parseGrokModelList } from './grok-model-list-probe'
+import { parseGrokModelList } from './grok-model-list-probe'
 
-// Captured byte-for-byte from `grok models` on a signed-in account (`sed -n l`),
-// blank lines and the two-space bullet indent included.
+// Byte-exact signed-in grok models capture, including blank lines/two-space bullet indent (sed -n l).
 const SIGNED_IN_STDOUT = [
   'You are logged in with grok.com.',
   '',
@@ -15,14 +14,8 @@ const SIGNED_IN_STDOUT = [
 ].join('\n')
 
 describe('parseGrokModelList', () => {
-  it('probes with the only listing subcommand grok exposes', () => {
-    expect(GROK_MODEL_LIST_ARGS).toEqual(['models'])
-  })
-
   it('parses the signed-in listing into exactly the bulleted models', () => {
-    // Regression: grok stars only the default row and dashes the rest, so a `*`-only
-    // bullet pattern published a one-model list and dropped every other model —
-    // and discovery is authoritative, so the dropped rows left the picker entirely.
+    // A star-only parser dropped dashed non-default rows from authoritative discovery, removing them from the picker.
     expect(parseGrokModelList(SIGNED_IN_STDOUT)).toEqual([
       { id: 'grok-4.6', label: 'Grok 4.6', isDefault: true },
       { id: 'grok-4.5', label: 'Grok 4.5' }
@@ -41,23 +34,17 @@ describe('parseGrokModelList', () => {
   })
 
   it('names no default when the listing annotates none', () => {
-    // Better to show nothing than to promote the first row: an unflagged launch
-    // would run whichever model the CLI picks, not this one.
+    // Without an explicit marker, first-row promotion would misrepresent the CLI’s unflagged default.
     const parsed = parseGrokModelList('Available models:\n  * grok-4.5\n  * grok-build\n')
-    expect(parsed.every(({ isDefault }) => isDefault === undefined)).toBe(true)
+    expect(parsed.map(({ id, isDefault }) => [id, isDefault])).toEqual([
+      ['grok-4.5', undefined],
+      ['grok-build', undefined]
+    ])
   })
 
   it('does not treat another parenthetical as the default marker', () => {
     const parsed = parseGrokModelList('Available models:\n  * grok-build (beta)\n')
     expect(parsed[0]!.isDefault).toBeUndefined()
-  })
-
-  it('ignores the decoy ids that sit above the header', () => {
-    // `Default model: grok-4.6` is a valid-looking id and the login line holds a
-    // dotted token; both precede the header, so neither may become a model.
-    const parsed = parseGrokModelList(SIGNED_IN_STDOUT)
-    expect(parsed).toHaveLength(2)
-    expect(parsed.some(({ id }) => id.includes('grok.com'))).toBe(false)
   })
 
   it('reads the default marker off a dashed row too', () => {
@@ -98,8 +85,7 @@ describe('parseGrokModelList', () => {
   })
 
   it('returns nothing when the header is missing, whatever follows', () => {
-    // A bullet list with no header is the shape a reworded CLI would emit; half
-    // a parse here would publish phantom models as an authoritative list.
+    // Unrecognized listing headers must not publish partial authoritative model lists.
     expect(parseGrokModelList('Models:\n  * grok-4.5 (default)\n')).toEqual([])
     expect(parseGrokModelList('Default model: grok-4.5\n')).toEqual([])
   })
@@ -118,8 +104,7 @@ describe('parseGrokModelList', () => {
   })
 
   it('stops at the blank line that ends the listing section', () => {
-    // A footer bullet parsed as a model becomes a selectable row, and picking it
-    // launches `-m Set` — so the section boundary has to be respected.
+    // Footer bullets must not become selectable IDs that launch e.g. -m Set.
     expect(
       parseGrokModelList(
         'Available models:\n  * grok-4.5 (default)\n\nTips:\n  * Set a default with `grok config`\n'

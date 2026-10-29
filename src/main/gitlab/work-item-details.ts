@@ -1,7 +1,3 @@
-// Why: aggregated detail-fetch for GitLabItemDialog. Parallel of
-// src/main/github/work-item-details.ts but scoped to v1 surface —
-// description body, flattened discussion notes, MR pipeline jobs/reviewers.
-// Files / inline review-comment positioning are deferred.
 import type {
   GitLabAssignableUser,
   GitLabWorkItem,
@@ -27,8 +23,6 @@ import {
   type ProjectRef
 } from './gl-utils'
 
-// ── Top-level aggregator ───────────────────────────────────────────
-
 type GitLabRawIssue = Parameters<typeof mapIssueToWorkItem>[0] & {
   description?: string | null
   assignees?: { username?: string | null }[] | null
@@ -42,14 +36,7 @@ type GitLabRawMR = Parameters<typeof mapMRToWorkItem>[0] & {
   reviewers?: GitLabRawUser[] | null
 }
 
-/**
- * Fetch full details for a GitLab MR or issue: the work item itself,
- * description body, discussion notes flattened to MRComment[], and (for
- * MRs only) per-job pipeline status.
- *
- * Returns null when the project ref can't be resolved or the item
- * can't be loaded — callers render a "not found" / error state.
- */
+/** Return null for unresolved/unloadable items; include discussion, pipeline and optional review metadata. */
 export async function getWorkItemDetails(
   repoPath: string,
   iid: number,
@@ -60,9 +47,7 @@ export async function getWorkItemDetails(
   localGitOptions: LocalGitExecOptions = {},
   options: { includeReviewDetails?: boolean } = {}
 ): Promise<GitLabWorkItemDetails | null> {
-  // Why: detail fetches must use the same project source as the list row
-  // that opened them, otherwise forked repos can show a row from one remote
-  // and a detail sheet from another.
+  // Retain the list row's selected project to avoid same-number fork/upstream collisions.
   const projectRef =
     projectRefOverride ??
     (
@@ -97,8 +82,6 @@ async function fetchIssueDetails(
   connectionId?: string | null,
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<GitLabWorkItemDetails | null> {
-  // Why: fan out the two reads. Issues don't have a pipeline so this
-  // pair covers everything the dialog renders.
   const [issueRes, discussions] = await Promise.all([
     glabExecFileAsync(
       [
@@ -113,9 +96,7 @@ async function fetchIssueDetails(
   const issueRaw = JSON.parse(issueRes.stdout) as GitLabRawIssue
   const item: Omit<GitLabWorkItem, 'repoId'> = (() => {
     const full = mapIssueToWorkItem(issueRaw, projectRef.path, projectRef)
-    // Why: omit repoId from the returned shape — the renderer stamps
-    // it from the dialog's caller (TaskPage / picker) so the main
-    // process doesn't need to know Orca's Repo.id.
+    // The renderer supplies Orca repoId; main knows only the repository path.
     const { repoId: _repoId, ...rest } = full
     return rest
   })()
@@ -137,9 +118,7 @@ async function fetchMRDetails(
   localGitOptions: LocalGitExecOptions = {},
   options: { includeReviewDetails?: boolean } = {}
 ): Promise<GitLabWorkItemDetails | null> {
-  // Why: MR detail + discussions in parallel. The pipeline jobs fetch
-  // depends on `head_pipeline.id` from the MR payload, so it has to
-  // wait — but it's a single follow-up call rather than a serial chain.
+  // Discussion can overlap MR details; child jobs need its head_pipeline ID.
   const [mrRes, discussions] = await Promise.all([
     glabExecFileAsync(
       [
@@ -168,7 +147,7 @@ async function fetchMRDetails(
           localGitOptions
         ).catch(() => [])
       : undefined
-  // Checks consumes the pipeline and discussions without the dialog's review enrichment.
+  // Checks needs pipeline/discussion data without the dialog's optional review enrichment.
   const includeReviewDetails = options.includeReviewDetails !== false
   const [reviewers, approvalState, files] = await Promise.all([
     includeReviewDetails

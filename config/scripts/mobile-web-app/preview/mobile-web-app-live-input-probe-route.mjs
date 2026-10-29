@@ -1,35 +1,12 @@
-/**
- * The scratch route the terminal live-input check bundles, and the handles it drives.
- *
- * The session route cannot reach its own live input from a render check: the field is behind
- * `liveInputEnabled`, which is `liveInputTerminalHandles.has(activeHandle)`, and no handle exists
- * until the host protocol has been scripted through a tab snapshot and a terminal inventory. So
- * `liveInputRef.current` is null on that route and every native write on it is skipped by its own
- * optional chain. This route mounts the commit hook against a real `TextInput` instead, which is
- * the state a session on a device is in the moment a terminal attaches.
- *
- * This is a bundler entry and a page under test, not an assertion. The check itself stays the list
- * of things being measured.
- */
+// No-RPC session has no active handle/live field, so optional ref chain skips native-write defects.
+// Mount commit hook against real TextInput like attached device session; this file is probe entry, assertions live in render suite.
 
-/** The terminal the probe's mirror state belongs to; every write below names it. */
 export const LIVE_INPUT_HANDLE = 'live-input-probe-handle'
-/** RN Web renders `nativeID` as the DOM `id`, which is how the check reads the field back. */
 export const LIVE_INPUT_FIELD_ID = 'live-input-probe-field'
-/** The buffered command field, which holds a draft until Enter sends it. */
 export const BUFFERED_FIELD_ID = 'buffered-probe-field'
 
-/**
- * The route: `useTerminalLiveInputCommit`, wired to a `TextInput` the way the command dock wires
- * it, down to `blurOnSubmit={false}` and the submit binding on the ref — which together decide
- * whether Enter reaches `onSubmitEditing` at all. Keystrokes therefore enter through the browser,
- * not through a handle that calls the hook directly.
- *
- * The mount effect is the other point. `use-mobile-session-startup.ts` calls
- * `clearPendingLiveInputCommit()` from an effect on every session mount, so a write the page
- * cannot honour throws under `PageFaultBoundary` and reaches the shell as a page fault rather than
- * as a rejected probe call. That is the emulator's symptom, reproduced where a browser can see it.
- */
+// Match dock’s blurOnSubmit=false and ref submit binding; send real browser keystrokes, not direct hook calls.
+// Clear in mount effect like session startup so unsupported DOM writes reach PageFaultBoundary as actual page fault.
 export function liveInputProbeRouteSource({ bindingModule, commitModule, draftsModule }) {
   return `import { useCallback, useEffect, useRef, useState } from 'react'
 import { TextInput, View } from 'react-native'

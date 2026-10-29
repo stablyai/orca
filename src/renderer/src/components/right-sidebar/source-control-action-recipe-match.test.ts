@@ -62,8 +62,7 @@ describe('sourceControlActionRecipeMatchesTarget', () => {
         target: { type: 'repo', repoId: 'repo-1' },
         recipe: {
           agentId: 'claude',
-          commandInputTemplate: '{basePrompt}\n\nrepo only',
-          agentArgs: ''
+          commandInputTemplate: '{basePrompt}\n\nrepo only'
         },
         settings: settings(),
         repo: {
@@ -169,4 +168,26 @@ describe('sourceControlActionRecipeMatchesTarget', () => {
       })
     ).toBe(true)
   })
+})
+
+it('distinguishes inheriting arguments from an explicit clear when deciding whether to save', () => {
+  const base = settings()
+  const recipe = { agentId: 'codex' as const, commandInputTemplate: '{basePrompt}' }
+  base.sourceControlAi!.actions = { fixChecks: recipe }
+  expect(
+    sourceControlActionRecipeMatchesTarget({
+      actionId: 'fixChecks',
+      target: { type: 'global' },
+      settings: base,
+      recipe
+    })
+  ).toBe(true)
+  expect(
+    sourceControlActionRecipeMatchesTarget({
+      actionId: 'fixChecks',
+      target: { type: 'global' },
+      settings: base,
+      recipe: { ...recipe, agentArgs: '' }
+    })
+  ).toBe(false)
 })

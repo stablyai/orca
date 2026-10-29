@@ -35,10 +35,7 @@ function isRemoteResumeTarget(args: AgentResumeLaunchTargetArgs): boolean {
   return Boolean(args.connectionId) || parseExecutionHostId(args.executionHostId)?.kind !== 'local'
 }
 
-/**
- * The OS an SSH execution host reported, else null. Why SSH only: a paired Orca server applies its
- * own Windows shell setting, which this client cannot see, so its resumes keep the old quoting.
- */
+/** Use reported OS only for SSH; paired servers choose Windows shell settings this client cannot see, preserving their prior resume quoting. */
 export function resolveSshHostReportedPlatform(
   state: Pick<AppState, 'sshConnectionStates' | 'sshStateByEnvironment'>,
   executionHostId: string | null,
@@ -74,20 +71,14 @@ function resolveResumeLaunchPlatform(args: AgentResumeLaunchTargetArgs): NodeJS.
   return CLIENT_PLATFORM
 }
 
-/**
- * Platform *and* live shell family a queued agent-resume command must be quoted for.
- * Why the shell half matters: resume lines are typed into a real terminal, so on a
- * cmd.exe tab the win32 PowerShell default sends literal quotes and the agent CLI
- * rejects the resume argv ("unexpected argument ''<uuid>'' found", #12320).
- */
+/** Quote for both host platform and live shell; typing PowerShell quotes into cmd.exe passes literal quotes that agent CLIs reject (#12320). */
 export function resolveAgentResumeLaunchTarget(
   args: AgentResumeLaunchTargetArgs
 ): AgentResumeLaunchTarget {
   const platform = resolveResumeLaunchPlatform(args)
   const isRemote = isRemoteResumeTarget(args)
   if (isRemote && platform === 'win32' && args.remotePlatform === 'win32') {
-    // Why: the client's Windows shell setting doesn't describe a remote host, but a remote tab's
-    // own shell override is what the host spawned, so cmd.exe tabs need cmd quoting.
+    // Client shell settings do not describe remote hosts; a remote tab’s explicit shell override does.
     const override = args.tabShellOverride
       ? canonicalizeWindowsShellOverride(args.tabShellOverride.trim())
       : undefined

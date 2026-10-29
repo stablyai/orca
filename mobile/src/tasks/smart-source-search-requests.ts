@@ -3,12 +3,12 @@ import type { GitLabWorkItem } from '../../../src/shared/gitlab-types'
 import type { LinearIssue } from '../../../src/shared/linear/issue-types'
 import type { BaseRefSearchResult } from '../../../src/shared/repo-types'
 import type { RpcClient } from '../transport/rpc-client'
-import type { JiraIssue, JiraSiteSelection } from '../../../src/shared/jira-types'
+import type { JiraIssue, JiraSiteSelection } from '../../../src/shared/jira/jira-types'
 import { getJiraIssueSearchQuery } from '../../../src/shared/new-workspace/smart-workspace-source-results'
 import {
   buildJiraIssueKeyJql,
   buildJiraTextMatchJql
-} from '../../../src/shared/jira-search-input-jql'
+} from '../../../src/shared/jira/jira-search-input-jql'
 import { jiraIssueSearchRead } from './mobile-jira-operations'
 import { repoBaseRefSearchRead } from './mobile-workspace-source-operations'
 import {
@@ -25,11 +25,7 @@ const LINEAR_LIMIT = 50
 const JIRA_LIMIT = 50
 const BRANCH_LIMIT = 20
 
-// Why: the desktop Smart picker returns BOTH issues and PRs — the runtime's
-// parseTaskQuery defaults scope 'all', and an empty query lists recent items of
-// both types. So pass the raw trimmed query straight through (an explicit
-// `is:pr`/`is:issue` the user typed is honored by the runtime); empty stays empty
-// so the runtime lists recent issues + PRs.
+// Pass the raw trimmed query: desktop searches issues and PRs, including both for empty input.
 export function scopeGitHubQuery(query: string): string {
   return query.trim()
 }
@@ -78,8 +74,6 @@ export async function searchLinearIssues(
   linearWorkspaceId: string | null | undefined
 ): Promise<LinearIssue[]> {
   const trimmed = query.trim()
-  // The reader yields the mobile issue-read shape; the fields the row builder/create flow read
-  // (id/identifier/title/url/state/team) are a subset.
   const issues = trimmed
     ? linearIssueSearchRead.interpret(
         await linearIssueSearchRead.request(client, {
@@ -90,8 +84,6 @@ export async function searchLinearIssues(
       )
     : linearAssignedIssueListRead.interpret(
         await linearAssignedIssueListRead.request(client, {
-          // Empty query lists the viewer's assigned issues, matching desktop's
-          // Smart picker default (SmartWorkspaceNameField uses listLinearIssues('assigned')).
           filter: 'assigned',
           limit: LINEAR_LIMIT,
           workspaceId: linearWorkspaceId ?? undefined
@@ -101,7 +93,6 @@ export async function searchLinearIssues(
   return issues as LinearIssue[]
 }
 
-// The composer accepts key/text searches; Tasks accepts raw JQL.
 export async function searchJiraIssues(
   client: RpcClient,
   query: string,
@@ -111,7 +102,7 @@ export async function searchJiraIssues(
   if (!searchable) {
     return []
   }
-  // Key first, as the desktop does: an issue key is an exact lookup, not a text match.
+  // Issue keys are exact lookups; try them before text search.
   const jql = buildJiraIssueKeyJql(searchable) ?? buildJiraTextMatchJql(searchable)
   return jiraIssueSearchRead.interpret(
     await jiraIssueSearchRead.request(client, {

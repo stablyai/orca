@@ -23,6 +23,7 @@ import {
   type SourceControlTextGenerationSaveTarget
 } from './text-generation-dialog-form'
 import { translate } from '@/i18n/i18n'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 
 export { buildCommitMessageGenerationParams } from './text-generation-params'
 
@@ -96,6 +97,7 @@ export function SourceControlTextGenerationDialog({
   onGenerate,
   onSaveDefaults
 }: SourceControlTextGenerationDialogProps): React.JSX.Element {
+  const languageRevision = useUiLanguageRevision()
   const resolved = useMemo(
     () =>
       settings
@@ -112,7 +114,8 @@ export function SourceControlTextGenerationDialog({
               'Settings are not loaded.'
             )
           },
-    [actionId, discoveryHostKey, repo, settings]
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- translate() reads the UI language implicitly.
+    [actionId, discoveryHostKey, repo, settings, languageRevision]
   )
   const baseParams = resolved.ok ? resolved.value.params : null
   const recipeLabel =

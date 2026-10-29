@@ -36,10 +36,7 @@ export type LocalGitProviderOptions = GitRuntimeOptions & {
   getSharedLinkPaths?: () => readonly string[]
 }
 
-/**
- * Contract methods whose local twin takes different inputs (a repo path the contract does not
- * carry, a single pinned diff instead of a list) stay on their existing local call sites.
- */
+/** Methods needing extra local inputs, such as repo paths or pinned diffs, retain their existing call sites. */
 export type LocalGitProvider = Omit<
   IGitProvider,
   | 'getBranchDiff'
@@ -51,13 +48,12 @@ export type LocalGitProvider = Omit<
   | 'forceDeletePreservedBranch'
 >
 
-/** Binds this machine's git free functions to the provider contract, with today's admission tiers. */
 export function createLocalGitProvider(options: LocalGitProviderOptions = {}): LocalGitProvider {
   const { getSharedLinkPaths = () => [], ...base } = options
   const interactive = { ...base, admissionTier: 'interactive' as const }
   return {
     getStatus: (worktreePath, statusOptions) => {
-      // Why: shared symlinks do not match Git's directory-only ignore rules.
+      // Shared directory symlinks do not match Git directory-only ignore rules.
       const sharedLinkPaths = getSharedLinkPaths()
       return getStatus(worktreePath, {
         ...statusOptions,
@@ -134,9 +130,9 @@ export function createLocalGitProvider(options: LocalGitProviderOptions = {}): L
         ...(execOptions?.signal ? { signal: execOptions.signal } : {}),
         ...(execOptions?.timeoutMs === undefined ? {} : { timeout: execOptions.timeoutMs })
       }),
-    getRemoteFileUrl: async (worktreePath, relativePath, line) => {
-      await awaitWindowsHostGitEnvironmentReady({ cwd: worktreePath })
-      return getRemoteFileUrl(worktreePath, relativePath, line)
+    getRemoteFileUrl: async (worktreePath, relativePath, line, endLine) => {
+      await awaitWindowsHostGitEnvironmentReady({ ...base, cwd: worktreePath })
+      return getRemoteFileUrl(worktreePath, relativePath, line, endLine, base)
     },
     getRemoteCommitUrl: async (worktreePath, sha) => {
       await awaitWindowsHostGitEnvironmentReady({ cwd: worktreePath })

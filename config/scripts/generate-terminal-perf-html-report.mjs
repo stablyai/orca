@@ -13,8 +13,7 @@ import { basename, dirname } from 'node:path'
 
 const DEFAULT_OUTPUT_PATH = 'test-results/terminal-perf-impact-report.html'
 
-// Why: every tracked metric is lower-is-better, so delta coloring and the
-// regression table share one direction rule.
+// All metrics are lower-is-better; share direction between delta colors and regression table.
 const MS_METRICS = [
   { key: 'medianMs', label: 'Typing median', chart: true },
   { key: 'worstMs', label: 'Typing worst', chart: true },
@@ -30,8 +29,7 @@ const COUNT_METRICS = [
   { key: 'mainPeakPendingChars', label: 'Main pending chars' },
   { key: 'hiddenSkippedChars', label: 'Hidden skipped chars' },
   { key: 'rendererDroppedBacklogs', label: 'Renderer dropped backlogs' },
-  // Why: parked-memory scenarios are table-only — heap/view counts have no
-  // ms trend story, so they stay out of the charts.
+  // Parked-memory heap/view counts belong in tables, not millisecond trend charts.
   { key: 'heapUsedMB', label: 'Renderer JS heap (MB)' },
   { key: 'liveTerminals', label: 'Live xterm instances' },
   { key: 'livePaneManagers', label: 'Live pane managers' }
@@ -86,8 +84,6 @@ export function parseHtmlReportArgs(argv, env = process.env) {
   return { inputs, outputPath }
 }
 
-// ── Trend data ────────────────────────────────────────────────────────────
-
 function buildMatrix(revisions) {
   const scenarios = new Map()
   for (const revision of revisions) {
@@ -114,8 +110,6 @@ function niceCeil(value) {
   }
   return 10 * magnitude
 }
-
-// ── Rendering ─────────────────────────────────────────────────────────────
 
 function renderTrendChart({ scenario, byRevision, revisions, title }) {
   const metrics = MS_METRICS.filter(
@@ -147,7 +141,6 @@ function renderTrendChart({ scenario, byRevision, revisions, title }) {
     `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="${escapeHtml(title)}" class="trend-chart">`
   )
   parts.push(`<text x="${pad.left}" y="16" class="chart-title">${escapeHtml(title)}</text>`)
-  // Horizontal gridlines + y labels
   const ticks = 4
   for (let tick = 0; tick <= ticks; tick += 1) {
     const value = (yMax * tick) / ticks
@@ -159,13 +152,11 @@ function renderTrendChart({ scenario, byRevision, revisions, title }) {
       `<text x="${pad.left - 6}" y="${y + 3}" class="axis-label" text-anchor="end">${value % 1 === 0 ? value : value.toFixed(1)}</text>`
     )
   }
-  // X labels
   revisions.forEach((revision, index) => {
     parts.push(
       `<text x="${xFor(index)}" y="${height - pad.bottom + 16}" class="axis-label" text-anchor="middle">${escapeHtml(revision.label)}</text>`
     )
   })
-  // Series
   for (const metric of metrics) {
     const color = SERIES_COLORS[metric.key] ?? '#475569'
     const points = revisions

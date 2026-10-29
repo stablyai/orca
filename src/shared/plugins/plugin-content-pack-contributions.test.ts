@@ -39,6 +39,36 @@ describe('content-pack manifest contributions', () => {
     expect(parsed.contributes.keybindings[0]?.key).toBe('Mod+Alt+T')
   })
 
+  it('accepts an optional native displayName on language packs', () => {
+    const parsed = pluginManifestSchema.parse(
+      manifest({
+        languagePacks: [
+          {
+            locale: 'zh-TW',
+            path: 'locales/zh-TW.json',
+            displayName: '中文（繁體）'
+          }
+        ]
+      })
+    )
+
+    expect(parsed.contributes.languagePacks[0]).toEqual({
+      locale: 'zh-TW',
+      path: 'locales/zh-TW.json',
+      displayName: '中文（繁體）'
+    })
+  })
+
+  it('rejects blank language-pack displayName', () => {
+    expect(
+      parsePluginManifest(
+        manifest({
+          languagePacks: [{ locale: 'zh-TW', path: 'locales/zh-TW.json', displayName: '   ' }]
+        })
+      ).ok
+    ).toBe(false)
+  })
+
   it('defaults every contribution registry to an empty array', () => {
     const parsed = pluginManifestSchema.parse(manifest({}))
 
@@ -49,7 +79,9 @@ describe('content-pack manifest contributions', () => {
       languagePacks: [],
       keybindings: [],
       vmRecipes: [],
-      agents: []
+      agents: [],
+      themes: [],
+      terminalThemes: []
     })
   })
 
@@ -120,11 +152,22 @@ describe('content-pack manifest contributions', () => {
 
   it.each([
     ['language pack', { languagePacks: [{ locale: 'en_US', path: 'locale.json' }] }],
+    // Shape-legal but ill-formed: the regex alone let these load with dates falling back to English.
+    ['duplicate region', { languagePacks: [{ locale: 'en-US-US', path: 'locale.json' }] }],
+    ['unknown subtag', { languagePacks: [{ locale: 'en-aaa', path: 'locale.json' }] }],
     ['language pack path', { languagePacks: [{ locale: 'pt-BR', path: '../outside.json' }] }],
     ['VM recipe', { vmRecipes: [{ path: '\\\\server\\recipe.json' }] }],
     ['agent profile', { agents: [{ path: 'agents/../profile.json' }] }]
   ])('rejects unsafe or malformed %s contributions', (_label, contributes) => {
     expect(parsePluginManifest(manifest(contributes)).ok).toBe(false)
+  })
+
+  it.each(['ru', 'pt-BR', 'zh-Hans-CN', 'en-US'])('accepts the well-formed locale %s', (locale) => {
+    expect(
+      parsePluginManifest(manifest({ languagePacks: [{ locale, path: 'locale.json' }] }))
+    ).toMatchObject({
+      ok: true
+    })
   })
 
   it('rejects duplicate ids, locales, paths, and bindings', () => {

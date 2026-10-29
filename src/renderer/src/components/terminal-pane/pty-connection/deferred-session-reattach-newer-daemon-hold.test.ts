@@ -7,6 +7,7 @@ import { NEWER_DAEMON_HOLD_ERROR } from '../../../../../shared/newer-daemon-hold
 import { newerDaemonHoldStore, reopenHeldTerminals } from '../newer-daemon-hold-state'
 import { startDeferredSessionReattach } from './deferred-session-reattach-connect'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
+import type { FreshSpawnOptions } from './fresh-spawn-types'
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 import { PANE_NOT_LIVE_ERROR } from '../../../../../shared/pane-attach-only-view'
 import { useAppStore } from '@/store'
@@ -64,7 +65,9 @@ function createSession(opts: { runtimeEnvironmentId?: string } = {}) {
     mergeStartupEnvWithPaneIdentity: (env: Record<string, string>) => env,
     handleReattachResult: vi.fn().mockResolvedValue(true),
     clearExitedPanePtyLayoutBinding: vi.fn(),
-    startFreshColdRestoreAgentResume: vi.fn().mockResolvedValue('fresh-pty'),
+    startFreshColdRestoreAgentResume: vi
+      .fn<(startup: unknown, options?: FreshSpawnOptions) => Promise<string>>()
+      .mockResolvedValue('fresh-pty'),
     reportError: vi.fn(),
     cols: 80,
     rows: 24,
@@ -154,15 +157,27 @@ describe('restored pane refused for a newer daemon', () => {
     expect(fixture.writeReplayData).not.toHaveBeenCalled()
   })
 
-  it('counts a released pane that falls back to a fresh session as reopened', async () => {
-    const { fixture, session, nextConnect } = createSession()
-    startDeferredSessionReattach(session, 'restored-pty')
-    await vi.waitFor(() => expect(isHeld()).toBe(true))
-    nextConnect('throw')
-    await reopenHeldTerminals('tab:leaf')
-    expect(fixture.startFreshColdRestoreAgentResume).toHaveBeenCalledOnce()
-    expect(toast.success).toHaveBeenCalledWith('Reopened 1 terminal', windowResumedDescription)
-  })
+  it.each([false, true])(
+    'counts the fallback terminal without claiming an unavailable resume (%s)',
+    async (unavailable) => {
+      const { fixture, session, nextConnect } = createSession()
+      startDeferredSessionReattach(session, 'restored-pty')
+      await vi.waitFor(() => expect(isHeld()).toBe(true))
+      fixture.startFreshColdRestoreAgentResume.mockImplementation(async (_startup, options) => {
+        if (unavailable) {
+          options?.onAgentResumeUnavailable?.()
+        }
+        return 'fresh-pty'
+      })
+      nextConnect('throw')
+      await reopenHeldTerminals('tab:leaf')
+      expect(fixture.startFreshColdRestoreAgentResume).toHaveBeenCalledOnce()
+      expect(toast.success).toHaveBeenCalledWith(
+        'Reopened 1 terminal',
+        unavailable ? undefined : windowResumedDescription
+      )
+    }
+  )
 
   it.each([
     ['restored', { description: '1 agent session resumed.' }],

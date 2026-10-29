@@ -62,10 +62,7 @@ describe('getStatus', () => {
     lstatMock.mockReset()
     readFileMock.mockReset()
     existsSyncMock.mockReset()
-    // Why: after the status call, getStatus may issue `git diff --numstat`
-    // calls to attach per-entry line counts. Tests that don't care about counts
-    // set only a `mockResolvedValueOnce` for the status output; this default
-    // keeps those follow-up numstat calls from returning undefined.
+    // Supply empty numstat results after tests' one-shot status responses.
     gitExecFileAsyncMock.mockResolvedValue({ stdout: '' })
   })
 
@@ -268,8 +265,7 @@ describe('getStatus', () => {
     const first = getStatus('/repo')
     await vi.waitFor(() => expect(statusCommandCalls).toBe(1))
 
-    // A mutation must invalidate the in-flight status read so the next getStatus
-    // starts fresh instead of joining a pre-mutation promise and going stale.
+    // Mutations retire the lease so post-mutation reads cannot join a stale status pass.
     await stageFile('/repo', 'src/file.ts')
 
     const second = getStatus('/repo')

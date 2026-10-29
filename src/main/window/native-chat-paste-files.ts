@@ -1,11 +1,9 @@
-// Orca's folder for local native-chat pastes no send claims: a terminal-backed chat's, and every
-// paste from before structured chats used their attachment store. Never swept, since nothing tells
-// which of them a sent message names; a restore keeps only files that really are inside it.
+// Unclaimed terminal-chat/legacy pastes cannot expire: sent messages may still name them. Restore only files inside the real paste folder.
 
 import { lstat, realpath, stat } from 'node:fs/promises'
 import path from 'node:path'
 import { getAppEnvironment } from '../../shared/app-environment'
-import { NATIVE_CHAT_PASTE_FOLDER } from '../../shared/native-chat-paste-folder'
+import { NATIVE_CHAT_PASTE_FOLDER } from '../../shared/native-chat/input/native-chat-paste-folder'
 
 const MAX_RESTORED_PASTES = 256
 
@@ -43,11 +41,7 @@ export function isInsideNativeChatPasteFolder(
   )
 }
 
-/**
- * For each restored local paste: kept only when its real path is a file inside the real paste
- * folder (symlinks and junctions resolved). Anything else comes back as a placeholder. Nothing is
- * granted: the preview reads a paste with chat-image access. Never throws.
- */
+/** Restore real files inside the real paste folder, resolving symlinks/junctions. Return placeholders otherwise; grant no access and leave preview to chat-image authorization. Never throws. */
 export async function restoreNativeChatPastes(paths: unknown): Promise<RestoredNativeChatPaste[]> {
   if (!Array.isArray(paths)) {
     return []
@@ -83,7 +77,7 @@ async function restoreNativeChatPaste(
   if (folders === null || restored === '' || !path.isAbsolute(restored)) {
     return refused
   }
-  // Why both: the text the draft stores and the file it really names must each be inside.
+  // Require both stored spelling and resolved file containment.
   const named = path.resolve(restored)
   if (
     !isInsideNativeChatPasteFolder(folders.named, named) &&

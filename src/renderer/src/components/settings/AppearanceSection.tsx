@@ -3,23 +3,17 @@ import { ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 type AppearanceSectionProps = {
-  /** Stable id used for the section toggle + aria wiring. */
   id: string
   icon: React.ReactNode
   title: React.ReactNode
-  /** Plain-language current value shown in the collapsed summary row. */
   summary: React.ReactNode
   open: boolean
   onToggle: () => void
-  /** Why: search force-opens matching sections; disable collapse so toggles
-   *  do not silently rewrite open-state that only applies after search clears. */
+  /** Search forces sections open; prevent collapse from silently changing post-search disclosure state. */
   toggleDisabled?: boolean
   children: React.ReactNode
 }
 
-/** Compact summary row that expands its section inline. The parent owns open
- *  state so sections can stay independently collapsible and search can force
- *  a section open. */
 export function AppearanceSection({
   id,
   icon,

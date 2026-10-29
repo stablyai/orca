@@ -1,13 +1,8 @@
 import type { OpenFile } from '../types/open-file'
 
-/**
- * Which editor tabs (views) show which buffer record. Maintained by the record middleware in the
- * same store update as `openFiles`, so every entry point resolves views through one index.
- */
+/** Record middleware updates view index atomically with openFiles so every entry point resolves the same sharing graph. */
 export type EditorBufferViewIndex = {
-  /** View (tab) id → record id. */
   editorBufferIdOf: Record<string, string>
-  /** Record id → its view ids, in the order they joined. */
   editorBufferViews: Record<string, readonly string[]>
 }
 
@@ -16,20 +11,14 @@ export const EMPTY_EDITOR_BUFFER_VIEW_INDEX: EditorBufferViewIndex = {
   editorBufferViews: {}
 }
 
-/**
- * A view kept off the record its identity names. `key` is that identity, so the view rejoins once
- * one side is clean; `retired` views (their environment now names another machine) never do.
- */
+/** Detach divergent drafts until one side cleans; retired-machine views never rejoin. key remembers excluded identity. */
 export type EditorBufferDetachment = { recordId: string; key: string; retired?: true }
 
 export type EditorBufferDetachments = Record<string, EditorBufferDetachment>
 
 const DETACHED_EDITOR_BUFFER_PREFIX = 'detached:'
 
-/**
- * A record id no identity key can equal. Divergent dirty drafts of one file move here until they
- * rejoin; records on a retired environment move here for good.
- */
+/** Unmatchable identity ID for divergent drafts until rejoin, or permanently retired environments. */
 export function detachedEditorBufferId(viewId: string): string {
   return `${DETACHED_EDITOR_BUFFER_PREFIX}${viewId}`
 }
@@ -50,7 +39,6 @@ export function editorBufferViewIds(
   return index.editorBufferViews[recordId] ?? [recordId]
 }
 
-/** Every view sharing `viewId`'s record, including `viewId` itself. */
 export function editorBufferSiblingViewIds(
   index: EditorBufferViewIndex,
   viewId: string
@@ -77,7 +65,6 @@ export function buildEditorBufferViewIndex(
   return { editorBufferIdOf, editorBufferViews }
 }
 
-/** Why the index is wrong for `openFiles`, or null when it is consistent. */
 export function editorBufferViewIndexMismatch(
   index: EditorBufferViewIndex,
   openFiles: readonly OpenFile[]

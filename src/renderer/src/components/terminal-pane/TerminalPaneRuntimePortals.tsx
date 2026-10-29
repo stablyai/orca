@@ -7,9 +7,6 @@ import { ClaudeDiffPanelNoticeBanner } from './ClaudeDiffPanelNoticeBanner'
 import { NewerDaemonHoldBanner } from './NewerDaemonHoldBanner'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { TerminalSshReconnectOverlay } from './TerminalSshReconnectOverlay'
-import { useWslHostUnavailableReason } from './use-wsl-host-unavailable-reason'
-import { useManagedPairingRefusedEnvironmentId } from './use-managed-pairing-refused'
-import { DelayedRemoteRuntimeReconnectBanner } from './TerminalRemoteRuntimeReconnectBanner'
 import { TerminalProcessExitOverlay } from './TerminalProcessExitOverlay'
 import { MobileDriverOverlay } from './MobileDriverOverlay'
 import { getDriverForPty } from '@/lib/pane-manager/mobile-driver-state'
@@ -17,6 +14,8 @@ import { getFitOverrideForPty } from '@/lib/pane-manager/mobile-fit-overrides'
 import { shouldShowMobileDriverOverlay } from './mobile-driver-overlay-visibility'
 import { shouldChatTakeOverMobileSurface } from '../native-chat/native-chat-send-eligibility'
 import type { TerminalPaneController } from './use-terminal-pane-controller'
+
+export { TerminalPaneRecoveryPortals } from './TerminalPaneRecoveryPortals'
 
 export function TerminalPaneCodexRestartPortals({
   controller
@@ -166,56 +165,6 @@ export function TerminalPaneSshReconnectPortals({
           `ssh-reconnect-${pane.id}`
         )
       )}
-    </>
-  )
-}
-
-export function TerminalPaneRecoveryPortals({
-  controller
-}: {
-  controller: TerminalPaneController
-}): React.JSX.Element | null {
-  const { managedPanes, paneTransportsRef, ptyRecoveryStatesByPaneId, showSshReconnectOverlay } =
-    controller
-  const wslHostUnavailable = useWslHostUnavailableReason(controller.worktreeId)
-  const pairingRefusedEnvironmentId = useManagedPairingRefusedEnvironmentId(controller.worktreeId)
-  if (showSshReconnectOverlay) {
-    return null
-  }
-  return (
-    <>
-      {managedPanes.map((pane) => {
-        const recoveryState = ptyRecoveryStatesByPaneId[pane.id]
-        if (!recoveryState || recoveryState.reason === 'ownership') {
-          return null
-        }
-        return createPortal(
-          <DelayedRemoteRuntimeReconnectBanner
-            // Why per pane, not per epoch: a Reconnect click opens a new epoch and must not hide the banner again.
-            key={`remote-runtime-reconnect-${pane.id}`}
-            epoch={recoveryState.epoch}
-            phase={recoveryState.phase}
-            onReconnect={() => {
-              const retry = (): void => {
-                paneTransportsRef.current.get(pane.id)?.retryRecovery?.()
-              }
-              // Why connect first: it asks Orca to pair again, which a pane retry alone does not.
-              if (pairingRefusedEnvironmentId) {
-                void window.api.runtimeEnvironments
-                  .connect({ selector: pairingRefusedEnvironmentId })
-                  .catch(() => undefined)
-                  .finally(retry)
-                return
-              }
-              retry()
-            }}
-            wslHostUnavailable={wslHostUnavailable}
-            pairingRefused={pairingRefusedEnvironmentId !== null}
-          />,
-          pane.container,
-          `remote-runtime-reconnect-${pane.id}`
-        )
-      })}
     </>
   )
 }

@@ -1,0 +1,22 @@
+{
+  "settings": {
+    "appearance": {
+      "theme": {
+        "system": "System",
+        "light": "Light",
+        "dark": "Dark",
+        "heading": "THEME",
+        "description": "System follows this device’s light or dark setting."
+      },
+      "title": "Appearance",
+      "language": {
+        "systemWithCurrent": "System ({{language}})",
+        "heading": "LANGUAGE",
+        "description": "System follows this device’s language. Permission prompts always use the device language."
+      }
+    }
+  },
+  "common": {
+    "back": "Back"
+  }
+}

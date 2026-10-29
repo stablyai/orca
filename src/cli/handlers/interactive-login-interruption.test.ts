@@ -2,11 +2,8 @@ import { EventEmitter } from 'node:events'
 import type { ChildProcess } from 'node:child_process'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
-  LOGIN_PROCESS_CLOSE_FALLBACK_MS,
-  LOGIN_PROCESS_POSIX_GRACE_MS,
   terminateInteractiveLoginProcess,
-  terminateWindowsLoginProcessTree,
-  WINDOWS_LOGIN_TREE_KILL_TIMEOUT_MS
+  terminateWindowsLoginProcessTree
 } from './interactive-login-interruption'
 
 function loginChild(pid = 4321): ChildProcess & EventEmitter {
@@ -36,7 +33,7 @@ describe('terminateInteractiveLoginProcess', () => {
     expect(execFileImpl).toHaveBeenCalledWith(
       'taskkill',
       ['/pid', '4321', '/T', '/F'],
-      { timeout: WINDOWS_LOGIN_TREE_KILL_TIMEOUT_MS, windowsHide: true },
+      { timeout: 5_000, windowsHide: true },
       expect.any(Function)
     )
   })
@@ -73,16 +70,25 @@ describe('terminateInteractiveLoginProcess', () => {
     vi.useFakeTimers()
     const child = loginChild()
 
+    let terminated = false
     const pending = terminateInteractiveLoginProcess(child, 'SIGINT', {
       platform: 'win32',
       killWindowsTree: vi.fn().mockResolvedValue(undefined)
+    }).then(() => {
+      terminated = true
     })
-    await vi.advanceTimersByTimeAsync(LOGIN_PROCESS_CLOSE_FALLBACK_MS)
+    await vi.advanceTimersByTimeAsync(999)
+    expect(child.kill).not.toHaveBeenCalled()
+    expect(terminated).toBe(false)
+    await vi.advanceTimersByTimeAsync(1)
     expect(child.kill).toHaveBeenCalledOnce()
     expect(child.kill).toHaveBeenCalledWith(undefined)
 
-    await vi.advanceTimersByTimeAsync(LOGIN_PROCESS_CLOSE_FALLBACK_MS)
+    await vi.advanceTimersByTimeAsync(999)
+    expect(terminated).toBe(false)
+    await vi.advanceTimersByTimeAsync(1)
     await pending
+    expect(terminated).toBe(true)
   })
 
   it('forwards the interrupt signal to a direct POSIX child and awaits close', async () => {
@@ -108,14 +114,23 @@ describe('terminateInteractiveLoginProcess', () => {
     vi.useFakeTimers()
     const child = loginChild()
 
+    let terminated = false
     const pending = terminateInteractiveLoginProcess(child, 'SIGINT', {
       platform: 'darwin'
+    }).then(() => {
+      terminated = true
     })
-    await vi.advanceTimersByTimeAsync(LOGIN_PROCESS_POSIX_GRACE_MS)
+    await vi.advanceTimersByTimeAsync(4_999)
+    expect(child.kill).toHaveBeenCalledExactlyOnceWith('SIGINT')
+    expect(terminated).toBe(false)
+    await vi.advanceTimersByTimeAsync(1)
     expect(child.kill).toHaveBeenNthCalledWith(1, 'SIGINT')
     expect(child.kill).toHaveBeenNthCalledWith(2, 'SIGKILL')
 
-    await vi.advanceTimersByTimeAsync(LOGIN_PROCESS_CLOSE_FALLBACK_MS)
+    await vi.advanceTimersByTimeAsync(999)
+    expect(terminated).toBe(false)
+    await vi.advanceTimersByTimeAsync(1)
     await pending
+    expect(terminated).toBe(true)
   })
 })

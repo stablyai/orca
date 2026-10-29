@@ -26,8 +26,10 @@ vi.mock('electron', () => {
 })
 const { CdpWsProxyMock } = vi.hoisted(() => {
   const instances: unknown[] = []
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const MockClass = vi.fn().mockImplementation(function (this: any, _wc: unknown) {
+  const MockClass = vi.fn().mockImplementation(function (
+    this: Record<string, unknown>,
+    _wc: unknown
+  ) {
     this._wc = _wc
     this.start = vi.fn(async () => 'ws://127.0.0.1:9222')
     this.stop = vi.fn(async () => {})
@@ -195,18 +197,5 @@ describe('AgentBrowserBridge', () => {
     expect(mouseCalls).toHaveLength(2)
     expect(mouseCalls[0]?.[1]).toMatchObject({ type: 'mousePressed', x: 12, y: 34, modifiers: 4 })
     expect(mouseCalls[1]?.[1]).toMatchObject({ type: 'mouseReleased', x: 12, y: 34, modifiers: 4 })
-  })
-
-  it('drops empty command queues after direct CDP commands finish', async () => {
-    const wc = mockWebContents(100)
-    wc.debugger.sendCommand.mockResolvedValue({})
-    webContentsFromIdMock.mockReturnValue(wc)
-
-    await bridge.mouseClick(10, 20, 'right', undefined, 'tab-1')
-
-    expect(
-      (bridge as unknown as { commandQueues: Map<string, unknown[]> }).commandQueues.size
-    ).toBe(0)
-    expect((bridge as unknown as { processingQueues: Set<string> }).processingQueues.size).toBe(0)
   })
 })

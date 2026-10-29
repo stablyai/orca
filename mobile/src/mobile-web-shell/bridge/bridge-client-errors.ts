@@ -1,8 +1,6 @@
 import { markRpcDeliveryUnknown } from '../../transport/rpc-delivery-ambiguity'
 import type { BridgeRefusal } from './bridge-caps'
 
-/** Everything the page's own client raises, as opposed to what it reconstructs from the shell. */
-
 /** A call that needs a session the page is not in yet. Always a mount-order bug, never a retry. */
 export class BridgeClientNotReadyError extends Error {
   constructor() {
@@ -18,8 +16,7 @@ export class BridgeClientClosedError extends Error {
   }
 }
 
-/** A second `init` naming a different session: whatever the page still held belonged to the shell
- *  that is now gone, and the one that replaced it has never heard of any of it. */
+// A different-session init invalidates all exchanges held for the replaced shell.
 export class BridgeShellReplacedError extends Error {
   constructor() {
     super('the shell behind this page was replaced')
@@ -27,7 +24,6 @@ export class BridgeShellReplacedError extends Error {
   }
 }
 
-/** The page's copy of the shell's in-flight caps, refusing before the round trip rather than after. */
 export class BridgeClientCapExceededError extends Error {
   constructor(message: string) {
     super(message)
@@ -35,8 +31,7 @@ export class BridgeClientCapExceededError extends Error {
   }
 }
 
-/** The shell answered and the page could not read the answer, so the desktop has already run the
- *  request: a caller told this was a definite failure would offer to retry what already happened. */
+// Unreadable replies are delivery-unknown: desktop execution already happened, so definite failure would invite replay.
 export class BridgeReplyRefusedError extends Error {
   constructor(refusal: BridgeRefusal) {
     super(`the reply could not be read (${refusal})`)
@@ -45,7 +40,6 @@ export class BridgeReplyRefusedError extends Error {
   }
 }
 
-/** The frame never left the page, so this is a definite send failure and carries no delivery mark. */
 export class BridgeSendFailedError extends Error {
   constructor() {
     super('the request could not be posted to the shell')
@@ -53,20 +47,8 @@ export class BridgeSendFailedError extends Error {
   }
 }
 
-/**
- * A request bigger than one frame may be, refused before it is posted.
- *
- * The shell's reader drops an oversized frame with a diagnostic and answers nothing, so posting it
- * anyway leaves the caller's promise pending for the life of the page — a spinner that never stops
- * and an error surface that is never written to. `git.bulkStage` carrying every changed path is the
- * shape that reaches this on a large enough workspace.
- *
- * The message is what the screen puts on the user's error surface, so it says what to do rather
- * than naming a cap nobody can act on. Also a definite failure: the frame never left, so nothing
- * ran on the desktop and no delivery mark belongs on it.
- */
+// Refuse oversized requests before posting; the shell drops them without reply and would strand the caller. Nothing was sent, so carry no delivery-unknown mark.
 export class BridgeRequestOversizedError extends Error {
-  /** Carried so a caller can switch on this rather than reading it out of the message. */
   readonly code = 'bridge_request_oversized'
 
   constructor() {
@@ -75,10 +57,8 @@ export class BridgeRequestOversizedError extends Error {
   }
 }
 
-/** A method sent through the native-verb member that is not one. The member is typed, so this is
- *  reachable only from a caller that widened it; refusing keeps the member from being a raw port. */
+// Reject nonnative names even if a widened caller bypasses the typed verb surface; this member must not become a raw RPC port.
 export class BridgeClientNotNativeVerbError extends Error {
-  /** Named for the page, so this does not fall through to an unknown reason. */
   readonly code = 'native_verb_not_a_verb'
 
   constructor(method: string) {
@@ -87,8 +67,7 @@ export class BridgeClientNotNativeVerbError extends Error {
   }
 }
 
-/** Extra wire fields for a shell that granted no `rpcEnvelope`. Refused rather than dropped, because
- *  the call would otherwise run on the desktop without what its caller said it needs. */
+// Refuse unsupported rpcEnvelope fields rather than executing without the caller’s required wire metadata.
 export class BridgeRpcEnvelopeUngrantedError extends Error {
   readonly code = 'bridge_rpc_envelope_ungranted'
 
@@ -98,7 +77,6 @@ export class BridgeRpcEnvelopeUngrantedError extends Error {
   }
 }
 
-/** Extra wire fields that are not a plain JSON object, which the shell's reader would drop. */
 export class BridgeRpcEnvelopeInvalidError extends Error {
   readonly code = 'bridge_rpc_envelope_invalid'
 

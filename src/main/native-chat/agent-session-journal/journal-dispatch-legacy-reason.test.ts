@@ -1,5 +1,4 @@
-// A dispatch row written before the write-side reason bound (#20654) still carries the provider's
-// full error text; the submission every page and frame attaches must read it bounded.
+// Older rows can contain unbounded provider errors; read paths must apply the current reason limit.
 
 import { describe, expect, it } from 'vitest'
 import { applyJournalRow, createJournalReducerState } from './journal-reducer'

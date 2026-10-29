@@ -57,8 +57,7 @@ function mirroredTerminalTab(terminalTabId: string): Tab {
   }
 }
 
-// Why: STA-4697. An agent status echo republishes the snapshot every turn; the diff tab must
-// keep activation instead of falling through to the mirrored terminal.
+// Agent status echoes must preserve active diff instead of falling through to mirrored terminal (STA-4697).
 describe('applyWebSessionTabsSnapshot — diff tab focus', () => {
   beforeEach(resetWebSessionTabsSyncTestState)
 
@@ -90,10 +89,8 @@ describe('applyWebSessionTabsSnapshot — diff tab focus', () => {
           {
             id: HOST_GROUP,
             worktreeId: WT,
-            // Why: the diff is what the user is looking at.
             activeTabId: DIFF_TAB_ID,
-            // Why: the mirrored terminal must share the group, or the membership guard in the
-            // group writers masks the steal and this test passes pre-fix.
+            // Put mirrored terminal in the same group or membership guards mask the pre-fix focus steal.
             tabOrder: [terminalTabId, DIFF_TAB_ID],
             recentTabIds: [terminalTabId, DIFF_TAB_ID]
           }
@@ -135,7 +132,6 @@ describe('applyWebSessionTabsSnapshot — diff tab focus', () => {
 
     expect(nextGroups?.find((group) => group.id === HOST_GROUP)?.activeTabId).toBe(DIFF_TAB_ID)
     expect(activeGroupId).toBe(HOST_GROUP)
-    // Why: the reported symptom left the tab present but deactivated.
     expect(nextTabs?.some((tab) => tab.id === DIFF_TAB_ID)).toBe(true)
   })
 })

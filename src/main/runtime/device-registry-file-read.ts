@@ -6,36 +6,41 @@ import { normalizeLoadedDeviceRow } from './device-registry-row-validation'
 
 export type DeviceRegistryFileRead = {
   devices: DeviceEntry[]
-  /** The registry exists but could not be read, which makes `devices` a lie to save from. */
+  /** An unreadable registry must never be overwritten from this empty device list. */
   unreadable: boolean
-  /** A parse failure, now or in an earlier run, means an unlisted device may still exist. */
+  /** Unlisted devices may still exist after a current or previous parse failure. */
   doubtful: boolean
   /** A corrupt file must be set aside before the first rewrite. */
   corruptFilePending: boolean
 }
 
 export function readDeviceRegistryFile(registryPath: string): DeviceRegistryFileRead {
-  // Why: a set-aside corrupt copy keeps revocation verdicts off until the owner removes it, even
-  // when the rewrite after quarantine never landed and the registry file itself is missing.
+  // Quarantined copies block revocation verdicts until removed, even if no rewrite landed.
   const doubtful = corruptRegistryCopyExists(registryPath)
   try {
     hardenExistingSecureFile(registryPath)
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: normalizeLoadedDeviceRow re-validates every field; a non-array throws below and reads as corrupt.
-    const parsed = JSON.parse(readFileSync(registryPath, 'utf-8')) as DeviceEntry[]
+    const parsed: unknown = JSON.parse(readFileSync(registryPath, 'utf-8'))
+    if (!Array.isArray(parsed)) {
+      throw new Error('Device registry is not an array')
+    }
+    const devices = parsed
+      .map(normalizeLoadedDeviceRow)
+      .filter((device): device is DeviceEntry => device !== null)
+    // Why: a dropped row may still be some client's credential; set the file aside like a corrupt one.
+    const droppedRows = devices.length !== parsed.length
     return {
-      devices: parsed.map(normalizeLoadedDeviceRow),
+      devices,
       unreadable: false,
-      doubtful,
-      corruptFilePending: false
+      doubtful: doubtful || droppedRows,
+      corruptFilePending: droppedRows
     }
   } catch (error) {
     if (isMissingFileError(error)) {
       return { devices: [], unreadable: false, doubtful, corruptFilePending: false }
     }
-    // "Cannot read" is not "is empty". Saving an empty list over a registry we were merely
-    // denied would erase every paired device's bearer token, and the write would succeed.
+    // Permission failure is not emptiness; saving here could erase every paired credential.
     const unreadable = isUnreadableError(error)
-    // Why: a corrupt file is not evidence any device was revoked; never tell a keyed client so.
+    // Corruption cannot prove revocation to a keyed client.
     return { devices: [], unreadable, doubtful: true, corruptFilePending: !unreadable }
   }
 }

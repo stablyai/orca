@@ -10,11 +10,7 @@ export type WorktreeCheckoutProgressReader = {
   close: () => void
 }
 
-/**
- * Turns the `Updating files` meter that `git worktree add` already writes to
- * stderr into progress reports. Reports synchronously with no timer, so nothing
- * can report after the process ends.
- */
+/** Parse Git's existing Updating files meter synchronously; close stops further reports. */
 export function createWorktreeCheckoutProgressReader(
   onProgress: WorktreeCheckoutProgressListener
 ): WorktreeCheckoutProgressReader {
@@ -29,9 +25,7 @@ export function createWorktreeCheckoutProgressReader(
       onProgress(null)
       return
     }
-    // Why: git prints only on a percent change plus at most one same-percent
-    // reprint after each one-second tick; increases only drops that reprint,
-    // so reports stay ~100.
+    // Suppress same-percent timer reprints to keep reports near 100.
     if (record.percent <= lastPercent) {
       return
     }

@@ -37,8 +37,7 @@ export function resolveAiVaultSessionResumeInChatForWorkspace(args: {
     ? resolveAiVaultTargetWorkspacePath(args.targetState, targetWorkspaceId)
     : null
   const state = useAppStore.getState()
-  // The conversation lives on the host that recorded it, so only a chat on that same host can
-  // resume it, the rule the terminal resume follows; that host also answers for the capability.
+  // Like terminal resume, native resume requires the recording host, which also owns capability checks.
   const targetOwner = targetWorkspaceId
     ? resolveStructuredAgentSessionOwner(state, targetWorkspaceId)
     : null
@@ -67,8 +66,7 @@ export function resolveAiVaultSessionResumeInChatForWorkspace(args: {
   })
 }
 
-/** A history row's resume target and its resume-in-chat eligibility, composed once so every surface
- *  offering the row's moves (the Session History panel, the tab menu) asks the same questions. */
+/** Share history-row resume eligibility across Session History and tab-menu actions. */
 export function resolveAiVaultHistoryRowResume(
   args: Parameters<typeof resolveAiVaultHistorySessionResumeState>[0] & {
     targetState: AiVaultSessionResumeTargetState

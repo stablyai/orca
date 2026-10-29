@@ -64,8 +64,7 @@ describe('createWorktreeAgentFreshnessSelector', () => {
     now = AGENT_STATUS_STALE_AFTER_MS + 1
     const nextState = { ...state, agentStatusEpoch: 2 }
 
-    // The global scheduler bumps one epoch for all cards. Zustand compares the
-    // selected string by value, so the unrelated card now skips its render.
+    // The shared epoch wakes selectors, but equal per-card signatures must skip unrelated renders.
     expect(selectWt1(nextState)).toBe(firstWt1)
     expect(selectWt2(nextState)).not.toBe(firstWt2)
   })

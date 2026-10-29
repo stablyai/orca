@@ -25,10 +25,7 @@ const itCrossHost = process.platform === 'win32' ? it.skip : it
 const projectRoot = resolve(import.meta.dirname, '../..')
 const WINDOWS_LOCK_CODES = ['EBUSY', 'ENOTEMPTY', 'EPERM']
 
-// Why: Windows releases the image handle on a just-executed exe (and finishes the
-// AV scan of the freshly compiled one) after the process exits, so tearing down the
-// fixture races those locks. Retry, then leave the temp tree rather than reporting a
-// teardown lock as a launcher failure.
+// Windows image/AV locks can outlast exit; retry cleanup then retain temp tree rather than fail launcher assertions.
 function removeFixtureTree(path) {
   try {
     rmSync(path, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 })
@@ -38,9 +35,7 @@ function removeFixtureTree(path) {
     }
   }
 }
-// Why: a cold cargo build compiles the resource crate and links from scratch,
-// which far exceeds Vitest's 5s unit budget on a hosted Windows runner. Later
-// cases reuse the shared target directory, so only the first pays it.
+// Cold Cargo compile/link exceeds unit timeout on hosted Windows; subsequent cases reuse target output.
 function itWindows(name, test) {
   const runner = process.platform === 'win32' ? it : it.skip
   runner(name, { timeout: 300_000 }, test)

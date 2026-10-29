@@ -66,19 +66,13 @@ function apiUrl(
 async function requestJson<T>(
   path: string,
   options: RequestOptions = {},
-  // Why: the existing-review lookup behind Create must distinguish a real
-  // transport/auth failure from an accepted "no PR". When true, a failed request
-  // throws instead of collapsing to null so callers never report false not_found.
+  // Creation preflight must distinguish lookup failure from an absent PR.
   throwOnFailure = false,
-  // Why: a linked PR number can be stale (deleted PR, wrong repo). A 404 there
-  // must fall through to the branch lookup rather than throw and hide the
-  // branch's real review, so only that caller opts into it.
+  // A stale linked PR may 404 while the branch still has a review.
   notFoundIsNull = false
 ): Promise<T | null> {
   const config = resolveBitbucketAuthConfig()
-  // Why: a denied keychain prompt leaves no usable credential. Issuing the
-  // request anyway gets a 404 on private repos, which reads as "no pull
-  // request" and offers Create for a branch that already has one.
+  // Anonymous private-repo 404s must not be mistaken for an absent PR.
   if (!hasAuth(config)) {
     if (throwOnFailure) {
       throw new Error('Bitbucket request failed: no usable credential')
@@ -147,19 +141,14 @@ async function normalizePullRequest(
   return mapBitbucketPullRequest(raw, status)
 }
 
-// Never decrypts. Env credentials are checked live; a stored credential is
-// revalidated only when its secret already sits in memory from an earlier API
-// call, and otherwise trusted from plaintext metadata — decrypting here would
-// prompt for keychain access every time Settings opens.
+// Avoid keychain prompts: validate stored credentials only when the secret is already cached.
 export async function getBitbucketAuthStatus(): Promise<BitbucketAuthStatus> {
   const env = getEnvAuthConfig()
   if (hasAuth(env)) {
     const result = await fetchBitbucketUserResult(env)
     return {
       configured: true,
-      // Why (STA-3944): only a rejection means the credential is bad. An
-      // unreachable host must not render as "Auth failed" and send the user
-      // off to regenerate a token that still works.
+      // An unreachable host does not prove the credential is invalid.
       authenticated: result.ok || result.reason === 'unreachable',
       account: result.ok ? accountNameFromUser(result.user) : null
     }
@@ -257,12 +246,7 @@ export async function getBitbucketPullRequestForBranch(
     const raw = list?.values?.[0]
     if (raw) {
       const state = mapBitbucketPullRequestState(raw.state)
-      // Why: a merged PR we only matched by branch name is history, not review
-      // context (GitHub's isMergedImplicitPR rule). Keeping it reported "a pull
-      // request already exists" and blocked the branch's next PR. Scoped to
-      // merged so a declined PR stays visible off the default branch, matching
-      // every other provider; the linked lookup above already returned early
-      // for an explicitly linked review.
+      // Exclude implicit merged matches so they cannot block a new PR on the branch.
       const isMergedImplicitMatch = state === 'merged'
       const hideOnDefaultBranch = await shouldHideNonOpenReviewOnDefaultBranch({
         state,
@@ -282,12 +266,7 @@ export async function getBitbucketPullRequestForBranch(
   return null
 }
 
-/**
- * Existing-review lookup that surfaces transport/auth failures instead of
- * collapsing them to null. The hosted-review creation preflight uses this so a
- * failed lookup becomes `reviewLookupOutcome: 'unavailable'`, never a false
- * "No pull request found".
- */
+/** Preserve lookup failures so creation preflight can report review state as unavailable. */
 export function getBitbucketPullRequestForBranchOrThrow(
   repoPath: string,
   branch: string,

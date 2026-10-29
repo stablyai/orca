@@ -1,7 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-// Why a mocked rm: the property under test is the ORDER in which overlapping removals settle, which
-// real filesystem timing cannot pin down. Deferreds make the interleaving exact.
+// Deferred removals make overlap ordering deterministic.
 const { rmMock } = vi.hoisted(() => ({ rmMock: vi.fn() }))
 vi.mock('node:fs/promises', () => ({ rm: rmMock }))
 
@@ -21,8 +20,6 @@ function deferred(): { promise: Promise<void>; resolve: () => void } {
 }
 
 describe('removeExtractedAppImagePayload reentrancy', () => {
-  // The hazard is the FIRST removal settling while a later one is still running: a naive
-  // save/restore would hand the shim back and silently leak the rest of the second removal.
   it('keeps asar interception disabled while a later removal is still running', async () => {
     process.noAsar = false
     const first = deferred()
@@ -37,7 +34,6 @@ describe('removeExtractedAppImagePayload reentrancy', () => {
 
     first.resolve()
     await firstCall
-    // gen-b is still being removed: handing the shim back here is exactly the leak.
     expect(process.noAsar).toBe(true)
 
     second.resolve()

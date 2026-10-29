@@ -1,21 +1,6 @@
-/**
- * Bounded memo for pure `(title: string) => T` terminal-title classifiers.
- *
- * Why: the sidebar cards and tab strip re-derive agent identity/status from
- * every pane title inside zustand selectors and render bodies, so an UNCHANGED
- * title was re-tested against every agent-name regex on every store write —
- * thousands of classifications per second while the app sat idle. Every
- * classifier below depends on nothing but the title string, so the verdict is
- * reusable until the title itself changes; a new title is simply a new key, so
- * there is no staleness window and no invalidation signal to miss.
- */
+/** Pure title classifiers can reuse verdicts across unrelated store writes; changed titles become new keys, so no invalidation signal is needed. */
 
-/**
- * Cap: comfortably above the live working set (one title per open pane plus
- * retained rows) so steady-state hit rate stays ~100%, small enough that the
- * map cannot grow with session length. Entries hold a reference to a string the
- * store already retains, so the marginal cost is the map entry itself.
- */
+/** Bound growth across session length while keeping the live pane/title working set cached. */
 const MAX_MEMOIZED_TITLES = 1024
 
 export function memoizeTitleClassification<T>(
@@ -29,8 +14,7 @@ export function memoizeTitleClassification<T>(
       return cached.value
     }
     const value = classify(title)
-    // Insertion-ordered FIFO eviction: a pane's superseded title frames are the
-    // oldest keys and the least likely to be asked for again.
+    // FIFO evicts superseded title frames first; they are least likely to be requested again.
     if (cache.size >= MAX_MEMOIZED_TITLES) {
       const oldest = cache.keys().next()
       if (!oldest.done) {

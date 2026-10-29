@@ -1,7 +1,4 @@
-// A queued card when the agent ahead of it exits: every frame from the exit on reads the dead
-// generation as ended (not Working, none of its prompts answerable), and the card is sent at once,
-// whether the exit's release write lands, waits or keeps failing: an acquisition then replaces the
-// owner once it is proven dead, and never one that is alive or unproven.
+// Proven generation death must immediately disable old work and wake cards even when lease release fails.
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentSessionOwnerProbe } from '../../../shared/agent-session-lease-adjudication'
@@ -29,7 +26,6 @@ afterEach(async () => {
   vi.restoreAllMocks()
 })
 
-/** A card queued behind a running turn that raised a prompt. */
 async function queuedBehindPrompt(
   probeOwner?: StructuredAgentSessionHostDeps['probeOwner']
 ): Promise<{ current: QueuedMessageTestRig; draftId: string }> {
@@ -47,7 +43,6 @@ async function queuedBehindPrompt(
   return { current, draftId: queued.value.queued.messageId }
 }
 
-/** Every release write refused, as storage that keeps failing would. */
 function refuseReleases(current: QueuedMessageTestRig): () => number {
   vi.spyOn(console, 'warn').mockImplementation(() => undefined)
   const transition = current.store.transitionHandoff.bind(current.store)
@@ -65,7 +60,6 @@ function refuseReleases(current: QueuedMessageTestRig): () => number {
   return () => refused
 }
 
-/** What a client reads after each frame, from the host's own fields. */
 async function watchChat(current: QueuedMessageTestRig) {
   let state = EMPTY_STRUCTURED_AGENT_SESSION
   const reads: { working: boolean; settled: boolean; prompts: number; cardSent: boolean }[] = []
@@ -103,10 +97,8 @@ describe('an exit whose settlement lands while its release keeps failing', () =>
     expect(refused()).toBeGreaterThan(0)
     const untilSent = reads.slice(before).filter((read) => !read.cardSent)
     expect(untilSent.length).toBeGreaterThan(0)
-    // Not Working, and the dead generation's prompt answerable, in no frame before the card's send.
     expect(untilSent.filter((read) => read.working)).toEqual([])
     expect(untilSent.filter((read) => read.prompts > 0)).toEqual([])
-    // Its turn was settled before the send, and the lease belongs to the generation that took it.
     expect(untilSent.at(-1)?.settled).toBe(true)
     expect(current.store.getRecord(SESSION)?.lease.claimStatus).toBe('live')
   })

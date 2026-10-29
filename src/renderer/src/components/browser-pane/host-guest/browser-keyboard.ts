@@ -12,8 +12,7 @@ export function isEditableKeyboardTarget(target: EventTarget | EditableTargetLik
     return false
   }
 
-  // Why: Browser panes stay mounted beside editor splits, so their global
-  // shortcut listeners must treat editor surfaces as editable too.
+  // Mounted browser panes share windows with editor splits; their global shortcuts must respect editable editor surfaces.
   const editableHost = element.closest?.(
     [
       'input',

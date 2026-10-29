@@ -127,10 +127,7 @@ export function formatChangeText(set: GoldenChangeSet, limit = 5): string {
   return `${lines.join('\n')}\n`
 }
 
-/**
- * GitHub caps one step summary at 1 MiB, and a recorder change can move ~700 goldens. Families are
- * listed in full; details stop at `maxBytes`, so the tail of a large change is names only.
- */
+// GitHub summaries cap at 1 MiB; list all families but bound detailed changes by maxBytes because recorder changes can touch ~700 goldens.
 export function formatChangeMarkdown(set: GoldenChangeSet, maxBytes = 200_000): string {
   if (changeSetIsEmpty(set)) {
     return ''

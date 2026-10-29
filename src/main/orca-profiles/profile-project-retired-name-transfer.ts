@@ -17,8 +17,7 @@ export function extractRetiredNameRegistriesByNamespace(
   if (!namespaceKey) {
     return {}
   }
-  // Pre-identity keys travel too, folded onto the canonical one so the target profile holds a
-  // single up-to-date entry.
+  // Fold pre-identity keys into the canonical namespace so retired names remain unique.
   let merged: RetiredNameRegistry | null = null
   for (const key of retirementNamespaceKeysToRead(sourceRepo, namespaceKey, lookup)) {
     const registry = sourceState.retiredWorktreeNamesByNamespace?.[key]

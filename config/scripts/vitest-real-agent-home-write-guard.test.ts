@@ -3,14 +3,14 @@ import { existsSync, mkdirSync, mkdtempSync, openSync, rmSync, writeFileSync } f
 import { writeFile } from 'node:fs/promises'
 import { homedir, tmpdir, userInfo } from 'node:os'
 import { join } from 'node:path'
+import { pathToFileURL } from 'node:url'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   clearInheritedAgentStateEnv,
   takeRealAgentHomeWriteViolations
 } from './vitest-real-agent-home-write-guard'
 
-// Why never-created paths: each sits under a missing folder or is a forced no-op removal, so even
-// with the guard off (the ablation) nothing lands in the real home.
+// Use missing-parent/no-op paths so guard ablation never writes real home either.
 const missingRealFolder = (entry: string) =>
   join(userInfo().homedir, entry, `orca-vitest-guard-${randomUUID()}`)
 
@@ -43,11 +43,20 @@ describe('vitest real-agent-home write guard', () => {
     }
   )
 
-  it('refuses a named-import sync write under the real ~/.codex', () => {
-    const target = join(missingRealFolder('.codex'), 'config.toml')
-    expect(() => writeFileSync(target, '[projects."/tmp/x"]\n')).toThrow(/real-agent-home guard/)
-    expect(existsSync(target)).toBe(false)
-  })
+  it.each(['string', 'buffer', 'url'])(
+    'refuses a named-import sync write through a %s path under the real ~/.codex',
+    (pathType) => {
+      const target = join(missingRealFolder('.codex'), 'config.toml')
+      const input =
+        pathType === 'buffer'
+          ? Buffer.from(target)
+          : pathType === 'url'
+            ? pathToFileURL(target)
+            : target
+      expect(() => writeFileSync(input, '[projects."/tmp/x"]\n')).toThrow(/real-agent-home guard/)
+      expect(existsSync(target)).toBe(false)
+    }
+  )
 
   it('allows only Claude transcript writes for the real CLI opt-in', () => {
     vi.stubEnv('ORCA_REAL_CLAUDE_CLI_TEST', '1')

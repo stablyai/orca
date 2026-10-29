@@ -1,8 +1,6 @@
 import type { WebContents } from 'electron'
 
-// Why: Orca attaches its own CDP sessions to a guest's cross-site frames to deliver agent input
-// there (see guest-focused-frame-route.ts). This file owns those sessions: one per frame target,
-// adopted even when the attach answers late, and hidden from the agent's CDP client.
+// Orca owns these frame-input sessions; hide their traffic from the agent's CDP client.
 
 export type GuestSessionCdpSender = (
   method: string,
@@ -10,9 +8,9 @@ export type GuestSessionCdpSender = (
   sessionId?: string
 ) => Promise<unknown>
 
-// Why: a page paused in a debugger or blocked on a dialog never answers; input must not wait on it.
+// Paused pages and dialogs must not block input routing indefinitely.
 const PAGE_PROBE_TIMEOUT_MS = 500
-// Why: the target list changes only when frames come and go; one lookup serves a burst of keys.
+// Reuse target discovery across bursts of keystrokes.
 const TARGET_LIST_TTL_MS = 1_000
 
 type FrameSessions = {
@@ -57,7 +55,6 @@ export function readString(value: Record<string, unknown> | null, key: string): 
 
 export type Settled<T> = { outcome: 'ok'; value: T } | { outcome: 'failed' | 'timeout' }
 
-/** Settles a page request within the probe timeout, telling a rejection from a slow page. */
 export async function settle<T>(request: Promise<T>): Promise<Settled<T>> {
   let timer: ReturnType<typeof setTimeout> | undefined
   try {
@@ -75,16 +72,12 @@ export async function settle<T>(request: Promise<T>): Promise<Settled<T>> {
   }
 }
 
-/** Resolves to `fallback` when the page rejects or does not answer within the probe timeout. */
 export async function settleWithin<T>(request: Promise<T>, fallback: T): Promise<T> {
   const settled = await settle(request)
   return settled.outcome === 'ok' ? settled.value : fallback
 }
 
-/**
- * True for debugger traffic that belongs to Orca's own frame sessions; the CDP proxy keeps it
- * from the agent's client, which never asked for those sessions.
- */
+/** Hide Orca-owned session traffic that the agent's client did not request. */
 export function isOrcaFrameSessionTraffic(
   webContents: WebContents,
   method: string,
@@ -108,7 +101,7 @@ export function isOrcaFrameSessionTraffic(
     forgetFrameSession(webContents, eventSessionId)
     sessions.ownedSessionIds.delete(eventSessionId)
   }
-  // Why: Chromium reports Orca's attach before answering it, while the attach is still in flight.
+  // Chromium emits attachedToTarget before answering the pending attach.
   return owned || (targetId !== null && sessions.attachByTargetId.has(targetId))
 }
 
@@ -122,7 +115,7 @@ export function forgetFrameSession(webContents: WebContents, sessionId: string):
   }
 }
 
-/** Orca's session on a frame target; concurrent callers share one attach, and a late one is kept. */
+/** Share concurrent attaches and retain sessions that answer after the caller times out. */
 export async function frameSessionFor(
   webContents: WebContents,
   send: GuestSessionCdpSender,
@@ -144,7 +137,7 @@ export async function frameSessionFor(
           'sessionId'
         )
         if (sessionId) {
-          // Why: owned even if this caller gave up waiting, so its events stay hidden.
+          // Late sessions remain owned so their events stay hidden.
           sessions.ownedSessionIds.add(sessionId)
           sessions.sessionIdByTargetId.set(targetId, sessionId)
         }
@@ -157,7 +150,6 @@ export async function frameSessionFor(
   return await settleWithin(attach, null)
 }
 
-/** Cross-site frame target ids, from a briefly cached target list. */
 export async function crossSiteFrameTargets(
   webContents: WebContents,
   send: GuestSessionCdpSender,
@@ -189,7 +181,6 @@ export async function crossSiteFrameTargets(
   return ids
 }
 
-/** Sends input on a frame session with focus emulation on, enabled once per session. */
 export async function sendFrameSessionInput(
   webContents: WebContents,
   send: GuestSessionCdpSender,
@@ -199,8 +190,7 @@ export async function sendFrameSessionInput(
 ): Promise<unknown> {
   const sessions = frameSessionsFor(webContents)
   if (!sessions.emulatedSessionIds.has(sessionId)) {
-    // Why: editors that check document.hasFocus() need it. Retried once and recorded only on
-    // success; input is sent either way, as a frame failing twice is navigating and loses it anyway.
+    // Editors need document.hasFocus(); cache successful emulation but keep input best effort.
     const enable = (): Promise<boolean> =>
       send('Emulation.setFocusEmulationEnabled', { enabled: true }, sessionId).then(
         () => true,

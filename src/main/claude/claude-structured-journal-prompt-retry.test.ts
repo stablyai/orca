@@ -201,7 +201,6 @@ describe('Claude journal prompt cancellation retry', () => {
       sessionId: 'orca-session',
       promptKey: prompt.promptKey
     })
-    // Still full at this drain: the card stays owed and reading waits for the next one.
     control?.resumeReading()
     expect(state.durableApproval()).toMatchObject({ resolution: { state: 'pending' } })
     expect(connection.resumeReading).not.toHaveBeenCalled()

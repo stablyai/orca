@@ -67,7 +67,7 @@ async function rig() {
   const report = async (next: AgentChildWorkRowView[]) => {
     children = next
     rows.changed('session-1')
-    // The writer is a queued loop; one macrotask lets its writes land.
+    // Let the queued writer land its writes.
     await new Promise((resolve) => setTimeout(resolve, 0))
   }
   const saved = () =>
@@ -141,7 +141,7 @@ describe("each subagent's saved row", () => {
     expect(parentOf('agent-nested')).toBe('agent-parent')
     expect(parentOf('agent-parent')).toBeUndefined()
 
-    // The parent's record retired; the nested helper's next change keeps the parent its row names.
+    // Retired parent records must not erase the saved parent identity.
     await r.report([{ ...nested, parentChildWorkId: undefined, totalTokens: 30 }])
     expect(r.saved().find(({ block }) => block.id === 'agent-nested')?.block).toMatchObject({
       parentId: 'agent-parent',
@@ -170,14 +170,13 @@ describe("each subagent's saved row", () => {
     expect(helper()).toMatchObject({ state: 'working' })
     expect(helper()).not.toHaveProperty('settledAt')
 
-    // The shell ends and no wake-up follows: the helper reads its own ending again.
     await r.report([
       finished,
       shell({ membership: 'settled', state: 'done', outcome: 'succeeded', settledAt: 400 })
     ])
     expect(helper()).toMatchObject({ state: 'completed', settledAt: 150 })
 
-    // The session ends while the shell runs: the shell's unknown ending is not the helper's.
+    // An unknown shell ending cannot imply the helper ended.
     await r.report([finished, shell({})])
     expect(helper()).toMatchObject({ state: 'working' })
     await r.report([

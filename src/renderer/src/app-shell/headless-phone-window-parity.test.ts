@@ -1,5 +1,4 @@
-// What the desktop window shows at startup for the partitions a phone on a host with no window is
-// compared against in headless-mobile-session-absorbed-rows.test.ts.
+// Desktop startup oracle for headless-mobile-session-absorbed-rows.test.ts.
 
 import { expect, it, vi } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
@@ -23,7 +22,7 @@ vi.mock('@/lib/agent-status', async (importOriginal) => {
 
 createStoreSessionMockApi()
 
-/** Terminals of a projected pane tree, in order; see `projectStartupWindowView`. */
+/** Project terminal bindings in pane-tree order, matching projectStartupWindowView. */
 function paneTerminals(node: unknown): (string | null)[] {
   if (typeof node !== 'object' || node === null) {
     return []

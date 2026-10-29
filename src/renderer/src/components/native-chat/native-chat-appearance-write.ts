@@ -2,7 +2,7 @@ import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import {
   normalizeNativeChatAppearanceSettings,
   type NativeChatAppearanceSettings
-} from '../../../../shared/native-chat-appearance-settings'
+} from '../../../../shared/native-chat/native-chat-appearance-settings'
 import { useAppStore } from '../../store'
 
 type AppearanceChange = (

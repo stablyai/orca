@@ -31,21 +31,23 @@ export type ProcessFileExplorerFsPayloadArgs = {
   refreshTree: () => void
 }
 
+const cachedChildPathIndexes = new WeakMap<readonly TreeNode[], ReadonlyMap<string, TreeNode>>()
+
 function cachedDirectoryChild(
   cache: Record<string, DirCache>,
   cachedDirPath: string,
-  childPath: string,
-  childPathIndexes: Map<string, Map<string, TreeNode>>
+  childPath: string
 ): TreeNode | undefined {
-  let childPaths = childPathIndexes.get(cachedDirPath)
+  const children = cache[cachedDirPath]?.children
+  if (!children) {
+    return undefined
+  }
+  let childPaths = cachedChildPathIndexes.get(children)
   if (!childPaths) {
     childPaths = new Map(
-      cache[cachedDirPath]?.children.map((child) => [
-        normalizeRuntimePathForComparison(child.path),
-        child
-      ]) ?? []
+      children.map((child) => [normalizeRuntimePathForComparison(child.path), child])
     )
-    childPathIndexes.set(cachedDirPath, childPaths)
+    cachedChildPathIndexes.set(children, childPaths)
   }
   return childPaths.get(normalizeRuntimePathForComparison(childPath))
 }
@@ -83,7 +85,6 @@ export function processFileExplorerFsPayload(args: ProcessFileExplorerFsPayloadA
   }
 
   const dirsToRefresh = new Set<string>()
-  const childPathIndexes = new Map<string, Map<string, TreeNode>>()
   let hasLinkedCache: boolean | undefined
   let cachedDirKeys: string[] | undefined
   let cachedDirPathIndex: ReadonlyMap<string, string> | undefined
@@ -114,7 +115,7 @@ export function processFileExplorerFsPayload(args: ProcessFileExplorerFsPayloadA
     const cachedParent = resolveCachedDirPath(cache, parent, currentWorktreePath, cachePathIndex)
     const updatedChild =
       evt.kind === 'update' && cachedParent
-        ? cachedDirectoryChild(cache, cachedParent, normalizedPath, childPathIndexes)
+        ? cachedDirectoryChild(cache, cachedParent, normalizedPath)
         : undefined
     const knownFileUpdate =
       evt.kind === 'update' &&
@@ -129,7 +130,7 @@ export function processFileExplorerFsPayload(args: ProcessFileExplorerFsPayloadA
     }
 
     if (evt.kind === 'delete') {
-      // Why: watcher can't report isDirectory for deletes; a dirCache key means it was an expanded dir (design §4.4).
+      // Deleted events lack isDirectory; cached keys identify tracked directories (design §4.4).
       const cachedDir = resolveCachedDirPath(
         cache,
         normalizedPath,
@@ -162,10 +163,7 @@ export function processFileExplorerFsPayload(args: ProcessFileExplorerFsPayloadA
         dirsToRefresh.add(cachedParent)
       }
     } else if (evt.kind === 'create' || evt.kind === 'rename') {
-      // Why: create and rename both change a parent's listing. Rename was
-      // previously deferred (#10264) so Explorer stayed stale until focus
-      // remounted the tree. Case-insensitive cache lookup covers Windows
-      // drive-letter / path casing drift between watcher and worktree path.
+      // Refresh create/rename parents immediately (#10264); case-insensitive lookup covers Windows watcher casing drift.
       if (cachedParent) {
         dirsToRefresh.add(cachedParent)
       }
@@ -230,7 +228,7 @@ export function processFileExplorerFsPayload(args: ProcessFileExplorerFsPayloadA
       if (
         cachedParent &&
         !dirsToRefresh.has(cachedParent) &&
-        !cachedDirectoryChild(cache, cachedParent, normalizedPath, childPathIndexes)
+        !cachedDirectoryChild(cache, cachedParent, normalizedPath)
       ) {
         dirsToRefresh.add(cachedParent)
       }

@@ -28,8 +28,7 @@ describe('resource session kill confirmation', () => {
   })
 
   it('confirms when ownership could not be established at all', () => {
-    // Why: a provider that cannot serialize claims reports no owners for a session that may have
-    // one. Treating that silence as proof of absence is the #8459 defect.
+    // Missing serialized claims cannot prove a session has no agent owner.
     expect(requiresKillConfirmation(row({ bound: false, agentOwnership: 'unknown' }))).toBe(true)
   })
 

@@ -181,8 +181,11 @@ describe('marketplace provenance contracts', () => {
     expect(isMarketplaceListingSupported(['vm-recipes', 'official'])).toBe(true)
     expect(isMarketplaceListingSupported(['keybindings'])).toBe(true)
     expect(isMarketplaceListingSupported([])).toBe(true)
-    for (const deferred of ['themes', 'icons', 'icon-themes', 'terminal-themes', 'skills']) {
+    for (const deferred of ['icons', 'icon-themes', 'skills']) {
       expect(isMarketplaceListingSupported([deferred, 'official'])).toBe(false)
+    }
+    for (const supported of ['themes', 'terminal-themes']) {
+      expect(isMarketplaceListingSupported([supported, 'official'])).toBe(true)
     }
   })
 })

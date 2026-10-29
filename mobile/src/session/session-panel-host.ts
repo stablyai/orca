@@ -1,11 +1,5 @@
-// Pure master-detail panel-host logic for the mobile session screen. No React/native
-// imports so the dock-vs-push decision and the active-panel state machine are
-// unit-testable under node Vitest (KTD3/R8).
-
 export type ActivePanel = 'sourceControl' | 'files' | 'pr' | null
 
-// Toggle/swap reducer for the wide-layout dock: tapping the active panel closes it,
-// tapping any other opens/swaps to it. Exactly one panel docks at a time (R2).
 export function nextActivePanel(
   current: ActivePanel,
   tapped: Exclude<ActivePanel, null>
@@ -24,9 +18,7 @@ export function shouldShowSessionHeaderChecksAction(args: {
   repoContextLoaded: boolean
   hostedChecksSupported: boolean
 }): boolean {
-  // Why: the hosted checks panel is provider-gated and the pr-panel guard
-  // force-closes it for unsupported providers, so offering the action there
-  // (or before the provider probe resolves) would be a silent no-op.
+  // Offer hosted checks only for supported providers; otherwise the panel guard would silently close them.
   return !args.isFolderWorkspaceRoute && args.repoContextLoaded && args.hostedChecksSupported
 }
 
@@ -42,9 +34,6 @@ export function canDockSessionPanel(args: {
   )
 }
 
-// Wide layouts dock (toggle/swap the sidebar beside the terminal); narrow layouts
-// push the panel's full-screen route (R3/R7). The caller maps a push to the concrete
-// expo-router path + params via panelRouteDescriptor.
 export function resolvePanelAction(args: {
   canDock: boolean
   tapped: Exclude<ActivePanel, null>
@@ -56,10 +45,7 @@ export function resolvePanelAction(args: {
   return { kind: 'push', panel: args.tapped }
 }
 
-// Single source of truth for each panel's expo-router pathname pattern so narrow-push
-// and any deep-linking agree; the caller supplies the [hostId]/[worktreeId] params.
-// The Pull Request panel is a segment of the source-control hub, so its narrow-push
-// targets that route with `tab: 'pr'` rather than the standalone (redirecting) route.
+// Route PR pushes through the source-control hub’s pr tab; its standalone route only redirects.
 export function panelRouteDescriptor(panel: Exclude<ActivePanel, null>): {
   pathname: string
   params?: Record<string, string>

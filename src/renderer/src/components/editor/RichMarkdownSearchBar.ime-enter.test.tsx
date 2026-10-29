@@ -68,8 +68,7 @@ function renderBar(spies: BarSpies): {
     )
   })
   const inputs = [...container.querySelectorAll('input')]
-  // Why: match on value rather than order so a layout change fails loudly instead of
-  // silently pointing the assertions at the wrong field.
+  // Match input values so layout reordering cannot silently redirect assertions.
   const findInput = inputs.find((candidate) => candidate.value === QUERY)
   const replaceInput = inputs.find((candidate) => candidate.value === REPLACEMENT)
   if (!findInput || !replaceInput) {

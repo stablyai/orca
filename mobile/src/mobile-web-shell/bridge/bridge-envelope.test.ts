@@ -12,11 +12,9 @@ import {
   BRIDGE_MAX_ROUTE_PARAMS,
   BRIDGE_MAX_ROUTE_PATHNAME_CHARS,
   BRIDGE_MAX_VIEWPORT_COLS,
-  BRIDGE_MAX_VIEWPORT_ROWS,
-  BRIDGE_ROUTE_HREF_PATTERN,
-  BRIDGE_ROUTE_PATHNAME_PATTERN
+  BRIDGE_MAX_VIEWPORT_ROWS
 } from './bridge-caps'
-import { BRIDGE_HAPTICS_KINDS, BRIDGE_HAPTICS_NOTIFY } from './bridge-haptics-notify'
+import { BRIDGE_HAPTICS_NOTIFY } from './bridge-haptics-notify'
 import {
   BRIDGE_FAULT_GRANT,
   BRIDGE_NAVIGATE_BACK_NOTIFY,
@@ -53,7 +51,6 @@ const BINARY_FRAME = {
 
 type BridgeBinaryEvent = Extract<BridgeHostMessage, { binary: unknown }>
 
-/** Compile-time pin: everything a decoded frame holds but its bytes crosses as a field. */
 function asDecodedFrameFields(
   binary: BridgeBinaryEvent['binary']
 ): Omit<BrowserScreencastFrame, 'image'> {
@@ -130,12 +127,14 @@ describe('client messages', () => {
       }
     ],
     ['a navigate-back notify', { type: 'notify', name: BRIDGE_NAVIGATE_BACK_NOTIFY }],
-    // One per kind, spread from the list itself: a kind added to the tuple and left out of the
-    // schema's enum would otherwise be accepted here by a case nobody wrote.
-    ...BRIDGE_HAPTICS_KINDS.map(
+    ...(['mediumImpact', 'selection', 'success', 'error', 'edgeBump'] as const).map(
       (kind) =>
         [`a ${kind} haptics notify`, { type: 'notify', name: BRIDGE_HAPTICS_NOTIFY, kind }] as const
     ),
+    [
+      'an escaped-name navigate notify',
+      { type: 'notify', name: 'navigate', href: '/h/a%20b/%2ex?from=list' }
+    ],
     ['close', { type: 'close' }]
   ] as const
 
@@ -146,8 +145,7 @@ describe('client messages', () => {
   }
 
   it('drops a target a page attached to a navigate-back, rather than carrying it to the shell', () => {
-    // Additive fields are dropped and never refused, which is what keeps a newer desktop's bundle
-    // working against an older shell — so the absence has to be read off the parsed frame.
+    // Assert parsed output drops additive fields; newer desktop bundles must remain usable with older shells.
     const read = readClient(
       client({ type: 'notify', name: BRIDGE_NAVIGATE_BACK_NOTIFY, href: '/h/host-a' })
     )
@@ -210,6 +208,13 @@ describe('client messages', () => {
       client({ type: 'notify', name: BRIDGE_HAPTICS_NOTIFY, kind: 'heavyImpact' })
     ],
     ['a haptics notify naming no kind', client({ type: 'notify', name: BRIDGE_HAPTICS_NOTIFY })],
+    ...['/h/../a', '/h/%2e%2e/a', '/h/%2E%2E/a', '/h/.%2e/a', '/h/%2e/a'].map(
+      (href) =>
+        [
+          `a navigate dot segment ${href}`,
+          client({ type: 'notify', name: 'navigate', href })
+        ] as const
+    ),
     ['a bare array', []],
     ['a bare string', 'ready']
   ] as const
@@ -227,7 +232,10 @@ describe('client messages', () => {
 
   it('keeps an absent params absent, so the host replays the arity the page used', () => {
     const read = readClient(client({ type: 'request', id: ID, method: 'status.get' }))
-    expect(read.ok && read.message.type === 'request' && 'params' in read.message).toBe(false)
+    expect(read).toEqual({
+      ok: true,
+      message: { v: BRIDGE_PROTOCOL_VERSION, type: 'request', id: ID, method: 'status.get' }
+    })
   })
 
   it('keeps an explicit null params, which is not the same call', () => {
@@ -246,7 +254,6 @@ describe('client messages', () => {
 })
 
 describe('host messages', () => {
-  /** An otherwise valid `init`, so a refusal below is the route's and not the frame's. */
   function initRoute(route: unknown): Record<string, unknown> {
     return client({
       type: 'init',
@@ -282,7 +289,6 @@ describe('host messages', () => {
         buildId: 'b1',
         connection: CONNECTION,
         grants: GRANTS,
-        // Without this the refusals above would also pass a rule that banned the character.
         route: { pathname: '/h/a..b/...' }
       }
     ],
@@ -294,9 +300,7 @@ describe('host messages', () => {
         buildId: 'b1',
         connection: CONNECTION,
         grants: GRANTS,
-        // An encoded space, a segment that starts with an encoded dot, and an encoded slash, which
-        // the router reads as one segment's text. Without these the refusals above would pass a
-        // rule that banned the escape rather than the dot segment it spells.
+        // Allow escaped text and encoded slashes within named segments; reject dot-segment semantics rather than all escapes.
         route: { pathname: '/h/a%20b/%2ex/a%2fb' }
       }
     ],
@@ -331,8 +335,6 @@ describe('host messages', () => {
       }
     ],
     [
-      // The recorder records every code it finds, whatever its shape, so refusing one here would
-      // move a golden.
       'an error whose code is an object',
       {
         type: 'error',
@@ -456,18 +458,13 @@ describe('host messages', () => {
       'an end for a reason that is not one of the three',
       client({ type: 'end', id: ID, reason: 'done' })
     ],
-    // Every one of these reaches `history.replaceState`. A protocol-relative path makes it throw a
-    // cross-origin SecurityError and takes the mount down; the other three are a URL the page
-    // would have to parse to separate again, which is what `params` exists to avoid.
+    // replaceState rejects cross-origin protocol-relative paths; queries/fragments belong in params instead of requiring URL re-parsing.
     ['an init route that is not rooted', initRoute({ pathname: 'h/host-a' })],
     ['an init route that is protocol-relative', initRoute({ pathname: '//evil.example/h' })],
     ['an init route that is backslash-relative', initRoute({ pathname: '/\\evil.example/h' })],
     ['an init route carrying its own query', initRoute({ pathname: '/h/a?name=b' })],
     ['an init route carrying a fragment', initRoute({ pathname: '/h/a#top' })],
-    // `replaceState` normalises each of these and the page then renders whatever came out:
-    // `/../../etc` resolves to `/etc`, `/h/a/../x` to `/h/x`, and `/h/a\\b` to `/h/a/b`. All three
-    // leave the `/h/<host>` prefix the page's tree starts at, which is the whole point of refusing
-    // shape rather than trusting the router to be handed one.
+    // Reject paths that replaceState normalizes away from their intended host prefix, including dot segments and backslashes.
     ['an init route that climbs out of its prefix', initRoute({ pathname: '/../../etc' })],
     [
       'an init route with an interior dot segment',
@@ -476,8 +473,7 @@ describe('host messages', () => {
     ['an init route ending in a dot segment', initRoute({ pathname: '/h/a/..' })],
     ['an init route with a single dot segment', initRoute({ pathname: '/h/./a' })],
     ['an init route with an interior backslash', initRoute({ pathname: '/h/a\\b' })],
-    // The same climb, spelled the way a URL parser still reads as a dot segment: it percent-decodes
-    // the path before it resolves it, so `%2e%2e` escapes the prefix exactly as `..` does.
+    // Encoded dots resolve as dot segments too, so they must not bypass the prefix guard.
     [
       'an init route that climbs out of its prefix percent-encoded',
       initRoute({ pathname: '/h/%2e%2e/render-check-host' })
@@ -488,6 +484,9 @@ describe('host messages', () => {
     ],
     ['an init route with a half-encoded dot segment', initRoute({ pathname: '/h/.%2e/a' })],
     ['an init route with a single encoded dot segment', initRoute({ pathname: '/h/%2e/a' })],
+    ['an init route with a literal parent segment', initRoute({ pathname: '/h/../a' })],
+    ['an init route with a lower encoded parent segment', initRoute({ pathname: '/h/%2e%2e/a' })],
+    ['an init route with an upper encoded parent segment', initRoute({ pathname: '/h/%2E%2E/a' })],
     ['an init route with an empty interior segment', initRoute({ pathname: '/h//a' })],
     ['an init route with an empty pathname', initRoute({ pathname: '' })],
     [
@@ -542,12 +541,7 @@ describe('host messages', () => {
 })
 
 describe('the reply reader is the native acceptance predicate', () => {
-  /**
-   * Agreement, not a second table of accepted shapes. The page stands in for the wire the native
-   * client reads, so anything `isRpcResponse` takes off that wire has to cross the bridge, and
-   * anything it drops has to be refused here too — including `{ ok: true }` with no `result` key,
-   * which no real frame boundary carries.
-   */
+  // Use isRpcResponse as the acceptance oracle: both bridge and native transport must agree, including refusal of ok:true with no result.
   const payloads: [string, unknown][] = [
     ['a success the runtime stamped', { id: 'r1', ok: true, result: 1, _meta: { runtimeId: 'a' } }],
     ['a success with no `_meta` at all', { id: 'r1', ok: true, result: 1 }],
@@ -584,7 +578,7 @@ describe('the reply reader is the native acceptance predicate', () => {
 })
 
 describe('the screencast frame reader', () => {
-  it('refuses a screencast metadata field that is not a finite number', () => {
+  it('refuses numeric strings in screencast metadata', () => {
     const keys = [
       'offsetTop',
       'pageScaleFactor',
@@ -605,7 +599,7 @@ describe('the screencast frame reader', () => {
     }
   })
 
-  it('carries a decoded screencast frame whole, minus its bytes', () => {
+  it('preserves binary event fields and their decoded-frame type compatibility', () => {
     const read = readHost(client({ type: 'event', id: ID, seq: 1, binary: BINARY_FRAME }))
     const binary =
       read.ok && read.message.type === 'event' && 'binary' in read.message
@@ -651,43 +645,28 @@ describe('the readers bound their two directions differently', () => {
   })
 
   it('still refuses a host frame one byte over the frame cap', () => {
-    const padding = 'x'.repeat(BRIDGE_MAX_MESSAGE_BYTES)
-    const raw = JSON.stringify({
-      v: BRIDGE_PROTOCOL_VERSION,
-      type: 'reply',
-      id: ID,
-      payload: { ...SUCCESS_PAYLOAD, result: padding }
-    })
-    expect(raw.length).toBeGreaterThan(BRIDGE_MAX_MESSAGE_BYTES)
+    const envelope = (result: string) =>
+      JSON.stringify({
+        v: BRIDGE_PROTOCOL_VERSION,
+        type: 'reply',
+        id: ID,
+        payload: { ...SUCCESS_PAYLOAD, result }
+      })
+    const overhead = new TextEncoder().encode(envelope('')).byteLength
+    const raw = envelope('x'.repeat(BRIDGE_MAX_MESSAGE_BYTES + 1 - overhead))
+    expect(new TextEncoder().encode(raw).byteLength).toBe(BRIDGE_MAX_MESSAGE_BYTES + 1)
     expect(readBridgeHostMessage(raw)).toEqual({ ok: false, refusal: 'oversized' })
   })
 })
 
-/**
- * One rule, two patterns.
- *
- * The screen the shell names and the screen a page asks for are the same vocabulary, and a spelling
- * one refuses while the other takes is a hole with a `notify` already pointed at it.
- */
-describe('the segment rule both route patterns are built from', () => {
-  it('refuses a dot segment in either position, however it is spelled', () => {
-    for (const spelling of ['/h/../a', '/h/%2e%2e/a', '/h/%2E%2E/a', '/h/.%2e/a', '/h/%2e/a']) {
-      expect(BRIDGE_ROUTE_PATHNAME_PATTERN.test(spelling), spelling).toBe(false)
-      expect(BRIDGE_ROUTE_HREF_PATTERN.test(spelling), spelling).toBe(false)
+// Pathnames and returned navigation hrefs share one segment rule; disagreement would expose a path through notify.
+describe('navigate query boundaries', () => {
+  it('refuses query-ended dot segments through the navigate reader', () => {
+    for (const href of ['/h/..?x', '/h/%2e%2e?x', '/h/.?x', '/h/a/..?x', '/h/..?']) {
+      expect(readClient(client({ type: 'notify', name: 'navigate', href })), href).toEqual({
+        ok: false,
+        refusal: 'unrecognised-message'
+      })
     }
-  })
-
-  it('refuses a trailing dot segment the query is what ends, not a slash', () => {
-    // The `notify` sink is `router.push`, which does not resolve these: it matches segments
-    // literally, so `..` becomes the `[hostId]` a screen is opened for. A different wrong screen
-    // from the spellings above, and the same reason one rule covers both patterns.
-    for (const spelling of ['/h/..?x', '/h/%2e%2e?x', '/h/.?x', '/h/a/..?x', '/h/..?']) {
-      expect(BRIDGE_ROUTE_HREF_PATTERN.test(spelling), spelling).toBe(false)
-    }
-  })
-
-  it('takes an escape that is part of a name, in either position', () => {
-    expect(BRIDGE_ROUTE_PATHNAME_PATTERN.test('/h/a%20b/%2ex/a%2fb')).toBe(true)
-    expect(BRIDGE_ROUTE_HREF_PATTERN.test('/h/a%20b/%2ex?from=list')).toBe(true)
   })
 })

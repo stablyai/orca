@@ -1,15 +1,4 @@
-/**
- * Creating a workspace with its agent the way `worktree.create` always has, through the executor.
- *
- * The agent is the workspace's startup terminal, never a chat, and the create delivers the text
- * itself; that is `worktree.create`'s contract, so the launch is `terminalOnly` with the
- * `legacy-host` prompt policy. Request and result are the create's own, so a caller swaps
- * `runtime.createManagedWorktree` for this and nothing a client sends or reads changes.
- *
- * This is the one `legacy-host` producer, so the no-agent outcome below is caught in one place.
- * The host's other agent-first creates (headless automations, federation) run the executor with
- * their own workspace factories instead.
- */
+/** Preserve worktree.create’s terminal startup and prompt delivery through the shared executor. */
 
 import type { AgentLaunchPrompt } from '../../shared/agent-launch-intent'
 import { getRepoSshConnectionId } from '../../shared/execution-host'
@@ -50,8 +39,6 @@ export async function createWorktreeWithStartupAgent(
       terminalOnly: true,
       promptPolicy: 'legacy-host',
       workspaces: {
-        // Reads the typed request it was built from; the executor's `create` is the same minus the
-        // agent fields, which come back as arguments here.
         createWorktree: async ({ legacyPrompt, launchSource }) => {
           created = await runtime.createManagedWorktree({
             ...withoutStartupAgentFields(args),
@@ -71,7 +58,7 @@ export async function createWorktreeWithStartupAgent(
       }
     })
   } catch (error) {
-    // A workspace with no agent back is the answer `worktree.create` has always given here.
+    // Preserve a successful workspace result even when its startup agent did not spawn here.
     if (!(error instanceof AgentLaunchStartupAgentNotCreatedError) || !created) {
       throw error
     }
@@ -82,8 +69,6 @@ export async function createWorktreeWithStartupAgent(
   return created
 }
 
-/** The launch a create asks for, or the create to run as is when it starts no agent. Mirrors the
- *  create's own order: a prebuilt command wins, then `startupAgent`, then a linked draft's agent. */
 async function resolveStartupAgentLaunch(
   runtime: StartupAgentCreateRuntime,
   args: RuntimeManagedWorktreeCreateArgs
@@ -96,7 +81,6 @@ async function resolveStartupAgentLaunch(
   if (args.startupAgent) {
     return {
       agent: args.startupAgent,
-      // A blank prompt is no prompt: the create launches the agent bare for it, sending nothing.
       prompt: args.startupPrompt?.trim()
         ? { text: args.startupPrompt, delivery: 'submit' }
         : undefined,
@@ -105,16 +89,14 @@ async function resolveStartupAgentLaunch(
   }
   const agent = await runtime.resolveStartupDraftAgent(repo, args.createdWithAgent)
   if (!agent) {
-    // The draft starts no agent, and the create would only run detection again to learn that.
+    // Avoid repeating agent detection when the draft resolved no agent.
     const { startupDraft: _draft, ...withoutDraft } = args
     return { passthrough: withoutDraft }
   }
   return { agent, prompt: { text: args.startupDraft ?? '', delivery: 'draft' }, connectionId }
 }
 
-/** A draft starts its agent through `startupDraft`, which a `startupAgent` would override. The
- *  chosen agent rides `startupDraftAgent` so the create neither chooses again nor records it as
- *  the agent the caller asked for: `createdWithAgent` stays the request's. */
+/** startupAgent would override the draft; keep its resolved agent separate from createdWithAgent. */
 function legacyStartupFields(
   agent: TuiAgent,
   prompt: AgentLaunchPrompt | undefined

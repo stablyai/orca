@@ -33,12 +33,12 @@ export default function HiddenWorktreeRecoveryList({
   const headingId = useId()
   const listRef = useRef<HTMLDivElement>(null)
   const hidden = getHiddenImportableExternalWorktrees(detected)
-  const normalizedQuery = query.trim().toLocaleLowerCase()
+  const normalizedQuery = query.trim().toLowerCase()
   const filtered = normalizedQuery
     ? hidden.filter(
         (worktree) =>
-          worktree.displayName.toLocaleLowerCase().includes(normalizedQuery) ||
-          worktree.path.toLocaleLowerCase().includes(normalizedQuery)
+          worktree.displayName.toLowerCase().includes(normalizedQuery) ||
+          worktree.path.toLowerCase().includes(normalizedQuery)
       )
     : hidden
   const discoveredCount = hidden.length + getVisibleNonOrcaWorktrees(detected).length
@@ -84,11 +84,19 @@ export default function HiddenWorktreeRecoveryList({
                 'auto.components.sidebar.WorktreeVisibilityDialog.search',
                 'Search hidden worktrees'
               )}
-              placeholder={translate(
-                'auto.components.sidebar.WorktreeVisibilityDialog.searchPlaceholder',
-                'Search {{value0}} worktrees…',
-                { value0: hidden.length }
-              )}
+              placeholder={
+                hidden.length === 1
+                  ? translate(
+                      'auto.components.sidebar.WorktreeVisibilityDialog.searchHiddenPlaceholder_one',
+                      'Search {{count}} worktree…',
+                      { count: hidden.length }
+                    )
+                  : translate(
+                      'auto.components.sidebar.WorktreeVisibilityDialog.searchHiddenPlaceholder_other',
+                      'Search {{count}} worktrees…',
+                      { count: hidden.length }
+                    )
+              }
               onChange={(event) => setQuery(event.target.value)}
             />
           </div>

@@ -24,6 +24,7 @@ import {
   previewableBinaryByteLimit
 } from './file-preview-budget'
 import { readLocalFileRange } from '../../ipc/filesystem/local-file-range-read'
+import { windowsFsPath } from '../../wsl/wsl-unc-drive-fs-path'
 import { resolveRuntimeAuthorizedPath } from './chat-scratch-file-root'
 import {
   NodeFileReadTooLargeError,
@@ -47,7 +48,6 @@ export class RuntimeFileReads {
     const store = this.host.requireStore()
     const target = await this.host.resolveRuntimeFileTarget(worktreeSelector)
     const { worktree } = target
-    // Why: an `ssh:` host fails before path validation, as it always has.
     requireLocalRuntimeFileRoute(target)
     if (!isSafeMobileRelativePath(relativePath)) {
       throw new Error('invalid_relative_path')
@@ -80,7 +80,6 @@ export class RuntimeFileReads {
         : previewableBinaryByteLimit(maxContentBytes)
     const target = await resolveFileExplorerPath(this.host, worktreeSelector, relativePath)
     requireLocalRuntimeFileRoute(target)
-    // Why: sized by extension instead of a stat round trip.
     const filePath = await resolveRuntimeAuthorizedPath(target.path, this.host.requireStore())
     const mimeType = RUNTIME_PREVIEWABLE_BINARY_MIME_TYPES[extname(filePath).toLowerCase()]
     const maxBytes = mimeType ? binaryMaxBytes : MOBILE_FILE_READ_MAX_BYTES
@@ -173,22 +172,25 @@ export class RuntimeFileReads {
 }
 
 async function readLocalMobileFile(filePath: string, store: RuntimeStore): Promise<string> {
-  // Why: cap the read so opening a large file can't block the WebSocket (previews are read-only convenience views).
+  // Bound preview reads so large files cannot block the WebSocket.
   const { bytes } = await readLocalRuntimeFilePrefix(
     filePath,
     store,
     MOBILE_FILE_READ_MAX_BYTES + 1
   )
+  // An extension the list does not know can still be binary; as text, a save would corrupt it.
+  if (isBinaryBuffer(bytes)) {
+    throw new Error('binary_file')
+  }
   return bytes.toString('utf8')
 }
 
-/** Up to `maxBytes` from the start of an authorized local file, and the file's full size. */
 export async function readLocalRuntimeFilePrefix(
   filePath: string,
   store: RuntimeStore,
   maxBytes: number
 ): Promise<{ bytes: Buffer; size: number }> {
-  const authorizedPath = await resolveRuntimeAuthorizedPath(filePath, store)
+  const authorizedPath = windowsFsPath(await resolveRuntimeAuthorizedPath(filePath, store))
   const fileStat = await stat(authorizedPath)
   const readLimit = Math.min(fileStat.size, maxBytes)
   const handle = await open(authorizedPath, 'r')

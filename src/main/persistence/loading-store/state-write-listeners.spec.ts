@@ -30,7 +30,6 @@ export function registerStateWriteListenersTests(): void {
       isPinned: false
     })
 
-    // Every metadata write also writes the host-qualified identity row.
     expect(seen).toEqual([
       WORKTREE_METADATA_DOMAINS,
       WORKTREE_METADATA_DOMAINS,

@@ -72,8 +72,7 @@ export function useDiffViewerLargeDiffLifecycle({
       }
       const activeModels = diffEditor.getModel()
       if (activeModels?.original !== originalModel || activeModels.modified !== modifiedModel) {
-        // Why: @monaco-editor/react swaps the two child models separately, but
-        // Monaco's diff widget must release its old pair before either is disposed.
+        // Release the diff widget’s old model pair before the React wrapper disposes either child separately.
         diffEditor.setModel({ original: originalModel, modified: modifiedModel })
       }
     }
@@ -85,12 +84,10 @@ export function useDiffViewerLargeDiffLifecycle({
       return
     }
     const modelPathsToDispose = currentDiffModelPathsRef.current
-    // Why: rotate below-limit Monaco paths after a safety fallback so stale
-    // large models cannot be reused when the same diff shrinks back down.
+    // Rotate paths after fallback so a shrinking diff cannot reuse its old oversized model.
     setLargeDiffModelGeneration((generation) => generation + 1)
     onEnterFallback()
-    // Why: ordinary tab switches keep models for fast return; the safety
-    // fallback must instead release huge detached models after unmount cleanup.
+    // Fallback must release huge retained models after unmount cleanup, unlike ordinary tab switching.
     const disposeTimer = window.setTimeout(() => {
       disposeUnattachedDiffViewerMonacoModels(monaco, modelPathsToDispose)
     }, 0)

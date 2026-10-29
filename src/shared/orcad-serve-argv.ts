@@ -1,7 +1,4 @@
-/**
- * The argv `orca serve` hands a serve host: Electron as `--serve-*`, orcad as plain flags. Shared so
- * orcad's own tests run the exact command line the CLI builds (#30120 dropped one across it).
- */
+/** Share the CLI’s exact Electron --serve-* and plain orcad argv with runtime tests; flags previously vanished at this boundary (#30120). */
 export type ServeOrcaAppArgs = {
   json?: boolean
   port?: string | null

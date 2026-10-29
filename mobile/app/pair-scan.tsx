@@ -1,5 +1,6 @@
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
 import {
+  AppState,
   View,
   Text,
   Pressable,
@@ -19,6 +20,7 @@ import {
 import type { ConnectionLogEntry, PairingOffer } from '../src/transport/types'
 import { useRefreshHostClient } from '../src/transport/host-client-hooks'
 import { colors, spacing } from '../src/theme/mobile-theme'
+import { useMobileColorScheme } from '../src/theme/use-mobile-color-scheme'
 import { TextInputModal } from '../src/components/TextInputModal'
 import { ConnectionLog } from '../src/components/ConnectionLog'
 import {
@@ -27,14 +29,13 @@ import {
 } from '../src/onboarding/mobile-onboarding-plan'
 import { pairScanStyles as styles } from '../src/pair-scan-styles'
 
-// Why: see pair-confirm.tsx — cap initial-pair "Connecting…" so a broken
-// route surfaces as a real error with the log visible instead of a
-// silent infinite spinner.
+// Bound initial pairing at ~25s (one connect timeout plus retry) so broken routes show an actionable error/log; live RPC retries indefinitely.
 const PAIRING_OVERALL_TIMEOUT_MS = 25_000
 const SCAN_RETICLE_SCALE = 0.62
 const SCAN_RETICLE_MAX_SIZE = 360
 
 function Step({ number, text }: { number: number; text: string }) {
+  useMobileColorScheme()
   return (
     <View style={styles.step}>
       <View style={styles.stepBadge}>
@@ -46,10 +47,11 @@ function Step({ number, text }: { number: number; text: string }) {
 }
 
 export default function PairScanScreen() {
+  useMobileColorScheme()
   const router = useRouter()
   const refreshHostClient = useRefreshHostClient()
   const insets = useSafeAreaInsets()
-  const [permission, requestPermission] = useCameraPermissions()
+  const [permission, requestPermission, getPermission] = useCameraPermissions()
   const [status, setStatus] = useState<'scanning' | 'connecting' | 'error'>('scanning')
   const [errorMessage, setErrorMessage] = useState('')
   const [pasteVisible, setPasteVisible] = useState(false)
@@ -60,13 +62,21 @@ export default function PairScanScreen() {
   const mountedRef = useRef(true)
   const activePairingAttemptRef = useRef<PreProfilePairingAttempt | null>(null)
 
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') {
+        void getPermission().catch(() => {})
+      }
+    })
+    return () => subscription.remove()
+  }, [getPermission])
+
   const setPairScanRootRef = useCallback((node: View | null): void => {
     if (node !== null) {
       mountedRef.current = true
       return
     }
-    // Why: pairing attempts can outlive the visible route; dispose them when
-    // the scan screen detaches without a passive cleanup-only Effect.
+    // Dispose pairing on route detach: attempts can outlive the visible screen, before passive cleanup.
     mountedRef.current = false
     activePairingAttemptRef.current?.dispose()
     activePairingAttemptRef.current = null
@@ -153,10 +163,7 @@ export default function PairScanScreen() {
       if (!mountedRef.current || !attemptIsCurrent) {
         return
       }
-      // Why: re-pairing the same desktop now reuses its existing host id
-      // (STA-1840 dedup), so a client cached under that id from an earlier
-      // pairing would keep the stale endpoint/relay. Close it so the
-      // Refresh any cached client from the newly persisted pairing profile.
+      // Re-pair reuses host id; close cached client so it reloads the persisted endpoint/relay (STA-1840).
       refreshHostClient(hostId)
       const onboardingSteps = await loadMobileOnboardingSteps()
       if (!mountedRef.current) {
@@ -192,15 +199,12 @@ export default function PairScanScreen() {
     processingRef.current = false
   }
 
-  // Why: bottom inset accounts for Android 3-button nav bars and iOS
-  // home-indicator areas that would otherwise overlap the 'Or paste
-  // pairing code' button at the bottom of the scan screen.
+  // Include Android three-button/iOS home-indicator inset so paste button stays clear.
   const containerPadding = {
     paddingTop: insets.top + spacing.sm,
     paddingBottom: insets.bottom + spacing.sm
   }
-  // Why: iPad camera previews are often rectangular, but QR guides should
-  // stay square so the corners still describe the code shape.
+  // Keep QR guide square even on rectangular iPad previews.
   const reticleSize = Math.min(
     Math.round(Math.min(cameraBounds.width, cameraBounds.height) * SCAN_RETICLE_SCALE),
     SCAN_RETICLE_MAX_SIZE
@@ -214,7 +218,7 @@ export default function PairScanScreen() {
     )
   }
 
-  if (!permission.granted) {
+  if (!permission.granted && status === 'scanning') {
     const canAskAgain = permission.canAskAgain !== false
     return (
       <View ref={setPairScanRootRef} style={[styles.container, containerPadding]}>
@@ -285,11 +289,7 @@ export default function PairScanScreen() {
 
       {status === 'scanning' && (
         <>
-          {/* Why: unmount the camera while the paste sheet is open. The
-              user has clearly chosen the paste path; keeping the camera
-              streaming behind a sheet wastes power and looks weird if
-              they cancel the sheet and the QR was scanned silently in
-              the meantime. */}
+          {/* Pause camera behind paste sheet to save power and prevent unnoticed scans. */}
           {!pasteVisible && (
             <View style={styles.cameraWrap} onLayout={handleCameraLayout}>
               <CameraView

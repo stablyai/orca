@@ -66,12 +66,7 @@ function groupLatestActivityMs(group: PRCommentGroup): number | null {
   }, commentMs(group.root))
 }
 
-/**
- * Orders comment groups by time. The two orders use different keys, not just opposite
- * directions: `newest-first` ranks by last activity anywhere in the thread, while
- * `oldest-first` ranks by when the thread started. Groups whose timestamp is unknown
- * sort last in both orders.
- */
+/** Newest-first uses thread activity; oldest-first uses thread start. Unknown timestamps sort last in either order. */
 export function sortPRCommentGroupsByRecency(
   groups: readonly PRCommentGroup[],
   order: 'oldest-first' | 'newest-first' = 'oldest-first'
@@ -79,7 +74,7 @@ export function sortPRCommentGroupsByRecency(
   const newestFirst = order === 'newest-first'
   const multiplier = newestFirst ? -1 : 1
   const timestampOf = newestFirst ? groupLatestActivityMs : groupStartMs
-  // Why: decorate first so each group parses its dates once, not once per comparison.
+  // Decorate once to avoid reparsing timestamps in every comparison.
   return groups
     .map((group) => ({ group, ts: timestampOf(group), id: getPRCommentGroupRoot(group).id }))
     .sort((left, right) => {
@@ -92,7 +87,7 @@ export function sortPRCommentGroupsByRecency(
         }
         return multiplier * (left.id - right.id)
       }
-      // Why: ids break the ties GitHub creates by stamping a whole review batch identically.
+      // IDs break ties from identical timestamps across GitHub review batches.
       return multiplier * (left.ts - right.ts || left.id - right.id)
     })
     .map((entry) => entry.group)

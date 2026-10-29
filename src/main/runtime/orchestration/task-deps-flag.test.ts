@@ -45,8 +45,7 @@ describe('parseOrchestrationTaskDepsFlag', () => {
   })
 })
 
-// Why: the recovery grammar used to hardcode 12 hex chars, which silently diverges if generateId's
-// byte count changes. This pins the validator to what the generator actually produces.
+// Pin recovery grammar to generated ids instead of assuming a fixed hex length.
 describe('generated-id contract', () => {
   it('accepts ids the generator produces', () => {
     for (let i = 0; i < 50; i++) {

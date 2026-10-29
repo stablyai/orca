@@ -73,8 +73,7 @@ export const TERMINAL_QUERY_METHODS = [
     })
   }),
   defineMethod({
-    // Read-only identity probe. Deliberately NOT `terminal.show`: this one resolves a structured
-    // worker too, and must therefore never hand back anything that looks writable.
+    // Read identity only: structured workers have no writable terminal, so never return terminal.show's shape.
     name: 'terminal.resolveIdentity',
     permission: 'workspace',
     params: TerminalHandle,

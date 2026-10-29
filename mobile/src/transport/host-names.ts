@@ -2,7 +2,7 @@ type HostNameSource = {
   readonly name: string
 }
 
-/** The generated "Host N" shape; a stored name matching it was never typed by the user. */
+// Treat matching legacy names as generated rather than phone overrides.
 export const GENERATED_HOST_NAME_PATTERN = /^Host (\d+)$/
 
 export function getNextHostNameFromHosts(hosts: readonly HostNameSource[]): string {

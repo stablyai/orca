@@ -3,7 +3,6 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { OrcadHostTransport } from '../../ssh/orcad-host-transport'
 import { ensureRemoteOrcadNodeRuntime } from './orcad-remote-node-runtime'
 import {
   REMOTE_NODE_RUNTIME_MISSING,
@@ -20,6 +19,7 @@ import {
   HOST_NODE_DOWNLOAD_OK,
   NodeRuntimeUnreachableError
 } from './remote-node-runtime-host-download'
+import { unusedOrcadHostTransport } from '../../ssh/unused-host-transport.test-fixture'
 
 vi.mock('../../ssh/remote-exec/remote-exec-command', async (importOriginal) => ({
   ...(await importOriginal<typeof ExecCommandModule>()),
@@ -29,8 +29,7 @@ vi.mock('./remote-install-transfers', () => ({
   uploadRemoteInstallDirectory: vi.fn(async () => {})
 }))
 
-// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: every remote call goes through the mocked execCommand.
-const conn = {} as OrcadHostTransport
+const conn = unusedOrcadHostTransport()
 const host = getRemoteHostPlatform('linux-x64')
 const TARGET = 'linux-x64-glibc'
 const OFFLINE_PATH = '/Users/me/Library/Application Support/Orca/orcad-artifacts/node/archives/x'
@@ -41,7 +40,7 @@ afterEach(() => {
   vi.mocked(uploadRemoteInstallDirectory).mockClear()
 })
 
-/** A fresh POSIX host; `download` is what its curl/wget step prints. */
+/** Model a fresh host with a configurable curl/wget download verdict. */
 function freshHost(download: string): string[] {
   const commands: string[] = []
   vi.mocked(execCommand).mockImplementation(async (_conn, command) => {

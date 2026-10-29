@@ -143,7 +143,13 @@ export function UpdateCard(): React.JSX.Element | null {
       .catch((error) => {
         const message = String((error as Error)?.message ?? error)
         console.error('[updates] failed to enable HTTP/1.1 compatibility:', error)
-        setCompatibilitySetupError(`Could not enable compatibility mode. ${message}`)
+        setCompatibilitySetupError(
+          translate(
+            'auto.components.UpdateCard.compatibilityModeFailed',
+            'Could not enable compatibility mode. {{message}}',
+            { message }
+          )
+        )
         setCompatibilityRelaunching(false)
       })
   }

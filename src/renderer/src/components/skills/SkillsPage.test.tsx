@@ -86,7 +86,6 @@ async function flushMicrotasks(): Promise<void> {
   })
 }
 
-/** Skill names currently rendered as rows. */
 function renderedSkillNames(): string[] {
   return [...(container?.querySelectorAll('[data-skill-name]') ?? [])].map(
     (node) => node.textContent ?? ''
@@ -196,8 +195,6 @@ describe('SkillsPage', () => {
 
     await renderPage()
     await flushMicrotasks()
-    // Why: the path lives in the detail dialog, where it must wrap inside the
-    // column instead of pushing the dialog into horizontal scroll.
     await act(async () => fireEvent.click(skillRow('long-path')))
 
     const dialog = document.querySelector('[role="dialog"]')
@@ -231,9 +228,7 @@ describe('SkillsPage', () => {
     expect(renderedSkillNames()).toContain('remote-only')
   })
 
-  // Why: a cold local scan walks every skill root, so it can land after a newer
-  // remote scan. Without a generation guard it overwrites the remote list and
-  // the page silently shows the client's skills again — #6789 all over.
+  // A slow cold local scan must not overwrite a newer remote scan after target switching.
   it('does not let a slow local scan overwrite a newer remote scan', async () => {
     const localScan = deferred<SkillDiscoveryResult>()
     const discover = vi.fn().mockReturnValue(localScan.promise)
@@ -362,8 +357,6 @@ describe('SkillsPage', () => {
     )
   })
 
-  // Why: Escape used to leave the page outright, discarding a selection that can
-  // hold dozens of skills chosen one by one.
   it('backs out of share selection on Escape before leaving the page', async () => {
     const closeSkillsPage = vi.fn()
     const discover = vi.fn().mockResolvedValue(discoveryResult(['alpha']))
@@ -390,8 +383,6 @@ describe('SkillsPage', () => {
     expect(closeSkillsPage).toHaveBeenCalledOnce()
   })
 
-  // Why: bundles run to ~30 skills; ticking each box one at a time is the flow
-  // this page exists for.
   it('extends the share selection to a shift-clicked row', async () => {
     const discover = vi.fn().mockResolvedValue(discoveryResult(['alpha', 'beta', 'gamma']))
     Object.defineProperty(window, 'api', {
@@ -432,8 +423,7 @@ describe('SkillsPage', () => {
     expect(container?.textContent).toContain('1 result')
   })
 
-  // Why: the reason is per-row state, but on a remote runtime it applies to every
-  // row at once — 114 copies of the same sentence is not an explanation.
+  // State page-wide remote sharing restrictions once rather than repeating them for every skill.
   it('explains remote-only skills once instead of on every row', async () => {
     const call = vi.fn(
       async (args: { method: string; selector?: string }) =>

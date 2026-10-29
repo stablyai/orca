@@ -1,6 +1,6 @@
-import { StyleSheet, colors, radii, spacing, typography } from './mobile-tasks-dependencies'
+import { themedStyleSheet, colors, radii, spacing, typography } from './mobile-tasks-dependencies'
 
-export const mobileTasksWorkspaceReviewStyles = StyleSheet.create({
+export const mobileTasksWorkspaceReviewStyles = themedStyleSheet(() => ({
   workspaceCreateForm: {
     gap: 0
   },
@@ -189,4 +189,4 @@ export const mobileTasksWorkspaceReviewStyles = StyleSheet.create({
     fontWeight: '600',
     textTransform: 'uppercase'
   }
-})
+}))

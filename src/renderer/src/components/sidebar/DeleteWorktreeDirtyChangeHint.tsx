@@ -42,8 +42,21 @@ export function DeleteWorktreeDirtyChangeHint({
 
   const label =
     changeCount > 0
-      ? `${changeCount} uncommitted or untracked ${changeCount === 1 ? 'change' : 'changes'}`
-      : 'Uncommitted or untracked changes'
+      ? changeCount === 1
+        ? translate(
+            'auto.components.sidebar.DeleteWorktreeDirtyChangeHint.changeCount_one',
+            '{{count}} uncommitted or untracked change',
+            { count: changeCount }
+          )
+        : translate(
+            'auto.components.sidebar.DeleteWorktreeDirtyChangeHint.changeCount_other',
+            '{{count}} uncommitted or untracked changes',
+            { count: changeCount }
+          )
+      : translate(
+          'auto.components.sidebar.DeleteWorktreeDirtyChangeHint.changes',
+          'Uncommitted or untracked changes'
+        )
 
   const warningLabel = (
     <>
@@ -144,11 +157,17 @@ export function DeleteWorktreeDirtyChangeHint({
             </div>
             {preview.remainingPathCount > 0 ? (
               <p className="mt-1 text-muted-foreground">
-                {translate(
-                  'auto.components.sidebar.DeleteWorktreeDirtyChangeHint.moreLoadedPaths',
-                  'and {{value0}} more loaded paths',
-                  { value0: preview.remainingPathCount }
-                )}
+                {preview.remainingPathCount === 1
+                  ? translate(
+                      'auto.components.sidebar.DeleteWorktreeDirtyChangeHint.moreLoadedPaths_one',
+                      'and {{count}} more loaded path',
+                      { count: preview.remainingPathCount }
+                    )
+                  : translate(
+                      'auto.components.sidebar.DeleteWorktreeDirtyChangeHint.moreLoadedPaths_other',
+                      'and {{count}} more loaded paths',
+                      { count: preview.remainingPathCount }
+                    )}
               </p>
             ) : null}
           </div>

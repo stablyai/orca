@@ -25,7 +25,7 @@ export function registerGitRemoteBranchMutationHandlers(context: FilesystemHandl
         pushTarget?: GitPushTarget
       }
     ): Promise<void> => {
-      // Why: coerce to strict boolean so a malformed payload (e.g. string 'false') can't enable --set-upstream; mirror in src/relay/git-handler.ts.
+      // Require literal true so malformed values such as string false cannot enable --set-upstream.
       const publish = args.publish === true
       requireReachableGitRoute(getConnectionExecutionHostId(args.connectionId))
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)

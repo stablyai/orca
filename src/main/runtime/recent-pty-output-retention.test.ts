@@ -11,25 +11,21 @@ function heapAfterGc(): number {
 }
 
 describe('recent PTY output retention', () => {
-  it.each([true, false])(
-    'releases oversized parent strings with boundary preservation=%s',
-    (preserveChunkBoundaries) => {
-      const count = 8
-      const before = heapAfterGc()
-      const buffers = Array.from({ length: count }, (_value, index) => {
-        const buffer = new RecentPtyOutputBuffer({ preserveChunkBoundaries })
-        buffer.append(`${index}:${'x'.repeat(4 * 1024 * 1024)}`)
-        return buffer
-      })
-      const growth = heapAfterGc() - before
+  it('releases oversized parent strings', () => {
+    const count = 8
+    const before = heapAfterGc()
+    const buffers = Array.from({ length: count }, (_value, index) => {
+      const buffer = new RecentPtyOutputBuffer()
+      buffer.append(`${index}:${'x'.repeat(4 * 1024 * 1024)}`)
+      return buffer
+    })
+    const growth = heapAfterGc() - before
 
-      expect(growth).toBeLessThan(count * RECENT_PTY_OUTPUT_LIMIT * 4)
-      for (const buffer of buffers) {
-        expect(buffer.read()).toBe('x'.repeat(RECENT_PTY_OUTPUT_LIMIT))
-        expect(buffer.retainedChunks().headChunkIsPartial).toBe(true)
-        buffer.append('next')
-        expect(buffer.read()).toBe(`${'x'.repeat(RECENT_PTY_OUTPUT_LIMIT - 4)}next`)
-      }
+    expect(growth).toBeLessThan(count * RECENT_PTY_OUTPUT_LIMIT * 4)
+    for (const buffer of buffers) {
+      expect(buffer.read()).toBe('x'.repeat(RECENT_PTY_OUTPUT_LIMIT))
+      buffer.append('next')
+      expect(buffer.read()).toBe(`${'x'.repeat(RECENT_PTY_OUTPUT_LIMIT - 4)}next`)
     }
-  )
+  })
 })

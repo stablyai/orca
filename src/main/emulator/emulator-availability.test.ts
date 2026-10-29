@@ -17,9 +17,6 @@ const NO_ANDROID: BackendAvailability = {
   message: 'Android SDK not found. Install Android Studio and set ANDROID_HOME.'
 }
 
-// A minimal stand-in exposing only what inspectEmulatorAvailability touches: the
-// registered backends (iOS host gate + Android checkAvailability) and the iOS
-// passthroughs.
 function fakeBridge(overrides: FakeBridgeOverrides = {}): EmulatorBridge {
   const android = overrides.android ?? NO_ANDROID
   return {

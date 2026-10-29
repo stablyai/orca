@@ -429,22 +429,27 @@ describe('startShadowSeatPoller', () => {
   })
 
   it('keeps polling the last cell list while a cell-list read hangs', async () => {
-    let finishRead: (cells: SeatFeedCell[]) => void = () => undefined
+    const readEntered = Promise.withResolvers<void>()
+    const readDone = Promise.withResolvers<SeatFeedCell[]>()
     const listCells = vi
       .fn<() => Promise<SeatFeedCell[]>>()
       .mockResolvedValueOnce(CELLS)
-      .mockImplementation(() => new Promise((resolve) => (finishRead = resolve)))
+      .mockImplementation(() => {
+        readEntered.resolve()
+        return readDone.promise
+      })
     const cell = poller({ 'cell-a': () => json(feed({ seq: 1, full: [] })) }, ['cell-a'], listCells)
     await cell.tick()
     cell.advance(31_000)
     const round = cell.tick()
-    await new Promise((resolve) => setTimeout(resolve, 0))
+    await readEntered.promise
+    await Promise.resolve()
     expect(listCells).toHaveBeenCalledTimes(2)
     expect(cell.requests.map((url) => url.hostname)).toEqual([
       'cell-a.example.test',
       'cell-a.example.test'
     ])
-    finishRead(CELLS)
+    readDone.resolve(CELLS)
     await round
     cell.stop()
   })
@@ -461,13 +466,32 @@ describe('startShadowSeatPoller', () => {
     expect(cell.directory.isComplete()).toBe(false)
   })
 
-  it('accepts unknown fields and change kinds from a newer cell', () => {
-    const directory = new ShadowSeatDirectory()
-    directory.setCells(['cell-a'])
-    directory.apply('cell-a', feed({ seq: 1, full: [seat('host-1')] }), 10)
-    directory.apply('cell-a', feed({ seq: 2, changes: [change(2, 'future-kind', 'host-1')] }), 11)
-    expect(directory.since('cell-a')).toBe(`${INCARNATION}:2`)
-    expect(directory.seatsOf('user-a', 'host-1')).toHaveLength(1)
+  it('accepts unknown fields and change kinds from a newer cell', async () => {
+    let call = 0
+    const cell = poller(
+      {
+        'cell-a': () =>
+          json(
+            ++call === 1
+              ? { ...feed({ seq: 1 }), future: true, full: [{ ...seat('host-1'), futureSeat: 17 }] }
+              : {
+                  ...feed({ seq: 2 }),
+                  future: true,
+                  changes: [{ ...change(2, 'future-kind', 'host-1'), futureChange: 18 }]
+                }
+          )
+      },
+      ['cell-a']
+    )
+    try {
+      await cell.tick()
+      await cell.tick()
+      expect(cell.directory.since('cell-a')).toBe(`${INCARNATION}:2`)
+      expect(cell.directory.seatsOf('user-a', 'host-1')).toHaveLength(1)
+      expect(cell.directory.cellState('cell-a')).toMatchObject({ status: 'live' })
+    } finally {
+      cell.stop()
+    }
   })
 
   it('polls only the listed cells and drops a cell that leaves the list', async () => {
@@ -501,53 +525,57 @@ describe('startShadowSeatPoller', () => {
 describe('RelayAssignmentStore.seatFeedCells', () => {
   it('lists every cell, and requires only live, unisolated cells with capacity', async () => {
     const database = await openInMemoryRelayDatabase()
-    const store = new RelayAssignmentStore(database, () => 100_000, {
-      requireLiveCells: true,
-      heartbeatTtlMs: 45_000
-    })
-    await store.reconcileCells(
-      ['cell-live', 'cell-stale', 'cell-isolated', 'cell-empty', 'cell-nobeat', 'cell-off'].map(
-        (id) => ({
-          id,
-          url: `https://${id}.example.test`,
-          capacityRequests: id === 'cell-empty' ? 0 : 10
-        })
+    try {
+      const store = new RelayAssignmentStore(database, () => 100_000, {
+        requireLiveCells: true,
+        heartbeatTtlMs: 45_000
+      })
+      await store.reconcileCells(
+        ['cell-live', 'cell-stale', 'cell-isolated', 'cell-empty', 'cell-nobeat', 'cell-off'].map(
+          (id) => ({
+            id,
+            url: `https://${id}.example.test`,
+            capacityRequests: id === 'cell-empty' ? 0 : 10
+          })
+        )
       )
-    )
-    // Existing-only: no new hosts, but it still seats the ones it has.
-    await database.query(`UPDATE relay_cells SET enabled = 0 WHERE cell_id = ?`, ['cell-off'])
-    for (const [cellId, heartbeatAt] of [
-      ['cell-live', 90_000],
-      ['cell-stale', 10_000],
-      ['cell-isolated', 90_000],
-      ['cell-empty', 90_000],
-      ['cell-off', 90_000]
-    ] as const) {
-      await database.query(
-        `INSERT INTO relay_cell_runtime
+      // Existing-only: no new hosts, but it still seats the ones it has.
+      await database.query(`UPDATE relay_cells SET enabled = 0 WHERE cell_id = ?`, ['cell-off'])
+      for (const [cellId, heartbeatAt] of [
+        ['cell-live', 90_000],
+        ['cell-stale', 10_000],
+        ['cell-isolated', 90_000],
+        ['cell-empty', 90_000],
+        ['cell-off', 90_000]
+      ] as const) {
+        await database.query(
+          `INSERT INTO relay_cell_runtime
          (cell_id, cell_url, cell_incarnation, started_at, ready, observed_requests,
           last_heartbeat_at, updated_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-        [cellId, `https://${cellId}.example.test`, 'inc', 1, 1, 0, heartbeatAt, heartbeatAt]
+          [cellId, `https://${cellId}.example.test`, 'inc', 1, 1, 0, heartbeatAt, heartbeatAt]
+        )
+      }
+      await database.query(
+        `UPDATE relay_cell_admission SET roll_isolated_at = ? WHERE cell_id = ?`,
+        [50_000, 'cell-isolated']
       )
+
+      const cells = await store.seatFeedCells()
+
+      expect(
+        cells.map((cell) => [cell.cellId, cell.heartbeatExpiresAt, cell.requiredForComplete])
+      ).toEqual([
+        ['cell-empty', 135_000, false],
+        ['cell-isolated', 135_000, false],
+        ['cell-live', 135_000, true],
+        ['cell-nobeat', null, false],
+        ['cell-off', 135_000, true],
+        ['cell-stale', 55_000, false]
+      ])
+    } finally {
+      await database.close()
     }
-    await database.query(
-      `UPDATE relay_cell_admission SET roll_isolated_at = ? WHERE cell_id = ?`,
-      [50_000, 'cell-isolated']
-    )
-
-    const cells = await store.seatFeedCells()
-
-    expect(
-      cells.map((cell) => [cell.cellId, cell.heartbeatExpiresAt, cell.requiredForComplete])
-    ).toEqual([
-      ['cell-empty', 135_000, false],
-      ['cell-isolated', 135_000, false],
-      ['cell-live', 135_000, true],
-      ['cell-nobeat', null, false],
-      ['cell-off', 135_000, true],
-      ['cell-stale', 55_000, false]
-    ])
   })
 })
 
@@ -582,7 +610,13 @@ describe('ShadowSeatDirectory.placementModeOf', () => {
 describe('ShadowSeatDirectory.onOutranked', () => {
   const reserve = { generation: 3, flags: { admitMode: 'reserve' } }
   const db = { generation: 3, flags: { admitMode: 'db' } }
-  const full = (cellId: string, epoch: number, joinedAt: number, flags = reserve, state = 'active') =>
+  const full = (
+    cellId: string,
+    epoch: number,
+    joinedAt: number,
+    flags = reserve,
+    state = 'active'
+  ) =>
     feed({
       cellId,
       seq: 1,

@@ -1,4 +1,3 @@
-/** Keeps the longest of any overlapping matches, returned in start order. */
 export function preferLongestNonOverlappingMatches<T>(
   matches: readonly T[],
   options: {

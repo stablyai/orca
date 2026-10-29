@@ -6,6 +6,10 @@ import type {
 import type { TuiAgent } from '../../../../shared/tui-agent'
 
 export type LocalDetectedAgentState = {
+  readLocalAgentInventory: (worktreeId?: string | null) => {
+    ids: TuiAgent[] | null
+    state: 'pending' | 'successful' | 'failed'
+  }
   detectedAgentIds: TuiAgent[] | null
   isDetectingAgents: boolean
   isRefreshingAgents: boolean
@@ -14,6 +18,8 @@ export type LocalDetectedAgentState = {
   isRefreshingLocalAgentsByContext: Record<string, boolean>
   pathSource: PathSource | null
   pathFailureReason: ShellHydrationFailureReason | null
+  ensureAllDetectedAgents: (worktreeId?: string | null) => Promise<TuiAgent[]>
+  refreshAllDetectedAgents: (worktreeId?: string | null) => Promise<TuiAgent[]>
   ensureNativeDetectedAgents: () => Promise<TuiAgent[]>
   ensureDetectedAgents: (worktreeId?: string | null) => Promise<TuiAgent[]>
   refreshDetectedAgents: (worktreeId?: string | null) => Promise<TuiAgent[]>

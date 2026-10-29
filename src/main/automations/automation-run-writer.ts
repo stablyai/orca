@@ -9,14 +9,11 @@ type DurableWrite<T extends (...args: never[]) => unknown> = (
 export type AutomationRunWriter = {
   createRun: DurableWrite<Store['createAutomationRun']>
   updateRun: DurableWrite<Store['updateAutomationRun']>
-  /** Null when nothing could be folded — the caller then writes an ordinary run. */
   repeatSkip: DurableWrite<Store['recordRepeatedAutomationSkip']>
   advanceNextRun: DurableWrite<Store['advanceAutomationNextRun']>
 }
 
-/** Wraps run persistence so every committed write announces itself. Clients with
- *  the Automations page closed — or none attached at all — have no other way to
- *  learn that a run progressed, so the event must follow the write, not a render. */
+/** Publish after durable writes so clients observe progress without an open Automations page. */
 export function createAutomationRunWriter(
   store: Pick<
     Store,
@@ -29,8 +26,7 @@ export function createAutomationRunWriter(
   >,
   publish: PublishAutomationsChanged | null
 ): AutomationRunWriter {
-  // A run write never moves the record, so its own host is the whole publication.
-  // A record that can no longer be named degrades to the authority-wide event.
+  // Scope to the run’s host; missing records fall back to an authority-wide event.
   const announce = (automationId: string, reason: 'run' | 'usage'): void => {
     if (!publish) {
       return

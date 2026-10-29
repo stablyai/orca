@@ -1,7 +1,3 @@
-// A Claude chat whose CLI exits before it finishes starting leaves one red row per start. A view
-// opening, or coming back to, a chat whose last start failed used to start the CLI again, so every
-// look at the chat added an identical row. Only a send retries a failed start: it is the user asking.
-
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -28,7 +24,7 @@ import { openTestJournalHostDatabase } from '../agent-session-journal/journal-ho
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-test-support'
 
-/** Delivery runs on its own serialized steps; under a loaded runner they take more than a second. */
+// Serialized delivery can take over a second on loaded runners.
 function eventually(assertion: () => unknown): Promise<unknown> {
   return vi.waitFor(assertion, { timeout: 10_000 })
 }
@@ -44,7 +40,7 @@ let host: StructuredAgentSessionHost
 let adapter: ClaudeStructuredSessionAdapter
 let claude: ReturnType<typeof fakeClaude>
 let lifecycle: Promise<void>[]
-/** Every initialize waits on it: a start that must outlast a step does not race a timer. */
+/** Gate initialization explicitly so assertions never race a timer. */
 let initGate: Promise<void>
 
 beforeEach(async () => {
@@ -52,7 +48,6 @@ beforeEach(async () => {
   resetHostTestOperationIds()
   lifecycle = []
   initGate = Promise.resolve()
-  // Every start spawns, is published, and exits before it answers initialize.
   claude = fakeClaude({ initDelayMs: 20, exitBeforeInit: LAUNCH_FAILURE })
   adapter = new ClaudeStructuredSessionAdapter({
     resolveLaunch: async () => ({
@@ -103,7 +98,6 @@ afterEach(async () => {
   await rm(root, { recursive: true, force: true })
 })
 
-/** Waits until the adapter has published every exit it saw and the host settled each one. */
 async function settleExits(): Promise<void> {
   await eventually(async () => {
     await adapter.drainObservedExits()
@@ -113,12 +107,10 @@ async function settleExits(): Promise<void> {
   await Promise.all(lifecycle)
 }
 
-/** A view of the chat: a subscription, which reads the chat and starts nothing. */
 function view(id: string): Promise<() => void> {
   return host.subscribe({ id, sessionId: SESSION, emit: () => undefined })
 }
 
-/** The chat as it renders: the user's messages and the error rows, in journal order. */
 async function timeline(): Promise<string[]> {
   return (await host.journalSnapshot(SESSION)).items.flatMap((item) =>
     item.body.kind === 'message'
@@ -149,14 +141,13 @@ async function send(text: string): Promise<string> {
 }
 
 describe('a fresh chat whose Claude start fails', () => {
-  // QA saw three failed starts from opening the chat alone: the create's, and the view's.
   it.each([
     ['after the create already died', false],
     ['while the create is still starting', true]
   ] as const)(
-    'starts once for the open and once for a send, one row each, when the view binds %s',
+    'starts once for the open and retries a send five times, one final row each, when the view binds %s',
     async (_when, createStillStarting) => {
-      // Released only once the views bound, so no runner is slow enough to let the create die first.
+      // Bind views before releasing create, independent of runner speed.
       let releaseCreate = (): void => {}
       const createGate = new Promise<void>((resolve) => {
         releaseCreate = resolve
@@ -180,19 +171,15 @@ describe('a fresh chat whose Claude start fails', () => {
       if (!createStillStarting) {
         await settleExits()
       }
-      // Two surfaces bind, as a pane and a second window do.
       const unsubscribe = await view(SURFACE)
       await view('desktop-chat:2')
       if (createStillStarting) {
-        // The views bound to the create's child itself, before it exited.
         expect(await timeline()).toEqual([])
         releaseCreate()
       }
       await settleExits()
-      // The row says the provider stopped; its stderr stays out of the sentence.
       const startFailure =
         'Claude stopped before it finished starting. Send your message to try again.'
-      // Opening the chat: the create's start, once, and its row.
       expect(claude.connections).toHaveLength(1)
       expect(await timeline()).toEqual([startFailure])
 
@@ -203,15 +190,13 @@ describe('a fresh chat whose Claude start fails', () => {
         ).toMatchObject({ dispatchState: 'rejected', reason: startFailure })
       )
       await settleExits()
-      // The send's own start, once, and one row for it below the message.
-      expect(claude.connections).toHaveLength(2)
+      expect(claude.connections).toHaveLength(6)
       expect(await timeline()).toEqual([startFailure, 'message', startFailure])
 
-      // Switching away and back re-subscribes; it starts nothing and adds no row.
       unsubscribe()
       await view(SURFACE)
       await settleExits()
-      expect(claude.connections).toHaveLength(2)
+      expect(claude.connections).toHaveLength(6)
       expect(await timeline()).toEqual([startFailure, 'message', startFailure])
     }
   )

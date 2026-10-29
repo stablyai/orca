@@ -217,8 +217,7 @@ describe('folderWorkspaceToWorktree', () => {
 })
 
 describe('recognising a folder workspace repoId', () => {
-  // The defect this exists for: a folder workspace's repoId is NEVER null, so code that tests for
-  // absence to mean "no git repo" takes the repo branch and renders the raw synthetic id.
+  // Synthetic repoId is always present; absence checks would render it as a real repo id.
   it('never mints a null repoId, so absence cannot be the test for having no repo', () => {
     const worktree = folderWorkspaceToWorktree(makeFolderWorkspace({ projectGroupId: 'group-9' }))
 
@@ -230,9 +229,7 @@ describe('recognising a folder workspace repoId', () => {
     expect(projectGroupIdFromRepoId(folderWorkspaceRepoId('4c3c3452-758b'))).toBe('4c3c3452-758b')
   })
 
-  // A real git repo id must not be mistaken for a project group, or a repo would lose its own name.
-  // The long id is the one that DISCRIMINATES: anything shorter than the prefix slices to an empty
-  // string and reads as null even with no prefix check, so short fixtures alone prove nothing.
+  // Use a long real repo id: short ids slice to empty even without a prefix check, hiding misclassification.
   it.each([
     'repo-1',
     'acme/app',

@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getRepoExecutionHostId } from '../shared/execution-host'
 import type { Repo } from '../shared/repo-types'
 import type { RepoHostTarget } from '../shared/repo-host-identity'
-import { closeTestStores, createStore, testState } from './persistence-test-harness'
+import { closeTestStores, createStore, testState } from './persistence/persistence-test-harness'
 import { wslMoveCutoverFixture as cutover } from './persistence/__fixtures__/wsl-mover/wsl-move-cutover-fixture'
 import { seedWslMoveCutover } from './persistence/__fixtures__/wsl-mover/wsl-move-journal-seeding'
 import {

@@ -4,7 +4,8 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { stripNoiseMessages } from '../../shared/native-chat-noise'
 import { mergeNativeChatMessages } from '../../shared/native-chat-merge'
-import { foldToolMessages, pairToolBlocks } from '../../shared/native-chat-tool-fold'
+import { foldToolMessages } from '../../shared/native-chat/tools/native-chat-tool-fold'
+import { pairToolBlocks } from '../../shared/native-chat/tools/native-chat-tool-pairs'
 import { isToolCallBlock, isToolResultBlock } from '../../shared/native-chat-types'
 import type { NativeChatMessage } from '../../shared/native-chat-types'
 import { decodeClaudeTranscriptLine } from './transcript-line-decoders-claude'
@@ -25,8 +26,6 @@ async function writeTranscript(records: unknown[]): Promise<string> {
   return filePath
 }
 
-/** One Claude turn: the assistant's `tool_use` record, then the user-role record
- *  carrying its `tool_result` — the shape every Claude transcript writes. */
 function toolTurn(n: number): unknown[] {
   return [
     {
@@ -52,7 +51,6 @@ function toolTurn(n: number): unknown[] {
   ]
 }
 
-/** Both chat views expose a result-only pair when no loaded call owns it. */
 function unattributedResults(messages: readonly NativeChatMessage[]): string[] {
   const stray: string[] = []
   for (const message of messages) {
@@ -85,8 +83,6 @@ describe('windowed transcript tool attribution', () => {
   it('shows a tool result whose call falls outside the read window without guessing its owner', async () => {
     const filePath = await writeTranscript([...toolTurn(1), ...toolTurn(2), ...toolTurn(3)])
 
-    // A 3-message window cuts turn 2 in half: its result is the oldest record in
-    // the window, its `tool_use` is not.
     const windowed = await renderedMessages(filePath, 3)
 
     expect(unattributedResults(windowed)).toEqual(['output 2'])
@@ -112,8 +108,6 @@ describe('windowed transcript tool attribution', () => {
   })
 
   it('drops the answered result records Claude re-emits at a /compact boundary', async () => {
-    // Claude appends byte-identical copies of already-answered tool_result
-    // records after a compaction, with no `tool_use` in between.
     const [, answeredResult] = toolTurn(1)
     const filePath = await writeTranscript([
       ...toolTurn(1),

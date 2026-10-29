@@ -51,7 +51,7 @@ async function getActiveTabTitle(page: Page, worktreeId: string): Promise<string
   const tabs = await getWorktreeTabs(page, worktreeId)
   const tab = tabs.find((entry) => entry.id === activeId)
   expect(tab).toBeDefined()
-  return tab!.customTitle ?? tab!.title ?? ''
+  return tab!.title ?? ''
 }
 
 function tabLocatorByTitle(page: Page, title: string): ReturnType<Page['locator']> {

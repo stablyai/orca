@@ -116,7 +116,7 @@ export async function installServeService(
   if (spec.logPath) {
     mkdirSync(dirname(spec.logPath), { recursive: true, mode: 0o700 })
   }
-  // Why: installing is the documented way to retry after the crash-loop brake gave up.
+  // Reinstalling retries a supervisor stopped by the crash-loop brake.
   clearServeSupervisorBrake(resolveLaunchUserDataPath(deps.env))
   if (spec.manager === 'launchd') {
     await deps.run('launchctl', ['bootout', `gui/${deps.uid}/${spec.name}`])
@@ -170,7 +170,7 @@ export async function readServeServiceStatus(
     if (result.code === null) {
       return { ...base, verdict: 'unverifiable', pid: null, detail: 'launchctl did not answer' }
     }
-    // Why only 113: other failures (no GUI session over SSH, a refused request) prove nothing.
+    // Other launchctl failures cannot establish an exit, e.g. a missing GUI session over SSH.
     if (result.code === 113) {
       return { ...base, verdict: 'exited', pid: null, detail: 'not loaded' }
     }
@@ -228,7 +228,6 @@ export async function uninstallServeService(
   return { removed: existed, manager: spec.manager, name: spec.name, unitPath: spec.unitPath }
 }
 
-/** Local, runtime-free output: the same envelope shape `--json` callers get elsewhere. */
 function emit<T>(result: T, json: boolean, format: (value: T) => string): void {
   console.log(json ? JSON.stringify({ ok: true, result }, null, 2) : format(result))
 }
@@ -241,7 +240,7 @@ export const SERVE_SERVICE_HANDLERS: Record<string, CommandHandler> = {
   'serve service install': async ({ flags, json }) => {
     const result = await installServeService({
       command: optionalString(flags.get('command')),
-      // Why validate here: a bad value fails before the supervisor's brake and launchd would loop.
+      // Validate before launchd can loop on a bad value and trip the supervisor brake.
       port: getOptionalServePort(flags),
       pairingAddress: optionalString(flags.get('pairing-address')),
       dryRun: flags.get('dry-run') === true

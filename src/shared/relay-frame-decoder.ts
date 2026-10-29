@@ -143,11 +143,8 @@ export class FrameDecoder {
         const framed = this.buffer.take(totalLength)
         frames += 1
         bytes += totalLength
-        // Why contain here and not in the caller: feed() runs straight from a socket 'data'
-        // handler, so a frame owner that throws on the first turn would escape as an
-        // uncaughtException and take the whole process — and every connection it serves — down.
-        // The continuation path already contains this; the synchronous path must match it, so
-        // one bad frame costs one connection (the owner's onError closes it), never the process.
+        // Socket data callbacks must contain owner exceptions like continuation turns do: close the bad connection, never crash
+        // the process and every other connection it serves.
         try {
           this.onFrame({
             type: framed[0],

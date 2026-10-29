@@ -1,7 +1,4 @@
-// Layout-owner build: main's one start of a restored pane that has no live terminal, for every
-// trigger that is not a desktop window's own restore (a client's first view, a CLI or
-// orchestration send, wait, read or wake). Restores from the pane's stored terminal when this
-// workspace owns it; the start port resumes the agent the host recorded for the pane.
+// Share one main-owned restored-pane start across CLI, mobile and orchestration triggers; resume only from this workspace's stored terminal/agent.
 
 import { isPtyIdMintedForAnotherWorkspace } from './foreign-pane-bindings'
 import type { RuntimeMobileSessionCreateTerminalResult as CreatedTerminal } from '../../../../shared/runtime-session-contracts'
@@ -55,11 +52,7 @@ export class RestoredPaneStarter {
 
   constructor(private readonly ports: RestoredPaneStartPorts) {}
 
-  /**
-   * The pane's live terminal, started once if it has none: concurrent triggers share one start.
-   * Null for a pane main no longer holds. A start another starter won still resolves to its
-   * terminal, so every caller ends bound to the same one.
-   */
+  /** Share concurrent starts; null when main no longer holds the pane. A competing starter's terminal still satisfies every caller. */
   ensureStarted(pane: RestoredPane, trigger: RestoredPaneTrigger = {}): Promise<StartedPty | null> {
     const key = makePaneKey(pane.tabId, pane.leafId)
     const running = this.inFlight.get(key)

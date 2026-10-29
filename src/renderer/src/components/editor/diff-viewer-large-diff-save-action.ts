@@ -15,8 +15,7 @@ export function getDiffViewerLargeDiffSaveAction({
 }: DiffViewerLargeDiffSaveActionInput):
   | { label: string; description: string; onClick: () => void }
   | undefined {
-  // Why: oversized diffs can arrive with text bodies stripped before IPC;
-  // fallback saves only when the modified content is known to be complete.
+  // IPC can prune oversized text bodies; allow fallback saves only when modified content is complete.
   if (!editable || !onSave || !saveContentAvailable) {
     return undefined
   }

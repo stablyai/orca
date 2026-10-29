@@ -12,7 +12,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
 import { translate } from '@/i18n/i18n'
 
-export type CloseTerminalDialogCopyKind = 'command' | 'agent'
+export type CloseTerminalDialogCopyKind = 'command' | 'agent' | 'chat-agent'
 
 export default function CloseTerminalDialog({
   open,
@@ -24,11 +24,9 @@ export default function CloseTerminalDialog({
 }: {
   open: boolean
   copyKind?: CloseTerminalDialogCopyKind
-  /** Names the tab when the prompt can target a tab the user is not looking at
-   *  (tab-strip X, middle-click). Omitted for the focused-pane keyboard path. */
+  /** Name off-focus tab-strip/middle-click targets; omit for focused-pane keyboard closes. */
   tabLabel?: string
-  /** Identifies what is being closed, for hosts that reuse one open dialog across a queue
-   *  of confirmations. Changing it clears the previous subject's "don't ask again" tick. */
+  /** Changing queued subject clears the previous tab’s opt-out without reopening the dialog. */
   subjectKey?: string
   onCancel: () => void
   onConfirm: (dontAskAgain: boolean) => void
@@ -38,8 +36,7 @@ export default function CloseTerminalDialog({
   const [previousOpen, setPreviousOpen] = useState(open)
   const [previousSubjectKey, setPreviousSubjectKey] = useState(subjectKey)
 
-  // Why: each reopen represents a fresh confirmation, so clear the old choice
-  // during render rather than briefly painting it while the dialog opens.
+  // Reset each new confirmation before paint to avoid flashing the previous opt-out.
   if (open !== previousOpen) {
     setPreviousOpen(open)
     if (open) {
@@ -47,9 +44,7 @@ export default function CloseTerminalDialog({
     }
   }
 
-  // Why: a queued confirmation swaps the subject without ever closing the dialog, so the
-  // reopen reset above never fires. Ignore the swap to undefined as the dialog closes —
-  // clearing the tick mid-exit-animation would be visible for no reason.
+  // Queued subjects change without reopening; ignore closing-to-undefined so the checkbox cannot flash during exit.
   if (subjectKey !== previousSubjectKey) {
     setPreviousSubjectKey(subjectKey)
     if (subjectKey !== undefined) {
@@ -57,7 +52,6 @@ export default function CloseTerminalDialog({
     }
   }
 
-  const isAgent = copyKind === 'agent'
   const trimmedTabLabel = tabLabel?.trim()
 
   return (
@@ -71,7 +65,7 @@ export default function CloseTerminalDialog({
     >
       <DialogContent className="max-w-sm" showCloseButton={false}>
         <CloseTerminalDialogBody
-          isAgent={isAgent}
+          copyKind={copyKind}
           trimmedTabLabel={trimmedTabLabel}
           checkboxId={checkboxId}
           dontAskAgain={dontAskAgain}
@@ -86,7 +80,7 @@ export default function CloseTerminalDialog({
 
 // Keep translation and element construction behind the dialog portal's mount boundary.
 function CloseTerminalDialogBody({
-  isAgent,
+  copyKind,
   trimmedTabLabel,
   checkboxId,
   dontAskAgain,
@@ -94,7 +88,7 @@ function CloseTerminalDialogBody({
   onCancel,
   onConfirm
 }: {
-  isAgent: boolean
+  copyKind: CloseTerminalDialogCopyKind
   trimmedTabLabel: string | undefined
   checkboxId: string
   dontAskAgain: boolean
@@ -102,6 +96,8 @@ function CloseTerminalDialogBody({
   onCancel: () => void
   onConfirm: (dontAskAgain: boolean) => void
 }): React.JSX.Element {
+  const isAgent = copyKind !== 'command'
+  const isChat = copyKind === 'chat-agent'
   return (
     <>
       <DialogHeader>
@@ -117,18 +113,23 @@ function CloseTerminalDialogBody({
               )}
         </DialogTitle>
         <DialogDescription className="text-xs">
-          {isAgent
+          {isChat
             ? translate(
-                'auto.components.terminal.pane.CloseTerminalDialog.stop_agent_description',
-                "Closing this terminal will stop the agent's current work."
+                'auto.components.terminal.pane.CloseTerminalDialog.stop_chat_description',
+                "Closing this chat will stop the agent's current work."
               )
-            : translate(
-                'auto.components.terminal.pane.CloseTerminalDialog.stop_command_description',
-                'Closing this terminal will stop the command running inside it.'
-              )}
+            : isAgent
+              ? translate(
+                  'auto.components.terminal.pane.CloseTerminalDialog.stop_agent_description',
+                  "Closing this terminal will stop the agent's current work."
+                )
+              : translate(
+                  'auto.components.terminal.pane.CloseTerminalDialog.stop_command_description',
+                  'Closing this terminal will stop the command running inside it.'
+                )}
         </DialogDescription>
       </DialogHeader>
-      {isAgent ? (
+      {copyKind === 'agent' ? (
         <p className="text-xs text-muted-foreground">
           {translate(
             'auto.components.terminal.pane.CloseTerminalDialog.automatic_resume_warning',
@@ -148,10 +149,12 @@ function CloseTerminalDialogBody({
           onCheckedChange={(checked) => setDontAskAgain(checked === true)}
         />
         <Label htmlFor={checkboxId} className="text-xs font-normal text-muted-foreground">
-          {translate(
-            'auto.components.terminal.pane.CloseTerminalDialog.dont_ask_again',
-            "Don't ask again for running terminals"
-          )}
+          {isChat
+            ? translate('auto.components.confirmation.dialog.92bac3217e', "Don't ask again")
+            : translate(
+                'auto.components.terminal.pane.CloseTerminalDialog.dont_ask_again',
+                "Don't ask again for running terminals"
+              )}
         </Label>
       </div>
       <DialogFooter className="gap-2">

@@ -60,8 +60,7 @@ export const usePluginPanelsStore = create<PluginPanelsState>()((set) => ({
   fetchPlugins: async () => {
     const generation = ++pluginListGeneration
     clearPluginListRetryTimer()
-    // Why: preload may predate the plugins namespace (web client pairing an
-    // older desktop build); treat a missing bridge as "no plugins" fail-soft.
+    // Older paired preload may lack plugins namespace; treat missing bridge as empty content.
     const pluginsApi = window.api?.plugins
     if (!pluginsApi) {
       if (generation === pluginListGeneration) {
@@ -83,9 +82,7 @@ export const usePluginPanelsStore = create<PluginPanelsState>()((set) => ({
       }
     } catch {
       if (generation === pluginListGeneration) {
-        // A failed authority refresh must not leave previously enabled panel
-        // documents mounted from stale state. Bounded retries recover from a
-        // transient preload/main startup race without spinning indefinitely.
+        // Failed authority refresh must unmount stale panel documents; bounded retries recover startup races without endless polling.
         set({ plugins: [], panelErrors: {}, fetchStatus: 'error' })
         schedulePluginListRetry(generation)
       }
@@ -126,8 +123,7 @@ function retainInstalledPanelErrors(
 
 let changeSubscriptionStarted = false
 
-/** Kicks off the startup fetch and subscribes to main-process change pushes
- *  (install/remove/enable/dev-reload); safe to call repeatedly. */
+/** Install startup fetch/change subscription once; safe for repeated callers. */
 export function ensurePluginPanelsLoaded(): void {
   const { fetchStatus, fetchPlugins } = usePluginPanelsStore.getState()
   if (fetchStatus === 'idle') {
@@ -141,8 +137,7 @@ export function ensurePluginPanelsLoaded(): void {
   }
 }
 
-/** Panels of plugins the user enabled (consented + not disabled). `idle` and
- *  `restarting` still show panels — the panel itself never needs a worker. */
+/** Enabled/consented panels remain available while workers are idle/restarting; panels need no worker. */
 export function collectActivePluginPanels(plugins: PluginHostListEntry[]): ActivePluginPanel[] {
   return plugins
     .filter(
@@ -158,9 +153,7 @@ export function collectActivePluginPanels(plugins: PluginHostListEntry[]): Activ
     )
 }
 
-/** Tab keys of every installed plugin panel (any status) — used by the
- *  persisted-route normalizer to drop keys of uninstalled plugins while
- *  keeping keys that are merely disabled. */
+/** Installed keys normalize persisted routes: remove uninstalled panels, retain merely disabled ones. */
 export function collectInstalledPluginTabKeys(
   plugins: readonly PluginHostListEntry[]
 ): Set<string> {
@@ -204,8 +197,7 @@ export function usePluginPanels(): ActivePluginPanel[] {
   useEffect(() => {
     ensurePluginPanelsLoaded()
   }, [])
-  // Why: derive in useMemo (not the selector) so the store snapshot stays
-  // referentially stable and doesn't retrigger useSyncExternalStore loops.
+  // Derive outside selector in useMemo or unstable snapshots loop through useSyncExternalStore.
   return useMemo(() => collectActivePluginPanels(plugins), [plugins])
 }
 

@@ -1,7 +1,4 @@
-// Why: rename() is atomic for readers but not durable. Without fsync on the file and its directory,
-// a power loss after a successful rename can leave the old contents, or an empty inode — the same
-// empty-file symptom as issue #1158, from a different cause. The .bak ring recovers it at up to an
-// hour's loss; fsync stops it from happening.
+// Atomic rename is not durable; fsync the file and directory to survive power loss.
 
 import { closeSync, fsyncSync, openSync, rmSync, writeFileSync } from 'node:fs'
 import { open, readdir, rm, stat } from 'node:fs/promises'
@@ -12,11 +9,7 @@ import {
   renameFileWithWindowsRetryAsync
 } from './codex-accounts/fs-utils'
 
-/**
- * fsync a directory so a rename within it is durable. Best-effort by design: Windows cannot open a
- * directory for fsync, and some filesystems reject it. The file fsync above it is the load-bearing
- * part; this closes the "rename recorded but not persisted" window where the platform allows it.
- */
+/** Persist directory changes where supported; Windows and some filesystems reject directory fsync. */
 async function syncDirectory(directory: string): Promise<void> {
   let handle: Awaited<ReturnType<typeof open>> | null = null
   try {
@@ -29,21 +22,19 @@ async function syncDirectory(directory: string): Promise<void> {
   }
 }
 
-/** Sync variant of the best-effort directory fsync, for callers that publish by rename or link. */
+/** Best-effort directory fsync after synchronous publication. */
 export function syncDirectoryDurablySync(directory: string): void {
   let fd: number | null = null
   try {
     fd = openSync(directory, 'r')
     fsyncSync(fd)
   } catch {
-    // Same platform caveats as syncDirectory.
+    // Directory fsync may be unsupported.
   } finally {
     if (fd !== null) {
       try {
         closeSync(fd)
-      } catch {
-        // Nothing actionable; the fsync already happened or the open failed.
-      }
+      } catch {}
     }
   }
 }
@@ -64,20 +55,13 @@ export function publishFileDurableSync(tmpPath: string, finalPath: string): bool
   return true
 }
 
-/**
- * Rename and then fsync the containing directory. For callers that already fsynced the temp file
- * themselves and need the rename made durable.
- */
+/** Callers must fsync the temp file before publishing it. */
 export async function renameDurable(tmpPath: string, finalPath: string): Promise<void> {
   await renameFileWithWindowsRetryAsync(tmpPath, finalPath)
   await syncDirectory(dirname(finalPath))
 }
 
-/**
- * Write `payload` to `tmpPath` and fsync it, WITHOUT publishing it. For callers that must order
- * other work between "the new content is durable" and "the new content is visible" — a backup
- * rotation that has to happen while the old file is still in place, for instance.
- */
+/** Make content durable without publishing, allowing backup rotation before replacement. */
 export async function writeTempFileDurable(
   tmpPath: string,
   payload: string | Uint8Array,
@@ -92,31 +76,28 @@ export async function writeTempFileDurable(
   }
 }
 
-/** Write `payload` to `tmpPath`, fsync it, then rename onto `finalPath` and fsync the directory. */
 export async function writeFileDurable(
   tmpPath: string,
   finalPath: string,
-  payload: string | Uint8Array
+  payload: string | Uint8Array,
+  mode?: number
 ): Promise<void> {
-  await writeFileDurableIfCurrent(tmpPath, finalPath, payload, () => true)
+  await writeFileDurableIfCurrent(tmpPath, finalPath, payload, () => true, mode)
 }
 
-/**
- * `writeFileDurable` with a commit veto: `isCurrent` is consulted after the fsync and before the
- * rename so a writer that was superseded mid-write doesn't publish a stale snapshot. Returns whether
- * the rename happened; the temp file is removed on every path that doesn't commit, so a multi-MB
- * payload can't orphan itself.
- */
+/** Veto superseded writes before rename and remove their temp files on every uncommitted path. */
 export async function writeFileDurableIfCurrent(
   tmpPath: string,
   finalPath: string,
   payload: string | Uint8Array,
-  isCurrent: () => boolean
+  isCurrent: () => boolean,
+  /** Creation mode for the new temp file, e.g. 0o600 for state other users must not read. */
+  mode?: number
 ): Promise<boolean> {
   let renamed = false
   try {
-    // Why: fsync BEFORE rename. A rename that lands first can expose a zero-length file.
-    await writeTempFileDurable(tmpPath, payload)
+    // Fsync before publication so power loss cannot expose an empty file.
+    await writeTempFileDurable(tmpPath, payload, mode)
     if (!(await renameFileWithWindowsRetryAsync(tmpPath, finalPath, isCurrent))) {
       return false
     }
@@ -130,17 +111,13 @@ export async function writeFileDurableIfCurrent(
   }
 }
 
-/** Temp path for a durable write. Shared shape so `removeStaleDurableWriteTempFiles` can reclaim orphans. */
+/** Keep this naming scheme in sync with stale-temp cleanup. */
 export function durableWriteTempPath(finalPath: string, owner?: string): string {
   const ownerSuffix = owner === undefined ? '' : `.owner-${owner}`
   return `${finalPath}.${process.pid}.${Date.now()}.${Math.random().toString(16).slice(2)}${ownerSuffix}.tmp`
 }
 
-/**
- * Sweep temp files orphaned by a death between write and rename — for multi-MB payloads they would
- * otherwise accumulate forever. Callers can require a minimum age to spare another live instance's
- * write. This process's own temps are skipped unless their owner is known to have exited.
- */
+/** Reclaim crashed writers’ temps; age guards protect other instances, and same-PID files need owner exit. */
 export async function removeStaleDurableWriteTempFiles(
   finalPath: string,
   options: { minimumAgeMs?: number; retiredOwner?: string } = {}
@@ -174,9 +151,7 @@ export async function removeStaleDurableWriteTempFiles(
           await rm(path, { force: true }).catch(() => {})
         })
     )
-  } catch {
-    // Directory missing or unreadable — nothing to sweep.
-  }
+  } catch {}
 }
 
 /** Synchronous counterpart for quit and crash paths that cannot await. */
@@ -189,7 +164,6 @@ export function writeFileDurableSync(
 ): void {
   let renamed = false
   try {
-    // A Uint8Array payload is written verbatim; a string still defaults to UTF-8.
     writeFileSync(tmpPath, payload, mode === undefined ? undefined : { mode })
     const fd = openSync(tmpPath, 'r+')
     try {

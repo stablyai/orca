@@ -1,25 +1,4 @@
-/**
- * Who currently owns a relay socket path, answered with host evidence.
- *
- * The client used to answer this by assumption: a failed `--connect` was read as "the relay
- * crashed", the socket was `rm -f`'d, and a fresh relay bound the same path. Unlinking a unix
- * socket does not close the listener the incumbent already holds, so an alive-but-refusing
- * relay (the `RelayVersionMismatchError` case, and the credential-rotation case) was left
- * running forever with its PTYs (#8585).
- *
- * The verdict vocabulary is fixed by docs/reference/ssh-execution-boundary.md — `live` /
- * `unverifiable` / `exited`, with no synonyms and no collapsing. Two consequences are load
- * bearing here:
- *
- * - `exited` is a claim about **this endpoint**, not about every relay on the host. It means
- *   nothing holds this socket path, established positively (a connect that was refused *and*
- *   an enumeration that found no holder). A relay whose socket was already unlinked is
- *   invisible to this probe by construction.
- * - a probe that could not run, a host without `lsof`, or a connect that failed for any other
- *   reason is `unverifiable`. It never authorizes client cleanup.
- * - a refused socket is `exited` only on a local disk. On a network home another machine's
- *   kernel may hold it, and this machine's connect and `lsof` cannot see that machine.
- */
+/** Probe this endpoint only: unlinking a refusing live socket strands its relay/PTYs (#8585). Exit requires refused connect, complete no-holder evidence and local storage; shared-home sockets may live on another kernel. Missing tools or ambiguous failures stay unverifiable and never authorize cleanup (docs/reference/ssh-execution-boundary.md). */
 import { RELAY_LSOF_PROBE_JS } from '@orca/process-host/posix-lsof-probe'
 import type { SshConnection } from '../connection/ssh-connection'
 import { quotePosixShell } from '../../../shared/shell-argument-quoting'
@@ -42,11 +21,7 @@ type RelayEndpointHolder = {
   matchesRelayArgv: boolean
   /** Direct children, or null when `pgrep` could not answer. Never guessed. */
   childCount: number | null
-  /**
-   * Direct children *not* positively identified as the daemon's own service processes, or
-   * null when the host could not enumerate them. This — not `childCount` — is what says
-   * whether the relay holds anything; see relay-daemon-service-children.ts.
-   */
+  /** Exclude only proven daemon service children; null means incomplete enumeration (relay-daemon-service-children.ts). */
   unrecognizedChildCount: number | null
 }
 
@@ -65,7 +40,7 @@ const PROBE_BEGIN = 'ORCA-INCUMBENT-BEGIN'
 const PROBE_END = 'ORCA-INCUMBENT-END'
 const CONNECT_PROBE_TIMEOUT_MS = 1000
 
-// Why ES5 syntax: nodePath may be a host-resolved system node, not the bundled one.
+// Use ES5 for host-provided Node runtimes.
 const RELAY_CONNECT_PROBE_JS = [
   'var s=require("net").connect(process.argv[1]);',
   'var done=false;',
@@ -97,10 +72,7 @@ class RelayProbeCleanupUnconfirmedError extends Error {
   }
 }
 
-/**
- * A POSIX probe that reports only what the host actually observed. Every field has an
- * explicit "could not tell" value; nothing is inferred from a missing tool.
- */
+/** Keep every unknown explicit; missing tools must never imply absence. */
 export function relayEndpointIncumbentProbeCommand(nodePath: string, sockPath: string): string {
   const sock = quotePosixShell(sockPath)
   const node = quotePosixShell(nodePath)
@@ -189,7 +161,7 @@ export function parseRelayEndpointIncumbentProbe(
     }
   }
   if (holders.length > 0) {
-    // The inode is held by a running process that is not accepting — wedged, not gone.
+    // A held inode with refused connect is wedged, not exited.
     return {
       sockPath,
       verdict: 'live',
@@ -245,7 +217,7 @@ function parseHolder(value: string): RelayEndpointHolder | null {
   }
 }
 
-/** `unknown`, a missing field, and anything unparseable are all "could not tell" — never 0. */
+/** Unknown, absent and malformed counts must never become zero. */
 function parseChildCount(raw: string | undefined): number | null {
   const count = Number.parseInt(raw ?? '', 10)
   return Number.isInteger(count) && count >= 0 ? count : null
@@ -269,8 +241,7 @@ export async function probeRelayEndpointIncumbent(
   sockPath: string,
   options?: { signal?: AbortSignal }
 ): Promise<RelayEndpointIncumbent> {
-  // Windows relays are named pipes: there is no inode to unlink and no `lsof`, so the
-  // orphan-by-unlink mechanism this probe defends against cannot occur there.
+  // Windows pipes cannot be orphaned by unlink; this POSIX probe cannot classify them.
   if (isWindowsRemoteHost(hostPlatform)) {
     return unverifiableEndpoint(sockPath)
   }
@@ -281,28 +252,19 @@ export async function probeRelayEndpointIncumbent(
     })
     return parseRelayEndpointIncumbentProbe(sockPath, output)
   } catch (err) {
-    // An exec whose channel never confirmed close may still be running remotely; the caller
-    // must not race a detached launch against it.
+    // Unconfirmed channel cleanup may leave the probe running remotely; do not race it with launch.
     if (
       err instanceof RelayProbeCleanupUnconfirmedError ||
       isUnconfirmedSshCommandTermination(err)
     ) {
       throw err
     }
-    // Any other unanswered probe observes nothing. It is never evidence of death.
+    // Unanswered probes never prove exit.
     return unverifiableEndpoint(sockPath)
   }
 }
 
-/**
- * A live relay that provably holds nothing: identity confirmed against its argv, exactly one
- * holder, and no child the host could not account for as one of the daemon's own service
- * processes. Reaping it destroys no user work. Anything less is retained — killing the wrong
- * pid on someone's remote host is the worst outcome available here.
- *
- * Why not `childCount === 0`: the daemon's AI Vault sidecar never exits once spawned, so that
- * gate was unreachable for any relay that had ever served a vault request (#13614).
- */
+/** Reap only one argv-verified relay holder with complete enumeration and no unrecognized children. childCount===0 would exclude idle relays whose AI Vault sidecar persists (#13614). */
 export function isReapableRelayHusk(incumbent: RelayEndpointIncumbent): boolean {
   if (incumbent.verdict !== 'live' || !incumbent.holdersEnumerable) {
     return false

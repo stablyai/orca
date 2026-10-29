@@ -1,5 +1,4 @@
-// What the runtime does when a provider settles a dispatch after the fact. It runs off the request
-// that caused it, so its failure has nobody to return to and is logged instead.
+// Late dispatch settlements run outside their request, so report failures through the logger.
 
 import type { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-host'
 import type { StructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'

@@ -39,8 +39,7 @@ export function useEmulatorPaneSession({
   const configuredDefaultUdid = useAppStore(
     (state) => state.settings?.mobileEmulatorDefaultDeviceUdid ?? null
   )
-  // Why the lazy initializer: the consume deletes the handoff entry, and a `useRef(expr)` argument
-  // re-runs every render — so a prelaunch registered after mount was consumed and then discarded.
+  // Consume the handoff only at mount; useRef(expr) would consume and discard later prelaunches on rerender.
   const [prelaunchedSession] = useState<EmulatorPaneSession['info'] | null>(() =>
     consumePrelaunchedSimulatorSession(worktreeId)
   )
@@ -71,7 +70,6 @@ export function useEmulatorPaneSession({
 
   const refreshDevices = useCallback(async (bootedTarget?: string | null) => {
     try {
-      // Unified list so Android devices/AVDs appear alongside iOS simulators.
       const raw = (await callRuntimeRpc(
         { kind: 'local' },
         'emulator.listDevices',
@@ -191,8 +189,7 @@ export function useEmulatorPaneSession({
         requestedTarget = target
         setSelectedUdid(target)
         if (target !== liveTargetRef.current) {
-          // Why: switching devices should show an explicit connecting state,
-          // not a frozen frame from the previously attached emulator.
+          // Clear the old device’s frame so switching shows a connecting state.
           setSession(null)
           setStreamKey(null)
           liveTargetRef.current = null
@@ -204,8 +201,7 @@ export function useEmulatorPaneSession({
           focus: false
         })) as { attached?: boolean; info?: EmulatorPaneSession['info'] }
         if (!mountedRef.current) {
-          // Why: attach can finish after the tab closes, after the earlier
-          // unmount shutdown already no-op'd because the session was not registered yet.
+          // Attach may finish after unmount cleanup ran before the session was registered.
           await shutdownManagedSimulatorIfNoPane(worktreeId, tabId)
           return
         }
@@ -223,8 +219,7 @@ export function useEmulatorPaneSession({
         if (requestedTarget && liveTargetRef.current === requestedTarget) {
           return
         }
-        // Why: setup failures otherwise trigger the mount auto-attach loop again
-        // and erase the actionable error before the user can read it.
+        // Prevent mount auto-attach from erasing actionable setup errors.
         suppressAutoAttachRef.current = true
         const msg = emulatorPaneErrorMessage(
           e,

@@ -49,5 +49,9 @@ it('retains both systemd modes on Ubuntu and full scheduled/manual references', 
   const phases = workflow.jobs.wsl2.steps.filter(
     (step) => step.env?.ORCA_RUN_WSL_ORCAD_LANE === '1'
   )
-  expect(phases.map((step) => step.env.ORCA_WSL_ORCAD_LANE_PHASE)).toEqual(['launch', 'survive'])
+  expect(phases.map((step) => step.env.ORCA_WSL_ORCAD_LANE_PHASE)).toEqual([
+    'launch',
+    'survive',
+    'idle-release'
+  ])
 })

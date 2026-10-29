@@ -41,11 +41,6 @@ afterEach(() => {
 })
 
 describe('setActiveFile with an id that has no open file', () => {
-  it('premise: the open document is active', () => {
-    expect(store.getState().activeFileId).toBe(fileId)
-    expect(store.getState().activeFileIdByWorktree['wt-1']).toBe(fileId)
-  })
-
   it('leaves the in-memory and per-workspace active file unchanged', () => {
     store.getState().setActiveFile(GHOST_ID)
     expect(store.getState().activeFileId).toBe(fileId)

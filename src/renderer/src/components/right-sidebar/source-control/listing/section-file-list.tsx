@@ -1,7 +1,7 @@
 import React from 'react'
 import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
 import type { SourceControlViewMode } from '../../../../../../shared/ui-chrome-types'
-import type { DiscardAllArea } from '../commit/discard-all-sequence'
+import type { DiscardAllArea } from '../../../../../../shared/source-control-discard-all-sequence'
 import {
   getSubmoduleExpansionKey,
   isExpandableSubmoduleEntry,
@@ -37,7 +37,7 @@ export function SourceControlSectionFileList({
   handleContextMenu,
   revealInExplorer,
   activeConnectionId,
-  openUncommittedFile,
+  handleOpenDiff,
   handleStage,
   handleUnstage,
   requestDiscardEntry,
@@ -64,7 +64,7 @@ export function SourceControlSectionFileList({
   handleContextMenu: (key: string) => void
   revealInExplorer: (worktreeId: string, absolutePath: string) => void
   activeConnectionId: string | null
-  openUncommittedFile: (entry: GitStatusEntry, event?: SourceControlRowOpenEvent) => void
+  handleOpenDiff: (entry: GitStatusEntry, event?: SourceControlRowOpenEvent) => void
   handleStage: (path: string) => Promise<void>
   handleUnstage: (path: string, oldPath?: string) => Promise<void>
   requestDiscardEntry: (entry: GitStatusEntry) => void
@@ -122,7 +122,7 @@ export function SourceControlSectionFileList({
             onContextMenu={handleContextMenu}
             onRevealInExplorer={revealInExplorer}
             connectionId={activeConnectionId}
-            onOpen={openUncommittedFile}
+            onOpen={handleOpenDiff}
             onStage={handleStage}
             onUnstage={handleUnstage}
             onDiscard={requestDiscardEntry}
@@ -173,7 +173,7 @@ export function SourceControlSectionFileList({
             onContextMenu={handleContextMenu}
             onRevealInExplorer={revealInExplorer}
             connectionId={activeConnectionId}
-            onOpen={openUncommittedFile}
+            onOpen={handleOpenDiff}
             onStage={handleStage}
             onUnstage={handleUnstage}
             onDiscard={requestDiscardEntry}

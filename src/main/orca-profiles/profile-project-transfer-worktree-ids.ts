@@ -7,7 +7,7 @@ import {
   isWorktreeHostIdentity
 } from '../../shared/worktree/host-qualified-identity'
 
-/** Includes worktrees referenced only by sessions or UI preferences so profile transfer cannot strand their state. */
+/** Include session/UI-only worktrees so transfer cannot strand their state. */
 export function collectTransferWorktreeIds(
   state: TransferProfileState,
   repoId: string

@@ -6,11 +6,7 @@ import { mapGraphQLReactionGroups, type GitHubGraphQLReactionGroup } from '../..
 import { noteRepositoryRateLimitSpend, repositoryRateLimitGuard } from '../../rate-limit'
 import { assertRateLimitBudget } from './../lookup/pr-lookup-rate-limit'
 import { REVIEW_THREADS_QUERY } from './pr-review-threads-query'
-/**
- * Get all comments on a PR — both top-level conversation comments and inline
- * review comments (including suggestions). Uses GraphQL for review threads
- * to get resolution status, REST for issue-level comments.
- */
+/** Combine conversation comments, review summaries and GraphQL threads with resolution metadata. */
 export async function getPRComments(
   repoPath: string,
   prNumber: number,
@@ -33,11 +29,11 @@ export async function getPRComments(
   await acquire()
   try {
     if (ownerRepo) {
-      // Why: --cache 60s saves rate-limit budget on normal loads; explicit refresh skips it for fresh data.
+      // Explicit refresh bypasses the polling cache.
       const cacheArgs = options?.noCache ? [] : ['--cache', '60s']
       const base = `repos/${ownerRepo.owner}/${ownerRepo.repo}`
 
-      // Why: allSettled so one failing endpoint doesn't blank out all comments; failed sources contribute zero.
+      // Retain successful comment sources when another endpoint fails.
       const reviewThreadsGuard = repositoryRateLimitGuard(ownerRepo, 'graphql', ghOptions)
       let reviewThreadsFetch: Promise<{ stdout: string; stderr: string } | null>
       if (reviewThreadsGuard.blocked) {
@@ -66,7 +62,7 @@ export async function getPRComments(
           ghOptions
         ),
         reviewThreadsFetch,
-        // Why: review summaries (approve/request-changes/general) live under pulls/{n}/reviews, not issue comments or threads.
+        // Review summaries live outside issue comments and inline threads.
         ghExecFileAsync(
           ['api', ...cacheArgs, `${base}/pulls/${prNumber}/reviews?per_page=100`],
           ghOptions
@@ -74,7 +70,6 @@ export async function getPRComments(
       ])
       noteRepositoryRateLimitSpend(ownerRepo, 'core', 2, ghOptions)
 
-      // Parse issue comments (REST)
       type RESTComment = {
         id: number
         user: { login: string; avatar_url: string; type?: string } | null
@@ -99,7 +94,6 @@ export async function getPRComments(
         console.warn('Failed to fetch issue comments:', issueResult.reason)
       }
 
-      // Parse review threads (GraphQL)
       type GQLThread = {
         id: string
         isResolved: boolean
@@ -143,8 +137,7 @@ export async function getPRComments(
             } | null
           } | null
         }
-        // Why: graphql can exit 0 with data.repository null plus an errors array (scopes, field-level denial);
-        // dereferencing it would throw and drop the REST halves fetched alongside it.
+        // GraphQL can exit 0 with a null repository and errors; retain the successful REST halves.
         const pullRequest = threadsData.data?.repository?.pullRequest
         if (!pullRequest) {
           console.warn('Review threads response missing pullRequest; keeping REST results')
@@ -163,7 +156,7 @@ export async function getPRComments(
         if (graphQLIssueComments.length > 0) {
           issueComments = graphQLIssueComments
         }
-        // Why: leave undefined when the payload is incomplete so the REST review summaries stay in use.
+        // Incomplete GraphQL payloads must preserve REST review summaries.
         graphQLReviewSummaries = pullRequest
           ? (pullRequest.reviews?.nodes ?? [])
               .filter((review) => review.body?.trim())
@@ -197,7 +190,7 @@ export async function getPRComments(
               threadId: thread.id,
               isResolved: thread.isResolved,
               isOutdated: thread.line == null,
-              // Why: GitHub nulls line/startLine when the commented code is outdated (e.g. force-push); originalLine preserves the original numbers.
+              // Outdated code nulls current line numbers; retain original positions.
               line: thread.line ?? thread.originalLine ?? undefined,
               startLine: thread.startLine ?? thread.originalStartLine ?? undefined
             })
@@ -209,7 +202,7 @@ export async function getPRComments(
         }
       }
 
-      // Review summaries (REST); skip empty-body reviews (e.g. approvals with no comment) as noise.
+      // Empty-body approvals add no conversation text.
       type RESTReview = {
         id: number
         user: { login: string; avatar_url: string; type?: string } | null
@@ -242,7 +235,7 @@ export async function getPRComments(
       return all
     }
 
-    // Fallback: non-GitHub remote — use gh pr view (only returns issue-level comments)
+    // Legacy local fallback returns issue-level comments only.
     const { stdout } = await ghExecFileAsync(
       ['pr', 'view', String(prNumber), '--json', 'comments'],
       ghOptions

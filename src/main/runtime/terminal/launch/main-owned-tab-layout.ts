@@ -1,5 +1,4 @@
-// Layout-owner build: main writes and starts a tab's panes only when main's layout holds the tab;
-// a paired server's tab (a runtime host) keeps the window's path.
+// Main starts only tabs its layout owns; paired-server tabs keep the window path.
 import { parseExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
 
 /** The tab's first holding partition is one main owns, not a paired server's. */

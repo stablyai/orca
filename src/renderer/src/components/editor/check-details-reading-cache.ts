@@ -2,7 +2,7 @@ import type { PRCheckJob, PRCheckRunDetails } from '../../../../shared/github/ch
 import type { OpenCheckRunDetailsState } from '../../../../shared/editor-tab-view-types'
 import { scrollTopCache, setWithLRU } from '@/lib/scroll-cache'
 import { sha256 } from '@/lib/sha256'
-import { resolveStepOutcome } from './check-job-step-status'
+import { resolveStepOutcome } from '../../../../shared/pr-check-step-status'
 
 export function checkJobIdentities(
   jobs: readonly PRCheckJob[]

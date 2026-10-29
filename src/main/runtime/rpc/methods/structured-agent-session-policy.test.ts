@@ -11,6 +11,10 @@ import {
   clientRendersStructuredAgent,
   supportsStructuredAgentSessions
 } from './structured-agent-session-policy'
+import { parseRuntimeClientCapabilities } from '../runtime-client-capabilities'
+import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../../shared/electron-remote-runtime-client-capabilities'
+import { remoteRuntimeClientCapabilities } from '../../../../shared/remote-runtime/remote-runtime-client-capabilities'
+import { WEB_RUNTIME_CLIENT_CAPABILITIES } from '../../../../shared/web-runtime-client-capabilities'
 
 const CAPABLE = [STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY]
 
@@ -91,5 +95,25 @@ describe('createSupportFollowsHostSetting', () => {
     expect(
       createSupportFollowsHostSetting({ clientKind: undefined, clientCapabilities: undefined })
     ).toBe(false)
+  })
+})
+
+// Both run the same chat; the browser client once omitted the structured capability and every
+// chat was refused (#32145).
+describe.each([
+  ['browser client', WEB_RUNTIME_CLIENT_CAPABILITIES],
+  ['desktop', remoteRuntimeClientCapabilities(ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES)]
+])("this build's %s handshake, as a paired host parses it", (_client, advertised) => {
+  const clientCapabilities = parseRuntimeClientCapabilities([...advertised])
+  const context = { clientKind: 'runtime' as const, clientCapabilities }
+
+  it('is kept whole and admits structured sessions', () => {
+    expect(clientCapabilities).toEqual(advertised)
+    expect(supportsStructuredAgentSessions(context)).toBe(true)
+    expect(createSupportFollowsHostSetting(context)).toBe(false)
+  })
+
+  it.each(['claude', 'codex', 'pi', 'opencode'])('renders %s chats', (agent) => {
+    expect(clientRendersStructuredAgent(clientCapabilities, agent)).toBe(true)
   })
 })

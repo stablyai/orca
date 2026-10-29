@@ -1,3 +1,4 @@
+import { taskProviderFailure } from '../../shared/task-provider-failure'
 import type { LinearClient } from '@linear/sdk'
 import type { LinearComment } from '../../shared/linear/issue-types'
 import { acquire, release } from './linear-request-concurrency'
@@ -33,7 +34,7 @@ export async function addIssueComment(
 > {
   const entry = getClients(workspaceId)[0]
   if (!entry) {
-    return { ok: false, error: 'Not connected to Linear' }
+    return taskProviderFailure('linear.notConnected', 'Not connected to Linear')
   }
 
   await acquire()
@@ -45,7 +46,7 @@ export async function addIssueComment(
       ...(options?.parentId ? { parentId: options.parentId } : {})
     })
     if (!result.success) {
-      return { ok: false, error: 'Failed to create comment' }
+      return taskProviderFailure('linear.commentFailed', 'Failed to create comment')
     }
     const comment = await result.comment
     return {
@@ -243,11 +244,9 @@ export async function getIssueComments(
       LinearRawVariables
     >(ISSUE_COMMENTS_QUERY, { id: issueId })
     const nodes = result.data?.issue?.comments?.nodes ?? []
-    return nodes.map((node) => ({
+    const comments = nodes.map((node) => ({
       id: node.id,
       body: node.body ?? '',
-      // Why: rawRequest returns createdAt as an ISO string already; do not
-      // re-serialize (the SDK model path used .toISOString() on a parsed Date).
       createdAt: node.createdAt ?? '',
       user: node.user
         ? {
@@ -256,6 +255,8 @@ export async function getIssueComments(
           }
         : undefined
     }))
+    // Why: Linear sends newest first; oldest-first matches linear.app and where new comments land.
+    return comments.sort((a, b) => a.createdAt.localeCompare(b.createdAt))
   } catch (error) {
     if (isAuthError(error)) {
       clearToken(entry.workspace.id)

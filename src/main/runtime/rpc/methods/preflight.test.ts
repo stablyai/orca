@@ -70,7 +70,10 @@ describe('preflight RPC methods', () => {
     // An older client sends no workspace and keeps the host-default probe.
     expect(resolveAgentDetectionHost).toHaveBeenNthCalledWith(1, undefined, undefined)
     expect(resolveAgentDetectionHost).toHaveBeenNthCalledWith(2, undefined, undefined)
-    expect(detectInstalledAgentsWithShellPathHydrationMock).toHaveBeenCalledWith(undefined)
+    expect(detectInstalledAgentsWithShellPathHydrationMock).toHaveBeenCalledWith(
+      undefined,
+      undefined
+    )
     expect(refreshShellPathAndDetectAgentsMock).toHaveBeenCalledWith(undefined)
     expect(detected).toMatchObject({ ok: true, result: ['codex'] })
     expect(refreshed).toMatchObject({
@@ -112,7 +115,10 @@ describe('preflight RPC methods', () => {
       makeRequest('preflight.detectAgents', { worktreeId: 'repo-ssh::/srv/w' })
     )
 
-    expect(detectInstalledAgentsWithShellPathHydrationMock).toHaveBeenCalledWith({ projectRuntime })
+    expect(detectInstalledAgentsWithShellPathHydrationMock).toHaveBeenCalledWith(
+      { projectRuntime },
+      undefined
+    )
     expect(wsl).toMatchObject({ ok: true, result: ['codex'] })
     expect(detectInstalledAgentsWithShellPathHydrationMock).toHaveBeenCalledTimes(1)
     expect(ssh).toMatchObject({ ok: false, error: { message: SSH_HOST_NOT_SERVED_MESSAGE } })
@@ -142,6 +148,32 @@ describe('preflight RPC methods', () => {
       const malformed = await dispatcher.dispatch(makeRequest('preflight.detectAgents', { repoId }))
       expect(malformed).toMatchObject({ ok: false, error: { code: 'invalid_argument' } })
     }
+    expect(resolveAgentDetectionHost).not.toHaveBeenCalled()
+  })
+
+  it('routes a project through its launch context and rejects mixed selectors before detection', async () => {
+    const context = { agents: ['codex'], workspaceKind: 'git', executionContext: { kind: 'host' } }
+    const detectProjectLaunchContext = vi.fn().mockResolvedValue(context)
+    const resolveAgentDetectionHost = vi.fn()
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the dispatcher reads only these runtime members.
+    const runtime = {
+      getRuntimeId: () => 'runtime',
+      detectProjectLaunchContext,
+      resolveAgentDetectionHost
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: PREFLIGHT_METHODS })
+    const project = { repo: 'r1' }
+    const response = await dispatcher.dispatch(makeRequest('preflight.detectAgents', { project }))
+    expect(response).toMatchObject({ ok: true, result: context })
+    expect(detectProjectLaunchContext).toHaveBeenCalledExactlyOnceWith('r1')
+    detectProjectLaunchContext.mockClear()
+    for (const selector of [{ repoId: 'r1' }, { worktreeId: 'r1::/work' }]) {
+      const mixed = await dispatcher.dispatch(
+        makeRequest('preflight.detectAgents', { project, ...selector })
+      )
+      expect(mixed).toMatchObject({ ok: false, error: { code: 'invalid_argument' } })
+    }
+    expect(detectProjectLaunchContext).not.toHaveBeenCalled()
     expect(resolveAgentDetectionHost).not.toHaveBeenCalled()
   })
 

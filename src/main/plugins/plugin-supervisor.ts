@@ -1,17 +1,8 @@
-/**
- * Crash/restart supervision policy for plugin workers — the pure decision
- * half of the runtime. Decides whether a worker that exited should be
- * restarted (with backoff) or marked errored after too many crashes.
- *
- * Pure + deterministic: callers own the actual timers and forking; this just
- * tracks per-plugin state and returns decisions. Ported from community PR
- * #5801 (gsxdsm).
- */
+// Pure supervision policy adapted from community PR #5801 (gsxdsm); callers own timers and process operations.
 
 export type PluginRunState = 'inactive' | 'running' | 'restarting' | 'errored'
 
 export type PluginExitInfo = {
-  /** Clean exit from a host-initiated deactivate vs. an unexpected crash. */
   crashed: boolean
 }
 
@@ -20,11 +11,9 @@ export type PluginRestartDecision =
   | { restart: false; state: PluginRunState }
 
 export type PluginSupervisionConfig = {
-  /** Max crash-restarts before a plugin is marked errored. `0` means no
-   *  restart attempts — the first crash goes straight to errored. */
+  /** Zero disables restarts; the first crash marks errored. */
   maxRestarts: number
-  /** Backoff schedule indexed by attempt; the last entry is reused past its
-   *  end. Must be non-empty (enforced in the constructor). */
+  /** Reuse the final delay after exhausting this nonempty schedule. */
   backoffMs: number[]
 }
 
@@ -41,8 +30,7 @@ export class PluginSupervisor {
 
   constructor(config: Partial<PluginSupervisionConfig> = {}) {
     this.config = { ...DEFAULT_CONFIG, ...config }
-    // Guard misconfiguration: an empty backoff schedule would index [-1] →
-    // undefined delay (immediate restart loop); a negative cap is meaningless.
+    // Empty schedules would produce immediate restart loops.
     if (this.config.maxRestarts < 0) {
       throw new Error('PluginSupervisionConfig.maxRestarts must be >= 0')
     }
@@ -59,8 +47,7 @@ export class PluginSupervisor {
     return this.entries.get(id)?.restarts ?? 0
   }
 
-  /** Mark a plugin as running. A fresh activation (not a restart) resets the
-   *  crash counter so a previously-flaky plugin gets a clean slate. */
+  /** Fresh activation resets crash history; restarts preserve it. */
   markRunning(id: string, options: { resetRestarts?: boolean } = {}): void {
     const prior = this.entries.get(id)
     this.entries.set(id, {
@@ -69,15 +56,12 @@ export class PluginSupervisor {
     })
   }
 
-  /** Record that the worker exited and decide what to do next. */
   markExited(id: string, info: PluginExitInfo): PluginRestartDecision {
     if (!info.crashed) {
-      // Host-initiated stop (or idle reap): go inactive, clear history.
       this.entries.set(id, { state: 'inactive', restarts: 0 })
       return { restart: false, state: 'inactive' }
     }
     const entry = this.entries.get(id)
-    // An exit for an untracked plugin is not a running crash to restart.
     if (!entry) {
       return { restart: false, state: 'inactive' }
     }
@@ -91,7 +75,6 @@ export class PluginSupervisor {
     return { restart: true, delayMs: this.config.backoffMs[idx]!, attempt }
   }
 
-  /** Clear all state (deactivate/remove or a manual re-enable). */
   reset(id: string): void {
     this.entries.delete(id)
   }

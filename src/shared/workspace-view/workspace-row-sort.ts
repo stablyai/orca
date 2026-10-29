@@ -3,14 +3,10 @@ import { compareCodePoints, createSidebarTextComparator } from '../sidebar-list/
 
 export type WorkspaceSortBy = PersistedUIState['sortBy']
 
-/**
- * A new workspace's activity is stamped when setup finishes, and ambient terminal output on other
- * workspaces can push it down a Recent list before the user notices it. It keeps a floor of
- * `createdAt + CREATE_GRACE_MS` until then.
- */
+/** New workspaces get a createdAt + CREATE_GRACE_MS floor so ambient terminal activity cannot immediately bury them in Recent. */
 export const CREATE_GRACE_MS = 5 * 60 * 1000
 
-/** Recency with the create-grace floor, applied only while the window is open; non-finite stamps from a row get none. */
+/** Apply the grace floor during its time window; non-finite timestamps receive none. */
 export function recentActivityWithCreateGrace(
   lastActivityAt: number,
   createdAt: number | undefined,

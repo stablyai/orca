@@ -38,10 +38,6 @@ function subscribeCollecting(
   })
 }
 
-// A brand-new agent session flushes its first JSONL line seconds to minutes
-// after start — and never at all until it is prompted. Emitting nothing in that
-// window leaves every client on an unexplained spinner (mobile native chat
-// renders `status === 'loading'` as a bare ActivityIndicator).
 describe('unflushed transcript settles the view', () => {
   beforeEach(() => {
     vi.useFakeTimers()
@@ -65,11 +61,9 @@ describe('unflushed transcript settles the view', () => {
 
     await vi.advanceTimersByTimeAsync(200)
     expect(pending).toHaveBeenCalledTimes(1)
-    // Never a snapshot: an empty window sold as a settled read captures over
-    // retained history and unblocks consumers that need a real transcript.
+    // Pending must not masquerade as an empty snapshot and overwrite retained history.
     expect(snapshots).toEqual([])
 
-    // Latched: the still-failing poll must not re-report on every tick.
     await vi.advanceTimersByTimeAsync(30_000)
     expect(pending).toHaveBeenCalledTimes(1)
 
@@ -78,14 +72,12 @@ describe('unflushed transcript settles the view', () => {
 
   it('leaves the settle to the real snapshot when the file lands inside the grace window', async () => {
     const unsubscribe = vi.fn()
-    // Missing at subscribe time, flushed by the first poll tick.
     mocks.install.mockResolvedValueOnce(null).mockResolvedValue({ unsubscribe, watching: true })
     const pending = vi.fn()
     const subscription = await subscribeCollecting([], pending)
 
     await vi.advanceTimersByTimeAsync(5_000)
-    // The engine owns the initial drain; an empty window announced here would
-    // blank a real transcript for a frame.
+    // The engine supplies the real snapshot; emitting empty here would flash away history.
     expect(pending).not.toHaveBeenCalled()
 
     subscription.unsubscribe()

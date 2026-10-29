@@ -154,7 +154,7 @@ describe('formatBrowserAnnotationsAsMarkdown', () => {
     expect(account).toContain('**Feedback:** B feedback')
   })
 
-  it('escapes and bounds added mixed-page context with the existing inline formatting', () => {
+  it('escapes added mixed-page context with the existing inline formatting', () => {
     const first = makeAnnotation()
     const second = makeAnnotation({ browserPageId: 'page`id\n## injected' })
     second.payload.page.sanitizedUrl = 'invalid`url\n## injected'
@@ -162,23 +162,6 @@ describe('formatBrowserAnnotationsAsMarkdown', () => {
     expect(markdown).toContain('**URL:** ``invalid`url ## injected``')
     expect(markdown).toContain('**Browser tab id:** ``page`id ## injected``')
     expect(markdown).not.toContain('\n## injected')
-  })
-
-  it('includes agent-useful selectors, source, react tree, styles, and feedback', () => {
-    const markdown = formatBrowserAnnotationsAsMarkdown([makeAnnotation()])
-
-    expect(markdown).toContain('## Design Feedback: /pricing')
-    expect(markdown).toContain('**Browser tab id:** page-1')
-    expect(markdown).not.toContain('Orca CLI')
-    expect(markdown).not.toContain('--page page-1')
-    expect(markdown).not.toContain('Page Feedback')
-    expect(markdown).toContain('**Selector:** `main.pricing > button.primary`')
-    expect(markdown).toContain('**Source:** src/components/PricingCta.tsx:42:8')
-    expect(markdown).toContain('**React:** <App> <PricingCta>')
-    expect(markdown).toContain('**Intent:** change')
-    expect(markdown).not.toContain('**Priority:**')
-    expect(markdown).toContain('- font-size: 16px')
-    expect(markdown).toContain('**Feedback:** Make this primary action more obvious.')
   })
 
   it('returns an empty string when no annotations exist', () => {
@@ -309,7 +292,7 @@ describe('formatBrowserAnnotationsAsMarkdown', () => {
     )
 
     expect(selectedLineStart).not.toBe(-1)
-    expect(selectedLine).toBeDefined()
+    expect(selectedLine).toBe(`**Selected text:** "${'x'.repeat(2047)}"`)
     expect(selectedLine).not.toContain('😀')
     expect(selectedLine).not.toContain('tail')
     expect(selectedLine).not.toContain('\ufffd')

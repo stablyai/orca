@@ -1,14 +1,4 @@
-/**
- * R25: one distro reached both as an SSH target (an SSH server inside WSL, e.g. 127.0.0.1:2222)
- * and as a WSL host would give one orcad install (`~/.orca-remote`, activation journal, locks)
- * two desktop-side owners. Until conversion exists, adding the WSL host is refused.
- *
- * Evidence: orcad's pairing identity is the E2EE key in its data dir (`~/.orca`), the same key
- * every pairing with it carries. A server this desktop already pairs with (SSH-managed or paired
- * by hand) whose key matches is the distro's orcad. Limits: an orcad another desktop deployed is
- * not ours to see (C4's activation admission still guards it), and a data dir moved off
- * `~/.orca` is not checked.
- */
+/** R25: refuse WSL Add if a known paired server shares the distro orcad's public E2EE key; otherwise one install gets two desktop owners. Other desktops and data dirs outside ~/.orca are unobservable; C4 admission still guards them. */
 import { errorMessage } from '../../shared/error-message'
 import { listEnvironments } from '../../shared/runtime-environment-store'
 import { E2EE_KEYPAIR_FILENAME } from '../../shared/runtime-e2ee-keypair-file'
@@ -56,7 +46,8 @@ export async function wslHostSshManagedRefusal(
 ): Promise<Extract<WslHostAddResult, { ok: false }> | null> {
   try {
     const sharing = findServerSharingWslOrcad(
-      listEnvironments(userDataPath),
+      // A conflict check before an add: a crash-zeroed list (#18766) must read as empty here.
+      listEnvironments(userDataPath, { recoverBlankStore: true }),
       await readPublicKey(distro)
     )
     return sharing

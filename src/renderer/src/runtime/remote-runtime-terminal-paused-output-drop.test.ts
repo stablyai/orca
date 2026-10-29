@@ -131,8 +131,7 @@ describe('remote terminal paused-output drop notice', () => {
     expect(snapshotRequests[0]?.requestId).toBeUndefined()
   })
 
-  // Why: with both the drop notice and the pane's repaint-baseline advance, a reveal
-  // costs one tagged snapshot and the stream never falls back to a resync.
+  // Drop notice plus repaint baseline makes reveal one tagged snapshot with no redundant resync.
   it('composes with the reveal snapshot: one tagged request, no resync', async () => {
     for (const announce of [true, false]) {
       hostCapabilities = announce

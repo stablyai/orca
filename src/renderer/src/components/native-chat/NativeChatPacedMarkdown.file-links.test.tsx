@@ -11,7 +11,7 @@ import {
   NativeChatReplyRevealsContext,
   type NativeChatReplyReveals
 } from './native-chat-reply-reveals'
-import { NATIVE_CHAT_TEXT_REVEAL_DELAY_MS } from '../../../../shared/native-chat-text-reveal'
+import { NATIVE_CHAT_TEXT_REVEAL_DELAY_MS } from '../../../../shared/native-chat/transcript/native-chat-text-reveal'
 
 vi.mock('@/hooks/usePrefersReducedMotion', () => ({ usePrefersReducedMotion: () => false }))
 vi.mock('./native-chat-visual-markdown-extension', () => ({

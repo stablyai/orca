@@ -1,9 +1,4 @@
-/**
- * Why a fence answered "held": a run that is still working clears on its own and is retried on
- * a later connect. A stale fence with no journal is cleared here, since Recover would only drop it.
- * Only a stale lock over a journal, or a journal no fence guards, needs Recover: a live run
- * journals under a fresh fence too, and Recover cannot take a fresh fence anyway.
- */
+/** Retry live fences later, clear abandoned bare fences, and require recovery for interrupted journaled state. */
 import {
   orcadActivationFenceExists,
   withStaleOrcadActivationRecoveryLock,
@@ -21,7 +16,7 @@ const ORCAD_ACTIVATION_RECOVERY_REQUIRED_CODE = 'orcad_activation_recovery_requi
 type OrcadActivationFenceRefusal = {
   code: string
   reason: string
-  /** A stale fence no journal backed was cleared, so the attempt may run again at once. */
+  /** Bare stale fence cleared; the caller may retry immediately. */
   cleared?: true
 }
 
@@ -30,14 +25,12 @@ export async function orcadActivationFenceRefusal(
   attempt: string
 ): Promise<OrcadActivationFenceRefusal> {
   const lockDir = orcadActivationFenceLockDir(options.host, options.remoteHome)
-  // An unreadable answer reads as busy: retrying later is never wrong, a sticky failure can be.
   const journal = (await readOrcadActivationTransaction(options).catch(() => null)) !== null
   const baseDir = orcadRemoteBaseDir(options.host, options.remoteHome)
   const stale =
     (await findExitedOwnLockToken(options, lockDir, { baseDir, guardsStateMutation: true })) !==
       null || (await isRelayInstallLockStale(options.conn, lockDir, options.host))
   if (stale && !journal && (await clearAbandonedFence(options))) {
-    // A wake or release cut short leaves a bare fence; Recover would only drop it (BUG-21).
     return {
       code: ORCAD_ACTIVATION_FENCE_BUSY_CODE,
       reason: `An abandoned fence held this host and was cleared; the ${attempt} is retried.`,
@@ -56,7 +49,7 @@ export async function orcadActivationFenceRefusal(
       }
 }
 
-/** Takes the stale fence over and drops it, unless a journal appeared under it meanwhile. */
+/** Drop a stale fence only after rechecking under takeover that no journal appeared. */
 async function clearAbandonedFence(options: OrcadActivationLockOptions): Promise<boolean> {
   try {
     return await withStaleOrcadActivationRecoveryLock(options, async (lock) => {
@@ -67,7 +60,7 @@ async function clearAbandonedFence(options: OrcadActivationLockOptions): Promise
       return true
     })
   } catch {
-    // Another client took it first, or the host did not answer: classify as before.
+    // Failed takeover leaves the fence intact for normal refusal classification.
     return false
   }
 }

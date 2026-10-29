@@ -15,7 +15,7 @@ import {
   type WslHookRelayManagerDeps
 } from './wsl-hook-relay-deps'
 import { wireWslRelayLink } from './wsl-hook-relay-link'
-import { WslRelayRecovery } from './wsl-hook-relay-recovery'
+import type { WslRelayRecovery } from './wsl-hook-relay-recovery'
 import { wslHookRelayStateKey } from './wsl-hook-relay-state-key'
 import { SshChannelMultiplexer, type MultiplexerTransport } from '../ssh/ssh-channel-multiplexer'
 import { AGENT_HOOK_REQUEST_REPLAY_METHOD } from '../../shared/agent-hook-relay'
@@ -29,14 +29,17 @@ import {
   wslRuntimeHomePathsEqual
 } from '../codex/managed-wsl-codex-home-registry'
 import {
+  createWslRelayRecoveryForManager,
   markWslRelayFailed,
   resolveWslDefaultDistro,
   resumeWslStoppedRelays
 } from './wsl-hook-relay-state-machine'
 import type { WslRelayDistroState } from './wsl-hook-relay-state'
+import { createWslRelayIdleStopForManager, type WslRelayIdleStop } from './wsl-hook-relay-idle-stop'
 export class WslHookRelayManager {
   private deps: WslHookRelayManagerDeps
   private recovery: WslRelayRecovery
+  private idle: WslRelayIdleStop
   private states = new Map<string, WslRelayDistroState>()
   private stoppedByHooksOff = new Map<string, string | undefined>()
   private defaultDistro: string | null = null
@@ -44,24 +47,16 @@ export class WslHookRelayManager {
   private warnedBundleMissing = false
   constructor(deps: Partial<WslHookRelayManagerDeps> = {}) {
     this.deps = { ...defaultWslHookRelayDeps, ...deps }
-    this.recovery = new WslRelayRecovery({
-      isDistroRunning: (distro) => this.deps.isDistroRunning(distro),
-      warn: (message) => this.deps.warn(message),
-      isDisposed: () => this.disposed,
-      isCurrent: (state) => this.states.get(wslHookRelayStateKey(state.distro)) === state,
-      restart: (distro) => this.ensureForDistro(distro, this.stateFor(distro)?.codexHomePath),
-      dropState: (state) => {
-        const key = wslHookRelayStateKey(state.distro)
-        if (this.states.get(key) === state) {
-          this.states.delete(key)
-        }
-      }
+    const owner = { deps: () => this.deps, states: this.states, isDisposed: () => this.disposed }
+    this.recovery = createWslRelayRecoveryForManager({
+      ...owner,
+      ensure: (...args) => this.ensureForDistro(...args)
     })
+    this.idle = createWslRelayIdleStopForManager({ ...owner, recovery: this.recovery })
   }
   setManagedHookSettingsResolver(resolve: WslHookRelayManagerDeps['managedHookSettings']): void {
     this.deps.managedHookSettings = resolve
   }
-  /** Fire-and-forget from every WSL PTY spawn-env build; errors breadcrumb. */
   async ensureForDistro(
     distro: string | null,
     codexHomePath?: string | null,
@@ -78,10 +73,15 @@ export class WslHookRelayManager {
   private stateFor(distro: string | null): WslRelayDistroState | undefined {
     return this.states.get(wslHookRelayStateKey(distro ?? this.defaultDistro ?? ''))
   }
-  /** Guest endpoint path once install completes. */
   getGuestEndpointFilePath(distro: string | null): string | null {
     return this.stateFor(distro)?.connectedAt
       ? (this.stateFor(distro)?.guestEndpointFilePath ?? null)
+      : null
+  }
+  getClaudeAgentView(distro: string | null): { pluginDir: string; configDir: string } | null {
+    const state = this.stateFor(distro)
+    return state?.claudeAgentViewDir && state.claudeConfigDir
+      ? { pluginDir: state.claudeAgentViewDir, configDir: state.claudeConfigDir }
       : null
   }
   getOpenCodeOverlayDir(
@@ -97,10 +97,10 @@ export class WslHookRelayManager {
     const state = this.stateFor(distro)
     return kind === 'pi' ? (state?.piAgentDir ?? null) : (state?.ompStatusExtension ?? null)
   }
-  /** Kills every live relay. Non-permanent (hooks switched off mid-session) leaves the
-   *  manager reusable, so re-enabling hooks can start relays again without an app restart. */
+  /** Nonpermanent disposal allows relays to restart when hooks are re-enabled. */
   disposeAll({ permanent = true }: { permanent?: boolean } = {}): void {
     this.disposed ||= permanent
+    this.idle.dispose(permanent)
     for (const state of this.states.values()) {
       this.recovery.clearTimers(state)
       state.mux?.dispose()
@@ -111,8 +111,7 @@ export class WslHookRelayManager {
     }
     this.states.clear()
   }
-  /** Restarts what a hooks-off teardown stopped. Skips distros the user has since shut
-   *  down: `wsl -d` BOOTS a stopped distro, and nothing in it is waiting on status. */
+  /** Resume only running distros: wsl -d would boot one the user shut down. */
   resumeStoppedRelays(): void {
     resumeWslStoppedRelays(this.stoppedByHooksOff, this.deps.isDistroRunning, (distro, home) =>
       this.ensureForDistro(distro, home)
@@ -128,6 +127,7 @@ export class WslHookRelayManager {
       return
     }
     const key = wslHookRelayStateKey(distro)
+    this.idle.restoreParked(distro)
     const existing = this.states.get(key)
     if (requestedCodexHomePath) {
       recordManagedWslCodexHome(distro, requestedCodexHomePath)
@@ -175,6 +175,8 @@ export class WslHookRelayManager {
       distro,
       phase: 'starting',
       failures: existing?.failures ?? 0,
+      claudeAgentViewDir: existing?.claudeAgentViewDir,
+      claudeConfigDir: existing?.claudeConfigDir,
       opencodeOverlayDir: existing?.opencodeOverlayDir,
       opencode2OverlayDir: existing?.opencode2OverlayDir,
       piAgentDir: existing?.piAgentDir,
@@ -230,7 +232,10 @@ export class WslHookRelayManager {
       mux,
       child,
       distro: state.distro,
-      ingest: this.deps.ingest,
+      ingest: this.idle.noteTraffic(state, this.deps.ingest),
+      beginSession: this.deps.beginRelaySession,
+      receiveClaudeAgentView: (body) =>
+        isWslHookRelayAllowed(this.deps) ? (this.deps.receiveClaudeAgentView?.(body) ?? {}) : {},
       warn: this.deps.warn,
       onDead: (reason) => {
         if (this.disposed || state.mux !== mux) {
@@ -272,14 +277,13 @@ export class WslHookRelayManager {
     }
     state.phase = 'running'
     state.connectedAt = Date.now()
+    this.idle.update(state)
     this.recovery.scheduleOneShotReinstall(state, REINSTALL_ONE_SHOT_DELAY_MS, () => {
       void maybeRerunWslRelayGuestInstall(this.deps, state)
     })
     void mux.request(AGENT_HOOK_REQUEST_REPLAY_METHOD).catch(() => {})
   }
-  /** Records + breadcrumbs the failure and always arms the restart timer —
-   *  one failed relaunch must not end self-recovery; the timer's
-   *  distro-running probe keeps this from booting stopped distros. */
+  /** Keep retrying failed relaunches while distro-running checks prevent unwanted VM starts. */
   private markFailed(
     state: WslRelayDistroState,
     message: string,

@@ -17,6 +17,7 @@ import { latestSessionConversationTurn } from './ai-vault-session-display'
 import { SessionActionMenuItems } from './AiVaultSessionActionMenuItems'
 import { SessionRowTrailingActions } from './SessionRowTrailingActions'
 import { aiVaultSessionDeleteBlockedReason } from './ai-vault-session-deletability'
+import { useAiVaultSessionDeleteHost } from './ai-vault-session-delete-action'
 import type { AiVaultSessionResumeActions } from './ai-vault-session-resume'
 import type { AiVaultSessionWorktreeInfo } from './ai-vault-session-worktree'
 import {
@@ -24,7 +25,7 @@ import {
   getSessionDetailsId,
   SessionMetadata
 } from './ai-vault-session-row-display'
-import type { AgentStatusState } from '../../../../shared/agent-status-types'
+import type { AgentDotState } from '@/components/AgentStateDot'
 import type { AiVaultSearchHit } from '../../../../shared/ai-vault-search-types'
 import { AiVaultSearchEvidence } from './AiVaultSearchEvidence'
 import { useAiVaultSessionDisplayTitle } from './use-ai-vault-session-display-title'
@@ -65,7 +66,7 @@ export function VaultSessionRow({
   onPick
 }: {
   session: AiVaultSession
-  liveState: AgentStatusState | null
+  liveState: AgentDotState | null
   resumeStartup: AiVaultResumeStartup
   realHomeResumeStartup: AiVaultResumeStartup
   worktreeInfo: AiVaultSessionWorktreeInfo | null
@@ -107,9 +108,9 @@ export function VaultSessionRow({
   const title = useAiVaultSessionDisplayTitle(session)
   const detailsId = getSessionDetailsId(session.id)
   const latestTurn = latestSessionConversationTurn(session)
-  // Computed once so the dropdown menu and the context menu never disagree.
+  const deleteHost = useAiVaultSessionDeleteHost(session)
   const deleteBlockedReason = onRequestDelete
-    ? aiVaultSessionDeleteBlockedReason(session)
+    ? aiVaultSessionDeleteBlockedReason(session, deleteHost)
     : translate(
         'auto.components.right.sidebar.AiVaultSearchEvidence.sourceActionsUnavailable',
         'The transcript source is unavailable.'
@@ -137,8 +138,7 @@ export function VaultSessionRow({
         sessionFilePath: session.filePath,
         sessionExecutionHostId: session.executionHostId,
         codexHome: session.codexHome,
-        // Why: always sent (null when absent) so drop targets can tell "no cwd"
-        // from "payload predates the repin field".
+        // Send null for missing cwd so consumers can distinguish absence from older payloads without repinning support.
         sessionCwd: session.cwd ?? null,
         ...(resumeStartup.env ? { env: resumeStartup.env } : {}),
         ...(resumeStartup.envToDelete ? { envToDelete: resumeStartup.envToDelete } : {}),
@@ -157,9 +157,7 @@ export function VaultSessionRow({
         !detailsExpanded && 'min-h-[98px]'
       )}
       onClick={(event) => {
-        // Radix portals this row's menus out of its DOM, but React still
-        // bubbles their clicks here — without this, choosing Delete expands
-        // the row behind the dialog.
+        // Ignore portaled React clicks outside the row DOM so menu actions cannot expand the row.
         const target = event.target
         if (target instanceof Node && !event.currentTarget.contains(target)) {
           return
@@ -175,8 +173,7 @@ export function VaultSessionRow({
         <div
           className={cn(
             'min-w-0 text-[13px] font-medium leading-5 text-foreground',
-            // Why: only the title is the resume drag handle — expanded
-            // details/preview need text selection and a normal pointer.
+            // Only the title drags; previews/details retain normal text selection.
             draggable && 'cursor-grab active:cursor-grabbing',
             detailsExpanded ? 'line-clamp-2 [overflow-wrap:anywhere]' : 'line-clamp-1'
           )}

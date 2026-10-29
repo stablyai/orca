@@ -5,10 +5,7 @@ import { ReviewNotesAnimatedVisual } from './ReviewNotesAnimatedVisual'
 import { ReviewPRViewAnimatedVisual } from './ReviewPRViewAnimatedVisual'
 import { ReviewShipAnimatedVisual } from './ReviewShipAnimatedVisual'
 
-// Why: thin dispatcher — picks the sub-step page. Each page renders its own
-// scoped <style> tag. The `key` prop forces unmount/remount so each page's
-// effect cleanup fires cleanly when the user flips between Notes, PR view,
-// and Ship.
+// Key each page so switching steps runs animation cleanup before remounting.
 export function ReviewAnimatedVisual(props: {
   reducedMotion: boolean
   activeStepId: ReviewStepId

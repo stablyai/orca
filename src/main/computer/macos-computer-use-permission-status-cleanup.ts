@@ -2,7 +2,7 @@ import { runProcess } from '@orca/process-host'
 import { escapeRegex } from '../../shared/string-utils'
 
 export async function stopMacOSPermissionStatusHelper(statusPath: string): Promise<void> {
-  // The unique status path distinguishes this completed probe from concurrent probes and setup helpers.
+  // The unique status path isolates this completed probe from other probes and setup helpers.
   await runProcess({
     program: '/usr/bin/pkill',
     args: [

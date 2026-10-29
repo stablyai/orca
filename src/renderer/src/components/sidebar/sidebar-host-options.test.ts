@@ -75,6 +75,38 @@ describe('sidebar host options', () => {
     })
   })
 
+  it('says why an SSH host failed, as Settings does (#29648)', () => {
+    const failed = (state: Pick<SshConnectionState, 'status'> & Partial<SshConnectionState>) =>
+      buildSidebarHostOptions({
+        repos: [],
+        sshTargetLabels: new Map([['ssh-1', 'Builder']]),
+        sshConnectionStates: new Map([
+          ['ssh-1', { targetId: 'ssh-1', error: null, reconnectAttempt: 0, ...state }]
+        ]),
+        settings: { activeRuntimeEnvironmentId: null }
+      }).find((host) => host.id === 'ssh:ssh-1')
+
+    expect(
+      failed({ status: 'auth-failed', error: 'All configured authentication methods failed' })
+    ).toMatchObject({
+      health: 'error',
+      detail: 'SSH',
+      failureReason: 'All configured authentication methods failed'
+    })
+    expect(
+      failed({
+        status: 'error',
+        error: 'raw',
+        managedServer: {
+          kind: 'relay',
+          reason: 'refused',
+          detail: 'This SSH host cannot move yet: automations (1).'
+        }
+      })?.failureReason
+    ).toContain('automations (1)')
+    expect(failed({ status: 'connected' })).not.toHaveProperty('failureReason')
+  })
+
   it('includes the focused runtime compatibility host', () => {
     const hosts = buildSidebarHostOptions({
       repos: [],
@@ -114,9 +146,7 @@ describe('sidebar host options', () => {
       repos: [],
       sshTargetLabels: new Map(),
       settings: { activeRuntimeEnvironmentId: 'runtime-1' },
-      // Why: protocol 0 is below the minimum compatible server version, so the
-      // registry must surface a 'server-too-old' blocked verdict + health when
-      // the live status map is passed.
+      // Protocol zero must produce a blocked server-too-old verdict from the live status map.
       runtimeStatusByEnvironmentId: new Map([
         [
           'runtime-1',

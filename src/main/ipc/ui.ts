@@ -1,14 +1,16 @@
-import { normalizeJiraQuickFilterState } from '../../shared/jira-quick-filters'
+import { normalizeJiraQuickFilterState } from '../../shared/jira/jira-quick-filters'
 import { JiraQuickFilterStateParam } from '../../shared/rpc-contract/jira-quick-filter-params'
 import {
   normalizeJiraSavedFilterState,
   mutateJiraSavedFilterState
-} from '../../shared/jira-saved-filters'
+} from '../../shared/jira/jira-saved-filters'
 import { JiraSavedFilterMutationParam } from '../../shared/rpc-contract/jira-saved-filter-params'
 import { BrowserWindow, ipcMain, webContents, type WebContents } from 'electron'
 import type { Store } from '../persistence'
 import type { PersistedUIState } from '../../shared/persisted-ui-state-types'
 import { isFeatureInteractionId } from '../../shared/feature-interactions'
+import { isWslMoveWindowWriteHeld } from '../persistence/moving-wsl-projects/wsl-move-window-write-hold'
+import { isTrustedMainRendererSender } from './main-renderer-sender-trust'
 
 let trustedUIRendererWebContentsId: number | null = null
 
@@ -34,7 +36,7 @@ export function sendToTrustedUIRenderer(
 export function getTrustedUIRendererWebContents(
   excludedWebContentsId?: number
 ): WebContents | null {
-  // Why: exact targeting avoids waking retained browser/utility windows that cannot consume app UI events.
+  // Target only trusted app UI; retained browser/utility windows cannot consume these events.
   const rendererId = trustedUIRendererWebContentsId
   if (rendererId == null || rendererId === excludedWebContentsId) {
     return null
@@ -55,16 +57,7 @@ export function registerUIHandlers(
   store: Store,
   options: { isDashboardPopoutRenderer?: (sender: WebContents) => boolean } = {}
 ): void {
-  // Why: UI view-state is shared between the desktop renderer and mobile (ui.set
-  // RPC). Broadcast every change so the desktop re-hydrates when mobile (or
-  // another window) updates it — bi-directional sync, mirroring settings:changed.
-  store.onUIChanged((ui) => {
-    for (const window of BrowserWindow.getAllWindows()) {
-      if (!window.isDestroyed()) {
-        window.webContents.send('ui:stateChanged', ui)
-      }
-    }
-  })
+  store.onUIChanged((ui) => sendToTrustedUIRenderer('ui:stateChanged', ui))
 
   ipcMain.handle('ui:getJiraQuickFilters', () =>
     normalizeJiraQuickFilterState(store.getUI().jiraQuickFilterState)
@@ -88,7 +81,10 @@ export function registerUIHandlers(
   })
 
   ipcMain.handle('ui:set', (_event, args: Partial<PersistedUIState>) => {
-    store.updateUI(args)
+    // A window a WSL move rewrote under is stale until main reloads it.
+    if (!isWslMoveWindowWriteHeld()) {
+      store.updateUI(args)
+    }
   })
 
   ipcMain.handle('ui:recordFeatureInteraction', (_event, id: unknown) => {
@@ -103,8 +99,7 @@ export function registerUIHandlers(
     if (!isTrustedUIRenderer(event.sender)) {
       return
     }
-    // Why: coordinated renderer paste falls back here only after no Orca owner
-    // claims the app-menu action; paste back into the requesting window only.
+    // Unclaimed app-menu paste falls back only to the requesting window.
     const webContents = BrowserWindow.fromWebContents(event.sender)?.webContents
     if (options?.mode === 'paste-and-match-style') {
       webContents?.pasteAndMatchStyle()
@@ -131,23 +126,5 @@ export function registerUIHandlers(
 }
 
 export function isTrustedUIRenderer(sender: WebContents): boolean {
-  if (sender.isDestroyed() || sender.getType() !== 'window') {
-    return false
-  }
-  if (trustedUIRendererWebContentsId != null) {
-    return sender.id === trustedUIRendererWebContentsId
-  }
-
-  const senderUrl = sender.getURL()
-  if (process.env.ELECTRON_RENDERER_URL) {
-    try {
-      return new URL(senderUrl).origin === new URL(process.env.ELECTRON_RENDERER_URL).origin
-    } catch {
-      return false
-    }
-  }
-
-  // Why: packaged fallback must be tied to the created main window id, not any
-  // file:// document that can obtain this IPC channel.
-  return false
+  return isTrustedMainRendererSender(sender, trustedUIRendererWebContentsId)
 }

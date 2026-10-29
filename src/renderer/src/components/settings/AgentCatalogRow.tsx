@@ -10,6 +10,7 @@ import type { AgentSessionSourceHomeControl } from './codex-session-source-home-
 import { AgentSessionSourceHomeInput } from './codex-session-source-home-control'
 import { resolveTuiAgentPermissionMode } from '../../../../shared/tui-agent-permissions'
 import { stringifyAgentDefaultEnvDraft } from './agent-default-env-draft'
+import { liftAgentPermissionArgs } from '../../../../shared/tui-agent-permission-lift'
 import {
   AgentPermissionExceptionBadge,
   AgentRowPermissionControl,
@@ -20,6 +21,11 @@ import {
   AgentDefaultArgsInput,
   AgentDefaultEnvInput
 } from './AgentLaunchDefaultsEditor'
+import {
+  agentPermissionChoiceLabel,
+  AgentPermissionMenu,
+  type AgentPermissionChoiceRow
+} from './AgentPermissionChoiceControls'
 
 type AgentAvailability = 'enabled' | 'disabled'
 
@@ -68,6 +74,7 @@ export type AgentCatalogRowProps = {
   defaultCmd: string
   defaultArgs: string
   defaultEnv: Record<string, string>
+  hasDefaultEnv?: boolean
   isDetected: boolean
   isEnabled: boolean
   isDefault: boolean
@@ -78,11 +85,15 @@ export type AgentCatalogRowProps = {
   onSetEnabled: (enabled: boolean) => void
   onSaveOverride: (value: string) => void | Promise<void>
   onSaveArgs: (value: string) => void | Promise<void>
-  onSaveEnv: (value: Record<string, string>) => void
+  onSaveEnv: (value: Record<string, string>) => void | Promise<void>
   sessionSourceHome?: AgentSessionSourceHomeControl
   environmentNames?: readonly string[]
   /** Absent for agents without a configurable permission mode on this host. */
   permission?: AgentRowPermission
+  /** On hosts that store the permission apart from Arguments; replaces `permission`. */
+  permissionChoice?: AgentPermissionChoiceRow
+  /** The text a terminal launch gets, when it differs from the editable Arguments. */
+  launchArgs?: string
   environmentEditor?: React.ReactNode
 }
 
@@ -93,6 +104,7 @@ export function AgentCatalogRow({
   defaultCmd,
   defaultArgs,
   defaultEnv,
+  hasDefaultEnv,
   isDetected,
   isEnabled,
   isDefault,
@@ -107,7 +119,9 @@ export function AgentCatalogRow({
   sessionSourceHome,
   environmentNames,
   environmentEditor,
-  permission
+  permission,
+  permissionChoice,
+  launchArgs = argsOverride
 }: AgentCatalogRowProps): React.JSX.Element {
   const envSummary = environmentNames?.join(' ') ?? stringifyAgentDefaultEnvDraft(envOverride)
   const defaultEnvSummary = stringifyAgentDefaultEnvDraft(defaultEnv)
@@ -132,7 +146,7 @@ export function AgentCatalogRow({
       )?.focus()
     })
   }
-  const expandable = isDetected || permission !== undefined
+  const expandable = isDetected || permission !== undefined || permissionChoice !== undefined
 
   return (
     <div className={cn('py-3', !isDetected && 'opacity-70')}>
@@ -158,14 +172,26 @@ export function AgentCatalogRow({
             ) : (
               defaultCmd
             )}
-            {argsOverride && <span className="ml-1.5 text-foreground/70">{argsOverride}</span>}
+            {launchArgs && <span className="ml-1.5 text-foreground/70">{launchArgs}</span>}
             {envSummary && <span className="ml-1.5 text-foreground/60">{envSummary}</span>}
           </div>
         </div>
 
-        <div className="ml-auto flex shrink-0 items-center gap-1.5">
+        <div className="ml-auto flex max-w-full flex-wrap items-center justify-end gap-1.5">
+          {permissionChoice?.source === 'agent' && (
+            <div className="mr-3 flex h-7 items-center">
+              <button
+                type="button"
+                onClick={openPermission}
+                className="rounded-full outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+              >
+                <SettingsBadge tone="accent">
+                  {agentPermissionChoiceLabel(permissionChoice.choice, label)}
+                </SettingsBadge>
+              </button>
+            </div>
+          )}
           {permission && permission.mode !== permission.expectedMode && (
-            // Right-aligned against the controls so badges line up without reserving width on every row.
             <div className="mr-3 flex h-7 items-center">
               <AgentPermissionExceptionBadge
                 label={label}
@@ -174,12 +200,12 @@ export function AgentCatalogRow({
               />
             </div>
           )}
-          <div className="grid grid-cols-[max-content_6.5rem_1.75rem_1.75rem] items-center gap-1.5">
-            <AgentAvailabilityControl
-              label={label}
-              isEnabled={isEnabled}
-              onSetEnabled={onSetEnabled}
-            />
+          <AgentAvailabilityControl
+            label={label}
+            isEnabled={isEnabled}
+            onSetEnabled={onSetEnabled}
+          />
+          <div className="grid grid-cols-[minmax(6.5rem,max-content)_1.75rem_1.75rem] items-center gap-1.5">
             <div className="flex justify-start">
               {isDetected && isEnabled && (
                 <Button
@@ -187,6 +213,7 @@ export function AgentCatalogRow({
                   variant={isDefault ? 'secondary' : 'ghost'}
                   size="xs"
                   onClick={onSetDefault}
+                  aria-pressed={isDefault}
                   title={
                     isDefault
                       ? translate('settings.agents.clearDefault', 'Clear default agent')
@@ -197,10 +224,8 @@ export function AgentCatalogRow({
                   }
                   className="h-7 w-full justify-center gap-1 text-xs"
                 >
-                  {isDefault && <Check className="size-3" />}
-                  {isDefault
-                    ? translate('auto.components.settings.AgentsPane.24e032fa34', 'Default')
-                    : translate('auto.components.settings.AgentsPane.959b67385b', 'Set default')}
+                  <Check className={cn('size-3', !isDefault && 'invisible')} />
+                  {translate('auto.components.settings.AgentsPane.24e032fa34', 'Default')}
                 </Button>
               )}
             </div>
@@ -246,6 +271,11 @@ export function AgentCatalogRow({
 
       {expandable && cmdOpen && (
         <div className="mt-3 space-y-3 pl-10">
+          {permissionChoice && (
+            <div ref={permissionRef}>
+              <AgentPermissionMenu agentId={agentId} label={label} permission={permissionChoice} />
+            </div>
+          )}
           {permission && (
             <AgentRowPermissionControl
               label={label}
@@ -263,23 +293,45 @@ export function AgentCatalogRow({
               />
               <div className="mt-2">
                 <AgentDefaultArgsInput
-                  key={`${agentId}:${argsOverride}`}
+                  key={agentId}
                   defaultArgs={defaultArgs}
                   argsOverride={argsOverride}
                   onSaveArgs={onSaveArgs}
+                  permissionChip={
+                    permissionChoice?.flag && !permissionChoice.argsSetPermission
+                      ? {
+                          label,
+                          flag: permissionChoice.flag,
+                          removeRecipe: (text) => {
+                            const lifted = liftAgentPermissionArgs(agentId, text)
+                            return lifted.choice !== null ? lifted.args : null
+                          },
+                          onRemove: () => permissionChoice.onSelect('own')
+                        }
+                      : undefined
+                  }
+                  note={
+                    permissionChoice?.argsSetPermission
+                      ? translate(
+                          'settings.agents.permissionArgsTerminalOnly',
+                          'These arguments may control {{agent}}’s terminal permissions, so Orca adds no flag. Chats use the Permissions choice above.',
+                          { agent: label }
+                        )
+                      : undefined
+                  }
                 />
               </div>
-              {environmentEditor ??
-                ((defaultEnvSummary || envSummary) && (
-                  <div className="mt-2">
-                    <AgentDefaultEnvInput
-                      key={`${agentId}:${envSummary}`}
-                      defaultEnv={defaultEnv}
-                      envOverride={envOverride}
-                      onSaveEnv={onSaveEnv}
-                    />
-                  </div>
-                ))}
+              {environmentEditor ?? (
+                <div className="mt-2">
+                  <AgentDefaultEnvInput
+                    key={agentId}
+                    defaultEnv={defaultEnv}
+                    showEmpty={hasDefaultEnv}
+                    envOverride={envOverride}
+                    onSaveEnv={onSaveEnv}
+                  />
+                </div>
+              )}
               {sessionSourceHome && (
                 <div className="mt-2">
                   <AgentSessionSourceHomeInput

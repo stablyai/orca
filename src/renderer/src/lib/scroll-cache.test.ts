@@ -22,7 +22,6 @@ describe('setWithLRU', () => {
     for (let i = 0; i <= 20; i++) {
       setWithLRU(map, `key-${i}`, i)
     }
-    // 21 inserts with default limit of 20 → oldest (key-0) evicted
     expect(map.size).toBe(20)
     expect(map.has('key-0')).toBe(false)
     expect(map.has('key-1')).toBe(true)
@@ -45,9 +44,7 @@ describe('setWithLRU', () => {
     setWithLRU(map, 'a', 1, 3)
     setWithLRU(map, 'b', 2, 3)
     setWithLRU(map, 'c', 3, 3)
-    // Touch 'a' to move it to the end
     setWithLRU(map, 'a', 10, 3)
-    // Now 'b' is the oldest — inserting 'd' should evict 'b', not 'a'
     setWithLRU(map, 'd', 4, 3)
     expect(map.has('a')).toBe(true)
     expect(map.has('b')).toBe(false)
@@ -77,12 +74,10 @@ describe('setWithLRU', () => {
 
   it('evicts only one entry per insert even when far over limit', () => {
     const map = new Map<string, number>()
-    // Pre-fill with 5 entries
     for (let i = 0; i < 5; i++) {
       map.set(`key-${i}`, i)
     }
-    // Insert with a limit of 3 — only evicts one, leaving 5 entries
-    // (LRU eviction is per-insert, not bulk)
+    // Lowering the limit still evicts only one entry per insertion, never bulk-prunes.
     setWithLRU(map, 'new', 99, 3)
     expect(map.size).toBe(5)
     expect(map.has('key-0')).toBe(false)

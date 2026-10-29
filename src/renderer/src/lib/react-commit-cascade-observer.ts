@@ -1,18 +1,4 @@
-/**
- * Installs the per-commit hook that feeds the cascade telemetry.
- *
- * Why the devtools callback and not <Profiler> or a root effect: Profiler is
- * stripped from production react-dom, and a dependency-less useLayoutEffect
- * fires per render of its OWN component, not per commit — measured, a root
- * effect saw 1 of 11 commits a leaf drove. react-dom calls onCommitFiberRoot
- * once per commit per root in both bundles, inside its own try/catch, and hands
- * us the FiberRoot whose `pendingLanes` drive the reset rule.
- *
- * Ordering: this module only WRAPS `onCommitFiberRoot`, which react-dom re-reads
- * at every commit, so it may be imported anywhere. The deadline belongs to
- * react-devtools-commit-hook-shim, which must merely exist before react-dom's
- * module evaluation and is therefore the entries' first import.
- */
+/** Use onCommitFiberRoot in both React bundles: production strips Profiler and root effects miss leaf commits. Wrap any time because React rereads the callback; only the import-free hook shim must precede react-dom evaluation. */
 import { observeReactCommit } from '@/lib/react-commit-cascade-telemetry'
 import { recordRendererCrashBreadcrumb } from '@/lib/crash-breadcrumb-recorder'
 import {
@@ -44,7 +30,7 @@ function scheduleInstallSelfCheck(): void {
       recordRendererCrashBreadcrumb(REACT_COMMIT_CASCADE_UNINSTALLED_BREADCRUMB)
     }
   }, REACT_COMMIT_CASCADE_INSTALL_CHECK_MS)
-  // Why unref where available: the check must never hold a renderer teardown open.
+  // Unref where supported so diagnostics never hold renderer teardown open.
   ;(installCheckTimer as { unref?: () => void })?.unref?.()
 }
 
@@ -56,8 +42,7 @@ export function installReactCommitCascadeObserver(): void {
     const hook = ensureReactDevtoolsCommitHook()
     if (hook) {
       installObserverOnHook(hook)
-      // Why only after the assignment: a hook that refuses it stays uninstalled,
-      // so a later call can retry rather than being gated out.
+      // Mark installed only after assignment succeeds so failed hooks remain retryable.
       installed = true
     }
   } catch {
@@ -71,16 +56,11 @@ function installObserverOnHook(hook: ReactDevtoolsCommitHook): void {
   const previous = hook.onCommitFiberRoot
   // Fixed arity, not rest args: this runs on every commit and must not allocate.
   hook.onCommitFiberRoot = (rendererId, root, priorityLevel, didError) => {
-    // Why our own try/catch when react-dom already has one: theirs would
-    // swallow the rest of this callback, silently unhooking DevTools and
-    // Fast Refresh from the chain below.
+    // Catch locally or React’s outer catch skips the remaining DevTools/Fast Refresh callbacks.
     try {
       commitsSeen += 1
       const pendingLanes = (root as FiberRootLike | null)?.pendingLanes
-      // Why 0 and not a skip: a React shape change that hides pendingLanes must
-      // end the cascade, not freeze a stale depth that later commits push over
-      // the limit. 0 is the lane value that means "nothing pending", so it
-      // takes the same reset path and this fails safe to no crumb.
+      // Missing pendingLanes resets through zero instead of freezing stale depth; diagnostics must go quiet on React shape changes.
       observeReactCommit(root, typeof pendingLanes === 'number' ? pendingLanes : 0)
     } catch {
       // Best-effort crash evidence only.

@@ -11,9 +11,7 @@ export function openWorkspaceCreationComposerWithTourHandoff(): void {
     state.activeContextualTourStepIndex === 1
 
   if (shouldHandoffFromAgentSessionsTour && state.activeContextualTourSource) {
-    // Why: clicking the highlighted create button is the final tour action.
-    // Clear it synchronously so the composer tour request is not blocked by
-    // a modal-cancellation effect that may run after the handoff retry window.
+    // Complete the final create-button action synchronously so modal cancellation cannot block the composer tour handoff.
     state.detachContextualTourSource('workspace-agent-sessions', state.activeContextualTourSource)
     state.completeContextualTour('workspace-agent-sessions')
   }

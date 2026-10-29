@@ -208,9 +208,10 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
               coordinatorHandle: 'Run home (relayed by Orca)',
               workerHandle: terminalHandle,
               devMode: params.devMode,
-              // Why the worker host's own setting: enforcement runs here, with this
-              // host's code, against this host's cap.
+              // Enforce the execution host's nesting cap using its own setting.
               canDispatchSubWorkers: (params.depth ?? 1) < runtime.getNestedWorkerMaxDepth(),
+              heartbeatIntervalMinutes: runtime.getOrchestrationHeartbeatMinutes(),
+              subWorkersInOwnRun: true,
               cliCommand: runtime.getTerminalOrchestrationCliCommand(terminalHandle)
             })
           }

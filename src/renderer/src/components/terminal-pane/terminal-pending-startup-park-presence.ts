@@ -4,10 +4,7 @@ import { useAppStore } from '../../store'
 
 const EMPTY_PENDING_STARTUP: Readonly<Record<string, unknown>> = Object.freeze({})
 
-/** Park policy only asks whether *these* tabs have a pending startup, so this
- *  subscribes to a worktree-scoped presence record instead of the app-global one:
- *  a startup write for any other worktree then cannot re-render this one. Empty
- *  in the steady state, so the subscription allocates nothing. */
+/** Subscribe only to this worktree’s startup presence so unrelated startups cannot rerender it; empty steady state allocates nothing. */
 export function usePendingStartupParkPresence(
   terminalTabs: readonly TerminalTab[]
 ): Readonly<Record<string, unknown>> {

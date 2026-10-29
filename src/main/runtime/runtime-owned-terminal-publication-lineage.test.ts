@@ -5,13 +5,20 @@ import type { RuntimeMobileSessionTabsResult } from '../../shared/runtime-types'
 const { OrcaRuntimeService } = await import('./orca-runtime-test-mocks.spec')
 await import('./orca-runtime-test-lifecycle.spec')
 const { store, TEST_WORKTREE_ID } = await import('./orca-runtime-test-fixtures.spec')
+const { committingSpawn } = await import('./bind-first-pane.test-fixture')
 
 it.each(['renderer:active-generation', 'headless:active-generation'])(
   'keeps %s live when runtime-owned creation supplements its inventory',
   async (publicationEpoch) => {
-    const runtime = new OrcaRuntimeService(store)
+    // Its own copy: layout-owner builds bind the created pane into this store's session.
+    const runtime = new OrcaRuntimeService({ ...store })
     runtime.setPtyController({
-      spawn: vi.fn().mockResolvedValue({ id: 'pty-runtime-fallback' }),
+      spawn: committingSpawn(
+        runtime,
+        vi.fn(async (_args: { worktreeId?: string; tabId?: string; leafId?: string }) => ({
+          id: 'pty-runtime-fallback'
+        }))
+      ),
       write: () => true,
       kill: () => true,
       getForegroundProcess: async () => null

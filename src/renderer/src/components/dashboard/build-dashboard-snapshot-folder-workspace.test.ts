@@ -6,7 +6,10 @@ import type { ProjectGroup } from '../../../../shared/project-group-types'
 import type { Tab } from '../../../../shared/tab-types'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
-import { buildDashboardSnapshot, type DashboardSnapshotState } from './build-dashboard-snapshot'
+import {
+  buildDashboardSnapshot,
+  type DashboardSnapshotInput as DashboardSnapshotState
+} from './build-dashboard-snapshot'
 import { buildDashboardBucketCounts } from './build-dashboard-bucket-counts'
 
 const NOW = 2_000_000_000
@@ -79,6 +82,7 @@ function entry(): AgentStatusEntry {
 
 function state(): DashboardSnapshotState {
   return {
+    chatNames: new Map(),
     repos: [],
     worktreesByRepo: {},
     folderWorkspaces: [folderWorkspace()],
@@ -100,7 +104,7 @@ function state(): DashboardSnapshotState {
     runtimePaneTitlesByTabId: {},
     acknowledgedAgentsByPaneKey: {},
     settings: null
-  } as unknown as DashboardSnapshotState
+  }
 }
 
 describe('buildDashboardSnapshot folder workspaces', () => {

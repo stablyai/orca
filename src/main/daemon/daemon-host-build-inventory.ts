@@ -6,6 +6,8 @@ import {
   buildDaemonHostManifest,
   daemonHostExeName,
   daemonHostProcessPackageDir,
+  daemonHostWindowsRegistryDir,
+  WINDOWS_REGISTRY_REQUIRED,
   destPath,
   toPosixRelative,
   type DaemonHostSources
@@ -84,7 +86,7 @@ function processHostExportsExist(packageDir: string): boolean {
   )
 }
 
-/** Hash code and its file list, without rereading the 260MB Electron image; unchanged files reuse cached hashes. */
+/** Fingerprint code and layout without hashing the large Electron executable. */
 export function collectDaemonHostBuildInventory(
   sources: DaemonHostSources
 ): DaemonHostBuildInventory | null {
@@ -110,7 +112,15 @@ export function collectDaemonHostBuildInventory(
       ...collectCodeFiles(join(processHostDir, 'package.json'), `${packageRel}/package.json`)
     )
     files.push(...collectCodeFiles(join(processHostDir, 'dist'), `${packageRel}/dist`))
-    files.sort((left, right) => left.path.localeCompare(right.path))
+    const registryDir = daemonHostWindowsRegistryDir(sources)
+    const registryRel = toPosixRelative(sources.appDir, registryDir)
+    for (const relative of WINDOWS_REGISTRY_REQUIRED) {
+      files.push({
+        path: `${registryRel}/${relative}`,
+        sha256: hashDaemonHostFile(destPath(registryDir, relative))
+      })
+    }
+    files.sort((left, right) => left.path.localeCompare(right.path, 'en'))
     const inventory = {
       runtimeVersion: runtimeVersion(),
       executableName: daemonHostExeName(sources.execPath),
@@ -190,6 +200,13 @@ export function daemonHostBuildRuntimeMatches(
     inventory.runtimeVersion === runtimeVersion() &&
     inventory.executableName === daemonHostExeName(sources.execPath) &&
     inventory.entryRelPath === sources.entryRelPath &&
+    WINDOWS_REGISTRY_REQUIRED.every((relative) =>
+      inventory.files.some(
+        (file) =>
+          file.path ===
+          `${toPosixRelative(sources.appDir, daemonHostWindowsRegistryDir(sources))}/${relative}`
+      )
+    ) &&
     inventory.files.some(
       (file) =>
         file.path ===

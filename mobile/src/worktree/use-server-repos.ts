@@ -5,10 +5,7 @@ import { listServerRepos, type ListedRepo } from './server-repos'
 
 type ServerRepo<Repo> = Repo & { executionHostId: ExecutionHostId }
 
-/**
- * Each reachable server's repos by host, filled in as each server answers, so a slow server never
- * holds back the desktop's own list or another server's. A new `generation` re-reads them.
- */
+// Install each server’s answer independently so a slow server cannot block other lists; generation forces a refresh.
 export function useServerRepos<Repo extends ListedRepo>(
   serverClients: ReadonlyMap<ExecutionHostId, RpcClient>,
   active: boolean,
@@ -19,7 +16,6 @@ export function useServerRepos<Repo extends ListedRepo>(
   )
 
   useEffect(() => {
-    // A server the phone can no longer reach takes its repos with it.
     setReposByHost((previous) => {
       const kept = [...previous].filter(([host]) => serverClients.has(host))
       return kept.length === previous.size ? previous : new Map(kept)

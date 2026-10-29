@@ -37,8 +37,7 @@ export function ProviderDetailsMenu({
   open?: boolean
   onOpenChange?: (open: boolean) => void
   children?: React.ReactNode
-  // When set, render as a drill-in submenu (used by the consolidated Usage
-  // popover) with triggerContent as the full-width row instead of a segment.
+  // Drill into this provider from UsageRosterPanel using a full-width trigger row.
   asSubmenu?: boolean
   triggerContent?: React.ReactNode
 }): React.JSX.Element {

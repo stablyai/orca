@@ -8,11 +8,7 @@ import { resumeRunView, type ResumeRunFilter } from './native-chat-resume-run-vi
 import { ResumeRunStatusIcon } from './NativeChatResumeRunStatusIcon'
 import { ResumeRunSummary } from './NativeChatResumeRunSummary'
 
-/**
- * The dialog's view of a run it is following: its title, the progress line and filters, the rows
- * in the order that matters, and each row's status icon. Null when no run is being followed, so
- * the dialog is then exactly the offer it was.
- */
+/** Project the followed run’s status/filters/ordered rows. Without one, return null so the dialog shows the host offer. */
 
 export type ResumeRunPanel = {
   title: React.ReactNode
@@ -52,28 +48,31 @@ function finishedDescription(everyChatResumed: boolean, byUpdate: boolean): stri
 
 function runTitle(run: ResumeRun, total: number, resumed: number): React.ReactNode {
   if (!resumeRunInFlight(run)) {
-    if (total === 1) {
-      return translate(
-        'auto.components.NativeChatResumeRunPanel.resumedTitleOne',
-        'Resumed {{value0}} of 1 chat',
-        { value0: resumed }
-      )
-    }
-    return translate(
-      'auto.components.NativeChatResumeRunPanel.resumedTitle',
-      'Resumed {{value0}} of {{value1}} chats',
-      { value0: resumed, value1: total }
-    )
+    return total === 1
+      ? translate(
+          'auto.components.NativeChatResumeRunPanel.resumedOfTotal_one',
+          'Resumed {{resumed}} of {{count}} chat',
+          { resumed, count: total }
+        )
+      : translate(
+          'auto.components.NativeChatResumeRunPanel.resumedOfTotal_other',
+          'Resumed {{resumed}} of {{count}} chats',
+          { resumed, count: total }
+        )
   }
   return (
     <span className="flex items-center gap-2">
       <Loader2 className="size-4 animate-spin text-muted-foreground" />
       {total === 1
-        ? translate('auto.components.NativeChatResumeRunPanel.resumingTitleOne', 'Resuming 1 chat')
+        ? translate(
+            'auto.components.NativeChatResumeRunPanel.resumingCount_one',
+            'Resuming {{count}} chat',
+            { count: total }
+          )
         : translate(
-            'auto.components.NativeChatResumeRunPanel.resumingTitle',
-            'Resuming {{value0}} chats',
-            { value0: total }
+            'auto.components.NativeChatResumeRunPanel.resumingCount_other',
+            'Resuming {{count}} chats',
+            { count: total }
           )}
     </span>
   )

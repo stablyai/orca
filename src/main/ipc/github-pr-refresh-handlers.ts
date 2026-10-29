@@ -27,6 +27,7 @@ import {
   isPRRefreshCandidateRegistered,
   validateAutomaticPRRefreshCandidate
 } from './github-repo-routing'
+import { abortWhenRendererGone } from './renderer-lifetime-abort'
 
 const visibilityCleanupRegistered = new Set<number>()
 
@@ -151,10 +152,15 @@ export function registerGitHubPRRefreshHandlers(store: Store, stats: StatsCollec
       const senderId = event.sender.id
       if (!visibilityCleanupRegistered.has(senderId)) {
         visibilityCleanupRegistered.add(senderId)
-        event.sender.once('destroyed', () => {
-          visibilityCleanupRegistered.delete(senderId)
-          clearVisiblePRRefreshWindow(senderId)
-        })
+        const lifetime = abortWhenRendererGone(event.sender)
+        lifetime.signal.addEventListener(
+          'abort',
+          () => {
+            visibilityCleanupRegistered.delete(senderId)
+            clearVisiblePRRefreshWindow(senderId)
+          },
+          { once: true }
+        )
       }
       const candidates: GitHubPRRefreshCandidate[] = []
       const repos = store.getRepos()

@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import {
   nativeChatLiveLine,
   type NativeChatLiveLine
-} from '../../../../shared/native-chat-live-line'
+} from '../../../../shared/native-chat/transcript/native-chat-live-line'
 import { isNativeChatRowInLiveWorkingTurn } from '../../../../shared/native-chat-turn-membership'
 import {
   buildNativeChatTranscriptSlots,
@@ -10,8 +10,7 @@ import {
   type NativeChatTranscriptSlotsInput
 } from './native-chat-transcript-slots'
 
-/** The transcript's slots and its live activity line, decided together: the open reasoning block
- *  the line discloses takes no slot, so a row is hidden exactly while the line shows it. */
+/** Choose slots/activity together so reasoning shown by the activity line never also gets a transcript row. */
 export function useNativeChatTranscriptSlots({
   line,
   ...input
@@ -20,6 +19,7 @@ export function useNativeChatTranscriptSlots({
 }): { slots: NativeChatTranscriptSlot[]; liveLine: NativeChatLiveLine | null } {
   const {
     messages,
+    unresolvedRowIds,
     typography,
     turnKeys,
     liveTurnKey,
@@ -45,7 +45,8 @@ export function useNativeChatTranscriptSlots({
           isNativeChatRowInLiveWorkingTurn(
             turnKeys[index],
             liveTurnKey,
-            isWorking || lifecycleWorking
+            isWorking || lifecycleWorking,
+            unresolvedRowIds?.has(messages[index]!.id)
           )
       }),
     [
@@ -57,7 +58,8 @@ export function useNativeChatTranscriptSlots({
       messages,
       stopping,
       thinking,
-      turnKeys
+      turnKeys,
+      unresolvedRowIds
     ]
   )
   const liveReasoningId = liveLine?.reasoning?.message.id ?? null
@@ -65,6 +67,7 @@ export function useNativeChatTranscriptSlots({
     () =>
       buildNativeChatTranscriptSlots({
         messages,
+        unresolvedRowIds,
         typography,
         turnKeys,
         liveTurnKey,
@@ -91,7 +94,8 @@ export function useNativeChatTranscriptSlots({
       turnDiffs,
       turnKeys,
       turnStatuses,
-      typography
+      typography,
+      unresolvedRowIds
     ]
   )
   return { slots, liveLine }
