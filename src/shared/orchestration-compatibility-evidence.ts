@@ -1,3 +1,6 @@
+import { ORCA_SCRUB_SAFE_LAUNCH_ENV, ORCA_SCRUB_SAFE_PANE_ENV } from './agent-hook-scrub-safe-env'
+import { ORCA_AGENT_SESSION_PROOF_ENV } from './agent-session-caller-env'
+
 const MAX_EVIDENCE_FIELD_LENGTH = 4_096
 
 export const ORCHESTRATION_COMPATIBILITY_HOST_KIND_ENV =
@@ -28,15 +31,21 @@ export type OrchestrationCompatibilityEvidence = {
   host?: OrchestrationCompatibilityHostStamp
   /** Injected Orca session identity is authoritative when present; dispatch resolves it and validates any declared handle against it. */
   agentSessionId?: string
+  agentSessionSpawnToken?: string
 }
 
 const SECRET_KEYS = new Set([
   'launchToken',
+  'agentSessionSpawnToken',
+  'ORCA_AGENT_SESSION_SPAWN_TOKEN',
+  ORCA_AGENT_SESSION_PROOF_ENV,
+  `shell_environment_policy.set.${ORCA_AGENT_SESSION_PROOF_ENV}`,
   'connectionIncarnation',
   'attachmentId',
   'compatibilityEvidence',
   'orchestrationCompatibilityEvidence',
   'ORCA_AGENT_LAUNCH_TOKEN',
+  ORCA_SCRUB_SAFE_LAUNCH_ENV,
   ORCHESTRATION_COMPATIBILITY_HOST_INCARNATION_ENV,
   ORCHESTRATION_COMPATIBILITY_ATTACHMENT_ENV
 ])
@@ -50,8 +59,9 @@ export function readOrchestrationCompatibilityEvidence(
   env: Readonly<Record<string, string | undefined>>
 ): OrchestrationCompatibilityEvidence | undefined {
   const terminalHandle = boundedValue(env.ORCA_TERMINAL_HANDLE)
-  const paneKey = boundedValue(env.ORCA_PANE_KEY)
-  const launchToken = boundedValue(env.ORCA_AGENT_LAUNCH_TOKEN)
+  const paneKey = boundedValue(env.ORCA_PANE_KEY) ?? boundedValue(env[ORCA_SCRUB_SAFE_PANE_ENV])
+  const launchToken =
+    boundedValue(env.ORCA_AGENT_LAUNCH_TOKEN) ?? boundedValue(env[ORCA_SCRUB_SAFE_LAUNCH_ENV])
   const host = readHostStamp(env)
   if (!terminalHandle && !paneKey && !launchToken && !host) {
     return undefined

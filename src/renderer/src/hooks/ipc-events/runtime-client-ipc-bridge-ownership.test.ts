@@ -475,3 +475,39 @@ it("lists a profile created on the host once the host announces it, without touc
     await h.finish()
   }
 })
+it.each([false, true])(
+  'invalidates GitHub caches for member events and reconnect replay (replay=%s)',
+  async (replay) => {
+    const h = createHarness()
+    try {
+      h.start()
+      useAppStore.setState({
+        repos: [
+          {
+            id: 'repo-1',
+            path: '/remote',
+            displayName: 'Remote',
+            badgeColor: '',
+            addedAt: 0,
+            executionHostId: 'runtime:host-a'
+          },
+          { id: 'repo-1', path: '/local', displayName: 'Local', badgeColor: '', addedAt: 0 }
+        ],
+        issueCache: {
+          'runtime:host-a::repo-1::1': { data: null, fetchedAt: 1 },
+          'repo-1::1': { data: null, fetchedAt: 1 }
+        }
+      })
+      h.emit(
+        0,
+        replay,
+        replay ? { type: 'reposChanged' } : { type: 'githubParticipantAccountsChanged' }
+      )
+      expect(useAppStore.getState().issueCache).toEqual({
+        'repo-1::1': { data: null, fetchedAt: 1 }
+      })
+    } finally {
+      await h.finish()
+    }
+  }
+)

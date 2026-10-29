@@ -81,6 +81,63 @@ describe('getHostedReviewForBranch', () => {
     __resetHostedReviewBranchCacheForTests()
   })
 
+  it('isolates participant review caches and refuses missing identities before GitHub reads', async () => {
+    getRepoSlugMock.mockResolvedValue({ owner: 'team', repo: 'orca', host: 'github.com' })
+    getPRForBranchOutcomeMock.mockImplementation(async (...args) => {
+      const account = args[5]?.localGitExecOptions?.ghAccount?.user
+      return {
+        kind: 'found',
+        fetchedAt: 1_700_000_000_000,
+        pr: { number: 7, title: account, state: 'OPEN', url: 'https://github.com/team/orca/pull/7' }
+      }
+    })
+    const input = {
+      repoPath: '/participant-repo',
+      executionHostId: 'local' as const,
+      branch: 'feature'
+    }
+    const alice = await getHostedReviewForBranch({
+      ...input,
+      localGitExecOptions: { resolveGitHubAccount: () => ({ host: 'github.com', user: 'alice' }) }
+    })
+    const bob = await getHostedReviewForBranch({
+      ...input,
+      localGitExecOptions: { resolveGitHubAccount: () => ({ host: 'github.com', user: 'bob' }) }
+    })
+    expect(alice?.title).toBe('alice')
+    expect(bob?.title).toBe('bob')
+    expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(2)
+    await expect(
+      getHostedReviewForBranch({
+        ...input,
+        localGitExecOptions: {
+          resolveGitHubAccount: () => {
+            throw new Error('github_participant_missing')
+          }
+        }
+      })
+    ).rejects.toThrow('github_participant_missing')
+    expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not require a GitHub participant for a known GitLab project', async () => {
+    getProjectSlugMock.mockResolvedValue({ host: 'gitlab.com', path: 'g/p' })
+    getMergeRequestForBranchMock.mockResolvedValue(null)
+    const resolveGitHubAccount = vi.fn(() => {
+      throw new Error('github_participant_missing')
+    })
+    await expect(
+      getHostedReviewForBranch({
+        repoPath: '/gitlab-participant-repo',
+        executionHostId: 'local',
+        branch: 'feature',
+        localGitExecOptions: { resolveGitHubAccount }
+      })
+    ).resolves.toBeNull()
+    expect(resolveGitHubAccount).not.toHaveBeenCalled()
+    expect(getMergeRequestForBranchMock).toHaveBeenCalledOnce()
+  })
+
   it('maps GitLab merge requests into the hosted review surface', async () => {
     getProjectSlugMock.mockResolvedValue({ host: 'gitlab.com', path: 'g/p' })
     getMergeRequestForBranchMock.mockResolvedValue({

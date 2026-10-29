@@ -135,6 +135,9 @@ export async function materializeRuntimeLocalWorktree<T>(args: {
         : {}),
       ...(request.cliProvenance ? { cliProvenance: request.cliProvenance } : {}),
       creatorProvenance: request.creatorProvenance ?? { kind: 'host' },
+      ...(request.githubExecutionIdentity
+        ? { githubExecutionIdentity: request.githubExecutionIdentity }
+        : {}),
       ...(request.comment !== undefined ? { comment: request.comment } : {}),
       ...(request.manualOrder !== undefined ? { manualOrder: request.manualOrder } : {}),
       ...(request.workspaceStatus !== undefined ? { workspaceStatus: request.workspaceStatus } : {})

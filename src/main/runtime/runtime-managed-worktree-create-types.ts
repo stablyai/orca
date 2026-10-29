@@ -1,3 +1,4 @@
+import type { GitHubExecutionIdentity } from '../../shared/github/execution-identity'
 import type { AgentLaunchPreferences } from '../../shared/agent-session-host-authority'
 import type { CreateWorktreeArgs } from '../../shared/worktree/create-types'
 import type {
@@ -17,6 +18,8 @@ import type { RuntimeNavigationTarget } from '../../shared/runtime-navigation'
 import type { RuntimeRepoSelector } from './runtime-repo-selector'
 
 export type RuntimeManagedWorktreeCreateArgs = {
+  /** Host-assigned execution owner; excluded from client mutation schemas. */
+  githubExecutionIdentity?: GitHubExecutionIdentity
   repoSelector: RuntimeRepoSelector
   name: string
   nameWasGenerated?: boolean

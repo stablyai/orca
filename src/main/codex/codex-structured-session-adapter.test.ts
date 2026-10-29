@@ -170,6 +170,7 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
         // Explicit values survive inherit = core.
         config: {
           'shell_environment_policy.set.ORCA_AGENT_SESSION_ID': 'session-1',
+          'shell_environment_policy.set.ORCA_AGENT_SESSION_PROOF': 'spawn-9',
           'shell_environment_policy.set.ORCA_STRUCTURED_SESSION': '1',
           'shell_environment_policy.set.ORCA_CLI_COMMAND': expect.stringMatching(
             /^[^:;]*[\\/]cli[\\/]bin[\\/]orca-dev$/

@@ -1,3 +1,5 @@
+import { normalizeGhAccountBinding } from '../../shared/github/account-binding'
+import { githubReadExecutionScope } from './github-read-execution-scope'
 import { reviewRefreshIntervalMs } from '../../shared/review-refresh-policy'
 import type {
   GitHubPRRefreshAlias,
@@ -33,6 +35,9 @@ export function hostedReviewOptionArgs(
     ...(candidate.localGitOptions?.wslDistro
       ? { wslDistro: candidate.localGitOptions.wslDistro }
       : {}),
+    ...(candidate.localGitOptions?.ghAccount
+      ? { ghAccount: candidate.localGitOptions.ghAccount }
+      : {}),
     admissionTier: admissionTierForRefreshReason(reason)
   }
   if (shouldAcceptMergedFallbackPR(candidate)) {
@@ -55,10 +60,17 @@ export function refreshKey(candidate: GitHubPRRefreshCandidate): string {
   const runtimeScope = candidate.connectionId
     ? 'remote'
     : `runtime:${candidate.localGitOptions?.wslDistro ? `wsl:${candidate.localGitOptions.wslDistro}` : 'host'}`
+  const binding = candidate.localGitOptions?.ghAccount
+  const accountScope = binding
+    ? `::account:${githubReadExecutionScope(
+        { ghAccount: normalizeGhAccountBinding(binding) ?? binding },
+        {}
+      )}`
+    : ''
   if (typeof candidate.linkedPRNumber === 'number') {
-    return `${connectionScope}::${runtimeScope}::${candidate.repoPath}::pr::${candidate.linkedPRNumber}`
+    return `${connectionScope}::${runtimeScope}${accountScope}::${candidate.repoPath}::pr::${candidate.linkedPRNumber}`
   }
-  return `${connectionScope}::${runtimeScope}::${candidate.repoPath}::branch::${candidate.branch}`
+  return `${connectionScope}::${runtimeScope}${accountScope}::${candidate.repoPath}::branch::${candidate.branch}`
 }
 
 export function validateCandidate(

@@ -59,6 +59,28 @@ async function startupTerminalOptions(startupPaneKey?: string): Promise<Record<s
 }
 
 describe('a folder workspace create with a startup agent', () => {
+  it('persists the host-assigned GitHub identity before starting a folder terminal', async () => {
+    const { deps, createTerminal } = createDeps()
+    const identity = {
+      repoId: repo.id,
+      participantId: 'alice',
+      account: { host: 'github.com', user: 'Alice' }
+    }
+    const persist = vi.spyOn(deps.store, 'setWorktreeMeta')
+    createTerminal.mockImplementation(async () => {
+      expect(persist.mock.calls[0]?.[1].githubExecutionIdentity).toEqual(identity)
+      return { handle: 'term-1', worktreeId: 'folder-1', title: null }
+    })
+    const result = await createRuntimeFolderWorktree({
+      request: { repoSelector: `id:${repo.id}`, name: 'task', githubExecutionIdentity: identity },
+      repo,
+      startup: { command: 'codex' },
+      deps
+    })
+    expect(createTerminal).toHaveBeenCalledTimes(1)
+    expect(result.worktree).not.toHaveProperty('githubExecutionIdentity')
+  })
+
   it('registers a folder launch before announcing its workspace', async () => {
     const { deps } = createDeps()
     const order: string[] = []

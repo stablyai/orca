@@ -82,6 +82,7 @@ function isRuntimeClientEvent(
   message: RuntimeClientEventStreamMessage
 ): message is RuntimeClientEvent {
   return (
+    message.type === 'githubParticipantAccountsChanged' ||
     message.type === 'reposChanged' ||
     message.type === 'worktreesChanged' ||
     message.type === 'nativeChatLaunchDraftResolved' ||

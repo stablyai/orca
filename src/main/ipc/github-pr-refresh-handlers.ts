@@ -1,3 +1,5 @@
+import { getStoreGitHubParticipants } from '../runtime/github-participant-store'
+import { hostedReviewOptionArgs } from '../github/pr-refresh-candidate-policy'
 import { ipcMain } from 'electron'
 import { resolve } from 'node:path'
 import type {
@@ -7,13 +9,18 @@ import type {
   PRRefreshOutcome
 } from '../../shared/github/pull-request-refresh-types'
 import type { Repo } from '../../shared/repo-types'
-import { getPRForBranch, type GitHubPRBranchLookupOptions } from '../github/client'
+import {
+  getPRForBranch,
+  getPRForBranchOutcome,
+  type GitHubPRBranchLookupOptions
+} from '../github/client'
 import {
   clearVisiblePRRefreshWindow,
   enqueuePRRefresh,
   refreshPRNow,
   reportVisiblePRRefreshCandidates,
   setPRRefreshOutcomeObserver,
+  setPRRefreshEventFilter,
   setPRRefreshRegistrationCheck
 } from '../github/pr-refresh-coordinator'
 import type { Store } from '../persistence'
@@ -43,6 +50,13 @@ export function registerGitHubPRRefreshHandlers(store: Store, stats: StatsCollec
     }
   }
 
+  setPRRefreshEventFilter((alias) => {
+    const registry = getStoreGitHubParticipants(store)
+    return (
+      !registry?.hasEnabledRepos() || Boolean(alias.repoId && !registry.isRepoEnabled(alias.repoId))
+    )
+  })
+
   setPRRefreshOutcomeObserver((candidate, outcome) => {
     const repo =
       store.getRepos().find((entry) => entry.id === candidate.repoId) ??
@@ -51,8 +65,10 @@ export function registerGitHubPRRefreshHandlers(store: Store, stats: StatsCollec
       recordPRIfNeeded(repo, outcome)
     }
   })
-  setPRRefreshRegistrationCheck((candidate) =>
-    isPRRefreshCandidateRegistered(candidate, store.getRepos())
+  setPRRefreshRegistrationCheck(
+    (candidate) =>
+      !getStoreGitHubParticipants(store)?.isRepoEnabled(candidate.repoId) &&
+      isPRRefreshCandidateRegistered(candidate, store.getRepos())
   )
 
   ipcMain.handle(
@@ -118,10 +134,17 @@ export function registerGitHubPRRefreshHandlers(store: Store, stats: StatsCollec
       args: { candidate: GitHubPRRefreshCandidate; reason?: GitHubPRRefreshReason }
     ) => {
       const repo = assertRegisteredPRRefreshCandidateRepo(args.candidate, store)
-      const outcome = await refreshPRNow(
-        applyRegisteredRepoToPRRefreshCandidate(store, repo, args.candidate),
-        args.reason
-      )
+      const candidate = applyRegisteredRepoToPRRefreshCandidate(store, repo, args.candidate)
+      const outcome = getStoreGitHubParticipants(store)?.isRepoEnabled(repo.id)
+        ? await getPRForBranchOutcome(
+            candidate.repoPath,
+            candidate.branch,
+            candidate.linkedPRNumber ?? null,
+            candidate.connectionId ?? null,
+            candidate.linkedPRNumber == null ? (candidate.fallbackPRNumber ?? null) : null,
+            ...hostedReviewOptionArgs(candidate, args.reason ?? 'manual')
+          )
+        : await refreshPRNow(candidate, args.reason)
       recordPRIfNeeded(repo, outcome)
       return outcome
     }

@@ -1,5 +1,7 @@
 import type { GitHubPrStartPoint } from '../../shared/worktree/types'
 import type { Repo } from '../../shared/repo-types'
+import type { GitHubParticipantRegistry } from './github-participant-registry'
+import { getRuntimeGitHubExecutionOptionArgs } from './runtime-github-execution-options'
 import {
   fetchPrHeadTrackingRef,
   fetchGitHubPullRequestHeadRef
@@ -7,10 +9,7 @@ import {
 import { resolveGitHubPrStartPoint } from '../github/pr-start-point'
 import { resolveGitHubReviewHeadRemote } from '../github/review-head-remote'
 import { gitExecFileAsync } from '../git/runner'
-import {
-  getLocalProjectGitExecOptions,
-  getLocalProjectGhExecOptions
-} from '../project-runtime-git-options'
+import { getLocalProjectGitExecOptions } from '../project-runtime-git-options'
 import { isFolderRepo } from '../../shared/repo-kind'
 import { requireRepoLocalGitRoute } from '../repo-execution-host'
 import type { ProjectRuntimeResolutionStore } from '../local-project-runtime-resolution'
@@ -27,6 +26,7 @@ export async function resolveRuntimeGitHubWorktreeBase(
   args: RuntimeGitHubWorktreeBaseArgs,
   deps: {
     store: ProjectRuntimeResolutionStore | null
+    participantRegistry?: GitHubParticipantRegistry
     resolveRepo: (selector: string) => Promise<Repo>
   }
 ): Promise<GitHubPrStartPoint | { error: string }> {
@@ -45,7 +45,11 @@ export async function resolveRuntimeGitHubWorktreeBase(
   // Use shared host gating: executionHostId may be a row's only SSH marker.
   requireRepoLocalGitRoute(repo)
   const localGitExecOptions = getLocalProjectGitExecOptions(deps.store, repo)
-  const localGhOptions = getLocalProjectGhExecOptions(deps.store, repo)
+  const localGhOptions = getRuntimeGitHubExecutionOptionArgs(
+    deps.store,
+    deps.participantRegistry,
+    repo
+  )[0]
   const gitExec = (gitArgs: string[]) => gitExecFileAsync(gitArgs, localGitExecOptions)
   const resolveRemote = (): Promise<string> =>
     resolveGitHubReviewHeadRemote({

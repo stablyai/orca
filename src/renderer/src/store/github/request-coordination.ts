@@ -32,9 +32,15 @@ export type InflightProjectView = {
 }
 
 export const inflightPRRequests = new Map<string, InflightPR>()
-export const inflightIssueRequests = new Map<string, Promise<IssueInfo | null>>()
+export const inflightIssueRequests = new Map<
+  string,
+  { promise: Promise<IssueInfo | null>; requestId: number }
+>()
 export const inflightChecksRequests = new Map<string, InflightChecks>()
-export const inflightCommentsRequests = new Map<string, Promise<PRComment[]>>()
+export const inflightCommentsRequests = new Map<
+  string,
+  { promise: Promise<PRComment[]>; requestId: number }
+>()
 export const inflightWorkItemsRequests = new Map<string, InflightWorkItems>()
 export const inflightProjectViewRequests = new Map<string, InflightProjectView>()
 export const prRequestGenerations = new Map<string, number>()
@@ -42,6 +48,26 @@ export const prRefreshStartedHostedReviewEntries = new Map<
   string,
   AppState['hostedReviewCache'][string] | undefined
 >()
+const pendingMutationCacheWrites = new Map<string, Set<{ current: boolean }>>()
+
+export function trackGitHubMutationCacheWrite(key: string): {
+  isCurrent: () => boolean
+  dispose: () => void
+} {
+  const mutation = { current: true }
+  const pending = pendingMutationCacheWrites.get(key) ?? new Set<{ current: boolean }>()
+  pending.add(mutation)
+  pendingMutationCacheWrites.set(key, pending)
+  return {
+    isCurrent: () => mutation.current,
+    dispose: () => {
+      pending.delete(mutation)
+      if (pending.size === 0 && pendingMutationCacheWrites.get(key) === pending) {
+        pendingMutationCacheWrites.delete(key)
+      }
+    }
+  }
+}
 
 let providerRequestSequence = 0
 
@@ -97,6 +123,32 @@ export function clearInflightWorkItemsForRepo(eviction: RepoCacheEviction): void
   for (const key of Array.from(inflightWorkItemsRequests.keys())) {
     if (matchesRepoCacheEviction(key, eviction)) {
       inflightWorkItemsRequests.delete(key)
+    }
+  }
+}
+
+export function clearInflightGitHubRequestsForRepo(eviction: RepoCacheEviction): void {
+  for (const [key, pending] of pendingMutationCacheWrites) {
+    if (matchesRepoCacheEviction(key, eviction)) {
+      for (const mutation of pending) {
+        mutation.current = false
+      }
+      pendingMutationCacheWrites.delete(key)
+    }
+  }
+  for (const registry of [
+    inflightPRRequests,
+    prRequestGenerations,
+    inflightIssueRequests,
+    inflightChecksRequests,
+    inflightCommentsRequests,
+    inflightWorkItemsRequests,
+    prRefreshStartedHostedReviewEntries
+  ]) {
+    for (const key of registry.keys()) {
+      if (matchesRepoCacheEviction(key, eviction)) {
+        registry.delete(key)
+      }
     }
   }
 }

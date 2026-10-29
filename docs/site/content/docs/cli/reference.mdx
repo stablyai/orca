@@ -89,6 +89,42 @@ orca repo search-refs --repo id:<repoId> --query main --limit 10 --json
 
 Set the repo base ref before creating lots of worktrees so new tasks branch from the right place by default.
 
+### GitHub members on a shared server
+
+The server owner can assign paired devices and allowed GitHub accounts to members from the server shell, including on headless servers. First inspect the repo's members and paired device IDs:
+
+```bash
+orca repo github-members --repo id:<repoId> --json
+```
+
+Create a JSON file containing account references, never credentials:
+
+```json
+{
+  "name": "Alice",
+  "deviceIds": ["<laptop-device-id>", "<phone-device-id>"],
+  "allowedAccounts": [{ "host": "github.com", "user": "alice" }]
+}
+```
+
+Save the assignment and enable the shared repo policy:
+
+```bash
+orca repo github-member-save --repo id:<repoId> --file member.json --json
+orca repo github-members-mode --repo id:<repoId> --mode enabled --json
+```
+
+Use device IDs reported by the status command and accounts available to the server. Add an `id` from the saved member to update it; saving replaces its device and account arrays. Enterprise hosts may include a port in the `host` field. Unknown JSON fields are rejected.
+
+Enabling this policy affects **all paired clients of this repo**. Each paired client must belong to a member and select one of that member's allowed accounts in Project Settings. Multiple devices assigned to the same member share that member's selection. Paired clients can use `repo github-members` to inspect their own status but cannot administer members.
+
+```bash
+orca repo github-member-remove --repo id:<repoId> --id <memberId> --json
+orca repo github-members-mode --repo id:<repoId> --mode disabled --json
+```
+
+Disabling restores the repo-wide GitHub account binding. Run save, remove, and mode commands locally on the server as its owner; `--environment` and `--pairing-code` are refused. These commands require a server version that supports GitHub member accounts. This policy governs Orca-managed GitHub requests, not shell credentials or Git commit authorship.
+
 ## Worktrees
 
 ```bash

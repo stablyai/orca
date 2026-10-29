@@ -81,7 +81,11 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
       'repo show',
       'repo set',
       'repo set-base-ref',
-      'repo search-refs'
+      'repo search-refs',
+      'repo github-members',
+      'repo github-member-save',
+      'repo github-member-remove',
+      'repo github-members-mode'
     ],
     load: async () => (await import('./handlers/repo.js')).REPO_HANDLERS
   },

@@ -189,14 +189,20 @@ describe('claude structured launch resolution', () => {
 
   it('names the child by the Orca session id, over any id the configured overlay carries', async () => {
     const launch = await resolverFor(record(), () => ({
-      ORCA_AGENT_SESSION_ID: 'a0b1c2d3-0000-4000-8000-00000000abcd'
-    }))({ identity: IDENTITY })
+      ORCA_AGENT_SESSION_ID: 'a0b1c2d3-0000-4000-8000-00000000abcd',
+      ORCA_AGENT_SESSION_PROOF: 'stale-parent-proof'
+    }))({ identity: IDENTITY, spawnToken: 'current-spawn-proof' })
 
     expect(launch.env).toMatchObject({
       ORCA_AGENT_SESSION_ID: SESSION_ID,
+      ORCA_AGENT_SESSION_PROOF: 'current-spawn-proof',
       ORCA_CLI_COMMAND: expect.stringMatching(/^[^:;]*[\\/]cli[\\/]bin[\\/]orca-dev$/)
     })
     expect(launch.env?.ORCA_AGENT_SESSION_ID).not.toBe(launch.providerSessionId)
+    const scrubbed = Object.fromEntries(
+      Object.entries(launch.env ?? {}).filter(([key]) => !/KEY|TOKEN|SECRET|PASSWORD/.test(key))
+    )
+    expect(scrubbed.ORCA_AGENT_SESSION_PROOF).toBe('current-spawn-proof')
   })
 
   it('forces session-state events on when the inherited overlay disables them', async () => {

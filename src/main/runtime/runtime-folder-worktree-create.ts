@@ -94,6 +94,9 @@ export async function createRuntimeFolderWorktree(args: {
     ...(request.automationProvenance ? { automationProvenance: request.automationProvenance } : {}),
     ...(request.cliProvenance ? { cliProvenance: request.cliProvenance } : {}),
     creatorProvenance: request.creatorProvenance ?? { kind: 'host' },
+    ...(request.githubExecutionIdentity
+      ? { githubExecutionIdentity: request.githubExecutionIdentity }
+      : {}),
     ...(request.linkedIssue !== undefined ? { linkedIssue: request.linkedIssue } : {}),
     ...(request.linkedPR !== undefined ? { linkedPR: request.linkedPR } : {}),
     ...(request.linkedLinearIssue !== undefined

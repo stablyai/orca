@@ -134,6 +134,23 @@ describe('forge provider interface', () => {
     expect(getRepoSlugMock).not.toHaveBeenCalled()
   })
 
+  it('allows another forge to identify its remote after a GitHub participant probe refusal', async () => {
+    getProjectSlugMock.mockResolvedValue(null)
+    getRepoSlugMock.mockRejectedValue(new Error('github_participant_missing'))
+    getGiteaRepoSlugMock.mockResolvedValue({
+      host: 'gitea.example.com',
+      owner: 'team',
+      repo: 'orca'
+    })
+    await expect(
+      detectHostedReviewProvider({ executionHostId: 'local', repoPath: '/repo' })
+    ).resolves.toBe('gitea')
+    getGiteaRepoSlugMock.mockResolvedValue(null)
+    await expect(
+      detectHostedReviewProvider({ executionHostId: 'local', repoPath: '/repo' })
+    ).rejects.toThrow('github_participant_missing')
+  })
+
   it('detects a GitHub Enterprise Server remote as the GitHub provider, not Gitea', async () => {
     // #8312: authenticated GHES belongs to GitHub; never fall through to Gitea token requirements.
     getProjectSlugMock.mockResolvedValue(null)

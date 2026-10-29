@@ -27,6 +27,16 @@ describe('orchestration compatibility evidence', () => {
     })
   })
 
+  it('reads launch proof after provider subprocess environment scrubbing', () => {
+    expect(
+      readOrchestrationCompatibilityEvidence({
+        ORCA_TERMINAL_HANDLE: 'term',
+        ORCA_AGENT_PANE: 'tab:leaf',
+        ORCA_AGENT_LAUNCH: 'launch'
+      })
+    ).toEqual({ terminalHandle: 'term', paneKey: 'tab:leaf', launchToken: 'launch' })
+  })
+
   it('rejects partial host stamps instead of accepting caller-chosen scope', () => {
     expect(
       readOrchestrationCompatibilityEvidence({
@@ -41,6 +51,10 @@ describe('orchestration compatibility evidence', () => {
   it('redacts evidence from nested CLI error and structured-log values', () => {
     const redacted = redactOrchestrationCompatibilitySecrets({
       compatibilityInvocationId: 'safe-operation-id',
+      agentSessionSpawnToken: 'spawn-secret',
+      ORCA_AGENT_SESSION_SPAWN_TOKEN: 'spawn-secret',
+      ORCA_AGENT_SESSION_PROOF: 'spawn-secret',
+      'shell_environment_policy.set.ORCA_AGENT_SESSION_PROOF': 'spawn-secret',
       orchestrationCompatibilityEvidence: {
         launchToken: 'secret',
         host: {
@@ -52,6 +66,10 @@ describe('orchestration compatibility evidence', () => {
 
     expect(redacted).toEqual({
       compatibilityInvocationId: 'safe-operation-id',
+      agentSessionSpawnToken: '[redacted]',
+      ORCA_AGENT_SESSION_SPAWN_TOKEN: '[redacted]',
+      ORCA_AGENT_SESSION_PROOF: '[redacted]',
+      'shell_environment_policy.set.ORCA_AGENT_SESSION_PROOF': '[redacted]',
       orchestrationCompatibilityEvidence: '[redacted]'
     })
     expect(JSON.stringify(redacted)).not.toContain('secret')

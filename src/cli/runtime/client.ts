@@ -28,7 +28,7 @@ import {
   ORCHESTRATION_CONTRACT_VERSION
 } from '../../shared/protocol-version'
 import { RemoteRuntimeCompatGate } from './remote-runtime-compat-gate'
-import { createOrchestrationCompatibilityEnvelope } from './orchestration-compatibility-envelope'
+import * as jobEnvelope from './orchestration-compatibility-envelope'
 import { getTimeoutMsParam, isWaitingCheck } from './runtime-request-timeout'
 import {
   isWorkerStartTimeoutWithinTimerLimit,
@@ -54,9 +54,8 @@ export class RuntimeClient {
   private readonly originalArgs: readonly string[] | undefined
   private readonly remoteCompat: RemoteRuntimeCompatGate
   private orchestrationContractCheck: Promise<void> | null = null
-  private readonly orchestrationCompatibility = createOrchestrationCompatibilityEnvelope(
-    process.env
-  )
+  private readonly orchestrationCompatibility =
+    jobEnvelope.createOrchestrationCompatibilityEnvelope(process.env)
   private readonly runtimeSourceFence: RuntimeSourceFence
 
   // Browser session cold starts can take 15–30 seconds; allow time for initialization.
@@ -128,7 +127,7 @@ export class RuntimeClient {
           compatibilityInvocationId:
             orchestrationRequestId ?? this.orchestrationCompatibility.compatibilityInvocationId
         }
-      : {}
+      : jobEnvelope.localJobEvidence(this.orchestrationCompatibility, this.remote !== null)
     const envelope = {
       orchestrationCapability: options?.orchestrationCapability,
       orchestrationContractVersion: method.startsWith('orchestration.')

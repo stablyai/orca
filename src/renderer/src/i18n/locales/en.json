@@ -682,6 +682,34 @@
         "sameAsAgent": "Same as {{agent}}"
       }
     },
+    "githubParticipants": {
+      "signedInAs": "Member: {{name}}",
+      "personalAccount": "Your GitHub account for this project",
+      "chooseAccount": "Choose an account",
+      "selectionRequired": "Choose an account before making GitHub issue or pull request calls.",
+      "assignmentRequired": "Ask the server owner to assign a GitHub account to your member.",
+      "enrollmentRequired": "Ask the server owner to assign this device to a member and allow a GitHub account, then refresh.",
+      "refresh": "Refresh member access",
+      "memberName": "Member name",
+      "devices": "Paired devices",
+      "noDevices": "Pair a device with this server before assigning it to a member.",
+      "allowedAccounts": "Allowed GitHub accounts",
+      "noAccounts": "Sign in to GitHub CLI on this server, then refresh accounts.",
+      "save": "Save member",
+      "cancel": "Cancel",
+      "loading": "Checking GitHub account access…",
+      "retry": "Retry",
+      "enable": "Use separate GitHub accounts for members",
+      "description": "Assign paired devices and allowed accounts to each member on this server. Members choose their own account for this project.",
+      "enforcement": "Devices without a member or a selected account cannot make project GitHub calls. The server owner continues using the account below.",
+      "edit": "Edit",
+      "remove": "Remove",
+      "removePrompt": "Remove {{name}} from this server? Their devices will lose member access.",
+      "confirmRemove": "Remove member",
+      "add": "Add member",
+      "ownerAccount": "Server owner’s project account",
+      "sharedAccount": "This account binding is shared by clients using this project on this server."
+    },
     "ssh": {
       "status": {
         "disconnected": "Disconnected",

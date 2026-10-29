@@ -23,8 +23,10 @@ import { getRepoRoutingConnectionId } from '../../shared/execution-host'
 type LocalGitArgs = [] | [LocalProjectGhExecOptions]
 
 type RuntimeGitHubRepositoryQueryCommandsDeps = {
+  assertUnscopedAccess?: () => void
   resolveRepo: (selector: string) => Promise<Repo>
   getLocalGitArgs: (repo: Repo) => LocalGitArgs
+  getAccountGitArgs?: (repo: Repo) => LocalGitArgs
 }
 
 export class RuntimeGitHubRepositoryQueryCommands {
@@ -150,6 +152,7 @@ export class RuntimeGitHubRepositoryQueryCommands {
   getGitHubRateLimit(options?: {
     force?: boolean
   }): Promise<Awaited<ReturnType<typeof getRateLimit>>> {
+    this.deps.assertUnscopedAccess?.()
     return getRateLimit(options)
   }
 
@@ -158,7 +161,8 @@ export class RuntimeGitHubRepositoryQueryCommands {
     options?: { refreshCapability?: boolean }
   ): Promise<Awaited<ReturnType<typeof listGhAccountBindingInventory>>> {
     const repo = await this.deps.resolveRepo(repoSelector)
-    const localGitOptions = this.deps.getLocalGitArgs(repo)[0] ?? {}
+    const localGitOptions =
+      (this.deps.getAccountGitArgs ?? this.deps.getLocalGitArgs)(repo)[0] ?? {}
     const requiredHost = await resolveGhAccountRequiredHost(repo, localGitOptions)
     return listGhAccountBindingInventory(localGitOptions, {
       refreshCapability: options?.refreshCapability === true,
@@ -171,7 +175,8 @@ export class RuntimeGitHubRepositoryQueryCommands {
     binding: { host: string; user: string }
   ): Promise<Awaited<ReturnType<typeof validateGhAccountBinding>>> {
     const repo = await this.deps.resolveRepo(repoSelector)
-    const localGitOptions = this.deps.getLocalGitArgs(repo)[0] ?? {}
+    const localGitOptions =
+      (this.deps.getAccountGitArgs ?? this.deps.getLocalGitArgs)(repo)[0] ?? {}
     const requiredHost = await resolveGhAccountRequiredHost(repo, localGitOptions)
     return validateGhAccountBinding(binding, localGitOptions, requiredHost ? { requiredHost } : {})
   }

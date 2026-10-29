@@ -10,8 +10,12 @@ import { translate } from '@/i18n/i18n'
 import { repoMatchesHostIdentity } from '../slices/repo-host-identity'
 import { evictRepoCacheEntries, repoCacheEviction, type RepoCacheEviction } from './cache-identity'
 import { ERROR_TOAST_DURATION } from './cache-policy'
-import { clearInflightWorkItemsForRepo } from './request-coordination'
+import {
+  clearInflightWorkItemsForRepo,
+  clearInflightGitHubRequestsForRepo
+} from './request-coordination'
 import { findRepoForGitHubOwner } from './repository-routing'
+import { clearHostedReviewRequestsForRepo } from '../slices/hosted-review-request-state'
 
 // Why: the row's own host is the bucket to drop; a same-id twin on another host keeps its own.
 function repoCacheEvictionForRow(
@@ -107,14 +111,22 @@ export const createWorkItemMutationActions = (
 
   evictGitHubRepoCaches: (repoId, repoPath, hostId) => {
     const eviction = repoCacheEvictionForRow(get(), repoId, repoPath, hostId)
-    clearInflightWorkItemsForRepo(eviction)
+    clearInflightGitHubRequestsForRepo(eviction)
+    clearHostedReviewRequestsForRepo(eviction)
     set((s) => {
       const workItems = evictRepoCacheEntries(s.workItemsCache, eviction)
       const prs = evictRepoCacheEntries(s.prCache, eviction)
       const issues = evictRepoCacheEntries(s.issueCache, eviction)
       const checks = evictRepoCacheEntries(s.checksCache, eviction)
       const comments = evictRepoCacheEntries(s.commentsCache, eviction)
-      const updates: Partial<AppState> = {}
+      const hostedReviews = evictRepoCacheEntries(s.hostedReviewCache ?? {}, eviction)
+      const hostedReviewCache = { ...hostedReviews.cache }
+      for (const [key, entry] of Object.entries(s.hostedReviewCache ?? {})) {
+        if (entry?.data && entry.data.provider !== 'github') {
+          hostedReviewCache[key] = entry
+        }
+      }
+      const updates: Partial<AppState> = hostedReviews.evicted ? { hostedReviewCache } : {}
 
       if (workItems.evicted) {
         updates.workItemsCache = workItems.cache

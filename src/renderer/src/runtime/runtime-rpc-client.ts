@@ -1,3 +1,4 @@
+import { trackGitHubParticipantRead } from './github-participant-read-fencing'
 import { waitForPromiseWithSignal } from '../../../shared/abort-signal-reason'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import type { RuntimeStatus } from '../../../shared/runtime-types'
@@ -70,19 +71,25 @@ export async function callRuntimeRpc<TResult>(
     ? withBrowserPaneUiRuntimeRpcSource(params)
     : params
   options.beforeSend?.()
-  const response =
-    target.kind === 'local'
-      ? await window.api.runtime.call({ method, params: nextParams })
-      : await callRuntimeEnvironmentWithRevision({
-          environmentId: target.environmentId,
-          method,
-          params: nextParams,
-          timeoutMs: options.timeoutMs,
-          signal: options.signal,
-          expectedEnvironmentPairingRevision,
-          expectedEnvironmentRuntimeId: options.expectedEnvironmentRuntimeId
-        })
-  return unwrapRuntimeRpcResult<TResult>(response as RuntimeRpcResponse<TResult>)
+  const identity = trackGitHubParticipantRead(target, method, params)
+  try {
+    const response =
+      target.kind === 'local'
+        ? await window.api.runtime.call({ method, params: nextParams })
+        : await callRuntimeEnvironmentWithRevision({
+            environmentId: target.environmentId,
+            method,
+            params: nextParams,
+            timeoutMs: options.timeoutMs,
+            signal: options.signal,
+            expectedEnvironmentPairingRevision,
+            expectedEnvironmentRuntimeId: options.expectedEnvironmentRuntimeId
+          })
+    identity.assertCurrent()
+    return unwrapRuntimeRpcResult<TResult>(response as RuntimeRpcResponse<TResult>)
+  } finally {
+    identity.dispose()
+  }
 }
 
 export async function ensureRuntimeEnvironmentCompatible(

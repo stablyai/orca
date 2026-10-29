@@ -14,6 +14,7 @@ import {
   type GitHubRepoExecOptions
 } from './github-api-repository'
 import { noteRepositoryRateLimitSpend, repositoryRateLimitGuard } from './rate-limit'
+import { githubReadExecutionScope } from './github-read-execution-scope'
 
 const STACK_CACHE_TTL_MS = 30_000
 const STACK_CACHE_MAX_ENTRIES = 256
@@ -246,7 +247,13 @@ export async function hydrateGitHubPRStack(
   prUpdatedAt?: string,
   executionScope = 'local:host'
 ): Promise<GitHubPRStack> {
-  const key = stackCacheKey(repository, summary.number, executionScope)
+  // Repository-wide stack entries can share sibling worktrees within one credential scope.
+  const { cwd: _cwd, ...credentialOptions } = ghOptions
+  const key = stackCacheKey(
+    repository,
+    summary.number,
+    `${executionScope}\0${githubReadExecutionScope(credentialOptions)}`
+  )
   const now = Date.now()
   pruneStackCache(now)
   const cached = stackDetailsCache.get(key)

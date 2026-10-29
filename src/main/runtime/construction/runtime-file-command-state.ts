@@ -1,3 +1,5 @@
+import { getRuntimeGitHubExecutionOptionArgs } from '../runtime-github-execution-options'
+import { assertUnscopedGitHubAccess } from '../github-participant-execution'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../shared/execution-host'
 import type { GitAdmissionTier } from '../../git/command-runner/git-exec-options'
 import type { LocalProjectGhExecOptions } from '../../project-runtime-git-options'
@@ -82,6 +84,14 @@ export abstract class OrcaRuntimeWithFileCommands extends OrcaRuntimeWithPreserv
       }
     | undefined
   protected abstract getLocalGitExecutionOptionArgs(repo: Repo): [] | [LocalProjectGhExecOptions]
+
+  protected getLocalGitHubExecutionOptionArgs(repo: Repo): [] | [LocalProjectGhExecOptions] {
+    return getRuntimeGitHubExecutionOptionArgs(
+      this.requireStore(),
+      this.getGitHubParticipantRegistry(),
+      repo
+    )
+  }
 
   abstract requireStore(): RuntimeStore
 
@@ -218,7 +228,9 @@ export abstract class OrcaRuntimeWithFileCommands extends OrcaRuntimeWithPreserv
 
   protected readonly gitHubRepositoryQueries = new RuntimeGitHubRepositoryQueryCommands({
     resolveRepo: (selector) => this.resolveRepoSelector(selector),
-    getLocalGitArgs: (repo) => this.getLocalGitExecutionOptionArgs(repo)
+    assertUnscopedAccess: () => assertUnscopedGitHubAccess(this.getGitHubParticipantRegistry()),
+    getAccountGitArgs: (repo) => this.getLocalGitExecutionOptionArgs(repo),
+    getLocalGitArgs: (repo) => this.getLocalGitHubExecutionOptionArgs(repo)
   })
 
   protected readonly gitLabQueryCommands = new RuntimeGitLabQueryCommands({
@@ -247,20 +259,22 @@ export abstract class OrcaRuntimeWithFileCommands extends OrcaRuntimeWithPreserv
 
   protected readonly gitHubReviewQueries = new RuntimeGitHubReviewQueryCommands({
     resolveRepo: (selector) => this.resolveRepoSelector(selector),
-    getLocalGitArgs: (repo) => this.getLocalGitExecutionOptionArgs(repo)
+    getLocalGitArgs: (repo) => this.getLocalGitHubExecutionOptionArgs(repo)
   })
 
   protected readonly gitHubReviewMutations = new RuntimeGitHubReviewMutationCommands({
     resolveRepo: (selector) => this.resolveRepoSelector(selector),
-    getLocalGitArgs: (repo) => this.getLocalGitExecutionOptionArgs(repo)
+    getLocalGitArgs: (repo) => this.getLocalGitHubExecutionOptionArgs(repo)
   })
 
   protected readonly gitHubIssueComments = new RuntimeGitHubIssueCommentCommands({
     resolveRepo: (selector) => this.resolveRepoSelector(selector),
-    getLocalGitArgs: (repo) => this.getLocalGitExecutionOptionArgs(repo)
+    getLocalGitArgs: (repo) => this.getLocalGitHubExecutionOptionArgs(repo)
   })
 
-  protected readonly gitHubProjectCommands = new RuntimeGitHubProjectCommands()
+  protected readonly gitHubProjectCommands = new RuntimeGitHubProjectCommands(() =>
+    assertUnscopedGitHubAccess(this.getGitHubParticipantRegistry())
+  )
 
   protected readonly repositoryHooks = new RuntimeRepositoryHooksCommands({
     resolveRepo: (selector) => this.resolveRepoSelector(selector)

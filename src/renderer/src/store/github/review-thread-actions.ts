@@ -7,6 +7,7 @@ import {
   restorePRCommentThreadSnapshot
 } from '@/lib/pr-comment-thread-resolution'
 import { prCommentsCacheSuffix, sourceScopedRepoCacheKey } from './cache-identity'
+import { trackGitHubMutationCacheWrite } from './request-coordination'
 import {
   getGitHubRepoSourceSettings,
   getGitHubSourceTarget,
@@ -61,6 +62,7 @@ export const createReviewThreadActions = (
       repoPath,
       options?.sourceContext
     )
+    const cacheWrite = trackGitHubMutationCacheWrite(cacheKey)
     let ok = false
     try {
       ok =
@@ -87,8 +89,10 @@ export const createReviewThreadActions = (
     } catch (err) {
       console.error('Failed to update review thread:', err)
       ok = false
+    } finally {
+      cacheWrite.dispose()
     }
-    if (!ok && previousThreadComments.length > 0) {
+    if (!ok && previousThreadComments.length > 0 && cacheWrite.isCurrent()) {
       set((s) => {
         const entry = s.commentsCache[cacheKey]
         if (!entry?.data) {

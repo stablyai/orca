@@ -7,6 +7,9 @@ export const ORCA_AGENT_SESSION_ID_ENV = 'ORCA_AGENT_SESSION_ID'
 /** The reservation token distinguishes its live child from a process that reused the PID. */
 export const ORCA_AGENT_SESSION_SPAWN_TOKEN_ENV = 'ORCA_AGENT_SESSION_SPAWN_TOKEN'
 
+/** Same child proof under a name preserved by provider subprocess environment scrubbing. */
+export const ORCA_AGENT_SESSION_PROOF_ENV = 'ORCA_AGENT_SESSION_PROOF'
+
 export function readInjectedAgentSessionId(
   env: Readonly<Record<string, string | undefined>> = process.env
 ): string | undefined {

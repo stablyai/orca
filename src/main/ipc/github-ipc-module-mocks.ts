@@ -4,6 +4,7 @@ import { type Mock, vi } from 'vitest'
 
 const CLIENT_EXPORTS = [
   'getPRForBranch',
+  'getPRForBranchOutcome',
   'getIssue',
   'getWorkItem',
   'getWorkItemByOwnerRepo',
@@ -44,6 +45,7 @@ const PR_REFRESH_EXPORTS = [
   'refreshPRNow',
   'reportVisiblePRRefreshCandidates',
   'setPRRefreshOutcomeObserver',
+  'setPRRefreshEventFilter',
   'setPRRefreshRegistrationCheck'
 ] as const
 

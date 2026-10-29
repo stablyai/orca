@@ -1,3 +1,4 @@
+import { readSharedGitHubCache } from './github-participant-shared-cache'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../shared/sidebar-inputs-switch'
 import type { Worktree } from '../../shared/worktree/types'
 import { DEFAULT_WORKSPACE_STATUS_ID } from '../../shared/workspace-statuses'
@@ -17,7 +18,7 @@ export function buildRuntimeWorktreePsSummaries(args: {
   platformByRepoId: ReadonlyMap<string, NodeJS.Platform>
 }): Map<string, RuntimeWorktreePsSummary> {
   const summaries = new Map<string, RuntimeWorktreePsSummary>()
-  const ghCache = args.store?.getGitHubCache?.()
+  const ghCache = args.store?.getGitHubCache ? readSharedGitHubCache(args.store) : undefined
   for (const { worktree, repo } of withOwnerRepos(
     args.resolvedWorktrees,
     args.store?.getRepos() ?? []

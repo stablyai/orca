@@ -1,3 +1,4 @@
+import { applyGitHubParticipantAccountsChanged } from '@/runtime/github-participant-account-changes'
 import { applyHostWorktreeTerminalSleepState } from '@/components/terminal-pane/pty-shutdown-exit-deferral'
 import { dispatchTerminalSideEffectBatch } from '@/components/terminal-pane/terminal-side-effect-facts-handler'
 import { emitAutomationsChangedWindowEvent } from '@/lib/automations-changed-window-event'
@@ -97,6 +98,10 @@ export function registerRuntimeClientIpcBridge(
     event: RuntimeClientEvent,
     generation = getEnvironmentSshStateGeneration(environmentId)
   ): void => {
+    if (event.type === 'githubParticipantAccountsChanged') {
+      applyGitHubParticipantAccountsChanged({ kind: 'environment', environmentId })
+      return
+    }
     if (event.type === 'worktreeTerminalSleepState') {
       applyHostWorktreeTerminalSleepState(environmentId, event)
       return
@@ -222,6 +227,7 @@ export function registerRuntimeClientIpcBridge(
     getDesiredEnvironmentIds: () => getRuntimeClientEventEnvironmentIds(useAppStore.getState()),
     getSubscriptionKey: (environmentId) => buildRuntimeClientEventEnvironmentKey([environmentId]),
     subscribe: (environmentId, onEvent, onError, isCurrent) => {
+      applyGitHubParticipantAccountsChanged({ kind: 'environment', environmentId })
       const sshGeneration = getEnvironmentSshStateGeneration(environmentId)
       const runtimeGeneration = getRuntimeEnvironmentConnectionGeneration(environmentId)
       const runtimeRevision = getRuntimeEnvironmentRevision(environmentId)
@@ -242,6 +248,7 @@ export function registerRuntimeClientIpcBridge(
           if (!isCurrent()) {
             return
           }
+          applyGitHubParticipantAccountsChanged({ kind: 'environment', environmentId })
           invalidateRuntimeClientEventReplay({
             getSshStateReference: () => useAppStore.getState().sshStateByEnvironment,
             refreshRuntimeStatus: () => {

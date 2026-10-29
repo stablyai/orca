@@ -7,6 +7,7 @@ import { callRuntimeRpc } from '../../runtime/runtime-rpc-client'
 import { prCommentsCacheSuffix, sourceScopedRepoCacheKey } from './cache-identity'
 import { withBoundedCacheEntry } from './cache-policy'
 import { hasUsableCommentPayload, mergePRCommentIntoList } from './pr-comment-cache'
+import { trackGitHubMutationCacheWrite } from './request-coordination'
 import {
   getGitHubRepoSourceSettings,
   getGitHubSourceTarget,
@@ -40,6 +41,7 @@ export const createConversationCommentActions = (
       repoPath,
       options?.sourceContext
     )
+    const cacheWrite = trackGitHubMutationCacheWrite(cacheKey)
     let result: GitHubCommentResult
     try {
       result =
@@ -68,6 +70,8 @@ export const createConversationCommentActions = (
     } catch (err) {
       const error = err instanceof Error ? err.message : 'Failed to post comment.'
       return { ok: false, error }
+    } finally {
+      cacheWrite.dispose()
     }
     if (!hasUsableCommentPayload(result)) {
       return result.ok
@@ -80,15 +84,17 @@ export const createConversationCommentActions = (
           }
         : result
     }
-    set((s) => {
-      const entry = s.commentsCache[cacheKey]
-      return {
-        commentsCache: withBoundedCacheEntry(s.commentsCache, cacheKey, {
-          data: mergePRCommentIntoList(entry?.data, result.comment),
-          fetchedAt: Date.now()
-        })
-      }
-    })
+    if (cacheWrite.isCurrent()) {
+      set((s) => {
+        const entry = s.commentsCache[cacheKey]
+        return {
+          commentsCache: withBoundedCacheEntry(s.commentsCache, cacheKey, {
+            data: mergePRCommentIntoList(entry?.data, result.comment),
+            fetchedAt: Date.now()
+          })
+        }
+      })
+    }
     return result
   }
 })

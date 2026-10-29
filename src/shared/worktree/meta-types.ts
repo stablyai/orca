@@ -1,3 +1,4 @@
+import type { GitHubExecutionIdentity } from '../github/execution-identity'
 import type { ExecutionHostId } from '../execution-host'
 import type { TaskSourceContext } from '../task-source-context'
 import type { EphemeralVmCheckoutMode } from '../orca-yaml-hook-types'
@@ -17,6 +18,8 @@ import type { SmartTier } from '../sidebar-list/sort-stamps'
 import type { ExternalConversationLink } from '../external-conversation-link'
 
 export type WorktreeMeta = {
+  /** Host-assigned execution owner; excluded from client mutation schemas. */
+  githubExecutionIdentity?: GitHubExecutionIdentity
   /** Immutable per-workspace-instance ID used to reject stale lineage after path reuse. */
   instanceId?: string
   /** See Worktree.projectId. Persisted for project-first workspace ownership. */

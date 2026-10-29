@@ -1,4 +1,5 @@
 import type { ExecutionHostId } from '../../shared/execution-host'
+import { selectForgeProvider } from './forge-provider-detection'
 import type {
   CreateHostedReviewInput,
   CreateHostedReviewResult,
@@ -42,6 +43,7 @@ import { hostedReviewSshConnectionId } from './hosted-review-execution-host'
 import {
   hasHostedReviewLocalGitOptions,
   getHostedReviewLocalGitOptions,
+  resolveHostedReviewGitHubOptions,
   type HostedReviewExecutionOptions
 } from './hosted-review-git-options'
 
@@ -163,6 +165,7 @@ const gitHubForgeProvider = {
       ...hostedReviewExecutionArgs(context)
     ),
   async getReviewForBranch(input) {
+    input = { ...input, localGitExecOptions: resolveHostedReviewGitHubOptions(input) }
     await assertGitHubReviewRateLimitBudget(input)
     const fallbackReviewNumber =
       input.linkedReviewNumber == null ? (input.fallbackReviewNumber ?? null) : null
@@ -182,6 +185,7 @@ const gitHubForgeProvider = {
     return unwrapGitHubPRForBranchOutcome(outcome)
   },
   async getReviewByNumber(input) {
+    input = { ...input, localGitExecOptions: resolveHostedReviewGitHubOptions(input) }
     await assertGitHubReviewRateLimitBudget(input)
     const executionArgs = hostedReviewExecutionArgs(input)
     const outcome =
@@ -312,12 +316,7 @@ export function getForgeProviderById(id: ForgeProviderId): ForgeProvider {
 export async function getForgeProviderForRepository(
   context: ForgeProviderRepositoryContext
 ): Promise<ForgeProvider | null> {
-  for (const provider of FORGE_PROVIDERS) {
-    if (await provider.resolveRepository(context)) {
-      return provider
-    }
-  }
-  return null
+  return selectForgeProvider(FORGE_PROVIDERS, context)
 }
 
 export async function detectHostedReviewProvider(

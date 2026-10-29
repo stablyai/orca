@@ -1,4 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { GitHubParticipantRegistry } from './github-participant-registry'
+import { runWithActiveRpcCaller } from './rpc/rpc-active-caller'
 import type { Repo } from '../../shared/repo-types'
 import { SshHostNotServedError } from '../providers/ssh-host-not-served-error'
 
@@ -66,6 +71,29 @@ describe('runtime PR/MR worktree base runs Git only for rows on this machine', (
   beforeEach(() => {
     gitExecFileAsyncMock.mockReset()
     gitExecFileAsyncMock.mockResolvedValue({ stdout: 'origin\n', stderr: '' })
+  })
+
+  it('rejects missing participant identity before PR lookup or Git fetch', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'orca-pr-base-participant-'))
+    try {
+      const registry = new GitHubParticipantRegistry(directory, () => ({}))
+      registry.setRepoEnabled('repo-1', true)
+      await expect(
+        runWithActiveRpcCaller({ kind: 'local-cli' }, () =>
+          resolveRuntimeGitHubWorktreeBase(
+            { repoSelector: 'id:repo-1', prNumber: 7 },
+            {
+              store,
+              resolveRepo: async () => repoOn({ executionHostId: 'local' }),
+              participantRegistry: registry
+            }
+          )
+        )
+      ).rejects.toThrow('github_participant_identity_required')
+      expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
+    } finally {
+      rmSync(directory, { recursive: true, force: true })
+    }
   })
 
   for (const [provider, resolveBase] of PROVIDERS) {

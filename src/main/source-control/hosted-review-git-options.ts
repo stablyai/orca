@@ -5,6 +5,8 @@ export type HostedReviewLocalGitOptions = {
   wslDistro?: string
   admissionTier?: GitAdmissionTier
   ghAccount?: GhAccountBinding
+  resolveGitHubAccount?: () => GhAccountBinding | undefined
+  canStart?: () => boolean
 }
 
 export type HostedReviewExecutionOptions = {
@@ -19,10 +21,36 @@ export function getHostedReviewLocalGitOptions(
   const wslDistro = options.localGitExecOptions?.wslDistro
   const admissionTier = options.localGitExecOptions?.admissionTier
   const ghAccount = options.localGitExecOptions?.ghAccount
+  const resolveGitHubAccount = options.localGitExecOptions?.resolveGitHubAccount
+  const canStart = options.localGitExecOptions?.canStart
   return {
     ...(wslDistro ? { wslDistro } : {}),
     ...(admissionTier ? { admissionTier } : {}),
-    ...(ghAccount ? { ghAccount } : {})
+    ...(ghAccount ? { ghAccount } : {}),
+    ...(resolveGitHubAccount ? { resolveGitHubAccount } : {}),
+    ...(canStart ? { canStart } : {})
+  }
+}
+
+export function resolveHostedReviewGitHubOptions(
+  options: HostedReviewExecutionOptions = {}
+): HostedReviewLocalGitOptions {
+  const { resolveGitHubAccount, ghAccount, canStart, ...gitOptions } =
+    getHostedReviewLocalGitOptions(options)
+  const binding = resolveGitHubAccount ? resolveGitHubAccount() : ghAccount
+  const checkStart = resolveGitHubAccount
+    ? () => {
+        if (canStart?.() === false) {
+          return false
+        }
+        resolveGitHubAccount()
+        return true
+      }
+    : canStart
+  return {
+    ...gitOptions,
+    ...(binding ? { ghAccount: binding } : {}),
+    ...(checkStart ? { canStart: checkStart } : {})
   }
 }
 

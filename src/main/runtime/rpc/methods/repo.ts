@@ -1,4 +1,5 @@
 import { defineMethod } from '../core'
+import { isGitHubParticipantOwner } from '../../github-participant-settings'
 import { PROJECT_RUNTIME_METHODS } from './project-runtime-rpc-methods'
 import { FOLDER_WORKSPACE_METHODS } from './folder-workspace'
 import {
@@ -184,15 +185,28 @@ export const REPO_METHODS = [
     name: 'repo.update',
     permission: 'workspace',
     params: RepoUpdate,
-    handler: async (params, context) => ({
-      repo: projectRepoVisibilityForClient(
-        await context.runtime.updateRepo(
-          params.repo,
-          params.updates as Parameters<typeof context.runtime.updateRepo>[1]
-        ),
-        context
-      )
-    })
+    handler: async (params, context) => {
+      if ('ghAccount' in params.updates && !isGitHubParticipantOwner(context.caller)) {
+        const registry = context.runtime.getGitHubParticipantRegistry?.()
+        if (registry) {
+          const repo = await context.runtime.showRepo(params.repo)
+          if (registry.isRepoEnabled(repo.id)) {
+            throw new Error(
+              'This project uses member GitHub accounts. Update your member account selection instead of the shared project binding; update Orca if this client lacks member settings.'
+            )
+          }
+        }
+      }
+      return {
+        repo: projectRepoVisibilityForClient(
+          await context.runtime.updateRepo(
+            params.repo,
+            params.updates as Parameters<typeof context.runtime.updateRepo>[1]
+          ),
+          context
+        )
+      }
+    }
   }),
   defineMethod({
     name: 'repo.rm',

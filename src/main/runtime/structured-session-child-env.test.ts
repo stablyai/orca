@@ -2,6 +2,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
 import { resolveProviderChildEnv } from '../provider-process/provider-process-launch'
+import { sealStructuredSessionChild } from './structured-session-child-env'
 
 const shim = vi.hoisted(() => ({ ensureLinuxTerminalOrcaCliShimDir: vi.fn() }))
 vi.mock('../cli/linux-terminal-orca-cli-shim', () => shim)
@@ -80,12 +81,26 @@ describe('sealStructuredSessionChild identity', () => {
       ORCA_ENVIRONMENT: '',
       ORCA_PAIRING_CODE: '',
       ORCA_REMOTE_PAIRING: '',
+      ORCA_AGENT_SESSION_PROOF: SEALED_TEST_SPAWN_TOKEN,
       ORCA_AGENT_SESSION_SPAWN_TOKEN: SEALED_TEST_SPAWN_TOKEN
     })
     // A chat names itself by its id alone: no handle, no pane key.
     expect(env.ORCA_TERMINAL_HANDLE).toBeUndefined()
     expect(env.ORCA_PANE_KEY).toBeUndefined()
     expect(childEnv).toEqual({ PATH: '/usr/bin' })
+  })
+
+  it('preserves a current session proof through scrubbed subprocesses and Codex core inheritance', () => {
+    installFakeAppEnvironment({ isPackaged: () => true, getPath: () => USER_DATA })
+    const sealed = sealStructuredSessionChild({
+      sessionId: SESSION_ID,
+      spawnToken: SEALED_TEST_SPAWN_TOKEN,
+      env: { ORCA_AGENT_SESSION_PROOF: 'stale-parent-proof' },
+      inheritedEnvToDelete: ['ORCA_AGENT_SESSION_PROOF']
+    })
+    expect(sealed.env.ORCA_AGENT_SESSION_PROOF).toBe(SEALED_TEST_SPAWN_TOKEN)
+    expect(sealed.commandEnv.ORCA_AGENT_SESSION_PROOF).toBe(SEALED_TEST_SPAWN_TOKEN)
+    expect(sealed.envToDelete).not.toContain('ORCA_AGENT_SESSION_PROOF')
   })
 
   it.each(['ORCA_ENVIRONMENT', 'ORCA_PAIRING_CODE', 'ORCA_REMOTE_PAIRING'])(

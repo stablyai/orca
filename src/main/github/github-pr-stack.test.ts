@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { GitHubPRStack } from '../../shared/github/pull-request-types'
+import { githubPRStackExecutionScope } from './client/github-exec-scope'
 
 const { ghExecFileAsyncMock, rateLimitGuardMock, noteRateLimitSpendMock } = vi.hoisted(() => ({
   ghExecFileAsyncMock: vi.fn(),
@@ -38,6 +39,60 @@ beforeEach(() => {
 })
 
 describe('hydrateGitHubPRStack', () => {
+  it.each(['explicit', 'default'] as const)(
+    'isolates concurrent participant stacks with %s execution scope',
+    async (scopeMode) => {
+      ghExecFileAsyncMock.mockImplementation(async (_args, options) => ({
+        stdout: JSON.stringify({
+          data: {
+            repository: {
+              pullRequest: {
+                stack: {
+                  number: 51,
+                  size: 1,
+                  baseRefName: 'main',
+                  entries: {
+                    nodes: [
+                      {
+                        position: 1,
+                        pullRequest: {
+                          number: 202,
+                          title: options.ghAccount.user,
+                          url: 'https://github.com/stablyai/orca/pull/202'
+                        }
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        })
+      }))
+      const read = (user: string) => {
+        const ghAccount = { host: 'github.com', user }
+        const scope =
+          scopeMode === 'explicit'
+            ? githubPRStackExecutionScope(null, { resolveGitHubAccount: () => ghAccount })
+            : undefined
+        return hydrateGitHubPRStack(
+          repository,
+          202,
+          summary,
+          { cwd: '/repo', ghAccount },
+          undefined,
+          scope
+        )
+      }
+      const [alice, bob] = await Promise.all([read('alice'), read('bob')])
+      expect(alice.entries?.[0]?.title).toBe('alice')
+      expect(bob.entries?.[0]?.title).toBe('bob')
+      expect((await read('alice')).entries?.[0]?.title).toBe('alice')
+      expect((await read('bob')).entries?.[0]?.title).toBe('bob')
+      expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(2)
+    }
+  )
+
   it('maps and caches every entry in one GraphQL request', async () => {
     ghExecFileAsyncMock.mockResolvedValue({
       stdout: JSON.stringify({

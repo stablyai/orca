@@ -80,6 +80,31 @@ describe('createGitHubPullRequest', () => {
     acquireMock.mockResolvedValue(undefined)
   })
 
+  it('refuses a missing participant before creating a pull request', async () => {
+    await expect(
+      createGitHubPullRequest(
+        '/repo',
+        {
+          provider: 'github',
+          base: 'main',
+          title: 'Feature',
+          body: '',
+          draft: false
+        },
+        'local',
+        {
+          localGitExecOptions: {
+            resolveGitHubAccount: () => {
+              throw new Error('github_participant_missing')
+            }
+          }
+        }
+      )
+    ).rejects.toThrow('github_participant_missing')
+    expect(ghExecFileAsyncMock).not.toHaveBeenCalled()
+    expect(getOwnerRepoForRemoteMock).not.toHaveBeenCalled()
+  })
+
   it('creates a GitHub pull request with normalized refs and a body file', async () => {
     getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
     ghExecFileAsyncMock.mockResolvedValueOnce({

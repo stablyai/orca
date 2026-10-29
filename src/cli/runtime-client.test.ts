@@ -120,6 +120,7 @@ describe.skipIf(process.platform === 'win32')('RuntimeClient', () => {
       await client.call('orchestration.taskList', {})
       const secondClient = new RuntimeClient(userDataPath, 500)
       await secondClient.call('orchestration.taskList', {})
+      await client.call('github.issue', { repo: 'id:repo', number: 1 })
     } finally {
       if (priorLaunchToken === undefined) {
         delete process.env.ORCA_AGENT_LAUNCH_TOKEN
@@ -138,6 +139,11 @@ describe.skipIf(process.platform === 'win32')('RuntimeClient', () => {
     })
     expect(requests[2]?.orchestrationRequestId).toBeUndefined()
     expect(requests[2]?.compatibilityInvocationId).not.toBe(requests[1]?.compatibilityInvocationId)
+    expect(requests[4]?.method).toBe('github.issue')
+    expect(requests[4]?.orchestrationCompatibilityEvidence).toMatchObject({
+      launchToken: 'launch-secret'
+    })
+    expect(requests[4]?.compatibilityInvocationId).toBeUndefined()
     expect(requests[3]?.method).toBe('orchestration.taskList')
     expect(requests[3]?.compatibilityInvocationId).not.toBe(requests[1]?.compatibilityInvocationId)
   })

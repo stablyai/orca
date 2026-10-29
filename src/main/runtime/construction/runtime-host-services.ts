@@ -7,7 +7,7 @@ import type { LegacyWorkerRecoveryCandidate } from '../runtime-legacy-worker-ter
 
 import type { LegacyWorkerTerminalRecoveryPlan } from '../orchestration/orchestration-legacy-worker-terminal-recovery'
 
-import { OrcaRuntimeWithTerminalDrivers } from '../terminal/driver/terminal-driver-resources'
+import { OrcaRuntimeWithGitHubParticipants } from './runtime-github-participant-services'
 import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
 import type { ResolvedWorktree } from '../runtime-worktree-path-identity'
 import { confirmRunTerminalShellAlone, readRunTerminalClientUse } from '../run-terminal-client-use'
@@ -44,8 +44,7 @@ import { RuntimeAiVaultCommands } from '../runtime-ai-vault-commands'
 import { ClaudeAgentTeamsService } from '../claude-agent-teams-service'
 import { teardownFolderWorkspacePtys } from '../folder-workspace-pty-teardown'
 import { countRepoTerminalsNotKnownExited } from '../project-removal-impact'
-
-export abstract class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeWithTerminalDrivers {
+export abstract class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeWithGitHubParticipants {
   declare addRepo: RuntimeRepositoryCommandSurface['addRepo']
   declare cloneRepo: RuntimeRepositoryCommandSurface['cloneRepo']
   protected abstract tryGetWorkspaceSessionHostIdForWorktree(

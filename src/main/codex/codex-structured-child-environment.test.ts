@@ -3,7 +3,10 @@ import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node
 import { tmpdir } from 'node:os'
 import { delimiter, join } from 'node:path'
 import { openCodexAppServerConnection } from './codex-app-server-connection'
-import { ORCA_AGENT_SESSION_SPAWN_TOKEN_ENV } from '../../shared/agent-session-caller-env'
+import {
+  ORCA_AGENT_SESSION_PROOF_ENV,
+  ORCA_AGENT_SESSION_SPAWN_TOKEN_ENV
+} from '../../shared/agent-session-caller-env'
 import { sealStructuredSessionChild } from '../runtime/structured-session-child-env'
 import { createCodexStructuredLaunchResolver } from '../runtime/structured-agent-launch-composition.test-support'
 import { agentSessionRecordFixture } from '../native-chat/agent-session-record-test-fixture'
@@ -67,6 +70,7 @@ describe('the Codex child environment', () => {
       EXAMPLE_GATEWAY_TOKEN: 'shell-exported',
       CODEX_HOME: '/pinned/home',
       [ORCA_AGENT_SESSION_SPAWN_TOKEN_ENV]: 'spawn-token',
+      [ORCA_AGENT_SESSION_PROOF_ENV]: 'spawn-token',
       ORCA_AGENT_SESSION_ID: 'session-not-a-worker',
       ORCA_STRUCTURED_SESSION: '1',
       ORCA_CLI_COMMAND: expect.stringMatching(DEV_CLI_LAUNCHER),
@@ -86,6 +90,7 @@ describe('the Codex child environment', () => {
     const sessionId = 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d'
     expect(sealed(sessionId)).toEqual({
       [ORCA_AGENT_SESSION_SPAWN_TOKEN_ENV]: 'spawn-token',
+      [ORCA_AGENT_SESSION_PROOF_ENV]: 'spawn-token',
       ORCA_AGENT_SESSION_ID: sessionId,
       ORCA_STRUCTURED_SESSION: '1',
       ORCA_CLI_COMMAND: expect.stringMatching(DEV_CLI_LAUNCHER),

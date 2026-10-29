@@ -189,6 +189,7 @@ export abstract class OrcaRuntimeWithCreateManagedRemoteWorktree extends OrcaRun
     isCrossRepository?: boolean
   }): Promise<GitHubPrStartPoint | { error: string }> {
     return resolveRuntimeGitHubWorktreeBase(args, {
+      participantRegistry: this.getGitHubParticipantRegistry(),
       store: this.store ? this.requireStore() : null,
       resolveRepo: (selector) => this.resolveRepoSelector(selector)
     })

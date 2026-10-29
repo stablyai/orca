@@ -69,6 +69,21 @@ describe('githubHostExecOptions', () => {
 })
 
 describe('resolveGitHubRepoExecution', () => {
+  it('does not reuse an Enterprise authentication miss across participant accounts', async () => {
+    const repository = { owner: 'team', repo: 'orca', host: 'ghe.example.com' }
+    getEnterpriseGitHubRepoSlugMock.mockImplementation(async (_path, _connection, options) =>
+      options.localGitExecOptions.ghAccount.user === 'alice' ? repository : null
+    )
+    const options = (user: string) => ({
+      resolveGitHubAccount: () => ({ host: 'ghe.example.com', user })
+    })
+    await expect(getOriginGitHubApiRepository('/repo', null, options('bob'))).resolves.toBeNull()
+    await expect(getOriginGitHubApiRepository('/repo', null, options('alice'))).resolves.toEqual(
+      repository
+    )
+    expect(getEnterpriseGitHubRepoSlugMock).toHaveBeenCalledTimes(2)
+  })
+
   it('combines local repository and GitHub host execution options', async () => {
     const ownerRepo = { owner: 'acme', repo: 'widgets', host: 'github.acme-corp.com:8443' }
     isGitHubHostAuthenticatedMock.mockResolvedValue(true)

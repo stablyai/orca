@@ -1,3 +1,4 @@
+import { REPO_GITHUB_MEMBER_HANDLERS } from './repo-github-members'
 import type { RuntimeRepoList, RuntimeRepoSearchRefs } from '../../shared/runtime-types'
 import type { CommandHandler } from '../dispatch'
 import { formatRepoList, formatRepoRefs, formatRepoShow, printResult } from '../format'
@@ -6,6 +7,7 @@ import { resolveRepoPathArgument } from '../repo-path-arguments'
 import { RuntimeClientError } from '../runtime/types'
 
 export const REPO_HANDLERS: Record<string, CommandHandler> = {
+  ...REPO_GITHUB_MEMBER_HANDLERS,
   'repo list': async ({ client, json }) => {
     const result = await client.call<RuntimeRepoList>('repo.list')
     printResult(result, json, formatRepoList)

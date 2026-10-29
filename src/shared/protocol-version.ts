@@ -1,4 +1,5 @@
 import { ACCOUNT_RUNTIME_CAPABILITIES } from './account-runtime-capabilities'
+import { GITHUB_PARTICIPANT_ACCOUNTS_CAPABILITY } from './github/participant-accounts'
 import * as agentLaunchCapabilities from './agent-launch-runtime-capability'
 import {
   AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY,
@@ -124,6 +125,7 @@ export const SAVED_RESUME_ORIGIN_RUNTIME_CAPABILITY =
   'agent-session.saved-resume-origin.v1' as const
 
 export const RUNTIME_CAPABILITIES = [
+  GITHUB_PARTICIPANT_ACCOUNTS_CAPABILITY,
   SAVED_RESUME_ORIGIN_RUNTIME_CAPABILITY,
   ...HOST_RUNTIME_CAPABILITIES,
   ...DEVICE_KEY_RUNTIME_CAPABILITIES,

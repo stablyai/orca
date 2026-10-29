@@ -94,6 +94,11 @@ describe('stripOrcaProvenanceMetaUpdates', () => {
     expect(
       stripOrcaProvenanceMetaUpdates({
         comment: 'keep me',
+        githubExecutionIdentity: {
+          repoId: 'r',
+          participantId: 'forged',
+          account: { host: 'github.com', user: 'owner' }
+        },
         orcaCreatedAt: 123,
         orcaCreationSource: 'desktop',
         orcaCreationWorkspaceLayout: { path: '/workspace', nestWorkspaces: false },

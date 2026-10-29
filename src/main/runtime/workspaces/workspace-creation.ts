@@ -1,3 +1,7 @@
+import {
+  captureGitHubExecutionIdentity,
+  runWithGitHubExecutionIdentity
+} from '../github-participant-execution'
 import type { Repo } from '../../../shared/repo-types'
 import type {
   WorktreeLineageInput,
@@ -62,6 +66,7 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
     )
 
     const repo = await this.resolveRepoSelector(args.repoSelector)
+    const identity = captureGitHubExecutionIdentity(this.getGitHubParticipantRegistry(), repo.id)
     // Listed from here: a create refused before its project resolved has nothing to show.
     const creation = this.workspaceLifecycle?.openCreate({
       creationId: args.creationId,
@@ -69,7 +74,15 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
       keyOf: (worktreeId) => workspaceLifecycleKey(getRepoExecutionHostId(repo), worktreeId)
     })
     try {
-      return await this.createInResolvedProject(args, repo, creation, rearm, events)
+      return await runWithGitHubExecutionIdentity(identity, () =>
+        this.createInResolvedProject(
+          { ...args, githubExecutionIdentity: identity },
+          repo,
+          creation,
+          rearm,
+          events
+        )
+      )
     } finally {
       creation?.close()
     }

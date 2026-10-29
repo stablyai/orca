@@ -10,6 +10,10 @@ export function ignoresRemoteSelection(commandPath: readonly string[]): boolean 
     (commandPath[0] === 'agent' && commandPath[1] !== 'launch') ||
     commandPath[0] === 'vm' ||
     commandPath[0] === 'agent-context' ||
-    commandPath[0] === 'profile'
+    commandPath[0] === 'profile' ||
+    (commandPath[0] === 'repo' &&
+      ['github-member-save', 'github-member-remove', 'github-members-mode'].includes(
+        commandPath[1]
+      ))
   )
 }

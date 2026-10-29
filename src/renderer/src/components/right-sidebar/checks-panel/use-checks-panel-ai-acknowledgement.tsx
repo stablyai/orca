@@ -1,6 +1,7 @@
 import { useCallback, useLayoutEffect, useRef } from 'react'
 import { toast } from 'sonner'
 import { mergePRCommentIntoList } from '@/store/github/pr-comment-cache'
+import { trackGitHubMutationCacheWrite } from '@/store/github/request-coordination'
 import {
   acknowledgePRCommentsAfterAiLaunch,
   attachPRReviewReplyParent,
@@ -90,163 +91,172 @@ export function useChecksPanelAiAcknowledgement(model: ChecksPanelAiAcknowledgem
       clearSentCommentSelection(resolution.reviewContextKey)
       // Ignore headSha churn; abort only when the user leaves this review/panel.
       const launchStableKey = checksPanelReviewStableKey(resolution.reviewContextKey)
-      // Host calls keep the snapshotted target; gate UI writes so replies cannot appear in another review.
-      const isPanelStillOnLaunchReview = (): boolean =>
-        checksPanelReviewStableKey(asyncResultKeyRef.current) === launchStableKey
-      const githubTarget = resolution.githubTarget
-      const canReplyOnHost = resolution.provider === 'github' && githubTarget != null
-      // Only GitHub supports fixing replies; missing targets matter only when selected comments need replies.
-      let lastHostError =
-        resolution.provider === 'github' &&
-        githubTarget == null &&
-        hasPRCommentGroupNeedingReply(resolution.selectedGroups)
-          ? translate(
-              'auto.components.right.sidebar.ChecksPanel.7e4b2a19c0',
-              'Could not resolve the GitHub PR to reply on.'
-            )
-          : undefined
-      const resolveSnapshottedThread = buildSnapshottedThreadResolver({
-        provider: resolution.provider,
-        githubResolveTarget: resolution.githubResolveTarget,
-        gitlabTarget: resolution.gitlabTarget,
-        resolveReviewThread,
-        resolveGitLabDiscussion: resolveGitLabMRDiscussionForChecks,
-        isPanelStillOnLaunchReview,
-        onResolvedOptimistically: (threadId) => {
-          setComments((prev) => markPRCommentThreadResolved(prev, threadId, true))
-        },
-        onResolveFailed: ({ threadId, error }) => {
-          lastHostError =
-            error ||
-            translate(
-              'auto.components.right.sidebar.ChecksPanel.430f1a62d4',
-              'Could not resolve the selected thread on the host.'
-            )
-          console.warn('Post-launch thread resolve failed:', threadId, error)
-        }
-      })
-      const counts = await acknowledgePRCommentsAfterAiLaunch({
-        groups: resolution.selectedGroups,
-        deps: {
-          resolveThread: resolveSnapshottedThread,
-          canReply: canReplyOnHost,
-          replyInThread: async (comment, body) => {
-            if (!githubTarget || !canPostPRReviewThreadReply(comment)) {
-              return false
-            }
-            try {
-              const parentThreadId =
-                resolvePRReviewReplyThreadId({
-                  parent: comment,
-                  existingComments: commentsRef.current
-                }) ?? comment.threadId
-              const result = await addPRReviewCommentReply(
-                githubTarget.repoPath,
-                githubTarget.prNumber,
-                comment.id,
-                body,
-                {
-                  repoId: githubTarget.repoId,
-                  prRepo: githubTarget.prRepo,
-                  threadId: parentThreadId,
-                  path: comment.path,
-                  line: comment.line
-                }
+      const cacheWrite =
+        resolution.provider === 'github'
+          ? trackGitHubMutationCacheWrite(resolution.reviewContextKey)
+          : null
+      try {
+        // Host calls keep the snapshotted target; gate UI writes so replies cannot appear in another review.
+        const isPanelStillOnLaunchReview = (): boolean =>
+          cacheWrite?.isCurrent() !== false &&
+          checksPanelReviewStableKey(asyncResultKeyRef.current) === launchStableKey
+        const githubTarget = resolution.githubTarget
+        const canReplyOnHost = resolution.provider === 'github' && githubTarget != null
+        // Only GitHub supports fixing replies; missing targets matter only when selected comments need replies.
+        let lastHostError =
+          resolution.provider === 'github' &&
+          githubTarget == null &&
+          hasPRCommentGroupNeedingReply(resolution.selectedGroups)
+            ? translate(
+                'auto.components.right.sidebar.ChecksPanel.7e4b2a19c0',
+                'Could not resolve the GitHub PR to reply on.'
               )
-              if (result.ok) {
-                // Attach threadId/path because API omissions would otherwise leave optimistic replies outside their parent.
-                if (isPanelStillOnLaunchReview()) {
-                  setComments((prev) =>
-                    mergePRCommentIntoList(
-                      prev,
-                      attachPRReviewReplyParent(result.comment, {
-                        ...comment,
-                        threadId: parentThreadId
-                      })
-                    )
-                  )
-                }
-                return true
-              }
-              lastHostError = result.error
-              console.warn('In-thread fixing reply failed:', result.error)
-              return false
-            } catch (err) {
-              lastHostError = err instanceof Error ? err.message : String(err)
-              console.warn('Failed to post in-thread fixing reply for review comment:', err)
-              return false
-            }
+            : undefined
+        const resolveSnapshottedThread = buildSnapshottedThreadResolver({
+          provider: resolution.provider,
+          githubResolveTarget: resolution.githubResolveTarget,
+          gitlabTarget: resolution.gitlabTarget,
+          resolveReviewThread,
+          resolveGitLabDiscussion: resolveGitLabMRDiscussionForChecks,
+          isPanelStillOnLaunchReview,
+          onResolvedOptimistically: (threadId) => {
+            setComments((prev) => markPRCommentThreadResolved(prev, threadId, true))
           },
-          // Conversation/review-summary comments lack nested replies; combine their acknowledgements into one body.
-          replyAsConversation: async (body) => {
-            if (!githubTarget) {
-              return false
-            }
-            try {
-              const result = await addPRConversationComment(
-                githubTarget.repoPath,
-                githubTarget.prNumber,
-                body,
-                {
-                  repoId: githubTarget.repoId,
-                  prRepo: githubTarget.prRepo
-                }
+          onResolveFailed: ({ threadId, error }) => {
+            lastHostError =
+              error ||
+              translate(
+                'auto.components.right.sidebar.ChecksPanel.430f1a62d4',
+                'Could not resolve the selected thread on the host.'
               )
-              if (result.ok) {
-                if (isPanelStillOnLaunchReview()) {
-                  setComments((prev) => mergePRCommentIntoList(prev, result.comment))
-                }
-                return true
+            console.warn('Post-launch thread resolve failed:', threadId, error)
+          }
+        })
+        const counts = await acknowledgePRCommentsAfterAiLaunch({
+          groups: resolution.selectedGroups,
+          deps: {
+            resolveThread: resolveSnapshottedThread,
+            canReply: canReplyOnHost,
+            replyInThread: async (comment, body) => {
+              if (!githubTarget || !canPostPRReviewThreadReply(comment)) {
+                return false
               }
-              lastHostError = result.error
-              console.warn('Conversation fixing reply failed:', result.error)
-              return false
-            } catch (err) {
-              lastHostError = err instanceof Error ? err.message : String(err)
-              console.warn('Failed to post conversation fixing reply for review comment:', err)
-              return false
+              try {
+                const parentThreadId =
+                  resolvePRReviewReplyThreadId({
+                    parent: comment,
+                    existingComments: commentsRef.current
+                  }) ?? comment.threadId
+                const result = await addPRReviewCommentReply(
+                  githubTarget.repoPath,
+                  githubTarget.prNumber,
+                  comment.id,
+                  body,
+                  {
+                    repoId: githubTarget.repoId,
+                    prRepo: githubTarget.prRepo,
+                    threadId: parentThreadId,
+                    path: comment.path,
+                    line: comment.line
+                  }
+                )
+                if (result.ok) {
+                  // Attach threadId/path because API omissions would otherwise leave optimistic replies outside their parent.
+                  if (isPanelStillOnLaunchReview()) {
+                    setComments((prev) =>
+                      mergePRCommentIntoList(
+                        prev,
+                        attachPRReviewReplyParent(result.comment, {
+                          ...comment,
+                          threadId: parentThreadId
+                        })
+                      )
+                    )
+                  }
+                  return true
+                }
+                lastHostError = result.error
+                console.warn('In-thread fixing reply failed:', result.error)
+                return false
+              } catch (err) {
+                lastHostError = err instanceof Error ? err.message : String(err)
+                console.warn('Failed to post in-thread fixing reply for review comment:', err)
+                return false
+              }
+            },
+            // Conversation/review-summary comments lack nested replies; combine their acknowledgements into one body.
+            replyAsConversation: async (body) => {
+              if (!githubTarget) {
+                return false
+              }
+              try {
+                const result = await addPRConversationComment(
+                  githubTarget.repoPath,
+                  githubTarget.prNumber,
+                  body,
+                  {
+                    repoId: githubTarget.repoId,
+                    prRepo: githubTarget.prRepo
+                  }
+                )
+                if (result.ok) {
+                  if (isPanelStillOnLaunchReview()) {
+                    setComments((prev) => mergePRCommentIntoList(prev, result.comment))
+                  }
+                  return true
+                }
+                lastHostError = result.error
+                console.warn('Conversation fixing reply failed:', result.error)
+                return false
+              } catch (err) {
+                lastHostError = err instanceof Error ? err.message : String(err)
+                console.warn('Failed to post conversation fixing reply for review comment:', err)
+                return false
+              }
             }
           }
+        })
+
+        if (isPanelStillOnLaunchReview()) {
+          await refreshCommentsRef.current(resolution.provider)
         }
-      })
 
-      if (isPanelStillOnLaunchReview()) {
-        await refreshCommentsRef.current(resolution.provider)
-      }
-
-      // Report host errors only when replies were needed and supported; resolving alone legitimately yields zero replies.
-      const repliedNoneDespiteHostSupport =
-        canReplyOnHost &&
-        counts.replied === 0 &&
-        hasPRCommentGroupNeedingReply(resolution.selectedGroups)
-      if (counts.failed > 0 || repliedNoneDespiteHostSupport || lastHostError) {
-        toast.error(
+        // Report host errors only when replies were needed and supported; resolving alone legitimately yields zero replies.
+        const repliedNoneDespiteHostSupport =
+          canReplyOnHost &&
+          counts.replied === 0 &&
+          hasPRCommentGroupNeedingReply(resolution.selectedGroups)
+        if (counts.failed > 0 || repliedNoneDespiteHostSupport || lastHostError) {
+          toast.error(
+            translate(
+              'auto.components.right.sidebar.ChecksPanel.f273f2271c',
+              'Started the agent. Marked {{value0}} resolved, replied to {{value1}}, skipped {{value2}}, failed {{value3}}.{{value4}}',
+              {
+                value0: counts.resolved,
+                value1: counts.replied,
+                value2: counts.skipped,
+                value3: counts.failed,
+                value4: lastHostError ? ` ${lastHostError}` : ''
+              }
+            )
+          )
+          return
+        }
+        toast.success(
           translate(
-            'auto.components.right.sidebar.ChecksPanel.f273f2271c',
-            'Started the agent. Marked {{value0}} resolved, replied to {{value1}}, skipped {{value2}}, failed {{value3}}.{{value4}}',
+            'auto.components.right.sidebar.ChecksPanel.aa95b81a3a',
+            'Started the agent. Marked {{value0}} resolved, replied to {{value1}}, skipped {{value2}}, failed {{value3}}.',
             {
               value0: counts.resolved,
               value1: counts.replied,
               value2: counts.skipped,
-              value3: counts.failed,
-              value4: lastHostError ? ` ${lastHostError}` : ''
+              value3: counts.failed
             }
           )
         )
-        return
+      } finally {
+        cacheWrite?.dispose()
       }
-      toast.success(
-        translate(
-          'auto.components.right.sidebar.ChecksPanel.aa95b81a3a',
-          'Started the agent. Marked {{value0}} resolved, replied to {{value1}}, skipped {{value2}}, failed {{value3}}.',
-          {
-            value0: counts.resolved,
-            value1: counts.replied,
-            value2: counts.skipped,
-            value3: counts.failed
-          }
-        )
-      )
     },
     [
       addPRConversationComment,

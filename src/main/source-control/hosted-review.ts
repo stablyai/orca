@@ -6,6 +6,7 @@ import { hostedReviewSshConnectionId } from './hosted-review-execution-host'
 import { withHostedReviewBranchCache } from './hosted-review-branch-cache'
 import {
   getHostedReviewLocalGitOptions,
+  resolveHostedReviewGitHubOptions,
   type HostedReviewExecutionOptions
 } from './hosted-review-git-options'
 
@@ -62,7 +63,13 @@ export async function getHostedReviewForBranch(
   }
 
   const headOid = input.currentHeadOid?.trim() || null
-  // All clients spend one host-user API quota; cache above the provider funnel (#11532).
+  const participantProvider = input.localGitExecOptions?.resolveGitHubAccount
+    ? await getForgeProviderForRepository({ ...input })
+    : undefined
+  if (participantProvider?.id === 'github') {
+    input = { ...input, localGitExecOptions: resolveHostedReviewGitHubOptions(input) }
+  }
+  // Resolve the GitHub account before consulting shared review caches.
   return withHostedReviewBranchCache(
     { ...input, branch: branchName },
     {
@@ -71,11 +78,13 @@ export async function getHostedReviewForBranch(
       ...(input.force === true ? { force: true } : {})
     },
     async () => {
-      const provider = await getForgeProviderForRepository({
-        repoPath: input.repoPath,
-        executionHostId: input.executionHostId,
-        ...(input.localGitExecOptions ? { localGitExecOptions: input.localGitExecOptions } : {})
-      })
+      const provider =
+        participantProvider ??
+        (await getForgeProviderForRepository({
+          repoPath: input.repoPath,
+          executionHostId: input.executionHostId,
+          ...(input.localGitExecOptions ? { localGitExecOptions: input.localGitExecOptions } : {})
+        }))
       if (!provider) {
         // Detection swallows errors; probe reachability first so timeouts/relay loss cannot cache definitive no-review (P1-D).
         await assertRemoteUrlReadable({

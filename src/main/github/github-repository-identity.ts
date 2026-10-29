@@ -11,6 +11,7 @@ import {
 import { classifyGitHubOwnerRepoFromRemoteUrl } from './github-ssh-host-alias-resolution'
 import { isStableMissingGitRemoteError } from '../git/stable-missing-git-remote-error'
 import type { GitAdmissionTier } from '../git/command-runner/git-exec-options'
+import { resolveHostedReviewGitHubOptions } from '../source-control/hosted-review-git-options'
 import { requireReachableGitRoute } from '../providers/execution-host-provider-dispatch'
 import { getConnectionExecutionHostId } from '../../shared/execution-host'
 
@@ -26,12 +27,16 @@ export type GitHubRepoContext = {
   admissionTier?: GitAdmissionTier
   /** SSH keeps the binding even when cwd is omitted from gh options. */
   ghAccount?: GhAccountBinding
+  resolveGitHubAccount?: () => GhAccountBinding | undefined
+  canStart?: () => boolean
 }
 
 export type LocalGitExecOptions = {
   wslDistro?: string
   admissionTier?: GitAdmissionTier
   ghAccount?: GhAccountBinding
+  resolveGitHubAccount?: () => GhAccountBinding | undefined
+  canStart?: () => boolean
 }
 
 export type GitHubRemoteIdentityProbeOptions = {
@@ -48,7 +53,11 @@ export function githubRepoContext(
     connectionId: connectionId ?? null,
     ...(localGitOptions.wslDistro ? { wslDistro: localGitOptions.wslDistro } : {}),
     ...(localGitOptions.admissionTier ? { admissionTier: localGitOptions.admissionTier } : {}),
-    ...(localGitOptions.ghAccount ? { ghAccount: localGitOptions.ghAccount } : {})
+    ...(localGitOptions.ghAccount ? { ghAccount: localGitOptions.ghAccount } : {}),
+    ...(localGitOptions.resolveGitHubAccount
+      ? { resolveGitHubAccount: localGitOptions.resolveGitHubAccount }
+      : {}),
+    ...(localGitOptions.canStart ? { canStart: localGitOptions.canStart } : {})
   }
 }
 
@@ -58,8 +67,15 @@ export function ghRepoExecOptions(context: GitHubRepoContext): {
   wslDistro?: string
   admissionTier?: GitAdmissionTier
   ghAccount?: GhAccountBinding
+  canStart?: () => boolean
 } {
-  const account = context.ghAccount ? { ghAccount: context.ghAccount } : {}
+  const account = resolveHostedReviewGitHubOptions({
+    localGitExecOptions: {
+      ghAccount: context.ghAccount,
+      resolveGitHubAccount: context.resolveGitHubAccount,
+      canStart: context.canStart
+    }
+  })
   return context.connectionId
     ? { ...account }
     : {

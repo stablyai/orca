@@ -74,9 +74,10 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
       const releaseStablePaneCreate = createIdempotentCallback(claimedStablePaneCreate)
       const launchToken = agentLaunchTokenFor(launchOpts, dependencies.randomUUID)
       const teamAllocation = terminalCreateTeamAllocation(this.claudeAgentTeams)
-      let effectiveLaunchConfig = launchOpts.launchConfig
+      let launchConfig = launchOpts.launchConfig
       let result!: Awaited<ReturnType<NonNullable<dependencies.RuntimePtyController['spawn']>>>
       const spawnFresh = async (operation: PaneSpawnOperation) => {
+        dependencies.bindParticipantLaunch(this.store, workspace, paneKey, launchToken)
         const baseEnv = withAgentLaunchToken(launchOpts.env, launchToken)
         const agentTeams = await teamAllocation
           .prepare(
@@ -95,7 +96,7 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
             throw error
           })
         const { plan: agentTeamsPlan, sequencedStartupCommand } = agentTeams
-        effectiveLaunchConfig = agentTeams.effectiveLaunchConfig
+        launchConfig = agentTeams.effectiveLaunchConfig
         const env = this.buildTerminalWorkspaceEnv(
           workspace,
           {
@@ -113,8 +114,7 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
           throw new Error('client_disconnected')
         }
         try {
-          const { launchAgent } = launchOpts
-          launchOpts.onPtySpawnDispatched?.({ launchConfig: effectiveLaunchConfig, launchAgent })
+          launchOpts.onPtySpawnDispatched?.({ launchConfig, launchAgent: launchOpts.launchAgent })
           result = await dependencies.spawnInAdmittedPane(this.store, ptyController, {
             ...initialSize,
             cwd,
@@ -122,7 +122,7 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
               ? launchOpts.command
               : (agentTeamsPlan?.command ?? launchOpts.command),
             launchAgent: launchOpts.launchAgent,
-            launchConfig: effectiveLaunchConfig,
+            launchConfig,
             ...(launchToken ? { launchToken } : {}),
             commandDelivery: 'provider',
             startupCommandDelivery: launchOpts.startupCommandDelivery,
@@ -214,7 +214,7 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
         // Why here: refused before a handle, snapshot or reveal could pose the live PTY as new.
         const launch = resolveTerminalLaunchResult(result, {
           ...launchOpts,
-          launchConfig: effectiveLaunchConfig,
+          launchConfig,
           launchToken
         })
         if (launch.surface) {

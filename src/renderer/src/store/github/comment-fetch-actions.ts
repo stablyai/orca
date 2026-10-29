@@ -5,7 +5,11 @@ import type { PRComment } from '../../../../shared/github/comment-types'
 import { callRuntimeRpc } from '../../runtime/runtime-rpc-client'
 import { prCommentsCacheSuffix, sourceScopedRepoCacheKey } from './cache-identity'
 import { isFresh, withBoundedCacheEntry } from './cache-policy'
-import { inflightCommentsRequests } from './request-coordination'
+import {
+  inflightCommentsRequests,
+  nextProviderRequestId,
+  ownsInflightRequest
+} from './request-coordination'
 import {
   getGitHubRepoSourceSettings,
   getGitHubSourceTarget,
@@ -39,9 +43,10 @@ export const createCommentFetchActions = (
 
     const inflightRequest = inflightCommentsRequests.get(cacheKey)
     if (inflightRequest) {
-      return inflightRequest
+      return inflightRequest.promise
     }
 
+    const requestId = nextProviderRequestId()
     const request = (async () => {
       try {
         const requestContext = getGitHubWorkItemRequestContext(
@@ -72,6 +77,9 @@ export const createCommentFetchActions = (
                 noCache: options?.force,
                 sourceContext: options?.sourceContext
               })) as PRComment[])
+        if (!ownsInflightRequest(inflightCommentsRequests, cacheKey, requestId)) {
+          return []
+        }
         set((s) => ({
           commentsCache: withBoundedCacheEntry(s.commentsCache, cacheKey, {
             data: comments,
@@ -83,11 +91,13 @@ export const createCommentFetchActions = (
         console.error('Failed to fetch PR comments:', err)
         return get().commentsCache[cacheKey]?.data ?? []
       } finally {
-        inflightCommentsRequests.delete(cacheKey)
+        if (ownsInflightRequest(inflightCommentsRequests, cacheKey, requestId)) {
+          inflightCommentsRequests.delete(cacheKey)
+        }
       }
     })()
 
-    inflightCommentsRequests.set(cacheKey, request)
+    inflightCommentsRequests.set(cacheKey, { promise: request, requestId })
     return request
   }
 })

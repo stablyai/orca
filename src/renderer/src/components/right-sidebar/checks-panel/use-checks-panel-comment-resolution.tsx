@@ -19,6 +19,7 @@ import { clearPendingPRCommentAiAck } from '../pr-comments-ai-launch-ack'
 import type { PRComment } from '../../../../../shared/github/comment-types'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
+import { trackGitHubMutationCacheWrite } from '@/store/github/request-coordination'
 import { worktreeLaunchWorkspace } from '@/lib/agent-launch-route-input'
 
 type ChecksPanelCommentResolutionInput = Pick<
@@ -116,25 +117,30 @@ export function useChecksPanelCommentResolution(model: ChecksPanelCommentResolut
         previousThreadComments = prev.filter((comment) => comment.threadId === threadId)
         return markPRCommentThreadResolved(prev, threadId, resolve)
       })
-      const ok = await resolveReviewThread(repo.path, prNumber, threadId, resolve, {
-        repoId: repo.id,
-        prRepo: pr?.prRepo
-      })
-      if (!isCurrentAsyncResult(requestKey)) {
-        return ok
-      }
-      if (!ok) {
-        rollbackThread(previousThreadComments)
-        if (notifyOnFailure) {
-          toast.error(
-            translate(
-              'auto.components.right.sidebar.ChecksPanel.5788d1059d',
-              'Could not update review thread. Check the GitHub API budget.'
-            )
-          )
+      const cacheWrite = trackGitHubMutationCacheWrite(prCacheKey)
+      try {
+        const ok = await resolveReviewThread(repo.path, prNumber, threadId, resolve, {
+          repoId: repo.id,
+          prRepo: pr?.prRepo
+        })
+        if (!cacheWrite.isCurrent() || !isCurrentAsyncResult(requestKey)) {
+          return ok
         }
+        if (!ok) {
+          rollbackThread(previousThreadComments)
+          if (notifyOnFailure) {
+            toast.error(
+              translate(
+                'auto.components.right.sidebar.ChecksPanel.5788d1059d',
+                'Could not update review thread. Check the GitHub API budget.'
+              )
+            )
+          }
+        }
+        return ok
+      } finally {
+        cacheWrite.dispose()
       }
-      return ok
     },
     [
       activeGitLabReview,

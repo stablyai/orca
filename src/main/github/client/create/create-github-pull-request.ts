@@ -20,6 +20,7 @@ import {
 } from '../../gh-utils'
 import {
   getHostedReviewLocalGitOptions,
+  resolveHostedReviewGitHubOptions,
   type HostedReviewExecutionOptions
 } from '../../../source-control/hosted-review-git-options'
 import { getOriginGitHubApiRepository, githubHostExecOptions } from '../../github-api-repository'
@@ -41,6 +42,7 @@ export async function createGitHubPullRequest(
   }
 
   // `gh` runs on this client whatever the host; only the git reads under it are routed.
+  options = { ...options, localGitExecOptions: resolveHostedReviewGitHubOptions(options) }
   const connectionId = hostedReviewSshConnectionId(executionHostId)
 
   // The unqualified head branch belongs to origin; retain its resolved host.

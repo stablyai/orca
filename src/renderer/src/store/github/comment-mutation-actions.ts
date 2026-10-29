@@ -8,6 +8,7 @@ import { restoreReactionOnSubject, setReactionOnSubject } from '@/lib/pr-comment
 import { prCommentsCacheSuffix, sourceScopedRepoCacheKey } from './cache-identity'
 import { withBoundedCacheEntry } from './cache-policy'
 import { hasUsableCommentPayload, mergePRCommentIntoList } from './pr-comment-cache'
+import { trackGitHubMutationCacheWrite } from './request-coordination'
 import {
   getGitHubRepoSourceSettings,
   getGitHubSourceTarget,
@@ -41,6 +42,7 @@ export const createCommentMutationActions = (
       repoPath,
       options?.sourceContext
     )
+    const cacheWrite = trackGitHubMutationCacheWrite(cacheKey)
     let result: GitHubCommentResult
     try {
       result =
@@ -75,6 +77,8 @@ export const createCommentMutationActions = (
     } catch (err) {
       const error = err instanceof Error ? err.message : 'Failed to post reply.'
       return { ok: false, error }
+    } finally {
+      cacheWrite.dispose()
     }
     if (!hasUsableCommentPayload(result)) {
       return result.ok
@@ -93,15 +97,17 @@ export const createCommentMutationActions = (
       path: result.comment.path ?? options?.path,
       line: result.comment.line ?? options?.line
     }
-    set((s) => {
-      const entry = s.commentsCache[cacheKey]
-      return {
-        commentsCache: withBoundedCacheEntry(s.commentsCache, cacheKey, {
-          data: mergePRCommentIntoList(entry?.data, comment),
-          fetchedAt: Date.now()
-        })
-      }
-    })
+    if (cacheWrite.isCurrent()) {
+      set((s) => {
+        const entry = s.commentsCache[cacheKey]
+        return {
+          commentsCache: withBoundedCacheEntry(s.commentsCache, cacheKey, {
+            data: mergePRCommentIntoList(entry?.data, comment),
+            fetchedAt: Date.now()
+          })
+        }
+      })
+    }
     return { ok: true, comment }
   },
 
@@ -157,6 +163,7 @@ export const createCommentMutationActions = (
       repoPath,
       options?.sourceContext
     )
+    const cacheWrite = trackGitHubMutationCacheWrite(cacheKey)
     let ok = false
     try {
       ok =
@@ -184,8 +191,10 @@ export const createCommentMutationActions = (
             })
     } catch (err) {
       console.error('Failed to update PR comment reaction:', err)
+    } finally {
+      cacheWrite.dispose()
     }
-    if (!ok && previousComment) {
+    if (!ok && previousComment && cacheWrite.isCurrent()) {
       set((state) => {
         const entry = state.commentsCache[cacheKey]
         if (!entry?.data) {
