@@ -24,6 +24,7 @@ export type ManagedOrcadPruneArgs = {
   serverTarget: NodeRuntimeTarget
   activeVersion: string
   readiness: ServeReadiness
+  keepStagedWithinDays?: number
 }
 
 /** True only when GC ran and left no stale version dir behind. */
@@ -43,6 +44,9 @@ export async function pruneManagedOrcadVersions(args: ManagedOrcadPruneArgs): Pr
       liveDaemonVersion,
       // Default and compat builds share one runtime store.
       nodeRuntimePins: nodeRuntimeStorePins(args.serverTarget),
+      ...(args.keepStagedWithinDays !== undefined
+        ? { keepStagedWithinDays: args.keepStagedWithinDays }
+        : {}),
       signal: args.slot.signal
     })
   } catch (error) {
@@ -82,6 +86,10 @@ export async function pruneSupersededOrcadCandidates(
     slot,
     serverTarget,
     activeVersion: candidateVersion,
-    readiness
+    readiness,
+    keepStagedWithinDays: STAGED_BUILD_KEEP_DAYS
   })
 }
+
+// Desktops on different releases share hosts; without a grace period each re-uploads what the other pruned.
+const STAGED_BUILD_KEEP_DAYS = 3

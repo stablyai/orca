@@ -194,6 +194,16 @@ export const PR_E2E_SOURCE_ROUTES = [
           file
         ))
   },
+  {
+    id: 'ssh.orcad-deferred-update-slots',
+    specs: ['tests/e2e/ssh-orcad-deferred-update-slots.spec.ts'],
+    matches: (file) =>
+      MANAGED_SSH_HARNESS.test(file) ||
+      (isProductSource(file) &&
+        /^src\/main\/(?:ssh\/orcad-runtime-maintenance|managed-server\/(?:lifecycle\/orcad-managed-version-gc|install\/(?:orcad-remote-gc|remote-install-gc))|wsl\/wsl-orcad-deploy)\.ts$/.test(
+          file
+        ))
+  },
   // COMPAT(legacy-relay-bridge): revisit 2027-01-15 with src/main/ssh/legacy-relay/.
   {
     id: 'ssh.orcad-legacy-relay-bridge',

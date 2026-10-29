@@ -63,17 +63,29 @@ test('a release deferred over running terminals replaces the build the last one 
         const staged = (await deferredCandidate(page, environmentId))!
         expect(slotVersions(exec)).toEqual([deployed, staged].sort())
 
+        // Releases come days apart; a build staged this recently could still be another desktop's.
+        exec(`touch -d '5 days ago' /root/.orca-remote/orcad-${staged}/.install-complete`)
         makeOrcadTemplateVariant(templateDir, 'C')
         page = await relaunchManagedApp(fixture)
+        let next: string | null = null
         await expect
-          .poll(() => deferredCandidate(page, environmentId), { timeout: 4 * 60_000 })
-          .not.toBe(staged)
-        const next = (await deferredCandidate(page, environmentId))!
-        expect(next).not.toBeNull()
+          .poll(
+            async () => {
+              const candidate = await deferredCandidate(page, environmentId)
+              next = candidate !== staged ? candidate : null
+              return next
+            },
+            { timeout: 4 * 60_000 }
+          )
+          .not.toBeNull()
         expect(readHostOrcadActivation(exec).active).toBe(deployed)
         await expect
           .poll(() => slotVersions(exec), { timeout: 60_000 })
-          .toEqual([deployed, next].sort())
+          .toEqual([deployed, next!].sort())
+        // The prune must not touch the running terminal the deferral protected.
+        expect(
+          exec("pgrep -f '[w]hile :; do echo TICK' >/dev/null && echo alive || true")
+        ).toContain('alive')
       },
       templateDir
     )
