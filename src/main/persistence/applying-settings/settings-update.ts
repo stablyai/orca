@@ -25,6 +25,7 @@ import { normalizeUiLanguage } from '../../../shared/ui-language'
 import { normalizeWorktreeVisibilityDefaults } from '../../../shared/external-worktree-visibility'
 import { normalizePRBotAuthorOverrides } from '../../../shared/pr-bot-author-overrides'
 import { normalizeMachineName } from '../../../shared/machine-name'
+import { normalizeFileExplorerOpenTarget } from '../../../shared/file-explorer-open-target'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import {
   addMobilePairingCustomAddress,
@@ -59,6 +60,11 @@ export function updateSettings(
   options: { notifyListeners?: boolean; originWebContentsId?: number } = {}
 ): GlobalSettings {
   const sanitizedUpdates = expandWorkspaceDirHome(stripRetiredGlobalSettings(updates))
+  if ('fileExplorerOpenTarget' in updates) {
+    sanitizedUpdates.fileExplorerOpenTarget = normalizeFileExplorerOpenTarget(
+      updates.fileExplorerOpenTarget
+    )
+  }
   const linkBehavior = updates.terminalLinkClickBehavior
   if (linkBehavior === 'actions' || linkBehavior === 'open' || linkBehavior === 'none') {
     // Loaded defaults are ambiguous; synchronize the legacy switch only on an explicit write.

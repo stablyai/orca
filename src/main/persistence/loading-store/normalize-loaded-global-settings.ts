@@ -18,6 +18,7 @@ import {
 } from '../applying-settings/terminal-settings-migrations'
 import { readLegacySidekickFlag } from '../applying-settings/onboarding-normalization'
 import { normalizeMachineName } from '../../../shared/machine-name'
+import { normalizeFileExplorerOpenTarget } from '../../../shared/file-explorer-open-target'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { PreparedLoadedTerminalSettings } from './prepare-loaded-terminal-settings'
 import type { PreparedLoadedProfileSettings } from './prepare-loaded-profile-settings'
@@ -115,6 +116,9 @@ export function normalizeLoadedGlobalSettings(
     localAccountRuntimeDefaultedToAutoForAllUsers: true,
     ...migratedOsc52Clipboard,
     floatingTerminalEnabled: migratedFloatingTerminalEnabled,
+    fileExplorerOpenTarget: normalizeFileExplorerOpenTarget(
+      parsed.settings?.fileExplorerOpenTarget
+    ),
     floatingTerminalDefaultedForAllUsers: true,
     floatingTerminalCwd: migratedFloatingTerminalCwd,
     floatingTerminalTrustedCwds: migratedFloatingTerminalTrustedCwds,

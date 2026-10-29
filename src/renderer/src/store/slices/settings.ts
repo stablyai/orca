@@ -35,6 +35,7 @@ import * as ownerHydration from './settings-owner-hydration-publication'
 import { persistVisibilityAwareSettings } from './worktree-visibility-settings-write'
 import { getSettingsFocusedExecutionHostId } from '../../../../shared/execution-host'
 import { createBrowserUuid } from '@/lib/browser-uuid'
+import { normalizeFileExplorerOpenTarget } from '../../../../shared/file-explorer-open-target'
 
 export type SettingsSlice = SettingsSearchState & {
   settings: GlobalSettings | null
@@ -67,6 +68,11 @@ function normalizeSettingsUpdates(
   const { terminalScrollbackBytes: _legacyScrollbackBytes, ...sanitizedUpdates } =
     updates as LegacyTerminalScrollbackSettingsUpdate
   void _legacyScrollbackBytes
+  if ('fileExplorerOpenTarget' in updates) {
+    sanitizedUpdates.fileExplorerOpenTarget = normalizeFileExplorerOpenTarget(
+      updates.fileExplorerOpenTarget
+    )
+  }
   if ('terminalQuickCommands' in updates) {
     sanitizedUpdates.terminalQuickCommands = normalizeTerminalQuickCommands(
       updates.terminalQuickCommands

@@ -1,13 +1,16 @@
 import type { FileDocument } from '../../../shared/filesystem-entry-types'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
-import type { EditorFilesSlice } from '@/store/slices/editor/types/editor-files-slice'
+import type {
+  EditorFilesSlice,
+  OpenFileOptions
+} from '@/store/slices/editor/types/editor-files-slice'
 import { detectLanguage } from './language-detect'
 
 /** Open picker/shell-resolved absolute local files in the floating workspace; focused runtime routing would read the wrong machine. */
 export function openDocumentInFloatingWorkspace(
   openFile: EditorFilesSlice['openFile'],
   document: Pick<FileDocument, 'filePath' | 'relativePath'>,
-  options: { targetGroupId?: string } = {}
+  options: Pick<OpenFileOptions, 'targetGroupId' | 'focusEditor'> = {}
 ): string {
   return openFile(
     {
@@ -21,6 +24,7 @@ export function openDocumentInFloatingWorkspace(
     {
       preview: false,
       targetGroupId: options.targetGroupId,
+      ...(options.focusEditor === undefined ? {} : { focusEditor: options.focusEditor }),
       suppressActiveRuntimeFallback: true
     }
   )

@@ -120,6 +120,23 @@ describe('Store', () => {
     expect((readDataFile() as PersistedState).settings.terminalLineHeight).toBe(1)
   })
 
+  it('persists the file explorer target through the normal settings store and repairs malformed writes', async () => {
+    const store = await createStore()
+    expect(store.getSettings().fileExplorerOpenTarget).toBe('current-workspace')
+    store.updateSettings({ fileExplorerOpenTarget: 'floating-workspace' })
+    store.flush()
+    expect(readDataFile()).toHaveProperty('settings.fileExplorerOpenTarget', 'floating-workspace')
+    await closeTestStores()
+
+    const reopened = await createStore()
+    expect(reopened.getSettings().fileExplorerOpenTarget).toBe('floating-workspace')
+    const malformed: Partial<GlobalSettings> = {}
+    Object.assign(malformed, { fileExplorerOpenTarget: 'new-window' })
+    reopened.updateSettings(malformed)
+    reopened.flush()
+    expect(readDataFile()).toHaveProperty('settings.fileExplorerOpenTarget', 'current-workspace')
+  })
+
   it('loads an old heartbeat profile, saves off, and reopens with heartbeats still off', async () => {
     const persisted = getDefaultPersistedState(testState.dir)
     delete persisted.settings.orchestrationHeartbeatsEnabled

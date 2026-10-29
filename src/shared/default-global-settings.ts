@@ -167,6 +167,7 @@ export function buildDefaultSettings(args: {
     // Why: Orca-first keeps core shortcuts working from a focused terminal; TUI-ownership users opt in.
     terminalShortcutPolicy: 'orca-first',
     floatingTerminalEnabled: true,
+    fileExplorerOpenTarget: 'current-workspace',
     browserClientHostedRemoteEnabled: true,
     floatingTerminalDefaultedForAllUsers: true,
     floatingTerminalCwd: '~',

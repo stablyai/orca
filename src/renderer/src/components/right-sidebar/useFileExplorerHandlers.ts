@@ -12,25 +12,17 @@ import {
   requireMatchingFileExplorerOperationRoute
 } from './file-explorer-operation-owner'
 import { runtimeTargetEnvironmentId } from '@/runtime/runtime-client-target'
+import { useAppStore } from '@/store'
+import type { EditorFilesSlice } from '@/store/slices/editor/types/editor-files-slice'
+import { openDocumentInFloatingWorkspace } from '@/lib/open-document-in-floating-workspace'
+import { revealFloatingWorkspacePanel } from '@/lib/floating-workspace-panel-reveal'
+import { isWebClientLocation } from '@/lib/web-client-location'
+import { extractIpcErrorMessage } from '@/lib/ipc-error'
 
 type UseFileExplorerHandlersParams = {
   activeWorktreeId: string | null
   runtimeEnvironmentId?: string | null
-  openFile: (
-    params: {
-      filePath: string
-      relativePath: string
-      worktreeId: string
-      language: string
-      mode: 'edit'
-      runtimeEnvironmentId?: string | null
-    },
-    options?: {
-      preview?: boolean
-      suppressActiveRuntimeFallback?: boolean
-      focusEditor?: boolean
-    }
-  ) => void
+  openFile: EditorFilesSlice['openFile']
   makePreviewFilePermanent: (filePath: string) => void
   toggleDir: (worktreeId: string, dirPath: string) => void
   canToggleDirectories?: boolean
@@ -54,11 +46,35 @@ type UseFileExplorerHandlersReturn = {
 type OpenFileParams = Parameters<UseFileExplorerHandlersParams['openFile']>[0]
 type OpenFileOptions = Parameters<UseFileExplorerHandlersParams['openFile']>[1]
 
+let floatingWorkspaceEnablePending: Promise<void> | null = null
+
+async function enableFloatingWorkspaceForExplorer(): Promise<void> {
+  if (useAppStore.getState().settings?.floatingTerminalEnabled) {
+    return
+  }
+  // Concurrent clicks must share one write so settings publication fences cannot discard an earlier acknowledgement.
+  floatingWorkspaceEnablePending ??= useAppStore
+    .getState()
+    .updateSettingsOrThrow({ floatingTerminalEnabled: true })
+    .finally(() => {
+      floatingWorkspaceEnablePending = null
+    })
+  await floatingWorkspaceEnablePending
+  if (!useAppStore.getState().settings?.floatingTerminalEnabled) {
+    throw new Error(
+      translate(
+        'fileExplorer.floatingWorkspaceEnableFailed',
+        'Could not enable the floating workspace. Try again.'
+      )
+    )
+  }
+}
+
 export async function activateFileExplorerNode(args: {
   node: TreeNode
   activeWorktreeId: string | null
   runtimeEnvironmentId?: string | null
-  openFile: (params: OpenFileParams, options?: OpenFileOptions) => void
+  openFile: (params: OpenFileParams, options?: OpenFileOptions) => string
   toggleDir: (worktreeId: string, dirPath: string) => void
   canToggleDirectories?: boolean
   loadDir: UseFileExplorerHandlersParams['loadDir']
@@ -131,11 +147,47 @@ export async function activateFileExplorerNode(args: {
     }
   }
   let fileRuntimeEnvironmentId: string | null
+  let isLocalOwner: boolean
   try {
     const route = requireMatchingFileExplorerOperationRoute(activeWorktreeId, node.operationOwner)
     fileRuntimeEnvironmentId = runtimeTargetEnvironmentId(route.target)
+    isLocalOwner =
+      route.target.kind === 'local' &&
+      route.expectedExecutionHostId === 'local' &&
+      !route.connectionId
   } catch {
     toast.error(getFileExplorerOwnerUnresolvedMessage())
+    return
+  }
+  if (
+    isLocalOwner &&
+    !isWebClientLocation() &&
+    useAppStore.getState().settings?.fileExplorerOpenTarget === 'floating-workspace'
+  ) {
+    try {
+      await enableFloatingWorkspaceForExplorer()
+      requireMatchingFileExplorerOperationRoute(activeWorktreeId, node.operationOwner)
+      openDocumentInFloatingWorkspace(
+        openFile,
+        {
+          filePath: node.path,
+          relativePath: escapesWorktree ? node.path : node.relativePath
+        },
+        { focusEditor: true }
+      )
+      // The toggle listener observes the enabled flag after React commits it.
+      requestAnimationFrame(() => revealFloatingWorkspacePanel(useAppStore.getState()))
+    } catch (error) {
+      toast.error(
+        extractIpcErrorMessage(
+          error,
+          translate(
+            'fileExplorer.floatingWorkspaceOpenFailed',
+            'Could not open the file in the floating workspace.'
+          )
+        )
+      )
+    }
     return
   }
   openFile(

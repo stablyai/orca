@@ -5,13 +5,18 @@ import type { FloatingTerminalTriggerLocation } from '../../../../shared/ui-chro
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
 import { ToggleGroup, ToggleGroupItem } from '../ui/toggle-group'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
 import { SearchableSetting } from './SearchableSetting'
 import { SettingsRow, SettingsSwitchRow } from './SettingsFormControls'
-import { getFloatingWorkspaceSearchEntries } from './floating-workspace-search'
+import {
+  getFileExplorerOpenTargetSearchEntry,
+  getFloatingWorkspaceSearchEntries
+} from './floating-workspace-search'
 import { matchesSettingsSearch } from './settings-search'
 import { useAppStore } from '../../store'
 import { translate } from '@/i18n/i18n'
 import { isWebClientLocation } from '@/lib/web-client-location'
+import { normalizeFileExplorerOpenTarget } from '../../../../shared/file-explorer-open-target'
 
 type FloatingWorkspacePaneProps = {
   settings: GlobalSettings
@@ -38,6 +43,7 @@ export function FloatingWorkspacePane({
 }: FloatingWorkspacePaneProps): React.JSX.Element | null {
   const searchQuery = useAppStore((state) => state.settingsSearchQuery)
   const includeBrowser = !isWebClientLocation()
+  const fileExplorerOpenTargetEntry = getFileExplorerOpenTargetSearchEntry()
   const [resolvedFloatingWorkspacePath, setResolvedFloatingWorkspacePath] = useState('')
 
   useEffect(() => {
@@ -82,6 +88,7 @@ export function FloatingWorkspacePane({
   return (
     <section className="space-y-4">
       <SearchableSetting
+        forceVisible
         title={translate(
           'auto.components.settings.FloatingWorkspacePane.1f67f39384',
           'Floating Workspace'
@@ -124,6 +131,41 @@ export function FloatingWorkspacePane({
             })
           }}
         />
+
+        {includeBrowser && (
+          <SettingsRow
+            label={fileExplorerOpenTargetEntry.title}
+            description={fileExplorerOpenTargetEntry.description}
+            control={
+              <Select
+                value={normalizeFileExplorerOpenTarget(settings.fileExplorerOpenTarget)}
+                onValueChange={(value) => {
+                  if (value === 'current-workspace' || value === 'floating-workspace') {
+                    updateSettings({ fileExplorerOpenTarget: value })
+                  }
+                }}
+              >
+                <SelectTrigger className="w-48" aria-label={fileExplorerOpenTargetEntry.title}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="current-workspace">
+                    {translate(
+                      'settings.floatingWorkspace.fileExplorerOpenTarget.currentWorkspace',
+                      'Current workspace'
+                    )}
+                  </SelectItem>
+                  <SelectItem value="floating-workspace">
+                    {translate(
+                      'settings.floatingWorkspace.fileExplorerOpenTarget.floatingWorkspace',
+                      'Floating workspace'
+                    )}
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            }
+          />
+        )}
 
         <SettingsRow
           alignTop

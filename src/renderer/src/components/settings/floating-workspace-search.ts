@@ -2,6 +2,33 @@ import { translate } from '@/i18n/i18n'
 import { translateSearchKeyword } from './settings-search-keywords'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 
+export function getFileExplorerOpenTargetSearchEntry() {
+  return {
+    title: translate(
+      'settings.floatingWorkspace.fileExplorerOpenTarget.title',
+      'File explorer open target'
+    ),
+    description: translate(
+      'settings.floatingWorkspace.fileExplorerOpenTarget.description',
+      'Local files opened from the desktop file explorer can use the floating workspace without leaving your current tab. Opens it automatically when hidden. SSH and remote files stay in the current workspace.'
+    ),
+    keywords: [
+      ...translateSearchKeyword(
+        'settings.floatingWorkspace.fileExplorerOpenTarget.searchExplorer',
+        'file explorer'
+      ),
+      ...translateSearchKeyword(
+        'settings.floatingWorkspace.fileExplorerOpenTarget.searchTarget',
+        'open target'
+      ),
+      ...translateSearchKeyword(
+        'settings.floatingWorkspace.fileExplorerOpenTarget.searchLocal',
+        'local files'
+      )
+    ]
+  }
+}
+
 function buildFloatingWorkspaceSearchEntries(includeBrowser: boolean) {
   return [
     {
@@ -69,7 +96,8 @@ function buildFloatingWorkspaceSearchEntries(includeBrowser: boolean) {
           'status bar'
         )
       ]
-    }
+    },
+    ...(includeBrowser ? [getFileExplorerOpenTargetSearchEntry()] : [])
   ]
 }
 

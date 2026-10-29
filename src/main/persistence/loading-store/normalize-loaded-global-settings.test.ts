@@ -310,3 +310,21 @@ describe('terminal default shell', () => {
     expect(normalizeLegacyProfile({ terminalDefaultShell: '   ' }).terminalDefaultShell).toBe('')
   })
 })
+
+describe('file explorer open target', () => {
+  it.each([undefined, null, 'floating-window', true])(
+    'keeps the current workspace for a missing or invalid saved target %s',
+    (fileExplorerOpenTarget) => {
+      expect(normalizeLegacyProfile({ fileExplorerOpenTarget }).fileExplorerOpenTarget).toBe(
+        'current-workspace'
+      )
+    }
+  )
+
+  it('preserves the floating workspace preference during profile loading', () => {
+    expect(
+      normalizeLegacyProfile({ fileExplorerOpenTarget: 'floating-workspace' })
+        .fileExplorerOpenTarget
+    ).toBe('floating-workspace')
+  })
+})

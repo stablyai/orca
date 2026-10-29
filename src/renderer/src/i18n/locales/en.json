@@ -426,6 +426,17 @@
     "refreshingDetails": "Refreshing check details…"
   },
   "settings": {
+    "floatingWorkspace": {
+      "fileExplorerOpenTarget": {
+        "title": "File explorer open target",
+        "description": "Local files opened from the desktop file explorer can use the floating workspace without leaving your current tab. Opens it automatically when hidden. SSH and remote files stay in the current workspace.",
+        "currentWorkspace": "Current workspace",
+        "floatingWorkspace": "Floating workspace",
+        "searchExplorer": "file explorer",
+        "searchTarget": "open target",
+        "searchLocal": "local files"
+      }
+    },
     "chat": {
       "permissionsAgentsLink": "Settings → Agents",
       "permissionsTitle": "Permissions for new chats",
@@ -21076,6 +21087,8 @@
     "typingBeforeStartNotSent": "Some keys typed while the terminal was starting were not sent."
   },
   "fileExplorer": {
+    "floatingWorkspaceEnableFailed": "Could not enable the floating workspace. Try again.",
+    "floatingWorkspaceOpenFailed": "Could not open the file in the floating workspace.",
     "root": {
       "label": "Explorer root",
       "full": "Repository root",

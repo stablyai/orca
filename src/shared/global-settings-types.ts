@@ -1,6 +1,7 @@
 import type { TelemetrySettings } from './telemetry-settings-types'
 import type { BrowserProfileScope } from './browser-profile-scope'
 import type { GlobalSettingsBase } from './global-settings-base'
+import type { FileExplorerOpenTarget } from './file-explorer-open-target'
 import type { ExecutionHostId } from './execution-host'
 import type { OrcaWorkspaceLayout } from './orca-workspace-layout'
 import type { GitHubProjectSettings } from './github/project-types'
@@ -263,6 +264,8 @@ export type GlobalSettings = GlobalSettingsBase & {
   terminalShortcutPolicy?: TerminalShortcutPolicy
   /** Floating Workspace: global surface for terminal/browser/markdown tabs outside repo/worktree context. */
   floatingTerminalEnabled: boolean
+  /** Desktop local file-tree opens; missing values keep opening in the current workspace. */
+  fileExplorerOpenTarget?: FileExplorerOpenTarget
   /** Main-side new-page kill switch for paired Electron client-hosted browser placement. */
   browserClientHostedRemoteEnabled?: boolean
   /** Browser profile new tabs in a workspace use; missing = 'shared' (the Default profile). */
