@@ -8,11 +8,17 @@ import type { DetectedBrowser } from './sources/browser-cookie-detection-types'
 import {
   pickCookieFile as pickFile,
   importCookiesFromFile as importFile,
-  type CookieImportOptions
+  parseCookieImportPayload,
+  type CookieImportOptions,
+  type CookieImportPayloadParseResult
 } from './browser-cookie-import-pipeline'
 import { importChromiumCookies } from './chromium/import-cookies'
 import { importCookiesFromFirefox } from './sources/browser-cookie-firefox-import'
 import { importCookiesFromSafari } from './sources/browser-cookie-safari-import'
+
+export { parseCookieImportPayload }
+export type { CookieImportPayloadParseResult }
+
 export function detectInstalledBrowsers(): DetectedBrowser[] {
   return detectBrowsers()
 }

@@ -247,6 +247,12 @@ export const CookieDelete = BrowserTarget.extend({
   url: OptionalPlainString
 })
 
+// Why: bulk import targets a session profile partition (persist across restart), not a live tab CDP path.
+export const CookieImport = z.object({
+  file: requiredString('Missing required --file'),
+  profileId: OptionalString
+})
+
 export const Viewport = BrowserTarget.extend({
   width: z.custom<number>((v) => typeof v === 'number' && v > 0, {
     message: 'Width and height must be positive numbers'

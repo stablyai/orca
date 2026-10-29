@@ -71,7 +71,8 @@ vi.mock('./browser-cookie-clear-store', () => ({
 import {
   importCookiesFromFile,
   importCookiesFromBrowser,
-  detectInstalledBrowsers
+  detectInstalledBrowsers,
+  parseCookieImportPayload
 } from './browser-cookie-import'
 import type { DetectedBrowser } from './sources/browser-cookie-detection-types'
 
@@ -116,6 +117,45 @@ describe('summarizeCookieImportError', () => {
     expect(summary.length).toBeLessThanOrEqual(180)
     expect(summary).toContain('Import failed secret-cookie-value')
     expect(replaceSpy).not.toHaveBeenCalled()
+  })
+})
+
+describe('parseCookieImportPayload', () => {
+  it('accepts EditThisCookie arrays', () => {
+    const result = parseCookieImportPayload([{ domain: '.a.com', name: 'n', value: 'v' }])
+    expect(result).toEqual({
+      ok: true,
+      total: 1,
+      entries: [{ domain: '.a.com', name: 'n', value: 'v' }]
+    })
+  })
+
+  it('accepts Playwright storage_state objects', () => {
+    const result = parseCookieImportPayload({
+      cookies: [{ domain: '.a.com', name: 'n', value: 'v', expires: -1 }],
+      origins: []
+    })
+    expect(result.ok).toBe(true)
+    if (!result.ok) {
+      return
+    }
+    expect(result.total).toBe(1)
+    expect(result.entries).toHaveLength(1)
+  })
+
+  it('rejects empty and unknown shapes with clear reasons', () => {
+    expect(parseCookieImportPayload([])).toEqual({ ok: false, reason: 'Cookie file is empty.' })
+    expect(parseCookieImportPayload({ cookies: [] })).toEqual({
+      ok: false,
+      reason: 'Cookie file is empty.'
+    })
+    const unknown = parseCookieImportPayload({ foo: 1 })
+    expect(unknown.ok).toBe(false)
+    if (unknown.ok) {
+      return
+    }
+    expect(unknown.reason).toContain('EditThisCookie')
+    expect(unknown.reason).toContain('storage_state')
   })
 })
 
@@ -297,7 +337,7 @@ describe('importCookiesFromFile', () => {
     expect(result.reason).toContain('not valid JSON')
   })
 
-  it('rejects non-array JSON', async () => {
+  it('rejects non-array JSON without a cookies field', async () => {
     const filePath = join(tmpDir, 'object.json')
     writeFileSync(filePath, '{"domain": "test.com"}')
 
@@ -306,7 +346,8 @@ describe('importCookiesFromFile', () => {
     if (result.ok) {
       return
     }
-    expect(result.reason).toContain('JSON array')
+    expect(result.reason).toContain('EditThisCookie')
+    expect(result.reason).toContain('storage_state')
   })
 
   it('rejects empty array', async () => {
@@ -317,6 +358,59 @@ describe('importCookiesFromFile', () => {
       return
     }
     expect(result.reason).toContain('empty')
+  })
+
+  it('imports Playwright storage_state cookies (expires field)', async () => {
+    const filePath = join(tmpDir, 'storage_state.json')
+    writeFileSync(
+      filePath,
+      JSON.stringify({
+        cookies: [
+          {
+            name: 'session',
+            value: 'pw-token',
+            domain: '.example.com',
+            path: '/',
+            expires: 1800000000,
+            httpOnly: true,
+            secure: true,
+            sameSite: 'Lax'
+          },
+          {
+            name: 'session_only',
+            value: 'temp',
+            domain: 'app.example.com',
+            path: '/',
+            expires: -1,
+            httpOnly: false,
+            secure: true,
+            sameSite: 'None'
+          }
+        ],
+        origins: []
+      })
+    )
+
+    const result = await importCookiesFromFile(filePath, 'persist:test')
+    expect(result.ok).toBe(true)
+    if (!result.ok) {
+      return
+    }
+
+    expect(result.summary.totalCookies).toBe(2)
+    expect(result.summary.importedCookies).toBe(2)
+    expect(cookiesSetMock).toHaveBeenCalledTimes(2)
+    expect(cookiesSetMock.mock.calls[0][0]).toMatchObject({
+      name: 'session',
+      value: 'pw-token',
+      domain: '.example.com',
+      secure: true,
+      httpOnly: true,
+      sameSite: 'lax',
+      expirationDate: 1800000000
+    })
+    expect(cookiesSetMock.mock.calls[1][0].expirationDate).toBeUndefined()
+    expect(cookiesSetMock.mock.calls[1][0].sameSite).toBe('no_restriction')
   })
 
   it('skips entries with missing required fields', async () => {

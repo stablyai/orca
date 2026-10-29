@@ -36,6 +36,13 @@ export const BROWSER_ADVANCED_COMMAND_SPECS: CommandSpec[] = withBrowserPageTarg
     allowedFlags: [...GLOBAL_FLAGS, 'name', 'domain', 'url', 'worktree']
   },
   {
+    path: ['cookie', 'import'],
+    summary:
+      'Bulk-import cookies from EditThisCookie JSON or Playwright storage_state into a browser profile (persists across restart)',
+    usage: 'orca cookie import --file <path> [--profile <id>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'file', 'profile']
+  },
+  {
     path: ['viewport'],
     summary: 'Set browser viewport size',
     usage:

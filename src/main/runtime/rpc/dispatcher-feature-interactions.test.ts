@@ -114,6 +114,11 @@ const METHODS = [
     handler: () => ({ ok: true })
   }),
   defineMethod({
+    name: 'browser.cookie.import',
+    params: z.object({}),
+    handler: () => ({ ok: true })
+  }),
+  defineMethod({
     name: 'browser.profileList',
     permission: 'workspace',
     params: z.object({}),
@@ -180,12 +185,14 @@ describe('RpcDispatcher feature interactions', () => {
     await dispatcher.dispatch(makeRequest('computer.permissions'))
     await dispatcher.dispatch(makeRequest('computer.permissionsStatus'))
     await dispatcher.dispatch(makeRequest('browser.profileImportFromBrowser'))
+    await dispatcher.dispatch(makeRequest('browser.cookie.import'))
     await dispatcher.dispatch(makeRequest('browser.profileList'))
     await dispatcher.dispatch(makeRequest('browser.profileClearDefaultCookies'))
 
     expect(runtime.recordFeatureInteraction).toHaveBeenCalledWith('computer-use-setup')
     expect(runtime.recordFeatureInteraction).toHaveBeenCalledWith('cookie-import')
-    expect(runtime.recordFeatureInteraction).toHaveBeenCalledTimes(2)
+    // profileImportFromBrowser + cookie.import + profileClearDefaultCookies
+    expect(runtime.recordFeatureInteraction).toHaveBeenCalledTimes(3)
   })
 
   it('does not record failed runtime methods', async () => {

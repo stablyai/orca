@@ -134,6 +134,9 @@ export type BrowserCookieGetResult = { cookies: BrowserCookie[] }
 export type BrowserCookieSetResult = { success: boolean }
 export type BrowserCookieDeleteResult = { deleted: boolean }
 
+/** Bulk cookie file import into a browser session profile partition. */
+export type BrowserCookieImportFromFileResult = BrowserCookieImportResult
+
 export type BrowserViewportResult = {
   width: number
   height: number

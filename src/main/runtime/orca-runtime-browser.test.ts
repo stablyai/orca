@@ -45,9 +45,12 @@ const {
     getDefaultProfile: vi.fn(),
     getProfile: vi.fn(),
     resolveKnownPartition: vi.fn(),
-    createProfile: vi.fn()
+    createProfile: vi.fn(),
+    updateProfileSource: vi.fn()
   }
 }))
+
+const importCookiesFromFileMock = vi.hoisted(() => vi.fn())
 
 vi.mock('electron', () => ({
   ipcMain: { on: ipcMainOnMock, removeListener: ipcMainRemoveListenerMock },
@@ -65,6 +68,11 @@ vi.mock('../ipc/browser-tab-registration-wait', () => ({
 
 vi.mock('../browser/browser-session-registry', () => ({
   browserSessionRegistry: browserSessionRegistryMock
+}))
+
+vi.mock('../browser/cookies/browser-cookie-import', () => ({
+  importCookiesFromFile: importCookiesFromFileMock,
+  importCookiesFromBrowser: vi.fn()
 }))
 
 function deferred<T>() {
@@ -137,6 +145,19 @@ describe('RuntimeBrowserCommands browser screencast', () => {
       }
     )
     browserSessionRegistryMock.createProfile.mockReset()
+    browserSessionRegistryMock.updateProfileSource.mockReset()
+    browserSessionRegistryMock.updateProfileSource.mockImplementation(
+      (profileId: string, source: unknown) => {
+        const profile = browserSessionRegistryMock.profiles.get(profileId)
+        if (!profile) {
+          return null
+        }
+        const updated = { ...profile, source }
+        browserSessionRegistryMock.profiles.set(profileId, updated)
+        return updated
+      }
+    )
+    importCookiesFromFileMock.mockReset()
   })
 
   it('creates profiles with the requested scope and label', async () => {
@@ -155,6 +176,35 @@ describe('RuntimeBrowserCommands browser screencast', () => {
       commands.browserProfileCreate({ label: 'Google', scope: 'isolated' })
     ).resolves.toEqual({ profile })
     expect(browserSessionRegistryMock.createProfile).toHaveBeenCalledWith('isolated', 'Google')
+  })
+
+  it('resolves synthetic default profile for bulk cookie import', async () => {
+    const { RuntimeBrowserCommands } = await import('./browser/browser-commands')
+    // Why: getProfile('default') can miss a synthetic id; fall back like browserTabSetProfile.
+    browserSessionRegistryMock.getProfile.mockImplementation(() => null)
+    browserSessionRegistryMock.getDefaultProfile.mockReturnValue({
+      id: 'default',
+      scope: 'default',
+      partition: 'persist:orca-browser',
+      label: 'Default',
+      source: null
+    })
+    importCookiesFromFileMock.mockResolvedValue({ ok: true, imported: 2, skipped: 0 })
+
+    const commands = new RuntimeBrowserCommands(createHost())
+    await expect(commands.browserCookieImport({ file: '/tmp/cookies.json' })).resolves.toEqual({
+      ok: true,
+      imported: 2,
+      skipped: 0,
+      profileId: 'default'
+    })
+
+    expect(browserSessionRegistryMock.getDefaultProfile).toHaveBeenCalled()
+    expect(importCookiesFromFileMock).toHaveBeenCalledWith('/tmp/cookies.json', 'persist:orca-browser')
+    expect(browserSessionRegistryMock.updateProfileSource).toHaveBeenCalledWith('default', {
+      browserFamily: 'manual',
+      importedAt: expect.any(Number)
+    })
   })
 
   it('waits for explicit worktree browser registration after requesting a hidden mount', async () => {
