@@ -1,5 +1,4 @@
 import { AlertTriangle, CircleAlert } from 'lucide-react'
-import type { PluginMarketplaceHostSourceState } from '../../../../../preload/api-types'
 import { translate } from '@/i18n/i18n'
 import { formatShortTimeAgo } from '@/lib/short-time-ago'
 import { Button } from '../../ui/button'
@@ -9,20 +8,14 @@ import { PluginCard } from '../list/PluginCard'
 import { PluginChips } from '../list/PluginChips'
 import { PluginCardAction } from './PluginCardAction'
 import { Badge } from '../../ui/badge'
+import { pluginCategoryLabel } from '../list/plugin-category-label'
+import { groupPluginsByCategory } from '../list/plugin-list-filter'
 import { PluginCategoryBadge } from '../list/PluginCategoryBadge'
 import { usePluginArtPalettes } from '../state/use-plugin-art-palettes'
 import { installedPluginControls, type InstalledRowHandlers } from '../list/PluginManagerRows'
 import type { usePluginCatalog } from '../state/use-plugin-catalog'
 import type { usePluginHoverPrefetch } from '../state/use-plugin-hover-prefetch'
 import type { usePluginInstallAction } from '../state/use-plugin-install-action'
-
-function sourceDetail(source: PluginMarketplaceHostSourceState): string {
-  const trust = source.official
-    ? translate('auto.components.settings.PluginManager.verified', 'verified')
-    : translate('auto.components.settings.PluginManager.unverified', 'unverified')
-  const origin = source.official ? source.marketplace?.owner : source.source.url
-  return origin ? `${trust} · ${origin}` : trust
-}
 
 export function CatalogNotice({
   tone,
@@ -170,7 +163,7 @@ export function PluginCardSkeletons(): React.JSX.Element {
   )
 }
 
-/** One group per catalog source, each capped, with its own refresh or load failure. */
+/** Category previews share the catalog cards and preserve each source’s load notices. */
 export function PluginCatalogGroups({
   catalog,
   available,
@@ -188,7 +181,7 @@ export function PluginCatalogGroups({
   installed: readonly PluginListEntry[]
   cardHandlers: CatalogCardHandlers
   matches: (entry: PluginListEntry) => boolean
-  /** Search or a filter is on: show every match and hide groups with none. */
+  /** Search and filters show each matching plugin once, without category previews. */
   narrowed: boolean
   capped: (groupId: string, rows: PluginListEntry[]) => PluginListEntry[]
   showAll: (groupId: string) => () => void
@@ -203,12 +196,33 @@ export function PluginCatalogGroups({
   const rank = (entry: PluginListEntry): number =>
     order.get(`${entry.listing?.marketplaceSourceId}:${entry.pluginKey}`) ?? Number.MAX_SAFE_INTEGER
   const listed = [...installed.filter((entry) => entry.listing), ...available]
-  const availableBySource = catalog.sources.map((source) => {
-    const rows = listed
-      .filter((entry) => entry.listing?.marketplaceSourceId === source.id && matches(entry))
-      .sort((left, right) => rank(left) - rank(right))
-    return { source, rows }
-  })
+  const sourceCounts = new Map(catalog.sources.map((source) => [source.id, 0]))
+  for (const entry of listed) {
+    const sourceId = entry.listing?.marketplaceSourceId
+    if (sourceId !== undefined && sourceCounts.has(sourceId)) {
+      sourceCounts.set(sourceId, (sourceCounts.get(sourceId) ?? 0) + 1)
+    }
+  }
+  const rows = listed
+    .filter((entry) => sourceCounts.has(entry.listing?.marketplaceSourceId ?? '') && matches(entry))
+    .sort((left, right) => rank(left) - rank(right))
+  const groups = narrowed
+    ? []
+    : groupPluginsByCategory(rows).map(({ category, rows }) => ({
+        id: category === null ? 'uncategorized' : `category:${category}`,
+        title:
+          category === null
+            ? translate('auto.components.plugins.categories.other', 'More plugins')
+            : pluginCategoryLabel(category),
+        description:
+          category === null
+            ? translate(
+                'auto.components.plugins.categories.otherDescription',
+                'Discover more ways to customize Orca.'
+              )
+            : pluginCategoryDescription(category),
+        rows
+      }))
   return catalog.loading ? (
     <PluginListGroup
       layout="grid"
@@ -241,14 +255,8 @@ export function PluginCatalogGroups({
     />
   ) : (
     <>
-      {availableBySource.map(({ source, rows }) => {
-        const shown = capped(source.id, rows)
-        const listedTotal = listed.filter(
-          (entry) => entry.listing?.marketplaceSourceId === source.id
-        ).length
-        if (narrowed && rows.length === 0) {
-          return null
-        }
+      {catalog.sources.map((source) => {
+        const listedTotal = sourceCounts.get(source.id) ?? 0
         const failed = Boolean(source.error)
         const notice =
           failed && listedTotal === 0 ? (
@@ -296,41 +304,77 @@ export function PluginCatalogGroups({
               }
             />
           ) : null
-        return (
-          <PluginListGroup
-            key={source.id}
-            layout="grid"
-            title={source.marketplace?.name ?? source.source.url}
-            detail={sourceDetail(source)}
-            aside={
-              listedTotal > shown.length && !narrowed
-                ? translate(
-                    'auto.components.settings.PluginManager.shownOf',
-                    '{{value0}} of {{value1}}',
-                    {
-                      value0: shown.length,
-                      value1: listedTotal
-                    }
-                  )
-                : undefined
-            }
-            notice={notice}
-            hiddenCount={rows.length - shown.length}
-            totalCount={rows.length}
-            onShowAll={showAll(source.id)}
-          >
-            {shown.length > 0
-              ? shown.map((entry) => (
-                  <CatalogCard
-                    key={`${source.id}:${entry.pluginKey}`}
-                    entry={entry}
-                    handlers={cardHandlers}
-                  />
-                ))
-              : null}
-          </PluginListGroup>
-        )
+        return notice ? (
+          <section key={source.id} aria-label={source.marketplace?.name ?? source.source.url}>
+            <p className="mb-2 text-xs text-muted-foreground">
+              {source.marketplace?.name ?? source.source.url}
+            </p>
+            {notice}
+          </section>
+        ) : null
       })}
+      {narrowed ? (
+        <PluginListGroup
+          layout="grid"
+          title={translate('auto.components.plugins.categories.results', 'Catalog')}
+        >
+          {rows.map((entry) => (
+            <CatalogCard key={entry.pluginKey} entry={entry} handlers={cardHandlers} />
+          ))}
+        </PluginListGroup>
+      ) : (
+        groups.map((group) => {
+          const shown = capped(group.id, group.rows)
+          return (
+            <PluginListGroup
+              key={group.id}
+              layout="grid"
+              categoryPreview
+              title={group.title}
+              description={group.description}
+              hiddenCount={group.rows.length - shown.length}
+              totalCount={group.rows.length}
+              onShowAll={showAll(group.id)}
+            >
+              {shown.map((entry) => (
+                <CatalogCard key={entry.pluginKey} entry={entry} handlers={cardHandlers} />
+              ))}
+            </PluginListGroup>
+          )
+        })
+      )}
     </>
   )
+}
+
+function pluginCategoryDescription(category: string): string | undefined {
+  switch (category) {
+    case 'themes':
+      return translate(
+        'auto.components.plugins.categories.themesDescription',
+        'Find a new look for your editor and terminal.'
+      )
+    case 'languages':
+      return translate(
+        'auto.components.plugins.categories.languagesDescription',
+        'Syntax highlighting and interface languages.'
+      )
+    case 'icons':
+      return translate(
+        'auto.components.plugins.categories.iconsDescription',
+        'Give your files and folders a fresh set of icons.'
+      )
+    case 'commands':
+      return translate(
+        'auto.components.plugins.categories.commandsDescription',
+        'Extend your workflow with commands, panels, and editors.'
+      )
+    case 'machines':
+      return translate(
+        'auto.components.plugins.categories.machinesDescription',
+        'Set up environments for your workspaces.'
+      )
+    default:
+      return undefined
+  }
 }

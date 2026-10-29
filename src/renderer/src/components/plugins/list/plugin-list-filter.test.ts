@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import type { PluginListEntry } from './plugin-list-entries'
-import { matchesPluginFilter, pluginFilterCategories } from './plugin-list-filter'
+import {
+  groupPluginsByCategory,
+  matchesPluginFilter,
+  pluginFilterCategories
+} from './plugin-list-filter'
 
 function entry(
   categories: string[],
@@ -74,5 +78,37 @@ describe('plugin list filter', () => {
     expect(
       matchesPluginFilter(shared, { categories: new Set(), sourceIds: new Set(['acme']) })
     ).toBe(true)
+  })
+
+  it('groups aliases once, preserves row order and sorts unknown and uncategorized groups last', () => {
+    const music = entry(['music'], 'acme')
+    const unknown = entry([], 'acme')
+    const mixed = entry(['syntax', 'themes', 'terminal-themes'], 'official')
+    const theme = entry(['app-themes'], 'official')
+    const worker = { ...entry(['official'], null), types: ['worker'] as const }
+
+    expect(groupPluginsByCategory([music, unknown, mixed, theme, worker])).toEqual([
+      { category: 'themes', rows: [mixed, theme] },
+      { category: 'languages', rows: [mixed] },
+      { category: 'commands', rows: [worker] },
+      { category: 'music', rows: [music] },
+      { category: null, rows: [unknown] }
+    ])
+  })
+
+  it('reads each plugin’s categories once even when every plugin adds a new group', () => {
+    let categoryReads = 0
+    const entries = Array.from({ length: 2048 }, (_, index) => ({
+      ...entry([], null),
+      get categories() {
+        categoryReads += 1
+        return ['syntax', `language-${index}`]
+      }
+    }))
+
+    const groups = groupPluginsByCategory(entries)
+    expect(categoryReads).toBe(entries.length)
+    expect(groups[0]).toEqual({ category: 'languages', rows: entries })
+    expect(groups).toHaveLength(entries.length + 1)
   })
 })

@@ -12404,8 +12404,6 @@
           "sources": "카탈로그 소스…"
         },
         "PluginManager": {
-          "verified": "확인됨",
-          "unverified": "확인되지 않음",
           "catalogLoading": "카탈로그",
           "catalogFailedTitle": "플러그인 카탈로그를 불러올 수 없습니다.",
           "catalogFailedBody": "설치된 플러그인은 계속 작동합니다.",
@@ -12415,7 +12413,6 @@
           "sources": "소스…",
           "sourceStaleTitle": "이 카탈로그를 새로 고칠 수 없습니다.",
           "sourceStaleBody": "{{value0}}의 사본을 표시합니다.",
-          "shownOf": "{{value1}}개 중 {{value0}}개",
           "installed": "설치됨",
           "installedFailedTitle": "설치된 플러그인을 읽을 수 없습니다.",
           "updatesTitle": "업데이트",

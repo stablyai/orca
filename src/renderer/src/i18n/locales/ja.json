@@ -12404,8 +12404,6 @@
           "sources": "カタログのソース…"
         },
         "PluginManager": {
-          "verified": "検証済み",
-          "unverified": "未検証",
           "catalogLoading": "カタログ",
           "catalogFailedTitle": "プラグインカタログを読み込めませんでした。",
           "catalogFailedBody": "インストール済みのプラグインは引き続き動作します。",
@@ -12415,7 +12413,6 @@
           "sources": "ソース…",
           "sourceStaleTitle": "このカタログを更新できませんでした。",
           "sourceStaleBody": "{{value0}} のコピーを表示しています。",
-          "shownOf": "{{value1}} 件中 {{value0}} 件",
           "installed": "インストール済み",
           "installedFailedTitle": "インストール済みのプラグインを読み取れませんでした。",
           "updatesTitle": "アップデート",

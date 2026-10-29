@@ -13077,8 +13077,6 @@
           "sources": "Catalog sources…"
         },
         "PluginManager": {
-          "verified": "verified",
-          "unverified": "unverified",
           "catalogLoading": "Catalog",
           "catalogFailedTitle": "Couldn’t load the plugin catalog.",
           "catalogFailedBody": "Your installed plugins keep working.",
@@ -13088,7 +13086,6 @@
           "sources": "Sources…",
           "sourceStaleTitle": "Couldn’t refresh this catalog.",
           "sourceStaleBody": "Showing the copy from {{value0}}.",
-          "shownOf": "{{value0}} of {{value1}}",
           "installed": "Installed",
           "installedFailedTitle": "Couldn’t read your installed plugins.",
           "updatesTitle": "Updates",
@@ -18887,6 +18884,18 @@
           "cancel": "Cancel",
           "add": "Add catalog",
           "body": "A link asked to show {{value0}} from this catalog. Add catalogs only from people you trust."
+        },
+        "categories": {
+          "other": "More plugins",
+          "otherDescription": "Discover more ways to customize Orca.",
+          "results": "Catalog",
+          "themesDescription": "Find a new look for your editor and terminal.",
+          "languagesDescription": "Syntax highlighting and interface languages.",
+          "iconsDescription": "Give your files and folders a fresh set of icons.",
+          "commandsDescription": "Extend your workflow with commands, panels, and editors.",
+          "machinesDescription": "Set up environments for your workspaces.",
+          "viewAllLabel": "View all {{value0}} plugins",
+          "viewAll": "View all"
         }
       }
     },

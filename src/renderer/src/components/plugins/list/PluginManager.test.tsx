@@ -10,6 +10,7 @@ import type {
 } from '../../../../../preload/api-types'
 import { PLUGIN_GROUP_ROW_CAP, PluginManager } from './PluginManager'
 import { usePluginPageNavigation } from '../state/use-plugin-page-navigation'
+import * as pluginListFilter from './plugin-list-filter'
 
 vi.mock('../../ui/tooltip', () => ({
   Tooltip: ({ children }: { children: React.ReactNode }) => <>{children}</>,
@@ -166,24 +167,67 @@ afterEach(() => {
   act(() => root?.unmount())
   root = null
   document.body.innerHTML = ''
+  vi.restoreAllMocks()
 })
 
 describe('PluginManager', () => {
-  it('lists each catalog plugin once, in catalog order, capped with Show all', async () => {
+  it('previews categories without an official section and expands in catalog order', async () => {
     const container = await render()
-    const catalogCards = (): Element[] =>
-      Array.from(container.querySelectorAll('[data-plugin-key]')).filter(
-        (card) => !card.closest('[data-installed-carousel]')
-      )
-    const rows = catalogCards().map((row) => row.getAttribute('data-plugin-key'))
-    // Why one grid: an installed catalog plugin keeps its card, so installing never moves it.
-    expect(rows.filter((key) => key === 'stablyai.orca-nord-theme')).toHaveLength(1)
-    expect(rows).toHaveLength(PLUGIN_GROUP_ROW_CAP)
-
-    await act(async () =>
-      buttonNamed(container, `Show all ${PLUGIN_GROUP_ROW_CAP + 3} plugins`)?.click()
+    const section = Array.from(container.querySelectorAll('h3'))
+      .find((heading) => heading.textContent === 'Themes')
+      ?.closest('section')
+    if (!section) {
+      throw new Error('missing Themes section')
+    }
+    const cards = () => Array.from(section.querySelectorAll('[data-plugin-key]'))
+    expect(cards()).toHaveLength(PLUGIN_GROUP_ROW_CAP)
+    expect(cards()[0]?.getAttribute('data-plugin-key')).toBe('stablyai.orca-nord-theme')
+    expect(section.textContent).toContain(String(catalogListings.length))
+    await act(async () => buttonNamed(container, 'View all Themes plugins')?.click())
+    expect(cards()).toHaveLength(catalogListings.length)
+    expect(container.textContent).not.toContain('Orca Official')
+    expect(container.querySelectorAll('[data-plugin-key="stablyai.orca-nord-theme"]')).toHaveLength(
+      2
     )
-    expect(catalogCards()).toHaveLength(PLUGIN_GROUP_ROW_CAP + 3)
+  })
+
+  it('folds related categories without duplicating a card and includes uncategorized plugins', async () => {
+    installApi({
+      listMarketplacePlugins: vi.fn().mockResolvedValue([
+        listing('community.palette', {
+          official: false,
+          categories: ['themes', 'terminal-themes']
+        }),
+        listing('community.diagram', { official: false, categories: [] })
+      ])
+    })
+    const container = await render([])
+    const themes = Array.from(container.querySelectorAll('h3'))
+      .find((heading) => heading.textContent === 'Themes')
+      ?.closest('section')
+    expect(themes?.querySelectorAll('[data-plugin-key]')).toHaveLength(1)
+    expect(container.textContent).toContain('More plugins')
+    expect(container.querySelectorAll('[data-plugin-key]')).toHaveLength(2)
+  })
+
+  it('searches all categories without repeating plugins', async () => {
+    const container = await render([])
+    const groupCategories = vi.spyOn(pluginListFilter, 'groupPluginsByCategory')
+    const input = container.querySelector('input')
+    if (!input) {
+      throw new Error('missing search input')
+    }
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
+      setter?.call(input, 'extra')
+      input.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    expect(container.querySelectorAll('[data-plugin-key]')).toHaveLength(catalogListings.length - 1)
+    expect(Array.from(container.querySelectorAll('h3'), (heading) => heading.textContent)).toEqual([
+      'Catalog'
+    ])
+    expect(container.querySelector('[data-plugin-key="stablyai.orca-nord-theme"]')).toBeNull()
+    expect(groupCategories).not.toHaveBeenCalled()
   })
 
   it('labels cards by category with an icon, keeping a chip only for full access', async () => {

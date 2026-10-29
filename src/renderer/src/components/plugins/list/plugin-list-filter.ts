@@ -81,10 +81,41 @@ export function pluginFilterCategories(entries: readonly PluginListEntry[]): [st
       counts.set(kind, (counts.get(kind) ?? 0) + 1)
     }
   }
-  const rank = (kind: string): number => {
-    return isPluginFilterKind(kind) ? PLUGIN_FILTER_KINDS.indexOf(kind) : PLUGIN_FILTER_KINDS.length
+  return [...counts.entries()].sort(([left], [right]) => comparePluginFilterKinds(left, right))
+}
+
+function comparePluginFilterKinds(left: string, right: string): number {
+  const rank = (kind: string): number =>
+    isPluginFilterKind(kind) ? PLUGIN_FILTER_KINDS.indexOf(kind) : PLUGIN_FILTER_KINDS.length
+  return rank(left) - rank(right) || left.localeCompare(right)
+}
+
+/** Keeps catalog order within each kind, with uncategorized plugins last. */
+export function groupPluginsByCategory(
+  entries: readonly PluginListEntry[]
+): { category: string | null; rows: PluginListEntry[] }[] {
+  const groups = new Map<string, PluginListEntry[]>()
+  const uncategorized: PluginListEntry[] = []
+  for (const entry of entries) {
+    const kinds = pluginFilterKinds(entry)
+    if (kinds.size === 0) {
+      uncategorized.push(entry)
+    }
+    for (const kind of kinds) {
+      const rows = groups.get(kind)
+      if (rows) {
+        rows.push(entry)
+      } else {
+        groups.set(kind, [entry])
+      }
+    }
   }
-  return [...counts.entries()].sort((a, b) => rank(a[0]) - rank(b[0]) || a[0].localeCompare(b[0]))
+  return [
+    ...[...groups.entries()]
+      .sort(([left], [right]) => comparePluginFilterKinds(left, right))
+      .map(([category, rows]) => ({ category, rows })),
+    ...(uncategorized.length > 0 ? [{ category: null, rows: uncategorized }] : [])
+  ]
 }
 
 export function matchesPluginFilter(entry: PluginListEntry, filter: PluginListFilter): boolean {

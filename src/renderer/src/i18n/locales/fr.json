@@ -12914,8 +12914,6 @@
           "sources": "Sources du catalogue…"
         },
         "PluginManager": {
-          "verified": "vérifié",
-          "unverified": "non vérifié",
           "catalogLoading": "Catalogue",
           "catalogFailedTitle": "Impossible de charger le catalogue de plugins.",
           "catalogFailedBody": "Vos plugins installés continuent de fonctionner.",
@@ -12925,7 +12923,6 @@
           "sources": "Sources…",
           "sourceStaleTitle": "Impossible d’actualiser ce catalogue.",
           "sourceStaleBody": "Copie de {{value0}} affichée.",
-          "shownOf": "{{value0}} sur {{value1}}",
           "installed": "Installés",
           "installedFailedTitle": "Impossible de lire vos plugins installés.",
           "updatesTitle": "Mises à jour",

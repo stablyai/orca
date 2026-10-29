@@ -50,8 +50,8 @@ function resultCountLabel(count: number): string {
       })
 }
 
-/** Rows a group shows before "Show all"; search and filters show everything. 12 fills whole rows at 1–4 columns. */
-export const PLUGIN_GROUP_ROW_CAP = 12
+/** Category previews show three cards; search and filters show every match. */
+export const PLUGIN_GROUP_ROW_CAP = 3
 
 type PluginManagerProps = {
   plugins: readonly PluginHostListEntry[]

@@ -12437,8 +12437,6 @@
           "sources": "目录来源…"
         },
         "PluginManager": {
-          "verified": "已验证",
-          "unverified": "未验证",
           "catalogLoading": "目录",
           "catalogFailedTitle": "无法加载插件目录。",
           "catalogFailedBody": "已安装的插件仍可正常使用。",
@@ -12448,7 +12446,6 @@
           "sources": "来源…",
           "sourceStaleTitle": "无法刷新此目录。",
           "sourceStaleBody": "显示的是 {{value0}} 的副本。",
-          "shownOf": "{{value0}} / {{value1}}",
           "installed": "已安装",
           "installedFailedTitle": "无法读取已安装的插件。",
           "updatesTitle": "更新",
