@@ -12,6 +12,7 @@ import {
 } from './bridge-envelope'
 import { reconstructBridgeError } from './bridge-error-capture'
 import { BRIDGE_APP_INACTIVE_FRAME } from './bridge-app-inactive'
+import { acceptPageStorageUpdate } from './page-async-storage'
 
 export type BridgeInboundFramePort = {
   requests: BridgeClientRequests
@@ -77,6 +78,9 @@ export function createBridgeInboundFrameReader(
         return
       case 'terminalKey':
         port.acceptTerminalKey(message.key, message.inputOwner)
+        return
+      case 'storage':
+        acceptPageStorageUpdate(message.key, message.value)
         return
       case 'reply':
         if (!requests.has(message.id)) {
