@@ -1,12 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from 'react'
 import type { Editor } from '@tiptap/react'
-import { getShortcutPlatform } from '@/lib/shortcut-platform'
-import { useAppStore } from '@/store'
-import {
-  isMarkdownPreviewFindShortcut,
-  isMarkdownPreviewReplaceShortcut,
-  isMarkdownPreviewSearchQueryTooLarge
-} from './markdown-preview-search'
+import { isMarkdownPreviewSearchQueryTooLarge } from './markdown-preview-search'
 import {
   createRichMarkdownSearchPlugin,
   findRichMarkdownSearchMatches,
@@ -14,8 +8,7 @@ import {
 } from './rich-markdown-search'
 import { createRichMarkdownSearchMatchesCache } from './rich-markdown-search-matches-cache'
 import { useRichMarkdownSearchHighlights } from './useRichMarkdownSearchHighlights'
-import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
-import { isImeOwnedKeyboardEvent } from '@/lib/ime-composition-keyboard-event'
+import { useRichMarkdownSearchShortcuts } from './useRichMarkdownSearchShortcuts'
 
 export function useRichMarkdownSearch({
   editor,
@@ -27,7 +20,6 @@ export function useRichMarkdownSearch({
   scrollContainerRef: RefObject<HTMLDivElement | null>
 }) {
   const searchInputRef = useRef<HTMLInputElement | null>(null)
-  const keybindings = useAppStore((state) => state.keybindings)
   const [isSearchOpen, setIsSearchOpen] = useState(false)
   const findMatches = useMemo(
     () =>
@@ -267,49 +259,14 @@ export function useRichMarkdownSearch({
     searchDocument
   })
 
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent): void => {
-      const root = rootRef.current
-      if (!root || isImeOwnedKeyboardEvent(event)) {
-        return
-      }
-
-      const target = event.target
-      const targetInsideEditor = target instanceof Node && root.contains(target)
-      if (
-        isMarkdownPreviewFindShortcut(event, getShortcutPlatform(), keybindings) &&
-        targetInsideEditor
-      ) {
-        event.preventDefault()
-        event.stopPropagation()
-        openSearch()
-        return
-      }
-
-      if (
-        isMarkdownPreviewReplaceShortcut(event, getShortcutPlatform(), keybindings) &&
-        targetInsideEditor
-      ) {
-        event.preventDefault()
-        event.stopPropagation()
-        openReplace()
-        return
-      }
-
-      if (
-        event.key === 'Escape' &&
-        isSearchOpen &&
-        (targetInsideEditor || target === searchInputRef.current)
-      ) {
-        event.preventDefault()
-        event.stopPropagation()
-        closeSearch()
-      }
-    }
-
-    addAppKeyListener('keydown', handleKeyDown)
-    return () => removeAppKeyListener('keydown', handleKeyDown)
-  }, [closeSearch, isSearchOpen, keybindings, openReplace, openSearch, rootRef])
+  useRichMarkdownSearchShortcuts({
+    closeSearch,
+    isSearchOpen,
+    openReplace,
+    openSearch,
+    rootRef,
+    searchInputRef
+  })
 
   return {
     openSearch,
