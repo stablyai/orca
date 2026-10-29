@@ -29,6 +29,7 @@ function buildMobileTerminalClipboardTextPayload(
 }
 
 type UseMobileTerminalPasteOptions = {
+  readonly sendTerminalUserInput: typeof terminalInputSend.request
   readonly agent?: string | null
   readonly activeHandle: string | null
   readonly activeHandleRef: RefObject<string | null>
@@ -49,6 +50,7 @@ type UseMobileTerminalPasteOptions = {
 }
 
 export function useMobileTerminalPaste({
+  sendTerminalUserInput,
   activeHandle,
   agent,
   activeHandleRef,
@@ -148,7 +150,7 @@ export function useMobileTerminalPaste({
         showToast(translate('session.useTerminalPaste.pasteFailed', 'Paste failed'), 1500)
         return
       }
-      const response = await terminalInputSend.request(currentClient, {
+      const response = await sendTerminalUserInput(currentClient, {
         terminal: targetHandle,
         text: payload,
         enter: false,
@@ -181,6 +183,7 @@ export function useMobileTerminalPaste({
       }
     }
   }, [
+    sendTerminalUserInput,
     activeHandle,
     agent,
     activeHandleRef,

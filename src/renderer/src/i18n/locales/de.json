@@ -760,7 +760,6 @@
       "defaultOpensAsScope": "Gilt für neue {{value0}}-Sitzungen, die von diesem Computer aus gestartet werden, auch auf gekoppelten Hosts. Entspricht dem zugehörigen Schalter unter „Anbieter“.",
       "save": "Speichern",
       "clearDefault": "Standardagent-Auswahl aufheben",
-      "autoPermissions": "Automatisch",
       "autoUnsupported": "„Automatisch“ erfordert eine neuere Orca-Version auf diesem Host.",
       "permissionsDescription": "Legt fest, wie viel Agenten ohne Rückfrage tun dürfen. Agenten mit benutzerdefinierten Startargumenten behalten diese bei.",
       "permissionsAutoDescription": "<agents>Unterstützte Agenten</agents> genehmigen sichere Aktionen selbstständig.",
@@ -7506,8 +7505,6 @@
           "8fbe1f37c1": "Umgebung",
           "2d133152fa": "Keine Standardumgebung",
           "agentPermissions": "Agentenberechtigungen",
-          "agentPermissionsYolo": "Yolo",
-          "agentPermissionsManual": "Manuell",
           "3f1bdf3cb4": "Der Umgebungstext ist zu groß, um sicher analysiert zu werden.",
           "codexSessionSource": "Codex-Home-Verzeichnis für den Import",
           "codexSessionSourceInfo": "Informationen zum Import des Codex-Verlaufs",
@@ -14828,7 +14825,7 @@
           "aa97420ba4": "Installationslink kopieren",
           "ac1eb64952": "Android",
           "711e6f4b47": "iOS",
-          "e75647ace0": "Den QR-Code mit dem Smartphone scannen oder den Installationslink öffnen, um Orca Mobile herunterzuladen.",
+          "e75647ace0": "Scanne diesen Download-QR-Code mit der Kamera deines Smartphones. Orca Mobile ist schon installiert? Weiter zu Schritt 2 für den Kopplungs-QR-Code.",
           "0d9b33299e": "App herunterladen.",
           "92ddfdfa1f": "Schritt 1 von 2",
           "ff48d9d520": "Weiteres Gerät koppeln",
@@ -15016,6 +15013,9 @@
           "reconnectBody": "Erneut anmelden, um Orca Relay zu nutzen, oder LAN verwenden, um über Tailscale oder dasselbe Wi‑Fi-Netzwerk zu koppeln.",
           "notEntitledTitle": "Orca Relay ist in diesem Orca-Konto nicht enthalten.",
           "rateLimitedBody": "Orca Relay ist ausgelastet. Eine Minute warten und erneut versuchen oder LAN verwenden, um über Tailscale oder dasselbe Wi‑Fi-Netzwerk zu koppeln."
+        },
+        "relayClockSkewMessage": {
+          "message": "Die Uhr deines Computers geht um etwa {{seconds}} Sekunden falsch. Aktiviere die automatische Zeiteinstellung und versuche es erneut."
         }
       },
       "gitlab": {

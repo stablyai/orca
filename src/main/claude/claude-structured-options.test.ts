@@ -1,5 +1,14 @@
 import { describe, expect, it, vi } from 'vitest'
-import { setClaudeStructuredOption } from './claude-structured-options'
+import { runProcess } from '@orca/process-host'
+import { probeClaudeCliVersion } from './claude-hook-event-versions'
+import {
+  CLAUDE_APPLY_FLAG_SETTINGS_CONTROL,
+  CLAUDE_EFFORT_FLAG,
+  createClaudeCliFlagSupport
+} from './claude-cli-flag-support'
+import { resolveClaudeLaunchFlags } from './claude-structured-launch-flags'
+import { claudeStructuredSpawnOptions } from './claude-structured-spawn-options'
+import { claudeTakesFlagSettings, setClaudeStructuredOption } from './claude-structured-options'
 import { applyClaudeMessageOptions } from './claude-structured-message-options'
 import type { ClaudeSession } from './structured/claude-structured-session-state'
 import { ClaudeControlRequestTimeoutError } from './claude-agent-sdk-control-requests'
@@ -9,10 +18,13 @@ import { ClaudeSlashCommandCatalog } from './claude-slash-command-catalog'
 import { createClaudeInitProof } from './structured/claude-structured-init-proof'
 import { claudeProviderHandleLink } from './structured/claude-structured-owner-identity'
 import {
+  claudeStructuredSessionOptionsFrom,
   observeClaudeFastModeFacts,
   readClaudeStructuredSessionOptions,
   refreshClaudeStructuredSessionOptions
 } from './claude-structured-session-options'
+
+vi.mock('@orca/process-host', () => ({ runProcess: vi.fn() }))
 
 function sessionFor(setModel: ClaudeSession['connection']['setModel']): ClaudeSession {
   return {
@@ -61,6 +73,71 @@ function sessionFor(setModel: ClaudeSession['connection']['setModel']): ClaudeSe
     }
   }
 }
+
+describe('identified versions across native Claude consumers', () => {
+  it.each([
+    ['launcher 0.1.0\n2.1.310 (Claude Code)', 'supported'],
+    ['launcher 11.17.0\n1.0.64 (Claude Code)', 'unsupported'],
+    ['11.17.0', 'unknown']
+  ] as const)(
+    'derives launch flags, saved options and live controls from %s',
+    async (stdout, fact) => {
+      vi.mocked(runProcess).mockResolvedValue({
+        stdout,
+        stderr: '',
+        code: 0,
+        signal: null,
+        timedOut: false
+      })
+      const support = createClaudeCliFlagSupport({
+        probe: probeClaudeCliVersion,
+        keyOf: async () => 'binary',
+        budgetMs: 1_000,
+        now: () => performance.now()
+      })
+      const launch = { command: '/bin/launcher', prefixArgs: ['claude'], cwd: '/repo', env: {} }
+      const flags = await resolveClaudeLaunchFlags(
+        {
+          cliFlags: support,
+          prepareVisuals: async () => ({
+            folder: '/scratch',
+            skill: { pluginDir: '/plugin', skillsRoot: '/skills' }
+          })
+        },
+        'session',
+        launch
+      )
+      expect(flags.thinkingDisplayArgs).toEqual(
+        fact === 'supported' ? { 'thinking-display': 'summarized' } : {}
+      )
+      expect(flags.visuals?.pluginDir).toBe(fact === 'supported' ? '/plugin' : null)
+      const effortFlag = await support.check(CLAUDE_EFFORT_FLAG, launch)
+      const control = await support.check(CLAUDE_APPLY_FLAG_SETTINGS_CONTROL, launch)
+      expect(effortFlag).toBe(fact)
+      expect(control).toBe(fact)
+      const spawn = claudeStructuredSpawnOptions({
+        launch: { options: {}, resumesTranscript: false },
+        saved: { effort: 'high', fastMode: 'true' },
+        effortFlag,
+        flagSettingsControl: control
+      })
+      expect(spawn.sdkOptions.effort).toBe(fact === 'supported' ? 'high' : undefined)
+      expect(spawn.fastModeAtStart).toBe(fact !== 'unsupported')
+      const { session, applyFlagSettings } = fastModeSession(true)
+      session.cliFlag = (flag, budget, start) => support.check(flag, launch, budget, start)
+      expect(await claudeTakesFlagSettings(session)).toBe(fact !== 'unsupported')
+      expect(session.flagSettingsControl).toBe(fact)
+      const options = claudeStructuredSessionOptionsFrom(session, null)
+      expect(options.effortFixed).toBe(fact === 'unsupported' ? true : undefined)
+      if (fact !== 'unsupported') {
+        await setClaudeStructuredOption(session, { key: 'fastMode', value: 'false' }, undefined)
+        expect(applyFlagSettings).toHaveBeenCalled()
+      } else {
+        expect(options.fastModeSupport).toEqual({ supported: false, reason: 'cli-update-required' })
+      }
+    }
+  )
+})
 
 describe('Claude structured option mutation fencing', () => {
   it('does not let a delayed earlier apply overwrite a later option', async () => {

@@ -62,7 +62,13 @@ export function handleRichMarkdownPaste({
     }
     if (visibleText && editor) {
       event.preventDefault()
-      editor.commands.insertContent(visibleText)
+      view.dispatch(
+        view.state.tr
+          .insertText(visibleText)
+          .setMeta('paste', true)
+          .setMeta('uiEvent', 'paste')
+          .scrollIntoView()
+      )
     }
     return true
   }

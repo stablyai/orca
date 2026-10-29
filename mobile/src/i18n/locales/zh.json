@@ -97,6 +97,7 @@
       "connecting": "正在连接…",
       "invalidPairingCode": "配对码无效，请从电脑上复制后重新粘贴",
       "invalidQrCode": "无效的 Orca 二维码",
+      "downloadQrCode": "这是下载码。请扫描桌面端第 2 步中的配对码。",
       "openDesktopStep": "在电脑上打开 Orca",
       "openMobileSettingsStep": "前往“设置” → “移动端”",
       "openSettings": "打开设置",
@@ -999,6 +1000,11 @@
       "folder": "文件夹",
       "project": "项目 {{repo}}",
       "remoteHost": "远程主机"
+    },
+    "nativeScreenRecovery": {
+      "title": "出了点问题",
+      "tryAgain": "重试",
+      "home": "首页"
     }
   },
   "connection": {
@@ -1092,7 +1098,8 @@
       "checkTailnet": "确认桌面未休眠，并在 tailnet 中显示为已连接。",
       "desktopTitle": "桌面应用未运行",
       "disableVpn": "关闭该 VPN，或启用分流功能／“允许 LAN”选项。",
-      "firewallTitle": "防火墙拦截端口 6768",
+      "firewallTitle": "防火墙拦截端口 {{port}}",
+      "linuxFirewall": "Linux: sudo ufw allow {{port}}",
       "keepTailscaleOn": "100.x.x.x 或 *.ts.net 等主机地址通过 Tailscale 连接，请保持 Tailscale 开启。",
       "macosFirewall": "macOS：系统设置 → 网络 → 防火墙，允许 Orca 通过。",
       "notificationNetwork": "尝试切换到蜂窝网络或其他 Wi-Fi 网络。如果切换后能收到通知，则原网络可能导致通知延迟。",

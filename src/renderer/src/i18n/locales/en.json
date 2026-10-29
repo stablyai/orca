@@ -800,13 +800,12 @@
       "defaultOpensAsScope": "Applies to new {{value0}} sessions launched from this computer, including on paired hosts. Matches its Providers switch.",
       "save": "Save",
       "clearDefault": "Clear default agent",
-      "autoPermissions": "Auto",
-      "autoUnsupported": "Auto needs a newer Orca on this host.",
+      "autoUnsupported": "Approve for me needs a newer Orca on this host.",
       "permissionsDescription": "How much agents can do without asking you. Agents with custom launch arguments keep them.",
       "permissionsAutoDescription": "<agents>Supported agents</agents> approve safe actions on their own.",
       "permissionsMixed": "Most agents use {{mode}}. Choosing a mode resets the marked exceptions, except custom arguments.",
       "permissionsMixedNoMajority": "Agents use different settings. Choosing a mode applies to all.",
-      "permissionsSearchDescription": "Launch agents with Manual, Auto, or Yolo permissions.",
+      "permissionsSearchDescription": "Choose Approve for me, Full access, or each agent’s own permission settings.",
       "otherAgentsPermissions": "Other agents",
       "otherAgentsPermissionsLabel": "Permissions for other agents",
       "customArgsBadge": "Custom",
@@ -829,6 +828,7 @@
       "permissionOwnDescription": "Terminals and chats follow the agent’s own permission settings.",
       "permissionOwnShort": "Own settings",
       "permissionWithoutAuto": "Agents without Approve for me",
+      "permissionMixed": "Mixed",
       "permissionSurfaceDifference": "Terminals use the agent’s own settings; new chats use {{mode}}.",
       "permissionSameAsAll": "Same as all agents",
       "choiceChipRemove": "Remove {{flag}}",
@@ -7584,8 +7584,6 @@
           "8fbe1f37c1": "Environment",
           "2d133152fa": "No default environment",
           "agentPermissions": "Agent Permissions",
-          "agentPermissionsYolo": "Yolo",
-          "agentPermissionsManual": "Manual",
           "3f1bdf3cb4": "Environment text is too large to parse safely.",
           "codexSessionSource": "Codex home to import from",
           "codexSessionSourceInfo": "About importing Codex history",
@@ -15232,8 +15230,8 @@
           "aa97420ba4": "Copy install link",
           "ac1eb64952": "Android",
           "711e6f4b47": "iOS",
-          "e75647ace0": "Scan the QR with your phone or open the install link to grab Orca Mobile.",
-          "0d9b33299e": "Get the app.",
+          "e75647ace0": "Scan this download QR with your phone's camera. Already have Orca Mobile? Continue to step 2 for the pairing QR.",
+          "0d9b33299e": "Download the app.",
           "92ddfdfa1f": "Step 1 of 2",
           "ff48d9d520": "Pair another device",
           "f9cbf4bb53": "Revoke device",
@@ -15420,6 +15418,9 @@
           "reconnectBody": "Sign in again to use Orca Relay, or use LAN to pair over Tailscale or the same Wi‑Fi.",
           "notEntitledTitle": "Orca Relay isn’t included with this Orca account.",
           "rateLimitedBody": "Orca Relay is busy. Wait a minute and retry, or use LAN to pair over Tailscale or the same Wi‑Fi."
+        },
+        "relayClockSkewMessage": {
+          "message": "Your computer's clock is off by about {{seconds}} seconds. Turn on automatic time, then retry."
         }
       },
       "gitlab": {

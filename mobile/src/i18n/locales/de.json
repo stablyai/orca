@@ -97,6 +97,7 @@
       "connecting": "Verbindung wird hergestellt…",
       "invalidPairingCode": "Kein gültiger Kopplungscode – vom Computer kopieren und erneut einfügen",
       "invalidQrCode": "Kein gültiger Orca-QR-Code",
+      "downloadQrCode": "Das ist der Download-Code. Scanne den Kopplungscode in Schritt 2 auf deinem Computer.",
       "openDesktopStep": "Orca auf dem Computer öffnen",
       "openMobileSettingsStep": "Einstellungen → Mobil öffnen",
       "openSettings": "Einstellungen öffnen",
@@ -1003,6 +1004,11 @@
       "folder": "Ordner",
       "project": "Projekt {{repo}}",
       "remoteHost": "Remote-Host"
+    },
+    "nativeScreenRecovery": {
+      "title": "Etwas ist schiefgelaufen",
+      "tryAgain": "Erneut versuchen",
+      "home": "Startseite"
     }
   },
   "connection": {
@@ -1096,7 +1102,8 @@
       "checkTailnet": "Prüfen, ob der Computer nicht im Ruhezustand ist und im Tailnet als verbunden angezeigt wird.",
       "desktopTitle": "Desktop-App läuft nicht",
       "disableVpn": "Dieses VPN deaktivieren oder Split-Tunneling / „Allow LAN“ aktivieren.",
-      "firewallTitle": "Firewall blockiert Port 6768",
+      "firewallTitle": "Firewall blockiert Port {{port}}",
+      "linuxFirewall": "Linux: sudo ufw allow {{port}}",
       "keepTailscaleOn": "Host-Adressen wie 100.x.x.x oder *.ts.net nutzen Tailscale – Tailscale eingeschaltet lassen.",
       "macosFirewall": "macOS: System Settings → Network → Firewall – Orca zulassen.",
       "notificationNetwork": "Mobilfunk oder ein anderes WLAN ausprobieren. Treffen Benachrichtigungen nach dem Wechsel ein, verzögert das ursprüngliche Netzwerk möglicherweise die Zustellung.",

@@ -725,7 +725,6 @@
       "defaultOpensAsScope": "適用於從這台電腦啟動的新 {{value0}} 工作階段，包括在已配對主機上啟動的工作階段。與「提供者」中對應的開關一致。",
       "save": "儲存",
       "clearDefault": "清除預設代理程式",
-      "autoPermissions": "自動",
       "autoUnsupported": "此主機上的 Orca 需更新至較新版本才能使用自動模式。",
       "permissionsDescription": "設定代理程式無須詢問即可執行的操作範圍。已自訂啟動參數的代理程式會保留這些參數。",
       "permissionsAutoDescription": "<agents>支援的代理程式</agents>會自行核准安全的操作。",
@@ -7329,8 +7328,6 @@
           "8fbe1f37c1": "環境",
           "2d133152fa": "無預設環境",
           "agentPermissions": "代理程式權限",
-          "agentPermissionsYolo": "Yolo",
-          "agentPermissionsManual": "手動",
           "3f1bdf3cb4": "環境文字過長，無法安全解析。",
           "codexSessionSource": "要匯入的 Codex 主目錄",
           "codexSessionSourceInfo": "關於匯入 Codex 歷史記錄",
@@ -14616,8 +14613,8 @@
           "aa97420ba4": "複製安裝連結",
           "ac1eb64952": "Android",
           "711e6f4b47": "iOS",
-          "e75647ace0": "使用手機掃描 QR Code 或開啟安裝連結以取得 Orca Mobile。",
-          "0d9b33299e": "取得應用程式。",
+          "e75647ace0": "用手機相機掃描此下載 QR 碼。已經安裝 Orca Mobile？繼續到第 2 步查看配對 QR 碼。",
+          "0d9b33299e": "下載 App。",
           "92ddfdfa1f": "第 1 步（共 2 步）",
           "ff48d9d520": "與另一台裝置配對",
           "f9cbf4bb53": "撤銷裝置",
@@ -14804,6 +14801,9 @@
           "reconnectBody": "再次登入使用 Orca Relay，或使用 LAN 透過 Tailscale 或相同 Wi-Fi 進行配對。",
           "notEntitledTitle": "此 Orca 帳戶不包含 Orca Relay。",
           "rateLimitedBody": "Orca Relay 正忙。請等待一分鐘再重試，或使用 LAN 透過 Tailscale 或同一 Wi‑Fi 配對。"
+        },
+        "relayClockSkewMessage": {
+          "message": "你的電腦時鐘偏差約 {{seconds}} 秒。請開啟自動設定時間，然後重試。"
         }
       },
       "gitlab": {

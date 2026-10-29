@@ -329,7 +329,6 @@
       "defaultOpensAsScope": "이 컴퓨터에서 시작하는 새 {{value0}} 세션(페어링된 호스트 포함)에 적용됩니다. 공급자의 스위치와 같습니다.",
       "save": "저장",
       "clearDefault": "기본 에이전트 지우기",
-      "autoPermissions": "자동",
       "customArgsBadge": "사용자 정의",
       "rowPermissions": "권한",
       "permissionsAutoDescription": "<agents>지원되는 에이전트</agents>는 안전한 작업을 스스로 승인합니다.",
@@ -6868,8 +6867,6 @@
           "8fbe1f37c1": "환경",
           "2d133152fa": "기본 환경 없음",
           "agentPermissions": "에이전트 권한",
-          "agentPermissionsYolo": "Yolo",
-          "agentPermissionsManual": "수동",
           "3f1bdf3cb4": "환경 텍스트가 너무 커서 안전하게 파싱할 수 없습니다.",
           "codexSessionSource": "가져올 Codex 홈",
           "codexSessionSourceInfo": "Codex 기록 가져오기 정보",
@@ -14455,8 +14452,8 @@
           "aa97420ba4": "설치 링크 복사",
           "ac1eb64952": "Android",
           "711e6f4b47": "iOS",
-          "e75647ace0": "휴대폰으로 QR을 스캔하거나 설치 링크를 열어 Orca Mobile을 다운로드하세요.",
-          "0d9b33299e": "앱을 받으세요.",
+          "e75647ace0": "휴대폰 카메라로 이 다운로드용 QR 코드를 스캔하세요. 이미 Orca Mobile이 있나요? 페어링 QR 코드를 보려면 2단계로 이동하세요.",
+          "0d9b33299e": "앱 다운로드.",
           "92ddfdfa1f": "2단계 중 1단계",
           "ff48d9d520": "다른 장치와 페어링",
           "f9cbf4bb53": "기기 취소",
@@ -14643,6 +14640,9 @@
           "reconnectBody": "Orca Relay를 사용하려면 다시 로그인하거나 LAN을 사용하여 Tailscale 또는 동일한 Wi-Fi를 통해 페어링하세요.",
           "notEntitledTitle": "이 Orca 계정에는 Orca Relay가 포함되어 있지 않습니다.",
           "rateLimitedBody": "Orca Relay가 사용 중입니다. 1분 정도 기다렸다가 다시 시도하거나, LAN을 사용해 Tailscale 또는 동일한 Wi‑Fi로 페어링하세요."
+        },
+        "relayClockSkewMessage": {
+          "message": "컴퓨터 시계가 약 {{seconds}}초 어긋나 있습니다. 자동 시간 설정을 켠 다음 다시 시도하세요."
         }
       },
       "gitlab": {

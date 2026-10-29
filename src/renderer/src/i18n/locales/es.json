@@ -331,7 +331,6 @@
       "clearDefault": "Borrar agente predeterminado",
       "customArgsBadge": "Personalizado",
       "rowPermissions": "Permisos",
-      "autoPermissions": "Automático",
       "otherAgentsPermissions": "Otros agentes",
       "permissionsAutoDescription": "Los <agents>agentes compatibles</agents> aprueban las acciones seguras por su cuenta.",
       "permissionsSearchDescription": "Inicia agentes con permisos Manual, Automático o Yolo.",
@@ -7159,8 +7158,6 @@
           "8fbe1f37c1": "Entorno",
           "2d133152fa": "Sin entorno predeterminado",
           "agentPermissions": "Permisos de Agents",
-          "agentPermissionsYolo": "Yolo",
-          "agentPermissionsManual": "Manual",
           "3f1bdf3cb4": "El texto de entorno es demasiado grande para analizarlo de forma segura.",
           "codexSessionSource": "Directorio Codex a importar",
           "codexSessionSourceInfo": "Sobre la importación del historial de Codex",
@@ -14828,8 +14825,8 @@
           "aa97420ba4": "Copiar enlace de instalación",
           "ac1eb64952": "Android",
           "711e6f4b47": "iOS",
-          "e75647ace0": "Escanea el código QR con tu teléfono o abre el enlace de instalación para obtener Orca Mobile.",
-          "0d9b33299e": "Obtén la aplicación.",
+          "e75647ace0": "Escanea este QR de descarga con la cámara de tu teléfono. ¿Ya tienes Orca Mobile? Continúa al paso 2 para ver el QR de emparejamiento.",
+          "0d9b33299e": "Descarga la app.",
           "92ddfdfa1f": "Paso 1 de 2",
           "ff48d9d520": "Emparejar otro dispositivo",
           "f9cbf4bb53": "Revocar dispositivo",
@@ -15016,6 +15013,9 @@
           "reconnectBody": "Inicia sesión de nuevo para usar Orca Relay, o usa LAN para emparejar mediante Tailscale o la misma red Wi‑Fi.",
           "notEntitledTitle": "Orca Relay no está incluido en esta cuenta de Orca.",
           "rateLimitedBody": "Orca Relay está ocupado. Espera un minuto y vuelve a intentarlo, o usa LAN para emparejar por Tailscale o la misma Wi‑Fi."
+        },
+        "relayClockSkewMessage": {
+          "message": "El reloj de tu computadora está desfasado unos {{seconds}} segundos. Activa la hora automática y vuelve a intentarlo."
         }
       },
       "gitlab": {

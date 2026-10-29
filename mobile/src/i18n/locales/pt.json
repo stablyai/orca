@@ -99,6 +99,7 @@
       "connecting": "Conectando…",
       "invalidPairingCode": "Código de pareamento inválido — copie-o do seu computador e cole novamente",
       "invalidQrCode": "Código QR do Orca inválido",
+      "downloadQrCode": "Esse é o código de download. Leia o código de pareamento na etapa 2 no seu computador.",
       "openDesktopStep": "Abra o Orca no seu computador",
       "openMobileSettingsStep": "Vá para Configurações → Mobile",
       "openSettings": "Abrir Configurações",
@@ -1046,6 +1047,11 @@
       "folder": "Pasta",
       "project": "Projeto {{repo}}",
       "remoteHost": "Host remoto"
+    },
+    "nativeScreenRecovery": {
+      "title": "Algo deu errado",
+      "tryAgain": "Tentar novamente",
+      "home": "Início"
     }
   },
   "connection": {
@@ -1139,7 +1145,8 @@
       "checkTailnet": "Verifique se o desktop está fora do modo de suspensão e aparece como conectado na sua tailnet.",
       "desktopTitle": "App desktop não está em execução",
       "disableVpn": "Desative essa VPN ou ative o tunelamento dividido / \"Permitir LAN\".",
-      "firewallTitle": "Firewall bloqueando a porta 6768",
+      "firewallTitle": "Firewall bloqueando a porta {{port}}",
+      "linuxFirewall": "Linux: sudo ufw allow {{port}}",
       "keepTailscaleOn": "Hosts com endereços como 100.x.x.x ou *.ts.net se conectam via Tailscale — mantenha-o ATIVADO.",
       "macosFirewall": "macOS: Ajustes do Sistema → Rede → Firewall — permita o Orca.",
       "notificationNetwork": "Tente usar os dados móveis ou outra rede Wi-Fi. Se os alertas chegarem após a troca, sua rede pode estar atrasando a entrega.",

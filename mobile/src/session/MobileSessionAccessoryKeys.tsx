@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { View, Text, ScrollView, Pressable } from 'react-native'
 import {
   ChevronDown,
@@ -10,7 +10,7 @@ import {
 } from 'lucide-react-native'
 import { triggerMediumImpact } from '../platform/haptics'
 import { createTerminalLiveAccessoryInput } from '../terminal/terminal-live-accessory-input'
-import { keepHeldPressThroughLongPress } from './held-press-long-press'
+import { TERMINAL_ACCESSORY_REPEAT_DELAY_MS } from '../terminal/terminal-accessory-repeat'
 import { isTerminalPhoneDisplayMode } from './mobile-session-route-helpers'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
@@ -45,13 +45,15 @@ export function MobileSessionAccessoryKeys({
     dismissSoftwareKeyboard,
     toggleLiveInput,
     stopAccessoryRepeat,
-    startAccessoryRepeat,
+    cancelAccessoryRepeat,
+    prepareAccessoryPress,
     handlePaste,
     keyboardLift
   } = controller
+  const accessoryPresses = useRef(new Map<string, ReturnType<typeof prepareAccessoryPress>>())
   const keepsKeyboard = useKeyboardPersistingTaps('always')
   // An unmounting Pressable never fires onPressOut, so a held key would outlive its strip.
-  useEffect(() => stopAccessoryRepeat, [stopAccessoryRepeat])
+  useEffect(() => cancelAccessoryRepeat, [cancelAccessoryRepeat])
   return (
     <View ref={keepsKeyboard} style={vertical ? styles.accessoryRail : styles.accessoryBar}>
       {/* Why: fixed keyboard escape hatch; outside ScrollView + shortcut path so it can't scroll away or be hidden (#5106). */}
@@ -89,6 +91,7 @@ export function MobileSessionAccessoryKeys({
         showsVerticalScrollIndicator={false}
         contentContainerStyle={vertical ? styles.accessoryContentVertical : styles.accessoryContent}
         keyboardShouldPersistTaps="always"
+        onScrollBeginDrag={cancelAccessoryRepeat}
       >
         <Pressable
           style={({ pressed }) => [
@@ -175,24 +178,41 @@ export function MobileSessionAccessoryKeys({
               !canSend && styles.accessoryKeyDisabled
             ]}
             disabled={!canSend}
-            onPressIn={() => {
+            onPressIn={(event) => {
               if (!key.repeatable) {
                 return
               }
-              startAccessoryRepeat(createTerminalLiveAccessoryInput(key))
+              const press = prepareAccessoryPress(createTerminalLiveAccessoryInput(key))
+              accessoryPresses.current.set(key.id, press)
+              if (event.type === 'keydown') {
+                press.hold(TERMINAL_ACCESSORY_REPEAT_DELAY_MS)
+              }
             }}
             onPressOut={() => {
               if (key.repeatable) {
                 stopAccessoryRepeat()
               }
             }}
-            onPress={() => {
+            onPress={(event) => {
               if (key.repeatable) {
+                // Accessibility clicks have no touch-down to prepare a sender.
+                const accessibilityClick =
+                  event.type === 'click' &&
+                  'detail' in event.nativeEvent &&
+                  event.nativeEvent.detail === 0
+                const press =
+                  (!accessibilityClick && accessoryPresses.current.get(key.id)) ||
+                  prepareAccessoryPress(createTerminalLiveAccessoryInput(key))
+                accessoryPresses.current.delete(key.id)
+                void press.tap()
                 return
               }
               void handleAccessoryKey(createTerminalLiveAccessoryInput(key))
             }}
-            onLongPress={key.repeatable ? keepHeldPressThroughLongPress : undefined}
+            onLongPress={
+              key.repeatable ? () => accessoryPresses.current.get(key.id)?.hold() : undefined
+            }
+            delayLongPress={TERMINAL_ACCESSORY_REPEAT_DELAY_MS}
             accessibilityLabel={
               key.accessibilityLabel ??
               t('session.accessoryKeys.sendKey', 'Send {{label}}', { label: key.label })

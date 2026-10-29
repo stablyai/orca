@@ -551,7 +551,6 @@
       "clearDefault": "Effacer l'agent par défaut",
       "customArgsBadge": "Personnalisé",
       "rowPermissions": "Autorisations",
-      "autoPermissions": "Auto",
       "autoUnsupported": "Le mode automatique nécessite une version plus récente d’Orca sur cet hôte.",
       "otherAgentsPermissions": "Autres agents",
       "permissionsMixed": "La plupart des agents utilisent {{mode}}. Le choix d'un mode réinitialise les exceptions marquées, à l'exception des arguments personnalisés.",
@@ -7387,8 +7386,6 @@
           "8fbe1f37c1": "Environnement",
           "2d133152fa": "Aucun environnement par défaut",
           "agentPermissions": "Permissions des agents",
-          "agentPermissionsYolo": "Yolo",
-          "agentPermissionsManual": "Manuel",
           "3f1bdf3cb4": "Le texte d'environnement est trop volumineux pour être analysé sans risque.",
           "codexSessionSource": "Home Codex d'où importer",
           "codexSessionSourceInfo": "À propos de l'import de l'historique Codex",
@@ -15052,8 +15049,8 @@
           "aa97420ba4": "Copier le lien d'installation",
           "ac1eb64952": "Android",
           "711e6f4b47": "iOS",
-          "e75647ace0": "Scannez le code QR avec votre téléphone ou ouvrez le lien d'installation pour récupérer Orca Mobile.",
-          "0d9b33299e": "Récupérez l'app.",
+          "e75647ace0": "Scannez ce QR de téléchargement avec l’appareil photo de votre téléphone. Vous avez déjà Orca Mobile ? Passez à l’étape 2 pour le QR d’association.",
+          "0d9b33299e": "Téléchargez l’app.",
           "92ddfdfa1f": "Étape 1 sur 2",
           "ff48d9d520": "Appairer un autre appareil",
           "f9cbf4bb53": "Révoquer l'appareil",
@@ -15240,6 +15237,9 @@
           "reconnectBody": "Connectez-vous à nouveau pour utiliser Orca Relay, ou utilisez le réseau local pour effectuer le couplage via Tailscale ou le même Wi‑Fi.",
           "notEntitledTitle": "Orca Relay n'est pas inclus avec ce compte Orca.",
           "rateLimitedBody": "Orca Relay est occupé. Attendez une minute et réessayez, ou utilisez le LAN pour appairer via Tailscale ou le même Wi‑Fi."
+        },
+        "relayClockSkewMessage": {
+          "message": "L’horloge de votre ordinateur est décalée d’environ {{seconds}} secondes. Activez le réglage automatique de l’heure, puis réessayez."
         }
       },
       "gitlab": {

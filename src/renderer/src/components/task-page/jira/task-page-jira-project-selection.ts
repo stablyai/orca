@@ -10,20 +10,22 @@ const JIRA_PROJECT_LABEL_OPTIONS: Intl.CollatorOptions = {
   sensitivity: 'base'
 }
 
-export function compareJiraProjectsByDisplayLabel(
-  a: JiraProject,
-  b: JiraProject,
+// Why: resolve the UI-language collator once per sort, not on every comparison.
+export function jiraProjectDisplayLabelComparator(
   includeSiteName: boolean
-): number {
-  const siteComparison = includeSiteName
-    ? uiCollator(JIRA_PROJECT_LABEL_OPTIONS).compare(a.siteName ?? '', b.siteName ?? '')
-    : 0
-  if (siteComparison !== 0) {
-    return siteComparison
+): (a: JiraProject, b: JiraProject) => number {
+  const collator = uiCollator(JIRA_PROJECT_LABEL_OPTIONS)
+  return (a, b) => {
+    const siteComparison = includeSiteName
+      ? collator.compare(a.siteName ?? '', b.siteName ?? '')
+      : 0
+    if (siteComparison !== 0) {
+      return siteComparison
+    }
+    const nameComparison = collator.compare(a.name, b.name)
+    if (nameComparison !== 0) {
+      return nameComparison
+    }
+    return collator.compare(a.key, b.key)
   }
-  const nameComparison = uiCollator(JIRA_PROJECT_LABEL_OPTIONS).compare(a.name, b.name)
-  if (nameComparison !== 0) {
-    return nameComparison
-  }
-  return uiCollator(JIRA_PROJECT_LABEL_OPTIONS).compare(a.key, b.key)
 }

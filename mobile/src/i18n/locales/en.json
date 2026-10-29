@@ -198,6 +198,7 @@
     },
     "pairScan": {
       "invalidQrCode": "Not a valid Orca QR code",
+      "downloadQrCode": "That's the download code. Scan the pairing code in step 2 on your desktop.",
       "invalidPairingCode": "Not a valid pairing code — copy it from your computer and paste again",
       "connectTimedOut": "Couldn't connect within {{seconds}}s — see log below for where it stalled",
       "pairingFailed": "Pairing failed: {{error}}",
@@ -360,7 +361,8 @@
       "sameNetwork": "Both devices must be on the same LAN (unless connected through Tailscale).",
       "sameSubnet": "Ethernet and WiFi must share the same subnet.",
       "reconnectWifi": "Try reconnecting WiFi on both devices.",
-      "firewallTitle": "Firewall Blocking Port 6768",
+      "firewallTitle": "Firewall Blocking Port {{port}}",
+      "linuxFirewall": "Linux: sudo ufw allow {{port}}",
       "macosFirewall": "macOS: System Settings → Network → Firewall — allow Orca.",
       "windowsFirewall": "Windows: Defender Firewall → Allow app — enable Orca for Private networks.",
       "restrictedNetwork": "Corporate/school networks may block P2P — try a personal hotspot.",
@@ -1275,6 +1277,11 @@
       "detailsChangedMessage": "The account or reset offer changed before the host contacted Codex. Review the updated details, then confirm again.",
       "resetFailed": "Could not reset rate limits",
       "confirmTitle": "Use a rate-limit reset?"
+    },
+    "nativeScreenRecovery": {
+      "title": "Something went wrong",
+      "tryAgain": "Try again",
+      "home": "Home"
     }
   },
   "pullRequest": {
@@ -3869,6 +3876,21 @@
     },
     "worktreeCreateRetry": {
       "createFailed": "Failed to create workspace"
+    },
+    "hostedMerge": {
+      "merged": "Merged",
+      "closed": "Closed",
+      "conflicts": "Conflicts",
+      "behind": "Behind",
+      "blocked": "Blocked",
+      "checksPending": "Checks pending",
+      "ableToMerge": "Able to merge",
+      "unknown": "Unknown"
+    },
+    "pagination": {
+      "pageUnreachable": "Page {{page}} is beyond what GitHub search can return.",
+      "loadPageFailed": "Page {{page}} could not be loaded from GitHub.",
+      "noMoreResults": "No more results on page {{page}}."
     }
   },
   "terminal": {

@@ -332,7 +332,6 @@
       "defaultOpensAsScope": "适用于从这台电脑启动的新 {{value0}} 会话，包括在已配对主机上启动的会话。与提供方中的开关一致。",
       "save": "保存",
       "clearDefault": "清除默认智能体",
-      "autoPermissions": "自动",
       "customArgsBadge": "自定义",
       "rowPermissions": "权限",
       "permissionsDescription": "设置智能体在无需询问您的情况下可以执行的操作范围。已设置自定义启动参数的智能体会保留这些参数。",
@@ -6868,8 +6867,6 @@
           "8fbe1f37c1": "环境",
           "2d133152fa": "无默认环境",
           "agentPermissions": "智能体权限",
-          "agentPermissionsYolo": "Yolo",
-          "agentPermissionsManual": "手动",
           "3f1bdf3cb4": "环境文本过长，无法安全解析。",
           "codexSessionSource": "要导入的 Codex 主目录",
           "codexSessionSourceInfo": "关于导入 Codex 历史记录",
@@ -14455,8 +14452,8 @@
           "aa97420ba4": "复制安装链接",
           "ac1eb64952": "安卓",
           "711e6f4b47": "iOS系统",
-          "e75647ace0": "使用手机扫描二维码或打开安装链接以获取 Orca 手机端。",
-          "0d9b33299e": "获取应用程序。",
+          "e75647ace0": "用手机相机扫描此下载二维码。已经安装 Orca Mobile？继续到第 2 步查看配对二维码。",
+          "0d9b33299e": "下载应用。",
           "92ddfdfa1f": "第 1 步（共 2 步）",
           "ff48d9d520": "与另一台设备配对",
           "f9cbf4bb53": "撤销设备",
@@ -14643,6 +14640,9 @@
           "reconnectBody": "再次登录以使用 Orca Relay，或使用 LAN 通过 Tailscale 或同一 Wi-Fi 进行配对。",
           "notEntitledTitle": "此 Orca 账户不包含 Orca Relay。",
           "rateLimitedBody": "Orca Relay 正忙。请等待一分钟再重试，或使用 LAN 通过 Tailscale 或同一 Wi‑Fi 配对。"
+        },
+        "relayClockSkewMessage": {
+          "message": "你的电脑时钟偏差约 {{seconds}} 秒。请开启自动设置时间，然后重试。"
         }
       },
       "gitlab": {

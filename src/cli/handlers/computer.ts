@@ -6,7 +6,12 @@ import type {
   ComputerSnapshotResult
 } from '../../shared/runtime-types'
 import type { CommandHandler } from '../dispatch'
-import { getOptionalStringFlag, getRequiredStringFlag } from '../flags'
+import {
+  getOptionalPositiveIntegerFlag,
+  getOptionalStringFlag,
+  getRequiredStringFlag
+} from '../flags'
+import { queryComputerTreeText } from '../computer-tree-query'
 import { RuntimeClientError } from '../runtime-client'
 import {
   formatComputerAction,
@@ -78,11 +83,17 @@ export const COMPUTER_HANDLERS: Record<string, CommandHandler> = {
   },
   'computer get-app-state': async ({ flags, client, cwd, json }) => {
     const observeFlags = getComputerObserveFlags(flags)
+    const query = getOptionalStringFlag(flags, 'query')
+    const maxElements = getOptionalPositiveIntegerFlag(flags, 'max-elements')
     const target = await getComputerCommandTarget(flags, cwd, client)
     const result = await client.call<ComputerSnapshotResult>('computer.getAppState', {
       ...target,
       ...observeFlags
     })
+    if (query !== undefined || maxElements !== undefined) {
+      const { snapshot } = result.result
+      snapshot.treeText = queryComputerTreeText(snapshot.treeText, { query, maxElements })
+    }
     printResult(result, json, formatGetAppState)
   },
   'computer click': async ({ flags, client, cwd, json }) => {
@@ -236,6 +247,7 @@ function formatComputerCapabilities(value: ComputerProviderCapabilities): string
     `  Actions: ${Object.entries(value.supports.actions)
       .filter(([, enabled]) => enabled)
       .map(([name]) => name)
-      .join(', ')}`
+      .join(', ')}`,
+    ...(value.supports.input ? [`  Input: background=${value.supports.input.background}`] : [])
   ].join('\n')
 }

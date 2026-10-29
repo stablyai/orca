@@ -1491,7 +1491,6 @@
       "hostDefaults": "Padrões para novos agentes no host selecionado.",
       "save": "Salvar",
       "clearDefault": "Limpar agente padrão",
-      "autoPermissions": "Automático",
       "autoUnsupported": "O modo Automático requer uma versão mais recente do Orca neste host.",
       "permissionsDescription": "O que os agentes podem fazer sem pedir sua aprovação. Agentes com argumentos de inicialização personalizados os mantêm.",
       "permissionsAutoDescription": "<agents>Agentes compatíveis</agents> aprovam ações seguras por conta própria.",
@@ -5570,8 +5569,6 @@
           "8fbe1f37c1": "Ambiente",
           "2d133152fa": "Nenhum ambiente padrão",
           "agentPermissions": "Permissões do Agente",
-          "agentPermissionsYolo": "Yolo",
-          "agentPermissionsManual": "Manual",
           "3f1bdf3cb4": "O texto do ambiente é muito grande para interpretar com segurança.",
           "codexSessionSource": "Diretório do Codex de onde importar",
           "codexSessionSourceInfo": "Sobre importar o histórico do Codex",
@@ -16325,8 +16322,8 @@
           "aa97420ba4": "Copiar link de instalação",
           "ac1eb64952": "Android",
           "711e6f4b47": "iOS",
-          "e75647ace0": "Escaneie o QR com o seu celular ou abra o link de instalação para obter o Orca Mobile.",
-          "0d9b33299e": "Obtenha o aplicativo.",
+          "e75647ace0": "Leia este QR de download com a câmera do celular. Já tem o Orca Mobile? Continue para a etapa 2 para ver o QR de pareamento.",
+          "0d9b33299e": "Baixe o app.",
           "92ddfdfa1f": "Etapa 1 de 2",
           "ff48d9d520": "Parear outro dispositivo",
           "f9cbf4bb53": "Revogar dispositivo",
@@ -16443,6 +16440,9 @@
           "96d651cb87": "Sessão de terminal",
           "93217b41c1": "Lista de worktrees",
           "89c7713645": "Tela inicial do Orca Mobile"
+        },
+        "relayClockSkewMessage": {
+          "message": "O relógio do seu computador está com uma diferença de cerca de {{seconds}} segundos. Ative a hora automática e tente novamente."
         }
       },
       "PullRequestConfirmation": {

@@ -9,6 +9,7 @@ import {
   normalizePluginUpdatePolicySettings,
   type PluginAutoUpdateState
 } from '../../../shared/plugins/catalog/plugin-update-policy'
+import { emptyPluginLockfile } from '../../../shared/plugins/installation/plugin-install-lockfile'
 import type { ValidDiscoveredPlugin } from '../plugin-discovery'
 import { PLUGIN_AUTO_UPDATE_HOLD_BACK_MS, PluginAutoUpdater } from './plugin-auto-updater'
 
@@ -102,6 +103,7 @@ function setup(
       }
     },
     installer: {
+      readInstallLockfile: async () => emptyPluginLockfile(),
       findInstalledUpdateListing: vi.fn(async () => ({
         listing: {
           marketplaceSourceId: 'a'.repeat(32),

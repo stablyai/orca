@@ -1228,7 +1228,6 @@
 1 test-timeout-needs-reason:mobile/src/test-support/rpc-recording/recorded-request-params.test.ts
 1 test-timeout-needs-reason:mobile/src/test-support/rpc-recording/rpc-recording-through-bridge.test.ts
 1 test-timeout-needs-reason:mobile/src/transport/mobile-web-bundle-host-slow-link.test.ts
-1 test-timeout-needs-reason:mobile/src/transport/rpc-client-live-recovery.test.ts
 3 test-timeout-needs-reason:mobile/src/transport/rpc-client-reconnect-wait.test.ts
 1 test-timeout-needs-reason:src/cli/agent-launch-process.test.ts
 1 test-timeout-needs-reason:src/cli/runtime/launch-serve-replaced-app-restart.test.ts

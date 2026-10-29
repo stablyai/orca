@@ -97,6 +97,7 @@
       "connecting": "Bağlanılıyor…",
       "invalidPairingCode": "Geçerli bir eşleştirme kodu değil — bilgisayarınızdan kopyalayıp yeniden yapıştırın",
       "invalidQrCode": "Geçerli bir Orca QR kodu değil",
+      "downloadQrCode": "Bu indirme kodu. Bilgisayarınızdaki 2. adımda bulunan eşleştirme kodunu tarayın.",
       "openDesktopStep": "Bilgisayarınızda Orca'yı açın",
       "openMobileSettingsStep": "Ayarlar → Mobil bölümüne gidin",
       "openSettings": "Ayarları Aç",
@@ -1003,6 +1004,11 @@
       "folder": "Klasör",
       "project": "{{repo}} projesi",
       "remoteHost": "Uzak sunucu"
+    },
+    "nativeScreenRecovery": {
+      "title": "Bir sorun oluştu",
+      "tryAgain": "Tekrar dene",
+      "home": "Ana sayfa"
     }
   },
   "connection": {
@@ -1096,7 +1102,8 @@
       "checkTailnet": "Bilgisayarınızın uyku modunda olmadığını ve tailnet ağınızda bağlı göründüğünü kontrol edin.",
       "desktopTitle": "Masaüstü Uygulaması Çalışmıyor",
       "disableVpn": "Bu VPN'i devre dışı bırakın veya bölünmüş tünellemeyi / \"Allow LAN\" seçeneğini etkinleştirin.",
-      "firewallTitle": "Güvenlik Duvarı 6768 Portunu Engelliyor",
+      "firewallTitle": "Güvenlik Duvarı {{port}} Portunu Engelliyor",
+      "linuxFirewall": "Linux: sudo ufw allow {{port}}",
       "keepTailscaleOn": "100.x.x.x veya *.ts.net gibi sunucu adreslerine Tailscale üzerinden bağlanılır — Tailscale'i AÇIK tutun.",
       "macosFirewall": "macOS: System Settings → Network → Firewall — Orca'ya izin verin.",
       "notificationNetwork": "Hücresel bağlantıyı veya başka bir Wi-Fi ağını deneyin. Ağ değiştirdikten sonra bildirimler geliyorsa ağınız iletimi geciktiriyor olabilir.",

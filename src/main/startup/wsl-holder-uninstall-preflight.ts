@@ -11,7 +11,7 @@ const UNINSTALL_RELEASE_TIMEOUT_MS = 30_000
 /** Exit code 0 only when every recorded holder is proven gone; unverifiable ones are left running. */
 export async function releaseWslHoldersForUninstall(holder: WslDistroHolder): Promise<number> {
   try {
-    const released = await holder.releaseAll()
+    const released = await holder.releaseAll({ forUninstall: true })
     for (const { distro, state } of released) {
       if (state !== 'exited') {
         console.warn(`[wsl] uninstall left the ${distro} holder ${state}`)

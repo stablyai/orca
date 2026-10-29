@@ -48,12 +48,12 @@ type TerminalLivePendingInputFlush = {
     composing?: boolean
   ) => Promise<boolean>
   readonly clearPendingLiveInputCommit: () => void
-  readonly endLiveInputSessionThenSend: (handle: string, bytes: string) => Promise<boolean>
+  readonly endLiveInputSessionThenSend: TerminalLiveInputSender
   readonly flushPendingLiveInputText: (expectedHandle: string | null) => Promise<boolean>
   readonly heldLiveInputTextRef: RefObject<string>
   readonly liveInputComposingRef: RefObject<boolean | undefined>
   readonly pendingLiveInputHandleRef: RefObject<string | null>
-  readonly queueLiveInputControl: (handle: string, bytes: string) => Promise<boolean>
+  readonly queueLiveInputControl: TerminalLiveInputSender
   readonly sentLiveInputTextRef: RefObject<string>
   readonly waitForPendingLiveInputFlush: () => Promise<boolean>
 }
@@ -118,6 +118,12 @@ export function useTerminalLivePendingInputFlush<TTabType extends string>({
   const sendQueuedMirrorPayload = useCallback(
     (handle: string, payload: string): Promise<boolean> =>
       sendLiveTerminalInputRef.current(handle, payload),
+    [sendLiveTerminalInputRef]
+  )
+
+  const sendQueuedPointerPayload = useCallback(
+    (handle: string, payload: string): Promise<boolean> =>
+      sendLiveTerminalInputRef.current(handle, payload, 'pointer'),
     [sendLiveTerminalInputRef]
   )
 
@@ -255,23 +261,23 @@ export function useTerminalLivePendingInputFlush<TTabType extends string>({
   )
 
   // Queue at key time; waiting for the drain would let text typed meanwhile go first.
-  const queueLiveInputControl = useCallback(
-    (handle: string, bytes: string): Promise<boolean> => {
+  const queueLiveInputControl = useCallback<TerminalLiveInputSender>(
+    (handle, bytes, origin) => {
       // Own the queued bytes so a terminal switch retires them even with an empty field.
       pendingLiveInputHandleRef.current = handle
       return queueTerminalLiveControlSend(
         pendingLiveInputFlushRef.current,
         handle,
         bytes,
-        sendQueuedMirrorPayload
+        origin === 'pointer' ? sendQueuedPointerPayload : sendQueuedMirrorPayload
       )
     },
-    [sendQueuedMirrorPayload]
+    [sendQueuedMirrorPayload, sendQueuedPointerPayload]
   )
 
   // Queue held text and the control synchronously so the next keystroke follows them.
-  const endLiveInputSessionThenSend = useCallback(
-    (handle: string, bytes: string): Promise<boolean> => {
+  const endLiveInputSessionThenSend = useCallback<TerminalLiveInputSender>(
+    (handle, bytes, origin) => {
       const pendingHandle = pendingLiveInputHandleRef.current
       const flushState = pendingLiveInputFlushRef.current
       if (pendingHandle && pendingHandle !== handle) {
@@ -289,7 +295,7 @@ export function useTerminalLivePendingInputFlush<TTabType extends string>({
           void queueTerminalLiveMirrorSend(flushState, handle, payload, sendQueuedMirrorPayload)
         }
       }
-      const sent = queueLiveInputControl(handle, bytes)
+      const sent = queueLiveInputControl(handle, bytes, origin)
       clearHeldCommitTimer()
       heldLiveInputTextRef.current = ''
       liveInputComposingRef.current = undefined
