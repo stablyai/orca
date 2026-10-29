@@ -483,8 +483,10 @@ it('stores a delivered kill in the form older builds read and reads only that ex
       { kind: 'exit-observed', ...evidence }
     ]
   ]) {
-    expect(
-      decodePersistedAgentSessionRecord(withEvidence(saved)).record.lease.deathEvidence
-    ).toEqual(read)
+    const row: unknown = withEvidence(saved)
+    if (!isPersistedAgentSessionRecord(row)) {
+      throw new Error('the stored evidence fixture must pass record validation')
+    }
+    expect(decodePersistedAgentSessionRecord(row).record.lease.deathEvidence).toEqual(read)
   }
 })

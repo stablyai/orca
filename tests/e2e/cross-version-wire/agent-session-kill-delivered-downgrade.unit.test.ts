@@ -65,7 +65,7 @@ function oldRecord(value: unknown) {
   ) {
     throw new Error('the old build must expose the chat and its lease')
   }
-  return value
+  return { ...value, lease: value.lease }
 }
 
 // Materializing the historical source checkout and importing its modules can exceed the default timeout.
