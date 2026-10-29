@@ -91,16 +91,15 @@ describe('registerAppMenu', () => {
   )
 
   it('shows the Settings hint when the user assigns a shortcut', () => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
     registerAppMenu({
       ...buildMenuOptions(),
       getKeybindings: () => ({ 'app.settings': ['Mod+Comma'] })
     })
 
-    const submenu = getSubmenu(getTemplate(), isMac ? 'Orca' : 'File')
+    const submenu = getSubmenu(getTemplate(), 'Orca')
     expect(submenu).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ label: `Settings\t${isMac ? '⌘,' : 'Ctrl+,'}` })
-      ])
+      expect.arrayContaining([expect.objectContaining({ label: 'Settings\t⌘,' })])
     )
   })
 
@@ -124,11 +123,12 @@ describe('registerAppMenu', () => {
   })
 
   it('shows reload shortcuts as policy-routed menu hints', () => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
     registerAppMenu(buildMenuOptions())
 
     expect(buildFromTemplateMock).toHaveBeenCalledTimes(1)
     const viewSubmenu = getSubmenu(getTemplate(), 'View')
-    const expectedForceReloadLabel = `Force Reload\t${isMac ? '⌘⇧R' : 'Ctrl+⇧+R'}`
+    const expectedForceReloadLabel = 'Force Reload\t⌘⇧R'
 
     expect(viewSubmenu).toEqual(
       expect.arrayContaining([expect.objectContaining({ label: 'Reload' })])
@@ -165,6 +165,7 @@ describe('registerAppMenu', () => {
   })
 
   it('force reloads the focused window from the view menu', () => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
     const reloadMock = vi.fn()
     const reloadIgnoringCacheMock = vi.fn()
     const options = buildMenuOptions()
@@ -250,11 +251,70 @@ describe('registerAppMenu', () => {
     ])
   })
 
+  it.each(['linux', 'win32'] as const)(
+    'moves display-only shortcut hints into an unregistered accelerator column on %s',
+    (platform) => {
+      vi.spyOn(process, 'platform', 'get').mockReturnValue(platform)
+      registerAppMenu({
+        ...buildMenuOptions(),
+        getKeybindings: () => ({ 'app.settings': ['Mod+Comma'], 'zoom.reset': [] })
+      })
+
+      const template = getTemplate()
+      const viewSubmenu = getSubmenu(template, 'View')
+      const appearanceSubmenu = getSubmenu(viewSubmenu, 'Appearance')
+      const unregistered = (label: string, accelerator: string) => ({
+        label,
+        accelerator,
+        registerAccelerator: false
+      })
+
+      // Chromium's views menus draw a label tab as a literal arrow on both platforms.
+      expect(getSubmenu(template, 'File')[0]).toMatchObject(unregistered('Settings', 'Ctrl+,'))
+      expect(viewSubmenu).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining(unregistered('Force Reload', 'Ctrl+Shift+R')),
+          expect.objectContaining(unregistered('Zoom In', 'Ctrl+=')),
+          expect.objectContaining(unregistered('Open Worktree Palette', 'Ctrl+Shift+J'))
+        ])
+      )
+      expect(appearanceSubmenu[0]).toMatchObject(unregistered('Toggle Left Sidebar', 'Ctrl+B'))
+      const resetSize = viewSubmenu.find((item) => item.label === 'Reset Size')
+      expect(resetSize).toBeDefined()
+      expect(resetSize?.accelerator).toBeUndefined()
+    }
+  )
+
+  it.each(['linux', 'win32'] as const)(
+    'shows the first binding Electron can render as the menu accelerator on %s',
+    (platform) => {
+      vi.spyOn(process, 'platform', 'get').mockReturnValue(platform)
+      registerAppMenu({
+        ...buildMenuOptions(),
+        getKeybindings: () => ({
+          'zoom.out': ['DoubleTap+Shift', 'Mod+Alt+BracketLeft'],
+          'zoom.reset': ['Cmd+ArrowUp'],
+          'sidebar.right.toggle': ['DoubleTap+Shift']
+        })
+      })
+
+      const viewSubmenu = getSubmenu(getTemplate(), 'View')
+      const appearanceSubmenu = getSubmenu(viewSubmenu, 'Appearance')
+
+      expect(viewSubmenu.find((item) => item.label === 'Zoom Out')?.accelerator).toBe('Ctrl+Alt+[')
+      expect(viewSubmenu.find((item) => item.label === 'Reset Size')?.accelerator).toBe('Super+Up')
+      const rightSidebar = appearanceSubmenu.find((item) => item.label === 'Toggle Right Sidebar')
+      expect(rightSidebar).toBeDefined()
+      expect(rightSidebar?.accelerator).toBeUndefined()
+    }
+  )
+
   it('shows the worktree palette shortcut as a display-only menu hint', () => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
     registerAppMenu(buildMenuOptions())
 
     const viewSubmenu = getSubmenu(getTemplate(), 'View')
-    const expectedLabel = `Open Worktree Palette\t${isMac ? '⌘J' : 'Ctrl+⇧+J'}`
+    const expectedLabel = 'Open Worktree Palette\t⌘J'
     const paletteItem = viewSubmenu.find((item) => item.label === expectedLabel)
 
     expect(paletteItem).toBeDefined()
@@ -606,6 +666,7 @@ describe('registerAppMenu', () => {
   })
 
   it('routes sidebar toggle items through their callbacks', () => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
     const options = buildMenuOptions()
     registerAppMenu(options)
 
@@ -613,8 +674,8 @@ describe('registerAppMenu', () => {
     const appearanceSubmenu = (viewSubmenu.find((item) => item.label === 'Appearance')?.submenu ??
       []) as Electron.MenuItemConstructorOptions[]
 
-    const leftLabel = `Toggle Left Sidebar\t${isMac ? '⌘B' : 'Ctrl+B'}`
-    const rightLabel = `Toggle Right Sidebar\t${isMac ? '⌘L' : 'Ctrl+L'}`
+    const leftLabel = 'Toggle Left Sidebar\t⌘B'
+    const rightLabel = 'Toggle Right Sidebar\t⌘L'
 
     appearanceSubmenu
       .find((item) => item.label === leftLabel)

@@ -1,9 +1,10 @@
 import { BrowserWindow, webContents } from 'electron'
 import { translateMain } from '../i18n/main-i18n'
+import { appMenuShortcutHint } from './app-menu-shortcut-hint'
 
 /** View > Reload, Force Reload and Toggle Developer Tools, which act on what has focus. */
 export function createAppMenuReloadAndDevToolsItems(options: {
-  forceReloadShortcutLabel: string
+  forceReloadBindings: readonly string[]
   onBeforeReload?: (options: { ignoreCache: boolean; webContentsId: number }) => void
   /** False when the focused contents belong to no browser page. */
   toggleFocusedPageDevTools?: (focused: Electron.WebContents) => boolean
@@ -30,7 +31,11 @@ export function createAppMenuReloadAndDevToolsItems(options: {
       click: () => reloadFocusedWindow(false)
     },
     {
-      label: `${translateMain('menu.forceReload', 'Force Reload')}\t${options.forceReloadShortcutLabel}`,
+      ...appMenuShortcutHint(
+        translateMain('menu.forceReload', 'Force Reload'),
+        options.forceReloadBindings,
+        process.platform
+      ),
       click: () => reloadFocusedWindow(true)
     },
     {
