@@ -1,11 +1,12 @@
 import { Blocks } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { useOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
+import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
+import { useShortcutKeyComboDetails } from '@/hooks/useShortcutLabel'
 import { openPluginsSettings } from '@/lib/open-plugins-settings'
 import { translate } from '@/i18n/i18n'
 
 export function PluginsStatusSegment(): React.JSX.Element {
-  const shortcut = useOptionalShortcutLabel('view.plugins')
+  const shortcut = useShortcutKeyComboDetails('view.plugins')
   const label = translate('auto.components.status.bar.PluginsStatusSegment.label', 'Plugins')
 
   return (
@@ -20,8 +21,17 @@ export function PluginsStatusSegment(): React.JSX.Element {
           <Blocks className="size-3" />
         </button>
       </TooltipTrigger>
-      <TooltipContent side="top" sideOffset={6}>
-        {shortcut ? `${label} (${shortcut})` : label}
+      <TooltipContent side="top" sideOffset={4}>
+        <span className="inline-flex items-center gap-2">
+          {label}
+          {shortcut.map((combo) => (
+            <ShortcutKeyCombo
+              key={`${combo.doubleTap}:${combo.keys.join('+')}`}
+              keys={combo.keys}
+              doubleTap={combo.doubleTap}
+            />
+          ))}
+        </span>
       </TooltipContent>
     </Tooltip>
   )
