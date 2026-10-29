@@ -63,9 +63,15 @@ async function render(
   return { container, input, root }
 }
 
-async function press(input: HTMLInputElement, key: string): Promise<void> {
+async function press(
+  input: HTMLInputElement,
+  key: string,
+  modifiers: KeyboardEventInit = {}
+): Promise<void> {
   await act(async () => {
-    input.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }))
+    input.dispatchEvent(
+      new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true, ...modifiers })
+    )
     await flushPromises()
   })
 }
@@ -120,6 +126,16 @@ describe('RemoteFileBrowser project folders', () => {
   it('shortens home paths even when the browser opens away from home', async () => {
     const { container, root } = await render(vi.fn(), '/srv')
     expect(projectFolderRows(container)).toEqual(['~/code', '/srv/app'])
+    await act(async () => root.unmount())
+  })
+
+  it('opens the highlighted folder on Enter with a modifier too', async () => {
+    const { input, root } = await render()
+    await press(input, 'ArrowUp')
+    browseDir.mockClear()
+
+    await press(input, 'Enter', { shiftKey: true })
+    expect(browseDir).toHaveBeenCalledWith({ targetId: 'target-1', dirPath: '/srv/app' })
     await act(async () => root.unmount())
   })
 
