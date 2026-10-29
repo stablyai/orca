@@ -1,7 +1,8 @@
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useLayoutEffect, useRef, useState } from 'react'
 import type React from 'react'
 import type { TreeNode } from './file-explorer-types'
 import type { FileExplorerRowProjection } from './file-explorer-row-projection'
+import type { LocalPathOpenOwner } from '@/lib/local-path-open-guard'
 import {
   createEmptyFileExplorerSelection,
   createSingleFileExplorerSelection,
@@ -30,13 +31,18 @@ type UseFileExplorerSelectionResult = {
 
 export function useFileExplorerSelection(
   rowProjection: FileExplorerRowProjection,
-  isMac: boolean
+  isMac: boolean,
+  pathOwner: LocalPathOpenOwner
 ): UseFileExplorerSelectionResult {
   const [selectionState, setSelectionState] = useState(createEmptyFileExplorerSelection)
   const selectionStateRef = useRef(selectionState)
   const rowProjectionRef = useRef(rowProjection)
+  const pathOwnerRef = useRef(pathOwner)
   selectionStateRef.current = selectionState
   rowProjectionRef.current = rowProjection
+  useLayoutEffect(() => {
+    pathOwnerRef.current = pathOwner
+  }, [pathOwner])
 
   const setSingleSelectedPath = useCallback((value: React.SetStateAction<string | null>) => {
     setSelectionState((prev) => {
@@ -112,7 +118,7 @@ export function useFileExplorerSelection(
       : []
     const actionNodes = selectedNodes.length > 0 ? selectedNodes : [node]
     void window.api.ui.writeClipboardText(
-      formatFileExplorerPathsForClipboard(actionNodes, pathKind)
+      formatFileExplorerPathsForClipboard(actionNodes, pathKind, pathOwnerRef.current)
     )
   }, [])
 

@@ -9,7 +9,6 @@ import {
   neverThrowingStructuredAgentSessionLogger,
   type StructuredAgentSessionLogger
 } from '../native-chat/agent-session-wire/structured-agent-session-logger'
-import { listedModels } from './claude-structured-model-catalog'
 import { setClaudeStructuredOption } from './claude-structured-options'
 import type { ClaudeSession } from './structured/claude-structured-session-state'
 import {
@@ -27,7 +26,7 @@ export async function applyClaudeMessageOptions(
   signal?: AbortSignal
 ): Promise<void> {
   throwIfSignalAborted(signal)
-  const model = options.model ?? (await defaultModelForMessage(session, timeoutMs, signal))
+  const model = options.model
   if (model && session.appliedInputOptions.get('model') !== model) {
     await waitForPromiseWithSignal(
       setClaudeStructuredOption(session, { key: 'model', value: model }, timeoutMs),
@@ -36,15 +35,12 @@ export async function applyClaudeMessageOptions(
   }
 
   throwIfSignalAborted(signal)
-  const effort = options.effort ?? session.configuredDefaults?.effort
+  const effort = options.effort
   if (effort && session.appliedInputOptions.get('effort') !== effort) {
     await waitForPromiseWithSignal(
       setClaudeStructuredOption(session, { key: 'effort', value: effort }, timeoutMs),
       signal
     )
-  } else if (!effort && session.options.has('effort')) {
-    // Omission restores configuration; without its value a live control cannot clear the override.
-    throw new AgentSessionOptionRejectedError('Claude did not report its configured effort')
   }
 
   throwIfSignalAborted(signal)
@@ -56,30 +52,6 @@ export async function applyClaudeMessageOptions(
     )
   }
   throwIfSignalAborted(signal)
-}
-
-async function defaultModelForMessage(
-  session: ClaudeSession,
-  timeoutMs: number | undefined,
-  signal?: AbortSignal
-): Promise<string | undefined> {
-  if (session.configuredDefaults?.model) {
-    return session.configuredDefaults.model
-  }
-  if (!session.options.has('model')) {
-    return undefined
-  }
-  const response = await waitForPromiseWithSignal(
-    session.connection.supportedModels({ timeoutMs }),
-    signal
-  ).catch(() => null)
-  throwIfSignalAborted(signal)
-  const listed = listedModels(response ? { models: response } : null)
-  const fallback = listed.find((model) => model.isDefault)?.id
-  if (!fallback) {
-    throw new AgentSessionOptionRejectedError('Claude did not report its default model')
-  }
-  return fallback
 }
 
 export async function dispatchClaudeMessage(

@@ -24,9 +24,13 @@ import { useAppStore } from '@/store'
 import { AGENT_SESSION_PERMISSION_OWN_RUNTIME_CAPABILITY } from '../../../shared/agent-session-permission-modes-capability'
 import { createCompatibleRuntimeStatusResponse } from './runtime-compatibility-test-fixture'
 import { clearRuntimeCompatibilityCacheForTests } from './runtime-rpc-client'
+import * as runtimeRpc from './runtime-rpc-client'
 import { RuntimeHostStatusOwner } from '../../../shared/runtime-host-status-owner'
 import type { RuntimeEnvironmentStatus } from '../../../shared/runtime-host-status'
-import { useStructuredAgentSessionOwnPermissionState } from './structured-agent-session-host-capability'
+import {
+  useStructuredAgentSessionOwnPermissionState,
+  useStructuredAgentSessionHostEditsQueuedSkills
+} from './structured-agent-session-host-capability'
 
 const owners: RuntimeHostStatusOwner[] = []
 afterEach(() => {
@@ -34,6 +38,7 @@ afterEach(() => {
   cleanup()
   clearRuntimeCompatibilityCacheForTests()
   vi.unstubAllGlobals()
+  vi.restoreAllMocks()
 })
 
 it.each([10, 100])(
@@ -198,5 +203,76 @@ it.each([10, 100])(
       })
     )
     expect(views[1].result.current).toBe(hostState === 'supported' ? 'unsupported' : 'supported')
+  }
+)
+
+it.each([10, 100])(
+  'isolates mounted skills capability consumers across %i other hosts with separate upstream counts',
+  async (count) => {
+    const hosts = ['own', ...Array.from({ length: count }, (_, i) => `idle-${i}`)]
+    const statuses = new Map<string, RuntimeEnvironmentStatus>(
+      hosts.map((host) => [host, { status: null, checkedAt: 1, hostContactEpoch: 0 }])
+    )
+    useAppStore.setState({ runtimeStatusByEnvironmentId: statuses })
+    let supported = false
+    const probe = vi
+      .spyOn(runtimeRpc, 'runtimeEnvironmentSupportsCapability')
+      .mockImplementation(async () => supported)
+    let upstream = 0
+    const subscribe = useAppStore.subscribe
+    vi.spyOn(useAppStore, 'subscribe').mockImplementation((listener) =>
+      subscribe((state, previous) => {
+        upstream++
+        listener(state, previous)
+      })
+    )
+    const renders = hosts.map(() => 0)
+    const views = hosts.map((host, i) =>
+      renderHook(() => {
+        renders[i]++
+        return useStructuredAgentSessionHostEditsQueuedSkills({
+          kind: 'environment',
+          environmentId: host
+        })
+      })
+    )
+    await act(async () => {})
+    expect(probe).toHaveBeenCalledTimes(hosts.length)
+    renders.fill(0)
+    probe.mockClear()
+    upstream = 0
+    await act(async () =>
+      useAppStore.setState({
+        runtimeStatusByEnvironmentId: new Map([
+          ...statuses,
+          ['unobserved', { status: null, checkedAt: 1, hostContactEpoch: 1 }]
+        ])
+      })
+    )
+    expect(upstream).toBe(hosts.length)
+    expect(renders).toEqual(hosts.map(() => 0))
+    expect(probe).not.toHaveBeenCalled()
+    supported = true
+    upstream = 0
+    await act(async () =>
+      useAppStore.setState({
+        runtimeStatusByEnvironmentId: new Map([
+          ...statuses,
+          ['own', { status: null, checkedAt: 2, hostContactEpoch: 1 }]
+        ])
+      })
+    )
+    expect(upstream).toBe(hosts.length)
+    expect(probe).toHaveBeenCalledTimes(1)
+    expect(probe.mock.calls[0][0]).toBe('own')
+    expect(views[0].result.current).toBe(true)
+    expect(renders[0]).toBeGreaterThan(0)
+    expect(renders.slice(1)).toEqual(hosts.slice(1).map(() => 0))
+    views.forEach((view) => view.unmount())
+    probe.mockClear()
+    upstream = 0
+    await act(async () => useAppStore.setState({ runtimeStatusByEnvironmentId: statuses }))
+    expect(upstream).toBe(0)
+    expect(probe).not.toHaveBeenCalled()
   }
 )

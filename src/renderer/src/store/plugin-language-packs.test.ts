@@ -2,7 +2,7 @@
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { i18n, setRendererPluginLanguagePacks } from '../i18n/i18n'
-import { pluginLanguageResourceId } from '../../../shared/plugins/plugin-language-pack-artifact'
+import { pluginLanguageResourceId } from '../../../shared/plugins/artifacts/plugin-language-pack-artifact'
 import { usePluginLanguagePackStore } from './plugin-language-packs'
 
 afterEach(() => {
@@ -36,14 +36,16 @@ describe('plugin language pack loading', () => {
       resourceLanguage: pluginLanguageResourceId('plugin:first'),
       pluginKey: 'first',
       locale: 'pt-BR',
-      catalog: { greeting: 'Olá' }
+      catalog: { greeting: 'Olá' },
+      coverage: 90
     }
     const second = {
       id: 'plugin:second',
       resourceLanguage: pluginLanguageResourceId('plugin:second'),
       pluginKey: 'second',
       locale: 'de',
-      catalog: {}
+      catalog: {},
+      coverage: 10
     }
     vi.stubGlobal('window', {
       api: {
@@ -169,14 +171,16 @@ describe('plugin language pack loading', () => {
       resourceLanguage: pluginLanguageResourceId('plugin:older'),
       pluginKey: 'older',
       locale: 'de',
-      catalog: {}
+      catalog: {},
+      coverage: 10
     }
     const latest = {
       id: 'plugin:latest',
       resourceLanguage: pluginLanguageResourceId('plugin:latest'),
       pluginKey: 'latest',
       locale: 'fr',
-      catalog: {}
+      catalog: {},
+      coverage: 95
     }
     let resolveOlder!: (value: unknown[]) => void
     const olderResponse = new Promise<unknown[]>((resolve) => {

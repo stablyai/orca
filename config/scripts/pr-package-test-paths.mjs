@@ -2,6 +2,7 @@ import process from 'node:process'
 import { pathToFileURL } from 'node:url'
 
 export const LINUX_PACKAGE_TESTS = [
+  'src/main/browser/cookies/browser-google-cookie-clear.electron.test.ts',
   'config/scripts/packaged-repository-input-exclusion.test.mjs',
   'src/main/browser/popup-origin-chrome.electron.test.ts',
   'src/main/browser/browser-link-materialization.electron.test.ts',
@@ -94,6 +95,7 @@ export const WINDOWS_BOUNDARY_TESTS = [
   'src/main/orca-profiles/profile-index-store.test.ts',
   'src/main/startup/windows-install-dir-acl-repair.win32.test.ts',
   'src/main/startup/windows-app-data-path.test.ts',
+  'src/main/startup/windows-std-handle-inheritance.win32.test.ts',
   'src/main/runtime/repo-worktree-admin-fingerprint.test.ts',
   'src/main/runtime/worktree-scan-admin-fingerprint-gate.test.ts',
   'src/shared/secure-file-fsync-flags.test.ts',

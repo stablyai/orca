@@ -1,3 +1,6 @@
+import { uiCollator } from '@/i18n/ui-intl-formatters'
+
+const NUMERIC_COLLATION: Intl.CollatorOptions = { numeric: true }
 export type CsvInspectionSort = { column: number; direction: 'ascending' | 'descending' }
 
 export function csvInspectionRows(
@@ -16,7 +19,7 @@ export function csvInspectionRows(
     }
   }
   if (sort) {
-    const collator = new Intl.Collator(undefined, { numeric: true })
+    const collator = uiCollator(NUMERIC_COLLATION)
     const direction = sort.direction === 'ascending' ? 1 : -1
     result.sort(
       (a, b) =>

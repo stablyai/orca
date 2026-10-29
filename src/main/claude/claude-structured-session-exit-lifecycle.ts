@@ -4,6 +4,7 @@ import {
   providerStartupFailureFact,
   startupAcquisitionRefusal
 } from '../native-chat/agent-session-wire/structured-agent-session-failure-text'
+import { providerSpawnAbsent } from '../provider-process/provider-executable-missing'
 import { settledClaudeTurnEndLeaf } from './claude-structured-resume-point'
 import { claudeHeldSends } from './claude-command-lifecycle'
 import {
@@ -87,12 +88,15 @@ export function settleClaudeUnexpectedExit(
       type: 'ended',
       sessionId,
       reason: exit.error.message,
-      // A typed startup refusal keeps its next step; else distinguish provider exit from a host fault.
-      failure: startupAcquisitionRefusal(exit.error)
-        ? providerStartupFailureFact(exit.error)
-        : providerExitObserved(exit.error)
-          ? agentSessionFailureFact('providerExited', { detail: providerDiagnosticOf(exit.error) })
-          : agentSessionFailureFact('hostFault'),
+      // A typed startup refusal or a spawn ENOENT keeps its next step; else provider exit vs host fault.
+      failure:
+        startupAcquisitionRefusal(exit.error) || providerSpawnAbsent(exit.error)
+          ? providerStartupFailureFact(exit.error)
+          : providerExitObserved(exit.error)
+            ? agentSessionFailureFact('providerExited', {
+                detail: providerDiagnosticOf(exit.error)
+              })
+            : agentSessionFailureFact('hostFault'),
       cause: 'unexpected-exit',
       fence: exit.session.fence,
       acquisitionGeneration: exit.session.acquisitionGeneration,

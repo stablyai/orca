@@ -73,6 +73,25 @@ describe('browser address bar suggestions', () => {
     })
   })
 
+  it('keeps a previously visited search as a search action', () => {
+    const url = 'https://duckduckgo.com/?q=react'
+    const suggestions = buildBrowserAddressBarSuggestions({
+      value: 'react',
+      searchEngine: 'duckduckgo',
+      browserUrlHistory: [historyEntry({ url, normalizedUrl: url, title: 'react results' })]
+    })
+
+    expect(suggestions).toEqual([
+      expect.objectContaining({
+        url,
+        title: 'react',
+        subtitle: 'DuckDuckGo Search',
+        isSearch: true,
+        normalizedUrl: url
+      })
+    ])
+  })
+
   it('does not turn a rejected scheme into a selectable navigation row', () => {
     const suggestions = buildBrowserAddressBarSuggestions({
       value: 'javascript:alert(1)',
@@ -270,7 +289,7 @@ describe('browser address bar suggestions', () => {
       )
     })
 
-    it('folds the synthetic row into the history row and keeps it on top, where Enter goes', () => {
+    it('keeps the typed address above history without replacing it with a visited page title', () => {
       const suggestions = buildBrowserAddressBarSuggestions({
         value: 'acme.dev',
         browserUrlHistory: [
@@ -292,10 +311,87 @@ describe('browser address bar suggestions', () => {
       })
 
       expect(suggestions).toEqual([
-        expect.objectContaining({ url: 'https://acme.dev/', title: 'Acme', isSearch: false }),
+        expect.objectContaining({
+          url: 'https://acme.dev/',
+          normalizedUrl: 'https://acme.dev',
+          title: 'acme.dev',
+          subtitle: '',
+          lastVisitedAt: now,
+          visitCount: 4,
+          isSearch: false
+        }),
         expect.objectContaining({ url: 'https://acme.dev/docs' })
       ])
     })
+
+    it.each([
+      { value: 'x', inline: true },
+      { value: 'x', inline: 'x.com' },
+      { value: 'x.com', inline: true }
+    ] as const)(
+      'keeps the host action first and unique for $value with inline $inline',
+      (input) => {
+        const suggestions = buildBrowserAddressBarSuggestions({
+          ...input,
+          browserUrlHistory: [
+            historyEntry({
+              url: 'https://x.com/home',
+              normalizedUrl: 'https://x.com/home',
+              title: 'Home / X',
+              lastVisitedAt: now,
+              visitCount: 40
+            }),
+            historyEntry({
+              url: 'https://x.com/',
+              normalizedUrl: 'https://x.com',
+              title: 'Jinjing Liang on X',
+              lastVisitedAt: now,
+              visitCount: 4
+            })
+          ]
+        })
+
+        expect(suggestions[0]).toMatchObject({
+          url: 'https://x.com/',
+          normalizedUrl: 'https://x.com',
+          title: 'x.com',
+          subtitle: '',
+          lastVisitedAt: now,
+          visitCount: 4,
+          inlineText: 'x.com',
+          isSearch: false
+        })
+        expect(suggestions[1]).toMatchObject({ url: 'https://x.com/home', title: 'Home / X' })
+        expect(suggestions.filter((row) => row.url === 'https://x.com/')).toHaveLength(1)
+      }
+    )
+
+    it.each([true, 'example.com/docs'] as const)(
+      'preserves removal metadata and the page favicon for a completed path with inline %s',
+      (inline) => {
+        const entry = historyEntry({
+          url: 'https://example.com/docs',
+          normalizedUrl: 'https://example.com/docs',
+          title: 'Documentation',
+          faviconUrl: 'https://example.com/docs.ico',
+          visitCount: 12
+        })
+        const suggestions = buildBrowserAddressBarSuggestions({
+          value: 'example.com/do',
+          inline,
+          browserUrlHistory: [entry]
+        })
+
+        expect(suggestions[0]).toEqual({
+          ...entry,
+          title: 'example.com/docs',
+          subtitle: '',
+          inlineText: 'example.com/docs',
+          isSearch: false
+        })
+        expect(suggestions.filter((row) => row.url === entry.url)).toHaveLength(1)
+      }
+    )
 
     it('puts the completed host first and the typed search last while the bar completes inline', () => {
       const suggestions = buildBrowserAddressBarSuggestions({
@@ -326,7 +422,32 @@ describe('browser address bar suggestions', () => {
         'https://github.com/stablyai/orca',
         'https://duckduckgo.com/?q=git'
       ])
+      expect(suggestions[0]?.normalizedUrl).toBeUndefined()
     })
+
+    it.each(['ac', 'acme.dev'])(
+      'fills the list without duplicating the typed action when completing %s',
+      (value) => {
+        const suggestions = buildBrowserAddressBarSuggestions({
+          value,
+          inline: true,
+          searchEngine: 'duckduckgo',
+          browserUrlHistory: Array.from({ length: 20 }, (_, index) =>
+            historyEntry({
+              url: `https://acme.dev/page-${index}`,
+              normalizedUrl: `https://acme.dev/page-${index}`,
+              title: `Page ${index}`,
+              lastVisitedAt: hoursAgo(index)
+            })
+          )
+        })
+
+        expect(suggestions).toHaveLength(MAX_BROWSER_ADDRESS_BAR_SUGGESTIONS)
+        expect(suggestions[0]).toMatchObject({ url: 'https://acme.dev/', title: 'acme.dev' })
+        expect(new Set(suggestions.map((row) => row.url)).size).toBe(suggestions.length)
+        expect(suggestions.at(-1)?.isSearch).toBe(value === 'ac')
+      }
+    )
 
     // Background tabs re-rank or evict history while the bar shows `github.com`.
     it('keeps the completion the bar shows on top whatever history does', () => {

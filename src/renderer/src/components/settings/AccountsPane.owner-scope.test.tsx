@@ -40,6 +40,7 @@ const fake = vi.hoisted(() => {
   return state
 })
 vi.mock('@/i18n/i18n', () => ({
+  getIntlLocale: () => 'en',
   i18n: { language: 'en' },
   translate: (_key: string, fallback: string, values?: Record<string, string | number>) =>
     Object.entries(values ?? {}).reduce(

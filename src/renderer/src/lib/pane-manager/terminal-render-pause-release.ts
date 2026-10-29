@@ -113,7 +113,7 @@ export function isSynchronizedOutputHeld(terminal: unknown): boolean {
   )
 }
 
-/** Force a full present through pause/DEC 2026 only for held keystroke echo or replay hold-cap expiry. Mid-frame painting exposes unfinished TUIs (#32198); reveal/recovery use requestFullViewportPresent. Normal unpaused paint falls back to refresh: direct first-splash renderRows precedes stable cell metrics and leaves a 1px gutter. */
+/** Force a full present through pause/DEC 2026 only for held keystroke echo, replay hold-cap expiry, or revealing a released canvas (no coherent frame left to keep). Mid-frame painting exposes unfinished TUIs (#32198); reveal/recovery use requestFullViewportPresent. Normal unpaused paint falls back to refresh: direct first-splash renderRows precedes stable cell metrics and leaves a 1px gutter. */
 export function forceFullViewportPresent(terminal: unknown): boolean {
   const service = getRenderService(terminal)
   if (!service) {

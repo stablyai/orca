@@ -8,7 +8,7 @@ import {
 import { isFloatingWorkspaceWorktreeId } from './floating-workspace'
 import { resumeFolderWorkspaceListRead } from '../agent-history/mobile-agent-history-operations'
 import { isMobileFolderNativeChatReadable } from './native-chat/mobile-native-chat-eligibility'
-import { isNativeChatTranscriptLocalReadable } from '../../../src/shared/native-chat-transcript-readability'
+import { isNativeChatTranscriptLocalReadable } from '../../../src/shared/native-chat/transcript/native-chat-transcript-readability'
 
 type ReadabilityState = {
   client: RpcClient | null

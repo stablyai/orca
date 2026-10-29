@@ -10,7 +10,6 @@ import {
   getNativeChatModelEnrichmentEntryCountForTests,
   NATIVE_CHAT_MODEL_ENRICHMENT_MAX_ENTRIES,
   readNativeChatEnrichedModels,
-  resolveNativeChatLaunchSessionOptions,
   subscribeNativeChatEnrichedModels
 } from './native-chat-session-option-enrichment'
 
@@ -367,30 +366,6 @@ describe('native chat session option enrichment', () => {
 
     expect(readNativeChatEnrichedModels('grok', 'm')!.map(({ id }) => id)).toEqual(['grok-5'])
     expect(readNativeChatEnrichedModels('cursor', 'm')!.map(({ id }) => id)).toContain('auto')
-  })
-
-  it('drops a persisted grok launch model missing from every settled probe', async () => {
-    // Reject probe-retired launch flags immediately, before asynchronous settings retirement completes.
-    const persisted = {
-      grok: { model: 'grok-4.5', valuesByModel: { 'grok-4.5': { effort: 'low' } } }
-    }
-    // No probe data: the pick is honored — absence of data is not proof of absence.
-    expect(resolveNativeChatLaunchSessionOptions(persisted, 'grok')).toMatchObject({
-      model: 'grok-4.5',
-      effort: 'low'
-    })
-
-    const discover = vi.fn().mockResolvedValue([{ id: 'grok-5', label: 'Grok 5', options: [] }])
-    ensureNativeChatModelEnrichment({ agent: 'grok', hostKey: 'local', discover })
-    await vi.waitFor(() => expect(readNativeChatEnrichedModels('grok', 'local')).not.toBeNull())
-
-    expect(resolveNativeChatLaunchSessionOptions(persisted, 'grok')).toBeUndefined()
-    expect(resolveNativeChatLaunchSessionOptions({ grok: { model: 'grok-5' } }, 'grok')).toEqual({
-      model: 'grok-5'
-    })
-    expect(
-      resolveNativeChatLaunchSessionOptions({ claude: { model: 'retired' } }, 'claude')
-    ).toEqual({ model: 'retired' })
   })
 
   it('does not advertise the Claude spec fallback when probing is unavailable', async () => {

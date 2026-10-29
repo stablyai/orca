@@ -1,23 +1,17 @@
-import {
-  getProjectHostSetupProjectionFromState,
-  type ProjectCatalogReadState
-} from '@/store/project-host-setup-selector'
 import type { LocalhostWorktreeLabelRoute } from '../../../shared/localhost-worktree-labels'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
-import {
-  getProjectHostSetupLookup,
-  type WorkspaceProjectOwner
-} from '../../../shared/project-host-setup-lookup'
+import type { Project } from '../../../shared/project-types'
+import type { Repo } from '../../../shared/repo-types'
 import type { WorkspacePort } from '../../../shared/workspace-ports'
 import { useAppStore } from '@/store'
 import { localhostWorktreeLabelRouteForPort } from './workspace-port-localhost-label'
 
-// Why: the port → repo → worktree → project resolution feeding
-// localhostWorktreeLabelRouteForPort was duplicated across every ports surface;
-// this is the single source for both reactive and imperative call sites.
-type LocalhostLabelLookupState = ProjectCatalogReadState & {
+// Share port → repo → workspace → project routing across reactive and imperative surfaces.
+type LocalhostLabelLookupState = {
   settings?: Pick<GlobalSettings, 'localhostWorktreeLabelsEnabled'> | null
-  getKnownWorktreeById?: (worktreeId: string) => Partial<WorkspaceProjectOwner> | null | undefined
+  repos?: readonly Repo[]
+  projects?: readonly Project[]
+  getKnownWorktreeById?: (worktreeId: string) => { projectId?: string | null } | null | undefined
 }
 
 export function resolveLocalhostLabelRouteForPort(
@@ -29,16 +23,8 @@ export function resolveLocalhostLabelRouteForPort(
   }
   const repo = (state.repos ?? []).find((entry) => entry.id === port.owner.repoId) ?? null
   const worktree = state.getKnownWorktreeById?.(port.owner.worktreeId) ?? null
-  const projectId = getProjectHostSetupLookup(
-    getProjectHostSetupProjectionFromState(state).setups
-  ).projectId({
-    ...worktree,
-    repoId: port.owner.repoId
-  })
-  const project = projectId
-    ? (getProjectHostSetupProjectionFromState(state).projects.find(
-        (entry) => entry.id === projectId
-      ) ?? null)
+  const project = worktree?.projectId
+    ? ((state.projects ?? []).find((entry) => entry.id === worktree.projectId) ?? null)
     : null
   return localhostWorktreeLabelRouteForPort({ port, repo, project, settings: state.settings })
 }
@@ -55,19 +41,9 @@ export function useLocalhostLabelRouteForPort(
   const worktree = useAppStore((s) =>
     portWorktreeId ? (s.getKnownWorktreeById?.(portWorktreeId) ?? null) : null
   )
-  const projectId = useAppStore((s) =>
-    portRepoId
-      ? getProjectHostSetupLookup(getProjectHostSetupProjectionFromState(s).setups).projectId({
-          ...worktree,
-          repoId: portRepoId
-        })
-      : undefined
-  )
   const project = useAppStore((s) =>
-    projectId
-      ? (getProjectHostSetupProjectionFromState(s).projects.find(
-          (entry) => entry.id === projectId
-        ) ?? null)
+    worktree?.projectId
+      ? ((s.projects ?? []).find((entry) => entry.id === worktree.projectId) ?? null)
       : null
   )
   return localhostWorktreeLabelRouteForPort({ port, repo, project, settings })

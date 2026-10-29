@@ -8,7 +8,8 @@ import {
   launchAgentInExistingWorkspace,
   reserveMobileAgentLaunch
 } from './mobile-existing-agent-launch'
-import { AGENT_PROMPT_NOT_SENT_MESSAGE } from './pr-ai-triage-launch'
+import { agentPromptNotSentMessage } from './pr-ai-triage-launch'
+import { translate } from '../i18n/mobile-i18n'
 import {
   isLaunchedSurfaceListed,
   launchedSelection,
@@ -17,7 +18,6 @@ import {
   type PendingSessionSelection
 } from './pending-session-selection'
 
-const NOTES_NOT_SENT_MESSAGE = "The agent started, but the notes weren't sent."
 export const PROMPT_UNCONFIRMED_MESSAGE =
   "The agent started, but couldn't confirm the prompt was sent."
 export const NOTES_UNCONFIRMED_MESSAGE =
@@ -101,7 +101,15 @@ export async function launchNewTabAgentThroughHost(args: {
       if (prompt?.trim()) {
         triggerError()
         showToast(
-          options?.initialPrompt ? NOTES_UNCONFIRMED_MESSAGE : PROMPT_UNCONFIRMED_MESSAGE,
+          options?.initialPrompt
+            ? translate(
+                'session.newTabAgentHostLaunch.notesUnconfirmed',
+                "The agent started, but couldn't confirm the notes were sent."
+              )
+            : translate(
+                'session.newTabAgentHostLaunch.promptUnconfirmed',
+                "The agent started, but couldn't confirm the prompt was sent."
+              ),
           2400
         )
       }
@@ -124,10 +132,20 @@ export async function launchNewTabAgentThroughHost(args: {
   void args.fetchSessionTabs()
   if (launched.promptDelivered === false) {
     triggerError()
-    showToast(options?.initialPrompt ? NOTES_NOT_SENT_MESSAGE : AGENT_PROMPT_NOT_SENT_MESSAGE, 2400)
+    showToast(
+      options?.initialPrompt
+        ? translate(
+            'session.newTabAgentHostLaunch.notesNotSent',
+            "The agent started, but the notes weren't sent."
+          )
+        : agentPromptNotSentMessage(),
+      2400
+    )
   } else if (launched.promptDelivered && options?.initialPrompt) {
     triggerSuccess()
-    showToast(options.successToast ?? 'Notes sent')
+    showToast(
+      options.successToast ?? translate('session.newTabAgentHostLaunch.notesSent', 'Notes sent')
+    )
     options.onPromptSent?.()
   } else if (warning?.trim()) {
     showToast(warning.trim(), 2400)

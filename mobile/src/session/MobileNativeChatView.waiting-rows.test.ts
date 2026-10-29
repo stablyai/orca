@@ -178,3 +178,7 @@ it('keeps a steer on its way into an ordinary running turn in the list, above th
 
   expect(drawn).toEqual({ listed: ['ask', 'steer'], footer: ['status'] })
 })
+
+vi.mock('./MobileQueuedMessageComposer', () => ({
+  MobileQueuedMessageComposer: 'QueuedMessageComposer'
+}))

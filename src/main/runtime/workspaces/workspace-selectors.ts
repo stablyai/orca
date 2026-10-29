@@ -42,7 +42,8 @@ export abstract class RuntimeWorkspaceSelectors extends OrcaRuntimeWithResolveBr
     ...args: Parameters<RuntimeWorkspaceCatalog['listResolvedWorktrees']>
   ): ReturnType<RuntimeWorkspaceCatalog['listResolvedWorktrees']>
 
-  protected async resolveWorktreeSelector(selector: string): Promise<ResolvedWorktree> {
+  /** The repo-backed catalog only: project-group folder workspaces never match. Resolve a workspace with resolveWorkspaceSelector. */
+  protected async resolveGitWorktreeSelector(selector: string): Promise<ResolvedWorktree> {
     const explicitWorktreeId = this.getValidatedExplicitWorktreeIdSelector(selector)
     // Only id selectors name a repo; scoping other selectors would hide fleet-wide ambiguity.
     if (explicitWorktreeId && !this.hasFreshResolvedWorktreeCache()) {
@@ -52,6 +53,14 @@ export abstract class RuntimeWorkspaceSelectors extends OrcaRuntimeWithResolveBr
       }
     }
     const worktrees = await this.listResolvedWorktrees()
+    return this.matchWorktreeSelector(selector, worktrees, explicitWorktreeId)
+  }
+
+  protected matchWorktreeSelector(
+    selector: string,
+    worktrees: ResolvedWorktree[],
+    explicitWorktreeId = this.getValidatedExplicitWorktreeIdSelector(selector)
+  ): ResolvedWorktree {
     let candidates: ResolvedWorktree[]
 
     if (selector === 'active') {

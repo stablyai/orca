@@ -28,6 +28,10 @@ vi.mock('../session/MobileSessionSheets', () => ({ MobileSessionSheets: () => nu
 vi.mock('../session/session-side-rail', () => ({
   useSessionSideRail: () => ({ backInRail: false, keysInRail: false })
 }))
+vi.mock('expo-router', async () => {
+  const { useEffect } = await import('react')
+  return { useFocusEffect: (effect: () => () => void) => useEffect(effect, [effect]) }
+})
 vi.mock('expo-keep-awake', () => ({
   activateKeepAwakeAsync: () => Promise.resolve(),
   deactivateKeepAwake: () => Promise.resolve()

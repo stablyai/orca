@@ -1,6 +1,10 @@
 import { basename } from 'node:path'
 import type { AiVaultScanIssue } from '../../shared/ai-vault-types'
 import { isWslUncPath } from '../../shared/wsl-paths'
+import {
+  aiVaultScanIssueText,
+  type AiVaultScanIssueText
+} from '../../shared/ai-vault-scan-issue-copy'
 import SyncDatabase from '../sqlite/sync-database'
 import { classifySqliteReadFailure } from '../sqlite/sqlite-read-failure'
 import { errorMessage } from './session-scanner-values'
@@ -57,18 +61,27 @@ export function openCodeDatabaseScanIssue(
   const kind = classifySqliteReadFailure({ error, databaseFileExists: true })
   // WSL-share lock errors do not establish writer contention; idle databases exhibit the same failure.
   const overWslShare = isWslUncPath(dbPath)
-  const detail =
+  const text =
     kind === 'contended' && !overWslShare
-      ? `${label} is writing to ${name} right now, so its history was skipped. It is read again on the next refresh.`
+      ? aiVaultScanIssueText('openCodeDatabaseBusy', {
+          params: { label, name }
+        })
       : kind === 'unreadable'
-        ? `${label} history in ${name} could not be read: ${errorMessage(error)}`
-        : unreadableShareDetail(dbPath, name, label)
-  return { agent, kind: 'scope', path: dbPath, message: detail }
+        ? aiVaultScanIssueText('openCodeDatabaseUnreadable', {
+            params: { label, name },
+            detail: errorMessage(error)
+          })
+        : unreadableShareText(dbPath, name, label)
+  return { agent, kind: 'scope', path: dbPath, ...text }
 }
 
-function unreadableShareDetail(dbPath: string, name: string, label: string): string {
+function unreadableShareText(dbPath: string, name: string, label: string): AiVaultScanIssueText {
   // WSL-share locking cannot be repaired by checkpointing; reserve WAL advice for other filesystems.
   return isWslUncPath(dbPath)
-    ? `${label} sessions inside WSL can't be searched from Windows yet.`
-    : `${label} history in ${name} could not be read. Its write-ahead log cannot be opened read-only on this filesystem. Exit ${label} cleanly to flush the log.`
+    ? aiVaultScanIssueText('openCodeWslDatabaseUnsupported', {
+        params: { label }
+      })
+    : aiVaultScanIssueText('openCodeWriteAheadLogUnreadable', {
+        params: { label, name }
+      })
 }

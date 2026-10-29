@@ -1,4 +1,5 @@
 import { Platform, StyleSheet, Text, TextInput, View } from 'react-native'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { colors, radii, spacing } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
@@ -29,6 +30,7 @@ export function MobileBrowserAddressField({
   onSubmit,
   value
 }: Props): React.JSX.Element {
+  const t = useMobileTranslation()
   useMobileColorScheme()
   const fileLabel = focused ? null : compactMobileBrowserFileAddress(value)
   const selection = focused ? undefined : { start: 0, end: 0 }
@@ -51,7 +53,7 @@ export function MobileBrowserAddressField({
         inputMode={Platform.OS === 'web' ? 'url' : undefined}
         numberOfLines={1}
         returnKeyType="go"
-        placeholder="URL"
+        placeholder={t('browser.addressField.urlPlaceholder', 'URL')}
         placeholderTextColor={colors.textMuted}
         editable={!disabled}
       />

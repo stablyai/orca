@@ -20,7 +20,7 @@ export type ClaudeResultJournalContext = Pick<
   | 'providerFallback'
   | 'corrections'
   | 'turn'
-  | 'authenticationFailures'
+  | 'assistantFailures'
   | 'usageLimits'
   | 'threadGoal'
 > & {
@@ -39,7 +39,7 @@ export function journalClaudeResult(
     turn,
     prompts,
     context,
-    authenticationFailures,
+    assistantFailures,
     usageLimits,
     threadGoal,
     goalBackgroundWork
@@ -95,7 +95,7 @@ export function journalClaudeResult(
   if (usageLimit && endedTurnIdentity) {
     return
   }
-  const alreadyShown = authenticationFailures.resultAlreadyShown(message)
+  const alreadyShown = assistantFailures.resultAlreadyShown(message)
   if ((failure || !isSettledClaudeResultKind(kind)) && !alreadyShown) {
     providerFallback.append(
       kind,

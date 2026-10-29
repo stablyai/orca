@@ -25,7 +25,6 @@ export async function generateConversationName(input: {
   const result = await runGenerationRequest({
     ...input,
     prompt,
-    emptyResultName: 'chat name',
     operation: 'conversation-name'
   })
   if (!result.success) {

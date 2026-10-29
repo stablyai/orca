@@ -35,7 +35,7 @@
 1 src/main/orcad/orcad-data-root-privacy.ts
 2 src/main/persistence/profile-state/profile-state-access-identity.ts
 1 src/main/persistence/profile-state/profile-state-recovery-copy.ts
-1 src/main/plugins/plugin-private-marketplace-ssh-shim.cjs
+1 src/main/plugins/catalog/plugin-private-marketplace-ssh-shim.cjs
 1 src/main/pty/posix-pty-process-table.ts
 1 src/main/pwsh.ts
 1 src/main/runtime/runtime-skill-install-authority.ts

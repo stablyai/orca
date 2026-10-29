@@ -6,6 +6,35 @@ import { cn } from '@/lib/utils'
 import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
 import { getLocalizedConflictKindLabel } from './conflict-label'
 
+function conflictBadgeAriaLabel(unresolved: boolean, kindLabel: string | null): string {
+  if (unresolved) {
+    return kindLabel
+      ? translate(
+          'auto.components.right.sidebar.SourceControl.unresolvedConflictOfKind',
+          'Unresolved conflict ({{kind}})',
+          {
+            kind: kindLabel
+          }
+        )
+      : translate(
+          'auto.components.right.sidebar.SourceControl.unresolvedConflict',
+          'Unresolved conflict'
+        )
+  }
+  return kindLabel
+    ? translate(
+        'auto.components.right.sidebar.SourceControl.locallyResolvedConflictOfKind',
+        'Conflict resolved locally ({{kind}})',
+        {
+          kind: kindLabel
+        }
+      )
+    : translate(
+        'auto.components.right.sidebar.SourceControl.locallyResolvedConflict',
+        'Conflict resolved locally'
+      )
+}
+
 export function ConflictBadge({ entry }: { entry: GitStatusEntry }): React.JSX.Element {
   const isUnresolvedConflict = entry.conflictStatus === 'unresolved'
   const label = isUnresolvedConflict
@@ -18,19 +47,7 @@ export function ConflictBadge({ entry }: { entry: GitStatusEntry }): React.JSX.E
   const badge = (
     <span
       role="status"
-      aria-label={
-        conflictKindLabel
-          ? translate(
-              'auto.components.right.sidebar.SourceControl.d206117f90',
-              '{{value0}} conflict ({{value1}})',
-              { value0: label, value1: conflictKindLabel }
-            )
-          : translate(
-              'auto.components.right.sidebar.SourceControl.05838cfdeb',
-              '{{value0}} conflict',
-              { value0: label }
-            )
-      }
+      aria-label={conflictBadgeAriaLabel(isUnresolvedConflict, conflictKindLabel)}
       className={cn(
         'inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold',
         isUnresolvedConflict

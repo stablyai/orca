@@ -2,6 +2,7 @@ import { piRpcIdle, piRpcStateSchema, type PiRpcState } from './rpc-protocol'
 
 type IdleCheckDeps = {
   request: () => Promise<unknown>
+  prepareObservation?: () => (state: PiRpcState) => void
   current: (revision: number) => boolean
   settled: (state: PiRpcState) => void
   failed: (error: Error) => void
@@ -18,6 +19,7 @@ export class PiRpcIdleCheck {
       if (this.ended || !this.deps.current(revision)) {
         return
       }
+      const observe = this.deps.prepareObservation?.()
       void this.deps
         .request()
         .then((value) => {
@@ -25,6 +27,7 @@ export class PiRpcIdleCheck {
             return
           }
           const state = piRpcStateSchema.parse(value)
+          observe?.(state)
           if (piRpcIdle(state)) {
             this.deps.settled(state)
           }

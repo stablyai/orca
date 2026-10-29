@@ -123,6 +123,7 @@ export function SourceControlAiActionRecipeDefaults({
     onActionTemplateChange,
     onActionAgentArgsChange,
     onActionLaunchPreferencesChange,
+    retireActionAgentDocument,
     saveActionTemplateDraft,
     discardActionTemplateDraft,
     appendVariable
@@ -175,6 +176,9 @@ export function SourceControlAiActionRecipeDefaults({
       }
       return next
     })
+    if (saved && changed) {
+      retireActionAgentDocument(actionId, agentId)
+    }
     if (saved && changed && captured) {
       onActionLaunchPreferencesChange(actionId, (current) =>
         retireActionLaunchPreferences(current, captured, agentId)
@@ -237,8 +241,8 @@ export function SourceControlAiActionRecipeDefaults({
               surface={recipe?.surface}
               onAgentChange={(id, value, choice) => void onActionAgentChange(id, value, choice)}
               launchPreferences={actionRecipeDraftState.values[actionId].launchPreferences}
-              onLaunchPreferencesChange={(id, value) =>
-                void onActionLaunchPreferencesChange(id, value)
+              onLaunchPreferencesChange={(id, value, userArgs, nodes) =>
+                void onActionLaunchPreferencesChange(id, value, userArgs, nodes)
               }
               onTemplateChange={onActionTemplateChange}
               onAgentArgsChange={onActionAgentArgsChange}

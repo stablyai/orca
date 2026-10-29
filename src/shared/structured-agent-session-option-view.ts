@@ -13,14 +13,6 @@ import {
 } from './structured-agent-session-option-state'
 import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from './agent-chat-permission-mode'
 
-function catalogListsSeedModel(
-  state: StructuredAgentSessionOptionState,
-  seed: Readonly<Record<string, string>>
-): boolean {
-  const model = seed.model
-  return model === undefined || Boolean(state.catalog?.models.some((entry) => entry.id === model))
-}
-
 /** Derive held picks, host values and launch seeds without mutating the record; retain unlisted models.
  * Permission mode uses held, host, explicit launch mode, then seed. */
 export function structuredAgentSessionOptionView(
@@ -64,20 +56,10 @@ function modelOptionView(
   const unconfirmedSeed =
     seed !== undefined && structuredAgentSessionModelId(state.record, 'own') === null
   const hasHeld = Object.keys(held).length > 0
-  // A saved pick the host's list does not name would show its raw id or another model's label.
-  if (
-    unconfirmedSeed &&
-    state.catalogSource === 'host' &&
-    !hasHeld &&
-    !catalogListsSeedModel(state, seed)
-  ) {
-    return { ...state, catalogSource: 'seed' }
-  }
-  // Only a host's or the session's list names a saved pick: a built-in label may be replaced.
   const seeded =
     unconfirmedSeed &&
     (state.catalogSource === 'host' || state.catalogSource === 'live') &&
-    catalogListsSeedModel(state, seed)
+    (held.model === undefined || held.model === seed.model)
   if (!state.catalog || (!seeded && !hasHeld)) {
     return state
   }

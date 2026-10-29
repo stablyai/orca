@@ -9,9 +9,11 @@ type ResolveCommandOptions = {
   pathEnv?: string | null
   platform?: NodeJS.Platform
   homePath?: string
+  /** Skip the PATH scan; the caller already established absence there (agent detection batches it). */
+  skipPathSearch?: boolean
 }
 
-function getExecutableNames(platform: NodeJS.Platform, commandName: string): string[] {
+export function getExecutableNames(platform: NodeJS.Platform, commandName: string): string[] {
   if (platform === 'win32') {
     return [`${commandName}.cmd`, `${commandName}.exe`, `${commandName}.bat`, commandName]
   }
@@ -288,7 +290,9 @@ export function resolveCliCommands(
 
   for (const commandName of new Set(commandNames)) {
     const executableNames = getExecutableNames(platform, commandName)
-    const pathCandidate = findFirstExecutable(platform, pathDirectories, executableNames)
+    const pathCandidate = options.skipPathSearch
+      ? undefined
+      : findFirstExecutable(platform, pathDirectories, executableNames)
     const installCandidate =
       pathCandidate ?? findFirstExecutable(platform, installDirectories, executableNames)
     resolved.set(commandName, installCandidate ?? commandName)

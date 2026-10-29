@@ -19,7 +19,7 @@ import {
   createClaudeUserMessageQueue
 } from './claude-agent-sdk-user-message-queue'
 import type { ClaudeStructuredSdkOptions } from './claude-structured-launch-resolution'
-import { withMissingProviderExecutable } from '../provider-process/provider-executable-missing'
+import { withProviderSpawnAbsence } from '../provider-process/provider-executable-missing'
 import { claudeStreamJsonExitError } from './claude-stream-json-exit-error'
 
 export { ClaudeControlRequestError }
@@ -170,7 +170,7 @@ export async function openClaudeStreamJsonConnection(
     resumeReading()
     if (!terminalError) {
       const error = claudeStreamJsonExitError(managed.stderrTail(), managed.exitStatus, cause)
-      terminalError = managed.executableMissing ? withMissingProviderExecutable(error) : error
+      terminalError = withProviderSpawnAbsence(error, managed.spawnAbsence)
     }
     inbox.fail(terminalError)
     if (!closing && !faultReported) {

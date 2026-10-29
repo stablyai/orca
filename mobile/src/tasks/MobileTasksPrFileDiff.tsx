@@ -16,6 +16,7 @@ import {
 import { MAX_RENDERED_PR_DIFF_LINES } from './mobile-tasks-options'
 import type { GitHubPRFileContents } from './mobile-tasks-provider-detail-types'
 import { styles } from './mobile-tasks-legacy-styles'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 
 export function formatDiffLineNumber(value: number | undefined): string {
   return value === undefined ? '    ' : value.toString().padStart(4, ' ')
@@ -47,6 +48,7 @@ export function GitHubPrFileDiff({
   onSubmitComment: (line: number) => void
 }): ReactNode {
   useMobileColorScheme()
+  const t = useMobileTranslation()
   const diffPreview = useMemo(
     () =>
       buildGitHubPrFileDiffPreview(
@@ -64,14 +66,25 @@ export function GitHubPrFileDiff({
   const hiddenDiffLineCount = Math.max(0, diffPreview.totalLineCount - visibleDiffLines.length)
 
   if (diffPreview.totalLineCount === 0) {
-    return <Text style={styles.detailMuted}>No text changes found.</Text>
+    return (
+      <Text style={styles.detailMuted}>
+        {t('tasks.prFileDiff.noTextChanges', 'No text changes found.')}
+      </Text>
+    )
   }
 
   return (
     <View style={styles.fileDiff}>
       {hiddenDiffLineCount > 0 ? (
         <Text style={styles.detailMuted}>
-          Showing first {MAX_RENDERED_PR_DIFF_LINES} of {diffPreview.totalLineCount} diff lines.
+          {t(
+            'tasks.prFileDiff.showingDiffLines',
+            'Showing first {{limit}} of {{total}} diff lines.',
+            {
+              limit: MAX_RENDERED_PR_DIFF_LINES,
+              total: diffPreview.totalLineCount
+            }
+          )}
         </Text>
       ) : null}
       {visibleDiffLines.map((line) => {
@@ -115,7 +128,7 @@ export function GitHubPrFileDiff({
                   style={[styles.input, styles.replyInput]}
                   value={commentDrafts[draftKey] ?? ''}
                   onChangeText={(next) => onCommentDraftChange(draftKey, next)}
-                  placeholder="Add review comment"
+                  placeholder={t('tasks.prFileDiff.commentPlaceholder', 'Add review comment')}
                   placeholderTextColor={colors.textMuted}
                   multiline
                   textAlignVertical="top"
@@ -125,7 +138,11 @@ export function GitHubPrFileDiff({
                   disabled={disabled || !(commentDrafts[draftKey] ?? '').trim()}
                   onPress={() => onSubmitComment(commentLine)}
                 >
-                  <Text style={styles.inlineSaveText}>Comment on line {commentLine}</Text>
+                  <Text style={styles.inlineSaveText}>
+                    {t('tasks.prFileDiff.commentOnLine', 'Comment on line {{line}}', {
+                      line: commentLine
+                    })}
+                  </Text>
                 </Pressable>
               </>
             ) : null}

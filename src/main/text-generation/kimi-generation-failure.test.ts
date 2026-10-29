@@ -119,7 +119,7 @@ it.each([
     code,
     includeLocalMacDnsHint: local,
     label: 'Kimi',
-    emptyResultName: 'message',
+    operation: 'commit-message',
     outputFormat: 'kimi-stream-json'
   })
   expect(result.success).toBe(stdout === realKimiPrOutput)

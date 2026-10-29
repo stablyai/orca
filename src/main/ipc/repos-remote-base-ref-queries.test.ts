@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as GitRunner from '../git/runner'
 import type * as RepoModule from '../git/repo'
+import type * as WslUncAccessGate from '../wsl/wsl-unc-access-gate'
 
 const { reposMocks, moduleMocks } = await vi.hoisted(async () => {
   const moduleMocks = await import('./repos-remote-test-harness')
@@ -21,12 +22,18 @@ vi.mock('./registered-worktree-roots-cache', () =>
 vi.mock('../worktree-root-preparation', () =>
   moduleMocks.worktreeRootPreparationModuleMock(reposMocks)
 )
+// The stopped-distro gate has its own tests; here it must not hide the routing under test.
+vi.mock('../wsl/wsl-unc-access-gate', async (importOriginal) => ({
+  ...(await importOriginal<typeof WslUncAccessGate>()),
+  blockedWslDistroForPath: vi.fn(async () => null)
+}))
 
 import { registerRepoHandlers } from './repos'
+import { WSL_HOSTS_INTERNAL_GATE_ENV } from '../../shared/wsl-host-internal-gate'
 import { clearGitCapabilityStateForTests } from '../git/git-capability-state'
 import { resetSshProviderAuthorities } from '../ssh/ssh-provider-authority'
 import { createRepoHandlerHarness } from './repos-remote-test-harness'
-import { getBaseRefDefault } from '../git/repo'
+import { getBaseRefDefault, getRemoteCount } from '../git/repo'
 
 const { handleMock, mockStore, gitExecFileAsyncMock, prepareLocalWorktreeRootForRepoMock } =
   reposMocks
@@ -160,5 +167,58 @@ describe('repos:searchBaseRefs on SSH repos', () => {
     })
 
     expect(result).toEqual([])
+  })
+})
+
+describe('base-ref queries on a drive project whose runtime is WSL', () => {
+  const { handlers, mockWindow, captureHandlers } = createRepoHandlerHarness()
+  const originalPlatform = process.platform
+  const repo = { id: 'r1', path: String.raw`C:\repo`, kind: 'git' }
+
+  beforeEach(() => {
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    vi.stubEnv(WSL_HOSTS_INTERNAL_GATE_ENV, '1')
+    captureHandlers(handleMock)
+    mockStore.getRepo.mockReset().mockReturnValue(repo)
+    mockStore.getProjects
+      .mockReset()
+      .mockReturnValue([{ id: 'p1', sourceRepoIds: ['r1'], createdAt: 0, updatedAt: 0 }])
+    Object.assign(mockStore, {
+      getSettings: () => ({ localWindowsRuntimeDefault: { kind: 'wsl', distro: 'Ubuntu' } })
+    })
+    gitExecFileAsyncMock.mockReset().mockResolvedValue({ stdout: '', stderr: '' })
+    vi.mocked(getBaseRefDefault).mockClear()
+    registerRepoHandlers(mockWindow as never, mockStore as never, {} as never)
+    return () => {
+      Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
+      vi.unstubAllEnvs()
+      Reflect.deleteProperty(mockStore, 'getSettings')
+    }
+  })
+
+  it('reads the default base and remote count with the distro Git', async () => {
+    await handlers.get('repos:getBaseRefDefault')!(null, { repoId: 'r1' })
+
+    expect(getBaseRefDefault).toHaveBeenCalledWith(repo.path, { wslDistro: 'Ubuntu' })
+    expect(getRemoteCount).toHaveBeenCalledWith(repo.path, { wslDistro: 'Ubuntu' })
+  })
+
+  it('reads with host Git, as before, while WSL hosts are off', async () => {
+    vi.stubEnv(WSL_HOSTS_INTERNAL_GATE_ENV, '')
+    await handlers.get('repos:getBaseRefDefault')!(null, { repoId: 'r1' })
+    await handlers.get('repos:searchBaseRefDetails')!(null, { repoId: 'r1', query: 'main' })
+
+    expect(getBaseRefDefault).toHaveBeenCalledWith(repo.path, {})
+    expect(getRemoteCount).toHaveBeenCalledWith(repo.path, {})
+    const commands = gitExecFileAsyncMock.mock.calls.map(([args, options]) => [args[0], options])
+    expect(commands).toContainEqual(['for-each-ref', { cwd: repo.path }])
+  })
+
+  it('searches base refs with the distro Git', async () => {
+    await handlers.get('repos:searchBaseRefDetails')!(null, { repoId: 'r1', query: 'main' })
+
+    const commands = gitExecFileAsyncMock.mock.calls.map(([args, options]) => [args[0], options])
+    expect(commands).toContainEqual(['remote', { cwd: repo.path, wslDistro: 'Ubuntu' }])
+    expect(commands).toContainEqual(['for-each-ref', { cwd: repo.path, wslDistro: 'Ubuntu' }])
   })
 })

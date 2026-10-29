@@ -33,6 +33,7 @@ import { runAfterFirstWindowShown } from './first-window-deferral'
 import { logStartupMilestone } from './startup-diagnostics'
 import { refreshInstalledOpenCodeStatusPlugins } from '../opencode/opencode-status-plugin-startup-refresh'
 import { pruneDesktopOrcadArtifactCache } from '../orcad/orcad-artifact-cache-retention'
+import { runGatedWslMoveDesktopRewritePass } from '../persistence/moving-wsl-projects/wsl-move-desktop-rewrite'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
 import { repairDuplicatePtyPanesOnStart } from '../runtime/moved-pane-owner-rekey'
 import { WslUsageReporter } from '../telemetry/wsl-usage-reporter'
@@ -102,6 +103,10 @@ export async function initializeReadyRuntimeServices(): Promise<void> {
     void pruneDesktopOrcadArtifactCache(app.getPath('userData')).catch((error) => {
       console.warn('[orcad-artifacts] Failed to bound the slot cache:', error)
     })
+  }, WORKTREE_TRASH_SWEEP_FALLBACK_MS)
+  // The startup pass ran before browser sessions and any window existed, so `browser-cookies` paused.
+  runAfterFirstWindowShown(() => {
+    void runGatedWslMoveDesktopRewritePass({ userDataPath: app.getPath('userData') })
   }, WORKTREE_TRASH_SWEEP_FALLBACK_MS)
   nativeTheme.themeSource = store.getSettings().theme ?? 'system'
   // Wait for shell PATH before probing Codex; start reconciliation early so first launch can share it.

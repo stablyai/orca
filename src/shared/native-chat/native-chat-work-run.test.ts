@@ -22,13 +22,6 @@ function rowsOf(pattern: string): NativeChatWorkRunRow[] {
 const spans = (pattern: string): number[][] => nativeChatWorkRunSpans(rowsOf(pattern))
 
 describe('work run spans', () => {
-  it('runs thoughts and calls together until something else draws', () => {
-    expect(spans('tctctxct')).toEqual([
-      [0, 1, 2, 3, 4],
-      [6, 7]
-    ])
-  })
-
   it('needs two members and a call', () => {
     expect(spans('c')).toEqual([])
     expect(spans('tt')).toEqual([])

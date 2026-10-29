@@ -35,7 +35,7 @@ export const WorktreeCreate = z
     baseBranch: OptionalString,
     compareBaseRef: OptionalString,
     branchNameOverride: OptionalString,
-    branchIntent: z.literal('open-existing').optional(),
+    branchIntent: z.enum(['open-existing', 'open-existing-v2', 'create-new']).optional(),
     linkedIssue: TriStateLinkedIssue,
     linkedPR: TriStateLinkedIssue,
     linkedLinearIssue: z.string().optional(),

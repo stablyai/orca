@@ -2,7 +2,6 @@ import { useAppStore } from '@/store'
 import { findReusableRightSplitGroupId } from './emulator-right-split-target'
 import { cancelPendingSimulatorPaneShutdown } from './simulator-pane-shutdown-scheduler'
 import { shouldShutdownSimulatorForPaneUnmountFromTabs } from './simulator-tab-shutdown'
-import { translate } from '@/i18n/i18n'
 import { createBrowserUuid } from './browser-uuid'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../shared/execution-host'
 import {
@@ -20,6 +19,7 @@ import {
   openSimulatorTabThroughLayoutOwner
 } from './simulator-tab-layout-owner'
 import { selectFolderWorkspaces } from '@/store/workspace-record-selectors'
+import { SIMULATOR_DEFAULT_TAB_LABEL } from './simulator-tab-label'
 
 type EnsureSimulatorTabOptions = {
   targetGroupId?: string
@@ -129,7 +129,7 @@ export function ensureSimulatorTab(
     return existing.id
   }
 
-  const label = translate('auto.lib.ensure.simulator.tab.372d21d428', 'Mobile Emulator')
+  const label = SIMULATOR_DEFAULT_TAB_LABEL
   const reusableRightGroupId =
     options?.placement === 'rightSplit' && shouldSurface
       ? findReusableRightSplitGroupId(store.layoutByWorktree[worktreeId], sourceGroupId)

@@ -80,7 +80,11 @@ export function SlugDialogBody({
         if (rid !== requestIdRef.current) {
           return
         }
-        setError(err instanceof Error ? err.message : 'Failed to load details')
+        setError(
+          err instanceof Error
+            ? err.message
+            : translate('projectViews.picker.detailsFailed', 'Failed to load details')
+        )
       })
       .finally(() => {
         if (rid !== requestIdRef.current) {

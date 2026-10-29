@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { salvagedOptional } from '../../../../src/shared/zod-salvage'
+import { SUPPORTED_UI_LOCALES } from '../../../../src/shared/ui-locale'
 import { NODE_PLATFORM_NAMES } from '../../transport/mobile-runtime-host-platform'
 import { RpcEnvelopeFieldsSchema } from '../../transport/rpc-envelope-fields'
 import { isRpcResponse } from '../../transport/rpc-response-shape'
@@ -100,6 +101,11 @@ export type BridgeInitHost = z.infer<typeof BridgeInitHostSchema>
 export const BridgeColorSchemeSchema = z.enum(['light', 'dark'])
 
 export type BridgeColorScheme = z.infer<typeof BridgeColorSchemeSchema>
+
+// The app's resolved UI language, so page chrome matches the native chrome and the in-app override.
+export const BridgeUiLocaleSchema = z.enum(SUPPORTED_UI_LOCALES)
+
+export type BridgeUiLocale = z.infer<typeof BridgeUiLocaleSchema>
 
 export const BridgeInitStorageSchema = z
   .record(
@@ -246,6 +252,8 @@ const BridgeHostMessageSchema = z.union([
     keyboardInset: BridgeKeyboardInsetSchema.optional(),
     // Older pages strip this key; salvage an unknown future scheme so it cannot invalidate the whole init.
     colorScheme: salvagedOptional('colorScheme', BridgeColorSchemeSchema).optional(),
+    // Older pages strip this key; a locale this page does not ship is salvaged rather than refusing init.
+    uiLocale: salvagedOptional('uiLocale', BridgeUiLocaleSchema).optional(),
     host: BridgeInitHostSchema.optional(),
     storage: BridgeInitStorageSchema.optional(),
     // Advisory page fast path for oversized keys; the shell independently refuses writes because older pages ignore this additive field (ruling 33.6).

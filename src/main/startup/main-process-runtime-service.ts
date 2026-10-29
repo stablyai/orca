@@ -47,6 +47,7 @@ import {
 import { startAgentStateRulesLiveUpdates } from '../runtime/agent-state-rules/agent-state-rules-live-update'
 import { recordDurableCrashBreadcrumb } from '../crash-reporting/durable-crash-breadcrumb'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
+import { getRuntimeEnvironmentRegistryRoot } from '../ipc/runtime-environments/runtime-environment-registry-root'
 
 export function getDesktopWindowStatus(): RuntimeDesktopWindowStatus {
   const activation = state.desktopActivationGate
@@ -65,7 +66,7 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
   }
   const orchestrationEnvironmentTransport: OrchestrationEnvironmentTransport = {
     resolve: (selector) => {
-      const environment = resolveEnvironment(app.getPath('userData'), selector)
+      const environment = resolveEnvironment(getRuntimeEnvironmentRegistryRoot(), selector)
       const connection = getPreferredPairedRuntimeConnection(environment)
       return {
         environmentId: environment.id,
@@ -76,7 +77,7 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
     },
     call: (selector, method, params, timeoutMs, envelope, expectedPairingRevision) =>
       callRuntimeEnvironment(
-        app.getPath('userData'),
+        getRuntimeEnvironmentRegistryRoot(),
         selector,
         method,
         params,
@@ -115,9 +116,7 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
     // Resolve per call: the RPC server/device registry is constructed later with this runtime.
     getPairedDeviceName: (pairedDeviceId) =>
       state.runtimeRpc?.getDeviceRegistry()?.getDevice(pairedDeviceId)?.name ?? null,
-    // Why: source codex-home here (runs in window AND serve) so aiVault.listSessions includes managed-Codex sessions; registerCoreHandlers is window-only.
-    getProjectOwnershipCatalog: () =>
-      sessionSearchScopeCatalogFromStore(store, LOCAL_EXECUTION_HOST_ID),
+    // Provide managed Codex homes here for desktop and headless session discovery; core IPC registration is window-only.
     getAdditionalAiVaultCodexHomePaths: () =>
       state.codexRuntimeHome?.getHostCodexHomePathsForSessionDiscovery() ?? [],
     prepareAiVaultSessionResume: codexAiVaultSessionResumePreparation(() => ({
@@ -134,7 +133,13 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
     orchestrationEnvironmentTransport,
     workspaceSleepPlatform: {
       callEnvironment: (environmentId, method, params, timeoutMs) =>
-        callRuntimeEnvironment(app.getPath('userData'), environmentId, method, params, timeoutMs),
+        callRuntimeEnvironment(
+          getRuntimeEnvironmentRegistryRoot(),
+          environmentId,
+          method,
+          params,
+          timeoutMs
+        ),
       suspendVm: (workspaceId) => suspendEphemeralVmWorkspace(store, workspaceId)
     },
     // Paired/local settings writes must reconcile the scanner child through the same path.

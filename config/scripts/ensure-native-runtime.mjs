@@ -295,8 +295,8 @@ function loadNativeModule(moduleName) {
     return
   }
   if (moduleName === '@orca/windows-security') {
-    // Why: the package defers loading its .node addon until the first call.
-    require(moduleName).currentUserSid()
+    // Why: the addon loads on first call; the newest export also rejects a stale build that loads.
+    require(moduleName).clearStdHandleInheritance()
     return
   }
   if (moduleName === 'node-pty') {

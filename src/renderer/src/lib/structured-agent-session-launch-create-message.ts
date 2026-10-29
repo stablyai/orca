@@ -39,7 +39,7 @@ export function prepareStructuredLaunchCreateMessage(
   if (!hostTakesExplicitOptions) {
     omitStructuredLaunchPermissionMode(state)
   }
-  // A permission mode alone overlays the host's remembered model selection.
+  // Options without a model overlay the host's remembered model selection.
   const optionsMode: StructuredAgentSessionCreateParams['optionsMode'] =
     hostTakesExplicitOptions && state.selection.explicit?.model !== undefined
       ? 'replace-model-selection'
@@ -89,8 +89,7 @@ function omitStructuredLaunchPermissionMode(state: StructuredLaunchState): void 
   state.selection = { ...state.selection, explicit: kept }
 }
 
-/** Picks held so far, the launch's own permission mode, and the chat's own model and effort: a
- *  first message starts its turn on them, as a later send does. */
+/** The first turn uses held picks over the action's choices over the chat's shown selection. */
 function structuredLaunchCreateOptions(
   state: StructuredLaunchState
 ): Readonly<Record<string, string>> | undefined {
@@ -118,8 +117,9 @@ function structuredLaunchCreateOptions(
     return requested.model === selection.held.model ? { ...requested, ...held } : requested
   }
   const options = {
-    ...(requested ? { ...requested, ...held } : held),
-    ...structuredAgentSessionSendSelection(view)
+    ...structuredAgentSessionSendSelection(view),
+    ...requested,
+    ...held
   }
   return Object.keys(options).length ? options : undefined
 }

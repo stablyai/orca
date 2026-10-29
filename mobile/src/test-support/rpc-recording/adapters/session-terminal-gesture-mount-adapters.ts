@@ -59,12 +59,17 @@ export function sessionTerminalGestureMountAdapters(
             terminalGestureInputInFlightRef: inFlight,
             liveInputRef: { current: null },
             liveInputFocusTimerRef: { current: null },
-            terminalUnsubsRef: { current: new Map() },
+            terminalUnsubsRef: { current: new Map([[HANDLE, () => {}]]) },
             hostQueryReplyInputSupportedRef: { current: false },
             hostProgramStatusSupportedRef: { current: false },
             clearPendingLiveInputCommit: () => {},
             toggleTerminalLiveInput: () => false,
             getTerminalRef: () => undefined,
+            unsubscribeTerminal: (handle) => effect('terminal-unsubscribe', { handle }),
+            subscribeToTerminal: (handle) => {
+              effect('terminal-subscribe', { handle })
+              return true
+            },
             showToast: (message: string, durationMs?: number) =>
               effect('toast', { message, durationMs: durationMs ?? null })
           })

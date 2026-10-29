@@ -35,7 +35,7 @@ async function startBridge(remotePort = echo.port) {
   })
   const forward = await listenWslOrcadStdioBridge(
     transport,
-    { environmentId: 'wsl:ubuntu', remotePort, localPort: 0, label: 'Ubuntu' },
+    { environmentId: 'wsl:ubuntu', distro: 'Ubuntu', remotePort, localPort: 0, label: 'Ubuntu' },
     {
       resolveBridge: async (_conn, port) => posixOrcadStdioBridge(port),
       checkBridge: checkOrcadStdioBridge,

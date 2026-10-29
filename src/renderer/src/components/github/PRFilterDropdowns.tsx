@@ -6,6 +6,9 @@ import { cn } from '@/lib/utils'
 import { useRepoLabelsBySlug, useRepoAssigneesBySlug } from '@/hooks/useGitHubSlugMetadata'
 import type { PickerOption } from '@/components/github/PRFilterPickers'
 import {
+  filterDraftLabel,
+  filterLabelsValue,
+  filterStateLabel,
   SectionDetail,
   SectionMenu,
   type PRFilterChange,
@@ -31,6 +34,10 @@ type Props = {
 }
 
 export type { PRFilterChange } from '@/components/github/PRFilterSections'
+
+function currentUserLabel(): string {
+  return translate('auto.components.github.PRFilterDropdowns.currentUser', 'Current user')
+}
 
 function userOptions(users: GitHubAssignableUser[]): PickerOption[] {
   return users.map((u) => ({ key: u.login, primary: u.login, secondary: u.name ?? undefined }))
@@ -94,12 +101,20 @@ export default function PRFilterDropdowns({
 
   // Offer @me because GitHub resolves it server-side to the authenticated user.
   const userOpts = useMemo<PickerOption[]>(() => {
-    const meOption: PickerOption = { key: '@me', primary: '@me', secondary: 'Current user' }
+    const meOption: PickerOption = {
+      key: '@me',
+      primary: '@me',
+      secondary: currentUserLabel()
+    }
     return [meOption, ...userOptions(hasPrimarySlug ? assigneesState.data : [])]
   }, [assigneesState.data, hasPrimarySlug])
   const authorOpts = useMemo<PickerOption[]>(() => {
     const options = new Map<string, PickerOption>()
-    options.set('@me', { key: '@me', primary: '@me', secondary: 'Current user' })
+    options.set('@me', {
+      key: '@me',
+      primary: '@me',
+      secondary: currentUserLabel()
+    })
     // Use visible authors because assignable-user metadata excludes outside contributors.
     for (const login of authorLogins) {
       options.set(login.toLowerCase(), { key: login, primary: login })
@@ -125,15 +140,13 @@ export default function PRFilterDropdowns({
   const statusActive = (parsed.state !== null && parsed.state !== 'open') || parsed.draft
   const statusPillValue = ((): string | null => {
     const parts: string[] = []
-    if (parsed.state === 'closed') {
-      parts.push('Closed')
-    } else if (parsed.state === 'merged') {
-      parts.push('Merged')
+    if (parsed.state === 'closed' || parsed.state === 'merged') {
+      parts.push(filterStateLabel(parsed.state))
     } else if (parsed.state === 'all') {
-      parts.push('Any')
+      parts.push(translate('auto.components.github.PRFilterDropdowns.anyState', 'Any'))
     }
     if (parsed.draft) {
-      parts.push('Draft')
+      parts.push(filterDraftLabel())
     }
     return parts.length > 0 ? parts.join(' · ') : null
   })()
@@ -248,7 +261,7 @@ export default function PRFilterDropdowns({
       {parsed.labels.length > 0 ? (
         <ActivePill
           label={translate('auto.components.github.PRFilterDropdowns.9d0f2eda6d', 'Label')}
-          value={parsed.labels.length === 1 ? parsed.labels[0] : `${parsed.labels.length} labels`}
+          value={filterLabelsValue(parsed.labels) ?? ''}
           onClear={() => onChange({ labels: [] })}
         />
       ) : null}

@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import type { AppState } from '@/store/types'
+import { createTestStore } from '../store/slices/store-test-helpers'
+import { getDefaultSettings } from '../../../shared/constants'
 import {
   _getProjectRuntimePreflightContextCacheSizeForTest,
   _getWslPreflightContextCacheSizeForTest,
@@ -8,6 +10,8 @@ import {
   getLocalPreflightContext,
   resetLocalPreflightContextCachesForTests
 } from './local-preflight-context'
+
+const baseState = createTestStore().getState()
 
 const WSL_CACHE_LIMIT = 128
 const PROJECT_RUNTIME_CACHE_LIMIT = 2048
@@ -20,28 +24,23 @@ function makeRepos(id: string, path: string): AppState['repos'] {
   return [{ id, path, displayName: id, badgeColor: 'blue', addedAt: 1 }]
 }
 
-function makeWslState(distro: string): Parameters<typeof getLocalPreflightContext>[0] {
+function makeWslState(distro: string): AppState {
   return {
-    endpointProjects: [],
-    endpointProjectHostSetups: [],
+    ...baseState,
     activeRepoId: 'repo-1',
     activeWorktreeId: null,
     repos: makeRepos('repo-1', `\\\\wsl.localhost\\${distro}\\home\\alice\\repo`),
-    settings: null,
     worktreesByRepo: {}
   }
 }
 
-function makeWindowsProjectState(
-  projectId: string
-): Parameters<typeof getLocalPreflightContext>[0] {
+function makeWindowsProjectState(projectId: string): AppState {
   return {
-    endpointProjects: [],
-    endpointProjectHostSetups: [],
+    ...baseState,
     activeRepoId: projectId,
     activeWorktreeId: null,
     repos: makeRepos(projectId, `C:\\Users\\alice\\${projectId}`),
-    settings: null,
+    settings: getDefaultSettings('/tmp'),
     worktreesByRepo: {}
   }
 }

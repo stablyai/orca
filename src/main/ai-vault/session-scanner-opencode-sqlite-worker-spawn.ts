@@ -1,5 +1,5 @@
 import { aiVaultScopePathsForWslDistro } from '../../shared/ai-vault-scope-cwd-match'
-import { recordSessionScanIssue } from './session-scan-issues'
+import { recordSessionScanIssue, scanIssueTextFromError } from './session-scan-issues'
 import { existsSync } from 'node:fs'
 import { Worker } from 'node:worker_threads'
 import type { AiVaultScanIssue, AiVaultSession } from '../../shared/ai-vault-types'
@@ -207,7 +207,7 @@ async function listCandidatesForHost(
           agent: args.agent ?? 'opencode',
           kind: 'scope',
           path: first,
-          message: error instanceof Error ? error.message : String(error)
+          ...scanIssueTextFromError(error)
         })
         return []
       } finally {

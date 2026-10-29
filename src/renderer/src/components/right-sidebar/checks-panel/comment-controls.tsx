@@ -18,6 +18,8 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
+import { useAppStore } from '@/store'
+import { isReviewThreadResolutionInFlight } from '@/store/github/review-thread-resolution-in-flight'
 import { basename } from '@/lib/path'
 import { isBotPRComment } from '../../../../../shared/pr-comment-audience'
 import { setPRBotAuthorOverride } from '@/lib/pr-bot-author-overrides'
@@ -29,7 +31,10 @@ import { translate } from '@/i18n/i18n'
 
 export function CopyButton({
   text,
-  title = 'Copy comment'
+  title = translate(
+    'auto.components.right.sidebar.checks.panel.content.copyComment',
+    'Copy comment'
+  )
 }: {
   text: string
   title?: string
@@ -96,6 +101,8 @@ export function ResolveButton({
   onResolve: (threadId: string, resolve: boolean) => boolean | Promise<boolean>
 }): React.JSX.Element {
   const [loading, setLoading] = useState(false)
+  // Why: the optimistic move remounts this button in the other section, losing local loading state.
+  const inFlight = useAppStore((s) => isReviewThreadResolutionInFlight(s, threadId))
   const loadingResetTimerRef = useRef<number | null>(null)
 
   const clearLoadingResetTimer = useCallback((): void => {
@@ -126,7 +133,7 @@ export function ResolveButton({
 
   return (
     <span ref={setResolveButtonRootRef} className="contents">
-      {loading ? (
+      {loading || inFlight ? (
         <LoaderCircle className="size-3 animate-spin text-muted-foreground shrink-0" />
       ) : (
         <button

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
 import { adoptAgentSessionLaunchVerdict } from './agent-session-launch-plan'
-import { FLOATING_TERMINAL_WORKTREE_ID, getDefaultSettings } from '../../../shared/constants'
+import { getDefaultSettings } from '../../../shared/constants'
 import { resolveSourceControlActionRecipe } from '../../../shared/source-control-ai'
 import type { SourceControlActionRecipe } from '../../../shared/source-control-ai-actions'
 import { sourceControlActionLaunchOptions } from '../../../shared/source-control-action-launch-preferences'
@@ -59,7 +59,7 @@ vi.mock('@/lib/connection-context', () => ({
   getConnectionIdFromState: () => null
 }))
 
-vi.mock('@/lib/native-chat-transcript-readability', () => ({
+vi.mock('../../../shared/native-chat/transcript/native-chat-transcript-readability', () => ({
   isNativeChatTranscriptLocalReadable: () => true
 }))
 
@@ -118,55 +118,6 @@ describe('launchAgentInNewTab terminal tab activation', () => {
     expect(mockCreateTab).not.toHaveBeenCalled()
   })
 
-  // Store activation is scoped to the launch workspace, so floating launches cannot move main-window selection.
-  it.each(['wt-1', FLOATING_TERMINAL_WORKTREE_ID])(
-    'selects the new tab within %s only',
-    async (worktreeId) => {
-      const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
-
-      launchAgentInNewTab({ requestId: 'request-1', agent: 'codex', worktreeId })
-
-      expect(mockCreateTab.mock.calls[0]?.[3]).not.toHaveProperty('activate')
-      expect(mockSetActiveTabType).toHaveBeenCalledExactlyOnceWith('terminal', worktreeId)
-    }
-  )
-
-  it('scopes a floating terminal fallback to the floating workspace with Chat UI on', async () => {
-    store.settings = placementSettings({
-      experimentalNativeChat: true,
-      nativeChatSessionOptions: {
-        codex: {
-          model: 'gpt-5.2-codex',
-          valuesByModel: { 'gpt-5.2-codex': { effort: 'medium' } }
-        }
-      }
-    })
-    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
-
-    launchAgentInNewTab({
-      requestId: 'request-2',
-      agent: 'codex',
-      worktreeId: FLOATING_TERMINAL_WORKTREE_ID
-    })
-
-    expect(mockCreateTab).toHaveBeenCalledWith(
-      FLOATING_TERMINAL_WORKTREE_ID,
-      undefined,
-      undefined,
-      {
-        launchAgent: 'codex',
-        quickCommandLabel: undefined,
-        pendingStartup: expect.anything()
-      }
-    )
-    expect(mockSetActiveTabType).toHaveBeenCalledExactlyOnceWith(
-      'terminal',
-      FLOATING_TERMINAL_WORKTREE_ID
-    )
-    // Chat UI model preferences belong to structured chats, not a terminal fallback.
-    expect(queuedStartups()[0]).not.toHaveProperty('sessionOptions')
-  })
-
   it('applies a saved action choice as terminal flags by scope', async () => {
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
     const base = getDefaultSettings('/tmp')
@@ -218,10 +169,10 @@ describe('launchAgentInNewTab terminal tab activation', () => {
     expect(repoChoice.command).toContain("'-m' 'gpt-5.5'")
     expect(repoChoice.command?.match(/dangerously-bypass/g)).toHaveLength(1)
     expect(repoChoice.command).not.toContain('old')
-    // N1: a legacy override's own raw model beats the inherited choice on terminals only.
+    // Own repository Args select the whole model/effort group on both surfaces.
     const legacy = launch({ agentArgs: '--model mine' })
     expect(legacy.command).toContain("'--model' 'mine'")
     expect(legacy.command).not.toMatch(/gpt-5\.6-terra|model_reasoning_effort/)
-    expect(legacy.chat).toMatchObject({ model: 'gpt-5.6-terra', permissionMode: 'ask' })
+    expect(legacy.chat).toEqual({ permissionMode: 'ask' })
   })
 })

@@ -7,7 +7,7 @@ import { toWindowsWslPath } from '../../shared/wsl-paths'
 import type { ClaudeManagedAccountUsageOptions } from './claude-usage-fetch-options'
 import { fetchActiveClaudeRateLimits } from './claude-active-usage-fetch'
 import { claudeUsageUnavailable, makeClaudeUsageResult } from './claude-usage-result'
-import { filterPathsToRunningWslDistrosAsync } from '../wsl-running-path-filter'
+import { blockedWslDistroForPath } from '../wsl/wsl-unc-access-gate'
 
 /** Derive host account folders from account ids, never stored paths. */
 export type InactiveClaudeAccount = {
@@ -35,10 +35,8 @@ export async function fetchInactiveClaudeAccountUsage(
   }
   // A stopped distro can block UNC reads for minutes and strand the sequential inactive-account loop.
   const guestRoot = toWindowsWslPath('/', distro)
-  if (
-    (await filterPathsToRunningWslDistrosAsync([guestRoot], { requireConfirmed: true })).length ===
-    0
-  ) {
+  // A list still naming a stopping distro must not let the reads below boot it (E9).
+  if (await blockedWslDistroForPath(guestRoot)) {
     return claudeUsageUnavailable()
   }
   const timeout = AbortSignal.timeout(INACTIVE_WSL_READ_TIMEOUT_MS)

@@ -10,6 +10,7 @@ import { DiffNotesSendMenu } from '../../DiffNotesSendMenu'
 import { canOpenDiffSectionPreviewToSide } from '../../diff-section-preview'
 import type { DiffSection } from '../../diff-section-types'
 import type { CombinedDiffScrollThumb } from './use-combined-diff-scrollbar'
+import { translate } from '@/i18n/i18n'
 
 export function CombinedDiffSectionList({
   activeGroupId,
@@ -120,7 +121,12 @@ export function CombinedDiffSectionList({
                   toggleSection={toggleSection}
                   openSection={openSection}
                   openSectionTitle={
-                    isAllMode || isBranchMode || isCommitMode ? 'Open diff' : 'Open in editor'
+                    isAllMode || isBranchMode || isCommitMode
+                      ? translate('auto.components.editor.CombinedDiffViewer.openDiff', 'Open diff')
+                      : translate(
+                          'auto.components.editor.CombinedDiffViewer.openInEditor',
+                          'Open in editor'
+                        )
                   }
                   onOpenPreview={
                     canOpenDiffSectionPreviewToSide({

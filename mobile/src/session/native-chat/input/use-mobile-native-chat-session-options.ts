@@ -29,7 +29,6 @@ import {
   readNativeChatSessionOptionCache,
   writeNativeChatSessionOptionCache
 } from '../../../../../src/shared/native-chat-session-option-cache'
-import { retireMissingModelMutation } from '../../../../../src/shared/native-chat-discovered-catalog-models'
 import {
   createNativeChatSessionOptionRecord,
   matchNativeChatCatalogModelId
@@ -174,7 +173,6 @@ export function useMobileNativeChatSessionOptions(
   const [pending, setPending] = useState<PendingOperation | null>(null)
   // One surface per tab for this controller's life: a pick still on its way lands where the chat shows it on return.
   const [surfaces] = useState(() => new Map<string, SurfaceEntry>())
-  const retiredModelsRef = useRef<readonly CatalogModel[] | null>(null)
 
   useLayoutEffect(() => {
     latest.current = args
@@ -221,17 +219,6 @@ export function useMobileNativeChatSessionOptions(
       entry.surface.replaceModels(discoveredModels)
     }
   }, [discoveredModels, entry])
-
-  useEffect(() => {
-    if (!agent || !discoveredModels || retiredModelsRef.current === discoveredModels) {
-      return
-    }
-    retiredModelsRef.current = discoveredModels
-    const mutation = retireMissingModelMutation(agent, discoveredModels)
-    if (mutation) {
-      latest.current.writeSettings?.(mutation)
-    }
-  }, [agent, discoveredModels])
 
   useEffect(() => {
     if (!surface || !scopeKey || !catalog || !reportedModel) {

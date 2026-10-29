@@ -64,6 +64,7 @@ function buildCommitMessageGenerationOverride(params: {
 export const GIT_COMMIT_MESSAGE_GENERATION_METHODS = [
   defineMethod({
     name: 'git.generateCommitMessage',
+    requires: ['accounts'],
     permission: 'workspace',
     params: GitGenerateCommitMessage,
     handler: async (params, { runtime }) => {

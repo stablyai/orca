@@ -9,6 +9,7 @@ import {
 } from '../../shared/conversation-name-generation'
 import { chatNamingAgentTarget } from './structured-chat-naming-agent-launch'
 import type { AgentLaunchProfileSettings } from '../../shared/tui-agent-launch-defaults'
+import { chatNamingFailure } from '../../shared/chat-naming-failure-copy'
 import { agentSessionCurrentContextRows } from '../../shared/agent-session-context-clear'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../shared/execution-host'
 import type { CommitMessageAgentEnvironmentResolvers } from '../text-generation/commit-message-agent-environment'
@@ -106,9 +107,7 @@ export function structuredChatNamingDeps(
           throw new Error('The naming agent returned an empty title')
         } catch (error) {
           logger.warn('Native chat naming failed', { ...log, error })
-          return {
-            error: `${record.provider === 'grok' ? 'Grok' : 'Antigravity'} could not name this chat. Try generating the name again.`
-          }
+          return chatNamingFailure(record.provider === 'grok' ? 'grokFailed' : 'antigravityFailed')
         }
       }
       const settings = resolveTextGenerationParams(
@@ -144,9 +143,9 @@ export function structuredChatNamingDeps(
           )
         : await resolveGenerationTarget(workspace.path, settings.params.agentId, runtime)
       if (!target) {
-        const error = 'No chat-name agent can run in this workspace.'
-        logger.warn(error, log)
-        return { error }
+        const failure = chatNamingFailure('noAgentAvailable')
+        logger.warn(failure.error, log)
+        return failure
       }
       const result = await generateConversationNameFromContext(
         { firstPrompt },

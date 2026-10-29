@@ -6,8 +6,10 @@ export const cliApi = {
   getInstallStatus: (): Promise<CliInstallStatus> => ipcRenderer.invoke('cli:getInstallStatus'),
   install: (): Promise<CliInstallStatus> => ipcRenderer.invoke('cli:install'),
   remove: (): Promise<CliInstallStatus> => ipcRenderer.invoke('cli:remove'),
-  getWslInstallStatus: (args?: { distro?: string | null }): Promise<CliInstallStatus> =>
-    ipcRenderer.invoke('cli:getWslInstallStatus', args),
+  getWslInstallStatus: (args?: {
+    distro?: string | null
+    wakeWslDistro?: boolean
+  }): Promise<CliInstallStatus> => ipcRenderer.invoke('cli:getWslInstallStatus', args),
   installWsl: (args?: { distro?: string | null }): Promise<CliInstallStatus> =>
     ipcRenderer.invoke('cli:installWsl', args),
   removeWsl: (args?: { distro?: string | null }): Promise<CliInstallStatus> =>

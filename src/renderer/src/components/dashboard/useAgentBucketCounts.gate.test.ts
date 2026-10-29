@@ -133,10 +133,10 @@ describe('agent bucket count input gate', () => {
     expect(second.agentStatusEpoch).toBe(1)
   })
 
-  it('carries every slice the counts read, and settings pinned to null', () => {
+  it('carries canonical contexts and every row-owner input the counts read', () => {
     const state = storeState()
     const inputs = selectAgentBucketCountState(state)
-    expect(inputs.settings).toBeNull()
+    expect(inputs.settings).toBe(state.settings)
     for (const key of [
       'repos',
       'worktreesByRepo',

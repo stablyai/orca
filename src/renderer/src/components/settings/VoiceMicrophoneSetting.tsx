@@ -12,6 +12,7 @@ import {
 } from '@/components/dictation/microphone-devices'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
 
 type VoiceMicrophoneSettingProps = {
@@ -77,6 +78,7 @@ export function VoiceMicrophoneSetting({
   voiceSettings,
   onUpdateVoiceSettings
 }: VoiceMicrophoneSettingProps): React.JSX.Element {
+  const languageRevision = useUiLanguageRevision()
   const [devices, setDevices] = useState<VoiceMicrophoneDevice[]>([])
   const [devicesKnown, setDevicesKnown] = useState(false)
   const [accessPending, setAccessPending] = useState(false)
@@ -213,7 +215,14 @@ export function VoiceMicrophoneSetting({
           'unavailable'
         )
       }),
-    [devices, devicesKnown, voiceSettings.microphoneDeviceId, voiceSettings.microphoneDeviceLabel]
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- translate() reads the UI language implicitly.
+    [
+      devices,
+      devicesKnown,
+      voiceSettings.microphoneDeviceId,
+      voiceSettings.microphoneDeviceLabel,
+      languageRevision
+    ]
   )
 
   const showAccessHint = voiceSettings.enabled && devices.length === 0

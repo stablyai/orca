@@ -1,3 +1,4 @@
+import type { CurrentActionSelection } from '../../../../shared/source-control-action-selection'
 import React from 'react'
 import type { RuntimeGitContext } from '@/runtime/runtime-git-client-context'
 import {
@@ -17,10 +18,12 @@ import type { LaunchSource } from '../../../../shared/telemetry-events'
 import type { SourceControlAiWriteTarget } from '../../../../shared/source-control-ai-recipe-save'
 import { SourceControlAgentActionDialogForm } from './SourceControlAgentActionDialogForm'
 import { useSourceControlAgentActionDialog } from './useSourceControlAgentActionDialog'
+import { translate } from '@/i18n/i18n'
 
 export type SourceControlAgentActionDialogProps = {
   open: boolean
   initialRecipe?: SourceControlActionRecipe
+  initialSelection?: CurrentActionSelection
   onOpenChange: (open: boolean) => void
   actionId: SourceControlLaunchActionId
   title: string
@@ -70,7 +73,10 @@ function SourceControlAgentActionEditor(
     baseCommandInput,
     savedCommandInputTemplate,
     onOpenSettings,
-    startLabel = 'Start agent',
+    startLabel = translate(
+      'auto.components.right.sidebar.SourceControlAgentActionDialog.startAgent',
+      'Start agent'
+    ),
     onSaveAgentDefault
   } = props
   const {
@@ -123,7 +129,11 @@ function SourceControlAgentActionEditor(
           agentArgsApply={agentArgsApply}
           recipe={recipe}
           commandTemplate={commandTemplate}
-          savedCommandInputTemplate={savedCommandInputTemplate}
+          savedCommandInputTemplate={
+            props.initialSelection?.current.commandInputTemplate ??
+            props.initialRecipe?.commandInputTemplate ??
+            savedCommandInputTemplate
+          }
           saveLaunchRecipe={saveLaunchRecipe}
           saveTargetValue={saveTargetValue}
           saveTargets={saveTargets}

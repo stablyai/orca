@@ -186,7 +186,7 @@ describe('resolveGitHubPrStartPoint', () => {
       resolveRemote: async () => 'origin'
     })
 
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       error:
         'Failed to fetch refs/pull/77/head: This SSH host is running an older Orca relay that cannot fetch pull request heads.'
     })
@@ -312,8 +312,11 @@ describe('resolveGitHubPrStartPoint', () => {
       resolveRemote: async () => 'origin'
     })
 
-    expect(result).toEqual({
-      error: `Failed to fetch refs/pull/1849/head: ${message}`
+    expect(result).toMatchObject({
+      error: `Failed to fetch refs/pull/1849/head: ${message}`,
+      errorCode: 'fetchFailed',
+      errorParams: { ref: 'refs/pull/1849/head' },
+      errorDetail: message
     })
     expect(gitExec).not.toHaveBeenCalledWith(['rev-parse', '--verify', durablePrRev(1849)])
   })

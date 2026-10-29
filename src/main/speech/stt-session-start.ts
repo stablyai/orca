@@ -47,7 +47,7 @@ export async function startSttDictation(
   try {
     await startSttSession(state, modelId, sink, hotwordsFilePath, owner)
     if (state.canceledOwners.delete(owner)) {
-      await stopSttDictation(state, owner, { cancelStarting: false })
+      await stopSttDictation(state, owner, { cancelStarting: false, discard: true })
       throw new Error('dictation_canceled')
     }
     state.activeOwner = owner

@@ -1,3 +1,4 @@
+import { textGenerationErrorText } from '@/lib/text-generation-error-copy'
 import React, { useMemo } from 'react'
 import { TriangleAlert } from 'lucide-react'
 import {
@@ -23,6 +24,7 @@ import {
   type SourceControlTextGenerationSaveTarget
 } from './text-generation-dialog-form'
 import { translate } from '@/i18n/i18n'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 
 export { buildCommitMessageGenerationParams } from './text-generation-params'
 
@@ -96,6 +98,7 @@ export function SourceControlTextGenerationDialog({
   onGenerate,
   onSaveDefaults
 }: SourceControlTextGenerationDialogProps): React.JSX.Element {
+  const languageRevision = useUiLanguageRevision()
   const resolved = useMemo(
     () =>
       settings
@@ -112,7 +115,8 @@ export function SourceControlTextGenerationDialog({
               'Settings are not loaded.'
             )
           },
-    [actionId, discoveryHostKey, repo, settings]
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- translate() reads the UI language implicitly.
+    [actionId, discoveryHostKey, repo, settings, languageRevision]
   )
   const baseParams = resolved.ok ? resolved.value.params : null
   const recipeLabel =
@@ -171,7 +175,7 @@ export function SourceControlTextGenerationDialog({
         {!resolved.ok ? (
           <p className="flex items-start gap-1.5 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive">
             <TriangleAlert className="mt-px size-3.5 shrink-0" />
-            {resolved.error}
+            {textGenerationErrorText(resolved)}
           </p>
         ) : null}
 

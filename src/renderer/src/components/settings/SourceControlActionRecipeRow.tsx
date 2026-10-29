@@ -1,3 +1,5 @@
+import { sourceControlActionSelectedPreferences } from '../../../../shared/source-control-action-launch-preferences'
+import type { ActionArgumentChoices } from '../../../../shared/source-control-action-argument-choices'
 import { SourceControlActionAgentPicker } from './SourceControlActionAgentPicker'
 import { SourceControlActionArguments } from './SourceControlActionArguments'
 import { Terminal } from 'lucide-react'
@@ -58,7 +60,9 @@ type SourceControlActionRecipeRowProps<ActionId extends AiActionId> = {
   launchPreferences?: SourceControlActionLaunchPreferences
   onLaunchPreferencesChange?: (
     actionId: ActionId,
-    value: SourceControlActionLaunchPreferences | undefined
+    value: SourceControlActionLaunchPreferences | undefined,
+    userArgs?: string,
+    argumentChoices?: ActionArgumentChoices | null
   ) => void
   onTemplateChange: (actionId: ActionId, value: string) => void
   onAgentArgsChange: (actionId: ActionId, value: string, commit?: boolean) => void
@@ -200,10 +204,22 @@ export function SourceControlActionRecipeRow<ActionId extends AiActionId>({
               showArguments={showArguments}
               agent={pickerAgent}
               value={draftValue.agentArgs}
-              preferences={launchPreferences}
+              preferences={
+                pickerAgent
+                  ? sourceControlActionSelectedPreferences(
+                      { ...draftValue, launchPreferences },
+                      pickerAgent
+                    )
+                  : undefined
+              }
+              authoredAgent={selectedAgent}
+              authoredPreferences={launchPreferences ?? null}
+              argumentChoices={draftValue.argumentChoices}
               disabled={actual.status === 'pending' || isSavingTemplate}
               onArgsChange={(value, commit) => onAgentArgsChange(actionId, value, commit)}
-              onPreferencesChange={(value) => onLaunchPreferencesChange?.(actionId, value)}
+              onPreferencesChange={(value, userArgs, nodes) =>
+                onLaunchPreferencesChange?.(actionId, value, userArgs, nodes)
+              }
             />
           </div>
         ) : (

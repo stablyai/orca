@@ -5,6 +5,7 @@ import {
   formatKeybindingList,
   getKeybindingPlatform,
   isKeybindingActionId,
+  keybindingFileDiagnostic,
   normalizeKeybindingArrayForAction,
   type KeybindingActionId,
   type KeybindingFileDiagnostic,
@@ -44,10 +45,12 @@ export function readKeybindingFile(
       commonOverrides: {},
       platformOverrides: {},
       diagnostics: [
-        {
-          severity: 'error',
-          message: `Could not read keybindings file: ${readResult.error ?? 'unknown error'}`
-        }
+        keybindingFileDiagnostic(
+          { severity: 'error' },
+          'readFailed',
+          { reason: readResult.error ?? 'unknown error' },
+          readResult.errorCode
+        )
       ]
     }
   }

@@ -85,6 +85,7 @@ vi.mock('./browser-tab-registration-wait', async (importOriginal) => {
 })
 
 import { registerBrowserHandlers } from './browser'
+import { setTrustedBrowserRendererWebContentsId } from './browser-renderer-trust'
 import { browserManager } from '../browser/browser-manager'
 import {
   getWorkspaceDocPageGuest,
@@ -141,6 +142,8 @@ const BROWSER_PAGE_CHANNELS = [
   'browser:session:importCookies',
   'browser:session:resolvePartition',
   'browser:session:clearDefaultCookies',
+  'browser:session:clearGoogleCookies',
+  'browser:session:googleCookieClearTarget',
   'browser:session:importFromBrowserForClientHost',
   'browser:session:clientRouteImportSources',
   'browser:session:detectBrowsers',
@@ -292,6 +295,7 @@ const GUEST_RECEIVING_MOCKS = [
 
 beforeEach(() => {
   vi.stubEnv('ELECTRON_RENDERER_URL', '')
+  setTrustedBrowserRendererWebContentsId(HOST_RENDERER_ID)
   // Revoke before clearing mocks so disposal calls belong to the previous test.
   revokeAllDocPreviewGrants()
   vi.clearAllMocks()

@@ -80,8 +80,13 @@ export function GitHubItemDialogPRHeader({
                 translate('auto.components.GitHubItemDialog.773ff70035', 'unknown')}
             </span>
             <span>
-              {translate('auto.components.GitHubItemDialog.8223320f8d', 'updated')}{' '}
-              {formatRelativeTime(workItem.updatedAt)}
+              {translate(
+                'auto.components.GitHubItemDialog.updatedRelativeTime',
+                'updated {{time}}',
+                {
+                  time: formatRelativeTime(workItem.updatedAt)
+                }
+              )}
             </span>
             {workItem.branchName && (
               <span className="max-w-full truncate rounded-md border border-border/50 bg-muted/40 px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">

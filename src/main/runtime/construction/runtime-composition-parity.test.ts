@@ -98,6 +98,12 @@ const DECLARED_HOST_DIFFERENCES: readonly DeclaredDifference[] = [
       'Sleep reaches paired servers and suspends VMs from the desktop only; orcad refuses those parts.'
   },
   {
+    wiring: 'ctor:headlessTerminalScrollbackRows',
+    missingOn: 'electron',
+    reason:
+      "Desktop reveals hidden panes from its model at desktop depth; renderer-less orcad needs only the daemon's live window."
+  },
+  {
     wiring: 'rpc-option:exposeNetworkByDefault',
     missingOn: 'orcad',
     reason: 'orcad pins its bind host instead, so exposure never widens itself.'
@@ -185,6 +191,7 @@ const ROOT_SOURCES: Record<Root, readonly string[]> = {
 const HOST_PORT_SOURCES: Record<Root, readonly string[]> = {
   electron: [
     'src/main/startup/main-process-preflight.ts',
+    'src/main/startup/agent-hooks-uninstall-preflight.ts',
     'src/main/host/electron-browser-commands.ts'
   ],
   orcad: [
@@ -197,10 +204,6 @@ const HOST_PORT_SOURCES: Record<Root, readonly string[]> = {
 const NOT_HOST_PORTS = new Set(['setTimeout', 'setInterval', 'setImmediate'])
 
 const SPREAD_SOURCES: Record<string, { file: string; anchor: string }> = {
-  'orcadAiVaultSessionSources(': {
-    file: 'src/main/orcad/orcad-session-search.ts',
-    anchor: 'return {'
-  },
   'agentHookRuntimeDeps(': {
     file: 'src/main/agent-hooks/agent-hook-runtime-deps.ts',
     anchor: 'return {'

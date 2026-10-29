@@ -1,4 +1,6 @@
 import { createHash } from 'node:crypto'
+import { existsSync, readFileSync } from 'node:fs'
+import { dirname } from 'node:path'
 import { afterEach, beforeEach, expect, it, onTestFinished, vi } from 'vitest'
 import { getDefaultSettings } from '../../shared/constants'
 import { agentSessionRecordFixture } from '../../shared/agent-session-record.test-fixture'
@@ -168,7 +170,21 @@ it.each(recordings)(
       provider === 'opencode' || provider === 'opencode2'
         ? { kind: 'opencode', locator: { kind: 'managed', managedProfileId: 'recorded' } }
         : { variable: 'PI_CODING_AGENT_DIR', path: '/recorded/pi' }
+    const prompt = `Name this chat from the user's first request.
+Write a short, specific title of at most 48 characters.
+Output only the title, with no heading, quotes, or explanation.
+
+First request:
+Repair login`
     const child = reply(stdout, stderr, exitCode)
+    let promptPath = ''
+    if (spec.promptDelivery === 'file') {
+      boundary.spawn.mockImplementationOnce((input) => {
+        promptPath = input.args.find((arg) => arg.startsWith('@'))?.slice(1) ?? ''
+        expect(readFileSync(promptPath)).toEqual(Buffer.from(`\uFEFF${prompt}`))
+        return child
+      })
+    }
     const result = await state.deps.generate(record, 'Repair login')
     if (name) {
       expect(result).toEqual({ name })
@@ -181,22 +197,23 @@ it.each(recordings)(
     }
     expect(boundary.spawn).toHaveBeenCalledOnce()
     const spawn = boundary.spawn.mock.calls[0]?.[0]
-    const prompt = `Name this chat from the user's first request.
-Write a short, specific title of at most 48 characters.
-Output only the title, with no heading, quotes, or explanation.
-
-First request:
-Repair login`
     // Delivery follows the common spec; the empty OMP recording remains a negative output control.
     expect(spawn).toMatchObject({
       binary: spec.binary,
-      args: spec.buildArgs({ prompt, model: provider === 'pi' ? 'openai/gpt-6.1-sol' : 'default' }),
+      args: spec.buildArgs({
+        prompt: spec.promptDelivery === 'file' ? `@${promptPath}` : prompt,
+        model: provider === 'pi' ? 'openai/gpt-6.1-sol' : 'default'
+      }),
       cwd: '/workspace/folder',
       stdinMode: 'pipe'
     })
     expect(child.stdin.end).toHaveBeenCalledExactlyOnceWith(
       spec.promptDelivery === 'stdin' ? prompt : undefined
     )
+    if (spec.promptDelivery === 'file') {
+      expect(spawn?.args).not.toContain(prompt)
+      await vi.waitFor(() => expect(existsSync(dirname(promptPath))).toBe(false))
+    }
     if (provider === 'opencode' || provider === 'opencode2') {
       expect(spawn?.env).toMatchObject({
         XDG_DATA_HOME: '/profiles/recorded/data',

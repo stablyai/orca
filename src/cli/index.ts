@@ -82,6 +82,14 @@ export async function main(
     printHelp(COMMAND_SPECS, [])
     return
   }
+  if (
+    parsed.flags.size === 0 &&
+    !findCommandSpec(COMMAND_SPECS, parsed.commandPath) &&
+    isCommandGroup(COMMAND_SPECS, parsed.commandPath)
+  ) {
+    printHelp(COMMAND_SPECS, parsed.commandPath)
+    return
+  }
   const json = parsed.flags.has('json')
 
   try {

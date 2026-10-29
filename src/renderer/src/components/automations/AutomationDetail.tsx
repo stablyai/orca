@@ -23,6 +23,7 @@ import { getAutomationHostDetailDisplay } from './automation-host-detail-display
 import { getAutomationSourceDisplay } from './automation-source-display'
 import { translate } from '@/i18n/i18n'
 import { AutomationPromptDisclosure } from './AutomationPromptDisclosure'
+import { automationRunErrorText } from './automation-run-error-copy'
 
 type AutomationDetailProps = {
   automation: Automation | null
@@ -62,13 +63,20 @@ function DetailMetric({
 
 function formatGrace(minutes: number): string {
   if (minutes <= 0) {
-    return 'No grace'
+    return translate('auto.components.automations.AutomationDetail.noGrace', 'No grace')
   }
   if (minutes < 60) {
-    return `${minutes} minutes`
+    return translate(
+      'auto.components.automations.AutomationDetail.graceMinutes',
+      '{{count}} minutes',
+      { count: minutes, defaultValue_one: '{{count}} minute' }
+    )
   }
   const hours = minutes / 60
-  return `${hours} ${hours === 1 ? 'hour' : 'hours'}`
+  return translate('auto.components.automations.AutomationDetail.graceHours', '{{count}} hours', {
+    count: hours,
+    defaultValue_one: '{{count}} hour'
+  })
 }
 
 function ToolbarIconButton({
@@ -131,15 +139,25 @@ export function AutomationDetail({
   const usageSummary = summarizeAutomationRunUsage(runs)
   const usageCoverage =
     usageSummary.knownRuns > 0
-      ? `${usageSummary.knownRuns}/${runs.length} runs`
+      ? translate(
+          'auto.components.automations.AutomationDetail.usageCoverageRuns',
+          '{{known}}/{{count}} runs',
+          {
+            known: usageSummary.knownRuns,
+            count: runs.length,
+            defaultValue_one: '{{known}}/{{count}} run'
+          }
+        )
       : usageSummary.unavailableRuns > 0
-        ? 'Unavailable'
-        : 'No runs'
+        ? translate('auto.components.automations.AutomationDetail.usageUnavailable', 'Unavailable')
+        : translate('auto.components.automations.AutomationDetail.noRuns', 'No runs')
   const agentLabel =
     getAgentCatalog().find((agent) => agent.id === automation.agentId)?.label ?? automation.agentId
   const runLocationLabel =
     automation.workspaceMode === 'new_per_run'
-      ? (automation.baseBranch ?? projectDefaultBaseRef ?? 'Project default')
+      ? (automation.baseBranch ??
+        projectDefaultBaseRef ??
+        translate('auto.components.automations.AutomationDetail.projectDefault', 'Project default'))
       : workspaceName
   const sourceDisplay = getAutomationSourceDisplay(automation.sourceContext, hostLabelById)
   const hostDisplay = getAutomationHostDetailDisplay({
@@ -149,7 +167,8 @@ export function AutomationDetail({
   })
   const runNowDisabled = runNowAvailability?.canRunNow === false
   const latestRun = indexLatestAutomationRuns(runs).get(automation.id)
-  const latestRunError = latestRun?.status === 'dispatch_failed' ? latestRun.error : null
+  const latestRunError =
+    latestRun?.status === 'dispatch_failed' ? automationRunErrorText(latestRun) : null
 
   return (
     <div className="flex w-full flex-col gap-4">
@@ -261,7 +280,7 @@ export function AutomationDetail({
           value={
             automation.enabled
               ? formatAutomationDateTimeWithRelative(automation.nextRunAt, now)
-              : 'Paused'
+              : translate('auto.components.automations.AutomationsPage.paused', 'Paused')
           }
         />
         <DetailMetric
@@ -279,7 +298,17 @@ export function AutomationDetail({
         />
         <DetailMetric
           label={translate('auto.components.automations.AutomationDetail.15ea446b93', 'Session')}
-          value={automation.reuseSession ? 'Reuse live session' : 'Fresh each run'}
+          value={
+            automation.reuseSession
+              ? translate(
+                  'auto.components.automations.AutomationDetail.reuseLiveSession',
+                  'Reuse live session'
+                )
+              : translate(
+                  'auto.components.automations.AutomationDetail.freshEachRun',
+                  'Fresh each run'
+                )
+          }
         />
         {sourceDisplay ? (
           <DetailMetric
@@ -296,8 +325,12 @@ export function AutomationDetail({
           label={translate('auto.components.automations.AutomationDetail.e353ab9516', 'Precheck')}
           value={
             automation.precheck
-              ? `Enabled, ${formatAutomationPrecheckTimeout(automation.precheck.timeoutSeconds)}`
-              : 'None'
+              ? translate(
+                  'auto.components.automations.AutomationDetail.precheckEnabled',
+                  'Enabled, {{timeout}}',
+                  { timeout: formatAutomationPrecheckTimeout(automation.precheck.timeoutSeconds) }
+                )
+              : translate('auto.components.automations.AutomationDetail.precheckNone', 'None')
           }
         />
         <div className="min-w-0">

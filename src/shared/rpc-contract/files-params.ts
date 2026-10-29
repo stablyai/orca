@@ -1,4 +1,5 @@
 import { PATH_EXISTENCE_BATCH_MAX } from '../path-existence-batch'
+import { FILE_READ_DIR_MAX_PAGE_ENTRIES } from '../file-dir-page'
 import { z } from 'zod'
 import { QUICK_OPEN_REMOTE_QUERY_MAX_CODE_UNITS } from '../quick-open-path-search'
 import { RUNTIME_NAVIGATION_TARGETS } from '../runtime-navigation'
@@ -17,6 +18,8 @@ export const FilePathSearch = WorktreeSelector.extend({
   excludePaths: z.array(z.string()).optional(),
   mode: z.literal('quick-open').optional()
 })
+
+export const ChatImageRead = WorktreeSelector.extend({ path: z.string().min(1).max(4096) })
 
 export const ResolveTerminalPath = WorktreeSelector.extend({
   pathText: z
@@ -74,6 +77,12 @@ export const FileTreePath = WorktreeSelector.extend({
     .unknown()
     .transform((v) => (typeof v === 'string' ? v : ''))
     .pipe(z.string())
+})
+
+/** With `after` or `limit` the reply is a `DirEntryPage`; without both it stays the bare entry array. */
+export const FileDirRead = FileTreePath.extend({
+  after: z.object({ name: z.string().min(1).max(4096), isDirectory: z.boolean() }).optional(),
+  limit: z.number().int().positive().max(FILE_READ_DIR_MAX_PAGE_ENTRIES).optional()
 })
 
 export const ServerDirectoryBrowse = z.object({

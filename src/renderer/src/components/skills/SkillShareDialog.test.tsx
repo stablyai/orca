@@ -245,6 +245,7 @@ describe('SkillShareDialog', () => {
     expect(screen.getByRole('button', { name: 'Publish new version' })).toBeTruthy()
     expect(skills.prepareShare).toHaveBeenCalledWith({
       skillIds: [skill.id],
+      skillDirectories: [skill.directoryPath],
       bundleName: skill.name,
       packageId: 'pkg_1'
     })
@@ -260,6 +261,7 @@ describe('SkillShareDialog', () => {
     await waitFor(() =>
       expect(skills.prepareShare).toHaveBeenCalledWith({
         skillIds: [skill.id],
+        skillDirectories: [skill.directoryPath],
         bundleName: skill.name
       })
     )
@@ -280,6 +282,7 @@ describe('SkillShareDialog', () => {
     expect(screen.getByRole('button', { name: 'Publish new version' })).toBeTruthy()
     expect(skills.prepareShare).toHaveBeenCalledWith({
       skillIds: [skill.id, secondSkill.id],
+      skillDirectories: [skill.directoryPath, secondSkill.directoryPath],
       bundleName: 'private-skill-and-1-more',
       packageId: 'pkg_1'
     })

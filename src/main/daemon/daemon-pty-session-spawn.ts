@@ -178,6 +178,8 @@ export abstract class DaemonPtySessionSpawn extends DaemonPtySpawnResult {
       // Keep an unverified recovered cwd; fall back when the folder probe proves it missing.
       return {
         ...restoreInfo,
+        // Why one probe for WSL too: a stat over \\wsl.localhost waits for a stopped distro and
+        // fails for reasons other than absence, which woke panes blank and at the root.
         cwd:
           recoveredCwd && (await probeRecoveredStartupCwdDirectory(recoveredCwd)) !== false
             ? recoveredCwd

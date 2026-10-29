@@ -5,6 +5,10 @@ import type {
 } from '../../shared/agent-session-wire'
 import { effectiveServiceTier } from '../../shared/structured-agent-session-effective-tier'
 import type { CodexAppServerConnection } from './app-server/codex-app-server-connection-types'
+import {
+  assertStructuredAgentResolutionCurrent,
+  type StructuredAgentResolutionOperation
+} from '../native-chat/structured-agent-command-resolution'
 import { structuredAgentSessionOptionModels } from '../native-chat/agent-session-wire/structured-agent-session-option-models'
 import {
   CODEX_DEFAULT_SERVICE_TIER,
@@ -86,7 +90,7 @@ function modelOption(value: unknown): AgentSessionModelOption | null {
   }
 }
 
-export type CodexSessionOptionCatalog = AgentSessionOptionsResult & { current: { model: string } }
+export type CodexSessionOptionCatalog = AgentSessionOptionsResult
 
 export type CodexModelCatalogListing = {
   models: AgentSessionModelOption[]
@@ -101,10 +105,15 @@ export async function fetchCodexModelCatalogListing(input: {
   timeoutMs?: number
   deadlineMs?: number
   cwd?: string
+  operation?: StructuredAgentResolutionOperation
 }): Promise<CodexModelCatalogListing> {
-  const deadline = input.deadlineMs === undefined ? null : Date.now() + input.deadlineMs
+  const deadline = Math.min(
+    input.operation?.deadline ?? Infinity,
+    input.deadlineMs === undefined ? Infinity : Date.now() + input.deadlineMs
+  )
   const remainingTimeout = (): number | undefined => {
-    if (deadline === null) {
+    assertStructuredAgentResolutionCurrent(input.operation)
+    if (!Number.isFinite(deadline)) {
       return input.timeoutMs
     }
     const remaining = deadline - Date.now()
@@ -124,6 +133,7 @@ export async function fetchCodexModelCatalogListing(input: {
         { timeoutMs: remainingTimeout() }
       )
     )
+    assertStructuredAgentResolutionCurrent(input.operation)
     if (!Array.isArray(response?.data)) {
       complete = false
     }
@@ -154,6 +164,7 @@ export async function fetchCodexModelCatalogListing(input: {
     remainingTimeout(),
     input.cwd
   )
+  assertStructuredAgentResolutionCurrent(input.operation)
   return {
     models: applyCodexConfiguredLaunchDefaults(parsedModels, configured),
     complete: complete && cursor === null && configured !== null,
@@ -186,10 +197,7 @@ export function composeCodexSessionOptionCatalog(
     input.current.model,
     (row) => row
   )
-  const model = input.current.model ?? models.find((entry) => entry.isDefault)?.id ?? models[0]?.id
-  if (!model) {
-    throw new Error('codex app-server returned no available models')
-  }
+  const model = input.current.model
   const reportedTier = input.reportedServiceTierKnown
     ? (input.reportedServiceTier ?? CODEX_DEFAULT_SERVICE_TIER)
     : undefined
@@ -216,28 +224,13 @@ export function composeCodexSessionOptionCatalog(
     models,
     ...(support ? { fastModeSupport: support } : {}),
     current: {
-      model,
+      ...(model ? { model } : {}),
       ...(input.current.effort ? { effort: input.current.effort } : {}),
       ...(serviceTier ? { serviceTier } : {}),
       ...(fastMode !== undefined ? { fastMode } : {}),
       ...(reportedTier !== undefined && input.current.serviceTier === undefined
         ? { confirmed: fastMode === undefined ? ['serviceTier'] : ['serviceTier', 'fastMode'] }
-        : {}),
-      ...(input.current.model ? {} : { defaulted: ['model'] as const })
+        : {})
     }
   }
-}
-
-export async function readCodexStructuredSessionOptionCatalog(input: {
-  connection: Pick<CodexAppServerConnection, 'request'>
-  current: { model?: string; effort?: string; serviceTier?: string }
-  reportedServiceTier?: string | null
-  reportedServiceTierKnown?: boolean
-  timeoutMs?: number
-}): Promise<CodexSessionOptionCatalog> {
-  const listing = await fetchCodexModelCatalogListing({
-    connection: input.connection,
-    ...(input.timeoutMs === undefined ? {} : { timeoutMs: input.timeoutMs })
-  })
-  return composeCodexSessionOptionCatalog(listing, input)
 }

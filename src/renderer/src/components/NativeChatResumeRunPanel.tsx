@@ -48,29 +48,20 @@ function finishedDescription(everyChatResumed: boolean, byUpdate: boolean): stri
 
 function runTitle(run: ResumeRun, total: number, resumed: number): React.ReactNode {
   if (!resumeRunInFlight(run)) {
-    if (total === 1) {
-      return translate(
-        'auto.components.NativeChatResumeRunPanel.resumedTitleOne',
-        'Resumed {{value0}} of 1 chat',
-        { value0: resumed }
-      )
-    }
     return translate(
-      'auto.components.NativeChatResumeRunPanel.resumedTitle',
-      'Resumed {{value0}} of {{value1}} chats',
-      { value0: resumed, value1: total }
+      'auto.components.NativeChatResumeRunPanel.resumedOfTotal',
+      'Resumed {{resumed}} of {{count}} chats',
+      { resumed, count: total, defaultValue_one: 'Resumed {{resumed}} of {{count}} chat' }
     )
   }
   return (
     <span className="flex items-center gap-2">
       <Loader2 className="size-4 animate-spin text-muted-foreground" />
-      {total === 1
-        ? translate('auto.components.NativeChatResumeRunPanel.resumingTitleOne', 'Resuming 1 chat')
-        : translate(
-            'auto.components.NativeChatResumeRunPanel.resumingTitle',
-            'Resuming {{value0}} chats',
-            { value0: total }
-          )}
+      {translate(
+        'auto.components.NativeChatResumeRunPanel.resumingCount',
+        'Resuming {{count}} chats',
+        { count: total, defaultValue_one: 'Resuming {{count}} chat' }
+      )}
     </span>
   )
 }

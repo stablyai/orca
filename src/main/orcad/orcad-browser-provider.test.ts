@@ -103,8 +103,9 @@ describe('ExternalChromiumBrowserProcess', () => {
     )
     await processHandle.start()
     const commands = processHandle.createCommands({
+      getRuntimeId: () => 'fixture-runtime',
       getAgentBrowserBridge: () => null,
-      resolveWorktreeSelector: async (selector) => ({ id: selector }),
+      resolveWorkspaceSelector: async (selector) => ({ id: selector }),
       resolveBrowserWorkspace: async (selector) => ({ id: selector }),
       resolveBrowserNetworkExecutionHost: () => {
         throw new Error('No browser network execution host')

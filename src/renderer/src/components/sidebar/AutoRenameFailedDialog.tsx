@@ -8,12 +8,18 @@ import {
   DialogTitle
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { translate } from '@/i18n/i18n'
+import { Trans } from 'react-i18next'
+import { i18n, translate } from '@/i18n/i18n'
+import { useAppStore } from '@/store'
+import { toast } from 'sonner'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
+import { cn } from '@/lib/utils'
 
 type AutoRenameFailedDialogProps = {
   open: boolean
   onOpenChange: (open: boolean) => void
   worktreeId: string
+  executionHostId?: ExecutionHostId
   worktreeName: string
   /** Persisted failure message — headline plus a sanitized output excerpt. */
   error: string
@@ -22,8 +28,39 @@ type AutoRenameFailedDialogProps = {
 export function AutoRenameFailedDialog({
   worktreeId,
   worktreeName,
+  executionHostId,
+  onOpenChange,
   ...props
 }: AutoRenameFailedDialogProps): React.JSX.Element {
+  const updateWorktreeMeta = useAppStore((s) => s.updateWorktreeMeta)
+  const [dismissing, setDismissing] = useState(false)
+  const dismissLabel = translate(
+    'auto.components.sidebar.AutoRenameFailedDialog.dismissError',
+    'Dismiss error'
+  )
+  const dismissingLabel = translate(
+    'auto.components.sidebar.AutoRenameFailedDialog.dismissing',
+    'Dismissing…'
+  )
+  const handleDismiss = async () => {
+    setDismissing(true)
+    try {
+      const result = await updateWorktreeMeta(
+        worktreeId,
+        { firstAgentMessageRenameError: null },
+        { executionHostId: executionHostId ?? 'local' }
+      )
+      if (result.ok) {
+        onOpenChange(false)
+      } else {
+        toast.error(result.error)
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : String(error))
+    } finally {
+      setDismissing(false)
+    }
+  }
   const readFullOutput = useCallback(
     () => window.api.worktrees.getBranchRenameFailureOutput({ worktreeId }),
     [worktreeId]
@@ -31,24 +68,53 @@ export function AutoRenameFailedDialog({
   return (
     <NameGenerationFailedDialog
       {...props}
+      onOpenChange={onOpenChange}
       title={translate(
         'auto.components.sidebar.AutoRenameFailedDialog.ca3b225195',
         'Branch auto-name failed'
       )}
       description={
-        <>
-          {translate(
-            'auto.components.sidebar.AutoRenameFailedDialog.ff62a18580',
-            "Orca couldn't generate a branch name for"
-          )}{' '}
-          <span className="font-medium text-foreground">{worktreeName}</span>{' '}
-          {translate(
-            'auto.components.sidebar.AutoRenameFailedDialog.3afcad0497',
-            'from the first agent message.'
+        <Trans
+          i18n={i18n}
+          defaults={translate(
+            'auto.components.sidebar.AutoRenameFailedDialog.couldNotGenerateBranchName',
+            "Orca couldn't generate a branch name for <name>{{name}}</name> from the first agent message."
           )}
-        </>
+          values={{ name: worktreeName }}
+          components={{ name: <span className="font-medium text-foreground" /> }}
+        />
       }
       readFullOutput={readFullOutput}
+      action={
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          disabled={dismissing}
+          aria-busy={dismissing}
+          aria-label={dismissing ? dismissingLabel : dismissLabel}
+          onClick={handleDismiss}
+        >
+          <span className="grid" aria-hidden="true">
+            <span
+              className={cn(
+                'col-start-1 row-start-1 transition-opacity duration-0',
+                dismissing ? 'opacity-0 delay-200' : 'opacity-100'
+              )}
+            >
+              {dismissLabel}
+            </span>
+            <span
+              className={cn(
+                'col-start-1 row-start-1 transition-opacity duration-0',
+                dismissing ? 'opacity-100 delay-200' : 'opacity-0'
+              )}
+            >
+              {dismissingLabel}
+            </span>
+          </span>
+        </Button>
+      }
     />
   )
 }
@@ -170,7 +236,7 @@ export function NameGenerationFailedDialog({
           </div>
         </div>
         <DialogFooter>
-          <Button type="button" variant="outline" size="sm" onClick={() => onOpenChange(false)}>
+          <Button type="button" variant="ghost" size="sm" onClick={() => onOpenChange(false)}>
             {translate('auto.components.sidebar.AutoRenameFailedDialog.aed1623b1e', 'Close')}
           </Button>
           {action}

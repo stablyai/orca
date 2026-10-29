@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, type Dispatch, type SetStateAction } from 'react'
+import { translate } from '../i18n/mobile-i18n'
 import type { DiffComment, MobileDiffReviewState } from '../../../src/shared/diff-comment-types'
 import type { ConnectionState } from '../transport/types'
 import type { RpcClient } from '../transport/rpc-client'
@@ -50,11 +51,18 @@ export function useMobileDiffReviewSendActions(input: SendActionsInput) {
     try {
       await clipboard.writeText(formatDiffComments(screenState.comments))
     } catch (err) {
-      setActionError(err instanceof Error ? err.message : 'Unable to copy the review notes')
+      setActionError(
+        err instanceof Error
+          ? err.message
+          : translate(
+              'session.useDiffReviewSendActions.copyFailed',
+              'Unable to copy the review notes'
+            )
+      )
       return
     }
     triggerSuccess()
-    setActionError('Review notes copied')
+    setActionError(translate('session.useDiffReviewSendActions.notesCopied', 'Review notes copied'))
   }, [clipboard, screenState, setActionError])
 
   const clearSentNotes = useCallback(async () => {
@@ -89,11 +97,15 @@ export function useMobileDiffReviewSendActions(input: SendActionsInput) {
   const sendPromptToTerminal = useCallback(
     async (terminal: string, comments: readonly DiffComment[]) => {
       if (!client || connState !== 'connected') {
-        throw new Error('Waiting for desktop...')
+        throw new Error(
+          translate('session.useDiffReviewSendActions.waitingForDesktop', 'Waiting for desktop...')
+        )
       }
       // Heal by terminal handle so native-chat image leftovers cannot join review notes.
       if (!(await healMobileNativeChatStaleInput({ client, terminal, deviceToken: null }))) {
-        throw new Error('Failed to send notes')
+        throw new Error(
+          translate('session.useDiffReviewSendActions.sendFailed', 'Failed to send notes')
+        )
       }
       const response = await reviewTerminalSendRun.request(client, {
         terminal,
@@ -103,14 +115,16 @@ export function useMobileDiffReviewSendActions(input: SendActionsInput) {
       let accepted
       accepted = interpretOrThrowRefusalMessage(
         () => reviewTerminalSendRun.interpret(response),
-        'Failed to send notes'
+        translate('session.useDiffReviewSendActions.sendFailed', 'Failed to send notes')
       )
       if (!accepted) {
-        throw new Error('Terminal input is locked')
+        throw new Error(
+          translate('session.useDiffReviewSendActions.inputLocked', 'Terminal input is locked')
+        )
       }
       await markNotesSent(comments)
       triggerSuccess()
-      setActionError('Review notes sent')
+      setActionError(translate('session.useDiffReviewSendActions.notesSent', 'Review notes sent'))
       closeSheet('send')
     },
     [client, connState, closeSheet, markNotesSent, setActionError]
@@ -121,7 +135,9 @@ export function useMobileDiffReviewSendActions(input: SendActionsInput) {
       // Report instead of throwing because the sheet drops the promise.
       if (!client || connState !== 'connected') {
         closeSheet('send')
-        setActionError('Waiting for desktop...')
+        setActionError(
+          translate('session.useDiffReviewSendActions.waitingForDesktop', 'Waiting for desktop...')
+        )
         return
       }
       if (agentLaunchInFlightRef.current) {
@@ -130,7 +146,9 @@ export function useMobileDiffReviewSendActions(input: SendActionsInput) {
       agentLaunchInFlightRef.current = true
       // Close the sheet before a long launch so progress stays visible.
       closeSheet('send')
-      setActionError('Starting an agent...')
+      setActionError(
+        translate('session.useDiffReviewSendActions.startingAgent', 'Starting an agent...')
+      )
       let result
       try {
         // Without an agent picker, use desktop’s default resolution with no saved recipe.
@@ -152,21 +170,36 @@ export function useMobileDiffReviewSendActions(input: SendActionsInput) {
       if (result.kind === 'prompt-not-sent') {
         // Notes stay unsent so Copy Notes and a later send still carry them.
         setActionError(
-          "The agent started, but the notes weren't sent. Use Copy Notes to paste them."
+          translate(
+            'session.useDiffReviewSendActions.promptNotSent',
+            "The agent started, but the notes weren't sent. Use Copy Notes to paste them."
+          )
         )
         return
       }
       await markNotesSent(comments)
       triggerSuccess()
       // Warnings describe successful launches, so append them to success feedback.
-      setActionError(result.warning ? `Review notes sent. ${result.warning}` : 'Review notes sent')
+      setActionError(
+        result.warning
+          ? translate(
+              'session.useDiffReviewSendActions.notesSentWithWarning',
+              'Review notes sent. {{warning}}',
+              {
+                warning: result.warning
+              }
+            )
+          : translate('session.useDiffReviewSendActions.notesSent', 'Review notes sent')
+      )
     },
     [client, closeSheet, connState, hostCapabilities, markNotesSent, setActionError, worktreeId]
   )
 
   const openSendSheet = useCallback(async () => {
     if (!client || connState !== 'connected') {
-      setActionError('Waiting for desktop...')
+      setActionError(
+        translate('session.useDiffReviewSendActions.waitingForDesktop', 'Waiting for desktop...')
+      )
       return
     }
     openSheet({ kind: 'send', load: { kind: 'loading' } })
@@ -177,13 +210,22 @@ export function useMobileDiffReviewSendActions(input: SendActionsInput) {
       let terminals
       terminals = interpretOrThrowRefusalMessage(
         () => reviewTerminalListRead.interpret(response),
-        'Unable to load agent sessions'
+        translate(
+          'session.useDiffReviewSendActions.loadSessionsFailed',
+          'Unable to load agent sessions'
+        )
       )
       updateSendSheet({ kind: 'ready', terminals })
     } catch (err) {
       updateSendSheet({
         kind: 'error',
-        message: err instanceof Error ? err.message : 'Unable to load agent sessions',
+        message:
+          err instanceof Error
+            ? err.message
+            : translate(
+                'session.useDiffReviewSendActions.loadSessionsFailed',
+                'Unable to load agent sessions'
+              ),
         terminals: []
       })
     }

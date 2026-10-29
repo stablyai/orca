@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils'
 import { WORKSPACE_FILE_PATH_MIME } from '@/lib/workspace-file-drag'
 import { writeWorkspaceFileDragSourceForWorkspace } from '@/lib/workspace-file-drag-source'
 import { translate } from '@/i18n/i18n'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
 import { ActionButton } from './action-button'
 import { ConflictBadge } from './conflict-badge'
@@ -69,6 +70,7 @@ export const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
   // When set, the row is a dirty submodule: clicking toggles lazy expansion instead of opening an uninformative gitlink diff.
   submoduleExpansion?: { isExpanded: boolean; onToggle: () => void }
 }): React.JSX.Element {
+  useUiLanguageRevision()
   const fileName = basename(entry.path)
   const parentDir = dirname(entry.path)
   const dirPath = parentDir === '.' ? '' : parentDir

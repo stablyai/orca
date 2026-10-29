@@ -1,4 +1,5 @@
 import type { ConnectionPresentationModel } from './use-mobile-tasks-connection-presentation'
+import { translate } from '../i18n/mobile-i18n'
 import {
   ScrollView,
   Pressable,
@@ -92,7 +93,9 @@ export function renderMobileTasksProviderControls(model: ConnectionPresentationM
             }}
           >
             <Text style={styles.segmentSecondaryText}>
-              {gitlabView === 'project' ? 'Project MRs' : 'My Todos'}
+              {gitlabView === 'project'
+                ? translate('tasks.providerControls.projectMergeRequests', 'Project MRs')
+                : translate('tasks.providerControls.myTodos', 'My Todos')}
             </Text>
           </Pressable>
           {gitlabView === 'project' && (
@@ -128,7 +131,9 @@ export function renderMobileTasksProviderControls(model: ConnectionPresentationM
           }}
         >
           <GitBranch size={14} color={colors.textSecondary} />
-          <Text style={styles.segmentSecondaryText}>Sort: {sortLabel}</Text>
+          <Text style={styles.segmentSecondaryText}>
+            {translate('tasks.providerControls.sort', 'Sort: {{sortLabel}}', { sortLabel })}
+          </Text>
         </Pressable>
       ) : null}
     </ScrollView>

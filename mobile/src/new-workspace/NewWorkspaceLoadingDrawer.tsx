@@ -12,6 +12,7 @@ import {
 } from 'react-native'
 import { BOTTOM_DRAWER_SHOW_DURATION_MS } from '../components/bottom-drawer-constants'
 import { bottomDrawerStyles } from '../components/bottom-drawer-styles'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useResponsiveLayout } from '../layout/responsive-layout'
 import { useWindowSafeAreaInsets } from '../layout/side-safe-area'
 import {
@@ -36,6 +37,7 @@ export function NewWorkspaceLoadingDrawer({
   download: ShellOverlayDownload | null
   onCancel: () => void
 }) {
+  const t = useMobileTranslation()
   useMobileColorScheme()
   const insets = useWindowSafeAreaInsets()
   const { isWideLayout, modalMaxWidth } = useResponsiveLayout()
@@ -85,7 +87,7 @@ export function NewWorkspaceLoadingDrawer({
         <Pressable
           style={bottomDrawerStyles.backdropPressable}
           onPress={onCancel}
-          accessibilityLabel="Cancel"
+          accessibilityLabel={t('common.cancel', 'Cancel')}
         />
       </Animated.View>
       <View
@@ -113,7 +115,10 @@ export function NewWorkspaceLoadingDrawer({
           </View>
           <View style={styles.body}>
             {download === null ? (
-              <ActivityIndicator color={colors.textSecondary} accessibilityLabel="Loading" />
+              <ActivityIndicator
+                color={colors.textSecondary}
+                accessibilityLabel={t('newWorkspace.loadingDrawer.loading', 'Loading')}
+              />
             ) : (
               <DownloadProgress download={download} />
             )}
@@ -125,6 +130,7 @@ export function NewWorkspaceLoadingDrawer({
 }
 
 function DownloadProgress({ download }: { download: ShellOverlayDownload }) {
+  const t = useMobileTranslation()
   useMobileColorScheme()
   return (
     <>
@@ -132,10 +138,12 @@ function DownloadProgress({ download }: { download: ShellOverlayDownload }) {
         feed={download.feed}
         receivedBytes={download.receivedBytes}
         totalBytes={download.totalBytes}
-        accessibilityLabel="Downloading"
+        accessibilityLabel={t('newWorkspace.loadingDrawer.downloading', 'Downloading')}
       />
       <Text style={styles.caption}>
-        Downloading… {downloadedMegabytesCaption(download.receivedBytes, download.totalBytes)}
+        {t('newWorkspace.loadingDrawer.downloadProgress', 'Downloading… {{progress}}', {
+          progress: downloadedMegabytesCaption(download.receivedBytes, download.totalBytes)
+        })}
       </Text>
     </>
   )

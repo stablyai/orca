@@ -5,6 +5,8 @@
 import { act, cleanup, render, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import type { AgentJournalTurnOutcome } from '../../../../shared/agent-session-journal-types'
+import { modelRefusalReadStates } from './structured-model-refusal.test-fixture'
+import { structuredAttentionReadObservation } from './structured-attention-read-observation'
 import type {
   AgentSessionStatusEvent,
   AgentSessionTurnCompletion,
@@ -61,6 +63,12 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
 }))
 
 import { StructuredAgentSessionAttentionBridge } from './StructuredAgentSessionAttentionBridge'
+import {
+  emitAgentSubjectReads,
+  subscribeAgentSubjectReads,
+  type AgentSubjectRead,
+  type StructuredSubjectRead
+} from '@/attention/agent-subject-read-actions'
 import { applyWebSessionTabsSnapshot } from '@/runtime/web-session-tabs-sync/snapshot-api'
 import { resolveNotificationTabOwner } from '@/attention/notification-subject-owner'
 import { resetStructuredAgentSessionTurnCompletionFeedsForTests } from '@/runtime/structured-agent-session-turn-completion-feed'
@@ -228,6 +236,133 @@ describe('StructuredAgentSessionAttentionBridge', () => {
     vi.unstubAllGlobals()
     resetStructuredAgentSessionTurnCompletionFeedsForTests()
     resetStructuredAgentSessionStatusFeedsForTests()
+  })
+
+  it.each([10, 100])(
+    'routes a Mark All Read batch across %i tabs without per-tab subject scans',
+    async (count) => {
+      const store = mocks.store
+      if (!store) {
+        throw new Error('test store was not initialized')
+      }
+      const rows = Array.from({ length: count }, (_, index) => {
+        const id = `read-tab-${index}`
+        const sessionId = `read-session-${index}`
+        return {
+          sessionId,
+          tab: chatTab({ id, entityId: sessionId }),
+          paneKey: structuredAgentSessionPaneKey(id, sessionId)
+        }
+      })
+      store.setState({ unifiedTabsByWorktree: { [WORKSPACE]: rows.map((row) => row.tab) } })
+      let comparisons = 0
+      const stopCounting = subscribeAgentSubjectReads((reads) => {
+        for (const read of reads) {
+          const subjectKey = read.subjectKey
+          Object.defineProperty(read, 'subjectKey', {
+            get: () => {
+              comparisons += 1
+              return subjectKey
+            }
+          })
+        }
+      })
+      try {
+        const view = render(<StructuredAgentSessionAttentionBridge />)
+        await waitFor(() => expect(mocks.subscribeCompletions).toHaveBeenCalledOnce())
+        act(() => {
+          for (const row of rows) {
+            hostStream()({
+              type: 'completion',
+              completion: {
+                ...turnCompletion(row.sessionId),
+                journalCursor: { epoch: 'read-epoch', sequence: 1 }
+              }
+            })
+          }
+          store.getState().acknowledgeAgents(
+            rows.map((row) => row.paneKey),
+            undefined,
+            'explicit'
+          )
+        })
+        expect(mocks.acknowledgeAttention.mock.calls).toEqual(
+          rows.map((row) => [
+            { kind: 'local' },
+            row.sessionId,
+            { epoch: 'read-epoch', sequence: 1 }
+          ])
+        )
+        expect(dismissed.flatMap(({ paneKeys }) => paneKeys ?? [])).toEqual(
+          expect.arrayContaining(rows.map((row) => row.paneKey))
+        )
+        expect(comparisons).toBeLessThanOrEqual(count)
+        view.unmount()
+        mocks.acknowledgeAttention.mockClear()
+        comparisons = 0
+        act(() =>
+          store.getState().acknowledgeAgents(
+            rows.map((row) => row.paneKey),
+            undefined,
+            'explicit'
+          )
+        )
+        expect(mocks.acknowledgeAttention).not.toHaveBeenCalled()
+        expect(comparisons).toBe(0)
+      } finally {
+        stopCounting()
+      }
+    }
+  )
+
+  it('keeps first-read semantics and retires a viewed model refusal on its owning target', async () => {
+    render(<StructuredAgentSessionAttentionBridge />)
+    await waitFor(() => expect(mocks.subscribeCompletions).toHaveBeenCalledOnce())
+    const { before, after } = modelRefusalReadStates()
+    const read: StructuredSubjectRead = {
+      sessionId: SESSION,
+      target: { kind: 'local' },
+      observedCursor: before.cursor,
+      observationKey: structuredAttentionReadObservation(before)
+    }
+    const valid: AgentSubjectRead = { subjectKey: CHAT_SUBJECT, structured: read }
+    const emit = (first: AgentSubjectRead): void => {
+      act(() => emitAgentSubjectReads([CHAT_SUBJECT], [first, valid], 'explicit'))
+    }
+    emit({ subjectKey: CHAT_SUBJECT })
+    emit({ subjectKey: CHAT_SUBJECT, structured: { ...read, sessionId: 'other-session' } })
+    emit({
+      subjectKey: CHAT_SUBJECT,
+      structured: { ...read, target: { kind: 'environment', environmentId: 'other-host' } }
+    })
+    expect(mocks.acknowledgeAttention).not.toHaveBeenCalled()
+    expect(dismissed).toEqual([])
+    const later: AgentSubjectRead = {
+      ...valid,
+      structured: {
+        ...read,
+        observedCursor: after.cursor,
+        observationKey: structuredAttentionReadObservation(after)
+      }
+    }
+    act(() => emitAgentSubjectReads([CHAT_SUBJECT], [valid, later], 'explicit'))
+    expect(mocks.acknowledgeAttention).toHaveBeenCalledExactlyOnceWith(
+      { kind: 'local' },
+      SESSION,
+      before.cursor
+    )
+    dismissed.length = 0
+    act(() => hostStream()(completionFrame(SESSION, 'failure')))
+    expect(onlyDispatch()).toMatchObject({ agentTurnOutcome: 'failure' })
+    expect(later.structured?.observationKey).not.toBe(read.observationKey)
+    act(() => emitAgentSubjectReads([CHAT_SUBJECT], [later]))
+    await waitFor(() => expect(mocks.acknowledgeAttention).toHaveBeenCalledTimes(2))
+    expect(mocks.acknowledgeAttention).toHaveBeenLastCalledWith(
+      { kind: 'local' },
+      SESSION,
+      after.cursor
+    )
+    expect(dismissed.flatMap(({ paneKeys }) => paneKeys ?? [])).toContain(CHAT_SUBJECT)
   })
 
   it('lights the unread indicators when the host reports a successful turn', async () => {

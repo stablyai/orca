@@ -4,7 +4,6 @@ import type { GlobalSettings } from './global-settings-types'
 import { isTuiAgent } from './tui-agent-config'
 import { YOLO_TUI_AGENT_ARGS, YOLO_TUI_AGENT_ENV } from './tui-agent-permissions'
 import {
-  agentPermissionArgs,
   readLaunchPermissionChoice,
   type AgentPermissionChoice,
   agentPermissionEnv,
@@ -13,7 +12,7 @@ import {
   resolveAgentPermission,
   sanitizeAgentPermissionUpdates
 } from './tui-agent-permission-choice'
-import { agentArgsSetPermission } from './tui-agent-permission-lift'
+import { projectAgentLaunchProfile } from './agent-launch-profile'
 import {
   resolveStartupShell,
   tokenizeStartupCommand,
@@ -169,42 +168,20 @@ function ownArgs(agent: string, settings: AgentLaunchProfileSettings | null | un
   return typeof value === 'string' ? value : undefined
 }
 
-/** Shared injection rule: CLI-owned permission text wins over an Orca choice. */
-export function agentPermissionArgsForLaunch(
-  agent: TuiAgent,
-  choice: AgentPermissionChoice,
-  text: string
-): string | null {
-  return choice === 'own'
-    ? ''
-    : agentArgsSetPermission(agent, text)
-      ? null
-      : agentPermissionArgs(agent, choice)
-}
-
+export { agentPermissionArgsForLaunch } from './agent-permission-args'
 /** Compose stored permission flags with user arguments, letting explicit user permission text win. Older host text already includes its flags. */
 export function resolveTuiAgentLaunchArgs(
   agent: string,
   settings: AgentLaunchProfileSettings | null | undefined,
   permissionChoice?: AgentPermissionChoice
 ): string {
-  const own = ownArgs(agent, settings)
-  if (
-    (!hasTypedAgentPermission(settings) && permissionChoice === undefined) ||
-    !isTuiAgent(agent)
-  ) {
-    return own ?? getTuiAgentDefaultArgs(agent)
+  if (!isTuiAgent(agent)) {
+    return ownArgs(agent, settings) ?? getTuiAgentDefaultArgs(agent)
   }
-  const user = own?.trim() ?? ''
-  const flag = agentPermissionArgsForLaunch(
-    agent,
-    permissionChoice ?? resolveAgentPermission(agent, settings).choice,
-    user
-  )
-  if (!flag) {
-    return user
-  }
-  return user ? `${flag} ${user}` : flag
+  return projectAgentLaunchProfile(agent, settings, {
+    target: 'terminal',
+    ...(permissionChoice ? { choices: { permissionMode: permissionChoice } } : {})
+  }).args
 }
 
 /** Legacy missing Arguments use Orca’s bypass default; Manual stores an explicit empty value that overrides it. */

@@ -55,7 +55,6 @@ export function HostRemoveDialog({
   const repos = useAppStore((s) => s.repos)
   const worktreesByRepo = useAppStore((s) => selectWorktreesByRepo(s))
   const detectedWorktreesByRepo = useAppStore((s) => selectDetectedWorktreesByRepo(s))
-  const sshConnectionStates = useAppStore((s) => s.sshConnectionStates)
 
   const sshResolution = useMemo(() => {
     if (target.kind !== 'ssh') {
@@ -64,10 +63,9 @@ export function HostRemoveDialog({
     return resolveSshHostRemoval({
       targetId: target.targetId,
       repos,
-      worktrees: getAllWorktreesFromState({ worktreesByRepo }),
-      sshConnectionStates
+      worktrees: getAllWorktreesFromState({ worktreesByRepo })
     })
-  }, [target, repos, worktreesByRepo, sshConnectionStates])
+  }, [target, repos, worktreesByRepo])
 
   const unsavedTargets = useMemo(() => {
     if (!sshResolution || !deleteWorkspaces) {
@@ -85,7 +83,6 @@ export function HostRemoveDialog({
 
   const workspaceCount = sshResolution?.workspaceCount ?? 0
   const hasWorkspaces = workspaceCount > 0
-  const isConnected = sshResolution?.isConnected ?? false
 
   // Drop orphaned label overrides so reused host IDs cannot inherit stale names.
   const dropOverridesForHost = (): void => {
@@ -120,7 +117,6 @@ export function HostRemoveDialog({
       if (target.kind === 'ssh' && deleteWorkspaces && sshResolution) {
         const { failedIds } = await clearSshHostWorkspaces(
           sshResolution,
-          isConnected ? 'delete-remote' : 'forget-local',
           confirmUnsavedDiscard(useAppStore.getState, unsavedTargets)
         )
         // Keep the host if workspace cleanup fails so stranded rows remain reachable for retry.
@@ -168,22 +164,11 @@ export function HostRemoveDialog({
     }
   }
 
-  const workspaceCountLabel =
-    workspaceCount === 1
-      ? translate('auto.components.sidebar.HostRemoveDialog.oneWorkspace', '1 workspace')
-      : translate(
-          'auto.components.sidebar.HostRemoveDialog.manyWorkspaces',
-          '{{count}} workspaces',
-          {
-            count: workspaceCount
-          }
-        )
-
   const description =
     target.kind === 'wsl'
       ? translate(
-          'auto.components.sidebar.HostRemoveDialog.wslHostEndsTerminals',
-          'Removes {{value0}} from Orca, ends its open terminals and stops Orca’s server in that distro. Files in the distro are untouched.',
+          'auto.components.sidebar.HostRemoveDialog.wslHostEndsTerminalsUnlessShared',
+          'Removes {{value0}} from Orca. Unless another Orca that’s open on this computer is using it, this also ends its open terminals and stops Orca’s server in that distro. Files in the distro are untouched.',
           { value0: label }
         )
       : target.kind === 'runtime'
@@ -193,27 +178,25 @@ export function HostRemoveDialog({
           )
         : hasWorkspaces
           ? translate(
-              'auto.components.sidebar.HostRemoveDialog.hostHasWorkspacesDefault',
-              'Removes {{value0}} and its credentials from this computer. Its {{value1}} stay in Orca — remote files are not touched.',
-              { value0: label, value1: workspaceCountLabel }
+              'auto.components.sidebar.HostRemoveDialog.hostKeepsWorkspaces',
+              'Removes {{host}} and its credentials from this computer. Its {{count}} workspaces stay in Orca — remote files are not touched.',
+              {
+                host: label,
+                count: workspaceCount,
+                defaultValue_one:
+                  'Removes {{host}} and its credentials from this computer. Its {{count}} workspace stays in Orca — remote files are not touched.'
+              }
             )
           : translate(
               'auto.components.sidebar.HostRemoveDialog.5e6f7a8b9c',
               'This removes the saved SSH host and its credentials from this computer. Remote files are not deleted.'
             )
 
-  // Connected hosts delete remote files; offline/ghost hosts only forget local records.
-  const deleteOptionLabel = isConnected
-    ? translate(
-        'auto.components.sidebar.HostRemoveDialog.alsoDeleteRemote',
-        'Also delete these {{value0}} on {{value1}}',
-        { value0: workspaceCountLabel, value1: label }
-      )
-    : translate(
-        'auto.components.sidebar.HostRemoveDialog.alsoForgetLocal',
-        'Also remove these {{value0}} from Orca',
-        { value0: workspaceCountLabel }
-      )
+  const deleteOptionLabel = translate(
+    'auto.components.sidebar.HostRemoveDialog.alsoRemoveWorkspaces',
+    'Also remove these {{count}} workspaces from Orca',
+    { count: workspaceCount, defaultValue_one: 'Also remove this workspace from Orca' }
+  )
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -267,15 +250,10 @@ export function HostRemoveDialog({
                   <span className="min-w-0 flex-1 text-xs leading-snug">
                     <span className="font-medium text-foreground">{deleteOptionLabel}</span>
                     <span className="mt-0.5 block text-muted-foreground">
-                      {isConnected
-                        ? translate(
-                            'auto.components.sidebar.HostRemoveDialog.alsoDeleteRemoteHint',
-                            'Permanently deletes the remote Git worktrees and their branches. Cannot be undone.'
-                          )
-                        : translate(
-                            'auto.components.sidebar.HostRemoveDialog.alsoForgetLocalHint',
-                            'Clears them from Orca only. Remote files, worktrees, and branches are left untouched.'
-                          )}
+                      {translate(
+                        'auto.components.sidebar.HostRemoveDialog.alsoForgetLocalHint',
+                        'Clears them from Orca only. Remote files, worktrees, and branches are left untouched.'
+                      )}
                     </span>
                   </span>
                 </div>

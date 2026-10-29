@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   applyStructuredAgentSessionOptions,
   createStructuredAgentSessionOptionState,
@@ -104,8 +104,10 @@ describe('structured option confirmation reaches the pill', () => {
     const adapter = await acquired(claude)
     await adapter.setOption({ sessionId: 'session-1', key: 'effort', value: 'low', fence: 7 })
 
-    const result = await adapter.readOptions({ sessionId: 'session-1', fence: 7 })
-    expect(result.current.confirmed).toContain('effort')
+    await vi.waitFor(async () => {
+      const result = await adapter.readOptions({ sessionId: 'session-1', fence: 7 })
+      expect(result.current.confirmed).toContain('effort')
+    })
   })
 
   it('treats a host that reports no confirmation as unconfirmed', () => {
@@ -179,7 +181,7 @@ describe('confirmation never outlives the write it belongs to', () => {
     } as unknown as ClaudeSession
 
     await setClaudeStructuredOption(session, { key: 'effort', value: 'low' }, undefined)
-    expect(session.confirmedOptions.has('effort')).toBe(true)
+    await vi.waitFor(() => expect(session.confirmedOptions.has('effort')).toBe(true))
 
     await setClaudeStructuredOption(session, { key: 'effort', value: 'max' }, undefined)
     expect(session.options.get('effort')).toBe('max')

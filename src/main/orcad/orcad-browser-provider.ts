@@ -18,6 +18,7 @@ export type OrcadBrowserProvider = {
   kind: 'electron' | 'chromium'
   factory: RuntimeBrowserCommandsFactory
   isAvailable(): boolean
+  supportsGoogleCookieClear?(): boolean
   stop(): Promise<void>
 }
 
@@ -166,6 +167,7 @@ async function startElectronServeProvider(
   })
   return {
     kind: 'electron',
+    supportsGoogleCookieClear: () => processHandle.supportsGoogleCookieClear(),
     factory: (host) => processHandle.createCommands(host),
     isAvailable: () => processHandle.isAvailable(),
     stop: async () => {

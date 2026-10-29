@@ -2,12 +2,18 @@ import { createElement, createRef, StrictMode, type ComponentProps, type ReactNo
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { Keyboard, type TextInput } from 'react-native'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import {
+  useMobileNativeChatDraft,
+  setMobileNativeChatDraftText
+} from './mobile-native-chat-draft-store'
 import { radii, spacing } from '../../../theme/mobile-theme'
 import { MobileNativeChatComposer as NativeChatComposer } from './MobileNativeChatComposer'
 import {
   findAllByHostType,
   findByHostType
 } from '../../../test-support/react-test-renderer-host-nodes'
+
+import { captureMobileNativeChatTextDestination } from './mobile-native-chat-draft-inputs'
 
 const getNoComposerEditGeneration = () => 0
 
@@ -108,6 +114,42 @@ describe('MobileNativeChatComposer', () => {
         String(node.type) === 'Pressable' && node.props.accessibilityLabel === 'Send message'
     )
   }
+
+  it('appends dictation until a selection is read, then replaces the selection it started on', async () => {
+    const scope = 'dictation-ordinary'
+    setMobileNativeChatDraftText(scope, 'Ok')
+    function Registered() {
+      const value = useMobileNativeChatDraft(scope)
+      return createElement(MobileNativeChatComposer, {
+        value,
+        draftScopeKey: scope,
+        onChangeText: (text) => setMobileNativeChatDraftText(scope, text),
+        onSend: async () => true,
+        sendSurfaceId: scope,
+        getSendCompletionGeneration: () => 0
+      })
+    }
+    await act(async () => {
+      renderer = create(createElement(Registered))
+    })
+    const input = () => findByHostType(renderer!.root, 'TextInput')
+    const say = (text: string) =>
+      act(() => void captureMobileNativeChatTextDestination()!.insert(text))
+    const select = (start: number, end: number) =>
+      input().props.onSelectionChange({ nativeEvent: { selection: { start, end }, text: 'Ok hi' } })
+    act(() => input().props.onFocus())
+    say('hi')
+    act(() => select(3, 5))
+    const destination = captureMobileNativeChatTextDestination()!
+    // A tap elsewhere while talking doesn't move where the words land.
+    act(() => {
+      select(0, 0)
+      destination.insert('there')
+    })
+    expect(input().props.value).toBe('Ok there')
+    say('now')
+    expect(input().props.value).toBe('Ok there now')
+  })
 
   it('reports an accepted send without owning route-scoped draft cleanup', async () => {
     const onChangeText = vi.fn()

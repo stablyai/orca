@@ -12,12 +12,16 @@ import { refreshInstalledOpenCodeStatusPlugins } from '../opencode/opencode-stat
 import type { ProfilePreferences } from '../persistence/loading-store/profile-preferences'
 import type { OrcadRuntimeCleanup } from './orcad-runtime-lifetime'
 
-/** Reconcile hooks at startup as well as setting changes so newly managed hosts report status immediately. */
+/**
+ * Reconcile hooks at startup as well as setting changes so newly managed hosts report status immediately.
+ * Call `readinessPublished` once readiness is out; work held off the ready path starts then.
+ */
 export function startOrcadManagedAgentHooks(
   store: Pick<ProfilePreferences, 'getSettings' | 'onSettingsChanged'>,
   setStatusHooksEnabled: (enabled: boolean) => void,
   registerCleanup: (cleanup: OrcadRuntimeCleanup) => void
-): void {
+): { readinessPublished: () => void } {
+  const published = Promise.withResolvers<void>()
   let stopping = false
   const agentView = getClaudeAgentViewService()
   void agentView.reconcile(store.getSettings())
@@ -35,6 +39,8 @@ export function startOrcadManagedAgentHooks(
   const shouldHydrateShellPath = getAppEnvironment().isPackaged()
   startCodexHooks({
     pathReady: shouldHydrateShellPath ? hydrateAgentCliShellPath() : Promise.resolve(),
+    // Every orcad host defers this; it pays off on WSL, where finding codex stats Windows-drive PATH.
+    startAfter: published.promise,
     isEnabled: () => isAgentStatusHooksEnabledForAgent(getSettings(), 'codex'),
     resolveLaunchHome: () => null
   })
@@ -50,4 +56,5 @@ export function startOrcadManagedAgentHooks(
   } catch (error) {
     console.warn('[orcad] could not refresh OpenCode status plugins:', error)
   }
+  return { readinessPublished: () => published.resolve() }
 }

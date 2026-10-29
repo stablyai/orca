@@ -18476,6 +18476,17 @@
                 "side": "modified"
               }
             ],
+            "diffCommentsBase": [
+              {
+                "body": "needs a test",
+                "createdAt": 0,
+                "filePath": "src/app.ts",
+                "id": "note-1",
+                "lineNumber": 4,
+                "worktreeId": "workspace-1",
+                "side": "modified"
+              }
+            ],
             "mobileDiffReview": {
               "completedAt": 1767225600000,
               "files": {
@@ -18532,6 +18543,17 @@
           "complete": "worktree.set#1",
           "params": {
             "diffComments": [
+              {
+                "body": "needs a test",
+                "createdAt": 0,
+                "filePath": "src/app.ts",
+                "id": "note-1",
+                "lineNumber": 4,
+                "worktreeId": "workspace-1",
+                "side": "modified"
+              }
+            ],
+            "diffCommentsBase": [
               {
                 "body": "needs a test",
                 "createdAt": 0,
@@ -21487,7 +21509,7 @@
           "reply": {
             "ok": true,
             "result": {
-              "cleared": true
+              "clear": { "handle": "terminal-1", "cleared": true }
             }
           }
         },

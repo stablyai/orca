@@ -1,4 +1,3 @@
-import type { ProjectCatalogReadState } from '@/store/project-host-setup-selector'
 import type { AppState } from '@/store/types'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import { CLIENT_PLATFORM } from '@/lib/new-workspace'
@@ -16,11 +15,11 @@ export function getAiVaultResumePlatform(
     | 'activeWorktreeId'
     | 'folderWorkspaces'
     | 'projectGroups'
+    | 'projects'
     | 'repos'
     | 'settings'
     | 'worktreesByRepo'
-  > &
-    ProjectCatalogReadState,
+  >,
   worktreeId?: string | null
 ): NodeJS.Platform {
   const targetWorktreeId = worktreeId ?? state.activeWorktreeId

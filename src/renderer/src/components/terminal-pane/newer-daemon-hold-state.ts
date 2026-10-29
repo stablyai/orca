@@ -97,14 +97,15 @@ export function announceReopenedTerminals(outcomes: readonly HeldPaneReopenOutco
   const resumed = outcomes.filter((outcome) => outcome.reopened && outcome.agentResumed).length
   toast.success(
     translate('terminal.newerDaemonBanner.reopened', 'Reopened {{count}} terminals', {
-      count: reopened
+      count: reopened,
+      defaultValue_one: 'Reopened {{count}} terminal'
     }),
     resumed > 0
       ? {
           description: translate(
             'terminal.newerDaemonBanner.resumed',
             '{{count}} agent sessions resumed.',
-            { count: resumed }
+            { count: resumed, defaultValue_one: '{{count}} agent session resumed.' }
           )
         }
       : undefined

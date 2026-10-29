@@ -68,6 +68,7 @@ const DEFAULT_DEPENDENCIES: WslOrcadIncumbentDependencies = {
   listen: (transport, remotePort, target) =>
     listenWslOrcadStdioBridge(transport, {
       environmentId: target.id,
+      distro: target.distro,
       remotePort,
       localPort: 0,
       label: `Orca server in WSL: ${target.label} (update check)`

@@ -1,5 +1,5 @@
 import type { HostedReviewProvider } from '../../../../../../shared/hosted-review'
-import { normalizeGitLabRemoteHost } from '../../../../../../shared/git-remote-host-alias'
+import { normalizeForgeWebHost } from '../../../../../../shared/git-remote-host-alias'
 
 export type ManualReviewProvider = Exclude<HostedReviewProvider, 'unsupported'>
 
@@ -48,20 +48,19 @@ function cleanPath(path: string): string | null {
 }
 
 function providerForHost(host: string): ManualReviewProvider | null {
-  const normalized = normalizeGitLabRemoteHost(host)
-  if (normalized === 'github.com' || normalized === 'ssh.github.com') {
+  if (host === 'github.com') {
     return 'github'
   }
-  if (normalized === 'gitlab.com') {
+  if (host === 'gitlab.com') {
     return 'gitlab'
   }
-  if (normalized === 'bitbucket.org') {
+  if (host === 'bitbucket.org') {
     return 'bitbucket'
   }
   if (
-    normalized === 'dev.azure.com' ||
-    normalized === 'ssh.dev.azure.com' ||
-    normalized.endsWith('.visualstudio.com')
+    host === 'dev.azure.com' ||
+    host === 'ssh.dev.azure.com' ||
+    host.endsWith('.visualstudio.com')
   ) {
     return 'azure-devops'
   }
@@ -154,7 +153,7 @@ export function parseRemoteRepo(
     ? trimmed.match(/^(?:[^@/:]+@)?([^:\s/]+):([^\s]+?)(?:\.git)?$/)
     : null
   if (scpLike) {
-    const host = normalizeGitLabRemoteHost(scpLike[1].toLowerCase())
+    const host = normalizeForgeWebHost(scpLike[1])
     const path = cleanPath(scpLike[2])
     if (!path) {
       return null
@@ -178,18 +177,14 @@ export function parseRemoteRepo(
       return null
     }
     const remoteHost = url.hostname.toLowerCase()
-    const host = normalizeGitLabRemoteHost(remoteHost)
+    const host = normalizeForgeWebHost(remoteHost)
     const hintedProvider = normalizeProvider(providerHint)
     const inferredProvider = providerForHost(host)
     const provider = hintedProvider ?? inferredProvider
-    let webOrigin: string
-    if (host === 'ssh.github.com') {
-      webOrigin = 'https://github.com'
-    } else if (remoteHost === 'altssh.gitlab.com') {
-      webOrigin = 'https://gitlab.com'
-    } else {
-      webOrigin = buildWebOrigin(protocol, url.host, url.hostname).replace(/\/+$/, '')
-    }
+    const webOrigin =
+      host === remoteHost
+        ? buildWebOrigin(protocol, url.host, url.hostname).replace(/\/+$/, '')
+        : `https://${host}`
     return {
       provider,
       path,

@@ -1,8 +1,10 @@
 import { isCurrentMobileDictationStart } from './mobile-dictation-session-state'
+import { translate } from '../i18n/mobile-i18n'
 import {
   dictationSessionCancel,
   dictationSessionStart
 } from '../dictation/mobile-dictation-operations'
+import { MOBILE_DICTATION_RECONNECT_GRACE_MS } from '../../../src/shared/rpc-contract/speech-params'
 import type { RpcClient } from '../transport/rpc-client'
 
 type StartMobileDictationDesktopSessionOptions = {
@@ -16,6 +18,16 @@ type StartMobileDictationDesktopSessionOptions = {
   setIdle: () => void
   commitRecordingStart: () => boolean
   rollbackRecordingStart: () => void
+}
+
+// Offline there is nothing to cancel against; the host drops a session its phone stops reaching, so never wait for a reconnect.
+export function cancelDesktopDictation(client: RpcClient, dictationId: string): Promise<void> {
+  return dictationSessionCancel
+    .request(client, { dictationId }, { failWhenDisconnected: true })
+    .then(
+      () => undefined,
+      () => undefined
+    )
 }
 
 function isCurrentStart(options: StartMobileDictationDesktopSessionOptions): boolean {
@@ -42,7 +54,7 @@ async function cancelStaleStart(options: StartMobileDictationDesktopSessionOptio
   const { client, dictationId } = options
   options.clearActiveId(dictationId)
   setIdleIfGenerationCurrent(options)
-  await dictationSessionCancel.request(client, { dictationId }).catch(() => undefined)
+  await cancelDesktopDictation(client, dictationId)
 }
 
 export async function startMobileDictationDesktopSession(
@@ -51,7 +63,12 @@ export async function startMobileDictationDesktopSession(
   const { client, dictationId } = options
 
   try {
-    const reply = await dictationSessionStart.request(client, { dictationId })
+    // The mic is already open, so a start stalled by a drop must give up rather than hold it.
+    const reply = await dictationSessionStart.request(
+      client,
+      { dictationId },
+      { timeoutMs: MOBILE_DICTATION_RECONNECT_GRACE_MS }
+    )
     dictationSessionStart.interpret(reply)
   } catch (err) {
     const wasCurrent = isCurrentStart(options)
@@ -64,7 +81,7 @@ export async function startMobileDictationDesktopSession(
       }
     }
     options.clearActiveId(dictationId)
-    await dictationSessionCancel.request(client, { dictationId }).catch(() => undefined)
+    await cancelDesktopDictation(client, dictationId)
     // Awaited cleanup may overlap a newer start; stale work must not reset or
     // report over the replacement session.
     const shouldReport = wasCurrent && canReportStartFailure(options)
@@ -84,7 +101,12 @@ export async function startMobileDictationDesktopSession(
   try {
     // Commit before returning so queued cancellation cannot resurrect recording after cleanup.
     if (!options.commitRecordingStart()) {
-      throw new Error('Failed to start microphone recording')
+      throw new Error(
+        translate(
+          'hooks.dictationDesktopStart.recordingFailed',
+          'Failed to start microphone recording'
+        )
+      )
     }
   } catch (err) {
     const wasCurrent = isCurrentStart(options)
@@ -96,7 +118,7 @@ export async function startMobileDictationDesktopSession(
       // Continue releasing independently owned resources after native audio failure.
     }
     options.clearActiveId(dictationId)
-    await dictationSessionCancel.request(client, { dictationId }).catch(() => undefined)
+    await cancelDesktopDictation(client, dictationId)
     const shouldReport = wasCurrent && canReportStartFailure(options)
     setIdleIfGenerationCurrent(options)
     if (!shouldReport) {

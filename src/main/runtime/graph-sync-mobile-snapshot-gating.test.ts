@@ -240,7 +240,7 @@ describe('graph-sync mobile snapshot gating', () => {
       })
     )
     const internals = runtime as unknown as RuntimeInternals
-    internals.offscreenBrowserBackend = { closeTab: vi.fn() }
+    internals.offscreenBrowserBackend = { closeTab: vi.fn(), ownsTab: () => true }
     internals.agentBrowserBridge = {
       tabList: vi.fn(() => ({
         tabs: [
@@ -423,7 +423,7 @@ describe('graph-sync mobile snapshot gating', () => {
       })
     )
     const internals = runtime as unknown as RuntimeInternals
-    internals.offscreenBrowserBackend = { closeTab: vi.fn() }
+    internals.offscreenBrowserBackend = { closeTab: vi.fn(), ownsTab: () => true }
     internals.agentBrowserBridge = {
       tabList: vi.fn(() => ({
         tabs: [

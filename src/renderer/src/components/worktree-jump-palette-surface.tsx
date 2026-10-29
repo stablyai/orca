@@ -183,21 +183,18 @@ export function WorktreeJumpPaletteSurface({
           : ''}
         {controller.deferredQuery.trim()
           ? translate(
-              'auto.components.WorktreeJumpPalette.bb72c08e63',
-              '{{value0}} results found{{value1}}',
-              {
-                value0: resultCount,
-                value1: controller.showCreateAction ? ', create worktree action available' : ''
-              }
+              'auto.components.WorktreeJumpPalette.resultsFound',
+              '{{count}} results found.',
+              { count: resultCount, defaultValue_one: '{{count}} result found.' }
             )
           : translate(
-              'auto.components.WorktreeJumpPalette.20af998bff',
-              '{{value0}} items available{{value1}}',
-              {
-                value0: resultCount,
-                value1: controller.showCreateAction ? ', create worktree action available' : ''
-              }
+              'auto.components.WorktreeJumpPalette.itemsAvailable',
+              '{{count}} items available.',
+              { count: resultCount, defaultValue_one: '{{count}} item available.' }
             )}
+        {controller.showCreateAction
+          ? ` ${translate('auto.components.WorktreeJumpPalette.createActionAvailable', 'Create worktree action available.')}`
+          : ''}
       </div>
     </CommandDialog>
   )

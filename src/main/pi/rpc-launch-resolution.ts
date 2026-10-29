@@ -18,6 +18,8 @@ import {
 import { AgentCliInstallationError } from '../native-chat/agent-cli-installation-error'
 import {
   resolveAgainAfterRefreshOnMissingProgram,
+  assertStructuredAgentResolutionCurrent,
+  type StructuredAgentResolutionOperation,
   resolveStructuredAgentCommand,
   type StructuredAgentCommandSettings
 } from '../native-chat/structured-agent-command-resolution'
@@ -111,6 +113,7 @@ export async function samePiDirectory(left: string, right: string): Promise<bool
 
 /** Resolve chat/catalog launches identically; refresh the environment once if Pi is missing. */
 export function resolvePiRpcInvocation(deps: {
+  operation?: StructuredAgentResolutionOperation
   accountDir: string
   resolveEnvironment: () => Promise<NodeJS.ProcessEnv>
   commandSettings?: StructuredAgentCommandSettings
@@ -127,11 +130,13 @@ export function resolvePiRpcInvocation(deps: {
           env[key] = value
         }
       }
+      assertStructuredAgentResolutionCurrent(deps.operation)
       env.PI_CODING_AGENT_DIR = deps.accountDir
       return { env, command: resolvePiRpcCommand(env, deps.commandSettings, deps.resolveCommand) }
     },
     deps.refreshEnvironmentAfterMiss,
-    { env: ({ env }) => env, cwd: deps.resolveWorkingDirectory }
+    { env: ({ env }) => env, cwd: deps.resolveWorkingDirectory },
+    deps.operation
   )
 }
 

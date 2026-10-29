@@ -45,6 +45,7 @@ export {
 export const AI_VAULT_METHODS = [
   defineMethod({
     name: 'aiVault.searchSessions',
+    requires: ['sessionSearch'],
     permission: 'workspace',
     params: AiVaultSearchRequestSchema,
     handler: (params, context) => {
@@ -60,6 +61,7 @@ export const AI_VAULT_METHODS = [
   }),
   defineMethod({
     name: 'aiVault.searchStatus',
+    requires: ['sessionSearch'],
     permission: 'workspace',
     params: AiVaultSearchStatusRequestSchema,
     handler: (params, { clientKind }) =>
@@ -67,6 +69,7 @@ export const AI_VAULT_METHODS = [
   }),
   defineMethod({
     name: 'aiVault.setSearchEnabled',
+    requires: ['sessionSearch'],
     permission: 'settings-write',
     params: AiVaultSetSearchEnabledParamsSchema,
     handler: async (params, { runtime, clientKind, pairedDeviceId }) => {
@@ -106,7 +109,6 @@ export const AI_VAULT_METHODS = [
             limit: params.unlimited ? undefined : params.limit,
             unlimited: params.unlimited,
             force: params.force,
-            historyOwnership: params.historyOwnership,
             scopePaths: params.scopePaths,
             includeAntigravityIdeSessions: params.includeAntigravityIdeSessions
           },

@@ -5,8 +5,8 @@ import type { NativeChatMessage } from '../../../../../src/shared/native-chat-ty
 import {
   createNativeChatReplyRevealTracker,
   trackNativeChatReplyRows
-} from '../../../../../src/shared/native-chat-reply-reveals'
-import { NATIVE_CHAT_TEXT_REVEAL_DELAY_MS } from '../../../../../src/shared/native-chat-text-reveal'
+} from '../../../../../src/shared/native-chat/transcript/native-chat-reply-reveals'
+import { NATIVE_CHAT_TEXT_REVEAL_DELAY_MS } from '../../../../../src/shared/native-chat/transcript/native-chat-text-reveal'
 import {
   MobileNativeChatReplyRevealsContext,
   type MobileNativeChatReplyReveals

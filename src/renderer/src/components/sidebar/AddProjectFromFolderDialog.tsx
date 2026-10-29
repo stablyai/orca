@@ -14,11 +14,13 @@ import { useAppStore } from '@/store'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import { finishProjectAddWithDefaultCheckout } from './project-added-default-checkout'
 import { translate } from '@/i18n/i18n'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { worktreeRefreshOptions } from './add-repo-runtime-owner'
 
 const NON_GIT_REPO_ERROR = 'Not a valid git repository'
 
 const AddProjectFromFolderDialog = React.memo(function AddProjectFromFolderDialog() {
+  useUiLanguageRevision()
   const activeModal = useAppStore((s) => s.activeModal)
   const modalData = useAppStore((s) => s.modalData)
   const closeModal = useAppStore((s) => s.closeModal)

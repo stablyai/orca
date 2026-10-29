@@ -1,3 +1,7 @@
+import type { AgentModelCatalogSource } from '../agent-model-catalog/agent-model-catalog-service-contract'
+// The attach's last commit: the child it spawned or kept becomes the session's, its sink the one
+// the session's events go through, and its open begins.
+
 import type { AttachedJournal } from './structured-agent-session-attach'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { AttachedOwner } from './structured-agent-session-attach-flow'
@@ -28,7 +32,17 @@ export type BoundAttach = {
   eventSink: DeferredStructuredAgentSessionEventSink
 }
 
-/** Read uncertain-rewind evidence outside commits so sends do not wait behind provider reads. */
+export type AttachAttempt = {
+  candidate: AttachCandidate | null
+  committed: boolean
+  catalogSource?: AgentModelCatalogSource
+  startup: StructuredAgentSessionStartupAttempt | null
+  bound: BoundAttach | null
+  rewind: StructuredRewindRecoveryEvidence
+}
+
+/** The provider's word on a rewind in doubt for the child this attach bound, read outside the
+ *  commits so no send waits behind it. */
 export function readBoundChildRewind(
   context: StructuredAgentSessionAttachContext,
   sessionId: string,
@@ -49,12 +63,7 @@ export async function publishAttachedChild(
   attached: AttachedJournal,
   input: {
     bound: BoundAttach | null
-    attempt: {
-      candidate: AttachCandidate | null
-      committed: boolean
-      startup: StructuredAgentSessionStartupAttempt | null
-      rewind: StructuredRewindRecoveryEvidence
-    }
+    attempt: AttachAttempt
     attemptSink: DeferredStructuredAgentSessionEventSink
     fenceBefore: number | null
     startedFor: string | undefined
@@ -77,6 +86,7 @@ export async function publishAttachedChild(
           generation: acquisitionGeneration,
           fence,
           phase: 'starting' as const,
+          catalogSource: attempt.catalogSource,
           heldSends: () => context.deps.adapter.heldSends?.(sessionId),
           exitObservation: eventSink.exitObservation,
           ...(startedFor === undefined ? {} : { startedFor }),
@@ -126,7 +136,13 @@ export async function publishAttachedChild(
     await context.endExitedChild(sessionId, indexed, structuredAgentSessionEndedEventExit(exited))
   } else if (attempt.startup) {
     if (candidate.child.phase === 'ready') {
-      noteStructuredAgentSessionProviderStarted(context.deps, sessionId)
+      noteStructuredAgentSessionProviderStarted(
+        context.deps,
+        sessionId,
+        () =>
+          context.sessions.get(sessionId)?.child === candidate.child &&
+          candidate.child.catalogSource?.() !== false
+      )
     } else {
       context.openProviderChild?.(sessionId, candidate.child)
     }

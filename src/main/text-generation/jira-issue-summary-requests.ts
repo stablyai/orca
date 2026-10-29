@@ -5,6 +5,10 @@ import type {
   JiraIssueSummaryGenerationCancellation,
   JiraIssueSummaryGenerationResult
 } from '../../shared/jira/jira-issue-summary-generation'
+import {
+  textGenerationFailure,
+  textGenerationFailureCodeFields
+} from '../../shared/text-generation-failure-copy'
 import { getStatus } from '../jira/client'
 import {
   prepareLocalCommitMessageAgentEnv,
@@ -48,10 +52,16 @@ export async function generateJiraIssueSummaryRequest(
   signal?: AbortSignal
 ): Promise<JiraIssueSummaryGenerationResult> {
   if (!args.description.trim()) {
-    return { success: false, error: 'Description is required.' }
+    return {
+      success: false,
+      ...textGenerationFailure('jiraDescriptionRequired')
+    }
   }
   if (!getStatus().sites?.some((site) => site.id === args.siteId)) {
-    return { success: false, error: 'Reconnect the selected Jira account on this host.' }
+    return {
+      success: false,
+      ...textGenerationFailure('jiraAccountDisconnected')
+    }
   }
   if (signal?.aborted) {
     return { success: false, error: 'Generation canceled.', canceled: true }
@@ -62,11 +72,19 @@ export async function generateJiraIssueSummaryRequest(
       activeRequest.siteId !== args.siteId ||
       activeRequest.draftId !== args.draftId
     ) {
-      return { success: false, error: 'A Jira title is already being generated in another draft.' }
+      return {
+        success: false,
+        ...textGenerationFailure('jiraSummaryBusyInOtherDraft')
+      }
     }
     cancelJiraIssueSummaryRequest(owner, activeRequest)
   }
-  const request = { owner, siteId: args.siteId, draftId: args.draftId, requestId: args.requestId }
+  const request = {
+    owner,
+    siteId: args.siteId,
+    draftId: args.draftId,
+    requestId: args.requestId
+  }
   activeRequest = request
   const cancel = (): void => cancelJiraIssueSummaryRequest(owner, request)
   signal?.addEventListener('abort', cancel, { once: true })
@@ -78,7 +96,7 @@ export async function generateJiraIssueSummaryRequest(
       null
     )
     if (!resolved.ok) {
-      return { success: false, error: resolved.error }
+      return { success: false, error: resolved.error, ...textGenerationFailureCodeFields(resolved) }
     }
     const localEnv = await prepareLocalCommitMessageAgentEnv(
       resolved.params.agentId,
@@ -91,7 +109,10 @@ export async function generateJiraIssueSummaryRequest(
       return { success: false, error: localEnv.error }
     }
     if (!getStatus().sites?.some((site) => site.id === args.siteId)) {
-      return { success: false, error: 'Reconnect the selected Jira account on this host.' }
+      return {
+        success: false,
+        ...textGenerationFailure('jiraAccountDisconnected')
+      }
     }
     const result = await generateJiraIssueSummaryFromContext(args, resolved.params, {
       kind: 'local',

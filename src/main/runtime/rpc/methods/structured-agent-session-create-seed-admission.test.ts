@@ -30,10 +30,11 @@ async function prepareWithSeed(
     runtimeKind: 'native' as const,
     ...(seed ? { options: seed } : {})
   }
+  const read = vi.fn(async () => listing(listingModels ?? []))
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the stub implements only the members prepare reaches.
   const host = {
     deps: {
-      modelCatalog: listingModels ? { read: vi.fn(async () => listing(listingModels)) } : undefined
+      modelCatalog: listingModels ? { read } : undefined
     }
   } as unknown as StructuredAgentSessionHost
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the stub implements only the members prepare reaches.
@@ -50,6 +51,7 @@ async function prepareWithSeed(
     caller: { callerKey: 'caller-1' },
     ...(options ? { options } : {})
   })
+  expect(read).not.toHaveBeenCalled()
   return prepared.attachParams.options
 }
 
@@ -60,19 +62,19 @@ const piRow = (efforts: readonly string[]) => ({
   efforts: efforts.map((value) => ({ value, label: value }))
 })
 
-it('moves a remembered effort the saved probe row lacks to its nearest listed level', async () => {
+it('keeps a remembered effort the saved probe row lacks without refusing create', async () => {
   // Pi's live menu offers xhigh where its --list-models probe stops at high.
   const options = await prepareWithSeed({ model: 'some/model', effort: 'xhigh' }, undefined, [
     piRow(['off', 'minimal', 'low', 'medium', 'high'])
   ])
-  expect(options).toEqual({ model: 'some/model', effort: 'high' })
+  expect(options).toEqual({ model: 'some/model', effort: 'xhigh' })
 })
 
-it('drops a remembered effort its saved row no longer admits', async () => {
+it('keeps a remembered effort when its saved row lists no efforts', async () => {
   const options = await prepareWithSeed({ model: 'some/model', effort: 'off' }, undefined, [
     piRow([])
   ])
-  expect(options).toEqual({ model: 'some/model' })
+  expect(options).toEqual({ model: 'some/model', effort: 'off' })
 })
 
 it('keeps an effort this launch named itself, even one its row does not admit', async () => {

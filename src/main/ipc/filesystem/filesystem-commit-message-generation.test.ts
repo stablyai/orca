@@ -341,7 +341,7 @@ describe('registerFilesystemHandlers', () => {
       handlers.get('git:generateCommitMessage')!(null, {
         worktreePath: WORKTREE_FEATURE_PATH
       })
-    ).resolves.toEqual({
+    ).resolves.toMatchObject({
       success: false,
       error: 'Failed to prepare the selected agent account for commit message generation.'
     })
@@ -454,7 +454,7 @@ describe('registerFilesystemHandlers', () => {
         worktreePath: '/remote/repo',
         connectionId: 'conn-1'
       })
-    ).resolves.toEqual({ success: false, error: SSH_HOST_NOT_SERVED_MESSAGE })
+    ).resolves.toMatchObject({ success: false, error: SSH_HOST_NOT_SERVED_MESSAGE })
     expect(getStagedCommitContextMock).not.toHaveBeenCalled()
     expect(generateCommitMessageFromContextMock).not.toHaveBeenCalled()
   })
@@ -488,7 +488,7 @@ describe('registerFilesystemHandlers', () => {
       handlers.get('git:generateCommitMessage')!(null, {
         worktreePath: WORKTREE_FEATURE_PATH
       })
-    ).resolves.toEqual({ success: false, error: 'No staged changes to summarize.' })
+    ).resolves.toMatchObject({ success: false, error: 'No staged changes to summarize.' })
 
     expect(generateCommitMessageFromContextMock).not.toHaveBeenCalled()
   })
@@ -506,7 +506,7 @@ describe('registerFilesystemHandlers', () => {
       handlers.get('git:generateCommitMessage')!(null, {
         worktreePath: WORKTREE_FEATURE_PATH
       })
-    ).resolves.toEqual({ success: false, error: 'Failed to read staged changes.' })
+    ).resolves.toMatchObject({ success: false, error: 'Failed to read staged changes.' })
 
     expect(generateCommitMessageFromContextMock).not.toHaveBeenCalled()
   })

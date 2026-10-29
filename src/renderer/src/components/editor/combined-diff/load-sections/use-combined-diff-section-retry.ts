@@ -115,7 +115,7 @@ export function useCombinedDiffSectionRetry({
         index,
         window.setTimeout(() => {
           reloadTimersRef.current.delete(index)
-          loadSchedulerRef.current.rerequest(index)
+          loadSchedulerRef.current.rerequest(index, { viewportOnly: true })
         }, COMBINED_DIFF_SECTION_RELOAD_COALESCE_MS)
       )
     },

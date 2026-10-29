@@ -183,6 +183,23 @@ try {
     Assert-TestEqual ([string]$tree.lines[0]) "0 row Invoice" "failed child read line"
     Assert-TestEqual $counter.findAll 2 "failed child read retries"
 
+    $counter = New-TestCounter
+    $tabs = @()
+    for ($index = 0; $index -lt 10; $index++) {
+        $value = if ($index -eq 9) { "1" } else { "" }
+        $tabs += New-TestElement -Role "tab item" -Name "Tab $index" -Value $value -Counter $counter -RuntimeId ($index + 10)
+    }
+    $buttons = @()
+    for ($index = 0; $index -lt 10; $index++) {
+        $buttons += New-TestElement -Role "button" -Name "Other $index" -Counter $counter -RuntimeId ($index + 30)
+    }
+    $tabList = New-TestElement -Role "tab" -Name "Tabs" -Children $tabs -Counter $counter -RuntimeId 2
+    $root = New-TestElement -Role "window" -Name "Browser" -Children (@($tabList) + $buttons) -Counter $counter
+    $tree = Render-OrcaTree $root $null $true
+    $indexes = @($tree.elements | ForEach-Object { [int]$_.index })
+    Assert-TestEqual (@($tree.elements | Where-Object { $_.name -eq "Tab 0" }).Count) 0 "compacted inactive tab"
+    Assert-TestEqual (@($indexes | Sort-Object -Unique).Count) $indexes.Count "compacted browser unique indexes"
+
     $originalMaxNodes = $MaxNodes
     try {
         $MaxNodes = 3

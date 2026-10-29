@@ -77,35 +77,22 @@ export function useWorktreeCardWorkspaceActions({
   const unreadTooltip = worktree.isUnread
     ? translate('auto.components.sidebar.useWorktreeCardWorkspaceActions.markRead', 'Mark read')
     : translate('auto.components.sidebar.useWorktreeCardWorkspaceActions.markUnread', 'Mark unread')
-  const lineageChildAriaLabel =
-    lineageChildCount === 1
-      ? lineageCollapsed
-        ? translate(
-            'auto.components.sidebar.WorktreeList.20bebf9c7f',
-            'Show {{value0}} child workspace',
-            { value0: lineageChildCount }
-          )
-        : translate(
-            'auto.components.sidebar.WorktreeList.e97297cb75',
-            'Hide {{value0}} child workspace',
-            { value0: lineageChildCount }
-          )
-      : lineageCollapsed
-        ? translate(
-            'auto.components.sidebar.WorktreeList.c1f4a31623',
-            'Show {{value0}} child workspaces',
-            { value0: lineageChildCount }
-          )
-        : translate(
-            'auto.components.sidebar.WorktreeList.0cd15956d4',
-            'Hide {{value0}} child workspaces',
-            { value0: lineageChildCount }
-          )
-  const childWorkspaceShortLabel = `${lineageChildCount} ${
-    lineageChildCount === 1
-      ? translate('auto.components.sidebar.WorktreeList.0c6ee14f23', 'child')
-      : translate('auto.components.sidebar.WorktreeList.045a8aed48', 'children')
-  }`
+  const lineageChildAriaLabel = lineageCollapsed
+    ? translate(
+        'auto.components.sidebar.WorktreeList.showChildWorkspaces',
+        'Show {{count}} child workspaces',
+        { count: lineageChildCount, defaultValue_one: 'Show {{count}} child workspace' }
+      )
+    : translate(
+        'auto.components.sidebar.WorktreeList.hideChildWorkspaces',
+        'Hide {{count}} child workspaces',
+        { count: lineageChildCount, defaultValue_one: 'Hide {{count}} child workspace' }
+      )
+  const childWorkspaceShortLabel = translate(
+    'auto.components.sidebar.WorktreeList.childCount',
+    '{{count}} children',
+    { count: lineageChildCount, defaultValue_one: '{{count}} child' }
+  )
   const showLineageChildChip = lineageChildCount > 0 && onLineageToggle !== undefined
 
   const handleDragStart = useCallback(

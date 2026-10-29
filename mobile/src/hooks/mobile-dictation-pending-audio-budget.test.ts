@@ -2,13 +2,13 @@ import { describe, expect, it } from 'vitest'
 import { MobileDictationPendingAudioBudget } from './mobile-dictation-pending-audio-budget'
 
 describe('MobileDictationPendingAudioBudget', () => {
-  it('caps pending raw PCM audio at five seconds', () => {
+  it('caps pending raw PCM audio at thirty seconds', () => {
     const budget = new MobileDictationPendingAudioBudget()
-    expect(budget.tryReserve(159_999)).toBe(true)
+    expect(budget.tryReserve(959_999)).toBe(true)
     expect(budget.tryReserve(1)).toBe(true)
-    expect(budget.pendingAudioBytes).toBe(160_000)
+    expect(budget.pendingAudioBytes).toBe(960_000)
     expect(budget.tryReserve(1)).toBe(false)
-    expect(budget.pendingAudioBytes).toBe(160_000)
+    expect(budget.pendingAudioBytes).toBe(960_000)
   })
 
   it('releases completed chunks and clamps stale releases after reset', () => {

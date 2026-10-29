@@ -16,7 +16,10 @@ import {
   failedAcquisitionSettlement
 } from './structured-agent-session-failed-create-refusal'
 import { withObservedProviderExit } from './structured-agent-session-failure-text'
-import { withMissingProviderExecutable } from '../../provider-process/provider-executable-missing'
+import {
+  withMissingProviderExecutable,
+  withProviderSpawnAbsence
+} from '../../provider-process/provider-executable-missing'
 import { providerDiagnostic, withProviderDiagnostic } from '../../../shared/agent-session-failure'
 import { resolveAgentSessionReplayOutcome } from './structured-agent-session-replay-outcome'
 
@@ -64,6 +67,12 @@ describe('a ledger replay names the details its first answer did', () => {
         withObservedProviderExit(withMissingProviderExecutable(new Error('exited (code 127)')))
       ),
       'cliMissing'
+    ],
+    [
+      new AgentSessionAcquisitionExitProvenError(
+        withProviderSpawnAbsence(new Error('spawn claude ENOENT'), 'launchFolder')
+      ),
+      'launchFolderMissing'
     ]
   ])('for a failed create: %s', (error, reason) => {
     const first = failedAcquisitionRefusal(error, CLAUDE_CREATE)

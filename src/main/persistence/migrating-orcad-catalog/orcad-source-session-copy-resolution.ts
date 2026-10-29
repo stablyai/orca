@@ -12,7 +12,7 @@ import {
 } from '../../../shared/workspace-session-stranded-partition-adoption'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 import {
-  createOrcadMigrationSourceScope,
+  createOrcadMigrationExportScope,
   orcadMigrationOwnerMatchesScope,
   orcadMigrationPartitionScope
 } from './orcad-source-scope'
@@ -31,7 +31,7 @@ export function desktopDrafts(
   catalog: OrcadMigrationCatalogPayload
 ): string[] {
   const scope = orcadMigrationPartitionScope(
-    createOrcadMigrationSourceScope({ source, catalog, repos: state.repos }),
+    createOrcadMigrationExportScope({ source, catalog, repos: state.repos }),
     LOCAL_EXECUTION_HOST_ID
   )
   return Object.entries(state.workspaceSession.openFilesByWorktree ?? {}).flatMap(

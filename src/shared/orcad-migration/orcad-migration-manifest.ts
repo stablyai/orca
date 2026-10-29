@@ -156,6 +156,8 @@ export type OrcadMigrationCatalogReferenceAbortResult = OrcadMigrationCatalogRef
   state: 'absent' | 'committed'
   aborted: boolean
   durableAbsent?: true
+  /** The receipt was flushed before this answer; older hosts never send it. */
+  durableCommitted?: true
 }
 
 export function orcadMigrationManifestHashInput(

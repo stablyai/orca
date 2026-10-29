@@ -217,8 +217,9 @@ export function registerPtyHandlers(
 
   const assertWorkspaceAcceptsNewPty = (
     worktreeId: string | undefined,
-    sessionId?: string
-  ): Promise<void> | void => assertWorkspaceAcceptsNewPtyImpl(store, worktreeId, sessionId)
+    sessionId?: string,
+    cwd?: string
+  ): Promise<void> | void => assertWorkspaceAcceptsNewPtyImpl(store, worktreeId, sessionId, cwd)
   const resolvePtySpawnStartupCwd = (
     worktreeId: string | undefined,
     cwd: string | undefined,

@@ -19,14 +19,16 @@ import {
   type NativeSyntheticEvent
 } from 'react-native'
 import { Check } from 'lucide-react-native'
-import { NATIVE_CHAT_TOOL_ACTIVITY_COPY } from '../../../../../src/shared/native-chat/tools/native-chat-tool-activity'
+import {
+  nativeChatToolActivityCopy,
+  nativeChatToolCallCount
+} from './native-chat-tool-activity-copy'
+import { nativeChatToolRunWords } from './native-chat-tool-run-words'
+import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { nativeChatToolLineIdentity } from '../../../../../src/shared/native-chat/tools/native-chat-tool-line-identity'
 import { pairNativeChatToolResults } from '../../../../../src/shared/native-chat/tools/native-chat-tool-pairing'
 import { nativeChatToolRunHeader } from '../../../../../src/shared/native-chat/tools/native-chat-tool-run-header'
-import {
-  NATIVE_CHAT_TOOL_RUN_SENTENCE_ENGLISH,
-  nativeChatToolRunSentence
-} from '../../../../../src/shared/native-chat/tools/native-chat-tool-run-sentence'
+import { nativeChatToolRunSentence } from '../../../../../src/shared/native-chat/tools/native-chat-tool-run-sentence'
 import { buildEditCards } from '../../../../../src/shared/native-chat/tools/native-chat-edit-cards'
 import type {
   NativeChatBlock,
@@ -56,10 +58,6 @@ import type {
 /** Desktop's 18rem: an opened run lists this much before it scrolls in place. */
 const MEMBERS_MIN_HEIGHT = 288
 const FOLLOW_REARM_PX = 24
-
-function fill(template: string, value: number): string {
-  return template.replaceAll('{{value0}}', String(value))
-}
 
 // Keep one header element so live-to-settled changes cannot remount it.
 function PulsingText({
@@ -198,6 +196,7 @@ export function ToolRun({
   onOpenFile
 }: MobileNativeChatToolRunProps): React.JSX.Element {
   useMobileColorScheme()
+  const t = useMobileTranslation()
   const runKey = disclosureId === undefined ? undefined : `run:${disclosureId}`
   const [open, setOpen] = useMobileNativeChatDisclosure(runKey, false)
   const asideCount = asides
@@ -214,18 +213,17 @@ export function ToolRun({
     [activeTurnIsWorking, awaitingAnswer, blocks, trailing]
   )
   const { live, latestCallLabel, iconName: headerIcon } = header
-  const sentence = nativeChatToolRunSentence(
-    header.work,
-    { live },
-    NATIVE_CHAT_TOOL_RUN_SENTENCE_ENGLISH
-  )
-  const fallbackLabel = fill(NATIVE_CHAT_TOOL_ACTIVITY_COPY[header.fallbackLabel], header.callCount)
+  const sentence = nativeChatToolRunSentence(header.work, { live }, nativeChatToolRunWords(t))
+  const fallbackLabel =
+    header.fallbackLabel === 'result'
+      ? nativeChatToolActivityCopy(t).result
+      : nativeChatToolCallCount(t, header.callCount)
   const marks = [
     header.failedCallCount > 0
-      ? fill(NATIVE_CHAT_TOOL_ACTIVITY_COPY.failedCount, header.failedCallCount)
+      ? nativeChatToolActivityCopy(t, { value0: header.failedCallCount }).failedCount
       : null,
     header.interruptedCallCount > 0
-      ? fill(NATIVE_CHAT_TOOL_ACTIVITY_COPY.interruptedCount, header.interruptedCallCount)
+      ? nativeChatToolActivityCopy(t, { value0: header.interruptedCallCount }).interruptedCount
       : null
   ].filter((mark) => mark !== null)
   const type = toolType(fontScale)

@@ -4,7 +4,8 @@ import {
   BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY,
   BROWSER_CLIENT_PAGE_METADATA_RUNTIME_CAPABILITY,
   BROWSER_NETWORK_EXECUTION_HOSTS_RUNTIME_CAPABILITY,
-  BROWSER_NETWORK_TUNNEL_RUNTIME_CAPABILITY
+  BROWSER_NETWORK_TUNNEL_RUNTIME_CAPABILITY,
+  BROWSER_SCREENCAST_RUNTIME_CAPABILITY
 } from '../../../shared/protocol-version'
 import type { KnownRuntimeEnvironment } from '../../../shared/runtime-environments'
 
@@ -65,7 +66,8 @@ describe('runtime environment browser client host handler', () => {
           BROWSER_CLIENT_PAGE_METADATA_RUNTIME_CAPABILITY,
           BROWSER_CLIENT_AUTOMATION_RUNTIME_CAPABILITY,
           BROWSER_NETWORK_TUNNEL_RUNTIME_CAPABILITY,
-          BROWSER_NETWORK_EXECUTION_HOSTS_RUNTIME_CAPABILITY
+          BROWSER_NETWORK_EXECUTION_HOSTS_RUNTIME_CAPABILITY,
+          BROWSER_SCREENCAST_RUNTIME_CAPABILITY
         ]
       },
       _meta: { runtimeId: 'runtime-a' }
@@ -106,7 +108,7 @@ describe('runtime environment browser client host handler', () => {
     })
   })
 
-  it('honors the default-on main-side kill switch only for new preparation', async () => {
+  it('honors the server-render setting for a host that streams, only for new preparation', async () => {
     register(false)
 
     const prepare = handler<{ selector: string }, { kind: 'server' }>(
@@ -114,7 +116,6 @@ describe('runtime environment browser client host handler', () => {
     )
 
     await expect(prepare(null, { selector: 'environment-a' })).resolves.toEqual({ kind: 'server' })
-    expect(getRuntimeEnvironmentStatusMock).not.toHaveBeenCalled()
     expect(startHostMock).not.toHaveBeenCalled()
     expect(closeHostMock).not.toHaveBeenCalled()
   })

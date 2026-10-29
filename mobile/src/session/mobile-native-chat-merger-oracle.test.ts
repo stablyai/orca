@@ -6,7 +6,7 @@ import {
   createNativeChatMerger,
   mergeNativeChatMessages,
   replaceList
-} from '../../../src/shared/native-chat-merge'
+} from '../../../src/shared/native-chat/native-chat-merge'
 
 function msg(id: string, overrides: Partial<NativeChatMessage> = {}): NativeChatMessage {
   return {

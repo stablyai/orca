@@ -36,10 +36,9 @@ describe('external automation action availability', () => {
           error: 'SSH target is not connected.'
         }),
         providerLabel: 'OpenClaw',
-        targetKindLabel: 'SSH host',
         sshStatus: 'disconnected'
       })
-    ).toBe('Connect this ssh host before managing OpenClaw automations.')
+    ).toBe('Connect this SSH host before managing OpenClaw automations.')
   })
 
   it('explains disabled SSH automation actions while the host is connecting', () => {
@@ -49,10 +48,9 @@ describe('external automation action availability', () => {
           target: { type: 'ssh', connectionId: 'devbox' },
           error: 'SSH target is not connected.'
         }),
-        targetKindLabel: 'SSH host',
         sshStatus: 'deploying-relay'
       })
-    ).toBe('Wait for this ssh host to finish connecting.')
+    ).toBe('Wait for this SSH host to finish connecting.')
   })
 
   it('explains disabled SSH automation actions when the remote source tool is missing', () => {

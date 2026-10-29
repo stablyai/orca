@@ -1,3 +1,8 @@
+import {
+  transportActionArgumentChoices,
+  demoteActionArgumentChoices,
+  type ActionArgumentChoices
+} from '../../../../shared/source-control-action-argument-choices'
 import type { Dispatch, SetStateAction } from 'react'
 import type {
   SourceControlActionId,
@@ -25,13 +30,23 @@ export function resetActionDraftLaunchPreferences(
   const draft = current[actionId]
   if (
     !draft ||
-    retireActionLaunchPreferences(draft.launchPreferences, captured, agentId) ===
-      draft.launchPreferences
+    ((!draft.argumentChoices || draft.argumentChoices.syntaxAgent === agentId) &&
+      retireActionLaunchPreferences(draft.launchPreferences, captured, agentId) ===
+        draft.launchPreferences)
   ) {
     return current
   }
-  const { launchPreferences: _oldAgent, ...text } = draft
-  return { ...current, [actionId]: text }
+  const text =
+    draft.argumentChoices && draft.argumentChoices.syntaxAgent !== agentId
+      ? demoteActionArgumentChoices({ ...draft, agentArgs: draft.agentArgs ?? undefined })
+      : draft
+  return {
+    ...current,
+    [actionId]: {
+      ...text,
+      launchPreferences: retireActionLaunchPreferences(draft.launchPreferences, captured, agentId)
+    }
+  }
 }
 
 export function patchActionTextDraft(
@@ -58,11 +73,15 @@ export function createRepoActionTextDraftEditors(
 ) {
   const updateActionLaunchPreferences = (
     actionId: SourceControlActionId,
-    value: SourceControlActionLaunchPreferences | undefined
+    value: SourceControlActionLaunchPreferences | undefined,
+    userArgs?: string,
+    argumentChoices?: ActionArgumentChoices | null
   ): void => {
     setActionTextDrafts((current) =>
       patchActionTextDraft(current, immediateRepoAiRef.current, actionId, {
-        launchPreferences: value
+        launchPreferences: value,
+        ...(argumentChoices !== undefined ? { argumentChoices: argumentChoices ?? undefined } : {}),
+        ...(userArgs !== undefined ? { agentArgs: userArgs } : {})
       })
     )
   }
@@ -82,7 +101,17 @@ export function createRepoActionTextDraftEditors(
   ): void => {
     setActionTextDrafts((current) => {
       const patched = patchActionTextDraft(current, immediateRepoAiRef.current, actionId, {
-        agentArgs: value
+        agentArgs: value,
+        argumentChoices: transportActionArgumentChoices(
+          {
+            ...(current[actionId] ??
+              readActionRecipeTextDraft(immediateRepoAiRef.current, actionId)),
+            agentArgs:
+              (current[actionId] ?? readActionRecipeTextDraft(immediateRepoAiRef.current, actionId))
+                .agentArgs ?? undefined
+          },
+          value
+        )
       })
       return commit
         ? {

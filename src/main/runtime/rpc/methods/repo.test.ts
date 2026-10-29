@@ -1,9 +1,9 @@
 import '../unused-default-rpc-methods.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from '../dispatcher'
-import type { RpcRequest } from '../core'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { REPO_METHODS } from './repo'
+import { makeRequest, repoDispatcher } from './repo-rpc.test-fixture'
 import {
   NATIVE_REMOTE_RUNTIME_CLIENT_CAPABILITIES,
   REPO_SEARCH_QUALIFIED_REFS_RUNTIME_CAPABILITY,
@@ -13,20 +13,6 @@ import {
 import { remoteRuntimeClientCapabilities } from '../../../../shared/remote-runtime/remote-runtime-client-capabilities'
 import { REPO_SEARCH_REFS_MAX_LIMIT } from '../../../../shared/repo-search-limits'
 import { SSH_TARGET_MANAGEMENT_RUNTIME_CAPABILITY } from '../../../../shared/ssh-target-management'
-
-function makeRequest(method: string, params?: unknown): RpcRequest {
-  return { id: 'req-1', authToken: 'tok', method, params }
-}
-
-function repoDispatcher(
-  runtime: Pick<OrcaRuntimeService, 'getRuntimeId'> & Partial<OrcaRuntimeService>
-) {
-  return new RpcDispatcher({
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: These RPC cases supply every runtime method their handlers and envelope access.
-    runtime: runtime as OrcaRuntimeService,
-    methods: REPO_METHODS
-  })
-}
 
 describe('repo RPC methods', () => {
   it('advertises qualified-ref support from hosts and native remote clients', () => {

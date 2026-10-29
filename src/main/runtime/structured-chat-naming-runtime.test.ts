@@ -84,6 +84,26 @@ function rig() {
 }
 
 describe('structured chat naming runtime', () => {
+  it.each(['grok', 'antigravity'] as const)(
+    'codes %s native naming failures without exposing provider text',
+    async (provider) => {
+      const state = rig()
+      const record = agentSessionRecordFixture()
+      record.provider = provider
+      for (const outcome of ['throw', 'empty'] as const) {
+        if (outcome === 'throw') {
+          mocks.native.mockRejectedValueOnce(new Error('private provider diagnostic'))
+        } else {
+          mocks.native.mockResolvedValueOnce('')
+        }
+        expect(await state.deps.generate(record, 'Repair login')).toEqual({
+          errorCode: `${provider}Failed`,
+          error: `${provider === 'grok' ? 'Grok' : 'Antigravity'} could not name this chat. Try generating the name again.`
+        })
+      }
+    }
+  )
+
   it.each([10, 100])(
     'scopes naming prompts with linear visits over %i retained items',
     async (count) => {

@@ -19,6 +19,8 @@ export type HookCheckResult = {
   hasHooks: boolean
   hooks: OrcaHooks | null
   mayNeedUpdate: boolean
+  /** A background check refused because the repo's WSL distro is stopped or didn't answer. */
+  unavailable?: 'wsl-distro-stopped' | 'wsl-distro-unverifiable'
 }
 
 export type IssueCommandReadResult = {
@@ -30,13 +32,19 @@ export type IssueCommandReadResult = {
   source: 'local' | 'shared' | 'none'
 }
 
+/** `background`: a render-driven probe that must not boot a stopped WSL distro (E9); launches omit it. */
 export async function checkRuntimeHooks(
   hostId: ExecutionHostId,
-  repoId: string
+  repoId: string,
+  options: { background?: boolean } = {}
 ): Promise<HookCheckResult> {
   const target = getHookInspectionTarget(hostId)
   if (target.kind !== 'environment') {
-    return window.api.hooks.check({ repoId, hostId })
+    return window.api.hooks.check({
+      repoId,
+      hostId,
+      ...(options.background ? { background: true } : {})
+    })
   }
   return callRuntimeRpc<HookCheckResult>(
     target,

@@ -3,6 +3,7 @@ import { getDefaultSettings } from '../../../../shared/constants'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { Repo } from '../../../../shared/repo-types'
 import { sourceControlActionRecipeMatchesTarget } from './source-control-action-recipe-match'
+import { resolveSourceControlActionRecipe } from '../../../../shared/source-control-ai-operation-policy'
 
 function settings(): GlobalSettings {
   const base = getDefaultSettings('/tmp')
@@ -24,6 +25,28 @@ function settings(): GlobalSettings {
 }
 
 describe('sourceControlActionRecipeMatchesTarget', () => {
+  it('compares the same live document after trimming its residual and gaps', () => {
+    const current = settings()
+    const recipe = {
+      agentId: 'codex' as const,
+      agentArgs: '',
+      argumentChoices: { syntaxAgent: 'codex' as const, nodes: [{ at: 0, text: '-c model=o3' }] }
+    }
+    current.sourceControlAi!.actions!.resolveConflicts = {
+      ...recipe,
+      agentArgs: '   ',
+      argumentChoices: { ...recipe.argumentChoices, nodes: [{ at: 3, text: '-c model=o3' }] }
+    }
+    expect(
+      sourceControlActionRecipeMatchesTarget({
+        actionId: 'resolveConflicts',
+        target: { type: 'global' },
+        recipe,
+        settings: current
+      })
+    ).toBe(true)
+  })
+
   it('returns true when the launch recipe matches the global saved recipe', () => {
     expect(
       sourceControlActionRecipeMatchesTarget({
@@ -188,6 +211,52 @@ it('distinguishes inheriting arguments from an explicit clear when deciding whet
       target: { type: 'global' },
       settings: base,
       recipe: { ...recipe, agentArgs: '' }
+    })
+  ).toBe(false)
+  const repo = {
+    sourceControlAi: {
+      actionOverrides: {
+        fixChecks: {
+          launchPreferences: { agentId: 'codex' as const, permissionMode: 'ask' as const }
+        }
+      }
+    }
+  }
+  base.sourceControlAi!.actions = {
+    fixChecks: {
+      ...recipe,
+      launchPreferences: {
+        agentId: 'codex',
+        modelSelection: { base: 'default', model: { agentId: 'codex', value: 'o3' } }
+      }
+    }
+  }
+  const selected = resolveSourceControlActionRecipe({ settings: base, repo, actionId: 'fixChecks' })
+  const changed = {
+    ...base,
+    sourceControlAi: {
+      ...base.sourceControlAi!,
+      actions: {
+        fixChecks: {
+          ...recipe,
+          launchPreferences: {
+            agentId: 'codex' as const,
+            modelSelection: {
+              base: 'default' as const,
+              model: { agentId: 'codex' as const, value: 'gpt-5.4' }
+            }
+          }
+        }
+      }
+    }
+  }
+  expect(
+    sourceControlActionRecipeMatchesTarget({
+      actionId: 'fixChecks',
+      target: { type: 'repo', repoId: 'r' },
+      settings: changed,
+      repo,
+      recipe: selected
     })
   ).toBe(false)
 })

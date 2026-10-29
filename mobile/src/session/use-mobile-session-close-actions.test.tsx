@@ -7,6 +7,19 @@ import type { MobileSessionContentCreateActionsModel } from './use-mobile-sessio
 import type { Terminal } from './mobile-session-route-types'
 import type { PendingSessionSelection } from './pending-session-selection'
 import { useMobileSessionCloseActions } from './use-mobile-session-close-actions'
+import {
+  closeMobileNativeChatEditInputs,
+  mobileNativeChatDraftDestination,
+  readMobileNativeChatDraftInputs,
+  updateMobileNativeChatDraftInputs
+} from './native-chat/composer/mobile-native-chat-draft-inputs'
+import {
+  mobileNativeChatLaunchDraftSeeds,
+  readMobileNativeChatDraftEditGeneration,
+  resetMobileNativeChatDraftStoreForTests,
+  setMobileNativeChatDraftText
+} from './native-chat/composer/mobile-native-chat-draft-store'
+import { mobileNativeChatScopeKey } from './native-chat/mobile-native-chat-scope-key'
 
 const initial: Terminal[] = ['a', 'b', 'c'].map((handle) => ({
   handle,
@@ -19,6 +32,7 @@ describe('legacy terminal close acknowledgments', () => {
   afterEach(() => {
     act(() => renderer?.unmount())
     renderer = null
+    resetMobileNativeChatDraftStoreForTests()
   })
 
   async function mount() {
@@ -34,10 +48,19 @@ describe('legacy terminal close acknowledgments', () => {
             typeof params.terminal === 'string'
           ) {
             acknowledgments.set(params.terminal, resolve)
+          } else if (
+            params &&
+            typeof params === 'object' &&
+            'tabId' in params &&
+            typeof params.tabId === 'string'
+          ) {
+            acknowledgments.set(params.tabId, resolve)
           }
         })
     )
     const subscribe = vi.fn()
+    const tabTombstones = new Map<string, number>()
+    const setSessionTabs = vi.fn()
     let current: {
       actions: ReturnType<typeof useMobileSessionCloseActions>
       terminals: Terminal[]
@@ -53,6 +76,7 @@ describe('legacy terminal close acknowledgments', () => {
       const activeHandleRef = useRef<string | null>('a')
       const pendingSelectionRef = useRef<PendingSessionSelection | null>(null)
       const scope = {
+        hostId: 'host',
         worktreeId: 'workspace',
         client,
         terminals,
@@ -61,12 +85,12 @@ describe('legacy terminal close acknowledgments', () => {
         activeHandleRef,
         setActiveHandle,
         pendingSelectionRef,
-        setSessionTabs: vi.fn(),
+        setSessionTabs,
         setFileDocs: vi.fn(),
         setMarkdownDocs: vi.fn(),
         sessionTabsRef: { current: [] },
         reconcileBufferedDraftsRef: { current: vi.fn() },
-        closedTabTombstonesRef: { current: new Map() },
+        closedTabTombstonesRef: { current: tabTombstones },
         clearTerminalLiveInputDefault: vi.fn(),
         setActiveSessionTabId: vi.fn(),
         activeSessionTabIdRef: { current: null },
@@ -112,14 +136,25 @@ describe('legacy terminal close acknowledgments', () => {
         return current
       },
       subscribe,
+      tabTombstones,
+      setSessionTabs,
       requests: client.sendRequest,
-      async acknowledge(handle: string, operation: Promise<void>) {
+      async acknowledge(
+        handle: string,
+        operation: Promise<void>,
+        accepted = true,
+        result: unknown = { closed: true, retirementConfirmed: true }
+      ) {
         await act(async () => {
           const resolve = acknowledgments.get(handle)
           if (!resolve) {
             throw new Error(`Missing close for ${handle}`)
           }
-          resolve({ id: `close-${handle}`, ok: true, result: {} })
+          resolve(
+            accepted
+              ? { id: `close-${handle}`, ok: true, result }
+              : { id: `close-${handle}`, ok: false, error: { code: 'refused', message: 'Retry' } }
+          )
           await operation
         })
       }
@@ -168,5 +203,146 @@ describe('legacy terminal close acknowledgments', () => {
     ])
     expect(harness.read().activeHandle).toBe('d')
     expect(harness.subscribe).not.toHaveBeenCalled()
+  })
+
+  it.each([10, 100])('releases input previews for %i confirmed closed tabs', async (count) => {
+    const harness = await mount()
+    const scopes = Array.from({ length: count }, (_, index) => `host\0workspace\0closed-${index}`)
+    const previewUri = `data:image/png;base64,${'a'.repeat(32 * 1024)}`
+    const destinations = scopes.map(mobileNativeChatDraftDestination)
+    const parked = mobileNativeChatScopeKey('host', 'workspace', 'parked')!
+    for (const scope of [...scopes, parked]) {
+      updateMobileNativeChatDraftInputs(scope, (current) => ({
+        ...current,
+        images: [{ id: scope, path: '/remote/image.png', previewUri }]
+      }))
+    }
+    for (let index = 0; index < count; index++) {
+      const id = `closed-${index}`
+      const operation = harness.read().actions.handleCloseSessionTab({
+        type: 'terminal',
+        id,
+        title: id,
+        isActive: false,
+        terminal: id
+      })
+      expect(readMobileNativeChatDraftInputs(scopes[index]!).images).toHaveLength(1)
+      await harness.acknowledge(id, operation)
+    }
+    for (let index = 0; index < count; index++) {
+      expect(readMobileNativeChatDraftInputs(scopes[index]!).images).toHaveLength(0)
+      expect(destinations[index]!.active).toBe(false)
+      updateMobileNativeChatDraftInputs(destinations[index]!, (current) => ({
+        ...current,
+        images: [{ id: 'late', path: '/late.png', previewUri }]
+      }))
+      expect(readMobileNativeChatDraftInputs(scopes[index]!).images).toHaveLength(0)
+    }
+    expect(readMobileNativeChatDraftInputs(parked).images).toHaveLength(1)
+  })
+
+  it.each([10, 100])(
+    'retires text, revisions and launch seeds for %i confirmed closed tabs',
+    async (count) => {
+      const harness = await mount()
+      const scopes = Array.from({ length: count }, (_, index) => `host\0workspace\0text-${index}`)
+      const parked = 'host\0workspace\0parked-text'
+      const text = 'draft '.repeat(2048)
+      for (const key of [...scopes, parked]) {
+        setMobileNativeChatDraftText(key, text)
+        mobileNativeChatLaunchDraftSeeds.set(key, { text, createdAt: 1 })
+      }
+      for (let index = 0; index < count; index++) {
+        const id = `text-${index}`
+        const operation = harness.read().actions.handleCloseSessionTab({
+          type: 'terminal',
+          id,
+          title: id,
+          isActive: false,
+          terminal: id
+        })
+        expect(readMobileNativeChatDraftEditGeneration(scopes[index]!)).toBe(1)
+        await harness.acknowledge(id, operation)
+      }
+      expect(scopes.filter((key) => readMobileNativeChatDraftEditGeneration(key) > 0)).toHaveLength(
+        0
+      )
+      expect(scopes.filter((key) => mobileNativeChatLaunchDraftSeeds.has(key))).toHaveLength(0)
+      expect(readMobileNativeChatDraftEditGeneration(parked)).toBe(1)
+      expect(mobileNativeChatLaunchDraftSeeds.get(parked)?.text).toBe(text)
+    }
+  )
+
+  it('preserves input previews when the host refuses a close', async () => {
+    const harness = await mount()
+    const scope = 'host\0workspace\0refused'
+    const destination = mobileNativeChatDraftDestination(scope)
+    updateMobileNativeChatDraftInputs(destination, (current) => ({ ...current, pending: 1 }))
+    setMobileNativeChatDraftText(scope, 'keep refused text')
+    mobileNativeChatLaunchDraftSeeds.set(scope, null)
+    const operation = harness.read().actions.handleCloseSessionTab({
+      type: 'terminal',
+      id: 'refused',
+      title: 'Refused',
+      isActive: false,
+      terminal: 'refused'
+    })
+    await harness.acknowledge('refused', operation, false)
+    expect(destination.active).toBe(true)
+    expect(readMobileNativeChatDraftInputs(scope).pending).toBe(1)
+    expect(readMobileNativeChatDraftEditGeneration(scope)).toBe(1)
+    expect(mobileNativeChatLaunchDraftSeeds.has(scope)).toBe(true)
+  })
+
+  it.each([
+    ['refused', { closed: true, refused: true, refusalReason: 'unknown-liveness' }],
+    ['refused receipt', { closed: true, refused: true, retirementConfirmed: true }],
+    ['delegated', { closed: true }],
+    ['legacy', {}],
+    ['invalid receipt', { closed: false, retirementConfirmed: true }]
+  ] as const)('preserves every draft owner for a %s close reply', async (kind, result) => {
+    const harness = await mount()
+    const key = 'host\0workspace\0uncertain'
+    const destination = mobileNativeChatDraftDestination(key)
+    updateMobileNativeChatDraftInputs(destination, (current) => ({ ...current, pending: 1 }))
+    const inputs = readMobileNativeChatDraftInputs(key)
+    setMobileNativeChatDraftText(key, 'keep this draft')
+    mobileNativeChatLaunchDraftSeeds.set(key, null)
+    const operation = harness.read().actions.handleCloseSessionTab({
+      type: 'terminal',
+      id: 'uncertain',
+      title: 'Uncertain',
+      isActive: false,
+      terminal: 'term'
+    })
+    await harness.acknowledge('uncertain', operation, true, result)
+    expect(destination.active).toBe(true)
+    expect(readMobileNativeChatDraftInputs(key)).toBe(inputs)
+    expect(readMobileNativeChatDraftEditGeneration(key)).toBe(1)
+    expect(mobileNativeChatLaunchDraftSeeds.has(key)).toBe(true)
+    if (kind.startsWith('refused')) {
+      expect(harness.tabTombstones.has('uncertain')).toBe(false)
+      expect(harness.setSessionTabs).not.toHaveBeenCalled()
+    }
+  })
+
+  it('retires uploads handed back from a queued editor when their destination tab closes', async () => {
+    const harness = await mount()
+    const destination = mobileNativeChatDraftDestination('queued-editor')
+    const scope = 'host\0workspace\0closed'
+    closeMobileNativeChatEditInputs('queued-editor', scope)
+    expect(destination.active).toBe(true)
+    expect(destination.scope).toBe(scope)
+    const operation = harness.read().actions.handleCloseSessionTab({
+      type: 'terminal',
+      id: 'closed',
+      title: 'Closed',
+      isActive: false,
+      terminal: 'closed'
+    })
+    await harness.acknowledge('closed', operation)
+    expect(destination.active).toBe(false)
+    updateMobileNativeChatDraftInputs(destination, (current) => ({ ...current, pending: 1 }))
+    expect(readMobileNativeChatDraftInputs(scope).pending).toBeUndefined()
   })
 })

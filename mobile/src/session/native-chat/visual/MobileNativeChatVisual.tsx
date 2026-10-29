@@ -11,8 +11,7 @@ import { MOBILE_NATIVE_CHAT_VISUAL_INITIAL_HEIGHT } from './mobile-native-chat-v
 import { MobileNativeChatVisualFrame } from './MobileNativeChatVisualFrame'
 import { useMobileNativeChatVisual } from './use-mobile-native-chat-visual'
 import type { MobileNativeChatVisualRender } from './mobile-native-chat-visual-context'
-
-const DEFAULT_TITLE = 'Visualization'
+import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 
 function MobileNativeChatVisualPlaceholder() {
   useMobileColorScheme()
@@ -43,10 +42,11 @@ export const MobileNativeChatVisual = memo(function MobileNativeChatVisual({
   source: MobileNativeChatVisualSource
 }) {
   useMobileColorScheme()
+  const t = useMobileTranslation()
   const { state, retry } = useMobileNativeChatVisual(source, directive.file)
   const [frameFailed, setFrameFailed] = useState(false)
   const [fullscreen, setFullscreen] = useState(false)
-  const title = directive.title ?? DEFAULT_TITLE
+  const title = directive.title ?? t('chat.nativeChatVisual.defaultTitle', 'Visualization')
   const onFrameFailed = useCallback(() => {
     setFrameFailed(true)
     setFullscreen(false)
@@ -65,11 +65,13 @@ export const MobileNativeChatVisual = memo(function MobileNativeChatVisual({
       <Pressable
         onPress={onRetry}
         accessibilityRole="button"
-        accessibilityLabel="Visualization unavailable"
-        accessibilityHint="Tries to load it again"
+        accessibilityLabel={t('chat.nativeChatVisual.unavailable', 'Visualization unavailable')}
+        accessibilityHint={t('chat.nativeChatVisual.retryHint', 'Tries to load it again')}
         style={styles.unavailable}
       >
-        <Text style={styles.unavailableText}>Visualization unavailable</Text>
+        <Text style={styles.unavailableText}>
+          {t('chat.nativeChatVisual.unavailable', 'Visualization unavailable')}
+        </Text>
       </Pressable>
     )
   }
@@ -84,7 +86,13 @@ export const MobileNativeChatVisual = memo(function MobileNativeChatVisual({
       <Pressable
         onPress={() => setFullscreen(true)}
         accessibilityRole="button"
-        accessibilityLabel={`Open ${title} full screen`}
+        accessibilityLabel={t(
+          'chat.nativeChatVisual.openFullscreen',
+          'Open {{title}} full screen',
+          {
+            title
+          }
+        )}
         hitSlop={8}
         style={styles.openButton}
       >
@@ -114,6 +122,7 @@ function MobileNativeChatVisualFullscreen({
   onFailed: () => void
 }) {
   useMobileColorScheme()
+  const t = useMobileTranslation()
   const insets = useWindowSafeAreaInsets()
   return (
     <Modal visible animationType="slide" presentationStyle="fullScreen" onRequestClose={onClose}>
@@ -135,7 +144,7 @@ function MobileNativeChatVisualFullscreen({
           <Pressable
             onPress={onClose}
             accessibilityRole="button"
-            accessibilityLabel="Close"
+            accessibilityLabel={t('common.close', 'Close')}
             hitSlop={8}
             style={styles.closeButton}
           >

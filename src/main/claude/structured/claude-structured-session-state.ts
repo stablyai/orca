@@ -173,6 +173,7 @@ export type ClaudeSession = {
   fastModeReportedMutation?: number
   fastModeState?: AgentSessionFastModeState
   fastModeDisabledReason?: string
+  fastModeDisabledMutation?: number
   fastModePerSessionOptIn?: boolean
   /** Mutation sequence of the last model report; newer writes outrank it. */
   reportedModelMutation: number
@@ -180,13 +181,9 @@ export type ClaudeSession = {
   confirmedOptions: Set<string>
   /** Inputs carried by launch or accepted controls, independent of provider reports. */
   appliedInputOptions: Map<string, string>
-  /** The model the child was launched with, as `--model`; null when it runs the CLI's own. */
-  launchedModel: string | null
   /** What Orca put on this process's command line, and the first root init's answer; this process only. */
   launchIntent?: { permissionMode?: string; model?: string }
   firstRootInit?: { permissionMode: string | null }
-  /** A launched model the CLI answered `model_not_found` for; reported until a new pick. */
-  retiredModel?: string
   /** Fast was omitted from launch settings and must be applied before message input. */
   fastModeAtStart: boolean
   /** CLI-advertised protocol capabilities from init; gates interrupt-receipt handling. */
@@ -198,6 +195,7 @@ export type ClaudeSession = {
   /** Monotonic fence advanced when a dispatch starts, including unresolved dispatches. */
   dispatchSequence: number
   /** Fences overlapping option writes so a late completion cannot restore stale state. */
+  settingsObservation?: { pending: boolean }
   optionMutationSequence: number
   /** Latest resume point written at a turn end; close and exit persist after it settles. */
   resumePointWrite?: { leafUuid: string; settled: Promise<void> }
@@ -349,15 +347,6 @@ export async function cancelClaudeAcquisitionAttempt(
     exitProven: () => attempt.exitProven,
     finished: attempt.finished
   })
-}
-
-export type ClaudeSessionAcquisitionInput = {
-  input: SessionAdapter.StructuredAgentSessionAcquireInput
-  deps: ClaudeStructuredSessionAdapterDeps
-  sessions: Map<string, ClaudeSession>
-  acquisitions: ClaudeAcquisitionRegistry
-  exits: Map<string, ClaudeSessionExit>
-  callbacks: ClaudeAcquireCallbacks
 }
 
 export type ClaudeAcquireCallbacks = {

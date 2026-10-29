@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { ChevronLeft, Globe } from 'lucide-react-native'
 import Svg, { Path } from 'react-native-svg'
 import { OrcaLogo } from '../components/OrcaLogo'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { colors, spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
@@ -35,11 +36,12 @@ export default function AboutScreen({
   openExternal: (url: string) => Promise<unknown>
   versionLabel: string
 }) {
+  const t = useMobileTranslation()
   useMobileColorScheme()
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState(false)
   const openLink = (url: string) => {
-    setError(null)
-    void openExternal(url).catch(() => setError('Could not open the link. Try again.'))
+    setError(false)
+    void openExternal(url).catch(() => setError(true))
   }
   const insets = useSafeAreaInsets()
 
@@ -49,25 +51,27 @@ export default function AboutScreen({
         <Pressable
           style={styles.backButton}
           accessibilityRole="button"
-          accessibilityLabel="Back"
+          accessibilityLabel={t('common.back', 'Back')}
           onPress={onBack}
         >
           <ChevronLeft size={22} color={colors.textSecondary} />
         </Pressable>
-        <Text style={styles.heading}>About</Text>
+        <Text style={styles.heading}>{t('settings.aboutScreen.title', 'About')}</Text>
       </View>
 
       <View style={styles.brand}>
         <OrcaLogo size={28} />
         <Text style={styles.brandName}>Orca</Text>
-        <Text style={styles.brandSub}>Open-source agent IDE for 100x builders</Text>
+        <Text style={styles.brandSub}>
+          {t('settings.aboutScreen.tagline', 'Open-source agent IDE for 100x builders')}
+        </Text>
       </View>
 
       <View style={styles.section}>
         <Pressable
           style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
           accessibilityRole="button"
-          accessibilityLabel="Orca website"
+          accessibilityLabel={t('settings.aboutScreen.website', 'Orca website')}
           onPress={() => openLink('https://onOrca.dev')}
         >
           <Globe size={16} color={colors.textSecondary} />
@@ -77,7 +81,7 @@ export default function AboutScreen({
         <Pressable
           style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
           accessibilityRole="button"
-          accessibilityLabel="Orca source code"
+          accessibilityLabel={t('settings.aboutScreen.sourceCode', 'Orca source code')}
           onPress={() => openLink('https://github.com/stablyai/orca')}
         >
           <GithubIcon />
@@ -87,7 +91,7 @@ export default function AboutScreen({
         <Pressable
           style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
           accessibilityRole="button"
-          accessibilityLabel="Orca on X"
+          accessibilityLabel={t('settings.aboutScreen.socialProfile', 'Orca on X')}
           onPress={() => openLink('https://x.com/orca_build')}
         >
           <XIcon />
@@ -98,7 +102,7 @@ export default function AboutScreen({
       <Text style={styles.versionText}>{versionLabel}</Text>
       {error && (
         <Text accessibilityRole="alert" style={styles.errorText}>
-          {error}
+          {t('settings.aboutScreen.openLinkFailed', 'Could not open the link. Try again.')}
         </Text>
       )}
     </View>

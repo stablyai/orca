@@ -293,6 +293,30 @@ describe('the latest request and its verdict', () => {
 })
 
 describe('the sidebar verdict agrees with the rejection classifier', () => {
+  it('replaces the prior success with the model rejection verdict', () => {
+    const items = [
+      turn('prior', 1, { state: 'completed', outcome: 'success', completedAt: 10 }),
+      userEntry('m1', 2)
+    ]
+    const submissions = [
+      sent('m1', {
+        dispatchState: 'rejected',
+        reason: "Grok couldn't use retired. Pick another model and send again.",
+        rejection: { kind: 'modelUnavailable' }
+      })
+    ]
+    expect(latestStructuredAgentSessionRequest(items, submissions)).toMatchObject({
+      kind: 'refused-send',
+      outcome: 'failure',
+      id: agentJournalSubmissionKey('m1')
+    })
+    expect(hasStructuredAgentSessionRequest([items[1]!], submissions)).toBe(true)
+    expect(projectStructuredAgentSessionStatusSummary(items, submissions)).toMatchObject({
+      status: 'idle',
+      turnOutcome: 'failure'
+    })
+  })
+
   // A sentence as the reason, so only the typed fact can make a kind read as no verdict.
   const typed = AGENT_SESSION_FAILURE_KINDS.filter(isSubmissionRejectionKind).map((kind) => ({
     name: `typed ${kind}`,

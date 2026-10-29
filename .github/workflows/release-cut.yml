@@ -1217,7 +1217,7 @@ jobs:
         uses: actions/cache@v5
         with:
           path: ~/.cache/electron-builder
-          key: electron-builder-linux-${{ hashFiles('pnpm-lock.yaml') }}
+          key: electron-builder-linux-${{ steps.eb-versions.outputs.versions }}
           # The release cache above restores the same tools, so this only needs to save on a miss.
           lookup-only: true
 

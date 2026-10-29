@@ -2,6 +2,7 @@ import type { TabBarItem } from './tab-bar-item-model'
 import { resolveTerminalTabTitle } from '../../../../shared/tab-title-resolution'
 import { getEditorDisplayLabel } from '@/components/editor/editor-labels'
 import { getBrowserTabLabel } from './BrowserTab'
+import { formatSimulatorTabLabel } from '@/lib/simulator-tab-label'
 
 export function tabItemLabel(
   item: TabBarItem,
@@ -18,7 +19,7 @@ export function tabItemLabel(
     return savedName ?? item.data.label
   }
   if (item.type === 'simulator') {
-    return item.data.label || 'Mobile Emulator'
+    return formatSimulatorTabLabel(item.data.label)
   }
   return getEditorDisplayLabel(item.data)
 }

@@ -181,7 +181,8 @@ export async function acquireAcpStructuredSession(input: {
           sessionId,
           fence: acquire.fence,
           acquisitionGeneration: generation,
-          reportedOptions: options.observedCurrent(spec.permissionModeConfig?.values)
+          reportedOptions: options.observedCurrent(spec.permissionModeConfig?.values),
+          catalogListing: { models: options.read().models }
         })
       }
     })

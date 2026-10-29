@@ -42,7 +42,7 @@ function currentWorkspaceActionAvailability(
   return getCurrentWorkspaceActionAvailability(ctx)
 }
 
-async function runWorkspaceAction(
+export async function runWorkspaceAction(
   ctx: CmdJQuickActionContext,
   run: (groupId: string) => Promise<void>
 ): Promise<CmdJQuickActionRunResult> {

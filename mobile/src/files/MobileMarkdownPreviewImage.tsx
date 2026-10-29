@@ -7,6 +7,8 @@ import { MobileLoadErrorState } from '../components/MobileLoadErrorState'
 import { MobileNativeChatImageViewer } from '../session/native-chat/visual/MobileNativeChatImageViewer'
 import type { MobileFilePreviewRpcSender } from './mobile-file-preview-operations'
 import { loadMarkdownPreviewImage } from './mobile-markdown-image-source'
+import { translate } from '../i18n/mobile-i18n'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 
 type Props = {
   client: MobileFilePreviewRpcSender | null
@@ -18,6 +20,7 @@ type Props = {
 
 export function MobileMarkdownPreviewImage({ client, worktreeId, documentPath, href, alt }: Props) {
   useMobileColorScheme()
+  const t = useMobileTranslation()
   const [load, setLoad] = useState<{ uri?: string; error?: string }>({})
   const [attempt, setAttempt] = useState(0)
   const [aspectRatio, setAspectRatio] = useState(16 / 9)
@@ -41,7 +44,12 @@ export function MobileMarkdownPreviewImage({ client, worktreeId, documentPath, h
       },
       (error: unknown) => {
         if (!cancelled) {
-          setLoad({ error: error instanceof Error ? error.message : 'Unable to load image' })
+          setLoad({
+            error:
+              error instanceof Error
+                ? error.message
+                : translate('files.markdownPreviewImage.loadFailed', 'Unable to load image')
+          })
         }
       }
     )
@@ -64,14 +72,22 @@ export function MobileMarkdownPreviewImage({ client, worktreeId, documentPath, h
         <Pressable
           onPress={() => setExpanded(true)}
           accessibilityRole="button"
-          accessibilityLabel={`Expand ${alt || 'image'}`}
+          accessibilityLabel={
+            alt
+              ? t('files.markdownPreviewImage.expandImage', 'Expand {{alt}}', { alt })
+              : t('files.markdownPreviewImage.expandFallback', 'Expand image')
+          }
         >
           <Image
             source={{ uri: load.uri }}
-            accessibilityLabel={alt || 'Markdown image'}
+            accessibilityLabel={alt || t('files.markdownPreviewImage.imageLabel', 'Markdown image')}
             resizeMode="contain"
             style={{ width: '100%', aspectRatio }}
-            onError={() => setLoad({ error: 'Unable to load image' })}
+            onError={() =>
+              setLoad({
+                error: translate('files.markdownPreviewImage.loadFailed', 'Unable to load image')
+              })
+            }
           />
         </Pressable>
       ) : (
@@ -81,7 +97,7 @@ export function MobileMarkdownPreviewImage({ client, worktreeId, documentPath, h
       {expanded && load.uri ? (
         <MobileNativeChatImageViewer
           uri={load.uri}
-          label={alt || 'Markdown image'}
+          label={alt || t('files.markdownPreviewImage.imageLabel', 'Markdown image')}
           onClose={() => setExpanded(false)}
         />
       ) : null}

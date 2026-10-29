@@ -3,7 +3,7 @@
 import React from 'react'
 import { cleanup, render } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { i18n, setRendererUiLanguage } from '@/i18n/i18n'
+import { i18n, loadRendererUiLanguage } from '@/i18n/i18n'
 import { AgentLaunchPaneNotice } from './AgentLaunchPaneNotice'
 import { TerminalErrorToast } from './TerminalErrorToast'
 import { agentLaunchPaneOutcomeForLeaf } from './agent-launch-pane-notice-text'
@@ -30,7 +30,7 @@ describe('localized startup failure surfaces', () => {
       unknown: '无法确认 Codex 已启动。请先检查其终端，再重试。'
     }
   ] as const)('renders both real mappings with the shipped $language catalog', async (copy) => {
-    await setRendererUiLanguage(copy.language)
+    await i18n.changeLanguage(await loadRendererUiLanguage(copy.language))
     for (const [code, expected, refusal] of [
       [
         'agent_session_exited_during_start',

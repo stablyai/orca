@@ -44,9 +44,9 @@ export async function uploadSshDirectory(
   options?: SshRemoteFileOptions & { signal?: AbortSignal }
 ): Promise<void> {
   await withLinkedSftpTransfer(host, remoteDir, options, {
-    sftp: async (sftp, targetDir, signal) => {
+    sftp: async (sftp, targetDir, signal, endSession) => {
       const { uploadDirectory } = await import('../sftp-upload')
-      await uploadDirectory(sftp, localDir, targetDir, localDir, { signal })
+      await uploadDirectory(sftp, localDir, targetDir, localDir, { signal, endSession })
     },
     system: (signal) =>
       uploadDirectoryViaSystemSsh(host.target, localDir, remoteDir, {
@@ -136,7 +136,12 @@ async function withLinkedSftpTransfer(
   remotePath: string,
   options: (SshRemoteFileOptions & { signal?: AbortSignal }) | undefined,
   transfer: {
-    sftp: (sftp: SFTPWrapper, targetPath: string, signal: AbortSignal) => Promise<void>
+    sftp: (
+      sftp: SFTPWrapper,
+      targetPath: string,
+      signal: AbortSignal,
+      endSession: () => void
+    ) => Promise<void>
     system: (signal: AbortSignal) => Promise<void>
   }
 ): Promise<void> {
@@ -172,7 +177,9 @@ async function withLinkedSftpTransfer(
     const lostSession = new Promise<never>((_resolve, reject) => {
       sessionLost = reject
     })
+    let sftpClosed = false
     const onSessionClose = (): void => {
+      sftpClosed = true
       if (!sftpEndRequested) {
         const error = sftpSessionClosedError()
         sessionLost(error)
@@ -185,11 +192,15 @@ async function withLinkedSftpTransfer(
       const run = (async (): Promise<void> => {
         const targetPath = await resolveSftpTransferPathIfMapped(sftp, remotePath, options)
         transferSignal.signal.throwIfAborted()
-        await transfer.sftp(sftp, targetPath, transferSignal.signal)
+        await transfer.sftp(sftp, targetPath, transferSignal.signal, endSftp)
       })()
       await Promise.race([
         raceSftpFileTransferWithAbort(run, linkedSignal.signal, (onClose) => {
-          sftp.once('close', onClose)
+          if (sftpClosed) {
+            onClose()
+          } else {
+            sftp.once('close', onClose)
+          }
           endSftp()
           return () => sftp.removeListener('close', onClose)
         }),

@@ -1,4 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { setMainUiLanguage } from '../i18n/main-i18n'
+import es from '../../renderer/src/i18n/locales/es.json'
 
 type Display = { workArea: { x: number; y: number; width: number; height: number } }
 
@@ -29,6 +31,7 @@ const {
       id: created.length + 1,
       send: vi.fn(),
       isDestroyed: () => this.destroyed,
+      isCrashed: () => false,
       session: {
         setPermissionRequestHandler: vi.fn(),
         setPermissionCheckHandler: vi.fn()
@@ -47,6 +50,9 @@ const {
       }
     }
     bounds = { x: 100, y: 100, width: 960, height: 720 }
+    setTitle = vi.fn((title: string) => {
+      this.options.title = title
+    })
     focus = vi.fn()
     show = vi.fn()
     restore = vi.fn(() => {
@@ -145,6 +151,8 @@ import {
   zoomDashboardPopoutIfFocused
 } from './dashboard-popout-window'
 import { readBrowserClientHostIdArgument } from '../../shared/browser-client-host-id-argument'
+import { hasWslHostsServeOnlyArgument } from '../../shared/wsl-host-internal-gate'
+import { configureWslHostsGate, resetWslHostsGateForTests } from '../wsl/wsl-host-gate'
 
 type FakeWindow = InstanceType<typeof BrowserWindowMock>
 
@@ -196,6 +204,39 @@ describe('createOrFocusDashboardPopout', () => {
     closeDashboardPopout()
     vi.unstubAllEnvs()
     vi.clearAllMocks()
+  })
+
+  it('updates the title after language initialization and unsubscribes when closed', async () => {
+    // SAFETY: The fixture implements the Store methods exercised by the popout.
+    createOrFocusDashboardPopout(makeStore() as never)
+    const win = instances[0]
+    try {
+      await setMainUiLanguage('es')
+      expect(win.options.title).toBe(es.native.dialog.dashboardTitle)
+      closeDashboardPopout()
+      win.setTitle.mockClear()
+      await setMainUiLanguage('en')
+      expect(win.setTitle).not.toHaveBeenCalled()
+    } finally {
+      await setMainUiLanguage('en')
+    }
+  })
+
+  it('lets its preload expose saved WSL hosts in serve-only, and passes nothing otherwise', () => {
+    vi.stubEnv('ORCA_INTERNAL_WSL_HOSTS', undefined)
+    createOrFocusDashboardPopout(makeStore() as never)
+    expect(instances[0].options.webPreferences?.additionalArguments).toBeUndefined()
+    closeDashboardPopout()
+
+    configureWslHostsGate({ hasSavedWslHost: () => true, hasWslMoveCutover: () => false })
+    try {
+      createOrFocusDashboardPopout(makeStore() as never)
+      expect(
+        hasWslHostsServeOnlyArgument(instances[1].options.webPreferences?.additionalArguments ?? [])
+      ).toBe(true)
+    } finally {
+      resetWslHostsGateForTests()
+    }
   })
 
   it('creates a native-frame window with the shared preload and no webview surface', () => {

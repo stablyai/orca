@@ -24,12 +24,16 @@ type MockState = {
   retainedAgentsByPaneKey: Record<string, unknown>
   unifiedTabsByWorktree: Record<string, Tab[]>
   structuredChatSleptAtByPaneKey: Record<string, number | null>
+  wslHostStatuses?: Record<string, { state: string; distro: string }>
 }
 
 let mockState: MockState
 
 vi.mock('@/store', () => ({
   useAppStore: (selector: (state: MockState) => unknown) => selector(mockState)
+}))
+vi.mock('../terminal-pane/remote-server-outage', () => ({
+  selectWorkspaceRuntimeEnvironmentId: () => 'wsl:ubuntu'
 }))
 
 function makeTab(id: string, worktreeId: string): TerminalTab {
@@ -156,6 +160,28 @@ describe('useWorktreeActivityStatus', () => {
 
   afterEach(() => {
     vi.restoreAllMocks()
+  })
+
+  // verify-7: a terminal on a terminated distro kept the workspace's green dot.
+  it('shows a workspace on a stopped WSL host as inactive, though its panes keep their bindings', () => {
+    const worktreeId = 'repo1::/home/u/app'
+    mockState = {
+      ...mockState,
+      tabsByWorktree: { [worktreeId]: [makeTab('tab-1', worktreeId)] },
+      ptyIdsByTabId: { 'tab-1': ['pty-1'] },
+      wslHostStatuses: { 'wsl:debian': { state: 'distro-stopped', distro: 'Debian' } }
+    }
+    // Another distro's stop is not this workspace's.
+    expect(renderToStaticMarkup(<StatusProbe worktreeId={worktreeId} />)).toBe(
+      '<span>active</span>'
+    )
+    mockState = {
+      ...mockState,
+      wslHostStatuses: { 'wsl:ubuntu': { state: 'distro-stopped', distro: 'Ubuntu' } }
+    }
+    expect(renderToStaticMarkup(<StatusProbe worktreeId={worktreeId} />)).toBe(
+      '<span>inactive</span>'
+    )
   })
 
   it('keeps a restored offscreen working agent yellow from the hook snapshot', () => {

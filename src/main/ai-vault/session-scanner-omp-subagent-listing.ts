@@ -6,14 +6,13 @@ import type {
 } from '../../shared/ai-vault-types'
 import { wslGatedReaddir, wslGatedStat } from '../native-chat/wsl-transcript-fs-access'
 import { WslTranscriptFsError } from '../native-chat/wsl-transcript-fs-gate'
-import { recordSessionScanIssue } from './session-scan-issues'
+import { recordSessionScanIssue, scanIssueTextFromError } from './session-scan-issues'
 import { sessionIdFromFileName, sessionSortTime } from './session-scanner-accumulator'
 import { parseMessageGraphSessionFile } from './session-scanner-graph-parsers'
 import {
   isOmpSubagentTranscriptFileName,
   ompArtifactDirFor
 } from './session-scanner-omp-subagent-transcripts'
-import { errorMessage } from './session-scanner-values'
 
 // Bound simultaneous read streams to avoid stalling WSL UNC paths.
 const OMP_SUBAGENT_PARSE_CONCURRENCY = 8
@@ -35,7 +34,11 @@ export async function listOmpSubagentSessions(args: {
   } catch (err) {
     // Report WSL refusal so the panel can retry instead of showing no subagents.
     if (err instanceof WslTranscriptFsError) {
-      recordSessionScanIssue(issues, { agent: 'omp', path: artifactDir, message: err.message })
+      recordSessionScanIssue(issues, {
+        agent: 'omp',
+        path: artifactDir,
+        ...scanIssueTextFromError(err)
+      })
     }
     return { sessions: [], issues }
   }
@@ -101,7 +104,7 @@ async function parseOmpSubagentTranscript(args: {
     recordSessionScanIssue(args.issues, {
       agent: 'omp',
       path: filePath,
-      message: errorMessage(err)
+      ...scanIssueTextFromError(err)
     })
     return null
   }

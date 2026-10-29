@@ -26,6 +26,7 @@ vi.mock('./filesystem-watcher-local-events', () => ({
 vi.mock('./filesystem-watcher-wsl', () => ({ createWslWatcher: createWslWatcherMock }))
 
 import { installLocalWatcher } from './filesystem-watcher-local-install'
+import { createDebouncedBatch } from './filesystem-watcher-batch-control'
 import { watcherLifecycleState } from './filesystem-watcher-lifecycle-state'
 import {
   _resetWslBackgroundDistroGateForTests,
@@ -123,7 +124,7 @@ describe('installLocalWatcher on a stopped WSL distro', () => {
     blockedWslDistroForPathMock.mockResolvedValue(null)
     const root = {
       listeners: new Map(),
-      batch: { cancelled: false },
+      batch: createDebouncedBatch(),
       subscription: { unsubscribe: async () => {} }
     }
     createWslWatcherMock.mockImplementation(async (_key, _path, deps) => {

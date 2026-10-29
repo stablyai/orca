@@ -8,8 +8,8 @@ const mocks = vi.hoisted(() => ({
   stateIndex: 0,
   storeState: {
     repos: [] as Repo[],
-    endpointProjects: [],
-    endpointProjectHostSetups: [],
+    projects: [],
+    projectHostSetups: [],
     clearOrcaHookTrustForRepo: vi.fn(),
     openModal: vi.fn(),
     sshStateByEnvironment: new Map()
@@ -103,8 +103,8 @@ describe('useRemoteRepo', () => {
     mocks.stateSetters = []
     mocks.stateValues = [[], 'ssh-1', '/srv/repo', null, false]
     mocks.storeState.repos = []
-    mocks.storeState.endpointProjects = []
-    mocks.storeState.endpointProjectHostSetups = []
+    mocks.storeState.projects = []
+    mocks.storeState.projectHostSetups = []
     mocks.listTargets.mockResolvedValue([
       { id: 'ssh-1', label: 'Builder 1' },
       { id: 'ssh-2', label: 'Builder 2' }

@@ -227,6 +227,10 @@ export class InMemoryOrchestrationMessages {
     return [...this.runs.values()].find((run) => run.coordinator_pane_key === paneKey)
   }
 
+  listSessionDispatchesForPresentation(): never[] {
+    return []
+  }
+
   listWorkerTerminalReleaseBacklog(): never[] {
     return []
   }

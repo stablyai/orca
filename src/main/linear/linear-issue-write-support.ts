@@ -1,5 +1,5 @@
 import type { LinearClient } from '@linear/sdk'
-import { loadLinearSdk } from './linear-sdk'
+import { createLinearClient } from './linear-sdk'
 import { acquire, release } from './linear-request-concurrency'
 import { clearToken } from './linear-token-store'
 import { isAuthError, type LinearClientForWorkspace } from './client'
@@ -123,9 +123,7 @@ export async function runLinearWrite<T>(
   await acquire(signal)
   try {
     signal?.throwIfAborted()
-    const client = signal
-      ? new (loadLinearSdk().LinearClient)({ apiKey: entry.apiKey, signal })
-      : entry.client
+    const client = signal ? createLinearClient({ apiKey: entry.apiKey, signal }) : entry.client
     beforeInvoke?.()
     return await write(client)
   } catch (error) {

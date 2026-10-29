@@ -236,8 +236,11 @@ it('global owner: bounded controlled edits, failed/same selection and no-op save
     agentArgs: '--verbose newer',
     launchPreferences: {
       agentId: 'claude',
-      model: 'sonnet',
-      options: { effort: 'high' },
+      modelSelection: {
+        base: 'default',
+        model: { agentId: 'claude', value: 'sonnet' },
+        options: { effort: { agentId: 'claude', value: 'high' } }
+      },
       permissionMode: 'full-access'
     }
   })

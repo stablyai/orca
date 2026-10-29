@@ -35,9 +35,6 @@ export function writeNativeChatDraftCache(
   )
 }
 
-// Why: a composer mid-IME-composition keeps showing what it had, so it is told what was appended.
-const appendListeners = new Map<string, Set<(text: string, previous: string) => void>>()
-
 /** Append returned text and notify mounted composers; true means durable hand-back so its source copy may go. */
 export function appendNativeChatDraftCache(
   scopeKey: string,
@@ -49,28 +46,7 @@ export function appendNativeChatDraftCache(
   if (text === '' && !images?.length) {
     return true
   }
-  const previous = readNativeChatDraftCache(scopeKey)
-  const durable = appendToNativeChatComposerDraft(scopeKey, { text, images }, owner)
-  // Why: an addition the draft already held adds nothing, so a composer must not show it again.
-  if (readNativeChatDraftCache(scopeKey) !== previous) {
-    appendListeners.get(scopeKey)?.forEach((listener) => listener(text, previous))
-  }
-  return durable
-}
-
-export function subscribeToNativeChatDraftAppend(
-  scopeKey: string,
-  listener: (text: string, previous: string) => void
-): () => void {
-  const listeners = appendListeners.get(scopeKey) ?? new Set()
-  appendListeners.set(scopeKey, listeners)
-  listeners.add(listener)
-  return () => {
-    listeners.delete(listener)
-    if (listeners.size === 0 && appendListeners.get(scopeKey) === listeners) {
-      appendListeners.delete(scopeKey)
-    }
-  }
+  return appendToNativeChatComposerDraft(scopeKey, { text, images }, owner)
 }
 
 export function clearNativeChatDraftCacheForTests(): void {

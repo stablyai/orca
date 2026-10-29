@@ -9,7 +9,9 @@ import type * as preparationModule from './opencode-wsl-runtime-preparation'
 const mocks = vi.hoisted(() => ({
   exists: vi.fn(() => true),
   run: vi.fn(),
-  running: vi.fn(async (paths: readonly string[]) => [...paths]),
+  running: vi.fn(async (paths: readonly string[], _options?: { requireConfirmed?: boolean }) => [
+    ...paths
+  ]),
   download: vi.fn(async () => 'C:\\cache\\node-v24.21.0-linux-arm64-musl.tar.gz'),
   bundles: vi.fn((platform: string) => [`C:/relay/${platform}`])
 }))
@@ -21,8 +23,13 @@ vi.mock('../../shared/app-environment', () => ({
   })
 }))
 vi.mock('../wsl/wsl-runner', () => ({ runWslProcess: mocks.run }))
-vi.mock('../wsl-running-path-filter', () => ({
-  filterPathsToRunningWslDistrosAsync: mocks.running
+// The admission gate asks the running list for the path's distro; `running` stands in for it.
+vi.mock('../native-chat/wsl-transcript-running-admission', () => ({
+  admitWslTranscriptPath: async (path: string) => {
+    if ((await mocks.running([path], { requireConfirmed: true })).length === 0) {
+      throw new Error('WSL distro is not running.')
+    }
+  }
 }))
 vi.mock('../node-runtime/pinned-runtime-materializer', () => ({
   materializeNodeRuntimeArchive: mocks.download

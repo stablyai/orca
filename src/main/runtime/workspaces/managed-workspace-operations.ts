@@ -146,7 +146,7 @@ export abstract class OrcaRuntimeWithListManagedWorktrees extends OrcaRuntimeWit
   }
 
   async showManagedWorktree(worktreeSelector: string) {
-    const worktree = await this.resolveWorktreeSelector(worktreeSelector)
+    const worktree = await this.resolveWorkspaceSelector(worktreeSelector)
     return { ...worktree, linkedItems: getWorkspaceAttachments(worktree) }
   }
 
@@ -250,7 +250,7 @@ export abstract class OrcaRuntimeWithListManagedWorktrees extends OrcaRuntimeWit
     worktreeSelector: string,
     opts: { replyOnAcceptance?: boolean; markChatsAsleep?: boolean } = {}
   ): Promise<{ worktreeId: string } & Partial<WorkspaceSleepOutcome>> {
-    const worktree = await this.resolveWorktreeSelector(worktreeSelector)
+    const worktree = await this.resolveWorkspaceSelector(worktreeSelector)
     return this.workspaceSleep.sleepOwnWorktree(worktree.id, opts)
   }
 

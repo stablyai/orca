@@ -50,12 +50,38 @@ type MenuSnapshot = {
 
 const SNAPSHOT_TTL_MS = 10 * 60_000
 const snapshots = new Map<string, MenuSnapshot>()
+let expiryTimer: ReturnType<typeof setTimeout> | null = null
 
 function pruneSnapshots(now: number): void {
   for (const [token, snapshot] of snapshots) {
     if (now - snapshot.createdAt > SNAPSHOT_TTL_MS) {
       snapshots.delete(token)
     }
+  }
+}
+
+function scheduleSnapshotExpiry(): void {
+  const oldest = snapshots.values().next().value
+  if (expiryTimer || !oldest) {
+    return
+  }
+  const delay = Math.min(
+    SNAPSHOT_TTL_MS + 1,
+    Math.max(1, SNAPSHOT_TTL_MS + 1 - (Date.now() - oldest.createdAt))
+  )
+  expiryTimer = setTimeout(() => {
+    expiryTimer = null
+    pruneSnapshots(Date.now())
+    scheduleSnapshotExpiry()
+  }, delay)
+  expiryTimer.unref()
+}
+
+function forgetSnapshot(token: string): void {
+  snapshots.delete(token)
+  if (snapshots.size === 0 && expiryTimer) {
+    clearTimeout(expiryTimer)
+    expiryTimer = null
   }
 }
 
@@ -126,6 +152,7 @@ export function buildBrowserExtensionPageContextMenu(
     mediaType: params.mediaType,
     createdAt: now
   })
+  scheduleSnapshotExpiry()
   return { token, groups }
 }
 
@@ -191,7 +218,10 @@ export function runBrowserExtensionContextMenuClick(
     return false
   }
   // Why one-shot: a menu is clicked once; a replayed token must not fire again.
-  snapshots.delete(click.token)
+  forgetSnapshot(click.token)
+  if (Date.now() - snapshot.createdAt > SNAPSHOT_TTL_MS) {
+    return false
+  }
   return runClick(snapshot, click.extensionId, click.key)
 }
 
@@ -237,5 +267,6 @@ export function buildBrowserExtensionActionContextMenu(
     editable: false,
     createdAt: now
   })
+  scheduleSnapshotExpiry()
   return { token, groups }
 }

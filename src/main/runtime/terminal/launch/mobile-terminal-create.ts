@@ -132,7 +132,7 @@ export abstract class OrcaRuntimeWithCreateMobileSessionTerminal extends OrcaRun
     if (select) {
       const worktreeId =
         this.getExplicitSessionWorktreeIdSelector(worktreeSelector) ??
-        (await this.resolveWorktreeSelector(worktreeSelector)).id
+        (await this.resolveWorkspaceSelector(worktreeSelector)).id
       this.applyMobileSessionTabNavigation(
         this.getMobileSessionTabsForWorktree(worktreeId),
         result.tab.id,

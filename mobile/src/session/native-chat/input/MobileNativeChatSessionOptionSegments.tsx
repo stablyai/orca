@@ -3,6 +3,7 @@ import { MobileSegmentedControl } from '../../../components/MobileSegmentedContr
 import { colors, spacing, typography } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
+import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import {
   sessionOptionDispatchUnconfirmed,
   type SessionOptionDescriptor,
@@ -10,9 +11,9 @@ import {
 } from '../../../../../src/shared/native-chat/input/native-chat-session-options'
 import {
   nativeChatSessionChoiceShortLabel,
-  nativeChatSessionOptionLabel,
-  sayNativeChatSessionOptionEnglish as say
+  nativeChatSessionOptionLabel
 } from '../../../../../src/shared/native-chat-session-option-labels'
+import { sayMobileNativeChatSessionOption as say } from './native-chat-session-option-copy'
 import { SessionOptionCaption } from './MobileNativeChatSessionOptionRows'
 
 // Five fit across a phone's sheet; more read better as a list on their own page.
@@ -38,6 +39,7 @@ export function SessionOptionSegments({
   onSetOption: (value: SessionOptionValue) => void
 }): React.JSX.Element | null {
   useMobileColorScheme()
+  const t = useMobileTranslation()
   if (descriptor.kind.type !== 'select') {
     return null
   }
@@ -57,7 +59,9 @@ export function SessionOptionSegments({
         disabled={disabled || !descriptor.settable}
       />
       {sessionOptionDispatchUnconfirmed(descriptor) ? (
-        <SessionOptionCaption>Sent to the agent — not confirmed</SessionOptionCaption>
+        <SessionOptionCaption>
+          {t('chat.sessionOptionSegments.dispatchUnconfirmed', 'Sent to the agent — not confirmed')}
+        </SessionOptionCaption>
       ) : null}
     </View>
   )

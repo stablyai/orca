@@ -50,9 +50,9 @@ beforeEach(() => {
     ],
     activeRepoId: 'local-project',
     activeModal: 'new-workspace-composer',
-    endpointProjects: [],
+    projects: [],
     projectGroups: [],
-    endpointProjectHostSetups: [],
+    projectHostSetups: [],
     newWorkspaceDraft: null,
     worktreesByRepo: {},
     sparsePresetsByRepo: {}

@@ -3,26 +3,12 @@ import type {
   CatalogModel,
   CatalogOption
 } from './agent-session-option-catalog-types'
-import { removeAgentArgOption } from './agent-session-option-agent-args'
+import { agentChoiceCliApply } from './agent-choice-cli-apply'
 import {
   CLAUDE_MODEL_LIST_ARGS,
   CLAUDE_MODEL_LIST_STDIN,
   parseClaudeModelList
 } from './claude-model-list-probe'
-
-// Why: Codex also reads any setting from a `-c key=value` config override.
-function removeCodexAgentArgs(
-  tokens: readonly string[],
-  flags: readonly string[],
-  configKey: string
-): string[] {
-  return removeAgentArgOption(
-    'codex',
-    removeAgentArgOption('codex', tokens, flags),
-    ['-c', '--config'],
-    (value) => new RegExp(`^\\s*${configKey}\\s*=`).test(value ?? '')
-  )
-}
 
 const STANDARD_EFFORT_CHOICES = [
   { value: 'low', label: 'Low' },
@@ -53,8 +39,17 @@ function claudeEffortWithChoices(choices: typeof EXTENDED_EFFORT_CHOICES): Catal
         : (choices[0]?.value ?? 'high')
     },
     apply: {
-      launchArgs: (value) => ['--effort', String(value)],
-      removeAgentArgs: (tokens) => removeAgentArgOption('claude', tokens, ['--effort']),
+      ...agentChoiceCliApply(
+        'claude',
+        [
+          {
+            kind: 'value',
+            names: ['--effort'],
+            lift: 'separate-and-long-equals'
+          }
+        ],
+        '--effort'
+      ),
       midSession: { kind: 'command', build: (value) => `/effort ${String(value)}` }
     }
   }
@@ -126,8 +121,17 @@ export const CLAUDE_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
     }
   ],
   modelApply: {
-    launchArgs: (value) => ['--model', String(value)],
-    removeAgentArgs: (tokens) => removeAgentArgOption('claude', tokens, ['--model']),
+    ...agentChoiceCliApply(
+      'claude',
+      [
+        {
+          kind: 'value',
+          names: ['--model'],
+          lift: 'separate-and-long-equals'
+        }
+      ],
+      '--model'
+    ),
     midSession: {
       kind: 'command',
       build: (value) => `/model ${String(value)}`,
@@ -166,9 +170,19 @@ function codexEffort(ceiling: 'xhigh' | 'max' | 'ultra'): CatalogOption {
       defaultValue: 'medium'
     },
     apply: {
-      launchArgs: (value) => ['-c', `model_reasoning_effort=${String(value)}`],
-      removeAgentArgs: (tokens) =>
-        removeCodexAgentArgs(tokens, ['--reasoning-effort'], 'model_reasoning_effort'),
+      ...agentChoiceCliApply(
+        'codex',
+        [
+          {
+            kind: 'config',
+            names: ['-c', '--config'],
+            key: 'model_reasoning_effort',
+            lift: 'codex-bare-string'
+          },
+          { kind: 'value', names: ['--reasoning-effort'], lift: 'never' }
+        ],
+        '-c'
+      ),
       midSession: { kind: 'agent-picker', command: '/model', delivery: 'type' }
     }
   }
@@ -190,8 +204,18 @@ export const CODEX_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
     }
   ],
   modelApply: {
-    launchArgs: (value) => ['-m', String(value)],
-    removeAgentArgs: (tokens) => removeCodexAgentArgs(tokens, ['-m', '--model'], 'model'),
+    ...agentChoiceCliApply(
+      'codex',
+      [
+        {
+          kind: 'value',
+          names: ['-m', '--model'],
+          lift: 'separate-and-long-equals'
+        },
+        { kind: 'config', names: ['-c', '--config'], key: 'model', lift: 'codex-bare-string' }
+      ],
+      '-m'
+    ),
     // Codex treats multi-character writes as paste; type the command and let its picker select an account-supported model.
     midSession: { kind: 'agent-picker', command: '/model', delivery: 'type' }
   },

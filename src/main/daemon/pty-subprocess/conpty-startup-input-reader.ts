@@ -1,9 +1,11 @@
 import type * as pty from 'node-pty'
 import { killConptyNow, terminatePtyJob } from '../../windows/windows-pty-job'
+import { CONPTY_DA1_RESPONSE } from '../../../shared/conpty-device-attributes'
 
 // Bundled ConPTY queries DA1 (or CPR when inheriting the cursor) right after it starts reading
 // input, and before relaying any client output. A pane without it never reads keyboard input.
-const INPUT_READER_ANNOUNCEMENTS = ['\x1b[c', '\x1b[6n'] as const
+const STARTUP_DA1_QUERY = '\x1b[c'
+const INPUT_READER_ANNOUNCEMENTS = [STARTUP_DA1_QUERY, '\x1b[6n'] as const
 // The pseudo-window thread can report window visibility ahead of the announcement.
 const WINDOW_VISIBILITY_REPORTS = ['\x1b[1t', '\x1b[2t'] as const
 
@@ -17,15 +19,21 @@ export const CONPTY_STARTUP_DECISION_LIMIT_MS = 5_000
 export const CONPTY_NO_INPUT_READER_NOTICE =
   '\r\n\x1b[31m[Orca] Windows could not start keyboard input for this terminal. Close it and open a new one.\x1b[0m\r\n'
 
-export function classifyConptyStartupOutput(output: string): ConptyStartupVerdict {
-  let rest = output
+function announcementOffset(output: string): number {
+  let offset = 0
   for (;;) {
-    const report = WINDOW_VISIBILITY_REPORTS.find((candidate) => rest.startsWith(candidate))
+    const report = WINDOW_VISIBILITY_REPORTS.find((candidate) =>
+      output.startsWith(candidate, offset)
+    )
     if (!report) {
-      break
+      return offset
     }
-    rest = rest.slice(report.length)
+    offset += report.length
   }
+}
+
+export function classifyConptyStartupOutput(output: string): ConptyStartupVerdict {
+  const rest = output.slice(announcementOffset(output))
   if (INPUT_READER_ANNOUNCEMENTS.some((announcement) => rest.startsWith(announcement))) {
     return 'input-reader'
   }
@@ -64,6 +72,15 @@ export function watchConptyStartup(proc: pty.IPty): ConptyStartupWatch {
     const classified = classifyConptyStartupOutput(output)
     if (classified !== 'pending') {
       decided = true
+      const offset = announcementOffset(output)
+      if (classified === 'input-reader' && output.startsWith(STARTUP_DA1_QUERY, offset)) {
+        // ConPTY 1.23 stalls 3s for this reply; Session drains it before any client could answer.
+        const rest = output.slice(0, offset) + output.slice(offset + STARTUP_DA1_QUERY.length)
+        events.data = rest ? [rest] : []
+        try {
+          proc.write(CONPTY_DA1_RESPONSE)
+        } catch {}
+      }
       settle(classified)
     }
   })

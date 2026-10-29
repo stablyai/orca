@@ -140,6 +140,25 @@ function createWebPreloadApi(): Partial<PreloadApi> {
     // Desktop-only: a web client never owns a WSL move's desktop stores.
     wslMove: {
       listPendingRendererRewrites: () => Promise.resolve([]),
+      recordStoreRewritten: () => Promise.resolve({ recorded: false, reason: 'gated-off' }),
+      preview: () => Promise.resolve({ outcome: 'refused', code: 'wsl_move_unavailable' }),
+      start: () => Promise.resolve({ outcome: 'refused', code: 'wsl_move_unavailable' }),
+      cancel: () => Promise.resolve(false),
+      listUnfinished: () => Promise.resolve([]),
+      isRunning: () => Promise.resolve(false),
+      useProjectHereAgain: () => Promise.resolve({ released: false, reason: 'gated-off' }),
+      onProgress: () => () => {},
+      listOrchestrator: () => Promise.resolve([]),
+      orchestratorUserAction: () => Promise.resolve(null),
+      orchestratorProjectOpened: () => Promise.resolve(),
+      onOrchestratorStatus: () => () => {},
+      onOrchestratorSleptPanesRequest: () => () => {},
+      answerOrchestratorSleptPanes: () => Promise.resolve()
+    },
+    // Desktop-only: a web client never converts this computer's projects.
+    wslDriveUnc: {
+      convert: () => Promise.resolve({ outcome: 'refused', blockers: [] }),
+      listPendingRendererRewrites: () => Promise.resolve([]),
       recordStoreRewritten: () => Promise.resolve({ recorded: false, reason: 'gated-off' })
     },
     pwsh: {

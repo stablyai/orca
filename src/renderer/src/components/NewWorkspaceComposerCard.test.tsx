@@ -32,8 +32,7 @@ vi.mock('@/store', () => ({
         activeModal: 'none',
         settings: { defaultTuiAgent: null, disabledTuiAgents: [] },
         updateSettings: vi.fn(),
-        endpointProjects: [],
-        endpointProjectHostSetups: [],
+        projects: [],
         repos: []
       }),
     {
@@ -442,7 +441,7 @@ describe('NewWorkspaceComposerCard folder task source mode', () => {
     // Reuse stays mounted for height animation; unavailable rows are collapsed and aria-hidden.
     current = renderCard({ canReuseSelectedBranch: false })
     const collapsedReuse = [...current.container.querySelectorAll('[aria-hidden="true"]')].find(
-      (el) => el.textContent?.includes('Reuse branch')
+      (el) => el.textContent?.includes('Existing branch')
     )
     expect(collapsedReuse).toBeTruthy()
 
@@ -450,21 +449,19 @@ describe('NewWorkspaceComposerCard folder task source mode', () => {
 
     current = renderCard({ canReuseSelectedBranch: true, reuseSelectedBranch: true })
     const reuseLabel = [...current.container.querySelectorAll('label')].find((label) =>
-      label.textContent?.includes('Reuse branch')
+      label.textContent?.includes('Existing branch')
     )
     expect(reuseLabel).toBeTruthy()
     expect(reuseLabel?.closest('[aria-hidden="true"]')).toBeNull()
-    expect(current.container.textContent).toContain(
-      'Check out the existing branch instead of creating a new one from it.'
-    )
+    expect(current.container.textContent).toContain('New commits go on this branch.')
   })
 
-  it('emits the toggled value from the reuse checkbox in both directions', () => {
-    const clickReuseCheckbox = (): void => {
+  it('emits the selected branch choice in both directions', () => {
+    const chooseBranch = (labelText: string): void => {
       const reuseLabel = [...(current?.container.querySelectorAll('label') ?? [])].find((label) =>
-        label.textContent?.includes('Reuse branch')
+        label.textContent?.includes(labelText)
       )
-      const checkbox = reuseLabel?.querySelector<HTMLInputElement>('input[type="checkbox"]')
+      const checkbox = reuseLabel?.querySelector<HTMLButtonElement>('[role="radio"]')
       expect(checkbox).toBeTruthy()
       act(() => checkbox?.click())
     }
@@ -475,7 +472,7 @@ describe('NewWorkspaceComposerCard folder task source mode', () => {
       reuseSelectedBranch: true,
       onReuseSelectedBranchChange: (next) => offChanges.push(next)
     })
-    clickReuseCheckbox()
+    chooseBranch('New branch')
     expect(offChanges).toEqual([false])
 
     unmountCurrent()
@@ -486,7 +483,7 @@ describe('NewWorkspaceComposerCard folder task source mode', () => {
       reuseSelectedBranch: false,
       onReuseSelectedBranchChange: (next) => onChanges.push(next)
     })
-    clickReuseCheckbox()
+    chooseBranch('Existing branch')
     expect(onChanges).toEqual([true])
   })
 

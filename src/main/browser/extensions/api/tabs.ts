@@ -10,6 +10,7 @@ import {
 import {
   activateBrowserExtensionTab,
   closeBrowserExtensionTab,
+  createBrowserExtensionTabResolver,
   describeBrowserExtensionTab,
   listBrowserExtensionTabs,
   mergeNativeTab,
@@ -130,10 +131,10 @@ function queryTabs(
   const discarded = listBrowserExtensionDiscardedTabs(caller.session)
     .map((entry) => describeBrowserExtensionDiscardedTab(caller.extension, entry))
     .filter((tab) => matchesDiscardedTabNativeQuery(tab, query))
+  const resolveTab = createBrowserExtensionTabResolver()
   return nativeTabs
     .flatMap((nativeTab) => {
-      const entry =
-        typeof nativeTab.id === 'number' ? resolveBrowserExtensionTab(nativeTab.id) : null
+      const entry = typeof nativeTab.id === 'number' ? resolveTab(nativeTab.id) : null
       return entry && entry.contents.session === caller.session
         ? [mergeCallerTab(caller, nativeTab, entry)]
         : []

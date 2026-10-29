@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as BackgroundDistroGate from '../wsl-background-distro-gate'
 import { fakeSpawnDispatch } from '../../shared/__fixtures__/fake-spawned-child'
 import type * as WslModule from '../wsl'
 
@@ -6,6 +7,12 @@ const { execFileSyncMock, spawnMock, getDefaultWslDistroMock } = vi.hoisted(() =
   execFileSyncMock: vi.fn(),
   spawnMock: vi.fn(),
   getDefaultWslDistroMock: vi.fn()
+}))
+
+// The default-distro fallback asks whether the distro runs before it may start it (E9).
+vi.mock('../wsl-background-distro-gate', async (importOriginal) => ({
+  ...(await importOriginal<typeof BackgroundDistroGate>()),
+  readWslDistroRunningState: vi.fn(async () => 'running')
 }))
 
 vi.mock('child_process', () => ({

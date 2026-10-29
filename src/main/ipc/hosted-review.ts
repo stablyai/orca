@@ -24,6 +24,7 @@ import {
 import { getWorktreeSharedLinkPaths } from '../git/worktree-shared-directories'
 import { getRepoExecutionHostId, getRepoSshConnectionId } from '../../shared/execution-host'
 import { getStoredRepoExecutionHostId } from '../repo-execution-host'
+import { guardWslUncPathAccess } from '../wsl/wsl-unc-access-gate'
 
 function assertRegisteredRepo(repoPath: string, store: Store, repoId?: string): Repo {
   if (repoId) {
@@ -111,21 +112,29 @@ export function registerHostedReviewHandlers(store: Store, stats: StatsCollector
       ...getLocalProjectGhExecOptions(store, repo),
       admissionTier: args.admissionTier ?? ('background' as const)
     }
-    const review = await getHostedReviewForBranch({
-      repoPath: repo.path,
-      executionHostId: getStoredRepoExecutionHostId(repo),
-      branch: args.branch,
-      linkedGitHubPR: args.linkedGitHubPR ?? null,
-      fallbackGitHubPR: args.linkedGitHubPR == null ? (args.fallbackGitHubPR ?? null) : null,
-      linkedGitLabMR: args.linkedGitLabMR ?? null,
-      linkedBitbucketPR: args.linkedBitbucketPR ?? null,
-      linkedAzureDevOpsPR: args.linkedAzureDevOpsPR ?? null,
-      linkedGiteaPR: args.linkedGiteaPR ?? null,
-      currentHeadOid: args.currentHeadOid ?? null,
-      ...(args.active === true ? { active: true } : {}),
-      ...(args.force === true ? { force: true } : {}),
-      localGitExecOptions: localGitOptions
-    })
+    // Sidebar cards and the checks panel poll this for every provider; gh/glab in WSL boot it (E9).
+    // Only an explicit Refresh may start a stopped distro; admissionTier is priority only, and
+    // the visible scheduler sends 'interactive' for the selected card on a timer.
+    const review = await guardWslUncPathAccess(
+      repo.path,
+      () =>
+        getHostedReviewForBranch({
+          repoPath: repo.path,
+          executionHostId: getStoredRepoExecutionHostId(repo),
+          branch: args.branch,
+          linkedGitHubPR: args.linkedGitHubPR ?? null,
+          fallbackGitHubPR: args.linkedGitHubPR == null ? (args.fallbackGitHubPR ?? null) : null,
+          linkedGitLabMR: args.linkedGitLabMR ?? null,
+          linkedBitbucketPR: args.linkedBitbucketPR ?? null,
+          linkedAzureDevOpsPR: args.linkedAzureDevOpsPR ?? null,
+          linkedGiteaPR: args.linkedGiteaPR ?? null,
+          currentHeadOid: args.currentHeadOid ?? null,
+          ...(args.active === true ? { active: true } : {}),
+          ...(args.force === true ? { force: true } : {}),
+          localGitExecOptions: localGitOptions
+        }),
+      { wake: args.wakeWslDistro === true, wslDistro: localGitOptions.wslDistro }
+    )
     if (review?.provider === 'github' && !stats.hasCountedPR(review.url)) {
       stats.record({
         type: 'pr_created',

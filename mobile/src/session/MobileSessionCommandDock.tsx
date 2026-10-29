@@ -1,15 +1,18 @@
 import { View, TextInput, Pressable } from 'react-native'
 import { hostOs } from '../platform/host-os'
-import { ArrowUp, Keyboard as KeyboardIcon } from 'lucide-react-native'
+import { ArrowUp } from 'lucide-react-native'
 import {
   getTerminalCommandKeyboardType,
   getTerminalLiveInputKeyboardType
 } from '../terminal/terminal-keyboard-type'
 import { MobileTerminalLiveInputStatus } from './MobileTerminalLiveInputStatus'
+import { MobileTerminalCommandDictationPreview } from './MobileTerminalCommandDictationPreview'
+import { readMobileDictationAnchor } from '../dictation/mobile-dictation-text-insertion'
 import { MobileTerminalInputActions } from './MobileTerminalInputActions'
 import { MobileSessionAccessoryKeys } from './MobileSessionAccessoryKeys'
 import { colors } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { styles } from './mobile-session-styles'
 import type { MobileSessionController } from './use-mobile-session-controller'
 
@@ -31,6 +34,7 @@ export function MobileSessionCommandDock({
   keysInRail: boolean
 }) {
   useMobileColorScheme()
+  const t = useMobileTranslation()
   const {
     insets,
     bufferedTerminalDraftState,
@@ -46,8 +50,11 @@ export function MobileSessionCommandDock({
     canSend,
     canCompose,
     liveInputEnabled,
-    focusLiveInput,
     dictation,
+    commandDictationPreview,
+    liveDictationText,
+    commandFieldAnchorRef,
+    activeHandle,
     cancelDictation,
     handleDictationToggle,
     handleDictationPressIn,
@@ -69,26 +76,47 @@ export function MobileSessionCommandDock({
         {keysInRail ? null : <MobileSessionAccessoryKeys controller={controller} />}
         {}
         {liveInputEnabled ? (
-          <View style={[styles.inputBar, styles.liveInputBar]}>
-            <Pressable
-              style={({ pressed }) => [
-                styles.liveInputFocusTarget,
-                pressed && styles.liveInputFocusTargetPressed,
-                !canSend && styles.liveInputFocusTargetDisabled
-              ]}
-              disabled={!canSend}
-              onPress={focusLiveInput}
-              accessibilityRole="button"
-              accessibilityLabel="Show keyboard for live terminal input"
-              accessibilityHint="Typed text is sent directly to the active terminal"
-            >
-              <KeyboardIcon size={16} color={colors.textSecondary} strokeWidth={2} />
+          <View style={styles.inputBar}>
+            <View style={styles.liveInputField}>
+              <TextInput
+                ref={bindLiveInputField}
+                style={[
+                  styles.textInput,
+                  styles.liveInputCapture,
+                  !canSend && styles.liveInputCaptureDisabled
+                ]}
+                value={liveInputCapture}
+                onChange={handleLiveInputChange}
+                onKeyPress={handleLiveInputKeyPress}
+                onSubmitEditing={submitLiveInput}
+                placeholder={t('session.terminalLiveInputStatus.liveInput', 'Live input')}
+                placeholderTextColor={colors.textMuted}
+                selectionColor={colors.accentBlue}
+                accessibilityLabel={t('session.commandDock.liveInputLabel', 'Live terminal input')}
+                accessibilityHint={t(
+                  'session.commandDock.liveInputHint',
+                  'Typed text is sent directly to the active terminal'
+                )}
+                showSoftInputOnFocus
+                autoCapitalize="none"
+                autoCorrect={false}
+                spellCheck={false}
+                smartInsertDelete={false}
+                // Why: iOS textContentType overrides autoComplete and can narrow the keyboard; keep IME switching available.
+                autoComplete="off"
+                keyboardType={getTerminalLiveInputKeyboardType(hostOs())}
+                returnKeyType="default"
+                blurOnSubmit={false}
+                editable={canSend}
+                importantForAutofill="no"
+              />
               <MobileTerminalLiveInputStatus
                 dictation={dictation}
+                dictationMode={dictationMode}
+                heard={liveDictationText}
                 isAttaching={isAttaching}
-                liveInputText={liveInputCapture}
               />
-            </Pressable>
+            </View>
             <MobileTerminalInputActions
               canSend={canSend}
               isAttaching={isAttaching}
@@ -105,65 +133,68 @@ export function MobileSessionCommandDock({
               onDictationPressOut={handleDictationPressOut}
               onDictationCancel={cancelDictation}
             />
-            <TextInput
-              ref={bindLiveInputField}
-              style={styles.liveInputCapture}
-              value={liveInputCapture}
-              onChange={handleLiveInputChange}
-              onKeyPress={handleLiveInputKeyPress}
-              onSubmitEditing={submitLiveInput}
-              placeholder=""
-              showSoftInputOnFocus
-              autoCapitalize="none"
-              autoCorrect={false}
-              spellCheck={false}
-              smartInsertDelete={false}
-              // Why: iOS textContentType overrides autoComplete and can narrow the keyboard; keep IME switching available.
-              autoComplete="off"
-              keyboardType={getTerminalLiveInputKeyboardType(hostOs())}
-              returnKeyType="default"
-              blurOnSubmit={false}
-              editable={canSend}
-              importantForAutofill="no"
-            />
           </View>
         ) : (
           <View style={styles.inputBar}>
-            <TextInput
-              ref={bindCommandField}
-              // Why: Android caches IME inputType at mount, so toggling autocomplete must remount there; iOS updates in place.
-              key={
-                hostOs() === 'android'
-                  ? autocompleteEnabled
-                    ? 'cmd-input-ac-on'
-                    : 'cmd-input-ac-off'
-                  : 'cmd-input'
-              }
-              style={styles.textInput}
-              value={bufferedTerminalDraftState.input}
-              // Why: iOS kills active dictation/IME if JS writes a value differing from native text; store raw, normalize at send.
-              onChangeText={bufferedTerminalDraftState.setInput}
-              placeholder="Type a command…"
-              placeholderTextColor={colors.textMuted}
-              autoCapitalize="none"
-              autoCorrect={autocompleteEnabled}
-              spellCheck={autocompleteEnabled}
-              smartInsertDelete={false}
-              // Why: not autofill content, but keyboard must stay default so non-Latin IMEs remain selectable.
-              autoComplete="off"
-              keyboardType={getTerminalCommandKeyboardType(hostOs(), autocompleteEnabled)}
-              returnKeyType="send"
-              blurOnSubmit={false}
-              // Why: composing is local — an outage must not lock the field or discard typed text (#6713).
-              editable={canCompose}
-              onSubmitEditing={() => void handleSend()}
-            />
+            <View style={styles.commandField}>
+              <TextInput
+                ref={bindCommandField}
+                // Why: Android caches IME inputType at mount, so toggling autocomplete must remount there; iOS updates in place.
+                key={
+                  hostOs() === 'android'
+                    ? autocompleteEnabled
+                      ? 'cmd-input-ac-on'
+                      : 'cmd-input-ac-off'
+                    : 'cmd-input'
+                }
+                style={[
+                  styles.textInput,
+                  styles.commandFieldInput,
+                  commandDictationPreview && styles.commandFieldInputHidden
+                ]}
+                value={bufferedTerminalDraftState.input}
+                // Why: iOS kills active dictation/IME if JS writes a value differing from native text; store raw, normalize at send.
+                onChangeText={bufferedTerminalDraftState.setInput}
+                onSelectionChange={(e) => {
+                  commandFieldAnchorRef.current = {
+                    handle: activeHandle,
+                    anchor: readMobileDictationAnchor(e, bufferedTerminalDraftState.input)
+                  }
+                }}
+                // The preview stands in for an empty draft, so its placeholder must not show through.
+                placeholder={
+                  commandDictationPreview
+                    ? undefined
+                    : t('session.commandDock.commandPlaceholder', 'Type a command…')
+                }
+                placeholderTextColor={colors.textMuted}
+                autoCapitalize="none"
+                autoCorrect={autocompleteEnabled}
+                spellCheck={autocompleteEnabled}
+                smartInsertDelete={false}
+                // Why: not autofill content, but keyboard must stay default so non-Latin IMEs remain selectable.
+                autoComplete="off"
+                keyboardType={getTerminalCommandKeyboardType(hostOs(), autocompleteEnabled)}
+                returnKeyType="send"
+                blurOnSubmit={false}
+                // Why: composing is local — an outage must not lock the field or discard typed text (#6713).
+                editable={canCompose}
+                onSubmitEditing={() => void handleSend()}
+              />
+              {commandDictationPreview ? (
+                <MobileTerminalCommandDictationPreview
+                  draft={bufferedTerminalDraftState.input}
+                  preview={commandDictationPreview}
+                />
+              ) : null}
+            </View>
             <MobileTerminalInputActions
               canSend={canSend}
               isAttaching={isAttaching}
               dictation={dictation}
               dictationMode={dictationMode}
               dictationEnabled={dictationEnabled}
+              meterHalo={dictation.meter}
               buttonStyle={styles.dictationButton}
               activeButtonStyle={styles.dictationButtonActive}
               disabledButtonStyle={styles.sendButtonDisabled}
@@ -178,7 +209,7 @@ export function MobileSessionCommandDock({
               style={[styles.sendButton, !canSend && styles.sendButtonDisabled]}
               disabled={!canSend}
               onPress={() => void handleSend()}
-              accessibilityLabel="Send command"
+              accessibilityLabel={t('session.commandDock.sendCommand', 'Send command')}
             >
               <ArrowUp size={18} color={colors.textSecondary} strokeWidth={2.5} />
             </Pressable>

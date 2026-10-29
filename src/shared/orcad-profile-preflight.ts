@@ -21,7 +21,9 @@ export const orcadProfilePreflightResponseSchema = z.object({
   runtimeVersion: z.string().min(1),
   artifactVersion: z.string().regex(/^\d+\.\d+\.\d+\+[a-f0-9]{12}$/),
   sqliteVersion: z.string().min(1),
-  revision: z.number().int().positive()
+  revision: z.number().int().positive(),
+  /** Daemon generations alive under the served data root, when asked; null when unverifiable. */
+  liveDaemonProtocols: z.array(z.number().int().positive()).nullable().optional()
 })
 
 export type OrcadProfilePreflightResponse = z.infer<typeof orcadProfilePreflightResponseSchema>

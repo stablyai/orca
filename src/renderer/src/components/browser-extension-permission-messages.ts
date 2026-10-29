@@ -96,10 +96,16 @@ function hostMessage(hostPermissions: string[]): string | null {
       }
     )
   }
+  const named = hosts.slice(0, MAX_NAMED_HOSTS).join(', ')
+  const count = hosts.length - MAX_NAMED_HOSTS
   return translate(
-    'browserExtensions.permission.manySites',
+    'browserExtensions.permission.manyOtherSites',
     'Read and change your data on {{hosts}} and {{count}} other sites',
-    { hosts: hosts.slice(0, MAX_NAMED_HOSTS).join(', '), count: hosts.length - MAX_NAMED_HOSTS }
+    {
+      hosts: named,
+      count,
+      defaultValue_one: 'Read and change your data on {{hosts}} and {{count}} other site'
+    }
   )
 }
 

@@ -24,7 +24,11 @@ function restartedServe(session: WorkspaceSessionState = savedServeTabs()) {
     return { browserPageId: browserPageId! }
   })
   const registered = () => new Map(livePages.map((pageId, index) => [pageId, index + 1]))
-  runtime.setOffscreenBrowserBackend({ createTab, closeTab: vi.fn(async () => {}) })
+  runtime.setOffscreenBrowserBackend({
+    createTab,
+    closeTab: vi.fn(async () => {}),
+    ownsTab: () => true
+  })
   runtime.setAgentBrowserBridge(
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the runtime reads only tabList from the bridge on these paths.
     {

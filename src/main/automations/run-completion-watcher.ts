@@ -4,13 +4,14 @@ import {
   type AutomationRun,
   type AutomationRunOutputSnapshot
 } from '../../shared/automations-types'
+import type { AutomationRunFailureCodeFields } from '../../shared/automation-run-failure-copy'
 import { RetainedRunReconciler } from './retained-run-reconciliation'
 
 export type AutomationRunCompletionObservation = {
   status: 'completed' | 'dispatch_failed'
   outputSnapshot?: AutomationRunOutputSnapshot | null
   error?: string | null
-}
+} & AutomationRunFailureCodeFields
 
 export type AutomationRunTerminalObserver = {
   /** Null also covers terminals that have not reattached yet. */
@@ -178,7 +179,9 @@ export class AutomationRunCompletionWatcher {
       terminalPaneKey: current.terminalPaneKey,
       terminalPtyId: current.terminalPtyId,
       outputSnapshot: observation.outputSnapshot ?? null,
-      error: observation.error ?? null
+      error: observation.error ?? null,
+      errorCode: observation.errorCode ?? null,
+      errorParams: observation.errorParams ?? null
     })
   }
 }

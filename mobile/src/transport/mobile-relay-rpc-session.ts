@@ -16,6 +16,7 @@ import { openRpcRequestBudget, resolvePostConnectRequestTimeout } from './rpc-re
 import { isRpcResponse } from './rpc-response-shape'
 import { RelayDialStageTracker, type RelayDialStageSource } from './relay-dial-stage'
 import { RelayPendingRequests } from './relay-pending-requests'
+import { MobileRelayConnectWaiters } from './mobile-relay-connect-waiters'
 import { RpcSessionLivenessWatchdog } from './rpc-session-liveness-watchdog'
 import { settleMobileRuntimeCapabilities } from './mobile-runtime-capability-negotiation'
 import type { RelayHostCloseReason } from '../../../src/shared/relay-host-close-reason'
@@ -138,6 +139,7 @@ export function connectMobileRelayRpcSession(args: {
       }
     },
     close() {
+      connectWaiters.releaseAll()
       if (closed) {
         return
       }
@@ -157,6 +159,7 @@ export function connectMobileRelayRpcSession(args: {
     probeAfterBackground: () =>
       state === 'connected' && livenessWatchdog.probeNow(livenessIdentity, RELAY_RESUME_PROBE_MS)
   }
+  const connectWaiters = new MobileRelayConnectWaiters(client)
   const livenessWatchdog = new RpcSessionLivenessWatchdog({
     transport: 'relay',
     idleProbeMs: null,
@@ -265,31 +268,7 @@ export function connectMobileRelayRpcSession(args: {
   }
 
   function waitForConnected(timeoutMs = requestTimeoutMs): Promise<void> {
-    if (state === 'connected') {
-      return Promise.resolve()
-    }
-    return new Promise((resolve, reject) => {
-      let timer: ReturnType<typeof setTimeout> | null = null
-      const unsubscribe = client.onStateChange((next) => {
-        if (next === 'connected') {
-          finish()
-          resolve()
-        } else if (next === 'disconnected' || next === 'auth-failed') {
-          finish()
-          reject(new Error(`relay session ${next}`))
-        }
-      })
-      timer = setTimeout(() => {
-        finish()
-        reject(new Error('relay session connection timed out'))
-      }, timeoutMs)
-      function finish(): void {
-        if (timer) {
-          clearTimeout(timer)
-        }
-        unsubscribe()
-      }
-    })
+    return connectWaiters.wait(timeoutMs)
   }
 
   function publishState(next: ConnectionState): void {

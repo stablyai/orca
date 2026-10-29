@@ -1,5 +1,5 @@
 import { app, clipboard, dialog, type BrowserWindow } from 'electron'
-import { parseSkillShareId } from '../shared/skill-share-link'
+import { isRoutedOrcaDeepLink } from './startup/orca-deep-link-url'
 import { createMacAppActivationHandler } from './window/macos-app-activation'
 import { isBackgroundLaunch, isOrcadSidecarLaunch } from './window/foreground-activation-policy'
 import { createDesktopHandoff, desktopHandoffArguments } from './window/macos-desktop-handoff'
@@ -11,6 +11,7 @@ import { openMainWindow as openMainWindowController } from './startup/main-windo
 import { mainProcessState as state } from './startup/main-process-state'
 import { runMainProcessPreflight } from './startup/main-process-preflight'
 import { runWslHolderUninstallPreflight } from './startup/wsl-holder-uninstall-preflight'
+import { runAgentHooksUninstallPreflight } from './startup/agent-hooks-uninstall-preflight'
 import { enableLinearRegexpFallback } from './startup/linear-regexp-fallback'
 import { registerMainProcessIpcHandlers } from './startup/main-process-ipc-bootstrap'
 import { initializeMainProcessReady } from './startup/main-process-ready'
@@ -35,7 +36,11 @@ import { ProfileStateRecoveryRequiredError } from './persistence/profile-state/p
 import { getProfileUserDataPath } from './orca-profiles/profile-storage-paths'
 import { leaseAppImageGenerationForCurrentProcess } from './cli/appimage-generation-lease'
 import { wakeRememberedWslHosts } from './wsl/wsl-host-early-wake'
-import { wslHostsGateOpen } from './wsl/wsl-host-gate'
+import { wslHostsServing } from './wsl/wsl-host-gate'
+import { configureWslHostsGateFromDisk } from './wsl/wsl-host-gate-startup'
+import { ignoreInheritedWslHostsGateState } from '../shared/wsl-host-internal-gate'
+import { registerOrcaProtocolClient } from './startup/orca-protocol-registration'
+import { clearWindowsStdHandleInheritance } from './startup/windows-std-handle-inheritance'
 
 function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}): BrowserWindow {
   return openMainWindowController(options)
@@ -54,6 +59,9 @@ const requestDesktopHandoff = createDesktopHandoff({
 function requestDesktopActivation(argv: readonly string[] = []): void {
   state.skillShareDeepLinks.capture(argv, (shareId) => {
     state.mainWindow?.webContents.send('ui:openSkillShare', shareId)
+  })
+  state.pluginInstallLinks.capture(argv, (link) => {
+    state.mainWindow?.webContents.send('ui:openPluginInstallLink', link)
   })
   state.osOpenedDocuments.capture(argv, publishOsOpenedDocuments)
   // Duplicate serve launches must not activate a desktop on a headless server (#11935).
@@ -100,9 +108,14 @@ const handleMacAppActivation = createMacAppActivationHandler({
   requestActivation: requestDesktopActivation
 })
 
-// The uninstaller's holder release runs instead of the app, never alongside it.
+// Before anything spawns: no child may inherit Orca's std handles.
+clearWindowsStdHandleInheritance()
+// A relaunch or installer inherits the parent's published WSL gate state; this process recomputes.
+ignoreInheritedWslHostsGateState()
+// The uninstaller's holder release and hook removal run instead of the app, never alongside it.
 const preflightReady =
   !runWslHolderUninstallPreflight() &&
+  !runAgentHooksUninstallPreflight() &&
   runMainProcessPreflight({
     focusExistingWindow,
     requestDesktopActivation
@@ -112,12 +125,14 @@ const preflightReady =
 if (preflightReady) {
   enableLinearRegexpFallback()
   void leaseAppImageGenerationForCurrentProcess()
+  // Before any gate check: saved WSL work keeps a closed gate serving it.
+  configureWslHostsGateFromDisk(app.getPath('userData'), app.getVersion())
   // Why this early: a cold distro takes seconds to boot; starting now overlaps it with app startup.
-  if (process.platform === 'win32' && wslHostsGateOpen()) {
+  if (process.platform === 'win32' && wslHostsServing()) {
     wakeRememberedWslHosts(app.getPath('userData'))
   }
   app.on('open-url', (event, url) => {
-    if (!parseSkillShareId(url)) {
+    if (!isRoutedOrcaDeepLink(url)) {
       return
     }
     event.preventDefault()
@@ -134,7 +149,12 @@ if (preflightReady) {
       requestDesktopActivation()
     }
   })
+  registerOrcaProtocolClient(app, {
+    platform: process.platform,
+    desktopLaunch: !state.isServeMode && !isBackgroundLaunch() && !isOrcadSidecarLaunch()
+  })
   state.skillShareDeepLinks.capture(process.argv)
+  state.pluginInstallLinks.capture(process.argv)
   // The first renderer pulls on mount; nothing listens this early.
   state.osOpenedDocuments.capture(process.argv)
   registerMainProcessIpcHandlers()

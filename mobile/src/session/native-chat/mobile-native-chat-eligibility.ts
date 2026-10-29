@@ -4,7 +4,7 @@ import {
   isNativeChatAgentAvailable,
   nativeChatAvailabilityAgent
 } from '../../../../src/shared/native-chat-availability'
-import { isNativeChatTranscriptLocalReadable } from '../../../../src/shared/native-chat-transcript-readability'
+import { isNativeChatTranscriptLocalReadable } from '../../../../src/shared/native-chat/transcript/native-chat-transcript-readability'
 
 export type MobileNativeChatResolution = {
   agent: string
@@ -13,6 +13,8 @@ export type MobileNativeChatResolution = {
   transcriptPath: string | null
   // Remembered identity alone permits reads only; typing could otherwise reach a bare shell.
   agentConfirmed: boolean
+  // The running agent reported this session, so a missing transcript means no prompt yet.
+  sessionLive: boolean
 }
 
 export type MobileNativeChatIdentity = {
@@ -43,7 +45,13 @@ export function resolveMobileNativeChat(
   if (tab.type === 'agent-session') {
     // Structured tabs use journals, so no per-agent transcript layout is needed.
     return tab.sessionId && isStructuredAgentId(tab.agent)
-      ? { agent: tab.agent, sessionId: tab.sessionId, transcriptPath: null, agentConfirmed: true }
+      ? {
+          agent: tab.agent,
+          sessionId: tab.sessionId,
+          transcriptPath: null,
+          agentConfirmed: true,
+          sessionLive: true
+        }
       : null
   }
   if (tab.type !== 'terminal') {
@@ -70,7 +78,8 @@ export function resolveMobileNativeChat(
     transcriptPath: liveSession
       ? (liveSession.transcriptPath ?? null)
       : (rememberedSession?.transcriptPath ?? null),
-    agentConfirmed: evidenceAgent !== null
+    agentConfirmed: evidenceAgent !== null,
+    sessionLive: liveSession?.id != null
   }
 }
 

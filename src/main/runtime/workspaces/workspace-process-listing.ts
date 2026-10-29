@@ -17,10 +17,9 @@ import {
 } from '../runtime-worktree-ps-activity'
 import { applyRuntimeWorktreePsUnverifiableTerminals } from '../runtime-worktree-ps-unverifiable-terminals'
 import { attachRuntimeWorktreeAgentRows } from '../runtime-worktree-agent-rows'
+import { attachRuntimeWorktreeAgentRowWaits } from '../runtime-worktree-agent-row-waits'
 import { compareWorktreePs } from '../runtime-worktree-status-projection'
 import type { Repo } from '../../../shared/repo-types'
-import type { StructuredAgentId } from '../../../shared/agent-session-provider-handle'
-import type { GlobalSettings } from '../../../shared/global-settings-types'
 import { enrichMissingRepoGitRemoteIdentities } from '../../repo-git-remote-identity-enrichment'
 import { ensureStructuredAgentSessionHost as installStructuredAgentSessionHost } from '../structured-agent-session-runtime'
 import {
@@ -46,7 +45,6 @@ import {
   structuredWorkerOpenTaskTitle,
   structuredWorkerOwesWork
 } from '../structured-worker-custody'
-import { resolveTuiAgentLaunchEnv } from '../../../shared/tui-agent-launch-defaults'
 import { preModeChatGetsFullAccess } from '../../../shared/agent-chat-permission-mode'
 import { isTuiAgent } from '../../../shared/tui-agent-config'
 import { nativeChatShellEnvironmentPolicy } from '../../../shared/native-chat/native-chat-shell-environment'
@@ -65,7 +63,8 @@ import { isWorkspaceNotificationMuted } from '../workspace-notification-mute'
 export abstract class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithWorktreePsDependencies {
   async getWorktreePs(
     limit = DEFAULT_WORKTREE_PS_LIMIT,
-    sourceDefaultsSupported = true
+    sourceDefaultsSupported = true,
+    includeAgentWait = false
   ): Promise<RuntimeWorktreePsResult> {
     if (!Number.isInteger(limit) || limit <= 0) {
       throw new Error('invalid_limit')
@@ -118,26 +117,28 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithWorktr
         getTerminalHandlesForPty: (ptyId) => this.getExistingTerminalHandlesForPtyId(ptyId),
         getSummary
       })
+    const rowSources = collectRuntimeWorktreeAgentSources({
+      mirroredWorktreeIdByTabId,
+      connectedPtyEvidence,
+      hookSnapshots: this.getAgentStatusSnapshotFn?.() ?? [],
+      readStructuredSummary: getStructuredAgentSessionHost()?.readStatusSummary
+    })
     attachRuntimeWorktreeAgentRows({
       summaries,
       terminalTitleEvidenceByWorktreeId,
-      rowSources: collectRuntimeWorktreeAgentSources({
-        mirroredWorktreeIdByTabId,
-        connectedPtyEvidence,
-        hookSnapshots: this.getAgentStatusSnapshotFn?.() ?? [],
-        readStructuredSummary: getStructuredAgentSessionHost()?.readStatusSummary
-      }),
+      rowSources,
       orchestrationByPaneKey: this.agentOrchestrationProjection.buildByPaneKey(),
       getSummary
     })
 
     const sorted = [...summaries.values()].sort(compareWorktreePs)
     // Apply per-host pagination so hosts sorting last cannot disappear behind a global cap (#18104).
-    return buildWorktreeListingPage(
+    const page = buildWorktreeListingPage(
       sorted,
       limit,
       withoutHiddenHosts(this.listKnownExecutionHostIds(), runtimeHiddenHostIds(this.store))
     )
+    return includeAgentWait ? attachRuntimeWorktreeAgentRowWaits(page, rowSources, this) : page
   }
 
   /** Match desktop visibility, including imported worktrees, through the worktree.list gate. */
@@ -164,17 +165,6 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithWorktr
             visibilitySettings
           )
       )
-    }
-  }
-
-  /** Apply the host-owning desktop's account overlay to configured agent environment. */
-  protected structuredAgentLaunchEnv(
-    agent: StructuredAgentId,
-    settings: Pick<GlobalSettings, 'agentDefaultEnv'>
-  ) {
-    return {
-      ...resolveTuiAgentLaunchEnv(agent, settings),
-      ...this.accounts.hostLaunchEnvFor(agent)
     }
   }
 

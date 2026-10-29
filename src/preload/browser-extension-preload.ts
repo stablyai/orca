@@ -17,6 +17,7 @@ import { passesBrowserExtensionEventFilter } from './browser-extension-event-fil
 import { installBrowserExtensionInertApis } from './browser-extension-inert-apis'
 import { installContentScriptRelayFilter } from './browser-extension-content-script-relay'
 import { installBrowserExtensionNativeMessaging } from './browser-extension-native-messaging'
+import { installBrowserExtensionFrameLifetime } from './browser-extension-frame-lifetime'
 import { installBrowserExtensionStorageRelay } from './browser-extension-storage-relay'
 import {
   installBrowserExtensionStorageSync,
@@ -68,6 +69,7 @@ async function invoke(request: unknown): Promise<BrowserExtensionInvokeReply> {
 }
 
 function installExtensionContextApis(): void {
+  installBrowserExtensionFrameLifetime(ipcRenderer)
   const dispatchers: ((namespace: string, event: string, args: unknown[]) => void)[] = []
   ipcRenderer.on(PRELOAD_BROWSER_EXTENSION_EVENT_CHANNEL, (_event, payload: unknown) => {
     if (

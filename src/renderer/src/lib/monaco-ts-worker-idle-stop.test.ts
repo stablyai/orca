@@ -58,33 +58,79 @@ describe('installMonacoTsWorkerIdleStop', () => {
     expect(fake.typescriptDefaults.setCompilerOptions).not.toHaveBeenCalled()
     vi.advanceTimersByTime(1)
     expect(fake.typescriptDefaults.setCompilerOptions).toHaveBeenCalledWith({ jsx: 1 })
-    expect(fake.javascriptDefaults.setCompilerOptions).toHaveBeenCalledWith({ jsx: 1 })
+    expect(fake.javascriptDefaults.setCompilerOptions).not.toHaveBeenCalled()
   })
 
-  it('rechecks reopened TS/JS models and waits for their departure', () => {
+  it.each(['typescript', 'javascript'])(
+    'stops %s independently of the other language',
+    (language) => {
+      vi.useFakeTimers()
+      const fake = createFakeMonaco(['typescript', 'javascript'])
+      installMonacoTsWorkerIdleStop(fake.monaco, 1000)
+      const closed = fake.models.find((model) => model.getLanguageId() === language)
+      if (!closed) {
+        throw new Error('Missing language model')
+      }
+      fake.disposeModel(closed)
+      vi.advanceTimersByTime(1000)
+      const stopped = language === 'typescript' ? fake.typescriptDefaults : fake.javascriptDefaults
+      const retained = language === 'typescript' ? fake.javascriptDefaults : fake.typescriptDefaults
+      expect(stopped.setCompilerOptions).toHaveBeenCalledOnce()
+      expect(retained.setCompilerOptions).not.toHaveBeenCalled()
+    }
+  )
+
+  it('keeps independent deadlines when both language workers lose their models', () => {
+    vi.useFakeTimers()
+    const fake = createFakeMonaco(['typescript', 'javascript'])
+    installMonacoTsWorkerIdleStop(fake.monaco, 1000)
+    fake.disposeModel(fake.models[0])
+    vi.advanceTimersByTime(500)
+    fake.disposeModel(fake.models[0])
+    vi.advanceTimersByTime(500)
+    expect(fake.typescriptDefaults.setCompilerOptions).toHaveBeenCalledOnce()
+    expect(fake.javascriptDefaults.setCompilerOptions).not.toHaveBeenCalled()
+    vi.advanceTimersByTime(500)
+    expect(fake.javascriptDefaults.setCompilerOptions).toHaveBeenCalledOnce()
+  })
+
+  it('releases the old language worker after changing between TS and JS', () => {
+    vi.useFakeTimers()
+    const fake = createFakeMonaco(['typescript'])
+    installMonacoTsWorkerIdleStop(fake.monaco, 1000)
+    fake.changeLanguage(fake.models[0], 'javascript')
+    vi.advanceTimersByTime(1000)
+    expect(fake.typescriptDefaults.setCompilerOptions).toHaveBeenCalledOnce()
+    expect(fake.javascriptDefaults.setCompilerOptions).not.toHaveBeenCalled()
+  })
+
+  it('rechecks reopened models of the same language and waits for their departure', () => {
     vi.useFakeTimers()
     const fake = createFakeMonaco(['typescript'])
     installMonacoTsWorkerIdleStop(fake.monaco, 1000)
 
     fake.disposeModel(fake.models[0])
-    fake.models.push(createModel('javascript'))
+    fake.models.push(createModel('typescript'))
     vi.advanceTimersByTime(1000)
     expect(fake.typescriptDefaults.setCompilerOptions).not.toHaveBeenCalled()
     fake.changeLanguage(fake.models[0], 'markdown')
     vi.advanceTimersByTime(999)
-    expect(fake.javascriptDefaults.setCompilerOptions).not.toHaveBeenCalled()
+    expect(fake.typescriptDefaults.setCompilerOptions).not.toHaveBeenCalled()
     vi.advanceTimersByTime(1)
-    expect(fake.javascriptDefaults.setCompilerOptions).toHaveBeenCalledTimes(1)
+    expect(fake.typescriptDefaults.setCompilerOptions).toHaveBeenCalledTimes(1)
+    expect(fake.javascriptDefaults.setCompilerOptions).not.toHaveBeenCalled()
   })
 
   it('cancels the pending stop and model subscriptions on cleanup', () => {
     vi.useFakeTimers()
-    const fake = createFakeMonaco(['javascript'])
+    const fake = createFakeMonaco(['typescript', 'javascript'])
     const dispose = installMonacoTsWorkerIdleStop(fake.monaco, 1000)
+    fake.disposeModel(fake.models[0])
     fake.disposeModel(fake.models[0])
     dispose()
     vi.advanceTimersByTime(1000)
     expect(fake.javascriptDefaults.setCompilerOptions).not.toHaveBeenCalled()
+    expect(fake.typescriptDefaults.setCompilerOptions).not.toHaveBeenCalled()
     for (const event of [
       fake.monaco.editor.onWillDisposeModel,
       fake.monaco.editor.onDidChangeModelLanguage

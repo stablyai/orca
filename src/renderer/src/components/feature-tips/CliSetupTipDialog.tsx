@@ -1,4 +1,4 @@
-import type { JSX } from 'react'
+import type { JSX, ReactNode } from 'react'
 import type { FeatureTip } from '../../../../shared/feature-tips'
 import { Button } from '@/components/ui/button'
 import {
@@ -9,12 +9,14 @@ import {
   DialogHeader,
   DialogTitle
 } from '@/components/ui/dialog'
-import { translate } from '@/i18n/i18n'
+import { i18n, translate } from '@/i18n/i18n'
+import { Trans } from 'react-i18next'
 import { CliFeatureTipVisual } from './CliFeatureTipVisual'
 import { CliSkillSetupPanel } from './CliSkillSetupPanel'
 import { FeatureTipActions } from './FeatureTipActions'
+import { getLocalizedFeatureTipCopy } from './feature-tip-localized-copy'
 
-function WorktreePromptTerm({ children }: { children: string }): JSX.Element {
+function WorktreePromptTerm({ children }: { children?: ReactNode }): JSX.Element {
   return (
     <span className="rounded-sm bg-foreground/10 px-1 py-0.5 font-medium text-foreground">
       {children}
@@ -39,6 +41,7 @@ export function CliSetupTipDialog({
   onPrimaryAction: () => void
   onSkip: () => void
 }): JSX.Element {
+  const copy = getLocalizedFeatureTipCopy(tip)
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       {/* Why: the CLI tip sits over terminal surfaces, so it needs a local token-mixed surface. */}
@@ -58,10 +61,10 @@ export function CliSetupTipDialog({
                   skillTerminalOpen ? 'max-w-2xl' : 'max-w-[22rem]'
                 }`}
               >
-                {tip.title}
+                {copy.title}
               </DialogTitle>
               <DialogDescription className="mt-3 max-w-2xl text-sm leading-relaxed">
-                {tip.description}
+                {copy.description}
               </DialogDescription>
               <div
                 aria-hidden={skillTerminalOpen}
@@ -78,20 +81,14 @@ export function CliSetupTipDialog({
                   )}
                 </p>
                 <p>
-                  {translate(
-                    'auto.components.feature.tips.FeatureTipsModal.55846c7f95',
-                    '“Split this PR into two'
-                  )}
-                  <WorktreePromptTerm>
-                    {translate(
-                      'auto.components.feature.tips.FeatureTipsModal.27c567a89c',
-                      'worktrees'
+                  <Trans
+                    i18n={i18n}
+                    defaults={translate(
+                      'auto.components.feature.tips.FeatureTipsModal.splitPrPrompt',
+                      '“Split this PR into two <term>worktrees</term> and create PRs for each.”'
                     )}
-                  </WorktreePromptTerm>{' '}
-                  {translate(
-                    'auto.components.feature.tips.FeatureTipsModal.7fc6f02099',
-                    'and create PRs for each.”'
-                  )}
+                    components={{ term: <WorktreePromptTerm /> }}
+                  />
                 </p>
                 <p>
                   {translate(

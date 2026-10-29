@@ -1,4 +1,8 @@
-import { validatePathExistenceBatch } from '../../shared/path-existence-batch'
+import { translateMain } from '../i18n/main-i18n'
+import {
+  validatePathExistenceBatch,
+  type ShellPathExistence
+} from '../../shared/path-existence-batch'
 import { ipcMain, shell, dialog } from 'electron'
 import { constants, copyFile, readFile, stat } from 'node:fs/promises'
 import { basename, extname, isAbsolute, normalize, posix, win32 } from 'node:path'
@@ -28,6 +32,7 @@ import {
   resolveOwnedPathTarget,
   validateLocalPathTarget
 } from './shell-owned-path-target'
+import { guardWslUncPathAccess } from '../wsl/wsl-unc-access-gate'
 
 export { EXTERNAL_EDITOR_CLI_COMMAND }
 
@@ -193,10 +198,23 @@ export function registerShellHandlers(
     await openWithSystemDefault(target.path, ownerHostId)
   })
 
-  ipcMain.handle('shell:pathsExist', async (_event, paths: string[]): Promise<boolean[]> => {
-    validatePathExistenceBatch(paths)
-    return Promise.all(paths.map(pathExists))
-  })
+  ipcMain.handle(
+    'shell:pathsExist',
+    async (_event, paths: string[]): Promise<ShellPathExistence[]> => {
+      validatePathExistenceBatch(paths)
+      // Chat link renders and terminal hovers ask unprompted: a stat of a stopped distro's UNC path
+      // boots it (E9). Refuse that path alone, so the caller retries it and keeps the rest.
+      return Promise.all(
+        paths.map((path) =>
+          guardWslUncPathAccess(path, () => pathExists(path)).catch(
+            (error: unknown): ShellPathExistence => ({
+              error: error instanceof Error ? error.message : String(error)
+            })
+          )
+        )
+      )
+    }
+  )
 
   ipcMain.handle('shell:pathExists', async (_event, filePath: string): Promise<boolean> => {
     return pathExists(filePath)
@@ -240,7 +258,10 @@ export function registerShellHandlers(
     const result = await dialog.showOpenDialog({
       properties: ['openFile'],
       filters: [
-        { name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp', 'ico'] }
+        {
+          name: translateMain('native.dialog.images', 'Images'),
+          extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp', 'ico']
+        }
       ]
     })
     if (result.canceled || result.filePaths.length === 0) {
@@ -254,7 +275,12 @@ export function registerShellHandlers(
     async (): Promise<{ dataUrl: string; fileName: string } | null> => {
       const result = await dialog.showOpenDialog({
         properties: ['openFile'],
-        filters: [{ name: 'Repo icon images', extensions: ['png'] }]
+        filters: [
+          {
+            name: translateMain('native.dialog.repoIconImages', 'Repo icon images'),
+            extensions: ['png']
+          }
+        ]
       })
       if (result.canceled || result.filePaths.length === 0) {
         return null
@@ -283,7 +309,12 @@ export function registerShellHandlers(
   ipcMain.handle('shell:pickAudio', async (): Promise<string | null> => {
     const result = await dialog.showOpenDialog({
       properties: ['openFile'],
-      filters: [{ name: 'Audio', extensions: ['ogg', 'mp3', 'wav', 'm4a', 'aac', 'flac'] }]
+      filters: [
+        {
+          name: translateMain('native.dialog.audio', 'Audio'),
+          extensions: ['ogg', 'mp3', 'wav', 'm4a', 'aac', 'flac']
+        }
+      ]
     })
     if (result.canceled || result.filePaths.length === 0) {
       return null

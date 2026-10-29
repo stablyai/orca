@@ -4,7 +4,12 @@ import { basename, isAbsolute, join, relative, toNamespacedPath } from 'node:pat
 import type * as WindowsSecurityModule from '@orca/windows-security'
 import { ORCAD_WINDOWS_SECURITY_FILENAME } from './orcad-artifacts'
 
-export type { GrantAccessOptions, WindowsAce, WindowsDacl } from '@orca/windows-security'
+export type {
+  GrantAccessOptions,
+  StdHandleInheritanceFailure,
+  WindowsAce,
+  WindowsDacl
+} from '@orca/windows-security'
 export type WindowsSecurityAddon = typeof WindowsSecurityModule
 
 /** The addon (every path namespaced, async writes ordered per path) and the token's user SID. */
@@ -105,7 +110,8 @@ function prepare(raw: WindowsSecurityAddon): WindowsSecurity {
       grantAccess: (path, sid, mask, options) =>
         raw.grantAccess(toNamespacedPath(path), sid, mask, options),
       grantAccessAsync: (path, sid, mask, options) =>
-        inPathOrder(path, (namespaced) => raw.grantAccessAsync(namespaced, sid, mask, options))
+        inPathOrder(path, (namespaced) => raw.grantAccessAsync(namespaced, sid, mask, options)),
+      clearStdHandleInheritance: () => raw.clearStdHandleInheritance()
     }
   }
 }

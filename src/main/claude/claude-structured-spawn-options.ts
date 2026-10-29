@@ -80,11 +80,10 @@ export function claudeStructuredSpawnOptions(input: {
 export function adoptClaudeStructuredSpawnOptions(
   session: Pick<
     ClaudeSession,
-    'translator' | 'launchedModel' | 'launchIntent' | 'fastModeAtStart' | 'appliedInputOptions'
+    'translator' | 'launchIntent' | 'fastModeAtStart' | 'appliedInputOptions'
   >,
   spawn: ClaudeStructuredSpawnOptions
 ): void {
-  session.launchedModel = spawn.options.get('model') ?? null
   const { extraArgs, permissionMode } = spawn.sdkOptions
   // A configured `--model` in the agent's arguments survives when the chat saved none.
   const configuredModel = typeof extraArgs?.model === 'string' ? extraArgs.model : undefined

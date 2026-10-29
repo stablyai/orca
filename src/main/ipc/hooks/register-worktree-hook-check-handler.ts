@@ -3,6 +3,7 @@ import { getRepoDialableSshTargetId, type ExecutionHostId } from '../../../share
 import { isFolderRepo } from '../../../shared/repo-kind'
 import { hasHooksFile, loadHooks, hasUnrecognizedOrcaYamlKeys } from '../../hooks'
 import { resolveRepoForExecutionHost } from '../worktrees/repo-host-ownership'
+import { blockedWslDistroForPath } from '../../wsl/wsl-unc-access-gate'
 import type { WorktreeIpcContext } from '../worktrees/worktree-ipc-context'
 
 export function registerWorktreeHookCheckHandler(context: WorktreeIpcContext): void {
@@ -10,7 +11,7 @@ export function registerWorktreeHookCheckHandler(context: WorktreeIpcContext): v
 
   ipcMain.handle(
     'hooks:check',
-    async (_event, args: { repoId: string; hostId?: ExecutionHostId }) => {
+    async (_event, args: { repoId: string; hostId?: ExecutionHostId; background?: boolean }) => {
       const repo = resolveRepoForExecutionHost(store, args.repoId, args.hostId)
       if (!repo) {
         const repoIdExists = store.getRepos().some((candidate) => candidate.id === args.repoId)
@@ -32,6 +33,22 @@ export function registerWorktreeHookCheckHandler(context: WorktreeIpcContext): v
           hasHooks: false,
           hooks: null,
           mayNeedUpdate: false
+        }
+      }
+
+      // A render-driven check must not open a stopped distro's `\\wsl.localhost` paths (E9).
+      const blocked = args.background ? await blockedWslDistroForPath(repo.path) : null
+      if (blocked) {
+        return {
+          status: 'error',
+          hasHooks: false,
+          hooks: null,
+          mayNeedUpdate: false,
+          // A stopped distro answers once it runs again; an unverifiable one is worth a retry.
+          unavailable:
+            blocked.state === 'stopped'
+              ? ('wsl-distro-stopped' as const)
+              : ('wsl-distro-unverifiable' as const)
         }
       }
 

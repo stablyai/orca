@@ -253,12 +253,22 @@ describe('structured agent session options', () => {
     )
     const seed = { model: 'gpt-5.5' }
     expect(viewModel(seeded, seed, {})).toBe('gpt-5.5')
-    // A saved pick the host's list does not name shows the quiet placeholder, never its raw id.
+    // An omitted saved pick stays visible as its literal id; inventory does not replace it.
     expect(
       structuredAgentSessionOptionSnapshot(
         structuredAgentSessionOptionView(seeded, { model: 'gpt-next' }, {})
       )
-    ).toEqual([expect.objectContaining({ id: 'model', settable: false, valueSource: 'unknown' })])
+    ).toEqual([
+      expect.objectContaining({
+        id: 'model',
+        settable: true,
+        valueSource: 'dispatched',
+        kind: expect.objectContaining({
+          currentValue: 'gpt-next',
+          choices: expect.arrayContaining([{ value: 'gpt-next', label: 'gpt-next' }])
+        })
+      })
+    ])
     // Before the host answers, and on the built-in list, no saved pick is named.
     expect(viewModel(cold, seed, {})).toBeUndefined()
     const settled = settleStructuredAgentSessionBuiltinCatalog(cold, false)
@@ -301,7 +311,25 @@ describe('structured agent session options', () => {
       structuredAgentSessionOptionSnapshot(fast).find(({ id }) => id === 'serviceTier')
     ).toMatchObject({ settable: true, kind: { currentValue: 'priority' } })
     const standard = commitStructuredAgentSessionOption(fast, 'serviceTier', 'default')
-    // With no model, nothing says which other speed the chat can take.
-    expect(canSetStructuredAgentSessionOption(standard, 'serviceTier', 'priority')).toBe(false)
+    // Inventory does not authorize a literal pick.
+    expect(canSetStructuredAgentSessionOption(standard, 'serviceTier', 'priority')).toBe(true)
   })
+})
+
+it('separates typed literal readiness from an empty or refreshing catalog', () => {
+  const state = createStructuredAgentSessionOptionState('codex')
+  const snapshot = structuredAgentSessionOptionSnapshot(state)
+  expect(canSetStructuredAgentSessionOption(state, 'model', 'unlisted', snapshot, false)).toBe(
+    false
+  )
+  expect(canSetStructuredAgentSessionOption(state, 'model', 'unlisted', snapshot, true)).toBe(true)
+  expect(
+    canSetStructuredAgentSessionOption(
+      { ...state, listingInProgress: true },
+      'effort',
+      'high',
+      snapshot,
+      true
+    )
+  ).toBe(true)
 })

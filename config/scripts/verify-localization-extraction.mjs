@@ -4,8 +4,18 @@ import path from 'node:path'
 import process from 'node:process'
 import { pathToFileURL } from 'node:url'
 
+import { collectSourceFiles } from './verify-localization-catalog.mjs'
+
 const EN_CATALOG_PATH = path.join('src', 'renderer', 'src', 'i18n', 'locales', 'en.json')
 const PLACEHOLDER_RE = /\{\{[^}]+\}\}/g
+// Extraction misses keys held in data structures or passed as variables, so any literal naming a key keeps it.
+// Scoped to src/ so only changes that trigger this check can change its verdict.
+const KEY_LITERAL_SCAN_ROOT = 'src'
+const KEY_LITERAL_RE = /['"`]([A-Za-z][\w-]*(?:\.[\w-]+)+)['"`]/g
+const DYNAMIC_KEY_HEAD_RE =
+  /\b(?:t|translate\w*)\(\s*(?:`([A-Za-z][\w-]*\.[\w.-]*)\$\{|['"]([A-Za-z][\w-]*\.[\w.-]*)['"]\s*\+)/g
+// i18next resolves `key_one` etc. from the base key at runtime.
+const PLURAL_SUFFIX_RE = /_(?:zero|one|two|few|many|other)$/
 
 function flattenCatalog(value, prefix = '', entries = new Map()) {
   if (typeof value === 'string') {
@@ -25,9 +35,36 @@ function placeholders(value) {
   return [...(value.match(PLACEHOLDER_RE) ?? [])].sort().join('|')
 }
 
+// Plural extraction splits every count-bearing key; one that only fills {{count}} stays singular in en.json.
+function collapseCountOnlyKeys(extracted, english) {
+  for (const [key, value] of extracted) {
+    // Plural extraction fills a non-literal default with the dotted base key; treat it as dynamic like other calls.
+    const base = key.replace(PLURAL_SUFFIX_RE, '')
+    if (base !== key && base.includes('.') && value === base) {
+      extracted.set(key, '')
+    }
+  }
+  for (const [key, value] of extracted) {
+    const base = key.endsWith('_other') ? key.slice(0, -'_other'.length) : null
+    // A suffixed key with count (x_one_other) is a pre-native plural call; keep it reported.
+    if (
+      base &&
+      !PLURAL_SUFFIX_RE.test(base) &&
+      !english.has(key) &&
+      english.has(base) &&
+      extracted.get(`${base}_one`) === value
+    ) {
+      extracted.delete(key)
+      extracted.delete(`${base}_one`)
+      extracted.set(base, value)
+    }
+  }
+  return extracted
+}
+
 export function compareExtraction(extractedCatalog, englishCatalog) {
-  const extracted = flattenCatalog(extractedCatalog)
   const english = flattenCatalog(englishCatalog)
+  const extracted = collapseCountOnlyKeys(flattenCatalog(extractedCatalog), english)
   const dynamicDefaults = [...extracted.entries()]
     .filter(([, value]) => value.length === 0)
     .map(([key]) => key)
@@ -60,6 +97,38 @@ export function compareExtraction(extractedCatalog, englishCatalog) {
     fallbackDrift,
     placeholderMismatches
   }
+}
+
+export function collectKeyLiterals(sourceText, evidence) {
+  for (const match of sourceText.matchAll(KEY_LITERAL_RE)) {
+    evidence.literals.add(match[1])
+  }
+  for (const match of sourceText.matchAll(DYNAMIC_KEY_HEAD_RE)) {
+    evidence.dynamicPrefixes.add(match[1] ?? match[2])
+  }
+  return evidence
+}
+
+async function collectSourceKeyEvidence(root) {
+  const evidence = { literals: new Set(), dynamicPrefixes: new Set() }
+  for (const file of await collectSourceFiles(root, path.join(root, KEY_LITERAL_SCAN_ROOT))) {
+    collectKeyLiterals(await fs.readFile(file, 'utf8'), evidence)
+  }
+  return evidence
+}
+
+export function findUnreferencedKeys(orphans, extracted, { literals, dynamicPrefixes }) {
+  const isNamed = (key) =>
+    extracted.has(key) ||
+    literals.has(key) ||
+    [...dynamicPrefixes].some((prefix) => key.startsWith(prefix))
+  return orphans.filter((key) => {
+    if (isNamed(key)) {
+      return false
+    }
+    const base = key.replace(PLURAL_SUFFIX_RE, '')
+    return base === key || !isNamed(base)
+  })
 }
 
 function printKeys(label, keys) {
@@ -123,14 +192,16 @@ export async function main(root = process.cwd()) {
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'orca-i18next-extraction-'))
 
   try {
-    const [extractedCatalog, englishCatalog] = await Promise.all([
+    const [extractedCatalog, englishCatalog, keyEvidence] = await Promise.all([
       extractToTemporaryCatalog(root, tempDir),
-      fs.readFile(path.join(root, EN_CATALOG_PATH), 'utf8').then(JSON.parse)
+      fs.readFile(path.join(root, EN_CATALOG_PATH), 'utf8').then(JSON.parse),
+      collectSourceKeyEvidence(root)
     ])
     const result = compareExtraction(extractedCatalog, englishCatalog)
+    const unreferenced = findUnreferencedKeys(result.orphans, result.extracted, keyEvidence)
 
     console.log(
-      `Extracted ${result.extracted.size} keys; ${result.dynamicDefaults.length} dynamic defaults are report-only, ${result.orphans.length} existing English entries are not statically referenced, and ${result.fallbackDrift.length} inline defaults differ from en.json.`
+      `Extracted ${result.extracted.size} keys; ${result.dynamicDefaults.length} dynamic defaults are report-only, ${result.orphans.length} existing English entries are not statically referenced (${unreferenced.length} named nowhere in source), and ${result.fallbackDrift.length} inline defaults differ from en.json.`
     )
 
     let failed = false
@@ -141,6 +212,13 @@ export async function main(root = process.cwd()) {
     }
     if (result.fallbackDrift.length > 0) {
       printFallbackDrift(result.fallbackDrift, result.extracted, result.english)
+      failed = true
+    }
+    if (unreferenced.length > 0) {
+      printKeys(
+        'Catalog keys no source references. Delete them from every locale catalog and config/scripts/locale-*-overrides.*, then run `pnpm sync:localization-runtime-catalog`',
+        unreferenced
+      )
       failed = true
     }
 

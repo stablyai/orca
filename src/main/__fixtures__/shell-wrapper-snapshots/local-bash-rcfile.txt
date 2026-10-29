@@ -127,6 +127,9 @@ if [[ -n "${__orca_codex_binary:-}" && -x "${__orca_codex_binary}" ]]; then
   function codex {
     # Why local: zsh's warn_create_global warns for each global a function creates.
     local __orca_codex_arg __orca_codex_isolate="${ORCA_CODEX_ISOLATE:-1}" __orca_codex_identity="${ORCA_CODEX_ISOLATE:-1}"
+    if [[ "${ORCA_REMOTE_VIEWER_CLIPBOARD:-}" == 1 && -z "${SSH_CONNECTION+x}" && -z "${SSH_TTY+x}" ]]; then
+      local -x SSH_CONNECTION='127.0.0.1 0 127.0.0.1 0'
+    fi
     if [[ -n "${ORCA_CODEX_LAUNCH_PREFLIGHT:-}" && -x "${ORCA_CODEX_LAUNCH_PREFLIGHT}" ]]; then
       "${ORCA_CODEX_LAUNCH_PREFLIGHT}" agent hooks prepare-codex >/dev/null 2>&1 || :
     fi
@@ -177,6 +180,22 @@ if [[ -n "${ORCA_CLAUDE_PROFILE_POINTER:-}" && -n "${__orca_claude_binary:-}" &&
 fi
 unset __orca_claude_binary
 
+__orca_wsl_cwd_report() {
+  [[ -n "${WSL_DISTRO_NAME:-}" ]] || return 0
+  if [[ "$PWD" != "${__orca_wsl_cwd_reported-}" ]]; then
+    __orca_wsl_cwd_reported=$PWD
+    local LC_ALL=C __orca_e= __orca_c __orca_i
+    for (( __orca_i = 0; __orca_i < ${#PWD}; __orca_i++ )); do
+      __orca_c=${PWD:__orca_i:1}
+      case $__orca_c in
+        [A-Za-z0-9/._~-]) __orca_e+=$__orca_c ;;
+        *) printf -v __orca_c '%d' "'$__orca_c"; printf -v __orca_c '%%%02X' $(( __orca_c & 255 )); __orca_e+=$__orca_c ;;
+      esac
+    done
+    __orca_wsl_cwd_encoded=$__orca_e
+  fi
+  printf '\033]7;file://%s\007' "${__orca_wsl_cwd_encoded-}"
+}
 # OSC 133 C/D clears agent status after interrupted CLIs exit without sending Stop/SessionEnd hooks.
 __orca_initializing_wrapper=1
 __orca_osc133_precmd() {
@@ -187,6 +206,7 @@ __orca_osc133_precmd() {
     unset __orca_in_command
   fi
   printf "\033]133;A\007"
+  __orca_wsl_cwd_report
   return "$exit_code"
 }
 __orca_osc133_prompt_done() {

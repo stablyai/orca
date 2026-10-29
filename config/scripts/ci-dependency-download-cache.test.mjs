@@ -32,6 +32,24 @@ describe('CI dependency download caches', () => {
     ])
   })
 
+  it('restores the fastlane bundle on pull requests from the key only the warmup saves', () => {
+    const verify = workflow('mobile').jobs.verify.steps
+    const warm = workflow('ci-cache-warmup-platform-jobs').jobs['warm-mobile-bundle']
+    const key = (steps) => steps.find((step) => step.name === 'Resolve fastlane bundle cache')
+    expect(key(warm.steps).run).toBe(key(verify).run)
+    expect(key(warm.steps).env).toEqual(key(verify).env)
+    const restore = verify.find((step) => step.name === 'Restore fastlane bundle')
+    const seed = warm.steps.find((step) => step.name === 'Seed fastlane bundle')
+    expect(restore.uses).toBe('actions/cache/restore@v5')
+    expect(restore.with).toEqual({ path: seed.with.path, key: seed.with.key })
+    expect(warm['runs-on']).toBe(workflow('mobile').jobs.verify['runs-on'])
+    for (const step of [...verify, ...warm.steps].filter((step) =>
+      step.uses?.startsWith('ruby/')
+    )) {
+      expect(step.with['bundler-cache']).toBeUndefined()
+    }
+  })
+
   it('builds internal packages before native preparation after a script-free install', () => {
     const steps = action.runs.steps
     const buildIndex = steps.findIndex((step) => step.name === 'Build internal packages')
@@ -399,16 +417,17 @@ describe('CI dependency download caches', () => {
     expect(warm['runs-on']).toBe('${{ matrix.runner }}')
     expect(warm.strategy.matrix.runner).toEqual([
       'blacksmith-4vcpu-ubuntu-2404-arm',
+      'blacksmith-8vcpu-ubuntu-2404',
       pr.jobs.test.with.runner,
-      'ubuntu-24.04-arm',
       'ubuntu-22.04'
     ])
     expect(workflow('ci-cache-warmup').jobs.warm.strategy.matrix.runner).toEqual([
       'blacksmith-4vcpu-ubuntu-2404',
       'ubuntu-24.04'
     ])
-    expect(pr.jobs.preflight['runs-on']).toBe('blacksmith-8vcpu-ubuntu-2404')
-    expect(pr.jobs.test.with.runner).toBe('blacksmith-8vcpu-ubuntu-2404')
+    // Preflight shares the shards' runner, so one warmed cache serves both.
+    expect(pr.jobs.preflight['runs-on']).toBe(pr.jobs.test.with.runner)
+    expect(pr.jobs.test.with.runner).toBe('ubuntu-24.04-arm')
     expect(units['runs-on']).toBe('${{ inputs.runner }}')
     expect(JSON.parse(pr.jobs.test.with.node_versions)).toEqual(['24'])
     expect(warmInstall.if).toBeUndefined()
@@ -509,6 +528,16 @@ describe('CI dependency download caches', () => {
     expect(release.steps.indexOf(writer)).toBeGreaterThan(release.steps.indexOf(combined))
     expect(consumer.uses).toBe('actions/cache/restore@v5')
     expect(consumer.with['restore-keys'].trim()).toBe('electron-builder-linux-')
+    // Hosted PRs read GitHub's store, which the release alone leaves empty between cuts.
+    const warm = workflow('ci-cache-warmup-platform-jobs').jobs['warm-linux-electron']
+    const seed = warm.steps.find((step) => step.name === 'Seed shared Linux packaging downloads')
+    expect(warm['runs-on']).toBe(packaging['runs-on'])
+    expect(seed.with).toEqual(writer.with)
+    for (const steps of [packaging.steps, release.steps, warm.steps]) {
+      expect(steps.find((step) => step.id === 'eb-versions').run).toBe(
+        packaging.steps.find((step) => step.id === 'eb-versions').run
+      )
+    }
     expect(combined.uses).toBe('actions/cache@v5')
     expect(linux.eb_cache_path.trim().split('\n')).toEqual([
       '~/.cache/electron',

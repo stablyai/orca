@@ -15,8 +15,10 @@ import { hostScreenStyles as styles } from './host-screen-styles'
 import { WorkspaceOptionsSheet } from './workspace-options-sheet'
 import { WorkspaceDetailsSheet } from './workspace-details-sheet'
 import type { HostScreenController } from './use-host-screen-controller'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 
 export function HostScreenOverlays({ controller }: { controller: HostScreenController }) {
+  const t = useMobileTranslation()
   useMobileColorScheme()
   const {
     actions,
@@ -52,10 +54,18 @@ export function HostScreenOverlays({ controller }: { controller: HostScreenContr
         {state.confirmDelete ? (
           <View>
             <View style={styles.confirmContent}>
-              <Text style={styles.confirmTitle}>Delete Worktree</Text>
+              <Text style={styles.confirmTitle}>
+                {t('hostScreen.hostScreenOverlays.deleteWorktree', 'Delete Worktree')}
+              </Text>
               <Text style={styles.confirmMessage}>
-                Delete "{state.confirmDelete.displayName || state.confirmDelete.repo}" (
-                {state.confirmDelete.branch})?
+                {t(
+                  'hostScreen.hostScreenOverlays.deleteConfirmMessage',
+                  'Delete "{{name}}" ({{branch}})?',
+                  {
+                    name: state.confirmDelete.displayName || state.confirmDelete.repo,
+                    branch: state.confirmDelete.branch
+                  }
+                )}
               </Text>
             </View>
             <View style={styles.confirmButtons}>
@@ -67,7 +77,7 @@ export function HostScreenOverlays({ controller }: { controller: HostScreenContr
                 ]}
                 onPress={() => state.setConfirmDelete(null)}
               >
-                <Text style={styles.confirmBtnCancelText}>Cancel</Text>
+                <Text style={styles.confirmBtnCancelText}>{t('common.cancel', 'Cancel')}</Text>
               </Pressable>
               <Pressable
                 style={({ pressed }) => [
@@ -83,7 +93,7 @@ export function HostScreenOverlays({ controller }: { controller: HostScreenContr
                   state.setActionTarget(null)
                 }}
               >
-                <Text style={styles.confirmBtnDestructiveText}>Delete</Text>
+                <Text style={styles.confirmBtnDestructiveText}>{t('common.delete', 'Delete')}</Text>
               </Pressable>
             </View>
           </View>
@@ -107,7 +117,8 @@ export function HostScreenOverlays({ controller }: { controller: HostScreenContr
                       ? []
                       : [
                           {
-                            label: 'Sleep',
+                            id: 'sleep',
+                            label: t('hostScreen.hostScreenOverlays.sleep', 'Sleep'),
                             icon: Moon,
                             onPress: () => {
                               actions.putWorktreeToSleep(actionTarget)
@@ -116,7 +127,10 @@ export function HostScreenOverlays({ controller }: { controller: HostScreenContr
                           }
                         ]),
                     {
-                      label: isWorktreePinned(actionTarget, state.pinnedIds) ? 'Unpin' : 'Pin',
+                      id: 'togglePin',
+                      label: isWorktreePinned(actionTarget, state.pinnedIds)
+                        ? t('hostScreen.hostScreenOverlays.unpin', 'Unpin')
+                        : t('hostScreen.hostScreenOverlays.pin', 'Pin'),
                       icon: isWorktreePinned(actionTarget, state.pinnedIds) ? PinOff : Pin,
                       onPress: () => {
                         actions.togglePin(actionTarget)
@@ -124,14 +138,18 @@ export function HostScreenOverlays({ controller }: { controller: HostScreenContr
                       }
                     },
                     {
-                      label: 'Delete',
+                      id: 'delete',
+                      label: t('common.delete', 'Delete'),
                       destructive: true,
                       onPress: () => state.setConfirmDelete(actionTarget),
                       // Like desktop, git can't remove a primary checkout; older hosts omit the flag.
                       ...(actionTarget.isMainWorktree === true
                         ? {
                             disabled: true,
-                            hint: "Primary worktree — can't be deleted. Remove the project instead."
+                            hint: t(
+                              'hostScreen.hostScreenOverlays.primaryWorktreeDeleteHint',
+                              "Primary worktree — can't be deleted. Remove the project instead."
+                            )
                           }
                         : {})
                     }
@@ -154,9 +172,13 @@ export function HostScreenOverlays({ controller }: { controller: HostScreenContr
 
       <ConfirmModal
         visible={state.confirmRemoveHost}
-        title="Remove Host"
-        message={`Remove "${state.hostName}"? You can re-pair later.`}
-        confirmLabel="Remove"
+        title={t('hostScreen.hostScreenOverlays.removeHost', 'Remove Host')}
+        message={t(
+          'hostScreen.hostScreenOverlays.removeHostMessage',
+          'Remove "{{name}}"? You can re-pair later.',
+          { name: state.hostName }
+        )}
+        confirmLabel={t('common.remove', 'Remove')}
         destructive
         onConfirm={() => void actions.handleRemoveHost()}
         onCancel={() => state.setConfirmRemoveHost(false)}

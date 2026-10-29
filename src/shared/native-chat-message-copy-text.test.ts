@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { nativeChatMessageCopyText } from './native-chat-message-copy-text'
 
-import { subagentGroupFallbackText } from './native-chat-subagent-summary'
+import { subagentGroupFallbackText } from './native-chat/transcript/native-chat-subagent-summary'
 import type { NativeChatSubagentEntry } from './native-chat-types'
 
 describe('nativeChatMessageCopyText', () => {

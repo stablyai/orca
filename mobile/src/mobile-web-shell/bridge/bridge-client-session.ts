@@ -3,7 +3,8 @@ import type {
   BridgeGrants,
   BridgeHostMessage,
   BridgeInitHost,
-  BridgeInitRoute
+  BridgeInitRoute,
+  BridgeUiLocale
 } from './bridge-envelope'
 import { ZERO_SAFE_AREA_INSETS, type BridgeSafeAreaInsets } from './bridge-safe-area-insets'
 
@@ -19,6 +20,8 @@ export type BridgeShellSession = {
   keyboardInset: number
   // Older shells omit this and paint dark native chrome, so absent means dark.
   colorScheme: BridgeColorScheme
+  // Null means an older shell sent no language; the page then follows the WebView's languages.
+  uiLocale: BridgeUiLocale | null
   host: BridgeInitHost | null
   storage: Readonly<Record<string, string>>
   // Oversize keys are withheld from storage and reject writes locally; older shells omit this additive field (ruling 33.6).
@@ -40,6 +43,7 @@ export function readShellSession(
     safeAreaInsets: message.safeAreaInsets ?? ZERO_SAFE_AREA_INSETS,
     keyboardInset: message.keyboardInset ?? 0,
     colorScheme: message.colorScheme ?? 'dark',
+    uiLocale: message.uiLocale ?? null,
     host: message.host ?? null,
     storage: message.storage ?? {},
     storageOversize: message.storageOversize ?? [],

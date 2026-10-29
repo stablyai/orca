@@ -124,6 +124,9 @@ export function useMobileBranchDiffPreview({
             mergeBase: summary.mergeBase
           }
         })
+        if (!isCurrentPreview()) {
+          return
+        }
         let result: MobileGitDiffReply
         try {
           result = gitBranchDiffRead.interpret(reply)
@@ -137,9 +140,6 @@ export function useMobileBranchDiffPreview({
           ignoreTrimWhitespace: shouldIgnoreTrimWhitespace(diffShowWhitespace)
         })
         const syntaxLanguage = resolveMobileSyntaxLanguage(entry.path)
-        if (!isCurrentPreview()) {
-          return
-        }
         updateBranchDiffPreview({
           kind: 'ready',
           entry,

@@ -1,8 +1,8 @@
 import type { Dispatch, SetStateAction } from 'react'
 import type { DirCache } from './file-explorer-types'
 import type { FileExplorerDirLoadTracker } from './file-explorer-dir-load-tracker'
+import { fileExplorerListingToDirCache } from './file-explorer-dir-pages'
 import {
-  fileExplorerEntriesToTreeNodes,
   keepOpenedDirectoryLinks,
   clearFailedOpenedDirectoryLink,
   type FileExplorerDirectoryListing
@@ -164,16 +164,7 @@ export async function refreshFileExplorerExpandedDirs({
       try {
         const listing = await readDirectory(dirPath)
         if (dirLoadTracker.isCurrent(loadToken)) {
-          cache = {
-            children: fileExplorerEntriesToTreeNodes(
-              listing.entries,
-              dirPath,
-              depth,
-              worktreePath,
-              listing.operationOwner
-            ),
-            operationOwner: listing.operationOwner
-          }
+          cache = fileExplorerListingToDirCache(listing, dirPath, depth, worktreePath)
         }
       } catch (error) {
         if (dirLoadTracker.isCurrent(loadToken)) {

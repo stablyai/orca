@@ -11,9 +11,11 @@ const runWslProcess = vi.hoisted(() =>
     timedOut: false
   }))
 )
-const peekConfirmedRunningWslDistros = vi.hoisted(() => vi.fn((): string[] | null => null))
-vi.mock('../wsl-background-distro-gate', () => ({ isWslDistroRunning }))
-vi.mock('../wsl-running-distro-cache', () => ({ peekConfirmedRunningWslDistros }))
+const wasWslDistroLastSeenRunningSettled = vi.hoisted(() => vi.fn((_distro: string) => false))
+vi.mock('../wsl-background-distro-gate', () => ({
+  isWslDistroRunning,
+  wasWslDistroLastSeenRunningSettled
+}))
 vi.mock('./wsl-runner', () => ({ runWslProcess }))
 
 const {
@@ -33,8 +35,8 @@ describe('the guest process table', () => {
   beforeEach(() => {
     isWslDistroRunning.mockReset()
     isWslDistroRunning.mockResolvedValue(true)
-    peekConfirmedRunningWslDistros.mockReset()
-    peekConfirmedRunningWslDistros.mockReturnValue(null)
+    wasWslDistroLastSeenRunningSettled.mockReset()
+    wasWslDistroLastSeenRunningSettled.mockReturnValue(false)
     runWslProcess.mockReset()
   })
 
@@ -77,8 +79,8 @@ describe('the guest process table', () => {
     expect(runWslProcess).not.toHaveBeenCalled()
   })
 
-  it('skips the running check for a live pane whose distro was last seen running', async () => {
-    peekConfirmedRunningWslDistros.mockReturnValue(['ubuntu'])
+  it('skips the running check for a live pane whose distro was last seen running, settled', async () => {
+    wasWslDistroLastSeenRunningSettled.mockReturnValue(true)
     runWslProcess.mockResolvedValue({
       environmentResolved: true,
       code: 0,
@@ -87,12 +89,13 @@ describe('the guest process table', () => {
       timedOut: false
     })
     expect(await readWslGuestPaneProcesses('Ubuntu', 3_000, { running: true })).toEqual([])
+    expect(wasWslDistroLastSeenRunningSettled).toHaveBeenCalledWith('Ubuntu')
     expect(isWslDistroRunning).not.toHaveBeenCalled()
   })
 
   // Review of #33398: a session the client still holds as live may be in a distro terminated since.
-  it('still checks a live pane whose distro is not in the last confirmed running list', async () => {
-    peekConfirmedRunningWslDistros.mockReturnValue(['Debian'])
+  it('still checks a live pane whose distro was not last seen running after any stop settled', async () => {
+    wasWslDistroLastSeenRunningSettled.mockReturnValue(false)
     isWslDistroRunning.mockResolvedValue(false)
     expect(await readWslGuestPaneProcesses('Ubuntu', 3_000, { running: true })).toBeNull()
     expect(isWslDistroRunning).toHaveBeenCalledWith('Ubuntu')

@@ -16,7 +16,7 @@ export async function loadAnsiConsumers(root = process.cwd()) {
     ['parseCodexLoginAuthUrl', 'main/codex-accounts/codex-login-auth-url'],
     ['TerminalCommandPaint', 'main/runtime/terminal-command-paint'],
     ['claudePermissionSubject', 'main/claude/claude-permission-presentation'],
-    ['terminalSafe', 'cli/agent-session-search-format'],
+    ['terminalSafe', 'shared/terminal-safe-text'],
     [
       'createAutomationRunOutputSnapshotBuffer',
       'renderer/src/components/automations/automation-run-output-snapshot'

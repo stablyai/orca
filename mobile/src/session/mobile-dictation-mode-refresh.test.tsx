@@ -16,12 +16,16 @@ const env = vi.hoisted(() => ({
   refuseRead: false
 }))
 
+vi.mock('../platform/clipboard', () => ({
+  useClipboardWriter: () => ({ writeText: async () => {} })
+}))
 vi.mock('expo-router', () => ({
   useFocusEffect: (effect: () => void | (() => void)) => {
     useEffect(() => (env.focused ? effect() : undefined), [effect, env.focused])
   }
 }))
 vi.mock('react-native', () => ({
+  StyleSheet: { create: <T,>(styles: T) => styles },
   Animated: { Value: class {} },
   ActivityIndicator: 'ActivityIndicator',
   Pressable: 'Pressable',
@@ -35,7 +39,11 @@ vi.mock('react-native', () => ({
 }))
 vi.mock('lucide-react-native', () => ({ ImagePlus: 'ImagePlus', Mic: 'Mic' }))
 vi.mock('@react-native-async-storage/async-storage', () => ({ default: {} }))
-vi.mock('../platform/haptics', () => ({ triggerError: () => {} }))
+vi.mock('../platform/haptics', () => ({
+  triggerError: () => {},
+  triggerEdgeBump: () => {},
+  triggerSelection: () => {}
+}))
 vi.mock('./use-terminal-live-input-mode-preference', () => ({
   useTerminalLiveInputModePreference: () => ({ liveInputTerminalHandles: new Set<string>() })
 }))
@@ -124,6 +132,7 @@ function Probe() {
   } as never)
   const activeHandleRef = useRef('terminal')
   const dictationRouteContextRef = useRef(null)
+  const commandFieldAnchorRef = useRef(null)
   const deviceTokenRef = useRef('device')
   const scope = {
     ...screen,
@@ -136,9 +145,11 @@ function Probe() {
     activeSessionTab: null,
     activeHandleRef,
     dictationRouteContextRef,
+    commandFieldAnchorRef,
     deviceTokenRef,
     flushPendingLiveInputBeforeExternalSend: async () => true,
     canSend: env.connected,
+    canCompose: true,
     liveInputEnabled: false,
     showToast: () => {},
     resetLiveInputFocus: () => {}
@@ -326,6 +337,18 @@ describe('the mic follows the host dictation mode', () => {
     await render()
     expect(micBinding()).toBe('hidden')
     expect(env.captureEnabled).toBe(false)
+  })
+
+  it('offers the mic on a host that never had a speech model selected', async () => {
+    env.connected = true
+    env.deferReply = true
+    env.slowReply = Promise.resolve({
+      id: 'first-run',
+      ok: true,
+      result: { enabled: false, selectedModelId: '', dictationMode: 'toggle', models: [] }
+    })
+    await render()
+    expect(micBinding()).toBe('toggle')
   })
 
   it('keeps legacy controls when the host omits the enabled field', async () => {

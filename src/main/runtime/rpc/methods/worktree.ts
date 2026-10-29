@@ -7,8 +7,6 @@ import { getLocalWorktreeCatalogVersion } from '../../../local-worktree-scan-gen
 import { getExplicitWorktreeIdSelector } from '../../runtime-worktree-selection'
 import { splitWorktreeId } from '../../../../shared/worktree/id'
 import { buildCliWorkspaceProvenance } from '../../../../shared/cli-workspace-provenance'
-import { displayNameUpdatePinsLabel } from '../../../../shared/worktree/display-name-provenance'
-import { getWorkspaceStatusWarning } from '../../../../shared/workspace-status-warning'
 import { createWorktreeWithStartupAgent } from '../../../agent-launch/startup-agent-worktree-create'
 import { defineMethod } from '../core'
 import { buildManagedWorktreeCreateArgs, worktreeCreateRepoSelector } from './worktree-create-args'
@@ -26,15 +24,15 @@ import {
   WorktreeResolveMrBase,
   WorktreeResolvePrBase,
   WorktreeSelector,
-  WorktreeSet,
   WorktreeSortOrder,
   WorktreeTeardownMissingTerminalsParams
 } from '../../../../shared/rpc-contract/worktree-params'
 import { WORKTREE_CATALOG_METHODS } from './worktree-catalog-methods'
 import { WORKTREE_PROVISIONED_ROOT_METHOD } from './worktree-provisioned-root-method'
-import { readsWorktreeRemovalMarker } from '../worktree-removal-marker-projection'
+import { waitsForWorktreeRemoval } from '../worktree-removal-marker-projection'
 import { queueWorkspaceDelete } from '../../workspaces/workspace-lifecycle-commands'
 import { WORKTREE_SLEEP_METHOD } from './worktree-sleep-method'
+import { WORKTREE_SET_METHOD } from './worktree-set-method'
 
 export const WORKTREE_METHODS = [
   ...WORKTREE_CATALOG_METHODS,
@@ -142,67 +140,7 @@ export const WORKTREE_METHODS = [
       return null
     }
   }),
-  defineMethod({
-    name: 'worktree.set',
-    permission: 'workspace',
-    params: WorktreeSet,
-    handler: async (params, { runtime }) => {
-      const worktree = await runtime.updateManagedWorktreeMeta(params.worktree, {
-        displayName: params.displayName,
-        ...(params.displayName !== undefined
-          ? { displayNameIsPinned: displayNameUpdatePinsLabel(params.displayName) }
-          : {}),
-        linkedIssue: params.linkedIssue,
-        linkedPR: params.linkedPR,
-        suppressedGitHubPR: params.suppressedGitHubPR,
-        linkedLinearIssue: params.linkedLinearIssue,
-        linkedLinearIssueWorkspaceId: params.linkedLinearIssueWorkspaceId,
-        linkedLinearIssueOrganizationUrlKey: params.linkedLinearIssueOrganizationUrlKey,
-        linkedGitLabMR: params.linkedGitLabMR,
-        linkedGitLabIssue: params.linkedGitLabIssue,
-        linkedBitbucketPR: params.linkedBitbucketPR,
-        linkedAzureDevOpsPR: params.linkedAzureDevOpsPR,
-        linkedGiteaPR: params.linkedGiteaPR,
-        linkedWorkItem: params.linkedWorkItem,
-        linkedItems: params.linkedItems,
-        ...(params.linkedItemsBase !== undefined
-          ? { linkedItemsBase: params.linkedItemsBase }
-          : {}),
-        ...(params.linkedItemsSelectionChanged !== undefined
-          ? { linkedItemsSelectionChanged: params.linkedItemsSelectionChanged }
-          : {}),
-        linkedTaskSourceContext: params.linkedTaskSourceContext,
-        comment: params.comment,
-        isArchived: params.isArchived,
-        isUnread: params.isUnread,
-        isPinned: params.isPinned,
-        sortOrder: params.sortOrder,
-        manualOrder: params.manualOrder,
-        lastActivityAt: params.lastActivityAt,
-        createdAt: params.createdAt,
-        sparseDirectories: params.sparseDirectories,
-        sparseBaseRef: params.sparseBaseRef,
-        sparsePresetId: params.sparsePresetId,
-        baseRef: params.baseRef,
-        workspaceStatus: params.workspaceStatus,
-        pushTarget: params.pushTarget,
-        diffComments: params.diffComments,
-        mobileDiffReview: params.mobileDiffReview,
-        lineage:
-          params.parentWorktree || params.noParent === true
-            ? {
-                parentWorktree: params.parentWorktree,
-                noParent: params.noParent === true
-              }
-            : undefined
-      })
-      const warning = getWorkspaceStatusWarning(
-        params.workspaceStatus,
-        () => runtime.getUIState().workspaceStatuses
-      )
-      return { worktree, ...(warning ? { warnings: [warning] } : {}) }
-    }
-  }),
+  WORKTREE_SET_METHOD,
   defineMethod({
     name: 'worktree.persistSortOrder',
     permission: 'workspace',
@@ -273,12 +211,11 @@ export const WORKTREE_METHODS = [
         (removal) =>
           runtime.removeManagedWorktree(params.worktree, {
             ...removal,
-            // Wait out Git deletion only for clients showing removing; older clients get acceptance and hide the row.
-            ...(readsWorktreeRemovalMarker(context) ? { waitForBackgroundRemoval: true } : {})
+            waitForBackgroundRemoval: waitsForWorktreeRemoval(context, params)
           })
       )
       return {
-        removed: true,
+        removed: result.removing !== true,
         ...result,
         ...(repoId ? { catalogVersion: getLocalWorktreeCatalogVersion(repoId) } : {})
       }

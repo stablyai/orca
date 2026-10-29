@@ -1,3 +1,4 @@
+import type { RepoCreateFailure } from '../../shared/repo-create-failure-copy'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import type { GhAccountBinding } from '../../shared/github/account-binding'
 import type {
@@ -20,9 +21,12 @@ import type {
   ProjectUpdateArgs
 } from '../../shared/project-types'
 import type { BaseRefDefaultResult, BaseRefSearchResult, Repo } from '../../shared/repo-types'
+import type { WslMovedProject } from '../../shared/wsl-move/wsl-moved-project'
 
 export type RepositoryApi = {
   list: () => Promise<Repo[]>
+  /** Local projects a WSL host now owns: read-only, listed only for their existing chats. */
+  listWslMoved: () => Promise<WslMovedProject[]>
   add: (args: {
     path: string
     kind?: 'git' | 'folder'
@@ -76,7 +80,7 @@ export type RepositoryApi = {
     parentPath: string
     name: string
     kind: 'git' | 'folder'
-  }) => Promise<{ repo: Repo } | { error: string }>
+  }) => Promise<{ repo: Repo } | RepoCreateFailure>
   isGitAvailable: () => Promise<boolean>
   getDefaultCreateProjectParent: () => Promise<string>
   onCloneProgress: (callback: (data: { phase: string; percent: number }) => void) => () => void

@@ -166,11 +166,11 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
   setOption: StructuredAgentSessionAdapter['setOption'] = (input) =>
     this.owner(input.sessionId).setOption(input)
 
+  readAppliedInputOptions: StructuredAgentSessionAdapter['readAppliedInputOptions'] = (input) =>
+    this.liveOwnerOrNull(input.sessionId)?.readAppliedInputOptions?.(input) ?? null
+
   projectOptions: StructuredAgentSessionAdapter['projectOptions'] = (sessionId, options) =>
     this.liveOwnerOrNull(sessionId)?.projectOptions?.(sessionId, options)
-
-  prepareReadOptions = (input: { sessionId: string; fence: number }) =>
-    this.liveOwnerOrNull(input.sessionId)?.prepareReadOptions?.(input)
 
   readOptions = (input: { sessionId: string; fence: number }) => {
     const reader = this.owner(input.sessionId).readOptions
@@ -179,9 +179,6 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
     }
     return reader(input)
   }
-
-  readOptionRestoreFailures = (sessionId: string): readonly string[] =>
-    this.owner(sessionId).readOptionRestoreFailures?.(sessionId) ?? []
 
   generateText: NonNullable<StructuredAgentSessionAdapter['generateText']> = (input) => {
     const { adapter } = this.requireAgent(input)

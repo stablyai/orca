@@ -17,6 +17,8 @@ export const LINT_STEPS = [
   'check:test-file-runners',
   'verify:localization-catalogs',
   'verify:localization-coverage',
+  'verify:mobile-localization',
+  'verify:mobile-localization-coverage',
   'lint:ast-grep-gates',
   'check:main-sync-spawn-ratchet',
   'lint:js-plugins',

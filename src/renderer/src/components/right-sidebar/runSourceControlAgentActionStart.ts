@@ -1,3 +1,7 @@
+import {
+  sourceControlActionRecipeEntry,
+  type SelectedSourceControlActionRecipe
+} from '../../../../shared/source-control-action-selection'
 import type { AgentLaunchPreferences } from '@/components/settings/use-host-agent-launch-preferences'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
@@ -17,12 +21,11 @@ import {
   saveSourceControlActionRecipe,
   type SourceControlAiWriteTarget
 } from '../../../../shared/source-control-ai-recipe-save'
-import { resolveSourceControlActionRecipe } from '../../../../shared/source-control-ai-operation-policy'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { sourceControlActionRecipeSaveMatchesTarget } from './source-control-action-recipe-match'
 import { resolveSourceControlAgentSaveTarget } from './source-control-agent-action-dialog-support'
-import { projectSourceControlActionLaunch } from '../../../../shared/source-control-action-launch-preferences'
+import { projectSelectedSourceControlActionLaunch } from '../../../../shared/source-control-action-launch-preferences'
 import { admitSourceControlRecovery } from './source-control-recovery-admission'
 
 export type RunSourceControlAgentActionStartArgs = {
@@ -30,7 +33,7 @@ export type RunSourceControlAgentActionStartArgs = {
   trimmedCommandInput: string
   /** The picker's choice: a deliberate surface stays explicit, a saved replay requests terminal only. */
   launchChoice?: AgentLaunchChoice
-  recipe: SourceControlActionRecipe
+  recipe: SelectedSourceControlActionRecipe
   saveTargetValue: string
   actionId: SourceControlLaunchActionId
   repoId?: string | null
@@ -107,14 +110,13 @@ export async function runSourceControlAgentActionStart({
   let launchFailureNotified = false
   let launchAcceptedNotified = false
   const saveTarget = resolveSourceControlAgentSaveTarget(saveTargetValue, repoId)
-  // The dialog edits agent, arguments and prompt; the model stays the saved one for that agent.
-  // Why: a recipe being saved launches as it will resolve once saved, so the next launch matches.
+  // Complete only the submitted selection; later parent changes cannot rewrite this launch.
   let launchRecipe = recipe
-  let recipeToSave = recipe
-  if (saveTarget && settings) {
+  let recipeToSave: SourceControlActionRecipe = recipe
+  if (saveTarget) {
     const saved = saveSourceControlActionRecipe({
       target: saveTarget,
-      settings,
+      settings: settings ?? {},
       repo,
       actionId,
       recipe
@@ -125,17 +127,9 @@ export async function runSourceControlAgentActionStart({
           ? saved.sourceControlAi.actions?.[actionId]
           : saved.update.sourceControlAi?.actionOverrides?.[actionId]
       ) ?? recipe
-    launchRecipe = resolveSourceControlActionRecipe({
-      settings:
-        'sourceControlAi' in saved
-          ? { ...settings, sourceControlAi: saved.sourceControlAi }
-          : settings,
-      repo:
-        'update' in saved ? { sourceControlAi: saved.update.sourceControlAi ?? undefined } : repo,
-      actionId
-    })
+    launchRecipe = sourceControlActionRecipeEntry(recipeToSave)
   }
-  const projection = projectSourceControlActionLaunch(
+  const projection = projectSelectedSourceControlActionLaunch(
     launchRecipe,
     selectedAgent,
     { renderedPrompt: trimmedCommandInput, settings },
@@ -154,7 +148,7 @@ export async function runSourceControlAgentActionStart({
     sourceControlActionRecipeSaveMatchesTarget({
       actionId,
       target: saveTarget,
-      recipe: recipeToSave,
+      recipe: launchRecipe,
       settings,
       repo
     })

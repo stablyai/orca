@@ -4,7 +4,7 @@
   "family": "speech.dictation-start",
   "namedDeltas": [],
   "values": {
-    "3b5708754539": {
+    "4c42677aca21": {
       "name": "speech.dictation.start#1",
       "ordinal": 1,
       "args": [
@@ -21,7 +21,7 @@
         {
           "name": "options",
           "value": {
-            "$rpc": "absent"
+            "timeoutMs": 30000
           }
         }
       ],
@@ -38,7 +38,13 @@
         }
       }
     },
-    "73faa32df517": {
+    "7ed3d39f0607": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": false
+    },
+    "9ab91ee194b8": {
       "name": "speech.dictation.cancel#1",
       "ordinal": 3,
       "args": [
@@ -55,7 +61,7 @@
         {
           "name": "options",
           "value": {
-            "$rpc": "absent"
+            "failWhenDisconnected": true
           }
         }
       ],
@@ -71,12 +77,6 @@
           }
         }
       }
-    },
-    "7ed3d39f0607": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": false
     },
     "a7ddd021010a": {
       "name": "speech.dictation.start#1",
@@ -110,7 +110,7 @@
       {
         "id": "stale-start-cancelled",
         "observation": {
-          "sender": ["3b5708754539", "73faa32df517"],
+          "sender": ["4c42677aca21", "9ab91ee194b8"],
           "payloads": ["a7ddd021010a", "ce9cbc8837fa"],
           "settlements": {
             "supersede": "eb79a9b3682a",

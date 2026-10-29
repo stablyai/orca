@@ -1,3 +1,4 @@
+import { translate } from '../i18n/mobile-i18n'
 import type { TuiAgent } from '../../../src/shared/tui-agent'
 import type { RpcClient } from '../transport/rpc-client'
 import type { RpcResponse } from '../transport/types'
@@ -40,8 +41,9 @@ export type CreateWorktreeWithNameRetryArgs = {
   client: RpcClient
   baseName: string
   nameWasGenerated?: boolean
-  buildParams: (name: string) => WorkspaceCreateParams
+  buildParams: (name: string, attempt: number) => WorkspaceCreateParams
   worktreeCreateIdempotency: WorktreeCreateIdempotencyProbe
+  branchIntentSupported?: boolean | Promise<boolean>
   agentLaunch?: WorktreeCreateAgentLaunch
   maxAttempts?: number
   mintMutationId?: () => string
@@ -64,7 +66,17 @@ export async function createWorktreeWithNameRetry(
     const candidateName = args.nameWasGenerated
       ? getGeneratedWorktreeCreateRetryCandidate(baseName, attempt)
       : getClientWorktreeCreateCandidate(baseName, attempt)
-    const candidateParams = buildParams(candidateName)
+    const candidateParams = buildParams(candidateName, attempt)
+    if (attempt === 0 && candidateParams.branchIntent) {
+      if ((await args.branchIntentSupported) !== true) {
+        return {
+          error: translate(
+            'workspace.branchChoice.hostUpdateRequired',
+            'Update Orca on the workspace host to reuse a branch or explicitly create a separate branch.'
+          )
+        }
+      }
+    }
     // Only advertised idempotency permits replay; use one key per candidate and a new key for each collision suffix.
     const params = worktreeCreateIdempotency
       ? { ...candidateParams, clientMutationId: mintMutationId() }
@@ -102,15 +114,22 @@ export async function createWorktreeWithNameRetry(
           ...(created.warning ? { warning: created.warning } : {})
         }
       }
-      lastError = 'Failed to create workspace'
+      lastError = translate('tasks.worktreeCreateRetry.createFailed', 'Failed to create workspace')
       break
     }
     lastError = response.error.message
-    if (launch?.replay || !isRetryableWorktreeCreateConflict(lastError ?? '')) {
+    if (
+      candidateParams.branchIntent === 'open-existing-v2' ||
+      launch?.replay ||
+      !isRetryableWorktreeCreateConflict(lastError ?? '')
+    ) {
       break
     }
   }
-  return { error: lastError ?? 'Failed to create workspace' }
+  return {
+    error:
+      lastError ?? translate('tasks.worktreeCreateRetry.createFailed', 'Failed to create workspace')
+  }
 }
 
 async function resolveAgentLaunchRoute(

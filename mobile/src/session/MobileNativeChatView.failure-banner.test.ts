@@ -111,3 +111,7 @@ describe('MobileNativeChatView: send and read failure banners', () => {
     expect(onClearSendError).toHaveBeenCalledOnce()
   })
 })
+
+vi.mock('./MobileQueuedMessageComposer', () => ({
+  MobileQueuedMessageComposer: 'QueuedMessageComposer'
+}))

@@ -20,6 +20,7 @@ type MonacoProps = {
   worktreeId?: string
   passiveMirror?: boolean
   revealLine?: number
+  viewStateId?: string
   onContentChange: (content: string) => void
   onSave: (content: string) => void
 }
@@ -239,7 +240,47 @@ describe('conflict-review overview as a live read-only view of the record', () =
     expect(reloadContent).toHaveBeenCalledWith(view, { wakeWslDistro: true })
   })
 
-  it("mounts as a passive mirror: the view's workspace, no cursor tracking, no reveals", () => {
+  it('applies a reveal explicitly owned by this overview and rejects another pane', () => {
+    const { store, view, review } = setup()
+    const reveal = { fileId: view.id, filePath: PATH, line: 9, column: 1, matchLength: 0 }
+    const ownOverview = render(store, review, 'disk', {
+      pendingEditorReveal: { ...reveal, viewStateId: 'panel-1:overview:file.ts' }
+    })
+    expect(ownOverview.revealLine).toBe(9)
+
+    const anotherPane = render(store, review, 'disk', {
+      pendingEditorReveal: { ...reveal, viewStateId: 'another-pane' }
+    })
+    expect(anotherPane.revealLine).toBeUndefined()
+  })
+
+  it('keeps a selected review editor scoped to its review pane', () => {
+    const { store, review } = setup()
+    store.getState().openConflictReviewFile(review.id, 'wt-2', '/repo', ENTRY, 'typescript')
+    const selectedReview = store.getState().openFiles.find((file) => file.id === review.id)
+    if (!selectedReview?.conflictReview?.selectedFileId) {
+      throw new Error('Expected selected conflict')
+    }
+    const reveal = {
+      fileId: selectedReview.conflictReview.selectedFileId,
+      filePath: PATH,
+      line: 9,
+      column: 1,
+      matchLength: 0
+    }
+    expect(
+      render(store, selectedReview, 'disk', {
+        pendingEditorReveal: { ...reveal, viewStateId: 'another-pane' }
+      }).revealLine
+    ).toBeUndefined()
+    expect(
+      render(store, selectedReview, 'disk', {
+        pendingEditorReveal: { ...reveal, viewStateId: 'panel-1' }
+      }).revealLine
+    ).toBe(9)
+  })
+
+  it("mounts as a passive mirror: the view's workspace, no cursor tracking, ignores untargeted reveals", () => {
     const { store, view, review } = setup()
     const overview = render(store, review, 'disk', {
       pendingEditorReveal: { fileId: view.id, filePath: PATH, line: 9, column: 1, matchLength: 0 }

@@ -30,7 +30,11 @@ import {
 } from '../ipc/preflight-remote-windows-terminal-capabilities'
 import { invalidateWslGuestEnvironment } from '../wsl/wsl-guest-environment'
 import { prunePreflightWslCache } from '../preflight-wsl-cache'
-import { detectInstalledAgents } from './installed-agent-detection'
+import { assertWslDistroRunningForExec } from '../wsl/wsl-background-exec-gate'
+import {
+  detectInstalledAgents,
+  type InstalledAgentDetectionOptions
+} from './installed-agent-detection'
 export { detectAgentCommandsOnHost } from './agent-command-detection'
 export {
   detectInstalledAgents,
@@ -123,13 +127,14 @@ export type RefreshAgentsResult = {
 
 /** Refresh login-shell PATH so newly installed CLIs appear without restarting Orca. */
 export async function refreshShellPathAndDetectAgents(
-  context?: PreflightRuntimeContext
+  context?: PreflightRuntimeContext,
+  options?: InstalledAgentDetectionOptions
 ): Promise<RefreshAgentsResult> {
   const wslTarget = getPreflightWslTarget(context)
   if (wslTarget) {
     // Discard cached guest PATH before detecting a newly installed WSL CLI.
     invalidateWslGuestEnvironment(wslTarget.distro)
-    const agents = await detectInstalledAgents(context)
+    const agents = await detectInstalledAgents(context, options)
     return {
       agents,
       addedPathSegments: [],
@@ -141,7 +146,7 @@ export async function refreshShellPathAndDetectAgents(
 
   const hydration = await hydrateShellPath({ force: true })
   const added = hydration.ok ? mergePathSegments(hydration.segments) : []
-  const agents = await detectInstalledAgents(context)
+  const agents = await detectInstalledAgents(context, options)
   return {
     agents,
     addedPathSegments: added,
@@ -251,6 +256,10 @@ async function executePreflightCheck(
   context: PreflightRuntimeContext | undefined,
   wslTarget: WslPreflightTarget | null
 ): Promise<PreflightStatus> {
+  if (wslTarget) {
+    // Mounts and polls must not start a stopped distro (E9); window focus and retry clicks wake it.
+    await assertWslDistroRunningForExec(wslTarget.distro)
+  }
   if (process.platform === 'win32' && !wslTarget) {
     await mergePersistedWindowsPathAsync(process.env, { forceRefresh: force })
   } else if (process.platform !== 'win32') {

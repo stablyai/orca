@@ -21,6 +21,7 @@ export function createGitStatusActions(
   | 'gitStatusByWorktree'
   | 'gitStatusHeadByWorktree'
   | 'gitStatusHugeByWorktree'
+  | 'gitStatusReadErrorByWorktree'
   | 'gitBranchLineTotalByWorktree'
   | 'gitIgnoredPathsByWorktree'
   | 'gitConflictOperationByWorktree'
@@ -33,6 +34,7 @@ export function createGitStatusActions(
     gitStatusByWorktree: {},
     gitStatusHeadByWorktree: {},
     gitStatusHugeByWorktree: {},
+    gitStatusReadErrorByWorktree: {},
     gitBranchLineTotalByWorktree: {},
     gitIgnoredPathsByWorktree: {},
     gitConflictOperationByWorktree: {},
@@ -52,6 +54,23 @@ export function createGitStatusActions(
       }),
     // Why: session-local conflict tracking (Resolved-locally) lives only in the renderer; main returns raw git status, so the renderer owns conflictStatusSource.
     setGitStatus: (worktreeId, status) => {
+      const { readError } = status
+      if (readError !== undefined) {
+        // A failed read proves nothing about the tree, so keep the last known state and flag it.
+        set((s) =>
+          s.gitStatusReadErrorByWorktree[worktreeId] === readError
+            ? s
+            : {
+                gitStatusReadErrorByWorktree: {
+                  ...s.gitStatusReadErrorByWorktree,
+                  [worktreeId]: readError
+                }
+              }
+        )
+        // Conflict markers are read independently of the index, so the banner stays live.
+        get().setConflictOperation(worktreeId, status.conflictOperation)
+        return
+      }
       const filesBefore = ORCA_LAYOUT_OWNER_IS_MAIN ? get().openFiles : null
       set((s) => {
         const hadStatusEntry = Object.hasOwn(s.gitStatusByWorktree, worktreeId)
@@ -162,6 +181,8 @@ export function createGitStatusActions(
             (prevBranchLineTotal.generated?.removed ?? null) ===
               (nextBranchLineTotal.generated?.removed ?? null))
 
+        const readErrorUnchanged = !Object.hasOwn(s.gitStatusReadErrorByWorktree, worktreeId)
+
         const prevStatusHead = s.gitStatusHeadByWorktree[worktreeId]
         const nextStatusHead = getKnownGitHead(status.head)
         const statusHeadUnchanged = prevStatusHead === nextStatusHead
@@ -182,6 +203,7 @@ export function createGitStatusActions(
           ignoredUnchanged &&
           hugeUnchanged &&
           branchLineTotalUnchanged &&
+          readErrorUnchanged &&
           statusHeadUnchanged &&
           !shouldInvalidateBranchCompare
         ) {
@@ -227,9 +249,18 @@ export function createGitStatusActions(
           ? { ...s.gitBranchChangesByWorktree, [worktreeId]: [] }
           : s.gitBranchChangesByWorktree
 
+        const nextReadErrorMap = readErrorUnchanged
+          ? s.gitStatusReadErrorByWorktree
+          : (() => {
+              const copy = { ...s.gitStatusReadErrorByWorktree }
+              delete copy[worktreeId]
+              return copy
+            })()
+
         return {
           openFiles: nextOpenFiles,
           gitStatusHugeByWorktree: nextHugeMap,
+          gitStatusReadErrorByWorktree: nextReadErrorMap,
           gitBranchLineTotalByWorktree: nextBranchLineTotalMap,
           gitStatusHeadByWorktree: nextStatusHeadMap,
           gitStatusByWorktree: statusUnchanged

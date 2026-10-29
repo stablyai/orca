@@ -24,6 +24,7 @@ function cell(kind: IpynbCell['kind'], source: string, outputs: IpynbOutput[] = 
 function renderSource(target: IpynbCell, onActivate = vi.fn()) {
   render(
     <IpynbCellSource
+      modelKey={null}
       cell={target}
       source={target.source}
       active={false}

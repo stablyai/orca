@@ -24,7 +24,7 @@ export async function structuredAgentSessionLaunchPermission(
 /** A synchronous admission read for providers whose modes need no model-catalog evidence. */
 export function structuredAgentSessionImmediatePermission(
   deps: Pick<StructuredAgentSessionHostDeps, 'agents'>,
-  record: AgentSessionRecord
+  record: Pick<AgentSessionRecord, 'provider' | 'permissionMode'>
 ): AgentChatPermissionChoice | null {
   const support = agentChatPermissionModes(record.provider)
   return support && deps.agents.definition(record.provider)

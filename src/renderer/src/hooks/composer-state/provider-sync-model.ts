@@ -9,6 +9,10 @@ export type ComposerProviderSyncModel = {
   cancelPromptCaretFrame: () => void
   handleComposerNodeChange: (node: HTMLDivElement | null) => void
   hookCheckRef: RefObject<{ key: string; promise: Promise<HookCheckResult> } | null>
-  loadHookCheckForRepo: (targetRepoId: string) => Promise<HookCheckResult>
+  /** `background`: the open-time check, refused rather than booting a stopped WSL distro. */
+  loadHookCheckForRepo: (
+    targetRepoId: string,
+    options?: { background?: boolean }
+  ) => Promise<HookCheckResult>
   commitHookCheckIfCurrent: (targetContextKey: string, hooks: OrcaHooks | null) => boolean
 }

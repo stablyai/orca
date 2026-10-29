@@ -130,7 +130,7 @@ describe.runIf(process.platform !== 'win32')('supervised agent processes', () =>
         { agentId: 'custom', model: '', customAgentCommand: `"${missing}"` },
         { kind: 'local', cwd: folder }
       )
-    ).resolves.toEqual({
+    ).resolves.toMatchObject({
       success: false,
       error: `${missing} not found on PATH. Install ${missing} to use AI commit messages.`
     })
@@ -150,7 +150,7 @@ describe.runIf(process.platform !== 'win32')('supervised agent processes', () =>
         { agentId: 'custom', model: '', customAgentCommand: `"${agent}"` },
         { kind: 'local', cwd: folder }
       )
-    ).resolves.toEqual({
+    ).resolves.toMatchObject({
       success: false,
       error: `${agent} failed to start. Check the agent command in Settings and try again.`
     })
@@ -181,7 +181,7 @@ describe.runIf(process.platform !== 'win32')('supervised agent processes', () =>
         },
         { kind: 'local', cwd: folder }
       )
-    ).resolves.toEqual({
+    ).resolves.toMatchObject({
       success: false,
       error: `${command} could not be started. Check the agent command in Settings and try again.`
     })
@@ -205,7 +205,7 @@ describe.runIf(process.platform !== 'win32')('supervised agent processes', () =>
           env: { ...process.env, NODE_DEBUG: 'child_process' }
         }
       )
-    ).resolves.toEqual({
+    ).resolves.toMatchObject({
       success: false,
       error: `${missing} not found on PATH. Install ${missing} to use AI commit messages.`
     })

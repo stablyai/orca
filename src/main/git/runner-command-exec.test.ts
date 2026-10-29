@@ -1,5 +1,5 @@
-import { EventEmitter } from 'node:events'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { createFakeSpawnedChild as createMockChildProcess } from '../../shared/__fixtures__/fake-spawned-child'
 
 const { execFileMock, execFileSyncMock, spawnMock } = vi.hoisted(() => ({
   execFileMock: vi.fn(),
@@ -26,22 +26,7 @@ import { _resetGitAdmissionForTests } from './command-runner/git-subprocess-admi
 
 afterEach(() => _resetGitAdmissionForTests())
 
-type MockChildProcess = EventEmitter & {
-  stdout: EventEmitter
-  stderr: EventEmitter
-  pid: number
-  kill: ReturnType<typeof vi.fn>
-  unref?: ReturnType<typeof vi.fn>
-}
-
-function createMockChildProcess(pid: number): MockChildProcess {
-  const child = new EventEmitter() as MockChildProcess
-  child.stdout = new EventEmitter()
-  child.stderr = new EventEmitter()
-  child.pid = pid
-  child.kill = vi.fn()
-  return child
-}
+type MockChildProcess = ReturnType<typeof createMockChildProcess>
 
 /** Hang the CLI while allowing its process-tree quiescence probes to answer. */
 function mockWedgedCliSpawn(child: MockChildProcess): void {
@@ -66,9 +51,7 @@ function mockProcessGroupSignals(): ReturnType<typeof vi.spyOn> {
 }
 
 function createMockTaskkillProcess(): MockChildProcess {
-  const child = createMockChildProcess(9000)
-  child.unref = vi.fn()
-  return child
+  return createMockChildProcess(9000)
 }
 
 async function withPlatform<T>(platform: NodeJS.Platform, fn: () => Promise<T>): Promise<T> {

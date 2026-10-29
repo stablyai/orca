@@ -13,6 +13,7 @@ export type RuntimeClientSettings = Pick<
   | 'agentDefaultArgs'
   | 'agentDefaultEnv'
   | 'agentStatusHooksEnabled'
+  | 'codexShareHistoryAcrossAccounts'
   | 'claudeSubagentNavigationEnabled'
   | 'terminalCopyTrimsGutter'
   | 'defaultTaskSource'

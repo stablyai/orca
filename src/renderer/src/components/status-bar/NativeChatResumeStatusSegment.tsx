@@ -78,28 +78,16 @@ function resumingText(done: number, total: number): SegmentText {
 
 function failedText(count: number): SegmentText {
   return {
-    label:
-      count === 1
-        ? translate(
-            'auto.components.status.bar.NativeChatResumeStatusSegment.failedLabelOne',
-            '1 chat failed to resume'
-          )
-        : translate(
-            'auto.components.status.bar.NativeChatResumeStatusSegment.failedLabel',
-            '{{value0}} chats failed to resume',
-            { value0: count }
-          ),
-    ariaLabel:
-      count === 1
-        ? translate(
-            'auto.components.status.bar.NativeChatResumeStatusSegment.failedAriaOne',
-            '1 chat failed to resume. Click for details.'
-          )
-        : translate(
-            'auto.components.status.bar.NativeChatResumeStatusSegment.failedAria',
-            '{{value0}} chats failed to resume. Click for details.',
-            { value0: count }
-          ),
+    label: translate(
+      'auto.components.status.bar.NativeChatResumeStatusSegment.chatsFailedLabel',
+      '{{count}} chats failed to resume',
+      { count, defaultValue_one: '{{count}} chat failed to resume' }
+    ),
+    ariaLabel: translate(
+      'auto.components.status.bar.NativeChatResumeStatusSegment.chatsFailedAria',
+      '{{count}} chats failed to resume. Click for details.',
+      { count, defaultValue_one: '{{count}} chat failed to resume. Click for details.' }
+    ),
     tooltip: translate(
       'auto.components.status.bar.NativeChatResumeStatusSegment.failedTooltip',
       'Chats Orca could not resume after the restart. Click for details.'
@@ -109,28 +97,16 @@ function failedText(count: number): SegmentText {
 
 function resumedText(count: number): SegmentText {
   return {
-    label:
-      count === 1
-        ? translate(
-            'auto.components.status.bar.NativeChatResumeStatusSegment.resumedLabelOne',
-            '1 chat resumed'
-          )
-        : translate(
-            'auto.components.status.bar.NativeChatResumeStatusSegment.resumedLabel',
-            '{{value0}} chats resumed',
-            { value0: count }
-          ),
-    ariaLabel:
-      count === 1
-        ? translate(
-            'auto.components.status.bar.NativeChatResumeStatusSegment.resumedAriaOne',
-            '1 chat resumed. Click to see it.'
-          )
-        : translate(
-            'auto.components.status.bar.NativeChatResumeStatusSegment.resumedAria',
-            '{{value0}} chats resumed. Click to see them.',
-            { value0: count }
-          ),
+    label: translate(
+      'auto.components.status.bar.NativeChatResumeStatusSegment.resumedLabelCount',
+      '{{count}} chats resumed',
+      { count, defaultValue_one: '{{count}} chat resumed' }
+    ),
+    ariaLabel: translate(
+      'auto.components.status.bar.NativeChatResumeStatusSegment.resumedAriaCount',
+      '{{count}} chats resumed. Click to see them.',
+      { count, defaultValue_one: '{{count}} chat resumed. Click to see it.' }
+    ),
     tooltip: translate(
       'auto.components.status.bar.NativeChatResumeStatusSegment.resumedTooltip',
       'Chats Orca resumed after the restart. Click to see them.'
@@ -140,28 +116,16 @@ function resumedText(count: number): SegmentText {
 
 function checkText(count: number): SegmentText {
   return {
-    label:
-      count === 1
-        ? translate(
-            'auto.components.status.bar.NativeChatResumeStatusSegment.checkLabelOne',
-            '1 chat to check'
-          )
-        : translate(
-            'auto.components.status.bar.NativeChatResumeStatusSegment.checkLabel',
-            '{{value0}} chats to check',
-            { value0: count }
-          ),
-    ariaLabel:
-      count === 1
-        ? translate(
-            'auto.components.status.bar.NativeChatResumeStatusSegment.checkAriaOne',
-            '1 chat to check after resuming. Click for details.'
-          )
-        : translate(
-            'auto.components.status.bar.NativeChatResumeStatusSegment.checkAria',
-            '{{value0}} chats to check after resuming. Click for details.',
-            { value0: count }
-          ),
+    label: translate(
+      'auto.components.status.bar.NativeChatResumeStatusSegment.checkLabelCount',
+      '{{count}} chats to check',
+      { count, defaultValue_one: '{{count}} chat to check' }
+    ),
+    ariaLabel: translate(
+      'auto.components.status.bar.NativeChatResumeStatusSegment.checkAriaCount',
+      '{{count}} chats to check after resuming. Click for details.',
+      { count, defaultValue_one: '{{count}} chat to check after resuming. Click for details.' }
+    ),
     tooltip: translate(
       'auto.components.status.bar.NativeChatResumeStatusSegment.checkTooltip',
       'Chats Orca couldn’t resume, or couldn’t confirm it resumed, after the restart. Click for details.'
@@ -250,30 +214,16 @@ function NativeChatRuntimeResumeStatusSegment({
           iconOnly={iconOnly}
           count={pending}
           icon={<RotateCcw className="size-3 text-muted-foreground" />}
-          label={
-            pending === 1
-              ? translate(
-                  'auto.components.status.bar.NativeChatResumeStatusSegment.labelOne',
-                  '1 chat to resume'
-                )
-              : translate(
-                  'auto.components.status.bar.NativeChatResumeStatusSegment.label',
-                  '{{value0}} chats to resume',
-                  { value0: pending }
-                )
-          }
-          ariaLabel={
-            pending === 1
-              ? translate(
-                  'auto.components.status.bar.NativeChatResumeStatusSegment.ariaLabelOne',
-                  '1 chat available to resume'
-                )
-              : translate(
-                  'auto.components.status.bar.NativeChatResumeStatusSegment.ariaLabel',
-                  '{{value0}} chats available to resume',
-                  { value0: pending }
-                )
-          }
+          label={translate(
+            'auto.components.status.bar.NativeChatResumeStatusSegment.labelCount',
+            '{{count}} chats to resume',
+            { count: pending, defaultValue_one: '{{count}} chat to resume' }
+          )}
+          ariaLabel={translate(
+            'auto.components.status.bar.NativeChatResumeStatusSegment.ariaLabelCount',
+            '{{count}} chats available to resume',
+            { count: pending, defaultValue_one: '{{count}} chat available to resume' }
+          )}
           tooltip={translate(
             'auto.components.status.bar.NativeChatResumeStatusSegment.tooltip',
             'Open interrupted chats available to resume'

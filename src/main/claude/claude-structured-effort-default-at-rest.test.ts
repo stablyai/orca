@@ -191,8 +191,15 @@ function catalogService(store: AgentModelCatalogStore, record: AgentSessionRecor
   })
 }
 
-function readAtRest(store: AgentModelCatalogStore, record: AgentSessionRecord) {
+/** The options a client reads for the chat once its child is gone. */
+async function readAtRest(store: AgentModelCatalogStore, record: AgentSessionRecord) {
   const modelCatalog = catalogService(store, record)
+  // Acquiring this scope is separate from the passive picker read below.
+  await modelCatalog.prepareSaved({
+    agent: record.provider,
+    sessionId: SESSION,
+    inSessionWorkspace: true
+  })
   const resting = {
     child: null,
     params: { provider: 'claude' },
@@ -220,7 +227,11 @@ function readAtRest(store: AgentModelCatalogStore, record: AgentSessionRecord) {
     openConversation: async () => resting,
     conversation: async () => resting
   } as unknown as StructuredAgentSessionMutationContext
-  return readStructuredAgentSessionOptions(context, SESSION, { readsWithoutModel: true })
+  try {
+    return await readStructuredAgentSessionOptions(context, SESSION, { readsWithoutModel: true })
+  } finally {
+    modelCatalog.stop()
+  }
 }
 
 function pickerEffortRow(result: Awaited<ReturnType<typeof readAtRest>>, agent = 'claude') {

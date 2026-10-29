@@ -1,4 +1,5 @@
-import { EmulatorError } from '../emulator-errors'
+import { EmulatorError, emulatorErrorCodedMessage } from '../emulator-errors'
+import { emulatorCodedMessage, emulatorFailureText } from '../../../shared/emulator-failure-copy'
 import type { EmulatorSessionInfo } from '../emulator-types'
 import type {
   BackendAvailability,
@@ -110,25 +111,25 @@ export class AndroidEmulatorBackend implements EmulatorBackend {
   async checkAvailability(): Promise<BackendAvailability> {
     const sdk = this.sdkState.resolve()
     if (!sdk) {
-      return {
-        available: false,
-        devices: [],
-        message: 'Android SDK not found. Install Android Studio and set ANDROID_HOME.'
-      }
+      return { available: false, devices: [], ...emulatorCodedMessage('androidSdkMissing') }
     }
     const sdkPath = sdk.sdkRoot
     let devices: EmulatorDevice[] = []
     try {
       devices = await this.listDevices()
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'adb is unavailable.'
-      return { available: false, devices: [], message, sdkPath }
+      return {
+        available: false,
+        devices: [],
+        ...emulatorErrorCodedMessage(error, 'adbUnavailable'),
+        sdkPath
+      }
     }
     if (devices.length === 0) {
       return {
         available: false,
         devices,
-        message: 'No Android devices or AVDs found. Create one in Android Studio.',
+        ...emulatorCodedMessage('noAndroidDevices'),
         sdkPath
       }
     }
@@ -165,7 +166,7 @@ export class AndroidEmulatorBackend implements EmulatorBackend {
     }
     throw new EmulatorError(
       'emulator_device_not_found',
-      `Android device "${deviceOrName}" is not running. Boot it first.`
+      emulatorFailureText('androidDeviceNotRunning', { device: deviceOrName })
     )
   }
 

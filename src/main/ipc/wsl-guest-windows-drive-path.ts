@@ -10,6 +10,13 @@ export const ORCAD_WSL_HOST_ENV = 'ORCA_WSL_ORCAD_HOST'
 
 let cachedGuestMounts: readonly string[] | null = null
 
+// The Windows-copy check stats every drive-mounted PATH entry (~50 ms cold); reuse a recent verdict.
+const WINDOWS_COPY_VERDICT_TTL_MS = 30_000
+// Launch envs can vary PATH; bound what a long-lived host keeps.
+const WINDOWS_COPY_VERDICT_LIMIT = 32
+type WindowsCopyVerdict = { windowsOnly: boolean; checkedAt: number }
+let windowsCopyVerdicts = new WeakMap<typeof resolveCliCommand, Map<string, WindowsCopyVerdict>>()
+
 export function isWslGuestProcess(
   env: NodeJS.ProcessEnv = process.env,
   platform: NodeJS.Platform = process.platform,
@@ -79,6 +86,11 @@ export function readGuestWindowsDriveMounts(): readonly string[] {
   return mounts
 }
 
+/** Stand in for /proc/mounts so call-site tests can model a Windows drive; null re-reads. */
+export function _setGuestWindowsDriveMountsForTests(mounts: readonly string[] | null): void {
+  cachedGuestMounts = mounts
+}
+
 /** Keep CLI launches consistent with detection by removing Windows drive PATH entries only in WSL-host orcad. */
 export function guestNativePathEnv(
   pathEnv: string | null | undefined,
@@ -123,5 +135,40 @@ export function resolveGuestNativeProgram(
   if (isAbsolute(native)) {
     return native
   }
-  return isAbsolute(resolve(command, options)) ? null : native
+  return hasWindowsDriveCopy(command, options, resolve, mounts) ? null : native
+}
+
+function hasWindowsDriveCopy(
+  command: string,
+  options: NonNullable<Parameters<typeof resolveCliCommand>[1]>,
+  resolve: typeof resolveCliCommand,
+  mounts: readonly string[]
+): boolean {
+  const key = [
+    command,
+    options.pathEnv ?? process.env.PATH ?? '',
+    options.homePath ?? '',
+    options.platform ?? '',
+    mounts.join(':')
+  ].join('\0')
+  let verdicts = windowsCopyVerdicts.get(resolve)
+  if (!verdicts) {
+    verdicts = new Map()
+    windowsCopyVerdicts.set(resolve, verdicts)
+  }
+  const now = Date.now()
+  const known = verdicts.get(key)
+  if (known && now - known.checkedAt < WINDOWS_COPY_VERDICT_TTL_MS) {
+    return known.windowsOnly
+  }
+  const windowsOnly = isAbsolute(resolve(command, options))
+  if (verdicts.size >= WINDOWS_COPY_VERDICT_LIMIT) {
+    verdicts.clear()
+  }
+  verdicts.set(key, { windowsOnly, checkedAt: now })
+  return windowsOnly
+}
+
+export function _resetWindowsCopyVerdictsForTests(): void {
+  windowsCopyVerdicts = new WeakMap()
 }

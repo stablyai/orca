@@ -36,7 +36,7 @@ function live(agent: string, current: AgentSessionOptionsResult['current'], auto
 }
 
 describe('the permission mode picker', () => {
-  it('keeps old-host fallback while capable hosts display only the nullable report', () => {
+  it('shows the saved mode until a report, except for own, which waits for the report', () => {
     const pr1 = live('codex', { permissionMode: 'ask' })
     expect(permission({ ...pr1, permissionOwnSupported: null })?.settable).toBe(false)
     expect(permission({ ...pr1, permissionOwnSupported: false })).toMatchObject({
@@ -54,7 +54,15 @@ describe('the permission mode picker', () => {
         }
       })
     }
-    expect(permission({ ...capable, permissionMode: 'ask' })?.settable).toBe(false)
+    // A resumed chat with no running agent shows its saved mode and can change it.
+    expect(permission({ ...capable, permissionMode: 'full-access' })).toMatchObject({
+      settable: true,
+      valueSource: 'applied',
+      kind: { currentValue: 'full-access' }
+    })
+    expect(
+      permission({ ...capable, permissionMode: 'full-access', reportedPermissionMode: null })
+    ).toMatchObject({ settable: false, kind: { currentValue: undefined } })
   })
 
   it('shows the seeded mode before the agent starts, beside the quiet model pill', () => {

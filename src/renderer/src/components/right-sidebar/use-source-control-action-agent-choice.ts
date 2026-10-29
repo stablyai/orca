@@ -8,7 +8,7 @@ import { useMemo } from 'react'
 import { useAppStore } from '@/store'
 import { isCustomAgentId } from '../../../../shared/commit-message-agent-spec'
 import { pickSourceControlLaunchAgent } from '../../../../shared/source-control-launch-agent-selection'
-import type { SourceControlActionRecipe } from '../../../../shared/source-control-ai-actions'
+import type { SelectedSourceControlActionRecipe } from '../../../../shared/source-control-action-selection'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
@@ -40,7 +40,7 @@ export function useSourceControlActionAgentChoice(args: {
   worktreeId?: string | null
   repoId?: string | null
   repo: Pick<Repo, 'id' | 'kind' | 'connectionId' | 'executionHostId'> | null
-  recipe: SourceControlActionRecipe
+  recipe: SelectedSourceControlActionRecipe
   /** This open's deliberate pick; absent replays the saved recipe. */
   livePick: AgentLaunchSurface | undefined
   settings: GlobalSettings | null
@@ -56,7 +56,9 @@ export function useSourceControlActionAgentChoice(args: {
           : NO_PROJECT_ROWS,
     [args.worktreeId, args.repoId, args.repo, worktreeDetectionTarget]
   )
-  const observation = useAgentMenuObservation(rows.target, args.open, rows.detectionTarget)
+  const observation = useAgentMenuObservation(rows.target, args.open, rows.detectionTarget, {
+    wakeOnOpen: true
+  })
   const { detectedIds, detectionFailed, needsServerUpdate } = observation.detection
   const detectedAgents =
     observation.model.state === 'settled'

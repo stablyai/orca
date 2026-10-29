@@ -35,6 +35,7 @@ import {
   type AiVaultServiceRequestBody,
   type AiVaultServiceResultValue
 } from './session-scanner-service-protocol'
+import { forwardWslDistroNotesToChild } from './session-scanner-service-wsl-notes'
 
 export class AiVaultScannerServiceClient {
   private child: ChildProcess | null = null
@@ -47,6 +48,8 @@ export class AiVaultScannerServiceClient {
   private readonly restartPolicy = new AiVaultServiceRestartPolicy()
   private readonly sessionSearch = new AiVaultServiceSessionSearchHold()
   private disposed = false
+
+  private readonly stopForwardingWslNotes = forwardWslDistroNotesToChild(() => this.child)
 
   constructor(private readonly options: AiVaultServiceClientOptions) {}
 
@@ -115,6 +118,7 @@ export class AiVaultScannerServiceClient {
       return
     }
     this.disposed = true
+    this.stopForwardingWslNotes()
     this.restartPolicy.dispose()
     this.idleRetirement.clear()
     const error = new Error('AI Vault service client was disposed.')

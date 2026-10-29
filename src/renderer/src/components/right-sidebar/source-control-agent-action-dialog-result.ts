@@ -1,7 +1,7 @@
+import type { SelectedSourceControlActionRecipe } from '../../../../shared/source-control-action-selection'
 import type { getAgentCatalog } from '@/lib/agent-catalog'
 import type { useAppStore } from '@/store'
 import type { useRepoById } from '@/store/selectors'
-import type { SourceControlActionRecipe } from '../../../../shared/source-control-ai-actions'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { AgentLaunchSurface } from '@/lib/agent-session-launch-plan'
 import type { AgentComboboxSurfaceRows } from '@/components/agent/agent-combobox-surface-items'
@@ -24,7 +24,7 @@ export type UseSourceControlAgentActionDialogResult = {
   agentArgs: string
   /** False when this launch would be a structured native chat session, which reads no CLI arguments. */
   agentArgsApply: boolean
-  recipe: SourceControlActionRecipe
+  recipe: SelectedSourceControlActionRecipe
   commandTemplate: string
   saveLaunchRecipe: boolean
   saveTargetValue: string

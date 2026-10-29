@@ -7,7 +7,14 @@ import process from 'node:process'
 import ts from 'typescript-api'
 
 import { canonicalGenericRenderings } from './locale-generic-ui-terms.mjs'
+import { LOCALIZATION_SURFACES, readLocalizationSurface } from './localization-surfaces.mjs'
 import { repairTranslatedValue } from './locale-translation-policy.mjs'
+import {
+  interpolationVariablesMatch,
+  pluralFamilyDefaults,
+  resolveLocaleSourceKey,
+  syncLocalePluralForms
+} from './locale-plural-forms.mjs'
 
 const SOURCE_EXTENSIONS = new Set(['.ts', '.tsx', '.js', '.jsx', '.mts', '.cts'])
 const SKIP_PATH_PARTS = new Set(['.git', 'dist', 'node_modules', 'out', '__snapshots__', 'assets'])
@@ -18,11 +25,7 @@ const LOCALIZATION_FUNCTION_NAMES = new Set([
   'translateSearchKeyword'
 ])
 const PLACEHOLDER_RE = /\{\{[^}]+\}\}/g
-const LOCALES_RELATIVE_DIR = path.join('src', 'renderer', 'src', 'i18n', 'locales')
-export const LOCALIZATION_SOURCE_ROOTS = [
-  path.join('src', 'renderer', 'src'),
-  path.join('src', 'main')
-]
+export const LOCALIZATION_SOURCE_ROOTS = LOCALIZATION_SURFACES.desktop.sourceRoots
 
 function normalizePath(root, filePath) {
   return path.relative(root, filePath).split(path.sep).join('/')
@@ -32,6 +35,8 @@ function isSkippedFile(root, filePath) {
   const relative = normalizePath(root, filePath)
   if (
     relative.endsWith('.d.ts') ||
+    // Build output (bundled engines, protocol schemas) is not translatable source.
+    relative.includes('.generated.') ||
     relative.includes('.test.') ||
     relative.includes('.spec.') ||
     relative.includes('/__tests__/')
@@ -119,16 +124,13 @@ export function collectLocalizationKeyReferences(filePath, sourceText, root = pr
         ts.isStringLiteralLike(firstArg)
       ) {
         const secondArg = node.arguments[1]
-        references.push(
-          reportAt(
-            root,
-            filePath,
-            sourceFile,
-            firstArg,
-            firstArg.text,
-            secondArg && ts.isStringLiteralLike(secondArg) ? secondArg.text : undefined
-          )
-        )
+        const fallback = secondArg && ts.isStringLiteralLike(secondArg) ? secondArg.text : undefined
+        const keys = pluralFamilyDefaults(ts, firstArg.text, fallback, node.arguments[2]) ?? [
+          [firstArg.text, fallback]
+        ]
+        for (const [key, value] of keys) {
+          references.push(reportAt(root, filePath, sourceFile, firstArg, key, value))
+        }
       }
     }
 
@@ -284,20 +286,23 @@ function setCatalogEntry(catalog, key, value) {
   cursor[parts.at(-1)] = value
 }
 
-function collectLocaleParityIssues(enCatalog, localeCatalog) {
+function collectLocaleParityIssues(enCatalog, localeCatalog, localeName) {
   const enEntries = flattenCatalogEntries(enCatalog)
   const localeEntries = flattenCatalogEntries(localeCatalog)
   const missingInLocale = [...enEntries.keys()].filter((key) => !localeEntries.has(key))
-  const extraInLocale = [...localeEntries.keys()].filter((key) => !enEntries.has(key))
+  const extraInLocale = [...localeEntries.keys()].filter(
+    (key) => !resolveLocaleSourceKey(enEntries, localeName, key)
+  )
   const interpolationMismatches = []
 
-  for (const key of enEntries.keys()) {
-    if (!localeEntries.has(key)) {
+  for (const [key, localeValue] of localeEntries) {
+    const sourceKey = resolveLocaleSourceKey(enEntries, localeName, key)
+    if (!sourceKey) {
       continue
     }
-    const enVariables = collectInterpolationVariables(enEntries.get(key))
-    const localeVariables = collectInterpolationVariables(localeEntries.get(key))
-    if (enVariables.join('|') !== localeVariables.join('|')) {
+    const enVariables = collectInterpolationVariables(enEntries.get(sourceKey))
+    const localeVariables = collectInterpolationVariables(localeValue)
+    if (!interpolationVariablesMatch(sourceKey, enVariables, localeVariables)) {
       interpolationMismatches.push(key)
     }
   }
@@ -422,7 +427,7 @@ async function readCatalogFile(catalogPath) {
 
 function verifyLocaleCatalog(enCatalog, localeName, localeCatalog) {
   const { enEntries, localeEntries, missingInLocale, extraInLocale, interpolationMismatches } =
-    collectLocaleParityIssues(enCatalog, localeCatalog)
+    collectLocaleParityIssues(enCatalog, localeCatalog, localeName)
   const genericTermRegressions = collectGenericTermRegressions(enEntries, localeEntries, localeName)
 
   // Feature PRs own English declarations; missing target translations use i18next fallback until localization supplies them.
@@ -488,7 +493,8 @@ function parseArgs(argv) {
   }
   return {
     fix: argv.includes('--fix'),
-    pluginCatalogs
+    pluginCatalogs,
+    surface: readLocalizationSurface(argv)
   }
 }
 
@@ -526,8 +532,8 @@ async function reportPluginCatalog(root, catalog, pluginCatalogPath) {
   return interpolationMismatches.length > 0 ? 1 : 0
 }
 
-export async function collectLocalizationReferences(root) {
-  const sourceRoots = LOCALIZATION_SOURCE_ROOTS.map((sourceRoot) => path.join(root, sourceRoot))
+export async function collectLocalizationReferences(root, roots = LOCALIZATION_SOURCE_ROOTS) {
+  const sourceRoots = roots.map((sourceRoot) => path.join(root, sourceRoot))
   const references = []
 
   for (const sourceRoot of sourceRoots) {
@@ -547,8 +553,10 @@ export async function main(
   options = parseArgs(process.argv.slice(2)),
   sharedReferences
 ) {
-  const localesDir = path.join(root, LOCALES_RELATIVE_DIR)
+  const surface = options.surface ?? LOCALIZATION_SURFACES.desktop
+  const localesDir = path.join(root, surface.localesDir)
   const catalogPath = path.join(localesDir, 'en.json')
+  const enCatalogLabel = normalizePath(root, catalogPath)
   const catalog = await readCatalogFile(catalogPath)
   if (catalog === undefined) {
     return 1
@@ -571,7 +579,8 @@ export async function main(
     return 1
   }
   let catalogKeys = new Set(flattenCatalogKeys(catalog))
-  const references = sharedReferences ?? (await collectLocalizationReferences(root))
+  const references =
+    sharedReferences ?? (await collectLocalizationReferences(root, surface.sourceRoots))
 
   // Why: runs before --fix so an ambiguous key never gets its first sentence written to en.json.
   if (reportReusedFallbackKeys(references)) {
@@ -593,18 +602,18 @@ export async function main(
         console.error(formatMissingReferences(missingFallbacks))
         return 1
       }
-      console.error('Localization keys are missing from src/renderer/src/i18n/locales/en.json.')
+      console.error(`Localization keys are missing from ${enCatalogLabel}.`)
       console.error('')
       console.error(formatMissingReferences(missing))
       console.error('')
-      console.error('Run `pnpm run sync:localization-catalog` to add keys with string fallbacks.')
+      console.error(`Run \`${surface.syncCatalogCommand}\` to add keys with string fallbacks.`)
       return 1
     }
   }
 
   const remainingMissing = references.filter((reference) => !catalogKeys.has(reference.key))
   if (remainingMissing.length > 0) {
-    console.error('Localization keys are missing from src/renderer/src/i18n/locales/en.json.')
+    console.error(`Localization keys are missing from ${enCatalogLabel}.`)
     console.error('')
     console.error(formatMissingReferences(remainingMissing))
     return 1
@@ -633,9 +642,19 @@ export async function main(
   for (const fileName of localeFiles) {
     const localeName = fileName.replace(/\.json$/, '')
     const localeCatalogPath = path.join(localesDir, fileName)
-    const localeCatalog = await readCatalogFile(localeCatalogPath)
+    let localeCatalog = await readCatalogFile(localeCatalogPath)
     if (localeCatalog === undefined || reportDottedCatalogKeys(fileName, localeCatalog) !== 0) {
       return 1
+    }
+    if (surface.fillsPluralForms) {
+      const plural = await syncLocalePluralForms(localeCatalogPath, localeCatalog, options.fix)
+      if (!plural.ok) {
+        console.error(
+          `Run \`${surface.syncCatalogCommand}\` to copy them from each \`_other\` form.`
+        )
+        return 1
+      }
+      localeCatalog = plural.catalog
     }
     const exitCode = verifyLocaleCatalog(catalog, localeName, localeCatalog)
     if (exitCode !== 0) {

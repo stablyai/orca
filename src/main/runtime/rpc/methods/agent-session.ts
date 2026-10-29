@@ -1,3 +1,4 @@
+import { ensureAgentSessionFeatureRequirement } from '../agent-launch-feature-requirement'
 import { terminalImageViewerSupported } from '../../terminal-image-viewer-env'
 import type { RuntimeAgentSessionRpcCaller } from '../../../../shared/agent-session-host-authority'
 import {
@@ -43,6 +44,7 @@ function assertOperationTimestampWithinFutureSkew(clientOperationId: string): vo
 export const AGENT_SESSION_METHODS = [
   defineMethod({
     name: 'terminal.ensureAgentSession',
+    requires: ensureAgentSessionFeatureRequirement,
     permission: 'workspace',
     params: EnsureAgentSessionParams,
     handler: (params, context) =>
@@ -53,6 +55,7 @@ export const AGENT_SESSION_METHODS = [
   }),
   defineMethod({
     name: 'terminal.createAgentSession',
+    requires: ['accounts'],
     permission: 'workspace',
     params: CreateAgentSessionParams,
     handler: (params, context) => {

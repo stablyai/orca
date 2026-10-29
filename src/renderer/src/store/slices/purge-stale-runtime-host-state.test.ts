@@ -84,7 +84,7 @@ describe('purgeStaleRuntimeHostState', () => {
           executionHostId: RUNTIME_NEVER_SAVED
         }
       ],
-      endpointProjectHostSetups: [
+      projectHostSetups: [
         setup({ id: 's-local', repoId: 'repo1', hostId: 'local' }),
         setup({ id: 's-a', repoId: 'repoA', hostId: RUNTIME_A }),
         setup({ id: 's-a-repoless', repoId: '', hostId: RUNTIME_A }),
@@ -108,11 +108,26 @@ describe('purgeStaleRuntimeHostState', () => {
     })
     const epochBefore = store.getState().sortEpoch
 
+    const paneKey = `${TAB_A}:leaf`
+    const previous = {
+      paneKey,
+      state: 'done' as const,
+      prompt: '',
+      updatedAt: 1,
+      stateStartedAt: 1,
+      stateHistory: [],
+      terminalResumeEligible: false as const
+    }
+    store.setState({ agentStatusByPaneKey: { [paneKey]: previous } })
+    const accepted = vi.fn()
+    const dispose = store.getState().subscribeAgentStatusChanges(accepted)
     store.getState().purgeStaleRuntimeHostState(['env-a'])
+    expect(accepted).toHaveBeenCalledExactlyOnceWith([{ paneKey, previous, current: undefined }])
+    dispose()
 
     const s = store.getState()
     expect(s.repos.map((r) => r.id)).toEqual(['repo1', 'repoServing'])
-    expect(s.endpointProjectHostSetups.map((x) => x.id).sort()).toEqual(['s-local', 's-serving'])
+    expect(s.projectHostSetups.map((x) => x.id).sort()).toEqual(['s-local', 's-serving'])
     expect(s.worktreesByRepo.repoA).toEqual([])
     expect(s.detectedWorktreesByRepo.repoA.worktrees).toEqual([])
     expect(s.tabsByWorktree[WT_A]).toBeUndefined()
@@ -162,7 +177,7 @@ describe('purgeStaleRuntimeHostState', () => {
     const store = createTestStore()
     seedStore(store, {
       repos: [TEST_REPO],
-      endpointProjectHostSetups: [setup({ id: 's-local', repoId: 'repo1', hostId: 'local' })],
+      projectHostSetups: [setup({ id: 's-local', repoId: 'repo1', hostId: 'local' })],
       worktreesByRepo: {
         repo1: [makeWorktree({ id: 'repo1::/wt', repoId: 'repo1', hostId: 'local' })]
       }
@@ -171,7 +186,7 @@ describe('purgeStaleRuntimeHostState', () => {
     const epochBefore = before.sortEpoch
     const worktreesRef = before.worktreesByRepo
     const reposRef = before.repos
-    const setupsRef = before.endpointProjectHostSetups
+    const setupsRef = before.projectHostSetups
 
     store.getState().purgeStaleRuntimeHostState([])
     store.getState().purgeStaleRuntimeHostState(['env-does-not-exist'])
@@ -181,7 +196,7 @@ describe('purgeStaleRuntimeHostState', () => {
     // Nothing stale => the reducer returns state untouched (same references).
     expect(s.worktreesByRepo).toBe(worktreesRef)
     expect(s.repos).toBe(reposRef)
-    expect(s.endpointProjectHostSetups).toBe(setupsRef)
+    expect(s.projectHostSetups).toBe(setupsRef)
   })
 
   it('same-repoId-on-two-hosts: keeps an ambiguous unhosted row and the repo key', () => {
@@ -340,7 +355,7 @@ describe('purgeStaleRuntimeHostState', () => {
     const worktreeId = 'repoA::/legacy'
     seedStore(store, {
       repos: [],
-      endpointProjectHostSetups: [setup({ id: 's-a', repoId: 'repoA', hostId: RUNTIME_A })],
+      projectHostSetups: [setup({ id: 's-a', repoId: 'repoA', hostId: RUNTIME_A })],
       worktreesByRepo: {
         repoA: [makeWorktree({ id: worktreeId, repoId: 'repoA', hostId: undefined })]
       },
@@ -350,7 +365,7 @@ describe('purgeStaleRuntimeHostState', () => {
     store.getState().purgeStaleRuntimeHostState(['env-a'])
 
     const s = store.getState()
-    expect(s.endpointProjectHostSetups).toEqual([])
+    expect(s.projectHostSetups).toEqual([])
     expect(s.worktreesByRepo.repoA).toEqual([])
     expect(s.tabsByWorktree[worktreeId]).toBeUndefined()
   })
@@ -436,7 +451,7 @@ describe('purgeStaleRuntimeHostState', () => {
           executionHostId: RUNTIME_A
         }
       ],
-      endpointProjectHostSetups: [setup({ id: 's-b', repoId: 'shared', hostId: RUNTIME_B })],
+      projectHostSetups: [setup({ id: 's-b', repoId: 'shared', hostId: RUNTIME_B })],
       worktreesByRepo: {
         shared: [makeWorktree({ id: worktreeId, repoId: 'shared', hostId: undefined })]
       },
@@ -447,7 +462,7 @@ describe('purgeStaleRuntimeHostState', () => {
 
     const s = store.getState()
     expect(s.repos).toEqual([])
-    expect(s.endpointProjectHostSetups).toHaveLength(1)
+    expect(s.projectHostSetups).toHaveLength(1)
     expect(s.worktreesByRepo.shared).toHaveLength(1)
     expect(s.tabsByWorktree[worktreeId]).toBe(tabs)
   })

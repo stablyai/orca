@@ -2,8 +2,8 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { mkdir, rm, stat, symlink, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { getPluginsDataDir, getUserPluginsDir } from './plugin-discovery'
-import { readPluginLockfile } from './plugin-install'
-import type { PluginManifest } from '../../shared/plugins/plugin-manifest'
+import { readPluginLockfile } from './installation/plugin-install'
+import type { PluginManifest } from '../../shared/plugins/manifest/plugin-manifest'
 import {
   createUninstallFixture,
   latestPluginLog,
@@ -99,21 +99,26 @@ it.each(['panel', 'event'] as const)(
     const contributes: Partial<PluginManifest['contributes']> =
       kind === 'panel'
         ? { panels: [{ id: 'panel', title: 'Panel', entry: 'panel.html' }] }
-        : { events: [{ on: 'worktree.created' }] }
+        : { events: [{ on: 'workspace.created' }] }
     const key = await install(`late-${kind}`, contributes)
     const held = uninstallGate()
+    if (kind === 'event') {
+      // Why: a running worker takes events without re-hashing; a stopped one verifies at spawn.
+      await service.deactivatePlugin(key)
+    }
     const verify = vi
-      .spyOn(uninstallContentVerifier(service), 'verify')
+      .spyOn(uninstallContentVerifier(service), kind === 'panel' ? 'verify' : 'verifyNow')
       .mockImplementationOnce(() => held.promise)
     const panelResult = kind === 'panel' ? service.panels.readEntry(key, 'panel') : null
     if (kind === 'event') {
-      service.emitEvent('worktree.created', {
-        worktreeId: 'fixture',
+      service.emitEvent('workspace.created', {
+        workspaceId: 'fixture',
+        kind: 'worktree',
         path: 'synthetic-path',
         branch: 'main'
       })
     }
-    expect(verify).toHaveBeenCalledOnce()
+    await vi.waitFor(() => expect(verify).toHaveBeenCalledOnce())
     verify.mockRestore()
     try {
       await removeThroughPluginIpc(key)

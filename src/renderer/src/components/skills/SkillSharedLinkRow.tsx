@@ -14,18 +14,19 @@ import { translate } from '@/i18n/i18n'
 import type { SkillCloudOwnedShare } from '../../../../shared/skill-cloud-contract'
 import { skillCountLabel } from './skill-display-labels'
 import { isSkillBundleVersion } from './skill-share-version-summary'
+import { uiDateTimeFormat } from '@/i18n/ui-intl-formatters'
 
-const createdFormatter = new Intl.DateTimeFormat(undefined, {
+const CREATED_OPTIONS: Intl.DateTimeFormatOptions = {
   year: 'numeric',
   month: 'short',
   day: 'numeric'
-})
+}
 
 function createdLabel(createdAt: string): string {
   const parsed = new Date(createdAt)
   return Number.isNaN(parsed.getTime())
     ? translate('auto.components.skills.SkillRow.updatedUnknown', 'No date')
-    : createdFormatter.format(parsed)
+    : uiDateTimeFormat(CREATED_OPTIONS).format(parsed)
 }
 
 /** Fetch package membership only on expansion because the shares endpoint omits it; avoid one request per collapsed link. */

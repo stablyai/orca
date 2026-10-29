@@ -123,7 +123,8 @@ describe('humanizeTerminalError', () => {
           if (kind === 'startup') {
             expect(tokenChecks).toBe(2 * rowCount)
           }
-          expect(startupTranslations).toBe(2 * matchingRows)
+          // Upper bound only: option-free translations are cached after their first lookup.
+          expect(startupTranslations).toBeLessThanOrEqual(2 * matchingRows)
           expect(
             view.container.textContent?.match(/Codex exited while starting\./g) ?? []
           ).toHaveLength(matchingRows)
@@ -207,6 +208,15 @@ describe('humanizeTerminalError', () => {
 
   it('leaves other errors untouched', () => {
     expect(humanizeTerminalError('Paste failed.')).toBe('Paste failed.')
+  })
+
+  it("drops Electron's IPC wrapper from a refusal main threw, keeping other lines as they are", () => {
+    const wrapped =
+      "Error invoking remote method 'runtimeEnvironments:call': Error: Ubuntu was stopped. Start it again."
+    expect(humanizeTerminalError(wrapped)).toBe('Ubuntu was stopped. Start it again.')
+    expect(humanizeTerminalError(`Paste failed.\n${wrapped}\n  indented detail`)).toBe(
+      'Paste failed.\nUbuntu was stopped. Start it again.\n  indented detail'
+    )
   })
 
   it('replaces the terminal-host-gone code with copy that explains the loss', () => {

@@ -1,5 +1,5 @@
 import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
-import { translate } from '@/i18n/i18n'
+import { getIntlLocale, translate } from '@/i18n/i18n'
 import { ExternalLink } from 'lucide-react'
 export function TaskPageGitLabTodoList({
   model
@@ -90,7 +90,7 @@ export function TaskPageGitLabTodoList({
                 {todo.projectPath}
               </span>
               <span className="text-xs text-muted-foreground">
-                {todo.updatedAt ? new Date(todo.updatedAt).toLocaleDateString() : ''}
+                {todo.updatedAt ? new Date(todo.updatedAt).toLocaleDateString(getIntlLocale()) : ''}
               </span>
               <span className="flex justify-end">
                 <ExternalLink className="size-3.5 text-muted-foreground" />

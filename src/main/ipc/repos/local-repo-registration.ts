@@ -14,6 +14,7 @@ import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../shared
 import { findProjectAtSameRealPath } from '../../project-realpath-identity'
 import { detectRepoIconAndUpstream } from '../../repo-icon-autodetect'
 import { prepareLocalWorktreeRootForRepo } from '../../worktree-root-preparation'
+import { describeWslUncAccessDenied } from '../../wsl/wsl-unc-access-denied'
 
 export async function addLocalRepoFromPath(
   store: Store,
@@ -27,7 +28,9 @@ export async function addLocalRepoFromPath(
   }
   const gitInfo = repoKind === 'git' ? await inspectGitRepoForRegistrationAsync(path) : null
   if (gitInfo && !gitInfo.isRepo) {
-    return { error: `Not a valid git repository: ${path}` }
+    return {
+      error: (await describeWslUncAccessDenied(path)) ?? `Not a valid git repository: ${path}`
+    }
   }
 
   const resolvedPath = gitInfo?.rootPath ?? path

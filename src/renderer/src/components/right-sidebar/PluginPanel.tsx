@@ -1,32 +1,15 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { isPluginPanelTabKey } from '../../../../shared/plugins/plugin-manifest'
-import {
-  PANEL_PING_TYPE,
-  PLUGIN_PANEL_FRAME_NAME_PREFIX
-} from '../../../../shared/plugins/plugin-panel-bridge'
-import {
-  PANEL_SHELL_COLOR_SCHEME_PLACEHOLDER,
-  PANEL_SHELL_TOKENS_PLACEHOLDER
-} from '../../../../shared/plugins/plugin-panel-shell'
-import {
-  callPanelActionViaPreload,
-  createPanelBridgeMessageHandler
-} from './plugin-panel-bridge-host'
-import { createPanelWatchdog } from './plugin-panel-watchdog'
-import { buildPanelDesignTokenCss, currentPanelColorScheme } from './plugin-panel-design-token-css'
-import { usePluginPanelThemeRevision } from './use-plugin-panel-theme-revision'
+import React, { useEffect, useMemo, useRef } from 'react'
+import { isPluginPanelTabKey } from '../../../../shared/plugins/manifest/plugin-manifest'
+import { PLUGIN_PANEL_FRAME_NAME_PREFIX } from '../../../../shared/plugins/frames/plugin-frame-bridge'
+import { fillPluginPanelShell } from './plugin-panel-design-token-css'
+import { usePluginFrameHost } from './use-plugin-frame-host'
+import { usePluginFrameEntry } from './use-plugin-frame-entry'
 import { usePluginPanels, usePluginPanelsStore } from '@/store/plugin-panels'
 import { translate } from '@/i18n/i18n'
 
 type PluginPanelProps = {
   tabKey: string
 }
-
-type PluginPanelEntryState =
-  | { status: 'loading' }
-  | { status: 'error' }
-  | { status: 'unresponsive' }
-  | { status: 'ready'; shellHtml: string; documentRevision: number }
 
 function PluginPanelMessage({ children }: { children: React.ReactNode }): React.JSX.Element {
   return (
@@ -36,137 +19,40 @@ function PluginPanelMessage({ children }: { children: React.ReactNode }): React.
   )
 }
 
-/** Replace only the first shell placeholders, parsed before plugin content, so plugin echoes stay inert. */
-function fillPanelShell(html: string): string {
-  return html
-    .replace(PANEL_SHELL_COLOR_SCHEME_PLACEHOLDER, currentPanelColorScheme())
-    .replace(PANEL_SHELL_TOKENS_PLACEHOLDER, buildPanelDesignTokenCss())
-}
-
 function PluginPanel({ tabKey }: PluginPanelProps): React.JSX.Element {
   const panels = usePluginPanels()
   const setPanelHealth = usePluginPanelsStore((state) => state.setPanelHealth)
   const panel = isPluginPanelTabKey(tabKey)
     ? (panels.find((entry) => entry.tabKey === tabKey) ?? null)
     : null
-  const [entryState, setEntryState] = useState<PluginPanelEntryState>({ status: 'loading' })
-  const [sessionToken, setSessionToken] = useState<string | null>(null)
-  const [loadedFrameKey, setLoadedFrameKey] = useState<string | null>(null)
   const iframeRef = useRef<HTMLIFrameElement | null>(null)
-  const themeRevision = usePluginPanelThemeRevision()
-
-  const pluginKey = panel?.pluginKey ?? null
-  const panelId = panel?.id ?? null
-  const panelShell = entryState.status === 'ready' ? entryState.shellHtml : null
-  const panelDocument = panelShell ? fillPanelShell(panelShell) : null
-  // Theme values are baked into srcdoc, so theme changes must rebuild the frame.
-  const panelFrameKey =
-    entryState.status === 'ready'
-      ? `${tabKey}:${entryState.documentRevision}:${themeRevision}`
-      : null
-  const watchdog = useMemo(
-    () =>
-      createPanelWatchdog({
-        sendPing: (pingId) =>
-          iframeRef.current?.contentWindow?.postMessage({ type: PANEL_PING_TYPE, pingId }, '*'),
-        onUnresponsive: () => {
-          setPanelHealth(tabKey, 'error')
-          setEntryState({ status: 'unresponsive' })
-        }
-      }),
-    [setPanelHealth, tabKey]
+  const { entry, markUnresponsive } = usePluginFrameEntry(
+    'panel',
+    panel?.pluginKey ?? null,
+    panel?.id ?? null
   )
+  const panelShell = entry.status === 'ready' ? entry.html : null
+  // Why memoized: a new srcdoc reloads the frame; theme changes arrive as messages instead.
+  const panelDocument = useMemo(
+    () => (panelShell ? fillPluginPanelShell(panelShell) : null),
+    [panelShell]
+  )
+  const panelFrameKey = entry.status === 'ready' ? `${tabKey}:${entry.revision}` : null
+  const { onFrameLoad } = usePluginFrameHost({
+    surface: 'panel',
+    iframeRef,
+    frameKey: panelFrameKey,
+    sessionToken: entry.status === 'ready' ? entry.sessionToken : null,
+    onUnresponsive: markUnresponsive
+  })
 
   useEffect(() => {
-    if (!sessionToken || !panelDocument) {
-      return
-    }
-    let active = true
-    const handler = createPanelBridgeMessageHandler({
-      sessionToken,
-      getPanelWindow: () => iframeRef.current?.contentWindow ?? null,
-      callPanelAction: callPanelActionViaPreload,
-      isActive: () => active,
-      onPong: (pingId) => watchdog.handlePong(pingId)
-    })
-    window.addEventListener('message', handler)
-    return () => {
-      active = false
-      window.removeEventListener('message', handler)
-    }
-  }, [panelDocument, sessionToken, watchdog])
-
-  useEffect(() => {
-    if (!panelFrameKey || loadedFrameKey !== panelFrameKey) {
-      return
-    }
-    // Install the srcdoc pong listener before pinging or a healthy panel may be suspended.
-    watchdog.start()
-    return () => watchdog.stop()
-  }, [loadedFrameKey, panelFrameKey, watchdog])
-
-  useEffect(() => {
-    if (!pluginKey || !panelId) {
-      return
-    }
-    let cancelled = false
-    let currentHtml: string | null = null
-    let documentRevision = 0
-    setEntryState({ status: 'loading' })
-    setSessionToken(null)
-    const pluginsApi = window.api?.plugins
-    if (!pluginsApi) {
+    if (entry.status === 'ready') {
+      setPanelHealth(tabKey, 'healthy')
+    } else if (entry.status !== 'loading') {
       setPanelHealth(tabKey, 'error')
-      setEntryState({ status: 'error' })
-      return
     }
-    let loadGeneration = 0
-    const load = (): void => {
-      const generation = ++loadGeneration
-      pluginsApi
-        .readPanelEntry({ pluginKey, panelId })
-        .then((entry) => {
-          if (cancelled || generation !== loadGeneration) {
-            return
-          }
-          if (!entry) {
-            currentHtml = null
-            setSessionToken(null)
-            setPanelHealth(tabKey, 'error')
-            setEntryState({ status: 'error' })
-            return
-          }
-          // Rotate authority without replacing unchanged content or restarting its watchdog.
-          setSessionToken(entry.sessionToken)
-          setPanelHealth(tabKey, 'healthy')
-          if (entry.html !== currentHtml) {
-            currentHtml = entry.html
-            documentRevision += 1
-            setPanelHealth(tabKey, 'healthy')
-            setEntryState({
-              status: 'ready',
-              shellHtml: entry.html,
-              documentRevision
-            })
-          }
-        })
-        .catch(() => {
-          if (!cancelled && generation === loadGeneration) {
-            currentHtml = null
-            setSessionToken(null)
-            setPanelHealth(tabKey, 'error')
-            setEntryState({ status: 'error' })
-          }
-        })
-    }
-    load()
-    const unsubscribe = pluginsApi.onChanged ? pluginsApi.onChanged(load) : null
-    return () => {
-      cancelled = true
-      loadGeneration += 1
-      unsubscribe?.()
-    }
-  }, [panelId, pluginKey, setPanelHealth, tabKey])
+  }, [entry.status, setPanelHealth, tabKey])
 
   // Persisted tabs can outlive an uninstalled or disabled plugin.
   if (!panel) {
@@ -180,7 +66,7 @@ function PluginPanel({ tabKey }: PluginPanelProps): React.JSX.Element {
     )
   }
 
-  if (entryState.status === 'loading') {
+  if (entry.status === 'loading') {
     return (
       <PluginPanelMessage>
         {translate('auto.components.right.sidebar.PluginPanel.loading', 'Loading plugin panel...')}
@@ -188,7 +74,7 @@ function PluginPanel({ tabKey }: PluginPanelProps): React.JSX.Element {
     )
   }
 
-  if (entryState.status === 'unresponsive') {
+  if (entry.status === 'unresponsive') {
     return (
       <PluginPanelMessage>
         {translate(
@@ -199,7 +85,7 @@ function PluginPanel({ tabKey }: PluginPanelProps): React.JSX.Element {
     )
   }
 
-  if (entryState.status === 'error') {
+  if (entry.status === 'error') {
     return (
       <PluginPanelMessage>
         {translate(
@@ -220,7 +106,7 @@ function PluginPanel({ tabKey }: PluginPanelProps): React.JSX.Element {
       sandbox="allow-scripts"
       name={`${PLUGIN_PANEL_FRAME_NAME_PREFIX}${tabKey}`}
       srcDoc={panelDocument ?? ''}
-      onLoad={() => setLoadedFrameKey(panelFrameKey)}
+      onLoad={onFrameLoad}
       title={panel.title}
       className="h-full w-full flex-1 border-0 bg-background"
     />

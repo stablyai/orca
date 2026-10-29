@@ -2,11 +2,11 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import type { WindowsTerminalCapabilities } from '@/lib/windows-terminal-capabilities'
 import { useAppStore } from '../../store'
-import type { TabAgentLaunchOption } from './tab-agent-launch-options'
 import { useTabAgentMenuLaunch } from './QuickLaunchButton'
 import { requestNativeChatComposerFocus } from '@/components/native-chat/use-native-chat-composer-reveal-focus'
 import { useNewTabAgentMenuRows, type NewTabAgentMenuModel } from './use-new-tab-agent-menu-rows'
 import type { AgentDetectionTarget } from '@/hooks/useDetectedAgents'
+import type { TabAgentLaunchOption } from './tab-agent-launch-options'
 import { buildTabAgentLaunchOptionsFromRows } from './tab-agent-launch-options'
 import { buildTabCreateMenuOptions, type TabCreateMenuOption } from './tab-create-menu-options'
 import { resolveWindowsShellLaunchTarget } from './windows-shell-launch'
@@ -89,13 +89,12 @@ export function useTabBarCreateMenuController({
   const agentMenu = useNewTabAgentMenuRows(
     worktreeId,
     newTabMenuOpen && showAgentLaunchItems,
-    agentDetectionTarget
+    agentDetectionTarget,
+    { wakeOnOpen: true }
   )
   const commandOverrides = useAppStore((state) => state.settings?.agentCmdOverrides)
-  const agentLaunchOptions = buildTabAgentLaunchOptionsFromRows(
-    agentMenu.state === 'settled' ? agentMenu.rows : [],
-    commandOverrides
-  )
+  const settledAgentRows = agentMenu.state === 'settled' ? agentMenu.rows : []
+  const agentLaunchOptions = buildTabAgentLaunchOptionsFromRows(settledAgentRows, commandOverrides)
   const pendingNewTabMenuFocusRef = useRef<{ focus: () => void; synchronous?: true } | null>(null)
   const pendingNewTabMenuFocusAnimationRef = useRef<number | null>(null)
   const pendingNewTabMenuFocusRetryRef = useRef<number | null>(null)
@@ -226,6 +225,8 @@ export function useTabBarCreateMenuController({
       case 'new-simulator':
       case 'go-to-simulator':
         onNewSimulatorTab?.()
+        break
+      case 'new-plugin-file': // usePluginNewFileMenuOptions handles these first.
     }
   }
   const launchAgentRow = useTabAgentMenuLaunch({

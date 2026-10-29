@@ -1,5 +1,6 @@
 import { platform } from 'node:os'
 import { EmulatorError } from '../emulator-errors'
+import { emulatorFailureText } from '../../../shared/emulator-failure-copy'
 import type { EmulatorSessionInfo } from '../emulator-types'
 import {
   ensureSimulatorBooted,
@@ -239,7 +240,7 @@ export class IosEmulatorBackend implements EmulatorBackend {
       if (!(await waitForReadyOrKill(info))) {
         throw new EmulatorError(
           'emulator_helper_failed',
-          'serve-sim started but its stream endpoint is not reachable.'
+          emulatorFailureText('serveSimEndpointUnreachable')
         )
       }
     }

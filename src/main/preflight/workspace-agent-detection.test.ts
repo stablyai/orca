@@ -27,6 +27,12 @@ const { detectInstalledMock, refreshMock } = vi.hoisted(() => ({
   refreshMock: vi.fn()
 }))
 
+// These cases cover a running distro; the E9 stopped-distro gate has its own suite.
+vi.mock('../wsl/wsl-background-exec-gate', () => ({
+  assertWslDistroRunningForExec: async () => {},
+  runAsWslExecUserAct: async (_distro: unknown, act: () => Promise<unknown>) => act()
+}))
+
 vi.mock('./agent-detection', () => ({
   detectInstalledAgentsWithShellPathHydration: detectInstalledMock,
   refreshShellPathAndDetectAgents: refreshMock,
@@ -155,7 +161,8 @@ describe('resolveWorkspaceAgentDetectionHost on a Windows host', () => {
       }
     })
     expect(detectInstalledMock).toHaveBeenCalledWith(
-      wslContext('Ubuntu-24.04', 'prospective', 'project-override')
+      wslContext('Ubuntu-24.04', 'prospective', 'project-override'),
+      undefined
     )
   })
 
@@ -341,7 +348,8 @@ describe('preflight.detectAgents resolves the workspace on the host', () => {
       params: { worktreeId: `r1::${WSL_REPO_PATH}` }
     })
     expect(detectInstalledMock).toHaveBeenCalledWith(
-      wslContext('Ubuntu-24.04', 'r1', 'project-override')
+      wslContext('Ubuntu-24.04', 'r1', 'project-override'),
+      undefined
     )
     expect(response).toMatchObject({ ok: true, result: ['claude', 'codex'] })
   })

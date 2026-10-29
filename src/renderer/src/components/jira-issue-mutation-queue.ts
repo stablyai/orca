@@ -1,3 +1,4 @@
+import { taskProviderErrorMessage } from '@/lib/task-provider-error-copy'
 import type { JiraIssue, JiraMutationResult } from '../../../shared/jira/jira-types'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { TaskSourceContext } from '../../../shared/task-source-context'
@@ -113,7 +114,7 @@ export function enqueueJiraIssueMutation({
     try {
       const result = await update()
       if (!result.ok) {
-        throw new Error(result.error)
+        throw new Error(taskProviderErrorMessage(result))
       }
       saved = true
       write.confirmed = { ...write.confirmed, ...optimistic }

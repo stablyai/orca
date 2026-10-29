@@ -64,9 +64,6 @@ describe('edge-wrapped terminal HTTP links', () => {
   beforeEach(() => {
     vi.stubGlobal('window', { api: { shell: { openUrl: openUrlMock } } })
     registerHttpLinkStoreAccessor(() => ({
-      repos: [],
-      endpointProjects: [],
-      endpointProjectHostSetups: [],
       settings: { openLinksInApp: false },
       setActiveWorktree: vi.fn(),
       createBrowserTab: vi.fn()
@@ -100,6 +97,15 @@ describe('edge-wrapped terminal HTTP links', () => {
       }
     }
   )
+
+  it('stops scanning back at a prose row that cannot continue a URL', () => {
+    const prose = makeBufferLine('see https://example.com and more words')
+    const hovered = makeBufferLine('tail')
+    const getLine = vi.fn((y: number) => (y === 199 ? hovered : prose))
+
+    buildEdgeWrappedHttpLogicalLineCandidates({ getLine }, 200)
+    expect(new Set(getLine.mock.calls.map(([y]) => y)).size).toBeLessThan(5)
+  })
 
   it('opens a URL when a wide glyph starts the continuation row', () => {
     const prefix = 'https://example.com/wide/'

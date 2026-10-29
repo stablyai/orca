@@ -142,6 +142,45 @@ describe('RuntimeFileCommands', () => {
       await expect(readFile(artifactPath, 'utf8')).resolves.toBe('{"ok":"ext"}')
     })
 
+    it('lets only one of two concurrent writes from different clients land', async () => {
+      const artifactPath = await tempFile('result.json', '{"ok":true}')
+      const { commands } = createRuntimeFileCommands({ path: '/repo' })
+      resolveAuthorizedPathMock.mockImplementation(async (p: string) => p)
+      // The registry stubs rename; commit for real so the second writer sees the first one's bytes.
+      renameMock.mockImplementation(async (from, to) => writeFile(to, await readFile(from)))
+
+      const first = absoluteFileTarget(await resolveTerminalArtifactPath(commands, artifactPath))
+      const second = absoluteFileTarget(
+        await resolveTerminalArtifactPath(commands, artifactPath, null, 'client-b')
+      )
+
+      const results = await Promise.allSettled([
+        commands.writeTerminalArtifactFile(
+          'id:wt-1',
+          first.grantId,
+          first.absolutePath,
+          '{"from":"a"}',
+          'client-a'
+        ),
+        commands.writeTerminalArtifactFile(
+          'id:wt-1',
+          second.grantId,
+          second.absolutePath,
+          '{"from":"b"}',
+          'client-b'
+        )
+      ])
+
+      const winner = results.findIndex((result) => result.status === 'fulfilled')
+      expect(results[1 - winner]).toMatchObject({
+        status: 'rejected',
+        reason: new Error('terminal_file_grant_stale')
+      })
+      await expect(readFile(artifactPath, 'utf8')).resolves.toBe(
+        winner === 0 ? '{"from":"a"}' : '{"from":"b"}'
+      )
+    })
+
     it('keeps the original terminal artifact when atomic commit fails', async () => {
       const artifactPath = await tempFile('result.json', '{"ok":true}')
       const { commands } = createRuntimeFileCommands({ path: '/repo' })

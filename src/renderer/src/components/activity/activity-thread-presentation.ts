@@ -21,19 +21,20 @@ import type {
   ActivityLiveAgentState,
   AgentPaneThread
 } from './activity-thread-types'
+import { uiDateTimeFormat } from '@/i18n/ui-intl-formatters'
 
 const ACTIVITY_THREAD_RESPONSE_RENDER_PREVIEW_MAX_LENGTH = 320
 
-const absoluteDateFormatter = new Intl.DateTimeFormat(undefined, {
+const ABSOLUTE_DATE_OPTIONS: Intl.DateTimeFormatOptions = {
   year: 'numeric',
   month: 'short',
   day: 'numeric',
   hour: 'numeric',
   minute: '2-digit'
-})
+}
 
 export function formatAbsoluteDate(timestamp: number): string {
-  return absoluteDateFormatter.format(new Date(timestamp))
+  return uiDateTimeFormat(ABSOLUTE_DATE_OPTIONS).format(new Date(timestamp))
 }
 
 export function formatRelativeTime(timestamp: number, now = Date.now()): string {

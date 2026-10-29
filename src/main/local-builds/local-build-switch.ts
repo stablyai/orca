@@ -40,17 +40,14 @@ export async function chooseLocalBuild(
     const terminalSummary =
       compatibility.liveTerminalCount === 0
         ? translateMain('localBuild.noLiveTerminals', 'No live terminals need to reconnect.')
-        : compatibility.liveTerminalCount === 1
-          ? translateMain(
-              'localBuild.liveTerminals_one',
-              '{{count}} live terminal will reconnect after restart.',
-              { count: compatibility.liveTerminalCount }
-            )
-          : translateMain(
-              'localBuild.liveTerminals_other',
-              '{{count}} live terminals will reconnect after restart.',
-              { count: compatibility.liveTerminalCount }
-            )
+        : translateMain(
+            'localBuild.liveTerminals',
+            '{{count}} live terminals will reconnect after restart.',
+            {
+              count: compatibility.liveTerminalCount,
+              defaultValue_one: '{{count}} live terminal will reconnect after restart.'
+            }
+          )
     const messageBoxOptions: Electron.MessageBoxOptions = {
       type: 'question',
       title: translateMain('localBuild.confirmTitle', 'Use Local Orca Build?'),

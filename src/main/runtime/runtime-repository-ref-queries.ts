@@ -8,6 +8,7 @@ import {
 } from '../../shared/repo-search-limits'
 import { getBaseRefDefault, getRemoteCount, searchBaseRefDetails } from '../git/repo'
 import { getRepoRoutingConnectionId } from '../../shared/execution-host'
+import { blockedWslDistroForPath } from '../wsl/wsl-unc-access-gate'
 
 type RuntimeRepositoryRefQueryDependencies = {
   resolveRepo: (selector: string) => Promise<Repo>
@@ -51,6 +52,10 @@ export class RuntimeRepositoryRefQueries {
       return { defaultBaseRef: null, remoteCount: 0 }
     }
     if (getRepoRoutingConnectionId(repo)) {
+      return { defaultBaseRef: null, remoteCount: 0 }
+    }
+    // A client's Settings pane must not start this host's stopped distro over `\\wsl.localhost` (E9).
+    if (await blockedWslDistroForPath(repo.path)) {
       return { defaultBaseRef: null, remoteCount: 0 }
     }
     const [defaultBaseRef, remoteCount] = await Promise.all([

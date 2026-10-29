@@ -1,3 +1,6 @@
+import { sourceControlActionRecipeEntry } from './source-control-action-selection'
+import { trimActionArgumentDocument } from './source-control-action-argument-choices'
+import { demoteDisplacedActionArgumentChoices } from './source-control-action-launch-preferences'
 import {
   normalizeRepoSourceControlAiOverrides,
   normalizeSourceControlAiSettings
@@ -5,6 +8,7 @@ import {
 import {
   DEFAULT_SOURCE_CONTROL_ACTION_COMMAND_TEMPLATES,
   SOURCE_CONTROL_TEXT_ACTION_IDS,
+  canonicalActionLaunchPreferences,
   type SourceControlActionId,
   type SourceControlActionRecipe
 } from './source-control-ai-actions'
@@ -41,6 +45,7 @@ type ReadCompatibleActionRecipe = {
   agentId?: SourceControlActionRecipe['agentId']
   commandInputTemplate?: string | null
   agentArgs?: string | null
+  argumentChoices?: SourceControlActionRecipe['argumentChoices']
   launchPreferences?: SourceControlActionRecipe['launchPreferences']
   surface?: SourceControlActionRecipe['surface']
 }
@@ -87,12 +92,20 @@ function normalizeCompleteRecipe(
       ? recipe.commandInputTemplate
       : DEFAULT_SOURCE_CONTROL_ACTION_COMMAND_TEMPLATES[actionId]
   const rawAgentArgs = recipe.agentArgs
-  const agentArgs = typeof rawAgentArgs === 'string' ? rawAgentArgs.trim() : undefined
+  const agentArgs = typeof rawAgentArgs === 'string' ? rawAgentArgs : undefined
   return {
+    ...trimActionArgumentDocument({ agentArgs, argumentChoices: recipe.argumentChoices }),
+    ...(rawAgentArgs === null ? { agentArgs: null } : {}),
     agentId: recipe.agentId ?? null,
     commandInputTemplate,
-    ...(agentArgs !== undefined ? { agentArgs } : {}),
-    ...(recipe.launchPreferences ? { launchPreferences: recipe.launchPreferences } : {}),
+
+    ...(recipe.launchPreferences
+      ? {
+          launchPreferences: TEXT_ACTION_ID_SET.has(actionId)
+            ? recipe.launchPreferences
+            : canonicalActionLaunchPreferences(recipe.launchPreferences)
+        }
+      : {}),
     ...(recipe.surface ? { surface: recipe.surface } : {})
   }
 }
@@ -177,7 +190,29 @@ function normalizeRecipeForSave(
 export function saveSourceControlActionRecipe(
   input: SaveSourceControlActionRecipeInput
 ): SourceControlActionRecipeSaveResult {
-  const savedRecipe = normalizeRecipeForSave(input.actionId, input.recipe)
+  const selected = sourceControlActionRecipeEntry(input.recipe)
+  const recipe = demoteDisplacedActionArgumentChoices(selected)
+  const sources = selected.resolvedChoiceSources
+  const savedRecipe = normalizeRecipeForSave(
+    input.actionId,
+    sources
+      ? {
+          ...recipe,
+          launchPreferences:
+            sources.canonicalAgentId && (sources.model || sources.permission)
+              ? {
+                  agentId: sources.canonicalAgentId,
+                  ...(sources.model
+                    ? { modelSelection: { ...sources.model, base: 'default' } }
+                    : {}),
+                  ...(sources.permission?.permissionMode
+                    ? { permissionMode: sources.permission.permissionMode }
+                    : {})
+                }
+              : undefined
+        }
+      : recipe
+  )
   if (input.target.type === 'global') {
     const current = normalizeSourceControlAiSettings(
       input.settings.sourceControlAi,
