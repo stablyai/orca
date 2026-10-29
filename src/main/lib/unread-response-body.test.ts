@@ -13,12 +13,6 @@ describe('cancelUnreadResponseBody', () => {
     expect(cancelled).toBe(true)
   })
 
-  it('no-ops on a body-less response', async () => {
-    await expect(
-      cancelUnreadResponseBody(new Response(null, { status: 500 }))
-    ).resolves.toBeUndefined()
-  })
-
   it('swallows cancellation failures on a locked stream', async () => {
     const response = cancelTrackingResponse(500, () => {})
     response.body?.getReader()

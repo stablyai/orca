@@ -114,6 +114,7 @@ describe('git admission span coverage', () => {
     callback?.(null, 'ok', '')
     await expect(pending).resolves.toEqual({ stdout: 'ok', stderr: '' })
     expect(span.setAttribute).toHaveBeenCalledWith('git.queue_wait_ms', 37)
+    expect(span.setAttribute).toHaveBeenCalledWith('git.runs_in', 'host')
     expect(span.end).toHaveBeenCalledOnce()
   })
 
@@ -135,6 +136,7 @@ describe('git admission span coverage', () => {
     callback?.(null, Buffer.from('blob'), Buffer.alloc(0))
     await expect(pending).resolves.toEqual({ stdout: Buffer.from('blob') })
     expect(span.setAttribute).toHaveBeenCalledWith('git.queue_wait_ms', 37)
+    expect(span.setAttribute).toHaveBeenCalledWith('git.runs_in', 'host')
     expect(span.end).toHaveBeenCalledOnce()
   })
 

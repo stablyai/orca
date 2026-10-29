@@ -1,7 +1,8 @@
 import { StyleSheet } from 'react-native'
 import { colors, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
 
-export const hostScreenSecondaryStyles = StyleSheet.create({
+export const hostScreenSecondaryStyles = themedStyleSheet(() => ({
   errorText: {
     color: colors.statusRed,
     fontSize: typography.bodySize
@@ -197,4 +198,4 @@ export const hostScreenSecondaryStyles = StyleSheet.create({
     fontWeight: '600',
     color: '#fff'
   }
-})
+}))

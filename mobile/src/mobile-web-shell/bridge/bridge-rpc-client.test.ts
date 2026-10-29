@@ -9,19 +9,12 @@ import { BRIDGE_MAX_MESSAGE_BYTES, BRIDGE_MAX_SUBSCRIPTIONS } from './bridge-cap
 import { BRIDGE_PROTOCOL_VERSION } from './bridge-envelope'
 import { createFakeBridgePortPair, type BridgePortPair } from './bridge-port-pair-test-harness'
 
-/**
- * The page's client and the shell's host, over one FIFO per direction.
- *
- * That `createBridgeRpcClient` returns an `RpcClient` is the type system's job and it is already
- * done; what a test has to prove is that each member still means the same thing after a round trip,
- * because the screens above it cannot tell which client they are holding.
- */
+// Test RpcClient behavior across real FIFO bridge lanes; type conformance alone cannot prove screens observe the same round-trip semantics.
 
 function success(id: string, result: unknown): RpcResponse {
   return { id, ok: true, result, _meta: { runtimeId: 'runtime-a' } }
 }
 
-/** Narrows what a rejection handed back, so a test reads an error rather than asserting one. */
 function readError(thrown: unknown): Error {
   if (!(thrown instanceof Error)) {
     throw new Error(`expected an Error, got ${typeof thrown}`)
@@ -150,11 +143,10 @@ describe('bridge round trip: subscriptions', () => {
     expect(pair.diagnostics).toEqual([
       { kind: 'stream-failed', error: expect.objectContaining({ message: 'the terminal is gone' }) }
     ])
-    // The shell's own message reaches the listener, the way the native client passes one through.
     expect(onData.mock.calls).toEqual([
       [{ type: 'error', message: 'the terminal is gone', error: expect.any(Error) }]
     ])
-    // A leaked slot is invisible until the page reaches its own cap, so that is where it is read.
+    // Reach the in-flight cap to expose a leaked slot.
     for (let index = 0; index < BRIDGE_MAX_SUBSCRIPTIONS; index += 1) {
       pair.client.subscribe('terminal.stream', {}, vi.fn())
     }
@@ -211,18 +203,10 @@ describe('bridge round trip: notifications and state', () => {
     expect(pair.client.notifyNavigate('/h/host-a/session/wt-1?name=a+b')).toBe(true)
     await pair.flush()
     expect(pair.navigations).toEqual(['/h/host-a/session/wt-1?name=a+b'])
-    // One way: the page hears nothing back, and nothing about it reaches the shell's client.
     expect(pair.rpc.requests).toEqual([])
   })
 
-  /**
-   * The page's normalization and the host's are separate calls on the same rule, and the frame in
-   * between is the only place they could disagree.
-   *
-   * Two halves, because the first cannot see the second: the page normalizes before it posts, so
-   * over the client the host only ever receives an already-normalized URL and forwarding it raw
-   * would pass. The injected frame at the end is what holds the host to the rule on its own.
-   */
+  // Page normalization hides raw input from the host; inject an unnormalized frame too so both endpoints’ use of the shared URL rule is tested.
   it('asks the shell to open a URL outside the app, normalized once and the same on both sides', async () => {
     const pair = await ready(createFakeBridgePortPair())
     const inputs = [
@@ -237,7 +221,6 @@ describe('bridge round trip: notifications and state', () => {
       expect(pair.client.notifyExternalLink(url), url).toBe(true)
     }
     await pair.flush()
-    // Byte-equal to what the page put on the wire, read back off the frames rather than recomputed.
     const posted = pair.toShell
       .map((json: string) => JSON.parse(json))
       .filter((frame: { name?: string }) => frame.name === 'externalLink')
@@ -251,7 +234,6 @@ describe('bridge round trip: notifications and state', () => {
       'https://example.com/',
       'mailto:someone@example.com'
     ])
-    // The host's own half: a frame the page client never shaped, delivered straight to the host.
     pair.host.receive(
       JSON.stringify({
         v: BRIDGE_PROTOCOL_VERSION,
@@ -262,7 +244,6 @@ describe('bridge round trip: notifications and state', () => {
     )
     await pair.flush()
     expect(pair.externalLinks.at(-1)).toBe('https://example.com/b')
-    // One way: the page hears nothing back, and nothing about it reaches the shell's client.
     expect(pair.rpc.requests).toEqual([])
   })
 
@@ -315,7 +296,6 @@ describe('bridge round trip: notifications and state', () => {
     expect(pair.diagnostics).toEqual([{ kind: 'state-out-of-order' }])
     expect(listener).not.toHaveBeenCalled()
     expect(pair.readToShell().filter((frame) => frame.type === 'ready').length).toBe(asked + 1)
-    // The fresh init is what re-primes the cache; the refused frame never touched it.
     expect(pair.client.getState()).toBe('connected')
     expect(pair.client.getGeneration?.()).toBe(2)
   })

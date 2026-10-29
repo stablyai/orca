@@ -36,9 +36,7 @@ export const RepoUpstream = z
   .nullable()
   .optional()
 
-// The return type is inferred on purpose: an explicit z.ZodObject<...> annotation
-// widened `updates` to an open record, which erased all 24 named fields from
-// RpcParams<'repo.update'> for every typed caller.
+// Infer the return type: an explicit ZodObject annotation erases named update fields into an open record.
 export function createRepoUpdateSchema<T extends Readonly<Record<string, z.ZodType>>>(
   selectorFields: T
 ) {

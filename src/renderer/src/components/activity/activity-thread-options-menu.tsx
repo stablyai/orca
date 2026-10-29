@@ -18,7 +18,7 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
 import { OptionsFilterCountBadge } from '@/components/sidebar/options-filter-count-badge'
-import { formatActiveFilterLabel } from '../../../../shared/workspace-view/workspace-row-filters'
+import { activeFilterCountLabel } from '../sidebar/active-filter-count-label'
 import {
   ActivityScopeFilterMenuItems,
   useActivityScopeFilterCount
@@ -82,7 +82,7 @@ export function ActivityThreadOptionsMenu({
   const skipCloseAutoFocusRef = React.useRef(false)
   const activeFilterCount =
     useActivityScopeFilterCount() + (onUnreadOnlyChange && unreadOnly ? 1 : 0)
-  const activeFilterLabel = formatActiveFilterLabel(activeFilterCount)
+  const activeFilterLabel = activeFilterCountLabel(activeFilterCount)
   const optionsLabel =
     activeFilterCount > 0
       ? translate(

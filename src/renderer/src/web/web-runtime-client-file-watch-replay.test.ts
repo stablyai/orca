@@ -1,7 +1,5 @@
 import { pairedRuntimeConnectionFromOffer } from '../../../shared/paired-runtime-connection'
-// Regression tests for the reconnect-gap resync of replayed paired-web file
-// watches: a replayed files.watch reports changes only from its own native
-// setup, so consumers must receive a conservative overflow once it is ready.
+// Replayed watches miss reconnect-gap changes; ready must trigger conservative overflow so consumers rescan.
 import { describe, expect, it, vi, afterEach, beforeEach } from 'vitest'
 import type { PairedE2EEClientHandshake } from '../../../shared/paired-e2ee-client-handshake'
 import { createFixedKeyLegacyHandshakeForTest } from '../../../shared/paired-e2ee-fixed-key-test-fixture'

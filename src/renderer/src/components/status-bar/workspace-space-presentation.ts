@@ -54,9 +54,7 @@ export function getPaneKeyTabId(paneKey: string): string | null {
     return parsed.tabId
   }
 
-  // Why: older hydrated snapshots can still carry `tabId:numericPaneId`.
-  // Delete readiness only needs tab ownership, so preserve the conservative
-  // "workspace is in use" signal instead of treating the row as deletable.
+  // Legacy numeric pane keys still establish tab ownership and must conservatively block deletion.
   const separatorIndex = paneKey.indexOf(':')
   if (
     separatorIndex <= 0 ||

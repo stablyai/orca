@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => {
     restoreUpdate: vi.fn(() => null),
     redeploy: vi.fn(async () => true),
     forgetVerdict: vi.fn(),
+    restoreForwards: vi.fn(async () => {}),
     startListener
   }
 })
@@ -56,6 +57,9 @@ vi.mock('../ssh/ssh-ipc-context', () => ({
   getCurrentMainWindow: () => null
 }))
 vi.mock('../ssh/ssh-renderer-broadcast', () => ({ broadcastSshState: vi.fn() }))
+vi.mock('../ssh/ssh-managed-port-forward-restore', () => ({
+  restoreManagedHostPortForwards: mocks.restoreForwards
+}))
 vi.mock('../ssh/ssh-host-launch-session-note', () => ({
   forgetLaunchSessionVerdict: mocks.forgetVerdict
 }))
@@ -110,6 +114,27 @@ describe('resolving a managed runtime for a call', () => {
     await resolveManagedRuntimeEnvironment('/u', 'env-1')
     expect(mocks.forgetVerdict).not.toHaveBeenCalled()
   })
+
+  // #32484: an update check that never settles, or a failed redeploy, publishes no served status.
+  it.each([
+    ['a serving server', { state: 'serving' }, true],
+    [
+      'a server whose redeploy failed',
+      { state: 'unverifiable', detail: MANAGED_ORCAD_NOT_ACTIVATED_DETAIL },
+      false
+    ]
+  ] as const)(
+    'restores saved forwards once the tunnel is up, for %s',
+    async (_name, serving, redeployed) => {
+      mocks.verify.mockResolvedValue(serving)
+      mocks.redeploy.mockResolvedValueOnce(redeployed)
+      await resolveManagedRuntimeEnvironment('/u', 'env-1')
+      expect(mocks.restoreForwards).toHaveBeenCalledWith('ssh-1', { tunnelUp: true })
+      expect(mocks.ensureTunnel.mock.invocationCallOrder[0]).toBeLessThan(
+        mocks.restoreForwards.mock.invocationCallOrder[0]
+      )
+    }
+  )
 
   it('leaves a serving server to the once-per-session update check', async () => {
     mocks.verify.mockResolvedValue({ state: 'serving' })

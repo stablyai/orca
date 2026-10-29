@@ -1,3 +1,4 @@
+import { translate } from '@/i18n/i18n'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import type { WorkspacePortScanResult } from '../../../shared/workspace-ports'
 import {
@@ -19,14 +20,18 @@ export async function refreshWorkspacePortScanForTarget(
     publish(await scanWorkspacePortsForTarget(args.runtimeTarget))
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
-    // Why: one dropped scan must not clear the host's last-good ports the way the background
-    // poll's debounce does not; the failure is still recorded so the host is named as unavailable.
+    // Retain last-good ports on one failed refresh like background debounce, while recording host unavailability.
     const previous = args.getWorkspacePortScansByKey()[scanKey]
     publish({
       platform: previous?.platform ?? 'unknown',
       scannedAt: Date.now(),
       ports: previous?.ports ?? [],
-      unavailableReason: message || 'Workspace port scan failed.'
+      unavailableReason:
+        message ||
+        translate(
+          'auto.components.right.sidebar.PortsPanel.740aca88ab',
+          'Workspace port scan failed.'
+        )
     })
   }
 }

@@ -59,7 +59,7 @@ export function registerDroppedPathPreparation(
   ipcMain.handle(prepareChannel, prepareHandler)
   activePrepareHandler = prepareHandler
   mainWindow.on('closed', () => {
-    // Why: an old window closing late must not remove the replacement window's handler.
+    // Late old-window close must not remove the replacement handler.
     if (activePrepareHandler === prepareHandler) {
       ipcMain.removeHandler(prepareChannel)
       activePrepareHandler = undefined

@@ -25,7 +25,6 @@ function mockClient(response: RpcResponse) {
   return { client: { sendRequest }, sendRequest }
 }
 
-// A controllable deferred so a test can resolve responses out of order.
 function deferred<T>() {
   let resolve!: (value: T) => void
   const promise = new Promise<T>((r) => {
@@ -40,6 +39,7 @@ function fakeMutations(overrides: Partial<PrActionMutations> = {}): PrActionMuta
     mergePR: vi.fn(ok),
     setPRAutoMerge: vi.fn(ok),
     updatePRState: vi.fn(ok),
+    markReadyForReview: vi.fn(ok),
     requestReviewers: vi.fn(ok),
     removeReviewers: vi.fn(ok),
     rerunChecks: vi.fn(ok),
@@ -63,8 +63,6 @@ function makeEngine(
   })
   return { engine, onChange, refetch }
 }
-
-// ─── mutation wrappers: prRepo / param shapes ───────────────────────────────
 
 describe('mutation wrappers — prRepo + param shapes', () => {
   it('mergePR carries method + prRepo (fork) and uses the id: repo selector', async () => {
@@ -154,8 +152,6 @@ describe('mutation wrappers — prRepo + param shapes', () => {
   })
 })
 
-// ─── engine: merge / state / reviewers / rerun ──────────────────────────────
-
 describe('PrActionsEngine — merge', () => {
   it('merge fires with the chosen method and refetches on success', async () => {
     const mutations = fakeMutations()
@@ -185,7 +181,6 @@ describe('PrActionsEngine — auto-merge optimistic revert', () => {
       setPRAutoMerge: vi.fn(async () => ({ ok: false as const, error: 'connection lost' }))
     })
     const { engine } = makeEngine(mutations, undefined, ENTERPRISE_PR_REPO)
-    // authoritative = false; user enables.
     await engine.setAutoMerge(true, 'squash')
     expect(mutations.setPRAutoMerge).toHaveBeenCalledWith({
       prNumber: 7,
@@ -193,17 +188,19 @@ describe('PrActionsEngine — auto-merge optimistic revert', () => {
       method: 'squash',
       prRepo: ENTERPRISE_PR_REPO
     })
-    // Reverted to authoritative after transient failure.
     expect(engine.resolveAutoMerge(false)).toBe(false)
     expect(engine.error).toBe('connection lost')
   })
 
-  it('keeps the optimistic value through success until refetch', async () => {
-    const mutations = fakeMutations()
+  it('shows the optimistic toggle while pending and clears it on success', async () => {
+    const pending = deferred<{ ok: true }>()
+    const mutations = fakeMutations({ setPRAutoMerge: vi.fn(() => pending.promise) })
     const { engine, refetch } = makeEngine(mutations)
-    await engine.setAutoMerge(true)
-    // After success the optimism clears to authoritative (refetch supplies truth).
-    expect(engine.resolveAutoMerge(true)).toBe(true)
+    const operation = engine.setAutoMerge(true)
+    expect(engine.resolveAutoMerge(false)).toBe(true)
+    pending.resolve({ ok: true })
+    await operation
+    expect(engine.resolveAutoMerge(false)).toBe(false)
     expect(refetch).toHaveBeenCalledOnce()
   })
 })
@@ -244,9 +241,8 @@ describe('PrActionsEngine — reviewers', () => {
       removeReviewers: vi.fn(async () => ({ ok: false as const, error: 'temporary error' }))
     })
     const { engine } = makeEngine(mutations)
-    // authoritative requested = true; user removes.
     await engine.removeReviewer('bob')
-    expect(engine.resolveReviewerRequested('bob', true)).toBe(true) // reverted
+    expect(engine.resolveReviewerRequested('bob', true)).toBe(true)
     expect(engine.error).toBe('temporary error')
   })
 })
@@ -266,8 +262,6 @@ describe('PrActionsEngine — rerun checks', () => {
   })
 })
 
-// ─── permanent vs transient + last-intent-wins ──────────────────────────────
-
 describe('PrActionsEngine — permanent failure (403)', () => {
   it('routes a permission denial to blocked, clears optimism, no auto-retry/refetch', async () => {
     const mutations = fakeMutations({
@@ -277,9 +271,8 @@ describe('PrActionsEngine — permanent failure (403)', () => {
     await engine.setAutoMerge(true)
     expect(engine.blocked).toBe('HTTP 403: forbidden')
     expect(engine.error).toBeNull()
-    expect(engine.resolveAutoMerge(false)).toBe(false) // optimism cleared to authoritative
+    expect(engine.resolveAutoMerge(false)).toBe(false)
     expect(refetch).not.toHaveBeenCalled()
-    // mutation fired exactly once — never auto-retried.
     expect(mutations.setPRAutoMerge).toHaveBeenCalledOnce()
   })
 })
@@ -296,17 +289,14 @@ describe('PrActionsEngine — last-intent-wins under out-of-order responses', ()
       })
     })
     const { engine } = makeEngine(mutations)
-    // authoritative = false
-    const pA = engine.setAutoMerge(true) // intent A: enable
-    const pB = engine.setAutoMerge(false) // intent B: disable (latest)
-    expect(engine.resolveAutoMerge(false)).toBe(false) // shows B's optimistic value
+    const pA = engine.setAutoMerge(true)
+    const pB = engine.setAutoMerge(false)
+    expect(engine.resolveAutoMerge(false)).toBe(false)
 
-    // A resolves LATE (success) — must not flip back to A's intent.
     dA.resolve({ ok: true })
     await pA
     expect(engine.resolveAutoMerge(false)).toBe(false)
 
-    // B resolves and is latest → clears optimism to authoritative.
     dB.resolve({ ok: true })
     await pB
     expect(engine.resolveAutoMerge(false)).toBe(false)

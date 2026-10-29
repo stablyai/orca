@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button'
 import { useAppStore } from '@/store'
 import type { OrcaHookScriptKind } from '@/lib/orca-hook-trust'
 import { translate } from '@/i18n/i18n'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 
 type ScriptKind = OrcaHookScriptKind
 
@@ -29,6 +30,7 @@ const SCRIPT_KIND_TRIGGER: Record<ScriptKind, string> = {
 }
 
 const OrcaYamlTrustDialog = React.memo(function OrcaYamlTrustDialog() {
+  useUiLanguageRevision()
   const activeModal = useAppStore((s) => s.activeModal)
   const modalData = useAppStore((s) => s.modalData)
   const closeModal = useAppStore((s) => s.closeModal)
@@ -41,8 +43,7 @@ const OrcaYamlTrustDialog = React.memo(function OrcaYamlTrustDialog() {
     value: false
   }))
 
-  // Why: never show a stale "always trust" choice on a new hook prompt.
-  // Resetting during render avoids one paint with the old decision checked.
+  // Reset before paint so a new hook prompt never flashes stale Always trust consent.
   if (alwaysTrustState.isOpen !== isOpen) {
     setAlwaysTrustState({ isOpen, value: false })
   }

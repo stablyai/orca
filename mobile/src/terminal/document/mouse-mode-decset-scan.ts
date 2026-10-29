@@ -16,13 +16,10 @@ export function normalizeInitialData(data: unknown) {
     return data
   }
   const on = data.lastIndexOf(ESC + '[?1049h')
-  // Why: SerializeAddon can include normal-buffer scrollback before the
-  // active alternate-screen snapshot. Replaying both into a fresh mobile
-  // xterm duplicates TUI frames and can flatten SGR attributes.
+  // Drop normal-buffer scrollback before alternate snapshots; replaying both duplicates TUI frames and can flatten SGR.
   return on > 0 ? data.slice(on) : data
 }
 
-// `live`: bytes the program just wrote, as opposed to a snapshot replay.
 export function updateMouseModeFromData(scope: TerminalDocumentScope, data: unknown, live = false) {
   if (typeof data !== 'string' || data.length === 0) {
     return
@@ -52,8 +49,7 @@ export function updateMouseModeFromData(scope: TerminalDocumentScope, data: unkn
       if (!Number.isInteger(param)) {
         continue
       }
-      // Why: a program enabling tracking live states its encoding in that same burst, or
-      // means the default; only a replay can carry tracking without its encoding.
+      // Live tracking enable proves its burst’s encoding or default; replay alone cannot prove either.
       if (live && enabled && (param === 9 || param === 1000 || param === 1002 || param === 1003)) {
         scope.mouseEncodingKnown = true
       }

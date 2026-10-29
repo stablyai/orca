@@ -1,7 +1,8 @@
-// Grok 1.0.41 captures show stop_cancelled retains live tasks and idle Ctrl+C leaves them running.
+// Grok 1.0.70: Esc never cancels and Ctrl+C can open a stop dialog; only StopCancelled reports a cancel.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AgentHookServer, _internals } from './server'
 import { buildBody, PANE } from './server.test-fixtures'
+import type { AgentInterruptInputIntent } from '../../shared/agent-interrupt-intent'
 
 const { getCohortAtEmitMock, trackMock } = vi.hoisted(() => ({
   getCohortAtEmitMock: vi.fn(),
@@ -19,8 +20,6 @@ beforeEach(() => {
 })
 
 afterEach(() => vi.restoreAllMocks())
-
-const RUNNING_TASK = { id: 'task-1', type: 'shell', status: 'running' }
 
 async function postGrokHook(
   server: AgentHookServer,
@@ -46,7 +45,7 @@ function row(server: AgentHookServer) {
   return entry
 }
 
-function pressCtrlC(server: AgentHookServer): boolean {
+function press(server: AgentHookServer, intent: AgentInterruptInputIntent): boolean {
   const baseline = row(server)
   return server.inferInterrupt({
     paneKey: PANE,
@@ -54,74 +53,26 @@ function pressCtrlC(server: AgentHookServer): boolean {
     baselineStateStartedAt: baseline.stateStartedAt,
     baselinePrompt: baseline.prompt,
     baselineAgentType: 'grok',
-    intent: 'ctrl-c'
+    intent
   })
 }
 
-async function startTaskThenSettle(server: AgentHookServer): Promise<void> {
-  await postGrokHook(server, {
-    hookEventName: 'user_prompt_submit',
-    promptId: 'prompt-1',
-    prompt: 'start a background task'
-  })
-  await postGrokHook(server, {
-    hookEventName: 'stop',
-    promptId: 'prompt-1',
-    reason: 'end_turn',
-    stopHookActive: false,
-    backgroundTasks: [RUNNING_TASK]
-  })
-  expect(row(server)).toMatchObject({
-    state: 'working',
-    workingMode: 'monitoring',
-    mainAgent: { state: 'done' }
-  })
-}
-
-describe('a Grok cancel never hides a running task', () => {
-  it('refuses Ctrl+C at the idle prompt of a row a task holds open', async () => {
+describe('a Grok keypress never decides a cancel', () => {
+  it('refuses Esc and Ctrl+C on a working Grok turn', async () => {
     const server = new AgentHookServer()
     await server.start({ env: 'production' })
     try {
-      await startTaskThenSettle(server)
-      const before = row(server)
-      expect(pressCtrlC(server)).toBe(false)
-      expect(row(server)).toEqual(before)
-    } finally {
-      server.stop()
-    }
-  })
-
-  it("shows the task when Grok's own cancel hook trails the inferred cancel", async () => {
-    const server = new AgentHookServer()
-    await server.start({ env: 'production' })
-    try {
-      await startTaskThenSettle(server)
       await postGrokHook(server, {
         hookEventName: 'user_prompt_submit',
-        promptId: 'prompt-2',
-        prompt: 'now do something else'
+        promptId: 'prompt-1',
+        prompt: 'run the tests'
       })
-      expect(row(server)).toMatchObject({ state: 'working', mainAgent: { state: 'working' } })
+      const working = row(server)
+      expect(working).toMatchObject({ state: 'working', mainAgent: { state: 'working' } })
 
-      // Inference can win before inventory exposes tasks behind a working main agent.
-      expect(pressCtrlC(server)).toBe(true)
-      expect(row(server)).toMatchObject({
-        state: 'done',
-        mainAgent: { state: 'done', outcome: 'cancellation' }
-      })
-
-      await postGrokHook(server, {
-        hookEventName: 'stop_cancelled',
-        promptId: 'prompt-2',
-        stopHookActive: false,
-        backgroundTasks: [RUNNING_TASK]
-      })
-      expect(row(server)).toMatchObject({
-        state: 'working',
-        workingMode: 'monitoring',
-        mainAgent: { state: 'done', outcome: 'cancellation' }
-      })
+      expect(press(server, 'plain-escape')).toBe(false)
+      expect(press(server, 'ctrl-c')).toBe(false)
+      expect(row(server)).toEqual(working)
     } finally {
       server.stop()
     }

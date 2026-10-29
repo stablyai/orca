@@ -1,7 +1,15 @@
+import { waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
+import {
+  assertStructuredAgentResolutionCurrent,
+  resolveAgainAfterRefreshOnMissingProgram,
+  type StructuredAgentResolutionOperation
+} from '../native-chat/structured-agent-command-resolution'
+// What a structured Claude child's environment is built from, shared by its launch and the
+// `--version` probe that runs the same binary.
+
 import { withCliRuntimeOnPath } from '../../shared/node-cli-command-resolution'
 import { applyClaudeEnvPatch } from '../claude-accounts/environment'
 import { resolveClaudeCommand } from '../codex-cli/command'
-import { resolveAgainAfterRefreshOnMissingProgram } from '../native-chat/structured-agent-command-resolution'
 import { withoutInheritedClaudeConfigDir } from './claude-config-dir-pin'
 
 function cloneDefinedEnv(env: NodeJS.ProcessEnv | Record<string, string>): Record<string, string> {
@@ -15,6 +23,8 @@ function cloneDefinedEnv(env: NodeJS.ProcessEnv | Record<string, string>): Recor
 }
 
 export type ClaudeEnvDeps = {
+  signal?: AbortSignal
+  operation?: StructuredAgentResolutionOperation
   resolveCommand?: (options?: { pathEnv?: string | null; homePath?: string }) => string
   /** Refresh once after command lookup misses; absent disables retry. */
   refreshEnvironmentAfterMiss?: (askedAt: number) => Promise<void>
@@ -40,16 +50,22 @@ export function resolveClaudeChildEnvSources(deps: ClaudeEnvDeps): Promise<Claud
     deps.refreshEnvironmentAfterMiss,
     {
       env: ({ inheritedEnv, overlay }) => ({ ...inheritedEnv, ...overlay }),
-      cwd: deps.resolveWorkingDirectory
-    }
+      cwd: deps.resolveWorkingDirectory,
+      signal: deps.signal
+    },
+    deps.operation
   )
 }
 
 async function readClaudeChildEnvSources(deps: ClaudeEnvDeps): Promise<ClaudeChildEnvSources> {
-  const overlay = await deps.resolveEnv?.()
+  assertStructuredAgentResolutionCurrent(deps.operation)
+  const overlay = await waitForPromiseWithSignal(Promise.resolve(deps.resolveEnv?.()), deps.signal)
+  assertStructuredAgentResolutionCurrent(deps.operation)
   const inheritedEnv = deps.resolveInheritedEnv
-    ? await deps.resolveInheritedEnv()
+    ? await waitForPromiseWithSignal(deps.resolveInheritedEnv(), deps.signal)
     : cloneDefinedEnv(process.env)
+  assertStructuredAgentResolutionCurrent(deps.operation)
+  deps.signal?.throwIfAborted()
   const effectiveEnv = { ...inheritedEnv, ...overlay }
   const command = (deps.resolveCommand ?? resolveClaudeCommand)({
     pathEnv: effectiveEnv.PATH ?? effectiveEnv.Path ?? null,

@@ -20,8 +20,6 @@ describe('getJiraProjectSelectionKey', () => {
   })
 
   it('treats an empty siteId as a real site id', () => {
-    // characterization: current behavior — `??` only replaces null/undefined, so an
-    // empty siteId produces a leading-colon key.
     expect(getJiraProjectSelectionKey(project({ id: '10', siteId: '' }))).toBe(':10')
   })
 })

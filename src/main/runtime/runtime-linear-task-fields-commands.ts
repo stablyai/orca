@@ -32,13 +32,12 @@ export class RuntimeLinearTaskFieldCommands extends RuntimeLinearLabelWriteComma
     input: string,
     states: Awaited<ReturnType<typeof getLinearTeamStatesOrThrow>>
   ): Awaited<ReturnType<typeof getLinearTeamStatesOrThrow>>[number] | null {
-    const normalized = input.toLocaleLowerCase()
+    const normalized = input.toLowerCase()
     const exact = states.find(
-      (state) =>
-        state.id.toLocaleLowerCase() === normalized || state.name.toLocaleLowerCase() === normalized
+      (state) => state.id.toLowerCase() === normalized || state.name.toLowerCase() === normalized
     )
-    // Why: Linear MCP accepts lifecycle types; keep explicit IDs/names authoritative when they collide.
-    return exact ?? states.find((state) => state.type.toLocaleLowerCase() === normalized) ?? null
+    // Accept MCP lifecycle types, but explicit ids/names win collisions.
+    return exact ?? states.find((state) => state.type.toLowerCase() === normalized) ?? null
   }
 
   public async readLinearAgentIssueWriteRecord(
@@ -197,10 +196,10 @@ export class RuntimeLinearTaskFieldCommands extends RuntimeLinearLabelWriteComma
     teamId: string,
     workspaceId: string
   ): Promise<string> {
-    if (input.toLocaleLowerCase() === 'me') {
+    if (input.toLowerCase() === 'me') {
       return (await this.getLinearViewerForWrite(workspaceId)).id
     }
-    // Why: caller-supplied IDs were accepted directly before save-issue; avoid a paginated member scan on that existing fast path.
+    // Keep the existing direct-id fast path; avoid a paginated member scan.
     if (isLinearUuid(input)) {
       return input
     }
@@ -210,13 +209,13 @@ export class RuntimeLinearTaskFieldCommands extends RuntimeLinearLabelWriteComma
     } catch (error) {
       throw this.mapLinearReadFailure(error)
     }
-    const normalized = input.toLocaleLowerCase()
+    const normalized = input.toLowerCase()
     const matches = members.filter(
       (member) =>
-        member.id.toLocaleLowerCase() === normalized ||
-        member.displayName.toLocaleLowerCase() === normalized ||
-        member.name?.toLocaleLowerCase() === normalized ||
-        member.email?.toLocaleLowerCase() === normalized
+        member.id.toLowerCase() === normalized ||
+        member.displayName.toLowerCase() === normalized ||
+        member.name?.toLowerCase() === normalized ||
+        member.email?.toLowerCase() === normalized
     )
     if (matches.length === 1) {
       return matches[0].id

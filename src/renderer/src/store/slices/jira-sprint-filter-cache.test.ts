@@ -1,8 +1,6 @@
 import { expect, it, vi } from 'vitest'
-import { create } from 'zustand'
-import type { AppState } from '../types'
 import type { JiraIssue, JiraIssueListFilters } from '../../../../shared/jira/jira-types'
-import { createJiraSlice } from './jira'
+import { createTestStore } from './store-test-helpers'
 
 const { list } = vi.hoisted(() => ({ list: vi.fn() }))
 vi.mock('@/runtime/runtime-jira-client', () => ({
@@ -12,10 +10,7 @@ vi.mock('@/runtime/runtime-jira-client', () => ({
 }))
 
 it('separates combined filters while treating an unchecked sprint like the default view', async () => {
-  const store = create<AppState>()(
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: These collection reads only access the supplied settings and Jira slice.
-    (...args) => ({ settings: null, ...createJiraSlice(...args) }) as AppState
-  )
+  const store = createTestStore()
   list.mockImplementation(
     async (
       _source,

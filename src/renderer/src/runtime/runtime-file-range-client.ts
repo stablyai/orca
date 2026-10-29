@@ -81,7 +81,8 @@ export async function statRuntimeReadTarget(
     return window.api.fs.stat({
       filePath: args.filePath,
       connectionId: args.connectionId,
-      access: args.access
+      access: args.access,
+      ...(args.wakeWslDistro && !args.connectionId ? { wakeWslDistro: true } : {})
     })
   }
   return statRemoteRuntimeFile(remote)
@@ -103,7 +104,8 @@ export async function readRuntimeFileRange(
           connectionId: args.connectionId,
           access: args.access,
           offset,
-          length
+          length,
+          ...(args.wakeWslDistro && !args.connectionId ? { wakeWslDistro: true } : {})
         })
   } catch (error) {
     if (error instanceof RuntimeRpcCallError && error.code === 'method_not_found') {

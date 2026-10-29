@@ -1,5 +1,6 @@
-import { useChatProgramFacts } from '@/lib/host-chat-program-acquisition'
-import { resolveChecksActionAgent } from '@/lib/fix-checks-agent-launch'
+import { useAgentMenuObservation } from '@/components/tab-bar/use-new-tab-agent-menu-rows'
+import { useAgentDetectionTargetForWorktree } from '@/hooks/useAgentDetectionTarget'
+import { resolveChecksActionAgent } from '@/lib/source-control-agent-picker'
 import type { SourceControlActionId } from '../../../../../shared/source-control-ai-actions'
 import { forgeOwnerHostIdForWorkspace } from '@/runtime/forge-credential-target'
 import { useCallback, useEffect } from 'react'
@@ -153,19 +154,40 @@ export function useChecksPanelCommentResolution(model: ChecksPanelCommentResolut
   const canTargetPRComments = Boolean(repo && prNumber && pr?.prRepo)
   const commentsDisabledReason = canTargetPRComments
     ? undefined
-    : 'Commenting requires a GitHub PR repository target.'
+    : translate(
+        'auto.components.right.sidebar.checks.panel.content.commentingRequiresGitHubPrTarget',
+        'Commenting requires a GitHub PR repository target.'
+      )
   const workspace = worktreeLaunchWorkspace(activeWorktreeId ?? '')
-  useChatProgramFacts(workspace, Boolean(activeWorktreeId) && sourceControlAiActionsVisible)
+  const observation = useAgentMenuObservation(
+    activeWorktreeId,
+    sourceControlAiActionsVisible,
+    useAgentDetectionTargetForWorktree(activeWorktreeId)
+  )
   const launchState = useAppStore.getState()
   const noAgentFor = (actionId: SourceControlActionId): boolean =>
+    !observation.preferencesPending &&
     detectedAgentIds != null &&
-    resolveChecksActionAgent(launchState, actionId, repo?.id, workspace, detectedAgentIds) == null
+    resolveChecksActionAgent(
+      launchState,
+      actionId,
+      repo?.id,
+      workspace,
+      detectedAgentIds,
+      observation.preferences
+    ) == null
   const noEnabledAgentKnown = noAgentFor('resolveConflicts')
   const actionDisabledReason = (actionId: SourceControlActionId): string | undefined =>
     !activeWorktreeId
-      ? 'Select a workspace before launching an AI action.'
+      ? translate(
+          'auto.components.right.sidebar.checks.panel.content.selectWorkspaceBeforeAiAction',
+          'Select a workspace before launching an AI action.'
+        )
       : noAgentFor(actionId)
-        ? 'No enabled AI agents. Configure agents in Settings.'
+        ? translate(
+            'auto.components.right.sidebar.source.control.ai.recovery.launch.9bbd9077a2',
+            'No enabled AI agents. Configure agents in Settings.'
+          )
         : undefined
   const aiActionDisabledReason = actionDisabledReason('resolveConflicts')
   const fixChecksDisabledReason = actionDisabledReason('fixChecks')

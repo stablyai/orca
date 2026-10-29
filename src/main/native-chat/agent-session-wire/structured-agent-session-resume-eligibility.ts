@@ -6,7 +6,7 @@ import { randomUUID } from 'node:crypto'
 import type { AgentSessionAttachParams } from './structured-agent-session-attach'
 import { attachParamsForRecord } from './structured-agent-session-conversation-open'
 import type { StructuredAgentSessionEndedChild } from './structured-agent-session-host-types'
-import { isSurfaceReleasableAgentSessionRecord } from '../../runtime/agent-session-surface-release-transition'
+import { isSurfaceReleasableAgentSessionRecord } from '../../runtime/agent-session/ownership/agent-session-surface-release-transition'
 
 /** Allow matching observed-ended children despite failed release; acquisition still requires death proof. */
 export function isResumableStructuredAgentSessionRecord(

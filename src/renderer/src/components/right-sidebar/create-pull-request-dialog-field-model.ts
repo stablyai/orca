@@ -40,10 +40,7 @@ export type UseCreatePullRequestDialogFieldsOptions = {
   submitting: boolean
   prCreationDefaults?: SourceControlAiPrCreationDefaults
   sourceControlAiActionsVisible?: boolean
-  // When the composer is hidden by a temporary policy (a hard refresh error) for
-  // the same context rather than dismissed, retain the in-memory draft so
-  // recovery does not discard the user's title/body/base edits. Reopening a
-  // different context still reseeds (guarded by the eligibility key).
+  // Retain drafts across temporary same-context hiding; different eligibility contexts still reseed.
   retainDraftWhenClosed?: boolean
   onBranchChangedByGeneration?: () => Promise<void>
   generation?: {

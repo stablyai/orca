@@ -52,7 +52,7 @@ export function BrowserSshWorkspaceRoutingSetting({
           <SettingsSegmentedControl
             size="sm"
             ariaLabel={title}
-            // Why: absent means on — routed egress is the correct default for SSH workspaces.
+            // Older profiles omit the flag and default SSH workspaces to routed egress.
             value={settings.browserSshWorkspaceRoutingEnabled !== false ? 'host' : 'device'}
             onChange={(value) =>
               updateSettings({ browserSshWorkspaceRoutingEnabled: value === 'host' })

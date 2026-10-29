@@ -57,6 +57,8 @@ import {
 import { isPortaledRowMenuClick, isRowActivationKey } from '@/lib/list-row-interaction'
 import { AutomationListStatusCell } from './AutomationListStatusCell'
 import { translate } from '@/i18n/i18n'
+import { useAppStore } from '@/store'
+import { wslMovedProjectForAutomation } from '@/store/repos/wsl-moved-projects'
 
 export type AutomationListLocalRowProps = {
   row: AutomationListRow
@@ -99,14 +101,22 @@ function automationUsageText(summary: AutomationUsageSummary | undefined): strin
 }
 
 function usageAmountText(summary: AutomationUsageSummary): string {
-  return translate(
-    'auto.components.automations.AutomationsPage.runUsageSummary',
-    '{{cost}} est. · {{tokens}} tokens',
-    {
-      cost: formatAutomationCost(summary.estimatedCostUsd),
-      tokens: formatAutomationTokens(summary.totalTokens)
-    }
-  )
+  const params = {
+    count: summary.totalTokens,
+    cost: formatAutomationCost(summary.estimatedCostUsd),
+    tokens: formatAutomationTokens(summary.totalTokens)
+  }
+  return summary.totalTokens === 1
+    ? translate(
+        'auto.components.automations.AutomationsPage.runUsageSummaryTokens_one',
+        '{{cost}} est. · {{tokens}} token',
+        params
+      )
+    : translate(
+        'auto.components.automations.AutomationsPage.runUsageSummaryTokens_other',
+        '{{cost}} est. · {{tokens}} tokens',
+        params
+      )
 }
 
 export function AutomationListLocalRow({
@@ -157,6 +167,9 @@ export function AutomationListLocalRow({
     ? formatAutomationDateTimeWithRelative(automation.nextRunAt, relativeNow)
     : translate('auto.components.automations.enablement.paused', 'Paused')
   const isSelected = isSelectedLocal && selectedRowKey === row.key
+  const movedToDistro = useAppStore(
+    (state) => wslMovedProjectForAutomation(state.wslMovedProjects, automation)?.distro ?? null
+  )
   const agentLabel = getAgentLabel(automation.agentId)
   const hostId =
     automation.runContext?.hostId ??
@@ -169,8 +182,7 @@ export function AutomationListLocalRow({
   const agentTooltipLabel = `${agentLabel} · ${hostLabel} · ${automationUsageText(row.usageSummary ?? undefined)}`
   const canRunNow = automationRunAvailability.canRunNow && allows(row, 'run')
   const lastRun = lastRunByAutomationId.get(automation.id)
-  // Without a fetched run, the row's projected summary carries the newest
-  // retained run's status — the list never downloads run history for this.
+  // Use the projected newest retained run when history is absent; the list does not download history.
   const lastRunSnapshot = lastRun
     ? getLocalAutomationLastRunSnapshot(automation, lastRun)
     : getAutomationRowLastRunSnapshot(row)
@@ -222,8 +234,7 @@ export function AutomationListLocalRow({
           data-automation-row-id={row.key}
           data-current={isSelected ? 'true' : undefined}
           onClick={(event) => {
-            // Why: Radix portals menus out of the row DOM, but React still
-            // bubbles those clicks here — ignore so menu actions don't open detail.
+            // React bubbles portaled menu clicks through this row; ignore them to avoid opening detail.
             if (isPortaledRowMenuClick(event)) {
               return
             }
@@ -258,7 +269,7 @@ export function AutomationListLocalRow({
             {nextRunLabel}
           </span>
           <AutomationListLastRunCell snapshot={lastRunSnapshot} now={relativeNow} />
-          <AutomationListStatusCell enabled={automation.enabled} />
+          <AutomationListStatusCell enabled={automation.enabled} movedToDistro={movedToDistro} />
           <Tooltip>
             <TooltipTrigger asChild>
               <span

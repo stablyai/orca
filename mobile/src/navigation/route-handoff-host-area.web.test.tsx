@@ -1,8 +1,4 @@
-/**
- * The hop the wide host-area session exists for: a worktree row in the page's own sidebar opening
- * the session screen inside the same document, decided by the page's real handoff rule against the
- * `init` the shell's real policy builds.
- */
+// Use real shell policy and page handoff to verify wide host sidebar hops stay inside the owning document.
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createShellPageClient } from '../mobile-web-shell/bridge/page-bootstrap'
@@ -77,7 +73,6 @@ function Screen(): null {
   return null
 }
 
-/** The page holding the `init` the shell builds for this route at this layout class. */
 function mountPage(
   pathname: string,
   wide: boolean
@@ -181,7 +176,6 @@ describe('a worktree row in the host-area page', () => {
 })
 
 describe('a session page opened on its own, leaving for the host route', () => {
-  // A missing worktree's notice and the session's own way out both replace to the host route.
   const hop = '/h/host-1?notice=worktree-missing'
 
   it('hands the hop to the shell on a wide layout, which opens the area-owning session', () => {
@@ -189,7 +183,7 @@ describe('a session page opened on its own, leaving for the host route', () => {
     page.handoff.replace(hop)
     expect(router.replace).not.toHaveBeenCalled()
     expect(page.navigations()).toEqual([
-      { v: BRIDGE_PROTOCOL_VERSION, type: 'notify', name: 'navigate', href: hop }
+      { v: BRIDGE_PROTOCOL_VERSION, type: 'notify', name: 'navigate', href: hop, replace: true }
     ])
     expect(routeViewOf(ROUTES, '/h/host-1', true).ownsHostArea).toBe(true)
   })

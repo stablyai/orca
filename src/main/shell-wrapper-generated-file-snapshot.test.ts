@@ -50,7 +50,7 @@ const CONTRACT_GLOBALS = new Set([
   // Exported only in the claude function's subshell.
   'CLAUDE_CONFIG_DIR',
   'HISTFILE',
-  'MIMOCODE_HOME',
+  'MIMOCODE_CONFIG_DIR',
   'OPENCODE_CONFIG_DIR',
   'OPENCODE_AUTH_CONTENT',
   'OPENCODE_DB',

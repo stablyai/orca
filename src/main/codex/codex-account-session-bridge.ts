@@ -121,6 +121,10 @@ export function stopCodexAccountSessionBridges(): void {
   stopping = true
 }
 
+export function isCodexAccountSessionBridgeStopping(): boolean {
+  return stopping
+}
+
 export async function bridgeCodexSessionsIntoAccountHome(args: {
   targetCodexHomePath: string
   sourceCodexHomePaths: readonly string[]

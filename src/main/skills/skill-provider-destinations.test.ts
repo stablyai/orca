@@ -23,8 +23,7 @@ describe('resolveSkillProviderDestinations', () => {
     ])
   })
 
-  // Why: Codex and Cursor read a project's .agents/skills but keep their own
-  // home directory, so the same agent needs a placement at one scope only.
+  // Agents may use canonical workspace roots but private home roots; placement depends on scope.
   it('resolves scope-specific roots for an agent that is canonical in a workspace only', () => {
     const workspace = resolveSkillProviderDestinations({
       scope: 'workspace',
@@ -145,8 +144,7 @@ describe('resolveSkillProviderDestinations', () => {
 })
 
 describe('selectedOrDetectedSkillProviders', () => {
-  // Why: removal passes no selection so it can still clean roots an earlier
-  // install wrote, even if the user has since narrowed their agents.
+  // Removal must find historical installs even after users narrow selected agents.
   it('keeps every detected agent when nothing was selected', () => {
     expect(selectedOrDetectedSkillProviders(['claude', 'codex'], undefined)).toEqual([
       'claude',

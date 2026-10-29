@@ -6,7 +6,7 @@ import type {
   LinearCustomViewSummary,
   LinearProjectSummary
 } from '../../../../../shared/linear/project-types'
-import { LINEAR_ITEM_LIMIT } from '../../task-page-source-context'
+import { LINEAR_ITEM_LIMIT } from '../task-page-source-context'
 import { useTaskPageLinearContextActions } from './use-task-page-linear-context-actions'
 export function useTaskPageLinearContextStatePrelude(model: TaskPageLinearViewStatePreludeModel) {
   const [linearCustomViewsResult, setLinearCustomViewsResult] = useState<

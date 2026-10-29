@@ -16,7 +16,7 @@ export function loadOniguruma(): Promise<Oniguruma> {
     await oniguruma.loadWASM(response)
     return oniguruma
   })().catch((error: unknown) => {
-    // Why: a failed fetch would otherwise leave every grammar plain until restart.
+    // Clear failed fetches so grammar retries can recover without restart.
     onigurumaPromise = undefined
     throw error
   })

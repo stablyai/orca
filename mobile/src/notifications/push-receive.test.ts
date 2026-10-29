@@ -148,16 +148,15 @@ describe('shouldSuppressForegroundPush', () => {
     dismissalSpy.mockRestore()
   })
 
-  it('keeps unrelated notifications visible when suppression checks throw', async () => {
+  it('keeps unrelated notifications visible without dismissal checks', async () => {
     const dismissals = await import('./push-dismissal-watermarks')
-    const dismissalSpy = vi
-      .spyOn(dismissals, 'wasPushDismissed')
-      .mockRejectedValue(new Error('dismissal read failed'))
+    const dismissalSpy = vi.spyOn(dismissals, 'wasPushDismissed')
     await expect(
       foregroundNotificationBehavior({
         request: { content: { data: { title: 'Other app notification' } } }
       })
     ).resolves.toMatchObject({ shouldShowBanner: true, shouldShowList: true })
+    expect(dismissalSpy).not.toHaveBeenCalled()
     dismissalSpy.mockRestore()
   })
 })

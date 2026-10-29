@@ -72,7 +72,9 @@ const preview: PluginMarketplaceHostInstallPreview = {
       languagePacks: [],
       keybindings: [],
       vmRecipes: [],
-      agents: []
+      agents: [],
+      themes: [],
+      terminalThemes: []
     },
     capabilities: [{ kind: 'workspace:read' }]
   }
@@ -181,8 +183,6 @@ describe('PluginMarketplaceBrowser', () => {
       marketplaceSourceId: SOURCE_ID,
       pluginKey: listing.pluginKey
     })
-    // Why: provenance leads with a short badge; the source URL + full commit
-    // are tucked behind an on-demand "Source" details popover.
     expect(document.body.textContent).toContain('Community')
     expect(
       Array.from(document.querySelectorAll('button')).some(
@@ -233,7 +233,6 @@ describe('PluginMarketplaceBrowser', () => {
       pluginKey: listing.pluginKey
     })
     expect(document.body.textContent).toContain('This exact plugin content is already installed.')
-    // Why: an up-to-date preview offers no install action at all — only Close.
     expect(
       Array.from(document.querySelectorAll('button')).some(
         (candidate) => candidate.textContent?.trim() === 'Update plugin'

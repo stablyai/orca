@@ -76,11 +76,15 @@ export function LargeDiffFallback({
           </div>
         </div>
         <div className="text-[11px]">
-          {translate('auto.components.editor.LargeDiffFallback.5fca073b72', 'Limits')}:{' '}
-          {formatCount(renderLimit.limits.maxLinesPerSide)}{' '}
-          {translate('auto.components.editor.LargeDiffFallback.f1d136a163', 'lines per side')} ·{' '}
-          {formatCount(renderLimit.limits.maxCombinedCharacters)}{' '}
-          {translate('auto.components.editor.LargeDiffFallback.23433fcdea', 'combined characters')}
+          {/* Both limits are large fixed values, so the plural form never varies. */}
+          {translate(
+            'auto.components.editor.LargeDiffFallback.limitsSummary',
+            'Limits: {{lines}} lines per side · {{characters}} combined characters',
+            {
+              lines: formatCount(renderLimit.limits.maxLinesPerSide),
+              characters: formatCount(renderLimit.limits.maxCombinedCharacters)
+            }
+          )}
         </div>
         {action ? (
           <div className="space-y-2">

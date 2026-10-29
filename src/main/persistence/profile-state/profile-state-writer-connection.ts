@@ -24,16 +24,16 @@ import { ProfileStateWriterThread } from './profile-state-writer-thread'
 
 export type ProfileStateWriterConnectionOptions = {
   workerPath?: string
-  /** Delay before one diagnostic breadcrumb; never fails the request. */
+  /** One diagnostic warning; delay alone never fails the request. */
   slowWarningMs?: number
   onFailure?: (error: Error) => void
   onSaveDelayChanged?: (delayed: boolean) => void
   reportInitializationFailure?: boolean
-  /** Monotonic milliseconds; tests replace it to model a stalled main loop. */
+  /** Monotonic clock; replace in tests to model stalled main loops. */
   clock?: () => number
 }
 
-/** One materialized command; Store owns coalescing and never queues snapshots here. */
+/** Store coalesces snapshots; this connection admits one materialized command. */
 export class ProfileStateWriterConnection {
   readonly ready: Promise<void>
   private thread: ProfileStateWriterThread | undefined
@@ -57,7 +57,7 @@ export class ProfileStateWriterConnection {
     const pending = this.createPending(0, 'initialize')
     this.active = pending
     this.ready = pending.promise.then(() => {})
-    // Initialization failures remain observable through ready without an unhandled rejection.
+    // Preserve rejection through ready while preventing an unhandled rejection.
     void this.ready.catch(() => {})
     try {
       this.thread = new ProfileStateWriterThread(
@@ -83,7 +83,7 @@ export class ProfileStateWriterConnection {
     }
   }
 
-  /** Abandoning an active wait cannot establish whether SQLite committed. */
+  /** Aborting cannot prove whether the active SQLite write committed. */
   async abort(): Promise<void> {
     this.faultWith('profile-state-writer-aborted', 'Profile state writer was aborted')
     await this.thread?.exitPromise
@@ -109,7 +109,7 @@ export class ProfileStateWriterConnection {
     return this.latestRevision
   }
 
-  /** The last revision this worker confirmed, kept after a fault for diagnostics. */
+  /** Retain the last confirmed revision after faults for diagnostics. */
   get lastAcknowledgedRevision(): number {
     return this.latestRevision ?? this.initialRevision
   }
@@ -125,7 +125,7 @@ export class ProfileStateWriterConnection {
       try {
         await this.dispatch({ command: 'close' })
       } finally {
-        // Neither elapsed time nor a termination request proves exit; ownership waits for it.
+        // Ownership requires observed exit, not timeout or termination request.
         await this.awaitExit(closeRequestId)
       }
       if (this.failure) {
@@ -191,7 +191,7 @@ export class ProfileStateWriterConnection {
     try {
       this.thread?.post({ ...command, id: pending.id })
     } catch (cause) {
-      // postMessage did not dispatch a message when serialization fails.
+      // Serialization failure means postMessage dispatched nothing.
       this.settle(
         undefined,
         new ProfileStateWriterError(
@@ -213,7 +213,7 @@ export class ProfileStateWriterConnection {
       now: this.options.clock,
       acknowledgedRevision: this.lastAcknowledgedRevision,
       onSlow: () => {
-        // Revision checks and exports occupy the same worker and can hold up later saves.
+        // Reads/exports share the worker and can delay later saves.
         if (this.active?.id === id && command !== 'initialize' && command !== 'close') {
           this.reportSaveDelay(true)
         }
@@ -312,7 +312,7 @@ export class ProfileStateWriterConnection {
     recordProfileStateWriterFault(error, this.active, this.lastAcknowledgedRevision, exitCode)
     this.settle(undefined, error)
     this.thread?.terminate()
-    // Startup failures already reject ready; admitted writers must also alert idle callers.
+    // Startup rejects ready; admitted writers also need failure notification while idle.
     if (this.latestRevision !== undefined || this.options.reportInitializationFailure) {
       try {
         this.options.onFailure?.(error)

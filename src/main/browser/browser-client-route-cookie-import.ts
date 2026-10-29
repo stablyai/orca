@@ -2,9 +2,10 @@ import type { BrowserCookieImportResult } from '../../shared/browser-workspace-t
 import {
   detectInstalledBrowsers,
   importCookiesFromBrowser,
-  selectBrowserProfile,
-  type DetectedBrowser
-} from './browser-cookie-import'
+  selectBrowserProfile
+} from './cookies/browser-cookie-import'
+import type { DetectedBrowser } from './cookies/sources/browser-cookie-detection-types'
+
 import { recordClientRouteCookieImportSource } from './client-route-cookie-import-source-store'
 import { currentBrowserRoutePartitionBindingStore } from './browser-route-partition-binding-runtime'
 import { resolveBrowserRoutePartitionBinding } from './browser-route-partition-migration'
@@ -65,7 +66,19 @@ export async function importCookiesIntoClientRoutePartition(
       importedAt: Date.now()
     }
   })
-  return { ...result, profileId: request.browserProfileId }
+  return {
+    ...result,
+    profileId: request.browserProfileId,
+    googleCookieClearTarget: {
+      label: profile.label,
+      local: {
+        profileId: profile.id,
+        environmentId: request.environmentId,
+        partition,
+        routeIdentity: JSON.stringify(routeIdentity)
+      }
+    }
+  }
 }
 
 function settledRoutePartition(request: ClientRouteCookieImportRequest): string | null {
@@ -80,7 +93,7 @@ function settledRoutePartition(request: ClientRouteCookieImportRequest): string 
   }
 }
 
-function bindRoutePartition(
+export function bindRoutePartition(
   routeIdentity: NonNullable<ReturnType<typeof getPairedRuntimeBrowserClientRouteIdentity>>,
   browserProfileId: string
 ): string {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { structuredAgentSessionCommandTurn } from '../native-chat/agent-session-wire/structured-agent-session-command-turn'
-import { CodexAppServerRequestError } from './codex-app-server-connection'
+import { CodexAppServerRequestError } from './app-server/codex-app-server-request-error'
 import { acquired, fakeCodex } from './codex-structured-session-adapter-fixture'
 
 describe('Codex compaction refused at the request', () => {

@@ -25,8 +25,7 @@ describe('normalizeFolderWorkspaces host attribution', () => {
       [folderGroup]
     )
 
-    // A runtime-scoped stamp names an authority the desktop store does not own, and it
-    // carries no generation to fence on — persisting it would recreate the divergence #12 fixed.
+    // Runtime stamps name an authority the desktop store does not own and lack a generation fence; persisting them recreates #12 divergence.
     expect(workspace).toBeDefined()
     expect(workspace.executionHostId).toBeUndefined()
     expect(Object.keys(workspace)).not.toContain('executionHostId')

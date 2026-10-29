@@ -22,17 +22,14 @@ const piEntrySchema = z.looseObject({
 })
 export type PiSessionEntry = z.infer<typeof piEntrySchema>
 
-/** `get_entries`: the entries after `since` in the order Pi appended them, and its leaf. */
+/** get_entries returns append order, including abandoned branches. */
 export const piEntriesAnswerSchema = z.object({
   entries: z.array(piEntrySchema),
   leafId: z.string().min(1).nullable()
 })
 export type PiEntriesAnswer = z.infer<typeof piEntriesAnswerSchema>
 
-/** The answer to `get_entries since: claim`: the active branch after the claim, oldest first, when
- *  the leaf's `parentId` chain reaches the claim inside it; null when the terminal went back to an
- *  earlier point, which only the whole tree can place. The answer lists in append order and keeps
- *  abandoned branches, so the branch is always walked from the leaf. */
+/** Walk from the leaf to the claim; null requires a whole-tree read to place an earlier rewind. */
 export function piBranchSince(
   answer: PiEntriesAnswer,
   claim: string
@@ -41,11 +38,7 @@ export function piBranchSince(
   return walked?.stop === claim ? { path: walked.path, rewound: false } : null
 }
 
-/**
- * The whole tree's active branch after the newest entry the chat accounts for: the claim, or the
- * nearest of its ancestors where the terminal branched off (rewound). Without a claim, the whole
- * branch. 'unknown-claim' when the claim isn't in this conversation at all.
- */
+/** Read the active branch after the claim or its nearest shared ancestor; unknown claims refuse import. */
 export function piBranchInTree(
   answer: PiEntriesAnswer,
   claim: string | null
@@ -77,7 +70,7 @@ function walkFromLeaf(
     if (!entry) {
       return null
     }
-    // Each id is visited once: a cycle ends the walk as incomplete history.
+    // Deleting visited IDs bounds cycles as incomplete history.
     byId.delete(current)
     path.push(entry)
     current = entry.parentId
@@ -85,7 +78,7 @@ function walkFromLeaf(
   return { path: path.toReversed(), stop: current }
 }
 
-/** Rows keyed as adoption keys them (`legacy/pi/<session file>/<entry id>`), so both dedupe. */
+/** Match adoption identities so both import paths deduplicate. */
 export function piHistoryEntryIdentity(
   sessionFile: string,
   entryId: string
@@ -93,15 +86,12 @@ export function piHistoryEntryIdentity(
   return { provider: 'legacy', agent: 'pi', sessionId: sessionFile, recordId: entryId }
 }
 
-/** Outside entries as journal rows, staged whole before anything is written; entries the journal
- *  already holds are left out first, so an earlier import never vetoes newer entries. Null when
- *  nothing on the path shows as a row. */
+/** Stage all outside rows before writing; exclude journaled entries so prior imports cannot veto newer ones. */
 export function createPiHistoryImportPlan(input: {
   sessionFile: string
   journal: StructuredAgentSessionTransitionJournal
   path: readonly PiSessionEntry[]
   rewound: boolean
-  /** Only a chat that already shows something needs the divider. */
   divider: boolean
   check: () => void
 }): HistoryCatchUpPlan | null {
@@ -127,7 +117,7 @@ export function createPiHistoryImportPlan(input: {
         )
       )
     }
-    // Imported prompts are history, never sends delivery recovery could claim.
+    // History imports must never become sends eligible for delivery recovery.
     batch.push(
       journalLifecycleItemMutation(
         {

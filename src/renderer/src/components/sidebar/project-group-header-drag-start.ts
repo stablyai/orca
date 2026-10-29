@@ -47,8 +47,7 @@ export function createProjectGroupHeaderDragSession(args: {
     return null
   }
   const handleEl = args.event.currentTarget
-  // Why: defer pointer capture until the threshold so ordinary group header
-  // clicks still toggle collapse through the row handler.
+  // Delay pointer capture until promotion so ordinary clicks can still toggle collapse.
   return {
     groupId: args.groupId,
     bucketKey,

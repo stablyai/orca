@@ -27,6 +27,7 @@ export async function stopWorkspaceSleepChat(input: {
   const { deps, sessions, sessionId, child } = input
   let ownedStopped = false
   try {
+    deps.store.requireWritableRecord(sessionId)
     if (child) {
       await input.stopAgent(sessionId, { cause: 'user-close' })
     } else if (input.owned) {

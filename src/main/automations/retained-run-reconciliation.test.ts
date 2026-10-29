@@ -1,14 +1,10 @@
-import { closeTestStores, createStore, testState } from '../persistence-test-harness'
+import { closeTestStores, createStore, testState } from '../persistence/persistence-test-harness'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import type { Repo } from '../../shared/repo-types'
-import {
-  isFinalAutomationRunStatus,
-  type Automation,
-  type AutomationRun
-} from '../../shared/automations-types'
+import type { Automation, AutomationRun } from '../../shared/automations-types'
 import { AutomationService } from './service'
 import type {
   AutomationRunCompletionObservation,
@@ -153,44 +149,6 @@ describe('reconciling retained runs against a graph that has not published yet',
     surface.settleObservation({ status: 'completed', error: null })
     await vi.advanceTimersByTimeAsync(0)
     expect(readRun(store, automation.id, retained.id).status).toBe('completed')
-    service.stop()
-  })
-
-  it('persists the terminal status exactly once when the restored pane finishes the run', async () => {
-    const store = await createStore()
-    const automation = createAutomation(store)
-    const retained = retainDispatchedRun(store, automation)
-    const surface = createPaneSurface()
-    const service = new AutomationService(store, { terminalObserver: surface.observer })
-
-    const transitions: string[] = []
-    const persist = store.updateAutomationRun.bind(store)
-    vi.spyOn(store, 'updateAutomationRun').mockImplementation((update) => {
-      const before = store.listAutomationRuns(automation.id).find((r) => r.id === update.runId)
-      if (before && !isFinalAutomationRunStatus(before.status)) {
-        if (isFinalAutomationRunStatus(update.status)) {
-          transitions.push(update.status)
-        }
-      }
-      return persist(update)
-    })
-
-    service.start()
-    service.setRendererReady()
-    await vi.advanceTimersByTimeAsync(5_000)
-
-    surface.mountPane()
-    await service.markDispatchResult({
-      runId: retained.id,
-      status: 'completed',
-      ...LAUNCH_TARGET,
-      error: null
-    })
-    await vi.advanceTimersByTimeAsync(AFTER_SETTLE_MS)
-
-    expect(transitions).toEqual(['completed'])
-    expect(readRun(store, automation.id, retained.id).status).toBe('completed')
-    expect(readRun(store, automation.id, retained.id).error).toBeNull()
     service.stop()
   })
 

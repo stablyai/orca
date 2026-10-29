@@ -1,9 +1,6 @@
 import type { ExecutionHostId } from '../../shared/execution-host'
 
-/**
- * A repo selector, optionally narrowed to one host. One repo id can be set up on several hosts, so
- * the host travels with the selector: every lookup that re-resolves it keeps the caller's choice.
- */
+/** Carry optional host through every re-resolution: one repo id can be registered on several hosts. */
 export type RuntimeRepoSelector =
   | string
   | { readonly selector: string; readonly hostId: ExecutionHostId }

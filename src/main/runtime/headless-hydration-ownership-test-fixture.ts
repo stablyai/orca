@@ -13,7 +13,11 @@ export const RETIRED_SNAPSHOT = {
 
 export class HydrationRuntime extends OrcaRuntimeService {
   model() {
-    const state = this.headlessTerminals.get(PTY_ID)
+    return this.modelFor(PTY_ID)
+  }
+
+  modelFor(ptyId: string) {
+    const state = this.headlessTerminals.get(ptyId)
     if (!state) {
       throw new Error('Expected headless model')
     }

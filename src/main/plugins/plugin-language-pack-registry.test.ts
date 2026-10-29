@@ -53,7 +53,7 @@ describe('PluginLanguagePackRegistry', () => {
       {
         id: 'plugin:orca-samples.portuguese/pt-BR',
         resourceLanguage:
-          'plugin0070006c007500670069006e003a006f007200630061002d00730061006d0070006c00650073002e0070006f00720074007500670075006500730065002f00700074002d00420052',
+          'pt-BR-x-orcapk-6f726361-2d73616d-706c6573-2e706f72-74756775-6573652f-70742d42-52',
         pluginKey: 'orca-samples.portuguese',
         locale: 'pt-BR',
         catalog: { common: { save: 'Salvar' } }

@@ -218,13 +218,16 @@ describe('Pi child rows', () => {
     ])
   })
 
-  it('posts an OMP task child with its description', async () => {
+  it.each([
+    ['its description', 'Map the auth module', 'Map the auth module'],
+    ['its name without one', undefined, 'AuthMap']
+  ])('posts an OMP task child labelled by %s', async (_name, description, label) => {
     const harness = createAgentStatusExtensionHarness({ kind: 'omp' })
     await harness.callHook('session_start')
     harness.emitPiEvent('task:subagent:lifecycle', {
-      id: '0-explore',
+      id: 'AuthMap',
       agent: 'explore',
-      description: 'Map the auth module',
+      description,
       detached: true,
       status: 'started',
       index: 0
@@ -233,11 +236,11 @@ describe('Pi child rows', () => {
 
     expect(posts(harness).at(-1)?.subagents).toEqual([
       {
-        id: '0-explore',
+        id: 'AuthMap',
         state: 'working',
         startedAt: expect.any(Number),
         agentType: 'explore',
-        description: 'Map the auth module'
+        description: label
       }
     ])
   })

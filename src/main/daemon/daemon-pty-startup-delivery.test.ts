@@ -41,7 +41,7 @@ describe('DaemonPtyAdapter startup delivery', () => {
     rmSync(dir, { recursive: true, force: true })
   })
 
-  itOnPosix('preserves the existing fast-start timing for fish', async () => {
+  itOnPosix('uses the normal shell-ready timeout for fish', async () => {
     // The mock subprocess represents installed fish even on hosts without it.
     const resolveShell = vi
       .spyOn(localPtyUtils, 'resolveUnixShellPath')
@@ -54,7 +54,7 @@ describe('DaemonPtyAdapter startup delivery', () => {
         command: 'codex',
         env: { SHELL: '/usr/bin/fish' }
       })
-      await vi.advanceTimersByTimeAsync(299)
+      await vi.advanceTimersByTimeAsync(14_999)
       expect(lastSubprocess.write).not.toHaveBeenCalled()
       await vi.advanceTimersByTimeAsync(1)
       expect(lastSubprocess.write).toHaveBeenCalledExactlyOnceWith('codex\r')

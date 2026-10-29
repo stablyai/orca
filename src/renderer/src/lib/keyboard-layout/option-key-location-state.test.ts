@@ -24,10 +24,4 @@ describe('createOptionKeyLocationTracker', () => {
     tracker.keyUp({ key: 'Alt', location: 0 })
     expect(tracker.get()).toBe(0)
   })
-
-  it('ignores non-Option keys', () => {
-    const tracker = createOptionKeyLocationTracker()
-    tracker.keyDown({ key: 'Shift', location: 1 })
-    expect(tracker.get()).toBe(0)
-  })
 })

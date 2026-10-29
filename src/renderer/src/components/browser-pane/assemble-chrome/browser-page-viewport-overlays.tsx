@@ -1,5 +1,13 @@
-import type { Dispatch, MutableRefObject, RefObject, SetStateAction } from 'react'
+import {
+  useCallback,
+  type Dispatch,
+  type MutableRefObject,
+  type RefObject,
+  type SetStateAction
+} from 'react'
 import { BrowserPageZoomIndicator } from './browser-page-zoom-indicator'
+import { BrowserLinkStatusBubble } from './browser-link-status-bubble'
+import { useBrowserAgentCursor } from '../agent-cursor/use-browser-agent-cursor'
 import type {
   BrowserCertificateFailure,
   BrowserLoadError,
@@ -71,6 +79,8 @@ export function BrowserPageViewportOverlays({
   annotationSend: ReturnType<typeof useBrowserPageAnnotationSend>
   grabAnnotations: ReturnType<typeof useBrowserPageGrabAnnotations>
 }): React.JSX.Element {
+  const getAgentCursorHost = useCallback(() => containerRef.current, [containerRef])
+  useBrowserAgentCursor(browserTab.id, webviewRef, getAgentCursorHost)
   return (
     <>
       <BrowserGuestAnnotateOverlays
@@ -88,6 +98,7 @@ export function BrowserPageViewportOverlays({
       />
       <BrowserPageZoomIndicator state={browserZoomIndicatorState} percent={browserZoomPercent} />
       <BrowserFind isOpen={findOpen} onClose={() => setFindOpen(false)} webviewRef={webviewRef} />
+      <BrowserLinkStatusBubble browserPageId={browserTab.id} />
       {showFailureOverlay && browserTab.loadError ? (
         <BrowserPageLoadFailure
           browserTab={browserTab}

@@ -97,7 +97,6 @@ export type SetupPrompt = {
   sparseCheckoutOverride?: { directories: string[]; presetId?: string }
   repoName: string
   command: string
-  /** Absent as well as null: `repo.hooks` need not report where the setup script came from. */
   source: string | null | undefined
 }
 

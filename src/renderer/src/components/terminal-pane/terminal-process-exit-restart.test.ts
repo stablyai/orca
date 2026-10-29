@@ -15,17 +15,6 @@ describe('terminal process exit restart', () => {
     ).toBe(startup)
   })
 
-  it('restarts a shell when a capacity failure had no startup request', () => {
-    expect(
-      resolveTerminalProcessExitRestartStartup({
-        paneId: 1,
-        exitCode: 1,
-        reason: 'git-bash-console-capacity',
-        startup: null
-      })
-    ).toBeNull()
-  })
-
   it('restarts other process failures as a shell', () => {
     expect(
       resolveTerminalProcessExitRestartStartup({

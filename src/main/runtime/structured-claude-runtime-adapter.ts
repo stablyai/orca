@@ -1,19 +1,23 @@
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
 import { claudeProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 import { resolveClaudeCommand } from '../codex-cli/command'
-import {
-  ClaudeStructuredSessionAdapter,
-  type ClaudeStructuredSessionAdapterDeps
-} from '../claude/claude-structured-session-adapter'
-import { claudeProviderHandleLink } from '../claude/claude-structured-owner-identity'
+import { ClaudeStructuredSessionAdapter } from '../claude/claude-structured-session-adapter'
+import type {
+  ClaudeStructuredSessionAdapterDeps,
+  ClaudeStructuredSessionEvent
+} from '../claude/structured/claude-structured-session-state'
+import { claudeProviderHandleLink } from '../claude/structured/claude-structured-owner-identity'
 import type { StructuredAgentSessionLifecycleEvent } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
-import type { ClaudeStructuredSessionEvent } from '../claude/claude-structured-session-state'
+
 import {
   recordAgentSessionProviderHandle,
   reviseAgentSessionProviderResumePoint
-} from './agent-session-provider-handle-transition'
+} from './agent-session/ownership/agent-session-provider-handle-transition'
 import type { AgentSessionRecordStore } from './agent-session-record-store'
-import { ClaudeAtRestCommandCatalog } from '../claude/claude-at-rest-commands'
+import {
+  ClaudeAtRestCommandCatalog,
+  type ClaudeAtRestCommandsDeps
+} from '../claude/claude-at-rest-commands'
 import type { ClaudeCommandCatalogProbe } from '../claude/claude-command-catalog-probe'
 import { openClaudeStreamJsonConnection } from '../claude/claude-stream-json-connection'
 import type { ClaudeCliFlagSupport } from '../claude/claude-cli-flag-support'
@@ -22,7 +26,7 @@ import { prewarmClaudeCliFlags } from '../claude/claude-cli-flag-prewarm'
 export type StructuredClaudeRuntimeAdapterDeps = {
   store: AgentSessionRecordStore
   resolveWorkspacePath: (workspaceId: string) => Promise<string>
-  /** The registration's composed launch: the shared launch path with Claude's part. */
+  resolveAccountHome?: ClaudeAtRestCommandsDeps['resolveAccountHome']
   resolveLaunch: ClaudeStructuredSessionAdapterDeps['resolveLaunch']
   /** The binary and env the startup version prewarm asks, as a launch would. */
   resolveClaudeCommand?: typeof resolveClaudeCommand
@@ -89,6 +93,7 @@ export function createStructuredClaudeRuntimeAdapter(
   return new ClaudeStructuredSessionAdapter({
     atRestCommands: new ClaudeAtRestCommandCatalog({
       resolveWorkspacePath: deps.resolveWorkspacePath,
+      ...(deps.resolveAccountHome ? { resolveAccountHome: deps.resolveAccountHome } : {}),
       ...(deps.atRestCommandProbe ? { probe: deps.atRestCommandProbe } : {})
     }),
     resolveLaunch: deps.resolveLaunch,
@@ -134,8 +139,7 @@ export function createStructuredClaudeRuntimeAdapter(
   })
 }
 
-/** The child's connection, watched for a CLI refusing a version-gated flag, so the start that
- *  failed on it is the last one to pass it. */
+/** Watch flag-refusal exits so the next start omits the unsupported flag. */
 export function openClaudeConnectionOf(
   deps: Pick<StructuredClaudeRuntimeAdapterDeps, 'openClaudeConnection' | 'claudeCliFlags'>
 ): Pick<ClaudeStructuredSessionAdapterDeps, 'openConnection'> {

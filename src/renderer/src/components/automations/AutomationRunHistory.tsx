@@ -26,19 +26,16 @@ import {
 } from './automation-run-history-keyboard-navigation'
 import { translate } from '@/i18n/i18n'
 
-// Date line + workspace detail line inside the row padding; the occurrence line
-// is the only optional one, so the estimate can be exact without measuring.
+// Base height covers date/workspace/padding; only folded occurrence text adds a line.
 const RUN_ROW_HEIGHT_PX = 57
 const RUN_ROW_OCCURRENCE_LINE_PX = 20
 const RUN_ROW_OVERSCAN = 10
-// happy-dom and the first paint both report a zero-height scroll element; without
-// a starting viewport the first render would mount no rows at all.
+// Seed viewport geometry because first paint and happy-dom report zero height, which would mount no rows.
 const RUNS_VIEWPORT_INITIAL_RECT = { width: 1024, height: 600 }
 
 const RUN_ROW_GRID_CLASS =
   'grid w-full grid-cols-[minmax(9rem,1fr)_minmax(10rem,1.1fr)_minmax(5rem,.55fr)_minmax(5rem,.55fr)_minmax(6rem,auto)] gap-3'
-// Sticky inside the scroller so the header shares the rows' content width when a
-// classic scrollbar takes gutter space; opaque so scrolled rows don't bleed through.
+// Share scroller width with rows, including scrollbar gutter; opaque sticky headers hide scrolled content.
 const RUN_ROW_HEADER_SURFACE_CLASS =
   '[background:color-mix(in_srgb,var(--muted)_20%,var(--background))]'
 
@@ -64,9 +61,7 @@ export function AutomationRunHistory({
   const scrollRef = useRef<HTMLDivElement>(null)
   const headerRef = useRef<HTMLDivElement>(null)
   const rowsRef = useRef<HTMLDivElement>(null)
-  // The sticky header sits above the virtual rows in the same scroller, so every
-  // item is offset by the header height; without scrollMargin the virtualizer's
-  // coordinates (and scrollToIndex) are short by that offset.
+  // Offset virtual coordinates/scrollToIndex by the sticky header height.
   const [scrollMargin, setScrollMargin] = useState(0)
   const [selectedRunState, setSelectedRunState] = useState<{
     automationId: string
@@ -77,7 +72,17 @@ export function AutomationRunHistory({
   }))
   const runCountLabel = useMemo(() => {
     const completed = runs.filter((run) => run.status === 'completed').length
-    return `${runs.length} ${runs.length === 1 ? 'run' : 'runs'} · ${completed} completed`
+    return runs.length === 1
+      ? translate(
+          'auto.components.automations.runHistory.runCountSummary_one',
+          '{{count}} run · {{completed}} completed',
+          { count: runs.length, completed }
+        )
+      : translate(
+          'auto.components.automations.runHistory.runCountSummary_other',
+          '{{count}} runs · {{completed}} completed',
+          { count: runs.length, completed }
+        )
   }, [runs])
 
   const selectedRunId =
@@ -85,14 +90,11 @@ export function AutomationRunHistory({
   const selectedIndex = selectedRunId ? runs.findIndex((run) => run.id === selectedRunId) : -1
   const selectedRun = (selectedIndex >= 0 ? runs[selectedIndex] : undefined) ?? runs[0] ?? null
 
-  // Both options must be stable across renders: virtual-core memoizes its
-  // measurements on measuringOptions, which closes over getItemKey, and an inline
-  // estimateSize re-walks every uncached index (up to the whole history) per render.
+  // Keep both callbacks stable: virtual-core memoizes measurements via getItemKey, and inline estimates rewalk uncached history each render.
   const estimateRunRowSize = useCallback(
     (index: number): number => {
       const run = runs[index]
-      // The predicate, not the label: estimateSize is asked for unmounted indexes too,
-      // and building the label there would translate and format a date per run.
+      // Check folding without formatting labels/dates for every unmounted run.
       return run && isAutomationRunFolded(run)
         ? RUN_ROW_HEIGHT_PX + RUN_ROW_OCCURRENCE_LINE_PX
         : RUN_ROW_HEIGHT_PX
@@ -112,13 +114,11 @@ export function AutomationRunHistory({
     initialRect: RUNS_VIEWPORT_INITIAL_RECT,
     getItemKey: getRunRowKey,
     scrollMargin,
-    // The sticky header covers the top of the scrollport, so a row aligned to the
-    // top must land below it; scrollPaddingStart is that viewport inset.
+    // Inset top-aligned rows below the sticky header.
     scrollPaddingStart: scrollMargin
   })
 
-  // Measure the rows container's offset inside the scroller (its top equals the
-  // header height) and keep it current across zoom/font changes.
+  // Track the rows’ header offset across zoom/font changes.
   useLayoutEffect(() => {
     const rows = rowsRef.current
     const scrollElement = scrollRef.current
@@ -137,8 +137,7 @@ export function AutomationRunHistory({
     if (typeof ResizeObserver === 'undefined' || !headerRef.current) {
       return
     }
-    // Only the header can shift the rows container's offset; observing the rows
-    // container too would fire on every row mount for no offset change.
+    // Only header resizing shifts the offset; observing rows would fire on every mount without a geometry change.
     const observer = new ResizeObserver(measure)
     observer.observe(headerRef.current)
     return () => observer.disconnect()
@@ -151,16 +150,14 @@ export function AutomationRunHistory({
     []
   )
 
-  // The window listener reads the latest runs and selection through this ref so it
-  // subscribes once, instead of on every render the page above it causes.
+  // Keep one window listener; refs supply current runs/selection across page renders.
   const keyboardInputRef = useRef({ runs, selectedRun, automationId, notice, onOpenRun })
   React.useEffect(() => {
     keyboardInputRef.current = { runs, selectedRun, automationId, notice, onOpenRun }
   })
   const pendingFocusRunIdRef = useRef<string | null>(null)
 
-  // A refresh can drop the row a keyboard move was waiting to focus; without this
-  // the stale id would steal focus if that run ever reappeared.
+  // Drop pending focus for removed runs so their later reappearance cannot steal focus.
   React.useEffect(() => {
     const pendingRunId = pendingFocusRunIdRef.current
     if (pendingRunId && !runs.some((run) => run.id === pendingRunId)) {
@@ -192,9 +189,7 @@ export function AutomationRunHistory({
         if (targetRun) {
           event.preventDefault()
           setSelectedRunState({ automationId: input.automationId, runId: targetRun.id })
-          // Enter is left to the focused control, so focus has to follow the selection —
-          // but the target row may still be outside the virtual window, so focus waits
-          // for the scroll below to mount it.
+          // Enter follows focused controls; defer focus until scrolling mounts the selected row.
           pendingFocusRunIdRef.current = targetRun.id
         }
       }
@@ -210,8 +205,7 @@ export function AutomationRunHistory({
     }
   }, [selectedIndex, virtualizer])
 
-  // Unconditional: the row a keyboard move selected can take an extra scroll-driven
-  // render to mount, and only then can it take focus.
+  // Check every render because scrolling may mount the pending focus target on a later pass.
   React.useEffect(() => {
     const pendingRunId = pendingFocusRunIdRef.current
     if (!pendingRunId) {

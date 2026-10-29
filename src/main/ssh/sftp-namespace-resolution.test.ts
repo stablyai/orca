@@ -1,5 +1,4 @@
-// Why: picking the wrong SFTP path silently installs the relay somewhere the shell
-// will never launch it, so every discovery outcome needs a pinned decision.
+// A wrong namespace installs bytes outside the shell's launch path; pin every discovery outcome.
 
 import type { SFTPWrapper } from 'ssh2'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -27,7 +26,7 @@ function statusError(code: number): Error {
   return Object.assign(new Error(`SFTP status ${code}`), { code })
 }
 
-// A marker probe must care only about "the call succeeded", never about the reported type or size.
+// Marker identity requires only successful lstat, not reported type/size.
 const MARKER_STATS = {
   isDirectory: () => false,
   isSymbolicLink: () => true,
@@ -162,7 +161,7 @@ describe('resolveSftpTransferPath', () => {
     expect(lstatCalls).toEqual([mapping.shellProbePath])
   })
 
-  // Why: only SSH_FX_NO_SUCH_FILE proves absence; anything else must not license a redirect.
+  // Only SSH_FX_NO_SUCH_FILE proves absence; uncertainty must never authorize redirect.
   it.each([
     ['generic failure', { code: 4 } as LstatOutcome],
     ['permission denied', { code: 3 } as LstatOutcome],
@@ -311,7 +310,7 @@ describe('resolveSftpTransferPathIfMapped', () => {
     expect(lstatCalls).toEqual([])
   })
 
-  // Why: Windows SFTP reports drive paths like /C:/Users/alice, which break the POSIX prefix contract.
+  // Windows /C:/ SFTP paths violate POSIX prefix mapping.
   it('ignores a mapping on a Windows host', async () => {
     const { sftp, realpathCalls } = makeSftp({
       startPath: '/homes/alice',

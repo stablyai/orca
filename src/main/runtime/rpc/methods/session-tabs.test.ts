@@ -74,8 +74,7 @@ describe('session tab RPC methods', () => {
     })
   })
 
-  // Why: only this field separates a reconnect probe from a user opening the tab,
-  // and the tab-open gesture is what wakes a deliberately slept pane (STA-3465).
+  // Only viewIntent distinguishes reconnect probes from tab opens that wake deliberately slept panes (STA-3465).
   it('forwards an automatic activation intent to the runtime', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',
@@ -101,8 +100,7 @@ describe('session tab RPC methods', () => {
     )
   })
 
-  // Why: the field is additive, so a client that predates it sends nothing and
-  // must keep the permissive default rather than losing its wake gesture.
+  // Older clients omit the additive field; preserve their permissive wake default.
   it('passes no intent for a client that omits the field', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',

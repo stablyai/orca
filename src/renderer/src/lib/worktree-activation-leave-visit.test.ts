@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Worktree } from '../../../shared/worktree/types'
 import { useAppStore } from '@/store'
 import { activateAndRevealWorktree } from './worktree-activation'
+import { getWorktreeVisitKey } from './worktree-visit-recency'
 
 vi.mock('../../../shared/sidebar-inputs-switch', () => ({ ORCA_SIDEBAR_INPUTS_IS_MAIN: true }))
 
@@ -39,7 +40,6 @@ describe('switching workspaces with the sidebar-inputs switch on', () => {
     vi.useFakeTimers({ now: 50_000, toFake: ['Date'] })
     const shells = worktree('shells')
     const next = worktree('next')
-    const markWorktreeVisited = vi.fn()
     useAppStore.setState({
       repos: [
         { id: 'repo-1', path: '/workspace/repo', displayName: 'repo', badgeColor: '', addedAt: 0 }
@@ -52,16 +52,15 @@ describe('switching workspaces with the sidebar-inputs switch on', () => {
       tabsByWorktree: { [shells.id]: [], [next.id]: [] },
       ptyIdsByTabId: {},
       everActivatedWorktreeIds: new Set([shells.id, next.id]),
-      markWorktreeVisited,
-      recordWorktreeVisit: vi.fn(),
+      lastVisitedAtByWorktreeId: {},
       refreshGitHubForWorktreeIfStale: vi.fn()
     })
 
     activateAndRevealWorktree(next.id)
 
-    expect(markWorktreeVisited.mock.calls).toEqual([
-      [shells.id, 49_999, 'local'],
-      [next.id, 50_000]
-    ])
+    expect(useAppStore.getState().lastVisitedAtByWorktreeId).toEqual({
+      [getWorktreeVisitKey(shells.id, 'local')]: 49_999,
+      [next.id]: 50_000
+    })
   })
 })

@@ -1,13 +1,9 @@
-import type { RemoteRuntimeClientError } from '../../remote-runtime-client-error'
+import type { RemoteRuntimeClientError } from '../remote-runtime-client-error'
 import { remoteRuntimeUnavailableError } from '../requests/remote-runtime-request-frames'
 import type { SharedControlSocketGeneration } from './remote-runtime-shared-control-socket-generation'
 import type { SharedControlLogicalSubscription } from './remote-runtime-shared-control-types'
 
-/**
- * Closes a shared control socket after an error and schedules its retry. A refused token is
- * refused on every retry, so an owner that can pair again takes over instead, and waiting callers
- * see a connection that will return rather than a refusal while it does.
- */
+/** After token refusal, a pairing-capable owner takes recovery; waiting callers see a reconnecting connection. */
 export function closeSharedControlAfterError(args: {
   refused: RemoteRuntimeClientError
   socketGeneration: number
@@ -46,8 +42,7 @@ export function closeSharedControlAfterError(args: {
     args.publishDiagnostics()
     return
   }
-  // Why closed only: an on-demand open may already be under way when the recovery settles.
-  // A recovery that threw leaves no owner, so the socket retries as usual.
+  // Recover only while closed: an on-demand open may have started. Failed recovery falls back to retry.
   void recovery
     .catch(() => 'retry' as const)
     .then((next) => {

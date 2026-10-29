@@ -35,6 +35,7 @@ const items: AgentJournalRenderItem[] = [
 ]
 
 vi.mock('@/runtime/structured-agent-session-client', () => ({
+  subscribeStructuredAgentSessionStatus: vi.fn(async () => ({ unsubscribe: vi.fn() })),
   callStructuredAgentSession: vi.fn().mockResolvedValue(null)
 }))
 

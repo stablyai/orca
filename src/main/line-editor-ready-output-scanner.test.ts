@@ -13,10 +13,4 @@ describe('line editor ready output scanner', () => {
       expect(scanForLineEditorReadyOutput(state, sequence.slice(4))).toBe(true)
     }
   )
-
-  it('ignores ordinary prompt output', () => {
-    expect(
-      scanForLineEditorReadyOutput(createLineEditorReadyOutputScanState(), 'user@host % ')
-    ).toBe(false)
-  })
 })

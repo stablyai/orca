@@ -7,7 +7,7 @@ import {
   type LocalGitExecOptions
 } from '../../gh-utils'
 import { githubHostExecOptions, type GitHubApiRepository } from '../../github-api-repository'
-import type { GhExecOptions } from './../github-exec-scope'
+import { githubPRStackExecutionScope, type GhExecOptions } from './../github-exec-scope'
 import { resolvePullRequestLookupCandidates } from './../pull-request-lookup-candidates'
 import { detectRepositoryMergeMetadata } from './../detect/repository-merge-metadata'
 import {
@@ -119,7 +119,12 @@ export async function fetchPullRequestWorkItem(
       // Best-effort merge metadata must not trigger a REST fallback that drops latestReviews.
       const baseRefName = typeof item.baseRefName === 'string' ? item.baseRefName : undefined
       try {
-        const mergeMetadata = await detectRepositoryMergeMetadata(ownerRepo, baseRefName, ghOptions)
+        const mergeMetadata = await detectRepositoryMergeMetadata(
+          ownerRepo,
+          baseRefName,
+          ghOptions,
+          githubPRStackExecutionScope(connectionId, localGitOptions)
+        )
         return {
           ...mapped,
           mergeQueueRequired: mergeMetadata.mergeQueueRequired,

@@ -4,14 +4,11 @@ import {
   probeAgentSessionProcessIdentities,
   probeAgentSessionProcessIdentity,
   probeAgentSessionReservation
-} from './agent-session-process-identity-probe'
-import { findAgentSessionSpawnTokenProcesses } from './agent-session-spawn-token-process-scan'
-import { readEchoedAgentSessionSpawnToken } from './agent-session-spawn-token-readback'
+} from './agent-session/ownership/agent-session-process-identity-probe'
+import { findAgentSessionSpawnTokenProcesses } from './agent-session/ownership/agent-session-spawn-token-process-scan'
+import { readEchoedAgentSessionSpawnToken } from './agent-session/ownership/agent-session-spawn-token-readback'
 
-/**
- * The lease's only source of truth about a previous owner. Everything it cannot
- * answer PID-reuse-safely reports `indeterminate`, and recovery resolution concludes from there.
- */
+/** Probe previous owners with PID-reuse-safe evidence; unresolved ownership remains indeterminate. */
 export function createStructuredAgentSessionOwnerProbe(
   hostId: string,
   probe = probeAgentSessionProcessIdentity,
@@ -28,13 +25,10 @@ export function createStructuredAgentSessionOwnerProbe(
             reason: 'reservation recorded no spawn token to scan for'
           }
         }
-        // The token is minted before the child and is the only thing a child could be carrying.
-        // No owner and no token means nothing on any host can be holding this lease — answering
-        // `indeterminate` here is what latches an already-free record into recovery forever.
+        // No owner or minted token means no child could hold this lease; indeterminate would trap a free record in recovery.
         return { outcome: 'reservation-unused' }
       }
-      // Freeing a reservation needs positive proof that nothing spawned under its token. The scan
-      // answers null where the platform cannot read another process's environment.
+      // Release requires positive evidence of no spawn; unreadable process environments yield null.
       return probeAgentSessionReservation({
         spawnToken,
         findProcessesWithSpawnToken: (token) => findSpawnTokenProcesses(token),
@@ -43,15 +37,13 @@ export function createStructuredAgentSessionOwnerProbe(
       })
     }
     if (owner.hostId !== hostId) {
-      // Checking a remote host's pid against this machine's process table is
-      // exactly how a live owner gets declared dead.
+      // A remote pid has no meaning in this machine's process table.
       return {
         outcome: 'indeterminate',
         reason: `owner runs on ${owner.hostId}, which this host cannot probe`
       }
     }
-    // The env read-back answers on hosts that expose it and null elsewhere, giving the
-    // probe a PID-reuse-safe element even when no start time was recorded.
+    // Environment read-back can prove identity without start time; unsupported hosts return null.
     return probe({
       identity: owner,
       deps: { readEchoedSpawnToken: readEchoedAgentSessionSpawnToken }
@@ -92,13 +84,7 @@ export function createStructuredAgentSessionOwnerProbes(
   }
 }
 
-/**
- * The only provider-side trace a reservation can leave in its own record: a handle link minted at
- * this fence. `proveAgentSessionOwner` refuses to append one before an identity is committed, so a
- * link at the reservation's fence means a child got far enough to resume the provider thread. It
- * cannot see activity the child produced without proving a handle, which is why it is paired with
- * the token scan rather than trusted alone.
- */
+/** A handle link at this fence proves provider contact only after owner identity commit; pair it with the token scan to cover unrecorded activity. */
 function agentSessionReservationTouchedProvider(record: AgentSessionRecord): boolean {
   return record.providerHandleChain.at(-1)?.mintedAtFence === record.lease.runtimeFence
 }

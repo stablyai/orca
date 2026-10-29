@@ -115,8 +115,6 @@ describe('SshConnection', () => {
     expect(conn.getState().status).toBe('connected')
     expect(conn.usesSystemSshTransport()).toBe(false)
     expect(clientInstances).toHaveLength(1)
-    // Why: proves the GSSAPI-first probe actually ran before the ssh2 fallback,
-    // so the test fails if the proactive block is removed.
     expect(spawnSystemSshCommandMock).toHaveBeenCalledWith(
       expect.objectContaining({ gssapiAuthentication: true }),
       'echo ORCA-SYSTEM-SSH-OK',
@@ -182,11 +180,7 @@ describe('SshConnection', () => {
   })
 
   it('keeps prompting for credentials when the GSSAPI fallback probe fails', async () => {
-    // Why: identityAgent 'none' makes resolveAgentSocket return undefined on
-    // every platform (SSH_AUTH_SOCK='' alone leaves the Windows agent pipe), so
-    // ssh2's first connect carries any default key directly and the agent
-    // fallback retry never consumes the second ssh2Mock.connectSequence entry —
-    // deterministic on dev machines with both ~/.ssh/id_* and a live agent.
+    // identityAgent none disables agents on every OS; empty SSH_AUTH_SOCK alone leaves Windows' agent pipe and changes retry order.
     vi.stubEnv('SSH_AUTH_SOCK', '')
     ssh2Mock.connectSequence = [new Error('All configured authentication methods failed'), 'ready']
     spawnSystemSshCommandMock.mockImplementation(() =>
@@ -209,8 +203,6 @@ describe('SshConnection', () => {
 
     expect(conn.getState().status).toBe('connected')
     expect(conn.usesSystemSshTransport()).toBe(false)
-    // Why: proves the reactive GSSAPI probe actually ran before prompting, so
-    // the test fails if the reactive fallback block is removed.
     expect(spawnSystemSshCommandMock).toHaveBeenCalledWith(
       expect.objectContaining({ configHost: 'krb-host' }),
       'echo ORCA-SYSTEM-SSH-OK',
@@ -226,10 +218,7 @@ describe('SshConnection', () => {
   })
 
   it('tries the GSSAPI probe before prompting for an encrypted key passphrase', async () => {
-    // Why: a valid Kerberos ticket should connect silently before the user is
-    // ever asked for the key passphrase. Agent auth fails, the explicit-key
-    // retry fails with a passphrase error, and resolved GSSAPI is on — so the
-    // reactive probe must run before onCredentialRequest.
+    // Try a valid Kerberos ticket before prompting for the encrypted key after agent/key failure.
     vi.stubEnv('SSH_AUTH_SOCK', '/tmp/agent.sock')
     const tempDir = mkdtempSync(join(tmpdir(), 'orca-ssh-key-'))
     const keyPath = join(tempDir, 'id_ed25519')
@@ -261,7 +250,6 @@ describe('SshConnection', () => {
 
       expect(conn.getState().status).toBe('connected')
       expect(conn.usesSystemSshTransport()).toBe(true)
-      // Why: the probe must precede any passphrase prompt (which here never runs).
       expect(order[0]).toBe('probe')
       expect(onCredentialRequest).not.toHaveBeenCalled()
     } finally {
@@ -294,9 +282,7 @@ describe('SshConnection', () => {
   })
 
   it('clears system SSH transport when the GSSAPI-first probe throws synchronously', async () => {
-    // Why: no system ssh binary makes spawnSystemSshCommand throw before the
-    // probe's try/catch, so the ssh2 fall-through must still reset the flag —
-    // otherwise exec/sftp keep routing through the unusable system transport.
+    // Missing system ssh can throw before probe handling; reset the transport flag so exec/SFTP cannot keep using it.
     spawnSystemSshCommandMock.mockImplementation(() => {
       throw new Error('No system ssh binary found. Install OpenSSH.')
     })
@@ -316,10 +302,7 @@ describe('SshConnection', () => {
     vi.mocked(resolveWithSshG).mockResolvedValue(
       createResolvedConfig({ proxyUseFdpass: false, gssapiAuthentication: true })
     )
-    // Why: a probe channel that stays open until close() leaves the reactive
-    // fallback pending, so we can disconnect mid-probe; disconnect() then calls
-    // close() (bumping the generation first), which settles the probe as a
-    // cancellation rather than a probe failure.
+    // Hold the probe channel until disconnect bumps generation and closes it, exercising cancellation instead of failure.
     let pendingChannel: ReturnType<typeof createSystemCommandChannel> | null = null
     spawnSystemSshCommandMock.mockImplementation(() => {
       const channel = new EventEmitter() as ReturnType<typeof createSystemCommandChannel>

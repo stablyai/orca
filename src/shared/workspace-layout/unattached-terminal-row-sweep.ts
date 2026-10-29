@@ -1,17 +1,11 @@
-// The window's startup sweep of stored terminal rows outside the tab bar, read from stored data
-// alone, so main's load can apply it once before main owns the layout. The window adopts such a
-// row only when its startup reconnect plan (workspace-terminal-reconnect-plan.ts) names a terminal
-// for it; the orphan sweep (terminal-orphan-helpers.ts) removes the rest with their pane layouts.
+// Mirror the window’s stored-row startup reconnect/orphan sweep in main load before main owns layout: retain only rows whose reconnect plan names a terminal.
 
 import { isValidTerminalTabId } from '../terminal-tab-id'
 import type { TerminalTab } from '../terminal-tab-types'
 import type { WorkspaceSessionState } from '../workspace-session-state-types'
 import { readCanonicalPtyOwners, resolveCanonicalPtyClaim } from './legacy-terminal-row-claims'
 
-/**
- * The reconnect plan's rule: the shutdown list, else any row with a terminal. Read per partition,
- * since each lists only its own workspaces.
- */
+/** Apply shutdown-list/fallback-terminal evidence per host partition; each partition lists only its own workspaces. */
 export function liveAtShutdown(session: WorkspaceSessionState): (key: string) => boolean {
   const listed = session.activeWorktreeIdsOnShutdown
   return listed
@@ -48,8 +42,7 @@ function sweepRows(
     if (canonical.tabIds.has(row.id)) {
       continue
     }
-    // Why not SSH-aware: the window ignores an SSH row's own id only when it finds the worktree
-    // listed, which main cannot know at load; keeping errs to a ghost, never a lost terminal.
+    // Main cannot know the window’s SSH catalog at load; keep uncertain rows rather than risk losing a terminal.
     const named = [live ? row.ptyId : null, session.remoteSessionIdsByTabId?.[row.id]]
     const reattaches =
       named.some((ptyId) => ptyId && !claim.releasedPtyIds.has(ptyId)) || claim.reconnectPtyId
@@ -60,10 +53,7 @@ function sweepRows(
   return { unattached, hydrated }
 }
 
-/**
- * Drops each stored terminal row the window's startup would sweep, with its pane layout, and
- * moves a selection off it as the sweep does. Resume and close records stay, as they do there.
- */
+/** Remove startup-orphan rows/layouts and redirect selections like the window sweep; retain resume/close records. */
 export function sweepUnattachedTerminalRows(
   session: WorkspaceSessionState,
   live: (key: string) => boolean = liveAtShutdown(session)

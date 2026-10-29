@@ -144,8 +144,7 @@ describe('resolveWorkspaceDocAddressTarget', () => {
     })
   })
 
-  // Why most-specific-first: the outer root lexically contains the nested workspace's files, and
-  // attributing them to it selects the wrong owner — and so the wrong host — for the grant.
+  // Prefer nested roots over outer containment so grants select the correct workspace/host owner.
   it('attributes a file in a nested workspace to the nested root, not the outer one', () => {
     const state = makeState()
     const stateWithNested = {

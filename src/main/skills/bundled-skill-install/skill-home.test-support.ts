@@ -52,7 +52,6 @@ export type SkillHome = {
 const directories: string[] = []
 
 export async function makeSkillHome(): Promise<SkillHome> {
-  // Real path, so the link targets the tests compare are spelled as the planner sees them.
   const root = await realpath(await mkdtemp(join(tmpdir(), 'orca-bundled-skill-')))
   directories.push(root)
   const home = join(root, 'home')
@@ -70,7 +69,7 @@ export async function makeSkillHome(): Promise<SkillHome> {
 
 export async function removeSkillHomes(): Promise<void> {
   for (const directory of directories.splice(0)) {
-    // The read-only layout chmods the shared root; rm can't empty it until restored.
+    // Restore permissions changed by read-only fixtures before cleanup.
     await chmod(join(directory, 'home', '.agents', 'skills'), 0o755).catch(() => undefined)
     await rm(directory, { recursive: true, force: true })
   }
@@ -126,7 +125,6 @@ export function serviceInput(
   }
 }
 
-/** What a path holds: a link's raw target, or a folder's sorted entries plus its SKILL.md. */
 export async function snapshot(path: string): Promise<string> {
   const stat = await lstat(path).catch(() => null)
   if (!stat) {
@@ -142,7 +140,6 @@ export async function snapshot(path: string): Promise<string> {
   return `dir[${entries}]:${await readFile(join(path, 'SKILL.md'), 'utf8').catch(() => '?')}`
 }
 
-/** Every Orca stage/old sibling left beside a target. */
 export async function leftoverSiblings(path: string): Promise<string[]> {
   const parent = join(path, '..')
   return (await readdir(parent).catch(() => [])).filter((name) =>
@@ -150,7 +147,6 @@ export async function leftoverSiblings(path: string): Promise<string[]> {
   )
 }
 
-/** Runs preview then install and asserts the run did exactly what the preview said. */
 export async function previewAndInstall(input: BundledSkillServiceInput) {
   const plan = await previewBundledSkillInstall(input)
   const result = await installBundledSkills(input, plan.planDigest)

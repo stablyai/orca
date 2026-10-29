@@ -4,8 +4,8 @@ import type {
   ClaudeSession,
   ClaudeSessionExit,
   ClaudeStructuredSessionEvent
-} from './claude-structured-session-state'
-import { cancelClaudeAcquisitionAttempt } from './claude-structured-session-state'
+} from './structured/claude-structured-session-state'
+import { cancelClaudeAcquisitionAttempt } from './structured/claude-structured-session-state'
 import {
   AgentSessionAcquisitionExitProvenError,
   AgentSessionAcquisitionExitUnprovenError,

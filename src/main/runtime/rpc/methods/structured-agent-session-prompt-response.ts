@@ -1,4 +1,3 @@
-// Answers to an agent's approvals and questions, and its options.
 import { defineMethod } from '../core'
 import {
   requireStructuredSessionHost as requireSessionHost,

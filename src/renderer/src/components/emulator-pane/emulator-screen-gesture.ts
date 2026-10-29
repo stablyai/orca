@@ -176,8 +176,7 @@ export function resolveEmulatorWheelDelta(
   }
   return {
     start,
-    // Why: wheel deltas describe content scroll direction, while iOS HID input
-    // needs the opposite finger movement that produces that scroll.
+    // Wheel scroll direction is opposite the finger motion iOS HID needs to produce it.
     delta: {
       x: (-deltaX / contentRect.width) * sensitivity,
       y: (-deltaY / contentRect.height) * sensitivity

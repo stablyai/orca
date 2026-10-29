@@ -1,7 +1,5 @@
 import type { SecretAtRestProtection } from '../secret-at-rest-protection'
-// 'cloud' = Atlassian Cloud (email + API token, Basic auth, REST v3).
-// 'server' = self-hosted Jira Server/Data Center (personal access token,
-// Bearer auth, REST v2). Older stored sites omit the field and mean 'cloud'.
+// Cloud uses email/token Basic auth and REST v3; Server/Data Center uses PAT Bearer auth and REST v2. Legacy absent values mean cloud.
 export type JiraAuthType = 'cloud' | 'server'
 
 export type JiraSite = {
@@ -30,11 +28,9 @@ export type JiraConnectionStatus = {
   sites?: JiraSite[]
   activeSiteId?: string | null
   selectedSiteId?: JiraSiteSelection | null
-  // Set when a stored token file exists but could not be decrypted, so the
-  // UI can explain reads failing while the connection still looks saved.
+  // Saved token decryption failures explain unreadable credentials while the connection remains configured.
   credentialError?: string
-  // 'plaintext' when any stored token is unsealed, so Settings can warn. Optional:
-  // an older remote host omits it, and absent must read as "unknown", not "sealed".
+  // Plaintext means some tokens are unsealed; older hosts omit protection, which means unknown rather than sealed.
   credentialProtection?: SecretAtRestProtection | null
   // Absent on older remote hosts, which require a Cloud email and unscoped token.
   supportsScopedTokens?: boolean
@@ -170,8 +166,7 @@ export type JiraCreateIssueArgs = {
   title: string
   description?: string
   customFields?: Record<string, unknown>
-  // Keys in customFields holding user ids; the host shapes them into the
-  // {accountId} / {name} object Jira requires. Omitted by older clients.
+  // Host wraps these custom-field user IDs as Jira accountId/name objects; older clients omit them.
   userFieldKeys?: string[]
 }
 

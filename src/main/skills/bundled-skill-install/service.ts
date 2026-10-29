@@ -24,7 +24,7 @@ export async function previewBundledSkillInstall(
   return (await buildBundledSkillPlan(withDefaults(input))).plan
 }
 
-/** Runs the previewed plan, identified by its digest; the client never re-sends the ops. */
+/** Execute by preview digest, never by client-supplied operations. */
 export async function installBundledSkills(
   input: BundledSkillServiceInput,
   planDigest: string

@@ -199,8 +199,7 @@ describe('remote agent-session host authority integration', () => {
       expect(spawnSubprocess).toHaveBeenCalledOnce()
       expect(host.listSessions()).toHaveLength(1)
 
-      // Why: a retry cannot prove whether its previous response arrived, so
-      // the provider identity—not a new client operation—must recover the owner.
+      // A lost reply cannot prove delivery; retries must recover ownership through provider identity.
       const retry = await retryClient.request<RuntimeEnsureAgentSessionResult>(
         'terminal.ensureAgentSession',
         request,

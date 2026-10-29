@@ -1,4 +1,4 @@
-import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
+import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import type { IPtyProvider } from '../../../providers/pty-provider-contract'
 import { LocalPtyProvider } from '../../../providers/local-pty-provider'
@@ -14,7 +14,7 @@ import {
   isSettledWrite,
   type WriteSettlement
 } from '../../../../shared/pty-write-settlement'
-import type { TerminalInputKind } from '../../../../shared/terminal-input-kind'
+import { isDrivingInputKind, type TerminalInputKind } from '../../../../shared/terminal-input-kind'
 
 type RuntimeWriteDeps = Pick<PtyRuntimeControllerDeps, 'runtime'>
 
@@ -39,7 +39,7 @@ export function writePtyFromRuntimeController(
   options?: { waitForSettlement: true }
 ): boolean | WriteSettlement | Promise<WriteSettlement> {
   const observeAcceptedInput = (): void => {
-    if (inputKind === 'driving' && ptyOwnership.get(ptyId) === LOCAL_EXECUTION_HOST_ID) {
+    if (isDrivingInputKind(inputKind) && ptyOwnership.get(ptyId) === LOCAL_EXECUTION_HOST_ID) {
       deps.runtime?.observeClaudeTerminalEvidence?.(ptyId, { kind: 'input', data })
     }
   }

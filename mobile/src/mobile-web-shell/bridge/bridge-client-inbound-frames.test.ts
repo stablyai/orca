@@ -1,5 +1,3 @@
-/** What the page does with a frame its own reader will not take: which exchange it settles,
- *  which stream it releases at the shell, and what it reports for a frame naming no exchange. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { isRpcDeliveryUnknown } from '../../transport/rpc-delivery-ambiguity'
 import { BRIDGE_MAX_MESSAGE_BYTES } from './bridge-caps'
@@ -54,11 +52,10 @@ describe('bridge client refusals and send failures', () => {
       id: idOf(page, 0),
       payload: { id: 'frame-1', ok: true }
     })
-    // No timer is advanced: a caller that has to wait for one has already rendered without it.
+    // Settle immediately; waiting for a timer lets consumers render without their answer.
     const error = await answer.catch((thrown: unknown) => thrown)
     expect(readError(error).name).toBe('BridgeReplyRefusedError')
     expect(readError(error).message).toContain('unrecognised-message')
-    // The shell answered, so the desktop ran the request; a definite failure would invite a retry.
     expect(isRpcDeliveryUnknown(error)).toBe(true)
     expect(page.diagnostics).toContainEqual({
       kind: 'refused',
@@ -79,9 +76,7 @@ describe('bridge client refusals and send failures', () => {
       'stream-failed'
     ])
     expect(ended).toHaveLength(1)
-    // The shell did not retire this stream — it is still sending on it — so nothing but the page's
-    // own `cancel` releases the slot it holds there. Its overflow backstop counts unacked frames,
-    // which a stream that has gone quiet never reaches.
+    // Cancel at the shell too: its unacked-frame backstop never releases a stream that has gone quiet.
     expect(page.frames().at(-1)).toEqual({
       v: BRIDGE_PROTOCOL_VERSION,
       type: 'cancel',
@@ -132,11 +127,7 @@ describe('bridge client refusals and send failures', () => {
         settled = true
       }
     )
-    // The two refusals that come before the id does. `oversized` is decided on the raw string and
-    // `malformed-json` on a parse that failed, so neither frame ever yields an id to settle: what
-    // the page holds for it is released by `close` or by a shell replacement and by nothing else.
-    // Neither arises from a host that is behaving: it chunks at the frame cap, refuses a body over
-    // `BRIDGE_MAX_REPLY_BYTES` on its own side, and answers that with an `error` frame instead.
+    // Oversized/malformed JSON yields no salvageable id; only close/replacement can release its exchange. A conforming host instead chunks or sends an error within caps.
     page.deliverRaw(`{"v":1,"type":"reply","id":"${idOf(page, 0)}",`)
     page.deliverRaw(`"${'z'.repeat(BRIDGE_MAX_MESSAGE_BYTES)}"`)
     await Promise.resolve()

@@ -1,3 +1,4 @@
+import { homedir } from 'node:os'
 import type { GlobalSettings, OrcaWorkspaceLayout } from '../../../shared/global-settings-types'
 import { normalizeRuntimePathForComparison } from '../../../shared/cross-platform-path'
 import {
@@ -10,6 +11,14 @@ import {
   normalizeTuiAgentArgsRecord,
   normalizeTuiAgentEnvRecord
 } from '../../../shared/tui-agent-launch-defaults'
+import { expandLeadingHomePath } from '../../home-path-expansion'
+
+/** Unexpanded, a leading ~ resolves inside each repo and worktrees land in <repo>/~ (#34944). */
+export function expandWorkspaceDirHome(settings: Partial<GlobalSettings>): Partial<GlobalSettings> {
+  return typeof settings.workspaceDir === 'string'
+    ? { ...settings, workspaceDir: expandLeadingHomePath(settings.workspaceDir, homedir()) }
+    : settings
+}
 
 export function buildWorkspaceDirHistoryForUpdate(
   current: GlobalSettings,
@@ -57,13 +66,14 @@ export function readLegacyTerminalScrollbackSettings(
 }
 
 type RetiredGlobalSettings = {
+  agentNativeChatPermissionModes?: unknown
   setupScriptLaunchMode?: unknown
   terminalScrollbackBytes?: unknown
   enableGitHubAttribution?: unknown
   showAgentsSidebar?: unknown
-  // Managed servers are the default SSH path now; an older build reads a missing key as off.
+  // Older builds interpret an absent managed-server switch as off.
   experimentalManagedServers?: unknown
-  // Why: #22551 kept this key in settings; it now lives in a main-owned store and must never ride along.
+  // Remove legacy settings secrets now owned by the main-process credential store.
   opencodeGoApiKey?: unknown
   experimentalStructuredNativeChat?: unknown
   openAgentTabsInChatByDefault?: unknown
@@ -73,6 +83,7 @@ export function stripRetiredGlobalSettings(
   settings: Partial<GlobalSettings> | undefined
 ): Partial<GlobalSettings> {
   const {
+    agentNativeChatPermissionModes: _retiredChatPermissionCopies,
     setupScriptLaunchMode: _legacySetupScriptLaunchMode,
     terminalScrollbackBytes: _legacyScrollbackBytes,
     enableGitHubAttribution: _legacyGitHubAttribution,
@@ -83,6 +94,7 @@ export function stripRetiredGlobalSettings(
     openAgentTabsInChatByDefault: _legacyChatDefaultView,
     ...rest
   } = (settings ?? {}) as Partial<GlobalSettings> & RetiredGlobalSettings
+  void _retiredChatPermissionCopies
   void _legacySetupScriptLaunchMode
   void _legacyScrollbackBytes
   void _legacyGitHubAttribution
@@ -94,10 +106,7 @@ export function stripRetiredGlobalSettings(
   return rest
 }
 
-/**
- * Chat UI was on but the retired Default view left new agent tabs in the terminal. Every build
- * before the retirement saved that key, so a profile without it was already upgraded.
- */
+/** Preserve terminal-first behavior for pre-retirement profiles whose Chat UI was enabled. */
 export function savedChatUiWithTerminalDefaultView(settings: unknown): boolean {
   return (
     typeof settings === 'object' &&
@@ -162,8 +171,7 @@ export function migrateAgentYoloDefaults(
     existingArgs.devin = DEFAULT_TUI_AGENT_ARGS.devin
   }
   if (settings?.agentYoloDefaultsMigrated === true) {
-    // Keep newly added agents manual for profiles migrated by an older build.
-    // Missing keys otherwise fall through to the current (possibly yolo) defaults.
+    // Pin newly added agents to manual; missing keys otherwise inherit current yolo defaults.
     for (const agent of Object.keys(DEFAULT_TUI_AGENT_ARGS)) {
       if (!(agent in existingArgs)) {
         existingArgs[agent as keyof typeof DEFAULT_TUI_AGENT_ARGS] = ''
@@ -207,7 +215,7 @@ export function migrateAgentYoloDefaults(
   }
 
   return {
-    // Why: legacy users could only customize launch defaults via command overrides, so those agents count as already user-owned.
+    // Legacy command overrides establish user ownership of launch defaults.
     agentDefaultArgs: migratedArgs,
     agentDefaultEnv: migratedEnv,
     agentYoloDefaultsMigrated: true

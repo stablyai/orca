@@ -1,8 +1,4 @@
-/**
- * The runtime path used to drop the publisher's identity here, which forced every
- * change on any host to invalidate every host. These pin the attribution the hook
- * must forward: which environment, and which selector when the host names one.
- */
+/** Forward publisher environment/selector so one host’s automation changes cannot invalidate every host. */
 
 import { describe, expect, it, vi } from 'vitest'
 import type * as ReactModule from 'react'
@@ -57,8 +53,7 @@ async function mountIpcEvents(): Promise<Mounted> {
     }
   }))
 
-  // Why: the hook registers dozens of IPC namespaces at mount; stub the rest so a
-  // pending promise keeps unrelated paths dormant instead of failing on store setters.
+  // Stub unrelated namespaces with pending promises so mount cannot reach unsupported store setters.
   const autoStubNamespace = new Proxy(
     {},
     {

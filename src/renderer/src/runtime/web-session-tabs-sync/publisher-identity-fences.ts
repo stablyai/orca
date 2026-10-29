@@ -138,12 +138,7 @@ export function acceptSessionTabsRuntimeId(
   return true
 }
 
-/**
- * Retirement is a property of the publishing generation, not of the exact string it published
- * under. Matching `retired` exactly let a `:headless-merge:` rebuild of a superseded generation
- * walk past this fence while the bare form hit it, so the same predecessor was accepted or
- * rejected depending on which shape it happened to arrive in.
- */
+/** Retire entire publisher lineages: exact-string checks let headless-merge rebuilds of dead generations bypass fences their bare epochs hit. */
 export function isRetiredSessionTabsPublicationEpoch(
   key: string,
   publicationEpoch: string
@@ -177,9 +172,7 @@ export function noteSessionTabsPublicationEpoch(
   publicationEpoch: string
 ): SessionTabsPublicationEpochHistory {
   const existing = sessionTabsPublicationEpochHistoryByWorktree.get(key)
-  // A headless merge is the same publisher adding runtime-owned surfaces, so it advances the
-  // current epoch rather than superseding it. Retiring the base here would have the generation
-  // retire itself, and a lineage-aware fence then rejects its own next frame.
+  // Headless merges advance the same publisher; retiring their base makes lineage fencing reject the publisher’s own next frame.
   if (existing?.current && sameSessionTabsPublicationLineage(existing.current, publicationEpoch)) {
     existing.current = publicationEpoch
     sessionTabsPublicationEpochHistoryByWorktree.set(key, existing)

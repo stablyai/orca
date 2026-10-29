@@ -57,23 +57,14 @@ import {
   getOrcaCloudSignInProgress,
   onOrcaCloudSignInProgressChanged
 } from '../orca-profiles/profile-cloud-sign-in-progress'
+import { profileIdFromArgs } from './orca-profile-id-arg'
 import { transferProjectArgsFromUnknown } from './orca-profile-project-transfer-args'
 
 type RegisterOrcaProfileHandlersOptions = {
   onBeforeRelaunch?: () => void | Promise<void>
   onAuthMutation?: () => void
   onBeforeSignOut?: () => void
-}
-
-function profileIdFromArgs(args: unknown): string {
-  const profileId =
-    args && typeof args === 'object' && 'profileId' in args && typeof args.profileId === 'string'
-      ? args.profileId.trim()
-      : ''
-  if (!profileId) {
-    throw new Error('invalid_orca_profile_id')
-  }
-  return profileId
+  onAfterSignOut?: () => void
 }
 
 function findProjectsByPathArgsFromUnknown(args: unknown): FindOrcaProfileProjectsByPathArgs {
@@ -309,7 +300,7 @@ export function registerOrcaProfileHandlers(
     'orcaProfiles:signOutCurrent',
     async (): Promise<SignOutCurrentOrcaProfileResult> => {
       options.onBeforeSignOut?.()
-      return signOutCurrentOrcaProfile(getProfileUserDataPath())
+      return signOutCurrentOrcaProfile(getProfileUserDataPath()).finally(options.onAfterSignOut)
     }
   )
 

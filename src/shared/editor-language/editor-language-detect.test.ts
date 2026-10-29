@@ -14,11 +14,56 @@ describe('detectLanguage', () => {
     expect(detectLanguage('src/routes/index.astro')).toBe('astro')
   })
 
+  it('maps Glimmer files to distinct js/ts language ids', () => {
+    expect(detectLanguage('app/components/hello.gjs')).toBe('glimmer-js')
+    expect(detectLanguage('app/components/hello.gts')).toBe('glimmer-ts')
+    expect(detectLanguage('C:\\app\\components\\HELLO.GTS')).toBe('glimmer-ts')
+  })
+
+  it.each([
+    'src/Build.groovy',
+    'scripts/deploy.gvy',
+    'scripts/deploy.gy',
+    'scripts/shell.gsh',
+    'C:\\repo\\settings.GRADLE',
+    'Jenkinsfile',
+    'C:\\repo\\jenkinsfile',
+    'ci/Jenkinsfile.release',
+    'ci/deploy.Jenkinsfile'
+  ])('maps Groovy source %s to the groovy language id', (filePath) => {
+    expect(detectLanguage(filePath)).toBe('groovy')
+  })
+
+  it.each([
+    ['Jenkinsfile.md', 'markdown'],
+    ['build.gradle.kts', 'kotlin'],
+    ['MyJenkinsfileNotes', 'plaintext']
+  ])('keeps %s off Groovy', (filePath, language) => {
+    expect(detectLanguage(filePath)).toBe(language)
+  })
+
   it('maps Nim files to the nim language id', () => {
     expect(detectLanguage('src/main.nim')).toBe('nim')
     expect(detectLanguage('tasks/build.nims')).toBe('nim')
     expect(detectLanguage('packages/app.nimble')).toBe('nim')
   })
+
+  it.each([
+    'Main.lean',
+    'lakefile.lean',
+    'C:\\proofs\\MAIN.LEAN',
+    '\\\\server\\share\\Main.lean',
+    '/home/user/folder workspace/Proof.LeAn'
+  ])('maps Lean source %s to the lean language id', (filePath) => {
+    expect(detectLanguage(filePath)).toBe('lean')
+  })
+
+  it.each(['Main.lean.bak', 'Main.leanx', 'proofs.lean/README', 'proofs.lean\\README'])(
+    'keeps non-Lean file %s on plaintext',
+    (filePath) => {
+      expect(detectLanguage(filePath)).toBe('plaintext')
+    }
+  )
 
   it.each([
     'documents/report.typ',
@@ -176,28 +221,31 @@ describe('detectLanguage', () => {
     expect(detectLanguage('notes/scratch.unknownext')).toBe('plaintext')
   })
   it.each([
-    ['.env', 'ini'],
-    ['.env.local', 'ini'],
-    ['.env.development', 'ini'],
-    ['.env.production', 'ini'],
-    ['.env.functions.local', 'ini'],
-    ['.env.staging', 'ini'],
-    ['.env.test.example', 'ini'],
-    ['config/.env.development.local', 'ini'],
-    ['.ENV', 'ini'],
-    ['.ENV.STAGING', 'ini'],
-    ['C:\\repo\\.EnV.FUNCTIONS.LOCAL', 'ini'],
-    ['\\\\server\\share\\.env.test.example', 'ini'],
+    ['.env', 'dotenv'],
+    ['.env.local', 'dotenv'],
+    ['.env.development', 'dotenv'],
+    ['.env.production', 'dotenv'],
+    ['.env.functions.local', 'dotenv'],
+    ['.env.staging', 'dotenv'],
+    ['.env.test.example', 'dotenv'],
+    ['config/.env.development.local', 'dotenv'],
+    ['.ENV', 'dotenv'],
+    ['.ENV.STAGING', 'dotenv'],
+    ['C:\\repo\\.EnV.FUNCTIONS.LOCAL', 'dotenv'],
+    ['\\\\server\\share\\.env.test.example', 'dotenv'],
     ['.env.sh', 'shell'],
     ['.ENV.SH', 'shell'],
     ['.env.json', 'json'],
     ['.env.local.ts', 'typescript'],
     ['.env/CMakeLists.txt', 'cmake'],
     ['C:\\repo\\.env.local\\Dockerfile', 'dockerfile'],
-    ['.envrc', 'plaintext'],
+    ['.envrc', 'shell'],
+    ['.ENVRC', 'shell'],
     ['.environment', 'plaintext'],
     ['env.staging', 'plaintext'],
-    ['dev.env', 'plaintext'],
+    ['dev.env', 'dotenv'],
+    ['config/prod.ENV', 'dotenv'],
+    ['C:\\repo\\staging.env', 'dotenv'],
     ['other.env.local', 'plaintext'],
     ['..env.local', 'plaintext'],
     ['.env.staging/readme', 'plaintext'],
@@ -236,5 +284,27 @@ describe('detectLanguage', () => {
     ['C:\\repo\\.GITIGNORE', 'ini']
   ])('maps exact filenames case-insensitively: %s', (filePath, expected) => {
     expect(detectLanguage(filePath)).toBe(expected)
+  })
+  it.each([
+    ['#!/usr/bin/python3\n', 'python'],
+    ['#!/usr/bin/env bash\necho hi', 'shell'],
+    ['#! /bin/sh -e\n', 'shell'],
+    ['#!/usr/bin/env -S node --flag', 'javascript'],
+    ['#!C:\\Python\\python.exe\n', 'python'],
+    ['#!/usr/bin/env python3.12', 'python'],
+    ['#!/usr/bin/ruby\r\nputs 1', 'ruby'],
+    ['#!/usr/bin/env groovy\n', 'groovy'],
+    ['#!/usr/bin/env awk', 'plaintext'],
+    ['#!/usr/bin/env toString', 'plaintext'],
+    ['#!/usr/bin/__proto__', 'plaintext'],
+    ['echo hi\n#!/bin/sh', 'plaintext']
+  ])('falls back to the shebang for extensionless files: %j', (content, expected) => {
+    expect(detectLanguage('bin/tool', content)).toBe(expected)
+  })
+
+  it('only applies the shebang to extensionless names', () => {
+    expect(detectLanguage('script.rb', '#!/usr/bin/env python3')).toBe('ruby')
+    expect(detectLanguage('Makefile', '#!/usr/bin/env python3')).toBe('makefile')
+    expect(detectLanguage('notes.txt', '#!/usr/bin/env python3')).toBe('plaintext')
   })
 })

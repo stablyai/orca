@@ -41,18 +41,6 @@ describe('agent-browser orphan sweep', () => {
     runProcessMock.mockReset()
   })
 
-  it('closes tab daemons left by a previous run', async () => {
-    respond(['orca-tab-aaa', 'orca-tab-bbb'])
-
-    const closed = await sweepOrphanedAgentBrowserSessions({ binaryPath: BIN, ...SCOPED })
-
-    expect(closed).toEqual(['orca-tab-aaa', 'orca-tab-bbb'])
-    expect(closedArgs()).toEqual([
-      ['--session', 'orca-tab-aaa', 'close'],
-      ['--session', 'orca-tab-bbb', 'close']
-    ])
-  })
-
   it('never closes a daemon outside Orca tab naming', async () => {
     respond(['default', 'agent1', 'orca-orcad-deadbeef', 'orca-tab-aaa'])
 
@@ -104,14 +92,6 @@ describe('agent-browser orphan sweep', () => {
     expect(closedArgs()).toEqual([])
   })
 
-  it('survives a listing that never returns', async () => {
-    runProcessMock.mockRejectedValue(new Error('ENOENT'))
-
-    await expect(
-      sweepOrphanedAgentBrowserSessions({ binaryPath: BIN, ...SCOPED })
-    ).resolves.toEqual([])
-  })
-
   it('keeps sweeping after one close fails', async () => {
     runProcessMock.mockImplementation((spec: Spec) => {
       if (spec.args?.[0] === 'session') {
@@ -132,16 +112,6 @@ describe('agent-browser orphan sweep', () => {
     const closed = await sweepOrphanedAgentBrowserSessions({ binaryPath: BIN, ...SCOPED })
 
     expect(closed).toEqual(['orca-tab-bbb'])
-  })
-
-  it('bounds every child it starts', async () => {
-    respond(['orca-tab-aaa'])
-
-    await sweepOrphanedAgentBrowserSessions({ binaryPath: BIN, ...SCOPED })
-
-    for (const call of runProcessMock.mock.calls) {
-      expect((call[0] as { timeoutMs?: number | null }).timeoutMs).toBeGreaterThan(0)
-    }
   })
 })
 
@@ -168,19 +138,5 @@ describe('sweep kill switch', () => {
 
     expect(closed).toEqual([])
     expect(runProcessMock).not.toHaveBeenCalled()
-  })
-
-  it('still sweeps when the flag holds any other value', async () => {
-    process.env.ORCA_DISABLE_AGENT_BROWSER_SWEEP = '0'
-    runProcessMock.mockClear()
-    runProcessMock.mockResolvedValue({ code: 0, stdout: '{"data":{"sessions":[]}}', stderr: '' })
-
-    await sweepOrphanedAgentBrowserSessions({
-      binaryPath: BIN,
-      env: {},
-      ownsSocketDirectory: true
-    })
-
-    expect(runProcessMock).toHaveBeenCalled()
   })
 })

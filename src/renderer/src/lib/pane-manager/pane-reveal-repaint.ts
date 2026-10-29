@@ -41,9 +41,7 @@ function scheduleSettledFrame(callback: () => void): void {
     globalThis.setTimeout(callback, 0)
     return
   }
-  // Why: the first frame after a reveal can still be laying out the tab
-  // overlay; the WebGL renderer silently drops redraw requests until the pane
-  // is attached and measured, so repaint on the frame after layout settles.
+  // Repaint after reveal layout settles; WebGL drops redraws before the pane is attached/measured.
   globalThis.requestAnimationFrame(() => {
     globalThis.requestAnimationFrame(callback)
   })
@@ -92,17 +90,7 @@ function flushPaneRevealRepaints(): void {
   }
 }
 
-/**
- * Repaints a revealed tab's panes from their xterm buffers.
- *
- * Why: while a pane is hidden, parsed output can update the WebGL renderer's
- * per-cell model without ever presenting a frame. At reveal the model diff
- * reports those cells unchanged, so plain refreshes skip them and the canvas
- * keeps compositing pre-hide pixels until a selection or resize rebuilds the
- * model. Once layout settles, reattach every revealed renderer before one
- * registry-wide atlas reset so no delayed pane-local clear can invalidate a
- * sibling terminal's rebuilt model.
- */
+/** Hidden output can update WebGL’s cell model without painting, making ordinary refresh skip stale pixels. After layout, reattach all revealed renderers before one global atlas reset so later pane-local clears cannot invalidate sibling models. */
 export function schedulePaneRevealRepaint(getPanes: PaneGetter): void
 export function schedulePaneRevealRepaint(
   owner: PaneRevealOwner,

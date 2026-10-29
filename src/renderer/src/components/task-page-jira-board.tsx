@@ -130,7 +130,6 @@ export function TaskPageJiraBoard({
   }
 
   return (
-    // Jira boards can have more columns than fit the panel.
     <div className="flex min-w-0 items-start gap-3 overflow-x-auto p-3 scrollbar-sleek">
       {sections.map((section) => {
         return (

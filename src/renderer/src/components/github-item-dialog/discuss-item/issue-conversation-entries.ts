@@ -48,9 +48,17 @@ export function getIssueConversationEntries(
 }
 
 export function getTimelineTargetLabel(target: GitHubIssueTimelineTarget): string {
-  const prefix = target.type === 'pr' ? 'PR' : 'issue'
-  const title = target.title ? ` ${target.title}` : ''
-  return `${prefix} #${target.number}${title}`
+  const reference =
+    target.type === 'pr'
+      ? translate(
+          'auto.components.GitHubItemDialog.timeline.pullRequestReference',
+          'PR #{{number}}',
+          { number: target.number }
+        )
+      : translate('auto.components.GitHubItemDialog.timeline.issueReference', 'issue #{{number}}', {
+          number: target.number
+        })
+  return target.title ? `${reference} ${target.title}` : reference
 }
 
 export function getTimelineStateReasonLabel(reason: string | null | undefined): string | null {

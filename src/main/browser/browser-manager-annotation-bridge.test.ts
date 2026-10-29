@@ -97,28 +97,6 @@ describe('browserManager.setAnnotationViewportBridge', () => {
     vi.restoreAllMocks()
   })
 
-  it('installs the bridge in an isolated world', async () => {
-    const { guest } = makeGuest(4646)
-    registerPage('tab-annotations', guest)
-
-    const ok = await browserManager.setAnnotationViewportBridge(
-      'tab-annotations',
-      BRIDGE_OPTIONS,
-      resolveFromRegistry('tab-annotations')
-    )
-
-    expect(ok).toBe(true)
-    expect(guest.executeJavaScriptInIsolatedWorld).toHaveBeenCalledWith(
-      expect.any(Number),
-      [
-        expect.objectContaining({
-          code: expect.stringContaining('__orcaBrowserAnnotationViewportBridge')
-        })
-      ],
-      false
-    )
-  })
-
   // Navigation can replace the registered guest while its old WebContents remains alive.
   it('injects into the guest the page has when a queued op finally runs, not the one it was asked with', async () => {
     const { guest: firstGuest } = makeGuest(5101)

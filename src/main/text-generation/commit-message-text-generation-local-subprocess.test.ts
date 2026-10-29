@@ -27,9 +27,7 @@ const spawnMock = vi.mocked(spawn)
 
 const expectChildTerminated = createChildTerminationExpectation(terminateWindowsProcessTreeMock)
 
-// These suites drive fake children down the Windows direct-child path, taskkill included. The POSIX
-// supervised stop with the Codex home lock (generation: timeout, cancel, output limit; discovery:
-// timeout, output limit) is in source-control-local-process.test.ts.
+// Fake Windows direct-child/taskkill paths here; source-control-local-process.test.ts covers supervised POSIX stop and managed-home lock release.
 const hostPlatform = process.platform
 
 afterEach(() => {
@@ -39,7 +37,7 @@ afterEach(() => {
 
 beforeEach(() => {
   Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
-  // Windows resolves a bare agent name on PATH; the host's own installs must not answer it.
+  // Clear PATH so host agent installs cannot answer fake Windows lookups.
   vi.stubEnv('PATH', '')
   terminateWindowsProcessTreeMock.mockClear()
   terminateWindowsProcessTreeMock.mockResolvedValue(undefined)
@@ -177,10 +175,7 @@ describe('generateCommitMessageFromContext on the Windows direct-child path', ()
         'wsl.exe',
         ['-d', 'Ubuntu 24.04', '--exec', 'sh', '-lc', expect.any(String)],
         expect.objectContaining({
-          // Why a concrete directory (#16463): `undefined` makes CreateProcessW inherit
-          // Orca's own cwd, a deletable WSL UNC path when it was launched from a
-          // worktree. The Linux directory still rides inside the command (/mnt/c/repo,
-          // asserted below), so the Windows-side cwd never decides where the agent runs.
+          // #16463: explicit native cwd avoids inheriting a deletable WSL UNC worktree; guest cwd stays inside the command.
           cwd: expect.any(String),
           windowsHide: true,
           env: expect.objectContaining({ CODEX_HOME: '/home/tester/.codex' })
@@ -238,7 +233,6 @@ describe('generateCommitMessageFromContext on the Windows direct-child path', ()
           success: true,
           message: 'Update README'
         })
-        // Not an npm shim, so process-host falls back to its own cmd.exe line.
         expect(spawnMock).toHaveBeenCalledWith(
           'C:\\Windows\\System32\\cmd.exe',
           ['/d /v:off /s /c ""C:/tools/agent.cmd""'],

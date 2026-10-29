@@ -1,6 +1,4 @@
-// Routes a finished dictation transcript to the right surface: live mode inserts
-// it straight into the originating PTY (matching live keystroke semantics, no
-// auto-Return); buffered mode appends to the command field as before.
+// Live dictation sends to its originating PTY without Return; buffered dictation appends to the command field.
 
 export type LiveDictationRoute =
   | { readonly kind: 'live-insert'; readonly text: string }
@@ -15,8 +13,6 @@ export function routeDictationTranscript(
     : { kind: 'buffered-append', text: transcript }
 }
 
-// Mirrors the prior buffered onTranscript behavior: append after existing text
-// with a single separating space, or replace an empty/whitespace-only field.
 export function appendBufferedDictation(current: string, transcript: string): string {
   if (!current.trim()) {
     return transcript

@@ -1,10 +1,4 @@
-/**
- * Leak-diagnosis counts for renderer_memory_highwater breadcrumbs.
- *
- * Why a contributor registry: crash-diagnostics must stay a leaf module, so
- * subsystems (store, terminals) push their counters in instead of being
- * imported. Counts only — never raw buffers — per the diagnostics budget.
- */
+/** Subsystems push count-only memory census into a registry so crash-diagnostics remains a leaf; never include raw buffers. */
 
 export type RendererMemoryProfileCounts = Record<string, number>
 
@@ -12,8 +6,7 @@ type RendererMemoryProfileContributor = () => RendererMemoryProfileCounts
 
 const contributors = new Map<string, RendererMemoryProfileContributor>()
 
-// Why: breadcrumbs are retained per session; a misbehaving contributor must not
-// bloat every crash report. 32 counts is plenty to name a leaking subsystem.
+// Cap retained breadcrumb counts at 32 so a faulty contributor cannot bloat every crash report.
 const MAX_COUNTS_PER_CONTRIBUTOR = 32
 // Why: individually bounded contributors can still create unbounded near-OOM work in aggregate.
 const MAX_PROFILE_COUNTS = 64
@@ -50,7 +43,7 @@ export function collectRendererMemoryProfileCounts(): RendererMemoryProfileCount
       break
     }
     visited += 1
-    // Why: a broken contributor must never take down memory reporting itself.
+    // A broken contributor must not disable memory reporting.
     try {
       const contribution = contributor()
       let inspected = 0
@@ -81,10 +74,7 @@ export function collectRendererMemoryProfileCounts(): RendererMemoryProfileCount
   return counts
 }
 
-/**
- * Sizes of the largest top-level collections in a state object, for spotting
- * which slice grew when the heap high-water mark trips.
- */
+/** Report largest top-level state collections to locate slice growth at heap high-water marks. */
 export function summarizeStateCollectionSizes(
   state: unknown,
   limit: number

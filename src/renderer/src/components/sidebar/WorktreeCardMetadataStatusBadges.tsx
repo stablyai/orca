@@ -163,7 +163,13 @@ export function ReviewChecksBadge({
     return null
   }
 
-  const label = `Checks: ${checksLabel(status)}`
+  const label = translate(
+    'auto.components.sidebar.WorktreeCardMetadataStatusBadges.checksStatus',
+    'Checks: {{status}}',
+    {
+      status: checksLabel(status)
+    }
+  )
 
   if (status === 'success') {
     return (
@@ -237,7 +243,13 @@ export function ReviewChecksIndicator({
   if (!status || status === 'neutral') {
     return null
   }
-  const label = `Checks: ${checksLabel(status)}`
+  const label = translate(
+    'auto.components.sidebar.WorktreeCardMetadataStatusBadges.checksStatus',
+    'Checks: {{status}}',
+    {
+      status: checksLabel(status)
+    }
+  )
   const Icon = status === 'success' ? CircleCheck : status === 'failure' ? CircleX : Clock
   return (
     <Tooltip>

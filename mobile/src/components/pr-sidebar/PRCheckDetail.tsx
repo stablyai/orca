@@ -1,21 +1,19 @@
 import { ActivityIndicator, ScrollView, Text, View } from 'react-native'
 import { colors } from '../../theme/mobile-theme'
+import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import type { PRCheckRunDetails } from '../../../../src/shared/github/check-types'
 import { presentCheckDetail, type CheckDetailJob } from './pr-check-detail-content'
 import { mobilePrSidebarStyles as styles } from './mobile-pr-sidebar-styles'
 
-// Per-check lazily-fetched detail. `loading`/`error` track the in-flight fetch;
-// `details` (once set) is the cache so collapse/re-expand never re-fetches.
+// Cache detail after first expansion; loading/error track only in-flight read.
 export type DetailEntry =
   | { status: 'loading' }
   | { status: 'error'; message: string }
   | { status: 'loaded'; details: PRCheckRunDetails | null }
 
-// Renders the expanded detail for one check: conclusion/title/summary, plus the
-// annotations and failed-job/step summary from the github.prCheckDetails payload
-// (parity with the desktop ChecksPanel detail). Muted/monochrome and scrollable
-// so long CI output never breaks the sidebar layout.
+// Match desktop check conclusion/summary/annotations/failed jobs; keep output muted and scrollable to bound sidebar layout.
 export function PRCheckDetailView({ entry }: { entry: DetailEntry | undefined }) {
+  useMobileColorScheme()
   if (!entry || entry.status === 'loading') {
     return (
       <View style={styles.checkDetailArea}>
@@ -93,6 +91,7 @@ export function PRCheckDetailView({ entry }: { entry: DetailEntry | undefined })
 }
 
 function JobRow({ job }: { job: CheckDetailJob }) {
+  useMobileColorScheme()
   return (
     <View>
       <View style={styles.checkDetailStepRow}>

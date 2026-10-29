@@ -1,4 +1,5 @@
 import { execFileSync, spawn } from 'node:child_process'
+import { assertWslDistroAllowed } from '@orca/process-host/wsl-distro-allowlist'
 import type { WindowsHostInteractiveLoginSpawn } from '../../shared/windows-interactive-login-spawn'
 import type {
   CodexManagedAccount,
@@ -97,13 +98,17 @@ export class CodexAccountService {
     private readonly runtimeHome: CodexRuntimeHomeService,
     lifecycle: CodexAccountServiceLifecycle = {}
   ) {
-    this.managedHomePaths = new CodexManagedHomePath((distro, script) =>
-      execFileSync(
-        'wsl.exe',
-        ['-d', distro, '--exec', 'bash', '-lc', buildEncodedWslBashCommand(script)],
-        { windowsHide: true, encoding: 'utf-8', timeout: 5000, cwd: resolveWslInteropSpawnCwd() }
-      )
-    )
+    this.managedHomePaths = new CodexManagedHomePath((distro, script) => {
+      const args = ['-d', distro, '--exec', 'bash', '-lc', buildEncodedWslBashCommand(script)]
+      // Bypasses process-host, so check the internal distro allowlist here too.
+      assertWslDistroAllowed('wsl.exe', args)
+      return execFileSync('wsl.exe', args, {
+        windowsHide: true,
+        encoding: 'utf-8',
+        timeout: 5000,
+        cwd: resolveWslInteropSpawnCwd()
+      })
+    })
     this.managedHomes = new CodexManagedHomeLifecycle(this.managedHomePaths)
     this.identity = new CodexAccountIdentity((path, accountId) =>
       this.managedHomePaths.assert(path, accountId)
@@ -127,6 +132,7 @@ export class CodexAccountService {
       configMirror: this.configMirror,
       lifecycle,
       resolveSystemDefault: () => this.resolveSystemDefaultIdentity(),
+      readIdentityFromHome: (path, accountId) => this.readIdentityFromHome(path, accountId),
       removeManagedHome: (path, accountId) => this.safeRemoveManagedHome(path, accountId),
       discardResetAttempts: (accountId) => this.resetCredits.discardForRemovedAccount(accountId)
     })
@@ -298,13 +304,15 @@ export class CodexAccountService {
     try {
       await runCodexLoginSession(managedHomePath, {
         wslCommand: 'wsl.exe',
-        spawn: ({ command, args, env, stdio }) =>
-          spawn(command, args, {
+        spawn: ({ command, args, env, stdio }) => {
+          assertWslDistroAllowed(command, args)
+          return spawn(command, args, {
             stdio,
             // Hide the outer wrapper; the dedicated login console remains visible.
             windowsHide: true,
             env
-          }),
+          })
+        },
         killProcessTree: killLoginProcessTree,
         setCancel: (cancel) => {
           this.cancelPendingCodexLogin = cancel

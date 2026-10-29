@@ -22,8 +22,7 @@ describe('getSuggestedCreatureName (mobile)', () => {
   })
 
   it('never reissues a retired name whose workspace is already deleted', () => {
-    // Parity with desktop: the deleted workspace's directory may still hold agent
-    // conversation state keyed by cwd, so the name must not come back.
+    // Deleted workspace directories may retain conversation state keyed by cwd, so their names remain spent.
     expect(getSuggestedCreatureName([], pickFirst, retiring(MARINE_CREATURES[0]))).toBe(lower(1))
   })
 
@@ -51,7 +50,7 @@ describe('getSuggestedCreatureName (mobile)', () => {
   })
 
   it('skips every tier the host reports as compacted rather than looking its names up', () => {
-    // Those names are absent from the wire payload because they are ALL spent, not available.
+    // The wire omits these names because the entire tier is spent.
     expect(getSuggestedCreatureName([], pickFirst, { exhaustedTiers: 2, names: [] })).toBe(
       `${lower(0)}-3`
     )

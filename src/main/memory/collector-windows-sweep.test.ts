@@ -568,27 +568,30 @@ describe('collectMemorySnapshot on Windows', () => {
     expect(snapshot.totalMemory).toBe(52428800)
   })
 
-  it('carries no commit metric on Unix, where ps has no committed-bytes column', async () => {
-    vi.spyOn(os, 'platform').mockReturnValue('darwin')
-    mockPsResponse('10 1 0 1024')
-    listRegisteredPtysMock.mockReturnValue([
-      {
-        ptyId: 'pty-1',
-        worktreeId: 'repo-1::/repo',
-        sessionId: 'session-1',
-        paneKey: 'pane-1',
-        pid: 10
-      }
-    ])
-    const { collectMemorySnapshot } = await loadCollector()
+  it.each(['darwin', 'linux'] as const)(
+    'reports RSS without commit values on %s',
+    async (platform) => {
+      vi.spyOn(os, 'platform').mockReturnValue(platform)
+      mockPsResponse('10 1 0 1024')
+      listRegisteredPtysMock.mockReturnValue([
+        {
+          ptyId: 'pty-1',
+          worktreeId: 'repo-1::/repo',
+          sessionId: 'session-1',
+          paneKey: 'pane-1',
+          pid: 10
+        }
+      ])
+      const { collectMemorySnapshot } = await loadCollector()
 
-    const snapshot = await collectMemorySnapshot(emptyStore)
+      const snapshot = await collectMemorySnapshot(emptyStore)
 
-    expect(snapshot.processMemoryMetric).toBe('rss')
-    expect(snapshot.processCommitMetric).toBeUndefined()
-    expect(snapshot.totalPrivateMemory).toBeUndefined()
-    expect(snapshot.worktrees[0].sessions[0].privateMemory).toBeUndefined()
-  })
+      expect(snapshot.processMemoryMetric).toBe('rss')
+      expect(snapshot.processCommitMetric).toBeUndefined()
+      expect(snapshot.totalPrivateMemory).toBeUndefined()
+      expect(snapshot.worktrees[0].sessions[0].privateMemory).toBeUndefined()
+    }
+  )
 
   it("attributes a shared ancestor's commit to one PTY only", async () => {
     vi.spyOn(os, 'platform').mockReturnValue('win32')

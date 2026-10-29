@@ -14,7 +14,7 @@ import {
   type JsonlRpcPeerHandlers,
   type JsonlRpcRecord
 } from './peer'
-import type { JsonlRpcRequestOptions } from './peer-oversized-reply'
+import type { JsonlRpcRequestOptions } from './peer-oversized-record'
 import { resolveJsonlRpcPeerOptions, type JsonlRpcPeerOptions } from './peer-limits'
 
 export type JsonlRpcAgentConnectionOptions = JsonlRpcPeerHandlers & {

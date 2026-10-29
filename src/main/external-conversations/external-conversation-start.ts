@@ -34,15 +34,16 @@ export function runtimeConversationLauncher(runtime: OrcaRuntimeService): Conver
   const context = { runtime }
   return {
     launch: async ({ agent, target, prompt }, onSurfacePublished, signal) => {
-      const intent = await resolveUnlaunchedIntent(
+      const { intent, decidedMode } = await resolveUnlaunchedIntent(
         { agent, target, prompt: { text: prompt, delivery: 'submit' } },
         runtime,
-        null
+        null,
+        { terminalOnly: true }
       )
       return executeAgentLaunch({
         runtime,
         intent,
-        terminalOnly: true,
+        decidedMode,
         surfaces: agentLaunchSurfaceFactory(context, undefined, undefined, false, undefined, {
           early: null,
           presentation: 'background'

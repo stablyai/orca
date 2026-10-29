@@ -1,7 +1,5 @@
 import '../unused-default-rpc-methods.test-fixture'
-// "Dismiss all" from the desktop prompt, through the context the desktop renderer really dispatches
-// with. On a host whose agents it all shows, the dismissal is the unscoped, fenced one; a desktop
-// from before registered agents, which cannot show some agent, leaves that agent's offers alone.
+// Drive desktop's real dispatch context: all-readable agents use one dismissal fence; older clients must preserve offers they cannot render.
 
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -78,7 +76,7 @@ it('fences a dismissed offer against a late teardown write when the desktop sees
   await capsule.record([marker!], NOW)
 
   expect(await capsule.list(NOW)).toEqual([])
-  // The unscoped dismissal every caller took before agents beyond Claude and Codex: one fence for all.
+  // When all agents are readable, dismissal uses one fence for all pending offers.
   expect(await storedFence(root)).toEqual({ dismissedAt: NOW + 1 })
   expect(await call('agentSession.restartResumable', {}, DESKTOP)).toMatchObject({
     ok: true,
@@ -87,12 +85,7 @@ it('fences a dismissed offer against a late teardown write when the desktop sees
 })
 
 it('leaves offers it was not shown when the host runs an agent an older desktop cannot show', async () => {
-  const { host, root, marker } = await interruptedRestart(
-    undefined,
-    undefined,
-    undefined,
-    withPilot()
-  )
+  const { host, root, marker } = await interruptedRestart(undefined, undefined, withPilot())
   setStructuredAgentSessionHost(host)
   const capsule = new AgentSessionRecoveryCapsule(root)
   // An offer whose chat this launch cannot read names no agent the desktop was shown.

@@ -75,8 +75,8 @@ export async function countChatFailureOperations(
       return result
     }
   )
-  const list = store.listRecords.bind(store)
-  vi.spyOn(store, 'listRecords').mockImplementation(() => {
+  const list = store.listConversations.bind(store)
+  vi.spyOn(store, 'listConversations').mockImplementation(() => {
     const records = list()
     counts.lineageCopied += records.length
     return records.map((record) => ({
@@ -87,7 +87,9 @@ export async function countChatFailureOperations(
       }
     }))
   })
-  vi.spyOn(lineage, 'readAgentSessionRecordStore').mockReturnValue(store)
+  vi.spyOn(lineage, 'readAgentSessionRecordStore').mockReturnValue(
+    lineage.conversationRecordReader(store)
+  )
   const visit = journal.visitItems.bind(journal)
   vi.spyOn(journal, 'visitItems').mockImplementation((callback) =>
     visit((...args) => {

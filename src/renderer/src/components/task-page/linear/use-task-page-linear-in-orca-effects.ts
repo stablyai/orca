@@ -1,3 +1,4 @@
+import { taskProviderErrorText } from '@/lib/task-provider-error-copy'
 import type { TaskPageLinearListEffectsModel } from './use-task-page-linear-list-effects'
 import { useEffect } from 'react'
 import {
@@ -65,8 +66,7 @@ export function useTaskPageLinearInOrcaEffects(model: TaskPageLinearListEffectsM
       setLinearIssues([])
     }
     setLinearLoading(true)
-    // Why: fetchLinearIssue serves anything under the 60s TTL and ignores `force`, so an
-    // explicit refresh has to go through refreshLinearIssue or the button does nothing.
+    // Explicit refresh must use refreshLinearIssue because fetchLinearIssue serves its TTL cache regardless of force.
     void readLinkedLinearIssuesWithLimit(linkedRefs, (ref) => {
       const read = forceRefresh ? refreshLinearIssue : fetchLinearIssue
       return read(ref.identifier, ref.workspaceId ?? selectedLinearWorkspaceId, {
@@ -81,8 +81,7 @@ export function useTaskPageLinearInOrcaEffects(model: TaskPageLinearListEffectsM
           return
         }
         const loaded = results.filter((issue): issue is LinearIssue => issue != null)
-        // Why: reads resolve to null instead of throwing, so an all-null result with links
-        // present is a load failure — not the "nothing linked yet" empty state.
+        // Reads resolve null on failure; all-null linked results must show failure rather than an unlinked empty state.
         if (loaded.length === 0) {
           setLinearError(
             translate(
@@ -112,14 +111,17 @@ export function useTaskPageLinearInOrcaEffects(model: TaskPageLinearListEffectsM
         ) {
           return
         }
-        setLinearError(err instanceof Error ? err.message : 'Failed to load Linear issues.')
+        setLinearError(
+          err instanceof Error
+            ? taskProviderErrorText(err.message)
+            : taskProviderErrorText('Failed to load Linear issues.')
+        )
         setLinearLoading(false)
       })
     return () => {
       cancelled = true
     }
-    // Why: linkedRefs are read from a ref keyed by their signature, so unrelated worktree
-    // churn (activity stamps, unread flags) can't re-issue one read per linked ticket.
+    // Depend on link signatures rather than unrelated worktree activity so unchanged tickets are not re-read.
   }, [
     fetchLinearIssue,
     inOrcaLinkedLinearRefsSignature,

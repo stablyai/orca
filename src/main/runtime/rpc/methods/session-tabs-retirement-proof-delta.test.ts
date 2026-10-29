@@ -46,8 +46,7 @@ describe('session tabs retirement proof delta', () => {
     expect(project(frame(2, [proof(1), proof(2)]))).toEqual(frame(2, [proof(1), proof(2)]))
   })
 
-  // Why `[]` rather than omitting the field: absence is the host's "I hold no proofs" signal and
-  // tells the client to forget, so a delta with nothing new must stay distinguishable from it.
+  // [] means nothing new; omission means the host holds no proofs and tells clients to forget.
   it('sends each proof once and an empty list when nothing is new', () => {
     const project = createSessionTabsRetirementProofDelta([
       SESSION_TABS_RETIREMENT_PROOF_DELTA_RUNTIME_CAPABILITY
@@ -63,7 +62,6 @@ describe('session tabs retirement proof delta', () => {
       SESSION_TABS_RETIREMENT_PROOF_DELTA_RUNTIME_CAPABILITY
     ])
     project(frame(1, [proof(1)]))
-    // Surface revived: the host dropped the proof and publishes an empty list.
     expect(project(frame(2, []))).toEqual(frame(2, []))
     expect(project(frame(3, [proof(1)]))).toEqual(frame(3, [proof(1)]))
   })
@@ -80,8 +78,7 @@ describe('session tabs retirement proof delta', () => {
   })
 })
 
-// Why: the host pins up to 64 proofs per worktree for its lifetime, so this is the steady-state
-// cost of every title tick on a churn-heavy worktree for a paired mobile/relay/SSH client.
+// Repeated title ticks must not resend up to 64 lifetime-pinned proofs over paired links.
 describe('session.tabs.subscribe retirement proof payload', () => {
   // Real identities are UUID-sized: tab/leaf/pty ids and `term_<uuid>` handles.
   const uuid = (index: number): string =>
@@ -123,13 +120,11 @@ describe('session.tabs.subscribe retirement proof payload', () => {
       (message) => messages.push(message),
       { clientKind: 'runtime', clientCapabilities }
     )
-    // An OSC title change bumps the version and republishes the same 64 proofs.
     listener!(frame(2, proofs))
     return { initial: messages[0]!, tick: messages[1]! }
   }
 
-  // Why: a reconnect is a new subscribe with fresh per-stream state, and the client's ledger
-  // resets on its new connection generation — so the first frame must carry the full set.
+  // Reconnect resets client ledger and stream state; its first frame must resend all proofs.
   it('resends the full proof set on the first frame of a fresh stream', async () => {
     const first = await subscribeAndTick([SESSION_TABS_RETIREMENT_PROOF_DELTA_RUNTIME_CAPABILITY])
     const reconnected = await subscribeAndTick([
@@ -147,11 +142,9 @@ describe('session.tabs.subscribe retirement proof payload', () => {
     const deltaTick = JSON.parse(delta.tick).result
     expect(legacyTick.retiredTerminalSurfaces).toHaveLength(64)
     expect(deltaTick.retiredTerminalSurfaces).toEqual([])
-    // Both clients still receive the full list on the initial snapshot.
     expect(JSON.parse(legacy.initial).result.retiredTerminalSurfaces).toHaveLength(64)
     expect(JSON.parse(delta.initial).result.retiredTerminalSurfaces).toHaveLength(64)
 
-    // The delta tick keeps a two-byte `[]` so the client can tell "nothing new" from "no proofs".
     const proofBytes = Buffer.byteLength(JSON.stringify(proofs))
     expect(proofBytes).toBeGreaterThan(8_000)
     expect(Buffer.byteLength(legacy.tick) - Buffer.byteLength(delta.tick)).toBe(proofBytes - 2)

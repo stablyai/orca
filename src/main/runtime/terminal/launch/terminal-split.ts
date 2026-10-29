@@ -82,8 +82,7 @@ export abstract class OrcaRuntimeWithSplitTerminal extends OrcaRuntimeWithStopEx
     }
 
     if (opts.retrySplit) {
-      // A retry only waits: the window may still be making the pane, and a pane missing from the
-      // graph may be remounting rather than closed, so asking again could run the command twice.
+      // Retries only wait: reissuing during a pending start or remount gap could execute the command twice.
       const split = this.rendererSplits.get(opts.retrySplit)
       if (split?.tabId !== leaf.tabId) {
         throw splitRetryUnknownError(leaf.tabId, opts.retrySplit)

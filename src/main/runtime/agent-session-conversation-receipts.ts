@@ -3,7 +3,7 @@ import {
   commitConversationClearRecord,
   type AgentSessionConversationClear
 } from './agent-session-conversation-command-record'
-import { settleAgentSessionOperationInto } from './agent-session-operation-admission'
+import { settleAgentSessionOperationInto } from './agent-session/ownership/agent-session-operation-admission'
 import { commitAgentSessionRewindCompletion } from './agent-session-rewind-completion'
 
 export function createAgentSessionConversationReceipts(

@@ -118,8 +118,7 @@ export function buildDashboardWorktreeLaunchOptions(
 
   const result: Record<string, TuiAgent[]> = {}
   for (const [worktreeId, repoId] of repoIdByWorktreeId) {
-    // Past the validator's bound the snapshot itself would be rejected, so the
-    // launcher goes quiet for the tail rather than taking the board down.
+    // Bound launch options before validation would reject the entire snapshot.
     if (Object.keys(result).length >= DASHBOARD_MAX_LAUNCH_WORKTREES) {
       break
     }

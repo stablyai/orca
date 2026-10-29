@@ -254,6 +254,10 @@ export class EmulatorBridge {
     return udid
   }
 
+  hasLiveManagedSessions(): Promise<boolean> {
+    return this.sessionRegistry.pruneGoneManagedSessions((kind) => this.backendForKind(kind))
+  }
+
   async destroyAllSessions(): Promise<void> {
     const promises: Promise<unknown>[] = []
     for (const session of this.sessionRegistry.listSessions()) {
@@ -273,10 +277,6 @@ export class EmulatorBridge {
     }
     await Promise.allSettled(promises)
     this.sessionRegistry.clear()
-  }
-
-  async onAppQuit(): Promise<void> {
-    await this.destroyAllSessions()
   }
 
   private async resolveTarget(

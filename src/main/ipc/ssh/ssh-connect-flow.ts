@@ -36,6 +36,7 @@ import {
   isSshUserDisconnected
 } from '../../ssh/ssh-user-disconnect'
 import {
+  isManagedServerRemovalHeld,
   liftSshHostUserDisconnect,
   resumeRuntimeEnvironmentStatus
 } from './ssh-host-user-disconnect'
@@ -56,7 +57,7 @@ export async function connectTarget(
       const label = getSshTargetRegistryStore()?.getTarget(targetId)?.label ?? targetId
       throw createSshUserDisconnectedError(label)
     }
-    return admitConnect(targetId)
+    return admitConnect(targetId, true)
   }
   clearSshCredentialDeclined(targetId)
   // Only explicit user connects may lift the re-pair cap.
@@ -74,7 +75,7 @@ export async function connectTarget(
   }
 }
 
-async function admitConnect(targetId: string): Promise<SshConnectionState> {
+async function admitConnect(targetId: string, automatic = false): Promise<SshConnectionState> {
   // Fence requests that entered before disconnect/reset but resume after its cleanup.
   const admissionAuthority = getSshProviderAuthority(targetId)
   await awaitTargetLifecycle(targetId)
@@ -103,7 +104,7 @@ async function admitConnect(targetId: string): Promise<SshConnectionState> {
   // Shutdown fences and snapshots synchronously; register below or fail here without an admission gap.
   assertSshConnectsNotFenced()
 
-  const promise = doConnect(targetId, replacePendingTransport)
+  const promise = doConnect(targetId, replacePendingTransport, automatic)
   const attempt = { authority: getSshProviderAuthority(targetId), promise }
   connectInFlight.set(targetId, attempt)
   try {
@@ -117,11 +118,16 @@ async function admitConnect(targetId: string): Promise<SshConnectionState> {
 
 async function doConnect(
   targetId: string,
-  replacePendingTransport = false
+  replacePendingTransport = false,
+  automatic = false
 ): Promise<SshConnectionState> {
   const target = getSshTargetRegistryStore()!.getTarget(targetId)
   if (!target) {
     throw new Error(`SSH target "${targetId}" not found`)
+  }
+  // Read after the lifecycle wait: a Stop or Forget this connect queued behind wrote the hold.
+  if (automatic && isManagedServerRemovalHeld(target)) {
+    throw createSshUserDisconnectedError(target.label)
   }
 
   const authority = rotateSshProviderAuthority(targetId)
@@ -171,7 +177,8 @@ async function doConnect(
       server.environmentId,
       server.update,
       server.serving,
-      server.linked
+      server.linked,
+      server.automationsLeftDisabled
     )
     // Publish first; the macOS-only check adds remote round trips.
     void import('./ssh-host-launch-session-note')

@@ -9,7 +9,6 @@ type OperationsModule = typeof import('../../../transport/mobile-web-bundle-oper
 type FetchModule = typeof import('../../../transport/mobile-web-bundle-fetch')
 type RpcOperationModule = typeof import('../../../transport/rpc-operation')
 
-/** The host's own code where it has one, so the projection observes the code reader too. */
 function describeFailure(operations: OperationsModule, error: unknown): string {
   const code = operations.readMobileWebBundleErrorCode(error)
   if (code !== null) {
@@ -18,14 +17,7 @@ function describeFailure(operations: OperationsModule, error: unknown): string {
   return `failed: ${error instanceof Error ? error.message : String(error)}`
 }
 
-/**
- * The two client reads that fetch the desktop-served mobile web bundle.
- *
- * `bundle-manifest` drives the manifest descriptor alone, so the loose reader's verdict on one reply
- * is the whole observation. `bundle-fetch` drives the paging flow, and its state carries the decoded
- * bytes of every asset rather than a count: a reassembly that misplaces a chunk still has the right
- * length, and only the bytes say so.
- */
+// Observe decoded asset bytes, not length: misplaced chunks can preserve total size while corrupting reassembly.
 export function mobileWebBundleMountAdapters(
   modules: ReturnType<typeof operationModuleLoader>
 ): Record<string, MountAdapter> {
@@ -63,9 +55,7 @@ export function mobileWebBundleMountAdapters(
       let assets: unknown = null
       return {
         action() {
-          // Projected rather than returned whole: the result carries a Map of Uint8Arrays, and the
-          // observation refuses a non-plain object, which loses the settlement and files an
-          // unhandled rejection in its place.
+          // Project Maps/Uint8Arrays to plain observations; returning them whole loses settlement to the recorder’s shape rejection.
           return fetchMobileWebBundle({
             client,
             onProgress: (progress) => {

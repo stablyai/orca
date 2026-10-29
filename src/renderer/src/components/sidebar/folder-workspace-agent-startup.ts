@@ -33,7 +33,6 @@ export function getFolderWorkspaceAgentLaunchFact(
   )
 }
 
-/** Resolve the linked context that should appear in the agent input without submitting. */
 export function resolveFolderWorkspaceLaunchDraft(
   linkedWorkItem: LinkedWorkItemSummary,
   note: string

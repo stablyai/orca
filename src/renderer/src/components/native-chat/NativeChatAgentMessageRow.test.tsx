@@ -1,12 +1,12 @@
 // @vitest-environment happy-dom
 import '@testing-library/jest-dom/vitest'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, screen } from '@testing-library/react'
+import { render } from './native-chat-tooltip-test-harness'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { AgentMessageSource } from '../../../../shared/agent-session-message-source'
+import type { AgentMessageSource } from '../../../../shared/agent-session/agent-session-message-source'
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 import { MessageRow } from './NativeChatMessageRow'
 import { NativeChatQueuedMessageCard } from './NativeChatQueuedMessageCard'
-import { TooltipProvider } from '@/components/ui/tooltip'
 
 const openAgentMessageSender = vi.hoisted(() => vi.fn(async () => {}))
 vi.mock('@/lib/open-agent-message-sender', () => ({ openAgentMessageSender }))
@@ -126,24 +126,22 @@ describe("another agent's message in the transcript", () => {
 describe("another agent's queued card", () => {
   function renderCard(source: AgentMessageSource, chatWorktreeId: string | null = 'wt-chat') {
     return render(
-      <TooltipProvider>
-        <NativeChatQueuedMessageCard
-          card={{
-            messageId: 'card',
-            position: 1,
-            text: 'You have 1 orchestration message.',
-            state: 'waiting',
-            hold: 'turn',
-            from: source
-          }}
-          chatWorktreeId={chatWorktreeId}
-          showsSteerShortcut={false}
-          onSteer={vi.fn()}
-          onDelete={vi.fn()}
-          onEdit={vi.fn()}
-          onTurnOffQueueing={vi.fn()}
-        />
-      </TooltipProvider>
+      <NativeChatQueuedMessageCard
+        card={{
+          messageId: 'card',
+          position: 1,
+          text: 'You have 1 orchestration message.',
+          state: 'waiting',
+          hold: 'turn',
+          from: source
+        }}
+        chatWorktreeId={chatWorktreeId}
+        showsSteerShortcut={false}
+        onSteer={vi.fn()}
+        onDelete={vi.fn()}
+        onEdit={vi.fn()}
+        onTurnOffQueueing={vi.fn()}
+      />
     )
   }
 

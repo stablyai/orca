@@ -1,5 +1,10 @@
 // Runs in the isolated world so page scripts cannot access the link reporter or its listeners.
-export type DocPreviewExternalLinkReporter = (url: string) => void
+import type { DocPreviewLinkModifiers } from '../shared/doc-preview-scheme'
+
+export type DocPreviewExternalLinkReporter = (
+  url: string,
+  modifiers: DocPreviewLinkModifiers
+) => void
 
 // Keep this literal: shared imports emit chunk requires the sandboxed preload cannot load.
 export const PRELOAD_DOC_PREVIEW_LINK_CLICK_CHANNEL = 'docPreview:linkClick'
@@ -112,7 +117,11 @@ export function handleDocPreviewLinkClick(
     return
   }
   event.preventDefault()
-  report(anchor.href)
+  report(anchor.href, {
+    metaKey: 'metaKey' in event && event.metaKey === true,
+    ctrlKey: 'ctrlKey' in event && event.ctrlKey === true,
+    shiftKey: 'shiftKey' in event && event.shiftKey === true
+  })
 }
 
 export function handleDocPreviewLinkAuxClick(event: MouseEvent): void {

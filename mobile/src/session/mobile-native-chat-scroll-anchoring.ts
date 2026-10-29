@@ -6,9 +6,7 @@ type Styled = {
   getBoundingClientRect: () => unknown
 }
 
-/** Who keeps a parked reader's place in an inner scroll box where the browser has scroll anchoring
- *  (not WebKit): the browser, which sees every change inside the box, except while the box owns its
- *  scroll: following its end or its own restore. Two owners would each put the same move back. */
+// Give scroll anchoring one owner: the browser normally, the box while following or restoring. Two owners would apply the same correction twice.
 export class MobileNativeChatScrollAnchoring {
   private holds = 0
   private readonly none = scrollWritesStopMomentum()
@@ -18,7 +16,6 @@ export class MobileNativeChatScrollAnchoring {
     private readonly following: () => boolean
   ) {}
 
-  /** The box takes its scroll for one correction, or gives it back. */
   hold(on: boolean): void {
     this.holds = Math.max(0, this.holds + (on ? 1 : -1))
     this.sync()
@@ -30,19 +27,17 @@ export class MobileNativeChatScrollAnchoring {
     if (this.none || !s?.style || s.style.overflowAnchor === next) {
       return
     }
-    // Laid out under the old owner first, and the new one in force before anything changes.
+    // Flush layout under the old owner before changing ownership.
     s.getBoundingClientRect()
     s.style.overflowAnchor = next
     s.getBoundingClientRect()
     if (next === 'auto') {
-      // Not one kept from before the page's turn, whose move the browser would then put back too.
+      // Do not retain the browser’s pre-correction anchor or it would undo the page’s move too.
       this.rechoose(s)
     }
   }
 
-  /** After each commit. While the browser holds the place, rows new on screen can't be its anchor
-   *  until laid out, so it kept the container around them, whose top never moves. Laid out now, a
-   *  scroll makes it choose among them. */
+  // After layout, force anchor reselection among newly visible rows; the old container anchor has an unmoving top.
   committed(): void {
     this.sync()
     const s = this.scroller()
@@ -53,9 +48,7 @@ export class MobileNativeChatScrollAnchoring {
     this.rechoose(s)
   }
 
-  /** A scroll makes the browser choose its anchor afresh; at the very top it keeps none anyway. It
-   *  ends where it started, so the scroll event after it reports only what else moved the scroll;
-   *  taken as the page's own writes, a reader's scroll landing there would be too. */
+  // A reversible scroll resets browser anchor selection; leave subsequent scroll events available to report real reader movement.
   private rechoose(s: Styled): void {
     const top = s.scrollTop
     if (top >= 0.5) {

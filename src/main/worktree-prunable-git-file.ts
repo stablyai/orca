@@ -1,4 +1,4 @@
-import { isENOENT } from './ipc/filesystem-path-containment'
+import { isENOENT } from './ipc/filesystem/filesystem-path-containment'
 import type { GitWorktreeInfo } from '../shared/worktree/types'
 import type { LocalWorktreeFilesystemOptions } from './local-worktree-filesystem'
 import { getLocalWorktreePathAccess, toLocalWorktreeRuntimePath } from './local-worktree-filesystem'

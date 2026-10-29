@@ -1,10 +1,8 @@
 import type { TerminalDocumentScope } from './document-scope'
 
-// Why: a leaf of pure reads, so fit, transform and overlay modules can share them without a cycle.
+// Keep pure metrics below fit/transform/overlay dependencies to avoid cycles.
 
-// xterm's RenderService.dimensions getter reads this._renderer.value.dimensions without
-// guarding for a disposed or not-yet-installed renderer, throwing TypeError when accessed
-// after term.dispose() or before a renderer is attached.
+// xterm's dimensions getter throws when the renderer is disposed or not yet installed.
 export function readRenderDimensions(scope: TerminalDocumentScope) {
   const renderService = scope.term?._core?._renderService
   if (!renderService) {
@@ -20,7 +18,7 @@ export function readRenderDimensions(scope: TerminalDocumentScope) {
   }
 }
 
-/** 0 until the renderer has measured a cell. */
+// 0 until the renderer has measured a cell.
 export function getMeasuredCellHeight(scope: TerminalDocumentScope) {
   const dimensions = readRenderDimensions(scope)
   if (dimensions) {

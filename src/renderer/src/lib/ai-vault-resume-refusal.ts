@@ -24,6 +24,13 @@ export function describeAiVaultResumeFailure(error: unknown, agent: AiVaultAgent
       { value0: aiVaultAgentLabel(agent) }
     )
   }
+  if (code === 'execution_owner_reconciling') {
+    return translate(
+      'auto.lib.aiVaultResumeRefusal.preparationRefused',
+      'Orca could not prepare this {{value0}} conversation. Start a new chat to continue.',
+      { value0: aiVaultAgentLabel(agent) }
+    )
+  }
   return (
     message ??
     translate(

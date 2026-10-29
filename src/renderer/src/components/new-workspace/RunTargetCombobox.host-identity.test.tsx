@@ -1,10 +1,11 @@
 // @vitest-environment happy-dom
 
 import React from 'react'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render as renderUi, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ReadyProjectHostSetupOption } from '@/lib/project-host-setup-options'
 import RunTargetCombobox from './RunTargetCombobox'
+import { TooltipProvider } from '@/components/ui/tooltip'
 import { buildRunTargetRows } from './run-target-options'
 
 vi.mock('@/components/ui/popover', () => ({
@@ -12,6 +13,10 @@ vi.mock('@/components/ui/popover', () => ({
   PopoverAnchor: ({ children }: { children: React.ReactNode }) => <>{children}</>,
   PopoverContent: ({ children }: { children: React.ReactNode }) => <div>{children}</div>
 }))
+
+function render(element: React.ReactNode): ReturnType<typeof renderUi> {
+  return renderUi(<TooltipProvider>{element}</TooltipProvider>)
+}
 
 const localOption: ReadyProjectHostSetupOption = {
   id: 'same-id',

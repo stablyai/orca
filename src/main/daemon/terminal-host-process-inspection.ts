@@ -80,7 +80,8 @@ export async function inspectTerminalHostProcess(args: {
   }
   args.onTier?.('full')
 
-  let foregroundProcess = session.getForegroundProcess()
+  const windowsDecision = process.platform === 'win32' && args.steadyState !== true
+  let foregroundProcess = windowsDecision ? null : session.getForegroundProcess()
   let childProcessEvidence: PtyChildProcessVerdict | undefined = session.processNameIsSpawnFile
     ? 'unverifiable'
     : undefined
@@ -88,8 +89,10 @@ export async function inspectTerminalHostProcess(args: {
   if (!incarnationMatches) {
     evidence = unverifiableEvidence(args, session, 'incarnation_mismatch')
   } else if (process.platform === 'win32') {
-    if (session.processNameIsSpawnFile) {
-      foregroundProcess = await session.confirmForegroundProcess()
+    if (windowsDecision || session.processNameIsSpawnFile) {
+      foregroundProcess = await session.confirmForegroundProcess(
+        windowsDecision ? { decision: true } : undefined
+      )
     }
     // A steady-state poll never decides adoption or close, so it may read the cached process table.
     childProcessEvidence = await session.inspectChildProcesses(

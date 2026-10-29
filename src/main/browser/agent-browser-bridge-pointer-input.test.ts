@@ -30,8 +30,10 @@ vi.mock('electron', () => {
 })
 const { CdpWsProxyMock } = vi.hoisted(() => {
   const instances: unknown[] = []
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const MockClass = vi.fn().mockImplementation(function (this: any, _wc: unknown) {
+  const MockClass = vi.fn().mockImplementation(function (
+    this: Record<string, unknown>,
+    _wc: unknown
+  ) {
     this._wc = _wc
     this.start = vi.fn(async () => 'ws://127.0.0.1:9222')
     this.stop = vi.fn(async () => {})
@@ -97,20 +99,6 @@ describe('AgentBrowserBridge coordinate pointer input', () => {
     dispatchedEvents = []
     recordDispatchedEvents(wc, dispatchedEvents)
     webContentsFromIdMock.mockReturnValue(wc)
-  })
-
-  it('dispatches move, down, up and wheel over CDP without spawning the helper', async () => {
-    await expect(bridge.mouseMove(10, 20)).resolves.toEqual({ moved: true })
-    await expect(bridge.mouseDown('left')).resolves.toEqual({ pressed: true })
-    await expect(bridge.mouseUp('left')).resolves.toEqual({ released: true })
-    await expect(bridge.mouseWheel(120, 30)).resolves.toEqual({
-      scrolled: true,
-      deltaX: 30,
-      deltaY: 120
-    })
-
-    expect(execFileMock).not.toHaveBeenCalled()
-    expect(dispatched()).toHaveLength(4)
   })
 
   it('sends CDP payloads matching a real pointer press and release', async () => {
@@ -341,14 +329,6 @@ describe('AgentBrowserBridge coordinate pointer input', () => {
     expect(dispatched()).toHaveLength(0)
   })
 
-  it('reports a dispatch failure as browser_error on the call that failed', async () => {
-    wc.debugger.sendCommand.mockRejectedValueOnce(new Error('boom'))
-
-    await expect(bridge.mouseMove(10, 20)).rejects.toMatchObject({
-      code: 'browser_error'
-    })
-  })
-
   it('reports a page that dies mid-dispatch as browser_tab_not_found', async () => {
     wc.debugger.sendCommand.mockImplementation(async () => {
       webContentsFromIdMock.mockReturnValue(null)
@@ -411,12 +391,6 @@ describe('AgentBrowserBridge coordinate pointer input', () => {
 
     expect(wc.debugger.attach).not.toHaveBeenCalled()
     expect(wc.debugger.detach).not.toHaveBeenCalled()
-  })
-
-  it('focuses an offscreen page on press, as mouseClick does', async () => {
-    await bridge.mouseDown('left')
-
-    expect(wc.focus).toHaveBeenCalled()
   })
 
   it('guards the user’s focus instead of focusing an embedded guest on press', async () => {

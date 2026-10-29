@@ -42,6 +42,13 @@ describe('approvalBlockedPathToShow', () => {
   it('checks only the text the card draws: a plan replaces the detail', () => {
     expect(
       approvalBlockedPathToShow({
+        blockedPath: '/repo/notes.md',
+        subject: { kind: 'plan', text: 'Read /repo/notes.md' },
+        detail: 'unused'
+      })
+    ).toBeNull()
+    expect(
+      approvalBlockedPathToShow({
         blockedPath: '/repo/plan.md',
         subject: { kind: 'plan', text: '# Plan', filePath: '/repo/plan.md' },
         detail: 'unused'
@@ -72,7 +79,10 @@ describe('approvalBlockedPathToShow', () => {
     ).toBe('/home/me/secret.txt')
   })
 
-  it('shows a path the text names only as the start of a longer name', () => {
+  it('distinguishes whole paths from longer names across all occurrences', () => {
+    expect(
+      approvalBlockedPathToShow({ blockedPath: '/srv/data', detail: 'ls /srv/data-old /srv/data' })
+    ).toBeNull()
     expect(
       approvalBlockedPathToShow({ blockedPath: '/srv/data', detail: 'ls /srv/data-old/x' })
     ).toBe('/srv/data')

@@ -42,8 +42,7 @@ describe('ssh connect in-flight registry', () => {
     expect(listener).toHaveBeenCalledTimes(2)
   })
 
-  // Why: every surface renders from one registry entry, so a duplicate begin must not
-  // emit again — and the paired end must not clear the flag while a connect is still live.
+  // Duplicate begin must neither notify all host surfaces nor let its paired end clear a live acquisition.
   it('ignores a duplicate begin without re-notifying', () => {
     const listener = vi.fn()
     subscribeSshConnectInFlight(listener)
@@ -55,8 +54,7 @@ describe('ssh connect in-flight registry', () => {
     expect(isSshConnectInFlight('ssh-a')).toBe(true)
   })
 
-  // Why: a connect handler's finally can run for a target it never began (early return
-  // paths), and a spurious notify would re-render every subscribed card.
+  // Early-return handlers may end locks they never acquired; avoid spurious global card notifications.
   it('ignores an end for a target that was never in flight', () => {
     const listener = vi.fn()
     subscribeSshConnectInFlight(listener)
@@ -94,9 +92,7 @@ describe('ssh connect in-flight registry', () => {
       expect(isSshConnectInFlight('ssh-a')).toBe(false)
     })
 
-    // The regression this guards: the UI wait is a race that rejects at the timeout while the
-    // backend keeps dialing. Releasing the lock there would let the next click on any surface
-    // for this host fire a second connect — a second credential prompt on a gated target.
+    // Display timeout leaves backend dialing; retaining lock prevents duplicate connects and credential prompts.
     it('keeps the lock after a UI timeout abandons the wait, so a second dial is suppressed', async () => {
       vi.useFakeTimers()
       try {
@@ -113,8 +109,7 @@ describe('ssh connect in-flight registry', () => {
       }
     })
 
-    // A tracked request outlives whatever dropped its lock — a reset between specs, or an
-    // explicit end. Its release must not unlock a later connect on the same target.
+    // Reset/explicit end can precede request settlement; its old release must not unlock a newer acquisition.
     it('ignores a settle whose lock was already cleared, so a later connect keeps its lock', async () => {
       let settleAbandoned: (value: string) => void = () => {}
       const abandoned = trackSshConnect(

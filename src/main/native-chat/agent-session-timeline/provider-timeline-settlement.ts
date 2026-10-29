@@ -1,3 +1,4 @@
+import { isHistoricalProviderTimelineItem } from './provider-timeline-history'
 // Resolve unsettled work from journal bodies, using the same terminal forms as dead-generation recovery.
 // Preserve client answers and other writers’ settlements; repeated settlement writes nothing.
 
@@ -76,6 +77,10 @@ export function providerTimelineSettlement(
   const mutations: JournalLifecycleMutationInput[] = []
   journal.visitItemsWithLinkage((itemId, _sequence, body, attribution) => {
     const turnScope = attribution.turnScope ?? AGENT_JOURNAL_THREAD_SCOPE
+    const historical = scope === 'session' && journal.item(itemId)
+    if (historical && isHistoricalProviderTimelineItem(historical, (key) => journal.item(key))) {
+      return
+    }
     const covered =
       scope === 'session' ||
       (turnScope.kind === 'turn' && turnScope.turnItemId === scope.turnItemId)
@@ -110,7 +115,8 @@ export function runningProviderTimelineTurns(
   journal.visitItems((itemId, _sequence, body) => {
     const identity =
       readAgentJournalTurn(body)?.state === 'running' ? parseAgentJournalItemKey(itemId) : null
-    if (identity) {
+    const item = journal.item(itemId)
+    if (identity && item && !isHistoricalProviderTimelineItem(item, (key) => journal.item(key))) {
       running.push({ identity, itemId })
     }
   })

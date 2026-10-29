@@ -1,12 +1,10 @@
-// Transitions that remove or rename a whole workspace with every record that names it. Pane data
-// and closed-tab records live in their workspace, so they follow without being touched.
+// Keep records within their workspace so removal and rename carry pane data and closed-tab records automatically.
 
 import { filterRecord } from './stored-record-fields'
 import type { WorkspaceLayoutModel } from './workspace-layout-model'
 
 type KeyedRecord<T> = Record<string, T> | undefined
 
-/** A deleted worktree, repo, folder or project group takes its layout and records with it. */
 export function removeWorkspaces(
   model: WorkspaceLayoutModel,
   keys: readonly string[]
@@ -35,10 +33,7 @@ export function removeWorkspaces(
 
 const renamed = (value: string, from: string, to: string) => (value === from ? to : value)
 
-/**
- * A worktree's identity changed: its key, its worktree id and the records keyed by them follow.
- * Null when `to` already holds a workspace: two layouts are never merged.
- */
+/** Rename the workspace key, worktree ID and keyed records; refuse an occupied destination rather than merging layouts. */
 export function renameWorkspace(
   model: WorkspaceLayoutModel,
   from: string,

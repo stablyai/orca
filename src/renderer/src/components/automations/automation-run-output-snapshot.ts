@@ -33,8 +33,7 @@ export function selectAutomationRunOutputSnapshot(
   assistantMessage: string | null | undefined,
   terminalSnapshot: AutomationRunOutputSnapshot | null
 ): AutomationRunOutputSnapshot | null {
-  // Why: raw hidden-PTY captures include full-screen TUI redraws; hook
-  // transcript text is the user-facing automation result when available.
+  // Prefer hook transcript text over hidden-PTY captures containing full-screen TUI redraws.
   return createAutomationRunOutputSnapshotFromText(assistantMessage ?? '') ?? terminalSnapshot
 }
 

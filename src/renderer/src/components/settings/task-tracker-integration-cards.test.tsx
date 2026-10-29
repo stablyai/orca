@@ -4,7 +4,8 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getExecutionHostLabel } from '../../../../shared/execution-host'
-import { setRendererUiLanguage } from '@/i18n/i18n'
+import es from '@/i18n/locales/es.json'
+import { setRendererUiLanguage, translate } from '@/i18n/i18n'
 import { getProviderRuntimeContextKey } from '@/lib/provider-runtime-context'
 import { TooltipProvider } from '../ui/tooltip'
 import { LinearIntegrationCard } from './task-tracker-integration-cards'
@@ -102,8 +103,7 @@ async function renderCard(): Promise<HTMLDivElement> {
 
 describe('LinearIntegrationCard account scope', () => {
   beforeEach(() => {
-    // Why: the embedded agent-skill CTA scans installed skills through
-    // window.api; without a stub it renders a scan error instead of a state.
+    // Stub the skill scan so the CTA renders setup state rather than a bridge error.
     Object.defineProperty(window, 'api', {
       configurable: true,
       value: {
@@ -155,6 +155,30 @@ describe('LinearIntegrationCard account scope', () => {
       }
     }
   )
+
+  it('translates a coded connection failure at the display site', async () => {
+    await setRendererUiLanguage('es')
+    const state = installStore(true)
+    state.testLinearConnection = vi.fn(async () => ({
+      ok: false,
+      error: 'Wire detail from the host',
+      errorCode: 'linear.noApiKey'
+    }))
+    const rendered = await renderCard()
+    const label = translate(
+      'auto.components.settings.task.tracker.integration.cards.c24e56c532',
+      'Test'
+    )
+    const button = Array.from(rendered.querySelectorAll('button')).find(
+      (button) => button.textContent === label
+    )
+    expect(button).toBeDefined()
+    await act(async () => {
+      button?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    expect(rendered.textContent).toContain(es.taskProviders.errors.linear.noApiKey)
+    expect(rendered.textContent).not.toContain('Wire detail from the host')
+  })
 
   it('shows local-client account ownership when Linear is disconnected', async () => {
     const state = installStore(false)

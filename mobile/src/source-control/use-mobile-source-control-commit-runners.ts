@@ -31,8 +31,6 @@ type Params = {
   recordCommitFailure: RecordMobileCommitFailure
 }
 
-// Commit + commit-then-action runners. Split from the main runners hook to keep
-// each file under the line limit; behavior is unchanged from the original.
 export function useMobileSourceControlCommitRunners(params: Params) {
   const {
     commitMessage,
@@ -50,8 +48,7 @@ export function useMobileSourceControlCommitRunners(params: Params) {
     setCommitMessage,
     recordCommitFailure
   } = params
-  // Why: as on desktop, committing the box's message cancels a running generation so its late
-  // reply cannot refill the box the commit empties.
+  // Cancel generation before committing so its late reply cannot refill the cleared message box.
   const sendCommitRequest = useCallback(
     (message: string) => {
       cancelGenerateCommitMessage()

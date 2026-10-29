@@ -11,6 +11,7 @@ import type {
   AgentLaunchTabPublishRequest
 } from '../../shared/agent-launch-tab-publication'
 import type { AgentLaunchPaneVerdictEvent } from '../../shared/agent-launch-pane-verdict'
+import type { PaneLaunchRecipe } from '../../shared/terminal-attachment-launch-result'
 import type {
   TerminalPaneRevealReply,
   TerminalPaneRevealRequest
@@ -141,6 +142,11 @@ export const uiTerminalAndSessionTabsApi = {
       callback(data)
     ipcRenderer.on('ui:agentLaunchPaneVerdict', listener)
     return () => ipcRenderer.removeListener('ui:agentLaunchPaneVerdict', listener)
+  },
+  onLaunchRecipe: (callback: (data: PaneLaunchRecipe) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, data: PaneLaunchRecipe) => callback(data)
+    ipcRenderer.on('ui:launchRecipe', listener)
+    return () => ipcRenderer.removeListener('ui:launchRecipe', listener)
   },
   onSplitTerminal: (
     callback: (data: {

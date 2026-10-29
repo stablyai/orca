@@ -4,8 +4,7 @@ function isMarkdownComment(comment: Pick<DiffComment, 'source'>): boolean {
   return comment.source === 'markdown'
 }
 
-// Why: the pasted format is the contract between review notes and whichever
-// agent consumes them. Keep it deterministic and quote-safe across clients.
+// Keep the pasted review-note contract deterministic and quote-safe across clients/agents.
 export function formatDiffComment(c: DiffComment): string {
   const escaped = c.body
     .replace(/\\/g, '\\\\')

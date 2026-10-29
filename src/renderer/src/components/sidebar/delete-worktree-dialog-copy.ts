@@ -1,4 +1,5 @@
 import { isFolderRepo } from '../../../../shared/repo-kind'
+import { translate } from '@/i18n/i18n'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 
@@ -59,8 +60,14 @@ export function getDeleteWorktreeDialogCopy(args: {
         ? 'from Orca. The project folder on disk will not be deleted.'
         : 'from git and delete its workspace folder.',
     mainWorktreeBlocker: args.isFolderWorkspaceDelete
-      ? 'Remove the folder project instead of deleting this workspace.'
-      : 'Git does not allow removing the main worktree.'
+      ? translate(
+          'auto.components.sidebar.DeleteWorktreeDialog.removeFolderProjectInstead',
+          'Remove the folder project instead of deleting this workspace.'
+        )
+      : translate(
+          'auto.components.sidebar.DeleteWorktreeDialog.gitBlocksMainWorktree',
+          'Git does not allow removing the main worktree.'
+        )
   }
 }
 

@@ -7,10 +7,7 @@ import {
 } from '../durable-file-write'
 import { hasErrorCode } from '../daemon/daemon-process-inspection'
 
-/**
- * One file per distro under `<userData>/wsl-distro-holders/`. Survives a full Orca quit on
- * purpose: the holder does too, and the next launch re-adopts it from this record.
- */
+/** Per-distro record intentionally survives Orca quit so the next launch can re-adopt the surviving holder. */
 export type WslDistroHolderRecord = {
   version: 1
   distro: string
@@ -111,10 +108,7 @@ export async function removeWslDistroHolderRecord(
   await rm(recordPath(userDataPath, distro), { force: true })
 }
 
-/**
- * Distro names that have a record file; sweeps temp files a crashed writer left behind.
- * Why decode the file name: the record may be corrupt, and its file is still owed a verdict.
- */
+/** List distro names from filenames even for corrupt records needing verdicts; sweep crashed-writer temps. */
 export async function listWslDistroHolderRecordDistros(userDataPath: string): Promise<string[]> {
   const directory = wslDistroHolderDirectory(userDataPath)
   let entries: string[]

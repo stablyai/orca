@@ -1,3 +1,5 @@
+import type { PluginThemeRegistration } from '../../shared/plugins/plugin-theme-artifact'
+import type { PluginTerminalThemeRegistration } from '../../shared/plugins/plugin-terminal-theme-artifact'
 import type {
   PluginPanelActionOutcome,
   PluginPanelEntry
@@ -139,6 +141,8 @@ export type PluginMarketplaceHostInstallPreview = {
 export type PluginsApi = {
   list: () => Promise<PluginHostListEntry[]>
   listLanguagePacks: () => Promise<PluginLanguagePackRegistration[]>
+  listThemes: () => Promise<PluginThemeRegistration[]>
+  listTerminalThemes: () => Promise<PluginTerminalThemeRegistration[]>
   /** Approval is bound to the current capability and trusted-worker fingerprint. */
   consent: (args: PluginConsentRequest) => Promise<PluginHostListEntry[]>
   setEnabled: (args: { pluginKey: string; enabled: boolean }) => Promise<PluginHostListEntry[]>

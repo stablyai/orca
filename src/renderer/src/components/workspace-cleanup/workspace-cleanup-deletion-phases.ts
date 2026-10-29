@@ -33,13 +33,7 @@ export function getWorkspaceCleanupDeletionPhaseByIdentity(
   return phases
 }
 
-/**
- * In-flight delete phases keyed by host-qualified identity.
- *
- * `deleteStateByWorktreeId` is keyed by bare id, so a row whose delete-state
- * names a host is re-keyed onto that host — otherwise two hosts sharing an id
- * would show each other's progress (STA-4343).
- */
+/** Re-key bare-ID delete state to its named host so colliding workspace rows cannot show another host’s progress (STA-4343). */
 export function selectWorkspaceCleanupDeletionPhases(s: {
   deleteStateByWorktreeId: Record<string, WorktreeDeleteState>
 }): Record<string, WorkspaceCleanupDeletionPhase> {

@@ -3,7 +3,6 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { OrcadHostTransport } from '../../ssh/orcad-host-transport'
 import {
   ensureRemoteOrcadNodeRuntime,
   NODE_RUNTIME_PROMOTE_TIMEOUT_MS
@@ -15,6 +14,7 @@ import {
 import { RUNTIME_STORE_LOCK_NAME } from './remote-node-runtime-store-lock'
 import { execCommand } from '../../ssh/remote-exec/remote-exec-command'
 import { getRemoteHostPlatform } from '../../ssh/ssh-remote-platform'
+import { unusedOrcadHostTransport } from '../../ssh/unused-host-transport.test-fixture'
 
 vi.mock('../../ssh/remote-exec/remote-exec-command', async (importOriginal) => ({
   ...(await importOriginal<typeof ExecCommandModule>()),
@@ -24,8 +24,7 @@ vi.mock('./remote-install-transfers', () => ({
   uploadRemoteInstallDirectory: vi.fn(async () => {})
 }))
 
-// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: every remote call goes through the mocked execCommand.
-const conn = {} as OrcadHostTransport
+const conn = unusedOrcadHostTransport()
 const host = getRemoteHostPlatform('linux-x64')
 const store = '/home/u/.orca-remote/runtimes'
 const lock = `${store}/${RUNTIME_STORE_LOCK_NAME}`

@@ -17,10 +17,7 @@ async function enableNativeChatSetting(page: Page): Promise<void> {
   })
 }
 
-// Why (#11761): reproduces the paired-headless topology from the client's side —
-// live status arrives carrying agent identity and a working state, but with no
-// `interactivePrompt`/`toolName`, which is exactly what the host projection
-// dropped. The pending ask exists only in the transcript.
+// #11761: model paired-headless status with identity/working state but no interactivePrompt/toolName; only the transcript carries the ask.
 async function seedStatusWithoutAskPayload(
   page: Page,
   args: { paneKey: string; worktreeId: string; sessionId: string; transcriptPath: string }
@@ -137,11 +134,7 @@ test.describe('Desktop chat AskUserQuestion card (#11761)', () => {
       })
       await expect(orcaPage.getByText(userText)).toBeVisible({ timeout: 30_000 })
 
-      // The pre-fix build leaves the composer mounted here and never renders a
-      // card, so this assertion is what actually gates the regression.
-      // Why (#20724): the transcript row renders the pending question in an
-      // awaiting-input row as well as the card, so gate on the card's own
-      // title node instead of any text match.
+      // Gate on the card’s title: awaiting-input transcript rows also contain the question (#20724).
       const cardQuestion = orcaPage
         .getByTestId('native-chat-question-card-title')
         .filter({ hasText: QUESTION })
@@ -149,13 +142,9 @@ test.describe('Desktop chat AskUserQuestion card (#11761)', () => {
       await expect(orcaPage.getByRole('button', { name: /Spaces/ })).toBeVisible()
       await orcaPage.screenshot({ path: path.join(screenshotDir, '01-question-card.png') })
 
-      // A single-select pick on the last question submits on its own after a short
-      // beat (#26288); that is what proves the card is answerable rather than merely rendered.
+      // A final single-select pick auto-submits (#26288), proving the card accepts answers.
       await orcaPage.getByRole('button', { name: /Spaces/ }).click()
-      // The card owns the composer slot, so its disappearance is the visible
-      // signal that the answer was accepted and chat input came back. The
-      // resolution receipt keeps the question in the transcript row, so only
-      // the card paragraph is expected to leave.
+      // Require card dismissal and composer return; the transcript keeps its resolution receipt.
       await expect(cardQuestion).toHaveCount(0, { timeout: 20_000 })
       await orcaPage.screenshot({ path: path.join(screenshotDir, '03-answered.png') })
     } finally {

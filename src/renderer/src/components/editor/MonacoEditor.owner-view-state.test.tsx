@@ -7,7 +7,7 @@ import { useStore } from 'zustand'
 import { createEditorStore } from '@/store/slices/editor-slice-test-harness'
 import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
 import type { OpenFile } from '@/store/slices/editor'
-import { editorSelectionCache, scrollTopCache } from '@/lib/scroll-cache'
+import { editorSelectionCache, editorViewStateCache, scrollTopCache } from '@/lib/scroll-cache'
 import { getDefaultSettings } from '../../../../shared/constants'
 
 const testState = vi.hoisted(() => {
@@ -59,6 +59,7 @@ afterEach(() => {
     model.dispose()
   }
   editorSelectionCache.clear()
+  editorViewStateCache.clear()
   scrollTopCache.clear()
   Reflect.set(HTMLCanvasElement.prototype, 'getContext', originalGetContext)
   testState.store = null

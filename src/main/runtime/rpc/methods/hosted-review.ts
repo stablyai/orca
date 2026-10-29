@@ -61,8 +61,7 @@ export const HOSTED_REVIEW_METHODS = [
     permission: 'workspace',
     params: HostedReviewCreate,
     handler: async (params, { runtime }) => {
-      // The wire carries the host's own provider token, so this is where an arm this build does
-      // not know becomes a refusal instead of a params rejection the client cannot read.
+      // Refuse an unknown host-issued provider token here; schema rejection would be unreadable to the client.
       if (!supportsHostedReviewCreation(params.provider)) {
         return UNSUPPORTED_HOSTED_REVIEW_PROVIDER
       }

@@ -2,6 +2,16 @@ import type { ClaimedAgentPtyOwnerRegistry } from '../../shared/claimed-agent-pt
 import type { Session } from './session'
 import type { SessionInfo } from './types'
 
+// Why a side table: only the listing reads it, and Session is at its max-lines cap.
+const spawnPaneKeys = new WeakMap<Session, string>()
+
+/** Records the ORCA_PANE_KEY a session was spawned with; reattaching never rewrites it. */
+export function recordSessionSpawnPaneKey(session: Session, paneKey: string | undefined): void {
+  if (paneKey) {
+    spawnPaneKeys.set(session, paneKey)
+  }
+}
+
 export function listLiveTerminalHostSessions(
   sessions: ReadonlyMap<string, Session>,
   agentSessionOwners: ClaimedAgentPtyOwnerRegistry
@@ -12,6 +22,7 @@ export function listLiveTerminalHostSessions(
       continue
     }
     const size = session.getAppliedSize()
+    const paneKey = spawnPaneKeys.get(session)
     const foregroundProcess = session.getForegroundProcess({ cachedOnly: true })
     result.push({
       sessionId: session.sessionId,
@@ -22,6 +33,7 @@ export function listLiveTerminalHostSessions(
       shellState: session.shellState,
       isAlive: true,
       ...(session.terminalHandle ? { terminalHandle: session.terminalHandle } : {}),
+      ...(paneKey ? { paneKey } : {}),
       wslDistro: session.wslDistro,
       pid: session.pid,
       cwd: session.getCwd(),

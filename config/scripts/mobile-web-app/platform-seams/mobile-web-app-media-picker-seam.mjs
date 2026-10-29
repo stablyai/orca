@@ -1,48 +1,19 @@
-/**
- * The media-picker seam, and how a census recognises a module that went around it.
- *
- * `expo-image-picker` and `expo-document-picker` are native modules: importing either runs a
- * codegen lookup that throws in a browser, and the route manifest imports every route, so one such
- * import takes the whole page down rather than one picker. `expo-clipboard`'s `getImageAsync` is
- * the third way in and fails differently — it resolves on the web to a `navigator.clipboard` read
- * that needs a secure context, which the iOS shell's custom scheme is not.
- *
- * Shared by the censuses rather than restated in each, for the external-link seam's reason: two
- * spellings of one rule drift, and the half that stops being enforced is the half nobody reads.
- */
+// Native image/document picker imports throw in browser and can break entire manifest; clipboard getImageAsync instead needs secure context absent under iOS scheme.
+// Share census across routes so future consumers cannot bypass one copy of rule.
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import ts from 'typescript-api'
 
-/** The seam, as the web build resolves it: `.web.ts` wins under the builder's resolveExtensions. */
 export const MEDIA_PICKER_SEAM = 'src/platform/media-picker.web.ts'
 
-/** The two module specifiers a page closure may not contain at all. */
 export const NATIVE_PICKER_MODULES = ['expo-image-picker', 'expo-document-picker']
 
 const CLIPBOARD_MODULE = 'expo-clipboard'
 const CLIPBOARD_IMAGE_READ = 'getImageAsync'
 
-/**
- * Every line on which a module reaches a native picker or the pasteboard's image.
- *
- * Parsed rather than matched, for the reason the external-link census parses: a regex over the text
- * names `expo-image-picker` inside the comment that explains why it is not imported, and a census
- * reporting a line nobody can act on is one the next reader learns to ignore.
- *
- * A picker import is reported at the import statement whatever its clause, side-effect imports
- * included, because the module's own top level is what throws — nothing has to be called. A
- * re-export is the same statement in the other direction and is reported too.
- *
- * `expo-clipboard` is not banned: writing and reading text are the clipboard seam's and legitimate
- * in this closure. Only the image read is an offence, so a named import of `getImageAsync` is
- * reported at its import, and a namespace or default binding reports the lines that read the
- * property off it — `import * as Clipboard from 'expo-clipboard'` is not itself an offence.
- *
- * `fileName` decides the script kind, and the default is only for a caller holding a source with no
- * path: in a `.ts` file `const id = <T>(v: T) => v` is a generic arrow, and parsed as TSX it is an
- * unclosed JSX element that swallows everything after it into an error node.
- */
+// Parse imports/reexports of native picker modules regardless of use: their top level throws, including side-effect imports.
+// Allow expo-clipboard text APIs; report named getImageAsync imports or namespace/default property uses only.
+// Infer kind from filename: TSX parsing of TS generic arrows can hide later offending calls.
 export function mediaPickerSites(source, fileName = 'module.tsx') {
   const parsed = ts.createSourceFile(fileName, source, ts.ScriptTarget.Latest, true)
   const lineOf = (node) => parsed.getLineAndCharacterOfPosition(node.getStart(parsed)).line + 1
@@ -52,11 +23,7 @@ export function mediaPickerSites(source, fileName = 'module.tsx') {
     statement.moduleSpecifier !== undefined && ts.isStringLiteral(statement.moduleSpecifier)
       ? statement.moduleSpecifier.text
       : null
-  /**
-   * `propertyName` is the imported or destructured name when the clause renames it, `name` when it
-   * does not. A binding element's `name` may be a nested pattern rather than an identifier and a
-   * `propertyName` may be computed, so the text is read only off a node that has one.
-   */
+  // Read imported/destructured propertyName before local alias; nested patterns/computed keys may lack readable identifier.
   const namesImageRead = (elements) =>
     elements.some((element) => {
       const named = element.propertyName ?? element.name
@@ -65,7 +32,6 @@ export function mediaPickerSites(source, fileName = 'module.tsx') {
       )
     })
 
-  /** A declaration reading straight off one of the module's aliases: `const x = Clipboard`. */
   const declaredFromAlias = (node) =>
     ts.isVariableDeclaration(node) &&
     node.initializer !== undefined &&
@@ -89,7 +55,7 @@ export function mediaPickerSites(source, fileName = 'module.tsx') {
     }
     if (ts.isExportDeclaration(statement)) {
       const clause = statement.exportClause
-      // No clause is `export *`, which carries `getImageAsync` along with everything else.
+      // Export * exposes getImageAsync too.
       if (clause === undefined || ts.isNamespaceExport(clause) || namesImageRead(clause.elements)) {
         sites.push(lineOf(statement))
       }
@@ -115,15 +81,7 @@ export function mediaPickerSites(source, fileName = 'module.tsx') {
     }
   }
 
-  /**
-   * The same two modules reached through `import()`, which the static scan above cannot see.
-   *
-   * A dynamic import with a literal specifier is a module the bundler resolves and puts in the
-   * closure exactly as a static one, so a picker behind `await import('expo-image-picker')` takes
-   * the page down the same way. `await` and parentheses are unwrapped because they are punctuation
-   * around the call rather than a different call; a specifier that is not a literal is left alone,
-   * for the reason a computed key is.
-   */
+  // Literal dynamic import enters bundler closure like static import; unwrap await/parentheses but do not guess computed specifiers.
   const dynamicImportOf = (node) => {
     let value = node
     while (ts.isAwaitExpression(value) || ts.isParenthesizedExpression(value)) {
@@ -153,7 +111,7 @@ export function mediaPickerSites(source, fileName = 'module.tsx') {
         }
       }
     }
-    // The picker modules need no alias: reaching one at all is the offence, wherever it lands.
+    // Any native picker module reach is forbidden, regardless of resulting alias.
     if (ts.isCallExpression(node)) {
       const specifier = dynamicImportOf(node)
       if (specifier !== null && NATIVE_PICKER_MODULES.includes(specifier)) {
@@ -165,13 +123,7 @@ export function mediaPickerSites(source, fileName = 'module.tsx') {
   ts.forEachChild(parsed, seedDynamic)
 
   if (clipboardAliases.size > 0) {
-    /**
-     * Every further name the module is reachable under, to a fixpoint.
-     *
-     * `const pasteboard = Clipboard` makes `pasteboard` the module too, and the chain has no
-     * length limit. A fixpoint rather than one pass in source order, because the rule is about
-     * what the module can be reached as and not about the order a reader arrives in.
-     */
+    // Learn transitive namespace aliases to fixed point; valid deferred uses can precede declarations in source order.
     for (let grew = true; grew;) {
       grew = false
       const learn = (node) => {
@@ -188,16 +140,7 @@ export function mediaPickerSites(source, fileName = 'module.tsx') {
       ts.forEachChild(parsed, learn)
     }
 
-    /**
-     * `Clipboard.getImageAsync` and `Clipboard['getImageAsync']` are the same call.
-     *
-     * Element access with a literal key is the spelling a minifier and a bundler both produce and
-     * the one a reader reaches for to get around a rule about dots. Quoted or backticked: a
-     * template with no substitution is a string literal with a different quote, and reading only
-     * one of the two would leave the other as the way around this rule. A key with a substitution
-     * or an identifier in it is not read, because its value is not in the source and guessing would
-     * report a line nobody can act on.
-     */
+    // Read dotted, quoted and substitution-free template keys equivalently; computed identifiers/templates are unknown and must not be guessed.
     const readsImageOffAlias = (node) => {
       if (!ts.isIdentifier(node.expression) || !clipboardAliases.has(node.expression.text)) {
         return false
@@ -220,10 +163,7 @@ export function mediaPickerSites(source, fileName = 'module.tsx') {
       ) {
         sites.push(lineOf(node))
       }
-      // `const { getImageAsync } = Clipboard` reaches the same function without ever writing the
-      // property access above. A census that read only the access approved the closure while that
-      // call died on the browser clipboard API. Reported at the declaration, which is the line to
-      // delete.
+      // Destructuring getImageAsync bypasses property-access scan; report declaration that exposes forbidden function.
       if (
         declaredFromAlias(node) &&
         ts.isObjectBindingPattern(node.name) &&
@@ -238,12 +178,7 @@ export function mediaPickerSites(source, fileName = 'module.tsx') {
   return [...new Set(sites)].sort((left, right) => left - right)
 }
 
-/**
- * Every module in a closure that can pick media without the seam, as `path:line`.
- *
- * A file the closure names but this checkout cannot read is not an offender: the closure reports
- * paths relative to `mobile/`, and one outside it is the caller's to read rather than guessed at.
- */
+// Return closure offenders as path:line; external mobile-relative paths missing here belong to caller’s resolver, not guessed offences.
 export function mediaPickerOffenders(mobileDir, closure) {
   return closure.local
     .filter((file) => file !== MEDIA_PICKER_SEAM)
@@ -254,7 +189,6 @@ export function mediaPickerOffenders(mobileDir, closure) {
       } catch {
         return []
       }
-      // The path, so the parser takes the script kind from the extension rather than assuming TSX.
       return mediaPickerSites(source, file).map((line) => [file, line])
     })
     .sort(([leftFile, leftLine], [rightFile, rightLine]) =>

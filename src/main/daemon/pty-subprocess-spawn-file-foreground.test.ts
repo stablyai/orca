@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ProcessTableRow } from '../../shared/process-table-snapshot'
 import type * as SnapshotReader from '../../shared/process-table-snapshot-reader'
 import { createDaemonPtySubprocessHandle } from './pty-subprocess/subprocess-handle'
+import { inspectSpawnFileChildProcessesFromRows } from './pty-subprocess/spawn-file-child-processes'
 import { resolveSpawnFileForegroundFromRows } from './pty-subprocess/spawn-file-foreground-process'
 import { inspectTerminalHostProcess } from './terminal-host-process-inspection'
 import { Session } from './session'
@@ -226,6 +227,35 @@ it('ignores stopped/background children and another terminal beneath the same ro
   })
 })
 
+// ps spells "no controlling terminal" as `?` on Linux, `??` on macOS and `-` on some builds.
+describe.each(['??', '?', '-'] as const)('root on no controlling terminal (tty=%s)', (tty) => {
+  const detachedRoot: ProcessTableRow = {
+    pid: 100,
+    ppid: 1,
+    pgid: 100,
+    tpgid: 100,
+    tty,
+    startTime: 'Sat Sep 26 13:44:29 2026',
+    stat: 'S',
+    command: '/bin/zsh'
+  }
+  const detachedTree: ProcessTableRow[] = [
+    detachedRoot,
+    { ...detachedRoot, pid: 101, ppid: 100, pgid: 100, command: 'claude' }
+  ]
+
+  it('declines to name the descendant that shares the group but holds no terminal', () => {
+    expect(resolveSpawnFileForegroundFromRows(detachedTree, 100)).toEqual({
+      available: false,
+      processName: null
+    })
+  })
+
+  it('reports child evidence as unverifiable rather than reading an unfenceable table', () => {
+    expect(inspectSpawnFileChildProcessesFromRows(detachedTree, 100, 'zsh')).toBe('unverifiable')
+  })
+})
+
 it('uses Windows job membership and the native process table for ordinary children', async () => {
   vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
   resolveWindows.mockResolvedValue({ available: true, processName: null })
@@ -237,7 +267,7 @@ it('uses Windows job membership and the native process table for ordinary childr
   const handle = createHandle()
   expect(await handle.confirmForegroundProcess?.()).toBe('vim.exe')
   expect(await inspect(handle)).toMatchObject({
-    foregroundProcess: 'vim.exe',
+    foregroundProcess: 'zsh',
     hasChildProcesses: true
   })
   expect(readStrict).not.toHaveBeenCalled()
@@ -247,8 +277,9 @@ it('keeps missing Windows job membership unverifiable', async () => {
   vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
   resolveWindows.mockResolvedValue({ available: true, processName: null })
   members.mockReturnValue(null)
+  expect(await createHandle().confirmForegroundProcess?.()).toBeNull()
   expect(await inspect(createHandle())).toMatchObject({
-    foregroundProcess: null,
+    foregroundProcess: 'zsh',
     hasChildProcesses: true,
     childProcessEvidence: 'unverifiable'
   })

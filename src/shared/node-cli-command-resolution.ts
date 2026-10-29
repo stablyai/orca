@@ -2,6 +2,7 @@ import { accessSync, constants, existsSync, readFileSync, readdirSync, statSync 
 import { homedir } from 'node:os'
 import { delimiter, dirname, isAbsolute, join } from 'node:path'
 import { firstWindowsPathEnvKey, isNativeExecutable } from './cli-runtime-pairing-inputs'
+import { getFnmDefaultAliasDirectories } from './fnm-default-alias-dirs'
 import { getSystemCliInstallDirectories } from './system-cli-install-dirs'
 
 type ResolveCommandOptions = {
@@ -81,8 +82,7 @@ function isRunnableCommand(platform: NodeJS.Platform, candidate: string): boolea
     if (platform === 'win32') {
       return true
     }
-    // Why: GUI fallback probing should skip placeholders/directories so spawn
-    // can continue to a runnable CLI instead of failing later with EACCES/EISDIR.
+    // Skip nonexecutables/placeholders now so GUI probing reaches a runnable CLI instead of later EACCES/EISDIR.
     accessSync(candidate, constants.X_OK)
     return true
   } catch {
@@ -94,23 +94,19 @@ function getBaseVersionManagerDirectories(platform: NodeJS.Platform, homePath: s
   const directories = [
     join(homePath, '.volta', 'bin'),
     join(homePath, '.asdf', 'shims'),
-    join(homePath, '.fnm', 'aliases', 'default', 'bin'),
-    // Why: mise (formerly rtx) exposes managed tool binaries via a shims
-    // directory, similar to asdf.
+    ...getFnmDefaultAliasDirectories(platform, homePath),
     join(homePath, '.local', 'share', 'mise', 'shims')
   ]
 
   if (platform === 'win32') {
-    // Why: Anthropic's native Windows installer places claude.exe here, and
-    // GUI-launched Orca may not inherit the user's PATH entry for it.
+    // Native Windows Claude installs here; GUI launches may lack the user PATH entry.
     directories.push(join(homePath, '.local', 'bin'))
     directories.push(join(homePath, 'AppData', 'Roaming', 'npm'))
     directories.push(join(homePath, 'AppData', 'Local', 'pnpm'))
     directories.push(join(homePath, 'AppData', 'Local', 'Yarn', 'bin'))
   } else {
     directories.push(join(homePath, '.local', 'bin'))
-    // Why: pnpm uses platform-specific global bin directories that differ from
-    // npm's ~/.local/bin.
+    // pnpm global bins vary by platform, unlike npm’s ~/.local/bin.
     if (platform === 'darwin') {
       directories.push(join(homePath, 'Library', 'pnpm'))
     } else {
@@ -123,12 +119,8 @@ function getBaseVersionManagerDirectories(platform: NodeJS.Platform, homePath: s
   return directories
 }
 
-// Why bounded and cycle-guarded: an nvm alias may point at another alias
-// (`default` -> `lts/*` -> `lts/krypton` -> a version), and a hand-edited pair
-// can point at each other. nvm's own resolver tracks seen aliases; mirror that
-// rather than trusting the files to be acyclic. Termination comes from the hop
-// bound; the seen-set is what turns a cycle into "no preference" instead of
-// silently resolving whichever alias the walk happened to stop on.
+// Bound/track nvm aliases (default → lts/* → lts/krypton → version). Hand-edited cycles must yield no preference,
+// not whichever alias happens to exhaust the hop limit; mirror nvm’s seen-set behavior.
 const NVM_ALIAS_CHAIN_LIMIT = 10
 
 /** Resolves `alias/default` to an installed version directory name, or null. */
@@ -159,11 +151,8 @@ function resolveNvmDefaultVersion(nvmVersionsDir: string, installed: string[]): 
 }
 
 function readNvmAlias(aliasPath: string): string | null {
-  // Why this is a cheap check and not the actual containment: join() normalizes
-  // `..` away before we ever see it, so this only rejects the literal spelling.
-  // The real guarantee is downstream — matchNvmVersion can only ever return an
-  // entry of readdirSync(versions/node), so no token can put a foreign path on
-  // PATH regardless of what the alias file says.
+  // Reject literal traversal cheaply; join normalizes it away. Real containment comes from matchNvmVersion returning only installed readdir entries,
+  // so arbitrary alias tokens can never add foreign paths to PATH.
   if (aliasPath.includes('..')) {
     return null
   }
@@ -180,16 +169,8 @@ function readNvmAlias(aliasPath: string): string | null {
 
 /** `24` matches the highest installed `v24.x.y`; `v24.18.0` matches exactly. */
 function matchNvmVersion(token: string, installed: string[]): string | null {
-  // Why a full shape check: parseVersionSegment coerces every unparseable
-  // segment to 0 (parseInt stops at the first non-digit), so an unresolvable
-  // token prefix-matched `v0.12.x` — or any stray non-version directory —
-  // instead of matching nothing. Anchoring only the first character was not
-  // enough: `0x18`, `00` and `0abc` all still parsed to [0]. nvm writes such a
-  // token to the alias file even while warning it does not exist, then answers
-  // N/A for it, and so must we — which leaves newest-first ordering untouched.
-  // Leading zeros are rejected for the same reason: nvm calls `00` and `024`
-  // N/A, while parseInt happily reads them as 0 and 24.
-  // (A length check cannot catch any of this: ''.split('.') is [''].)
+  // Validate full decimal version shape with no leading zeros: parseInt would coerce garbage/0x18/00/0abc to zero and select old v0.x.
+  // nvm stores nonexistent aliases but resolves them as N/A; preserve newest-first fallback for those, including 024.
   if (!/^v?(0|[1-9]\d*)(\.(0|[1-9]\d*))*$/.test(token)) {
     return null
   }
@@ -217,12 +198,8 @@ function getNvmVersionDirectories(homePath: string): string[] {
     return []
   }
 
-  // Why default-first rather than newest-first: this ordering decides which node
-  // a CLI runs under whenever the login-shell probe does not land. Newest is
-  // usually the version the user just installed and has put nothing into, so it
-  // hid every globally installed CLI and mismatched native module ABIs
-  // (stablyai/orca#10932). The rest stay behind it as fallbacks, so a CLI
-  // installed outside the default version is still reachable.
+  // Prefer nvm default when login probing fails. Freshest installs often have no CLIs and mismatched native ABIs (#10932);
+  // keep other installed versions as fallbacks so their CLIs remain reachable.
   const preferred = resolveNvmDefaultVersion(nvmVersionsDir, installed)
   const ordered = preferred
     ? [preferred, ...installed.filter((entry) => entry !== preferred)]
@@ -247,9 +224,7 @@ function getVersionManagerDirectories(
   return directories
 }
 
-// Why one list for both resolvers: the system block must stay LAST so a
-// version-manager install always outranks a Homebrew/npm/snap one, and two
-// hand-spelled spreads is how the native and WSL lists drifted apart before.
+// Share native/WSL ordering: version-manager bins must precede system Homebrew/npm/snap installs.
 function getCliInstallDirectories(platform: NodeJS.Platform, homePath: string): string[] {
   return [
     ...getNvmVersionDirectories(homePath),
@@ -330,20 +305,9 @@ export function resolveClaudeCommand(options: ResolveCommandOptions = {}): strin
   return resolveCliCommand('claude', options)
 }
 
-/**
- * Put a resolved CLI's own directory ahead of PATH when that directory ships a
- * sibling `node`.
- *
- * Why: `resolveCliCommand` falls back to scanning every version-manager install
- * when PATH misses, so it can hand back `~/.nvm/versions/node/v20.x/bin/codex`
- * while PATH still leads with v22. The CLI's `#!/usr/bin/env node` shebang then
- * loads a v20-built native module under a v22 ABI and the agent dies on first
- * require (stablyai/orca#10932). Pair the binary with the runtime it was
- * installed against instead.
- *
- * Only prepends when the sibling `node` really exists and the CLI is not a
- * compiled binary, so a native CLI or one beside no node is left alone.
- */
+/** Pair resolved script CLIs with sibling Node on PATH to preserve their installed native-module ABI (#10932).
+ * Fallback discovery can find a v20 CLI while PATH leads with v22; env-node shebangs would crash on require.
+ * Prepend only if sibling Node exists and the CLI is not a compiled binary. */
 export function withCliRuntimeOnPath<T extends NodeJS.ProcessEnv>(
   commandPath: string,
   env: T,
@@ -362,7 +326,7 @@ export function withCliRuntimeOnPath<T extends NodeJS.ProcessEnv>(
   }
   const pathKey = platform === 'win32' ? firstWindowsPathEnvKey(env) : 'PATH'
   const pathDelimiter = platform === 'win32' ? ';' : delimiter
-  // Why: the child inherits Orca's PATH when `env` names none, so pair over that, not over nothing.
+  // Missing child PATH inherits Orca’s; pair over that inherited value.
   const segments = splitPath(env[pathKey] ?? process.env[pathKey], pathDelimiter)
   if (segments[0] === commandDirectory) {
     return env
@@ -372,8 +336,7 @@ export function withCliRuntimeOnPath<T extends NodeJS.ProcessEnv>(
   )
   const paired = { ...env, [pathKey]: next }
   if (platform === 'win32') {
-    // Why: the spread is case-sensitive while Windows env lookup is not, so a
-    // differently-cased twin would keep shadowing the value we just wrote.
+    // Windows environment keys ignore case but object spreads do not; remove alternate-case twins that could shadow the new PATH.
     for (const name of Object.keys(paired)) {
       if (name !== pathKey && name.toLowerCase() === pathKey.toLowerCase()) {
         delete (paired as NodeJS.ProcessEnv)[name]

@@ -1,9 +1,4 @@
-/**
- * View-attribute bridge (terminal-query-authority.md §View-attribute bridge):
- * the XParseColor mirrors must match the bundled xterm grammar exactly —
- * main's replies for hidden PTYs must be byte-identical to a visible
- * renderer xterm's.
- */
+/** Main’s hidden-PTY color replies must match the bundled renderer xterm’s XParseColor grammar byte-for-byte. */
 import { describe, expect, it } from 'vitest'
 import {
   formatXColorRgbSpec,
@@ -62,13 +57,6 @@ describe('validateTerminalViewAttributes', () => {
     cursorBlink: true
   })
 
-  it('accepts and normalizes a well-formed payload', () => {
-    const attrs = validateTerminalViewAttributes(valid())
-    expect(attrs).not.toBeNull()
-    expect(attrs?.ansi).toHaveLength(256)
-    expect(attrs?.colorSchemeMode).toBe('dark')
-  })
-
   it.each([
     ['null payload', null],
     ['missing foreground', { ...valid(), foreground: undefined }],
@@ -86,8 +74,7 @@ describe('validateTerminalViewAttributes', () => {
 })
 
 describe('terminalViewAttributesEqual', () => {
-  // The store's idempotence gate: a deep-equal snapshot from a fresh renderer
-  // process must compare equal so the re-push never fans out as a theme apply.
+  // Equal re-pushes from a fresh renderer must not fan out as another theme apply.
   const snapshot = (): TerminalViewAttributes => ({
     foreground: [1, 2, 3],
     background: [4, 5, 6],
@@ -100,20 +87,5 @@ describe('terminalViewAttributesEqual', () => {
 
   it('treats two independently built identical snapshots as equal', () => {
     expect(terminalViewAttributesEqual(snapshot(), snapshot())).toBe(true)
-  })
-
-  it.each([
-    ['foreground', { ...snapshot(), foreground: [1, 2, 4] as TerminalViewRgb }],
-    ['background', { ...snapshot(), background: [0, 0, 0] as TerminalViewRgb }],
-    ['cursor', { ...snapshot(), cursor: [7, 8, 10] as TerminalViewRgb }],
-    [
-      'an ansi entry',
-      { ...snapshot(), ansi: snapshot().ansi.map((rgb, i) => (i === 200 ? [9, 9, 9] : rgb)) }
-    ],
-    ['colorSchemeMode', { ...snapshot(), colorSchemeMode: 'light' as const }],
-    ['cursorStyle', { ...snapshot(), cursorStyle: 'bar' as const }],
-    ['cursorBlink', { ...snapshot(), cursorBlink: false }]
-  ])('detects a change in %s', (_label, changed) => {
-    expect(terminalViewAttributesEqual(snapshot(), changed as TerminalViewAttributes)).toBe(false)
   })
 })

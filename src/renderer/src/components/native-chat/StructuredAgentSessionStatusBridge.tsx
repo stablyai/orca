@@ -5,11 +5,13 @@ import { projectStatus } from './structured-agent-session-status-projection'
 import {
   getStructuredAgentSessionLaunchLifecycle,
   subscribeStructuredAgentLaunchStatus
-} from '@/lib/structured-agent-session-launch-registry'
-import { getStructuredAgentSessionLaunchFailedAt } from '@/lib/structured-agent-session-launch-failed-at'
+} from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
+import { getStructuredAgentSessionLaunchFailedAt } from '@/lib/agent-session/launch/structured-agent-session-launch-failed-at'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import type { WorktreeRuntimeOwnerState } from '@/lib/worktree-runtime-owner-state'
+import { worktreeOwnerRowsTokenOf } from '@/lib/worktree-owner-rows-token'
+import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 import {
   structuredAgentSessionOwnerForTab,
   structuredAgentSessionTargetForHost
@@ -69,6 +71,20 @@ const ownerInputs: readonly (keyof WorktreeRuntimeOwnerState)[] = [
   'runtimeEnvironmentCatalogHydrated',
   'removedRuntimeEnvironmentIds'
 ]
+
+// Rank/unread/activity row patches keep row ownership, so they must not re-walk every session tab.
+function ownerInputChanged(
+  state: AppState,
+  previous: AppState,
+  key: keyof WorktreeRuntimeOwnerState
+): boolean {
+  return (
+    state[key] !== previous[key] &&
+    (key !== 'worktreesByRepo' ||
+      worktreeOwnerRowsTokenOf(selectWorktreesByRepo(state)) !==
+        worktreeOwnerRowsTokenOf(selectWorktreesByRepo(previous)))
+  )
+}
 
 function sameStatusInput(previous: ProjectionInput | undefined, next: ProjectionInput): boolean {
   return (
@@ -315,7 +331,7 @@ function installStatusProjection(): () => void {
     if (
       !disposed &&
       (state.unifiedTabsByWorktree !== previous.unifiedTabsByWorktree ||
-        ownerInputs.some((key) => state[key] !== previous[key]))
+        ownerInputs.some((key) => ownerInputChanged(state, previous, key)))
     ) {
       boundary(reconcile)
     }

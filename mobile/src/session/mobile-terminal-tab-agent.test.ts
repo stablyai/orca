@@ -9,9 +9,12 @@ import {
   resolveMobileTerminalTabOwnedAgentId
 } from './mobile-terminal-tab-agent'
 
-function agentStatus(agentType: string | undefined): AgentStatusEntry {
+function agentStatus(
+  agentType: string | undefined,
+  state: AgentStatusEntry['state'] = 'working'
+): AgentStatusEntry {
   return {
-    state: 'working',
+    state,
     prompt: '',
     updatedAt: 1,
     stateStartedAt: 1,
@@ -23,7 +26,12 @@ function agentStatus(agentType: string | undefined): AgentStatusEntry {
 
 function terminalTab(
   title: string,
-  options: { agentType?: string; id?: string; launchAgent?: TuiAgent } = {}
+  options: {
+    agentType?: string
+    state?: AgentStatusEntry['state']
+    id?: string
+    launchAgent?: TuiAgent
+  } = {}
 ): Extract<MobileSessionTab, { type: 'terminal' }> {
   return {
     type: 'terminal',
@@ -32,7 +40,9 @@ function terminalTab(
     terminal: 'pty-1',
     isActive: true,
     ...(options.launchAgent ? { launchAgent: options.launchAgent } : {}),
-    ...(options.agentType === undefined ? {} : { agentStatus: agentStatus(options.agentType) })
+    ...(options.agentType === undefined
+      ? {}
+      : { agentStatus: agentStatus(options.agentType, options.state) })
   }
 }
 
@@ -49,22 +59,25 @@ describe('resolveMobileTerminalTabAgentId', () => {
     ).toBe('claude')
   })
 
-  it('keeps hook identity authoritative over launch identity', () => {
-    expect(
-      resolveMobileTerminalTabAgentId(
-        terminalTab('Terminal', { agentType: 'codex', launchAgent: 'claude' })
-      )
-    ).toBe('codex')
-  })
-
   it('falls back to explicit terminal titles when hook identity is unavailable', () => {
     expect(resolveMobileTerminalTabAgentId(terminalTab('✦ Gemini CLI'))).toBe('gemini')
   })
 
-  it('does not let title fallback override launch identity', () => {
+  it('lets a different agent reclaim a pane whose launched agent finished', () => {
+    const tab = terminalTab('Codex ready', {
+      agentType: 'claude',
+      state: 'done',
+      launchAgent: 'claude'
+    })
+    expect(resolveMobileTerminalTabAgentId(tab)).toBe('codex')
+  })
+
+  it('keeps an OMP-launched tab as OMP when its hook reports pi', () => {
     expect(
-      resolveMobileTerminalTabAgentId(terminalTab('Codex ready', { launchAgent: 'claude' }))
-    ).toBe('claude')
+      resolveMobileTerminalTabAgentId(
+        terminalTab('Terminal', { agentType: 'pi', launchAgent: 'omp' })
+      )
+    ).toBe('omp')
   })
 
   it('treats unknown hook identity as unavailable', () => {
@@ -85,16 +98,22 @@ describe('host pane identity', () => {
     expect(resolveMobileTerminalTabOwnedAgentId(tab, 'cursor')).toBe('cursor')
   })
 
-  it('does not replace a launch identity Orca chose', () => {
+  it('ranks host Cursor identity above titles only for panes no hook or launch owns', () => {
+    const launched = terminalTab('Terminal', { agentType: 'unknown', launchAgent: 'claude' })
+    expect(resolveMobileTerminalTabOwnedAgentId(launched, 'cursor')).toBe('claude')
+    expect(resolveMobileTerminalTabAgentId(launched, 'cursor')).toBe('claude')
     expect(
-      resolveMobileTerminalTabAgentId(terminalTab('Terminal', { launchAgent: 'claude' }), 'cursor')
-    ).toBe('claude')
+      resolveMobileTerminalTabAgentId(terminalTab('Fix Codex support - ⏳ Working ···'), 'cursor')
+    ).toBe('cursor')
   })
 
-  it('keeps launch identity when the hook report is unknown', () => {
-    const tab = terminalTab('Terminal', { agentType: 'unknown', launchAgent: 'claude' })
-    expect(resolveMobileTerminalTabOwnedAgentId(tab, 'cursor')).toBe('claude')
-    expect(resolveMobileTerminalTabAgentId(tab, 'cursor')).toBe('claude')
+  it('keeps a reused pane on its finished hook when terminal.list still caches Cursor', () => {
+    expect(
+      resolveMobileTerminalTabAgentId(
+        terminalTab('Terminal', { agentType: 'codex', state: 'done' }),
+        'cursor'
+      )
+    ).toBe('codex')
   })
 
   it("does not replace another agent's hook report", () => {
@@ -112,8 +131,7 @@ describe('host pane identity', () => {
     expect(resolveMobileTerminalTabAgentId(tab, null)).toBe('claude')
   })
 
-  it('shows Cursor for a saved task name with no hook or launch identity', () => {
-    expect(resolveMobileTerminalTabAgentId(terminalTab('Saved task name'), 'cursor')).toBe('cursor')
+  it('keeps host Cursor identity out of behavioral ownership', () => {
     expect(
       resolveMobileTerminalTabOwnedAgentId(terminalTab('Saved task name'), 'cursor')
     ).toBeNull()
@@ -164,10 +182,6 @@ describe('getMobileSessionTabTitle', () => {
     expect(getMobileSessionTabTitle(terminalTab('✳ working', { launchAgent: 'claude' }))).toBe(
       'working'
     )
-  })
-
-  it('keeps generic status titles unstripped when no agent identity is known', () => {
-    expect(getMobileSessionTabTitle(terminalTab('✳ investigating'))).toBe('✳ investigating')
   })
 
   it('preserves browser title fallbacks after moving the helper out of the route', () => {

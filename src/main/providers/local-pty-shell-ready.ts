@@ -1,9 +1,3 @@
-/**
- * Shell-ready launch configuration for local PTYs.
- *
- * Why: startup commands must wait until the shell has fully initialized. Picks the args/env
- * that point each shell at its Orca wrapper (which emits the OSC 777 marker the scanner detects).
- */
 import { basename, win32 as pathWin32 } from 'node:path'
 import {
   encodePowerShellCommand,
@@ -47,23 +41,18 @@ const UNWRAPPED: ShellReadyLaunchConfig = {
   supportsReadyMarker: false
 }
 
-/** True when the wrapper tree is complete on disk right now. */
 function wrapperTreeUsable(): boolean {
   const ensured = ensureShellReadyWrappers()
   return ensured && shellReadyWrappersExist()
 }
 
-/** Args that point bash at Orca's rcfile, or null when it is not usable. */
 export function getBashWrapperLaunchArgs(): string[] | null {
   return shellReadyWrappersExist()
     ? ['--rcfile', `${getShellReadyWrapperRoot()}/bash/rcfile`]
     : null
 }
 
-/**
- * The one launch-config entry point: args + env for a shell that should start
- * with exactly `features` enabled. An empty selection is never wrapped.
- */
+/** Empty feature selections stay unwrapped. */
 export function getShellLaunchConfig(
   shellPath: string,
   features: readonly ShellStartupFeature[],
@@ -84,8 +73,7 @@ export function getShellLaunchConfig(
       return UNWRAPPED
     }
     if (!wrapperTreeUsable()) {
-      // Why plain login zsh: ZDOTDIR pointed at an incomplete wrapper dir makes
-      // zsh skip the user's whole config. Losing Orca's features is recoverable.
+      // Incomplete ZDOTDIR wrappers skip user configuration; prefer losing Orca features to breaking the shell.
       return { args: ['-l'], env: {}, supportsReadyMarker: false }
     }
     return {
@@ -137,8 +125,7 @@ export function getShellLaunchConfig(
     }
   }
 
-  // Why: mirrors daemon/shell-ready.ts; only these need the -C init, plain fish gets
-  // the env-only handoff below. The selection is baked in, so no feature env var.
+  // Ready/startup fish needs -C initialization; plain fish uses only the env handoff below.
   if (shellName === 'fish' && (features.includes('ready') || startupCommand !== undefined)) {
     return {
       args: [
@@ -156,8 +143,7 @@ export function getShellLaunchConfig(
     }
   }
 
-  // Why env only: a plain fish pane keeps fish's own argv; the vendor_conf.d
-  // snippet this points at adds Orca's codex function and then undoes itself.
+  // Plain fish keeps its argv; vendor_conf.d installs wrappers then reverses the temporary env handoff.
   if (shellName === 'fish' && wrapperTreeUsable()) {
     return {
       args: null,

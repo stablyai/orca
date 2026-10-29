@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
 import { afterEach, describe, expect, it } from 'vitest'
-import { recoverLocalWindowsWorktreeRemoval } from './local-worktree-removal-recovery'
+import { recoverPartialLocalWorktreeRemoval } from './local-worktree-removal-recovery'
 
 const tempRoots: string[] = []
 
@@ -105,7 +105,7 @@ describe('local Windows worktree removal recovery (live Git)', () => {
 
         await stopProcess(churn)
         await expect(
-          recoverLocalWindowsWorktreeRemoval({
+          recoverPartialLocalWorktreeRemoval({
             error: Object.assign(new Error('git worktree remove failed'), {
               stderr: removal.stderr
             }),

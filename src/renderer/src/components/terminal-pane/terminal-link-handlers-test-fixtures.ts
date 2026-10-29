@@ -8,13 +8,6 @@ export type TerminalLinkStoreSettings = {
   activeRuntimeEnvironmentId?: string | null
 }
 
-export type TerminalLinkOpenFile = {
-  id?: string
-  filePath: string
-  worktreeId: string
-  readOnly?: boolean
-}
-
 export type TerminalLinkStoreState = {
   settings: TerminalLinkStoreSettings | undefined
   setActiveWorktree: Mock
@@ -24,7 +17,7 @@ export type TerminalLinkStoreState = {
   setPendingEditorReveal: Mock
   setMarkdownViewMode: Mock
   activeFileIdByWorktree: Record<string, string | null>
-  openFiles: TerminalLinkOpenFile[]
+  openFiles: { filePath: string; worktreeId: string }[]
   groupsByWorktree: Record<string, TabGroup[]>
   unifiedTabsByWorktree: Record<
     string,
@@ -42,7 +35,6 @@ export type TerminalLinkStoreState = {
     }[]
   >
   folderWorkspaces: []
-  repos?: { id: string; displayName: string }[]
 }
 
 export type TerminalLinkTestDoubles = {
@@ -79,8 +71,7 @@ export function createTerminalLinkTestDoubles(): TerminalLinkTestDoubles {
   const setMarkdownViewModeMock = vi.fn()
 
   const deps = { worktreeId: 'wt-1', worktreePath: '/tmp' }
-  // Why: specs assert the legacy openFile(file, options) shape; the link entry point delegates to it
-  // and records the view it "opened" so the guarded reveal can find it.
+  // Adapt legacy openFile assertions while recording the opened view for guarded reveal.
   const openFileForLinkMock = vi.fn(
     (
       file: { filePath: string; worktreeId: string },

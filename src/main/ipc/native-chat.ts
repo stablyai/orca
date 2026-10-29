@@ -14,9 +14,8 @@ import {
   type SubscribeNativeChatTranscriptArgs
 } from '../native-chat/transcript-watch'
 import { abortWhenRendererGone } from './renderer-lifetime-abort'
-import { agentHookServer } from '../agent-hooks/server'
-import { nativeChatTranscriptPathOnExecutionHost } from '../native-chat/ssh-transcript-path'
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
+import { openNativeChatTranscript } from '../native-chat/native-chat-open-wake'
 
 export { clearNativeChatTranscriptCache }
 
@@ -34,15 +33,15 @@ export type NativeChatReadSessionArgs = {
 async function readSession(args: NativeChatReadSessionArgs): Promise<ReadTranscriptResult> {
   const { agent, sessionId } = args
   const limit = args.limit && args.limit > 0 ? Math.floor(args.limit) : DESKTOP_READ_WINDOW
+  // Showing or paging a chat's history is a user act on its WSL distro.
+  const { transcriptPath, waking } = openNativeChatTranscript(sessionId, args.transcriptPath)
+  await waking
   return readNativeChatTranscriptTail({
     agent,
     sessionId,
-    transcriptPath: nativeChatTranscriptPathOnExecutionHost(
-      agentHookServer.getStatusSnapshot(),
-      sessionId,
-      args.transcriptPath
-    ),
-    limit
+    transcriptPath,
+    limit,
+    sourceOrder: true
   })
 }
 
@@ -187,15 +186,14 @@ async function handleSubscribe(event: IpcMainEvent, args: NativeChatSubscribeArg
   const canPublish = (): boolean =>
     !sender.isDestroyed() && !rendererSignal.aborted && !pending.controller.signal.aborted
 
+  // Opening a chat is a user act on its WSL distro; the watch that follows stays background.
+  const opened = openNativeChatTranscript(sessionId, transcriptPath)
   const subscribeArgs: SubscribeNativeChatTranscriptArgs = {
     agent,
     sessionId,
-    transcriptPath: nativeChatTranscriptPathOnExecutionHost(
-      agentHookServer.getStatusSnapshot(),
-      sessionId,
-      transcriptPath
-    ),
+    transcriptPath: opened.transcriptPath,
     initialLimit: limit,
+    sourceOrder: true,
     onTranscriptPending: () => {
       if (!canPublish()) {
         return
@@ -255,6 +253,9 @@ async function handleSubscribe(event: IpcMainEvent, args: NativeChatSubscribeArg
   }
   let subscription: NativeChatTranscriptSubscription
   try {
+    if (opened.waking) {
+      await opened.waking
+    }
     subscription = await subscribeNativeChatTranscript(subscribeArgs, pending.controller.signal)
   } catch {
     takePendingSubscription(sender.id, subscriptionId, pending)

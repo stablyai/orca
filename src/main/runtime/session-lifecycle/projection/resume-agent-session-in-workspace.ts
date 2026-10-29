@@ -1,5 +1,3 @@
-// A targeted resume of one recorded agent conversation into a fresh pane of its workspace.
-
 import { OrcaRuntimeWithAgentSessionResumeOwnership } from './agent-session-resume-ownership'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import {
@@ -17,6 +15,7 @@ import { deterministicAgentSessionUuid } from '../../runtime-agent-launch-resolu
 import { isUnclaimedRunningSleepRecord } from './sleep-record-pane-claim'
 import type { ResumedAgentSession } from './agent-session-resume-claims'
 import { worktreeIdsEqual } from '../../../../shared/worktree/id'
+import { WslHostWindowsOnlyAgentError } from '../../wsl-host-agent-terminal-launch'
 
 export type AgentSessionResumeRefusal =
   | 'window_owns_wake'
@@ -24,20 +23,20 @@ export type AgentSessionResumeRefusal =
   | 'no_resume_command'
   | 'aborted'
   | 'create_failed'
+  | 'windows_only_cli'
 
 export type AgentSessionResumeResult =
   | { ok: true; handle: string; paneKey: string; ptyId: string }
-  | { ok: false; reason: AgentSessionResumeRefusal }
+  | { ok: false; reason: Exclude<AgentSessionResumeRefusal, 'windows_only_cli'> }
+  /** A WSL host found only a Windows copy of the agent CLI; message says how to fix it. */
+  | { ok: false; reason: 'windows_only_cli'; message: string }
 
 export abstract class OrcaRuntimeWithResumeAgentSessionInWorkspace extends OrcaRuntimeWithAgentSessionResumeOwnership {
   protected abstract createRuntimeOwnedMobileSessionTerminal(
     ...args: Parameters<OwnedMobileTerminalCreate['createRuntimeOwnedMobileSessionTerminal']>
   ): ReturnType<OwnedMobileTerminalCreate['createRuntimeOwnedMobileSessionTerminal']>
 
-  /**
-   * Resumes one recorded conversation in a fresh pane of its workspace: the exact new binding, or
-   * a refusal. Never a plain shell or a fresh agent.
-   */
+  /** Resume the recorded conversation into a fresh bound pane or refuse; never substitute a plain shell or fresh agent. */
   async resumeAgentSessionInWorkspace(
     worktreeId: string,
     request: {
@@ -99,7 +98,9 @@ export abstract class OrcaRuntimeWithResumeAgentSessionInWorkspace extends OrcaR
       onPtyCreated: (ptyId: string) => void
     }
   ): Promise<AgentSessionResumeResult> {
-    const refuse = (reason: AgentSessionResumeRefusal): AgentSessionResumeResult => ({
+    const refuse = (
+      reason: Exclude<AgentSessionResumeRefusal, 'windows_only_cli'>
+    ): AgentSessionResumeResult => ({
       ok: false,
       reason
     })
@@ -112,11 +113,11 @@ export abstract class OrcaRuntimeWithResumeAgentSessionInWorkspace extends OrcaR
     } catch {
       return refuse('no_resume_command')
     }
-    // Why: a session id names a transcript on the host that reported it; elsewhere it cannot resume.
+    // Provider session ids name transcripts only on their reporting execution host.
     if (getConnectionExecutionHostId(workspace.connectionId) !== request.captureHostId) {
       return refuse('no_resume_command')
     }
-    // Why its own pane: a retry of this request reconciles the pane it started.
+    // Retries reconcile this request's pane instead of spawning another.
     const ownPaneKey = makePaneKey(create.identity.tabId, create.identity.leafId)
     if (await this.isProviderSessionLiveInAnotherPane(session, ownPaneKey)) {
       return refuse('held_elsewhere')
@@ -132,19 +133,27 @@ export abstract class OrcaRuntimeWithResumeAgentSessionInWorkspace extends OrcaR
     if (records.some((record) => !this.isPaneOwnedResumeRecord(record))) {
       return refuse('window_owns_wake')
     }
-    // Why: a session two panes record is never resumed automatically (resolvePaneOwnedResumeStartup).
+    // A session recorded by two panes cannot resume automatically (resolvePaneOwnedResumeStartup).
     if (records.length > 1) {
       return refuse('held_elsewhere')
     }
     const record = records[0]
-    const resume = this.resolveMobileSessionResumeCommand(workspace, {
-      ...session,
-      launchConfig: record?.launchConfig
-    })
+    let resume
+    try {
+      resume = this.resolveMobileSessionResumeCommand(workspace, {
+        ...session,
+        launchConfig: record?.launchConfig
+      })
+    } catch (error) {
+      if (error instanceof WslHostWindowsOnlyAgentError) {
+        return { ok: false, reason: 'windows_only_cli', message: error.message }
+      }
+      throw error
+    }
     if (!resume) {
       return refuse('no_resume_command')
     }
-    // Why: pane-owned before the spawn, so another resume of the record cannot run it twice.
+    // Claim pane ownership before spawn to prevent a second resume writer.
     if (record && isUnclaimedRunningSleepRecord(record)) {
       if (!(await this.claimSleepRecord(worktreeId, record))) {
         return refuse('held_elsewhere')
@@ -153,10 +162,9 @@ export abstract class OrcaRuntimeWithResumeAgentSessionInWorkspace extends OrcaR
     if (request.signal?.aborted) {
       return refuse('aborted')
     }
-    // Why: the create publishes onto the worktree's snapshot, which must hold its saved tabs first.
+    // Seed saved tabs before create publishes onto the workspace snapshot.
     this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktreeId)
-    // Why the runtime-owned create: it spawns with the runtime the command was quoted for, and a
-    // window-made create can time out here while its agent still starts.
+    // Runtime-owned create uses the quoting host; a window create may time out while its agent still starts.
     const created = await this.createRuntimeOwnedMobileSessionTerminal(
       worktreeId,
       false,

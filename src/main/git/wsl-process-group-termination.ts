@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto'
 import type { ProcessTerminationBarrier } from '@orca/process-host/process-spec'
 import { quotePosixShell } from '../../shared/shell-argument-quoting'
 import { runWslProcess } from '../wsl/wsl-runner'
+import { blockedWslDistroForPath } from '../wsl/wsl-unc-access-gate'
 
 const GUEST_TERMINATION_ATTEMPTS = 40
 const GUEST_TERMINATION_INTERVAL_SECONDS = '0.025'
@@ -31,6 +32,12 @@ export function createWslProcessGroupTermination(distro: string): WslProcessGrou
   const terminate = async (signal: 'TERM' | 'KILL'): Promise<boolean> => {
     if (processGroupId === null) {
       return false
+    }
+    // A cancel or timeout can land after the distro stopped; a kill would boot it again (E9).
+    // A confirmed stop already ended the group, while an unanswered read proves nothing.
+    const blocked = await blockedWslDistroForPath('', distro)
+    if (blocked) {
+      return blocked.state === 'stopped'
     }
     const script = [
       '_orca_group=$1',

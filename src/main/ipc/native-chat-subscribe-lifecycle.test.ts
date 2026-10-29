@@ -48,7 +48,7 @@ type SenderHarness = {
   sender: {
     id: number
     isDestroyed: () => boolean
-    once: (event: string, callback: () => void) => void
+    on: (event: string, callback: () => void) => void
     removeListener: (event: string, callback: () => void) => void
     send: ReturnType<typeof vi.fn>
   }
@@ -90,7 +90,7 @@ function createSender(id: number): SenderHarness {
     sender: {
       id,
       isDestroyed: () => destroyed,
-      once: (event, callback) => void events.once(event, callback),
+      on: (event, callback) => void events.on(event, callback),
       removeListener: (event, callback) => void events.removeListener(event, callback),
       send: vi.fn()
     }
@@ -156,6 +156,7 @@ describe('nativeChat subscribe lifecycle', () => {
 
     subscribe(renderer.sender, 'unmount')
     expect(setupSignal(0).aborted).toBe(false)
+    expect(subscribeTranscript.mock.calls[0]?.[0]).toMatchObject({ sourceOrder: true })
     expect(_getNativeChatPendingSubscriptionCountForTest()).toBe(1)
     unsubscribe(renderer.sender, 'unmount')
     expect(setupSignal(0).aborted).toBe(true)

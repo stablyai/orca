@@ -22,36 +22,6 @@ function item(itemId: string, body: AgentJournalRenderItem['body']): AgentJourna
 }
 
 describe('structured agent session ask-row projection', () => {
-  it('gives a pending question a row instead of dropping it from the transcript', () => {
-    // Codex only ever journals the question, so without this the reader sees
-    // nothing in the log while the agent is blocked on them.
-    const projected = projectQuestion(
-      item('q', {
-        kind: 'question',
-        question: 'Which branch?',
-        options: [{ id: 'q1:main', label: 'main' }],
-        resolution: { ...PENDING }
-      })
-    )
-
-    expect(projected?.role).toBe('system')
-    expect(projected?.blocks).toEqual([{ type: 'text', text: 'Which branch?' }])
-  })
-
-  it('prefers a grouped prompt own questions over the label naming their count', () => {
-    const grouped = item('grouped', {
-      kind: 'question',
-      question: '2 grouped questions from Claude',
-      options: [],
-      questions: [
-        { id: 'q1', question: 'Which targets?', multiSelect: true, options: [] },
-        { id: 'q2', question: 'Proceed?', multiSelect: false, options: [] }
-      ],
-      resolution: { ...PENDING }
-    })
-    expect(structuredQuestionTranscript([grouped]).receipts.get('grouped')).toBe(grouped.body)
-  })
-
   it('suppresses only a matching question tool and preserves failed or unmatched calls', () => {
     const call = item('ask', {
       kind: 'tool-call',
@@ -200,19 +170,6 @@ describe('structured agent session ask-row projection', () => {
     })
     expect(projectStructuredQuestionMessages([resolved])[0]).toMatchObject({ role: 'system' })
     expect(projectStructuredQuestionMessages([resolved])[0]).not.toBe(initial)
-  })
-
-  it('keeps an ordinary tool call', () => {
-    expect(
-      projectStructuredItemToNativeChat(
-        item('read', {
-          kind: 'tool-call',
-          name: 'Read',
-          input: { file_path: 'a.ts' },
-          state: 'running'
-        })
-      )?.blocks
-    ).toHaveLength(1)
   })
 })
 

@@ -1,3 +1,4 @@
+import type { AgentSessionCloseObserver } from './structured-agent-session-adapter-stop'
 import type { StructuredAgentSessionCurrentWork } from './structured-agent-session-current-work'
 import { heldStructuredAgentSessionCurrentWork } from './structured-agent-session-host-current-work'
 import { withTimeout } from '../../../shared/promise-timeout-fallback'
@@ -12,7 +13,7 @@ import type { SubmissionRejectionFact } from '../../../shared/agent-session-fail
 
 /** Personal Stop already records its event; other host stops record cause, while quit uses cut-turn rows. */
 export type StructuredAgentSessionStopEnding =
-  | { recorded: 'user-stop' }
+  | { recorded: 'user-stop'; observeClose?: AgentSessionCloseObserver }
   | {
       cause: Exclude<StructuredAgentSessionStopCause, 'user-stop'>
       reason?: string

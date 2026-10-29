@@ -19,8 +19,7 @@ describe('hasFlag', () => {
   })
 
   it('does not clusters-match a long flag that merely shares the prefix', () => {
-    // `--model-context` is its own option; treating it as `--model` would silently
-    // discard the picker's model from the launch record.
+    // --model-context is a separate option; prefix matching would discard the picker's model.
     expect(hasFlag(['--model-context', '8000'], MODEL_FLAGS)).toBe(false)
     expect(hasFlag(['--models'], MODEL_FLAGS)).toBe(false)
   })

@@ -2,7 +2,7 @@ import { useCallback } from 'react'
 import { toast } from 'sonner'
 
 import { translate } from '@/i18n/i18n'
-import type { LinearMode } from '@/components/task-page-localized-options'
+import type { LinearMode } from '@/components/task-page/task-page-localized-options'
 import type { LinearCollectionResult } from '../../../../../shared/linear/workspace-types'
 import type { LinearIssue } from '../../../../../shared/linear/issue-types'
 import type {
@@ -10,7 +10,7 @@ import type {
   LinearProjectSummary
 } from '../../../../../shared/linear/project-types'
 
-import { LINEAR_ITEM_LIMIT } from '../../task-page-source-context'
+import { LINEAR_ITEM_LIMIT } from '../task-page-source-context'
 import type { TaskPageLinearContextStatePreludeModel } from './use-task-page-linear-context-state'
 
 export function useTaskPageLinearContextActions(model: TaskPageLinearContextStatePreludeModel) {

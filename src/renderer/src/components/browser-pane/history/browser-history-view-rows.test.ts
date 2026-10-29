@@ -21,6 +21,9 @@ describe('browser history view rows', () => {
     expect(listBrowserHistoryRows(history, [], 'orca github').map((r) => r.title)).toEqual([
       'Orca repo'
     ])
+    expect(listBrowserHistoryRows(history, [], ' GITHUB   ORCA ').map((r) => r.title)).toEqual([
+      'Orca repo'
+    ])
     expect(listBrowserHistoryRows(history, [], '').map((r) => r.title)).toEqual([
       'Orca - Wikipedia',
       'Orca repo'

@@ -1,0 +1,22 @@
+{
+  "common": {
+    "back": "返回"
+  },
+  "settings": {
+    "appearance": {
+      "language": {
+        "description": "「系統」會使用此裝置的語言。權限提示一律使用裝置語言。",
+        "heading": "語言",
+        "systemWithCurrent": "系統（{{language}}）"
+      },
+      "theme": {
+        "dark": "深色",
+        "description": "「系統」會使用此裝置的淺色或深色設定。",
+        "heading": "主題",
+        "light": "淺色",
+        "system": "系統"
+      },
+      "title": "外觀"
+    }
+  }
+}

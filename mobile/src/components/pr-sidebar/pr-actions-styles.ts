@@ -1,11 +1,8 @@
 import { StyleSheet } from 'react-native'
 import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
+import { themedStyleSheet } from '../../theme/themed-styles'
 
-// Styles for PRActionsSection (action buttons, auto-merge toggle, transient-error
-// line). Split out of mobile-pr-sidebar-styles to keep that file under the
-// 300-line cap.
-export const prActionsStyles = StyleSheet.create({
-  // Bare block when identity + actions share one section card.
+export const prActionsStyles = themedStyleSheet(() => ({
   actionsBlock: {
     gap: spacing.sm
   },
@@ -18,7 +15,6 @@ export const prActionsStyles = StyleSheet.create({
   secondaryButton: {
     flex: 1
   },
-  // Primary CTA (merge) and secondary action buttons (close/reopen/rerun/add).
   actionButton: {
     minHeight: 44,
     flexDirection: 'row',
@@ -32,14 +28,12 @@ export const prActionsStyles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderSubtle
   },
-  // Neutral primary: a light fill with dark text, mirroring the desktop PR page's
-  // default button (no bright accent) so the sidebar stays mostly monochrome.
+  // Use neutral light/dark primary like desktop so sidebar stays mostly monochrome.
   actionButtonPrimary: {
     backgroundColor: colors.textPrimary,
     borderColor: colors.textPrimary
   },
-  // Merge CTA: green fill + white text, matching the desktop ChecksPanel's
-  // affirmative merge action. The merge still confirms before firing.
+  // Match desktop affirmative green merge CTA; action still confirms before execution.
   actionButtonMerge: {
     backgroundColor: colors.mergeGreen,
     borderColor: colors.mergeGreen
@@ -51,9 +45,7 @@ export const prActionsStyles = StyleSheet.create({
     opacity: 0.5
   },
   actionButtonText: {
-    // Why: shrink + single-line (numberOfLines=1 at call sites) so a long label
-    // like "Link existing pull request" can't wrap and inflate the button's
-    // effective padding on a narrow sidebar.
+    // Shrink single-line labels so long Link existing pull request cannot wrap and inflate narrow button height.
     flexShrink: 1,
     color: colors.textPrimary,
     fontSize: typography.bodySize,
@@ -65,7 +57,6 @@ export const prActionsStyles = StyleSheet.create({
   actionButtonDestructiveText: {
     color: colors.statusRed
   },
-  // Auto-merge toggle row: label + a pill that reflects on/off state.
   toggleRow: {
     minHeight: 44,
     flexDirection: 'row',
@@ -101,10 +92,25 @@ export const prActionsStyles = StyleSheet.create({
   togglePillTextOn: {
     color: colors.textPrimary
   },
-  // Non-blocking error line shown under an action after a transient failure.
+  hintRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: spacing.sm
+  },
+  actionHint: {
+    flex: 1,
+    color: colors.textSecondary,
+    fontSize: typography.metaSize,
+    lineHeight: 18
+  },
+  recheckText: {
+    color: colors.textPrimary,
+    fontSize: typography.metaSize,
+    fontWeight: '600'
+  },
   actionError: {
     color: colors.statusRed,
     fontSize: typography.metaSize,
     lineHeight: 18
   }
-})
+}))

@@ -37,7 +37,7 @@ function channelOver(
   const channel = new StructuredAgentSessionBackgroundTaskChannel(
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the channel reads only the record store's fence and the adapter's stop capability.
     {
-      store: { getRecord: () => null },
+      store: { getConversation: () => null },
       adapter: { backgroundTaskStops: stops }
     } as unknown as StructuredAgentSessionHostDeps,
     sessions,

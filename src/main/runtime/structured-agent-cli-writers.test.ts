@@ -1,3 +1,5 @@
+import type * as ProcessTableReader from '../../shared/process-table-snapshot-reader'
+import { hostSleepKey } from './terminal/stop/worktree-terminal-sleep-key'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentStatusIpcPayload } from '../../shared/agent-status-types'
 import type { AgentProcessVerdict } from '../../shared/agent-process-presence'
@@ -6,13 +8,14 @@ import type { SleepingAgentSessionRecord } from '../../shared/agent-session-resu
 import type { EnrichedAgentHookEventPayload } from '../agent-hooks/server/server-types'
 import {
   assertCliConversationWritersExited,
+  posixCliWriterShellAlone,
   type CliWriterHost
 } from './structured-agent-cli-writers'
 import { OrcaRuntimeService } from './orca-runtime'
 import type { RuntimeStore } from './runtime-store-contract'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
 import { bindPaneFirst } from './bind-first-pane.test-fixture'
+import { asProfileSessionStore } from './profile-session-store.test-fixture'
 import {
   OPEN_CODE_WRITER_TOPOLOGY,
   tmuxCliWriterEvent
@@ -94,6 +97,108 @@ function writerLayoutStore(): RuntimeStore {
 
 beforeEach(() => vi.clearAllMocks())
 describe('execution-host conversation writer inspection', () => {
+  it('looks through the macOS login wrapper to the shell it started', async () => {
+    // Captured from a real macOS pane: login(1) stays as the shell's parent.
+    const wrapped = [
+      {
+        pid: 10,
+        ppid: 1,
+        stat: 'Ss',
+        command: '/usr/bin/login -flpq user /bin/bash --noprofile --norc -p -c orca-tcc-login'
+      },
+      { pid: 11, ppid: 10, stat: 'S+', command: '-/bin/zsh -l' }
+    ]
+    snapshot.mockResolvedValue(wrapped)
+    await expect(posixCliWriterShellAlone(10)).resolves.toBe(true)
+    for (const rows of [
+      [wrapped[0]],
+      [...wrapped, { ...wrapped[1], pid: 13 }],
+      [wrapped[0], { ...wrapped[1], command: 'claude' }],
+      [wrapped[0], { ...wrapped[1], stat: 'Ss' }]
+    ]) {
+      snapshot.mockResolvedValue(rows)
+      await expect(posixCliWriterShellAlone(10)).resolves.toBe(false)
+    }
+  })
+
+  it.skipIf(
+    process.platform !== 'darwin' ||
+      process.env.GITHUB_ACTIONS !== 'true' ||
+      process.env.RUNNER_ENVIRONMENT !== 'github-hosted' ||
+      process.env.ORCA_MACOS_LOGIN_CENSUS_CI !== '1'
+  )(
+    'censuses a real login PTY on a disposable hosted Mac',
+    async () => {
+      expect(process.env.ORCA_DISABLE_MACOS_LOGIN_SHELL).toBeUndefined()
+      const login = await import('../providers/macos-tcc-login-shell')
+      expect(await login.prepareMacosTccLoginShell()).toMatchObject({
+        ok: true,
+        reason: 'accepted'
+      })
+      const wrapped = login.wrapShellSpawnForMacosTccAttribution('/bin/bash', [
+        '--noprofile',
+        '--norc',
+        '-i'
+      ])
+      expect(wrapped.file).toBe('/usr/bin/login')
+      const real = await vi.importActual<typeof ProcessTableReader>(
+        '../../shared/process-table-snapshot-reader'
+      )
+      snapshot.mockImplementation(real.getFreshShellForegroundSnapshot)
+      const { spawn } = await import('node-pty')
+      const proc = spawn(wrapped.file, wrapped.args, {
+        name: 'xterm-256color',
+        cols: 80,
+        rows: 24,
+        env: { PATH: '/usr/bin:/bin', TERM: 'xterm-256color' }
+      })
+      let exited = false
+      const subscription = proc.onExit(() => {
+        exited = true
+      })
+      const idle = () => posixCliWriterShellAlone(proc.pid)
+      const rows = () => real.getFreshShellForegroundSnapshot()
+      try {
+        await expect.poll(idle, { timeout: 15000 }).toBe(true)
+        const initial = await rows()
+        expect(initial.find((row) => row.pid === proc.pid)?.command).toMatch(/^\/usr\/bin\/login /)
+        const children = initial.filter((row) => row.ppid === proc.pid)
+        expect(children).toHaveLength(1)
+        expect(children[0].command).toMatch(/bash/)
+        expect(children[0].stat).toContain('+')
+        for (const kind of ['foreground', 'background', 'suspended']) {
+          proc.write(kind === 'foreground' ? '/bin/sleep 30\r' : '/bin/sleep 30 & job=$!\r')
+          const jobObserved = async (stopped = false) =>
+            (await rows()).some(
+              (row) =>
+                row.ppid === children[0].pid &&
+                row.command === '/bin/sleep 30' &&
+                (!stopped || row.stat.includes('T'))
+            )
+          await expect.poll(() => jobObserved(), { timeout: 15000 }).toBe(true)
+          if (kind === 'suspended') {
+            proc.write('kill -STOP "$job"\r')
+            await expect.poll(() => jobObserved(true), { timeout: 15000 }).toBe(true)
+          }
+          expect(await idle()).toBe(false)
+          proc.write(
+            kind === 'foreground'
+              ? '\x03'
+              : 'kill -CONT "$job"; kill "$job"; wait "$job"; unset job\r'
+          )
+          await expect.poll(idle, { timeout: 15000 }).toBe(true)
+        }
+      } finally {
+        // Only this shell's recorded job is signalled; login exits through its own shell.
+        proc.write('\x03')
+        proc.write('if [ -n "$job" ]; then kill -CONT "$job"; kill "$job"; wait "$job"; fi; exit\r')
+        await expect.poll(() => exited, { timeout: 15000 }).toBe(true)
+        subscription.dispose()
+      }
+    },
+    120000
+  )
+
   it('accepts exact exited or unchanged shell-only proof, never loss of evidence', async () => {
     await expect(inspection('unverifiable').run()).rejects.toMatchObject(refusal)
     for (const cause of ['missing-row', 'sleeping', 'failed-scan', 'unknown-topology'] as const) {
@@ -130,6 +235,196 @@ describe('execution-host conversation writer inspection', () => {
       await expect(check.run()).rejects.toMatchObject(refusal)
     }
   })
+
+  it.each(['claude', 'codex', 'pi', 'opencode', 'opencode2'] as const)(
+    'classifies the saved %s note separately from a physical terminal',
+    async (agent) => {
+      const check = inspection()
+      const record: SleepingAgentSessionRecord = {
+        paneKey: 'source',
+        worktreeId: 'workspace',
+        agent,
+        providerSession: { key: 'session_id', id: 'conversation' },
+        prompt: '',
+        state: 'done',
+        origin: 'worktree-sleep',
+        capturedAt: 1,
+        updatedAt: 1
+      }
+      check.host.saved = () => [record]
+      check.host.rows = () => []
+      check.host.sleeping = () => true
+      check.host.terminal = () => null
+      const run = () =>
+        assertCliConversationWritersExited(
+          check.host,
+          agent === 'opencode2' ? 'opencode' : agent,
+          'conversation',
+          { paneKey: record.paneKey, worktreeId: record.worktreeId }
+        )
+      await (agent === 'opencode' || agent === 'opencode2'
+        ? expect(run()).rejects.toMatchObject(refusal)
+        : expect(run()).resolves.toBeUndefined())
+      check.host.terminal = () => ({ pane: null })
+      await expect(run()).rejects.toMatchObject(refusal)
+      expect(check.host.shellAlone).not.toHaveBeenCalled()
+    }
+  )
+
+  it('uses normal physical proof for conclusively pane-owned OpenCode, retaining its saved-note guard', async () => {
+    const check = inspection()
+    check.host.rows = () => [{ ...row, agentType: 'opencode' }]
+    const saved: SleepingAgentSessionRecord = {
+      paneKey: row.paneKey,
+      worktreeId: 'workspace',
+      agent: 'opencode',
+      providerSession: { key: 'session_id', id: 'conversation' },
+      prompt: '',
+      state: 'done',
+      origin: 'live',
+      capturedAt: 1,
+      updatedAt: 1
+    }
+    check.host.saved = () => [saved]
+    const run = () => assertCliConversationWritersExited(check.host, 'opencode', 'conversation')
+    await expect(run()).resolves.toBeUndefined()
+    check.observation.presence = async () => 'live'
+    await expect(run()).rejects.toMatchObject(refusal)
+  })
+
+  it('probes a current row before admitting physical absence, even for a sleeping identity', async () => {
+    for (const verdict of [null, 'exited', 'live', 'unverifiable'] as const) {
+      const check = inspection(verdict)
+      check.host.terminal = () => null
+      check.host.sleeping = () => true
+      check.observation.topology = 'unverifiable'
+      const result = expect(check.run())
+      await (verdict === null || verdict === 'exited'
+        ? result.resolves.toBeUndefined()
+        : result.rejects.toMatchObject(refusal))
+      expect(check.observation.presence).toHaveBeenCalledOnce()
+    }
+    const replaced = inspection()
+    replaced.host.terminal = () => null
+    replaced.observation.presence = async () => {
+      replaced.replaceRow()
+      return null
+    }
+    await expect(replaced.run()).rejects.toMatchObject(refusal)
+  })
+
+  it('rechecks an absent saved pane and captured identity after another candidate awaits', async () => {
+    for (const changed of ['terminal', 'capture'] as const) {
+      const check = inspection()
+      const record: SleepingAgentSessionRecord = {
+        paneKey: 'absent',
+        worktreeId: 'workspace',
+        agent: 'codex',
+        providerSession: { key: 'session_id', id: 'conversation' },
+        prompt: '',
+        state: 'done',
+        origin: 'worktree-sleep',
+        capturedAt: 1,
+        updatedAt: 1
+      }
+      const other = { ...record, paneKey: 'other' }
+      check.host.saved = () => [record, other]
+      check.host.rows = () => []
+      const terminal = check.host.terminal
+      let appeared = false
+      check.host.terminal = (coordinates) =>
+        coordinates.paneKey === 'absent' && !appeared ? null : terminal(coordinates)
+      check.host.shellAlone = async () => {
+        if (changed === 'terminal') {
+          appeared = true
+        } else {
+          record.updatedAt += 1
+        }
+        return true
+      }
+      await expect(check.run()).rejects.toMatchObject(refusal)
+    }
+  })
+
+  it('retains a matching absent row observation across another saved candidate await', async () => {
+    const check = inspection()
+    const record: SleepingAgentSessionRecord = {
+      paneKey: row.paneKey,
+      worktreeId: 'workspace',
+      agent: 'codex',
+      providerSession: { key: 'session_id', id: 'conversation' },
+      prompt: '',
+      state: 'done',
+      origin: 'worktree-sleep',
+      capturedAt: 1,
+      updatedAt: 1
+    }
+    const other = { ...record, paneKey: 'other' }
+    check.host.saved = () => [record, other]
+    const terminal = check.host.terminal
+    check.host.terminal = (coordinates) =>
+      coordinates.paneKey === row.paneKey ? null : terminal(coordinates)
+    check.host.shellAlone = async () => {
+      check.replaceRow()
+      return true
+    }
+    await expect(check.run()).rejects.toMatchObject(refusal)
+  })
+
+  it.each(['absent', 'shell'] as const)(
+    'retains %s current-row proof without a saved match across a later saved census',
+    async (physical) => {
+      for (const changed of ['unchanged', 'row', 'terminal'] as const) {
+        const check = inspection()
+        const other: SleepingAgentSessionRecord = {
+          paneKey: 'other',
+          worktreeId: 'workspace',
+          agent: 'codex',
+          providerSession: { key: 'session_id', id: 'conversation' },
+          prompt: '',
+          state: 'done',
+          origin: 'worktree-sleep',
+          capturedAt: 1,
+          updatedAt: 1
+        }
+        check.host.saved = () => [other]
+        const terminal = check.host.terminal
+        const otherTerminal = terminal(other)
+        let appeared = false
+        check.host.terminal = (coordinates) =>
+          coordinates.paneKey !== row.paneKey
+            ? otherTerminal
+            : physical === 'absent' && !appeared
+              ? null
+              : terminal(coordinates)
+        const entered = Promise.withResolvers<void>()
+        const released = Promise.withResolvers<boolean>()
+        let scans = 0
+        check.host.shellAlone = async () => {
+          scans += 1
+          if (physical === 'shell' && scans === 1) {
+            return true
+          }
+          entered.resolve()
+          return released.promise
+        }
+        const result = check.run()
+        const assertion =
+          changed === 'unchanged'
+            ? expect(result).resolves.toBeUndefined()
+            : expect(result).rejects.toMatchObject(refusal)
+        await entered.promise
+        if (changed === 'row') {
+          check.replaceRow()
+        } else if (changed === 'terminal') {
+          appeared = true
+          check.replacePty()
+        }
+        released.resolve(true)
+        await assertion
+      }
+    }
+  )
 
   it('requires current owned shell proof for saved resumes, including done checkpoints', async () => {
     const record: SleepingAgentSessionRecord = {
@@ -212,17 +507,35 @@ describe('execution-host conversation writer inspection', () => {
     await expect(noRows.run()).rejects.toMatchObject(refusal)
   })
 
-  it('inspects the terminal a conversation leaves, whatever its rows now say', async () => {
+  it.each([
+    ['darwin', true],
+    ['darwin', false],
+    ['linux', false]
+  ] as const)('inspects %s CLI consumers (login=%s)', async (platform, wrapped) => {
     const leaf = '11111111-1111-4111-8111-111111111111'
     const pane = `tab-a:${leaf}`
     let rows: AgentStatusIpcPayload[] = []
-    const store = ORCA_LAYOUT_OWNER_IS_MAIN ? writerLayoutStore() : null
-    const runtime = new OrcaRuntimeService(store, undefined, {
+    const store = writerLayoutStore()
+    const sessions = asProfileSessionStore(store, 'local')
+    // The hook shell captures $PPID, the CLI, before starting its helper shell.
+    const cliProcess = {
+      pid: 82801,
+      platform,
+      startTime:
+        platform === 'darwin'
+          ? 'Mon Oct 26 03:00:00 2026'
+          : '11111111-2222-4333-8444-555555555555:123456'
+    }
+    probe.mockResolvedValue('exited')
+    class WriterRuntime extends OrcaRuntimeService {
+      readonly sleepStates = this.terminalSleepStateByHostWorktree
+    }
+    const runtime = new WriterRuntime(store, undefined, {
       getAgentProviderSessionSnapshot: () => rows,
       readHookCliWriterObservation: () => ({
         current: () => true,
         topology: 'pane-owned',
-        presence: async () => null
+        presence: async () => probe(cliProcess)
       })
     })
     const register = (tabId: string, incarnationId?: string, isWsl?: boolean) => {
@@ -234,7 +547,9 @@ describe('execution-host conversation writer inspection', () => {
     register('tab-a', 'i1')
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the census reads only listProcesses.
     runtime.setPtyController({
-      listProcesses: async () => [{ id: 'pty', rootProcessId: 10, incarnationId: 'i1' }]
+      listProcesses: async () => [
+        { id: 'pty', rootProcessId: wrapped ? 82718 : 82760, incarnationId: 'i1' }
+      ]
     } as never)
     const event = (agentType: string, extra?: Partial<EnrichedAgentHookEventPayload>) => ({
       paneKey: pane,
@@ -243,6 +558,9 @@ describe('execution-host conversation writer inspection', () => {
       stateStartedAt: 1,
       providerSession: { key: 'session_id' as const, id: 'conversation' },
       payload: { state: 'done' as const, prompt: '', agentType },
+      ...(agentType === 'claude'
+        ? { agentPresence: { agent: 'claude' as const, process: cliProcess } }
+        : {}),
       ...extra
     })
     const report = (agentType: string, extra?: Partial<EnrichedAgentHookEventPayload>) =>
@@ -251,16 +569,40 @@ describe('execution-host conversation writer inspection', () => {
       agent: 'claude' | 'opencode',
       source?: { workspaceId: string; paneKey: string }
     ) => runtime.assertStructuredAdoptionTerminalWritersExited(agent, 'conversation', source)
-    const shell = { pid: 10, ppid: 1, stat: 'Ss+', command: '/bin/zsh' }
+    const shell = {
+      pid: 82760,
+      ppid: wrapped ? 82718 : 1,
+      pgid: 82760,
+      tpgid: 82760,
+      stat: 'S+',
+      command: platform === 'darwin' ? '-/bin/zsh -l' : '/bin/bash'
+    }
+    const launch = wrapped
+      ? [
+          {
+            pid: 82718,
+            ppid: 46400,
+            pgid: 82718,
+            tpgid: 82760,
+            stat: 'Ss',
+            command:
+              '/usr/bin/login -flpq user /bin/bash --noprofile --norc -p -c orca-tcc-login /bin/zsh /bin/zsh -l'
+          }
+        ]
+      : []
     const census = async (run: () => Promise<void>) => {
       // A prompt's zpty worker left the session; any suspended or background job counts, whatever its name.
       const worker = [
+        ...launch,
         shell,
-        { pid: 20, ppid: 10, stat: 'Ss+', command: '-zsh -i' },
+        { pid: 20, ppid: 82760, stat: 'Ss+', command: '-zsh -i' },
         { pid: 21, ppid: 20, stat: 'S+', command: 'git status' }
       ]
-      for (const stat of ['T', 'SN']) {
-        snapshot.mockResolvedValue([...worker, { pid: 22, ppid: 10, stat, command: 'agent-alias' }])
+      for (const stat of ['S+', 'T', 'SN']) {
+        snapshot.mockResolvedValue([
+          ...worker,
+          { pid: 82801, ppid: 82760, stat, command: 'agent-alias' }
+        ])
         await expect(run()).rejects.toMatchObject(refusal)
       }
       snapshot.mockResolvedValue(worker)
@@ -268,18 +610,58 @@ describe('execution-host conversation writer inspection', () => {
     }
     // The header switch inspects the pane it leaves even when nothing recorded the conversation.
     await census(() => check('claude', { workspaceId: 'workspace', paneKey: pane }))
-    // A row restored after restart has no observed identity; the pane's current PTY decides.
+    // Another host's same-id workspace cannot hold this local source; each local sleep phase does.
+    const source = { workspaceId: 'workspace', paneKey: pane }
+    for (const phase of ['sleeping', 'partial', 'stopping'] as const) {
+      const state = {
+        worktreeId: 'workspace',
+        generation: 1,
+        phase,
+        ptyIds: [],
+        terminalHandles: [],
+        terminalHandlesByPtyId: {}
+      }
+      runtime.sleepStates.set(hostSleepKey('ssh:twin', 'workspace'), state)
+      await expect(check('claude', source)).resolves.toBeUndefined()
+      runtime.sleepStates.set(hostSleepKey('local', 'workspace'), state)
+      await expect(check('claude', source)).rejects.toMatchObject(refusal)
+      runtime.sleepStates.delete(hostSleepKey('local', 'workspace'))
+    }
+    runtime.sleepStates.clear()
+    // The current row rechecks the exited CLI identity before inspecting its PTY.
     rows = [{ ...row, paneKey: pane, agentType: 'claude' }]
     await census(() => check('claude'))
+    const saved: SleepingAgentSessionRecord = {
+      paneKey: pane,
+      worktreeId: 'workspace',
+      agent: 'claude',
+      providerSession: { key: 'session_id', id: 'conversation' },
+      prompt: '',
+      state: 'done',
+      origin: 'live',
+      capturedAt: 1,
+      updatedAt: 1
+    }
+    sessions.set(
+      { ...sessions.get('local'), sleepingAgentSessionsByPaneKey: { [pane]: saved } },
+      'local'
+    )
+    await census(() => check('claude'))
     rows = []
+    await census(() => check('claude'))
+    sessions.set({ ...sessions.get('local'), sleepingAgentSessionsByPaneKey: {} }, 'local')
+    expect(probe).toHaveBeenCalledWith(cliProcess)
     // Paused, then a second run overwrote the row and the pane moved: the link is the execution's.
     report('claude')
+    rows = [{ ...row, paneKey: pane, agentType: 'claude' }]
+    await census(() => check('claude'))
+    rows = [{ ...rows[0], providerSession: { key: 'session_id', id: 'later-run' } }]
     report('claude', { providerSession: { key: 'session_id', id: 'later-run' } })
     register('tab-b', 'i1')
     await census(() => check('claude'))
     // The agent's own process can outlive the terminal's tree, as in detached tmux or nohup.
     report('claude', {
-      agentPresence: { agent: 'claude', process: { pid: 12, platform: 'darwin', startTime: 's' } }
+      agentPresence: { agent: 'claude', process: cliProcess }
     })
     for (const verdict of ['live', 'unverifiable', 'exited'] as const) {
       probe.mockResolvedValueOnce(verdict)

@@ -11,6 +11,8 @@ import { parsePaneKey } from '../../../../shared/stable-pane-id'
 import type { WorkspaceAttachment, Worktree } from '../../../../shared/worktree/types'
 import type { Tab } from '../../../../shared/tab-types'
 import { getWorkspaceAttachmentOriginKey } from '../../../../shared/workspace-attachment-origins'
+import { useStructuredChatTabNames } from '@/runtime/structured-chat-name-observation'
+import { projectedStructuredChatTabName } from '@/runtime/structured-chat-tab-name'
 
 const EMPTY_TABS: Tab[] = []
 
@@ -53,6 +55,7 @@ export function WorkspaceAttachmentOrigins({
   workspace: Worktree
   compact?: boolean
 }): React.JSX.Element | null {
+  const names = useStructuredChatTabNames()
   const tabs = useReferenceTabs(workspace)
   const origins = item.origins?.filter((origin) => origin.kind === 'observed') ?? []
   if (!origins.length) {
@@ -69,6 +72,9 @@ export function WorkspaceAttachmentOrigins({
             (origin.hostId ?? 'local') === (workspace.hostId ?? 'local')
         )
         const label =
+          (tab?.contentType === 'agent-session'
+            ? projectedStructuredChatTabName(tab, names)
+            : null) ||
           tab?.customLabel ||
           tab?.label ||
           origin.label ||

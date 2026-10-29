@@ -1,5 +1,3 @@
-// Each pane's live terminal title laid over a published layout: live state, never saved.
-
 import type { PublishedWorkspaceLayout } from '../../shared/workspace-layout/workspace-layout-published'
 
 /** `titles` in tab and pane order, null for a pane with none; the same layout when all are null. */

@@ -1,4 +1,4 @@
-import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime-pty-id'
+import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { safeFit, safeFitAndThen } from '@/lib/pane-manager/pane-tree-ops'
 import { getFitOverrideForPty } from '@/lib/pane-manager/mobile-fit-overrides'
 import { waitForTerminalReplayWritesParsed } from '../replay-guard'
@@ -31,8 +31,7 @@ import { recordTerminalFreezeBreadcrumb } from '../terminal-freeze-breadcrumbs'
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 
 export function bindHiddenOutputRestoreSnapshot(session: ConnectPanePtySession): void {
-  // Why the kitty restore: an abandoned restore discards queued chunks the
-  // mirror already scanned, so xterm re-adopts the mirror's flags.
+  // Abandonment discards bytes the mirror already scanned; restore its Kitty flags into xterm after grounding.
   session.writeAbandonedRestoreGap = function (): void {
     session.writePtyOutputToXterm(
       `${RESET_AFTER_BYTE_GAP}${buildKittyKeyboardRestore(session.kittyKeyboardModes.snapshotFlags)}`,
@@ -59,9 +58,7 @@ export function bindHiddenOutputRestoreSnapshot(session: ConnectPanePtySession):
     session.requestRemoteProgramRedraw('restore-unavailable')
   }
 
-  // Why an ack instead of retiring on the serve: the pane can dispose across the serialize +
-  // IPC round trip, and a snapshot nobody painted heals nothing. Only PTYs whose bytes transit
-  // local main have a drop latch, so remote-runtime streams send nothing.
+  // Ack only after paint: disposal during serialization/IPC leaves the gap unhealed. Remote streams bypass local main’s drop latch.
   session.ackHiddenOutputRestoreApplied = function (
     ptyId: string,
     hiddenDropEpisode: number | null
@@ -137,9 +134,7 @@ export function bindHiddenOutputRestoreSnapshot(session: ConnectPanePtySession):
               session.suppressStructuralReplayPtyResize = false
             }
           }
-          // Why here and not from the writes below: the mirror tracks what the
-          // APPLICATION negotiated, so it must see the snapshot's own bytes
-          // before adopting the flags main proved for this boundary.
+          // Scan application snapshot bytes before adopting owner-proven flags; reset bytes do not represent application negotiation.
           session.applySnapshotKittyKeyboardModes(
             `${snapshot.scrollbackAnsi ?? ''}${snapshot.data}`,
             {
@@ -147,9 +142,7 @@ export function bindHiddenOutputRestoreSnapshot(session: ConnectPanePtySession):
               snapshotSeq: snapshot.seq
             }
           )
-          // Why shared: the SSH reattach model paint inlines the same
-          // choreography (coordinator nesting would deadlock there); one
-          // builder keeps the alt-screen branches from drifting.
+          // Share alt-screen choreography with SSH reattach, where coordinator nesting would deadlock.
           skippedAltFrame =
             snapshot.alternateScreen === true &&
             snapshot.frameRestoreAnsi !== undefined &&
@@ -161,10 +154,7 @@ export function bindHiddenOutputRestoreSnapshot(session: ConnectPanePtySession):
           const snapshotCarriesNoImage =
             snapshot.alternateScreen !== true && snapshot.data === '' && !snapshot.scrollbackAnsi
           if (snapshotCarriesNoImage) {
-            // Why still ground: a restore only runs because bytes were dropped, so
-            // the gap's pen outlives a snapshot that cannot repaint over it. The
-            // live-path constant, not the replay baseline — nothing repaints here,
-            // so the pane is handed back to whatever is still running.
+            // An imageless result still follows a byte gap; ground its pen with the live profile because no repaint resets it.
             session.writeReplayData(RESET_AFTER_BYTE_GAP)
             session.requestRemoteProgramRedraw('restore-imageless')
           } else {
@@ -176,10 +166,7 @@ export function bindHiddenOutputRestoreSnapshot(session: ConnectPanePtySession):
             }
           }
           const hasLiveAgent = session.hasLiveAgentReattachStatusOrTitleSignal()
-          // Why the pane-local fallback: every owner-publishing host also fills
-          // alternateScreen, but the reattach site falls back to pane state for
-          // an absent flag and this site must not drift from it (?1049l on a
-          // normal-buffer pane still runs cursor restore).
+          // Match reattach’s live-pane fallback when alternateScreen is absent; even same-buffer ?1049l runs cursor restore.
           const postReplayReset =
             snapshot.terminalOwner === 'shell'
               ? (snapshot.alternateScreen ?? session.isPaneOnAlternateScreen())
@@ -262,8 +249,7 @@ export function bindHiddenOutputRestoreSnapshot(session: ConnectPanePtySession):
               {
                 shouldContinue: isCurrentRestore,
                 retryIfUnmeasurable: true,
-                // A skipped frame is blank until this fit pushes the final
-                // grid/SIGWINCH, so carry the continuation through reveal.
+                // Carry the final-grid resize through reveal so SIGWINCH can repaint a skipped frame.
                 deferIfHidden: true
               }
             )

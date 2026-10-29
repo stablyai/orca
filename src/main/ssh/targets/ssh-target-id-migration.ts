@@ -6,19 +6,7 @@ import { parseAppSshPtyId, toAppSshPtyId } from '../../../shared/ssh-pty-id'
 import { toSshExecutionHostId } from '../../../shared/execution-host'
 import { normalizeManualRepoOrder } from '../../../shared/manual-repo-order'
 
-/**
- * Carrier sweep for SSH target re-adoption (see ssh-target-readoption.ts).
- *
- * reassignSshTargetId re-points repos/worktree metas, but the removed target's
- * id is also embedded in other persisted state: app-scoped SSH pty ids
- * ("ssh:<targetId>@@pty-N") inside the workspace session, the startup
- * reconnect list, sleeping-agent resume records, and the sidebar host-scope
- * arrays. Any survivor resurfaces later as `SSH target "<old>" not found` at
- * connect/reattach time (STA-1468), so every carrier must migrate together.
- *
- * All helpers mutate in place (matching how the Store edits this.state) and
- * return whether anything changed so callers can gate scheduleSave.
- */
+/** Re-adoption must migrate every persisted id carrier together or reconnect/reattach resurrects dead target ids (STA-1468). Mutate in place and report changes for save scheduling. */
 
 function rewriteSshPtyId(ptyId: string, oldTargetId: string, newTargetId: string): string | null {
   const parsed = parseAppSshPtyId(ptyId)
@@ -47,7 +35,6 @@ function rewriteSshPtyIdRecordValues(
   return changed
 }
 
-/** Re-point every old-target-id carrier inside one workspace session partition. */
 export function migrateWorkspaceSessionSshTargetId(
   session: WorkspaceSessionState,
   oldTargetId: string,
@@ -91,13 +78,7 @@ export function migrateWorkspaceSessionSshTargetId(
   return changed
 }
 
-/**
- * Re-point folder-workspace scopes pinned to the old SSH target.
- *
- * A folder workspace carries its own connection/host stamp, and its group can
- * carry the scope connection — neither is a repo row, so the repo sweep misses
- * both and the workspace (plus any automation pinned to it) stays on the dead id.
- */
+/** Folder workspace and group host stamps are outside the repo sweep; leaving either stale strands workspaces and pinned automations. */
 export function migrateFolderWorkspaceHostSshTargetId(
   scope: { folderWorkspaces?: FolderWorkspace[]; projectGroups?: ProjectGroup[] },
   oldTargetId: string,
@@ -119,7 +100,6 @@ export function migrateFolderWorkspaceHostSshTargetId(
   return changed
 }
 
-/** Re-point the sidebar host-scope arrays pinned to the old SSH host id. */
 export function migrateUiHostScopeSshTargetId(
   ui: PersistedUIState,
   oldTargetId: string,

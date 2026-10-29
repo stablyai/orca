@@ -1,3 +1,4 @@
+import { translateMain } from '../i18n/main-i18n'
 import { BrowserWindow, dialog, ipcMain } from 'electron'
 import { copyFile, mkdir, readFile, rm, stat } from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
@@ -21,12 +22,12 @@ export function registerPetHandlers(): void {
     const senderWindow =
       BrowserWindow.fromWebContents(event.sender) ?? BrowserWindow.getFocusedWindow()
     const options: Electron.OpenDialogOptions = {
-      title: 'Pick pet',
+      title: translateMain('native.dialog.pickPet', 'Pick pet'),
       properties: ['openFile'],
       // APNG uses .png; its missing macOS UTI can hide other formats when listed separately.
       filters: [
         {
-          name: 'Pet image',
+          name: translateMain('native.dialog.petImage', 'Pet image'),
           extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg']
         }
       ]

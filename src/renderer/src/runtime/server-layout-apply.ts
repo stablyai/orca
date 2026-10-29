@@ -1,10 +1,4 @@
-// A layout intent for a workspace a paired server's frames draw goes to that server's main
-// (design H5c), under the server's ids. Only the intents on one list do; any other keeps today's
-// path, as does every intent for a server that does not advertise `layout.intents.v1`. Closes,
-// starts and terminal names keep their RPCs (session.tabs.close, terminal.close, terminal.split,
-// session.tabs.createTerminal, terminal.rename), which that server's main applies to its own layout.
-// Editor opens go too (H5d): a new tab keeps the id the window proposed, which the server's frame
-// draws.
+// Route supported layout intents to paired main under its IDs only when frames draw the workspace and layout.intents.v1 is supported (H5c). Close/start/name RPCs retain server terminal-side effects. Editor opens preserve window-proposed IDs (H5d).
 
 import { isWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
 
@@ -17,14 +11,7 @@ import type { LayoutApplyHandlers, WindowLayoutCommand } from './layout-apply-se
 import { serverLayoutApplyRoute, type ServerLayoutApplyRoute } from './server-layout-apply-routes'
 import { serverEditorFileId } from './server-layout-frame-ids'
 
-/**
- * The intents a server's main applies from a paired desktop exactly as from its own window: tab and
- * group placement, pane sizes and moves (into a new tab too), a tab's props and non-terminal names,
- * a tab's chat pane, the workspace's default-tabs mark, and editor opens. Never a close (closeTabs,
- * closePane): main takes a window's close as already stopped and stops nothing, while this desktop
- * cannot stop a server's terminals; nor a start (createTerminalTab, splitPane), sleep or wake, which
- * need main's terminal side. Their RPCs reach that main instead.
- */
+/** Server main accepts placement, pane resize/move, props/nonterminal names, chat panes, default-tabs marks and editor opens. Never send close/start/sleep/wake intents: local-window close assumes terminals already stopped, and terminal lifecycle needs server RPC side effects. */
 export const SERVER_ROUTED_LAYOUT_COMMANDS = [
   'moveTab',
   'splitGroup',

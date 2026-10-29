@@ -1,9 +1,4 @@
-/**
- * argv for an interactive, unmanaged `ssh` login to a saved target. Only the target's identity is
- * shared with Orca's transport: no `-T`, no BatchMode and no Orca ControlMaster, so OpenSSH
- * allocates a TTY, prompts for passphrases, OTPs and host keys in the terminal, and applies the
- * user's own ssh_config (Include, Match, ProxyJump, ControlMaster) to the saved alias.
- */
+/** Keep interactive OpenSSH login unmanaged: omit -T, BatchMode and Orca ControlMaster so the saved alias uses user ssh_config and terminal prompts/TTY. */
 import type { SshTarget } from '../../../shared/ssh-types'
 import {
   appendSshTargetDestinationArgs,

@@ -5,6 +5,8 @@ import type { MobileDiffLine } from '../session/mobile-diff-lines'
 import type { MobileHighlightedDiffLine } from '../session/mobile-file-syntax'
 import { mobileDiffLineNumber, mobileDiffLinePrefix } from '../source-control/mobile-diff-format'
 import { colors, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { MobileSyntaxSegments } from './MobileSyntaxSegments'
 
 type Props = {
@@ -34,6 +36,7 @@ export function MobileDiffReviewLine({
   onAddNote,
   onEditNote
 }: Props) {
+  useMobileColorScheme()
   const lineNumber = mobileDiffLineNumber(line)
   const canComment = canCommentOnLine(line)
 
@@ -92,9 +95,8 @@ export function MobileDiffReviewLine({
   )
 }
 
-// Row height comes from the 18px code lineHeight alone (no vertical padding or
-// minHeight) so mobile diff density matches the desktop diff editor (STA-1239).
-const styles = StyleSheet.create({
+// Use 18px lineHeight alone without padding/minHeight to match desktop diff density (STA-1239).
+const styles = themedStyleSheet(() => ({
   row: {
     flexDirection: 'row',
     alignItems: 'stretch',
@@ -157,4 +159,4 @@ const styles = StyleSheet.create({
   noteButtonPressed: {
     opacity: 0.72
   }
-})
+}))

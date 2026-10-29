@@ -16,14 +16,17 @@ import {
 } from '../../shared/branch-name-from-work'
 import {
   cleanGeneratedCommitMessage,
+  STAGED_DIFF_BYTE_BUDGET,
   stripPrefilledReasoningPreamble
 } from '../../shared/commit-message-prompt'
 import { isCustomAgentId } from '../../shared/commit-message-agent-spec'
+import { planCommitMessageGeneration } from '../../shared/commit-message-plan'
 import type { ResolvedSourceControlAiGenerationParams } from '../../shared/source-control-ai'
 import { formatLinkedIssueTemplateValue } from '../../shared/source-control-ai-action-variables'
 import { renderSourceControlActionCommandTemplate } from '../../shared/source-control-ai-actions'
 import { captureAgentGenerationFailureOutput } from './agent-failure-output'
-import { runGenerationRequest } from './agent-generation-request'
+import { commandBackslashMode, runGenerationRequest } from './agent-generation-request'
+import { fitsLocalCommandLine } from './source-control-local-process'
 export { commandBackslashMode } from './agent-generation-request'
 import type {
   CommitMessageGenerationTarget,
@@ -39,6 +42,54 @@ export function trimGeneratedCommitMessage(message: string): string {
   return message.replace(/\s+$/, '')
 }
 
+// Leaves room for retry plans' extra flags.
+const COMMAND_LINE_FIT_HEADROOM = 1_000
+
+/** Argv-delivered prompts must fit the local command line, so shrink only the patch to the largest budget that fits. */
+function fitPromptToLocalCommandLine(
+  params: GenerateParams,
+  target: CommitMessageGenerationTarget,
+  build: (diffBudget?: number) => string
+): string {
+  const prompt = build()
+  // The WSL launcher re-wraps argv in a login-shell script, so this plan's size does not bound it; keep the guard's verdict.
+  if (
+    target.kind !== 'local' ||
+    target.wslDistro ||
+    (process.platform !== 'win32' && process.platform !== 'linux')
+  ) {
+    return prompt
+  }
+  const fits = (candidate: string): boolean => {
+    const planned = planCommitMessageGeneration(
+      { ...params, backslash: commandBackslashMode(target) },
+      candidate
+    )
+    return !planned.ok || fitsLocalCommandLine(planned.plan, COMMAND_LINE_FIT_HEADROOM)
+  }
+  if (fits(prompt)) {
+    return prompt
+  }
+  const minimum = build(0)
+  if (!fits(minimum)) {
+    return prompt
+  }
+  let best = minimum
+  let low = 1
+  let high = STAGED_DIFF_BYTE_BUDGET
+  while (low <= high) {
+    const budget = Math.floor((low + high) / 2)
+    const candidate = build(budget)
+    if (fits(candidate)) {
+      best = candidate
+      low = budget + 1
+    } else {
+      high = budget - 1
+    }
+  }
+  return best
+}
+
 export async function generateCommitMessage(input: {
   context: CommitMessageDraftContext
   params: GenerateParams
@@ -46,17 +97,17 @@ export async function generateCommitMessage(input: {
   spawnAgent: SpawnSourceControlAgent
 }): Promise<GenerateCommitMessageResult> {
   const { context, params } = input
-  const basePrompt = buildCommitMessagePrompt(context, '')
-  const prompt =
+  const prompt = fitPromptToLocalCommandLine(params, input.target, (diffBudget) =>
     params.commandInputTemplate !== undefined
       ? renderSourceControlActionCommandTemplate(params.commandInputTemplate, {
-          basePrompt,
+          basePrompt: buildCommitMessagePrompt(context, '', diffBudget),
           branch: context.branch ?? '(detached)',
           stagedFiles: context.stagedSummary,
           stagedPatch: context.stagedPatch,
           linkedIssue: formatLinkedIssueTemplateValue(context.linkedIssue)
         })
-      : buildCommitMessagePrompt(context, params.customPrompt ?? '')
+      : buildCommitMessagePrompt(context, params.customPrompt ?? '', diffBudget)
+  )
   const result = await runGenerationRequest({
     ...input,
     prompt,
@@ -84,11 +135,10 @@ export async function generatePullRequestFields(input: {
   spawnAgent: SpawnSourceControlAgent
 }): Promise<GeneratePullRequestFieldsResult<GeneratedPullRequestFields>> {
   const { context, params } = input
-  const basePrompt = buildPullRequestFieldsPrompt(context, '')
-  const prompt =
+  const prompt = fitPromptToLocalCommandLine(params, input.target, (diffBudget) =>
     params.commandInputTemplate !== undefined
       ? renderSourceControlActionCommandTemplate(params.commandInputTemplate, {
-          basePrompt,
+          basePrompt: buildPullRequestFieldsPrompt(context, '', diffBudget),
           branch: context.branch ?? '(detached)',
           baseBranch: context.base,
           currentTitle: context.currentTitle,
@@ -98,7 +148,8 @@ export async function generatePullRequestFields(input: {
           patch: context.patch,
           linkedIssue: formatLinkedIssueTemplateValue(context.linkedIssue)
         })
-      : buildPullRequestFieldsPrompt(context, params.customPrompt ?? '')
+      : buildPullRequestFieldsPrompt(context, params.customPrompt ?? '', diffBudget)
+  )
   const result = await runGenerationRequest({
     ...input,
     prompt,
@@ -129,8 +180,7 @@ export async function generatePullRequestFields(input: {
   }
 }
 
-// Why: a body may quote a lone closing tag inside valid JSON, so reasoning is
-// stripped only when the untouched output does not parse.
+// Valid JSON may quote a lone closing think tag; strip reasoning only after the original fails parsing.
 function parsePullRequestFieldsOutput(
   raw: string,
   context: PullRequestDraftContext,

@@ -49,7 +49,7 @@ export async function attemptEditorFileSave(
         ? attemptEditorFileSave({ ...target, convertToUtf8: true })
         : false
     }
-    // Why: shortcut handlers need a non-throwing result, while dependent actions must not treat a rejected write as success.
+    // Shortcut callers need non-throwing failures; dependent actions still must not treat refusals as saved.
     console.error('[editor] file save failed', error)
     toast.error(
       error instanceof Error && error.message === EDITOR_STALE_SAVE_MESSAGE

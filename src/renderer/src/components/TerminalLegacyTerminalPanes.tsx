@@ -69,8 +69,7 @@ export function TerminalLegacyTerminalPanes({
                     tab.id
                   )
                 ) {
-                  // Why only the startup hold lands here visible: reveal admits every other
-                  // visible deferred tab in the same render pass.
+                  // Only startup-held tabs remain visibly deferred; reveal admits other visible tabs in this render.
                   return isActiveTerminalTab ? <TerminalRestoringPlaceholder key={tab.id} /> : null
                 }
                 const activityTerminalPortal = findActivityTerminalPortal(activityTerminalPortals, {

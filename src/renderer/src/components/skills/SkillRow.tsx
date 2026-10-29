@@ -65,11 +65,9 @@ export function SkillRow({
   deletable: boolean
   /** Shown on the `Delete…` item itself, so it reads outside selection mode too. */
   deleteDisabledReason: string | null
-  /** Mode-dependent: a delete-ineligible row and a share-ineligible row need
-   *  different copy in the same visual slot. */
+  /** Use mode-specific copy for delete versus share ineligibility. */
   disabledLabel: string
-  /** Row-specific explanation only; page-wide causes are stated once above the
-   *  list instead of once per row. */
+  /** Show only row-specific causes; page-wide restrictions belong above the list. */
   disabledReason: string | null
   focusable: boolean
   onOpenDetail: () => void
@@ -81,8 +79,7 @@ export function SkillRow({
   onKeyDown: (event: React.KeyboardEvent<HTMLDivElement>) => void
 }): React.JSX.Element {
   const reasonId = useId()
-  // Why: Radix's checkbox callback carries no event, so the modifier has to be
-  // captured from the pointer press that produced it.
+  // Capture the pointer modifier because Radix’s checkbox callback provides no event.
   const rangeRef = useRef(false)
   const selectionBlocked = selectionMode && !selectable
   const showReason = selectionBlocked && disabledReason !== null
@@ -185,8 +182,7 @@ export function SkillRow({
               />
             </span>
           ) : null}
-          {/* Why: metadata is its own grid column, so the description truncates
-              where that column starts instead of at the window edge. */}
+          {/* Reserve a metadata column so descriptions truncate before metadata rather than at the window edge. */}
           <div className="grid min-w-0 flex-1 grid-cols-[minmax(0,1fr)_auto] items-baseline gap-x-3">
             <div className="flex min-w-0 items-baseline gap-2">
               <span className="min-w-0 truncate text-sm font-medium" data-skill-name>

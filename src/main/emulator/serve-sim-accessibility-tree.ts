@@ -1,4 +1,4 @@
-import { net } from 'electron'
+import { getMainHttpClient } from '../network/http-client'
 import { EmulatorError } from './emulator-errors'
 import { normalizeServeSimAxTree, type NormalizedAxNode } from './serve-sim-ax-normalization'
 
@@ -7,7 +7,7 @@ const MAX_ERROR_BODY_LENGTH = 512
 
 export async function requestServeSimAccessibilityTree(axUrl: string): Promise<NormalizedAxNode[]> {
   try {
-    const response = await net.fetch(axUrl, {
+    const response = await getMainHttpClient().fetch(axUrl, {
       signal: AbortSignal.timeout(AX_REQUEST_TIMEOUT_MS)
     })
     const body = await response.text()

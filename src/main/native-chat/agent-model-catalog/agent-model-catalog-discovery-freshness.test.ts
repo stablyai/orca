@@ -1,6 +1,7 @@
+import { agentSessionRecordFixture } from '../agent-session-record-test-fixture'
+import { agentSessionConversationView } from '../../../shared/agent-session-conversation-view'
 import { describe, expect, it, vi } from 'vitest'
 import type { AgentSessionAccountHome } from '../../../shared/agent-session-account-home'
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import type { AgentSessionModelOption } from '../../../shared/agent-session-wire'
 import { agentModelCatalogFingerprintForRecord } from './agent-model-catalog-fingerprint'
 import { createAgentModelCatalogService } from './agent-model-catalog-service'
@@ -12,7 +13,7 @@ import {
 
 const HOME: AgentSessionAccountHome = { variable: 'GROK_HOME', path: '/homes/grok' }
 
-const RECORD = {
+const RECORD = agentSessionRecordFixture({
   sessionId: 'grok-session',
   provider: 'grok',
   accountHome: HOME,
@@ -22,7 +23,7 @@ const RECORD = {
     workspaceId: 'ws-1',
     workspaceKind: 'git-worktree'
   }
-} as const satisfies Pick<AgentSessionRecord, 'sessionId' | 'provider' | 'accountHome' | 'location'>
+})
 
 const EFFORTS = [
   { value: 'low', label: 'Low' },
@@ -54,8 +55,8 @@ function harness(probe: () => Promise<AgentModelCatalogSuccess>) {
   const probes = vi.fn(probe)
   const catalog = createAgentModelCatalogService({
     store,
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the service reads only provider, accountHome and location.
-    getRecord: () => RECORD as unknown as AgentSessionRecord,
+    getConversation: () => agentSessionConversationView(RECORD),
+    getRecord: () => RECORD,
     drivesRecord: () => true,
     resolveAccountHome: async () => HOME,
     probes: { grok: probes },
@@ -81,11 +82,14 @@ describe('a live listing beside the account-level discovery', () => {
   it('merges a discovery that resolves after a live save instead of dropping it', async () => {
     let settle!: (success: AgentModelCatalogSuccess) => void
     const run = harness(() => new Promise((resolve) => (settle = resolve)))
+    // Explicit demand starts discovery; a chat lists while it is still running.
+    void run.catalog.demand({ agent: 'grok' })
     expect(await run.catalog.read({ agent: 'grok' })).toEqual({
       origin: 'unknown',
       listingInProgress: true
     })
     run.saveLive()
+    await vi.waitFor(() => expect(run.probes).toHaveBeenCalledTimes(1))
     settle(discovery('grok-4'))
     await vi.waitFor(() =>
       expect(run.store.get(agentModelCatalogFingerprintForRecord(RECORD))?.discovered).not.toBe(
@@ -104,9 +108,9 @@ describe('a live listing beside the account-level discovery', () => {
   it('names the default on a cold account whose first listing came from a live chat', async () => {
     const run = harness(async () => discovery('grok-4'))
     run.saveLive()
-    // Live membership cannot establish discovery freshness or the configured default.
-    await run.catalog.read({ agent: 'grok' })
-    expect(run.probes).toHaveBeenCalledTimes(1)
+    // A live listing alone names no default and does not count as fresh, so explicit demand lists the account.
+    await run.catalog.demand({ agent: 'grok' })
+    await vi.waitFor(() => expect(run.probes).toHaveBeenCalledTimes(1))
     await vi.waitFor(async () => expect(await run.defaultOf()).toBe('grok-4'))
   })
 
@@ -122,8 +126,8 @@ describe('a live listing beside the account-level discovery', () => {
       run.saveLive()
     }
     expect(run.store.shouldRefresh(agentModelCatalogFingerprintForRecord(RECORD))).toBe(true)
-    await run.catalog.read({ agent: 'grok' })
-    expect(run.probes).toHaveBeenCalledTimes(2)
+    await run.catalog.demand({ agent: 'grok' })
+    await vi.waitFor(() => expect(run.probes).toHaveBeenCalledTimes(2))
     await vi.waitFor(async () => expect(await run.defaultOf()).toBe('grok-3-mini'))
   })
 

@@ -1,6 +1,7 @@
 import {
   DOC_PREVIEW_EXTERNAL_LINK_CHANNEL,
-  parseDocPreviewUrl
+  parseDocPreviewUrl,
+  type DocPreviewExternalLink
 } from '../../shared/doc-preview-scheme'
 import { normalizeExternalBrowserUrl } from '../../shared/browser-url'
 import { enforceBrowserRouteWebRtcPolicy } from './browser-route-webrtc-policy'
@@ -8,7 +9,7 @@ import { getDocPreviewGrant } from './doc-preview-grant-registry'
 
 type PreviewHostRenderer = {
   id: number
-  send: (channel: string, payload: { url: string }) => void
+  send: (channel: string, payload: DocPreviewExternalLink) => void
 }
 
 type PreviewGuestRegistration = {
@@ -172,7 +173,11 @@ function isWebUrl(url: string): boolean {
 }
 
 // Preload reports trusted anchor clicks; require a known sender, live grant and web URL.
-export function reportDocPreviewLinkClick(sender: Electron.WebContents, rawUrl: string): void {
+export function reportDocPreviewLinkClick(
+  sender: Electron.WebContents,
+  rawUrl: string,
+  rawModifiers?: unknown
+): void {
   const registration = previewGuests.get(sender)
   if (!registration) {
     return
@@ -185,5 +190,14 @@ export function reportDocPreviewLinkClick(sender: Electron.WebContents, rawUrl: 
   if (!externalUrl || !isWebUrl(externalUrl)) {
     return
   }
-  registration.host.send(DOC_PREVIEW_EXTERNAL_LINK_CHANNEL, { url: externalUrl })
+  const modifiers = typeof rawModifiers === 'object' && rawModifiers !== null ? rawModifiers : {}
+  registration.host.send(DOC_PREVIEW_EXTERNAL_LINK_CHANNEL, {
+    url: externalUrl,
+    grantId: boundGrantId,
+    modifiers: {
+      metaKey: 'metaKey' in modifiers && modifiers.metaKey === true,
+      ctrlKey: 'ctrlKey' in modifiers && modifiers.ctrlKey === true,
+      shiftKey: 'shiftKey' in modifiers && modifiers.shiftKey === true
+    }
+  })
 }

@@ -1,8 +1,9 @@
 ---
 name: orchestration
 description: >-
-  Coordinate supervised Orca workers: threaded messages, blocking ask/reply,
-  task dispatch, worker_done/escalation waits, task DAGs, decision gates,
+  Coordinate supervised Orca workers, or work as a dispatched worker
+  (heartbeats, ask, worker_done): threaded messages, blocking ask/reply, task
+  dispatch, worker_done/escalation waits, task DAGs, decision gates,
   coordinator loops, and decomposing work across agents. Use `orca-cli` for full
   ownership handoffs — "hand off", "handoff", "handover", "give this to another
   agent", "another worktree" — unless asked to supervise, monitor, or coordinate
@@ -81,10 +82,14 @@ The injected preamble is authoritative. A dispatched worker must:
    coordinator question. Never open a local question TUI the coordinator cannot
    answer. Resume the same message ID after an ask timeout.
 2. Send heartbeats only at the cadence in the preamble. A heartbeat proves
-   liveness, not completion.
+   liveness, not completion. If a background loop sends them, restart it if it
+   expires mid-task, and stop it before `worker_done`.
 3. Read coordinator follow-ups at each natural checkpoint — before starting a
    new file, after a test run — and once more immediately before `worker_done`:
    `ORCA orchestration check --terminal <your_handle> --json`.
+   After processing every message, ack the batch, which returns the next one, and
+   repeat until `count` is 0; an unacked batch replays and hides newer mail:
+   `ORCA orchestration check --terminal <your_handle> --ack <delivery_id> --json`.
 4. Send `worker_done` exactly once, from the dispatched terminal, with a
    three-sentence executive summary, both lifecycle IDs, and explicit
    `--outcome succeeded` or `--outcome failed`. Never encode failure only in prose.
@@ -107,6 +112,12 @@ ORCA orchestration worker-start --spec "<worker A task>" --worktree current --ag
 ORCA orchestration worker-start --spec "<worker B task>" --worktree current --agent claude --json
 ORCA orchestration check --wait --types "worker_done,escalation,question" --timeout-ms 900000 --json
 ```
+
+After a restart, resume your own Run with `run-use --id <run_id>`. A worker
+cannot bind the Run it works for or an ancestor, and cannot use
+`--takeover-legacy`; an already-bound no-op remains allowed. When its
+coordinator directs a handoff, a replacement worker may resume a separate Run
+with plain `run-use`.
 
 If `worker-start` exits non-zero, do not relaunch. Read the receipt's
 `failedStage` and `residualResources`, then load

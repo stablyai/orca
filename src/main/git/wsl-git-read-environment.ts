@@ -1,4 +1,5 @@
 import { execFile } from 'node:child_process'
+import { assertWslDistroAllowed } from '@orca/process-host/wsl-distro-allowlist'
 import {
   buildWslCapturedLoginShellCommand,
   buildWslExecArgs
@@ -80,10 +81,17 @@ function probeWslGitReadEnvironment(distro: string): Promise<ProbeOutcome> {
     `printf '%s\\0%s\\0%s' "$PATH" "$_orca_git_path" "$HOME"`
   ].join('\n')
   const captured = buildWslCapturedLoginShellCommand(probeCommand)
+  const args = buildWslExecArgs(distro, ['sh', '-lc', captured.command])
   return new Promise((resolve) => {
+    try {
+      assertWslDistroAllowed('wsl.exe', args)
+    } catch {
+      resolve({ kind: 'rejected' })
+      return
+    }
     execFile(
       'wsl.exe',
-      buildWslExecArgs(distro, ['sh', '-lc', captured.command]),
+      args,
       {
         encoding: 'utf8',
         maxBuffer: PROBE_MAX_BUFFER,

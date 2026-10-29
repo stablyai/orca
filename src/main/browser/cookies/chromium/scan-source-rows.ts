@@ -2,29 +2,24 @@ import type { BrowserCookieImportResult } from '../../../../shared/browser-works
 import {
   isGoogleSourceBoundCookie,
   isNonTransplantableCookieDomain,
-  normalizeCookieImportDomain,
-  importedDomainScope
-} from '../../browser-cookie-import-policy'
-import { prepareStagedCookiesForImport } from '../../browser-cookie-staged-import'
-import {
-  chromiumTimestampToUnix,
-  buildChromiumCookieInsertParams
-} from '../../browser-cookie-sqlite'
+  normalizeCookieImportDomain
+} from '../browser-cookie-import-policy'
+import { isExpiredImportRow } from '../browser-cookie-import-write'
+import { chromiumTimestampToUnix } from '../sources/browser-cookie-sqlite'
 import { databaseSameSite } from '../sources/browser-cookie-validation'
 import {
   buildUndecryptableWarning,
   cookieEncryptionVersion,
   decryptCookieValueRaw
-} from '../../browser-cookie-decryption'
-import { diag } from '../../browser-cookie-import-diagnostics'
+} from '../sources/browser-cookie-decryption'
+import { diag } from '../browser-cookie-import-diagnostics'
 import type { ChromiumImportContext } from './import-context'
 
-/** Build one accepted-row set for live writes and scoped staged replay. */
+/** Decrypt readable source rows for the live merge. */
 export function scanChromiumCookieRows(
   context: ChromiumImportContext
 ): BrowserCookieImportResult | null {
-  const { sourceRows, sourceKey, plannedSourceRows, partitionBySourceRow, targetColumnInfo } =
-    context
+  const { sourceRows, sourceKey, plannedSourceRows, partitionBySourceRow } = context
 
   for (const sourceRow of sourceRows) {
     const domain = sourceRow.host_key as string
@@ -84,7 +79,7 @@ export function scanChromiumCookieRows(
       context.skipped++
       continue
     }
-    // Decryption failures were counted above; count other family-suppressed rows here.
+    // Unreadable partition identities cannot be imported faithfully.
     if (!plannedSourceRows.has(sourceRow)) {
       context.skipped++
       continue
@@ -96,56 +91,24 @@ export function scanChromiumCookieRows(
     // Missing SameSite values use Chromium’s unspecified fallback.
     const sameSite = databaseSameSite(Number(sourceRow.samesite ?? -1))
     const expiresUtc = chromiumTimestampToUnix(sourceRow.expires_utc as bigint)
+    if (isExpiredImportRow({ expirationDate: expiresUtc > 0 ? expiresUtc : undefined })) {
+      context.skipped++
+      continue
+    }
     const partition = partitionBySourceRow.get(sourceRow)!
     // latin1 preserves raw cookie bytes without UTF-8 replacement.
     const value = decryptedValue.toString('latin1')
-    context.scanned.push({
-      entry: {
-        decryptedValue,
-        value,
-        domain,
-        name,
-        path,
-        secure,
-        httpOnly,
-        sameSite,
-        expirationDate: expiresUtc > 0 ? expiresUtc : undefined,
-        partition
-      },
-      sourceRow
+    context.decryptedCookies.push({
+      value,
+      domain,
+      name,
+      path,
+      secure,
+      httpOnly,
+      sameSite,
+      expirationDate: expiresUtc > 0 ? expiresUtc : undefined,
+      partition
     })
-  }
-
-  for (const { entry } of context.scanned) {
-    context.domainSet.add(entry.domain.startsWith('.') ? entry.domain.slice(1) : entry.domain)
-  }
-  // Live removal and staged replay must use the same scope as the write plan.
-  context.importScope = importedDomainScope([...context.domainSet])
-
-  if (context.stagingDb && context.insertStmt) {
-    try {
-      prepareStagedCookiesForImport(context.stagingDb, context.importScope)
-    } catch (err) {
-      context.disableStaging(String(err))
-    }
-  }
-
-  for (const { entry, sourceRow } of context.scanned) {
-    context.decryptedCookies.push(entry)
-    if (context.insertStmt && targetColumnInfo) {
-      try {
-        const params = buildChromiumCookieInsertParams(
-          targetColumnInfo,
-          sourceRow,
-          entry.decryptedValue
-        )
-        context.insertStmt.run(...params)
-      } catch (err) {
-        context.disableStaging(String(err))
-      }
-    }
-    // Count importable cookies even when staging is unavailable.
-    context.imported++
   }
 
   diag(
@@ -155,13 +118,15 @@ export function scanChromiumCookieRows(
   context.undecryptableWarning = buildUndecryptableWarning({
     decryptFailed: context.decryptFailed,
     appBoundFailed: context.appBoundFailed,
-    keyringUnavailableFailed: context.keyringUnavailableFailed
+    keyringUnavailableFailed: context.keyringUnavailableFailed,
+    keyringFailure:
+      sourceKey?.mode === 'aes-128-cbc' && sourceKey.keyringFailure
+        ? { cause: sourceKey.keyringFailure, browser: context.browser.label }
+        : undefined
   })
 
   // Refuse before live mutation if an older client cannot report partition skips.
   if (context.partitionSkipped > 0 && context.options.canReportPartitionSkippedCookies === false) {
-    context.closeStagingDb()
-    context.discardStagingFile()
     return {
       ok: false,
       reason:

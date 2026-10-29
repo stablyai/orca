@@ -35,7 +35,7 @@ export function trackWithResult<N extends EventName>(
   name: N,
   props: EventProps<N>
 ): Promise<boolean | void> {
-  // Why: telemetry is fire-and-forget and must never throw into the renderer; log (don't rethrow/silently swallow) so IPC failures leave a breadcrumb.
+  // Telemetry must never throw into renderer callers; log IPC failure for breadcrumbs instead of rethrowing or silently swallowing.
   try {
     return (
       window.api?.telemetryTrack?.(name, { ...props })?.catch((err) => {
@@ -49,7 +49,7 @@ export function trackWithResult<N extends EventName>(
   }
 }
 
-// Returns a Promise (resolves, never rejects) so callers can await ordering a settings write after the opt-in event.
+/** Resolve without rejecting so callers can order settings writes after opt-in telemetry. */
 export function setOptIn(optedIn: boolean): Promise<void> {
   try {
     return (
@@ -74,8 +74,7 @@ export async function getConsentState(): Promise<TelemetryConsentState> {
   }
 }
 
-// Banner ✕ = silent persisted opt-in: unlike setOptIn(true) it must NOT emit telemetry_opted_in (user declined to intervene, didn't opt in).
-// Returns a Promise (resolves, never rejects) so callers can await ordering a settings fetch after the acknowledge persists.
+/** Banner dismissal persists silent opt-in, never telemetry_opted_in. Resolve without rejecting so subsequent settings fetch waits for persistence. */
 export function acknowledgeBanner(): Promise<void> {
   try {
     return (

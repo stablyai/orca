@@ -20,11 +20,7 @@ export type SessionSearchTipSetup = {
   enable: () => Promise<void>
 }
 
-/**
- * The tip's view of local session search, read from the setting and the index itself so a
- * build started from Settings shows the same progress. The feature-tips modal stays mounted
- * after it closes, so a build the user left mid-index is still watched and toasts once ready.
- */
+/** Watch the live index even after dismissal so builds started elsewhere stay in sync and dismissed builds can toast when ready. */
 export function useSessionSearchTipSetup({
   dialogOpen
 }: {

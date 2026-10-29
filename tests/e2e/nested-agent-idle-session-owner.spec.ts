@@ -23,7 +23,7 @@ import {
 import { createDesktopMobilePairingOffer } from './helpers/paired-electron-client'
 import { pairMobileClient } from './helpers/paired-mobile-client'
 import { readAgentProcess } from '../../src/shared/agent-process-presence-probe'
-import { resolveMobileNativeChat } from '../../mobile/src/session/mobile-native-chat-eligibility'
+import { resolveMobileNativeChat } from '../../mobile/src/session/native-chat/mobile-native-chat-eligibility'
 import type { RuntimeMobileSessionTabsResult } from '../../src/shared/runtime-session-contracts'
 
 const SESSION = '11111111-2222-4333-8444-555555555555'
@@ -106,7 +106,7 @@ test('idle Claude keeps chat, mobile transcript, and return identity through nes
   await orcaPage.screenshot({ path: testInfo.outputPath('01-claude-before-nested.png') })
   expect(
     await orcaPage.evaluate(
-      (key) => window.api.agentStatus.hasVerifiableAgentProcess(key),
+      async (key) => (await window.api.agentStatus.hasVerifiableAgentProcess?.(key)) ?? false,
       descriptor.paneKey
     )
   ).toBe(true)

@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('sonner', () => ({ toast: { error: mocks.toastError, message: vi.fn() } }))
 
 vi.mock('@/runtime/structured-agent-session-client', () => ({
+  subscribeStructuredAgentSessionStatus: vi.fn(async () => ({ unsubscribe: vi.fn() })),
   callStructuredAgentSession: mocks.call,
   supportsStructuredAgentSessionQuietRepeatedStop: vi.fn(async () => false)
 }))
@@ -164,7 +165,6 @@ describe('a chat write the host refused', () => {
         ? Promise.resolve(OPTIONS)
         : Promise.resolve({
             ok: false,
-            // As the host answers it (pinned in `journal-open-failure.test.ts`).
             refusal: {
               code: 'agent_session_journal_unreadable',
               message: 'Chats were saved by a newer Orca. Update Orca to keep using them.',
@@ -214,7 +214,7 @@ describe('a chat write the host refused', () => {
     await act(async () => {
       await expect(result.current.runConversationCommand('compact')).resolves.toEqual({
         accepted: false,
-        // The code does not say why, so no next step is offered that could be false.
+        // Unknown reasons must not invent potentially false next steps.
         error: "The command didn't run."
       })
     })

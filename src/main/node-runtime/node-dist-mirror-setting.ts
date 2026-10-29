@@ -1,9 +1,8 @@
-/** This computer's Node mirror: the Settings value, else the conventional environment variables. */
 import { resolveNodeDistMirror } from '../../shared/node-dist-mirror'
 
 let readMirrorSetting: (() => string | undefined) | null = null
 
-/** Registered once the settings store exists; read on every download, so edits apply at once. */
+/** Register after settings initialization; reread on every download so changes apply immediately. */
 export function setNodeDistMirrorSettingReader(read: (() => string | undefined) | null): void {
   readMirrorSetting = read
 }

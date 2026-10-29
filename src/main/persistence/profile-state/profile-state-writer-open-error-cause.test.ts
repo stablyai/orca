@@ -12,7 +12,7 @@ function acrossWorker(error: unknown): Error {
   )
 }
 
-// #27333: the startup failure logged `cause: undefined`, hiding which SQLite call failed.
+// Regression #27333: missing causes concealed the failing SQLite call.
 it('keeps the SQLite failure behind a database open error across the writer boundary', () => {
   const sqliteFailure = Object.assign(new Error('database is locked'), {
     code: 'ERR_SQLITE_ERROR',

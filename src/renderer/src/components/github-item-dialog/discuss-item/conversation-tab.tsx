@@ -99,7 +99,8 @@ export function ConversationTab({
   onCommentAdded: (comment: PRComment) => void
   onReviewersRequested: (reviewRequests: GitHubAssignableUser[]) => void
 }): React.JSX.Element {
-  const authorLabel = item.author ?? 'unknown'
+  const authorLabel =
+    item.author ?? translate('auto.components.GitHubItemDialog.773ff70035', 'unknown')
   const [replyingTo, setReplyingTo] = useState<number | null>(null)
   const [commentFilter, setCommentFilter] = useState<PRCommentAudienceFilter>('all')
   const [bodyDraft, setBodyDraft] = useState(body)
@@ -203,8 +204,7 @@ export function ConversationTab({
         )
         return false
       }
-      // Why: nest under review threads (path/threadId/discussion_r); never post a
-      // separate top-level conversation comment for those.
+      // Reply within review threads instead of creating unrelated top-level conversation comments.
       const isReviewThreadReply = item.type === 'pr' && canPostPRReviewThreadReply(comment)
       const result = isReviewThreadReply
         ? await addPRReviewCommentReplyForRepo({

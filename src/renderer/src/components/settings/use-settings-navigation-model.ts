@@ -19,7 +19,7 @@ export function useSettingsNavigationModel(
   model: SettingsStoreModel,
   interactions: SettingsInteractionController
 ) {
-  // Why: recompute scrollback mode only when the row value changes, not on every settings mutation.
+  // Unrelated settings mutations must not recompute scrollback mode.
   if (model.settings?.terminalScrollbackRows !== model.prevScrollbackRows) {
     model.setPrevScrollbackRows(model.settings?.terminalScrollbackRows)
     if (model.settings) {

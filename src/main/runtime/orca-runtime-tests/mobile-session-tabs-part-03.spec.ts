@@ -103,7 +103,8 @@ describe('OrcaRuntimeService', () => {
       if (withOffscreen) {
         runtime.setOffscreenBrowserBackend({
           createTab: vi.fn(),
-          closeTab: closeOffscreenTab
+          closeTab: closeOffscreenTab,
+          ownsTab: () => true
         })
       }
       runtime.syncWindowGraph(0, {
@@ -168,7 +169,8 @@ describe('OrcaRuntimeService', () => {
     const runtime = new OrcaRuntimeService(store)
     runtime.setOffscreenBrowserBackend({
       createTab: vi.fn(),
-      closeTab: closeOffscreenTab
+      closeTab: closeOffscreenTab,
+      ownsTab: () => true
     })
     runtime.setNotifier({
       worktreesChanged: vi.fn(),
@@ -294,7 +296,6 @@ describe('OrcaRuntimeService', () => {
       viewMode: 'chat',
       isActive: true
     })
-    // Written with the pane before spawn, so a serve restart keeps the initial mode.
     expect(
       getSession().tabsByWorktree[TEST_WORKTREE_ID]?.find(
         (tab) => tab.id === result.tab.parentTabId
@@ -326,8 +327,7 @@ describe('OrcaRuntimeService', () => {
   it.each(placementCases)('places a runtime-owned terminal $label', placesRuntimeOwnedTerminal)
 
   async function placesRuntimeOwnedTerminal(testCase: (typeof placementCases)[number]) {
-    // Switch point: the split and trailing tabs are main's own, saved in its layout; switch-off a
-    // host with no window knows them from the snapshot it published.
+    // Main-owned splits/tabs live in persisted layout; legacy headless hosts learn them from snapshots.
     const runtime = new OrcaRuntimeService(
       ORCA_LAYOUT_OWNER_IS_MAIN ? splitPlacementStore() : store
     )
@@ -571,7 +571,7 @@ describe('OrcaRuntimeService', () => {
       expect.objectContaining({ source: 'runtime-session', viewMode: 'chat' })
     )
     expect(spawn).not.toHaveBeenCalled()
-    // The final release restores throttling on the next task, after any native destruction.
+    // Release restores throttling next task, after native destruction.
     await vi.waitFor(() => expect(setBackgroundThrottling.mock.calls).toEqual([[false], [true]]))
     expect(result.tab).toMatchObject({
       type: 'terminal',
@@ -656,9 +656,7 @@ describe('OrcaRuntimeService', () => {
         runtime.markGraphUnavailable(1)
       }
       if (ORCA_LAYOUT_OWNER_IS_MAIN && graphStatus === 'unavailable') {
-        // Layout-owner build: the window closed, so main takes the graph back and starts the
-        // terminal itself; nothing reaches the closed window. (The fixture store has no
-        // agent-session API, so only where the start runs is under test.)
+        // Closed windows transfer graph ownership to main; fixture lacks agent-session APIs, so assert only start location.
         electronMocks.BrowserWindow.fromId.mockReturnValue(null)
         await runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`, {}).catch(() => null)
         expect(runtime.getStatus().graphStatus).toBe('ready')

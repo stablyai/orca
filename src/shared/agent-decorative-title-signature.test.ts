@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   DECORATIVE_AGENT_TITLE_SIGNATURE_SOURCE_SCAN_LIMIT,
   getDecorativeAgentTitleSignature,
+  getDecorativeTitleGateKey,
   isDecorativeAgentTitleFrameChange
 } from './agent-decorative-title-signature'
 
@@ -16,6 +17,35 @@ describe('agent decorative title signatures', () => {
         `${BRAILLE_SPINNER_FRAME_B}  Codex\tis\nthinking`
       )
     ).toBe(true)
+  })
+
+  it('folds a spinner frame repeated inside the title (Codex)', () => {
+    // Codex 0.155.1 titles, as recorded: the frame leads and repeats before the folder.
+    expect(
+      isDecorativeAgentTitleFrameChange(
+        '\u2819 renaming... \u2819 | scratch',
+        '\u2839 renaming... \u2839 | scratch'
+      )
+    ).toBe(true)
+    expect(getDecorativeAgentTitleSignature('\u2819 renaming... \u2819 | scratch')).toBe(
+      'working:renaming... | scratch'
+    )
+    // The runtime's session-tabs gate: equal keys publish nothing new.
+    const first = '\u2819 renaming... \u2819 | scratch'
+    const next = '\u2839 renaming... \u2839 | scratch'
+    expect(getDecorativeTitleGateKey(next, next)).toBe(getDecorativeTitleGateKey(first, first))
+  })
+
+  it('keeps braille inside a title that is not a copy of the leading frame', () => {
+    expect(
+      isDecorativeAgentTitleFrameChange('\u280b Codex \u2801 task', '\u280b Codex \u2803 task')
+    ).toBe(false)
+    expect(
+      isDecorativeAgentTitleFrameChange(
+        '\u2819 renaming\u2819... | scratch',
+        '\u2839 renaming\u2839... | scratch'
+      )
+    ).toBe(false)
   })
 
   it('returns null for ordinary non-agent titles', () => {

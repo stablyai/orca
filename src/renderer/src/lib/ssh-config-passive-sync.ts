@@ -8,10 +8,7 @@ let lastStartedAt = Number.NEGATIVE_INFINITY
 // An import persists hosts before they are listed; a failed listing must be retried next time.
 let metadataRefreshPending = false
 
-/**
- * Non-destructive ~/.ssh/config sync: no reAdopt, so hosts the user deleted stay deleted. Settings →
- * SSH used to be its only trigger, which left the status-bar hosts menu stale for everyone else.
- */
+/** Sync ~/.ssh/config without reAdopt so deleted hosts stay deleted; passive triggers keep menus fresh without opening SSH settings. */
 export function syncSshConfigTargetsPassively(): Promise<void> {
   if (inFlight) {
     return inFlight

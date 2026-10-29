@@ -504,9 +504,7 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
       updateWorktreeMeta
     } as unknown as Partial<AppState>)
 
-    // The coordinator coalesces linked PR refreshes by PR number, so one probe
-    // (worktree A's head) is broadcast to both aliases. Only A actually diverged;
-    // B is still on a contained commit and must keep its link.
+    // PR-number coalescing broadcasts A’s head probe to B too; clear only diverged A, retaining B’s contained-head link.
     store.getState().applyGitHubPRRefreshEvent({
       sequence: 1,
       reason: 'swr',

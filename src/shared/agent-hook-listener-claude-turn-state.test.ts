@@ -75,8 +75,7 @@ describe('shared agent-hook-listener', () => {
       'production'
     )
 
-    // Why: 'working' would show a phantom spinner on an idle TUI; a session-boundary
-    // 'done' renders the row idle, which is the truth at SessionStart.
+    // SessionStart is idle; working would invent a spinner before a turn.
     expect(event?.payload).toMatchObject({
       state: 'done',
       prompt: '',
@@ -85,11 +84,96 @@ describe('shared agent-hook-listener', () => {
     })
     expect(event?.payload.interrupted).toBeUndefined()
     expect(event?.hookEventName).toBe('SessionStart')
-    // Why: SessionStart carries resume identity, so in-app resume works before any prompt.
+    // SessionStart resume identity must work before the first prompt.
     expect(event?.providerSession).toMatchObject({
       key: 'session_id',
       id: '44444444-4444-4444-8444-444444444444'
     })
+  })
+
+  it('records the folder a Claude session started in, not the one its Bash tool moved to (#16960)', () => {
+    const sessionId = '55555555-5555-4555-8555-555555555555'
+    normalizeAndAccept(state, 'claude', {
+      hook_event_name: 'UserPromptSubmit',
+      session_id: sessionId,
+      prompt: 'go',
+      cwd: '/repo/pkg'
+    })
+    // Claude's hook cwd follows `cd` inside its Bash tool.
+    const afterCd = normalizeAndAccept(state, 'claude', {
+      hook_event_name: 'PostToolUse',
+      session_id: sessionId,
+      tool_name: 'Bash',
+      cwd: '/repo/pkg/sub'
+    })
+    const cleared = normalizeAndAccept(state, 'claude', {
+      hook_event_name: 'SessionStart',
+      source: 'clear',
+      session_id: '66666666-6666-4666-8666-666666666666',
+      cwd: '/repo/pkg'
+    })
+    const clearedPrompt = normalizeAndAccept(state, 'claude', {
+      hook_event_name: 'UserPromptSubmit',
+      session_id: '66666666-6666-4666-8666-666666666666',
+      prompt: 'next',
+      cwd: '/repo/pkg/sub'
+    })
+    const resumedElsewhere = normalizeAndAccept(state, 'claude', {
+      hook_event_name: 'SessionStart',
+      source: 'resume',
+      session_id: '77777777-7777-4777-8777-777777777777',
+      cwd: '/elsewhere'
+    })
+
+    expect(afterCd?.providerSession).toMatchObject({ id: sessionId, cwd: '/repo/pkg' })
+    expect(cleared?.providerSession?.cwd).toBe('/repo/pkg')
+    expect(clearedPrompt?.providerSession?.cwd).toBe('/repo/pkg')
+    expect(resumedElsewhere?.providerSession?.cwd).toBe('/elsewhere')
+  })
+
+  it("records a Claude session's live effort and keeps it across hooks that omit it", () => {
+    const sessionId = '88888888-8888-4888-8888-888888888888'
+    const prompt = normalizeAndAccept(state, 'claude', {
+      hook_event_name: 'UserPromptSubmit',
+      session_id: sessionId,
+      prompt: 'go'
+    })
+    normalizeAndAccept(state, 'claude', {
+      hook_event_name: 'PreToolUse',
+      session_id: sessionId,
+      tool_name: 'Bash',
+      effort: { level: 'max' }
+    })
+    // Subagent hooks name the parent session but report the subagent's own effort.
+    const subagent = normalizeAndAccept(state, 'claude', {
+      hook_event_name: 'PostToolUse',
+      session_id: sessionId,
+      agent_id: 'agent-1',
+      tool_name: 'Read',
+      effort: { level: 'low' }
+    })
+    const nextPrompt = normalizeAndAccept(state, 'claude', {
+      hook_event_name: 'UserPromptSubmit',
+      session_id: sessionId,
+      prompt: 'again'
+    })
+    // /clear starts a new session id in the same process, which keeps its effort.
+    const cleared = normalizeAndAccept(state, 'claude', {
+      hook_event_name: 'SessionStart',
+      source: 'clear',
+      session_id: '99999999-9999-4999-8999-999999999999'
+    })
+    const otherSession = normalizeAndAccept(state, 'claude', {
+      hook_event_name: 'SessionStart',
+      source: 'startup',
+      session_id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+    })
+
+    expect(prompt?.providerSession?.effort).toBeUndefined()
+    expect(subagent?.providerSession?.effort).toBe('max')
+    expect(nextPrompt?.providerSession?.effort).toBe('max')
+    expect(cleared?.providerSession?.effort).toBe('max')
+    expect(otherSession?.providerSession?.effort).toBeUndefined()
   })
 
   it('resets stale Claude turn state when SessionStart announces a new session on the pane', () => {
@@ -106,8 +190,7 @@ describe('shared agent-hook-listener', () => {
       source: 'startup'
     })
 
-    // Why: a new process owns the pane; stale prompt/tool/children must not survive
-    // into the fresh session's idle row or gate it back up to 'working'.
+    // New processes must not inherit stale prompt/tool/children or their working gates.
     expect(event?.payload.state).toBe('done')
     expect(event?.payload.prompt).toBe('')
     expect(event?.payload.toolName).toBeUndefined()
@@ -123,7 +206,7 @@ describe('shared agent-hook-listener', () => {
       { paneKey: PANE_KEY, payload: { hook_event_name: 'SessionStart', source: 'compact' } },
       'production'
     )
-    // Why: unknown/missing sources fail closed — only startup/resume/clear are idle boundaries.
+    // Only known startup/resume/clear boundaries may assert idle.
     const unknownSource = normalizeHookPayload(
       state,
       'claude',
@@ -141,8 +224,7 @@ describe('shared agent-hook-listener', () => {
     )
     const stopped = normalizeAndAccept(state, 'claude', { hook_event_name: 'Stop' })
 
-    // Why: auto-compact restarts mid-turn (PreCompact/PostCompact own that lifecycle) and a
-    // child-attributed SessionStart must not flip the lead's live turn to an idle row.
+    // Auto-compact restarts mid-turn; neither it nor child SessionStart may idle the lead.
     expect(compacted).toBeNull()
     expect(unknownSource).toBeNull()
     expect(child).toBeNull()
@@ -232,8 +314,7 @@ describe('shared agent-hook-listener', () => {
       prompt_id: CLAUDE_PREVIOUS_PROMPT_ID,
       session_id: 'session-a'
     })
-    // Why: PreCompact fires before the compact is validated — an aborted compact emits it alone —
-    // so it is neither registered nor mapped. Only the completion may move the pane.
+    // PreCompact can occur alone on abort; only completed compaction changes pane state.
     const pre = normalizeAndAccept(state, 'claude', {
       hook_event_name: 'PreCompact',
       trigger: 'manual',
@@ -280,9 +361,7 @@ describe('shared agent-hook-listener', () => {
       { paneKey: PANE_KEY, payload: { hook_event_name: 'UserPromptSubmit', prompt: 'fix login' } },
       'production'
     )
-    // Why: a real prompt starting with an unknown kebab tag (<my-custom-element>)
-    // is the user's turn — it must reset the cached prompt and count as explicit,
-    // so interrupt recovery does not leave the pane visibly done.
+    // Unknown kebab-tag prompts are real turns and must reset cached/interrupt state.
     const event = normalizeHookPayload(
       state,
       'claude',
@@ -328,8 +407,7 @@ describe('shared agent-hook-listener', () => {
       { paneKey: PANE_KEY, payload: { hook_event_name: 'UserPromptSubmit', prompt: 'first' } },
       'production'
     )
-    // The second listener has no cached prompt for this paneKey, so a tool
-    // event without a fresh prompt should produce empty prompt string.
+    // Listener prompt caches must remain independent.
     const event = normalizeHookPayload(
       b,
       'claude',
@@ -492,8 +570,7 @@ describe('the main agent verdict from an inferred interrupt', () => {
       ?.payload
   }
 
-  // Current Claude sends no hook on a cancel and no `is_interrupt` on Stop, so the cancellation
-  // enters the main agent record from Orca's inferred interrupt and rides into the next real Stop.
+  // Claude has no cancel hook/is_interrupt Stop; inferred cancellation must ride mainAgent into the next Stop.
   it('carries the inferred cancellation into the next plain Stop', () => {
     claude({ hook_event_name: 'UserPromptSubmit', prompt: 'go' })
     markClaudeLeadTurnInterrupted(state, PANE_KEY)

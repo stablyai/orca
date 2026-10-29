@@ -34,8 +34,7 @@ export function HostRenameDialog({
   const currentOverride = getHostDisplayLabelOverride(settings, hostId)
   const [value, setValue] = useState(currentOverride ?? '')
 
-  // Why: reseed the field from the persisted override each time the dialog opens
-  // so a prior cancelled edit doesn't leak into the next open.
+  // Seed persisted names on every open so canceled drafts cannot reappear.
   useEffect(() => {
     if (open) {
       setValue(currentOverride ?? '')

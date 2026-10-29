@@ -2,15 +2,10 @@ import type { IncomingMessage } from 'node:http'
 import { request } from 'node:https'
 import type { OpenSpeechDownloadRequest } from './speech-model-download-response'
 
-/**
- * Model downloads on a host without Chromium (orcad). Node does not follow redirects, so a 3xx
- * surfaces as the `redirect` Electron's `net` reports, and the download re-requests it the same
- * way. Node's `https` uses no proxy, so the host must reach the model host directly.
- */
+/** orcad uses direct Node HTTPS without proxy support; surface 3xx as redirects so the shared downloader re-requests them. */
 export const openNodeSpeechDownloadRequest: OpenSpeechDownloadRequest = (url) => {
   const outgoing = request(url, { method: 'GET' })
-  // Why permanent: abort() destroys the request after the download detached, and an unheard
-  // ClientRequest error would crash the server.
+  // Keep this after detach: abort can emit an otherwise unhandled error and crash orcad.
   outgoing.on('error', () => {})
   return {
     setHeader: (name, value) => {
@@ -21,7 +16,7 @@ export const openNodeSpeechDownloadRequest: OpenSpeechDownloadRequest = (url) =>
         const status = incoming.statusCode ?? 0
         const location = incoming.headers.location
         if (status >= 300 && status < 400 && location) {
-          // Drained so an unread redirect body cannot hold the socket before the caller aborts.
+          // Drain unread redirects so their bodies cannot retain the socket before abort.
           incoming.resume()
           redirect(status, 'GET', location)
           return

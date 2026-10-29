@@ -1,7 +1,8 @@
 import { Platform, StyleSheet } from 'react-native'
 import { colors, spacing } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
 
-export const bottomDrawerStyles = StyleSheet.create({
+export const bottomDrawerStyles = themedStyleSheet(() => ({
   overlay: {
     ...StyleSheet.absoluteFillObject,
     zIndex: 1000
@@ -39,8 +40,7 @@ export const bottomDrawerStyles = StyleSheet.create({
     })
   },
   drawerFill: {
-    // Why: flex children (results + dock) need a column height budget; without
-    // this, fill height alone still leaves staticContent height content-sized.
+    // Give flex results/dock a height budget; fill height alone leaves staticContent content-sized.
     overflow: 'hidden',
     flexDirection: 'column'
   },
@@ -76,4 +76,4 @@ export const bottomDrawerStyles = StyleSheet.create({
     height: 500,
     backgroundColor: colors.bgBase
   }
-})
+}))

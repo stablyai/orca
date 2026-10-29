@@ -1,6 +1,6 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { setClaudeStructuredOption } from './claude-structured-options'
-import type { ClaudeSession } from './claude-structured-session-state'
+import type { ClaudeSession } from './structured/claude-structured-session-state'
 import {
   PROVIDER_SESSION_ID,
   USER_MESSAGE,
@@ -107,8 +107,10 @@ describe('Claude model confirmation', () => {
     })
 
     await adapter.setOption({ sessionId: 'session-1', key: 'effort', value: 'high', fence: 7 })
-    await expect(adapter.readOptions({ sessionId: 'session-1', fence: 7 })).resolves.toMatchObject({
-      current: { model: 'claude-sonnet-5', effort: 'high', confirmed: ['model', 'effort'] }
+    await vi.waitFor(async () => {
+      expect(await adapter.readOptions({ sessionId: 'session-1', fence: 7 })).toMatchObject({
+        current: { model: 'claude-sonnet-5', effort: 'high', confirmed: ['model', 'effort'] }
+      })
     })
 
     await adapter.setOption({ sessionId: 'session-1', key: 'model', value: 'haiku', fence: 7 })

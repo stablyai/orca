@@ -1,7 +1,4 @@
-// The probe is the one place an inspection becomes a verdict, so it is the one place that has to
-// know `hasChildProcesses` cannot hold the third answer. A host that could not read its own process
-// table spells that the same way as one that read it and found nothing; Windows relays spelled it
-// `false` unconditionally, which read here as `exited` -- an idle verdict for a pane nobody looked at.
+// hasChildProcesses=false can mean missing host evidence, especially legacy Windows relays; it must not alone prove idle.
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { inspectRuntimeTerminalProcessMock } = vi.hoisted(() => ({

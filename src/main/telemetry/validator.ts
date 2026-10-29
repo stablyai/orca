@@ -1,26 +1,4 @@
-// Fail-closed runtime validator. Thin wrapper around
-// `eventSchemas[name].safeParse(props)` — the schema defined in
-// `src/shared/telemetry-events.ts` IS the validator. There is no parallel
-// `EVENT_SPEC` declaration to keep in sync with `EventMap`.
-//
-// The validator is the single enforcement point for both main-originated
-// and IPC-arrived events. TypeScript types do not survive IPC serialization,
-// so the renderer cannot be trusted to send well-typed payloads — the
-// renderer is explicitly in the threat model. Every shape-level promise in
-// `EventMap` is also a runtime check here.
-//
-// Contract (all drops go through the same fail-closed path — no event is
-// ever emitted when any of these fire):
-//   - Unknown event name → drop + rate-limited `console.warn`.
-//   - Extra property key → drop + warn. (Enforced by `.strict()` on every
-//     per-event object schema — no separate check.)
-//   - Missing required key → drop + warn.
-//   - Wrong type / value not in declared enum → drop + warn.
-//   - Any string longer than its `.max(N)` cap → drop + warn. (Enforced by
-//     `.max()` in the schema; the cap and the schema are the same thing.)
-//
-// Warnings are rate-limited: ≤ 1 log per `event_name` per 60 s. Silent
-// otherwise — a misbehaving caller should not be able to DoS stderr.
+// Use shared event schemas as the runtime contract for untrusted IPC and main callers. Fail closed on unknown names, extra/missing keys, wrong enums/types and overlong strings; cap warnings per name/minute to prevent stderr flooding.
 
 import {
   commonPropsSchema,
@@ -59,8 +37,7 @@ function warnRateLimited(key: string, message: string): void {
   if (prev !== undefined && now - prev < WARN_WINDOW_MS) {
     return
   }
-  // Why: renderer-originated event names are untrusted; keep the rate-limit
-  // table bounded even if a bad caller sends unique invalid names forever.
+  // Bound warning keys because untrusted callers can supply endless unique invalid event names.
   lastWarnAt.delete(key)
   lastWarnAt.set(key, now)
   pruneWarnCache(now)
@@ -68,9 +45,7 @@ function warnRateLimited(key: string, message: string): void {
 }
 
 export function validate<N extends EventName>(name: N, props: unknown): ValidationResult<N> {
-  // Event name must be a known key. `eventSchemas` is the source of truth for
-  // what names exist; a cast-bypass at a call site (`track('foo' as never, {})`)
-  // fails here at runtime.
+  // Reject unknown runtime names even when callers bypass static types.
   const schema = eventSchemas[name] as (typeof eventSchemas)[EventName] | undefined
   if (!schema) {
     const reason = `unknown event: ${String(name)}`
@@ -78,8 +53,7 @@ export function validate<N extends EventName>(name: N, props: unknown): Validati
     return { ok: false, reason }
   }
 
-  // `.safeParse()` is the single call that enforces exact key set (via
-  // `.strict()`), types, enum membership, and per-string `.max()` caps.
+  // Schema enforces exact keys, types, enums and string lengths together.
   const parsed = schema.safeParse(props)
   if (!parsed.success) {
     const issue = parsed.error.issues[0]
@@ -92,7 +66,6 @@ export function validate<N extends EventName>(name: N, props: unknown): Validati
   return { ok: true, props: parsed.data as EventProps<N> }
 }
 
-/** Test-only reset of the warn-rate-limit cache. */
 export function _resetValidatorWarnCacheForTests(): void {
   lastWarnAt.clear()
 }
@@ -101,7 +74,5 @@ export function _getValidatorWarnCacheSizeForTests(): number {
   return lastWarnAt.size
 }
 
-// Re-exported so `client.ts` can re-validate the merged outgoing payload
-// without reaching into `src/shared/telemetry-events.ts` directly. Keeps the
-// validator as the single surface the client depends on.
+// Keep outgoing common-property revalidation behind the same validator surface.
 export { commonPropsSchema }

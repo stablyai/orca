@@ -8,7 +8,7 @@ import { resolveEnvironmentSkillProviderRoots } from './skill-provider-runtime-r
 
 const HOME = '/home/test'
 
-// Why: a new agent must get an entry or a recorded reason, never a silent gap.
+// New agents need a provider entry or an explicit unsupported reason.
 const AGENTS_WITHOUT_INSTALL_PROVIDER: Partial<Record<TuiAgent, string>> = {
   'claude-agent-teams': 'detected only alongside claude, whose entry covers .claude/skills',
   aider: 'no skills support',
@@ -49,7 +49,6 @@ describe('skill install provider table drives discovery', () => {
         )
       }
     }
-    // Agents with a null scope read the canonical root, which is always listed.
     expect(sources.map((source) => source.path)).toEqual(
       expect.arrayContaining([
         posix.join(HOME, '.agents', 'skills'),

@@ -2,7 +2,7 @@ import type {
   AgentJournalItemIdentity,
   AgentJournalTurnScope
 } from '../../shared/agent-session-journal-types'
-import { backgroundTaskJournalBody } from '../../shared/native-chat-background-task-row'
+import { backgroundTaskJournalBody } from '../../shared/native-chat/input/native-chat-background-task-row'
 import { isBackgroundTaskBlock } from '../../shared/native-chat-types'
 import type {
   StructuredAgentSessionEventSink,

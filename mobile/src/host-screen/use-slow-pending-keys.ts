@@ -1,11 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 
-/** How long the desktop has to answer before a pending change shows a spinner. */
 export const SLOW_PENDING_MS = 500
 
 const NONE: ReadonlySet<string> = new Set()
 
-/** The pending keys the desktop has not answered within `delayMs` of each first going pending. */
 export function useSlowPendingKeys(
   pendingKeys: ReadonlySet<string>,
   delayMs: number = SLOW_PENDING_MS

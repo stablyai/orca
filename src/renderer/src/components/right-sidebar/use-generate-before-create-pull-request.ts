@@ -12,11 +12,7 @@ import { hasConfiguredSourceControlTextGenerationDefaults } from './source-contr
 
 type CreatePullRequest = (stacked?: boolean, fields?: PullRequestGenerationFields) => Promise<void>
 
-/**
- * Create PR on a ready branch: when the composer still holds Orca's seeded placeholders and a PR
- * agent is configured, run the composer's own generation and create from its result, like the
- * prepare-branch path does.
- */
+/** Generate before ready-branch creation only for seeded placeholders with a configured PR agent. */
 export function useGenerateBeforeCreatePullRequest({
   aiGenerationEnabled,
   canCreate,
@@ -60,7 +56,7 @@ export function useGenerateBeforeCreatePullRequest({
       const status = generationKey
         ? useAppStore.getState().pullRequestGenerationRecords[generationKey]?.status
         : undefined
-      // Why: the record is written before generation's first await, so repeated clicks see it.
+      // Generation publishes the running record before its first await, guarding repeated clicks.
       if (status === 'running') {
         return
       }
@@ -69,7 +65,7 @@ export function useGenerateBeforeCreatePullRequest({
         !canCreate ||
         !aiGenerationEnabled ||
         !fieldsAreSeedPlaceholders ||
-        // Why: after a failed or stopped run the next click submits as shown, so a broken agent never blocks Create PR.
+        // After failure/Stop, submit visible fields so a broken agent cannot block Create PR.
         status === 'failed' ||
         status === 'canceled' ||
         !hasConfiguredSourceControlTextGenerationDefaults({
@@ -89,7 +85,6 @@ export function useGenerateBeforeCreatePullRequest({
       if (!outcome.result) {
         return
       }
-      // The request record retains edits across branch switches and composer remounts.
       await createPullRequest(stacked, outcome.result)
     },
     [

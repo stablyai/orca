@@ -1,4 +1,6 @@
 import { useCallback, useRef, useState, type MutableRefObject } from 'react'
+import type { MobileSourceControlSettings } from '../transport/settings-read-operations'
+import { useMobileSourceControlSettings } from './mobile-source-control-settings'
 import { useFocusEffect } from 'expo-router'
 import { View } from 'react-native'
 import type { RpcClient } from '../transport/rpc-client'
@@ -10,7 +12,7 @@ import type { ConnectionState } from '../transport/types'
 import {
   nextBranchCompareState,
   readBranchCompareOutcome,
-  type BranchCompareOutcome
+  type BranchCompareAttempt
 } from './mobile-branch-compare-outcome'
 import { gitStatusHostPayloadRead } from './mobile-git-read-operations'
 import {
@@ -37,7 +39,6 @@ type Params = {
   onStatusLoadSuccess?: () => void
 }
 
-/** The compare is the whole worktree against its base, so its request carries no further parameters. */
 type BranchCompareParameters = Readonly<Record<string, never>>
 const WHOLE_WORKTREE: BranchCompareParameters = {}
 
@@ -51,36 +52,38 @@ export type MobileSourceControlLoaders = {
   mountedRef: MutableRefObject<boolean>
   setRootRef: (node: View | null) => void
   loadStatus: (options?: LoadStatusOptions) => Promise<boolean>
+  settings: MobileSourceControlSettings
+  // Desktop's rebase target; kept apart from the compare so a failed or unsupported compare keeps it.
+  rebaseBaseRef: string | null
 }
 
-// Owns git.status / git.branchCompare loading, the load-generation guards, and
-// the mount ref so the giant state hook stays under the line limit.
 export function useMobileSourceControlLoaders(params: Params): MobileSourceControlLoaders {
   const { client, connState, statusIdentityKey, worktreeId, setActionError, onStatusLoadSuccess } =
     params
+  // Desktop's settings decide the compare base here and the list order and diffs upstream.
+  const { settings, reload: reloadSettings } = useMobileSourceControlSettings(client, connState)
+  const compareAgainstUpstream = settings.compareAgainstUpstream
   const [screenState, setScreenState] = useState<ScreenState>({ kind: 'loading' })
   const [branchCompareState, setBranchCompareState] = useState<MobileBranchCompareState>({
     kind: 'idle'
   })
+  const [rebaseBaseRef, setRebaseBaseRef] = useState<string | null>(null)
   const currentStatusIdentityRef = useRef('')
   const loadGenerationRef = useRef(0)
   const mountedRef = useRef(true)
   const statusLoadInFlightRef = useRef<StatusLoadInFlight | null>(null)
   const branchCompare = useRef(
-    new GenerationScopedRequestOwner<BranchCompareParameters, BranchCompareOutcome>()
+    new GenerationScopedRequestOwner<BranchCompareParameters, BranchCompareAttempt>()
   ).current
-  // Why: the same route can be reused for another worktree/host (identity change);
-  // a kept-on-failure `ready` state would otherwise show the previous worktree's
-  // data until the fresh load resolves. Reset to loading in the render phase (the
-  // React "adjust state on prop change" pattern) before the new load runs.
+  // Reset on identity change during render so retained ready state cannot expose another host/worktree for a frame.
   const lastResetIdentityRef = useRef(statusIdentityKey)
   if (lastResetIdentityRef.current !== statusIdentityKey) {
     lastResetIdentityRef.current = statusIdentityKey
-    // Retire here rather than leaving it to the next load's scope: that load only starts once the
-    // fresh status returns, and an in-flight compare would publish the old worktree's commits first.
+    // Retire before fresh status arrives; otherwise the old compare can publish into the new worktree.
     branchCompare.reset()
     setScreenState({ kind: 'loading' })
     setBranchCompareState({ kind: 'idle' })
+    setRebaseBaseRef(null)
   }
   currentStatusIdentityRef.current = statusIdentityKey
 
@@ -90,8 +93,7 @@ export function useMobileSourceControlLoaders(params: Params): MobileSourceContr
         mountedRef.current = true
         return
       }
-      // Why: source-control RPC loads can outlive the route; invalidate pending
-      // writes when the screen detaches without a passive cleanup-only Effect.
+      // Invalidate route-detached RPC writes without waiting for passive cleanup.
       mountedRef.current = false
       loadGenerationRef.current += 1
       branchCompare.reset()
@@ -100,9 +102,9 @@ export function useMobileSourceControlLoaders(params: Params): MobileSourceContr
   )
 
   const loadBranchCompare = useCallback(
-    async (options?: { preserveReadyOnFailure?: boolean }) => {
-      // A compare is a refresh, so nothing it holds is reusable and no attempt may share another's
-      // reply: retiring first is what makes the newest attempt the only one that can still publish.
+    // The compare base can be the branch's upstream, so it follows the status read that triggered it.
+    async (options: { preserveReadyOnFailure: boolean; upstreamName: string | undefined }) => {
+      // Each compare refresh owns a fresh reply; retire first so only the newest attempt can publish.
       branchCompare.reset()
       if (!worktreeId || !client || connState !== 'connected') {
         if (mountedRef.current) {
@@ -110,18 +112,17 @@ export function useMobileSourceControlLoaders(params: Params): MobileSourceContr
         }
         return false
       }
-      // What retires a compare: this host and this route identity, which is `${hostId}\0${worktreeId}`
-      // and so carries the workspace already. It is in the scope as well as in the render-phase
-      // retire, so a scope the owner has not seen still retires on its own if a load ever reaches it
-      // before that block does.
+      // Scope by host and route identity as well as render-time retirement to fence loads that reach the owner first.
       const scope: RequestScope = [client, statusIdentityKey]
 
       setBranchCompareState((prev) => (prev.kind === 'ready' ? prev : { kind: 'loading' }))
       const loaded = await branchCompare.load(scope, WHOLE_WORKTREE, (currency) =>
-        readBranchCompareOutcome(client, worktreeId, currency)
+        readBranchCompareOutcome(client, worktreeId, currency, {
+          compareAgainstUpstream,
+          upstreamName: options.upstreamName
+        })
       )
-      // The mount latch is not the owner's to keep: a detached route has no screen to publish to,
-      // which is a fact about the view, not about which reply is current.
+      // Mount liveness belongs to the view; a current reply still cannot publish after detach.
       if (!loaded || !mountedRef.current) {
         return false
       }
@@ -129,16 +130,20 @@ export function useMobileSourceControlLoaders(params: Params): MobileSourceContr
         return false
       }
       const outcome = loaded.value
+      setRebaseBaseRef(outcome.effectiveBaseRef)
       setBranchCompareState((prev) =>
-        nextBranchCompareState(outcome, prev, options?.preserveReadyOnFailure === true)
+        nextBranchCompareState(outcome, prev, options.preserveReadyOnFailure)
       )
       return outcome.kind === 'ready'
     },
-    [branchCompare, client, connState, statusIdentityKey, worktreeId]
+    [branchCompare, client, compareAgainstUpstream, connState, statusIdentityKey, worktreeId]
   )
 
   const loadStatus = useCallback(
     async (options?: LoadStatusOptions) => {
+      if (options?.rereadSettings) {
+        reloadSettings()
+      }
       const loadKey = statusIdentityKey
       const inFlight = statusLoadInFlightRef.current
       if (inFlight && !options?.force && inFlight.key === loadKey && inFlight.client === client) {
@@ -180,18 +185,19 @@ export function useMobileSourceControlLoaders(params: Params): MobileSourceContr
             if (!isCurrentLoad()) {
               return false
             }
-            // Why the raw refusal: the retry and capability routes below are decided by the
-            // refusal's code, which no acceptance policy carries through.
+            // Inspect refusal code before acceptance policy loses capability/retry routing information.
             const refusal = readMobileGitRefusal(reply)
             if (!refusal) {
               const result = gitStatusHostPayloadRead.interpret(reply)
               setScreenState({ kind: 'ready', status: result })
-              void loadBranchCompare({ preserveReadyOnFailure: true })
+              void loadBranchCompare({
+                preserveReadyOnFailure: true,
+                upstreamName: result.upstreamStatus?.upstreamName
+              })
               if (options?.clearActionErrorOnSuccess !== false) {
                 setActionError(null)
               }
-              // Why: recovery prompts are based on a specific failed commit
-              // snapshot; a fresh status means that snapshot may be stale.
+              // Fresh status can invalidate the failed-commit snapshot used by recovery prompts.
               onStatusLoadSuccess?.()
               return true
             }
@@ -220,9 +226,7 @@ export function useMobileSourceControlLoaders(params: Params): MobileSourceContr
           }
           const message = err instanceof Error ? err.message : 'Unable to load source control'
           setScreenState((prev) => {
-            // Why: git mutations can succeed while the immediate status refresh
-            // races a desktop abort; keep the last good screen instead of flashing
-            // a full-screen error that Retry fixes a moment later.
+            // Mutations can succeed while refresh races an abort; retain the last good screen through transient read failure.
             if (options?.preserveReadyOnFailure && prev.kind === 'ready') {
               return prev
             }
@@ -247,6 +251,7 @@ export function useMobileSourceControlLoaders(params: Params): MobileSourceContr
       connState,
       loadBranchCompare,
       onStatusLoadSuccess,
+      reloadSettings,
       statusIdentityKey,
       worktreeId,
       setActionError
@@ -266,6 +271,8 @@ export function useMobileSourceControlLoaders(params: Params): MobileSourceContr
     setBranchCompareState,
     mountedRef,
     setRootRef,
-    loadStatus
+    loadStatus,
+    settings,
+    rebaseBaseRef
   }
 }

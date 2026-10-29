@@ -4,10 +4,13 @@ const launchAgentInNewTab = vi.hoisted(() => vi.fn())
 const writeClipboardText = vi.hoisted(() => vi.fn(async () => undefined))
 const ensureDetectedAgentsForWorktree = vi.hoisted(() => vi.fn())
 const toast = vi.hoisted(() => ({ error: vi.fn(), success: vi.fn(), warning: vi.fn() }))
-const store: { settings: { disabledTuiAgents: string[]; experimentalNativeChat?: boolean } } =
-  vi.hoisted(() => ({
-    settings: { disabledTuiAgents: [] }
-  }))
+const store: {
+  settings: { disabledTuiAgents: string[]; experimentalNativeChat?: boolean }
+  getKnownWorktreeById: () => undefined
+} = vi.hoisted(() => ({
+  settings: { disabledTuiAgents: [] },
+  getKnownWorktreeById: () => undefined
+}))
 
 vi.mock('@/store', () => ({ useAppStore: { getState: () => store } }))
 vi.mock('@/lib/launch-agent-in-new-tab', () => ({ launchAgentInNewTab }))
@@ -135,8 +138,7 @@ describe('launchAgentSessionContinuation', () => {
   })
 
   it('hedges instead of claiming success when the paste went out unconfirmed', async () => {
-    // Regression (#22479): on Windows the composer-ready signal can never fire, so the paste
-    // is written blind. Reporting that as a delivered handoff hid a prompt that never arrived.
+    // Windows may force blind paste; do not report a handoff delivered when its composer was never observed (#22479).
     launchAgentInNewTab.mockImplementation(
       (args: {
         onPromptDelivered?: () => void
@@ -168,7 +170,7 @@ describe('launchAgentSessionContinuation', () => {
     expect(writeClipboardText).toHaveBeenCalledWith('continue the unfinished task')
   })
 
-  it('still reports a confirmed delivery as a success', async () => {
+  it('keeps the confirmed-delivery toast visible until dismissed', async () => {
     launchAgentInNewTab.mockImplementation((args: { onPromptDelivered?: () => void }): unknown => {
       args.onPromptDelivered?.()
       return {
@@ -185,7 +187,10 @@ describe('launchAgentSessionContinuation', () => {
       launchSource: 'sidebar'
     })
 
-    expect(toast.success).toHaveBeenCalledWith('Session context sent to Codex in a new session.')
+    expect(toast.success).toHaveBeenCalledWith(
+      'Session context sent to Codex in a new session.',
+      expect.objectContaining({ duration: Infinity, dismissible: true })
+    )
     expect(toast.warning).not.toHaveBeenCalled()
   })
 })

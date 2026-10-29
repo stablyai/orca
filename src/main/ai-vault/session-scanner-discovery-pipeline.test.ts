@@ -293,10 +293,10 @@ describe('fresh discovery pipeline', () => {
       await fs.unlink(alias)
       await fs.symlink(join(root, 'b'), alias, 'dir')
       expect((await scan(alias)).files[0]?.sizeBytes).toBe(15)
-      await fs.writeFile(a, '{"target":"a"}\n')
+      await fs.writeFile(a, '{"target":"a-long"}\n')
       await fs.unlink(alias)
       await fs.symlink(join(root, 'a'), alias, 'dir')
-      expect((await scan(alias)).files[0]?.sizeBytes).toBe(15)
+      expect((await scan(alias)).files[0]?.sizeBytes).toBe(20)
     }
   )
 })

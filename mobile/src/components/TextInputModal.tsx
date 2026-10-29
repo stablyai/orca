@@ -1,14 +1,8 @@
 import { useState } from 'react'
-import {
-  View,
-  Text,
-  TextInput,
-  Pressable,
-  StyleSheet,
-  Platform,
-  type KeyboardTypeOptions
-} from 'react-native'
+import { View, Text, TextInput, Pressable, Platform, type KeyboardTypeOptions } from 'react-native'
 import { colors, spacing, radii, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { TEXT_INPUT_FONT_SIZE } from '../platform/text-input-font-size'
 import { BottomDrawer } from './BottomDrawer'
 
@@ -42,12 +36,12 @@ export function TextInputModal({
   onCancel,
   onAfterClose
 }: Props) {
+  useMobileColorScheme()
   const [value, setValue] = useState(defaultValue)
   const [previousVisible, setPreviousVisible] = useState(visible)
   const [previousDefaultValue, setPreviousDefaultValue] = useState(defaultValue)
 
-  // Why: reset before the opening commit so the drawer never paints the
-  // previous modal value while preserving the existing close animation state.
+  // Reset before opening commit to prevent previous-value flash; preserve close-animation state.
   const shouldResetValue = visible && (!previousVisible || defaultValue !== previousDefaultValue)
   if (visible !== previousVisible || shouldResetValue) {
     setPreviousVisible(visible)
@@ -112,7 +106,7 @@ export function TextInputModal({
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   header: {
     paddingHorizontal: spacing.xs,
     paddingBottom: spacing.sm
@@ -127,10 +121,7 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     marginTop: 2
   },
-  // Why: matches NewWorktreeModal's input — bgRaised on the modal
-  // background reads as a tappable surface (brighter than the wrapper)
-  // rather than a recessed pit (darker than the wrapper, which is what
-  // bgBase looked like inside a bgPanel group).
+  // Match workspace input: bgRaised on bgPanel reads tappable; bgBase looked recessed.
   input: {
     backgroundColor: colors.bgRaised,
     color: colors.textPrimary,
@@ -174,4 +165,4 @@ const styles = StyleSheet.create({
     fontSize: typography.bodySize,
     fontWeight: '600'
   }
-})
+}))

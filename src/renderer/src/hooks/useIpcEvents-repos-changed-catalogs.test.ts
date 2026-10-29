@@ -2,8 +2,7 @@ import type * as ReactModule from 'react'
 import { describe, expect, it, vi } from 'vitest'
 
 describe('runtime host catalog refresh on reposChanged', () => {
-  // Why: the host emits one reposChanged for project-group and folder-workspace edits
-  // too, so a repos-only refresh leaves those catalogs stale on every paired client.
+  // reposChanged includes group/folder edits; repos-only refresh leaves those catalogs stale.
   it('refetches the runtime host project group and folder workspace catalogs', async () => {
     vi.resetModules()
     vi.useFakeTimers()
@@ -36,6 +35,7 @@ describe('runtime host catalog refresh on reposChanged', () => {
         fetchRepos: vi.fn(() => Promise.resolve()),
         fetchRuntimeEnvironmentRepos,
         fetchProjectGroups,
+        fetchHostWorkspaceStatuses: vi.fn(),
         fetchFolderWorkspaces,
         fetchWorktrees: vi.fn(() => Promise.resolve()),
         fetchWorktreeLineage: vi.fn(() => Promise.resolve())
@@ -78,7 +78,6 @@ describe('runtime host catalog refresh on reposChanged', () => {
 
       const { useIpcEvents } = await import('./useIpcEvents')
       useIpcEvents()
-      // Seeded discovery for the connected runtime; drains the scheduler's debounce.
       await vi.advanceTimersByTimeAsync(300)
 
       const runtimeOwner = { runtimeEnvironmentId: 'env-1' }
@@ -93,7 +92,6 @@ describe('runtime host catalog refresh on reposChanged', () => {
       if (!runtimeOnResponse) {
         throw new Error('Expected runtime client event callbacks')
       }
-      // Past the scheduler's min interval so the event schedules on the debounce alone.
       await vi.advanceTimersByTimeAsync(5_000)
       runtimeOnResponse({ ok: true, result: { type: 'reposChanged' } })
       await vi.advanceTimersByTimeAsync(300)
@@ -106,14 +104,12 @@ describe('runtime host catalog refresh on reposChanged', () => {
     }
   })
 
-  // Why: the catalog fetches carry 15s RPC timeouts; serializing them ahead of the
-  // worktree refresh stalled lineage convergence for 30s on a connected-but-wedged host.
+  // Worktree/lineage refresh must not wait behind two 15s catalog timeouts.
   it('refreshes worktrees and lineage without waiting on a stalled catalog fetch', async () => {
     vi.resetModules()
     vi.useFakeTimers()
     try {
       const fetchRuntimeEnvironmentRepos = vi.fn(() => Promise.resolve([{ id: 'repo-1' }]))
-      // Never settles, standing in for a host that accepted the connection but stopped answering.
       const fetchProjectGroups = vi.fn(() => new Promise<void>(() => {}))
       const fetchFolderWorkspaces = vi.fn(() => Promise.resolve())
       const fetchWorktrees = vi.fn(() => Promise.resolve())
@@ -133,6 +129,7 @@ describe('runtime host catalog refresh on reposChanged', () => {
         fetchRepos: vi.fn(() => Promise.resolve()),
         fetchRuntimeEnvironmentRepos,
         fetchProjectGroups,
+        fetchHostWorkspaceStatuses: vi.fn(),
         fetchFolderWorkspaces,
         fetchWorktrees,
         fetchWorktreeLineage
@@ -198,6 +195,7 @@ describe('repo catalog refresh on repos:changed', () => {
       remountTerminalTabForRecovery,
       fetchRepos,
       fetchProjectGroups,
+      fetchHostWorkspaceStatuses: vi.fn(),
       fetchFolderWorkspaces
     }
 

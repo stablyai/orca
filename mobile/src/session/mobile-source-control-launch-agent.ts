@@ -1,8 +1,3 @@
-/**
- * Which agent a source-control AI button starts from the phone: the desktop's own resolution
- * (`pickSourceControlLaunchAgent`), fed the same saved recipe, default agent and detected agents.
- */
-
 import type { GlobalSettings } from '../../../src/shared/global-settings-types'
 import type { Repo } from '../../../src/shared/repo-types'
 import type {
@@ -20,7 +15,6 @@ import { isMobileTuiAgent } from '../tasks/mobile-tui-agents'
 import type { MobileAgentLaunchContext } from './mobile-new-tab-agent-loader'
 
 export type MobileSourceControlLaunchAgent =
-  /** `recipe`: the action's saved recipe, for its prompt template; null with no action. */
   | { kind: 'agent'; agent: TuiAgent; recipe: SourceControlActionRecipe | null }
   | { kind: 'unavailable'; message: string }
 
@@ -31,15 +25,13 @@ type LaunchAgentSettings = Pick<
 
 export function resolveMobileSourceControlLaunchAgent(
   context: MobileAgentLaunchContext,
-  // Null for a launch with no saved recipe, such as sending review notes.
   actionId: SourceControlLaunchActionId | null
 ): MobileSourceControlLaunchAgent {
   const settings = readLaunchAgentSettings(context.settings)
   const detectedAgents = context.detectedAgents.filter(isMobileTuiAgent)
   const recipe = actionId ? readSavedRecipe(settings, context.repo, actionId) : null
   const savedAgent = readSourceControlLaunchRecipeAgentId(recipe)
-  // Why: the phone has no pre-launch dialog showing the pick, so a saved agent that can't run here
-  // is an error, as on the desktop's direct launch, rather than a silent swap to another agent.
+  // No pre-launch dialog can show a substitution; fail an unavailable saved agent instead of silently swapping it.
   if (
     savedAgent &&
     !filterEnabledTuiAgents(detectedAgents, settings?.disabledTuiAgents).includes(savedAgent)

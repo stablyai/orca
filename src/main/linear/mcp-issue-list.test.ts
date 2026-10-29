@@ -90,6 +90,8 @@ describe('MCP-compatible Linear issue listing', () => {
         orderBy: 'createdAt',
         includeArchived: true,
         filter: expect.objectContaining({
+          team: { or: [{ name: { eqIgnoreCase: 'ENG' } }, { key: { eqIgnoreCase: 'ENG' } }] },
+          labels: { some: { or: [{ name: { eqIgnoreCase: 'Bug' } }] } },
           searchableContent: { contains: 'auth' },
           priority: { eq: 2 },
           updatedAt: { gte: '-P7D' },

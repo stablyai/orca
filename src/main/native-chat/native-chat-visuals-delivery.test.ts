@@ -6,8 +6,8 @@ import {
   NATIVE_CHAT_VISUAL_MAX_BYTES,
   NATIVE_CHAT_VISUAL_MAX_PER_MESSAGE,
   parseNativeChatVisualDirectiveLine
-} from '../../shared/native-chat-visual-directive'
-import { NATIVE_CHAT_VISUAL_THEME_TOKENS } from '../../shared/native-chat-visual-shell'
+} from '../../shared/native-chat/native-chat-visual-directive'
+import { NATIVE_CHAT_VISUAL_THEME_TOKENS } from '../../shared/native-chat/native-chat-visual-shell'
 import { ORCAD_NATIVE_CHAT_VISUALS_ARTIFACTS } from '../../shared/orcad-artifacts'
 import {
   createNativeChatVisualsDelivery,

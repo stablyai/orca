@@ -14,12 +14,16 @@ const CLASS_PROPERTY_NAMES = new Set(['className', 'classNames'])
 // Why: the children of these elements are CSS or code, never copy a translator should see.
 const NON_COPY_JSX_ELEMENTS = new Set(['style', 'script'])
 const USER_VISIBLE_JSX_ATTRIBUTES = new Set([
+  // React Native screen-reader copy (mobile/).
+  'accessibilityHint',
+  'accessibilityLabel',
   'ariaLabel',
   'aria-label',
   'aria-description',
   'alt',
   'description',
   'emptyText',
+  'headerTitle',
   'helperText',
   'keywords',
   'label',
@@ -32,11 +36,14 @@ const USER_VISIBLE_JSX_ATTRIBUTES = new Set([
   'tooltip'
 ])
 const USER_VISIBLE_OBJECT_KEYS = new Set([
+  'accessibilityHint',
+  'accessibilityLabel',
   'ariaLabel',
   'badge',
   'description',
   'emptyText',
   'error',
+  'headerTitle',
   'helperText',
   'keywords',
   'label',
@@ -64,8 +71,7 @@ const USER_VISIBLE_OBJECT_METHODS = new Set([
   'warning'
 ])
 const USER_VISIBLE_OBJECT_NAMES = new Set(['toast'])
-// Why: only comparison operands are code, not copy. Bailing on every non-`+`
-// operator hid whole subtrees behind `cond && <JSX/>` guards and `?? 'fallback'`.
+// Only comparison operands are non-copy; rejecting all non-+ operators hides guarded JSX and ?? fallback strings.
 const COPY_PRESERVING_BINARY_OPERATORS = new Set([
   ts.SyntaxKind.PlusToken,
   ts.SyntaxKind.QuestionQuestionToken,
@@ -79,7 +85,11 @@ function normalizePath(root, filePath) {
 
 export function isSkippedFile(root, filePath) {
   const relative = normalizePath(root, filePath)
-  if (relative.endsWith('.d.ts') || isTestOnlySourcePath(relative)) {
+  if (
+    relative.endsWith('.d.ts') ||
+    relative.includes('.generated.') ||
+    isTestOnlySourcePath(relative)
+  ) {
     return true
   }
   return relative.split('/').some((part) => SKIP_PATH_PARTS.has(part))
@@ -512,7 +522,7 @@ function parseArgs(argv) {
     check: false,
     format: 'summary',
     outputPath: null,
-    sourceRoot: path.join('src', 'renderer', 'src')
+    sourceRoots: []
   }
 
   for (let index = 0; index < argv.length; index += 1) {
@@ -530,9 +540,15 @@ function parseArgs(argv) {
       options.outputPath = argv[index + 1] ?? null
       index += 1
     } else if (arg === '--source-root') {
-      options.sourceRoot = argv[index + 1] ?? options.sourceRoot
+      // Repeatable: mobile spans app/, src/ and web-entry/ under one allowlist.
+      if (argv[index + 1]) {
+        options.sourceRoots.push(argv[index + 1])
+      }
       index += 1
     }
+  }
+  if (options.sourceRoots.length === 0) {
+    options.sourceRoots.push(path.join('src', 'renderer', 'src'))
   }
 
   return options
@@ -592,8 +608,10 @@ function findNewCandidates(reports, allowlist) {
 
 export async function main(root = process.cwd(), argv = process.argv.slice(2)) {
   const options = parseArgs(argv)
-  const absoluteSourceRoot = path.resolve(root, options.sourceRoot)
-  const files = await collectSourceFiles(root, absoluteSourceRoot)
+  const files = []
+  for (const sourceRoot of options.sourceRoots) {
+    files.push(...(await collectSourceFiles(root, path.resolve(root, sourceRoot))))
+  }
   const reports = []
 
   for (const filePath of files) {
@@ -605,7 +623,7 @@ export async function main(root = process.cwd(), argv = process.argv.slice(2)) {
     const allowlist = await readAllowlist(root, options.allowlistPath)
     const newCandidates = findNewCandidates(reports, allowlist)
     if (newCandidates.length > 0) {
-      console.error('New unlocalized renderer strings were found.')
+      console.error('New unlocalized UI strings were found.')
       console.error('Localize them or add a reviewed exclusion to the localization allowlist.')
       console.error('')
       console.error(formatReports(root, newCandidates))

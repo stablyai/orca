@@ -1,6 +1,4 @@
-// Tabs this desktop created (desktop-created-server-tabs) in a workspace their server's frames draw
-// now: the server's groups have no place of their own for them. Kept out of the record so store
-// slices can import the record without the frame runtime.
+// Project desktop-created tab exceptions into current server-frame groups; keep this outside the record so store slices need no frame-runtime imports.
 
 import { isFrameDrawnServerWorkspace } from '@/runtime/web-session-tabs-sync/frame-drawn-server-workspaces'
 import { desktopCreatedServerTabEnvironments } from './desktop-created-server-tabs'

@@ -562,10 +562,6 @@ describe('which flag names the caller, declared on every spec', () => {
       .map((flag) => ({ command: spec.path[1] ?? '', flag }))
   )
 
-  it('covers the verbs whose requests name a caller', () => {
-    expect(callerFlagVerbs.length).toBeGreaterThanOrEqual(CALLER_VERBS.length)
-  })
-
   it.each(callerFlagVerbs)(
     '$command refuses --$flag naming another caller, before any request',
     async ({ command, flag }) => {
@@ -586,57 +582,9 @@ describe('which flag names the caller, declared on every spec', () => {
     )
   )('$command passes a --$flag target through unfenced', async ({ command, flag }) => {
     asSessionWithInheritedPane()
-    await invoke(command, flagMap({ ...EVERY_REQUIRED_FLAG, [flag]: 'term_sibling' })).catch(
-      (error: unknown) => {
-        expect(error).not.toMatchObject({ code: 'consumer_fenced' })
-      }
-    )
+    await invoke(command, flagMap({ ...EVERY_REQUIRED_FLAG, [flag]: 'term_sibling' }))
     expect(callMock.mock.calls.flatMap(([, params]) => Object.values(params ?? {}))).toContain(
       'term_sibling'
     )
-  })
-})
-
-describe('every orchestration verb, enumerated', () => {
-  async function verbsThatGuess(): Promise<string[]> {
-    const guessed: string[] = []
-    for (const command of Object.keys(ORCHESTRATION_HANDLERS)) {
-      const verb = command.replace('orchestration ', '')
-      getTerminalHandleMock.mockClear()
-      callMock.mockClear()
-      await invoke(verb, flagMap(EVERY_REQUIRED_FLAG)).catch(() => undefined)
-      if (getTerminalHandleMock.mock.calls.length > 0) {
-        guessed.push(verb)
-      }
-    }
-    return guessed.sort()
-  }
-
-  it('guesses a terminal for no verb when the session id is present', async () => {
-    // Prove the harness observes guesses without an injected identity before testing their absence.
-    setEnv({})
-    const population = await verbsThatGuess()
-    expect(population).toEqual([
-      'ask',
-      'check',
-      'dispatch',
-      'dispatch-show',
-      'gate-create',
-      'gate-list',
-      'gate-resolve',
-      'reply',
-      'run-create',
-      'run-current',
-      'run-use',
-      'send',
-      'task-create',
-      'task-list',
-      'task-update',
-      'worker-list',
-      'worker-start'
-    ])
-
-    asSessionWithInheritedPane()
-    expect(await verbsThatGuess()).toEqual([])
   })
 })

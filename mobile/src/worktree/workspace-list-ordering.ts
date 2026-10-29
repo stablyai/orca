@@ -1,4 +1,5 @@
 import type { Worktree } from './workspace-list-types'
+import type { WorktreeStatus } from '../../../src/shared/worktree-status-rollup'
 import type { WorkspaceSortBy } from '../../../src/shared/workspace-view/workspace-view-options'
 import {
   buildWorkspaceRowComparator,
@@ -21,7 +22,6 @@ function getManualSortRank(worktree: Worktree): number | null {
   return typeof rank === 'number' && Number.isFinite(rank) ? rank : null
 }
 
-// The phone's row names the unread flag `unread`.
 function stampRow(worktree: Worktree): StampOrderRow {
   return {
     lastActivityAt: worktree.lastActivityAt,
@@ -57,14 +57,9 @@ export function sortWorktrees(
       })
     )
   }
-  // Why lastOutputAt too: headless serve hosts only stamp lastActivityAt at creation, so live
-  // terminal output must still count as recency for mobile-only pairings.
+  // Match desktop's effectiveRecentActivity: terminal output never counts as activity.
   const recentActivity = (w: Worktree): number =>
-    recentActivityWithCreateGrace(
-      Math.max(finiteOr(w.lastActivityAt, 0), finiteOr(w.lastOutputAt, 0)),
-      w.createdAt,
-      now
-    )
+    recentActivityWithCreateGrace(finiteOr(w.lastActivityAt, 0), w.createdAt, now)
   const compareRecent = (a: Worktree, b: Worktree): number =>
     recentActivity(b) - recentActivity(a) ||
     compareSidebarText(a.displayName, b.displayName) ||
@@ -80,14 +75,12 @@ export function sortWorktrees(
         const aRank = finiteOr(a.sortOrder, 0)
         const bRank = finiteOr(b.sortOrder, 0)
         if (aRank !== bRank) {
-          // Why: desktop persists its computed Agent activity order into sortOrder.
           return bRank - aRank
         }
         if (aRank !== 0) {
           return 0
         }
-        // Why: headless serve hosts never persist desktop smart ranks; unranked rows fall back to
-        // agent attention, then recency, instead of a frozen A-Z list.
+        // Headless hosts lack desktop smart ranks; fall back to attention then recency.
         return (
           AGENT_ATTENTION_STATUS_ORDER[getWorktreeStatus(a)] -
             AGENT_ATTENTION_STATUS_ORDER[getWorktreeStatus(b)] || compareRecent(a, b)
@@ -100,8 +93,7 @@ export function sortWorktrees(
 export function getWorktreeStatus(
   w: Worktree
 ): 'working' | 'active' | 'permission' | 'done' | 'inactive' {
-  // Why: desktop's sidebar activity is the parity source. Runtime status may
-  // still report retained/background PTYs as active after desktop hides them.
+  // Match desktop sidebar activity; retained/background PTYs alone must not imply an active workspace.
   if (w.hasHostSidebarActivity === false) {
     return 'inactive'
   }
@@ -118,4 +110,23 @@ export function getWorktreeStatus(
     return 'active'
   }
   return 'inactive'
+}
+
+// Only the host sees agent verdicts; older hosts omit sidebarStatus, and activity stays the phone's rule above.
+const HOST_VERDICT_DOT_STATUSES: ReadonlySet<string> = new Set<WorktreeStatus>([
+  'permission',
+  'failed',
+  'working',
+  'monitoring',
+  'unconfirmed',
+  'interrupted',
+  'done'
+])
+
+function isHostVerdictDotStatus(value: string | undefined): value is WorktreeStatus {
+  return value !== undefined && HOST_VERDICT_DOT_STATUSES.has(value)
+}
+
+export function getWorktreeDotStatus(w: Worktree): WorktreeStatus {
+  return isHostVerdictDotStatus(w.sidebarStatus) ? w.sidebarStatus : getWorktreeStatus(w)
 }

@@ -5,7 +5,8 @@ import {
   resetAiVaultScannerBackgroundForTests,
   scanAiVaultSessionsInBackground
 } from './session-scanner-background'
-import { getCachedWslDistros, hasCachedWslDistros, listRunningWslHomeDirsAsync } from '../wsl'
+import { getCachedWslDistros, hasCachedWslDistros } from '../wsl'
+import { listRunningWslHomeDirsUnlessStopped } from '../wsl/wsl-home-unless-stopped'
 import { filterPathsToRunningWslDistrosAsync } from '../wsl-running-path-filter'
 import {
   isAiVaultScanCancelledError,
@@ -14,6 +15,7 @@ import {
 } from '../../shared/ai-vault-types'
 import { aiVaultLocalScanKey, aiVaultLocalScanScopeKey } from '../../shared/ai-vault-local-scan-key'
 import type { AiVaultScanOptions } from './session-scanner-types'
+import { managedOpenCodeAccountDataDirs } from '../opencode/opencode-managed-account-data-dirs'
 import { prepareOpenCodeWslReaders } from './opencode-wsl-runtime-preparation'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import { AiVaultScanCoordinator } from './ai-vault-scan-coordinator'
@@ -69,7 +71,13 @@ export function configureAiVaultSessionSources(next: AiVaultSessionSources): voi
 /** Resolve fresh WSL roots for both listing and indexing; distros can start or stop between scans. */
 export async function localAiVaultScanRoots(): Promise<
   Required<Pick<AiVaultScanOptions, 'additionalCodexSessionsDirs' | 'wslHomeDirs'>> &
-    Pick<AiVaultScanOptions, 'executionHostId' | 'wslOpenCodeReaders' | 'claudeProfileProjectsDirs'>
+    Pick<
+      AiVaultScanOptions,
+      | 'executionHostId'
+      | 'wslOpenCodeReaders'
+      | 'claudeProfileProjectsDirs'
+      | 'opencodeAccountDataDirs'
+    >
 > {
   const [additionalCodexHomes, wslHomeDirs] = await Promise.all([
     filterPathsToRunningWslDistrosAsync(configuredAdditionalCodexHomePaths()),
@@ -80,6 +88,7 @@ export async function localAiVaultScanRoots(): Promise<
     wslHomeDirs,
     // Scanner workers have no account router; supply profile roots from this process.
     claudeProfileProjectsDirs: claudeProfileHistoryDirs('projects'),
+    opencodeAccountDataDirs: managedOpenCodeAccountDataDirs(),
     wslOpenCodeReaders: await prepareOpenCodeWslReaders(wslHomeDirs),
     // Runtime-addressed callers restamp host-local results at the RPC edge instead of rescanning.
     executionHostId: LOCAL_EXECUTION_HOST_ID
@@ -114,7 +123,8 @@ export async function listAiVaultSessions(
   const startGeneration = cacheGeneration
   let progress: LocalAiVaultScanProgressHandle | null = null
   return scanCoordinator.run({
-    key: scanKey,
+    // Isolate invalidated scans without changing the key used by progress readers.
+    key: JSON.stringify({ scanKey, generation: startGeneration }),
     force: args?.force,
     signal: options.signal,
     onCreate: (scanId) => {
@@ -172,7 +182,11 @@ export async function getAiVaultWslHomeDirs(): Promise<string[]> {
   if (hasCachedWslDistros() && getCachedWslDistros()?.length === 0) {
     return []
   }
-  return listRunningWslHomeDirsAsync()
+  return listRunningWslHomeDirsUnlessStopped()
+}
+
+export function aiVaultSessionListCacheGeneration(): number {
+  return cacheGeneration
 }
 
 // Invalidate cached results and disarm in-flight cache writes after deletion.

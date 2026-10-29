@@ -4,7 +4,11 @@ import { CheckJobLogTail } from '@/components/right-sidebar/check-job-log-tail'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
 import type { PRCheckJob, PRCheckStep } from '../../../../shared/github/check-types'
-import { resolveStepOutcome, summarizeJobSteps, type StepOutcome } from './check-job-step-status'
+import {
+  resolveStepOutcome,
+  summarizeJobSteps,
+  type StepOutcome
+} from '../../../../shared/pr-check-step-status'
 import { formatJobsForClipboard } from './check-run-clipboard-text'
 import { CheckRunCopyButton } from './CheckRunCopyButton'
 import { Badge } from '@/components/ui/badge'
@@ -114,27 +118,45 @@ function JobCard({
   const collapsible = [...breakdown.succeeded, ...breakdown.skipped, ...breakdown.pending]
   const summaryParts: string[] = []
   if (breakdown.succeeded.length > 0) {
+    const count = breakdown.succeeded.length
     summaryParts.push(
-      `${breakdown.succeeded.length} ${translate(
-        'auto.components.editor.CheckRunJobs.1c0a4d7e02',
-        'succeeded'
-      )}`
+      count === 1
+        ? translate(
+            'auto.components.editor.CheckRunJobs.stepsSucceeded_one',
+            '{{count}} succeeded',
+            {
+              count
+            }
+          )
+        : translate(
+            'auto.components.editor.CheckRunJobs.stepsSucceeded_other',
+            '{{count}} succeeded',
+            { count }
+          )
     )
   }
   if (breakdown.skipped.length > 0) {
+    const count = breakdown.skipped.length
     summaryParts.push(
-      `${breakdown.skipped.length} ${translate(
-        'auto.components.editor.CheckRunJobs.2d3b8f1a55',
-        'skipped'
-      )}`
+      count === 1
+        ? translate('auto.components.editor.CheckRunJobs.stepsSkipped_one', '{{count}} skipped', {
+            count
+          })
+        : translate('auto.components.editor.CheckRunJobs.stepsSkipped_other', '{{count}} skipped', {
+            count
+          })
     )
   }
   if (breakdown.pending.length > 0) {
+    const count = breakdown.pending.length
     summaryParts.push(
-      `${breakdown.pending.length} ${translate(
-        'auto.components.editor.CheckRunJobs.3e6c9a2b71',
-        'pending'
-      )}`
+      count === 1
+        ? translate('auto.components.editor.CheckRunJobs.stepsPending_one', '{{count}} pending', {
+            count
+          })
+        : translate('auto.components.editor.CheckRunJobs.stepsPending_other', '{{count}} pending', {
+            count
+          })
     )
   }
 
@@ -151,10 +173,17 @@ function JobCard({
         </span>
         {breakdown.failed.length > 0 && (
           <Badge variant="destructive">
-            {breakdown.failed.length}
-            {' / '}
-            {breakdown.total}{' '}
-            {translate('auto.components.editor.CheckRunJobs.4f7d0c3e88', 'steps failed')}
+            {breakdown.total === 1
+              ? translate(
+                  'auto.components.editor.CheckRunJobs.stepsFailedOfTotal_one',
+                  '{{failed}} / {{count}} steps failed',
+                  { failed: breakdown.failed.length, count: breakdown.total }
+                )
+              : translate(
+                  'auto.components.editor.CheckRunJobs.stepsFailedOfTotal_other',
+                  '{{failed}} / {{count}} steps failed',
+                  { failed: breakdown.failed.length, count: breakdown.total }
+                )}
           </Badge>
         )}
       </div>

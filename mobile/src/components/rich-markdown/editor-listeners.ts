@@ -24,8 +24,7 @@ function mirrorCheckedState(input: HTMLInputElement) {
 }
 
 function handleInput(scope: RichMarkdownEditorScope, event: Event) {
-  // The flag is cleared for a checkbox too, as it always was: only the change is `change`'s, since
-  // one tap raises click, input and change and each of the three used to report.
+  // Clear blur flag for checkbox too; change alone owns report because one tap raises click/input/change.
   scope.selectionDroppedOnBlur = false
   if (checkboxAt(event.target) || !scope.editable) {
     return
@@ -75,8 +74,7 @@ function handleClick(scope: RichMarkdownEditorScope, event: MouseEvent) {
     }
     return
   }
-  // The tick and the change both come from `change`, which this same tap raises; a read-only
-  // document refuses the toggle here, which is the only thing left for a click to decide.
+  // change owns checkbox tick/report; click only refuses toggle for read-only document.
   if (!scope.editable) {
     event.preventDefault()
   }

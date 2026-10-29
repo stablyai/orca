@@ -1,4 +1,6 @@
 import { BrowserWindow, ipcMain } from 'electron'
+import { abortWhenRendererGone } from './renderer-lifetime-abort'
+import { noteWslHostUserAction } from '../wsl/wsl-host-user-actions'
 import {
   WSL_HOST_STATUS_CHANNEL,
   type WslHostAddResult,
@@ -7,19 +9,28 @@ import {
 } from '../../shared/wsl-host-types'
 import type { Store } from '../persistence'
 import { createWslHostConnector } from '../wsl/wsl-host-connector'
+import { releaseUnwantedWslHolders, wslHolderKeepPolicy } from '../wsl/wsl-orphan-holder-release'
 import {
   createFakeWslHostConnector,
   readFakeWslHostsConfig
 } from '../wsl/wsl-host-e2e-fake-connector'
 import { hasOrcadTemplate } from '../orcad/orcad-artifact-materializer'
 import { WslHostService } from '../wsl/wsl-host-service'
-import { wslHostsGateOpen } from '../wsl/wsl-host-gate'
+import { WslHostVisibleWorkByWindow } from './wsl-host-visible-work-windows'
+import type { WslHostAutomationWake } from '../wsl/wsl-host-automation-wake'
+import { createWslHostAutomationWake } from './wsl-host-automation-wake-wiring'
+import {
+  WSL_HOSTS_NEW_WORK_PAUSED_MESSAGE,
+  wslHostsGateOpen,
+  wslHostsServing
+} from '../wsl/wsl-host-gate'
 import { getWslHostService, setWslHostService } from '../wsl/wsl-host-service-instance'
 import { retireRemovedRuntimeEnvironment } from './runtime-environments/runtime-environment-removal-cleanup'
 import { getRuntimeEnvironmentStatus } from './runtime-environments/runtime-environment-status-probe'
 import { callRuntimeEnvironment } from './runtime-environments/runtime-environment-transport-routing'
 import { isRemoteRuntimeConnectionReady } from './runtime-environments/runtime-environment-request-connections'
 import { resolveEnvironment } from '../../shared/runtime-environment-store'
+import { reconcileWslHostBridgePorts } from '../../shared/runtime-environment-wsl-host-store'
 import { getPreferredPairedRuntimeConnection } from '../../shared/runtime-environments'
 import { requestOrcadTerminalCensus } from '../ssh/orcad-terminal-census-client'
 import type { WslHostRuntimeAccess } from '../wsl/wsl-host-server-stop'
@@ -28,6 +39,7 @@ import {
   pushWslOrcadHostAccountEnv
 } from '../wsl/wsl-orcad-host-account-push'
 import { wslOrcadHostSupports } from '../wsl/wsl-orcad-host-environments'
+import { wslHostConnectOptions } from '../wsl/wsl-host-connect-request'
 
 export const WSL_HOST_HANDLER_CHANNELS = [
   'wslHosts:listDistros',
@@ -36,6 +48,7 @@ export const WSL_HOST_HANDLER_CHANNELS = [
   'wslHosts:connect',
   'wslHosts:getStatuses',
   'wslHosts:setVisibleWork',
+  'wslHosts:focusHost',
   'wslHosts:getCapability'
 ] as const
 
@@ -101,14 +114,23 @@ type WslHostHandlerArgs = {
 }
 
 function createService(args: WslHostHandlerArgs): WslHostService | null {
-  // A closed gate must prevent service adoption, WSL spawns and reconnects.
-  if (!wslHostsGateOpen()) {
+  // A closed gate must prevent service adoption, WSL spawns and reconnects; serve-only keeps saved hosts.
+  if (!wslHostsServing()) {
     return null
   }
   const fake = readFakeWslHostsConfig()
   if (process.platform !== 'win32' && !fake) {
     return null
   }
+  // Before any bridge connects or the window lists servers: a crash mid-save must not hide a host.
+  try {
+    for (const environmentId of reconcileWslHostBridgePorts(args.getUserDataPath())) {
+      console.warn(`[wsl-hosts] Realigned ${environmentId}'s bridge port with its pairing.`)
+    }
+  } catch (error) {
+    console.warn('[wsl-hosts] Could not check WSL host records against their pairings:', error)
+  }
+  let automationWake: WslHostAutomationWake | null = null
   const created = new WslHostService({
     userDataPath: args.getUserDataPath,
     isEnabled: () => args.store.getSettings().experimentalWslHosts === true,
@@ -123,9 +145,17 @@ function createService(args: WslHostHandlerArgs): WslHostService | null {
       if (distro) {
         pushHostAccounts(args.getUserDataPath, environmentId, distro)
       }
+      void automationWake?.learn(environmentId)
     },
-    removed: (environmentId) =>
-      retireRemovedRuntimeEnvironment(environmentId, args.invalidateTransport, args.store)
+    removed: (environmentId) => {
+      automationWake?.forget(environmentId)
+      return retireRemovedRuntimeEnvironment(
+        environmentId,
+        args.invalidateTransport,
+        args.store,
+        args.getUserDataPath()
+      )
+    }
   })
   const onChange = created.handleConnectionChange.bind(created)
   const isKnownDistro = (distro: string): boolean => created.isKnownDistro(distro)
@@ -141,6 +171,7 @@ function createService(args: WslHostHandlerArgs): WslHostService | null {
           runtime
         })
   )
+  automationWake = createWslHostAutomationWake(args.getUserDataPath, created)
   return created
 }
 
@@ -170,6 +201,26 @@ function startService(args: WslHostHandlerArgs): WslHostService | null {
   return created
 }
 
+let gatedOffHoldersReleased = false
+
+/**
+ * With the gate closed, a launch still releases orphans (no host record, or a pending Remove)
+ * but keeps every host's holder: a tester reopening Orca without the gate must not end a live
+ * host's sessions. With no holder recorded it touches nothing beyond one folder check.
+ */
+function releaseHoldersWhileGatedOff(userDataPath: string): void {
+  if (process.platform !== 'win32' || gatedOffHoldersReleased) {
+    return
+  }
+  gatedOffHoldersReleased = true
+  void releaseUnwantedWslHolders({
+    userDataPath,
+    isWanted: wslHolderKeepPolicy({ userDataPath, keepHostHolders: true })
+  }).catch((error: unknown) => {
+    console.warn('[wsl-hosts] Could not release orphaned WSL distro holders:', error)
+  })
+}
+
 export function registerWslHostHandlers(args: WslHostHandlerArgs): void {
   for (const channel of WSL_HOST_HANDLER_CHANNELS) {
     ipcMain.removeHandler(channel)
@@ -177,13 +228,26 @@ export function registerWslHostHandlers(args: WslHostHandlerArgs): void {
   // Install no API without a service, matching the preload gate.
   const wsl = getWslHostService() ?? startService(args)
   if (!wsl) {
+    releaseHoldersWhileGatedOff(args.getUserDataPath())
     return
   }
   ipcMain.handle('wslHosts:listDistros', () => wsl.listDistros())
   ipcMain.handle(
     'wslHosts:add',
-    (_event, request: { distro: string; startIfStopped?: boolean }): Promise<WslHostAddResult> =>
-      wsl.add(request)
+    async (
+      _event,
+      request: { distro: string; startIfStopped?: boolean }
+    ): Promise<WslHostAddResult> => {
+      // Serve-only keeps saved hosts working but admits none.
+      if (!wslHostsGateOpen()) {
+        return { ok: false, kind: 'disabled', message: WSL_HOSTS_NEW_WORK_PAUSED_MESSAGE }
+      }
+      const result = await wsl.add(request)
+      if (result.ok) {
+        noteWslHostUserAction({ kind: 'added', distro: request.distro })
+      }
+      return result
+    }
   )
   ipcMain.handle('wslHosts:remove', async (_event, request: { environmentId: string }) => {
     if (args.store.getSettings().activeRuntimeEnvironmentId === request.environmentId) {
@@ -195,17 +259,34 @@ export function registerWslHostHandlers(args: WslHostHandlerArgs): void {
   })
   ipcMain.handle(
     'wslHosts:connect',
-    (_event, request: { environmentId: string; intent?: unknown }) =>
-      wsl.connect(
-        request.environmentId,
-        request.intent === 'update' || request.intent === 'force' ? { intent: request.intent } : {}
-      )
+    (
+      _event,
+      request: { environmentId: string; intent?: unknown; withdrawPendingRemoval?: unknown }
+    ) => wsl.connect(request.environmentId, wslHostConnectOptions(request))
   )
   ipcMain.handle('wslHosts:getCapability', (): WslHostCapability => ({
-    serverFiles: wsl.hasServerFiles()
+    serverFiles: wsl.hasServerFiles(),
+    acceptsNewWork: wslHostsGateOpen()
   }))
   ipcMain.handle('wslHosts:getStatuses', () => wsl.getStatuses())
-  ipcMain.handle('wslHosts:setVisibleWork', (_event, request: { environmentIds: string[] }) => {
-    wsl.setVisibleWork(Array.isArray(request.environmentIds) ? request.environmentIds : [])
+  const visibleWork = new WslHostVisibleWorkByWindow()
+  ipcMain.handle('wslHosts:setVisibleWork', (event, request: { environmentIds: string[] }) => {
+    const sender = event.sender
+    const windowId = sender.id
+    const ids = Array.isArray(request.environmentIds) ? request.environmentIds : []
+    if (!visibleWork.has(windowId)) {
+      const lifetime = abortWhenRendererGone(sender)
+      lifetime.signal.addEventListener(
+        'abort',
+        () => wsl.setVisibleWork(visibleWork.forget(windowId)),
+        { once: true }
+      )
+    }
+    wsl.setVisibleWork(visibleWork.report(windowId, ids))
+  })
+  // The user switched to a workspace on this host: the focus entry that may boot its distro.
+  ipcMain.handle('wslHosts:focusHost', (_event, request: { environmentId: string | null }) => {
+    // null: the user is on a workspace that isn't on a WSL host.
+    wsl.focusHost(typeof request?.environmentId === 'string' ? request.environmentId : null)
   })
 }

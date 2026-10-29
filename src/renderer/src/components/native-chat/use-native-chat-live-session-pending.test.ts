@@ -11,7 +11,7 @@ const { resetTransport, subscriptions, transport } = vi.hoisted(() => {
   const transport = { readSession: vi.fn(), subscribe: vi.fn() }
   const resetTransport = (): void => {
     subscriptions.splice(0)
-    // Default to an in-flight read so only the frames a test emits move the view.
+    // Hold the seed in flight so only emitted frames move the view.
     transport.readSession.mockReset().mockImplementation(() => new Promise(() => {}))
     transport.subscribe.mockReset().mockImplementation((_args, onFrame) => {
       subscriptions.push({ onFrame })
@@ -42,7 +42,6 @@ const BASE_ARGS: UseNativeChatLiveSessionArgs = {
   enabled: true
 }
 
-/** The frame the host emits once it has waited out the flush grace period. */
 const PENDING_FRAME = { type: 'snapshot', messages: [], hasMore: false, pending: true }
 
 function assistant(id: string): NativeChatMessage {
@@ -111,9 +110,7 @@ describe('useNativeChatLiveSession — unflushed transcript (pending frame)', ()
   })
 
   it('keeps the readSession seed live, so the real transcript still backfills', async () => {
-    // The seed is the only thing that repairs the pane when the flush lands
-    // between the stream's initial drain and its next event — a pending frame
-    // must not consume it the way a real snapshot does.
+    // A flush between stream drains needs the independent seed; pending frames must leave it eligible.
     let settleRead = (_result: { messages: NativeChatMessage[] }): void => {}
     transport.readSession.mockImplementationOnce(
       () => new Promise((resolve) => (settleRead = resolve))
@@ -141,8 +138,7 @@ describe('useNativeChatLiveSession — unflushed transcript (pending frame)', ()
   })
 
   it('errors once the not-found window expires with no word from the host', async () => {
-    // Control for the next case: proves the clock really drives the retry loop,
-    // so a passing suppression test can't be the timers never firing.
+    // Prove retry timers fire so the suppression case cannot pass vacuously.
     vi.useFakeTimers()
     transport.readSession.mockResolvedValue({ error: 'no transcript', notFound: true })
     await render()
@@ -155,8 +151,6 @@ describe('useNativeChatLiveSession — unflushed transcript (pending frame)', ()
   })
 
   it('stops duplicate seed polling once the live stream owns the pending transcript', async () => {
-    // The reported bug: a tab that is never prompted never writes a transcript, so
-    // every read is notFound forever. The host has told us that is expected.
     vi.useFakeTimers()
     let settleRead = (_result: { error: string; notFound: true }): void => {}
     transport.readSession.mockImplementationOnce(
@@ -173,8 +167,6 @@ describe('useNativeChatLiveSession — unflushed transcript (pending frame)', ()
 
     expect(latest?.readPhase).toBe('awaiting')
     expect(latest?.status).not.toBe('error')
-    // The resolve-poll subscription owns the eventual initial drain; continuing
-    // the seed too would issue one redundant filesystem read every 10 seconds.
     expect(transport.readSession).toHaveBeenCalledOnce()
   })
 
@@ -234,8 +226,7 @@ describe('useNativeChatRetainedSession — unflushed transcript', () => {
 
 describe('isNativeChatTranscriptUnsettled', () => {
   it('covers both unsettled phases and neither settled one', () => {
-    // The launch-draft gate in NativeChatView reads this: treating 'awaiting' as
-    // settled would re-offer a prefill the user already submitted.
+    // Treating awaiting as settled would re-offer an already-submitted launch prefill.
     expect(isNativeChatTranscriptUnsettled('loading')).toBe(true)
     expect(isNativeChatTranscriptUnsettled('awaiting')).toBe(true)
     expect(isNativeChatTranscriptUnsettled('ready')).toBe(false)

@@ -11,7 +11,10 @@ import { isUnresolvedSshHostAlias } from '../shared/git-remote-host-alias'
 import { getProjectProviderIdentity } from '../shared/project-host-setup-projection'
 import { getStoredRepoExecutionHostId } from './repo-execution-host'
 import { probeGitRemoteIdentity } from './repo-git-remote-identity'
+import { getProjectRuntimeReadGitOptions } from './project-runtime-git-options'
+import type { ProjectRuntimeResolutionStore } from './local-project-runtime-resolution'
 import { isWslMoveRepoBlocked } from './persistence/moving-wsl-projects/wsl-move-background-backoff'
+import { blockedWslDistroForPath, wslDistroForPath } from './wsl/wsl-unc-access-gate'
 
 const NO_IDENTITY_RETRY_TTL_MS = 5 * 60 * 1000
 // Refresh renamed/transferred projects without probing on every list call.
@@ -21,7 +24,7 @@ const RESOLVED_IDENTITY_REFRESH_STARTUP_DELAY_MS = 5 * 60 * 1000
 // Bound speculative probes so large repo lists do not stall a sweep.
 const MAX_IDENTITY_REFRESHES_PER_SWEEP = 4
 
-type RepoIdentityStore = {
+type RepoIdentityStore = ProjectRuntimeResolutionStore & {
   getRepos(): Repo[]
   getRepo?(id: string, hostId?: ExecutionHostId): Repo | undefined
   updateRepo(
@@ -159,8 +162,19 @@ async function enrichRepoGitRemoteIdentity(store: RepoIdentityStore, repo: Repo)
     : NO_IDENTITY_RETRY_TTL_MS
   const controller = new AbortController()
   const promise = (async () => {
+    // A local project's runtime may run its Git in a distro, whatever its path.
+    const git = getProjectRuntimeReadGitOptions(store, repo)
+    // E9: git on a stopped distro's repo boots it; no deadline, so the next sweep retries once it runs.
+    // Checked synchronously first so host repos keep probing without an extra await.
+    if (
+      wslDistroForPath(repo.path, git.wslDistro) &&
+      (await blockedWslDistroForPath(repo.path, git.wslDistro))
+    ) {
+      return false
+    }
     const result = await probeGitRemoteIdentity(repo.path, hostId, {
-      signal: controller.signal
+      signal: controller.signal,
+      ...git
     })
     // Aborted probes resolve as unavailable; prevent retired probes from re-seeding deadlines.
     if (controller.signal.aborted) {

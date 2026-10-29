@@ -1,5 +1,6 @@
 import type { BrowserPageZoomDirection } from '../../shared/browser-page-zoom'
 import type { ResolveRenderer } from './browser-guest-renderer-target'
+import { forwardGuestMousePress } from './browser-guest-mouse-press'
 
 const CONTROL_MODIFIERS = new Set(['control', 'ctrl'])
 const MAC_COMMAND_MODIFIERS = new Set(['meta', 'command', 'cmd'])
@@ -81,6 +82,10 @@ export function setupGuestMouseWheelZoomForwarding(args: {
     onViewportWheelConsumed
   } = args
   const handler = (event: Electron.Event, mouse: Electron.MouseInputEvent): void => {
+    // Why here: presses ride this per-guest listener and its cleanup rather than a second one.
+    if (forwardGuestMousePress(guest, browserTabId, resolveRenderer, mouse)) {
+      return
+    }
     const direction = resolveGuestMouseWheelZoomDirection(mouse)
     if (direction) {
       // Focused guest wheel events do not reach renderer DOM handlers.

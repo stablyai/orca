@@ -1,4 +1,3 @@
-// Actions that ship unbound until a user assigns them.
 import { describe, expect, it } from 'vitest'
 import {
   getKeybindingDefinition,

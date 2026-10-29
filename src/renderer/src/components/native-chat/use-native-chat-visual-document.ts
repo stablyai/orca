@@ -100,11 +100,7 @@ function useEditorSavesOf(target: RuntimeClientTarget, path: string | null): num
   return saves
 }
 
-/**
- * The visual's current document. Starts from the cached revision when there is one, then asks the
- * host (revalidating it) once `enabled`, and freshly again after each editor save of its file. A
- * later failure keeps a document already shown.
- */
+/** Revalidate cached visuals when enabled and after editor saves on their host; keep shown documents through contact failures. */
 export function useNativeChatVisualDocument(
   identity: NativeChatVisualIdentity,
   enabled: boolean

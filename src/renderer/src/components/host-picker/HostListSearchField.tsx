@@ -5,7 +5,6 @@ import { searchHostsLabel } from './host-picker-copy'
 
 const MENU_ITEM_SELECTOR = '[role="menuitem"], [role="menuitemcheckbox"], [role="menuitemradio"]'
 
-/** Moves focus from the search item to the menu item before or after it. */
 function focusAdjacentMenuItem(from: HTMLElement, step: 1 | -1): void {
   const menu = from.closest('[role="menu"]')
   const item = from.closest<HTMLElement>(MENU_ITEM_SELECTOR)
@@ -42,10 +41,7 @@ function HostListSearchInput({
   )
 }
 
-/**
- * Search box for a bounded host checklist. Inside a dropdown menu it is a menu item, so arrow keys
- * reach it like any row; focusing the item hands focus to the input, and arrows leave it again.
- */
+/** Make search reachable as a menu row; focus enters the input and arrow keys return to neighboring items. */
 export function HostListSearchField({
   value,
   onChange,

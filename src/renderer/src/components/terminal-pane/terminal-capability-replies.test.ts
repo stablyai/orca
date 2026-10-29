@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { Terminal } from '@xterm/headless'
+import { CONPTY_DA1_RESPONSE } from '../../../../shared/conpty-device-attributes'
 import {
-  CONPTY_DA1_RESPONSE,
   DEFAULT_DA1_RESPONSE,
   createTerminalPixelSizeQueryResponder,
   installTerminalCapabilityReplyHandlers,
@@ -157,7 +157,6 @@ describe('installTerminalCapabilityReplyHandlers', () => {
     expect(withSixelDa1Attribute('\x1b[?1;2c')).toBe('\x1b[?1;2;4c')
     expect(withSixelDa1Attribute('\x1b[?61;4c')).toBe('\x1b[?61;4c')
     expect(withSixelDa1Attribute('\x1b[?62;4;9;22c')).toBe('\x1b[?62;4;9;22c')
-    // Leaves anything that is not a DA1 response untouched.
     expect(withSixelDa1Attribute('\x1b[0m')).toBe('\x1b[0m')
   })
 

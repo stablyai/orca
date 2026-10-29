@@ -1,3 +1,4 @@
+import { applyClaudeAgentViewEnv } from './claude-agent-view'
 import { resolveTerminalInlineImagesEnabled } from '../../../../shared/terminal-inline-images-settings'
 import { resolveSetupAgentSequenceLaunchCommand } from '../../../../shared/setup-agent-sequencing'
 import {
@@ -25,7 +26,7 @@ import {
   clearPiAgentShadowEnv,
   exposePiManagedExtensionEnv,
   isMimoLaunchCommand,
-  resolveMimocodeSourceHome,
+  resolveMimocodeSourceConfigDir,
   resolvePiAgentSourceDir,
   resolveScopedPiAgentSourceDir
 } from './pi-agent'
@@ -33,7 +34,7 @@ import { restoreOrStripOverlayEnv } from '../../../../shared/agent-overlay-env'
 import { AGENT_HOOK_RUNTIME_ENV_KEYS } from './spawn-env-keys'
 import { applyManagedDataAccountEnvironment } from '../../../managed-data-accounts/launch-environment'
 import { applyOpenCodeStatusPluginEnv, captureOpenCodeSourceConfig } from './opencode-config'
-import { applyCodexRemoteViewerClipboardEnv } from './codex-terminal-clipboard'
+import { applyRemoteViewerClipboardEnv } from './remote-viewer-clipboard-env'
 
 /** Mutate host-local PTY environment only for local execution; SSH cannot use these loopback endpoints or filesystem paths. */
 export function buildPtyHostEnv(
@@ -57,6 +58,7 @@ export function buildPtyHostEnv(
   const openCodeConfig = captureOpenCodeSourceConfig(baseEnv, opts.userDataPath)
   const launchCommandHint = resolveSetupAgentSequenceLaunchCommand(baseEnv, opts.launchCommand)
   applyManagedDataAccountEnvironment(baseEnv, { ...opts, launchCommand: launchCommandHint })
+  applyClaudeAgentViewEnv(baseEnv, opts)
   const explicitPiAgentKind = isPiCompatibleAgentType(opts.launchAgent)
     ? opts.launchAgent
     : opts.launchAgent === undefined
@@ -98,25 +100,29 @@ export function buildPtyHostEnv(
     opts,
     launchCommandHint
   )
-  if (opts.agentStatusHooksEnabled) {
-    if (isMimoLaunchCommand(launchCommandHint)) {
-      const preexistingMimocodeHome = resolveMimocodeSourceHome(baseEnv)
-      Object.assign(baseEnv, mimoCodeHookService.buildPtyEnv(id, preexistingMimocodeHome))
-      if (baseEnv.MIMOCODE_HOME) {
-        baseEnv.ORCA_MIMOCODE_HOME = baseEnv.MIMOCODE_HOME
-        if (preexistingMimocodeHome) {
-          baseEnv.ORCA_MIMOCODE_SOURCE_HOME = preexistingMimocodeHome
-        } else {
-          delete baseEnv.ORCA_MIMOCODE_SOURCE_HOME
-        }
+  // Older builds redirected MIMOCODE_HOME; a nested pane must not inherit that overlay.
+  restoreOrStripOverlayEnv(baseEnv, {
+    primary: 'MIMOCODE_HOME',
+    overlay: 'ORCA_MIMOCODE_HOME',
+    source: 'ORCA_MIMOCODE_SOURCE_HOME'
+  })
+  restoreOrStripOverlayEnv(baseEnv, {
+    primary: 'MIMOCODE_CONFIG_DIR',
+    overlay: 'ORCA_MIMOCODE_CONFIG_DIR',
+    source: 'ORCA_MIMOCODE_SOURCE_CONFIG_DIR',
+    preserveExplicitPrimary: true
+  })
+  const mimoSourceConfigDir = resolveMimocodeSourceConfigDir(baseEnv)
+  if (opts.agentStatusHooksEnabled && isMimoLaunchCommand(launchCommandHint)) {
+    mimoCodeHookService.carryOverLegacyAuth({ ...process.env, ...baseEnv })
+    const overlay = mimoCodeHookService.buildPtyEnv(id, mimoSourceConfigDir).MIMOCODE_CONFIG_DIR
+    if (overlay && overlay !== mimoSourceConfigDir) {
+      baseEnv.MIMOCODE_CONFIG_DIR = overlay
+      baseEnv.ORCA_MIMOCODE_CONFIG_DIR = overlay
+      if (mimoSourceConfigDir) {
+        baseEnv.ORCA_MIMOCODE_SOURCE_CONFIG_DIR = mimoSourceConfigDir
       }
     }
-  } else {
-    restoreOrStripOverlayEnv(baseEnv, {
-      primary: 'MIMOCODE_HOME',
-      overlay: 'ORCA_MIMOCODE_HOME',
-      source: 'ORCA_MIMOCODE_SOURCE_HOME'
-    })
   }
 
   // Remove inherited hook coordinates before injecting the owning pane's receiver.
@@ -136,6 +142,15 @@ export function buildPtyHostEnv(
       const guestEndpoint = wslHookRelayManager.getGuestEndpointFilePath(distro)
       if (guestEndpoint) {
         baseEnv.ORCA_AGENT_HOOK_ENDPOINT = guestEndpoint
+      }
+      const claude =
+        opts.claudeSubagentNavigationEnabled !== false &&
+        isTuiAgentEnabled('claude', opts.disabledTuiAgents)
+          ? wslHookRelayManager.getClaudeAgentView(distro)
+          : null
+      if (claude) {
+        baseEnv.ORCA_CLAUDE_AGENT_VIEW_PLUGIN_DIR = claude.pluginDir
+        baseEnv.ORCA_CLAUDE_CONFIG_DIR = claude.configDir
       }
       // OpenCode must load status hooks from its guest-resident overlay.
       const opencodeOverlayDir = openCodeAgent
@@ -298,7 +313,7 @@ export function buildPtyHostEnv(
     baseEnv.BROWSER = `${cliCommand} open-url --url %s`
   }
   // Browser-relayed and SSH-managed headless hosts both have viewers on another machine.
-  applyCodexRemoteViewerClipboardEnv(baseEnv, {
+  applyRemoteViewerClipboardEnv(baseEnv, {
     launchAgent: opts.launchAgent,
     viewerIsRemote: opts.routeBrowserOpensToClient === true
   })

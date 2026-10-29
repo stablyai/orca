@@ -1,18 +1,17 @@
 import { useMemo } from 'react'
 import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/CommentMarkdown'
 import type { NativeChatBlock, NativeChatToolCallBlock } from '../../../../shared/native-chat-types'
-import { pairNativeChatToolResults } from '../../../../shared/native-chat-tool-pairing'
-import { nativeChatToolLineIdentity } from '../../../../shared/native-chat-tool-line-identity'
+import { pairNativeChatToolResults } from '../../../../shared/native-chat/tools/native-chat-tool-pairing'
+import { nativeChatToolLineIdentity } from '../../../../shared/native-chat/tools/native-chat-tool-line-identity'
 import { NativeChatDiffCard } from './NativeChatDiffCard'
 import { NativeChatTaskList } from './NativeChatTaskList'
 import { NativeChatToolLine } from './NativeChatToolLine'
-import { buildEditCards } from '../../../../shared/native-chat-edit-cards'
-import { buildNativeChatTaskListRows } from '../../../../shared/native-chat-task-list-history'
+import { buildEditCards } from '../../../../shared/native-chat/tools/native-chat-edit-cards'
+import { buildNativeChatTaskListRows } from '../../../../shared/native-chat/input/native-chat-task-list-history'
 import type { NativeChatDiffReveal } from './native-chat-turn-diffs'
 import type { NativeChatToolRunAsides } from './NativeChatToolRun'
 
-/** An opened run's members in order, each one line until opened. Mounted only while the
- *  run is open, so a collapsed run pays for none of the diffing and pairing done here. */
+/** Mount only while expanded so collapsed runs avoid member pairing and diff work. */
 export function NativeChatToolRunMemberList({
   blocks,
   headerBlocks,

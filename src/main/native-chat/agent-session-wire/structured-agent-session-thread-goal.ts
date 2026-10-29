@@ -20,6 +20,7 @@ import type { StructuredAgentSessionAdapter } from './structured-agent-session-a
 import type { StructuredAgentRegistry } from './structured-agent-registry'
 import type { MutationPlan } from './structured-agent-session-mutation-plans'
 import type { AgentSessionTurnContext, TurnOutcome } from './structured-agent-session-turns'
+import { captureStructuredExecutionOptions } from './structured-agent-session-execution-options'
 import { throwIfSignalAborted } from '../../../shared/abort-signal-reason'
 import { contextStructuredAgentSessionCurrentWork } from './structured-agent-session-current-work'
 
@@ -48,21 +49,6 @@ function objectiveIdentity(clientOperationId: string): AgentJournalItemIdentity 
   return { provider: 'orca', clientMessageId: `thread-goal:${clientOperationId}` }
 }
 
-/** Provider-journaled transitions recover operations whose response was lost. */
-export function journalRecordsThreadGoalChange(
-  goal: AgentJournalThreadGoal | null,
-  change: AgentSessionThreadGoalChange
-): boolean {
-  switch (change.kind) {
-    case 'clear':
-      return goal === null
-    case 'status':
-      return goal !== null && goal.status === change.status
-    case 'set':
-      return goal !== null && goal.status === 'active' && goal.objective === change.objective
-  }
-}
-
 export async function performThreadGoalChange(
   ctx: AgentSessionTurnContext,
   input: { clientOperationId: string; change: AgentSessionThreadGoalChange; signal?: AbortSignal }
@@ -74,6 +60,20 @@ export async function performThreadGoalChange(
     return goalsUnsupported()
   }
   const { change } = input
+  const captured =
+    change.kind === 'set' || (change.kind === 'status' && change.status === 'active')
+      ? captureStructuredExecutionOptions({
+          ...ctx,
+          persistedOptions: Object.fromEntries(
+            Object.entries(ctx.persistedOptions ?? {}).filter(
+              ([key]) => key === 'model' || key === 'effort'
+            )
+          )
+        })
+      : { options: undefined }
+  if ('refusal' in captured) {
+    return { ok: false, refusal: captured.refusal }
+  }
   const identity = objectiveIdentity(input.clientOperationId)
   let replacesGoal = false
   if (change.kind === 'set') {
@@ -99,20 +99,21 @@ export async function performThreadGoalChange(
       await ctx.journal.appendTombstone(identity, { fence: ctx.fence })
     }
   }
-  let result: Awaited<ReturnType<typeof ctx.adapter.changeThreadGoal>>
   try {
     throwIfSignalAborted(input.signal)
-    result = await ctx.adapter.changeThreadGoal({
-      sessionId: ctx.sessionId,
-      fence: ctx.fence,
-      change,
-      replacesGoal,
-      signal: input.signal
-    })
   } catch (error) {
     await withdrawObjective()
     throw error
   }
+  // A lost response cannot prove non-application; retain the objective for provider reconciliation.
+  const result = await ctx.adapter.changeThreadGoal({
+    sessionId: ctx.sessionId,
+    fence: ctx.fence,
+    change,
+    replacesGoal,
+    executionOptions: captured.options,
+    signal: input.signal
+  })
   if (!result.ok) {
     await withdrawObjective()
     return refused('providerRejected', result.rejected)
@@ -135,15 +136,8 @@ export function threadGoalPlan(params: {
         change: params.change,
         signal: params.signal
       }),
-    // Recover lost responses from provider-journaled state; otherwise every change is safe to repeat.
-    recoverUnknownFromDurableState: true,
-    replay: (ctx, outcome) =>
-      outcome.status === 'succeeded' ||
-      (outcome.status === 'unknown' &&
-        journalRecordsThreadGoalChange(ctx.journal.threadGoal(), params.change))
-        ? value
-        : null,
-    rerunWhenReplayMissing: () => true
+    // Current state cannot identify an old operation after a later user action changed the goal.
+    replay: (_ctx, outcome) => (outcome.status === 'succeeded' ? value : null)
   }
 }
 

@@ -1,5 +1,4 @@
-// A live terminal no pane shows (the host's census found it unowned), shown through main: in the
-// pane main already holds for it, else in a new tab bound to it. Never a second tab for it.
+// Show an unowned live terminal in main’s existing pane or a new bound tab; never create a second tab for it.
 
 import {
   applied,
@@ -25,7 +24,6 @@ export type LiveTerminalAdoption = {
   recordedPaneKey?: string
 }
 
-/** The pane of `workspace` that already shows the terminal, or null. */
 export function heldPaneOfTerminal(
   workspace: WorkspaceLayout | undefined,
   { ptyId, recordedPaneKey }: LiveTerminalAdoption
@@ -53,7 +51,6 @@ export function heldPaneOfTerminal(
     : null
 }
 
-/** The pane data of a pane bound to the adopted terminal. */
 export function adoptedLeaf({ ptyId, incarnationId }: LiveTerminalAdoption): LayoutLeaf {
   return incarnationId ? { ptyId, incarnationId } : { ptyId }
 }

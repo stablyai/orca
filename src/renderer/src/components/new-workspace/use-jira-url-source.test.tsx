@@ -172,7 +172,6 @@ describe('useJiraUrlSource', () => {
     act(() => result.current.retry())
     await advanceLookup()
 
-    // A forced retry still needs a fresh read — the cached answer is what failed.
     expect(mocks.readJiraStatus).toHaveBeenCalledTimes(1)
     expect(result.current.issue?.key).toBe('ORCA-1')
   })

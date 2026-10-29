@@ -12,11 +12,15 @@ import { tmpdir } from 'node:os'
 import { join, relative, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
+import { resolvePinnedBunExecutable } from './pinned-bun-executable.mjs'
 import {
+  MOBILE_TYPECHECK_PROJECTS,
   TYPECHECK_PROJECTS,
   admissibleHeapGib,
   planTypecheckBatches,
   resolveProjectCompiler,
+  resolveTypecheckBunExecutable,
+  resolveTypecheckCommand,
   parseTypecheckOptions,
   selectTypecheckCompiler,
   typecheckBatches,
@@ -133,7 +137,7 @@ describe('workspace package test typecheck', () => {
 })
 
 describe('local and CI compiler selection', () => {
-  it('selects the supported local compiler by default while CI explicitly selects Bun', () => {
+  it('defaults to automatic compiler selection while CI explicitly selects Bun', () => {
     expect(parseTypecheckOptions([]).compiler).toBe('auto')
     const manifest = JSON.parse(readFileSync(join(repoRoot, 'package.json'), 'utf8'))
     expect(manifest.scripts['typecheck:ci']).toContain('--compiler=bun')
@@ -194,10 +198,14 @@ describe('local and CI compiler selection', () => {
       TYPECHECK_PROJECTS[0]
     ])
     expect(parseTypecheckOptions([]).projects).toEqual(TYPECHECK_PROJECTS)
+    expect(parseTypecheckOptions(['--project=mobile/tsconfig.test.json']).projects).toEqual([
+      MOBILE_TYPECHECK_PROJECTS[1]
+    ])
+    expect(TYPECHECK_PROJECTS).not.toContainEqual(MOBILE_TYPECHECK_PROJECTS[0])
     expect(() => parseTypecheckOptions(['--project=config/tsconfig.json'])).toThrow()
   })
 
-  it('runs the resolved Bun and refuses to silently fall back when it is missing', () => {
+  it('selects the resolved Bun path and rejects a missing executable', () => {
     expect(
       selectTypecheckCompiler('bun', {
         root: repoRoot,
@@ -207,6 +215,38 @@ describe('local and CI compiler selection', () => {
     expect(() =>
       selectTypecheckCompiler('bun', { root: repoRoot, resolveBunExecutable: () => null })
     ).toThrow('run pnpm install')
+  })
+
+  it('reports a timed-out installed Bun probe without changing optional fallback', () => {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), 'orca-bun-probe-')))
+    try {
+      const manifest = join(root, 'node_modules', 'bun')
+      mkdirSync(manifest, { recursive: true })
+      mkdirSync(join(root, 'config'))
+      writeFileSync(join(root, 'package.json'), '{}')
+      writeFileSync(join(root, 'config', '.bun-version'), '1.4.4')
+      writeFileSync(join(manifest, 'package.json'), JSON.stringify({ bin: { bun: 'bin/bun' } }))
+      const execute = () => ({ code: null, signal: 'SIGTERM', stdout: '', timedOut: true })
+      expect(resolvePinnedBunExecutable(root, execute)).toBeNull()
+      expect(() =>
+        selectTypecheckCompiler('bun', {
+          root,
+          resolveBunExecutable: (directory, hint) =>
+            resolveTypecheckBunExecutable(directory, hint, execute)
+        })
+      ).toThrow(/Bun version probe timed out after 2000 ms: .*or pass --compiler=native\./)
+      expect(() => resolveTypecheckBunExecutable(root, null, execute)).toThrow(
+        /Retry when the host is less busy\.$/
+      )
+      expect(
+        resolveTypecheckBunExecutable(root, null, () => ({ code: 0, stdout: '1.4.4\n' }))
+      ).toBe(join(manifest, 'bin/bun'))
+      expect(
+        resolveTypecheckBunExecutable(root, null, () => ({ code: 0, stdout: '1.4.3\n' }))
+      ).toBeNull()
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
   })
 
   it('never probes Bun when tsc is requested', () => {
@@ -225,9 +265,25 @@ describe('local and CI compiler selection', () => {
     '--bun-concurrency=0',
     '--bun-threads=NaN',
     '--bun-concurrency=5',
+    '--checkers=0',
+    '--checkers=two',
     '--project'
   ])('rejects unsafe or unknown options: %s', (argument) => {
     expect(() => parseTypecheckOptions([argument])).toThrow()
+  })
+
+  it('passes a checker cap to the native compiler only when one is requested', () => {
+    const command = (checkers) =>
+      resolveTypecheckCommand('config/tsconfig.node.json', {
+        compiler: 'native',
+        checkers,
+        root: repoRoot
+      }).args
+    expect(command(parseTypecheckOptions(['--checkers=4']).checkers).slice(-2)).toEqual([
+      '--checkers',
+      '4'
+    ])
+    expect(command(parseTypecheckOptions([]).checkers)).not.toContain('--checkers')
   })
 
   it('bounds Bun project concurrency and reserves memory for overlapping checks', () => {

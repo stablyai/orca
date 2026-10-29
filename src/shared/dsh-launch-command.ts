@@ -46,7 +46,6 @@ const LAUNCHER_FLAGS_WITH_VALUE = new Set(['--profile', '--from-default-profile'
 /** Valueless launcher flags. */
 const LAUNCHER_FLAGS = new Set(['-V', '--version', '-h', '--help', ...DUMP_FLAGS])
 
-/** Splits `--profile=web` down to `--profile` so both spellings match one lookup. */
 function flagName(token: string): string {
   return token.split('=', 1)[0]
 }
@@ -55,13 +54,7 @@ function isLauncherToken(token: string): boolean {
   return LAUNCHER_FLAGS.has(token) || LAUNCHER_FLAGS_WITH_VALUE.has(flagName(token))
 }
 
-/**
- * Whether a `dsh` command line runs something other than the interactive agent.
- *
- * Only the launcher's own tokens are read. Everything after the first token the launcher
- * does not recognize belongs to the booted app (`dsh --profile dsh-tui --resume <id>`),
- * and a prompt or session id is free text that must never be read as a launcher flag.
- */
+/** Read launcher tokens only; after its first unrecognized token, free-form app prompts/session IDs cannot be interpreted as launcher flags. */
 export function isDshNonInteractiveCommand(tokens: readonly string[]): boolean {
   const firstProgram = programBasename(tokens[0])
   const entrypoint = findInterpreterEntrypointToken([...tokens], firstProgram)

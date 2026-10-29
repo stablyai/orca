@@ -9,11 +9,7 @@ function hasVisibleText(normalizedText: string): boolean {
   return VISIBLE_CHARACTER_RE.test(stripAnsiEscapeSequences(normalizedText))
 }
 
-/**
- * Where the running command's own output begins. Orca's shell integration prints OSC 133;C
- * after the prompt and the echoed command line, right before the command runs, so only
- * visible output after it can be the command's.
- */
+/** OSC 133;C follows the prompt/echo; only visible bytes after it prove the running command painted. */
 export class TerminalCommandPaint {
   private awaitingPaint = false
   private markerEndInChunk = -1
@@ -56,11 +52,7 @@ export function observeTerminalCommandPaint(
   record.commandPaint.observe(data, normalizedText)
 }
 
-/**
- * Why no marker reads as painted: some launches get no command boundary (older fish, SSH relay
- * zsh, shells Orca could not wrap, and Windows launches that pass the command in shell args), so
- * any output is all the evidence there is.
- */
+/** Without markers (older fish, relay zsh, unwrapped shells, cmd.exe /K startup args), any output is the only paint evidence. */
 export function hasTerminalCommandPainted(record: TerminalCommandPaintRecord): boolean {
   return record.commandPaint?.hasPainted() ?? true
 }

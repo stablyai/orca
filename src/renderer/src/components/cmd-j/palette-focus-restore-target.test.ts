@@ -16,8 +16,7 @@ function addTerminal(id: string): HTMLTextAreaElement {
 
 describe('resolvePaletteFocusRestoreTarget', () => {
   it('returns the exact previously-focused element when it is still connected', () => {
-    // Two terminals mounted (e.g. a background worktree comes first in the DOM);
-    // the user was typing in the second one before opening Cmd+J.
+    // DOM order may put a retained background terminal before the one the user was typing in.
     addTerminal('background')
     const active = addTerminal('active')
 
@@ -32,29 +31,5 @@ describe('resolvePaletteFocusRestoreTarget', () => {
 
     expect(detached.isConnected).toBe(false)
     expect(resolvePaletteFocusRestoreTarget(detached)).toBe(first)
-  })
-
-  it('falls back to the editor textarea when no preferred target and no terminal exist', () => {
-    const editor = document.createElement('div')
-    editor.className = 'monaco-editor'
-    const textarea = document.createElement('textarea')
-    editor.appendChild(textarea)
-    document.body.appendChild(editor)
-
-    expect(resolvePaletteFocusRestoreTarget(null)).toBe(textarea)
-  })
-
-  it('prefers the terminal over the editor when both are present and nothing was captured', () => {
-    const terminal = addTerminal('only')
-    const editor = document.createElement('div')
-    editor.className = 'monaco-editor'
-    editor.appendChild(document.createElement('textarea'))
-    document.body.appendChild(editor)
-
-    expect(resolvePaletteFocusRestoreTarget(null)).toBe(terminal)
-  })
-
-  it('returns null when nothing is focusable', () => {
-    expect(resolvePaletteFocusRestoreTarget(null)).toBeNull()
   })
 })

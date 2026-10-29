@@ -5,8 +5,7 @@ import { useAppStore } from '../../store'
 import type { SettingsSearchEntry } from './settings-search'
 import { matchesSettingsSearch } from './settings-search'
 
-// Why: avoids threading `activeSectionId` through every <SettingsSection /> call
-// site in Settings.tsx — the page wraps its content tree in this provider.
+// Share active section through context to avoid threading it through every section call.
 const ActiveSettingsSectionContext = createContext<string | null>(null)
 
 export const ActiveSettingsSectionProvider = ActiveSettingsSectionContext.Provider
@@ -22,17 +21,11 @@ type SettingsSectionProps = {
   badge?: string
   badgeAccessory?: React.ReactNode
   forceVisible?: boolean
-  /** When true, this section is the one currently selected in the sidebar.
-   *  Sections render only when active. During search, the sidebar lists every
-   *  match while the content pane stays focused on the selected match instead
-   *  of mounting every matching settings surface at once. */
+  /** Mount only the selected section, even when search lists several matches. */
   isActive?: boolean
-  /** Rendered in the section header's upper-right corner — intended for
-   *  section-scoped actions (e.g. "Import from Ghostty") that would otherwise
-   *  crowd the settings list as their own row. */
+  /** Header-scoped actions, such as Import from Ghostty. */
   headerAction?: React.ReactNode
-  /** Click handler on the section title — the hook for hidden staff
-   *  affordances (Option-click reveals), mirroring the Updates header. */
+  /** Title-click hook for hidden staff controls such as Option-click reveals. */
   onTitleClick?: (event: React.MouseEvent<HTMLHeadingElement>) => void
 }
 
@@ -86,9 +79,7 @@ export function SettingsSection({
         </div>
         {headerAction ? <div className="shrink-0">{headerAction}</div> : null}
       </div>
-      {/* Why: body content sits in a visually distinct band — a soft card with
-          rounded corners and tight inner padding — so each row group reads as
-          contained inside the section, not as a continuation of the sidebar. */}
+      {/* Contain row groups in a distinct band so they cannot read as sidebar continuations. */}
       <div
         className={cn(
           'rounded-xl border border-border/50 bg-card/50 px-7 py-6 shadow-xs',

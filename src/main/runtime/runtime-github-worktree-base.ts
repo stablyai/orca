@@ -42,7 +42,7 @@ export async function resolveRuntimeGitHubWorktreeBase(
   if (isFolderRepo(repo)) {
     return { error: 'Folder mode does not support creating worktrees.' }
   }
-  // Why the shared gate: a row may name its SSH host only as `executionHostId`.
+  // Use shared host gating: executionHostId may be a row's only SSH marker.
   requireRepoLocalGitRoute(repo)
   const localGitExecOptions = getLocalProjectGitExecOptions(deps.store, repo)
   const localGhOptions = getLocalProjectGhExecOptions(deps.store, repo)

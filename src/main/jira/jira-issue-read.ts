@@ -1,6 +1,6 @@
 import type { JiraIssue, JiraSiteSelection } from '../../shared/jira/jira-types'
 import type { JiraMediaFormat } from '../../shared/jira/jira-attachment-image'
-import { JiraSummaryLookupError } from '../../shared/jira-summary-lookup'
+import { JiraSummaryLookupError } from '../../shared/jira/jira-summary-lookup'
 import { acquire, release } from './request-queue'
 import { apiBasePath, jiraRequest, type JiraClientForSite } from './authenticated-request'
 import { clearToken, getClients, isAuthError } from './client'

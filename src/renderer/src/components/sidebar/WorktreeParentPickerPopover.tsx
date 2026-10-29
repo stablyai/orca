@@ -30,7 +30,8 @@ import {
   PICKER_LIST_MAX_HEIGHT,
   PICKER_VIEWPORT_PADDING
 } from './worktree-parent-picker-placement'
-import { translate } from '@/i18n/i18n'
+import { Trans } from 'react-i18next'
+import { i18n, translate } from '@/i18n/i18n'
 
 type WorktreeParentPickerPopoverProps = {
   open: boolean
@@ -64,8 +65,7 @@ function getAnchorRect(anchorElement: HTMLElement | null): AnchorRect | null {
 const FOCUSABLE_ANCHOR_SELECTOR =
   'a[href],button,input,select,textarea,[tabindex]:not([tabindex="-1"])'
 
-// Why: the anchor is a non-focusable `role="option"` row, so closing focus has
-// to land on its nearest focusable container (the sidebar listbox).
+// Option-row anchors cannot take focus; restore it to their enclosing sidebar listbox.
 export function getWorktreeParentPickerFocusRestoreTarget(
   anchorElement: HTMLElement | null
 ): HTMLElement | null {
@@ -190,8 +190,7 @@ export function WorktreeParentPickerPopover({
       return
     }
     suppressInitialOutsideCloseRef.current = true
-    // Why: the click that selected the dropdown item can reach Radix's newly
-    // mounted popover as an outside interaction before the picker settles.
+    // The selecting menu click can reach the just-mounted popover as an outside interaction; suppress it briefly.
     const timerId = window.setTimeout(() => {
       suppressInitialOutsideCloseRef.current = false
     }, 150)
@@ -211,18 +210,14 @@ export function WorktreeParentPickerPopover({
     [assignWorktreeParent, childWorktreeId, onOpenChange]
   )
 
-  // Why: a `position: fixed` anchor element would be laid out against the
-  // sidebar's transformed virtual-row container, not the viewport, so its
-  // viewport coordinates landed a full row-offset too low. A virtual anchor
-  // renders no node and hands Radix the measured rect directly.
+  // Transformed virtual rows offset fixed DOM anchors; pass viewport bounds through a node-free virtual anchor.
   const virtualAnchorRef = useMemo(() => {
     if (!anchorRect) {
       return undefined
     }
     const top = clampWorktreeParentPickerAnchorTop(
       anchorRect.top,
-      // Why: measured from the full candidate list, not the filtered one, so
-      // the popover does not jump around while the user types.
+      // Use unfiltered candidate count so the popover does not jump while typing.
       estimateWorktreeParentPickerHeight(candidates.length),
       viewportHeight
     )
@@ -242,13 +237,11 @@ export function WorktreeParentPickerPopover({
     estimateSize: () => PICKER_ROW_HEIGHT,
     overscan: PICKER_ROW_OVERSCAN,
     getItemKey: (index) => filtered[index]?.id ?? index,
-    // Why: the list mounts inside a popover that measures on the next frame, so
-    // seed the viewport with max-h-72 to avoid a blank first paint.
+    // Seed viewport height because the popover measures next frame and would otherwise paint blank.
     initialRect: { width: 0, height: PICKER_LIST_MAX_HEIGHT }
   })
   const handleSearchChange = useCallback(
     (nextSearch: string) => {
-      // Why: re-ranking on each keystroke makes any prior highlight meaningless.
       setSearch(nextSearch)
       setHighlightedIndex(0)
       virtualizer.scrollToOffset(0)
@@ -257,8 +250,7 @@ export function WorktreeParentPickerPopover({
   )
 
   const virtualRows = virtualizer.getVirtualItems()
-  // Why: the hook memoizes its store selector on this array's identity, so a
-  // fresh array each render would rebuild the status map on every render.
+  // Keep this ID array stable because the status selector memoizes by its identity.
   const visibleWorktreeIds = useMemo(
     () =>
       virtualRows
@@ -278,9 +270,7 @@ export function WorktreeParentPickerPopover({
 
   const handleKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLInputElement>) => {
-      // Why: cmdk's root key handler navigates the items it has mounted, which
-      // is only the virtual window here — own the navigation instead and keep
-      // the event from reaching it.
+      // Own navigation across the full candidate set; cmdk sees only mounted virtual rows.
       handleWorktreeParentPickerKeyDown({
         event,
         candidates: filtered,
@@ -292,9 +282,7 @@ export function WorktreeParentPickerPopover({
     [activeIndex, filtered, handleSelect, moveHighlight]
   )
 
-  // Why: cmdk's Input owns aria-activedescendant and points it at its own item
-  // registry, which is empty while we drive selection. Re-point it after every
-  // commit so assistive tech still tracks the highlighted row.
+  // Override cmdk’s empty item registry after commit so aria-activedescendant follows our virtual selection.
   useEffect(() => {
     const input = inputRef.current
     if (!input) {
@@ -313,7 +301,7 @@ export function WorktreeParentPickerPopover({
   }
 
   return (
-    // Why: modal traps focus (incl. post-menu xterm restore); non-modal loses search focus.
+    // Modal focus trapping prevents post-menu xterm restoration from stealing search focus.
     <Popover modal open={open} onOpenChange={onOpenChange}>
       <PopoverAnchor virtualRef={virtualAnchorRef} />
       <PopoverContent
@@ -326,9 +314,7 @@ export function WorktreeParentPickerPopover({
           event.preventDefault()
           inputRef.current?.focus()
         }}
-        // Why: virtual anchor has no trigger for Radix to restore focus to, so
-        // drive it back to the anchored row's listbox instead of dropping it on
-        // the detached input (i.e. document.body).
+        // Virtual anchors have no trigger to restore; return focus to the anchored row’s listbox.
         onCloseAutoFocus={(event) => {
           event.preventDefault()
           getWorktreeParentPickerFocusRestoreTarget(anchorElement)?.focus()
@@ -340,13 +326,17 @@ export function WorktreeParentPickerPopover({
         }}
       >
         <div className="flex min-w-0 shrink-0 items-center gap-1.5 border-b border-border bg-muted/30 px-3 py-2 text-[11px] leading-none text-muted-foreground">
-          <span className="shrink-0">
-            {translate(
-              'auto.components.sidebar.WorktreeParentPickerPopover.setParentFor',
-              'Set parent for'
-            )}
+          <span className="min-w-0 truncate">
+            <Trans
+              i18n={i18n}
+              defaults={translate(
+                'auto.components.sidebar.WorktreeParentPickerPopover.setParentForName',
+                'Set parent for <name>{{name}}</name>'
+              )}
+              values={{ name: child.displayName }}
+              components={{ name: <span className="font-medium text-foreground" /> }}
+            />
           </span>
-          <span className="truncate font-medium text-foreground">{child.displayName}</span>
         </div>
         <Command shouldFilter={false} className="min-h-0">
           <CommandInput

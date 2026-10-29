@@ -71,7 +71,7 @@ export function useOnboardingFlowActions({
   updateSettings,
   skipOptions
 }: OnboardingFlowActionsArgs) {
-  // Why: sync latch; busyLabel state commits too late to stop a ~30ms Cmd+Enter auto-repeat from re-entering next() and skipping a step.
+  // Latch synchronously: busyLabel commits too late to stop shortcut autorepeat from skipping a step.
   const nextInFlightRef = useRef(false)
   const trackCurrentStepCompleted = useCallback(
     (advancedVia: 'button' | 'keyboard'): void => {
@@ -203,7 +203,6 @@ export function useOnboardingFlowActions({
       if (!closed) {
         return
       }
-      // Why: repo picker now lives in the Add Project dialog, so skipping optional setup closes onboarding and hands off to it.
       track('onboarding_step_skipped', {
         step: stepNumber,
         value_kind: valueKind,

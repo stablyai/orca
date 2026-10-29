@@ -9,6 +9,8 @@ import {
 import { readCodexTopLevelModelProvider } from '../codex/codex-model-provider-config'
 import type { Store } from '../persistence'
 import { toWindowsWslPath } from '../wsl'
+import { wasWslDistroLastSeenRunningSettled } from '../wsl-background-distro-gate'
+import { WSL_UNC_RUNNING_LEASE_MS } from '../wsl/wsl-unc-access-gate'
 
 export type CanonicalCodexConfig = {
   contents: string
@@ -93,6 +95,14 @@ export class CodexConfigMirror {
 
   private syncToManagedHomes(): void {
     for (const account of this.store.getSettings().codexManagedAccounts) {
+      const distro = parseWslUncPath(account.managedHomePath)?.distro
+      // Its UNC reads boot a stopped distro (E9); launch preparation syncs that home before use.
+      if (
+        distro &&
+        !wasWslDistroLastSeenRunningSettled(distro, { maxAgeMs: WSL_UNC_RUNNING_LEASE_MS })
+      ) {
+        continue
+      }
       try {
         this.syncIntoManagedHome(account.managedHomePath, undefined, account.id)
       } catch (error) {

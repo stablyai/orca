@@ -40,14 +40,7 @@ function getUnstampedExecutionHostId(state: WorktreeRuntimeOwnerState): Executio
   return environmentId ? toRuntimeExecutionHostId(environmentId) : 'local'
 }
 
-/**
- * The catalog's answer, or `null` when it has none: no row names an owner for this worktree (a git
- * worktree without a repo row, a folder workspace without a folder-workspace row) and nothing more
- * specific — active-workspace host, detected owner, per-worktree host — applies either. A row that
- * exists and names no owner is a positive `'local'`; a row that has not landed is silence.
- * {@link getExecutionHostIdForWorktree} papers over that silence with the local default, which is the right answer for routing an operation and the wrong one for a caller that
- * reads the host as evidence.
- */
+/** Null means no row/stronger evidence names an owner; an existing hostless row positively means local. getExecutionHostIdForWorktree defaults silence to local for operation routing, which is unsafe as ownership evidence. */
 export function getKnownExecutionHostIdForWorktree(
   state: WorktreeRuntimeOwnerState,
   worktreeId: string | null | undefined
@@ -88,8 +81,7 @@ export function getKnownExecutionHostIdForWorktree(
   const worktree = findWorktreeRecord(state.worktreesByRepo, worktreeId)
   const worktreeHostId = getExecutionHostIdFromWorktreeHost(worktree?.hostId)
   if (worktreeHostId) {
-    // Why: per-worktree host ownership is more specific than the repo host
-    // default, especially when local and runtime checkouts share a project.
+    // Per-worktree ownership outranks repo defaults when local/runtime checkouts share a project.
     return worktreeHostId
   }
   const repoId = worktree?.repoId ?? getRepoIdFromWorktreeId(worktreeId)

@@ -71,7 +71,6 @@ describe('rehome on reconnect rules', () => {
     expect(admitted(rehome, { now: RESERVE_REHOME_HOST_COOLDOWN_MS })).toBeNull()
   })
 
-  // Jinwoo's condition: no move into a region without real room. Asia at its 98% peak gets none.
   it('moves no one into a region under 10% free, however full the source is', () => {
     expect(admitted(warmed(), { target: { free: 20, ceiling: 1_000, bookable: true } })).toBe('target-room')
     expect(admitted(warmed(), { target: { free: 99, ceiling: 1_000, bookable: true } })).toBe('target-room')
@@ -84,7 +83,6 @@ describe('rehome on reconnect rules', () => {
     const rehome = warmed()
     expect(admitted(rehome)).toBeNull()
     expect(admitted(rehome, { identity: { ...HOST, relayHostId: 'qrstuvwxyzabcdef' } })).toBe('source-budget')
-    // Another source cell has its own bucket.
     expect(admitted(rehome, { sourceCellId: 'us-r2', now: 0 })).toBe('source-budget')
     rehome.refund('us-r')
     expect(admitted(rehome, { identity: { ...HOST, relayHostId: 'qrstuvwxyzabcdef' } })).toBeNull()
@@ -140,7 +138,6 @@ describe('the rehome switch under a stalled read', () => {
       return { enabled: false, notBefore: 0 }
     }, () => now)
     const stalled = control.refresh()
-    // The next tick finds the first read still out, so it does not start another.
     await control.refresh()
     expect(reads).toEqual(['stalled'])
     now += RESERVE_REHOME_SWITCH_STALE_MS

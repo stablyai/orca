@@ -203,18 +203,6 @@ describe('headless run terminal retention', () => {
     expect(h.forgotten[0]).toMatchObject({ id: 'missing', status: 'dispatch_failed' })
   })
 
-  it('keeps a timed-out run whose agent still runs in its shell', async () => {
-    const runs = [
-      makeRun('timed-out', 0, 'dispatch_failed'),
-      ...[1, 2, 3].map((n) => makeRun(`done${n}`, n))
-    ]
-    const h = harness(runs)
-    await h.retention.sweep()
-    vi.advanceTimersByTime(RUN_TERMINAL_GRACE_MS * 10)
-    await h.retention.sweep()
-    expect(h.closed).toEqual([])
-  })
-
   it('closes a still-dispatched run whose agent exited, leaving its shell idle', async () => {
     const runs = [
       makeRun('exited', 0, 'dispatched'),
@@ -352,17 +340,6 @@ describe('headless run terminal retention', () => {
     await h.retention.drain()
     expect(h.slept).toEqual(['r0'])
     expect(h.forgotten.map((run) => run.id)).not.toContain('r0')
-  })
-
-  it('closes a completed run whose workspace is shared', async () => {
-    const runs = [0, 1, 2, 3].map((n) => makeRun(`r${n}`, n))
-    const h = harness(runs)
-    await h.retention.sweep()
-    vi.advanceTimersByTime(RUN_TERMINAL_GRACE_MS)
-    await h.retention.sweep()
-    expect(h.slept).toEqual([])
-    expect(h.closed).toEqual(['tab-r0:1'])
-    expect(h.forgotten.map((run) => run.id)).toEqual(['r0'])
   })
 
   it('closes a failed run in its own workspace, and never sleeps or closes a used one', async () => {

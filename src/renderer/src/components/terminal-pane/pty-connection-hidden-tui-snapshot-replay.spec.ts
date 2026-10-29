@@ -92,7 +92,7 @@ export function registerPtyConnectionHiddenTuiSnapshotReplayTests(): void {
         _core?: { refresh: typeof refresh }
       }
       terminal._core = { refresh }
-      terminal.write = vi.fn((_data: string, callback?: () => void) => {
+      terminal.write = vi.fn((_data: string | Uint8Array, callback?: () => void) => {
         callback?.()
       })
       const manager = createManager(1)
@@ -150,7 +150,7 @@ export function registerPtyConnectionHiddenTuiSnapshotReplayTests(): void {
         _core?: { refresh: typeof refresh }
       }
       terminal._core = { refresh }
-      terminal.write = vi.fn((_data: string, callback?: () => void) => {
+      terminal.write = vi.fn((_data: string | Uint8Array, callback?: () => void) => {
         callback?.()
       })
       const manager = createManager(1)

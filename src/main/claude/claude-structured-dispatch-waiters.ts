@@ -1,4 +1,7 @@
-import type { ClaudeDispatchWaiter, ClaudeSession } from './claude-structured-session-state'
+import type {
+  ClaudeDispatchWaiter,
+  ClaudeSession
+} from './structured/claude-structured-session-state'
 
 const MAX_RETIRED_DISPATCH_WAITERS = 64
 

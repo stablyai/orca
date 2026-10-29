@@ -24,13 +24,16 @@ export function agentSessionMutationAdmitsNow<TValue>(
     now: request.now(),
     ...(plan.operationIdScope ? { operationIdScope: plan.operationIdScope } : {})
   })
+  const selected = request.store.selectWritableRecord(envelope.sessionId)
   return (
+    selected.kind === 'writable' &&
     evaluated !== null &&
+    evaluated.decision.decision === 'admit' &&
     admitAgentSessionMutation({
       envelope,
       hostFingerprint,
       ledger: evaluated.decision,
-      lease: evaluated.record.lease,
+      lease: selected.record.lease,
       ...(plan.conversationWrite ? { conversationWrite: true } : {})
     }).decision === 'admit'
   )

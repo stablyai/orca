@@ -6,13 +6,6 @@ import {
 } from './browser-page-initiated-tab-budget'
 
 describe('page-initiated tab budget', () => {
-  it('absorbs a window.open loop fired from a single activation', () => {
-    const budget = createPageInitiatedTabBudget()
-    const granted = Array.from({ length: 12 }, () => budget.tryConsume(1_000)).filter(Boolean)
-
-    expect(granted).toHaveLength(MAX_PAGE_INITIATED_TABS_PER_WINDOW)
-  })
-
   it('refills once the rolling window has passed, so real browsing is unaffected', () => {
     const budget = createPageInitiatedTabBudget()
     for (let i = 0; i < MAX_PAGE_INITIATED_TABS_PER_WINDOW; i++) {

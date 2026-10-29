@@ -1,12 +1,5 @@
-/**
- * Build a native addon for a package dir other worktrees share, without touching what they load.
- *
- * Under pnpm's global virtual store the package dir is one store slot for every worktree, so an
- * in-place node-gyp rebuild swaps the binary out from under running processes. Instead the
- * source is compiled in a private scratch copy, the outputs are validated in a fresh process,
- * and they are published as the immutable `build/<entry>` from native-build-entry.cjs. A usable
- * entry is reused as-is and never rebuilt, which is also why a forced rebuild cannot displace it.
- */
+// Global pnpm store shares addon dirs: compile in private scratch, probe fresh process, then publish immutable per-ABI build/<entry>.
+// Never replace usable published entry, even for forced rebuild, or running worktrees lose their binary.
 import { cpSync, existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
@@ -40,10 +33,7 @@ export function nativeBuildEnvironment(env = process.env, platform = process.pla
     : disableMsbuildFileTrackingOnWindows({ ...env })
 }
 
-/**
- * Why `dir` cannot serve this runtime, or null when it can. Loads it in a fresh `executable`
- * (Node, or Electron as Node), the only proof an addon is usable.
- */
+// Fresh Node/Electron-as-Node load is the usability proof; return failure reason or null.
 export function checkNativeBuildDirLoads(moduleName, dir, { executable = process.execPath } = {}) {
   if (
     moduleName === '@vscode/windows-process-tree' &&
@@ -86,12 +76,7 @@ export function checkNativeBuildDirArtifacts(moduleName, dir, { platform, arch }
   return null
 }
 
-/**
- * Make sure `packageDir` holds a usable published build of `moduleName` for platform-arch.
- *
- * `checkBuildDir(dir)` returns why a dir is unusable, or null. Returns the entry dir and whether
- * this call compiled. Throws when no usable entry exists afterwards.
- */
+// Publish reusable platform/arch build; checkBuildDir returns reason/null, result reports entry/compilation, and absence of usable output throws.
 export function ensureSharedNativeBuild({
   moduleName,
   packageDir,

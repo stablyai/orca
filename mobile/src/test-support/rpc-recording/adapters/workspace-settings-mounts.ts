@@ -6,9 +6,7 @@ import { operationModuleLoader } from '../operation-module-loader'
 export function workspaceSettingsMounts(
   modules: ReturnType<typeof operationModuleLoader>
 ): Record<string, MountAdapter> {
-  // `settings.task-workspace` stops at the setup prompt, which is the branch that scenario set
-  // exercises. A second registration resolves setup instead, so createWorkspace runs to
-  // worktree.create and the reply matrix reaches that call's acceptance policy.
+  // Resolve setup in a second registration so the matrix reaches worktree.create instead of stopping at the prompt.
   function taskWorkspaceAdapter(setupResolution: {
     kind: string
     command?: string
@@ -24,6 +22,7 @@ export function workspaceSettingsMounts(
       const model = observableModel(context, {
         client: context.client,
         hostId: 'host-1',
+        repos: [],
         tasksSupported: true,
         taskStateHydrated: true,
         runtimeTaskSettings: { disabledTuiAgents: ['claude'] },
@@ -82,6 +81,7 @@ export function workspaceSettingsMounts(
       >('mobile/src/components/use-new-workspace-create-submit.ts').useNewWorkspaceCreateSubmit
       const model = observableModel(context, {
         client: context.client,
+        repos: [],
         selectedRepo: { id: 'repo-1', displayName: 'Repo' },
         selectedAgent: { id: 'claude', label: 'Claude' },
         runtimeSettings: { disabledTuiAgents: ['claude'] },
@@ -97,8 +97,7 @@ export function workspaceSettingsMounts(
         runSetup: false,
         trustedOrcaHooks: {},
         getWorktreeCreateCutoverSupport: async () => false,
-        // False for the same reason as the cutover probe: an old host is the baseline the
-        // recordings pin, so the create stays on worktree.create rather than agent.launch.
+        // Pin an older host so create remains worktree.create rather than agent.launch.
         getAgentLaunchSupport: async () => false,
         transitionDrawer: (view: unknown) => context.effect('drawer', view),
         onCreated: (id: unknown, name: unknown) => context.effect('created', { id, name }),

@@ -1,3 +1,4 @@
+import { agentSessionCurrentContextRows } from '../../shared/agent-session-context-clear'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../shared/execution-host'
 import type { CommitMessageAgentEnvironmentResolvers } from '../text-generation/commit-message-agent-environment'
 import type { StructuredChatNamingDeps } from '../native-chat/structured-chat-naming'
@@ -41,11 +42,13 @@ export function structuredChatNamingDeps(
     readJournalFirstPrompt: async (sessionId) => {
       const host = getStructuredAgentSessionHost()
       return host
-        ? firstStructuredAgentSessionPrompt((await host.journalSnapshot(sessionId)).items)
+        ? firstStructuredAgentSessionPrompt(
+            agentSessionCurrentContextRows((await host.journalSnapshot(sessionId)).items).items
+          )
         : ''
     },
     workerTaskTitle: runtime.workerTaskTitle,
-    generate: async (record, firstPrompt) => {
+    generate: async (record, firstPrompt, shouldExecute) => {
       // Unsupported execution contexts keep the seed regardless of native naming settings.
       if (record.location.wslDistro !== null) {
         return null
@@ -74,7 +77,8 @@ export function structuredChatNamingDeps(
       const result = await generateConversationNameFromContext(
         { firstPrompt },
         settings.params,
-        target
+        target,
+        shouldExecute
       )
       if (result.success) {
         return { name: result.name }

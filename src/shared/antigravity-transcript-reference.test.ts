@@ -59,7 +59,7 @@ describe('Antigravity transcript reference launch', () => {
     expect(command).not.toContain('wsl.localhost')
   })
   it.each(['cmd', 'powershell', 'posix'] as const)(
-    'uses the actual Windows %s shell and preserves CLI resume behavior',
+    'selects transcript-reference or CLI-resume flags for Windows %s commands',
     (shell) => {
       const path =
         'C:\\User data\\.gemini\\antigravity-ide\\brain\\id\\.system_generated\\logs\\transcript_full.jsonl'

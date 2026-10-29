@@ -74,7 +74,9 @@ export abstract class AgentBrowserBridgeQueue extends AgentBrowserBridgeShutdown
       options.requireScopedTarget
     )
     const sessionName = `${ORCA_TAB_SESSION_PREFIX}${pageId}`
+    const agentCommand = this.browserManager.beginAgentCommand(pageId)
 
+    // Dropped commands never execute, so settling also ends the lease; ending twice is harmless.
     return new Promise<T>((resolve, reject) => {
       let queue = this.commandQueues.get(sessionName)
       if (!queue) {
@@ -99,13 +101,13 @@ export abstract class AgentBrowserBridgeQueue extends AgentBrowserBridgeShutdown
               },
               options
             )
-          return origin.run(run)
+          return origin.run(() => agentCommand.run(run))
         },
         resolve: resolve as (value: unknown) => void,
         reject
       })
       this.processQueue(sessionName)
-    })
+    }).finally(agentCommand.end)
   }
 
   protected async executeQueuedCommand<T>(
@@ -118,10 +120,15 @@ export abstract class AgentBrowserBridgeQueue extends AgentBrowserBridgeShutdown
     const sessionName = `${ORCA_TAB_SESSION_PREFIX}${browserPageId}`
     // A queued page may acquire a replacement guest before execution.
     const target = this.resolveCommandTarget(worktreeId, browserPageId)
-    if (options.ensureSession !== false) {
-      await this.ensureSession(sessionName, browserPageId, target.webContentsId)
+    const releaseGuest = this.browserManager.holdGuestActive(target.webContentsId)
+    try {
+      if (options.ensureSession !== false) {
+        await this.ensureSession(sessionName, browserPageId, target.webContentsId)
+      }
+      return await execute(sessionName, target)
+    } finally {
+      releaseGuest()
     }
-    return execute(sessionName, target)
   }
 
   /** Revocation must stop every later step of a host command. */

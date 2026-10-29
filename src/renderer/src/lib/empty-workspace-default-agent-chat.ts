@@ -18,10 +18,7 @@ import { planAgentSessionLaunch } from '@/lib/agent-session-launch-plan'
 import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
 
-/**
- * The host whose agent list picks the default chat; undefined when the workspace opens a shell
- * whatever that list says. Shared by the wait and the open so they cannot drift.
- */
+/** Share the host between wait/open; undefined means the workspace opens a shell regardless of agent inventory. */
 function defaultChatDetectionTarget(
   state: AppState,
   worktreeId: string
@@ -34,7 +31,6 @@ function defaultChatDetectionTarget(
   return parseAgentDetectionTargetKey(getAgentDetectionTargetKeyForWorktree(state, worktreeId))
 }
 
-/** True when the default chat could open here but its agent list or chat facts have not loaded. */
 export function emptyWorkspaceDefaultChatAwaitsDetection(worktreeId: string): boolean {
   const state = useAppStore.getState()
   const target = defaultChatDetectionTarget(state, worktreeId)
@@ -47,7 +43,6 @@ export function emptyWorkspaceDefaultChatAwaitsDetection(worktreeId: string): bo
   )
 }
 
-/** Loads the workspace host's agent list and chat facts; resolves on success, failure, or timeout. */
 export async function loadEmptyWorkspaceDefaultChatDetection(worktreeId: string): Promise<void> {
   const state = useAppStore.getState()
   const target = defaultChatDetectionTarget(state, worktreeId)
@@ -62,11 +57,7 @@ export async function loadEmptyWorkspaceDefaultChatDetection(worktreeId: string)
   ).catch(() => undefined)
 }
 
-/**
- * When the user's new agent tabs open as chat, an empty workspace opens their default agent as a
- * chat instead of a bare shell. Null means nothing opened and the caller seeds the shell; so does
- * `seedShell` when the host declines the chat, since nobody asked for the agent's terminal.
- */
+/** Open the configured default chat for an empty workspace; null or host decline seeds a shell, never an unrequested agent TUI. */
 export function openDefaultAgentChatInEmptyWorkspace(
   worktreeId: string,
   seedShell: () => boolean

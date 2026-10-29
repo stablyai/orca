@@ -1,5 +1,3 @@
-// A windowless host's saved chat tab against a real chat host: the index hiding a chat reaches the
-// runtime and takes the tab out of the layout, and a chat whose record is gone loses its tab.
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -10,11 +8,13 @@ import {
 } from '../../shared/agent-session-record.test-fixture'
 import { structuredAgentSessionTabId } from '../../shared/structured-agent-session-projection'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
+import { getDefaultWorkspaceSession } from '../../shared/constants'
+import { normalizeExecutionHostId } from '../../shared/execution-host'
 import { closeTestJournalHostDatabases } from '../native-chat/agent-session-journal/journal-host-database-test-support'
 import { recordingStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
 import { seedTestAgentSessionRecordStore } from './agent-session-record-store-test-harness'
 import { OrcaRuntimeService } from './orca-runtime'
-import { withChatTabChanges } from './agent-session-tab-layout'
+import { withChatTabChanges } from './agent-session/agent-session-tab-layout'
 import {
   chatTabCommandsSettled as settled,
   layoutApplyOn
@@ -23,6 +23,7 @@ import {
   ensureStructuredAgentSessionHost,
   stopStructuredAgentSessionRuntime
 } from './structured-agent-session-runtime'
+import { partialRuntimeStore } from './runtime-store-partial-fixture'
 
 const WT = 'workspace-1'
 // Session ids are 8 to 128 characters; a shorter one is not a readable record.
@@ -80,9 +81,11 @@ async function runtimeWithSavedChats(
   const store = {
     getRepos: () => [],
     getSettings: () => ({}),
+    // An unsaved partition reads as the default layout, as the Store answers it.
     getWorkspaceSession: (hostId = 'local') =>
-      hostId === 'local' ? state.session : (partitions.get(hostId) ?? null),
-    getWorkspaceSessionHostIds: () => ['local', ...partitions.keys()],
+      hostId === 'local' ? state.session : (partitions.get(hostId) ?? getDefaultWorkspaceSession()),
+    getWorkspaceSessionHostIds: () =>
+      ['local', ...partitions.keys()].flatMap((id) => normalizeExecutionHostId(id) ?? []),
     setWorkspaceSession: (next: WorkspaceSessionState, hostId = 'local') => {
       if (hostId === 'local') {
         state.session = next
@@ -95,8 +98,7 @@ async function runtimeWithSavedChats(
       (next, hostId) => store.setWorkspaceSession(next, hostId)
     )
   }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the runtime reads only these store methods on these paths.
-  const runtime = new OrcaRuntimeService(store as never)
+  const runtime = new OrcaRuntimeService(partialRuntimeStore(store))
   for (const sessionId of sessionIds) {
     await runtime.publishStructuredAgentSessionTab({
       workspaceId: WT,

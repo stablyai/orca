@@ -154,9 +154,7 @@ describe('OnboardingFlow', () => {
     })
 
     expect(html).toContain('Set Windows terminal defaults')
-    // Why: integrations is skipped (gh already installed), so it is not a
-    // stepper dot at all — the four real steps are agent, theme, Windows
-    // terminal, notifications, and Windows terminal is the third of four.
+    // Installed gh skips Integrations entirely; Windows terminal is step three of the four visible steps.
     expect(html).toContain('3 of 4')
     expect(html).not.toContain('Set up GitHub tasks')
     expect(html).not.toContain('Integrations')
@@ -184,8 +182,7 @@ describe('OnboardingFlow', () => {
     expect(html).not.toContain('Set up GitHub tasks')
     expect(html).not.toContain('Connect your task sources')
     expect(html).not.toContain('Point Orca at some code')
-    // Why: with both integrations (gh installed) and Windows terminal (Mac)
-    // skipped, the stepper shows only the three real steps — no dead dots.
+    // Installed gh and macOS skip Integrations/Windows terminal, leaving three visible steps.
     expect(html).toContain('3 of 3')
     expect(html).not.toContain('Integrations')
   })

@@ -1,4 +1,5 @@
 // Keep Electron imports out: both desktop and orcad bundle these account services.
+import { getClaudeAgentViewService } from './claude/agent-view-service'
 import type { Store } from './persistence'
 import { RateLimitService } from './rate-limits/service'
 import { CodexRuntimeHomeService } from './codex-accounts/runtime-home-service'
@@ -9,10 +10,12 @@ import { getInitialCodexRateLimitTarget } from './rate-limits/codex-rate-limit-t
 import { getInitialClaudeRateLimitTarget } from './rate-limits/claude-rate-limit-target'
 import { getKimiRuntimeTarget, resolveKimiHome } from './kimi/kimi-runtime-home'
 import { isWslDistroRunningForBackgroundWork } from './wsl-background-distro-gate'
+import { inactiveCodexHomeUnlessStopped } from './rate-limits/inactive-codex-home'
 import { readMiniMaxSessionCookie } from './minimax/minimax-cookie-store'
 import { readMiniMaxApiKey } from './minimax/minimax-api-key-store'
 import { readZcodePlanApiKey } from './zcode/zcode-plan-api-key-store'
 import { readOpenCodeGoApiKey } from './opencode/opencode-go-api-key-store'
+import { setAntigravityNativeCredentialChangeListener } from './antigravity/native-account-host'
 import { createAccountRuntimeTargetSettingsSync } from './rate-limits/account-runtime-target-sync'
 import { normalizeCodexRuntimeSelection } from './codex-accounts/runtime-selection'
 import { normalizeClaudeRuntimeSelection } from './claude-accounts/runtime-selection'
@@ -33,6 +36,8 @@ export function createProviderAccountServices(
     setClaudeStatusLineListener: (listener: (event: ClaudeStatusLineRateLimits) => void) => void
   }
 ): ProviderAccountServices {
+  const agentView = getClaudeAgentViewService()
+  void agentView.reconcile(store.getSettings())
   const rateLimits = new RateLimitService()
   const codexRuntimeHome = new CodexRuntimeHomeService(store)
   const codexAccounts = new CodexAccountService(
@@ -58,6 +63,7 @@ export function createProviderAccountServices(
     store.getSettings()
   )
   store.onSettingsChanged((updates, settings) => {
+    void agentView.reconcile(settings)
     // Auto runtime selection remains live as provider settings change.
     void syncAccountRuntimeTargets(updates, settings).catch((error) =>
       console.warn('[rate-limits] Failed to apply account runtime target:', error)
@@ -130,6 +136,9 @@ export function createProviderAccountServices(
   rateLimits.setAntigravityUsageEnabledResolver(() =>
     store.getUI().statusBarItems.includes('antigravity')
   )
+  setAntigravityNativeCredentialChangeListener(() =>
+    rateLimits.invalidateAntigravityCredentialState()
+  )
   rateLimits.setNetworkProxySettingsResolver(() => store.getSettings())
   rateLimits.setInactiveClaudeAccountsResolver(() => {
     const settings = store.getSettings()
@@ -160,12 +169,10 @@ export function createProviderAccountServices(
       .filter((account) => !activeIds.has(account.id))
       .map((account) => ({
         id: account.id,
-        resolveHome: () => {
-          const resolved = codexRuntimeHome.resolveCodexManagedAccountHomeForInactiveFetch(account)
-          return resolved.kind === 'ready'
-            ? { kind: 'ready' as const, managedHomePath: resolved.homePath }
-            : { kind: 'skip' as const }
-        }
+        resolveHome: () =>
+          inactiveCodexHomeUnlessStopped(
+            codexRuntimeHome.resolveCodexManagedAccountHomeForInactiveFetch(account)
+          )
       }))
   })
   return { rateLimits, codexRuntimeHome, codexAccounts, claudeRuntimeAuth, claudeAccounts }

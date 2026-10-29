@@ -1,6 +1,7 @@
-import { useId, useState } from 'react'
+import { useId, useLayoutEffect, useRef, useState } from 'react'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
+import { Textarea } from '../ui/textarea'
 import { translate } from '@/i18n/i18n'
 import {
   parseAgentDefaultEnvDraft,
@@ -8,6 +9,7 @@ import {
   type AgentDefaultEnvDraftInvalidReason
 } from './agent-default-env-draft'
 import { useAgentLaunchFieldWrite } from './use-agent-launch-field-write'
+import { AgentPermissionArgsChip } from './AgentPermissionChoiceControls'
 
 export function AgentCommandOverrideInput({
   defaultCmd,
@@ -86,24 +88,53 @@ export function AgentDefaultArgsInput({
   argsOverride,
   onSaveArgs,
   permissionChip,
-  note
+  note,
+  disabled = false,
+  onDraftChange
 }: {
   defaultArgs: string
   argsOverride: string
   onSaveArgs: (value: string) => void | Promise<void>
-  /** The permission flag terminals add ahead of the text, drawn just before the box. */
-  permissionChip?: React.ReactNode
+  permissionChip?: {
+    label: string
+    flag: string
+    removeRecipe: (text: string) => string | null
+    onRemove: () => void
+  }
   note?: string
+  disabled?: boolean
+  onDraftChange?: (value: string) => void
 }): React.JSX.Element {
   const [draft, setDraft] = useState<string | null>(null)
-  const argsDraft = draft ?? argsOverride
+  const inputRef = useRef<HTMLTextAreaElement>(null)
+  const chipRef = useRef<HTMLSpanElement>(null)
+  const chipButtonRef = useRef<HTMLButtonElement>(null)
+  const argsDraft = onDraftChange ? argsOverride : (draft ?? argsOverride)
   const { pending, write } = useAgentLaunchFieldWrite()
-  const commitArgs = (): void => {
-    if (pending || draft === null) {
+  useLayoutEffect(() => {
+    const input = inputRef.current
+    const chip = chipRef.current
+    if (!input) {
       return
     }
-    const value = draft.trim()
-    if (value === argsOverride) {
+    input.style.textIndent = ''
+    if (!chip) {
+      return
+    }
+    const measure = (): void => {
+      input.style.textIndent = `calc(${chip.getBoundingClientRect().width}px + var(--spacing) * 2)`
+    }
+    measure()
+    const observer = new ResizeObserver(measure)
+    observer.observe(chip)
+    return () => observer.disconnect()
+  }, [permissionChip?.flag])
+  const commitArgs = (): void => {
+    if (disabled || pending || (!onDraftChange && draft === null)) {
+      return
+    }
+    const value = argsDraft.trim()
+    if (!onDraftChange && value === argsOverride) {
       setDraft(null)
       return
     }
@@ -115,40 +146,104 @@ export function AgentDefaultArgsInput({
   }
 
   return (
-    <div className="flex flex-col gap-1">
-      <span className="text-xs text-muted-foreground">
+    <div className="flex min-w-0 flex-col gap-1">
+      <span className="text-xs font-medium leading-none text-muted-foreground">
         {translate('auto.components.settings.AgentsPane.cfb3f35775', 'Arguments')}
       </span>
-      <div className="flex items-center gap-2">
-        {permissionChip}
-        <Input
-          value={argsDraft}
-          readOnly={pending}
-          onChange={(event) => setDraft(event.target.value)}
-          onBlur={commitArgs}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter') {
+      <div className="flex min-w-0 items-center gap-2">
+        <div
+          className="scrollbar-sleek relative max-h-[calc(var(--spacing)*41+2px)] min-h-7 min-w-0 flex-1 overflow-x-hidden overflow-y-auto rounded-md border border-input px-3 py-0.5 shadow-xs transition-[color,box-shadow] focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50 dark:bg-input/30"
+          onBlur={(event) => {
+            if (!event.currentTarget.contains(event.relatedTarget)) {
               commitArgs()
-              event.currentTarget.blur()
-            }
-            if (event.key === 'Escape') {
-              setDraft(null)
             }
           }}
-          placeholder={
-            defaultArgs ||
-            translate('auto.components.settings.AgentsPane.6f99bf5dd0', 'No default arguments')
-          }
-          spellCheck={false}
-          className="h-7 flex-1 font-mono text-xs"
-        />
+          onClick={(event) => {
+            if (event.target === event.currentTarget) {
+              inputRef.current?.focus()
+            }
+          }}
+        >
+          {permissionChip && (
+            <AgentPermissionArgsChip
+              {...permissionChip}
+              chipRef={chipRef}
+              buttonRef={chipButtonRef}
+              disabled={disabled || pending}
+              onRemove={() => {
+                if (disabled || pending) {
+                  return
+                }
+                if (onDraftChange) {
+                  onDraftChange(permissionChip.removeRecipe(argsDraft) ?? argsDraft)
+                } else if (draft !== null) {
+                  setDraft(permissionChip.removeRecipe(draft) ?? draft)
+                }
+                inputRef.current?.focus()
+                permissionChip.onRemove()
+              }}
+            />
+          )}
+          <Textarea
+            variant="composite"
+            ref={inputRef}
+            rows={1}
+            value={argsDraft}
+            disabled={disabled}
+            readOnly={pending}
+            aria-label={translate('auto.components.settings.AgentsPane.cfb3f35775', 'Arguments')}
+            onChange={(event) =>
+              (onDraftChange ?? setDraft)(event.target.value.replace(/[\r\n]/g, ''))
+            }
+            onKeyDown={(event) => {
+              if (disabled || pending) {
+                return
+              }
+              if (
+                permissionChip &&
+                event.key === 'Backspace' &&
+                !event.repeat &&
+                !event.altKey &&
+                !event.ctrlKey &&
+                !event.metaKey &&
+                event.currentTarget.selectionStart === 0 &&
+                event.currentTarget.selectionEnd === 0
+              ) {
+                event.preventDefault()
+                chipButtonRef.current?.focus()
+              }
+              if (event.key === 'Enter') {
+                event.preventDefault()
+                commitArgs()
+                event.currentTarget.blur()
+              }
+              if (event.key === 'Escape') {
+                setDraft(null)
+              }
+            }}
+            placeholder={
+              permissionChip
+                ? undefined
+                : defaultArgs ||
+                  translate(
+                    'auto.components.settings.AgentsPane.6f99bf5dd0',
+                    'No default arguments'
+                  )
+            }
+            spellCheck={false}
+            className="block min-h-5 [field-sizing:content]"
+          />
+        </div>
         {(argsOverride !== defaultArgs || argsDraft !== defaultArgs) && (
           <Button
             type="button"
             variant="ghost"
             size="xs"
+            disabled={disabled}
             onClick={() => {
-              setDraft(argsDraft)
+              if (!onDraftChange) {
+                setDraft(argsDraft)
+              }
               write(
                 defaultArgs,
                 () => onSaveArgs(defaultArgs),

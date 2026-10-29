@@ -18,6 +18,7 @@ const COMMAND_SCOPED_FLAG_HELP: Record<string, Record<string, string>> = {
     limit: '--limit <n>            Maximum matching workspaces (default 50)'
   },
   'worktree create': {
+    branch: '--branch <name>        Git branch name to use instead of the prefixed default',
     reference:
       '--reference <url-or-jira-key> Attach an issue/review URL or Jira key; repeat for several',
     'reference-site': '--reference-site <id> Jira site for bare keys; see orca jira connection',
@@ -54,6 +55,10 @@ const COMMAND_SCOPED_FLAG_HELP: Record<string, Record<string, string>> = {
   },
   'skills install': {
     agent: '--agent <names>        Comma-separated install targets; default is detected agents'
+  },
+  'orchestration run-show': {
+    removed: '--removed              List the Tasks, Dispatches and workers removed from this Run',
+    cursor: '--cursor <cursor>      Cursor printed by the previous page of removed work'
   },
   'worktree set': {
     unread: '--unread               Mark the workspace unread in the sidebar',

@@ -1,3 +1,4 @@
+import { taskProviderErrorMessage, taskProviderErrorText } from '@/lib/task-provider-error-copy'
 import { ImeInput } from '@/lib/ime-text-field'
 import React, { useCallback, useMemo, useRef, useState } from 'react'
 import { ArrowRight, LoaderCircle, Plus } from 'lucide-react'
@@ -71,7 +72,7 @@ export function LinearIssueSubIssues({
         if (mountedRef.current && requestId === openRequestIdRef.current) {
           toast.error(
             error instanceof Error
-              ? error.message
+              ? taskProviderErrorText(error.message)
               : translate(
                   'auto.components.LinearIssueWorkspace.9a1317cdd3',
                   'Failed to load sub-issue'
@@ -129,14 +130,14 @@ export function LinearIssueSubIssues({
           setTitle('')
           setOpen(false)
         } else {
-          toast.error(result.error)
+          toast.error(taskProviderErrorMessage(result))
         }
       })
       .catch((error) => {
         if (mountedRef.current && requestId === createRequestIdRef.current) {
           toast.error(
             error instanceof Error
-              ? error.message
+              ? taskProviderErrorText(error.message)
               : translate(
                   'auto.components.LinearIssueWorkspace.b25e453c9d',
                   'Failed to create sub-issue'

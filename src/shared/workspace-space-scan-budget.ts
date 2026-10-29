@@ -8,17 +8,7 @@ export type WorkspaceSpaceScanLimits = {
   maxRetainedBytes: number
 }
 
-/**
- * Tracks what the traversal is holding right now, not what it has ever seen:
- * `retainedBytes` falls again as listings are dispatched and dropped, so the
- * cap bounds live heap rather than total tree size.
- *
- * `maxEntries` bounds ONE listing, not the traversal — a directory's width is
- * the only entry count fixed by shape. A traversal-wide entry counter is
- * charged by every worker holding a listing at once, so its verdict scaled with
- * concurrency and rejected intact worktrees; aggregate live cost is bounded by
- * `maxRetainedBytes` instead. Do not reintroduce a traversal-wide entry count.
- */
+/** Bound live retained bytes, releasing dispatched listings. maxEntries bounds one directory’s width; a traversal-wide entry count would incorrectly scale with worker concurrency. */
 export type WorkspaceSpaceScanBudget = {
   retainedBytes: number
   limits: WorkspaceSpaceScanLimits
@@ -59,8 +49,7 @@ export function estimateWorkspaceSpaceEntryRetainedBytes(entryName: string): num
   return entryName.length * 2 + WORKSPACE_SPACE_ENTRY_OVERHEAD_BYTES
 }
 
-/** Why: a listing's entries share one parent-path string, so charging it per
- *  entry scaled the estimate by checkout depth rather than live heap. */
+/** Charge the shared parent path once per listing so checkout depth does not inflate per-entry cost. */
 export function estimateWorkspaceSpaceListingRetainedBytes(parentPath: string): number {
   return parentPath.length * 2
 }
@@ -82,8 +71,7 @@ export function retainWorkspaceSpaceScanEntry(
   budget.retainedBytes = retainedBytes
 }
 
-// Why: callers must return a listing's charge once they drop it, so the cap
-// tracks live retention instead of accumulating across the whole traversal.
+// Release dropped listings so the cap bounds live retention, not total traversal work.
 export function releaseWorkspaceSpaceScanEntries(
   budget: WorkspaceSpaceScanBudget,
   retainedBytes: number
@@ -110,8 +98,7 @@ export async function collectWorkspaceSpaceDirectoryEntries<TEntry>(
     for await (const entry of directory) {
       checkCancelled()
       const name = entryName(entry)
-      // The listing's shared parent path is charged once, with its first entry,
-      // so an empty listing holds no charge for the caller to release.
+      // Charge the shared parent path with the first entry; empty listings hold no charge.
       const listingBytes =
         entries.length === 0 ? estimateWorkspaceSpaceListingRetainedBytes(parentPath) : 0
       retainWorkspaceSpaceScanEntry(budget, name, entries.length, listingBytes)
@@ -119,8 +106,7 @@ export async function collectWorkspaceSpaceDirectoryEntries<TEntry>(
       entries.push(entry)
     }
   } catch (error) {
-    // Why: a rejected or cancelled listing is never handed to the caller, so
-    // nothing would otherwise return the charge already taken for it.
+    // Rejected/cancelled listings never reach a caller that could release their charge.
     releaseWorkspaceSpaceScanEntries(budget, retainedBytes)
     throw error
   }

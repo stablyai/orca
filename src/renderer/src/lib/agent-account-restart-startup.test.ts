@@ -10,6 +10,12 @@ import {
   type ProjectExecutionRuntimeResolution
 } from '../../../shared/project-execution-runtime'
 import type * as localPreflightContext from '@/lib/local-preflight-context'
+import { resolveAgentResumeLaunchTarget } from '@/lib/agent-resume-launch-target'
+import {
+  makeTerminalTab,
+  makeWorktree,
+  TEST_REPO
+} from '@/store/slices/worktrees-slice-test-fixtures'
 import {
   buildPaneAccountRestartStartup,
   resolveAgentAccountRestartResumeStartup,
@@ -17,6 +23,8 @@ import {
 } from './agent-account-restart-startup'
 
 let projectRuntimeContext: ProjectExecutionRuntimeResolution | undefined
+
+vi.mock('@/lib/agent-resume-launch-target', { spy: true })
 
 vi.mock('@/lib/local-preflight-context', async (importOriginal) => ({
   ...(await importOriginal<typeof localPreflightContext>()),
@@ -66,6 +74,7 @@ describe('buildPaneAccountRestartStartup for Codex', () => {
   beforeEach(() => {
     seedAgentStatus(null)
     projectRuntimeContext = undefined
+    useAppStore.setState({ settings: getDefaultSettings('/home/dev') })
   })
 
   it('names the session so the relaunch continues the conversation', () => {
@@ -95,11 +104,22 @@ describe('buildPaneAccountRestartStartup for Codex', () => {
     expect(startup.startupCommandDelivery).toBe('shell-ready')
   })
 
-  it('falls back to a bare relaunch when the pane has no Codex session to name', () => {
-    const startup = build()
+  it('relaunches the configured command without adding defaults when no session is recorded', () => {
+    const command = String.raw`& 'C:\Program Files\Codex\codex.exe'`
+    useAppStore.setState({
+      settings: {
+        ...getDefaultSettings('/home/dev'),
+        agentCmdOverrides: { codex: command },
+        agentDefaultArgs: { codex: '--search' },
+        agentDefaultEnv: { codex: { CODEX_DEFAULT_ONLY: '1' } }
+      }
+    })
 
-    expect(startup.command).toBe('codex')
-    expect(startup.resumeProviderSession).toBeUndefined()
+    expect(build()).toEqual({
+      command,
+      startupCommandDelivery: 'shell-ready',
+      launchAgent: 'codex'
+    })
   })
 
   it('uses the persisted record when the live status entry is gone', () => {
@@ -125,7 +145,13 @@ describe('buildPaneAccountRestartStartup for Codex', () => {
     expect(startup.resumeProviderSession?.id).toBe(SESSION_ID)
   })
 
-  it('keeps the bare relaunch for a resolved WSL runtime', () => {
+  it('keeps the configured fresh relaunch for a resolved WSL runtime', () => {
+    useAppStore.setState({
+      settings: {
+        ...getDefaultSettings('/home/dev'),
+        agentCmdOverrides: { codex: 'codex-wrapper' }
+      }
+    })
     seedAgentStatus({
       agentType: 'codex',
       state: 'done',
@@ -145,7 +171,7 @@ describe('buildPaneAccountRestartStartup for Codex', () => {
 
     const startup = build()
 
-    expect(startup.command).toBe('codex')
+    expect(startup.command).toBe('codex-wrapper')
     expect(startup.resumeProviderSession).toBeUndefined()
   })
 
@@ -184,6 +210,7 @@ describe('buildPaneAccountRestartStartup for Claude', () => {
   beforeEach(() => {
     seedAgentStatus(null)
     projectRuntimeContext = undefined
+    useAppStore.setState({ tabsByWorktree: {}, worktreesByRepo: {} })
   })
 
   it('resumes the pane’s Claude session with the launch marks the spawn needs', () => {
@@ -250,6 +277,96 @@ describe('buildPaneAccountRestartStartup for Claude', () => {
     expect(buildPaneAccountRestartStartup('claude', pane)?.command).toContain('--model')
   })
 
+  // #31545: `cd pkg && claude` must come back in pkg, not the tab's start folder.
+  it('resumes a Claude started in another folder from that folder', () => {
+    seedAgentStatus({
+      agentType: 'claude',
+      state: 'done',
+      providerSession: { key: 'session_id', id: SESSION_ID, cwd: '/repo/pkg' }
+    })
+    useAppStore.setState({
+      tabsByWorktree: {
+        [WORKTREE_ID]: [
+          makeTerminalTab({ id: TAB_ID, worktreeId: WORKTREE_ID, startupCwd: '/repo' })
+        ]
+      }
+    })
+
+    expect(buildPaneAccountRestartStartup('claude', pane)?.command).toBe(
+      `cd '/repo/pkg' && claude '--resume' '${SESSION_ID}'`
+    )
+  })
+
+  it('falls back to the workspace folder when the tab records no start folder', () => {
+    seedAgentStatus({
+      agentType: 'claude',
+      state: 'done',
+      providerSession: { key: 'session_id', id: SESSION_ID, cwd: '/repo/pkg' }
+    })
+    useAppStore.setState({
+      tabsByWorktree: { [WORKTREE_ID]: [makeTerminalTab({ id: TAB_ID, worktreeId: WORKTREE_ID })] },
+      worktreesByRepo: { r1: [makeWorktree({ id: WORKTREE_ID, repoId: 'r1', path: '/repo' })] }
+    })
+
+    expect(buildPaneAccountRestartStartup('claude', pane)?.command).toBe(
+      `cd '/repo/pkg' && claude '--resume' '${SESSION_ID}'`
+    )
+  })
+
+  it.each([
+    ['workspace folder', undefined, "cd '/recorded/session' && "],
+    ['saved tab folder', '/recorded/session', '']
+  ] as const)('uses the selected host and respects the %s on resume', (_, startupCwd, prefix) => {
+    const original = useAppStore.getState()
+    try {
+      seedAgentStatus({
+        agentType: 'claude',
+        state: 'done',
+        providerSession: { key: 'session_id', id: SESSION_ID, cwd: '/recorded/session' }
+      })
+      useAppStore.setState({
+        repos: [
+          TEST_REPO,
+          { ...TEST_REPO, executionHostId: 'runtime:remote-host', connectionId: 'selected-ssh' }
+        ],
+        worktreesByRepo: {
+          [TEST_REPO.id]: [
+            makeWorktree({
+              id: WORKTREE_ID,
+              repoId: TEST_REPO.id,
+              path: '/recorded/session',
+              hostId: 'local'
+            }),
+            makeWorktree({
+              id: WORKTREE_ID,
+              repoId: TEST_REPO.id,
+              path: '/remote/workspace',
+              hostId: 'runtime:remote-host'
+            })
+          ]
+        },
+        detectedWorktreesByRepo: {},
+        activeWorktreeId: WORKTREE_ID,
+        activeWorkspaceExecutionHostId: 'runtime:remote-host',
+        tabsByWorktree: {
+          [WORKTREE_ID]: [makeTerminalTab({ id: TAB_ID, worktreeId: WORKTREE_ID, startupCwd })]
+        }
+      })
+
+      expect(buildPaneAccountRestartStartup('claude', pane)?.command).toBe(
+        `${prefix}claude '--resume' '${SESSION_ID}'`
+      )
+      expect(resolveAgentResumeLaunchTarget).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          executionHostId: 'runtime:remote-host',
+          connectionId: 'selected-ssh'
+        })
+      )
+    } finally {
+      useAppStore.setState(original)
+    }
+  })
+
   it('reports no resume when the Claude pane has no session id', () => {
     seedAgentStatus({ agentType: 'claude', state: 'done' })
 
@@ -266,7 +383,7 @@ describe('buildPaneAccountRestartStartup for Claude', () => {
     expect(resolveAgentAccountRestartResumeStartup('claude', pane)).toBeNull()
   })
 
-  // Why both: a WSL worktree's UNC path and a WSL Windows runtime default each resolve a WSL runtime.
+  // Both WSL UNC paths and a WSL default runtime must resolve to the guest runtime.
   it.each([
     [
       'a WSL worktree path',

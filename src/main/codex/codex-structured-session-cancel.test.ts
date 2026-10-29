@@ -37,12 +37,14 @@ import type {
   AgentJournalMessageItem,
   AgentSessionJournalIdentity
 } from '../../shared/agent-session-journal-types'
-import {
-  CodexAppServerRequestError,
-  type CodexAppServerConnection,
-  type CodexAppServerConnectionHandlers,
-  type CodexAppServerLaunch,
-  type openCodexAppServerConnection
+import { CodexAppServerRequestError } from './app-server/codex-app-server-request-error'
+import type {
+  CodexAppServerConnection,
+  CodexAppServerConnectionHandlers
+} from './app-server/codex-app-server-connection-types'
+import type {
+  CodexAppServerLaunch,
+  openCodexAppServerConnection
 } from './codex-app-server-connection'
 import { CodexAppServerUnsupportedError } from './codex-app-server-session'
 import {

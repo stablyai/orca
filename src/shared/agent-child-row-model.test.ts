@@ -149,7 +149,8 @@ describe('buildAgentChildRowModels: the display vocabulary', () => {
       { displayState: 'unverifiable', detail: { kind: 'no-update' } }
     ]
   ])('%s', (_name, views, expected) => {
-    expect(only(views)).toMatchObject(expected)
+    const row = only(views)
+    expect({ displayState: row.displayState, detail: row.detail }).toEqual(expected)
   })
 
   it('suppresses the tool line while monitoring, even when a stale operation arrives', () => {
@@ -356,7 +357,12 @@ describe('agentChildRowContextForParent: the reader clock', () => {
 
   it("measures a mirrored parent on this machine's receipt clock, never the host's", () => {
     const context = agentChildRowContextForParent(MIRRORED_PARENT, false)
-    expect(context).toMatchObject({ parentObservedAt: 1_190_000, hostClockOffsetMs: -20 * 60_000 })
+    expect(context).toEqual({
+      parentEvidenceFresh: false,
+      transportObservation: 'live',
+      parentObservedAt: 1_190_000,
+      hostClockOffsetMs: -20 * 60_000
+    })
     const [legacy] = buildLegacyAgentChildRowModels(
       [{ id: 'a', state: 'working', startedAt: 10 }],
       context

@@ -181,8 +181,7 @@ Implement the detailed worker instructions that should not be the short label`
       windowGives('Better worker label')
     )
 
-    // Why: orchestration metadata is sticky (~30m). A later non-dispatch turn on
-    // the same pane must first-write-wins — not re-assert the old dispatch name.
+    // Sticky dispatch context lasts ~30m; later nondispatch turns must first-write-wins instead of reviving the old task name.
     store.getState().setAgentStatus(paneKey, {
       state: 'working',
       prompt: 'Refactor the auth middleware to use JWT tokens for session recovery',
@@ -221,8 +220,7 @@ Old dispatch task that already finished`,
       }
     })
     await layoutApplyTestTransport.settle()
-    // Clear any title set during the dispatch turn so the next non-dispatch
-    // prompt is a pure first-write with sticky orchestration still present.
+    // Clear dispatch title so next prompt exercises first-write under sticky orchestration.
     const tabs = store.getState().tabsByWorktree[WORKTREE_ID]
     store.setState({
       tabsByWorktree: {

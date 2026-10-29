@@ -1,5 +1,5 @@
 import type { AgentJournalTurnScope } from '../../shared/agent-session-journal-types'
-import { isSettledBackgroundTaskState } from '../../shared/native-chat-background-task-row'
+import { isSettledBackgroundTaskState } from '../../shared/native-chat/input/native-chat-background-task-row'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { record, taskAliasId } from './claude-background-task-frames'
 import {
@@ -31,6 +31,11 @@ const TASK_SUBTYPES: ReadonlySet<string> = new Set([
   'task_updated',
   'task_progress',
   'task_notification'
+])
+
+const SILENT_ROW_REFRESH_SUBTYPES: ReadonlySet<string> = new Set([
+  'task_progress',
+  'background_tasks_changed'
 ])
 
 export type ClaudeBackgroundTaskRowsDeps = {
@@ -261,7 +266,14 @@ export class ClaudeBackgroundTaskRows {
       id,
       row,
       () => {
-        if (journaling && openOutputTurn) {
+        // Why: progress and roster ticks refresh the row only. Opening a turn
+        // here flips an idle chat back to working.
+        const subtype = journaling?.frame.subtype
+        if (
+          journaling &&
+          openOutputTurn &&
+          (typeof subtype !== 'string' || !SILENT_ROW_REFRESH_SUBTYPES.has(subtype))
+        ) {
           this.deps.openOutputTurn?.(journaling.frame, journaling.observedAt)
         }
       },

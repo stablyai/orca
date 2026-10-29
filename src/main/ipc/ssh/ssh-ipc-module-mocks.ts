@@ -51,6 +51,7 @@ export function createSshIpcMocks(): SshIpcMocks {
       removeForwardAndWait: vi.fn(),
       listForwards: vi.fn().mockReturnValue([]),
       removeAllForwards: vi.fn(),
+      closeStaleForwards: vi.fn(),
       closeAll: vi.fn(),
       dispose: vi.fn(),
       setCallbacks: vi.fn(),

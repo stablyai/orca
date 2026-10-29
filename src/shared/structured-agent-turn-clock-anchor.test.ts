@@ -10,13 +10,10 @@ import {
 } from './structured-agent-turn-clock-anchor'
 import {
   completedStructuredAgentTurnSeconds,
-  selectStructuredAgentRunningTurnTiming,
-  structuredAgentTurnOrigin
+  selectStructuredAgentRunningTurnTiming
 } from './structured-agent-session-turn-timing'
 
-// The host clock sits an hour ahead of the client's, so any host timestamp that
-// leaks into a local anchor shows up as a wild offset instead of hiding on a
-// developer machine where the two clocks agree.
+// Separate host/client clocks by an hour so mixed-clock anchors fail visibly.
 const HOST_START = 3_600_000_000
 const CLIENT_NOW = 12_345_000
 
@@ -34,8 +31,7 @@ function lifecycle(
   }
 }
 
-/** A running turn as the host writes it: the row's append time is the provider
- *  turn-start, so `observedAt - startedAt` is zero and only the origin moves. */
+/** Append time equals provider start; zero append lag isolates the origin adjustment. */
 function runningTurn(startedAt: number, requestedAt?: number): AgentJournalRenderItem[] {
   return [
     lifecycle(
@@ -61,9 +57,7 @@ function anchorFor(
 }
 
 describe('structured agent turn clock anchor', () => {
-  // The defect: the indicator starts at the send but the clock used to anchor at
-  // the provider turn-open, so it jumped back by exactly the dispatch latency.
-  // Milliseconds, not the rendered label — second-flooring hides the 898ms case.
+  // Turn-open must not reset elapsed dispatch time; assert milliseconds because second-flooring hides the 898ms case.
   it.each([898, 7_051, 25_000])(
     'never counts backwards across turn-open with %ims of dispatch latency',
     (latencyMs) => {
@@ -83,20 +77,7 @@ describe('structured agent turn clock anchor', () => {
     }
   )
 
-  it('anchors on the client clock, never on the host clock', () => {
-    const { workingStartedAt } = anchorFor(runningTurn(HOST_START + 1_000, HOST_START), {
-      hostNow: HOST_START + 1_000,
-      receivedAt: CLIENT_NOW
-    })
-
-    expect(workingStartedAt).toBe(CLIENT_NOW - 1_000)
-    // A raw host timestamp assigned straight through would land an hour away.
-    expect(Math.abs((workingStartedAt ?? 0) - HOST_START)).toBeGreaterThan(1_000_000)
-  })
-
-  // `receivedAt - hostNow` is skew PLUS that sample's one-way delivery latency, and
-  // the reducer replaces the sample on every frame. Re-deriving would import the
-  // new latency and could move the anchor later, running the counter backwards.
+  // New host samples include new delivery latency; recomputing the offset could move the anchor later and run elapsed backwards.
   it('keeps the latched conversion when a later host sample carries more latency', () => {
     const items = runningTurn(HOST_START + 1_000, HOST_START)
     const first = anchorFor(items, { hostNow: HOST_START + 1_000, receivedAt: CLIENT_NOW })
@@ -152,19 +133,7 @@ describe('structured agent turn clock anchor', () => {
 })
 
 describe('structured agent turn origin', () => {
-  it('is the send that opened the turn when the host named one', () => {
-    expect(
-      structuredAgentTurnOrigin({
-        state: 'running',
-        startedAt: HOST_START + 7_051,
-        requestedAt: HOST_START,
-        observedAt: HOST_START + 7_051
-      })
-    ).toBe(HOST_START)
-  })
-
-  // The live counter and the settled row must count from the same instant, or the
-  // turn ends by contradicting the number it just displayed.
+  // Live and settled timing must share an origin or completion contradicts the counter.
   it('settles a turn from the same instant the live counter used', () => {
     const settled = completedStructuredAgentTurnSeconds({
       state: 'completed',

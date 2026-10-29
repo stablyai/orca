@@ -51,7 +51,11 @@ export class AcpTurnMessages {
       update.sessionUpdate !== 'agent_message_chunk' &&
       update.sessionUpdate !== 'agent_thought_chunk'
     ) {
-      if (['tool_call', 'tool_call_update', 'plan'].includes(update.sessionUpdate)) {
+      if (
+        ['user_message_chunk', 'tool_call', 'tool_call_update', 'plan'].includes(
+          update.sessionUpdate
+        )
+      ) {
         state.channel = undefined
       }
       return undefined

@@ -56,7 +56,7 @@ beforeEach(() => {
 })
 
 describe("the host row's state clock", () => {
-  it("dates a subagent's approval at the ask, and the parent's completion where it was", () => {
+  it("uses the summary's status clock across attention and idle", () => {
     const server = new AgentHookServer()
     server.ingestStructuredStatus(summary({ statusStartedAt: SETTLED }), SUBJECT)
     server.ingestStructuredStatus(

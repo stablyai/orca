@@ -132,8 +132,7 @@ describe('DiagramViewerModal', () => {
   })
 
   it('re-serializes the HTML-serialized sanitizer output as an XML image document', async () => {
-    // What DOMPurify returns in Chromium for a label holding U+00A0. Chromium's XML serializer
-    // then writes the character itself; happy-dom's keeps the entity, so only the reparse is asserted.
+    // Chromium’s sanitizer emits &nbsp; for U+00A0; happy-dom preserves the entity during XML serialization, so assert successful reparsing.
     const sanitized = '<svg viewBox="0 0 400 200"><text>User&nbsp;A</text></svg>'
     render(<Host />)
     act(() => useAppStore.getState().openModal('diagram-viewer', { svg: sanitized }))

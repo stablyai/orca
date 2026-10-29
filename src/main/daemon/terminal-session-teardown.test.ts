@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TerminalSessionTeardown } from './terminal-session-teardown'
 import type { Session } from './session'
 import type { DescendantSnapshot } from '../pty-descendant-termination'
+import type { TuiAgent } from '../../shared/tui-agent'
 
 const killWithDescendantSweepMock = vi.hoisted(() => vi.fn())
 const terminateShutdownDescendantsMock = vi.hoisted(() => vi.fn())
@@ -19,7 +20,6 @@ function createPlainShellSession(overrides: Partial<Session> = {}): Session {
     isAlive: true,
     forceKillAndWaitForExit: vi.fn(async () => {}),
     beginTermination: vi.fn(() => true),
-    kill: vi.fn(),
     terminateOwnedTree: vi.fn(() => 'terminated' as const),
     scheduleForceDisposeFallback: vi.fn(),
     signalTerminationRoot: vi.fn(),
@@ -173,7 +173,7 @@ describe('TerminalSessionTeardown plain-shell teardown', () => {
     expect(settled).toBe(true)
   })
 
-  it('non-immediate (graceful) kill uses the plain kill path without a sweep', async () => {
+  it('win32 graceful close of a plain shell signals only the root, leaving `start /b` jobs', async () => {
     setPlatform('win32')
     const session = createPlainShellSession()
     const teardown = new TerminalSessionTeardown(new Map([['s1', session]]))
@@ -181,8 +181,79 @@ describe('TerminalSessionTeardown plain-shell teardown', () => {
     await teardown.killSession('s1', session, false)
 
     expect(killWithDescendantSweepMock).not.toHaveBeenCalled()
+    expect(session.terminateOwnedTree).not.toHaveBeenCalled()
+    expect(session.signalTerminationRoot).toHaveBeenCalled()
+    expect(session.scheduleForceDisposeFallback).toHaveBeenCalled()
+  })
+
+  it('graceful close captures descendants before signalling a shell without launch metadata', async () => {
+    // An agent typed into the shell has no launchAgent; its detached MCP tools outlive the shell's SIGHUP (#16714).
+    setPlatform('linux')
+    const session = createPlainShellSession()
+    const teardown = new TerminalSessionTeardown(new Map([['s1', session]]))
+
+    await teardown.killSession('s1', session, false)
+
+    expect(killWithDescendantSweepMock).toHaveBeenCalledWith(
+      4242,
+      expect.any(Function),
+      expect.objectContaining({ ownsRoot: expect.any(Function) })
+    )
+    expect(session.signalTerminationRoot).not.toHaveBeenCalled()
+    const killRoot = killWithDescendantSweepMock.mock.calls[0][1] as () => void
+    killRoot()
+    expect(session.signalTerminationRoot).toHaveBeenCalled()
     expect(session.forceKillAndWaitForExit).not.toHaveBeenCalled()
-    expect(session.kill).toHaveBeenCalled()
+  })
+})
+
+describe('graceful close preserves shell jobs only for plain shells', () => {
+  let platformDescriptor: PropertyDescriptor | undefined
+  // Shell 10 with nohup job 30 in its own background group on the tty.
+  const snapshot: DescendantSnapshot = {
+    root: { pid: 10, startedAt: 'Tue Jul 14 12:00:00 2026' },
+    rootPgid: 10,
+    capturedAtMs: 0,
+    descendants: [
+      { pid: 20, ppid: 10, pgid: 20, tpgid: 20, startedAt: 'Tue Jul 14 12:00:00 2026' },
+      { pid: 30, ppid: 10, pgid: 30, tpgid: 20, startedAt: 'Tue Jul 14 12:00:00 2026' }
+    ]
+  }
+
+  beforeEach(() => {
+    killWithDescendantSweepMock.mockReset()
+    killWithDescendantSweepMock.mockImplementation(
+      async (
+        _pid: number,
+        _killRoot: () => void,
+        deps: { terminateDescendants: (s: DescendantSnapshot) => void }
+      ) => {
+        deps.terminateDescendants(snapshot)
+      }
+    )
+    terminateShutdownDescendantsMock.mockReset()
+    platformDescriptor = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
+  })
+
+  afterEach(() => {
+    if (platformDescriptor) {
+      Object.defineProperty(process, 'platform', platformDescriptor)
+    }
+  })
+
+  const cases: [string, TuiAgent | null, number[]][] = [
+    ['plain shell', null, [20]],
+    ['Orca-launched agent', 'codex', [20, 30]]
+  ]
+  it.each(cases)('%s', async (_label, launchAgent, swept) => {
+    const session = createPlainShellSession({ launchAgent })
+    const teardown = new TerminalSessionTeardown(new Map([['s1', session]]))
+
+    await teardown.killSession('s1', session, false)
+
+    const passed: DescendantSnapshot = terminateShutdownDescendantsMock.mock.calls[0][0]
+    expect(passed.descendants.map((row) => row.pid)).toEqual(swept)
   })
 })
 

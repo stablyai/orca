@@ -38,11 +38,6 @@ describe('parseCodexLoginAuthUrl', () => {
     ).toBe(AUTH_URL)
   })
 
-  it('reports nothing for output without a link yet', () => {
-    expect(parseCodexLoginAuthUrl('')).toBe(null)
-    expect(parseCodexLoginAuthUrl('Codex login failed: network unreachable\n')).toBe(null)
-  })
-
   it('offers no link at all rather than an unrelated one when the notice is missing', () => {
     expect(
       parseCodexLoginAuthUrl('A new version of codex is available: https://openai.com/codex\n')

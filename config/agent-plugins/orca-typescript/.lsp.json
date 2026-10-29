@@ -1,0 +1,18 @@
+{
+  "orca-typescript": {
+    "command": "node",
+    "args": ["${CLAUDE_PROJECT_DIR}/config/scripts/agent-typescript-lsp.mjs"],
+    "extensionToLanguage": {
+      ".ts": "typescript",
+      ".tsx": "typescriptreact",
+      ".mts": "typescript",
+      ".cts": "typescript",
+      ".js": "javascript",
+      ".jsx": "javascriptreact",
+      ".mjs": "javascript",
+      ".cjs": "javascript"
+    },
+    "startupTimeout": 60000,
+    "maxRestarts": 3
+  }
+}

@@ -55,8 +55,7 @@ if (!pidFile) {
   throw new Error('ORCA_DEV_WRAPPER_TEST_PID_FILE is required')
 }
 
-// Why: wrapper tests must clean up both the fake electron-vite CLI process and
-// the spawned Electron-like descendant if the assertion fails before SIGINT.
+// Record both PIDs so assertion failures before SIGINT cannot leak the wrapper or its child.
 writeFileSync(pidFile, `${process.pid}\n${grandchild.pid ?? ''}\n`, 'utf8')
 if (envFile) {
   writeFileSync(

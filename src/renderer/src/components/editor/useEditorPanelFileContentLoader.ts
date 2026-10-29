@@ -20,14 +20,20 @@ import {
   type InFlightContentRead
 } from './editor-panel-content-types'
 import type { EditorPanelContentLoadOptions } from './useEditorPanelExternalContentEvents'
-import { migrateRestoredEditorFileOwner } from './migrate-restored-editor-file-owner'
+import {
+  migrateRestoredEditorFileOwner,
+  restoredOwnerMigrationErrorMessage
+} from './migrate-restored-editor-file-owner'
 import { findRestoredEditorWorkspaceRuntimeOwner } from './restored-editor-workspace-runtime-owner'
 import type { RuntimeWorkspaceFileRoute } from '@/lib/runtime-workspace-file-route'
 import { editorTabFileAccess, isClientLocalReadOnlyTab } from '@/lib/local-file-access'
 import { isFloatingWorkspaceId } from '../../../../shared/floating-workspace-worktree'
+import { grantRestoredHostFile } from './restored-host-file-grant'
+import { captureRuntimeEnvironmentRequestRevision } from '@/runtime/runtime-environment-revision'
 import { chatScratchFileAddress } from '@/runtime/runtime-chat-scratch-file-address'
 import { stampCleanTabDiskBaseline } from './editor-clean-tab-disk-baseline'
 import { applyEditorFileLoadFailure } from './editor-deleted-file-reload'
+import { translate } from '@/i18n/i18n'
 
 const inFlightFileReads = new Map<string, InFlightContentRead<FileContent>>()
 
@@ -79,8 +85,7 @@ export function useEditorPanelFileContentLoader({
         const restoredOpenFile = openFilesRef.current.find((file) => file.id === id)
         const isLiveTailLogTab =
           restoredOpenFile?.readOnly === true && restoredOpenFile.liveTail === true
-        // Why: these tabs name a file on this client, so the worktree's SSH or runtime owner must
-        // never be inferred for them (a stamp still routes).
+        // Client-local tabs must not inherit workspace SSH/runtime ownership; explicit stamps still route.
         const isClientLocalTab = restoredOpenFile
           ? isClientLocalReadOnlyTab(restoredOpenFile)
           : false
@@ -96,6 +101,8 @@ export function useEditorPanelFileContentLoader({
           readTarget.kind === 'environment' ? readTarget.environmentId : undefined
         readConnectionId = connectionId
         let readWorktreeId = worktreeId
+        let readGrantId = restoredOpenFile?.terminalArtifactGrantId
+        let readGrantPairing: number | undefined
         let readRelativePath = restoredOpenFile?.relativePath ?? relativePath
         // Re-owning re-keys the tab, which starts a fresh load under the new owner.
         const reownRestoredFile = async (
@@ -104,11 +111,10 @@ export function useEditorPanelFileContentLoader({
         ): Promise<void> => {
           const migration = await migrateRestoredEditorFileOwner(id, route, runtimeEnvironmentId)
           if (!migration.ok) {
-            throw new Error(
-              migration.reason === 'collision'
-                ? 'The sibling file is already open; close one tab before restoring it.'
-                : 'The sibling file owner changed while the tab was restoring.'
-            )
+            throw new Error(restoredOwnerMigrationErrorMessage(migration.reason))
+          }
+          if (fileReadGenerationRef.current[id] !== generation) {
+            return
           }
           fileReadGenerationRef.current[id] = ++fileReadGenerationCounterRef.current
           setFileContents((prev) => {
@@ -138,15 +144,11 @@ export function useEditorPanelFileContentLoader({
           !readOwnerEnvironmentId &&
           !isWorktreeConnectionResolved(worktreeId ?? null)
         ) {
-          // Why: the backing repo hasn't hydrated yet (SSH still connecting), so
-          // we can't tell local from remote. Reading locally would deny a remote
-          // path with a terminal "access denied" (#6648); fail retryably instead.
+          // Unhydrated owners may be remote; fail retryably rather than turning a bad client-local read into terminal access denial.
           throw new Error(WORKTREE_OWNER_NOT_READY_ERROR)
         }
         if (restoredOpenFile?.filePath === filePath && restoredOpenFile.relativePath === filePath) {
-          // Why: an out-of-worktree absolute path in an SSH workspace belongs to the
-          // remote host, so the resolved connection owns it even when the tab predates
-          // (or was opened outside) the terminal-link path that stamps the target id.
+          // Absolute paths in SSH workspaces belong to their resolved host, including legacy tabs without terminal-link stamps.
           const externalSshOwnerId =
             restoredOpenFile.externalSshTargetId?.trim() ||
             (isClientLocalTab ? undefined : connectionId)
@@ -171,14 +173,27 @@ export function useEditorPanelFileContentLoader({
             if (
               runtimeEnvironmentId &&
               !route &&
-              !restoredOpenFile.terminalArtifactGrantId &&
+              !readGrantId &&
               !chatScratchFileAddress(filePath)
             ) {
-              throw new Error('External local files are not available for remote workspaces.')
+              readGrantPairing =
+                readTarget.kind === 'environment'
+                  ? captureRuntimeEnvironmentRequestRevision(readTarget.environmentId)
+                  : undefined
+              const restored = await grantRestoredHostFile(
+                readTarget,
+                readWorktreeId,
+                filePath,
+                readGrantPairing
+              )
+              readGrantId = restored.grantId
+              // Why: a read-only grant stays off the tab, so its save asks the host again and is refused.
+              if (!restored.readOnly) {
+                useAppStore.getState().setTerminalArtifactGrant(id, readGrantId)
+              }
             }
             if (!externalSshOwnerId) {
-              // Why: a client-local external tab names a client path, so this read must stay off
-              // the worktree's SSH host.
+              // Client-local external tabs must stay off the workspace’s SSH host.
               readConnectionId = undefined
             }
           }
@@ -191,15 +206,15 @@ export function useEditorPanelFileContentLoader({
           !restoredOpenFile?.isDirty &&
           (!/\.(csv|tsv)$/i.test(filePath) || useAppStore.getState().editorDrafts[id] === undefined)
         // Keep file authorization and editable drafts isolated between concurrent reads.
-        const key = `${inFlightReadKey(readScope, filePath)}::${access?.kind ?? ''}${allowPagedPreview ? '' : '::editable'}`
+        // A background read refused for a stopped distro must not answer a user's waking read.
+        const key = `${inFlightReadKey(readScope, filePath)}::${access?.kind ?? ''}${allowPagedPreview ? '' : '::editable'}${options?.wakeWslDistro ? '::wake' : ''}`
         const registeredRead = inFlightFileReads.get(key)
         if (
           options?.force &&
           (options.externalEventGeneration === undefined ||
             registeredRead?.externalEventGeneration !== options.externalEventGeneration)
         ) {
-          // Why: forced reloads must not attach to a currently registered read
-          // started before the external change landed.
+          // Forced reloads must bypass reads started before the external change.
           inFlightFileReads.delete(key)
         }
         let pending = inFlightFileReads.get(key)
@@ -214,8 +229,10 @@ export function useEditorPanelFileContentLoader({
               expectedExternalSshTargetId: restoredOpenFile?.externalSshTargetId,
               includeLocalLogMetadata: isLiveTailLogTab,
               access,
-              terminalArtifactGrantId: restoredOpenFile?.terminalArtifactGrantId,
-              pageOversizedBinary: true
+              terminalArtifactGrantId: readGrantId,
+              expectedEnvironmentPairingRevision: readGrantPairing,
+              pageOversizedBinary: true,
+              ...(options?.wakeWslDistro ? { wakeWslDistro: true } : {})
             },
             allowPagedPreview
           )
@@ -233,7 +250,10 @@ export function useEditorPanelFileContentLoader({
         }
         if (result.csvPreview && useAppStore.getState().editorDrafts[id] !== undefined) {
           throw new Error(
-            'CSV grew too large for editing. Your draft has been kept; reopen the file to preview it.'
+            translate(
+              'auto.components.editor.EditorPanel.csvGrewTooLarge',
+              'CSV grew too large for editing. Your draft has been kept; reopen the file to preview it.'
+            )
           )
         }
         if (result.csvPreview || restoredOpenFile?.csvPreviewOnly) {
@@ -250,8 +270,7 @@ export function useEditorPanelFileContentLoader({
           useAppStore.getState(),
           worktreeId ?? null
         )
-        // Why: a read through an SSH host that is still connecting failed on the connection,
-        // not the file; the retry gate waits for it rather than showing "connection dropped".
+        // Connection failures while SSH connects should wait for readiness instead of appearing as file errors.
         const hostConnecting =
           hostConnection.phase === 'connecting' &&
           readConnectionId !== undefined &&
@@ -261,8 +280,7 @@ export function useEditorPanelFileContentLoader({
           : err instanceof Error
             ? err.message
             : String(err)
-        // Why: a host may put prose on the message and the machine token on `.code`;
-        // classifiers downstream must see the token, not only its rendering (#21041).
+        // Preserve machine error codes separately because hosts may render prose-only messages.
         const loadErrorCode =
           !hostConnecting && err instanceof RuntimeRpcCallError ? err.code : undefined
         const failure: FileContent = {

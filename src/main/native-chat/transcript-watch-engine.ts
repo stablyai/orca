@@ -77,7 +77,8 @@ export async function installTranscriptWatcher(
       (nextLifecycle) => {
         lifecycle = nextLifecycle
       },
-      gateAbort.signal
+      gateAbort.signal,
+      args.sourceOrder
     )
     if (!closed && (remaining.length > 0 || lifecycle)) {
       onAppend(remaining, lifecycle)
@@ -95,7 +96,8 @@ export async function installTranscriptWatcher(
       gateAbort.signal,
       (boundary) => {
         state.boundary = boundary
-      }
+      },
+      args.sourceOrder
     )
   }
 
@@ -199,7 +201,8 @@ export async function installTranscriptWatcher(
           (nextLifecycle) => {
             lifecycle = nextLifecycle
           },
-          gateAbort.signal
+          gateAbort.signal,
+          args.sourceOrder
         )
         if (closed) {
           return

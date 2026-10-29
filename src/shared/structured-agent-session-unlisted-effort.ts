@@ -1,9 +1,8 @@
 import type { AgentSessionOptionCatalog } from './agent-session-option-catalog'
-import type { SessionOptionDescriptor } from './native-chat-session-options'
-import type { TrackedNativeChatSessionOption } from './native-chat-session-option-state'
+import type { SessionOptionDescriptor } from './native-chat/input/native-chat-session-options'
+import type { TrackedNativeChatSessionOption } from './native-chat/input/native-chat-session-option-state'
 
-/** A model the list lacks has no effort menu, so the chat's own effort under it shows read-only:
- *  no list says which levels it takes, and a send carries the value unchanged. */
+/** Unlisted models expose current effort read-only and send it unchanged; no listing proves which alternatives they accept. */
 export function withUnlistedEffort(
   catalog: AgentSessionOptionCatalog,
   /** The model the picker draws the chat's controls under. */

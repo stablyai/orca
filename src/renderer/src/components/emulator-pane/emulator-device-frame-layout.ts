@@ -59,8 +59,7 @@ export function resolveVisualStreamGeometry(
   streamSize: StreamSize | null,
   visualOrientation: EmulatorDeviceVisualOrientation
 ): VisualStreamGeometry {
-  // Why: serve-sim can keep the same canvas dimensions after rotate; the pane's
-  // physical frame and input rect still need to follow the successful request.
+  // The physical frame/input rect must follow successful rotation even when serve-sim retains the old canvas dimensions.
   const width = streamSize?.width ?? 9
   const height = streamSize?.height ?? 19
   const shortSide = Math.min(width, height)
@@ -127,8 +126,7 @@ export function fitDeviceFrameToPane(
       return null
     }
     const chrome = measureChrome(screenSize, kind)
-    // Why: fractional aspect-ratio math can overshoot the pane by a sub-pixel,
-    // which shows up as clipped hardware in split panes.
+    // Leave room for fractional aspect-ratio rounding or split panes clip sub-pixel hardware edges.
     const availableWidth = Math.max(
       1,
       paneSize.width - chrome.hardwareOutset * 2 - chrome.bezel * 2 - FIT_MARGIN_PX

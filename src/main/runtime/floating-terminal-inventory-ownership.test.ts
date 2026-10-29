@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/constants'
 import { committingSpawn } from './bind-first-pane.test-fixture'
 
-// Fragments stay side-effect ordered: mocks, then lifecycle, then fixtures.
+// Preserve side-effect order: mocks, lifecycle, fixtures.
 const { OrcaRuntimeService } = await import('./orca-runtime-test-mocks.spec')
 await import('./orca-runtime-test-lifecycle.spec')
 const { createFolderWorkspaceRuntimeStore, makeFolderProjectGroup, makeFolderWorkspace, store } =
@@ -43,7 +43,6 @@ function makeRuntime() {
     kill: () => true,
     getForegroundProcess: async () => null,
     hasPty: (ptyId: string) => live.has(ptyId),
-    // The daemon reports no worktree for serve- ids; only the cwd is known.
     listProcesses: async () => [...live].map((id) => ({ id, cwd: HOME_FOLDER, title: 'shell' }))
   })
   runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
@@ -61,7 +60,6 @@ describe('PTY inventory refresh keeps recorded floating ownership', () => {
     )
     expect(created.tab).toMatchObject({ status: 'ready' })
 
-    // A paired desktop lists the folder workspace's tabs, which refreshes inventory scoped to it.
     await runtime.listMobileSessionTabs(`id:${folderWorkspaceKey}`)
     await runtime.listTerminals(`id:${folderWorkspaceKey}`)
     const listed = await runtime.listTerminals()

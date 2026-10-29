@@ -74,7 +74,7 @@ export async function buildRuntimePtySpawnOptions(
     prevalidatedCwd: ctx.prevalidatedCwd,
     isDaemonHostSpawn: ctx.isDaemonHostSpawn,
     preAdoptedStablePane: ctx.preAdoptedStablePane !== null,
-    isNewSession: ctx.isNewDaemonSession,
+    isNewSession: ctx.ownsNewIncarnation,
     codexRuntime: ctx.codexSelectionTarget.runtime,
     expectedWslDistro: ctx.expectedWslDistro,
     requestedAgentTeamsPath: ctx.requestedAgentTeamsPath,
@@ -91,17 +91,15 @@ export async function buildRuntimePtySpawnOptions(
   ctx.spawnOptions = launch.spawnOptions
   ctx.env = launch.env
   ctx.launchCommand = launch.launchCommand
-  const seeded = seedPtySpawnSize({
+  ctx.provisionalPtySize = seedPtySpawnSize({
     sessionId: ctx.sessionId,
     sessionAppId: ctx.effectiveSessionAppId,
-    isFreshSessionId: ctx.isNewDaemonSession,
-    // Runtime requests are measured; only cached geometry can outrank them here.
+    isFreshSessionId: ctx.ownsNewIncarnation,
+    // Host requests, including defaults, are intentional; only a live cached grid outranks them.
     requestIsUnmeasured: false,
     cols: args.cols,
     rows: args.rows
   })
-  ctx.hadSessionSizeBeforeAttach = seeded.hadSessionSizeBeforeAttach
-  ctx.sessionSizeBeforeAttach = seeded.sessionSizeBeforeAttach
   if (
     !ctx.preAdoptedStablePane &&
     args.agentSessionEnsure &&
@@ -151,10 +149,7 @@ export async function buildRuntimePtySpawnOptions(
   ctx.stablePaneBindingPersisted = false
   ctx.rejectedRegistrationCandidate = null
   ctx.pendingRegistrationPtyId = null
-  // Carry renderer-domain sequence reconciliation into the reply beside proven kitty flags.
-  ctx.reconciledSnapshotSeq = null
-  // Bytes arriving during spawn can postdate proven flags; preserve any negotiation scanned live.
-  ctx.snapshotKittyFlagsCoverReconciledSeq = true
+  ctx.provedSnapshotSeq = undefined
   ctx.preparedProvisionalExecutionContext = false
 
   return null

@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/constants'
+import { FLOATING_TERMINAL_WORKTREE_ID, getDefaultWorkspaceSession } from '../../shared/constants'
 import { OrcaRuntimeService } from './orca-runtime'
+import { withDurableRuntimeStore } from './runtime-durable-store-fixture'
 
 const { readFile } = vi.hoisted(() => ({ readFile: vi.fn() }))
 vi.mock('./terminal-kitty-file-read', () => ({ readTerminalKittyFile: readFile }))
@@ -9,8 +10,38 @@ const PTY = 'kitty-file-pty'
 const LEAF = '11111111-1111-4111-8111-111111111111'
 const WORKSPACE = 'folder:kitty-files'
 
+// A project-group folder workspace: no repo row backs it, so a Git-only selector never finds it.
+function folderWorkspaceStore() {
+  const folder = {
+    id: 'kitty-files',
+    projectGroupId: 'group-1',
+    name: 'kitty',
+    folderPath: '/workspace',
+    linkedTask: null,
+    comment: '',
+    isArchived: false,
+    isUnread: false,
+    isPinned: false,
+    sortOrder: 0,
+    lastActivityAt: 1,
+    createdAt: 1,
+    updatedAt: 1
+  }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: fixture supplies only the store reads workspace resolution makes.
+  return withDurableRuntimeStore({
+    getRepos: () => [],
+    getRepo: () => undefined,
+    getFolderWorkspaces: () => [folder],
+    getAllWorktreeMeta: () => ({}),
+    getWorktreeMeta: () => undefined,
+    getWorkspaceSession: () => getDefaultWorkspaceSession(),
+    setWorkspaceSession: () => {},
+    flushOrThrow: () => {}
+  }) as never
+}
+
 function fixture(ptyId = PTY, connectionId: string | null = null, worktreeId = WORKSPACE) {
-  const runtime = new OrcaRuntimeService(null)
+  const runtime = new OrcaRuntimeService(folderWorkspaceStore())
   runtime.attachWindow(1)
   const handle = runtime.preAllocateHandleForPty(ptyId)
   runtime.registerPty(ptyId, worktreeId, connectionId, {
@@ -22,7 +53,6 @@ function fixture(ptyId = PTY, connectionId: string | null = null, worktreeId = W
     tabs: [{ tabId: 'file-tab', worktreeId, title: '', activeLeafId: LEAF, layout: null }],
     leaves: [{ tabId: 'file-tab', worktreeId, leafId: LEAF, paneRuntimeId: 1, ptyId }]
   })
-  runtime['resolveWorktreeSelector'] = vi.fn().mockResolvedValue({ path: '/workspace' })
   return { runtime, handle }
 }
 
@@ -39,7 +69,6 @@ describe('Kitty file execution-host ownership', () => {
     expect(await runtime.readKittyFile(handle, request, controller.signal)).toEqual({
       base64: 'aW1hZ2U='
     })
-    expect(runtime['resolveWorktreeSelector']).toHaveBeenCalledWith(`id:${WORKSPACE}`)
     expect(readFile).toHaveBeenCalledWith(
       request,
       { workspacePath: '/workspace', wslDistro: 'Ubuntu' },
@@ -51,7 +80,7 @@ describe('Kitty file execution-host ownership', () => {
     'reads floating-terminal temporary files in namespace %s',
     async (distro) => {
       const { runtime, handle } = fixture(PTY, null, FLOATING_TERMINAL_WORKTREE_ID)
-      runtime['resolveWorktreeSelector'] = vi
+      runtime['resolveGitWorktreeSelector'] = vi
         .fn()
         .mockRejectedValue(new Error('selector_not_found'))
       if (distro) {
@@ -60,7 +89,7 @@ describe('Kitty file execution-host ownership', () => {
       expect(await runtime.readKittyFile(handle, { path: '/tmp/image' })).toEqual({
         base64: 'aW1hZ2U='
       })
-      expect(runtime['resolveWorktreeSelector']).not.toHaveBeenCalled()
+      expect(runtime['resolveGitWorktreeSelector']).not.toHaveBeenCalled()
       expect(readFile).toHaveBeenCalledWith(
         { path: '/tmp/image' },
         { workspacePath: null, wslDistro: distro },
@@ -70,8 +99,7 @@ describe('Kitty file execution-host ownership', () => {
   )
 
   it('does not treat an unresolved project as a floating terminal', async () => {
-    const { runtime, handle } = fixture()
-    runtime['resolveWorktreeSelector'] = vi.fn().mockRejectedValue(new Error('selector_not_found'))
+    const { runtime, handle } = fixture(PTY, null, 'folder:deleted-folder')
     await expect(runtime.readKittyFile(handle, { path: '/tmp/image' })).rejects.toThrow(
       'selector_not_found'
     )

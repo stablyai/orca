@@ -51,7 +51,7 @@ describe('revealPairedTerminalOnLocalDesktop', () => {
     )
   })
 
-  it("shows a paired server's terminal in this machine's desktop window", async () => {
+  it('routes a paired terminal reveal to the local desktop with its execution host', async () => {
     const { client, serverCall } = pairedClient('winpc')
 
     await expect(revealPairedTerminalOnLocalDesktop(client, HANDLE)).resolves.toBe(true)

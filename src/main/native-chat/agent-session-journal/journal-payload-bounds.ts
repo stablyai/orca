@@ -1,5 +1,8 @@
 import { createHash } from 'node:crypto'
-import type { AgentJournalBoundedPayload } from '../../../shared/agent-session-journal-types'
+import type {
+  AgentJournalBoundedPayload,
+  AgentJournalItemBody
+} from '../../../shared/agent-session-journal-types'
 
 export type JournalPayloadLimits = {
   inlineHeadBytes: number
@@ -36,6 +39,18 @@ export function journalPayload(payload: string): AgentJournalBoundedPayload {
 
 export function journalToolPayload(payload: string, running: boolean): AgentJournalBoundedPayload {
   return running ? boundPayload(payload, JOURNAL_RUNNING_PREVIEW_LIMITS) : journalPayload(payload)
+}
+
+/** Growing calls are re-saved on every revision, so the journal keeps whole output only on the closing one. */
+export function boundRunningToolOutput(body: AgentJournalItemBody): AgentJournalItemBody {
+  if (body.kind !== 'tool-call' || body.state !== 'running' || !body.output) {
+    return body
+  }
+  const { output } = body
+  const limit = JOURNAL_RUNNING_PREVIEW_LIMITS.inlineHeadBytes
+  return output.truncated || output.byteLength <= limit
+    ? body
+    : { ...body, output: { ...output, head: utf8Head(output.head, limit), truncated: true } }
 }
 
 /** Digest/byteLength describe the original, even when only its head is retained. */

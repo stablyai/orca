@@ -81,7 +81,6 @@ describe('Relay region selection counters', () => {
 
   it('counts a placement out of the target region on any lane as a fallback', async () => {
     const recordRegionSelection = vi.fn()
-    // The reconnect verifies on the sticky lane; the store then re-places the host.
     await assign(
       {
         recordRegionSelection,
@@ -145,7 +144,6 @@ describe('Relay region selection counters', () => {
     const placed = vi.fn(async () => usAssignment())
     await assign({ recordRegionSelection: vi.fn(), plan, assign: placed }, { reconnect: true }, { regionalPlacementEnabled: false })
     await assign({ recordRegionSelection: vi.fn(), plan, assign: placed }, { reconnect: true, preferredRegion: undefined })
-    // Asking for the default region while regional placement is off is not a preference either.
     await assign(
       { recordRegionSelection: vi.fn(), plan, assign: placed },
       { reconnect: true, preferredRegion: 'us-central1' },
@@ -162,7 +160,6 @@ describe('Relay region selection counters', () => {
     await assign(
       {
         recordRegionSelection,
-        // A report carries no preference, so its target is the default region.
         resolve: vi.fn(async () => usAssignment({ cellId: 'asia-c1', region: 'asia-east2' })),
         exchangeRegionCorrection: vi.fn(async () => ({ v: 1, reportStatus: 'accepted' }))
       },

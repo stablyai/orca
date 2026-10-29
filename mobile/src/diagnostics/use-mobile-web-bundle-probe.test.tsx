@@ -18,7 +18,7 @@ vi.mock('../transport/host-logical-client', () => ({
   openHostLogicalClient: (...args: unknown[]) => connectMock(...args)
 }))
 vi.mock('../transport/host-store', () => ({ loadHosts: () => loadHostsMock() }))
-// Why: the opener starts a descriptor status probe per connection; these fakes have no RPC surface.
+// The opener probes descriptor status on each connection; these fakes have no RPC surface.
 vi.mock('../transport/runtime-status-probe', () => ({ startRuntimeStatusProbe: () => () => {} }))
 vi.mock('../transport/connection-revival-triggers', () => ({
   subscribeConnectionRevivalTriggers: () => () => {}
@@ -69,7 +69,7 @@ const mounted: ReactTestRenderer[] = []
 
 async function renderProbe(hostId: string | null): Promise<ProbeHarness> {
   let latest: ReturnType<typeof useMobileWebBundleProbe> | null = null
-  // A box, not a `let`: assigning inside the callback leaves a `let` narrowed to `null`.
+  // Callback assignment leaves a local let narrowed to null; keep the mutable value in a box.
   const rendered: { tree: ReactTestRenderer | null } = { tree: null }
 
   function Probe(): null {
@@ -224,8 +224,7 @@ describe('useMobileWebBundleProbe', () => {
 
   it('gives up on a host whose client never arrives instead of waiting forever', async () => {
     vi.useFakeTimers()
-    // The host is not in the store, so no client is ever acquired for it and `awaitingHost` would
-    // otherwise stay true with the row's button disabled for the life of the screen.
+    // A removed host yields no client; awaitingHost must clear so the button can re-enable.
     loadHostsMock.mockResolvedValue([])
     const probe = await renderProbe(HOST.id)
 
@@ -242,7 +241,6 @@ describe('useMobileWebBundleProbe', () => {
       await vi.advanceTimersByTimeAsync(1)
     })
     expect(probe.state).toEqual({ status: 'failed', detail: 'no client for the host within 10s' })
-    // The row re-enables its button off `running`, and nothing is left dialling the host.
     expect(probe.awaitingHost).toBe(false)
     expect(fetchMock).not.toHaveBeenCalled()
   })
@@ -259,7 +257,7 @@ describe('useMobileWebBundleProbe', () => {
       await vi.advanceTimersByTimeAsync(60_000)
     })
 
-    // A slow fetch is not a host that never opened: the deadline covers acquiring the client only.
+    // The acquisition deadline must not abort a fetch that already has its client.
     expect(probe.state).toEqual({ status: 'running' })
   })
 

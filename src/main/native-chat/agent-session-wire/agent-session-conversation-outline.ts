@@ -7,7 +7,7 @@ import {
   truncateOutlinePreview,
   type AgentSessionConversationOutline,
   type AgentSessionConversationOutlineEntry
-} from '../../../shared/agent-session-conversation-outline'
+} from '../../../shared/agent-session/agent-session-conversation-outline'
 import type { AgentJournalSnapshot } from '../../../shared/agent-session-journal-types'
 import { HISTORY_PAGE_CONTENT_BUDGET_BYTES } from './agent-session-history-page-bounds'
 

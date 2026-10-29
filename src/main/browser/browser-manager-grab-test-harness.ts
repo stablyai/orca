@@ -22,9 +22,11 @@ export type GrabTestMocks = {
 }
 
 export function makeGuest(id: number, mocks: GrabTestMocks): Electron.WebContents {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: grab tests drive only the guest members listed here.
   return {
     id,
     isDestroyed: mocks.guestIsDestroyedMock,
+    isCurrentlyAudible: vi.fn(() => false),
     getType: vi.fn(() => 'webview'),
     setBackgroundThrottling: mocks.guestSetBackgroundThrottlingMock,
     setWindowOpenHandler: mocks.guestSetWindowOpenHandlerMock,
@@ -51,7 +53,9 @@ export function routeWebContentsIds(
     if (id === GRAB_RENDERER_WEB_CONTENTS_ID) {
       return {
         isDestroyed: mocks.rendererIsDestroyedMock,
-        send: mocks.rendererSendMock
+        send: mocks.rendererSendMock,
+        setBackgroundThrottling: vi.fn(),
+        capturePage: vi.fn(async () => null)
       }
     }
     return null
@@ -75,5 +79,7 @@ export function resetGrabTestEnvironment(mocks: GrabTestMocks): Electron.WebCont
     webContentsId: GRAB_GUEST_WEB_CONTENTS_ID,
     rendererWebContentsId: GRAB_RENDERER_WEB_CONTENTS_ID
   })
+  // Registration also reports audio state; grab tests count only grab-driven sends.
+  mocks.rendererSendMock.mockClear()
   return guest
 }

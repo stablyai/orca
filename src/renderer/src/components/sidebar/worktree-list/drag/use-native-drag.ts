@@ -17,7 +17,6 @@ import {
   NO_WORKTREE_SIDEBAR_DROP_TARGET
 } from './row-state'
 
-// The HTML5 drag path used by cards that start a native dragstart (board <-> sidebar transfers).
 export function useWorktreeNativeDrag(args: {
   ctx: WorktreeDropCommitContext
   session: WorktreeDragSession

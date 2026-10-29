@@ -1,4 +1,4 @@
-import { isCodexAppServerRequestError } from './codex-app-server-connection'
+import { isCodexAppServerRequestError } from './app-server/codex-app-server-request-error'
 import { isCodexAppServerUnsupportedError } from './codex-app-server-session'
 import { providerDiagnosticOf } from '../../shared/agent-session-failure'
 import type { AgentSessionCancelOutcome } from '../native-chat/agent-session-wire/structured-agent-session-adapter'

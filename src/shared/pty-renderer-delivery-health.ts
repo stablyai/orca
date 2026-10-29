@@ -1,23 +1,9 @@
-/**
- * `pty:reportRendererDeliveryState` (renderer → main, invoke) payload/reply.
- *
- * Why invoke and renderer-initiated: field evidence (v1.4.121-rc.0 snapshot,
- * 2026-07-06) proved a wedge where main→renderer push delivery (`pty:data`,
- * `pty:requestDeliveryResync`, `pty:modelRestoreNeeded`) goes silently dead
- * while renderer→main invoke IPC stays healthy. Every push-initiated recovery
- * path (cumulative-ACK self-heal, solicited resync, wake relay) is unreachable
- * in that state, so the delivery watchdog reports and heals over invoke — the
- * direction proven alive.
- */
+/** Renderer-initiated invoke heals dead main→renderer push delivery: field snapshots (v1.4.121-rc.0, 2026-07-06)
+ * showed data/resync/restore pushes dead while invokes still worked. Push-initiated recovery cannot reach that state. */
 export type PtyRendererDeliveryStateReport = {
-  /** Cumulative chars received per PTY, counted at dispatcher enqueue —
-   *  BEFORE parse-deferred ACK crediting. The gap between main's sentChars
-   *  and this total is bytes provably lost in the push channel, distinct
-   *  from bytes received but still queued for parsing. */
+  /** Count received chars at dispatcher enqueue, before parse ACK; sent-minus-received proves push loss rather than parser backlog. */
   receivedCharsByPty: Record<string, number>
-  /** Cumulative processed (ACK-credited) chars per PTY — same totals the
-   *  ACK path and resync response carry; merging them here is a free extra
-   *  repair lane for the lost-ACK variant. */
+  /** Cumulative parse ACK totals also repair lost ACKs through this independent invoke path. */
   processedCharsByPty: Record<string, number>
   /** Set on the confirming tick: main may write off provably-lost bytes and
    *  answer with restore markers for the renderer to route locally. */

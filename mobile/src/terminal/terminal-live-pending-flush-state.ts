@@ -10,6 +10,7 @@ type TerminalLivePendingBatch = {
   byteLength: number
   readonly requests: TerminalLivePendingRequest[]
   readonly sender: TerminalLiveMirrorSender
+  readonly control: boolean
 }
 
 export type TerminalLivePendingFlushState = {
@@ -63,15 +64,19 @@ async function drainTerminalLiveMirrorSends(
     }
 
     state.activeRequests = batch.requests
-    let delivery: Promise<boolean>
-    try {
-      delivery = batch.sender(batch.handle, batch.payload)
-    } catch {
-      delivery = Promise.resolve(false)
-    }
-    const sent = await delivery.catch(() => false)
-    if (state.generation !== generation) {
-      return false
+    let sent = false
+    // A control after undelivered text could act on the wrong line, e.g. Return running a partial command.
+    if (allSent || !batch.control) {
+      let delivery: Promise<boolean>
+      try {
+        delivery = batch.sender(batch.handle, batch.payload)
+      } catch {
+        delivery = Promise.resolve(false)
+      }
+      sent = await delivery.catch(() => false)
+      if (state.generation !== generation) {
+        return false
+      }
     }
 
     state.activeRequests = []
@@ -81,12 +86,31 @@ async function drainTerminalLiveMirrorSends(
   return false
 }
 
-// Mirror deltas are ordered PTY bytes; batching pending bytes avoids one RTT per keystroke.
+// Batch ordered PTY mirror bytes to avoid one round trip per keystroke.
 export function queueTerminalLiveMirrorSend(
   state: TerminalLivePendingFlushState,
   handle: string,
   payload: string,
   sender: TerminalLiveMirrorSender
+): Promise<boolean> {
+  return queueTerminalLiveSend(state, handle, payload, sender, false)
+}
+
+export function queueTerminalLiveControlSend(
+  state: TerminalLivePendingFlushState,
+  handle: string,
+  bytes: string,
+  sender: TerminalLiveMirrorSender
+): Promise<boolean> {
+  return queueTerminalLiveSend(state, handle, bytes, sender, true)
+}
+
+function queueTerminalLiveSend(
+  state: TerminalLivePendingFlushState,
+  handle: string,
+  payload: string,
+  sender: TerminalLiveMirrorSender,
+  control: boolean
 ): Promise<boolean> {
   let resolveRequest: (sent: boolean) => void = () => {}
   const request = new Promise<boolean>((resolve) => {
@@ -94,9 +118,11 @@ export function queueTerminalLiveMirrorSend(
   })
   const byteLength = getTerminalInputByteLength(payload)
   const pendingTail = state.pendingBatches.at(-1)
+  // A control never joins a text batch, so it can be skipped when that text fails to arrive.
   if (
     pendingTail?.handle === handle &&
     pendingTail.sender === sender &&
+    (!control || pendingTail.control) &&
     pendingTail.byteLength + byteLength <= TERMINAL_LIVE_INPUT_MAX_BYTES
   ) {
     pendingTail.payload += payload
@@ -108,7 +134,8 @@ export function queueTerminalLiveMirrorSend(
       payload,
       byteLength,
       requests: [{ resolve: resolveRequest }],
-      sender
+      sender,
+      control
     })
   }
 

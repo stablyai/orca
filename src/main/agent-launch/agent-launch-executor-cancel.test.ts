@@ -58,10 +58,6 @@ function harness(options: {
     calls.push('createTerminalAgent')
     return { handle: 'term_1', ...carried(args.startupPrompt) }
   })
-  const deliverStructuredPrompt = vi.fn(async () => {
-    calls.push('deliverStructuredPrompt')
-    return 'msg-1'
-  })
   const deliverTerminalPrompt = vi.fn(async (_args: { signal?: AbortSignal }) => {
     calls.push('deliverTerminalPrompt')
     return true
@@ -84,7 +80,6 @@ function harness(options: {
         surfaces: {
           createStructuredSession,
           createTerminalAgent,
-          deliverStructuredPrompt,
           deliverTerminalPrompt
         },
         workspaces: { createWorktree, createRecoveryShell },

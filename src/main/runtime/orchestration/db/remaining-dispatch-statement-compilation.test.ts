@@ -8,6 +8,7 @@ import { OrchestrationDb } from './orchestration-db'
 import { createRootDispatch } from './root-dispatch-test-fixture'
 import { LEGACY_CONTRACT_VERSION } from './contract-constants'
 import { DISPATCH_CONTEXT_COLUMNS } from './row-column-lists'
+import { DROP_REMOVED_WORK_TRIGGERS_SQL } from './reset/removed-orchestration-work-store'
 import { warnStaleDispatches } from '../coordinator-task-dispatch'
 
 const databases: OrchestrationDb[] = []
@@ -58,8 +59,10 @@ function fixture(count = 1, version: 'fresh' | 'v41' = 'fresh') {
   })
   if (version === 'v41') {
     writer.db.exec(`
+      ${DROP_REMOVED_WORK_TRIGGERS_SQL}
       DROP INDEX idx_runs_coordinator_orca_session_id;
       DROP INDEX idx_dispatch_assignee_orca_session_id;
+      DROP INDEX idx_dispatch_session_presentation;
       DROP TRIGGER trg_runs_remember_coordinator_insert;
       DROP TRIGGER trg_runs_remember_coordinator_update;
       DROP TRIGGER trg_messages_route_coordinator_mail;
@@ -90,7 +93,19 @@ function fixture(count = 1, version: 'fresh' | 'v41' = 'fresh') {
       .map((row) => row.name)
       .toSorted()
   ).toEqual(DISPATCH_CONTEXT_COLUMNS.toSorted())
+  const priorVersion = writer.db.pragma('user_version', { simple: true })
+  expect(
+    writer.db
+      .prepare("SELECT name FROM sqlite_master WHERE name = 'idx_dispatch_session_presentation'")
+      .get()
+  ).toBeDefined()
   const reader = new OrchestrationDb(path)
+  expect(reader.db.pragma('user_version', { simple: true })).toBe(priorVersion)
+  expect(
+    reader.db
+      .prepare("SELECT name FROM sqlite_master WHERE name = 'idx_dispatch_session_presentation'")
+      .get()
+  ).toBeDefined()
   databases.push(reader)
   return { writer, reader, run, entries }
 }
@@ -137,7 +152,7 @@ describe('remaining dispatch metadata statement compilation', () => {
         ).toBeUndefined()
       }
       const warnings: string[] = []
-      warnStaleDispatches(reader, (warning) => warnings.push(warning))
+      warnStaleDispatches(reader, (warning) => warnings.push(warning), 5)
       expect(warnings).toEqual([
         `Warning: worker worker_0 on task ${dispatch.task_id} has not sent a heartbeat in ~10 min (dispatch ${dispatch.id})`
       ])

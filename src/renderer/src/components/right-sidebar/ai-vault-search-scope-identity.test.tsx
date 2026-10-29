@@ -16,7 +16,7 @@ vi.mock('@/store', () => ({
 }))
 
 const AGENTS = ['codex' as const]
-// Stable, the way the panel memoizes it: the hook keys its request on the reference.
+// Keep the reference stable as in the panel; request identity depends on it.
 const WORKSPACE = { kind: 'workspace', worktreeId: 'repo-1::/work/app' } as const
 const searchSessions =
   vi.fn<

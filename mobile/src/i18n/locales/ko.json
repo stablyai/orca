@@ -1,0 +1,22 @@
+{
+  "common": {
+    "back": "뒤로"
+  },
+  "settings": {
+    "appearance": {
+      "language": {
+        "description": "시스템을 선택하면 이 기기의 언어를 따릅니다. 권한 요청은 항상 기기 언어로 표시됩니다.",
+        "heading": "언어",
+        "systemWithCurrent": "시스템 ({{language}})"
+      },
+      "theme": {
+        "dark": "다크",
+        "description": "시스템을 선택하면 이 기기의 라이트 또는 다크 모드 설정을 따릅니다.",
+        "heading": "테마",
+        "light": "라이트",
+        "system": "시스템"
+      },
+      "title": "모양"
+    }
+  }
+}

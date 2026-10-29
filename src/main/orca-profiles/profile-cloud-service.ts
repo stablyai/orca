@@ -92,7 +92,7 @@ export async function connectCurrentOrcaProfile(
       signal: browserWait.signal,
       onAuthorizeUrl: (link) => setOrcaCloudSignInLink(attempt, link)
     })
-    // Why: the callback listener closes once the browser answers, so the link is dead.
+    // The callback listener has closed, so its browser link is dead.
     setOrcaCloudSignInLink(attempt, null)
     if (attempt < linkedCloudConnectAttempt) {
       return {
@@ -150,15 +150,13 @@ export async function connectCurrentOrcaProfile(
 export async function signOutCurrentOrcaProfile(
   userDataPath: string
 ): Promise<SignOutCurrentOrcaProfileResult> {
-  // Why: a Sign in click still waiting in the browser must not relink after
-  // the user explicitly signed out.
+  // Pending browser sign-ins must not relink after explicit sign-out.
   invalidateOutstandingCloudConnectAttempts()
   const signOutEpoch = linkedCloudConnectAttempt
   const active = ensureActiveOrcaProfile(userDataPath)
   const configState = getOrcaCloudAuthConfig()
   const session = readCloudSession(active.profile.id, userDataPath)
-  // Why: fence before logout network I/O so a refresh already in flight cannot
-  // save after explicit sign-out.
+  // Fence before network I/O so in-flight refreshes cannot save after sign-out.
   invalidateCloudSessionChanges(active.profile.id, userDataPath)
   if (!isOrcaCloudDevAuthEnabled() && configState.configured && session.status === 'found') {
     await revokeOrcaCloudSession(configState.config, session.session).catch(() => undefined)

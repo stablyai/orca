@@ -3,7 +3,7 @@ import {
   createStore,
   readPersistedStateJson,
   testState
-} from './persistence-test-harness'
+} from './persistence/persistence-test-harness'
 // Repo-less floating/setup terminals belong to this machine and must not project onto SSH hosts (#31498).
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'

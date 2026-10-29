@@ -109,7 +109,7 @@ export const ROOT_HELP_TEXT_PRIMARY = [
   '',
   'Orchestration:',
   '  orchestration run-create  Create and bind a lightweight orchestration Run',
-  '  orchestration run-use     Bind this coordinator to an existing Run',
+  '  orchestration run-use     Resume coordinating a Run (workers never use this)',
   "  orchestration run-current Show this coordinator's bound Run",
   '  orchestration run-list    List lightweight orchestration Runs',
   '  orchestration run-show    Show one lightweight orchestration Run',

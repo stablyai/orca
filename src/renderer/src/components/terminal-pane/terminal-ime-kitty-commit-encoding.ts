@@ -20,14 +20,7 @@ export type ImeCommitKeyPress = {
   numLock?: boolean
 }
 
-/**
- * The matching physical release, read from the actual `keyup`.
- *
- * Why not reuse the press's fields: macOS lets Shift come up first, and the
- * browser then reports the printable keyup with the UNSHIFTED `key` and
- * `shiftKey: false`. Encoding that release from the press's shifted fields
- * would report a modifier the app no longer holds.
- */
+/** Read actual keyup fields: Shift can release first, so press-time modifiers would misreport the release. */
 export type ImeReleaseKeyEvent = {
   key: string
   code?: string
@@ -39,11 +32,7 @@ export type ImeReleaseKeyEvent = {
   numLock?: boolean
 }
 
-/**
- * Opaque proof that a delivered press/repeat owes a release report, carrying
- * the flags read at commit time. Only `encodeImeReleaseForKitty` interprets it:
- * the forwarder must never re-test event-type bits or rebuild CSI-u itself.
- */
+/** Encoder-owned release proof carries commit-time flags; forwarders must not reinterpret bits or rebuild CSI-u. */
 export type ImeCommitReleaseObligation = {
   readonly flags: number
   readonly primaryCodePoint: number
@@ -56,18 +45,7 @@ export type ImeCommitKittyEncoding = {
   release: ImeCommitReleaseObligation | null
 }
 
-/**
- * A pane that negotiated bit 3 asked for every printable key as a CSI-u report,
- * so writing IME-committed text raw hands it the legacy byte stream it declined.
- * Re-encode the press that produced the commit instead.
- *
- * Standard text keys require bit 3. Functional numpad keys also use CSI-u under
- * disambiguation/event reporting; other printable commits remain raw text.
- * Bit 1 (`report_event_types`) independently makes a raw-text commit owe one release.
- *
- * The physical key remains the report identity; bit 4 carries the committed
- * text independently, including multi-codepoint commits.
- */
+/** Bit 3 requests printable CSI-u; functional numpad keys also report under disambiguation/events. Bit 1 independently owes release for raw text. Keep physical key identity, with bit 4 carrying committed text, including multiple codepoints. */
 export function encodeImeCommitForKitty(
   press: ImeCommitKeyPress | null,
   kittyKeyboardFlags: number,
@@ -127,20 +105,11 @@ export function encodeImeReleaseForKitty(
     layoutCharacterForCode?: (code: string, shifted: boolean) => string | undefined
   }
 ): string | null {
-  // Why the current-flags gate: the app can pop kitty mode between commit and
-  // keyup (a TUI quitting on the pressed key). xterm suppresses releases the
-  // moment `report_event_types` is gone — match it so the successor process
-  // never receives CSI-u bytes it did not negotiate. The report itself still
-  // encodes under the commit-time flags so the press/release pair stays
-  // consistent.
+  // Require current event reporting so a mode pop cannot leak release bytes into the successor; encode with commit-time flags to match the press.
   if ((context.currentKittyKeyboardFlags & KITTY_REPORT_EVENT_TYPES) === 0) {
     return null
   }
-  // Why the key fallback: an input source can rewrite the keyup's `key`
-  // ('Process' after a source switch mid-hold) while `code` still matches the
-  // press; xterm's evaluate finds no encodable key there and would silently
-  // drop the release, leaving the app with the key held forever. The keyup's
-  // own single-char `key` wins (Shift-up-first correctly reports unshifted).
+  // Rewritten keyup keys such as Process need the press fallback to avoid a stuck key; actual single-character keyup still wins when Shift released first.
   const releaseKey =
     release.key.length === 1 || context.press === undefined
       ? release

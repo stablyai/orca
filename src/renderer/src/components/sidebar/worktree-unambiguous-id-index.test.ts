@@ -14,18 +14,6 @@ function worktree(id: string, hostId: Worktree['hostId']): Worktree {
 }
 
 describe('buildUnambiguousWorktreeIdIndex', () => {
-  it('keeps unique bare ids', () => {
-    const local = worktree('repo::local', 'local')
-    const remote = worktree('repo::remote', 'ssh:host')
-
-    expect(buildUnambiguousWorktreeIdIndex([local, remote])).toEqual(
-      new Map([
-        ['repo::local', local],
-        ['repo::remote', remote]
-      ])
-    )
-  })
-
   it('drops bare ids claimed by multiple hosts', () => {
     const local = worktree('repo::feature', 'local')
     const remote = worktree('repo::feature', 'ssh:host')

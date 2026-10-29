@@ -24,10 +24,8 @@ export function isVirtualBridgeInterface(name: string, hasDefaultRoute?: boolean
   return VIRTUAL_BRIDGE_INTERFACE_PATTERN.test(name)
 }
 
-// Why: main mints the QR from this and the renderer's picker shows its result, so both sides must
-// agree — a divergence would display one address while the QR advertises another. Bridges stay
-// pickable for an explicit choice but are never chosen here; `undefined` means "advertise no direct
-// address", which Relay tolerates (it carries its own invite) and the LAN-only path refuses.
+// Share QR and picker selection to avoid advertising a different address. Bridges remain manually selectable.
+// Undefined omits direct addressing: Relay carries its own invite, while LAN-only pairing refuses.
 export function selectAutoAdvertisedPairingAddress(
   interfaces: readonly PairingNetworkInterface[]
 ): string | undefined {

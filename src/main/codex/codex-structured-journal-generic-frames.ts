@@ -21,7 +21,7 @@ import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session-journal-t
 import {
   CODEX_PLAN_UPDATED_FRAME_KIND,
   isWordlessProviderFrame
-} from '../../shared/native-chat-provider-frame-summary'
+} from '../../shared/native-chat/native-chat-provider-frame-summary'
 import type { CodexRowAttribution } from './codex-subagent-linkage'
 import { codexAuthenticationFailure } from './codex-authentication-failure'
 import { agentSessionFailureWords } from '../../shared/agent-session-failure-words'

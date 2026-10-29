@@ -5,7 +5,6 @@ import type { ReplayingPanesRef } from './replay-guard'
 import type { installTerminalLinkPointerGesture } from './terminal-link-pointer-gesture'
 import type { installHttpLinkClickFallback } from './terminal-url-link-hit-testing'
 
-/** Mutable registries owned by one mounted pane surface. */
 export function useTerminalPaneLifecycleRefs() {
   return {
     systemPrefersDarkRef: useRef(false),

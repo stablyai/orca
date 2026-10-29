@@ -41,7 +41,6 @@ export function BranchPrefixFeedback({ rawPrefix }: BranchPrefixFeedbackProps): 
     )
   }
 
-  // Reserve a line of height so the message swapping in/out as the user types
-  // does not reflow the settings list below it.
+  // Reserve height so typing feedback cannot reflow the settings below.
   return <p className="min-h-4 text-xs">{message}</p>
 }

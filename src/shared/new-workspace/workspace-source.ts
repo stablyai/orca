@@ -120,8 +120,7 @@ export function buildGitLabWorkspaceSource(item: {
 export function getUsableLinearBranchName(
   branchName: string | null | undefined
 ): string | undefined {
-  // Why: only a non-blank normalized value can safely enter the exact git-ref
-  // override path; missing values must keep Orca's generated-name fallback.
+  // Only nonblank values enter exact Git-ref overrides; missing names retain generated fallback.
   return branchName?.trim() || undefined
 }
 

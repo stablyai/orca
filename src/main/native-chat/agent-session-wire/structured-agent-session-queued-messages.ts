@@ -52,7 +52,7 @@ export type StructuredQueueGateInput = {
 }
 
 export function structuredQueueHold(input: StructuredQueueGateInput): StructuredQueueHold | null {
-  if (structuredAgentSessionSendBlock(input.record)) {
+  if (!input.record || structuredAgentSessionSendBlock(input.record)) {
     return 'blocked'
   }
   // Prompts outrank working because Send-now cannot override them.

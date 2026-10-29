@@ -1,10 +1,15 @@
-import { agentSessionRecordFixture } from '../../shared/agent-session-record.test-fixture'
+import { agentSessionConversationView } from '../../shared/agent-session-conversation-view'
+import {
+  agentSessionLeaseFixture,
+  agentSessionRecordFixture
+} from '../../shared/agent-session-record.test-fixture'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { AgentSessionHistoryPage } from '../../shared/agent-session-wire'
 import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'
+import { MAX_RETAINED_OWN_ITEMS } from '../../shared/structured-agent-session-item-retention'
 import {
   latestStructuredAgentContextFacts,
   selectStructuredAgentContextUsage
@@ -91,6 +96,10 @@ function readOptions(journal: AgentSessionJournal, agents: StructuredAgentRegist
     child: { fence: 1, generation: 'generation-1' },
     params: { provider: 'claude' }
   }
+  const record = {
+    ...agentSessionRecordFixture(agentSessionLeaseFixture({ sessionId: SESSION, runtimeFence: 1 })),
+    options: { model: 'opus' }
+  }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the options read touches only these members.
   const context = {
     deps: {
@@ -99,12 +108,8 @@ function readOptions(journal: AgentSessionJournal, agents: StructuredAgentRegist
       },
       agents,
       store: {
-        getRecord: () => ({
-          ...agentSessionRecordFixture(),
-          sessionId: SESSION,
-          provider: 'claude',
-          options: { model: 'opus' }
-        })
+        requireWritableRecord: () => record,
+        getConversation: () => agentSessionConversationView(record)
       }
     },
     serialize: (_sessionId: string, task: () => Promise<unknown>) => task(),
@@ -242,8 +247,11 @@ describe('context usage for a turn row outside the loaded page', () => {
       translator.handle(assistantFrame(`turn-b-reply-${index}`, 4_000 + index, 200_000 + index))
     }
     let index = 0
-    for (; index < 1_900; index += 1) {
+    for (; index < MAX_RETAINED_OWN_ITEMS - 20; index += 1) {
       respond(index)
+      if (index % 100 === 99) {
+        await settle()
+      }
     }
     await settle()
     state = catchUp(journal, state)

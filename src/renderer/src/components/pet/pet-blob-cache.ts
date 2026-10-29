@@ -1,25 +1,16 @@
-// Why: isolated module so the store slice can call revokeCustomPetBlobUrl
-// without importing usePetUrl (which itself imports the store). Keeps
-// the dependency graph acyclic.
+// Keep cache revocation independent of the hook/store dependency cycle.
 
 import { detectFramesFromImageData, type DetectedFrame } from './sprite-frame-detection'
 
-// Why: sandbox=true + webSecurity=true block the renderer from reading user
-// files directly. For custom pet images we fetch the bytes over IPC and
-// turn them into a `blob:` URL that an <img> tag can load. A small in-memory
-// cache means switching back and forth between images in the same session
-// doesn't re-fetch from main.
+// Sandboxed renderers cannot read user files; cache IPC-loaded blob URLs to avoid refetching on pet switches.
 export const blobUrlCache = new Map<string, string>()
 export const CUSTOM_PET_BLOB_CACHE_MAX = 16
 
 export type DetectedSpriteCacheEntry = {
   frames: DetectedFrame[]
-  /** Per-frame image bitmaps drawn from the keyed canvas. The overlay paints
-   *  these onto its own canvas one at a time, so we can crop irregular sheets
-   *  without forcing the manifest to declare a uniform grid. */
+  /** Crop irregular sheets into per-frame bitmaps for canvas playback without requiring a manifest grid. */
   bitmaps: ImageBitmap[]
-  /** Manifest-declared playback speed; the overlay falls back to 8 fps when
-   *  the bundle didn't declare one. */
+  /** Imported manifest speed; missing values use the overlay’s 8 fps fallback. */
   fps: number
 }
 export const detectedSpriteCache = new Map<string, DetectedSpriteCacheEntry>()
@@ -119,28 +110,19 @@ async function loadCustomBlobUrlUncached(
   hasManifestSprite: boolean | undefined,
   loadEpoch: number
 ): Promise<string | null> {
-  // Why: defensively clear any stale entry so we don't leak a prior blob URL
-  // or ImageBitmap[] when re-populating after a cache miss.
+  // Release stale URLs/bitmaps before repopulating a cache miss.
   clearCustomPetBlobCacheEntry(id)
   const buffer = await window.api.pet.read(id, fileName, kind)
   if (!buffer) {
     return null
   }
-  // Why: MIME comes from CustomPet.mimeType — required especially for
-  // SVG, which browsers refuse to render from a blob URL with the wrong
-  // Content-Type.
+  // Use the stored MIME type; SVG blobs with the wrong Content-Type will not render.
   const blob = new Blob([buffer], { type: mimeType })
   let url = URL.createObjectURL(blob)
   let detected: DetectedSpriteCacheEntry | null = null
-  // Why: pet bundles often ship spritesheets with a magenta chroma-key as
-  // the background instead of true alpha (common in pixel-art tooling).
-  // Strip it once at load and replace the cached URL with a transparent PNG
-  // so the overlay just sees a normal blob URL.
+  // Remove magenta chroma keys once at load so overlays receive ordinary transparent PNG URLs.
   if (kind === 'bundle' && mimeType !== 'image/svg+xml') {
-    // Why: when the manifest already provides a valid sprite layout, the
-    // renderer reads the `sprite` branch of usePetUrl and never touches
-    // detectedSpriteCache — so skipping detection (and the per-frame
-    // ImageBitmap allocations) avoids a per-bundle memory leak.
+    // Manifest-layout playback never reads detected bitmaps; skip their allocation to avoid leaking them.
     const processed = await processBundleSheet(url, spriteFps, hasManifestSprite === true)
     if (processed) {
       URL.revokeObjectURL(url)
@@ -173,8 +155,7 @@ function cacheCustomPetBlobUrl(
 }
 
 function evictInactiveCustomPetBlobUrls(): void {
-  // Why: users can import many custom pets; inactive blob URLs and sprite
-  // bitmaps should not stay resident for the whole renderer session.
+  // Bound inactive URLs/bitmaps so imported pets cannot occupy memory for the entire session.
   while (blobUrlCache.size > CUSTOM_PET_BLOB_CACHE_MAX) {
     let evicted = false
     for (const id of blobUrlCache.keys()) {
@@ -210,21 +191,16 @@ async function processBundleSheet(
     const data = ctx.getImageData(0, 0, canvas.width, canvas.height)
     keyMagenta(data.data)
     ctx.putImageData(data, 0, 0)
-    // Why: detect frames *after* keying so transparent gutters between
-    // sprites are visible to the band/column scanner. Without this the whole
-    // sheet collapses into one giant frame.
+    // Detect after keying so transparent gutters separate frames instead of one whole-sheet frame.
     const sprite = skipDetection ? null : detectFramesFromImageData(data)
     if (sprite && sprite.frames.length >= 1) {
-      // Why: allSettled so a single failed crop doesn't leak the bitmaps that
-      // did succeed — close fulfilled ones before bailing out.
+      // allSettled lets failed crops release successful bitmaps before falling back.
       const results = await Promise.allSettled(
         sprite.frames.map((f) => createImageBitmap(canvas, f.x, f.y, f.w, f.h))
       )
       const rejected = results.some((r) => r.status === 'rejected')
       if (rejected) {
-        // Why: don't discard the keyed canvas when only the per-frame crops
-        // failed — fall through to emit the keyed PNG so the caller still gets
-        // the chroma-keyed sheet instead of falling back to the un-keyed url.
+        // Crop failure must still return the keyed PNG instead of the original magenta sheet.
         for (const r of results) {
           if (r.status === 'fulfilled') {
             r.value.close()
@@ -252,23 +228,15 @@ async function processBundleSheet(
   }
 }
 
-// Why: WebP/JPEG-compressed magenta keys leave wide gradient halos around
-// each sprite, so a tight RGB-distance check leaves ugly fringing. We use a
-// hue-style test instead: the magenta family has R and B much greater than
-// G. Anything matching gets fully cleared; anything close gets proportional
-// alpha so antialiased edges fade smoothly.
+// Compressed keys leave halos beyond tight RGB distance; score magenta dominance and fade near-key edge pixels proportionally.
 function magentaScore(r: number, g: number, b: number): number {
-  // 0 = not magenta, 1 = pure magenta key. Restricted to near-pure magenta
-  // (saturated R+B, very low G) so legitimate purples and pinks (e.g.
-  // 128,0,128 or 255,128,200) aren't keyed out of imported sprite art.
+  // 0 means retained color, 1 pure key; preserve legitimate purple/pink artwork.
   const minRB = Math.min(r, b)
   if (g >= minRB) {
     return 0
   }
-  const dom = (minRB - g) / 255 // how much R and B dominate green
-  // Why: require a strong R+B dominance over G so purples/pinks (e.g.
-  // 128,0,128 or 255,128,200) aren't keyed, while still letting antialiased
-  // edge pixels (e.g. 255,128,255 → dom≈0.5) fade with proportional alpha.
+  const dom = (minRB - g) / 255
+  // Require strong R+B dominance to preserve purple/pink while fading antialiased key edges.
   if (dom <= 0.4) {
     return 0
   }
@@ -302,9 +270,7 @@ function loadImage(url: string): Promise<HTMLImageElement> {
   })
 }
 
-// Why: the store invokes this on removeCustomPet so the underlying Blob
-// is released; otherwise the blob: URL keeps it alive for the rest of the
-// session, wasting memory per imported image.
+// Removal must revoke the URL or its blob stays alive for the renderer session.
 export function revokeCustomPetBlobUrl(id: string): void {
   customPetBlobCacheEpoch.set(id, (customPetBlobCacheEpoch.get(id) ?? 0) + 1)
   customPetBlobUrlLoads.delete(id)

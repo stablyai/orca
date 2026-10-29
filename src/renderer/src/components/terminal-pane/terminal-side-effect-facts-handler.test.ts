@@ -62,8 +62,7 @@ describe('isMainTerminalSideEffectAuthorityForPty', () => {
     expect(
       isMainTerminalSideEffectAuthorityForPty({ settings: {}, runtimeEnvironmentId: null })
     ).toBe(true)
-    // Why: settings hydrate asynchronously; the default-on switch must not
-    // flip authority off during the null-settings startup window.
+    // Null startup settings must not disable default-on authority before hydration.
     expect(
       isMainTerminalSideEffectAuthorityForPty({ settings: null, runtimeEnvironmentId: null })
     ).toBe(true)
@@ -88,9 +87,7 @@ describe('isMainTerminalSideEffectAuthorityForPty', () => {
   })
 
   it('honors the persisted kill switch before settings hydrate', () => {
-    // Why: the authority decision is made once at transport creation; a pane
-    // bound during startup must not pick main authority when the user
-    // persisted the switch off.
+    // Creation-time authority must honor the persisted off switch even before settings hydrate.
     setPersistedSettingsSync({ terminalMainSideEffectAuthority: false })
 
     expect(
@@ -240,8 +237,7 @@ describe('registerTerminalSideEffectFactConsumer', () => {
   })
 
   it('never replays command-code scrape facts', () => {
-    // Why: a replayed working/done seed would resurrect a finished turn's
-    // status row — replay batches restore title state only.
+    // Replay is title-only; agent status seeds would resurrect finished turns.
     const events: unknown[][] = []
     registerTerminalSideEffectFactConsumer({
       ptyId: PTY_ID,
@@ -267,9 +263,7 @@ describe('registerTerminalSideEffectFactConsumer', () => {
   })
 
   it('routes 2031-subscribe facts to the registered consumer but never replays them', () => {
-    // Why: the fact lets hidden-delivery-gated views answer the color-scheme
-    // query without byte access; a replayed subscribe would re-answer a query
-    // the snapshot already satisfied.
+    // Live subscription facts enable hidden-view theme pushes; replay must not re-answer a satisfied query.
     const events: unknown[][] = []
     registerTerminalSideEffectFactConsumer({
       ptyId: PTY_ID,
@@ -295,8 +289,7 @@ describe('registerTerminalSideEffectFactConsumer', () => {
   })
 
   it('never replays command-finished or pr-link facts', () => {
-    // Why: like bells and agent transitions, command/PR facts are attention
-    // signals — replay snapshots restore title state only.
+    // Command/PR facts are attention too; snapshots restore only title state.
     const events: unknown[][] = []
     registerTerminalSideEffectFactConsumer({
       ptyId: PTY_ID,
@@ -441,9 +434,7 @@ describe('registerTerminalSideEffectFactConsumer', () => {
   })
 
   it('hands off facts emitted between the parked watcher unregistering and the pane registering', () => {
-    // Why: the reveal window — the watcher unregisters synchronously in the
-    // effect flush, the pane registers only after its async reattach resolves,
-    // and replay is title-only, so an unbuffered bell/command-code-done is lost.
+    // Reveal unregisters watchers before async pane registration; title-only replay cannot recover live bells/completions lost in that gap.
     const watcher = createCallbackRecorder()
     const disposeWatcher = registerTerminalSideEffectFactConsumer({
       ptyId: PTY_ID,
@@ -496,8 +487,7 @@ describe('registerTerminalSideEffectFactConsumer', () => {
   })
 
   it('does not buffer replay batches across a handoff', () => {
-    // Why: the next consumer requests its own snapshot; a held replay would
-    // regress the title it just restored.
+    // New consumers request fresh snapshots; buffered replay could regress restored titles.
     const dispose = registerTerminalSideEffectFactConsumer({
       ptyId: PTY_ID,
       callbacks: createCallbackRecorder().callbacks
@@ -518,8 +508,7 @@ describe('registerTerminalSideEffectFactConsumer', () => {
   })
 
   it('drains the handoff buffer before the register snapshot, so the replay is stale', async () => {
-    // Why: the drained live title sets lastLiveTitleSeq, which is what makes
-    // the async snapshot's older title lose to the fact the pane already got.
+    // Drain live titles before the async snapshot so sequence comparison rejects its stale predecessor.
     const snapshot = batch([{ kind: 'title', normalizedTitle: 'snapshot', rawTitle: 'snapshot' }], {
       replay: true,
       seq: 20
@@ -613,8 +602,7 @@ describe('registerTerminalSideEffectFactConsumer', () => {
     })
     expect(getSideEffectSnapshot).toHaveBeenCalledWith(PTY_ID)
 
-    // Replace before the snapshot resolves: the slow snapshot must not fire
-    // into the superseded registration.
+    // Slow snapshots must not reach replacement registrations.
     const second = createCallbackRecorder()
     registerTerminalSideEffectFactConsumer({ ptyId: PTY_ID, callbacks: second.callbacks })
     resolveSnapshot(

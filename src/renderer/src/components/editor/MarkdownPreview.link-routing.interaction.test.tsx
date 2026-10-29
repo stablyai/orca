@@ -1,12 +1,6 @@
 // @vitest-environment happy-dom
 //
-// Faithful end-to-end check of the markdown-preview http link routing: renders
-// the real MarkdownPreview, lets react-markdown produce a real <a>, and fires
-// real modifier clicks so the component's own handleClick + modifier detection
-// run. openHttpLink stays real (wired through its registerHttpLinkStoreAccessor
-// seam); only its store data and window.api are controlled. This is the
-// regression guard for "Cmd+Shift-click opens the system browser, plain/Cmd
-// click opens the Orca browser".
+// Exercise real MarkdownPreview links, modifier detection and openHttpLink; control only store data and IPC.
 
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
@@ -29,8 +23,7 @@ const statRuntimePathMock = vi.hoisted(() => vi.fn(async () => ({ isDirectory: f
 const openFiles: MarkdownPreviewSourceOpenFile[] = []
 const activeFileIdByWorktree: Record<string, string | null> = {}
 
-// Minimal store: MarkdownPreview reads settings/worktreesByRepo plus a handful
-// of action functions. None of the actions fire on the http path under test.
+// Provide only store reads used by this HTTP-link path; file actions should remain idle.
 const storeState = {
   openFile: vi.fn(),
   activateMarkdownLink: vi.fn(),
@@ -307,7 +300,7 @@ describe('MarkdownPreview http link routing (Cmd vs Cmd+Shift click)', () => {
 
     it('reveals the line in another worktree after the preview unmounts', async () => {
       const targetFileId = buildOwnedEditorFileId('/other/src/Example.cs', 'wt-2', null)
-      // Why: the real openFile registers an owner-qualified record; the editor only applies a reveal whose fileId matches it.
+      // Use the real owner-qualified file ID so the editor can match and apply the reveal.
       storeState.openFile.mockImplementation(
         (file: { filePath: string; relativePath: string; worktreeId: string }) => {
           storeState.openFiles = [{ ...file, id: targetFileId, mode: 'edit' }]
@@ -315,7 +308,7 @@ describe('MarkdownPreview http link routing (Cmd vs Cmd+Shift click)', () => {
         }
       )
       await clickLineLink('file:///other/src/Example.cs#L120')
-      // Why: the worktree switch unmounts this preview before the reveal frames run.
+      // Worktree switching unmounts this preview before reveal frames execute.
       act(() => {
         root.unmount()
       })

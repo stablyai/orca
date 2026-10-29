@@ -37,6 +37,7 @@ const WORKTREE_HANDLER_CHANNELS = [
   'worktrees:sleep',
   'worktrees:sleepReopened',
   'worktrees:resumeSleptPane',
+  'worktrees:retireStrandedSleepRecord',
   'worktrees:previewNestedRemoval',
   'worktrees:forgetLocal',
   'worktrees:forceDeletePreservedBranch',
@@ -50,6 +51,17 @@ const WORKTREE_HANDLER_CHANNELS = [
   'hooks:readIssueCommand',
   'hooks:writeIssueCommand'
 ] as const
+
+vi.mock('../text-generation/commit-message-text-generation', () => ({
+  resolveTextGenerationParams: () => ({
+    ok: true,
+    params: { agentId: 'claude', model: 'fixture' }
+  }),
+  generateBranchNameFromContext: async () => ({ success: true, slug: 'fix-auth' })
+}))
+vi.mock('../text-generation/commit-message-agent-environment', () => ({
+  prepareLocalCommitMessageAgentEnv: async () => ({ ok: true })
+}))
 
 vi.mock('electron', async () =>
   (await import('./worktrees-test-module-mocks')).electronModuleMock()
@@ -578,7 +590,7 @@ describe('registerWorktreeHandlers', () => {
         'pr-prateek-orca',
         '+refs/heads/prateek/fix-sidebar-agents-toggle*:refs/remotes/pr-prateek-orca/prateek/fix-sidebar-agents-toggle*'
       ],
-      { cwd: '/workspace/repo' }
+      { cwd: '/workspace/repo', timeout: REVIEW_HEAD_FETCH_TIMEOUT_MS }
     )
     expect(gitExecFileAsyncMock).not.toHaveBeenCalledWith(
       [
@@ -761,7 +773,7 @@ describe('registerWorktreeHandlers', () => {
         'origin',
         '+refs/heads/feature/add-feature:refs/remotes/origin/feature/add-feature'
       ],
-      { cwd: '/workspace/repo' }
+      { cwd: '/workspace/repo', timeout: REVIEW_HEAD_FETCH_TIMEOUT_MS }
     )
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
       ['rev-parse', '--verify', 'origin/feature/add-feature'],

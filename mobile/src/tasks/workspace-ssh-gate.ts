@@ -1,15 +1,7 @@
 import type { SshConnectionState, SshConnectionStatus } from '../../../src/shared/ssh-types'
 import { ORCAD_RECLAIM_STALE_LOCK_FLAG } from '../../../src/shared/orcad-stale-lock-reclaim'
 
-/**
- * What mobile stores for an SSH connection.
- *
- * SshConnectionState with the two members no mobile reader touches left optional. The host always
- * sends them (public-ssh-state.ts:8 writes `error` explicitly and `reconnectAttempt` has been on
- * the type since #590), so this widens nothing on the wire; it exists so a reply that omits one
- * keeps its `status` instead of dropping the whole record into the connect path's `'connected'`
- * fallback.
- */
+// Keep unread SSH fields optional so an omitted member cannot drop auth-failed state into connected fallback.
 export type WorkspaceSshRecord = Omit<
   SshConnectionState,
   'error' | 'reconnectAttempt' | 'managedServer'
@@ -24,7 +16,6 @@ export type WorkspaceSshGate = {
   requiresConnection: boolean
   connectInProgress: boolean
   error: string | null
-  /** The host's server refused to start on a possibly stale lock; only the desktop can clear it. */
   needsDesktopServerRecovery: boolean
 }
 
@@ -74,7 +65,6 @@ export function deriveWorkspaceSshGate(args: {
   }
 }
 
-/** The desktop's own gate for Recover server (canRecoverSshHostServer), read from a lenient record. */
 function needsDesktopServerRecovery(server: WorkspaceSshRecord['managedServer']): boolean {
   return (
     server?.kind === 'managed' &&

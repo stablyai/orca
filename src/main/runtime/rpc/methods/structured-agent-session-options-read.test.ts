@@ -1,3 +1,4 @@
+import { agentSessionConversationView } from '../../../../shared/agent-session-conversation-view'
 import '../unused-default-rpc-methods.test-fixture'
 // The catalog read behind the picker: which directory a named worktree runs in on this host.
 
@@ -12,6 +13,10 @@ import type { AgentSessionRecord } from '../../../../shared/agent-session-record
 import type { AgentSessionModelCatalogResult } from '../../../../shared/agent-session-wire'
 import { agentSessionRecordFixture } from '../../../../shared/agent-session-record.test-fixture'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
+import {
+  agentModelCatalogFingerprintForRecord,
+  agentModelCatalogScopeFingerprint
+} from '../../../native-chat/agent-model-catalog/agent-model-catalog-fingerprint'
 import {
   call,
   clearStructuredHostStub,
@@ -38,7 +43,15 @@ describe('agentSession.modelCatalog', () => {
     record = null
     setStructuredAgentSessionHost(
       Object.assign(hostStub(), {
-        deps: { modelCatalog: { read }, store: { getRecord: () => record }, adapter: {} }
+        deps: {
+          modelCatalog: { read, demand: vi.fn(async () => {}) },
+          store: {
+            getRecord: () => record,
+            getConversation: () => (record ? agentSessionConversationView(record) : null),
+            requireWritableRecord: () => record
+          },
+          adapter: {}
+        }
       })
     )
   })
@@ -72,6 +85,10 @@ describe('agentSession.modelCatalog', () => {
     }
     const catalog = createAgentModelCatalogService({
       store: new AgentModelCatalogStore(),
+      getConversation: () => {
+        const saved = record ?? undefined
+        return saved ? agentSessionConversationView(saved) : undefined
+      },
       getRecord: () => record ?? undefined,
       drivesRecord: () => true,
       recordWorkspacePath: async () => '/repo/work',
@@ -87,7 +104,15 @@ describe('agentSession.modelCatalog', () => {
     })
     setStructuredAgentSessionHost(
       Object.assign(hostStub(), {
-        deps: { modelCatalog: catalog, store: { getRecord: () => record }, adapter: {} }
+        deps: {
+          modelCatalog: catalog,
+          store: {
+            getRecord: () => record,
+            getConversation: () => (record ? agentSessionConversationView(record) : null),
+            requireWritableRecord: () => record
+          },
+          adapter: {}
+        }
       })
     )
     try {
@@ -137,11 +162,11 @@ describe('agentSession.modelCatalog', () => {
       STRUCTURED_CLIENT,
       { resolveStructuredAgentSessionLocalWorkspacePath }
     )
-    expect(resolveStructuredAgentSessionLocalWorkspacePath).toHaveBeenCalledWith('id:wt-1')
+    expect(resolveStructuredAgentSessionLocalWorkspacePath).not.toHaveBeenCalled()
     expect(read).toHaveBeenCalledWith({
       agent: 'codex',
       sessionId: SESSION,
-      workspacePath: '/repo/wt'
+      workspace: expect.objectContaining({ selector: 'id:wt-1', resolve: expect.any(Function) })
     })
   })
 
@@ -156,7 +181,10 @@ describe('agentSession.modelCatalog', () => {
         })
       }
     )
-    expect(read).toHaveBeenCalledWith({ agent: 'codex', workspacePath: null })
+    expect(read).toHaveBeenCalledWith({
+      agent: 'codex',
+      workspace: expect.objectContaining({ selector: 'id:missing', resolve: expect.any(Function) })
+    })
   })
 
   it('reads as before when no worktree is named', async () => {
@@ -177,6 +205,87 @@ describe('agentSession.modelCatalog', () => {
     await call('agentSession.modelCatalog', { agent: 'grok', savedOnly: true }, STRUCTURED_CLIENT)
     expect(read).toHaveBeenCalledWith({ agent: 'grok', savedOnly: true })
   })
+
+  it('answers cold saved-only without resolution and reuses prepared memory for another equivalent chat', async () => {
+    const pinned = { ...agentSessionRecordFixture(), provider: 'claude' }
+    const key = agentModelCatalogScopeFingerprint(
+      agentModelCatalogFingerprintForRecord(pinned),
+      '/project',
+      'saved-launch'
+    )
+    const seed = new AgentModelCatalogStore()
+    const saved = seed.recordSuccess(
+      key,
+      'claude',
+      {
+        origin: 'probe',
+        complete: true,
+        models: [{ id: 'saved', label: 'Saved', isDefault: false, efforts: [] }]
+      },
+      'discovery'
+    )!
+    const store = new AgentModelCatalogStore()
+    await store.attachPersistence({
+      load: async () => [saved],
+      save: () => {},
+      flush: async () => {}
+    })
+    const folder = vi.fn(async () => '/project')
+    const run = vi.fn(() => new Promise<never>(() => {}))
+    const resolve = vi.fn(async () => ({ identity: 'saved-launch', run }))
+    const catalog = createAgentModelCatalogService({
+      store,
+      getConversation: (id) => {
+        const held = { ...pinned, sessionId: id }
+        return held ? agentSessionConversationView(held) : undefined
+      },
+      getRecord: (id) => ({ ...pinned, sessionId: id }),
+      drivesRecord: () => true,
+      resolveAccountHome: vi.fn(() => new Promise<never>(() => {})),
+      recordWorkspacePath: folder,
+      probes: { claude: Object.assign(run, { resolve }) }
+    })
+    setStructuredAgentSessionHost(
+      Object.assign(hostStub(), {
+        sessionAgent: () => 'claude',
+        deps: {
+          modelCatalog: catalog,
+          store: {
+            getConversation: (id: string) => {
+              const held = { ...pinned, sessionId: id }
+              return held ? agentSessionConversationView(held) : undefined
+            },
+            getRecord: (id: string) => ({ ...pinned, sessionId: id })
+          },
+          adapter: {}
+        }
+      })
+    )
+    try {
+      const cold = await call(
+        'agentSession.modelCatalog',
+        { agent: 'claude', sessionId: 'session-cold-a', savedOnly: true },
+        STRUCTURED_CLIENT
+      )
+      expect(cold.ok, JSON.stringify(cold)).toBe(true)
+      expect(cold).toMatchObject({ result: { origin: 'unknown' } })
+      expect(folder).not.toHaveBeenCalled()
+      expect(resolve).not.toHaveBeenCalled()
+      await catalog.prepareSaved({ agent: 'claude', sessionId: 'session-cold-a' })
+      const calls = resolve.mock.calls.length
+      expect(
+        await call(
+          'agentSession.modelCatalog',
+          { agent: 'claude', sessionId: 'session-cold-b', savedOnly: true },
+          STRUCTURED_CLIENT
+        )
+      ).toMatchObject({ ok: true, result: { models: [{ id: 'saved' }] } })
+      expect(resolve).toHaveBeenCalledTimes(calls)
+      expect(run).not.toHaveBeenCalled()
+    } finally {
+      catalog.stop()
+    }
+  })
 })
 
 describe('agentSession.modelCatalog before anything built the host', () => {
@@ -188,7 +297,11 @@ describe('agentSession.modelCatalog before anything built the host', () => {
   const installHost = vi.fn(async () => {
     setStructuredAgentSessionHost(
       Object.assign(hostStub(), {
-        deps: { modelCatalog: { read }, store: { getRecord: () => null }, adapter: {} }
+        deps: {
+          modelCatalog: { read, demand: vi.fn(async () => {}) },
+          store: { getRecord: () => null, getConversation: () => null },
+          adapter: {}
+        }
       })
     )
   })
@@ -199,8 +312,7 @@ describe('agentSession.modelCatalog before anything built the host', () => {
     clearStructuredHostStub()
   })
 
-  // A new chat's picker reads before its create lands; on a host with no saved chats nothing else
-  // has built the host yet, and a refusal here left the picker on the client's built-in list.
+  // New-chat pickers may be the first host caller; refusing before installation leaves only client-built-in models.
   it('builds the host for a structured chat and answers from its catalog', async () => {
     const reply = await call(
       'agentSession.modelCatalog',
@@ -213,8 +325,7 @@ describe('agentSession.modelCatalog before anything built the host', () => {
     expect(read).toHaveBeenCalledWith({ agent: 'codex', sessionId: SESSION })
   })
 
-  // Terminal-backed chat reads with no session: a host that runs no structured chat keeps its
-  // journal closed, and the read falls back to the CLI listing.
+  // Session-less terminal-chat reads must use CLI listing without opening a structured journal.
   it('does not build the host for a read that names no session', async () => {
     const reply = await call('agentSession.modelCatalog', { agent: 'codex' }, STRUCTURED_CLIENT, {
       ensureStructuredAgentSessionHost: installHost
@@ -252,7 +363,15 @@ describe('agentSession.modelCatalog for a chat on a model its CLI stopped listin
   beforeEach(() => {
     setStructuredAgentSessionHost(
       Object.assign(hostStub(), {
-        deps: { modelCatalog: { read }, store: { getRecord: () => record }, adapter: {} }
+        deps: {
+          modelCatalog: { read, demand: vi.fn(async () => {}) },
+          store: {
+            getRecord: () => record,
+            getConversation: () => (record ? agentSessionConversationView(record) : null),
+            requireWritableRecord: () => record
+          },
+          adapter: {}
+        }
       })
     )
   })

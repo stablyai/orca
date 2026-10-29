@@ -10,10 +10,12 @@ import {
   CODEX_APPROVAL_DECISIONS,
   CODEX_COMMAND_APPROVAL_METHOD,
   CODEX_FILE_CHANGE_APPROVAL_METHOD,
+  CODEX_MCP_ELICITATION_METHOD,
   codexJournalPromptIdPart,
   encodeCodexJournalQuestionOptionId,
   type CodexApprovalDecision
 } from './codex-structured-prompt-replies'
+import { codexMcpToolApprovalDecisions } from './codex-mcp-tool-approval'
 
 const APPROVAL_DECISION_LABELS: Record<CodexApprovalDecision, string> = {
   accept: 'Allow',
@@ -69,6 +71,9 @@ export function codexApprovalItem(input: {
   detail: string | null
 }): AgentJournalApprovalItem {
   const params = readParams(input.params)
+  if (input.method === CODEX_MCP_ELICITATION_METHOD) {
+    return codexMcpToolApprovalItem(params)
+  }
   return {
     kind: 'approval',
     title:
@@ -79,6 +84,21 @@ export function codexApprovalItem(input: {
           : 'Approve this action?',
     detail: boundNullablePromptText(approvalDetail(params) ?? input.detail),
     options: codexApprovalOptions(input.params),
+    resolution: { ...PENDING }
+  }
+}
+
+function codexMcpToolApprovalItem(params: Record<string, unknown>): AgentJournalApprovalItem {
+  const toolParams = readParams(params._meta).tool_params
+  return {
+    kind: 'approval',
+    title: boundJournalPromptText(readString(params, 'message') ?? 'Allow this tool call?'),
+    detail: toolParams === undefined ? null : boundJournalPromptText(JSON.stringify(toolParams)),
+    options: codexMcpToolApprovalDecisions(params).map((decision) => ({
+      id: decision,
+      // MCP cancel skips only this call and the turn continues, so it reads as Deny, not Stop.
+      label: APPROVAL_DECISION_LABELS[decision === 'cancel' ? 'decline' : decision]
+    })),
     resolution: { ...PENDING }
   }
 }

@@ -205,6 +205,7 @@ describe('journal lifecycle batch partitioning', () => {
       const state = createJournalReducerState('session', EPOCH)
       const mutation = (text: string): JournalLifecycleMutationInput => ({
         ...item(0, text),
+        observedAt: 123,
         body:
           kind === 'turn'
             ? { kind: 'turn', turnId: text, state: 'interrupted', outcome: 'cancellation' }

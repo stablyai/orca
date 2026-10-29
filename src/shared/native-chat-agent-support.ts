@@ -42,11 +42,15 @@ export function nativeChatAskRequiresTerminal(agent: string | null | undefined):
   return resolveNativeChatTranscriptAgent(agent) === 'omp'
 }
 
+/** OpenCode confirms an interrupt with a second Escape; Claude Code and Codex read Esc-Esc at an idle prompt as rewind. */
+export function nativeChatStopSendsSecondEscape(agent: string | null | undefined): boolean {
+  return resolveNativeChatTranscriptAgent(agent) === 'opencode'
+}
+
 export function resolveNativeChatTranscriptAgent(
   agent: string | null | undefined
 ): NativeChatTranscriptAgent | null {
-  // Why: OpenClaude writes the Claude transcript format and layout even though
-  // Orca preserves its distinct agent identity for launch and UI behavior.
+  // OpenClaude writes Claude transcripts but retains distinct launch/UI identity.
   if (agent === 'claude' || agent === 'openclaude') {
     return 'claude'
   }

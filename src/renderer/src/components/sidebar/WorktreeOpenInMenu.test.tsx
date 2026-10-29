@@ -250,31 +250,32 @@ describe('WorktreeOpenInMenu', () => {
     )
   })
 
-  it('enables only VS Code-compatible launchers for SSH paths', () => {
+  it('enables only launchers that open SSH hosts themselves for SSH paths', () => {
     const entries = getWorktreeOpenInEntries(
       [
         { id: 'renamed', label: 'My Remote Editor', command: 'code-insiders' },
-        { id: 'fake', label: 'VS Code', command: 'cursor' },
+        { id: 'cursor', label: 'Cursor', command: 'cursor' },
+        { id: 'zed', label: 'Zed', command: 'zed' },
+        { id: 'fake', label: 'VS Code', command: 'subl' },
         { id: 'compound', label: 'VS Code Reuse', command: 'code --reuse-window' }
       ],
       'Finder'
     )
 
-    expect(getOpenInEntryAvailability(entries[0], 'ssh-1')).toEqual({
-      disabled: false,
-      metadata: 'Remote SSH'
-    })
-    expect(getOpenInEntryAvailability(entries[1], 'ssh-1')).toEqual({
-      disabled: true,
-      metadata: 'Local only',
-      disabledReason: 'Only VS Code can open folders on an SSH host.'
-    })
-    expect(getOpenInEntryAvailability(entries[2], 'ssh-1')).toEqual({
-      disabled: true,
-      metadata: 'Local only',
-      disabledReason: 'Only VS Code can open folders on an SSH host.'
-    })
-    expect(getOpenInEntryAvailability(entries[3], 'ssh-1')).toEqual({
+    for (const entry of entries.slice(0, 3)) {
+      expect(getOpenInEntryAvailability(entry, 'ssh-1')).toEqual({
+        disabled: false,
+        metadata: 'Remote SSH'
+      })
+    }
+    for (const entry of entries.slice(3, 5)) {
+      expect(getOpenInEntryAvailability(entry, 'ssh-1')).toEqual({
+        disabled: true,
+        metadata: 'Local only',
+        disabledReason: 'Only VS Code, Cursor, and Zed can open folders on an SSH host.'
+      })
+    }
+    expect(getOpenInEntryAvailability(entries[5], 'ssh-1')).toEqual({
       disabled: true,
       metadata: 'Local only'
     })
@@ -301,12 +302,12 @@ describe('WorktreeOpenInMenu', () => {
       target: 'external-editor',
       worktreePath: '/home/ada/project',
       connectionId: 'ssh-1',
-      command: 'cursor'
+      command: 'subl'
     })
 
     expect(openInExternalEditorMock).not.toHaveBeenCalled()
     expect(toastErrorMock).toHaveBeenCalledWith('This app cannot open SSH workspaces.', {
-      description: 'Choose VS Code or use the app locally.'
+      description: 'Choose VS Code, Cursor, or Zed, or use the app locally.'
     })
   })
 
@@ -326,7 +327,7 @@ describe('WorktreeOpenInMenu', () => {
     })
 
     expect(toastErrorMock).toHaveBeenCalledWith(
-      'VS Code needs an SSH config alias for this host.',
+      'This editor needs an SSH config alias for this host.',
       {
         description:
           'Add a Host alias for builder.example.com:2222 to your local SSH config, reconnect the workspace, then try again.'
@@ -393,19 +394,24 @@ describe('WorktreeOpenInMenu', () => {
       target: 'external-editor',
       command: 'code'
     } as const
-    const zed = { id: 'zed', label: 'Zed', target: 'external-editor', command: 'zed' } as const
+    const subl = {
+      id: 'subl',
+      label: 'Sublime',
+      target: 'external-editor',
+      command: 'subl'
+    } as const
 
     it('enables VS Code over Remote SSH and explains why other apps stay off', () => {
       expect(
         getOpenInEntryAvailability(code, null, 'managed-owner', false, runtimeSshHost)
       ).toEqual({ disabled: false, metadata: 'Remote SSH' })
-      expect(getOpenInEntryAvailability(zed, null, 'managed-owner', false, runtimeSshHost)).toEqual(
-        {
-          disabled: true,
-          metadata: 'Local only',
-          disabledReason: 'Only VS Code can open folders on an SSH host.'
-        }
-      )
+      expect(
+        getOpenInEntryAvailability(subl, null, 'managed-owner', false, runtimeSshHost)
+      ).toEqual({
+        disabled: true,
+        metadata: 'Local only',
+        disabledReason: 'Only VS Code, Cursor, and Zed can open folders on an SSH host.'
+      })
     })
 
     it('sends the SSH host with the server as the owner', async () => {

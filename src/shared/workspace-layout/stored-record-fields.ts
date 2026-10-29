@@ -1,4 +1,4 @@
-/** The named fields a stored record holds; an undefined value is a missing field on disk (JSON). */
+/** Undefined fields are omitted on JSON disk writes. */
 export function pickStoredFields<T extends object, K extends keyof T>(
   record: T,
   keys: readonly K[]
@@ -23,7 +23,6 @@ export function omitStoredFields<T extends object, K extends keyof T>(
   return omitted
 }
 
-/** The record without `key`; the same object when it has no such key. */
 export function withoutKey<T>(
   record: Record<string, T> | undefined,
   key: string
@@ -36,7 +35,6 @@ export function withoutKey<T>(
   return next
 }
 
-/** The child record under `key`, created empty when missing. */
 export function childRecord<T>(
   record: Record<string, Record<string, T>>,
   key: string
@@ -45,7 +43,6 @@ export function childRecord<T>(
   return record[key]
 }
 
-/** The entries `keep` accepts; undefined stays undefined. */
 export function filterRecord<T>(
   record: Record<string, T> | undefined,
   keep: (key: string, value: T) => boolean

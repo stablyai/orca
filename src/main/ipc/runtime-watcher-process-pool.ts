@@ -1,11 +1,11 @@
-import { isWatcherProcessFailure, WatcherProcessFailure } from './parcel-watcher-process-failure'
-import { WatcherProcessSupervisor } from './parcel-watcher-process-supervisor'
-import type { WatcherProcessSubscribeOptions } from './parcel-watcher-process-protocol'
+import * as failures from './filesystem/watcher-process/parcel-watcher-process-failure'
+import { WatcherProcessSupervisor } from './filesystem/watcher-process/parcel-watcher-process-supervisor'
+import type { WatcherProcessSubscribeOptions } from './filesystem/watcher-process/parcel-watcher-process-protocol'
 import type {
   WatcherProcessCallback,
   WatcherProcessHooks,
   WatcherProcessSubscription
-} from './parcel-watcher-process-subscription'
+} from './filesystem/watcher-process/parcel-watcher-process-subscription'
 import { RuntimeWatcherPendingAssignment } from './runtime-watcher-pending-assignment'
 import { RuntimeWatcherDisposalOwners } from './runtime-watcher-disposal-owners'
 import { RuntimeWatcherPoolLifecycle } from './runtime-watcher-pool-lifecycle'
@@ -105,7 +105,7 @@ export class RuntimeWatcherProcessPool {
         unsubscribePromise ??= subscription.unsubscribe().then(
           () => releaseAssignment(),
           (error: unknown) => {
-            if (isWatcherProcessFailure(error) && error.scope === 'supervisor') {
+            if (failures.isWatcherProcessFailure(error) && error.scope === 'supervisor') {
               this.retireSlot(slot, error)
             } else {
               releaseAssignment()
@@ -121,7 +121,7 @@ export class RuntimeWatcherProcessPool {
   /** Kill every pooled watcher child (production shutdown or test reset). */
   dispose(): void {
     this.lifecycle.dispose()
-    const disposedError = new WatcherProcessFailure(
+    const disposedError = new failures.WatcherProcessFailure(
       'file watcher supervisor disposed',
       'supervisor',
       'supervisor_disposed'
@@ -163,7 +163,7 @@ export class RuntimeWatcherProcessPool {
   ): RuntimeWatcherPoolAssignment | Promise<RuntimeWatcherPoolAssignment> {
     this.predecessorBarriers.throwIfRetained(dir)
     if (this.lifecycle.failedQuarantineRoots.has(dir)) {
-      throw new WatcherProcessFailure(
+      throw new failures.WatcherProcessFailure(
         'file watcher process failed again in quarantine',
         'supervisor',
         'supervisor_crash_fuse'
@@ -253,7 +253,7 @@ export class RuntimeWatcherProcessPool {
     return slot
   }
 
-  private retireSlot(slot: RuntimeWatcherPoolSlot, error: WatcherProcessFailure): void {
+  private retireSlot(slot: RuntimeWatcherPoolSlot, error: failures.WatcherProcessFailure): void {
     if (slot.retired) {
       return
     }

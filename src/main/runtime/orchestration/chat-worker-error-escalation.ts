@@ -21,7 +21,6 @@ export type ChatWorkerErrorEscalationDeps = {
   notify: (handle: string, messageType: string) => void
 }
 
-/** On while Chat UI is on, unless the user turned the Orchestration switch off. */
 export function chatWorkerErrorEscalationEnabled(
   settings:
     | Pick<GlobalSettings, 'experimentalNativeChat' | 'orchestrationChatErrorEscalationEnabled'>

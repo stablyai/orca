@@ -57,8 +57,7 @@ describe('windowSaveKeepingMainSleepRecords', () => {
     expect(windowSaveKeepingMainSleepRecords(stored(), patch, 'patch')).toBe(patch)
   })
 
-  // The window drops its mirror of a record once main resumed the pane; its next save carries no
-  // records at all, or names the field as undefined. Neither may erase main's.
+  // Omitted/undefined renderer fields cannot clear main-owned workspace-sleep records.
   it("keeps main's records through a full save without the field, after the window's resume", () => {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the merge reads only the records field.
     const save = { activeRepoId: 'repo' } as WorkspaceSessionState

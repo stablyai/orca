@@ -1,4 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron'
+import { HIDDEN_WINDOW_FRAME_PUMP_STOP_CHANNEL } from '../shared/hidden-window-frame-pump'
+import { installHiddenWindowFramePump } from './hidden-window-frame-pump'
 import type { PreloadApi } from './api-types'
 import { installBrowserFindListener } from './preload-runtime-support'
 import { appApi } from './api/app-bridge'
@@ -6,6 +8,7 @@ import { orcaProfilesApi } from './api/orca-profiles-bridge'
 import { platformApi } from './api/platform-bridge'
 import { wslApi } from './api/wsl-bridge'
 import { wslMoveApi } from './api/wsl-move-bridge'
+import { wslDriveProjectApi } from './api/wsl-drive-project-bridge'
 import { pwshApi } from './api/pwsh-bridge'
 import { gitBashApi } from './api/git-bash-bridge'
 import { pluginsApi } from './api/plugins-bridge'
@@ -103,6 +106,7 @@ const api = {
   platform: platformApi,
   wsl: wslApi,
   wslMove: wslMoveApi,
+  wslDriveProject: wslDriveProjectApi,
   pwsh: pwshApi,
   gitBash: gitBashApi,
   plugins: pluginsApi,
@@ -197,3 +201,16 @@ if (process.contextIsolated) {
 } else {
   window.api = api
 }
+
+installHiddenWindowFramePump(
+  process.argv,
+  (stop) => ipcRenderer.once(HIDDEN_WINDOW_FRAME_PUMP_STOP_CHANNEL, stop),
+  {
+    rootStyle: () => document.documentElement?.style ?? null,
+    requestAnimationFrame: (callback) => window.requestAnimationFrame(callback),
+    every: (callback, ms) => {
+      const handle = window.setInterval(callback, ms)
+      return () => window.clearInterval(handle)
+    }
+  }
+)

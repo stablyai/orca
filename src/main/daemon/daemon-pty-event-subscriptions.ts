@@ -10,6 +10,7 @@ import {
 } from './types'
 import type { DaemonIdleRetirementResult } from './daemon-pty-runtime-state'
 import type { PtyBackgroundStreamEvent } from '../providers/pty-provider-contract'
+import { readDaemonWslQuitCwds } from './daemon-wsl-sleep-cwd'
 
 export abstract class DaemonPtyEventSubscriptions extends DaemonPtySessionInventory {
   onData(callback: (payload: DaemonPtyRouterDataEvent) => void): () => void {
@@ -65,6 +66,7 @@ export abstract class DaemonPtyEventSubscriptions extends DaemonPtySessionInvent
     this.nonFinalAdmissionDeniedSessionIds.clear()
     this.coldRestoreCache.clear()
     this.wslDistrosBySessionId.clear()
+    this.wslPaneKeysBySessionId.clear()
     this.pausedProducerSessionIds.clear()
     this.producerResumesOwedOnReconnect.clear()
     this.auditObservationListeners.length = 0
@@ -173,6 +175,14 @@ export abstract class DaemonPtyEventSubscriptions extends DaemonPtySessionInvent
     }
   }
 
+  private wslBridgePanesForQuit(): { sessionId: string; paneKey: string; wslDistro: string }[] {
+    return [...this.activeSessionIds].flatMap((sessionId) => {
+      const wslDistro = this.wslDistrosBySessionId.get(sessionId)
+      const paneKey = this.wslPaneKeysBySessionId.get(sessionId)
+      return wslDistro && paneKey ? [{ sessionId, paneKey, wslDistro }] : []
+    })
+  }
+
   private reopenAfterRefusedIdleRetirement(): void {
     this.idleRetirementState = 'open'
     this.idleRetirementAdmissionClosed = false
@@ -195,14 +205,32 @@ export abstract class DaemonPtyEventSubscriptions extends DaemonPtySessionInvent
     // Let admitted sleep shutdowns finish recovery and kill RPCs before disconnecting their client.
     await Promise.allSettled(keepHistoryShutdowns)
     this.respawnAdoptionClosed = true
+    // Bridge bash reports no folder and the daemon outlives quit; a distro stopped before relaunch leaves only this read.
+    const shellCwds = await readDaemonWslQuitCwds(
+      this.wslBridgePanesForQuit(),
+      this.quitWslCwdBudgetMs
+    )
     // Await final checkpoints, including new sessions, before disconnect can reject their snapshot RPCs.
-    await this.runExclusiveCheckpoint(() => this.checkpointAllSessions(), {
-      rescheduleDirty: false
-    })
+    await this.runExclusiveCheckpoint(
+      async () => {
+        for (const [id, cwd] of shellCwds) {
+          this.probedShellCwds.set(id, cwd)
+        }
+        try {
+          await this.checkpointAllSessions()
+        } finally {
+          for (const id of shellCwds.keys()) {
+            this.probedShellCwds.delete(id)
+          }
+        }
+      },
+      { rescheduleDirty: false }
+    )
     this.dirtySessionVersions.clear()
     this.lastFullCheckpointAt.clear()
     this.coldRestoreCache.clear()
     this.wslDistrosBySessionId.clear()
+    this.wslPaneKeysBySessionId.clear()
     // Daemon PTYs survive disconnect; resume producers so warm reattach does not wait for a pause failsafe.
     for (const id of this.pausedProducerSessionIds) {
       this.client.notify('resumePty', { sessionId: id })

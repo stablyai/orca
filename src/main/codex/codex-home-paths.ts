@@ -11,15 +11,20 @@ import {
   unlinkSync
 } from 'node:fs'
 import { homedir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import {
   clearCopiedResourceMarker,
   markCopiedResource,
   targetIsOwnedFallbackCopy
 } from './codex-managed-home-resource-copy-marker'
+import { syncSystemCodexRulesIntoManagedHome } from './codex-managed-home-rules'
 import { observe, observeResolvedPathEntry } from './codex-path-observation'
 
 const CODEX_GLOBAL_INSTRUCTIONS_ENTRY = 'AGENTS.md'
+
+// The Codex app installs these under ~/.codex; Codex rejects them from any other home.
+export const CODEX_BUNDLED_MARKETPLACES_ENTRY = join('.tmp', 'bundled-marketplaces')
+export const CODEX_BUNDLED_MARKETPLACE_NAMES = ['openai-bundled', 'openai-bundled-alpha'] as const
 
 const CODEX_SYSTEM_RESOURCE_ENTRIES = [
   'skills',
@@ -29,6 +34,7 @@ const CODEX_SYSTEM_RESOURCE_ENTRIES = [
   'profile-v2',
   'themes',
   'prompts',
+  CODEX_BUNDLED_MARKETPLACES_ENTRY,
   CODEX_GLOBAL_INSTRUCTIONS_ENTRY
 ] as const
 
@@ -48,11 +54,17 @@ export function getOrcaManagedCodexHomePath(): string {
 }
 
 /** Config files an Orca-launched local Codex reads trust from, in the hook installer's lock order. */
-export function getLocalCodexTrustConfigFiles(agentHome: string): string[] {
-  return [
+export function getLocalCodexTrustConfigFiles(
+  agentHome: string,
+  launchCodexHome?: string | null
+): string[] {
+  const files = [
     join(getOrcaManagedCodexHomePath(), 'config.toml'),
+    // Managed accounts launch on their own CODEX_HOME, the only config that launch reads (#27235).
+    ...(launchCodexHome ? [join(launchCodexHome, 'config.toml')] : []),
     join(agentHome, '.codex', 'config.toml')
   ]
+  return [...new Set(files)]
 }
 
 export function getCodexSessionBackfillStateDirPath(): string {
@@ -79,6 +91,7 @@ export function syncSystemCodexResourcesIntoManagedHome(managedHomePath?: string
   for (const entryName of CODEX_SYSTEM_RESOURCE_ENTRIES) {
     linkSystemCodexResource(systemHomePath, targetHome, entryName)
   }
+  syncSystemCodexRulesIntoManagedHome(systemHomePath, targetHome)
 }
 
 export function syncCodexGlobalInstructionsIntoManagedHome({
@@ -147,6 +160,7 @@ function linkSystemCodexResource(
     rmSync(targetPath, { recursive: true, force: true })
   }
 
+  mkdirSync(dirname(targetPath), { recursive: true })
   if (preferCopy) {
     copySystemCodexResourceAsOwnedFallback(sourcePath, targetPath, managedHomePath, entryName)
     return

@@ -1,5 +1,7 @@
-import { useCallback } from 'react'
-import { StyleSheet, View } from 'react-native'
+import { useCallback, useEffect, useState } from 'react'
+import { AppState, StyleSheet, View } from 'react-native'
+import { useFocusEffect } from 'expo-router'
+import type { ParsedFileLinkLocation } from '../../../src/shared/file-link-location'
 import { TerminalWebView } from '../terminal/TerminalWebView'
 import type {
   MobileTerminalTheme,
@@ -27,7 +29,7 @@ type TerminalPaneViewProps = {
   onTerminalInput: (handle: string, bytes: string, input?: TerminalPointerInput) => void
   onTerminalQueryReply: (handle: string, bytes: string) => void
   onTerminalTap: (handle: string) => void
-  onFileTap: (handle: string, pathText: string, line: number | null, column: number | null) => void
+  onFileTap: (handle: string, candidates: readonly ParsedFileLinkLocation[]) => void
   onOpenUrl: (handle: string, url: string) => void
   onTextScaleChange: (scale: number) => void
   onCellBoxChange: (handle: string) => void
@@ -56,12 +58,34 @@ export function TerminalPaneView({
   onTextScaleChange,
   onCellBoxChange
 }: TerminalPaneViewProps) {
+  const [visited, setVisited] = useState(active)
+  if (active && !visited) {
+    setVisited(true)
+  }
+  const [routeFocused, setRouteFocused] = useState(false)
+  useFocusEffect(
+    useCallback(() => {
+      setRouteFocused(true)
+      return () => setRouteFocused(false)
+    }, [])
+  )
+  const [appActive, setAppActive] = useState(() => AppState.currentState === 'active')
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (state) =>
+      setAppActive(state === 'active')
+    )
+    return () => subscription.remove()
+  }, [])
   const setRef = useCallback(
     (ref: TerminalWebViewHandle | null) => {
       onRef(handle, ref)
     },
     [handle, onRef]
   )
+
+  if (!active && !visited) {
+    return null
+  }
 
   return (
     <View
@@ -80,6 +104,7 @@ export function TerminalPaneView({
         terminalTheme={terminalTheme}
         textScale={textScale}
         shownAtMount={active}
+        interactionActive={active && appActive && routeFocused}
         onWebReady={() => onWebReady(handle)}
         onSelectionMode={(a) => onSelectionMode(handle, a)}
         onSelectionCopy={(t) => onSelectionCopy(handle, t)}
@@ -91,7 +116,7 @@ export function TerminalPaneView({
         onTerminalInput={(bytes, input) => onTerminalInput(handle, bytes, input)}
         onTerminalQueryReply={(bytes) => onTerminalQueryReply(handle, bytes)}
         onTerminalTap={() => onTerminalTap(handle)}
-        onFileTap={(pathText, line, column) => onFileTap(handle, pathText, line, column)}
+        onFileTap={(candidates) => onFileTap(handle, candidates)}
         onOpenUrl={(url) => onOpenUrl(handle, url)}
         onTextScaleChange={onTextScaleChange}
         onCellBoxChange={() => onCellBoxChange(handle)}

@@ -11,27 +11,18 @@ type RunVirtualizedScrollAnchorRestoreArgs<
   el: TScrollElement
   getItemElementKey?: (element: TItemElement) => string | null
   itemElementSelector?: string
-  // Why: true while a restore has written toward the anchor but the anchored
-  // row's position is not yet confirmed; the caller re-runs the restore across
-  // measurement ticks until it converges or the user scrolls.
+  // Retry across measurement ticks until row geometry confirms the landing or the user takes over.
   pendingRestoreRef: MutableRefObject<boolean>
   programmaticScrollMarks?: ProgrammaticScrollMarks
   recordScrollAnchor: (scrollTop: number) => void
-  // Why: old key -> new key for rows that were re-keyed without moving. Lets an
-  // anchor follow its own row instead of resolving a fallback row below it.
+  // Follow the same row under a new key instead of falling back to a neighbor.
   rekeyedRowKeys?: ReadonlyMap<string, string>
   rowIndexByKey: ReadonlyMap<string, number>
   scrollOffsetRef: MutableRefObject<number>
   virtualizer: Virtualizer<TScrollElement, TItemElement>
 }
 
-/**
- * One restore attempt: pin the anchored row back to its recorded viewport
- * offset. Prefers the row's live DOM position, then its measured virtual slot,
- * then scrollToIndex to bring it into the window. Every scroll write is
- * registered with the marks so scroll listeners attribute it to this code,
- * not the user. Returns a cleanup for the scrollToIndex follow-up frame.
- */
+/** Restore the row’s viewport offset using DOM geometry, then a measured slot, then scrollToIndex; mark every write as programmatic. Returns cleanup for the follow-up frame. */
 export function runVirtualizedScrollAnchorRestore<
   TScrollElement extends Element,
   TItemElement extends Element
@@ -56,9 +47,7 @@ export function runVirtualizedScrollAnchorRestore<
     ? anchor.key
     : (followedKey ?? anchor.fallbackKeys?.find((key) => rowIndexByKey.has(key)))
   if (!resolvedKey) {
-    // Why: an unresolvable anchor has nothing to converge; rows that make it
-    // resolvable again always arrive via a signal change, so leaving the arm
-    // set would re-run restore on every measurement tick.
+    // Disarm unresolvable anchors; a new structural signal must accompany later resolvability.
     pendingRestoreRef.current = false
     return
   }
@@ -67,14 +56,10 @@ export function runVirtualizedScrollAnchorRestore<
     pendingRestoreRef.current = false
     return
   }
-  // Why: a fallback key means the anchored row was REMOVED and the row below
-  // slid up — a different row, so the within-row offset does not transfer. A
-  // followed key is the SAME row under a new key, so it does.
+  // Preserve within-row offset only for the same/rekeyed row; a fallback names a different row.
   const followedRow = resolvedKey === followedKey
   const offset = hasExactKey || followedRow ? anchor.offset : 0
-  // Why: the followed row can be a different height than the one the offset was
-  // recorded against (a lineage group dissolving back to a single card), so
-  // clamp it the same way recording does.
+  // A rekey can shrink the row, such as a dissolved lineage group; clamp its preserved offset.
   const offsetWithinRow = (rowHeight: number): number =>
     followedRow ? Math.min(rowHeight, offset) : offset
   const canConfirmFromDom = Boolean(itemElementSelector && getItemElementKey)
@@ -95,8 +80,7 @@ export function runVirtualizedScrollAnchorRestore<
     const desiredTop = scrollRect.top - offsetWithinRow(rect.height)
     const delta = rect.top - desiredTop
     if (Math.abs(delta) > 1) {
-      // Why: this scroll write is still part of restore; keep the target
-      // anchor until a later layout confirms the intended row is in place.
+      // Keep the target anchor until later layout confirms the landing.
       programmaticScrollMarks?.mark(el.scrollTop + delta)
       el.scrollTop += delta
       scrollOffsetRef.current = el.scrollTop
@@ -124,12 +108,10 @@ export function runVirtualizedScrollAnchorRestore<
       programmaticScrollMarks?.mark(nextScrollTop)
       el.scrollTop = nextScrollTop
     }
-    // Why: measured fallback can run while TanStack's virtual window is
-    // transitional, so recording here can replace the target with a wrong row.
+    // A transitional virtual window can report the wrong row; do not replace the target anchor here.
     scrollOffsetRef.current = el.scrollTop
     anchor.scrollTop = el.scrollTop
-    // Why: without a DOM selector there is no later confirmation step; the
-    // measured landing is final, so don't re-arm restore ticks forever.
+    // Without DOM confirmation, this measured landing is final; do not keep restore armed.
     pendingRestoreRef.current = canConfirmFromDom
     return true
   }
@@ -138,26 +120,18 @@ export function runVirtualizedScrollAnchorRestore<
     return
   }
 
-  // Why: right after a delete the virtualizer can briefly render the wrong
-  // window, so the anchor row's DOM node isn't mounted yet even though the
-  // virtualizer still has its measured slot. Pin from that measured start
-  // (preserving the within-row offset) before falling back to scrollToIndex,
-  // whose align:'start' snaps the row to the viewport top and visibly jumps.
+  // Use the measured slot while DOM mounting catches up; scrollToIndex would discard the within-row offset and jump.
   if (restoreFromMeasuredItem()) {
     return
   }
 
-  // Why: the anchored row is outside the virtualizer's current window — no
-  // DOM node and no measured slot. Bring it in, then apply the within-row
-  // offset once TanStack Virtual has mounted and measured that row.
-  // scrollToIndex marks its write via the caller-supplied scrollToFn.
+  // Bring an unmounted/unmeasured row into view, then apply its offset; the caller’s scrollToFn marks the write.
   pendingRestoreRef.current = true
   virtualizer.scrollToIndex(index, { align: 'start' })
   anchor.scrollTop = el.scrollTop
   const frameId = window.requestAnimationFrame(() => {
     if (!pendingRestoreRef.current) {
-      // Why: an unmarked (user) scroll disarmed the restore between the
-      // effect and this frame; writing now would fight their input.
+      // A user scroll disarmed restore before this frame; writing now would fight their input.
       return
     }
     if (!restoreFromDomElement()) {

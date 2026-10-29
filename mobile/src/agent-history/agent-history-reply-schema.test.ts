@@ -29,8 +29,7 @@ describe('agent history reply schemas', () => {
   })
 
   it('keeps a session row whose agent this build has never heard of', () => {
-    // The agent vocabulary grows with every CLI Orca learns to scan and is echoed back on resume,
-    // so a newer host's rows must survive rather than being refused or dropped.
+    // Pass through growing agent vocabulary from newer hosts so rows survive and resume echoes host’s spelling.
     const parsed = agentHistorySessionScanSchema.parse({
       sessions: [{ id: 's1', agent: 'some-new-agent' }],
       issues: []

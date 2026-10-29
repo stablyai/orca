@@ -118,6 +118,28 @@ describe('editor external watch path batch index', () => {
     expect(wrongLinuxCase.matchingOpenFiles(wrongLinuxCase.changes[0])).toEqual([])
   })
 
+  it('matches Windows tabs across separator and drive spellings, but not tail case or POSIX //', () => {
+    const scope = { worktreeId: 'wt-wsl', worktreePath: 'C:/Repo', runtimeEnvironmentId: null }
+    const tab = file({ id: 'tab', filePath: 'c:\\Repo\\File.ts', relativePath: 'File.ts' })
+    const otherCase = file({ id: 'other', filePath: 'c:\\Repo\\file.ts', relativePath: 'file.ts' })
+    const windows = indexEditorExternalWatchBatchPaths(
+      {
+        worktreePath: scope.worktreePath,
+        events: [{ kind: 'update', absolutePath: 'C:/Repo/File.ts' }]
+      },
+      [tab, otherCase],
+      scope
+    )
+    const posix = indexEditorExternalWatchBatchPaths(
+      { worktreePath: '//repo', events: [{ kind: 'update', absolutePath: '//repo/a/b.ts' }] },
+      [file({ id: 'posix', filePath: '//repo/a\\b.ts', relativePath: 'a\\b.ts' })],
+      { ...scope, worktreePath: '//repo' }
+    )
+
+    expect(windows.matchingOpenFiles(windows.changes[0])).toEqual([tab])
+    expect(posix.matchingOpenFiles(posix.changes[0])).toEqual([])
+  })
+
   it('keeps aliases literal for SSH, runtimes, and POSIX scopes', () => {
     const restored = file({
       id: 'restored',

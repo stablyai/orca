@@ -51,8 +51,7 @@ describe('screencast frames a viewer refused', () => {
     vi.useRealTimers()
   })
 
-  // Why: an idle page sends no next frame, so a refused last frame must reach the viewer once its
-  // socket drains, or a relayed phone (whose server leg drops on a full socket) keeps a stale page.
+  // Idle pages produce no next frame; retry the latest refused frame after socket drain.
   it('delivers the last refused frame once the socket drains, with no new frame produced', async () => {
     let socketFull = true
     const received: Uint8Array<ArrayBufferLike>[] = []
@@ -99,7 +98,7 @@ describe('screencast frames a viewer refused', () => {
     subscription.session.stop()
   })
 
-  // Why: a lossy frame must not queue behind a backlog; the retry above delivers the newest instead.
+  // Lossy frames must not queue behind backlog; retries deliver only the newest.
   it('asks the transport to drop frames while the socket is backlogged', async () => {
     const sendBinary = vi.fn(() => true)
     const { subscription, onFrame } = await subscribe(sendBinary)
@@ -128,7 +127,6 @@ describe('screencast frames a viewer refused', () => {
     await vi.advanceTimersByTimeAsync(
       SCREENCAST_PENDING_FRAME_RETRY_MS * BROWSER_SCREENCAST_GHOST_SUBSCRIBER_REFUSAL_LIMIT * 2
     )
-    // Eviction is judged when a frame is produced.
     onFrame(new Uint8Array([2]))
     expect(stop).not.toHaveBeenCalled()
     subscription.session.stop()

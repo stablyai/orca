@@ -205,15 +205,11 @@ describe('issue source operations', () => {
     })
 
     expect(ghExecFileAsyncMock).toHaveBeenCalledWith(
-      [
-        'api',
-        '-X',
-        'POST',
-        'repos/team/orca/issues/7/comments',
-        '--raw-field',
-        'body=Enterprise comment'
-      ],
-      expect.objectContaining({ host: 'github.acme-corp.com' })
+      ['api', '-X', 'POST', 'repos/team/orca/issues/7/comments', '--input', '-'],
+      expect.objectContaining({
+        host: 'github.acme-corp.com',
+        stdin: JSON.stringify({ body: 'Enterprise comment' })
+      })
     )
   })
 
@@ -262,17 +258,12 @@ describe('issue source operations', () => {
       url: 'https://github.com/stablyai/orca/issues/924'
     })
     expect(ghExecFileAsyncMock).toHaveBeenCalledWith(
-      [
-        'api',
-        '-X',
-        'POST',
-        'repos/stablyai/orca/issues',
-        '--raw-field',
-        'title=New issue',
-        '--raw-field',
-        'body=Body'
-      ],
-      { cwd: '/repo-root', host: 'github.com' }
+      ['api', '-X', 'POST', 'repos/stablyai/orca/issues', '--input', '-'],
+      {
+        cwd: '/repo-root',
+        host: 'github.com',
+        stdin: JSON.stringify({ title: 'New issue', body: 'Body' })
+      }
     )
   })
 
@@ -296,23 +287,17 @@ describe('issue source operations', () => {
       url: 'https://github.com/stablyai/orca/issues/925'
     })
     expect(ghExecFileAsyncMock).toHaveBeenCalledWith(
-      [
-        'api',
-        '-X',
-        'POST',
-        'repos/stablyai/orca/issues',
-        '--raw-field',
-        'title=New issue',
-        '--raw-field',
-        'body=Body',
-        '--raw-field',
-        'labels[]=bug',
-        '--raw-field',
-        'labels[]=frontend',
-        '--raw-field',
-        'assignees[]=octo'
-      ],
-      { cwd: '/repo-root', host: 'github.com' }
+      ['api', '-X', 'POST', 'repos/stablyai/orca/issues', '--input', '-'],
+      {
+        cwd: '/repo-root',
+        host: 'github.com',
+        stdin: JSON.stringify({
+          title: 'New issue',
+          body: 'Body',
+          labels: ['bug', 'frontend'],
+          assignees: ['octo']
+        })
+      }
     )
   })
 
@@ -345,23 +330,36 @@ describe('issue source operations', () => {
     })
     expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
       1,
-      expect.arrayContaining([
-        `body=${body}`,
-        'title=Image issue',
-        'labels[]=bug',
-        'assignees[]=octo'
-      ]),
-      { cwd: '/repo-root', host: 'github.com' }
+      ['api', '-X', 'POST', 'repos/stablyai/orca/issues', '--input', '-'],
+      {
+        cwd: '/repo-root',
+        host: 'github.com',
+        stdin: JSON.stringify({
+          title: 'Image issue',
+          body,
+          labels: ['bug'],
+          assignees: ['octo']
+        })
+      }
     )
     expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
       2,
-      expect.arrayContaining(['body=', 'title=Image issue', 'labels[]=bug', 'assignees[]=octo']),
-      { cwd: '/repo-root', host: 'github.com' }
+      ['api', '-X', 'POST', 'repos/stablyai/orca/issues', '--input', '-'],
+      {
+        cwd: '/repo-root',
+        host: 'github.com',
+        stdin: JSON.stringify({
+          title: 'Image issue',
+          body: '',
+          labels: ['bug'],
+          assignees: ['octo']
+        })
+      }
     )
     expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
       3,
-      ['api', '-X', 'PATCH', 'repos/stablyai/orca/issues/926', '--raw-field', `body=${body}`],
-      { cwd: '/repo-root', host: 'github.com' }
+      ['api', '-X', 'PATCH', 'repos/stablyai/orca/issues/926', '--input', '-'],
+      { cwd: '/repo-root', host: 'github.com', stdin: JSON.stringify({ body }) }
     )
   })
 
@@ -437,10 +435,15 @@ describe('issue source operations', () => {
         localGitOptions
       )
     ).resolves.toEqual({ ok: true, number: 927, url: 'issue-url' })
-    const firstCreateArgs = [...ghExecFileAsyncMock.mock.calls[0][0]]
-    const fallbackCreateArgs = [...ghExecFileAsyncMock.mock.calls[1][0]]
-    firstCreateArgs[firstCreateArgs.indexOf(`body=${body}`)] = 'body='
-    expect(fallbackCreateArgs).toEqual(firstCreateArgs)
+    const createArgs = ['api', '-X', 'POST', 'repos/stablyai/orca/issues', '--input', '-']
+    expect(ghExecFileAsyncMock.mock.calls[0][0]).toEqual(createArgs)
+    expect(ghExecFileAsyncMock.mock.calls[0][1]?.stdin).toBe(
+      JSON.stringify({ title: 'Fields issue', body, labels: ['bug'], assignees: ['octo'] })
+    )
+    expect(ghExecFileAsyncMock.mock.calls[1][0]).toEqual(createArgs)
+    expect(ghExecFileAsyncMock.mock.calls[1][1]?.stdin).toBe(
+      JSON.stringify({ title: 'Fields issue', body: '', labels: ['bug'], assignees: ['octo'] })
+    )
     expect(ghExecFileAsyncMock.mock.calls.every((call) => call[1]?.wslDistro === 'Ubuntu')).toBe(
       true
     )
@@ -473,16 +476,17 @@ describe('issue source operations', () => {
     })
   })
 
-  it('updates issue body through the REST issue endpoint', async () => {
+  it('sends large issue bodies over stdin through the REST issue endpoint', async () => {
     getIssueOwnerRepoMock.mockResolvedValueOnce({ owner: 'stablyai', repo: 'orca' })
     ghExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' })
+    const body = `Screenshot:\ndata:image/png;base64,${'A'.repeat(40_000)}`
 
-    await expect(updateIssue('/repo-root', 924, { body: 'Updated body' })).resolves.toEqual({
+    await expect(updateIssue('/repo-root', 924, { body })).resolves.toEqual({
       ok: true
     })
     expect(ghExecFileAsyncMock).toHaveBeenCalledWith(
-      ['api', '-X', 'PATCH', 'repos/stablyai/orca/issues/924', '--raw-field', 'body=Updated body'],
-      { cwd: '/repo-root', host: 'github.com' }
+      ['api', '-X', 'PATCH', 'repos/stablyai/orca/issues/924', '--input', '-'],
+      { cwd: '/repo-root', host: 'github.com', stdin: JSON.stringify({ body }) }
     )
   })
 
@@ -532,5 +536,17 @@ describe('issue source operations', () => {
       ['issue', 'reopen', '924', '--repo', 'stablyai/orca'],
       { cwd: '/repo-root', host: 'github.com' }
     )
+  })
+
+  it('reports a failed close whose gh error mentions "already"', async () => {
+    getIssueOwnerRepoMock.mockResolvedValueOnce({ owner: 'stablyai', repo: 'orca' })
+    ghExecFileAsyncMock.mockRejectedValueOnce(
+      new Error('GraphQL: API rate limit already exceeded for user ID 1.')
+    )
+
+    await expect(updateIssue('/repo-root', 924, { state: 'closed' })).resolves.toEqual({
+      ok: false,
+      error: 'GitHub rate limit hit. Try again in a few minutes.'
+    })
   })
 })

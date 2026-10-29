@@ -3,17 +3,7 @@ import { join, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { formatSites, scanWebSocketServerBinds } from './websocket-server-bind-scan'
 
-/**
- * Hold the bind address at the tree level rather than per call site.
- *
- * Every one of the ~30 `.listen(0, ...)` calls in this repo already passes
- * '127.0.0.1'; 7 of 7 `new WebSocketServer({ port })` calls did not. Authors know
- * the convention -- `ws` just never asks, because `{ port }` alone binds the
- * wildcard without a word. That silence is what this test replaces.
- *
- * The allowlist only shrinks. A new wildcard bind fails here even where it looks
- * harmless today, because harmless-looking is exactly what the seven were.
- */
+// Require explicit WebSocket bind host tree-wide; ws {port} silently binds wildcard unlike established .listen convention. Allowlist only shrinks.
 /** The ratchet, held as data so it reads as the list it is. */
 const WILDCARD_BIND_ALLOWLIST: readonly string[] = readFileSync(
   join(__dirname, '__fixtures__', 'websocket-server-wildcard-bind-allowlist.txt'),
@@ -23,21 +13,10 @@ const WILDCARD_BIND_ALLOWLIST: readonly string[] = readFileSync(
   .map((line) => line.trim())
   .filter((line) => line.length > 0 && !line.startsWith('#'))
 
-/**
- * The true count of constructions that bind a port without pinning a host.
- *
- * May only ever be DECREASED, and only by pinning a host. Raising it is never
- * the fix.
- */
+// Only lower count after pinning a host; raising it is never a fix.
 const WILDCARD_BIND_PIN = 1
 
-/**
- * A floor under the constructions the scanner still recognizes.
- *
- * This is the guard against the scanner going blind: an import pattern it stops
- * following reports zero offenders and reads exactly like a clean tree. During
- * development a single wrong regex dropped this from 24 to 3.
- */
+// Pin recognized construction floor so broken scanner cannot pass after finding zero offenders.
 const RECOGNIZED_CONSTRUCTION_FLOOR = 20
 
 describe('WebSocketServer loopback bind boundary', () => {
@@ -60,8 +39,7 @@ describe('WebSocketServer loopback bind boundary', () => {
   })
 
   it('can read the options of every construction it found', () => {
-    // An unreadable shape is never assumed safe: it could be hiding a host, or
-    // hiding the absence of one. Rewrite it as a plain object literal.
+    // Opaque shapes may hide wildcard bind; rewrite plainly instead of treating unreadable as safe.
     expect(
       scan.opaque.map((site) => `${site.path}:${site.line} -- ${site.reason}`),
       'WebSocketServer options that this guard cannot read.'
@@ -80,23 +58,19 @@ describe('WebSocketServer loopback bind boundary', () => {
   })
 
   it('has no stale allowlist entry', () => {
-    // Why this direction matters too: an entry left behind after the file was
-    // fixed hides the next regression in that same path.
+    // Remove fixed allowlist entries or next regression at same path is hidden.
     const stale = WILDCARD_BIND_ALLOWLIST.filter((path) => !offenders.includes(path))
     expect(stale, 'Allowlist entry no longer binds the wildcard — delete the line.').toEqual([])
   })
 
   it('holds the wildcard-bind count at the pin', () => {
-    // Bounding by the allowlist's own length would prove nothing: the two move
-    // together, so appending a line to silence a failure would keep the bound
-    // satisfied. The pin is a literal so that widening takes a second edit.
+    // Use literal cap independent of allowlist length so widening requires another visible edit.
     expect(
       scan.wildcardBound.length,
       `${scan.wildcardBound.length} constructions bind the wildcard; the pin is ` +
         `${WILDCARD_BIND_PIN}. Never raise the pin -- pass host: '127.0.0.1' instead.`
     ).toBeLessThanOrEqual(WILDCARD_BIND_PIN)
-    // A pin left above reality is how a ratchet rots: it re-opens room for the
-    // next wildcard bind to land for free.
+    // Prune unused allowance or ratchet grants free room for next wildcard bind.
     expect(
       scan.wildcardBound.length,
       `Only ${scan.wildcardBound.length} constructions bind the wildcard. Lower ` +

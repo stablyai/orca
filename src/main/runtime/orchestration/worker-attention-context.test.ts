@@ -80,7 +80,7 @@ describe('worker attention liveness', () => {
 
   it('reads a released resource as exited, not as a stale live pane', () => {
     const attention = projectWorkerAttentionContext({
-      // worker-list called the same dispatch exited while this pane classified from a status.
+      // Keep pane attention consistent with worker-list's unknown outcome.
       facts: facts({
         outcome: 'outcome_unknown',
         hostScope: '{"kind":"local","hostId":"local"}',

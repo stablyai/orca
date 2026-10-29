@@ -24,7 +24,7 @@ import { decodePiHistoryClaim, encodePiHistoryClaim } from './rpc-history-journa
 
 export class PiRpcSessionStartup {
   commands?: AgentSessionSlashCommand[]
-  /** Set by an open that left its claim at Pi's current leaf. */
+  /** Continue capture only from a claim reconciled to Pi's current leaf. */
   historyAnchor?: PiHistoryAnchor
 
   constructor(
@@ -34,10 +34,10 @@ export class PiRpcSessionStartup {
     /** A new Pi session starts on its config's model; a resumed or forked one keeps its own. */
     private readonly resolvesConfig: boolean,
     private readonly setState: (state: PiRpcState) => void,
-    private readonly failedCause: () => Error | undefined
+    private readonly failedCause: () => Error | undefined,
+    private readonly prepareObservation: () => (options: AgentSessionOptionsResult) => boolean
   ) {}
 
-  /** Ready once Pi reports its state: only an unknown provider fails the start. */
   async run(
     launch: PiRpcResolvedLaunch,
     signal: AbortSignal
@@ -56,7 +56,7 @@ export class PiRpcSessionStartup {
       Date.now()
     )
     this.setState(state)
-    // Only the conversation this open continues can carry the claim; a replacement starts over.
+    // Replacement sessions cannot inherit the prior conversation's history claim.
     const continued = launch.sessionFile !== undefined || launch.forkFile !== undefined
     const history = await this.wait(
       catchUpPiSession({
@@ -88,14 +88,24 @@ export class PiRpcSessionStartup {
     return { link: claimed, reportedOptions: current }
   }
 
+  reportAfterOpen(generation: string, opening: AgentSessionOptionsResult['current']): void {
+    void this.readAfterOpen(generation, opening).catch((error: unknown) =>
+      this.warn('Pi startup reports failed', 'pi-startup-reports', error)
+    )
+  }
+
   /** After the open: the listing and the `/` commands reach the host as later reports, and a read
    *  that fails only leaves the chat without them. */
-  async readAfterOpen(
+  private async readAfterOpen(
     generation: string,
     opening: AgentSessionOptionsResult['current']
   ): Promise<void> {
-    const options = await this.readListing()
+    let observe: ((options: AgentSessionOptionsResult) => boolean) | undefined
+    const options = await this.readListing(() => {
+      observe = this.prepareObservation()
+    })
     if (options && !this.failedCause() && !this.connection.closed) {
+      const adopted = observe?.(options) === true
       // What it started on names its config's default once; a later switch teaches nothing.
       const { catalogListing } = withLiveCatalogListing(
         options,
@@ -106,21 +116,31 @@ export class PiRpcSessionStartup {
           current: opening
         })
       )
-      this.deps.onLifecycle({
-        type: 'options-reported',
-        sessionId: this.input.identity.sessionId,
-        fence: this.input.fence,
-        acquisitionGeneration: generation,
-        reportedOptions: options.current,
-        ...(catalogListing ? { catalogListing } : {})
-      })
+      this.reportOptions(generation, adopted ? options.current : {}, catalogListing)
     }
     await this.readCommands()
   }
 
-  private async readListing(): Promise<AgentSessionOptionsResult | undefined> {
+  reportOptions(
+    generation: string,
+    reportedOptions: AgentSessionOptionsResult['current'],
+    catalogListing?: ReturnType<typeof withLiveCatalogListing>['catalogListing']
+  ): void {
+    this.deps.onLifecycle({
+      type: 'options-reported',
+      sessionId: this.input.identity.sessionId,
+      fence: this.input.fence,
+      acquisitionGeneration: generation,
+      reportedOptions,
+      ...(catalogListing ? { catalogListing } : {})
+    })
+  }
+
+  private async readListing(
+    beforeStateRead: () => void
+  ): Promise<AgentSessionOptionsResult | undefined> {
     try {
-      return await readPiRpcSessionOptions(this.connection)
+      return await readPiRpcSessionOptions(this.connection, beforeStateRead)
     } catch (error) {
       this.warn('Pi options could not be read', 'pi-options', error)
       return undefined

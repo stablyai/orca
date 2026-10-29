@@ -12,6 +12,10 @@
 	<true/>
 	<key>com.apple.security.device.usb</key>
 	<true/>
+	<key>com.apple.security.personal-information.addressbook</key>
+	<true/>
+	<key>com.apple.security.personal-information.calendars</key>
+	<true/>
 	<key>com.apple.security.personal-information.location</key>
 	<true/>
 	<key>com.apple.security.cs.allow-dyld-environment-variables</key>

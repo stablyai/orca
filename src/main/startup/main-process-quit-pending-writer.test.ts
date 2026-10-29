@@ -19,13 +19,14 @@ const dependencies: Record<string, Record<string, unknown>> = {
   '../ipc/pty/kill-all': { killAllPty },
   '../daemon/daemon-provider-state': { disconnectDaemon: settled(), shutdownDaemon: settled() },
   '../ipc/ssh/ssh-shutdown-drain': { beginSshShutdown },
+  './main-process-connector-startup': { desktopConnectorCloud: () => null },
   '../agent-hooks/server': { agentHookServer: { stop: stopAgentHookServer } },
   '../agent-hooks/wsl-hook-relay-manager': { wslHookRelayManager: { disposeAll: idle() } },
   '../agent-hooks/managed-agent-hook-controls': {
     removeManagedAgentHooksAsync: vi.fn(async () => [])
   },
   '../runtime/structured-agent-session-runtime': { stopStructuredAgentSessionRuntime },
-  '../runtime/structured-agent-session-runtime-teardown': {
+  '../runtime/agent-session/structured-agent-session-runtime-teardown': {
     setStructuredAgentSessionTeardownTrigger: idle()
   },
   '../runtime/files/watch/file-watcher-leases': { awaitRuntimeFileWatcherUnsubscribes: settled() },
@@ -172,8 +173,7 @@ it('starts the SSH shutdown and the final save at once when no pane grid waits',
   expect(flushesByNextMicrotask).toBe(1)
 })
 
-// The chat teardown decides which chats to offer to resume from the hook server's status store,
-// and finishes after the hook server stops: that stop must leave the store readable.
+// Chat teardown reads hook status after server stop; retain it for background-only session resume offers.
 it('stops the hook server without clearing the status store the chat teardown reads', async () => {
   await startQuit(async () => {})
   expect(stopAgentHookServer).toHaveBeenCalledWith({ keepStatus: true })

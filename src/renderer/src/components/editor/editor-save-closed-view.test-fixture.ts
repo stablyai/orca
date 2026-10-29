@@ -41,11 +41,11 @@ export type ClosedViewHarness = {
   disk: FakeEditorDisk
   store: ReturnType<typeof createEditorStore>
   queue: EditorSaveQueue
-  /** Each view's loaded disk text: the editor panel's dirty-compare baseline, kept by the saved event. */
+  /** Loaded disk text per view, advanced by saved events for dirty comparisons. */
   loaded: Record<string, { content: string; isBinary: boolean }>
   view: (id: string) => OpenFile
   recordOf: (id: string) => string
-  /** An edit as the panel reports it: the draft, then dirty against the loaded text. */
+  /** Match panel edits: publish draft, then compare dirty state against loaded text. */
   type: (id: string, text: string) => void
   /** The next write waits for `release`; `refuse` makes it a changed-on-disk refusal. */
   holdNextWrite: (refuse?: boolean) => void
@@ -54,10 +54,7 @@ export type ClosedViewHarness = {
   dispose: () => void
 }
 
-/**
- * One file open in workspaces wt-1 (view A) and wt-2 (view B), one record, autosave off: nothing
- * calls syncAutoSave, so only explicit saves write.
- */
+/** Share one record across two workspace views; only explicit saves write because autosave is not scheduled. */
 export function createClosedViewHarness(): ClosedViewHarness {
   vi.useFakeTimers()
   const disk = stubEditorWindowWithDisk(createFakeEditorDisk({ [CLOSED_VIEW_PATH]: 'disk' }))

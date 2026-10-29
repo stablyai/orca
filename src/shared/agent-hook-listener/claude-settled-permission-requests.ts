@@ -77,11 +77,7 @@ function sameClaudeRun(previous: AgentHookEventPayload, next: AgentHookEventPayl
   )
 }
 
-/**
- * The relay caches one status row per pane, so a later hook overwrites the PostToolUse that ended a
- * request. Keeping the ended request ids beside that row lets a reconnecting receiver release a
- * permission wait it is still holding. Evidence never crosses into another launch or session.
- */
+/** Carry settled request IDs beside the latest row so reconnects release overwritten permission waits. Evidence stays within one launch/session. */
 export function retainClaudeSettledRequests(
   retained: readonly ClaudeSettledRequest[] | undefined,
   previous: AgentHookEventPayload | undefined,

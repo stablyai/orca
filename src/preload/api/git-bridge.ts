@@ -15,6 +15,7 @@ export const gitApi = {
     reuseLineStats?: boolean
     branchLineTotalMergeBase?: string
     requestToken?: string
+    wakeWslDistro?: boolean
   }) => ipcRenderer.invoke('git:status', args),
   cancelStatus: (args: { requestToken: string }): Promise<void> =>
     ipcRenderer.invoke('git:cancelStatus', args),
@@ -193,6 +194,7 @@ export const gitApi = {
     worktreePath: string
     relativePath: string
     line: number
+    endLine?: number
     connectionId?: string
   }): Promise<string | null> => ipcRenderer.invoke('git:remoteFileUrl', args),
   remoteCommitUrl: (args: {

@@ -1,11 +1,10 @@
+import { compareFileNames } from '../../../src/shared/file-name-sort'
 import type {
   MobileGitBranchChangeEntry,
   MobileGitBranchCompareReply,
   MobileGitBranchCompareSummary
 } from './git-compare-reply-schema'
 
-// The shapes mobile reads off the compare replies are the reply schemas' outputs, not the desktop
-// aggregates: a member with no reader in mobile/ is stripped rather than re-declared here.
 export type { MobileGitBranchChangeEntry, MobileGitBranchCompareSummary }
 export type MobileGitBranchCompareResult = MobileGitBranchCompareReply
 
@@ -23,10 +22,7 @@ export function buildMobileBranchCompareSection<TEntry extends MobileGitBranchCh
     return null
   }
   const data = [...entries]
-  if (data.length > 1) {
-    const collator = new Intl.Collator(undefined, { numeric: true })
-    data.sort((a, b) => collator.compare(a.path, b.path))
-  }
+  data.sort((a, b) => compareFileNames(a.path, b.path))
   return {
     title: 'Committed on Branch',
     data

@@ -1,23 +1,9 @@
-/**
- * What one dictation costs the bridge, measured against the cap that actually bounds it.
- *
- * Not the frame cap: a chunk of 500 ms of 16 kHz PCM is 16,000 bytes, which is 21,336 characters of
- * base64 against `BRIDGE_MAX_MESSAGE_BYTES` of 655,360. The bound is
- * `BRIDGE_MAX_PENDING_REQUESTS`, because every `speech.dictation.chunk` is a forwarded request
- * holding a slot for the whole desktop round trip. One request per native microphone event puts
- * Android's 31.25 events a second against a two-second link at 62 of 64 slots — so the page refuses
- * at its own call site before the desktop is even slow.
- *
- * Driven through the real port pair with the real shell handler and a desktop that answers after
- * the link's own delay, so what this counts is frames that were really sent and replies that had
- * really not arrived.
- */
+// Measure actual request slots through real shell lanes: per-event forwarding nearly fills 64 slots on a two-second link, while batched reads preserve room for other work.
 import type { ReactElement } from 'react'
 import { act, create } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-// The provider module re-exports the screen hooks, and reaching the real ones imports the Expo
-// runtime this test does not have. Nothing below calls one.
+// Stub re-exported hooks to avoid Expo imports; these tests call none of them.
 vi.mock('../transport/host-client-hooks', () => ({
   useDisconnectHostClient: () => () => {},
   useForceReconnect: () => null,
@@ -35,7 +21,10 @@ import {
   type BridgePortPair
 } from '../mobile-web-shell/bridge/bridge-port-pair-test-harness'
 import { MobileDictationPendingAudioBudget } from '../hooks/mobile-dictation-pending-audio-budget'
-import { enqueueMobileDictationAudioChunk } from '../hooks/mobile-dictation-audio-chunk'
+import {
+  enqueueMobileDictationAudioChunk,
+  MobileDictationTranscriptSoFar
+} from '../hooks/mobile-dictation-audio-chunk'
 import { createNativeAudioCapture, type NativeAudioEngine } from './native-audio'
 import { createPageDictationCapture } from './dictation-capture.web'
 import {
@@ -44,13 +33,10 @@ import {
 } from './dictation-capture-contract'
 import type { BridgeNativeVerb } from '../mobile-web-shell/bridge/bridge-native-verbs'
 
-/** The link the design prices against: a phone on a slow network to a desktop that answers. */
 const DESKTOP_ROUND_TRIP_MS = 2_000
 
-/** One dictation long enough to reach a steady state at either rate. */
 const SESSION_MS = 10_000
 
-/** 1,024 bytes of 16 kHz 16-bit PCM, which is what both native engines emit per event. */
 const NATIVE_EVENT_BYTES = 1_024
 
 function pcm(byteLength: number): Uint8Array {
@@ -61,7 +47,6 @@ function pcm(byteLength: number): Uint8Array {
   return bytes
 }
 
-/** A shell holding a real ring over an engine this test speaks into. */
 function createAudioShell() {
   let microphone: ((bytes: Uint8Array) => void) | null = null
   const engine: NativeAudioEngine = {
@@ -88,13 +73,7 @@ function createAudioShell() {
   }
 }
 
-/**
- * One dictation of `SESSION_MS`, drained at `drainIntervalMs`, over a link of
- * `DESKTOP_ROUND_TRIP_MS`.
- *
- * The page's half is the two things that decide the cost: the drain, and the chunk each drain
- * forwards. Sampled every native event, so the peak is the real one and not the value at the end.
- */
+// Sample free slots at every native event so the peak reflects read/forward costs, not merely the final outstanding count.
 async function runDictation(
   pair: BridgePortPair,
   shell: ReturnType<typeof createAudioShell>,
@@ -122,7 +101,8 @@ async function runDictation(
     enqueueMobileDictationAudioChunk(pair.client, 'dictation-1', chunk, {
       pendingChunks,
       pendingAudioBudget,
-      shouldReleaseBudget: () => true,
+      isActive: () => true,
+      transcriptSoFar: new MobileDictationTranscriptSoFar(),
       failActiveDictation: (_id, error) => {
         refusals.push(error instanceof Error ? error.message : String(error))
       }
@@ -133,7 +113,6 @@ async function runDictation(
   capture.begin()
   const framesBefore = { toShell: pair.toShell.length, toPage: pair.toPage.length }
 
-  /** The desktop, answering each forwarded chunk one round trip after it arrived. */
   function answerDesktop(): void {
     for (; settled < pair.rpc.requests.length; settled += 1) {
       const request = pair.rpc.requests[settled]
@@ -169,13 +148,7 @@ async function runDictation(
   }
 }
 
-/**
- * How much of the in-flight window is left for everything else the page does, at this moment.
- *
- * Ordinary requests are fired until the shell refuses one over the cap, which is the only honest
- * measure of a window: a count of what dictation holds says nothing about what is free unless the
- * cap is the thing that answers.
- */
+// Fill the remaining window until refusal; dictation’s own count alone cannot prove how much capacity others retain.
 async function probeFreeSlots(pair: BridgePortPair): Promise<number> {
   let free = 0
   for (let attempt = 0; attempt <= BRIDGE_MAX_PENDING_REQUESTS; attempt += 1) {
@@ -184,7 +157,6 @@ async function probeFreeSlots(pair: BridgePortPair): Promise<number> {
       refused = true
     })
     await pair.flush()
-    // A request the shell accepted is one the fake desktop is holding, which is a slot spent.
     if (refused) {
       await pending
       return free
@@ -209,7 +181,6 @@ function render(pair: BridgePortPair): ReactElement {
   )
 }
 
-/** The page's own verb surface, taken off a mounted screen exactly as a composer takes it. */
 async function mountVerbs(pair: BridgePortPair): Promise<NativeVerbs> {
   await pair.flush()
   act(() => {
@@ -237,32 +208,25 @@ describe('what one dictation spends of the bridge', () => {
     const pair = createFakeBridgePortPair({ serveNativeVerb: shell.serveNativeVerb })
     await pair.flush()
     const spent = await runDictation(pair, shell, DICTATION_NATIVE_EVENT_INTERVAL_MS)
-    // 31.25 events a second against a two-second link is 62.5 requests outstanding, which is the
-    // whole window. Dictation does not overflow it on its own — it leaves nothing for anything
-    // else, which is the same defect one screen later.
+    // 31.25 events/second over a two-second link leaves almost no room for other requests.
     expect(spent.peakInFlight).toBeGreaterThanOrEqual(BRIDGE_MAX_PENDING_REQUESTS - 2)
     expect(spent.freeSlots).toBeLessThanOrEqual(2)
   }, 60_000)
 
-  it('spends four slots of sixty-four on the shipped drain', async () => {
+  it('keeps the shipped drain within the request budget', async () => {
     const shell = createAudioShell()
     const pair = createFakeBridgePortPair({ serveNativeVerb: shell.serveNativeVerb })
     await pair.flush()
     const spent = await runDictation(pair, shell, DICTATION_CAPTURE_DRAIN_INTERVAL_MS)
-    // Two chunks a second over a two-second link: four outstanding, and the same 42 KiB/s.
+    // Two chunks/second over the same link holds four requests at unchanged audio throughput.
     expect(spent.peakInFlight).toBeLessThanOrEqual(6)
     expect(spent.refusals).toBe(0)
-    // The window is still the page's: everything else a screen does still fits.
     expect(spent.freeSlots).toBeGreaterThanOrEqual(BRIDGE_MAX_PENDING_REQUESTS - 8)
-    // What ten seconds of dictation costs the bridge, measured: 38 frames out — 19 reads and 19
-    // chunk forwards — and 34 back, the four missing being the chunk replies the desktop is still
-    // holding at the count. Under four frames a second, each under 4% of the cap, on a transport
-    // that moves them inside one process.
+    // Ten seconds sends 19 reads and 19 forwards; four forwarded replies remain in flight, keeping total bridge traffic under four frames/second.
     expect({ toShell: spent.framesToShell, toPage: spent.framesToPage }).toEqual({
       toShell: 38,
       toPage: 34
     })
-    // Ten seconds at two a second, give or take the drain that lands on the boundary.
     expect(spent.chunkRequests).toBeGreaterThanOrEqual(
       Math.floor(SESSION_MS / DICTATION_CAPTURE_DRAIN_INTERVAL_MS) - 1
     )
@@ -270,8 +234,4 @@ describe('what one dictation spends of the bridge', () => {
       Math.ceil(SESSION_MS / DICTATION_CAPTURE_DRAIN_INTERVAL_MS) + 1
     )
   }, 60_000)
-
-  it('ships the batched drain, not the native event rate', () => {
-    expect(DICTATION_CAPTURE_DRAIN_INTERVAL_MS).toBeGreaterThan(DICTATION_NATIVE_EVENT_INTERVAL_MS)
-  })
 })

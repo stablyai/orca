@@ -1,5 +1,4 @@
-// Which terminal tabs and panes main's layout frames hold, for readers outside the frame sync. Its
-// own module so those readers do not pull the frame sync into window-owned builds.
+// Expose main-framed terminal ownership without importing frame sync into window-owned builds.
 
 import type { PublishedTab } from '../../../shared/workspace-layout/workspace-layout-published'
 

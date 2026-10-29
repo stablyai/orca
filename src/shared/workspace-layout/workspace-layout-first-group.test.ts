@@ -1,5 +1,4 @@
-// A layout-owner build's first group of a workspace: main names it as the window and the Loader
-// do, so a window save before main's frame keeps main's group.
+// Main/window/Loader must mint the same first group so a window save before main’s frame preserves it.
 
 import { describe, expect, it, vi } from 'vitest'
 import { build, testContext, WS } from './workspace-layout-command.test-fixture'

@@ -12,8 +12,20 @@ import {
   localGitOptionsForTarget,
   requireLocalRuntimeGitRoute,
   requireRuntimeGitProvider,
-  type RuntimeGitCommandHost
+  type RuntimeGitCommandHost,
+  type RuntimeGitTarget
 } from './runtime-git-command-target'
+import { assertRuntimeReadWslDistroRunning } from './runtime-wsl-background-read-gate'
+
+// Followers nobody is looking at: a stopped distro must stay stopped for them (E9).
+async function resolveGatedGitTarget(
+  host: RuntimeGitCommandHost,
+  worktreeSelector: string
+): Promise<RuntimeGitTarget> {
+  const target = await host.resolveRuntimeGitTarget(worktreeSelector)
+  await assertRuntimeReadWslDistroRunning(target, localGitOptionsForTarget(target).wslDistro)
+  return target
+}
 
 export class RuntimeGitStatusCommands {
   constructor(private readonly host: RuntimeGitCommandHost) {}
@@ -22,6 +34,7 @@ export class RuntimeGitStatusCommands {
     worktreeSelector: string,
     options?: GitProviderStatusOptions
   ): Promise<GitStatusResult> {
+    // A client showing this workspace is a user act; its status is the implicit wake (E9).
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
     const provider = requireRuntimeGitProvider(target)
     return options
@@ -34,7 +47,7 @@ export class RuntimeGitStatusCommands {
     submodulePath: string,
     area: GitStagingArea = 'unstaged'
   ): Promise<GitStatusResult> {
-    const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
+    const target = await resolveGatedGitTarget(this.host, worktreeSelector)
     return requireRuntimeGitProvider(target).getSubmoduleStatus(
       target.worktree.path,
       submodulePath,
@@ -46,7 +59,7 @@ export class RuntimeGitStatusCommands {
     worktreeSelector: string,
     relativePaths: string[]
   ): Promise<string[]> {
-    const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
+    const target = await resolveGatedGitTarget(this.host, worktreeSelector)
     return requireRuntimeGitProvider(target).checkIgnoredPaths(target.worktree.path, relativePaths)
   }
 
@@ -54,17 +67,17 @@ export class RuntimeGitStatusCommands {
     worktreeSelector: string,
     options: GitHistoryOptions = {}
   ): Promise<GitHistoryResult> {
-    const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
+    const target = await resolveGatedGitTarget(this.host, worktreeSelector)
     return requireRuntimeGitProvider(target).getHistory(target.worktree.path, options)
   }
 
   async getRuntimeGitConflictOperation(worktreeSelector: string): Promise<GitConflictOperation> {
-    const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
+    const target = await resolveGatedGitTarget(this.host, worktreeSelector)
     return requireRuntimeGitProvider(target).detectConflictOperation(target.worktree.path)
   }
 
   async getRuntimeGitMutationInFlight(worktreeSelector: string): Promise<GitMutationInFlight> {
-    const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
+    const target = await resolveGatedGitTarget(this.host, worktreeSelector)
     requireLocalRuntimeGitRoute(target)
     return {
       inFlight: await isGitWorktreeMutationInFlight(

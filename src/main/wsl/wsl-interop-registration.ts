@@ -1,13 +1,4 @@
-/**
- * Guest-side detection and repair of the `WSLInterop` binfmt_misc entry.
- *
- * Why: on WSL < 3.0.1 a graceful stop of ANY systemd distro (including the
- * ~15 s idle stop) writes -1 to binfmt_misc/status, which deletes every entry
- * VM-wide. Every other running distro then fails to exec Windows binaries
- * (`code .`, `explorer.exe`, Orca's WSL CLI bridge) with "Exec format error".
- * Fixed upstream in microsoft/WSL#13885. The registry is shared by all
- * distros, so one repair restores every one of them.
- */
+/** WSL <3.0.1 systemd distro stops wipe VM-wide binfmt entries, breaking Windows-binary exec in other distros. One shared-registry repair restores all (microsoft/WSL#13885). */
 
 export type WslInteropProbeResult =
   | { state: 'present' }
@@ -19,7 +10,7 @@ export type WslInteropProbeResult =
 const MARKER = 'orca-wsl-interop:'
 const BINFMT_DIR = '/proc/sys/fs/binfmt_misc'
 
-// Why both names: some WSL builds register `WSLInterop-late` after systemd starts.
+// Some WSL builds register WSLInterop-late after systemd startup.
 const PRESENT_TEST = `[ -e ${BINFMT_DIR}/WSLInterop ] || [ -e ${BINFMT_DIR}/WSLInterop-late ]`
 
 /** Read-only; runs as the default user. wsl.conf is only printed when it matters. */
@@ -29,16 +20,10 @@ export const WSL_INTEROP_PROBE_SCRIPT = [
   `else echo '${MARKER}missing'; echo '${MARKER}conf'; cat /etc/wsl.conf 2>/dev/null; fi`
 ].join('\n')
 
-/**
- * Idempotent; runs as root. Re-checks so a concurrent repair (or WSL itself)
- * never gets a duplicate entry. Never `systemctl restart systemd-binfmt`:
- * that flushes every entry first. Flags match WSL's own `P` registration; `F`
- * would pin the repairing distro's /init open for the life of the VM.
- */
+/** Root repair rechecks to avoid duplicate entries. Never restart systemd-binfmt (flushes all). Match WSL P flags; F would pin this distro's /init for the VM lifetime. */
 export const WSL_INTEROP_REPAIR_SCRIPT = [
   `if ${PRESENT_TEST}; then echo '${MARKER}present'; exit 0; fi`,
-  // No trailing newline: busybox printf writes it separately and the kernel rejects that write
-  // with EINVAL after registering. The re-check below, not the write status, is the verdict.
+  // Omit newline: BusyBox writes it separately and gets EINVAL after successful registration. Judge the recheck, not write status.
   `printf ':WSLInterop:M::MZ::/init:P' > ${BINFMT_DIR}/register`,
   `if ${PRESENT_TEST}; then echo '${MARKER}repaired'; else exit 1; fi`
 ].join('\n')

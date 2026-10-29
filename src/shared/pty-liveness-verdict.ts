@@ -1,11 +1,5 @@
-/**
- * The one vocabulary Orca uses to talk about whether a PTY is live.
- *
- * `exited` requires positive evidence of absence from the owning host. Losing
- * contact with that host — an unregistered SSH provider, a dropped relay, an
- * inventory that only enumerates registered providers — is `unverifiable`, never
- * a death certificate and never a successful stop.
- */
+/** Only owning-host evidence proves exit. Lost relay/contact or incomplete provider inventory is unverifiable,
+ * never proof of death or a successful stop. */
 export type PtyLivenessVerdict =
   | { status: 'exited' }
   | { status: 'live'; ptyIds: string[] }
@@ -16,8 +10,7 @@ export const NO_OBSERVING_PROVIDER_REASON = 'no registered provider can observe 
 export const SSH_EXIT_UNCONFIRMED_REASON = 'the owning SSH host did not confirm the PTY exit'
 export const PTY_LIVE_NOTE = 'The PTY is live.'
 
-// Why: reasons reach these sentences from verdicts, receipts and relayed errors, and
-// some already end in a terminator — appending one blindly printed `...to failed..`.
+// Receipts/relayed errors may already end sentences; avoid duplicate punctuation.
 function endSentence(detail: string): string {
   return /[.!?]$/u.test(detail.trimEnd()) ? detail.trimEnd() : `${detail.trimEnd()}.`
 }

@@ -1,8 +1,8 @@
 import type { NdjsonRejectedRecord } from '../../shared/main-process-ndjson-framer'
-import type { CodexAppServerConnectionHandlers } from './codex-app-server-connection-types'
-import { CodexAppServerFrameSizeError } from './codex-app-server-frame-size-error'
+import type { CodexAppServerConnectionHandlers } from './app-server/codex-app-server-connection-types'
+import { CodexAppServerFrameSizeError } from './app-server/codex-app-server-frame-size-error'
 import { isProviderRecord } from '../provider-process/provider-json-record'
-import { CodexAppServerRequestError } from './codex-app-server-request-error'
+import { CodexAppServerRequestError } from './app-server/codex-app-server-request-error'
 import {
   CodexAppServerUnsupportedError,
   isCodexMethodNotFoundError

@@ -50,18 +50,13 @@ export async function createWebRuntimeSessionBrowserTab(
   }
   const context = createWebRuntimeBrowserCreationContext(args, environmentId)
   let stagedWorkspaceId: string | undefined
+  let materializedPageId: string | undefined
   try {
     stageWebRuntimeBrowserCreation(context)
     stagedWorkspaceId = context.staged?.workspaceId
     const placementPreference = args.placementPreference ?? 'auto'
     let placement: BrowserPageCreationPlacement = { kind: 'server' }
-    // Why no cached-capability gate here: the renderer's runtime status can hold a pre-upgrade
-    // "cannot client-host" verdict for a whole catalog TTL, and skipping the preparation on it
-    // pinned a capable pair to server placement for that long. The preparation reads live status
-    // and answers `server` for a runtime that truly cannot host, so staleness now costs a round
-    // trip against an incapable host instead of the wrong placement. An unreachable host pays for
-    // that on the failure path too: the probe's 15s ceiling, then the tabCreate behind it and the
-    // cleanup close its non-definitive failure needs, where before the create never started.
+    // Always probe live placement: cached pre-upgrade capabilities can pin capable pairs to server placement for a catalog TTL. Incapable/unreachable hosts pay an extra round-trip (up to 15s), then create and any non-definitive-failure cleanup.
     if (placementPreference !== 'server') {
       try {
         await pauseDuringE2eWebRuntimeBrowserClientHostPreparation()
@@ -128,15 +123,9 @@ export async function createWebRuntimeSessionBrowserTab(
         })
     }
     await pauseAfterE2eWebRuntimeBrowserCreate(created.browserPageId)
-    // Why: the strip's X on a staged tab only unwinds this client's rows — it cannot close a host
-    // page whose id did not exist when the user clicked. Hand the cancel to the cleanup path in the
-    // catch below, which already owns retiring an unreconciled host page.
-    // Why (accepted bound): the host page has no name until the create answers, so a cancel during
-    // that round-trip leaves it alive for up to the RPC timeout. That is the same bound the
-    // unreconciled-cleanup path has always accepted, so no sweep is added for it.
-    // Why: in a frame-drawn workspace the frames replace the staged rows with their own tab for
-    // the page; that is the create landing, not the user's close (L284).
-    // Their tab gets no handle until its pane mounts, so the handover alone is the create landing.
+    // Staged X removes only local rows; catch must retire the host page once create returns its ID.
+    // Accepted cancellation bound: until create answers, the unnamed host page can survive up to the RPC timeout, as in unreconciled cleanup.
+    // Frame handover replaces staged rows before a pane handle exists; that proves landing, not user cancellation (L284).
     const handedToFrames = (): boolean =>
       stagedWorkspaceId !== undefined &&
       wasStagedBrowserTabHandedToFrames(stagedWorkspaceId, created.browserPageId)
@@ -150,7 +139,7 @@ export async function createWebRuntimeSessionBrowserTab(
     if (created.browserPageId !== context.provisionalPageId) {
       rehomeWebRuntimeBrowserCreation(context, created.browserPageId)
     }
-    // Why: a staged row the user moved is judged where it renders now, not where it was requested.
+    // Judge moved staged tabs in their current group, not the requested one.
     const resolveExpectedGroupId = (): string | undefined =>
       (context.staged
         ? resolveStagedWebRuntimeBrowserTabGroupId(context.staged, args.worktreeId)
@@ -196,8 +185,7 @@ export async function createWebRuntimeSessionBrowserTab(
       })
     }
     if (!materialized && expectedGroupId) {
-      // Why: an older runtime can honor creation but not group targeting; a live tab in
-      // the wrong split beats destroying what the user just made.
+      // Older hosts may create without group targeting; retain the live tab even in the wrong split.
       materialized = hasMaterializedWebRuntimeBrowserPage(
         useAppStore.getState(),
         environmentId,
@@ -214,17 +202,13 @@ export async function createWebRuntimeSessionBrowserTab(
     if (!materialized) {
       throw new Error('The created browser tab did not materialize in the client.')
     }
-    // Why: materialization only proves *some* workspace in this worktree carries the page — when the
-    // host mirrors it under its own id, the predicate goes true even though the staged row the user
-    // X-ed is gone. The whole materialization wait above is a live window for that X, so re-check the
-    // row here before the stage is surrendered, or the create reports success and never retires the
-    // host page.
+    // Materialization can see a host-owned row after staged X; recheck staged liveness after the wait or success skips required host cleanup.
     if (stagedClosedByUser()) {
       throw new StagedWebRuntimeBrowserTabCancelledError()
     }
-    // Why: materialization means the snapshot has taken ownership of these rows, so nothing
-    // downstream may still unwind them as an optimistic stage.
-    return completeWebRuntimeBrowserCreation(context)
+    // Materialized rows belong to the snapshot; later failures must not unwind them as staging.
+    completeWebRuntimeBrowserCreation(context)
+    materializedPageId = created.browserPageId
   } catch (error) {
     const failure = prepareWebRuntimeBrowserCreationFailure(context, error)
     if (failure.cleanupPageId) {
@@ -279,6 +263,10 @@ export async function createWebRuntimeSessionBrowserTab(
       forgetStagedBrowserTabHandover(stagedWorkspaceId)
     }
   }
+  if (materializedPageId) {
+    args.onMaterialized?.(materializedPageId)
+  }
+  return true
 }
 
 registerPairedBrowserTabCreator(createWebRuntimeSessionBrowserTab)

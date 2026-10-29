@@ -29,6 +29,15 @@ export const uiStateAndMenuCommandsApi = {
   },
   consumePendingOpenSettings: (): Promise<boolean> =>
     ipcRenderer.invoke('ui:consumePendingOpenSettings'),
+  onQuitAndStopAllSessions: (callback: () => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent) => callback()
+    ipcRenderer.on('ui:quitAndStopAllSessions', listener)
+    return () => ipcRenderer.removeListener('ui:quitAndStopAllSessions', listener)
+  },
+  consumePendingQuitAndStopAllSessions: (): Promise<boolean> =>
+    ipcRenderer.invoke('ui:consumePendingQuitAndStopAllSessions'),
+  quitAfterStoppingAllSessions: (): Promise<boolean> =>
+    ipcRenderer.invoke('ui:quitAfterStoppingAllSessions'),
   onOpenSkillShare: (callback: (shareId: string) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, shareId: string): void => callback(shareId)
     ipcRenderer.on('ui:openSkillShare', listener)
@@ -138,21 +147,6 @@ export const uiStateAndMenuCommandsApi = {
     ipcRenderer.on('ui:worktreeHistoryNavigate', listener)
     return () => ipcRenderer.removeListener('ui:worktreeHistoryNavigate', listener)
   },
-  onNewBrowserTab: (callback: () => void): (() => void) => {
-    const listener = (_event: Electron.IpcRendererEvent) => callback()
-    ipcRenderer.on('ui:newBrowserTab', listener)
-    return () => ipcRenderer.removeListener('ui:newBrowserTab', listener)
-  },
-  onNewMarkdownTab: (callback: () => void): (() => void) => {
-    const listener = (_event: Electron.IpcRendererEvent) => callback()
-    ipcRenderer.on('ui:newMarkdownTab', listener)
-    return () => ipcRenderer.removeListener('ui:newMarkdownTab', listener)
-  },
-  onNewSimulatorTab: (callback: () => void): (() => void) => {
-    const listener = (_event: Electron.IpcRendererEvent) => callback()
-    ipcRenderer.on('ui:newSimulatorTab', listener)
-    return () => ipcRenderer.removeListener('ui:newSimulatorTab', listener)
-  },
   onRequestTabCreate: (
     callback: (data: {
       requestId: string
@@ -162,6 +156,7 @@ export const uiStateAndMenuCommandsApi = {
       sessionProfileId?: string | null
       sessionPartition?: string
       activate?: boolean
+      fallbackWorktreeId?: string
     }) => void
   ): (() => void) => {
     const listener = (
@@ -174,6 +169,7 @@ export const uiStateAndMenuCommandsApi = {
         sessionProfileId?: string | null
         sessionPartition?: string
         activate?: boolean
+        fallbackWorktreeId?: string
       }
     ) => callback(data)
     ipcRenderer.on('browser:requestTabCreate', listener)
@@ -181,6 +177,9 @@ export const uiStateAndMenuCommandsApi = {
   },
   replyTabCreate: (reply: { requestId: string; browserPageId?: string; error?: string }): void => {
     ipcRenderer.send('browser:tabCreateReply', reply)
+  },
+  browserTabRequestsReady: (): void => {
+    ipcRenderer.send('browser:tabRequestsReady')
   },
   onRequestRemoteCliBrowserScope: (
     callback: (data: RemoteCliBrowserScopeQuery) => void

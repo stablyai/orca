@@ -6,6 +6,7 @@ import {
   hookDefinitionHasManagedCommand,
   isPlainObject,
   MANAGED_HOOK_TIMEOUT_MILLISECONDS,
+  MANAGED_HOOK_TIMEOUT_SECONDS,
   removeManagedCommands,
   wrapPosixHookCommand,
   type HookDefinition
@@ -29,6 +30,9 @@ export function isKiroHooksConfigSupported(config: Record<string, unknown>): boo
   if (config.hooks === undefined) {
     return true
   }
+  if (Array.isArray(config.hooks)) {
+    return config.hooks.every(isPlainObject)
+  }
   if (!isPlainObject(config.hooks)) {
     return false
   }
@@ -38,7 +42,7 @@ export function isKiroHooksConfigSupported(config: Record<string, unknown>): boo
   )
 }
 
-/** Kiro has no global hook config and no editable built-in agent; patch each user-owned global agent file. */
+/** Kiro V2 has no global hook config and no editable built-in agent; patch each user-owned global agent file. */
 export function getKiroAgentsDir(): string {
   return join(resolveKiroHomeDir(), 'agents')
 }
@@ -85,6 +89,72 @@ function buildManagedDefinition(event: string, command: string): HookDefinition 
   }
 }
 
+/** List-form entry, as in V3 hook files and agents `kiro-cli agent upgrade` rewrote. */
+export function buildKiroListHook(trigger: string, command: string): Record<string, unknown> {
+  return {
+    name: `orca-agent-status-${trigger}`,
+    trigger,
+    ...(KIRO_TOOL_EVENTS.has(trigger) ? { matcher: '*' } : {}),
+    action: { type: 'command', command },
+    timeout: MANAGED_HOOK_TIMEOUT_SECONDS
+  }
+}
+
+export function kiroListHookRunsManagedCommand(
+  entry: unknown,
+  isManagedCommand: (command: string | undefined) => boolean
+): boolean {
+  const action = isPlainObject(entry) ? entry.action : undefined
+  return (
+    isPlainObject(action) && typeof action.command === 'string' && isManagedCommand(action.command)
+  )
+}
+
+function managedListHookEvent(
+  entry: unknown,
+  isManagedCommand: (command: string | undefined) => boolean
+): string | null {
+  if (!isPlainObject(entry) || !kiroListHookRunsManagedCommand(entry, isManagedCommand)) {
+    return null
+  }
+  return KIRO_HOOK_EVENTS.find((event) => event === entry.trigger) ?? null
+}
+
+// An upgraded agent carries `permissions`; object-form hooks would knock it out of the universal format.
+function usesListHooks(config: Record<string, unknown>): boolean {
+  return (
+    Array.isArray(config.hooks) || (config.hooks === undefined && isPlainObject(config.permissions))
+  )
+}
+
+function applyManagedKiroListHooks(
+  entries: unknown[],
+  command: string,
+  isManagedCommand: (command: string | undefined) => boolean
+): unknown[] {
+  const missing = new Set<string>(KIRO_HOOK_EVENTS)
+  const kept = entries.flatMap((entry) => {
+    const event = managedListHookEvent(entry, isManagedCommand)
+    if (event === null) {
+      return [entry]
+    }
+    // Refresh the first Orca entry per event where it sits; drop duplicates.
+    return missing.delete(event) ? [buildKiroListHook(event, command)] : []
+  })
+  return [...kept, ...[...missing].map((event) => buildKiroListHook(event, command))]
+}
+
+function withHooks(
+  config: Record<string, unknown>,
+  hooks: unknown[] | Record<string, unknown>
+): Record<string, unknown> {
+  if ((Array.isArray(hooks) ? hooks.length : Object.keys(hooks).length) > 0) {
+    return { ...config, hooks }
+  }
+  const { hooks: _emptied, ...rest } = config
+  return rest
+}
+
 function splitDefinitions(value: unknown): { definitions: HookDefinition[]; other: unknown[] } {
   const entries = Array.isArray(value) ? value : []
   return {
@@ -108,6 +178,10 @@ export function applyManagedKiroHooks(
   command: string,
   isManagedCommand: (command: string | undefined) => boolean
 ): Record<string, unknown> {
+  if (usesListHooks(config)) {
+    const entries = Array.isArray(config.hooks) ? config.hooks : []
+    return { ...config, hooks: applyManagedKiroListHooks(entries, command, isManagedCommand) }
+  }
   const hooks: Record<string, unknown> = isPlainObject(config.hooks) ? { ...config.hooks } : {}
   for (const event of KIRO_HOOK_EVENTS) {
     const { definitions, other } = splitDefinitions(hooks[event])
@@ -125,6 +199,12 @@ export function removeManagedKiroHooks(
   isManagedCommand: (command: string | undefined) => boolean
 ): Record<string, unknown> {
   const original = config.hooks
+  if (Array.isArray(original)) {
+    const hooks = original.filter(
+      (entry) => !kiroListHookRunsManagedCommand(entry, isManagedCommand)
+    )
+    return hooks.length === original.length ? config : withHooks(config, hooks)
+  }
   if (
     !isPlainObject(original) ||
     !Object.values(original).some((value) => hasManagedDefinition(value, isManagedCommand))
@@ -144,17 +224,18 @@ export function removeManagedKiroHooks(
       delete hooks[event]
     }
   }
-  if (Object.keys(hooks).length > 0) {
-    return { ...config, hooks }
-  }
-  const { hooks: _emptied, ...rest } = config
-  return rest
+  return withHooks(config, hooks)
 }
 
 export function readManagedKiroHookEvents(
   config: unknown,
   isManagedCommand: (command: string | undefined) => boolean
 ): Set<string> {
+  if (isPlainObject(config) && Array.isArray(config.hooks)) {
+    return new Set(
+      config.hooks.flatMap((entry) => managedListHookEvent(entry, isManagedCommand) ?? [])
+    )
+  }
   const hooks = isPlainObject(config) && isPlainObject(config.hooks) ? config.hooks : {}
   return new Set(
     KIRO_HOOK_EVENTS.filter((event) => hasManagedDefinition(hooks[event], isManagedCommand))

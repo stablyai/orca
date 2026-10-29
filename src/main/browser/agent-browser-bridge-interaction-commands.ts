@@ -11,7 +11,10 @@ import type {
   BrowserPdfResult
 } from '../../shared/runtime-types'
 import { BrowserError } from './cdp-bridge'
-import { WAIT_PROCESS_TIMEOUT_GRACE_MS } from './agent-browser-bridge-types'
+import {
+  agentBrowserWaitArguments,
+  type AgentBrowserWaitOptions
+} from './agent-browser-wait-arguments'
 import { acquireElectronDebugger } from './electron-debugger-lease'
 import { parseCdpKeyEvent, imeFallbackKeyEvent } from './cdp-keyboard-us-layout'
 import { dispatchPageKeyEvent, type GuestCdpSender } from './guest-direct-key-input'
@@ -57,56 +60,24 @@ export abstract class AgentBrowserBridgeInteractionCommands extends AgentBrowser
   }
 
   async wait(
-    options?: {
-      selector?: string
-      timeout?: number
-      text?: string
-      url?: string
-      load?: string
-      fn?: string
-      state?: string
-    },
+    options?: AgentBrowserWaitOptions,
     worktreeId?: string,
     browserPageId?: string
   ): Promise<BrowserWaitResult> {
     return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName) => {
-      const args = ['wait']
-      const hasCondition =
-        !!options?.selector || !!options?.text || !!options?.url || !!options?.load || !!options?.fn
-      if (options?.selector) {
-        args.push(options.selector)
-      } else if (options?.timeout != null && !hasCondition) {
-        args.push(String(options.timeout))
-      }
-      if (options?.text) {
-        args.push('--text', options.text)
-      }
-      if (options?.url) {
-        args.push('--url', options.url)
-      }
-      if (options?.load) {
-        args.push('--load', options.load)
-      }
-      if (options?.fn) {
-        args.push('--fn', options.fn)
-      }
-      const normalizedState = options?.state === 'visible' ? undefined : options?.state
-      if (normalizedState) {
-        args.push('--state', normalizedState)
-      }
-      // Bound condition waits here because agent-browser lacks a per-command timeout.
+      const { args, conditionTimeoutMs, processTimeoutMs } = agentBrowserWaitArguments(
+        options ?? {}
+      )
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: agent-browser's wait --json answers the BrowserWaitResult shape.
       return (await this.execAgentBrowser(sessionName, args, {
-        timeoutMs:
-          options?.timeout != null && hasCondition
-            ? options.timeout + WAIT_PROCESS_TIMEOUT_GRACE_MS
-            : undefined,
+        timeoutMs: processTimeoutMs,
         timeoutError:
-          options?.timeout != null && hasCondition
-            ? new BrowserError(
+          conditionTimeoutMs === undefined
+            ? undefined
+            : new BrowserError(
                 'browser_timeout',
-                `Timed out waiting for browser condition after ${options.timeout}ms.`
+                `Timed out waiting for browser condition after ${conditionTimeoutMs}ms.`
               )
-            : undefined
       })) as BrowserWaitResult
     })
   }
@@ -202,6 +173,7 @@ export abstract class AgentBrowserBridgeInteractionCommands extends AgentBrowser
         let releaseDebugger = (): void => {}
         try {
           releaseDebugger = acquireElectronDebugger(wc).release
+          await this.waitForPagePaint(wc, target.webContentsId)
           const send: GuestCdpSender = (method, params, sessionId) =>
             sendGuestCdpCommand(wc, method, params, sessionId)
           const guardFocus = (): Promise<() => void> =>

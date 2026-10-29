@@ -15,7 +15,7 @@ import {
 
 const LOCAL_OWNER: RuntimeClientTarget = { kind: 'local' }
 
-/** The GLM plan key on `owner`; key the component by owner so the draft resets. */
+/** Key by owner so switching GLM credential hosts resets drafts. */
 export function useZcodePlanCredentials(
   updatedAt: number | undefined,
   owner: RuntimeClientTarget = LOCAL_OWNER
@@ -50,7 +50,7 @@ export function useZcodePlanCredentials(
       (error: unknown) => {
         if (request === readGeneration.current) {
           setStatus(null)
-          // Why local stays editable: this computer's store is always writable, as before.
+          // Local storage stays writable even when its status read fails.
           setAccess(ownerEnvironmentId ? usageCredentialAccessAfterError(error) : 'ready')
         }
       }

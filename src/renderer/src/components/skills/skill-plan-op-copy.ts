@@ -21,11 +21,15 @@ export function updatedSkillsLabel(summary: BundledSkillResultSummary): string {
   const { changedCount, leftAloneCount } = summary
   const updated =
     changedCount === 1
-      ? translate('auto.components.skills.SkillFreshnessUpdateDialog.updatedOne', 'Updated 1 skill')
+      ? translate(
+          'auto.components.skills.SkillFreshnessUpdateDialog.updated_one',
+          'Updated {{count}} skill',
+          { count: changedCount }
+        )
       : translate(
-          'auto.components.skills.SkillFreshnessUpdateDialog.updatedMany',
-          'Updated {{value0}} skills',
-          { value0: changedCount }
+          'auto.components.skills.SkillFreshnessUpdateDialog.updated_other',
+          'Updated {{count}} skills',
+          { count: changedCount }
         )
   return leftAloneCount > 0
     ? translate(
@@ -74,7 +78,6 @@ export function leaveReasonText(reason: string | null | undefined): string {
   }
 }
 
-/** "Shared folder", or the agents that read this folder. */
 export function locationPlaceLabel(location: BundledSkillLocation): string {
   if (location.place.kind === 'shared') {
     return translate('auto.components.skills.skillPlanOpCopy.sharedFolder', 'Shared folder')
@@ -82,7 +85,6 @@ export function locationPlaceLabel(location: BundledSkillLocation): string {
   return location.place.names.join(', ') || location.displayPath
 }
 
-/** The action or reason for one planned location. */
 export function locationStateText(location: BundledSkillLocation): string {
   const texts: Record<BundledSkillLocationState, () => string> = {
     update: () => translate('auto.components.skills.skillPlanOpCopy.update', 'Update'),
@@ -178,12 +180,13 @@ export function updateActionLabel(plan: BundledSkillPlan): string {
   }
   return updates === 1
     ? translate(
-        'auto.components.skills.SkillFreshnessUpdateDialog.updateActionOne',
-        'Update 1 skill'
+        'auto.components.skills.SkillFreshnessUpdateDialog.updateAction_one',
+        'Update {{count}} skill',
+        { count: updates }
       )
     : translate(
-        'auto.components.skills.SkillFreshnessUpdateDialog.updateActionMany',
-        'Update {{value0}} skills',
-        { value0: updates }
+        'auto.components.skills.SkillFreshnessUpdateDialog.updateAction_other',
+        'Update {{count}} skills',
+        { count: updates }
       )
 }

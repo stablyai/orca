@@ -50,15 +50,14 @@ function UpToDateLine({
             { value0: upToDate[0].name }
           )
         : translate(
-            'auto.components.skills.SkillFreshnessUpdateDialog.upToDateMany',
-            '{{value0}} skills are up to date.',
-            { value0: upToDate.length }
+            'auto.components.skills.SkillFreshnessUpdateDialog.upToDate_other',
+            '{{count}} skills are up to date.',
+            { count: upToDate.length }
           )}
     </p>
   )
 }
 
-/** The skill rows plus, while reviewing, the up-to-date line and the locations toggle. */
 export function SkillUpdateRows({
   skills,
   unforcedPlan,

@@ -44,7 +44,7 @@ vi.mock('../browser/paired-runtime-browser-client-host-runtime', () => ({
   getPairedRuntimeBrowserClientRouteIdentity: routeIdentityMock
 }))
 
-vi.mock('../browser/browser-cookie-import', () => ({
+vi.mock('../browser/cookies/browser-cookie-import', () => ({
   detectInstalledBrowsers: detectBrowsersMock,
   importCookiesFromBrowser: vi.fn(),
   importCookiesFromFile: vi.fn(),
@@ -65,7 +65,7 @@ describe('browser session profile IPC', () => {
     detectBrowsersMock.mockReturnValue([])
     setBrowserIdentityModeMock.mockReset()
     setBrowserIdentityModeMock.mockResolvedValue({ ok: true })
-    setTrustedBrowserRendererWebContentsId(null)
+    setTrustedBrowserRendererWebContentsId(91)
   })
 
   function trustedSender(): Electron.WebContents {

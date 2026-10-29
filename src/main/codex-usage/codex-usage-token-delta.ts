@@ -153,7 +153,7 @@ export function resolveCodexUsageDelta(
 }
 
 export function buildCodexUsageEventKey(
-  timestamp: string,
+  recordIdentity: string,
   totalUsage: CodexUsageRawUsage | null,
   lastUsage: CodexUsageRawUsage | null
 ): string {
@@ -168,5 +168,5 @@ export function buildCodexUsageEventKey(
           usage.totalTokens
         ].join(',')
       : ''
-  return [timestamp, tupleOf(totalUsage), tupleOf(lastUsage)].join('|')
+  return [recordIdentity, tupleOf(totalUsage), tupleOf(lastUsage)].join('|')
 }

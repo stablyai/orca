@@ -32,7 +32,7 @@ export function normalizeLoadedLocalSession(
       '[persistence] Salvaged workspace session; dropped corrupt entries:',
       workspaceSessionSalvageLogDetails(result)
     )
-    // Why: salvage repairs only the in-memory session; without a save the corrupt entries stay on disk and get re-dropped every launch.
+    // Persist salvaged state so corrupt entries do not recur on every launch.
     markNeedsSave()
   }
   return { ...defaults.workspaceSession, ...result.value }
@@ -50,7 +50,6 @@ export function normalizeLoadedHostSessions(
     localSession
   )
   if (repaired) {
-    // Why: salvage repairs only the in-memory partitions; without a save the corrupt entries stay on disk and get re-dropped every launch.
     markNeedsSave()
   }
   return partitions
@@ -64,19 +63,14 @@ export function normalizeLoadedAutomationRuns(
     return []
   }
   const runs = pruneAutomationRuns(backfillAutomationRunNumbers(parsed.automationRuns))
-  // Why: nothing else marks dirty, so an oversized legacy file would otherwise only shrink at the next unrelated save.
+  // Persist pruning even when no unrelated save follows startup.
   if (runs.length !== parsed.automationRuns.length) {
     markNeedsSave()
   }
   return runs
 }
 
-/**
- * Repairs project/setup rows whose stored field types do not match the declared ones — a null
- * `repoId` or `path` written by an older build reaches every consumer that calls `.trim()` on it.
- * Marking dirty is the migration: without a save the bad rows stay on disk and are repaired again
- * every launch, and this host keeps publishing them to paired clients over the wire.
- */
+/** Repair untrusted catalog fields and persist them before republishing to paired clients. */
 export function normalizeLoadedProjectCatalog(
   parsed: Partial<Pick<PersistedState, 'projects' | 'projectHostSetups'>>,
   markNeedsSave: () => void

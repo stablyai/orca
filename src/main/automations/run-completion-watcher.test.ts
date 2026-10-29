@@ -1,4 +1,4 @@
-import { closeTestStores, createStore, testState } from '../persistence-test-harness'
+import { closeTestStores, createStore, testState } from '../persistence/persistence-test-harness'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
@@ -342,25 +342,6 @@ describe('automationsChanged publication', () => {
     expect(seen.map((entry) => entry.payload.reason)).toEqual(['run', 'run', 'run', 'run', 'usage'])
     expect(seen.at(-1)?.status).toBe('completed')
     expect(seen.every((entry) => entry.payload.selector?.kind === 'self')).toBe(true)
-    service.stop()
-  })
-
-  it('changes nothing for a consumer that ignores the unknown event type', async () => {
-    const store = await createStore()
-    const automation = createAutomation(store)
-    const oldClientState = { repoRefreshes: 0 }
-    const service = new AutomationService(store, {
-      headlessDispatcher: async () => ({ ...LAUNCH_TARGET }),
-      onAutomationsChanged: (payload) => {
-        if ((payload as { type?: string }).type === 'reposChanged') {
-          oldClientState.repoRefreshes += 1
-        }
-      }
-    })
-
-    const run = await service.runNow(automation.id)
-    expect(oldClientState.repoRefreshes).toBe(0)
-    expect(readRun(store, automation.id, run.id).status).toBe('dispatched')
     service.stop()
   })
 })

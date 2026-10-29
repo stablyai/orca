@@ -26,7 +26,7 @@ function reply(result: unknown): RpcResponse {
   return { id: 'reply', ok: true, result, _meta: { runtimeId: 'runtime' } }
 }
 
-/** The desktop holds `recent` and nothing collapsed; the first of each write is lost in transit. */
+// Lose the first attempt of each write to exercise replay against the desktop’s recent sort and expanded state.
 function desktop() {
   const client = new FakeSession('connected')
   const lost = new Set<string>()
@@ -51,9 +51,8 @@ function desktop() {
   return { client, writes }
 }
 
-// The feed's own reads are not under test; it only replaces the poll, as on a switched-on page.
 const SIDEBAR_FEED = { refresh: () => {}, changed: () => {}, onInstalled: () => () => {} }
-// Stable across renders, as the screen's own are: each is a dependency of the refresh lifecycle.
+// Keep callbacks stable as in the screen; refresh lifecycle depends on their identities.
 const NO_CAPABILITIES: string[] = []
 const fetchRepoMetadata = async (): Promise<void> => {}
 

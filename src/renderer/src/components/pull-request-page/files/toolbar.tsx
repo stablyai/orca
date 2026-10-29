@@ -48,8 +48,23 @@ export function PRFilesDiffToolbar({
           </Tooltip>
         )}
         <span className="truncate text-xs text-muted-foreground">
-          {files.filter(isPRFileViewed).length} / {files.length}{' '}
-          {translate('auto.components.PullRequestPage.89e80af1c7', 'files viewed')}
+          {files.length === 1
+            ? translate(
+                'auto.components.PullRequestPage.filesViewed_one',
+                '{{viewed}} / {{count}} file viewed',
+                {
+                  viewed: files.filter(isPRFileViewed).length,
+                  count: files.length
+                }
+              )
+            : translate(
+                'auto.components.PullRequestPage.filesViewed_other',
+                '{{viewed}} / {{count}} files viewed',
+                {
+                  viewed: files.filter(isPRFileViewed).length,
+                  count: files.length
+                }
+              )}
         </span>
       </div>
       <div className="flex shrink-0 items-center gap-2">

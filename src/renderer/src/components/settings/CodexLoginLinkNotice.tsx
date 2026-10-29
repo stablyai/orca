@@ -4,10 +4,7 @@ import { useClipboardTextCopyFeedback } from '@/hooks/use-clipboard-text-copy-fe
 import { Button } from '../ui/button'
 import { useCodexPendingLoginUrl } from './use-codex-pending-login-url'
 
-/**
- * The sign-in link of an in-flight `codex login`, so the user can finish the
- * flow in a browser of their choosing instead of only the one Codex opened.
- */
+/** Expose in-flight login links so users can finish in a different browser. */
 export function CodexLoginLinkNotice(): React.JSX.Element | null {
   const url = useCodexPendingLoginUrl()
   const { copyText, status } = useClipboardTextCopyFeedback(url ?? '')

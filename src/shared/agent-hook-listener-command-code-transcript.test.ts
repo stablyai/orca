@@ -233,9 +233,7 @@ describe('shared agent-hook-listener', () => {
     const originalConcat = Buffer.concat
     let concatenatedBytes = 0
     try {
-      // The shared backward reader (readLastTextFromTranscriptOnce) stitches a
-      // line spanning many read blocks. Re-joining the carry per block copies
-      // O(line^2); the chunk list defers to one join.
+      // Multi-block lines must join once; per-block carry joins copy quadratic bytes.
       const lineBytes = 2 * 1024 * 1024
       writeFileSync(
         transcriptPath,
@@ -277,10 +275,7 @@ describe('shared agent-hook-listener', () => {
     }
   })
 
-  // Why these three: the prompt read scans backward from EOF and stops at the
-  // first user line, so the cases that can break are a prompt spanning a chunk
-  // boundary, a later prompt that must win over an earlier one, and the byte
-  // offset in interactionKey, which the old forward pass computed absolutely.
+  // Backward scanning must preserve boundary-spanning prompts, latest-user selection and absolute interaction offsets.
   it('reads a Command Code prompt that straddles the backward-scan chunk boundary', () => {
     const tmpDir = mkdtempSync(join(tmpdir(), 'orca-command-code-chunk-straddle-'))
     const transcriptPath = join(tmpDir, 'transcript.jsonl')
@@ -289,8 +284,7 @@ describe('shared agent-hook-listener', () => {
         role: 'user',
         content: [{ type: 'text', text: 'straddling prompt' }]
       })
-      // Place the prompt so it spans the 64 KiB read boundary counted back from
-      // EOF: the scan must stitch the two reads together to see the whole line.
+      // Straddle the 64KiB boundary counted backward from EOF.
       const chunkBytes = 64 * 1024
       const bytesAfterPrompt = chunkBytes - Math.floor(Buffer.byteLength(promptLine) / 2)
       const tail = Array.from({ length: 271 }, (_value, index) =>
@@ -342,9 +336,7 @@ describe('shared agent-hook-listener', () => {
     const originalConcat = Buffer.concat
     let concatenatedBytes = 0
     try {
-      // A single tool result spanning many 64 KiB read blocks. Re-joining the
-      // accumulated carry per block copies O(line^2) bytes; the chunk list defers
-      // to one join, so total copied bytes stay proportional to the line.
+      // A single multi-block tool result exposes quadratic carry concatenation.
       const lineBytes = 2 * 1024 * 1024
       const hugeLine = JSON.stringify({
         role: 'assistant',
@@ -382,8 +374,7 @@ describe('shared agent-hook-listener', () => {
       )
 
       expect(tool?.payload.prompt).toBe('prompt behind a huge tool result')
-      // Linear copies once (~lineBytes). The quadratic form copied ~16x that at
-      // this size and grows with the square, so 4x separates them decisively.
+      // A 4x copy bound separates one linear join from the old ~16x amplification.
       expect(concatenatedBytes).toBeLessThan(lineBytes * 4)
     } finally {
       Buffer.concat = originalConcat
@@ -395,8 +386,7 @@ describe('shared agent-hook-listener', () => {
     const tmpDir = mkdtempSync(join(tmpdir(), 'orca-command-code-long-line-'))
     const transcriptPath = join(tmpDir, 'transcript.jsonl')
     try {
-      // A prompt longer than one 64 KiB block: the scan sees consecutive blocks
-      // with no newline at all and must stitch them before parsing.
+      // Prompts exceeding 64KiB require stitching blocks with no newline.
       const promptText = `pasted prompt ${'W'.repeat(150 * 1024)}`
       writeFileSync(
         transcriptPath,
@@ -437,8 +427,7 @@ describe('shared agent-hook-listener', () => {
     const tmpDir = mkdtempSync(join(tmpdir(), 'orca-command-code-over-cap-'))
     const transcriptPath = join(tmpDir, 'transcript.jsonl')
     try {
-      // The only user line sits beyond the 4 MB cap, so the bounded scan must not
-      // reach it — dropping the cap would restore the unbounded read this avoids.
+      // Put the only user line beyond 4MB so removing the read cap fails.
       const filler = JSON.stringify({
         role: 'assistant',
         content: [{ type: 'text', text: 'f'.repeat(64 * 1024) }]
@@ -541,9 +530,7 @@ describe('shared agent-hook-listener', () => {
         content: [{ type: 'text', text: 'same text' }]
       })
       const answer = JSON.stringify({ role: 'assistant', content: [{ type: 'text', text: 'a' }] })
-      // Why past one chunk: the offset is absolute over the whole file, so the
-      // prompt must sit beyond a single backward-scan read for a chunk-relative
-      // offset to be distinguishable from the correct one.
+      // Place the prompt beyond one chunk to distinguish absolute and chunk-relative offsets.
       const filler = Array.from({ length: 900 }, (_value, index) =>
         JSON.stringify({
           role: 'assistant',
@@ -574,9 +561,7 @@ describe('shared agent-hook-listener', () => {
         'production'
       )?.promptInteractionKey
 
-      // The offset segment must be the prompt line's real position in the file;
-      // a chunk-relative value would make two turns collide across reads.
-      // Key shape: command-code-transcript-<pathHash>-<offset>-<textHash>.
+      // The key's offset must be absolute or turns can collide across reads.
       expect(key?.split('-')[4]).toBe(String(promptOffset))
     } finally {
       rmSync(tmpDir, { recursive: true, force: true })

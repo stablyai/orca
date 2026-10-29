@@ -42,7 +42,8 @@ export type HostScopedWorktreeSelection = { selector: string; worktreeId: string
 export function selectEnclosingWorktreeSelectionOnHost(
   catalog: readonly CatalogRow[],
   cwd: string,
-  hostId: ExecutionHostId
+  hostId: ExecutionHostId,
+  callerWorktreeId?: string
 ): HostScopedWorktreeSelection | undefined {
   const currentPath = resolvePath(cwd)
   let enclosing: CatalogRow | undefined
@@ -52,7 +53,14 @@ export function selectEnclosingWorktreeSelectionOnHost(
       continue
     }
     const rowPath = resolvePath(row.path)
-    if (!isPathInsideOrEqual(rowPath, currentPath) || rowPath.length <= enclosingPathLength) {
+    if (!isPathInsideOrEqual(rowPath, currentPath)) {
+      continue
+    }
+    // Folder workspaces share their project's path, so only the caller's pane can break the tie.
+    if (
+      rowPath.length < enclosingPathLength ||
+      (rowPath.length === enclosingPathLength && row.id !== callerWorktreeId)
+    ) {
       continue
     }
     enclosing = row

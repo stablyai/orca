@@ -351,6 +351,9 @@ describe('session parse cache persistence', () => {
         resume: null
       })
       await vi.advanceTimersByTimeAsync(1_000)
+      if (second === 14) {
+        expect(write).toHaveBeenCalledOnce()
+      }
     }
     expect(write).toHaveBeenCalledOnce()
     await flushSessionParseCachePersist()

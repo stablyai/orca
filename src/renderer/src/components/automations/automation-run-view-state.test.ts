@@ -143,7 +143,7 @@ describe('automation run view state', () => {
     ).toMatchObject({ availability: 'metadata', actionLabel: 'View run', canOpen: false })
   })
 
-  it('keeps skipped or missing-workspace runs as metadata-only history', () => {
+  it('keeps runs without a workspace as metadata-only history', () => {
     expect(
       getAutomationRunViewState({
         run: makeRun({ workspaceId: null, terminalSessionId: null }),

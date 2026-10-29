@@ -22,18 +22,13 @@ export type TerminalNativeOnlyShortcutTracker = {
   clear: () => void
 }
 
-/**
- * Physical-key identity for pairing a native-only keydown with its keypress/keyup.
- * Why: Chromium keypress can omit `code` and report only `key: " "`; normalize so
- * keydown (`code: "Space"`) still matches the companion events.
- */
+/** Normalize physical identity so keypress with no code still pairs with Space keydown. */
 export function getTerminalShortcutKeyIdentity(event: TerminalNativeOnlyShortcutKeyEvent): string {
   const code = event.code?.trim()
   if (code) {
     return code
   }
-  // Why: Space is the reported input-source chord; bare " " must not diverge
-  // from code-based identities used on keydown.
+  // Bare Space must match the code-based identity used at keydown.
   if (event.key === ' ' || event.key === 'Spacebar' || event.key === 'Space') {
     return 'Space'
   }
@@ -58,8 +53,7 @@ function consumeCompanion(
   if (event.type !== 'keypress' && event.type !== 'keyup') {
     return false
   }
-  // Why: match either normalized identity so keypress without `code` still
-  // pairs with a keydown that used `code: "Space"`.
+  // Either normalized alias can pair code-less keypress with Space keydown.
   const candidates = getCompanionKeyCandidates(event)
   let matched: string | null = null
   for (const candidate of candidates) {
@@ -94,8 +88,7 @@ export function createTerminalNativeOnlyShortcutTracker(): TerminalNativeOnlySho
     if (event.inputType !== 'insertText' || event.isComposing) {
       return false
     }
-    // Why: an input-source change can also commit IME text before keyup; cancel
-    // only the printable text produced by a configured native-only chord.
+    // Input-source changes can commit IME text before release; cancel only this native chord’s printable text.
     for (const key of pendingKeys.values()) {
       if (getExpectedText(key) === event.data) {
         return true
@@ -106,8 +99,7 @@ export function createTerminalNativeOnlyShortcutTracker(): TerminalNativeOnlySho
 
   return {
     prepareKeyDown: (event) => {
-      // Why: replace a lost-keyup entry for this key without disarming other
-      // held native-only keys during normal key rollover.
+      // Replace only this key’s lost-release entry so rollover preserves other held native chords.
       if (!event.repeat) {
         pendingKeys.delete(getTerminalShortcutKeyIdentity(event))
       }

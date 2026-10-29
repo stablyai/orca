@@ -16,6 +16,7 @@ import { useFileExplorerImport } from './useFileExplorerImport'
 import { useFileExplorerInlineInput } from './useFileExplorerInlineInput'
 import { useFileExplorerNodeCommands } from './use-file-explorer-node-commands'
 import { useFileExplorerRowScrolling } from './use-file-explorer-row-scrolling'
+import { useFileExplorerLoadMore } from './use-file-explorer-load-more'
 import { useFileExplorerTreeLoadEffects } from './use-file-explorer-tree-load-effects'
 import { useFileExplorerWatch } from './useFileExplorerWatch'
 import type { useFileExplorerSelection } from './useFileExplorerSelection'
@@ -60,14 +61,7 @@ type UseFileExplorerTreePaneStateResult = {
   fileDropOwnerRef: (root: HTMLElement | null) => void
 }
 
-/**
- * Owns every effect and command handler behind the explorer tree pane.
- *
- * Why: this must be called by FileExplorer above its `!worktreePath` early
- * return. The reset guard and SSH generation refs live here, and losing them
- * for a single null-worktree render would re-reset the tree — dropping the
- * whole directory cache — when the same workspace comes back.
- */
+/** Call above FileExplorer’s null-worktree return; losing reset/SSH refs for one render would discard the returning workspace’s directory cache. */
 export function useFileExplorerTreePaneState({
   onRevealOutsideRoot,
   activeWorktreeId,
@@ -100,6 +94,7 @@ export function useFileExplorerTreePaneState({
     markPathAsDirectory,
     refreshTree,
     refreshDir,
+    loadMoreDir,
     isDirStale,
     resetAndLoad
   } = tree
@@ -243,9 +238,18 @@ export function useFileExplorerTreePaneState({
     loadingDirPaths,
     rootCache,
     loadDir,
+    loadMoreDir,
     setSelectedPath: setSingleSelectedPath,
     activeFileId,
     openFiles
+  })
+
+  useFileExplorerLoadMore({
+    virtualizer: rowScrolling.virtualizer,
+    rowProjection,
+    dirCache,
+    loadingDirPaths,
+    loadMoreDir
   })
 
   const handlers = useFileExplorerHandlers({

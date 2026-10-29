@@ -48,8 +48,7 @@ describe('createPinnedTabCloseConfirmSlice', () => {
   it('clears the request before running onConfirm so re-entrant closes do not loop', () => {
     const store = makeStore()
     const onConfirm = vi.fn(() => {
-      // Why: a close path may synchronously inspect the pending request; it must
-      // already be cleared by the time onConfirm runs.
+      // Clear pending before onConfirm; close paths can synchronously inspect/reenter it.
       expect(store.getState().pinnedTabCloseConfirm).toBeNull()
     })
     store.getState().requestPinnedTabCloseConfirm({ tabLabel: 'Docs', onConfirm })

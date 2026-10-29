@@ -1,3 +1,4 @@
+import { captureRuntimeEnvironmentRequestRevision } from '@/runtime/runtime-environment-revision'
 import type { BrowserSlice, BrowserSliceGet, BrowserSliceSet } from './browser-slice-contract'
 import type { BrowserSessionProfile } from '../../../../../shared/browser-workspace-types'
 import type {
@@ -37,15 +38,14 @@ export function createBrowserProfileListActions(
         parsedHostId?.kind === 'runtime' ? parsedHostId.environmentId : null
       if (runtimeEnvironmentId) {
         try {
+          const pairingRevision = captureRuntimeEnvironmentRequestRevision(runtimeEnvironmentId)
           const result = await callRuntimeRpc<BrowserProfileListResult>(
             { kind: 'environment', environmentId: runtimeEnvironmentId },
             'browser.profileList',
             undefined,
-            { timeoutMs: 15_000 }
+            { timeoutMs: 15_000, expectedEnvironmentPairingRevision: pairingRevision }
           )
-          // Why: client-hosted imports never touch the server, so the server's
-          // records can't carry the "imported from Chrome" badge — this desktop
-          // remembers what it imported into each environment's jar and overlays it.
+          // Server never observes client imports; overlay desktop-tracked import badges onto each environment’s jar.
           const clientImportSources = await window.api.browser
             .sessionClientRouteImportSources?.({ environmentId: runtimeEnvironmentId })
             .catch(() => ({}))
@@ -56,6 +56,13 @@ export function createBrowserProfileListActions(
           )
           if (isLatest()) {
             set((s) => listedProfilesByHostUpdate(s, profiles, hostId))
+          }
+          return {
+            hostId,
+            environmentId: runtimeEnvironmentId,
+            pairingRevision,
+            profiles,
+            executorRuntimeId: result.executorRuntimeId
           }
         } catch {
           if (isLatest()) {
@@ -72,6 +79,7 @@ export function createBrowserProfileListActions(
       } catch {
         /* best-effort — stale profile list is preferable to a crash */
       }
+      return undefined
     },
 
     createBrowserSessionProfile: async (scope, label) => {

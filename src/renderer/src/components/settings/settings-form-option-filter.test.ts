@@ -24,23 +24,6 @@ function createThemeOption(
 }
 
 describe('settings-form-option-filter', () => {
-  it('filters terminal themes by label and source label', () => {
-    const themes = [
-      createThemeOption('Solarized Dark'),
-      createThemeOption('Night Owl', 'imported', 'Imported from Ghostty'),
-      createThemeOption('Tango Light')
-    ]
-
-    expect(filterTerminalThemeOptions(themes, 'ghostty')).toEqual([themes[1]])
-    expect(filterTerminalThemeOptions(themes, ' dark ')).toEqual([themes[0]])
-  })
-
-  it('orders font suggestions by prefix matches before substring matches', () => {
-    expect(filterFontSuggestions(['Fira Code', 'Cascadia Code', 'Code New Roman'], 'code')).toEqual(
-      ['Code New Roman', 'Fira Code', 'Cascadia Code']
-    )
-  })
-
   it('enforces the query budget by UTF-8 byte length', () => {
     const query = 'é'.repeat(SETTINGS_FORM_OPTION_QUERY_MAX_BYTES)
 

@@ -1,10 +1,24 @@
+import { delimiter, isAbsolute, resolve } from 'node:path'
+import { waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
+import {
+  assertStructuredAgentResolutionCurrent,
+  resolveAgainAfterRefreshOnMissingProgram,
+  type StructuredAgentResolutionOperation
+} from '../native-chat/structured-agent-command-resolution'
+// How a durable session record becomes a Codex process launch.
+//
+// Every input is read back from the record the store already made durable, not
+// from the call that triggered spawn. A client that attaches twice must
+// land in the same working directory under the same account home, and a resume
+// must name the thread this session actually proved — never one a caller asks
+// for, which is how a resume becomes a fork wearing a resume's name.
+
 import { requireLegacyAgentSessionAccountHome } from '../../shared/agent-session-account-home'
 import { agentSessionProviderHandleChainHead } from '../../shared/agent-session-provider-handle'
 import { resolveCodexCommand } from '../codex-cli/command'
-import { resolveAgainAfterRefreshOnMissingProgram } from '../native-chat/structured-agent-command-resolution'
 import type { StructuredAgentLaunchPartResolver } from '../runtime/structured-agent-launch-composition'
 import type { CodexStructuredLaunch } from './codex-structured-session-adapter'
-import { codexStructuredPermissionPolicy } from './codex-structured-permission-policy'
+import { codexStructuredPermissionPolicy } from '../../shared/codex-permission-policy'
 import { codexStructuredLaunchArgs } from './codex-structured-launch-args'
 import {
   LEGACY_NATIVE_CHAT_VISUALS_DIR_ENV,
@@ -21,6 +35,8 @@ export type CodexStructuredInvocationDeps = Pick<
   CodexStructuredLaunchPartDeps,
   'resolveCommand'
 > & {
+  signal?: AbortSignal
+  operation?: StructuredAgentResolutionOperation
   /** Fresh spawn environment, never persisted in the session record. */
   resolveEnvironment?: () => Promise<NodeJS.ProcessEnv>
   /** Refresh after a missing binary; absence disables retry. */
@@ -41,15 +57,35 @@ export function resolveCodexStructuredInvocation(
   return resolveAgainAfterRefreshOnMissingProgram(
     () => readCodexStructuredInvocation(deps),
     deps.refreshEnvironmentAfterMiss,
-    { env: ({ environment }) => environment, cwd: deps.resolveWorkingDirectory }
+    {
+      env: ({ environment }) => environment,
+      cwd: deps.resolveWorkingDirectory,
+      signal: deps.signal
+    },
+    deps.operation
   )
 }
 
 async function readCodexStructuredInvocation(
   deps: CodexStructuredInvocationDeps
 ): Promise<CodexStructuredInvocation> {
-  const environment = await deps.resolveEnvironment?.()
-  const pathEnv = environment?.PATH ?? environment?.Path ?? null
+  assertStructuredAgentResolutionCurrent(deps.operation)
+  const environment = await waitForPromiseWithSignal(
+    Promise.resolve(deps.resolveEnvironment?.()),
+    deps.signal
+  )
+  assertStructuredAgentResolutionCurrent(deps.operation)
+  const cwd = await waitForPromiseWithSignal(
+    Promise.resolve(deps.resolveWorkingDirectory?.()),
+    deps.signal
+  )
+  assertStructuredAgentResolutionCurrent(deps.operation)
+  deps.signal?.throwIfAborted()
+  const pathEnv =
+    (environment?.PATH ?? environment?.Path)
+      ?.split(delimiter)
+      .map((entry) => (entry && !isAbsolute(entry) ? resolve(cwd ?? process.cwd(), entry) : entry))
+      .join(delimiter) ?? null
   const homePath = environment?.HOME ?? environment?.USERPROFILE
   const command = (deps.resolveCommand ?? resolveCodexCommand)({
     pathEnv,
@@ -87,8 +123,10 @@ export function codexStructuredLaunchPart(
         resumeThreadId,
         // Only created threads may be unsaved; resumed, forked and adopted threads were persisted.
         ...(resumeThreadId && head?.origin === 'created' ? { supersedeIfUnsaved: true } : {}),
-        // Omitted policy fields would inherit the resumed thread's previous permissions.
-        permissionPolicy: codexStructuredPermissionPolicy(basis.permissionMode ?? 'ask'),
+        // Own settings leaves a new thread to config and a resumed thread to its saved policy.
+        ...(basis.permissionMode === 'own'
+          ? {}
+          : { permissionPolicy: codexStructuredPermissionPolicy(basis.permissionMode ?? 'ask') }),
         ...(model ? { model } : {}),
         ...(visuals ? { visuals } : {})
       },

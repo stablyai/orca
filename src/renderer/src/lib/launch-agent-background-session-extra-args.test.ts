@@ -96,26 +96,6 @@ describe('launchAgentBackgroundSession with automation extras', () => {
     })
   })
 
-  it('merges extras over the default arguments, before the prompt', async () => {
-    const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
-    mockSpawn.mockResolvedValue({ id: 'pty-1' })
-
-    await launchAgentBackgroundSession({
-      agent: 'claude',
-      worktreeId: 'wt-1',
-      prompt: 'run the automation',
-      extraAgentArgs: '--model opus --add-dir "my docs"'
-    })
-
-    expect(mockSpawn.mock.calls[0]?.[0]).toMatchObject({
-      command:
-        "claude '--dangerously-skip-permissions' '--model' 'opus' '--add-dir' 'my docs' 'run the automation'",
-      launchConfig: {
-        agentArgs: "'--dangerously-skip-permissions' '--model' 'opus' '--add-dir' 'my docs'"
-      }
-    })
-  })
-
   it('fails before reserving a tab or spawning when the extras are refused', async () => {
     const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
 

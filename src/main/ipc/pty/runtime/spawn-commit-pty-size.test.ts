@@ -1,3 +1,4 @@
+import { restoreProvisionalPtySize, seedPtySpawnSize } from '../spawn-options-assembly'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ptySizes } from '../delivery/visibility-state'
 import { commitRuntimePtySpawn } from './spawn-commit'
@@ -44,15 +45,55 @@ describe('runtime spawn commit: adopted agent-session claim', () => {
     return { runtime, ctx }
   }
 
+  it('preserves a same-id winner grid when releasing a provisional loser seed', async () => {
+    const winnerGrid = { cols: 132, rows: 45 }
+    ptySizes.set(PTY_ID, { cols: 91, rows: 31 })
+    const loser = {
+      provisionalPtySize: seedPtySpawnSize({
+        sessionId: PTY_ID,
+        sessionAppId: PTY_ID,
+        isFreshSessionId: true,
+        requestIsUnmeasured: false,
+        cols: 80,
+        rows: 24
+      })
+    }
+    expect(ptySizes.get(PTY_ID)).toEqual({ cols: 80, rows: 24 })
+    const { ctx } = makeAdoptedCtx({
+      isReattach: true,
+      snapshotCols: winnerGrid.cols,
+      snapshotRows: winnerGrid.rows
+    })
+    await commitRuntimePtySpawn(ctx)
+    expect(ptySizes.get(PTY_ID)).toEqual(winnerGrid)
+
+    restoreProvisionalPtySize(loser, { reattachId: PTY_ID })
+    expect(loser.provisionalPtySize).toBeUndefined()
+    expect(ptySizes.get(PTY_ID)).toEqual(winnerGrid)
+    restoreProvisionalPtySize(loser)
+    expect(ptySizes.get(PTY_ID)).toEqual(winnerGrid)
+  })
+
   it('commits the live grid from the adoption reply before the early return', async () => {
     const { runtime, ctx } = makeAdoptedCtx({
       isReattach: true,
+      launchAgent: 'codex',
+      launchToken: 'owner-token',
       snapshotCols: LIVE_GRID.cols,
       snapshotRows: LIVE_GRID.rows
     })
 
-    await commitRuntimePtySpawn(ctx)
+    const reply = await commitRuntimePtySpawn(ctx)
 
+    expect(reply.kind).toBe('adopted')
+    expect(reply.result).toMatchObject({
+      id: PTY_ID,
+      isReattach: true,
+      launchAgent: 'codex',
+      launchToken: 'owner-token',
+      snapshotCols: LIVE_GRID.cols,
+      snapshotRows: LIVE_GRID.rows
+    })
     expect(ptySizes.get(PTY_ID)).toEqual(LIVE_GRID)
     expect(runtime.reflowHeadlessTerminalToPtyGrid).toHaveBeenCalledWith(
       PTY_ID,
@@ -65,7 +106,14 @@ describe('runtime spawn commit: adopted agent-session claim', () => {
   it('treats an adoption without a reattach flag as an attach and keeps the held size', async () => {
     ptySizes.set(PTY_ID, LIVE_GRID)
     const { runtime, ctx } = makeAdoptedCtx({})
-    ctx.sessionSizeBeforeAttach = LIVE_GRID
+    ctx.provisionalPtySize = seedPtySpawnSize({
+      sessionId: PTY_ID,
+      sessionAppId: PTY_ID,
+      isFreshSessionId: false,
+      requestIsUnmeasured: false,
+      cols: 120,
+      rows: 40
+    })
 
     await commitRuntimePtySpawn(ctx)
 

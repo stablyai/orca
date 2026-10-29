@@ -32,6 +32,7 @@ import {
 } from '../../../skills/skill-discovery-target'
 import { SKILL_INSTALL_RESULT_V2_CAPABILITY } from '../../../../shared/skill-install-capability'
 import type { OrcaRuntimeService } from '../../orca-runtime'
+import { parseExecutionHostId } from '../../../../shared/execution-host'
 import {
   AGENT_SKILL_SHARING_UNSUPPORTED_ENVIRONMENT_CODE,
   AgentSkillShareRequestSchema,
@@ -42,12 +43,14 @@ import {
   SkillsDiscoverParams,
   SkillsGetInstallProgressParams
 } from '../../../../shared/rpc-contract/skills-params'
+import { unavailableWhileWslDistroStopped } from '../../../skills/skill-discovery-stopped-wsl-roots'
+import { runAsWslUserAct, wslDistroForPath } from '../../../wsl/wsl-unc-access-gate'
 
-/** Exported so the delete plan's root rebuild resolves its target exactly the
- *  way `skills.discover` resolved the scan's — including WSL. */
+// Use the same target resolution for discovery and delete-plan roots, including WSL.
 export function resolveDiscoveryTarget(
   params: z.infer<typeof SkillDiscoveryTargetSchema>,
-  runtime: Pick<OrcaRuntimeService, 'resolveProjectRuntimeForWorktree'>
+  runtime: Pick<OrcaRuntimeService, 'resolveProjectRuntimeForWorktree'>,
+  options: { refuseStoppedWslDistro?: boolean } = {}
 ) {
   const target = params.projectRuntime
     ? params
@@ -55,7 +58,22 @@ export function resolveDiscoveryTarget(
         ...params,
         projectRuntime: runtime.resolveProjectRuntimeForWorktree(params.worktreeId)
       }
-  return resolveSkillDiscoveryTarget(target)
+  return resolveSkillDiscoveryTarget(target, options)
+}
+
+// A caller naming only the workspace gets its folder from the host, which refuses SSH workspaces like desktop.
+async function withWorkspaceCwd(
+  params: z.infer<typeof SkillsDiscoverParams>,
+  runtime: Pick<OrcaRuntimeService, 'resolveRuntimeFileTarget'>
+): Promise<z.infer<typeof SkillsDiscoverParams>> {
+  if (params.cwd?.trim() || !params.worktreeId) {
+    return params
+  }
+  const target = await runtime.resolveRuntimeFileTarget(`id:${params.worktreeId}`)
+  if (parseExecutionHostId(target.executionHostId)?.kind === 'ssh') {
+    throw new Error('Skill discovery is unavailable for SSH hosts.')
+  }
+  return { ...params, cwd: target.worktree.path }
 }
 
 function skillDeleteDependencies(
@@ -73,16 +91,19 @@ export const SKILL_METHODS = [
     name: 'skills.discover',
     permission: 'workspace',
     params: SkillsDiscoverParams,
-    handler: async (params, { runtime }) => {
-      // Why: the executing runtime owns WSL project preferences. Remote callers
-      // send worktree identity only; trusting their projectRuntime absence
-      // would scan this host's native filesystem for a WSL-configured project.
-      const resolvedTarget = resolveDiscoveryTarget(params, runtime)
-      return discoverSkillsOnTarget(resolvedTarget, runtime.listRepos(), {
-        providerRootOverrides: await runtime.resolveSkillDiscoveryProviderRoots(resolvedTarget),
-        refresh: params.refresh === true
-      })
-    }
+    handler: async (params, { runtime }) =>
+      unavailableWhileWslDistroStopped(async () => {
+        // Resolve WSL preferences on the executing host; remote clients provide workspace identity, not trusted runtime absence.
+        const resolvedTarget = await resolveDiscoveryTarget(
+          await withWorkspaceCwd(params, runtime),
+          runtime,
+          { refuseStoppedWslDistro: true }
+        )
+        return discoverSkillsOnTarget(resolvedTarget, runtime.listRepos(), {
+          providerRootOverrides: await runtime.resolveSkillDiscoveryProviderRoots(resolvedTarget),
+          refresh: params.refresh === true
+        })
+      }, params.sourceKinds)
   }),
   defineMethod({
     name: 'skills.previewDelete',
@@ -91,7 +112,7 @@ export const SKILL_METHODS = [
     handler: async (params, { runtime }) =>
       previewSkillDeleteRequest(
         params,
-        resolveDiscoveryTarget(params.target ?? {}, runtime),
+        await resolveDiscoveryTarget(params.target ?? {}, runtime),
         skillDeleteDependencies(runtime)
       )
   }),
@@ -102,7 +123,7 @@ export const SKILL_METHODS = [
     handler: async (params, { runtime }) =>
       runSkillDeleteRequest(
         params,
-        resolveDiscoveryTarget(params.target ?? {}, runtime),
+        await resolveDiscoveryTarget(params.target ?? {}, runtime),
         skillDeleteDependencies(runtime)
       )
   }),
@@ -131,17 +152,23 @@ export const SKILL_METHODS = [
           'Publishing skills through a paired client is not supported. Run the command from Orca on the machine that stores the skills.'
         )
       }
-      const resolvedTarget = resolveDiscoveryTarget(params.target ?? {}, runtime)
+      const resolvedTarget = await resolveDiscoveryTarget(params.target ?? {}, runtime)
       if (resolvedTarget.kind !== 'native-host') {
         throw new AgentSkillSharingError(
           AGENT_SKILL_SHARING_UNSUPPORTED_ENVIRONMENT_CODE,
           'Publishing skills from a forwarded WSL session is not supported yet. Run the command from Orca on the machine that stores the skills.'
         )
       }
-      const discovered = await discoverSkillsOnTarget(resolvedTarget, runtime.listRepos(), {
-        providerRootOverrides: await runtime.resolveSkillDiscoveryProviderRoots(resolvedTarget),
-        refresh: true
-      })
+      // Sharing named skills is a user act: it may start the workspace's distro.
+      const discovered = await runAsWslUserAct(
+        resolvedTarget.cwd ? wslDistroForPath(resolvedTarget.cwd) : null,
+        async () =>
+          discoverSkillsOnTarget(resolvedTarget, runtime.listRepos(), {
+            providerRootOverrides: await runtime.resolveSkillDiscoveryProviderRoots(resolvedTarget),
+            refresh: true,
+            gateStoppedWslDistros: false
+          })
+      )
       return runtime.publishDiscoveredSkillsFromAgent(params, discovered.skills, signal)
     }
   }),

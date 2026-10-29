@@ -1,6 +1,4 @@
-// Bind-first census (L80): every production site that registers a terminal with the runtime runs
-// after the write that binds its pane, so main's layout answers which pane holds it from then on.
-// A new registration site fails here until it is listed with the binding write that precedes it.
+// Census every registration path and its preceding binding write; new paths must establish pane ownership before registering (L80).
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import ts from 'typescript-api'

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { RuntimeWorktreeTerminalSleepResult } from '../../../shared/runtime-types'
 import type { WorkspaceSleepNotice, WorkspaceSleepTarget } from '../../../shared/workspace-sleep'
-import { toRemoteRuntimePtyId } from '../../../shared/remote-runtime-pty-id'
+import { toRemoteRuntimePtyId } from '../../../shared/remote-runtime/remote-runtime-pty-id'
 import { WorkspaceLifecycleQueue } from './workspace-lifecycle-queue'
 import {
   sleepWorkspaces,
@@ -48,7 +48,6 @@ function deps(overrides: Partial<WorkspaceSleepDeps> = {}) {
   return { log, deps: all }
 }
 
-/** Each workspace's sleep in `queue`, keyed by its id. */
 function queued(queue = new WorkspaceLifecycleQueue()): WorkspaceSleepQueue {
   return {
     submit: (target, command) => queue.submit(target.worktreeId, command),

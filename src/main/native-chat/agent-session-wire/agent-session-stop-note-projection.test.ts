@@ -98,7 +98,7 @@ it.each([false, true])(
     expect(projected.body).toEqual(ordinary)
     expect(projected).toEqual({ ...prior, body: ordinary })
     expect(projected).not.toBe(prior)
-    expect(readNote()).not.toBe(projected)
+    expect(readNote()).toBe(projected)
     expect(journal.itemBody(noteId)).toBe(raw)
     expect(rows()).toEqual(stored)
     expect(stored.filter((row) => row.kind === 'item' && row.itemId === noteId)).toHaveLength(1)

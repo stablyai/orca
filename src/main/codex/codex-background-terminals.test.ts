@@ -1,10 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import type { AgentChildWorkEvidence } from '../../shared/agent-status-child-work-evidence'
 import { codexPrimaryCommandTaskId } from '../../shared/structured-session-foreground-commands'
-import {
-  CodexAppServerRequestError,
-  type CodexAppServerConnection
-} from './codex-app-server-connection'
+import { CodexAppServerRequestError } from './app-server/codex-app-server-request-error'
+import type { CodexAppServerConnection } from './app-server/codex-app-server-connection-types'
 import {
   CodexAppServerTimeoutError,
   CodexAppServerUnsupportedError

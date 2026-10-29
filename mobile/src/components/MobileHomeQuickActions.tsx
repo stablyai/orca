@@ -1,7 +1,9 @@
 import { Plus, QrCode } from 'lucide-react-native'
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { Pressable, Text, View } from 'react-native'
 import type { HostProfile } from '../transport/types'
 import { colors, radii, spacing } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 
 type Props = {
   connectedHosts: HostProfile[]
@@ -10,6 +12,7 @@ type Props = {
 }
 
 export function MobileHomeQuickActions(props: Props) {
+  useMobileColorScheme()
   const canCreateWorkspace = props.connectedHosts.length > 0
 
   return (
@@ -47,7 +50,7 @@ export function MobileHomeQuickActions(props: Props) {
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   sectionHeading: {
     marginTop: spacing.xl,
     marginBottom: spacing.sm,
@@ -93,4 +96,4 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600'
   }
-})
+}))

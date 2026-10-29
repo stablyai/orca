@@ -1,7 +1,4 @@
-// Frame parity: for each stored profile, the store slices the frame applier builds from main's
-// published layout frames, the content facts and the window's view must equal the slices the
-// window's startup restores from the stored session. The window's view of them must differ only
-// as the Loader parity test lists; slices may differ only as listed below.
+// Compare frame-applied slices with disk-session startup restore. Views may differ only by Loader parity entries; slice differences are enumerated below.
 
 import { describe, expect, it, vi } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
@@ -48,7 +45,7 @@ import {
   projectStartupWindowView
 } from './startup-window-view.test-fixture'
 
-// Main and the frame applier run as in a layout-owner build; the restore they match runs as today's.
+// Compare layout-owner main/frame application against legacy window restore.
 const layoutOwner = vi.hoisted(() => ({ isMain: true }))
 vi.mock('../../../shared/layout-owner-switch', () => ({
   get ORCA_LAYOUT_OWNER_IS_MAIN() {
@@ -180,7 +177,6 @@ function frameInput(hostId: ExecutionHostId, stored: WorkspaceSessionState): Lay
   }
 }
 
-/** Every leaf value that differs, as `slice key …` paths. */
 function diffSlices(restored: unknown, applied: unknown, path: string, into: string[]): string[] {
   if (JSON.stringify(restored) === JSON.stringify(applied)) {
     return into
@@ -205,7 +201,7 @@ function diffSlices(restored: unknown, applied: unknown, path: string, into: str
 const PARITY_REATTACH_ONLY = (paths: string[]): boolean =>
   paths.every((path) => path.endsWith(' reattaches'))
 
-/** View paths the Loader parity test lists for a fixture, minus what the applier never writes. */
+/** Loader parity paths excluding reconnect-only state the frame applier never writes. */
 function loaderParityPaths(fixture: string): string[] {
   return [
     ...KNOWN_DIFFERENCES.filter((entry) => entry.fixture === fixture).flatMap(

@@ -3,7 +3,7 @@ import {
   getMatchingJiraSites,
   isResolvedJiraIssueMatch,
   parseJiraIssueUrl
-} from '../../../src/shared/jira-issue-url'
+} from '../../../src/shared/jira/jira-issue-url'
 import type { RpcOperationSender } from '../transport/rpc-operation-sender'
 import { jiraIssueRead } from './mobile-jira-operations'
 

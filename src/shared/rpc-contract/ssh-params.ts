@@ -17,9 +17,8 @@ export const SshConnect = SshTarget.extend({
 
 const boundedText = (max: number) => z.string().trim().min(1).max(max)
 
-// Why strict: an unknown key (a password, a passphrase, or a main-owned field such as a
-// generation or managed-server fence) is refused rather than silently dropped, so a client can
-// never believe the server kept a secret. Credentials are asked for when the server connects.
+// Reject unknown keys, including credentials and host-owned fences, so callers cannot believe secrets were saved.
+// Ask for credentials when connecting.
 export const SshEditableTargetInput = z
   .object({
     label: boundedText(200),

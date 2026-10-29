@@ -2,6 +2,7 @@ import { CLEARED_HOSTED_REVIEW_SELECTION_UPDATES } from '../../../../shared/work
 import type { StateCreator } from 'zustand'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import type { AppState } from '../types'
+import type { RuntimeFocusSettings } from '../../../../shared/github/github-cache-key'
 import type { GitHubSlice } from './slice-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { PRInfo } from '../../../../shared/github/pull-request-types'
@@ -18,16 +19,20 @@ import { callRuntimeRpc } from '../../runtime/runtime-rpc-client'
 import { inflightPRRequests, prRequestGenerations } from './request-coordination'
 import { getRuntimeRepoTarget } from './repository-routing'
 import { applyCachedChecksStatus } from './pr-check-status-cache'
+import { isWslHostOffForForge, withForgeHostOffSkip } from './wsl-host-off-forge'
+import { cachedPRCandidateFields } from './pr-refresh-cached-candidate-fields'
 import { setGitHubPRResultCaches, shouldPreserveExistingPRForFallbackMiss } from './pr-result-cache'
 import {
   findUniqueWorktreeById,
   findWorktreeById,
-  isStaleExactLinkedPRLookup,
+  isStaleExactLinkedPRLookup
+} from './worktree-refresh'
+import {
   shouldApplyBranchMismatchedLinkedPRClear,
   shouldApplyDivergedLinkedPRClear,
   shouldClearBranchMismatchedLinkedOpenPR,
   shouldClearDivergedLinkedMergedPR
-} from './worktree-refresh'
+} from '../../../../shared/github/linked-pr-staleness'
 export function startPullRequestLookup(args: {
   set: Parameters<StateCreator<AppState>>[0]
   get: Parameters<StateCreator<AppState>>[1]
@@ -36,7 +41,7 @@ export function startPullRequestLookup(args: {
   options: Parameters<GitHubSlice['fetchPRForBranch']>[2]
   repo: Repo | undefined
   repoId: string | undefined
-  requestSettings: AppState['settings']
+  requestSettings: RuntimeFocusSettings
   requestTarget: RuntimeClientTarget
   cacheKey: string
   cached: CacheEntry<PRInfo> | undefined
@@ -70,7 +75,13 @@ export function startPullRequestLookup(args: {
   } = args
   const request = (async () => {
     try {
-      const runtimeRepo = getRuntimeRepoTarget(get(), repoPath, requestTarget)
+      const runtimeRepo = getRuntimeRepoTarget(get(), { repoId, repoPath }, requestTarget)
+      if (runtimeRepo && isWslHostOffForForge(get(), runtimeRepo.target.environmentId)) {
+        if (prRequestGenerations.get(cacheKey) === generation) {
+          set((s) => withForgeHostOffSkip(s.prRefreshStates, cacheKey))
+        }
+        return cached?.data ?? null
+      }
       const candidateWorktree = options?.worktreeId
         ? findWorktreeById(get(), options.worktreeId)
         : null
@@ -105,14 +116,8 @@ export function startPullRequestLookup(args: {
               fallbackPRSource,
               connectionId: repo?.connectionId ?? null,
               executionHostId: repo?.executionHostId ?? null,
-              cachedFetchedAt: cached?.fetchedAt ?? null,
-              cachedHeadOid: cached?.fetchedHeadOid ?? cached?.data?.headSha ?? null,
               isSelected: options?.worktreeId === get().activeWorktreeId,
-              cachedHasPR: cached?.data ? true : cached ? false : null,
-              cachedPRState: cached?.data?.state ?? null,
-              cachedChecksStatus: cached?.data?.checksStatus ?? null,
-              cachedMergeable: cached?.data?.mergeable ?? null,
-              cachedMergeStateStatus: cached?.data?.mergeStateStatus ?? null
+              ...cachedPRCandidateFields(cached)
             }
             const response = window.api.gh.refreshPRNow
               ? await window.api.gh.refreshPRNow({
@@ -132,7 +137,7 @@ export function startPullRequestLookup(args: {
           })()
       const pr = outcome.kind === 'found' ? outcome.pr : null
       if (outcome.kind === 'upstream-error') {
-        // Why: the runtime RPC path skips the coordinator broadcast that fills prRefreshStates on native, so record the classified error here for Checks parity with native (design criterion 2).
+        // Runtime RPC bypasses native coordinator broadcasts; record classified errors here for Checks parity (criterion 2).
         if (runtimeRepo && prRequestGenerations.get(cacheKey) === generation) {
           set((s) => {
             const nextStates = { ...s.prRefreshStates }

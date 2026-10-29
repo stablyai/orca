@@ -226,6 +226,7 @@ export function removeConflictingOverrides(
       return next
     }
 
+    next = { ...next }
     for (const actionId of conflictingOverrides) {
       delete next[actionId]
     }

@@ -11,7 +11,6 @@ import {
   DropdownMenuTrigger
 } from '../ui/dropdown-menu'
 
-/** Whether Settings offers "Copy sign-in link instead" for a sign-in in `runtime`. */
 export function canOfferClaudeSignInLink(runtime: 'host' | 'wsl' | undefined): boolean {
   return canCopyClaudeSignInLink(navigator.userAgent.includes('Windows'), runtime)
 }
@@ -45,7 +44,6 @@ export function withCopiedClaudeLink(
   return signIn
 }
 
-/** The ▾ beside Add Account and Sign in again. */
 export function ClaudeSignInLinkMenu({
   variant,
   disabled,

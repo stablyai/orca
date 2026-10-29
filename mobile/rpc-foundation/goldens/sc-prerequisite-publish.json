@@ -19,19 +19,9 @@
         "ran": true
       }
     },
-    "191da6f43475": {
-      "name": "progress",
-      "ordinal": 1,
-      "value": "publishing"
-    },
-    "316caee8c6a8": {
+    "1db12e6df397": {
       "name": "git.push#1",
-      "ordinal": 3,
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"git.push\",\"params\":{\"worktree\":\"id:repo42::/p\",\"publish\":true}}"
-    },
-    "ddf67b6024c1": {
-      "name": "git.push#1",
-      "ordinal": 2,
+      "ordinal": 8,
       "args": [
         {
           "name": "method",
@@ -56,13 +46,149 @@
         "startedAt": 0,
         "settledAt": 0,
         "value": {
-          "id": "frame-1",
+          "id": "frame-4",
           "ok": true,
           "result": {
             "ok": true
           }
         }
       }
+    },
+    "200b79b5dff2": {
+      "name": "progress",
+      "ordinal": 7,
+      "value": "publishing"
+    },
+    "2e60bf50e151": {
+      "name": "git.branchCompare#1",
+      "ordinal": 6,
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"git.branchCompare\",\"params\":{\"worktree\":\"id:repo42::/p\",\"baseRef\":\"origin/main\"}}"
+    },
+    "3b589774484d": {
+      "name": "worktree.show#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.show"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "worktree": {
+              "baseRef": "origin/main"
+            }
+          }
+        }
+      }
+    },
+    "4c0e61cc3218": {
+      "name": "git.push#1",
+      "ordinal": 9,
+      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"git.push\",\"params\":{\"worktree\":\"id:repo42::/p\",\"publish\":true}}"
+    },
+    "694d6cbd4ace": {
+      "name": "git.branchCompare#1",
+      "ordinal": 5,
+      "args": [
+        {
+          "name": "method",
+          "value": "git.branchCompare"
+        },
+        {
+          "name": "params",
+          "value": {
+            "baseRef": "origin/main",
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-3",
+          "ok": true,
+          "result": {
+            "entries": [],
+            "summary": {
+              "baseRef": "origin/main",
+              "changedFiles": 1,
+              "commitsAhead": 2,
+              "status": "ready"
+            }
+          }
+        }
+      }
+    },
+    "d64700b9de3b": {
+      "name": "repo.list#1",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"repo.list\"}"
+    },
+    "de284e564998": {
+      "name": "repo.list#1",
+      "ordinal": 2,
+      "args": [
+        {
+          "name": "method",
+          "value": "repo.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "repos": []
+          }
+        }
+      }
+    },
+    "dfcd2e1792cb": {
+      "name": "worktree.show#1",
+      "ordinal": 3,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.show\",\"params\":{\"worktree\":\"id:repo42::/p\"}}"
     }
   },
   "recording": {
@@ -71,13 +197,13 @@
       {
         "id": "settled",
         "observation": {
-          "sender": ["ddf67b6024c1"],
-          "payloads": ["316caee8c6a8"],
+          "sender": ["3b589774484d", "de284e564998", "694d6cbd4ace", "1db12e6df397"],
+          "payloads": ["dfcd2e1792cb", "d64700b9de3b", "2e60bf50e151", "4c0e61cc3218"],
           "settlements": {
             "apply": "00e8a3bac22f"
           },
           "state": "0fe2eb2410a4",
-          "effects": ["191da6f43475"]
+          "effects": ["200b79b5dff2"]
         }
       }
     ]

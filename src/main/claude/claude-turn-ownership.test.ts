@@ -87,6 +87,7 @@ function sessionHoldingTurn(turnId: string | null): ReturnType<typeof sessionFor
   session.translator = {
     handle: vi.fn(),
     openTurnInLiveProviderCycle: false,
+    openTurnHasInputWork: false,
     journalPrompts: {
       resolve: vi.fn(),
       handOver: () => () => {},
@@ -95,12 +96,14 @@ function sessionHoldingTurn(turnId: string | null): ReturnType<typeof sessionFor
       whenWritten: () => undefined
     },
     currentTurnId: turnId,
+    currentTurnScope: () => ({ kind: 'thread' }),
     commandTurnId: null,
     beginCommand: vi.fn(),
     forgetCommand: vi.fn(),
     commandInterruptRequested: vi.fn(),
     flush: vi.fn(),
     contextActivity: 0,
+    finalOutputAdmitted: true,
     markContextActivity: vi.fn(),
     subscribeContextUsageRequests: () => () => {},
     recordContextReport: () => {},

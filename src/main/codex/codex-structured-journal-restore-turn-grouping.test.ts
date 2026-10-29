@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { AgentJournalRenderItem } from '../../shared/agent-session-journal-types'
 import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
-import { nativeChatTurnFold } from '../../shared/native-chat-turn-fold'
+import { nativeChatTurnFold } from '../../shared/native-chat/transcript/native-chat-turn-fold'
 import { nativeChatTurnMembership } from '../../shared/native-chat-turn-membership'
 import type { NativeChatMessage } from '../../shared/native-chat-types'
 import { projectStructuredItemToNativeChat } from '../../shared/structured-agent-session-projection'

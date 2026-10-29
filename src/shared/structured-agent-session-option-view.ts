@@ -1,11 +1,13 @@
+import { structuredLaunchRequestedOptions } from './native-chat/input/native-chat-session-option-defaults'
 import {
   commitStructuredAgentSessionOptionValues,
   structuredAgentSessionOptionSnapshot,
   type StructuredAgentSessionOptionState
 } from './structured-agent-session-options'
-import type { SessionOptionDescriptor } from './native-chat-session-options'
+import type { SessionOptionDescriptor } from './native-chat/input/native-chat-session-options'
 import {
   cloneStructuredAgentSessionOptionRecord,
+  createStructuredAgentSessionOptionRecord,
   structuredAgentSessionModelId,
   structuredAgentSessionOwnValue
 } from './structured-agent-session-option-state'
@@ -19,28 +21,33 @@ function catalogListsSeedModel(
   return model === undefined || Boolean(state.catalog?.models.some((entry) => entry.id === model))
 }
 
-/**
- * What the picker shows before the host has confirmed this session's values:
- * `seed` (the selection a launch seeds) stands in until the record names a
- * model of the chat's own, and `held` picks outrank both until the host settles them. All show as `dispatched`;
- * derived on every read, never written into the record. A model the list lacks is kept: a list
- * is no evidence the chat's own model cannot run.
- *
- * The permission mode reads its own way: the held pick, else what the host stated, else the seed.
- */
+/** Derive held picks, host values and launch seeds without mutating the record; retain unlisted models.
+ * Permission mode uses held, host, explicit launch mode, then seed. */
 export function structuredAgentSessionOptionView(
   state: StructuredAgentSessionOptionState,
   seed: Readonly<Record<string, string>> | undefined,
-  held: Readonly<Record<string, string>>
+  held: Readonly<Record<string, string>>,
+  explicit?: Readonly<Record<string, string>>
 ): StructuredAgentSessionOptionState {
+  const requested = structuredLaunchRequestedOptions({ explicit, seed, held })
+  // Only a requested model replaces the shown selection; a permission mode alone overlays it.
+  if (requested?.model !== undefined) {
+    return commitStructuredAgentSessionOptionValues(
+      { ...state, record: createStructuredAgentSessionOptionRecord(state.record.agent) },
+      requested
+    )
+  }
   const { [AGENT_CHAT_PERMISSION_MODE_OPTION_ID]: heldPermission, ...heldSelection } = held
   const view = modelOptionView(state, seed, heldSelection)
   const permissionMode =
-    heldPermission ?? state.permissionMode ?? seed?.[AGENT_CHAT_PERMISSION_MODE_OPTION_ID] ?? null
+    heldPermission ??
+    state.permissionMode ??
+    requested?.[AGENT_CHAT_PERMISSION_MODE_OPTION_ID] ??
+    seed?.[AGENT_CHAT_PERMISSION_MODE_OPTION_ID] ??
+    null
   return view.permissionMode === permissionMode ? view : { ...view, permissionMode }
 }
 
-/** The picker of a client that holds no launch selection, such as the phone. */
 export function structuredAgentSessionShownSnapshot(
   state: StructuredAgentSessionOptionState
 ): SessionOptionDescriptor[] {
@@ -84,9 +91,7 @@ function modelOptionView(
   return { ...commitStructuredAgentSessionOptionValues(view, held), pendingId: state.pendingId }
 }
 
-/** The Claude model and effort a send carries: the chat's own and the picks over them in `view`.
- *  A new chat (or an older host's answer) sends the defaults it shows, so a new chat's first send
- *  pins them; a resumed chat shows its host's defaults but never sends them. */
+/** Claude sends its own values plus held picks. New chats/older hosts pin shown defaults on first send; resumed chats display defaults without sending them. */
 export function structuredAgentSessionSendSelection(
   view: StructuredAgentSessionOptionState
 ): Record<string, string> | undefined {

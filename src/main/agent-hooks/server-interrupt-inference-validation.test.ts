@@ -454,7 +454,7 @@ describe('the main agent fact on an inferred interrupt', () => {
             state: 'working',
             workingMode: 'monitoring',
             prompt: 'watch it',
-            agentType: 'grok',
+            agentType: 'gemini',
             mainAgent: settled
           }
         },
@@ -468,7 +468,7 @@ describe('the main agent fact on an inferred interrupt', () => {
           baselineUpdatedAt: baseline.receivedAt,
           baselineStateStartedAt: baseline.stateStartedAt,
           baselinePrompt: 'watch it',
-          baselineAgentType: 'grok',
+          baselineAgentType: 'gemini',
           intent: 'ctrl-c'
         })
       ).toBe(false)

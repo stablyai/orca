@@ -54,8 +54,7 @@ export function WorktreeCardSecondaryRows({
         </div>
       )}
 
-      {/* Why from the row: the host lists a failed delete until it is retried, forgotten or gone.
-          Why a tooltip: the error leads with the path; the Delete dialog shows it inline too. */}
+      {/* The host retains failed deletes until resolved; show its path-leading error in a tooltip. */}
       {worktree.removalError && !isDeleting ? (
         <Tooltip>
           <TooltipTrigger asChild>

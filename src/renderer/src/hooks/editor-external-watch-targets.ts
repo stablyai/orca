@@ -1,5 +1,4 @@
-import { useAppStore, type AppState } from '@/store'
-import { openFileOwnerWorktreeId } from '@/lib/open-file-owner-scope'
+import type { AppState } from '@/store'
 import type { OpenFile } from '@/store/slices/editor'
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
 import { isVirtualEditorFile } from '@/store/slices/editor/tabs/editor-tab-content-type'
@@ -58,7 +57,6 @@ type WatchedTargetsSnapshot = {
   unwatchedTargetsKey: string
 }
 
-let cachedOwnersKey = ''
 let cachedOpenFiles: AppState['openFiles'] | null = null
 let cachedWorktreesByRepo: AppState['worktreesByRepo'] | null = null
 let cachedRepos: AppState['repos'] | null = null
@@ -82,7 +80,7 @@ let cachedWatchedTargetsSnapshot: WatchedTargetsSnapshot = {
 }
 
 export function getEditorExternalWatchTargetKey(target: EditorExternalWatchTarget): string {
-  // Why: include connectionId so a local placeholder watch is replaced by the real SSH watch once an SSH worktree's provider metadata hydrates.
+  // Include connectionId so hydrated SSH metadata replaces temporary local placeholder watch.
   return `${target.worktreeId}::${target.worktreePath}::${target.connectionId ?? 'local'}::${target.runtimeEnvironmentId ?? 'client'}::${target.allowLocalWindowsWslAliases === true ? 'wsl-aliases' : 'literal'}`
 }
 
@@ -151,19 +149,7 @@ export function selectEditorExternalWatchTargets(
 ): WatchedTargetsSnapshot {
   const runtimeEnvironmentId = state.settings?.activeRuntimeEnvironmentId?.trim() || undefined
   const activeWorkspaceExecutionHostId = state.activeWorkspaceExecutionHostId ?? null
-  // Why the store: this selector's narrowed state lacks the catalog the owner lookup reads, and
-  // the owners join the cache key because catalog fields outside it can move them.
-  const catalog = useAppStore.getState()
-  const watchWorktreeIds = new Map<string, string>()
-  for (const file of state.openFiles) {
-    const owner = openFileOwnerWorktreeId(file, catalog)
-    if (owner !== file.worktreeId) {
-      watchWorktreeIds.set(file.id, owner)
-    }
-  }
-  const ownersKey = [...watchWorktreeIds].join('|')
   if (
-    cachedOwnersKey === ownersKey &&
     cachedOpenFiles === state.openFiles &&
     cachedWorktreesByRepo === selectWorktreesByRepo(state) &&
     cachedRepos === state.repos &&
@@ -191,7 +177,7 @@ export function selectEditorExternalWatchTargets(
     openFiles: state.openFiles,
     exists: (id) => resolveEditorExternalWatchTargetRows(state, id, null) !== null
   })
-  // Why: watcher ownership is scoped by worktree + execution host — the same workspace id can be open locally, over SSH and in a runtime, and reads/saves already route per host.
+  // Key watchers by workspace and execution host, matching reads/saves: same id may be open locally, over SSH and in a runtime.
   for (const file of state.openFiles) {
     // Why: a virtual tab (CI details, chat visual) has no file in the workspace to watch.
     if (isVirtualEditorFile(file)) {
@@ -201,11 +187,7 @@ export function selectEditorExternalWatchTargets(
     const consumers = watchEligibleIds.has(file.worktreeId)
       ? consumersByWorktreeId
       : unwatchedConsumersByWorktreeId
-    addWatchConsumer(
-      consumers,
-      watchWorktreeIds.get(file.id) ?? file.worktreeId,
-      getOpenFileWatchConsumer(file)
-    )
+    addWatchConsumer(consumers, file.worktreeId, getOpenFileWatchConsumer(file))
   }
   const activeWorktreeId = state.activeWorktreeId
   const activeWorktree = activeWorktreeId
@@ -256,7 +238,6 @@ export function selectEditorExternalWatchTargets(
   const nextTargets = sortedEntries.map(([, target]) => target)
   const targetsKey = sortedEntries.map(([key]) => key).join('|')
   const unwatchedTargetsKey = [...unwatchedTargetKeys].sort().join('|')
-  cachedOwnersKey = ownersKey
   cachedOpenFiles = state.openFiles
   cachedWorktreesByRepo = selectWorktreesByRepo(state)
   cachedRepos = state.repos

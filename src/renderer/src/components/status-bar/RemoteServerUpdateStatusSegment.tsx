@@ -44,13 +44,14 @@ export function RemoteServerUpdateStatusSegment({
           label:
             failed === 1
               ? translate(
-                  'auto.components.status.bar.RemoteServerUpdateStatusSegment.failedOne',
-                  '1 server update failed'
+                  'auto.components.status.bar.RemoteServerUpdateStatusSegment.failedCount_one',
+                  '{{count}} server update failed',
+                  { count: failed }
                 )
               : translate(
-                  'auto.components.status.bar.RemoteServerUpdateStatusSegment.failed',
-                  '{{value0}} server updates failed',
-                  { value0: failed }
+                  'auto.components.status.bar.RemoteServerUpdateStatusSegment.failedCount_other',
+                  '{{count}} server updates failed',
+                  { count: failed }
                 ),
           tooltip: translate(
             'auto.components.status.bar.RemoteServerUpdateStatusSegment.failedTooltip',
@@ -62,13 +63,14 @@ export function RemoteServerUpdateStatusSegment({
           label:
             updated === 1
               ? translate(
-                  'auto.components.status.bar.RemoteServerUpdateStatusSegment.updatedOne',
-                  '1 server updated'
+                  'auto.components.status.bar.RemoteServerUpdateStatusSegment.updatedCount_one',
+                  '{{count}} server updated',
+                  { count: updated }
                 )
               : translate(
-                  'auto.components.status.bar.RemoteServerUpdateStatusSegment.updated',
-                  '{{value0}} servers updated',
-                  { value0: updated }
+                  'auto.components.status.bar.RemoteServerUpdateStatusSegment.updatedCount_other',
+                  '{{count}} servers updated',
+                  { count: updated }
                 ),
           tooltip: translate(
             'auto.components.status.bar.RemoteServerUpdateStatusSegment.updatedTooltip',

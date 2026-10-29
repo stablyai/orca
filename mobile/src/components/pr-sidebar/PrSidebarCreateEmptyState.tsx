@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 import { GitPullRequestArrow, Link2, RefreshCw } from 'lucide-react-native'
 import { colors } from '../../theme/mobile-theme'
+import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import type { RpcClient } from '../../transport/rpc-client'
 import type { ConnectionState } from '../../transport/types'
 import type { MobileGitStatusResult } from '../../source-control/mobile-git-status'
@@ -17,7 +18,7 @@ import {
   isMobileHostedReviewCommitFailure,
   runMobileHostedReviewCreateIntent
 } from '../../source-control/mobile-hosted-review-create-intent-runner'
-import { fetchWorktreeLinkedPR } from '../../source-control/mobile-pr-link'
+import { fetchWorktreeGitHubPRLink } from '../../source-control/mobile-pr-link'
 import { openMobilePrUrl } from '../mobile-pr-url'
 import { MobileLinkPrForm } from './MobileLinkPrForm'
 import { prCreateEmptyStateStyles as styles } from './pr-create-empty-state-styles'
@@ -36,9 +37,7 @@ type Props = {
 
 type Mode = 'choose' | 'link'
 
-// Empty state for a branch with no PR: create a new PR, or link an existing one
-// (the no-PR surface is the natural home for linking — desktop's link entry lives
-// on its PR card, but on mobile this is where a user lands with nothing linked).
+// Offer create or link when branch has no PR; empty state is mobile’s linking entry point.
 export function PrSidebarCreateEmptyState({
   client,
   worktreeId,
@@ -48,13 +47,13 @@ export function PrSidebarCreateEmptyState({
   workspaceLabel,
   onCreated
 }: Props) {
+  useMobileColorScheme()
   const [mode, setMode] = useState<Mode>('choose')
   const [loading, setLoading] = useState(false)
   const [createWarning, setCreateWarning] = useState<string | null>(null)
   const [commitFailureRecovery, setCommitFailureRecovery] =
     useState<MobileCommitFailureRecovery | null>(null)
-  // A persisted linkedPR while the branch shows no PR means the linked PR could
-  // not be resolved. Mention it while still allowing the user to relink.
+  // Persisted linkedPR with no resolved PR warrants notice while preserving relink action.
   const [orphanLinkedPR, setOrphanLinkedPR] = useState<number | null>(null)
   const commitFailureRecoveryAction = useMobileCommitFailureRecovery({
     client,
@@ -76,10 +75,10 @@ export function PrSidebarCreateEmptyState({
       setOrphanLinkedPR(null)
       return
     }
-    void fetchWorktreeLinkedPR(client, worktreeId)
-      .then((n) => {
+    void fetchWorktreeGitHubPRLink(client, worktreeId)
+      .then((link) => {
         if (!cancelled) {
-          setOrphanLinkedPR(n)
+          setOrphanLinkedPR(link.linkedPR)
         }
       })
       .catch(() => {
@@ -104,8 +103,7 @@ export function PrSidebarCreateEmptyState({
         setCreateWarning('Check out a branch before creating a pull request.')
         return
       }
-      // Why: mobile skips the local compose step here and runs the hosted create
-      // flow directly so PR creation matches the automated hosted-review path.
+      // Skip local compose and use hosted create flow to match automated review path.
       let progress: MobileHostedReviewCreateIntentProgress | null = null
       const outcome = await runMobileHostedReviewCreateIntent(client, worktreeId, {
         branch: gitBranch,

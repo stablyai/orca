@@ -158,7 +158,7 @@ export function AutomationsListPanel(props: AutomationsListPanelProps): React.JS
     onOpenRuns
   } = props
   const listRef = useRef<HTMLDivElement>(null)
-  // Hosts moved into the Filters menu, so its toolbar row is the focus fallback now.
+  // Use the Filters toolbar as focus fallback now that it owns host controls.
   const toolbarRef = useRef<HTMLDivElement>(null)
   const pendingKeyboardScrollRef = useRef(false)
   // Why: keyboard traversal and focus recovery read render order, which the sort owns.

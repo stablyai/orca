@@ -1,5 +1,6 @@
 import {
   agentSessionFailureFact,
+  providerDiagnostic,
   providerDiagnosticOf,
   type AgentSessionArgumentProblem,
   type SubmissionRejectionFact,
@@ -16,8 +17,14 @@ import {
   agentSessionRefusalReference,
   type AgentSessionWireRefusal
 } from '../../../shared/agent-session-wire-refusals'
-import { AgentSessionAcquisitionRefusal } from './structured-agent-session-adapter'
-import { providerExecutableMissing } from '../../provider-process/provider-executable-missing'
+import {
+  AgentSessionAcquisitionRefusal,
+  isAgentSessionPreSpawnError
+} from './structured-agent-session-adapter'
+import {
+  providerExecutableMissing,
+  providerLaunchFolderMissing
+} from '../../provider-process/provider-executable-missing'
 import { providerRequestTimeoutOf } from '../../provider-process/provider-request-timeout'
 import { findInErrorChain } from '../../provider-process/provider-error-chain'
 import { argumentProblemOf } from '../structured-agent-arguments-error'
@@ -36,7 +43,11 @@ const TYPED_START_REFUSALS = [
   'claudeAccountFolderMissing',
   'claudeAccountSetupFailed',
   'agentCommandNotRunnable',
-  'runtimeNotInstalled'
+  'runtimeNotInstalled',
+  'fullAccessAsRoot',
+  'launchPreparationFailed',
+  'conversationOpenInTerminal',
+  'conversationOpenElsewhere'
 ] as const satisfies readonly (AgentSessionFailureKind &
   AgentSessionRefusalReason<'agent_session_operation_invalid'>)[]
 
@@ -44,6 +55,34 @@ function typedStartRefusal(
   reason: string | undefined
 ): (typeof TYPED_START_REFUSALS)[number] | undefined {
   return TYPED_START_REFUSALS.find((typed) => typed === reason)
+}
+
+/** A failed launch preparation shows the host error behind it in Details; named problems keep their own words. */
+export function launchPreparationDiagnosticOf(error: unknown): ProviderDiagnostic | undefined {
+  const preSpawn = findInErrorChain(error, (inner) =>
+    isAgentSessionPreSpawnError(inner) && inner.reason === 'launchPreparationFailed'
+      ? inner
+      : undefined
+  )
+  if (
+    !preSpawn ||
+    providerDiagnosticOf(error) ||
+    argumentProblemOf(error) ||
+    agentCliInstallationProblemOf(error)
+  ) {
+    return undefined
+  }
+  // Bounded like the other cause-chain readers, so a cyclic cause cannot hang the host.
+  let root: Error = preSpawn
+  for (let depth = 0; depth < 6 && root.cause instanceof Error; depth += 1) {
+    root = root.cause
+  }
+  return providerDiagnostic(root.message, 'log')
+}
+
+/** The words Details shows for a failed start: the provider's, else the host error behind it. */
+export function startFailureDiagnosticOf(error: unknown): ProviderDiagnostic | undefined {
+  return providerDiagnosticOf(error) ?? launchPreparationDiagnosticOf(error)
 }
 
 /** Mark exit evidence at the adapter’s observation site. */
@@ -59,8 +98,28 @@ export function providerExitObserved(error: unknown): boolean {
   )
 }
 
-/** Preserve typed/observed causes and diagnostics; unclassified spawn/host errors cannot imply provider failure. */
+/** Cleanup wrappers retain the provider's typed refusal without changing their exit proof. */
+export function startupAcquisitionRefusal(
+  error: unknown,
+  depth = 0
+): AgentSessionAcquisitionRefusal | undefined {
+  if (depth >= 6 || !(error instanceof Error)) {
+    return undefined
+  }
+  if (error instanceof AgentSessionAcquisitionRefusal) {
+    return error
+  }
+  return (
+    startupAcquisitionRefusal(error.cause, depth + 1) ??
+    (error instanceof AggregateError
+      ? error.errors.map((inner) => startupAcquisitionRefusal(inner, depth + 1)).find(Boolean)
+      : undefined)
+  )
+}
+
+/** A failed start keeps its typed refusal or observed exit, and the provider diagnostic its Details show. */
 export function providerStartupFailureFact(cause?: unknown): SubmissionRejectionFact {
+  cause = startupAcquisitionRefusal(cause) ?? cause
   const installation = agentCliInstallationProblemOf(cause)
   if (installation) {
     return agentSessionFailureFact('startFailed', {
@@ -81,6 +140,13 @@ export function providerStartupFailureFact(cause?: unknown): SubmissionRejection
   }
   if (providerExecutableMissing(cause)) {
     return agentSessionFailureFact('cliMissing')
+  }
+  if (providerLaunchFolderMissing(cause)) {
+    return agentSessionFailureFact('launchFolderMissing')
+  }
+  const preparation = launchPreparationDiagnosticOf(cause)
+  if (preparation) {
+    return agentSessionFailureFact('launchPreparationFailed', { detail: preparation })
   }
   const exited = providerExitObserved(cause)
   return agentSessionFailureFact(exited ? 'providerStartFailed' : 'startFailed', {
@@ -126,7 +192,7 @@ function refusedStartFailureFact(
 }
 
 export type StructuredAgentSessionStartFailureCause =
-  /** Provider words stay host-side; newSession distinguishes first launch from restart. */
+  /** Provider words reach Details, never the sentence; newSession distinguishes first launch from restart. */
   | {
       refusal: AgentSessionWireRefusal
       diagnostic?: ProviderDiagnostic

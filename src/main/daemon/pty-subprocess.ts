@@ -85,9 +85,17 @@ export async function createPtySubprocess(opts: PtySubprocessOptions): Promise<S
       cols: size.cols,
       rows: size.rows,
       windowsFallbackAttempts: launch.windowsFallbackAttempts,
-      onMacosTccSpawnStrategy: opts.onMacosTccSpawnStrategy
+      // User-configured shell args can carry a command (`pwsh -Command ...`); never respawn those.
+      primaryArgsRespawnSafe:
+        !launch.startupCommandDeliveredInShellArgs && !opts.terminalShellArgs?.length,
+      onMacosTccSpawnStrategy: opts.onMacosTccSpawnStrategy,
+      ...(opts.cancelSignal ? { signal: opts.cancelSignal } : {})
     })
   } catch (error) {
+    // A cancel that lands while ConPTY's startup is awaited is a cancel, not a spawn failure.
+    if (opts.cancelSignal?.aborted) {
+      throw new TerminalAttachCanceledError(opts.sessionId)
+    }
     if (process.platform === 'win32') {
       throw formatPtySpawnError(error, launch.shellPath, launch.spawnCwd)
     }
@@ -104,6 +112,8 @@ export async function createPtySubprocess(opts: PtySubprocessOptions): Promise<S
     reportsChildExitStatus: spawned.reportsChildExitStatus,
     requestedCwd: opts.cwd,
     sessionId: opts.sessionId,
-    startupAgentRecognition: launch.startupAgentRecognition
+    startupAgentRecognition: launch.startupAgentRecognition,
+    // Claimed here, synchronously with the handle's own subscription, so no event falls between.
+    ...(spawned.claimStartupEvents ? { startupEvents: spawned.claimStartupEvents() } : {})
   })
 }

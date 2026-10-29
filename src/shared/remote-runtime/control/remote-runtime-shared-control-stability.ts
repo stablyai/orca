@@ -8,8 +8,7 @@ export function scheduleSharedControlStableReset(args: {
   reset: () => void
   clearCurrent: () => void
 }): ReturnType<typeof setTimeout> {
-  // Why: reset only after a stable ready period. Immediate reset would make
-  // authenticate-then-close loops retry forever instead of exhausting.
+  // Reset only after stable readiness so authenticate/close loops retain their accumulated backoff.
   const timer = setTimeout(() => {
     if (args.getState() === 'ready' && args.getSocket()?.readyState === WebSocket.OPEN) {
       args.reset()
@@ -22,8 +21,7 @@ export function scheduleSharedControlStableReset(args: {
   return timer
 }
 
-// Why: owns the ready-stable timer's lifecycle so the connection only wires
-// state accessors; scheduling always replaces any earlier pending timer.
+// Replace any prior stable-ready timer when scheduling.
 export class SharedControlReadyStableResetTimer {
   private timer: ReturnType<typeof setTimeout> | null = null
 

@@ -5,8 +5,7 @@ import { getDefaultVoiceSettings } from './constants'
 import { getDefaultNotificationSettings } from './notification-settings-defaults'
 import { buildDefaultSettings } from './default-global-settings'
 
-// Why: tests need a complete GlobalSettings without hand-copying every field, so
-// new settings only have to be added to buildDefaultSettings, not each fixture.
+// Use buildDefaultSettings so adding a setting does not require duplicating it in every test fixture.
 export function createGlobalSettingsFixture(
   overrides: Partial<GlobalSettings> = {}
 ): GlobalSettings {

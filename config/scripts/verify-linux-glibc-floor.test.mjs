@@ -9,7 +9,6 @@ const {
   readElfMachine,
   declaredArchFromPath,
   findArchViolation,
-  ELF_MACHINE_BY_ARCH,
   parseGlibcVersion,
   compareGlibcVersions,
   parseVersionNeeds,
@@ -28,9 +27,7 @@ const {
 // 0x7f 'E' 'L' 'F' + class/data/version padding — enough for the magic check.
 const ELF_HEADER = Buffer.from([0x7f, 0x45, 0x4c, 0x46, 0x02, 0x01, 0x01, 0x00])
 
-// Real `objdump -p` "Version References" shape (entry: 0xHASH 0xFLAGS <n> NAME;
-// flags 0x02 = VER_FLG_WEAK). Includes a symbol-less ABI marker, a weak need,
-// and a libstdc++ need.
+// Model objdump -p version rows with weak 0x02 needs, symbol-less ABI marker and C++ requirement.
 const OBJDUMP_P = [
   'Dynamic Section:',
   '  NEEDED               libc.so.6',
@@ -69,9 +66,7 @@ describe('verify-linux-glibc-floor parsing', () => {
   it('classifies version nodes across glibc and libstdc++ families', () => {
     expect(isVersionNodeAboveFloor('GLIBC_2.34')).toBe(true)
     expect(isVersionNodeAboveFloor('GLIBC_2.31')).toBe(false)
-    expect(isVersionNodeAboveFloor('GLIBC_ABI_DT_RELR')).toBe(true) // symbol-less marker (2.36+)
-    // GLIBC_PRIVATE is not a stable ABI contract; a needed private symbol can be
-    // absent on the floor even though the version node exists — reject it.
+    expect(isVersionNodeAboveFloor('GLIBC_ABI_DT_RELR')).toBe(true) // Reject GLIBC_PRIVATE even if version node exists: private symbol may be absent on floor, like newer ABI marker.
     expect(isVersionNodeAboveFloor('GLIBC_PRIVATE')).toBe(true)
     expect(isVersionNodeAboveFloor('CXXABI_TM_1')).toBe(false) // named libstdc++ node on 20.04
     expect(isVersionNodeAboveFloor('GLIBCXX_3.4.29')).toBe(true) // GCC 11, above 20.04's 3.4.28
@@ -84,8 +79,7 @@ describe('verify-linux-glibc-floor parsing', () => {
   it('flags strong too-new glibc + libstdc++ needs, skipping weak and ungated families', () => {
     const violations = findFloorViolations(parseVersionNeeds(OBJDUMP_P), '/opt/app/pty.node')
     const names = violations.map((v) => v.name).sort()
-    // GLIBC_2.34, GLIBC_ABI_DT_RELR, GLIBCXX_3.4.29 fail; weak GLIBC_2.18 and
-    // GLIBC_2.2.5 are excluded.
+    // Reject strong too-new requirements; omit weak GLIBC_2.18 and supported GLIBC_2.2.5.
     expect(names).toEqual(['GLIBCXX_3.4.29', 'GLIBC_2.34', 'GLIBC_ABI_DT_RELR'].sort())
   })
 
@@ -244,11 +238,7 @@ describe('collectNativeBinaries', () => {
 })
 
 describe.skipIf(process.platform === 'win32')('verifyLinuxGlibcFloor', () => {
-  // A stub objdump keyed on the inspected file's basename. Handles `-p` (Dynamic
-  // Section DT_NEEDED + Version References) and `-T` (undefined symbols).
-  // `*fail*` exits non-zero (fail-closed branch); `*noutil*` omits libutil.so.1
-  // from DT_NEEDED; `*pty*` imports openpty. Match on basename only so the
-  // (random) temp-dir path cannot collide.
+  // Stub objdump by basename to avoid random-temp collisions: -p needs, -T imports, fail exits nonzero, noutil omits libutil, pty imports openpty.
   async function writeStubObjdump(dir) {
     const stubPath = join(dir, 'objdump-stub.sh')
     await writeFile(
@@ -317,8 +307,7 @@ describe.skipIf(process.platform === 'win32')('verifyLinuxGlibcFloor', () => {
     try {
       const objdumpPath = await writeStubObjdump(root)
       await mkdir(join(root, 'app'), { recursive: true })
-      // Below the version floor (so the version check passes) but libutil.so.1
-      // is missing from DT_NEEDED — openpty would not resolve on Ubuntu 20.04.
+      // Supported symbol version still fails without libutil.so.1 DT_NEEDED: openpty cannot resolve on Ubuntu20.04.
       await writeFile(join(root, 'app', 'noutil-pty.node'), ELF_HEADER)
 
       expect(() => verifyLinuxGlibcFloor(join(root, 'app'), { objdumpPath })).toThrow(
@@ -409,21 +398,18 @@ describe('bundled native binary architecture', () => {
   it('reads e_machine from a little-endian ELF', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'orca-elf-arch-'))
     const file = join(dir, 'pty.node')
-    await writeFile(file, elfHeader(ELF_MACHINE_BY_ARCH.arm64))
-    expect(readElfMachine(file)).toBe(ELF_MACHINE_BY_ARCH.arm64)
+    await writeFile(file, elfHeader(0xb7))
+    expect(readElfMachine(file)).toBe(0xb7)
     await rm(dir, { recursive: true, force: true })
   })
 
-  // The observed failure: cross-building arm64 on an x64 host packed an x86-64 pty.node, whose
-  // symbol versions are valid, so every other gate here passed it.
-  // Real CI hit: @parcel/watcher ships every architecture and its loader picks the match, so the
-  // arm64 copy is present in an x64 build on purpose.
+  // Catch wrong-arch source build despite valid symbol floors; retain intentionally vendored foreign-arch watcher judged by its own path.
   it('accepts a per-arch vendored package that matches its own path', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'orca-elf-arch-'))
     const pkg = join(dir, '@parcel', 'watcher-linux-arm64-glibc')
     await mkdir(pkg, { recursive: true })
     const file = join(pkg, 'watcher.node')
-    await writeFile(file, elfHeader(ELF_MACHINE_BY_ARCH.arm64))
+    await writeFile(file, elfHeader(0xb7))
     expect(declaredArchFromPath(file)).toBe('arm64')
     expect(findArchViolation(file, 'x64')).toBeNull()
     await rm(dir, { recursive: true, force: true })
@@ -435,7 +421,7 @@ describe('bundled native binary architecture', () => {
     const nested = join(dir, 'bin', 'linux-arm64-148')
     await mkdir(nested, { recursive: true })
     const file = join(nested, 'node-pty.node')
-    await writeFile(file, elfHeader(ELF_MACHINE_BY_ARCH.x64))
+    await writeFile(file, elfHeader(0x3e))
     expect(findArchViolation(file, 'arm64')).toMatchObject({ actual: 'x64', expectedArch: 'arm64' })
     // Still caught even when the slice being built is x64.
     expect(findArchViolation(file, 'x64')).toMatchObject({ actual: 'x64', expectedArch: 'arm64' })
@@ -448,7 +434,7 @@ describe('bundled native binary architecture', () => {
     const dir = join(root, 'resources', 'ripgrep', 'linux-x64')
     await mkdir(dir, { recursive: true })
     const file = join(dir, 'rg')
-    await writeFile(file, elfHeader(ELF_MACHINE_BY_ARCH.x64))
+    await writeFile(file, elfHeader(0x3e))
     expect(findArchViolation(file, 'arm64', root)).toBeNull()
     await rm(dirname(root), { recursive: true, force: true })
   })
@@ -456,7 +442,7 @@ describe('bundled native binary architecture', () => {
   it('flags an x86-64 binary in an arm64 slice', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'orca-elf-arch-'))
     const file = join(dir, 'pty.node')
-    await writeFile(file, elfHeader(ELF_MACHINE_BY_ARCH.x64))
+    await writeFile(file, elfHeader(0x3e))
     expect(findArchViolation(file, 'arm64')).toMatchObject({ actual: 'x64' })
     await rm(dir, { recursive: true, force: true })
   })
@@ -464,7 +450,7 @@ describe('bundled native binary architecture', () => {
   it('accepts a matching architecture', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'orca-elf-arch-'))
     const file = join(dir, 'pty.node')
-    await writeFile(file, elfHeader(ELF_MACHINE_BY_ARCH.x64))
+    await writeFile(file, elfHeader(0x3e))
     expect(findArchViolation(file, 'x64')).toBeNull()
     await rm(dir, { recursive: true, force: true })
   })
@@ -472,7 +458,7 @@ describe('bundled native binary architecture', () => {
   it('stays silent when no target architecture is supplied', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'orca-elf-arch-'))
     const file = join(dir, 'pty.node')
-    await writeFile(file, elfHeader(ELF_MACHINE_BY_ARCH.x64))
+    await writeFile(file, elfHeader(0x3e))
     expect(findArchViolation(file, undefined)).toBeNull()
     await rm(dir, { recursive: true, force: true })
   })

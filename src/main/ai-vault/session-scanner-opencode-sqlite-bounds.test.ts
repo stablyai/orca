@@ -164,7 +164,7 @@ describe('listOpenCodeSqliteSessions — LIMIT-first discovery', () => {
     expect(candidates[0].file.mtimeMs).toBe(1_777_634_003_000)
   })
 
-  it('does not read message payloads that discovery does not use', async () => {
+  it('lists a session despite a malformed unused message payload', async () => {
     const { db, path } = createTempDb()
     applySchema(db)
     insertSession(db, 'ses_candidate', 1_777_634_001_000)
@@ -259,18 +259,16 @@ describe('parseOpenCodeSqliteSession — bounded preview window', () => {
     const { db, path } = createTempDb()
     applySchema(db)
     insertSession(db, 'ses_roles', 1_777_634_100_000)
-    insertUserMessage(db, {
-      id: 'msg_user',
-      sessionId: 'ses_roles',
-      timeCreated: 1_777_634_000_100,
-      text: 'hello'
-    })
-    db.prepare(`INSERT INTO message (id, session_id, time_created, data) VALUES (?, ?, ?, ?)`).run(
-      'msg_tool',
-      'ses_roles',
-      1_777_634_000_200,
-      JSON.stringify({ role: 'tool' })
-    )
+    for (const [index, role] of ['user', 'assistant', 'tool', 'system'].entries()) {
+      insertMessageWithPart(db, {
+        id: `msg_${role}`,
+        sessionId: 'ses_roles',
+        timeCreated: 1_777_634_000_100 + index,
+        role,
+        partType: 'text',
+        text: `${role} text`
+      })
+    }
     db.close()
 
     const session = await parseOpenCodeSqliteSession({
@@ -278,6 +276,7 @@ describe('parseOpenCodeSqliteSession — bounded preview window', () => {
       sessionId: 'ses_roles',
       platform: 'darwin'
     })
-    expect(session!.messageCount).toBe(1)
+    expect(session!.messageCount).toBe(2)
+    expect(session!.previewMessages.map((message) => message.role)).toEqual(['user', 'assistant'])
   })
 })

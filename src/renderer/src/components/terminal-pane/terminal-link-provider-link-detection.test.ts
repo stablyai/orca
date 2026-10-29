@@ -50,23 +50,18 @@ installTerminalLinkTestEnvironment(doubles)
 
 describe('createFilePathLinkProvider range bounds', () => {
   it('underlines only the filename itself, not the column padding from `ls`', async () => {
-    // ls pads each column with trailing spaces. Regression: the provider used
-    // to report `end.x = endIndex + 1`, which in xterm's 1-based *inclusive*
-    // convention overshoots the last filename cell by one, underlining the
-    // trailing space as well ("package.json ").
+    // xterm end.x is inclusive and 1-based; endIndex + 1 incorrectly underlines ls padding after the filename.
     const line = 'CLAUDE.md      package.json     README.md'
     const links = await collectLinks(line)
     const byText = new Map(links.map((link) => [link.text, link]))
 
     const claude = byText.get('CLAUDE.md')
     expect(claude, 'CLAUDE.md should be linkified').toBeDefined()
-    // 'CLAUDE.md' occupies cols 1..9 (inclusive, 1-based). end.x must be 9.
     expect(claude!.range.start.x).toBe(1)
     expect(claude!.range.end.x).toBe('CLAUDE.md'.length)
 
     const pkg = byText.get('package.json')
     expect(pkg, 'package.json should be linkified').toBeDefined()
-    // 'package.json' starts at index 15 → col 16; inclusive end at col 15+12 = 27.
     const pkgStartIndex = line.indexOf('package.json')
     expect(pkg!.range.start.x).toBe(pkgStartIndex + 1)
     expect(pkg!.range.end.x).toBe(pkgStartIndex + 'package.json'.length)
@@ -88,8 +83,7 @@ describe('createFilePathLinkProvider range bounds', () => {
   })
 
   it('recovers with no links when a path-existence probe rejects (SSH teardown)', async () => {
-    // Regression: a rejected probe used to escape the void Promise.all as an
-    // unhandled rejection the crash-breadcrumb buffer retained, leaking heap (#8260).
+    // Contain rejected probes so crash breadcrumbs do not retain unhandled rejections and leak heap (#8260).
     const shellPathExists = vi.mocked(window.api.shell.pathExists)
     shellPathExists.mockRejectedValueOnce(new Error('Remote connection dropped/reconnecting'))
     const { provider } = createProviderSetup([makeBufferLine('CLAUDE.md')], new Map())

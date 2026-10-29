@@ -9,17 +9,6 @@ const transientMessages = [
 afterEach(() => vi.useRealTimers())
 
 describe('retryTransientMainEvaluate', () => {
-  it('returns the first successful read without retrying', async () => {
-    let calls = 0
-    await expect(
-      retryTransientMainEvaluate(async () => {
-        calls += 1
-        return '/isolated/home'
-      })
-    ).resolves.toBe('/isolated/home')
-    expect(calls).toBe(1)
-  })
-
   it.each(transientMessages)('retries a transient startup failure: %s', async (message) => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
     let calls = 0

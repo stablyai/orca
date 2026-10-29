@@ -30,13 +30,6 @@ describe('mapped repository creation target hints', () => {
     })
   })
 
-  it('supports repositories whose catalog still comes from the legacy projection', () => {
-    expect(getRepoWorkspaceCreationTargetHint(sshRepo, [])).toEqual({
-      projectId: 'repo:same-id',
-      hostId: 'ssh:builder'
-    })
-  })
-
   it('retains unique setup precedence when a linked Jira account is on another host', () => {
     const projection = projectHostSetupProjectionFromRepos([sshRepo])
     expect(
@@ -61,6 +54,31 @@ describe('mapped repository creation target hints', () => {
         hostId: 'ssh:missing'
       })
     ).toEqual({ status: 'unavailable', reason: 'setup-not-found' })
+  })
+
+  it('does not pick the first host when two hosts share the setup id and none is named', () => {
+    const projection = projectHostSetupProjectionFromRepos([localRepo, sshRepo])
+    expect(
+      resolveWorkspaceCreationTarget({
+        eligibleRepos: [localRepo, sshRepo],
+        projects: projection.projects,
+        projectHostSetups: projection.setups,
+        projectHostSetupId: 'same-id'
+      })
+    ).toEqual({ status: 'unavailable', reason: 'setup-not-found' })
+  })
+
+  it('resolves an unnamed shared setup id when only one of its hosts can run it', () => {
+    const projection = projectHostSetupProjectionFromRepos([localRepo, sshRepo])
+    expect(
+      resolveWorkspaceCreationTarget({
+        eligibleRepos: [localRepo, sshRepo],
+        projects: projection.projects,
+        projectHostSetups: projection.setups,
+        projectHostSetupId: 'same-id',
+        actionableHostIds: new Set(['ssh:builder'])
+      })
+    ).toMatchObject({ status: 'ready', target: { hostId: 'ssh:builder', repo: sshRepo } })
   })
 
   it('keeps an explicit host selection unavailable when only a same-ID setup on another host remains', () => {

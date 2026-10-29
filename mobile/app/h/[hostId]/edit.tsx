@@ -3,7 +3,6 @@ import {
   View,
   Text,
   TextInput,
-  StyleSheet,
   Pressable,
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -14,14 +13,27 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { ChevronLeft } from 'lucide-react-native'
 import { colors, radii, spacing, typography } from '../../../src/theme/mobile-theme'
+import { themedStyleSheet } from '../../../src/theme/themed-styles'
+import { useMobileColorScheme } from '../../../src/theme/use-mobile-color-scheme'
 import { loadHosts, updateHostNameAndEndpoint } from '../../../src/transport/host-store'
 import { displayHostEndpoint } from '../../../src/transport/host-endpoint'
 import { resolveHostEndpointEdit } from '../../../src/transport/host-endpoint-edit'
 import { usePrimeHosts, useRefreshHostClient } from '../../../src/transport/host-client-hooks'
 import type { HostProfile } from '../../../src/transport/types'
 import { hostOs } from '../../../src/platform/host-os'
+import { SideSafeArea } from '../../../src/layout/side-safe-area'
 
-export default function EditHostScreen() {
+// The host group leaves the Duo's status-bar rail to its pages; this native screen pads it.
+export default function EditHostRoute() {
+  return (
+    <SideSafeArea>
+      <EditHostScreen />
+    </SideSafeArea>
+  )
+}
+
+function EditHostScreen() {
+  useMobileColorScheme()
   const router = useRouter()
   const insets = useSafeAreaInsets()
   const { hostId } = useLocalSearchParams<{ hostId: string }>()
@@ -34,8 +46,7 @@ export default function EditHostScreen() {
   const [address, setAddress] = useState('')
   const [saveError, setSaveError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
-  // Why: setSaving is async, so a second trigger before the re-render could
-  // still read stale state and re-enter handleSave; the ref closes that race.
+  // Ref blocks re-entry before async setSaving rerenders.
   const savingRef = useRef(false)
   const routeRevision = useRef(0)
   const leave = () => {
@@ -125,9 +136,7 @@ export default function EditHostScreen() {
     setSaving(true)
     setSaveError(null)
     try {
-      // Why: a single mutateStoredHosts pass so name + endpoint commit
-      // atomically — a mid-save failure can never persist one without the
-      // other, and a host removed mid-edit throws instead of no-oping.
+      // Persist name+endpoint atomically; a removed host must throw rather than silently no-op.
       await updateHostNameAndEndpoint(host.id, {
         ...(willRename ? { personalName: nextName || null } : {}),
         ...(nextEndpoint !== undefined ? { endpoint: nextEndpoint } : {})
@@ -142,9 +151,7 @@ export default function EditHostScreen() {
     }
 
     try {
-      // Why: the write already committed above; a re-prime failure here
-      // must not be reported as a save failure — the next loadHosts() call
-      // elsewhere in the app picks up the fresh state regardless.
+      // Persistence already succeeded; failed re-prime must not report save failure. Later loadHosts picks up the committed data.
       const hosts = await loadHosts()
       primeHosts(hosts)
     } catch {
@@ -279,7 +286,7 @@ export default function EditHostScreen() {
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   container: {
     flex: 1,
     backgroundColor: colors.bgBase
@@ -395,4 +402,4 @@ const styles = StyleSheet.create({
     fontSize: typography.bodySize,
     fontWeight: '500'
   }
-})
+}))

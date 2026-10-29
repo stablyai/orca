@@ -1,3 +1,6 @@
+import { randomUUID } from 'node:crypto'
+import { ORCA_SCRUB_SAFE_PANE_ENV } from '../../shared/agent-hook-scrub-safe-env'
+import { CONNECTOR_REPLY_UNAVAILABLE } from '../../shared/rpc-contract/connector-params'
 import type { CommandHandler, HandlerContext } from '../dispatch'
 import {
   getOptionalNonNegativeIntegerFlag,
@@ -85,6 +88,25 @@ function conversationParams(flags: HandlerContext['flags']) {
   return { ...conversation(flags), deliveryId: getRequiredStringFlag(flags, 'delivery-id') }
 }
 
+// The host retries an unavailable cloud itself, waiting out Retry-After, so the call can take a while.
+const REPLY_TIMEOUT_MS = 180_000
+
+type ConnectorReply = { status: 'posted' | 'queued' }
+
+// A host without this pane's conversation: a remote or older host, or one with connectors off or signed out.
+const REPLY_UNAVAILABLE_CODES = new Set([
+  'not_a_cloud_conversation',
+  'connector_not_connected',
+  'connectors_disabled',
+  'incompatible_runtime'
+])
+
+export function formatReply(reply: ConnectorReply): string {
+  return reply.status === 'posted'
+    ? 'Posted to the thread.'
+    : 'Sent; Orca Cloud will post it to the thread.'
+}
+
 export const CONNECTOR_HANDLERS: Record<string, CommandHandler> = {
   'connector start': async ({ flags, client, cwd, json }) => {
     const projectGroupId = getOptionalStringFlag(flags, 'project-group')
@@ -155,5 +177,28 @@ export const CONNECTOR_HANDLERS: Record<string, CommandHandler> = {
     printResult(result, json, (value) =>
       [value.snapshot, ...value.events].map((event) => JSON.stringify(event)).join('\n')
     )
+  },
+  'connector reply': async ({ flags, client, json }) => {
+    // Claude can scrub names containing KEY from its tools' environment; the alias survives.
+    const paneKey = process.env.ORCA_PANE_KEY || process.env[ORCA_SCRUB_SAFE_PANE_ENV]
+    if (!paneKey) {
+      throw new RuntimeClientError(
+        'invalid_argument',
+        'Run this from an agent a connector message started; this terminal is not an Orca agent pane.'
+      )
+    }
+    const reply = await callConnector<ConnectorReply>(
+      client,
+      'connector.reply',
+      // Minted once here, so Orca Cloud posts it once however often the host retries.
+      { paneKey, replyId: randomUUID(), text: getRequiredStringFlag(flags, 'text') },
+      { timeoutMs: REPLY_TIMEOUT_MS }
+    ).catch((error: unknown) => {
+      if (error instanceof RuntimeClientError && REPLY_UNAVAILABLE_CODES.has(error.code)) {
+        throw new RuntimeClientError('not_a_cloud_conversation', CONNECTOR_REPLY_UNAVAILABLE)
+      }
+      throw error
+    })
+    printResult(reply, json, formatReply)
   }
 }

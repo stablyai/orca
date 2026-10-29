@@ -33,8 +33,6 @@ describe('SourceControl commit drafts by worktree', () => {
     drafts = writeCommitDraftForWorktree(drafts, 'wt-b', 'fix: message for B')
     expect(readCommitDraftForWorktree(drafts, 'wt-b')).toBe('fix: message for B')
 
-    // Why: switching back must keep the prior draft for that worktree rather
-    // than leaking the active worktree's text into all worktree views.
     expect(readCommitDraftForWorktree(drafts, 'wt-a')).toBe('feat: message for A')
   })
 

@@ -12,21 +12,14 @@ type ParkedTerminalCaptureArgs = {
   localOnly: boolean
 }
 
-/** Serialize a parked worktree's panes before the park unmounts them.
- *  Why every park and not only force-park: a remote-runtime pane's bytes never transit main, so its
- *  xterm buffer is the only client-side copy, and the paired-parking capability that licenses the
- *  unmount is a static build string — never evidence the host retained this pty's buffer. A host
- *  that answers `no-serializable-buffer` (or stays silent) is unverifiable, not empty, so the park
- *  must leave a copy behind. See docs/reference/ssh-execution-boundary.md.
- *  Returns whether the episode covered every tab; false leaves it unmarked so a later episode retries. */
+/** Capture every remote park: build capability does not prove retained host bytes, and unavailable snapshots are unverifiable, not empty. False coverage leaves the episode unmarked for retry (docs/reference/ssh-execution-boundary.md). */
 export function captureParkedTerminalBuffers({
   worktreeId,
   tabIds,
   repos,
   localOnly
 }: ParkedTerminalCaptureArgs): boolean {
-  // Why skip local worktrees: includeLocalBuffers:false serializes nothing for them, so the only
-  // effect left is setTabLayout replacing away a stored buffer (e.g. an exited setup pane's output).
+  // Local capture is disabled here; replacing its layout would only erase stored buffers such as exited setup output.
   if (!shouldPreserveTerminalScrollbackBuffers(worktreeId, repos)) {
     return true
   }

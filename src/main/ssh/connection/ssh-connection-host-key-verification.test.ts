@@ -48,8 +48,6 @@ describe('SshConnection host key verification', () => {
     resetSshConnectionMocks()
   })
 
-  // Proves the WIRING, not just the module: a verifier that decides correctly is worthless if the
-  // handshake never consults it, and until this change ssh-connection accepted every key.
   it('refuses a host key whose own blob cannot be identified', async () => {
     ssh2Mock.presentedHostKey = UNIDENTIFIABLE_HOST_KEY
     const conn = new SshConnection(createTarget(), createCallbacks())
@@ -65,10 +63,7 @@ describe('SshConnection host key verification', () => {
     expect(ssh2Mock.lastHostKeyAccepted).toBe(true)
   })
 
-  // The point of refusing the key is that we do not trust who is on the other end. ssh2 reports a
-  // denied key as a generic auth failure, and an encrypted identity file makes the passphrase branch
-  // eligible on message shape alone — so without an explicit abort we would hand the secret to the
-  // party we just refused.
+  // A rejected host key must bypass credential fallbacks or auth-shaped errors could disclose a secret to the refused peer.
   it('never asks for a credential after refusing a host key', async () => {
     vi.stubEnv('SSH_AUTH_SOCK', '/tmp/agent.sock')
     const tempDir = mkdtempSync(join(tmpdir(), 'orca-ssh-key-'))
@@ -90,8 +85,6 @@ describe('SshConnection host key verification', () => {
     }
   })
 
-  // 'auth-failed' invites the user to re-enter credentials, which is the wrong thing to offer and
-  // the wrong thing to blame; nothing about their credentials is wrong.
   it('surfaces a refused host key as an error rather than an auth failure', async () => {
     ssh2Mock.presentedHostKey = UNIDENTIFIABLE_HOST_KEY
     const conn = new SshConnection(createTarget(), createCallbacks())
@@ -101,10 +94,7 @@ describe('SshConnection host key verification', () => {
     expect(conn.getState().error).toMatch(/host key verification failed/i)
   })
 
-  // Everyone's first connection happens before ~/.ssh/known_hosts exists — ssh creates it on its
-  // own first connect. Treating a file that was never there as a source we failed to read would
-  // refuse every connection a new profile ever makes, which is how a fail-closed rule turns into a
-  // product that does not work.
+  // Absent known_hosts is normal for new profiles; it cannot be treated as withheld evidence.
   it('connects on first contact when no known_hosts file exists yet', async () => {
     const emptyHome = mkdtempSync(join(tmpdir(), 'orca-ssh-home-'))
     vi.stubEnv('HOME', emptyHome)
@@ -120,11 +110,7 @@ describe('SshConnection host key verification', () => {
     }
   })
 
-  // A known_hosts that exists and will not open is the absence of evidence, so by product decision
-  // we connect as ssh does — it warns and treats the host as unknown — rather than refusing an
-  // ordinary offline Windows laptop whose OneDrive-backed file is a cloud placeholder. That we
-  // record NOTHING in that state is covered end to end in
-  // ssh-connection-host-key-store-wiring.test.ts, where the store is actually bound.
+  // Unreadable known_hosts connects as SSH does, including cloud-placeholder files, but must record no trust; store-wiring tests prove that boundary.
   it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)(
     'still connects when a known_hosts file exists but cannot be read',
     async () => {
@@ -147,8 +133,6 @@ describe('SshConnection host key verification', () => {
     }
   )
 
-  // Retrying re-derives the same decision, so a ladder that treated this as transient would back off
-  // against a host it has already refused until it gave up — burying the reason.
   it('does not retry a refused host key', async () => {
     ssh2Mock.presentedHostKey = UNIDENTIFIABLE_HOST_KEY
     const conn = new SshConnection(createTarget(), createCallbacks())

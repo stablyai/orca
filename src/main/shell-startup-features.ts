@@ -1,3 +1,5 @@
+import { REMOTE_VIEWER_CLIPBOARD_ENV } from '../shared/remote-viewer-clipboard-env'
+
 // Wrappers consume the feature env before user config so children cannot inherit the selection.
 
 export const SHELL_STARTUP_FEATURE_ENV = 'ORCA_SHELL_FEATURES'
@@ -14,9 +16,10 @@ export const SHELL_STARTUP_FEATURES = [
 export type ShellStartupFeature = (typeof SHELL_STARTUP_FEATURES)[number]
 
 const OVERLAY_ENV_KEYS = [
+  REMOTE_VIEWER_CLIPBOARD_ENV,
   'ORCA_DATA_ACCOUNT_DATA_HOME',
   'ORCA_OPENCODE_CONFIG_DIR',
-  'ORCA_MIMOCODE_HOME',
+  'ORCA_MIMOCODE_CONFIG_DIR',
   'ORCA_OMP_STATUS_EXTENSION',
   'ORCA_CODEX_HOME',
   'ORCA_AGENT_TEAMS_SHIM_DIR',

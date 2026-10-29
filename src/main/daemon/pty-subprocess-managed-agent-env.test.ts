@@ -151,8 +151,8 @@ describe('createPtySubprocess', () => {
         rows: 24,
         env: {
           SHELL: '/bin/zsh',
-          MIMOCODE_HOME: '/tmp/orca-mimocode-overlay',
-          ORCA_MIMOCODE_HOME: '/tmp/orca-mimocode-overlay'
+          MIMOCODE_CONFIG_DIR: '/tmp/orca-mimocode-overlay',
+          ORCA_MIMOCODE_CONFIG_DIR: '/tmp/orca-mimocode-overlay'
         }
       })
     } finally {

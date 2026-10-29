@@ -56,8 +56,7 @@ function EditorPanelInner({
   )
   const markFileDirty = useAppStore((s) => s.markFileDirty)
   const pendingEditorReveal = useAppStore((s) => s.pendingEditorReveal)
-  // Why: background Git refreshes for other worktrees must not wake every
-  // mounted Monaco/rich editor pane.
+  // Git refreshes for other worktrees must not wake every mounted editor pane.
   const gitStatusEntries = useAppStore((s) =>
     selectEditorPanelGitStatusEntries(s, activeWorktreeId)
   )
@@ -90,8 +89,7 @@ function EditorPanelInner({
     null
   )
   const copiedPathToastResetTimerRef = useRef<number | null>(null)
-  // Why: clipboard IPC can resolve after the editor panel unmounts; skip path
-  // toast feedback instead of starting a reset timer on a stale panel.
+  // Clipboard IPC may settle after unmount; skip feedback rather than starting an orphan toast timer.
   const pathCopyMountedRef = useRef(false)
   const clearCopiedPathToastResetTimer = useCallback((): void => {
     if (copiedPathToastResetTimerRef.current === null) {
@@ -145,7 +143,7 @@ function EditorPanelInner({
     closeRenameDialog,
     handleRenameConfirm
   } = useUntitledFileRename({ openFiles, clearUntitled })
-  // Why not local: an unresolved owner must not offer this machine's folder picker either.
+  // Unresolved owners must not fall back to this machine’s folder picker.
   const renameDialogFileOffClient = useAppStore(
     (s) =>
       !!renameDialogFile &&
@@ -251,7 +249,7 @@ function EditorPanelInner({
     if (!model.openFileState.canOpen) {
       return
     }
-    openFile({
+    const openedFileId = openFile({
       filePath: activeFile.filePath,
       relativePath: activeFile.relativePath,
       worktreeId: activeFile.worktreeId,
@@ -260,8 +258,8 @@ function EditorPanelInner({
       mode: 'edit'
     })
     if (preferredMarkdownViewMode) {
-      setEditorViewMode(activeFile.filePath, 'edit')
-      setMarkdownViewMode(activeFile.filePath, preferredMarkdownViewMode)
+      setEditorViewMode(openedFileId, 'edit')
+      setMarkdownViewMode(openedFileId, preferredMarkdownViewMode)
     }
   }
   const handleEditorToggleChange = (next: EditorToggleValue): void => {
@@ -313,7 +311,7 @@ function EditorPanelInner({
     activeDocumentContent &&
     extractFrontMatter(activeDocumentContent)
   )
-  // Why: front-matter shows by default; the map only carries per-file hide overrides.
+  // The map stores only per-file hide overrides; frontmatter is visible by default.
   const isMarkdownFrontmatterVisible =
     markdownFrontmatterVisible[markdownDocumentStateFileId] ?? true
   const isMarkdownTableOfContentsVisible =
@@ -334,7 +332,7 @@ function EditorPanelInner({
 
   return (
     <EditorCommandOwnerContext value={isCmdSaveOwner}>
-      {/* Why: each split pane needs an isolated bridge between its diff editor and header controls. */}
+      {/* Split panes need independent bridges between diff editors and header controls. */}
       <DiffNavigationProvider>
         <EditorPanelShell
           panelRef={setPanelRef}

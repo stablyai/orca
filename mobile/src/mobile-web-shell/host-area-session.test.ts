@@ -33,7 +33,6 @@ const SESSION_GRANTS = [
   'native.audio.stop'
 ]
 
-/** The desktop's list as this branch writes it, trimmed to one route of each grant shape. */
 function desktopRoutes(declares: boolean): MobileWebPageRoute[] {
   return [
     {
@@ -61,7 +60,6 @@ function wideStateFor(routes: MobileWebPageRoute[] | null, pathname = HOST_ROUTE
   const opened = run(
     createMobileWebShellSession(pathname),
     { type: 'layout-changed', wide: true },
-    // No bundle capability is a desktop that serves no page at all.
     { type: 'gates-changed', gates: routes === null ? gates({ hostCapabilities: [] }) : gates() }
   )
   if (routes === null) {
@@ -78,7 +76,7 @@ describe('the page declaring it can own the host area', () => {
   it('accepts a true ownership declaration from the desktop and refuses false', () => {
     const [host] = desktopRoutes(true)
     expect(MobileWebBundleRouteSchema.safeParse(host).success).toBe(true)
-    // `true` only: a desktop writing `false` is writing a field with no meaning.
+    // Only true declares ownership; false must be rejected.
     expect(MobileWebBundleRouteSchema.safeParse({ ...host, canOwnHostArea: false }).success).toBe(
       false
     )
@@ -115,6 +113,9 @@ describe('the wide host-area session', () => {
     // Every pair the page compares a hop against is covered, which is what keeps it in the page.
     for (const pair of phone.pageRouteGrants) {
       expect(pair.grants.every((grant) => phone.routeGrants.includes(grant))).toBe(true)
+    }
+    for (const pair of wide.pageRouteGrants) {
+      expect(pair.grants.every((grant) => wide.routeGrants.includes(grant))).toBe(true)
     }
     expect(routeViewOf(desktopRoutes(true), '/h/host-1/session/wt-1').routeGrants).toEqual([
       ...SESSION_GRANTS,

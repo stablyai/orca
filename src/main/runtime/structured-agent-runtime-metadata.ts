@@ -91,18 +91,20 @@ async function resolveCodexAccountHomePath(
   services: StructuredAgentAccountHomeServices
 ): Promise<string> {
   const { launchEnv, purpose, workspacePath } = request
-  if (purpose === 'launch' && workspacePath) {
-    await applyStructuredCodexWorkspaceTrust({
-      workspacePath: await workspacePath(),
-      launchEnv,
-      settings: services.workspaceTrustSettings()
-    })
-  }
-  return resolveStructuredCodexAccountHomePath({
+  const codexHome = await resolveStructuredCodexAccountHomePath({
     launchEnv,
     resolveLaunchHome:
       purpose === 'launch' ? services.prepareCodexLaunchHome : services.readCodexLaunchHome
   })
+  if (purpose === 'launch' && workspacePath) {
+    await applyStructuredCodexWorkspaceTrust({
+      workspacePath: await workspacePath(),
+      launchEnv,
+      codexHome,
+      settings: services.workspaceTrustSettings()
+    })
+  }
+  return codexHome
 }
 
 // One roster supplies both metadata readers and the host's synchronous adapter factories.

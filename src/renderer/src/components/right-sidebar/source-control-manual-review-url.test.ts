@@ -106,6 +106,41 @@ describe('buildSourceControlManualReviewUrl', () => {
     }
   })
 
+  it.each([
+    'ssh://git@ssh.bitbucket.org/team/project.git',
+    'git@ssh.bitbucket.org:team/project.git',
+    'git@SSH.BITBUCKET.ORG:team/project.git'
+  ])('canonicalizes the Bitbucket SSH host web identity: %s', (remote) => {
+    expect(parseRemoteRepo(remote)).toEqual({
+      provider: 'bitbucket',
+      path: 'team/project',
+      webBaseUrl: 'https://bitbucket.org/team/project'
+    })
+    for (const provider of [undefined, 'bitbucket'] as const) {
+      expect(
+        buildSourceControlManualReviewUrl({
+          baseRef: 'main',
+          branchName: 'feature/x',
+          repoRemoteName: 'origin',
+          repoRemoteUrl: remote,
+          provider,
+          upstreamName: 'origin/feature/x'
+        })
+      ).toBe('https://bitbucket.org/team/project/pull-requests/new?source=feature%2Fx&dest=main')
+    }
+  })
+
+  it.each(['ssh://git@ssh.github.com:443/team/project.git', 'git@ssh.github.com:team/project.git'])(
+    'canonicalizes the GitHub SSH-over-443 web identity: %s',
+    (remote) => {
+      expect(parseRemoteRepo(remote)).toEqual({
+        provider: 'github',
+        path: 'team/project',
+        webBaseUrl: 'https://github.com/team/project'
+      })
+    }
+  )
+
   it('does not infer GitLab or rewrite the web origin of an alias lookalike', () => {
     const remote = 'ssh://git@altssh.gitlab.com.example.com:443/team/project.git'
     expect(parseRemoteRepo(remote)).toEqual({
@@ -241,8 +276,7 @@ describe('buildSourceControlManualReviewUrl', () => {
   })
 
   it('suppresses the link when the branch tracks a fork remote with no resolvable push URL', () => {
-    // Repro: branch pushed only to a fork (tracked via plain git, so pushTarget
-    // is empty). A base-repo compare/main...quick-commands would 404 on origin.
+    // A fork-only tracked branch without pushTarget would 404 through the base-repo compare URL.
     expect(
       buildSourceControlManualReviewUrl({
         baseRef: 'refs/remotes/origin/main',
@@ -296,8 +330,7 @@ describe('buildSourceControlManualReviewUrl', () => {
   })
 
   it('suppresses the link when the branch was never pushed (no upstream, no push target)', () => {
-    // Repro: local-only branch. main...<local-branch> lands on GitHub's
-    // "There isn't anything to compare" page.
+    // Unpushed local branches would lead to GitHub's empty compare page.
     expect(
       buildSourceControlManualReviewUrl({
         baseRef: 'refs/remotes/origin/main',

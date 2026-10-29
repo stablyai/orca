@@ -127,7 +127,7 @@ export function createPtyApi(): NonNullable<Partial<PreloadApi>['pty']> {
 
 export function createSshApi(): NonNullable<Partial<PreloadApi>['ssh']> {
   return {
-    // Why: SSH is owned by the paired host; route read/connect to runtime RPC for state/reconnect (STA-1468). Target mgmt is desktop-only.
+    // Paired host owns SSH; route state/reconnect through runtime RPC, leaving target management to desktop (STA-1468).
     listTargets: async () => {
       if (!requireActiveEnvironmentOrNull()) {
         return []
@@ -192,6 +192,8 @@ export function createSshApi(): NonNullable<Partial<PreloadApi>['ssh']> {
       Promise.reject(new Error('SSH port forwarding is unavailable in the web client.')),
     removePortForward: () => Promise.resolve(null),
     listPortForwards: () => Promise.resolve([]),
+    listUnrestoredPortForwards: () => Promise.resolve([]),
+    removeSavedPortForward: () => Promise.resolve(),
     listDetectedPorts: () => Promise.resolve([]),
     onPortForwardsChanged: () => noopUnsubscribe,
     onDetectedPortsChanged: () => noopUnsubscribe,

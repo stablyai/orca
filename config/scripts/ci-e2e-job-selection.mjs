@@ -46,6 +46,16 @@ function parseSpecs(input) {
   return specs
 }
 
+export function generalE2eShards(input) {
+  if (input === '') {
+    return ['1/1']
+  }
+  const count = new Set(selectGeneralE2eSpecs(parseSpecs(input))).size
+  // Broad selections need the nightly suite's shard capacity; small PRs retain one VM.
+  const shards = Math.min(14, Math.max(1, Math.ceil(count / 25)))
+  return Array.from({ length: shards }, (_, index) => `${index + 1}/${shards}`)
+}
+
 export function selectManagedSshE2eSpecs(input) {
   if (input === '') {
     return [MANAGED_SSH_E2E_SPEC_PREFIX]

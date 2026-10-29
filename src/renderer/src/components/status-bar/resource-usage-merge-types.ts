@@ -7,7 +7,7 @@ import type {
   PtyListedSession
 } from '../../../../shared/pty-listed-session'
 
-/** `null` === "no local sample" (e.g. SSH PTY); UI renders as em-dash. */
+/** Null means no process sample, commonly for SSH PTYs; render an em dash. */
 export type Metric = number | null
 
 /** One `pty.listSessions()` row. Aliased so ownership evidence cannot be dropped locally. */
@@ -58,9 +58,7 @@ export type UnifiedProjectGroup = {
 }
 
 export type MergeContext = {
-  /** From useAppStore: maps worktreeId -> tabs[] for tab-walk resolution. */
   tabsByWorktree: Record<string, TerminalTab[]>
-  /** From useAppStore: maps tabId -> ptyIds[] for the bound check. */
   ptyIdsByTabId: Record<string, string[]>
   /** From useAppStore: persisted per-leaf PTY wake hints for deferred reattach. */
   terminalLayoutsByTabId?: Record<string, TerminalLayoutSnapshot>

@@ -18,7 +18,12 @@ export async function copyStructuredChatConversation(
   }
   const host = getStructuredAgentSessionHost()
   const ownership = findResumeOwnership(args)
-  const record = ownership ? host?.deps.store.getRecord(ownership.sessionId) : undefined
+  const record =
+    ownership &&
+    host &&
+    host.deps.store.selectWritableRecord(ownership.sessionId).kind !== 'missing'
+      ? host.deps.store.requireWritableRecord(ownership.sessionId)
+      : undefined
   const copy = host?.deps.adapter.copyConversation
   if (!host || !ownership || !record || !copy) {
     throw new Error('This chat is no longer in Orca, so it cannot be copied to a new CLI.')
@@ -32,7 +37,11 @@ export async function copyStructuredChatRecordConversation(
 ): Promise<AiVaultPrepareSessionResumeResult> {
   const host = getStructuredAgentSessionHost()
   const copy = host?.deps.adapter.copyConversation
-  if (!host || !copy || !isAiVaultAgent(record.provider)) {
+  if (!host) {
+    throw new Error('This chat cannot be copied to a new CLI.')
+  }
+  record = host.deps.store.requireWritableRecord(record.sessionId)
+  if (!copy || !isAiVaultAgent(record.provider)) {
     throw new Error('This chat cannot be copied to a new CLI.')
   }
   const forkedSession = await copy.call(host.deps.adapter, {

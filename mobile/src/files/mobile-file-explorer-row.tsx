@@ -10,6 +10,7 @@ import {
 } from 'lucide-react-native'
 import { triggerSelection } from '../platform/haptics'
 import { colors, spacing } from '../theme/mobile-theme'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { type FileExplorerRow, isMarkdownPath, type TreeNode } from './file-tree'
 import { fileExplorerStyles as styles } from './mobile-file-explorer-styles'
 import { canPreviewMobileFileRow } from './mobile-file-preview-navigation'
@@ -24,6 +25,7 @@ type Props = {
 }
 
 export function MobileFileExplorerRow(props: Props) {
+  useMobileColorScheme()
   const { item, maximumIndentation, expanded, onPreviewFile, onRetryDirectory, onToggleDirectory } =
     props
   const paddingLeft = spacing.lg + Math.min(item.depth * 18, maximumIndentation)
@@ -85,6 +87,7 @@ function TreeRow(props: {
   onPreviewFile: (relativePath: string, displayName: string) => void
   onToggleDirectory: (relativePath: string) => void
 }) {
+  useMobileColorScheme()
   const { item, paddingLeft, expanded, onPreviewFile, onToggleDirectory } = props
   const isDirectory = item.kind === 'directory'
   const isExpanded = expanded.has(item.relativePath)

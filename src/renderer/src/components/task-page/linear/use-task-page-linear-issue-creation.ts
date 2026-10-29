@@ -1,3 +1,4 @@
+import { taskProviderErrorMessage } from '@/lib/task-provider-error-copy'
 import type { TaskPageLinearProjectCreationModel } from './use-task-page-linear-project-creation'
 import { useCallback } from 'react'
 import { toast } from 'sonner'
@@ -77,7 +78,7 @@ export function useTaskPageLinearIssueCreation(model: TaskPageLinearProjectCreat
       }
       if (!result.ok) {
         toast.error(
-          result.error ||
+          taskProviderErrorMessage(result) ||
             translate('auto.components.TaskPage.7437e340b4', 'Failed to create issue.')
         )
         return
@@ -107,7 +108,6 @@ export function useTaskPageLinearIssueCreation(model: TaskPageLinearProjectCreat
       setLinearRefreshNonce((n) => n + 1)
       useAppStore.getState().recordFeatureInteraction('linear-tasks')
 
-      // Why: auto-select the new issue so the user sees exactly what was filed (mirrors the GitHub create-issue flow).
       void linearGetIssue(
         linearTaskSourceContext ?? defaultScopeSource(settings),
         result.id,

@@ -1,3 +1,4 @@
+import { translateMain } from '../i18n/main-i18n'
 import { validatePathExistenceBatch } from '../../shared/path-existence-batch'
 import { ipcMain, shell, dialog } from 'electron'
 import { constants, copyFile, readFile, stat } from 'node:fs/promises'
@@ -13,10 +14,9 @@ import type { Store } from '../persistence'
 import {
   EXTERNAL_EDITOR_CLI_COMMAND,
   launchExternalEditor,
-  resolveExternalEditorLaunchSpec,
-  resolveVsCodeRemoteSshLaunchSpec
+  resolveExternalEditorLaunchSpec
 } from '../external-editor-launch'
-import { resolveVsCodeSshAuthority } from '../ssh/config/vscode-ssh-authority'
+import { resolveRemoteSshEditorLaunchSpec } from '../remote-ssh-editor-launch'
 import { toSshExecutionHostId } from '../../shared/execution-host'
 import {
   isEditorSshHostForOwner,
@@ -74,20 +74,12 @@ async function openInExternalEditor(
     if (!posix.isAbsolute(request.path) && !win32.isAbsolute(request.path)) {
       return { ok: false, reason: 'not-absolute' }
     }
-    const authority = resolveVsCodeSshAuthority(sshTarget)
-    if (!authority.ok) {
-      return authority
-    }
-    const launchSpec = resolveVsCodeRemoteSshLaunchSpec(
-      request.command,
-      request.path,
-      authority.authority
-    )
-    if (!launchSpec) {
-      return { ok: false, reason: 'remote-editor-unsupported' }
+    const remoteLaunch = resolveRemoteSshEditorLaunchSpec(request.command, request.path, sshTarget)
+    if (!remoteLaunch.ok) {
+      return remoteLaunch
     }
     try {
-      await launchExternalEditor(launchSpec)
+      await launchExternalEditor(remoteLaunch.launchSpec)
       return { ok: true }
     } catch {
       return { ok: false, reason: 'launch-failed' }
@@ -249,7 +241,10 @@ export function registerShellHandlers(
     const result = await dialog.showOpenDialog({
       properties: ['openFile'],
       filters: [
-        { name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp', 'ico'] }
+        {
+          name: translateMain('native.dialog.images', 'Images'),
+          extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp', 'ico']
+        }
       ]
     })
     if (result.canceled || result.filePaths.length === 0) {
@@ -263,7 +258,12 @@ export function registerShellHandlers(
     async (): Promise<{ dataUrl: string; fileName: string } | null> => {
       const result = await dialog.showOpenDialog({
         properties: ['openFile'],
-        filters: [{ name: 'Repo icon images', extensions: ['png'] }]
+        filters: [
+          {
+            name: translateMain('native.dialog.repoIconImages', 'Repo icon images'),
+            extensions: ['png']
+          }
+        ]
       })
       if (result.canceled || result.filePaths.length === 0) {
         return null
@@ -292,7 +292,12 @@ export function registerShellHandlers(
   ipcMain.handle('shell:pickAudio', async (): Promise<string | null> => {
     const result = await dialog.showOpenDialog({
       properties: ['openFile'],
-      filters: [{ name: 'Audio', extensions: ['ogg', 'mp3', 'wav', 'm4a', 'aac', 'flac'] }]
+      filters: [
+        {
+          name: translateMain('native.dialog.audio', 'Audio'),
+          extensions: ['ogg', 'mp3', 'wav', 'm4a', 'aac', 'flac']
+        }
+      ]
     })
     if (result.canceled || result.filePaths.length === 0) {
       return null

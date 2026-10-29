@@ -23,6 +23,7 @@ import { BrowserSitePermissionsSetting } from './BrowserSitePermissionsSetting'
 import { SettingsSubsectionHeader } from './SettingsFormControls'
 import { BrowserSessionCookiesSection } from './BrowserSessionCookiesSection'
 import { BrowserNewProfileDialog } from './BrowserNewProfileDialog'
+import { BrowserExtensionsSection } from './BrowserExtensionsSection'
 import {
   createBrowserHomePageDraftState,
   resolveBrowserHomePageDraftState
@@ -31,10 +32,12 @@ import { buildSidebarHostOptions } from '../sidebar/sidebar-host-options'
 import { getHostDisplayLabelOverrides } from '../../../../shared/host-setting-overrides'
 import {
   getSettingsFocusedExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID,
   type ExecutionHostId
 } from '../../../../shared/execution-host'
 import { isMacUserAgent } from '@/components/terminal-pane/pane-helpers'
 import { translate } from '@/i18n/i18n'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { resolveAvailableBrowserSessionHostId } from './browser-session-host-selection'
 import { motionSafeScrollBehavior } from '@/hooks/usePrefersReducedMotion'
 export { getBrowserPaneCombinedSearchEntries }
@@ -57,6 +60,7 @@ export function BrowserPane({
   updateSettings,
   onOpenComputerUse
 }: BrowserPaneProps): React.JSX.Element {
+  const languageRevision = useUiLanguageRevision()
   const searchQuery = useAppStore((s) => s.settingsSearchQuery)
   const browserDefaultUrl = useAppStore((s) => s.browserDefaultUrl)
   const setBrowserDefaultUrl = useAppStore((s) => s.setBrowserDefaultUrl)
@@ -77,6 +81,7 @@ export function BrowserPane({
   const defaultBrowserSessionProfileId = useAppStore((s) => s.defaultBrowserSessionProfileId)
   const setDefaultBrowserSessionProfileId = useAppStore((s) => s.setDefaultBrowserSessionProfileId)
   const defaultProfile = browserSessionProfiles.find((p) => p.id === 'default')
+  const selectedProfileId = defaultBrowserSessionProfileId ?? 'default'
   const nonDefaultProfiles = browserSessionProfiles.filter((p) => p.scope !== 'default')
   const persistedHomePageDraft = browserDefaultUrl ?? ''
   const [homePageDraftState, setHomePageDraftState] = useState(() =>
@@ -151,6 +156,7 @@ export function BrowserPane({
                   'Browser profiles on this Orca server.'
                 )
         })),
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- translate() reads the UI language implicitly.
     [
       repos,
       sshTargetLabels,
@@ -158,7 +164,8 @@ export function BrowserPane({
       settings,
       runtimeEnvironments,
       runtimeStatusByEnvironmentId,
-      hostLabelOverrides
+      hostLabelOverrides,
+      languageRevision
     ]
   )
   const settingsFocusedHostId = getSettingsFocusedExecutionHostId(settings)
@@ -167,6 +174,12 @@ export function BrowserPane({
     browserSessionHostIdOverride,
     settingsFocusedHostId
   )
+  const activeBrowserSessionProfileId =
+    useAppStore((s) => s.defaultBrowserSessionProfileIdByHostId[selectedBrowserSessionHostId]) ??
+    ((browserSessionHostIdOverride ?? settingsFocusedHostId) === selectedBrowserSessionHostId
+      ? defaultBrowserSessionProfileId
+      : null) ??
+    'default'
   useEffect(() => {
     const requestedHostId = browserSessionHostIdOverride ?? settingsFocusedHostId
     if (selectedBrowserSessionHostId !== requestedHostId) {
@@ -321,13 +334,25 @@ export function BrowserPane({
           nonDefaultProfiles={nonDefaultProfiles}
           detectedBrowsers={detectedBrowsers}
           importState={browserSessionImportState}
-          defaultBrowserSessionProfileId={defaultBrowserSessionProfileId}
           hostOptions={browserSessionHostOptions}
           selectedHostId={selectedBrowserSessionHostId}
+          activeProfileId={activeBrowserSessionProfileId}
           onAddProfile={() => setNewProfileDialogOpen(true)}
           onSelectHost={selectBrowserSessionHost}
           onSelectDefaultProfile={() => setDefaultBrowserSessionProfileId(null)}
           onSelectProfile={setDefaultBrowserSessionProfileId}
+        />
+      ) : null}
+
+      {/* Why local only: release 1 runs extensions in this computer's browser profiles. */}
+      {settings.experimentalBrowserExtensions === true &&
+      selectedBrowserSessionHostId === LOCAL_EXECUTION_HOST_ID ? (
+        <BrowserExtensionsSection
+          profileId={selectedProfileId}
+          profileLabel={
+            browserSessionProfiles.find((profile) => profile.id === selectedProfileId)?.label ??
+            selectedProfileId
+          }
         />
       ) : null}
 

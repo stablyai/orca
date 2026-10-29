@@ -1,15 +1,14 @@
 import { deriveCliWriterTopology } from './cli-writer-observation'
 import { transitionHookPresence } from '../../../shared/agent-hook-presence-transition'
 import {
-  reconcileRemoteCodexState,
+  reconcileCodexStatusEvent,
   markCodexLeadTurnInterrupted
 } from '../../../shared/agent-hook-listener/providers/codex-state'
 import {
   resolveAgentStatusIdentity,
   shouldSuppressInheritedTerminalStatus
 } from '../../../shared/agent-status-identity'
-import type { EnrichedAgentHookEventPayload } from './server-types'
-import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
+import type { EnrichedAgentHookEventPayload, IncomingAgentHookEvent } from './server-types'
 import type { AgentStatusObservationOrigin } from '../../../shared/agent-status-observation'
 import { ClaudeOwedNotificationExpiryTimers } from '../../../shared/claude-owed-notification-expiry-timers'
 import { setClaudeMainAgentTurnState } from '../../../shared/agent-hook-listener/providers/claude-roster-state'
@@ -19,7 +18,7 @@ import {
   shouldKeepClaudePermissionVisible,
   withHeldChildWaitMainAgent
 } from './server-claude-status-rules'
-import { isStaleGrokTurnEnd } from './server-grok-status-rules'
+import { isForeignTurnHook } from './server-foreign-turn-hook'
 import { resolveCancelVerdictLatch } from './server-cancel-verdict-latch'
 import { AgentHookServerStatusApplication } from './server-status-application'
 import { claimsPaneAfterExit } from './agent-exit-evidence'
@@ -46,7 +45,7 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
   }
 
   protected applyNormalizedStatus(
-    incoming: AgentHookEventPayload & { authorityRestartId?: string },
+    incoming: IncomingAgentHookEvent,
     onAccepted?: () => void,
     origin: AgentStatusObservationOrigin = 'hook',
     observedAt?: number,
@@ -60,7 +59,10 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
     if (!transitioned) {
       return undefined
     }
-    const { authorityRestartId, ...payload } = { ...incoming, ...transitioned }
+    const { authorityRestartId, codexRosterAuthority, ...payload } = {
+      ...incoming,
+      ...transitioned
+    }
     if (!this.canWriteLegacyStatusRow(payload)) {
       return undefined
     }
@@ -93,8 +95,8 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
         : undefined)
     const terminalOwnedPayload =
       terminalHandle === payload.terminalHandle ? payload : { ...payload, terminalHandle }
-    if (previous && isStaleGrokTurnEnd(previous, terminalOwnedPayload)) {
-      // Grok end hooks can lag the next prompt, even across relay restart.
+    if (previous && isForeignTurnHook(previous, terminalOwnedPayload)) {
+      // A lagging Grok end or a relayed Codex side thread keeps the row, even across relay restart.
       this.commitStatusRowMutation(rowBefore, previous)
       return previous
     }
@@ -122,6 +124,7 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
       incoming: terminalOwnedPayload.payload.agentType,
       // Relay presence is the execution host's owner verdict, not the sender's identity.
       incomingProcess: payload.connectionId ? undefined : incoming.agentPresence?.process,
+      incomingSession: terminalOwnedPayload.providerSession?.id,
       now
     })
     if (
@@ -133,8 +136,8 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
       this.commitStatusRowMutation(rowBefore, previous)
       return previous
     }
-    if (payload.hookEventName === 'UserPromptSubmit') {
-      // Repeated prompt text still opens a new turn; OSC must not inherit the old completion stamp.
+    // Any submitted prompt (incl. a replayed Codex start) opens a new turn; OSC must not inherit the old stamp.
+    if (payload.hookEventName === 'UserPromptSubmit' || payload.hasExplicitPrompt === true) {
       this.activeHookTurnCompletedAtByPaneKey.delete(payload.paneKey)
     }
     if (terminalOwnedPayload.connectionId) {
@@ -164,22 +167,12 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
       this.emitEnrichedStatus(enriched)
       return enriched
     }
-    const stateReconciledPayload =
-      (terminalOwnedPayload.connectionId || !terminalOwnedPayload.hookEventName) &&
-      terminalOwnedPayload.payload.agentType === 'codex' &&
-      (terminalOwnedPayload.hookEventName || terminalOwnedPayload.payload.mainAgent)
-        ? {
-            ...terminalOwnedPayload,
-            payload: reconcileRemoteCodexState(
-              this.state,
-              terminalOwnedPayload.paneKey,
-              terminalOwnedPayload.hookEventName,
-              terminalOwnedPayload.toolAgentId,
-              terminalOwnedPayload.payload,
-              previous?.payload
-            )
-          }
-        : terminalOwnedPayload
+    const stateReconciledPayload = reconcileCodexStatusEvent(
+      this.state,
+      terminalOwnedPayload,
+      previous?.payload,
+      codexRosterAuthority
+    )
     const previousCodexRoot =
       stateReconciledPayload.payload.agentType === 'codex' &&
       stateReconciledPayload.toolAgentId &&

@@ -1,5 +1,4 @@
-/** Renderer-internal fan-out for authority `automationsChanged` events, so the
- *  Automations page refreshes without every publisher knowing about the page. */
+/** Fan out authority changes within the renderer without coupling every publisher to the Automations page. */
 import type { AutomationsChangedPayload } from '../../../shared/runtime-client-events'
 
 export const AUTOMATIONS_CHANGED_EVENT = 'orca:automations-changed'

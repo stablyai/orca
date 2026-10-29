@@ -200,32 +200,41 @@ describe('formatTerminalSend', () => {
   })
 })
 
-// Older hosts can mislabel other providers' dialogs with codex-* tokens; include the neutral names.
-describe('blocked-reason rendering against a mixed-version host', () => {
-  function showResult(reason?: RuntimeTerminalWaitBlockedReason): {
-    terminal: RuntimeTerminalShow
-  } {
-    return {
-      terminal: {
-        handle: 'term_agy',
-        ptyId: 'pty-1',
-        paneRuntimeId: 1,
-        rendererGraphEpoch: 1,
-        worktreeId: 'worktree-1',
-        worktreePath: '/tmp/w',
-        branch: 'main',
-        tabId: 'tab-1',
-        leafId: 'leaf-1',
-        title: 'Antigravity',
-        connected: true,
-        writable: true,
-        lastOutputAt: null,
-        preview: 'Do you trust the files in this folder?',
-        agentWait: { source: 'prompt-text', reason }
-      }
+function showResult(reason?: RuntimeTerminalWaitBlockedReason): {
+  terminal: RuntimeTerminalShow
+} {
+  return {
+    terminal: {
+      handle: 'term_agy',
+      ptyId: 'pty-1',
+      paneRuntimeId: 1,
+      rendererGraphEpoch: 1,
+      worktreeId: 'worktree-1',
+      worktreePath: '/tmp/w',
+      branch: 'main',
+      tabId: 'tab-1',
+      leafId: 'leaf-1',
+      title: 'Antigravity',
+      connected: true,
+      writable: true,
+      lastOutputAt: null,
+      preview: 'Do you trust the files in this folder?',
+      agentWait: { source: 'prompt-text', reason }
     }
   }
+}
 
+describe('formatTerminalShow orphaned marker', () => {
+  it('prints orphaned only for a terminal with no pane binding', () => {
+    expect(
+      formatTerminalShow({ terminal: { ...showResult().terminal, orphaned: true } })
+    ).toContain('orphaned: true\nconnected: true')
+    expect(formatTerminalShow(showResult())).not.toContain('orphaned')
+  })
+})
+
+// Older hosts can mislabel other providers' dialogs with codex-* tokens; include the neutral names.
+describe('blocked-reason rendering against a mixed-version host', () => {
   function waitResult(blockedReason: RuntimeTerminalWaitBlockedReason): {
     wait: RuntimeTerminalWait
   } {

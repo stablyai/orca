@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as TracerModule from './observability/tracer'
 import type * as UpdaterModule from './updater'
 import { loadUpdaterModule, warmUpdaterModule } from './updater-test-module-loader'
+import { updaterMainWindow } from './updater-test-main-window'
 
 const {
   appMock,
@@ -94,6 +95,14 @@ vi.mock('electron', () => ({
 }))
 
 vi.mock('electron-updater', () => ({ autoUpdater: autoUpdaterMock }))
+vi.mock('./updater-prerelease-feed', () => ({
+  fetchNewerReleaseTagsWithReadiness: vi
+    .fn()
+    .mockResolvedValue({ tags: ['v1.4.241'], state: 'ready' }),
+  getReleaseDownloadUrl: (tag: string) =>
+    `https://github.com/stablyai/orca/releases/download/${tag}`
+}))
+
 vi.mock('./electron-updater-loader', () => ({
   loadElectronAutoUpdater: () => autoUpdaterMock
 }))
@@ -149,14 +158,14 @@ function installSpan(): CapturedSpan | undefined {
 }
 
 async function reachDownloaded(): Promise<typeof UpdaterModule> {
-  const mainWindow = { webContents: { send: vi.fn() } }
+  const mainWindow = updaterMainWindow(vi.fn())
   autoUpdaterMock.checkForUpdates.mockResolvedValue(undefined)
   // Install the sink on the fresh tracer instance the updater will import.
   tracer = await import('./observability/tracer')
   tracer.setActiveSink(capturingSink())
   const updater = await loadUpdaterModule()
 
-  updater.setupAutoUpdater(mainWindow as never)
+  updater.setupAutoUpdater(mainWindow)
   await vi.advanceTimersByTimeAsync(0)
   await vi.waitFor(() => {
     expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(1)

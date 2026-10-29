@@ -1,5 +1,5 @@
 import { readOpenCodeNativeChatTranscriptTail } from './transcript-opencode'
-import { isENOENT } from '../ipc/filesystem-path-containment'
+import { isENOENT } from '../ipc/filesystem/filesystem-path-containment'
 import type {
   AgentType,
   NativeChatMessage,
@@ -62,7 +62,8 @@ export async function readNativeChatTranscriptTailFile(
   endOffset?: number,
   decodeLifecycle?: NativeChatTurnLifecycleDecoder | null,
   signal?: AbortSignal,
-  onConsumedBoundary?: (boundary: Buffer) => void
+  onConsumedBoundary?: (boundary: Buffer) => void,
+  sourceOrder = false
 ): Promise<{
   messages: NativeChatMessage[]
   lifecycle?: NativeChatTurnLifecycle
@@ -155,7 +156,11 @@ export async function readNativeChatTranscriptTailFile(
     }
     let latest = Number.NEGATIVE_INFINITY
     const chronological = newestFirst.toReversed().map((entry) => {
-      const ordered = inTranscriptFileOrder(entry.message, latest)
+      const ordered = inTranscriptFileOrder(
+        entry.message,
+        latest,
+        sourceOrder ? entry.offset : undefined
+      )
       latest = ordered.latest
       return { message: ordered.message, offset: entry.offset }
     })
@@ -237,6 +242,7 @@ export async function readNativeChatTranscriptTail(
     filePath?: string
     limit: number
     beforeOffset?: number
+    sourceOrder?: boolean
   },
   signal?: AbortSignal
 ): Promise<
@@ -282,7 +288,9 @@ export async function readNativeChatTranscriptTail(
       true,
       args.beforeOffset,
       decodeLifecycle,
-      signal
+      signal,
+      undefined,
+      args.sourceOrder
     )
     signal?.throwIfAborted()
     return {

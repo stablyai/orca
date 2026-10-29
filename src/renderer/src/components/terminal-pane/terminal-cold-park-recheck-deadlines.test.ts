@@ -78,9 +78,7 @@ describe('getTerminalWorktreeColdParkRecheckDelayMs', () => {
     ).toBeNull()
   })
 
-  // Why: past the ordinary deadlines nothing else would wake the verdict
-  // effect, and the cool-down is what keeps the candidate out of the parked
-  // set — without this wakeup a measured worktree never re-parks.
+  // With earlier deadlines exhausted, only the cool-down wakeup lets this worktree park again.
   it('wakes at the measure cool-down deadline when all ordinary deadlines have passed', () => {
     expect(
       getTerminalWorktreeColdParkRecheckDelayMs({
@@ -170,8 +168,7 @@ describe('getTerminalTabColdParkRecheckDelayMs', () => {
     ).toBe(250)
   })
 
-  // Why: a flip-damped tab is long past every hysteresis deadline, so the pin
-  // expiry is the only wakeup left — drop it and the tab never re-parks.
+  // A damped tab has no other pending wakeup; pin expiry must release it to parking.
   it('wakes at the flip-damping pin deadline when all ordinary deadlines have passed', () => {
     expect(
       getTerminalTabColdParkRecheckDelayMs({
@@ -185,8 +182,7 @@ describe('getTerminalTabColdParkRecheckDelayMs', () => {
     ).toBe(60_000)
   })
 
-  // Why: the earliest pending deadline wins — a pin must not delay a nearer
-  // cool-down wakeup, and vice versa.
+  // Pins and cool-downs must not delay each other’s earlier wakeup.
   it('takes the nearest of the pin and cool-down deadlines', () => {
     const base = {
       parkingEnabled: true,

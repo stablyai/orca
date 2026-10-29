@@ -9,7 +9,9 @@ import type {
 } from '../../shared/agent-session-journal-types'
 import type {
   CodexAppServerConnection,
-  CodexAppServerConnectionHandlers,
+  CodexAppServerConnectionHandlers
+} from './app-server/codex-app-server-connection-types'
+import type {
   CodexAppServerLaunch,
   openCodexAppServerConnection
 } from './codex-app-server-connection'

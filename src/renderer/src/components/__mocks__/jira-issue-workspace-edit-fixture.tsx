@@ -122,8 +122,7 @@ export const initialSource: TaskSourceContext = {
 }
 export const initialSourceContextKey = getJiraReadIdentity(null, initialSource).contextKey
 
-// Why: the task page reads the open issue back out of the Jira store, so an
-// optimistic patch hands the workspace a new object for the same issue.
+// Read optimistically patched issues from the store as the task page does, producing new same-issue objects.
 export function StoreBackedWorkspace({ initial }: { initial: JiraIssue }): React.JSX.Element {
   const [issue, setIssue] = useState<JiraIssue | null>(initial)
   const [source, setSource] = useState(initialSource)

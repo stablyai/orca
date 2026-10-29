@@ -20,7 +20,6 @@ vi.mock('../terminal/worker-terminal-takeover-report', () => ({
 const handle = 'term-tap'
 const up = '\x1b[A'
 const down = '\x1b[B'
-/** A tap's press and release as the WebView reports it to an SGR-tracking TUI. */
 const click = '\x1b[<0;9;31M\x1b[<0;9;31m'
 const ref = <T>(current: T) => ({ current })
 const request = vi.mocked(terminalInputSend.request)
@@ -31,7 +30,6 @@ const accepted: Awaited<ReturnType<typeof terminalInputSend.request>> = {
   result: { send: { accepted: true } }
 }
 
-/** `liveField`: whether this terminal has the live input field turned on. */
 function fixture(liveField: boolean) {
   const client = {}
   const sendLiveInputClick = vi.fn(async () => true)
@@ -113,7 +111,6 @@ it('sends a click at once for a terminal without the live field, past a wheel in
   await vi.advanceTimersByTimeAsync(16)
   expect(request).toHaveBeenCalledTimes(1)
   await actions.handleTerminalInput(handle, click, { click: true })
-  // The wheel's request is still held; the click did not queue behind it and cannot age out.
   await vi.advanceTimersByTimeAsync(300)
   expect(sendLiveTerminalInput).toHaveBeenCalledWith(handle, click)
   expect(sendLiveInputClick).not.toHaveBeenCalled()
