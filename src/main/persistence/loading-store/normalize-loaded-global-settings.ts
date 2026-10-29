@@ -6,11 +6,13 @@ import { normalizeOpenInApplications } from '../../../shared/open-in-application
 import { normalizeTerminalShortcutPolicy } from '../../../shared/keybindings'
 import { normalizeAppIconId } from '../../../shared/app-icon'
 import { normalizeTerminalCustomThemes } from '../../../shared/terminal-custom-themes'
+import { normalizePluginThemeSettings } from '../../../shared/plugin-theme-settings'
 import { normalizeTerminalDefaultShell } from '../../../shared/terminal-default-shell'
 import { projectSourceControlAiToLegacyCommitMessageAi } from '../../../shared/source-control-ai'
 import { normalizeNativeChatShellEnvironmentVariables } from '../../../shared/native-chat/native-chat-shell-environment'
 import { publishedLegacyChatPermissionMode } from '../../../shared/agent-chat-permission-mode'
 import {
+  expandWorkspaceDirHome,
   savedChatUiWithTerminalDefaultView,
   stripRetiredGlobalSettings
 } from '../applying-settings/terminal-settings-migrations'
@@ -64,7 +66,7 @@ export function normalizeLoadedGlobalSettings(
   return {
     ...defaults.settings,
     // Legacy stored booleans cannot distinguish opt-in from the old default; retain explicit true.
-    ...stripRetiredGlobalSettings(parsed.settings),
+    ...expandWorkspaceDirHome(stripRetiredGlobalSettings(parsed.settings)),
     // Preserve terminal-first new tabs when retiring the old default-view switch.
     ...(savedChatUiWithTerminalDefaultView(parsed.settings)
       ? { experimentalNativeChat: false }
@@ -119,6 +121,7 @@ export function normalizeLoadedGlobalSettings(
     terminalDefaultShell: normalizeTerminalDefaultShell(parsed.settings?.terminalDefaultShell),
     terminalQuickCommands: normalizeTerminalQuickCommands(parsed.settings?.terminalQuickCommands),
     terminalCustomThemes: normalizeTerminalCustomThemes(parsed.settings?.terminalCustomThemes),
+    ...normalizePluginThemeSettings(parsed.settings ?? {}),
     appIcon: normalizeAppIconId(parsed.settings?.appIcon),
     mobilePairingCustomAddress,
     mobilePairingCustomAddresses,

@@ -88,7 +88,8 @@ describe('Claude accepted message choices', () => {
         )
       ).toEqual([
         { subtype: 'set_model', params: { model: 'custom[1m]' } },
-        { subtype: 'apply_flag_settings', params: { settings: { effortLevel: 'low' } } }
+        { subtype: 'apply_flag_settings', params: { settings: { effortLevel: 'low' } } },
+        { subtype: 'apply_flag_settings', params: { settings: { fastMode: false } } }
       ])
       const failure = new Error('control refused')
       connection.setModel = async () => {
@@ -149,7 +150,7 @@ describe('Claude accepted message choices', () => {
     })
     expect(outcome).toEqual({
       state: 'admitted',
-      ranOptions: applied ? { model: 'claude-sonnet-5', ...ranOptions } : {}
+      ranOptions: { model: 'claude-sonnet-5', ...ranOptions }
     })
   })
 
@@ -349,7 +350,7 @@ describe('Claude accepted message choices', () => {
     expect(connection.sent).toHaveLength(2)
   })
 
-  it('restores the configured model and effort for an empty snapshot', async () => {
+  it('inherits native state for an empty snapshot after an explicit effort', async () => {
     let currentEffort = 'high'
     const claude = fakeClaude({
       routes: {
@@ -383,6 +384,7 @@ describe('Claude accepted message choices', () => {
     claudeTurnEnds(connection)
     claudeFrame(connection, { type: 'system', subtype: 'init', model: 'claude-opus-5' })
     connection.calls.length = 0
+    connection.getSettings = () => new Promise(() => {})
     await expect(
       adapter.dispatch({
         sessionId: 'session-1',
@@ -394,10 +396,7 @@ describe('Claude accepted message choices', () => {
     ).resolves.toMatchObject({ state: 'admitted' })
     expect(
       connection.calls.filter((call) => ['set_model', 'apply_flag_settings'].includes(call.subtype))
-    ).toEqual([
-      { subtype: 'set_model', params: { model: 'claude-sonnet-5' } },
-      { subtype: 'apply_flag_settings', params: { settings: { effortLevel: 'high' } } }
-    ])
+    ).toEqual([])
     expect(connection.sent).toHaveLength(2)
   })
 
@@ -486,14 +485,21 @@ describe('Claude accepted message choices', () => {
     }
     try {
       await expect(send('starts', 'opus')).resolves.toMatchObject({ state: 'admitted' })
+      expect(models()).toEqual(['sonnet', 'opus', 'opus'])
+      expect(settings()).toEqual([
+        ...settingsAfterTurn,
+        { subtype: 'apply_flag_settings', params: { settings: { effortLevel: 'low' } } },
+        { subtype: 'apply_flag_settings', params: { settings: { fastMode: true } } }
+      ])
+      const settingsAtStart = [...settings()]
       claudeFrame(connection, {
         type: 'command_lifecycle',
         state: 'started',
         command_uuid: connection.sent.at(-1)?.uuid
       })
       await expect(send('before-echo', 'sonnet')).resolves.toMatchObject({ state: 'admitted' })
-      expect(models()).toEqual(['sonnet', 'opus'])
-      expect(settings()).toEqual(settingsAfterTurn)
+      expect(models()).toEqual(['sonnet', 'opus', 'opus'])
+      expect(settings()).toEqual(settingsAtStart)
     } finally {
       connection.send = originalSend
       await adapter.closeAll()

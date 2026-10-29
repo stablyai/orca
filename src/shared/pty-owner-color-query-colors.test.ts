@@ -28,3 +28,14 @@ it('keeps only a wire pair that answers both slots', () => {
   expect(normalizeColorQueryReplyColors('#fff')).toBeNull()
   expect(normalizeColorQueryReplyColors(null)).toBeNull()
 })
+
+it("puts a launching client's colours ahead of the host's", () => {
+  const launcher = { foreground: '#444444', background: '#555555' }
+  const host = { foreground: '#000000', background: '#111111' }
+  const spawn = { foreground: '#222222', background: '#333333' }
+
+  expect(resolvePtyOwnerColorQueryColors(host, spawn, launcher)).toEqual(launcher)
+  expect(
+    resolvePtyOwnerColorQueryColors(host, spawn, { foreground: 'red', background: '#555555' })
+  ).toEqual(host)
+})

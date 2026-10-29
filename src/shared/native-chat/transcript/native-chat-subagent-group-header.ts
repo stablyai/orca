@@ -1,6 +1,6 @@
 // Share spawn-group headline/verdict/alert/clock/token derivation; callers supply platform translations.
 
-import { normalizeSubagentState, summarizeSubagentGroup } from '../../native-chat-subagent-summary'
+import { normalizeSubagentState, summarizeSubagentGroup } from './native-chat-subagent-summary'
 import type { NativeChatSubagentEntry, NativeChatSubagentState } from '../../native-chat-types'
 
 export const NATIVE_CHAT_SUBAGENT_GROUP_COPY = {

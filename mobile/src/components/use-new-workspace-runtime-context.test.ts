@@ -15,7 +15,7 @@ type PublishedState = Pick<
 // Use the persisted per-repo, per-hook approval shape; a content hash directly under the repo key is unreadable.
 const TRUSTED_HOOKS = { 'repo-1': { setup: { contentHash: 'sha-1', approvedAt: 1700000000000 } } }
 const UI_WITH_TRUST = { ui: { trustedOrcaHooks: TRUSTED_HOOKS } }
-const SETTINGS = { defaultTuiAgent: 'codex', visibleTaskProviders: ['github', 'linear'] }
+const SETTINGS = { defaultTuiAgent: 'codex' as const, visibleTaskProviders: ['github', 'linear'] }
 
 function reply(result: unknown): RpcResponse {
   return { id: 'r', ok: true, result, _meta: { runtimeId: 'runtime-1' } }
@@ -41,6 +41,7 @@ function clientAnswering(settingsResult: unknown, uiResult: unknown): RpcClient 
 describe('useNewWorkspaceRuntimeContext', () => {
   let renderer: ReactTestRenderer | null = null
   let context: RuntimeContext | null = null
+  let servers = 0
 
   afterEach(() => {
     act(() => renderer?.unmount())
@@ -55,14 +56,21 @@ describe('useNewWorkspaceRuntimeContext', () => {
     return context
   }
 
-  function Harness({ client }: { client: RpcClient }): null {
-    context = useNewWorkspaceRuntimeContext(client, true)
+  function Harness({ client, serverId }: { client: RpcClient; serverId?: string }): null {
+    context = useNewWorkspaceRuntimeContext(client, true, 'host-1', serverId)
     return null
   }
 
   // Reuse the mounted harness so the second answer represents a host swap.
-  async function answer(settingsResult: unknown, uiResult: unknown): Promise<PublishedState> {
-    const element = createElement(Harness, { client: clientAnswering(settingsResult, uiResult) })
+  async function answer(
+    settingsResult: unknown,
+    uiResult: unknown,
+    serverId = `runtime:${++servers}`
+  ): Promise<PublishedState> {
+    const element = createElement(Harness, {
+      client: clientAnswering(settingsResult, uiResult),
+      serverId
+    })
     await act(async () => {
       if (renderer) {
         renderer.update(element)
@@ -137,5 +145,56 @@ describe('useNewWorkspaceRuntimeContext', () => {
       TRUSTED_HOOKS
     )
     expect((await answer({ settings: SETTINGS }, null)).trustedOrcaHooks).toEqual({})
+  })
+
+  async function swapToUnansweredClient(serverId: string): Promise<void> {
+    const next = new FakeSession('connected')
+    next.sendRequest.mockImplementation(() => new Promise<RpcResponse>(() => {}))
+    await act(async () => renderer?.update(createElement(Harness, { client: next, serverId })))
+  }
+
+  it('does not show the previous host settings or approvals while the new host has not answered', async () => {
+    await answer({ settings: SETTINGS }, UI_WITH_TRUST, 'runtime:a')
+    await swapToUnansweredClient('runtime:b')
+    expect(currentContext().runtimeSettings).toBeNull()
+    expect(currentContext().trustedOrcaHooks).toEqual({})
+    expect(currentContext().availableProviders).toEqual([])
+  })
+
+  // Any server's relay change rebuilds every scoped client, so the client object is not the host.
+  it('keeps the selected host values when its client is rebuilt', async () => {
+    const published = await answer({ settings: SETTINGS }, UI_WITH_TRUST, 'runtime:a')
+    await swapToUnansweredClient('runtime:a')
+    expect(currentContext().runtimeSettings).toEqual(published.runtimeSettings)
+    expect(currentContext().trustedOrcaHooks).toEqual(TRUSTED_HOOKS)
+  })
+
+  // A -> B -> A: the first A's Save callbacks must stay retired when A is picked again.
+  it('ignores publishers from an earlier selection, including of the same host', async () => {
+    let ui: unknown = UI_WITH_TRUST
+    const first = new FakeSession('connected')
+    first.sendRequest.mockImplementation(async (method: string) =>
+      reply(method === 'ui.get' ? ui : method === 'settings.get' ? { settings: SETTINGS } : {})
+    )
+    await act(async () => {
+      renderer = create(createElement(Harness, { client: first, serverId: 'runtime:a' }))
+    })
+    const retired = currentContext()
+    expect(retired.trustedOrcaHooks).toEqual(TRUSTED_HOOKS)
+
+    await answer({ settings: { defaultTuiAgent: 'claude' } }, { ui: {} }, 'runtime:b')
+    act(() => {
+      retired.setRuntimeSettings(SETTINGS)
+      retired.setTrustedOrcaHooks(TRUSTED_HOOKS)
+    })
+    expect(currentContext().runtimeSettings).toEqual({ defaultTuiAgent: 'claude' })
+    expect(currentContext().trustedOrcaHooks).toEqual({})
+
+    ui = { ui: {} }
+    await act(async () =>
+      renderer?.update(createElement(Harness, { client: first, serverId: 'runtime:a' }))
+    )
+    act(() => retired.setTrustedOrcaHooks(TRUSTED_HOOKS))
+    expect(currentContext().trustedOrcaHooks).toEqual({})
   })
 })

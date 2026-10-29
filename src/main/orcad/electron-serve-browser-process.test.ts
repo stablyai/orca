@@ -1,3 +1,4 @@
+import type * as OrcadBrowserProviderModule from './orcad-browser-provider'
 import type { ProcessSpec } from '@orca/process-host/process-spec'
 import { existsSync } from 'node:fs'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
@@ -43,10 +44,22 @@ import { startOrcadBrowserProvider } from './orcad-browser-startup'
 import { resolveOrcadBrowserProvider } from './orcad-browser-provider'
 import {
   createRuntimeBrowserCommands,
+  runtimeBrowserCommandsFactorySupportsGoogleCookieClear,
   setRuntimeBrowserCommandsFactory
 } from '../runtime/runtime-browser-commands-factory'
 
 vi.mock('./orcad-browser-provider', () => ({ resolveOrcadBrowserProvider: vi.fn() }))
+
+vi.mock('electron', () => ({ app: { getPath: () => harnessRoot }, ipcMain: {} }))
+vi.mock('../browser/browser-manager', () => ({ browserManager: {} }))
+vi.mock('../browser/cookies/browser-cookie-import', () => ({
+  detectInstalledBrowsers: () => [{ family: 'chrome', profiles: [], selectedProfile: 'Default' }],
+  importCookiesFromBrowser: async () => ({ ok: true, summary: {} })
+}))
+import { browserSessionRegistry } from '../browser/browser-session-registry'
+import { browserProfileRpcFixture } from '../runtime/browser/browser-profile-rpc-test-fixture'
+
+const actual = await vi.importActual<typeof OrcadBrowserProviderModule>('./orcad-browser-provider')
 
 const FAKE_SIDECAR = join(import.meta.dirname, '__fixtures__', 'fake-orcad-electron-sidecar.cjs')
 const INSTALLED_EXECUTABLE = join('/Applications', 'Orca.app', 'Contents', 'MacOS', 'Orca')
@@ -68,9 +81,10 @@ const AGENT_BROWSER_ENVIRONMENT_KEYS = [
 type SidecarRequest = { method: string; params: Record<string, unknown>; authToken: string | null }
 
 const host: RuntimeBrowserCommandHost = {
+  getRuntimeId: () => 'owner',
   getAgentBrowserBridge: () => null,
   // Distinct IDs prove registry fencing uses resolved workspaces, not caller selectors.
-  resolveWorktreeSelector: async (selector) => ({ id: `id-${selector}` }),
+  resolveWorkspaceSelector: async (selector) => ({ id: `id-${selector}` }),
   resolveBrowserWorkspace: async (selector) => ({ id: `id-${selector}` }),
   resolveBrowserNetworkExecutionHost: () => {
     throw new Error('No browser network execution host')
@@ -448,7 +462,7 @@ describe('ElectronServeBrowserProcess command routing', () => {
   it('scopes a folder workspace through the browser-workspace resolver', async () => {
     const folderHost: RuntimeBrowserCommandHost = {
       ...host,
-      resolveWorktreeSelector: async () => {
+      resolveWorkspaceSelector: async () => {
         throw new Error('selector_not_found')
       },
       resolveBrowserWorkspace: async () => ({ id: 'folder:docs' })
@@ -504,3 +518,76 @@ it('forwards tab commands through startup to the Electron sidecar', async () => 
     await startup.stop()
   }
 })
+
+// Subprocess forwarding contract; executed by CI or an admitted QA machine.
+it.each([false, true])(
+  'installs the actual provider with executor support=%s and forwards owner stamps unchanged',
+  async (supported) => {
+    const commandHost = {
+      ...host,
+      getRuntimeBrowserPageRegistry: () => new RuntimeBrowserPageRegistry()
+    }
+    browserSessionRegistry.configureForOrcaProfile({
+      orcaProfileId: 'fixture',
+      profileDirectory: harnessRoot
+    })
+    const owner = browserProfileRpcFixture('S2').profiles
+    const list = await owner.browserProfileList()
+    const imported = await owner.browserProfileImportFromBrowser({
+      profileId: 'default',
+      browserFamily: 'chrome'
+    })
+    await setControl({
+      capabilities: [
+        ['browser.headless.v1', ...(supported ? ['browser.google-cookie-clear.v1'] : [])]
+      ],
+      results: { 'browser.profileList': list, 'browser.profileImportFromBrowser': imported }
+    })
+    vi.mocked(resolveOrcadBrowserProvider).mockImplementation((options) =>
+      actual.resolveOrcadBrowserProvider({
+        ...options,
+        resolveInstalledElectronExecutable: async () => INSTALLED_EXECUTABLE
+      })
+    )
+    const startup = startOrcadBrowserProvider({ userDataPath: harnessRoot })
+    await startup.ready
+    try {
+      expect(runtimeBrowserCommandsFactorySupportsGoogleCookieClear()).toBe(supported)
+      const commands = createRuntimeBrowserCommands(commandHost)
+      await commands.browserTabList({})
+      expect(await commands.browserProfileList()).toEqual(list)
+      expect(
+        await commands.browserProfileImportFromBrowser({
+          profileId: 'default',
+          browserFamily: 'chrome'
+        })
+      ).toMatchObject({ ok: true, executorRuntimeId: 'S2' })
+      if (supported) {
+        await commands.browserProfileClearGoogleCookies({
+          profileId: 'default',
+          executorRuntimeId: 'S1'
+        })
+        expect((await browserRequests()).at(-1)).toMatchObject({
+          method: 'browser.profileClearGoogleCookies',
+          params: { profileId: 'default', executorRuntimeId: 'S1' }
+        })
+      }
+    } finally {
+      await startup.stop()
+    }
+    expect(runtimeBrowserCommandsFactorySupportsGoogleCookieClear()).toBe(false)
+    await setControl({
+      capabilities: [
+        ['browser.headless.v1', ...(!supported ? ['browser.google-cookie-clear.v1'] : [])]
+      ]
+    })
+    const restarted = startOrcadBrowserProvider({ userDataPath: harnessRoot })
+    await restarted.ready
+    try {
+      expect(runtimeBrowserCommandsFactorySupportsGoogleCookieClear()).toBe(!supported)
+      await createRuntimeBrowserCommands(commandHost).browserTabList({})
+    } finally {
+      await restarted.stop()
+    }
+  }
+)

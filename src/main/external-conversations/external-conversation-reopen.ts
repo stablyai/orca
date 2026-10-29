@@ -19,7 +19,9 @@ const REOPEN_REFUSALS: Record<Exclude<AgentSessionResumeRefusal, 'aborted'>, Con
   // An unreachable SSH host may still run the old pane, so reopening would risk duplicates.
   held_elsewhere: 'agent_not_reachable',
   no_resume_command: 'reopen_refused',
-  create_failed: 'reopen_refused'
+  create_failed: 'reopen_refused',
+  // Connector refusal codes are a published set; the host-side result keeps the fix-it message.
+  windows_only_cli: 'reopen_refused'
 }
 
 /** Resume only the linked session after proving it is unheld; never substitute a shell or fresh agent. */

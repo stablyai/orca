@@ -99,7 +99,8 @@ export async function modelCatalogHostDeps(input: {
 /** The installed host lists what a changed account or agent setting made cold; with no host yet,
  *  its install lists everything anyway. */
 export function prewarmStructuredAgentModelCatalogs(): void {
-  void getStructuredAgentSessionHost()?.deps.modelCatalog?.prewarm()
+  const catalog = getStructuredAgentSessionHost()?.deps.modelCatalog
+  void catalog?.prewarm()
 }
 
 // Re-exported so the runtime deps type can reference the resolver shape without

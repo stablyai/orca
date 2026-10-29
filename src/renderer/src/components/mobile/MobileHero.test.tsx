@@ -6,7 +6,8 @@ import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('@/i18n/i18n', () => ({
+vi.mock(import('@/i18n/i18n'), async (importOriginal) => ({
+  ...(await importOriginal()),
   translate: (_key: string, fallback: string) => fallback
 }))
 

@@ -4,7 +4,7 @@ import { spawnManagedProviderProcess } from '../provider-process/managed-provide
 import { createClaudeChildTreeReaper } from '../claude/claude-agent-sdk-exit-proof'
 import type { ProviderProcessLaunch } from '../provider-process/provider-process-launch'
 import { buildCodexAppServerExitError } from './app-server/codex-app-server-exit-error'
-import { withMissingProviderExecutable } from '../provider-process/provider-executable-missing'
+import { withProviderSpawnAbsence } from '../provider-process/provider-executable-missing'
 import { initializeCodexAppServerConnection } from './app-server/codex-app-server-handshake'
 import { CodexAppServerHandshakeExitUnprovenError } from './app-server/codex-app-server-handshake-exit-proof'
 import {
@@ -51,7 +51,7 @@ async function connectCodexAppServer(
 
   function buildExitError(cause?: Error): Error {
     const error = buildCodexAppServerExitError(managed.stderrTail(), cause)
-    return managed.executableMissing ? withMissingProviderExecutable(error) : error
+    return withProviderSpawnAbsence(error, managed.spawnAbsence)
   }
 
   const dispatcher = createCodexAppServerRecordDispatcher({

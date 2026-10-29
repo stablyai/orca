@@ -22,6 +22,7 @@ import {
   shouldResetTaskPagePaginationAfterLandingRefresh,
   reconcileTaskPagePagesAfterLandingRefresh
 } from '@/components/task-page/task-page-cache-selectors'
+import { translate } from '@/i18n/i18n'
 export function runTaskPageGitHubLandingRefresh(model: TaskPageGitHubSearchPaginationModel) {
   const {
     fetchWorkItemsAcrossRepos,
@@ -356,7 +357,14 @@ export function runTaskPageGitHubLandingRefresh(model: TaskPageGitHubSearchPagin
       if (cancelled) {
         return
       }
-      setTasksError(err instanceof Error ? err.message : 'Failed to load GitHub work.')
+      setTasksError(
+        err instanceof Error
+          ? err.message
+          : translate(
+              'auto.components.TaskPage.loadGitHubWorkFailed',
+              'Failed to load GitHub work.'
+            )
+      )
       setFailedCount(0) // the per-repo banner would be misleading next to tasksError
       setGithubUnavailable(false)
       if (targetPage === 0 || cachedTargetPage) {

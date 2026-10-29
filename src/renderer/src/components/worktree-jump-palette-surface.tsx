@@ -182,22 +182,31 @@ export function WorktreeJumpPaletteSurface({
             })} `
           : ''}
         {controller.deferredQuery.trim()
-          ? translate(
-              'auto.components.WorktreeJumpPalette.bb72c08e63',
-              '{{value0}} results found{{value1}}',
-              {
-                value0: resultCount,
-                value1: controller.showCreateAction ? ', create worktree action available' : ''
-              }
-            )
-          : translate(
-              'auto.components.WorktreeJumpPalette.20af998bff',
-              '{{value0}} items available{{value1}}',
-              {
-                value0: resultCount,
-                value1: controller.showCreateAction ? ', create worktree action available' : ''
-              }
-            )}
+          ? resultCount === 1
+            ? translate(
+                'auto.components.WorktreeJumpPalette.resultsFound_one',
+                '{{count}} result found.',
+                { count: resultCount }
+              )
+            : translate(
+                'auto.components.WorktreeJumpPalette.resultsFound_other',
+                '{{count}} results found.',
+                { count: resultCount }
+              )
+          : resultCount === 1
+            ? translate(
+                'auto.components.WorktreeJumpPalette.itemsAvailable_one',
+                '{{count}} item available.',
+                { count: resultCount }
+              )
+            : translate(
+                'auto.components.WorktreeJumpPalette.itemsAvailable_other',
+                '{{count}} items available.',
+                { count: resultCount }
+              )}
+        {controller.showCreateAction
+          ? ` ${translate('auto.components.WorktreeJumpPalette.createActionAvailable', 'Create worktree action available.')}`
+          : ''}
       </div>
     </CommandDialog>
   )

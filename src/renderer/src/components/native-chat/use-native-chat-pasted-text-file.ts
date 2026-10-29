@@ -11,7 +11,7 @@ import { extractIpcErrorMessage } from '@/lib/ipc-error'
 import { measureUtf8ByteLength } from '../../../../shared/utf8-byte-limits'
 import { structuredAgentSessionBlocksTooLarge } from '../../../../shared/rpc-contract/structured-agent-session-message-params'
 import { structuredAgentSessionSendBody } from '../../../../shared/structured-agent-session-send-mutation'
-import { imageReferencesToPromptMarkers } from '../../../../shared/native-chat-image-transcript-markers'
+import { imageReferencesToPromptMarkers } from '../../../../shared/native-chat/transcript/native-chat-image-transcript-markers'
 import {
   nativeChatAttachFailedNotice,
   nativeChatAttachmentOwnerChangedNotice,

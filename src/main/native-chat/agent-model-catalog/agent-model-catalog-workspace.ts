@@ -1,11 +1,13 @@
 import type {
-  AgentModelCatalogLiveListing,
-  AgentModelCatalogStore
-} from './agent-model-catalog-store'
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+  AgentSessionAccountHome,
+  AgentSessionRecord
+} from '../../../shared/agent-session-record'
+import type { AgentModelCatalogBinding } from './agent-model-catalog-snapshot'
+import { independentAgentModelCatalog } from './agent-model-catalog-discovery'
 import { isLegacyAgentSessionAccountHome } from '../../../shared/agent-session-account-home'
 import { isNativeLocalLocation } from '../../../shared/execution-host'
 import type { AgentModelCatalogConfiguredChoice } from './agent-model-catalog-entry'
+import type { AgentModelCatalogStore } from './agent-model-catalog-store'
 
 export type AgentModelCatalogRecord = Pick<
   AgentSessionRecord,
@@ -79,7 +81,8 @@ export async function recordConfiguredDefault(
   },
   record: AgentSessionRecord,
   fingerprint: string,
-  choice: AgentModelCatalogConfiguredChoice | null
+  choice: AgentModelCatalogConfiguredChoice | null,
+  current: () => boolean
 ): Promise<void> {
   const accountHome = record.accountHome
   if (!deps.workspaceMayOverrideDefaultModel) {
@@ -96,39 +99,33 @@ export async function recordConfiguredDefault(
   ) {
     return
   }
-  if (deps.getRecord(record.sessionId)?.lease.runtimeFence !== record.lease.runtimeFence) {
-    return
+  if (
+    current() &&
+    deps.getRecord(record.sessionId)?.lease.runtimeFence === record.lease.runtimeFence
+  ) {
+    deps.store.recordConfiguredDefault(fingerprint, choice)
   }
-  deps.store.recordConfiguredDefault(fingerprint, choice)
 }
 
-export function createAgentModelCatalogLiveListingRecorder(
-  deps: Parameters<typeof recordConfiguredDefault>[0],
-  recordingDefaults: Map<string, Promise<void>>
-) {
-  return (
-    record: AgentSessionRecord,
-    listing: AgentModelCatalogLiveListing,
-    fingerprint: string
-  ): void => {
-    const { configuredDefault, ...listed } = listing
-    const saved = deps.store.recordSuccess(
-      fingerprint,
-      record.provider,
-      { ...listed, origin: 'live-session' },
-      'live'
-    )
-    if (saved && configuredDefault !== undefined) {
-      // Preserve report order when learning configured defaults.
-      const recording = (recordingDefaults.get(fingerprint) ?? Promise.resolve())
-        .then(() => recordConfiguredDefault(deps, record, fingerprint, configuredDefault))
-        .catch(() => {})
-        .then(() => {
-          if (recordingDefaults.get(fingerprint) === recording) {
-            recordingDefaults.delete(fingerprint)
-          }
-        })
-      recordingDefaults.set(fingerprint, recording)
+/** Default provenance belongs to the resolved binding and the operation projecting it. */
+export async function projectAgentModelCatalogDefault(
+  deps: AgentModelCatalogWorkspaceDeps,
+  agent: string,
+  bound: AgentModelCatalogBinding,
+  home: AgentSessionAccountHome | null,
+  current: () => boolean
+): Promise<void> {
+  const accountHomePath = home && isLegacyAgentSessionAccountHome(home) ? home.path : null
+  const path =
+    bound.workspacePath === null && independentAgentModelCatalog(agent)
+      ? undefined
+      : bound.workspacePath
+  try {
+    const keepDefault = await workspaceKeepsListedDefault(deps, agent, path, accountHomePath)
+    if (current()) {
+      bound.keepDefault = keepDefault
     }
+  } catch {
+    /* A failed provenance read leaves the binding's conservative projection. */
   }
 }

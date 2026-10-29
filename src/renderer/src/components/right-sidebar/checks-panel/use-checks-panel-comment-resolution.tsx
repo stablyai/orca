@@ -154,7 +154,10 @@ export function useChecksPanelCommentResolution(model: ChecksPanelCommentResolut
   const canTargetPRComments = Boolean(repo && prNumber && pr?.prRepo)
   const commentsDisabledReason = canTargetPRComments
     ? undefined
-    : 'Commenting requires a GitHub PR repository target.'
+    : translate(
+        'auto.components.right.sidebar.checks.panel.content.commentingRequiresGitHubPrTarget',
+        'Commenting requires a GitHub PR repository target.'
+      )
   const workspace = worktreeLaunchWorkspace(activeWorktreeId ?? '')
   const observation = useAgentMenuObservation(
     activeWorktreeId,
@@ -176,9 +179,15 @@ export function useChecksPanelCommentResolution(model: ChecksPanelCommentResolut
   const noEnabledAgentKnown = noAgentFor('resolveConflicts')
   const actionDisabledReason = (actionId: SourceControlActionId): string | undefined =>
     !activeWorktreeId
-      ? 'Select a workspace before launching an AI action.'
+      ? translate(
+          'auto.components.right.sidebar.checks.panel.content.selectWorkspaceBeforeAiAction',
+          'Select a workspace before launching an AI action.'
+        )
       : noAgentFor(actionId)
-        ? 'No enabled AI agents. Configure agents in Settings.'
+        ? translate(
+            'auto.components.right.sidebar.source.control.ai.recovery.launch.9bbd9077a2',
+            'No enabled AI agents. Configure agents in Settings.'
+          )
         : undefined
   const aiActionDisabledReason = actionDisabledReason('resolveConflicts')
   const fixChecksDisabledReason = actionDisabledReason('fixChecks')

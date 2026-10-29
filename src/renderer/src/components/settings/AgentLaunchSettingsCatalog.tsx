@@ -87,7 +87,7 @@ export function AgentLaunchSettingsCatalog({
     detectionFailed,
     isRefreshing,
     refresh
-  } = useDetectedAgents(detectionTarget)
+  } = useDetectedAgents(detectionTarget, 'all')
   const detectedIds = useMemo(() => (detected ? new Set(detected) : null), [detected])
   useHostStructuredAgentsVersion()
   const installedHere = useAppStore(readNativeDetectedAgents)

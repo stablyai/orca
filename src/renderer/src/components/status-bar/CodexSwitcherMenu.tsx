@@ -145,13 +145,14 @@ export function CodexSwitcherMenu({
             <div>
               {resetCreditCount === 1
                 ? translate(
-                    'auto.components.status.bar.StatusBar.5e5f9f5160',
-                    '1 rate-limit reset available'
+                    'auto.components.status.bar.StatusBar.rateLimitResetsAvailable_one',
+                    '{{count}} rate-limit reset available',
+                    { count: resetCreditCount }
                   )
                 : translate(
-                    'auto.components.status.bar.StatusBar.5ecae9197c',
-                    '{{value0}} rate-limit resets available',
-                    { value0: resetCreditCount }
+                    'auto.components.status.bar.StatusBar.rateLimitResetsAvailable_other',
+                    '{{count}} rate-limit resets available',
+                    { count: resetCreditCount }
                   )}
             </div>
             {resetCreditExpiry ? (

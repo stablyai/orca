@@ -85,7 +85,7 @@ describe('OrcaRuntimeService worktree removal execution host', () => {
         allowUnverifiedPtyStop: false,
         hostId: 'ssh:target-a'
       })
-    ).rejects.toThrow('Remote connection dropped')
+    ).rejects.toThrow('isn’t served by Orca’s server')
 
     expect(listWorktreesStrict).not.toHaveBeenCalled()
     expect(removeWorktree).not.toHaveBeenCalled()

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { ClaudeStructuredSessionEvent } from './structured/claude-structured-session-state'
 import {
   PROVIDER_SESSION_ID,
@@ -141,7 +141,7 @@ describe('Claude model before the first turn', () => {
     expect(current.effort).toBe('medium')
   })
 
-  it('re-reads what Claude will apply after a model write', async () => {
+  it('refreshes what Claude applies at turn completion, without work on an options read', async () => {
     const settings = structuredClone(SETTINGS.settingsHaiku)
     const claude = startedWithoutATurn(settings)
     const adapter = await acquired(claude)
@@ -149,8 +149,27 @@ describe('Claude model before the first turn', () => {
     await adapter.setOption({ sessionId: 'session-1', fence: 7, key: 'model', value: 'sonnet' })
     Object.assign(settings.applied, { model: 'claude-sonnet-5', effort: 'high' })
 
+    const reads = claude.connections[0]!.calls.filter(
+      (call) => call.subtype === 'get_settings'
+    ).length
     const { current } = await adapter.readOptions({ sessionId: 'session-1', fence: 7 })
-    expect(current).toMatchObject({ model: 'sonnet', effort: 'high' })
+    expect(current.model).toBe('sonnet')
+    expect(current.effort).toBeUndefined()
+    expect(
+      claude.connections[0]!.calls.filter((call) => call.subtype === 'get_settings')
+    ).toHaveLength(reads)
+    claude.connections[0]!.handlers.onMessage?.({
+      type: 'result',
+      subtype: 'success',
+      uuid: 'finished',
+      session_id: PROVIDER_SESSION_ID,
+      is_error: false
+    })
+    await vi.waitFor(async () => {
+      expect(
+        (await adapter.readOptions({ sessionId: 'session-1', fence: 7 })).current
+      ).toMatchObject({ model: 'sonnet', effort: 'high' })
+    })
   })
 
   it('drops the applied effort once a restored model replaces the model it described', async () => {

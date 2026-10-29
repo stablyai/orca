@@ -304,6 +304,11 @@ export function invalidatePersistedWindowsPathCache(): void {
   pendingPersistedWindowsPathRefresh = undefined
 }
 
+/** The last committed registry PATH; reading it never starts or waits for a refresh. */
+export function cachedPersistedWindowsPathSegments(): string[] {
+  return persistedWindowsPathCache ? [...persistedWindowsPathCache.segments] : []
+}
+
 export function mergePersistedWindowsPath(
   env: NodeJS.ProcessEnv,
   options: ReadWindowsPathOptions = {}

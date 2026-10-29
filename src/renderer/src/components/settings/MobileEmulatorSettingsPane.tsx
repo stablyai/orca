@@ -14,6 +14,7 @@ import { SearchableSetting } from './SearchableSetting'
 import { SettingsRow, SettingsSwitchRow } from './SettingsFormControls'
 import { getMobileEmulatorSearchEntries } from './mobile-emulator-search'
 import { translate } from '@/i18n/i18n'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 
 type SimulatorDeviceRow = {
   name: string
@@ -122,6 +123,7 @@ export function MobileEmulatorSettingsPane({
   settings,
   updateSettings
 }: MobileEmulatorSettingsPaneProps): React.JSX.Element {
+  const languageRevision = useUiLanguageRevision()
   const [availability, setAvailability] = useState<EmulatorAvailability | null>(null)
   const [refreshing, setRefreshing] = useState(false)
   const enabled = settings.mobileEmulatorEnabled !== false
@@ -174,7 +176,8 @@ export function MobileEmulatorSettingsPane({
       'auto.components.settings.MobileEmulatorSettingsPane.b2fd62ea75',
       'Default device for new emulator tabs and agent attach commands. Auto-select prefers an already running device.'
     )
-  }, [devices.length])
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- translate() reads the UI language implicitly.
+  }, [devices.length, languageRevision])
 
   return (
     <div className="space-y-4">

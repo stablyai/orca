@@ -31,6 +31,7 @@ export function useTerminalWebViewController(
 ) {
   const {
     terminalTheme,
+    interactionActive = true,
     textScale = 1,
     onWebReady,
     onEngineError,
@@ -112,10 +113,12 @@ export function useTerminalWebViewController(
         onWebReady?.()
       }
       // Reload drops commands; readiness must restore the selected theme even if its React value did not change.
+      sendToDocument({ type: 'set-interaction-active', active: interactionActive })
       sendToDocument({ type: 'set-theme', terminalTheme })
       flushPendingMessages()
     },
     [
+      interactionActive,
       clearEngineError,
       clearWebReadyWatchdog,
       flushPendingMessages,
@@ -125,10 +128,17 @@ export function useTerminalWebViewController(
     ]
   )
 
+  useEffect(() => {
+    if (isWebReadyRef.current) {
+      sendToDocument({ type: 'set-interaction-active', active: interactionActive })
+    }
+  }, [sendToDocument, interactionActive])
+
   const receive = useCallback(
     (msg: Record<string, unknown>) => {
       routeTerminalQueryReply(msg, onTerminalQueryReply)
       if (
+        interactionActive &&
         msg.type === 'terminal-input' &&
         typeof msg.bytes === 'string' &&
         isTerminalGestureInput(msg.bytes)
@@ -162,16 +172,17 @@ export function useTerminalWebViewController(
           onModesChanged,
           onKeyboardAvoidanceMetrics,
           onHaptic,
-          onTerminalInput,
-          onTerminalTap,
-          onFileTap,
-          onOpenUrl,
+          onTerminalInput: interactionActive ? onTerminalInput : undefined,
+          onTerminalTap: interactionActive ? onTerminalTap : undefined,
+          onFileTap: interactionActive ? onFileTap : undefined,
+          onOpenUrl: interactionActive ? onOpenUrl : undefined,
           onTextScaleChange
         })
       }
     },
     [
       confirmWebReady,
+      interactionActive,
       promises,
       reportEngineError,
       onSelectionMode,

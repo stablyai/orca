@@ -12,7 +12,7 @@ import {
 import {
   isRenderableSubagentGroup,
   withoutSubagentGroupTwins
-} from '../../../../../src/shared/native-chat-subagent-summary'
+} from '../../../../../src/shared/native-chat/transcript/native-chat-subagent-summary'
 import type {
   NativeChatBlock,
   NativeChatMessage,

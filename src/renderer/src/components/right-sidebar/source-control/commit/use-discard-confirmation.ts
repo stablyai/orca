@@ -122,27 +122,41 @@ export function useSourceControlDiscardConfirmation({
           // Limit bulk failures to the first error and sample paths so the toast stays readable.
           const firstMsg = readIpcErrorMessage(errors[0])
           const sample = result.failed.slice(0, 3).join(', ')
-          const more = result.failed.length > 3 ? `, +${result.failed.length - 3} more` : ''
+          const hiddenCount = result.failed.length - 3
+          const samplePaths =
+            hiddenCount > 0
+              ? hiddenCount === 1
+                ? translate(
+                    'auto.components.right.sidebar.SourceControl.discardFailedSampleMore_one',
+                    '{{paths}}, +{{count}} more',
+                    { paths: sample, count: hiddenCount }
+                  )
+                : translate(
+                    'auto.components.right.sidebar.SourceControl.discardFailedSampleMore_other',
+                    '{{paths}}, +{{count}} more',
+                    { paths: sample, count: hiddenCount }
+                  )
+              : sample
           toast.error(
             result.failed.length === 1
               ? translate(
-                  'auto.components.right.sidebar.SourceControl.discardFailedSingular',
+                  'auto.components.right.sidebar.SourceControl.discardFailed_one',
                   'Failed to discard {{count}} file',
                   { count: result.failed.length }
                 )
               : translate(
-                  'auto.components.right.sidebar.SourceControl.discardFailedPlural',
+                  'auto.components.right.sidebar.SourceControl.discardFailed_other',
                   'Failed to discard {{count}} files',
                   { count: result.failed.length }
                 ),
             {
               description: firstMsg
                 ? translate(
-                    'auto.components.right.sidebar.SourceControl.dc5a6465fc',
-                    '{{value0}} (e.g. {{value1}}{{value2}})',
-                    { value0: firstMsg, value1: sample, value2: more }
+                    'auto.components.right.sidebar.SourceControl.discardFailedWithSample',
+                    '{{error}} (e.g. {{paths}})',
+                    { error: firstMsg, paths: samplePaths }
                   )
-                : `${sample}${more}`
+                : samplePaths
             }
           )
         }

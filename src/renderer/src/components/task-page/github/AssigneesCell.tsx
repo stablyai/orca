@@ -146,7 +146,12 @@ export function GHAssigneesCell({
               }
               return res
             }
-            throw new Error('No GitHub repository context available for this issue.')
+            throw new Error(
+              translate(
+                'auto.components.TaskPage.noGitHubRepositoryContext',
+                'No GitHub repository context available for this issue.'
+              )
+            )
           }
         })
       } finally {

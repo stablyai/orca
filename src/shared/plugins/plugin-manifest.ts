@@ -4,10 +4,13 @@ import {
   PLUGIN_AGENT_PROFILE_LIMIT,
   PLUGIN_KEYBINDING_LIMIT,
   PLUGIN_LANGUAGE_PACK_LIMIT,
+  PLUGIN_TERMINAL_THEME_LIMIT,
+  PLUGIN_THEME_LIMIT,
   PLUGIN_VM_RECIPE_LIMIT,
   pluginAgentProfileContributionSchema,
   pluginKeybindingContributionSchema,
   pluginLanguagePackContributionSchema,
+  pluginThemeContributionSchema,
   pluginVmRecipeContributionSchema
 } from './plugin-content-pack-contributions'
 import {
@@ -16,9 +19,22 @@ import {
   pluginRelativePathSchema
 } from './plugin-manifest-fields'
 import { validatePluginManifestContributions } from './plugin-manifest-contribution-validation'
+import {
+  pluginExecutionProfileSchema,
+  validatePluginExecutionProfile
+} from './plugin-execution-profile'
 
-/** Shared orca-plugin.json validation keeps desktop, serve, relay and CLI behavior aligned. Contribution names mirror
- * Electron conventions for future adapters. Experimental until pluginApi v1 freezes. */
+/**
+ * Plugin manifest v1 and v2 (`orca-plugin.json` at the plugin root). The
+ * `contributes` key names deliberately mirror common Electron-ecosystem
+ * manifest conventions so future adapters stay cheap.
+ *
+ * Lives in `shared` so the desktop app, the headless `orca serve` runtime,
+ * the relay, and the CLI validate manifests identically (SSH/remote parity).
+ *
+ * Everything here is EXPERIMENTAL: no compatibility promises until pluginApi
+ * v1 freezes (see the plugin roadmap).
+ */
 
 const SEMVER_RE =
   /^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-(?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*))*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/
@@ -98,6 +114,11 @@ const pluginManifestV1Object = z.object({
       agents: z
         .array(pluginAgentProfileContributionSchema)
         .max(PLUGIN_AGENT_PROFILE_LIMIT)
+        .default([]),
+      themes: z.array(pluginThemeContributionSchema).max(PLUGIN_THEME_LIMIT).default([]),
+      terminalThemes: z
+        .array(pluginThemeContributionSchema)
+        .max(PLUGIN_TERMINAL_THEME_LIMIT)
         .default([])
     })
     .strict()
@@ -106,9 +127,18 @@ const pluginManifestV1Object = z.object({
   capabilities: z.array(pluginCapabilitySchema).max(32).default([])
 })
 
-export const pluginManifestSchema = pluginManifestV1Object.superRefine(
-  validatePluginManifestContributions
-)
+// Why strict: v2 declares its execution profile, so unknown keys must not smuggle in behavior.
+const pluginManifestV2Object = pluginManifestV1Object
+  .extend({ manifestVersion: z.literal(2), execution: pluginExecutionProfileSchema })
+  .strict()
+
+export const pluginManifestSchema = z.discriminatedUnion('manifestVersion', [
+  pluginManifestV1Object.superRefine(validatePluginManifestContributions),
+  pluginManifestV2Object.superRefine((manifest, ctx) => {
+    validatePluginManifestContributions(manifest, ctx)
+    validatePluginExecutionProfile(manifest, ctx)
+  })
+])
 
 export type PluginManifest = z.infer<typeof pluginManifestSchema>
 export type PluginPanelContribution = z.infer<typeof panelContributionSchema>

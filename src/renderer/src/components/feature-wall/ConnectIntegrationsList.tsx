@@ -1,4 +1,5 @@
 import { Fragment, useState } from 'react'
+import { Trans } from 'react-i18next'
 import {
   AzureDevOpsIntegrationCard,
   BitbucketIntegrationCard,
@@ -20,7 +21,7 @@ import {
   deriveIntegrationFlowState,
   useIntegrationConnectionStatus
 } from './use-integration-connection-status'
-import { translate } from '@/i18n/i18n'
+import { i18n, translate } from '@/i18n/i18n'
 
 function TaskSourceNameList(props: { names: readonly string[] }): React.JSX.Element {
   return (
@@ -92,13 +93,15 @@ export function ConnectIntegrationsList(): React.JSX.Element {
             'Connect a review provider so Orca can show PR or MR status, checks, and reviews.'
           )}
           summary={
-            <>
-              <span className="font-semibold text-foreground">{status.reviewProviderName}</span>{' '}
-              {translate(
-                'auto.components.feature.wall.ConnectIntegrationsList.5b3577a492',
-                'connected for review status'
+            <Trans
+              i18n={i18n}
+              defaults={translate(
+                'auto.components.feature.wall.ConnectIntegrationsList.reviewConnectedSummary',
+                '<provider>{{provider}}</provider> connected for review status',
+                { provider: status.reviewProviderName }
               )}
-            </>
+              components={{ provider: <span className="font-semibold text-foreground" /> }}
+            />
           }
           onToggle={() => setReviewReopened((value) => !value)}
           canToggle={reviewCanToggle}
@@ -126,23 +129,24 @@ export function ConnectIntegrationsList(): React.JSX.Element {
           )}
           summary={
             status.trackerProviderName ? (
-              <>
-                <TaskSourceNameList names={status.taskSourceNames} />{' '}
-                {translate(
-                  'auto.components.feature.wall.ConnectIntegrationsList.3dddb2d565',
-                  'connected for tasks'
+              <Trans
+                i18n={i18n}
+                defaults={translate(
+                  'auto.components.feature.wall.ConnectIntegrationsList.tasksConnectedSummary',
+                  '<sources/> connected for tasks'
                 )}
-              </>
+                components={{ sources: <TaskSourceNameList names={status.taskSourceNames} /> }}
+              />
             ) : (
-              <>
-                <span className="font-semibold text-foreground">
-                  {status.codeHostTaskProviderName}
-                </span>{' '}
-                {translate(
-                  'auto.components.feature.wall.ConnectIntegrationsList.code_host_tasks_summary',
-                  'issues available as tasks · add Linear or Jira if your team plans work there'
+              <Trans
+                i18n={i18n}
+                defaults={translate(
+                  'auto.components.feature.wall.ConnectIntegrationsList.codeHostTasksSummary',
+                  '<provider>{{provider}}</provider> issues available as tasks · add Linear or Jira if your team plans work there',
+                  { provider: status.codeHostTaskProviderName }
                 )}
-              </>
+                components={{ provider: <span className="font-semibold text-foreground" /> }}
+              />
             )
           }
           onToggle={() =>

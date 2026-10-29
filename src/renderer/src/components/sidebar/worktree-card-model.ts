@@ -4,6 +4,7 @@ import type React from 'react'
 import type { Repo } from '../../../../shared/repo-types'
 import type { WorkspaceStatus, Worktree } from '../../../../shared/worktree/types'
 import type { WorktreeCardPrDisplay } from './worktree-card-pr-display'
+import { translate } from '@/i18n/i18n'
 
 export type WorktreeRenameRequest = {
   worktreeId: string
@@ -106,7 +107,25 @@ export function shouldBeginWorktreeRename(
 
 export function formatSparseDirectoryPreview(directories: string[]): string {
   const preview = directories.slice(0, 4).join(', ')
-  return directories.length <= 4 ? preview : `${preview}, +${directories.length - 4} more`
+  return directories.length <= 4
+    ? preview
+    : directories.length - 4 === 1
+      ? translate(
+          'auto.components.sidebar.worktreeCardModel.sparsePreviewMore_one',
+          '{{preview}}, +{{count}} more',
+          {
+            preview,
+            count: directories.length - 4
+          }
+        )
+      : translate(
+          'auto.components.sidebar.worktreeCardModel.sparsePreviewMore_other',
+          '{{preview}}, +{{count}} more',
+          {
+            preview,
+            count: directories.length - 4
+          }
+        )
 }
 
 export function isWebClient(): boolean {

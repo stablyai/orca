@@ -39,11 +39,17 @@ function formatAnnouncement(matchCount: number, totalCount: number): string {
         'auto.components.sidebar.WorkspaceKanbanSearchField.bdb753c78d',
         'No workspaces match'
       )
-    : translate(
-        'auto.components.sidebar.WorkspaceKanbanSearchField.4d96c209d6',
-        '{{value0}} of {{value1}} workspaces match',
-        { value0: matchCount, value1: totalCount }
-      )
+    : totalCount === 1
+      ? translate(
+          'auto.components.sidebar.WorkspaceKanbanSearchField.workspacesMatch_one',
+          '{{matchCount}} of {{count}} workspace matches',
+          { matchCount, count: totalCount }
+        )
+      : translate(
+          'auto.components.sidebar.WorkspaceKanbanSearchField.workspacesMatch_other',
+          '{{matchCount}} of {{count}} workspaces match',
+          { matchCount, count: totalCount }
+        )
 }
 
 export default function WorkspaceKanbanSearchField({

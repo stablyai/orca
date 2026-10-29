@@ -131,3 +131,4 @@ patchedDependencies:
   monaco-editor@0.55.1: config/patches/monaco-editor@0.55.1.patch
   sprintf-js@1.1.3: config/patches/sprintf-js@1.1.3.patch
   '@tiptap/extension-list@3.31.3': config/patches/@tiptap__extension-list@3.31.3.patch
+  vitest@5.0.5: config/patches/vitest@5.0.5.patch

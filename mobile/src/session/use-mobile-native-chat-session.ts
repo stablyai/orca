@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   createNativeChatTranscriptRetention,
   encodeNativeChatTranscriptIdentity
-} from '../../../src/shared/native-chat-transcript-retention'
+} from '../../../src/shared/native-chat/transcript/native-chat-transcript-retention'
 import { createNativeChatMerger, replaceList } from '../../../src/shared/native-chat-merge'
 import type {
   NativeChatMessage,

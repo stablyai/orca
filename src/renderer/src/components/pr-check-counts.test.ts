@@ -57,6 +57,6 @@ describe('getCheckCounts', () => {
       pending: 0,
       neutral: 1
     })
-    expect(getChecksSummaryLabel(checks)).toBe('0 of 1 checks passing')
+    expect(getChecksSummaryLabel(checks)).toBe('0 of 1 check passing')
   })
 })

@@ -5,6 +5,9 @@ import type { Repo } from '../shared/repo-types'
 import type { RepoHostTarget } from '../shared/repo-host-identity'
 import { repoTarget } from './persistence/repo-host-target-matcher.test-fixture'
 import { type GitRemoteIdentityProbe, probeGitRemoteIdentity } from './repo-git-remote-identity'
+import { WSL_HOSTS_INTERNAL_GATE_ENV } from '../shared/wsl-host-internal-gate'
+import type * as DistroGate from './wsl-background-distro-gate'
+import type { WslDistroRunningState } from './wsl-background-distro-gate'
 import {
   enrichMissingRepoGitRemoteIdentities,
   flushRepoGitRemoteIdentityEnrichmentForTests,
@@ -13,6 +16,11 @@ import {
 
 vi.mock('./repo-git-remote-identity', () => ({
   probeGitRemoteIdentity: vi.fn()
+}))
+const distroGate = vi.hoisted((): { state: WslDistroRunningState } => ({ state: 'running' }))
+vi.mock('./wsl-background-distro-gate', async (importOriginal) => ({
+  ...(await importOriginal<typeof DistroGate>()),
+  readWslDistroRunningState: async () => distroGate.state
 }))
 
 type RepoIdentityStore = {
@@ -121,6 +129,61 @@ describe('enrichMissingRepoGitRemoteIdentities', () => {
 
     expect(repo.gitRemoteIdentity).toEqual(remoteIdentity)
     expect(onChanged).toHaveBeenCalledTimes(1)
+  })
+
+  function drivePathRepoUnderWslRuntime(): { repo: Repo; store: RepoIdentityStore } {
+    const repo = makeRepo({ path: String.raw`C:\src\app` })
+    const store = {
+      ...makeStore(repo),
+      getProjects: () => [
+        {
+          id: 'p1',
+          displayName: 'app',
+          badgeColor: '',
+          sourceRepoIds: [repo.id],
+          createdAt: 0,
+          updatedAt: 0
+        }
+      ],
+      getSettings: () => ({
+        localWindowsRuntimeDefault: { kind: 'wsl' as const, distro: 'Ubuntu' }
+      })
+    }
+    return { repo, store }
+  }
+
+  async function sweepOnWindows(store: RepoIdentityStore, gate: string): Promise<void> {
+    vi.stubEnv(WSL_HOSTS_INTERNAL_GATE_ENV, gate)
+    const originalPlatform = process.platform
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    try {
+      await sweep(store)
+    } finally {
+      Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
+      vi.unstubAllEnvs()
+      distroGate.state = 'running'
+    }
+  }
+
+  it.each([
+    ['with the distro Git', '1', 'Ubuntu'],
+    ['with host Git, as before, while WSL hosts are off', '', undefined]
+  ])('probes a drive project whose runtime is WSL %s', async (_case, gate, distro) => {
+    vi.mocked(probeGitRemoteIdentity).mockResolvedValue(resolvedProbe)
+    const { repo, store } = drivePathRepoUnderWslRuntime()
+    await sweepOnWindows(store, gate)
+
+    expect(probeGitRemoteIdentity).toHaveBeenCalledWith(repo.path, 'local', expect.any(Object))
+    expect(vi.mocked(probeGitRemoteIdentity).mock.calls[0]?.[2]?.wslDistro).toBe(distro)
+  })
+
+  it("never probes a drive project whose WSL runtime's distro is stopped, so the sweep can't boot it", async () => {
+    vi.mocked(probeGitRemoteIdentity).mockResolvedValue(resolvedProbe)
+    distroGate.state = 'stopped'
+    const { store } = drivePathRepoUnderWslRuntime()
+    await sweepOnWindows(store, '1')
+
+    expect(probeGitRemoteIdentity).not.toHaveBeenCalled()
   })
 
   it('probes an SSH row that carries only executionHostId on its own host', async () => {

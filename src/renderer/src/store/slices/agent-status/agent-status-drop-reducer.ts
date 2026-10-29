@@ -36,11 +36,12 @@ export function buildAgentStatusTabPrefixDropPatch(
   tabIdPrefix: string,
   retiredAliasPaneKeys: readonly string[],
   opts?: DropAgentStatusByTabPrefixOptions & { paneKeys?: ReadonlySet<string> }
-): { patch: Partial<AgentStatusTabPrefixDropState>; hadLive: boolean } {
+): { patch: Partial<AgentStatusTabPrefixDropState>; hadLive: boolean; removedPaneKeys: string[] } {
   const prefix = `${tabIdPrefix}:`
   const matchesPane = (key: string): boolean =>
     key.startsWith(prefix) && (!opts?.paneKeys || opts.paneKeys.has(key))
   let hadLive = false
+  const removedPaneKeys: string[] = []
   const buildPatch = (): Partial<AgentStatusTabPrefixDropState> => {
     const completedOrphanKeys = opts?.paneKeys
       ? []
@@ -135,6 +136,7 @@ export function buildAgentStatusTabPrefixDropPatch(
 
     const nextLive = liveKeys.length > 0 ? { ...s.agentStatusByPaneKey } : s.agentStatusByPaneKey
     for (const key of liveKeys) {
+      removedPaneKeys.push(key)
       delete nextLive[key]
     }
     const nextLaunchConfigs =
@@ -187,5 +189,5 @@ export function buildAgentStatusTabPrefixDropPatch(
     }
   }
   const patch = buildPatch()
-  return { patch, hadLive }
+  return { patch, hadLive, removedPaneKeys }
 }

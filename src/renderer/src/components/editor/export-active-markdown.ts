@@ -46,7 +46,13 @@ export async function exportActiveMarkdownToPdf(options: {
       { id: toastId }
     )
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Failed to export PDF'
+    const message =
+      error instanceof Error
+        ? error.message
+        : translate(
+            'auto.components.editor.export.active.markdown.eda2cea3ad',
+            'Failed to export PDF'
+          )
     toast.error(message, { id: toastId })
   }
 }

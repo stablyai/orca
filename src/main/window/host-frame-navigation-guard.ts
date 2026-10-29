@@ -13,7 +13,6 @@ const HOST_FRAME_KINDS = [
 export type HostFrameKind = (typeof HOST_FRAME_KINDS)[number]['kind']
 
 type RegisteredFrame = {
-  frame: NavigationFrame
   kind: HostFrameKind
   initialSrcdocPending: boolean
 }
@@ -25,13 +24,12 @@ export function hostFrameKindForName(name: string): HostFrameKind | null {
 /** Records host-marked frame identities at browsing-context creation, before their content can
  * mutate window.name. */
 export class HostFrameNavigationRegistry {
-  private readonly frames = new Map<number, RegisteredFrame>()
+  private frames = new WeakMap<NavigationFrame, RegisteredFrame>()
 
   register(frame: NavigationFrame): void {
-    this.prune()
     const kind = hostFrameKindForName(frame.name)
     if (kind) {
-      this.frames.set(frame.frameTreeNodeId, { frame, kind, initialSrcdocPending: true })
+      this.frames.set(frame, { kind, initialSrcdocPending: true })
     }
   }
 
@@ -40,9 +38,8 @@ export class HostFrameNavigationRegistry {
     initiator: NavigationFrame | null,
     destinationUrl: string
   ): boolean {
-    this.prune()
-    const registeredTarget = frame ? this.frames.get(frame.frameTreeNodeId) : undefined
-    if (registeredTarget) {
+    const registeredTarget = frame ? this.frames.get(frame) : undefined
+    if (registeredTarget && frame && !frame.isDestroyed()) {
       // Registration precedes srcdoc commit; allow its initial document only, then contain all navigation.
       if (registeredTarget.initialSrcdocPending && destinationUrl === 'about:srcdoc') {
         registeredTarget.initialSrcdocPending = false
@@ -50,19 +47,11 @@ export class HostFrameNavigationRegistry {
       }
       return true
     }
-    return Boolean(initiator && this.frames.has(initiator.frameTreeNodeId))
+    return Boolean(initiator && this.frames.has(initiator) && !initiator.isDestroyed())
   }
 
   clear(): void {
-    this.frames.clear()
-  }
-
-  private prune(): void {
-    for (const [id, registered] of this.frames) {
-      if (registered.frame.isDestroyed()) {
-        this.frames.delete(id)
-      }
-    }
+    this.frames = new WeakMap()
   }
 }
 

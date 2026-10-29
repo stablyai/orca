@@ -1,7 +1,7 @@
 /** Evaluate reservation identity/replay/CAS without I/O; commit applies the winning record and operation row in one store transaction. */
 
 import { agentSessionRefusalError } from '../../../../shared/agent-session-wire-refusals'
-import { assertAgentSessionOptionsAdmitted } from '../../agent-session-record-options'
+import type { AgentSessionAdmissionModels } from '../../agent-session-record-options'
 import { chatAgentsShareConversations } from '../../../../shared/structured-agent-cli-conversation-adoption'
 import {
   agentSessionOperationKey,
@@ -64,7 +64,7 @@ export type AgentSessionReserveRequest = {
   /** Initial provider options persisted before the first process is acquired. */
   options?: Readonly<Record<string, string>>
   /** Saved catalog rows those options are admitted against; transient, never written. */
-  models?: Parameters<typeof assertAgentSessionOptionsAdmitted>[1]
+  models?: AgentSessionAdmissionModels
   /** Reserved tab ids are checked before spawn and claimed only when the tab publishes. */
   surfaceTabId?: string
   /** Seed an adopted handle to resume its conversation; absent means a fresh provider conversation. */
@@ -152,7 +152,6 @@ export function validateAgentSessionReservationInput(request: AgentSessionReserv
   if (request.options && !isAgentSessionOptions(request.options)) {
     throw new Error('agent_session_options_invalid')
   }
-  assertAgentSessionOptionsAdmitted(request.provider, request.models, request.options)
 }
 
 export function applyAgentSessionReservation(

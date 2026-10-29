@@ -18,12 +18,12 @@ export function getGitHubPRStackMergeScope(
     label:
       scope.count === 1
         ? translate(
-            'auto.components.right.sidebar.github.pr.stack.merge.55ae29b907',
+            'auto.components.right.sidebar.github.pr.stack.merge.mergeThroughLabel_one',
             'Merge through #{{pr}} · {{count}} PR',
             { pr: currentPRNumber, count: scope.count }
           )
         : translate(
-            'auto.components.right.sidebar.github.pr.stack.merge.b8446f6ec2',
+            'auto.components.right.sidebar.github.pr.stack.merge.mergeThroughLabel_other',
             'Merge through #{{pr}} · {{count}} PRs',
             { pr: currentPRNumber, count: scope.count }
           )

@@ -1,3 +1,4 @@
+import { makeRuntimeOrchestrationDb } from '../runtime-orchestration-db.test-fixture'
 import { withDurableRuntimeStore } from '../runtime-durable-store-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import {
@@ -79,6 +80,7 @@ describe('OrcaRuntimeService', () => {
     )
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This isolated recovery path reaches only the supplied planner and missing-terminal settlement methods.
     runtime.setOrchestrationDb({
+      listSessionDispatchesForPresentation: () => [],
       reconcileMissingWorkerTerminal: vi.fn(),
       listLegacyWorkerTerminalRecoveryRows: () =>
         cases.map(({ name, leafId, terminalHandle }) => ({
@@ -201,22 +203,23 @@ describe('OrcaRuntimeService', () => {
       undefined,
       { canRecoverPersistentLocalPtys: () => true }
     )
-    runtime.setOrchestrationDb({
-      listLegacyWorkerTerminalRecoveryRows: () => [
-        {
-          dispatch_id: 'dispatch-folder',
-          task_id: 'task-folder',
-          dispatch_status: 'completed',
-          contract_version: 0,
-          assignee_handle: 'term_folder',
-          assignee_pane_key: workerPaneKey,
-          process_incarnation: `pty-folder-legacy:${incarnationId}`,
-          worker_state: 'ready',
-          worktree_id: TEST_FOLDER_WORKSPACE_KEY,
-          agent_terminal_handle: 'term_folder'
-        }
-      ]
-    } as unknown as OrchestrationDb)
+    const orchestrationDb = makeRuntimeOrchestrationDb()
+    vi.spyOn(orchestrationDb, 'listSessionDispatchesForPresentation').mockImplementation(() => [])
+    vi.spyOn(orchestrationDb, 'listLegacyWorkerTerminalRecoveryRows').mockImplementation(() => [
+      {
+        dispatch_id: 'dispatch-folder',
+        task_id: 'task-folder',
+        dispatch_status: 'completed',
+        contract_version: 0,
+        assignee_handle: 'term_folder',
+        assignee_pane_key: workerPaneKey,
+        process_incarnation: `pty-folder-legacy:${incarnationId}`,
+        worker_state: 'ready',
+        worktree_id: TEST_FOLDER_WORKSPACE_KEY,
+        agent_terminal_handle: 'term_folder'
+      }
+    ])
+    runtime.setOrchestrationDb(orchestrationDb)
     const listProcesses = vi.fn(async () => [
       {
         id: 'pty-folder-legacy',
@@ -329,22 +332,23 @@ describe('OrcaRuntimeService', () => {
       undefined,
       { canRecoverPersistentLocalPtys: () => true }
     )
-    runtime.setOrchestrationDb({
-      listLegacyWorkerTerminalRecoveryRows: () => [
-        {
-          dispatch_id: 'dispatch-ssh-folder',
-          task_id: 'task-ssh-folder',
-          dispatch_status: 'completed',
-          contract_version: 0,
-          assignee_handle: 'term_ssh_folder',
-          assignee_pane_key: workerPaneKey,
-          process_incarnation: `${ptyId}:${incarnationId}`,
-          worker_state: 'ready',
-          worktree_id: TEST_FOLDER_WORKSPACE_KEY,
-          agent_terminal_handle: 'term_ssh_folder'
-        }
-      ]
-    } as unknown as OrchestrationDb)
+    const orchestrationDb = makeRuntimeOrchestrationDb()
+    vi.spyOn(orchestrationDb, 'listSessionDispatchesForPresentation').mockImplementation(() => [])
+    vi.spyOn(orchestrationDb, 'listLegacyWorkerTerminalRecoveryRows').mockImplementation(() => [
+      {
+        dispatch_id: 'dispatch-ssh-folder',
+        task_id: 'task-ssh-folder',
+        dispatch_status: 'completed',
+        contract_version: 0,
+        assignee_handle: 'term_ssh_folder',
+        assignee_pane_key: workerPaneKey,
+        process_incarnation: `${ptyId}:${incarnationId}`,
+        worker_state: 'ready',
+        worktree_id: TEST_FOLDER_WORKSPACE_KEY,
+        agent_terminal_handle: 'term_ssh_folder'
+      }
+    ])
+    runtime.setOrchestrationDb(orchestrationDb)
     const listProcesses = vi.fn(async () => [
       {
         id: ptyId,

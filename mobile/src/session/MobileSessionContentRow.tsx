@@ -8,6 +8,7 @@ import { styles } from './mobile-session-styles'
 import type { MobileSessionController } from './use-mobile-session-controller'
 import { MobileSessionActiveContent } from './MobileSessionActiveContent'
 import { MobileSessionCommandDock } from './MobileSessionCommandDock'
+import { MobileDictationStatusAnnouncement } from './MobileDictationStatusAnnouncement'
 
 export function MobileSessionContentRow({
   controller,
@@ -27,6 +28,7 @@ export function MobileSessionContentRow({
     canDockPanel,
     setCreateWarningState,
     createWarning,
+    dictation,
     handleFileOpenStart,
     handleOpenedFileDiff,
     handleSessionContentRowLayout
@@ -51,6 +53,7 @@ export function MobileSessionContentRow({
         <MobileSessionActiveContent controller={controller} />
         {/* Why: translate instead of resize so keyboard toggles don't trigger a server-side PTY viewport change. */}
         <MobileSessionCommandDock controller={controller} keysInRail={keysInRail} />
+        <MobileDictationStatusAnnouncement dictation={dictation} />
       </View>
       {canDockPanel && activePanel !== null && (
         <SessionDockColumn

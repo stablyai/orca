@@ -44,7 +44,7 @@ describe('getIntlLocale', () => {
   it('resolves a plugin resource language to the locale the pack declares', async () => {
     withSupportedLocales(['ru-RU'])
     await activate(PACK_RESOURCE, [PACK])
-    // Without the pack lookup this would reach Intl as `plugin<hex>`.
+    // Without the pack lookup this would reach Intl as the private-use resource tag.
     expect(getIntlLocale()).toBe('ru-RU')
   })
 
@@ -61,10 +61,5 @@ describe('getIntlLocale', () => {
     })
     await activate(PACK_RESOURCE)
     expect(getIntlLocale()).toBe(DEFAULT_LOCALE)
-  })
-
-  it('keeps the synthetic resource language unusable for Intl directly', () => {
-    // Unstubbed on purpose: this is a property of the tag, not of ICU data.
-    expect(() => Intl.DateTimeFormat.supportedLocalesOf(PACK_RESOURCE)).toThrow(RangeError)
   })
 })

@@ -85,7 +85,10 @@ export function EditorConflictReviewSurface({
                 'auto.components.editor.EditorContent.8b1a605bae',
                 'This file is in a conflict state, but no working-tree file is available to edit.'
               ),
-              guidance: 'Resolve the conflict in Git or restore one side before reopening it.'
+              guidance: translate(
+                'auto.components.editor.EditorContent.resolveConflictGuidance',
+                'Resolve the conflict in Git or restore one side before reopening it.'
+              )
             }
           : {
               kind: 'conflict-editable' as const,
@@ -163,6 +166,8 @@ export function EditorConflictReviewSurface({
           <div className={className}>
             <ImageViewer
               content={fileContent.content}
+              src={fileContent.mediaUrl}
+              byteSize={fileContent.size}
               filePath={contentFile.filePath}
               mimeType={fileContent.mimeType}
             />

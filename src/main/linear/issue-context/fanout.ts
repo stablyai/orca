@@ -2,7 +2,7 @@ import type { LinearErrorCode } from '../../../shared/linear/agent-access'
 import type { LinearWorkspaceCandidate } from '../../../shared/linear/agent-result-types'
 import type { LinearWorkspace } from '../../../shared/linear/workspace-types'
 import { getClients, getStatus, type LinearClientForWorkspace } from '../client'
-import { LinearAgentAccessError, classifyLinearError, linearError, linearMessage } from './errors'
+import { toLinearAccessError, type LinearAgentAccessError } from './errors'
 
 export type WorkspaceReadFailure = {
   workspace: LinearWorkspaceCandidate
@@ -50,11 +50,4 @@ export function workspaceFailure(
     message: error.message,
     error
   }
-}
-
-function toLinearAccessError(error: unknown): LinearAgentAccessError {
-  if (error instanceof LinearAgentAccessError) {
-    return error
-  }
-  return linearError(classifyLinearError(error), linearMessage(error))
 }

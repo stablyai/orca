@@ -123,7 +123,8 @@ describe('humanizeTerminalError', () => {
           if (kind === 'startup') {
             expect(tokenChecks).toBe(2 * rowCount)
           }
-          expect(startupTranslations).toBe(2 * matchingRows)
+          // Upper bound only: option-free translations are cached after their first lookup.
+          expect(startupTranslations).toBeLessThanOrEqual(2 * matchingRows)
           expect(
             view.container.textContent?.match(/Codex exited while starting\./g) ?? []
           ).toHaveLength(matchingRows)

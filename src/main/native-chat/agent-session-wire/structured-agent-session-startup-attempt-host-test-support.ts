@@ -3,7 +3,6 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, vi, type Mock } from 'vitest'
 import type { AgentJournalSubmission } from '../../../shared/agent-session-journal-types'
-import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
 import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
@@ -23,8 +22,9 @@ import {
   HOST_TEST_SESSION as SESSION,
   HOST_TEST_THREAD as THREAD,
   hostTestAttachParams,
-  hostTestMessage,
-  hostTestOperationId,
+  hostTestSendParams as sendParams,
+  hostTestCancelParams,
+  hostTestSubmission,
   resetHostTestOperationIds
 } from './structured-agent-session-host-test-data'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
@@ -101,10 +101,14 @@ async function startHost({ startupLimits, supportsGoals }: StartupHostOptions = 
       setOption
     },
     modelCatalog: {
+      snapshot: vi.fn(() => ({ origin: 'unknown' as const })),
+      demand: vi.fn(async () => {}),
+      prepareSaved: vi.fn(async () => ({ origin: 'unknown' as const })),
+      captureSource: () => () => true,
+      retireContext: vi.fn(),
       peek: () => null,
       read: vi.fn(async () => ({ origin: 'unknown' as const })),
       recordLiveListing,
-      retainedLiveModelIds: vi.fn(async () => []),
       prewarm: vi.fn(async () => {}),
       stop: vi.fn(),
       providerStarted
@@ -167,23 +171,6 @@ export function registerStartupAttemptHostTests(): void {
   })
 }
 
-function sendParams(text: string, clientOperationId = hostTestOperationId()) {
-  const body = hostTestMessage(text)
-  return {
-    envelope: {
-      sessionId: SESSION,
-      clientOperationId,
-      expectedRuntimeFence: 1,
-      payloadFingerprint: computeAgentSessionPayloadFingerprint({
-        method: 'agentSession.send',
-        sessionId: SESSION,
-        fields: { body }
-      })
-    },
-    body
-  }
-}
-
 export async function accept(text: string, clientOperationId?: string): Promise<string> {
   const params = sendParams(text, clientOperationId)
   expect(await host.send(CALLER, params)).toMatchObject({
@@ -194,9 +181,7 @@ export async function accept(text: string, clientOperationId?: string): Promise<
 }
 
 export async function submission(id: string): Promise<AgentJournalSubmission | undefined> {
-  return (await host.journalSnapshot(SESSION)).submissions.find(
-    (entry) => entry.clientMessageId === id
-  )
+  return hostTestSubmission(host, id)
 }
 
 export async function heldBehindStart(text: string, interval = 0): Promise<string> {
@@ -209,17 +194,5 @@ export async function heldBehindStart(text: string, interval = 0): Promise<strin
 }
 
 export function stop() {
-  return host.cancel(CALLER, {
-    envelope: {
-      sessionId: SESSION,
-      clientOperationId: hostTestOperationId(),
-      expectedRuntimeFence: null,
-      payloadFingerprint: computeAgentSessionPayloadFingerprint({
-        method: 'agentSession.cancel',
-        sessionId: SESSION,
-        fields: { turnId: 'turn-none' }
-      })
-    },
-    turnId: 'turn-none'
-  })
+  return host.cancel(CALLER, hostTestCancelParams())
 }

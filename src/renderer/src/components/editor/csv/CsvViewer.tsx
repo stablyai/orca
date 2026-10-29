@@ -207,12 +207,27 @@ export function CsvFooter({
   return (
     <div className="flex flex-wrap items-center gap-4 border-t border-border/60 px-3 py-1 text-xs text-muted-foreground">
       <span>
-        {rowCount.toLocaleString()}{' '}
-        {translate('auto.components.editor.CsvViewer.ac31d2cd60', 'rows')}
+        {rowCount === 1
+          ? translate('auto.components.editor.CsvViewer.rowCount_one', '{{formatted}} row', {
+              count: rowCount,
+              formatted: rowCount.toLocaleString()
+            })
+          : translate('auto.components.editor.CsvViewer.rowCount_other', '{{formatted}} rows', {
+              count: rowCount,
+              formatted: rowCount.toLocaleString()
+            })}
       </span>
       <span>
-        {columnCount.toLocaleString()}{' '}
-        {translate('auto.components.editor.CsvViewer.eedd0d37a7', 'columns')}
+        {columnCount === 1
+          ? translate('auto.components.editor.CsvViewer.columnCount_one', '{{formatted}} column', {
+              count: columnCount,
+              formatted: columnCount.toLocaleString()
+            })
+          : translate(
+              'auto.components.editor.CsvViewer.columnCount_other',
+              '{{formatted}} columns',
+              { count: columnCount, formatted: columnCount.toLocaleString() }
+            )}
       </span>
       <CsvDelimiterPicker
         value={delimiterChoice}

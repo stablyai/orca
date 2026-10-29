@@ -127,7 +127,7 @@ export function EditorEditFileSurface({
     )
   }
   if (fileContent.isBinary) {
-    if (fileContent.mediaUrl) {
+    if (fileContent.mediaUrl && !fileContent.isImage) {
       return (
         <MediaViewer
           key={fileContent.mediaUrl}
@@ -147,6 +147,8 @@ export function EditorEditFileSurface({
       return (
         <ImageViewer
           content={fileContent.content}
+          src={fileContent.mediaUrl}
+          byteSize={fileContent.size}
           filePath={activeFile.filePath}
           mimeType={fileContent.mimeType}
           preferenceKey={pdfPreferenceKey}

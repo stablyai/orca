@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { setClaudeStructuredOption } from './claude-structured-options'
+import { applyClaudeMessageOptions } from './claude-structured-message-options'
+import { resetClaudeRetiredModel } from './claude-structured-retired-model'
 import type { ClaudeSession } from './structured/claude-structured-session-state'
 import { ClaudeControlRequestTimeoutError } from './claude-agent-sdk-control-requests'
 import { ClaudeBackgroundTaskTracker } from './claude-background-task-tracker'
@@ -9,7 +11,8 @@ import { createClaudeInitProof } from './structured/claude-structured-init-proof
 import { claudeProviderHandleLink } from './structured/claude-structured-owner-identity'
 import {
   observeClaudeFastModeFacts,
-  readClaudeStructuredSessionOptions
+  readClaudeStructuredSessionOptions,
+  refreshClaudeStructuredSessionOptions
 } from './claude-structured-session-options'
 
 function sessionFor(setModel: ClaudeSession['connection']['setModel']): ClaudeSession {
@@ -222,6 +225,12 @@ describe('Claude structured Fast mode', () => {
     const { session } = fastModeSession(true)
     session.options.set('fastMode', 'true')
     session.connection.getSettings = async () => ({ effective: { fastMode: false } })
+    await refreshClaudeStructuredSessionOptions(
+      session,
+      undefined,
+      () => true,
+      () => {}
+    )
 
     await expect(readClaudeStructuredSessionOptions(session, undefined)).resolves.toMatchObject({
       current: { fastMode: false, confirmed: ['fastMode'] }
@@ -235,6 +244,12 @@ describe('Claude structured Fast mode', () => {
     session.options.set('fastMode', 'false')
     session.connection.getSettings = async () => ({ effective: { fastMode: true } })
     observeClaudeFastModeFacts(session, { fast_mode_state: 'cooldown' })
+    await refreshClaudeStructuredSessionOptions(
+      session,
+      undefined,
+      () => true,
+      () => {}
+    )
 
     await expect(readClaudeStructuredSessionOptions(session, undefined)).resolves.toMatchObject({
       current: { fastMode: true, fastModeState: 'cooldown', confirmed: ['fastMode'] }
@@ -249,6 +264,12 @@ describe('Claude structured Fast mode', () => {
       fast_mode_state: 'cooldown',
       fast_mode_disabled_reason: null
     })
+    await refreshClaudeStructuredSessionOptions(
+      session,
+      undefined,
+      () => true,
+      () => {}
+    )
     await expect(readClaudeStructuredSessionOptions(session, undefined)).resolves.toMatchObject({
       current: {
         model: 'opus',
@@ -296,6 +317,12 @@ describe('Claude structured Fast mode', () => {
       { value: 'opus', displayName: 'Opus', supportsFastMode: true },
       { value: 'haiku', displayName: 'Haiku', supportsFastMode: false }
     ]
+    await refreshClaudeStructuredSessionOptions(
+      session,
+      undefined,
+      () => true,
+      () => {}
+    )
 
     await expect(readClaudeStructuredSessionOptions(session, undefined)).resolves.toMatchObject({
       current: { model: 'haiku', fastMode: false }
@@ -381,6 +408,32 @@ describe("Claude's model the chat never chose", () => {
 })
 
 describe('Claude structured option write under the request deadline', () => {
+  it('completes successful literal effort writes without optional settings confirmation', async () => {
+    const { session, applyFlagSettings } = fastModeSession(true)
+    session.connection.getSettings = () => new Promise(() => {})
+    const held = [...session.options]
+    const applied = [...session.appliedInputOptions]
+    const sequence = session.optionMutationSequence
+    await expect(
+      setClaudeStructuredOption(session, { key: 'effort', value: 'banana' }, undefined)
+    ).rejects.toThrow(
+      'Claude effort is invalid; choose low, medium, high, xhigh, or max and send again.'
+    )
+    expect(applyFlagSettings).not.toHaveBeenCalled()
+    expect([...session.options]).toEqual(held)
+    expect([...session.appliedInputOptions]).toEqual(applied)
+    expect(session.optionMutationSequence).toBe(sequence)
+    await expect(
+      setClaudeStructuredOption(session, { key: 'effort', value: 'high' }, undefined)
+    ).resolves.toMatchObject({ effort: 'high' })
+    expect(applyFlagSettings).toHaveBeenCalledWith(
+      { effortLevel: 'high' },
+      { timeoutMs: undefined }
+    )
+    expect(session.appliedInputOptions.get('effort')).toBe('high')
+    expect(session.confirmedOptions.has('effort')).toBe(false)
+  })
+
   it("keeps a timed-out client write as the deadline's own error, not a rejection", async () => {
     const session = sessionFor(async () => {
       throw new ClaudeControlRequestTimeoutError('set_model')
@@ -389,5 +442,54 @@ describe('Claude structured option write under the request deadline', () => {
     await expect(
       setClaudeStructuredOption(session, { key: 'model', value: 'sonnet' }, 10)
     ).rejects.toBeInstanceOf(ClaudeControlRequestTimeoutError)
+  })
+})
+
+describe('Claude applied inputs across native writer effects', () => {
+  it('retires old-model Fast refusal and reissues explicit inputs after promotion, reset and failure', async () => {
+    const setModel = vi.fn<ClaudeSession['connection']['setModel']>().mockResolvedValue(undefined)
+    const session = sessionFor(setModel)
+    const flags = vi
+      .fn<ClaudeSession['connection']['applyFlagSettings']>()
+      .mockResolvedValue(undefined)
+    session.connection.applyFlagSettings = flags
+    session.connection.getSettings = () => new Promise(() => {})
+    session.fastModeDisabledReason = 'model_not_allowed'
+    await applyClaudeMessageOptions(
+      session,
+      { model: 'opus[1m]', effort: 'high', fastMode: 'true' },
+      undefined
+    )
+    expect(flags.mock.calls.map(([settings]) => settings)).toEqual([
+      { effortLevel: 'high' },
+      { fastMode: true }
+    ])
+    expect(session.fastModeDisabledReason).toBeUndefined()
+    // Fast can promote the native model; the next supplied model/effort must reach their controls.
+    await applyClaudeMessageOptions(session, { model: 'opus[1m]', effort: 'high' }, undefined)
+    expect(setModel).toHaveBeenCalledTimes(2)
+    expect(flags.mock.calls.filter(([settings]) => settings.effortLevel === 'high')).toHaveLength(2)
+    resetClaudeRetiredModel(session, {}, 'chat', 'opus[1m]')
+    await vi.waitFor(() =>
+      expect(setModel).toHaveBeenLastCalledWith(undefined, { timeoutMs: undefined })
+    )
+    await applyClaudeMessageOptions(session, { effort: 'high' }, undefined)
+    expect(flags.mock.calls.filter(([settings]) => settings.effortLevel === 'high')).toHaveLength(3)
+    flags.mockRejectedValueOnce(new Error('native effort failure'))
+    await expect(applyClaudeMessageOptions(session, { effort: 'low' }, undefined)).rejects.toThrow(
+      'native effort failure'
+    )
+    await applyClaudeMessageOptions(session, { effort: 'low' }, undefined)
+    expect(flags.mock.calls.filter(([settings]) => settings.effortLevel === 'low')).toHaveLength(2)
+    const count = setModel.mock.calls.length + flags.mock.calls.length
+    await applyClaudeMessageOptions(session, {}, undefined)
+    expect(setModel.mock.calls.length + flags.mock.calls.length).toBe(count)
+    setModel.mockImplementationOnce(async () => {
+      observeClaudeFastModeFacts(session, { fast_mode_disabled_reason: 'model_not_allowed' })
+    })
+    await applyClaudeMessageOptions(session, { model: 'haiku' }, undefined)
+    await expect(
+      applyClaudeMessageOptions(session, { fastMode: 'true' }, undefined)
+    ).rejects.toThrow('Fast mode is unavailable')
   })
 })

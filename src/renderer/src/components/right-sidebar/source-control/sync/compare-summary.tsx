@@ -72,8 +72,13 @@ export function CompareSummary({
       <div className="flex items-center gap-2 text-xs text-muted-foreground">
         <RefreshCw className="size-3.5 animate-spin" />
         <span>
-          {translate('auto.components.right.sidebar.SourceControl.11b5dd8e41', 'Comparing against')}{' '}
-          {summary?.baseRef ?? '…'}
+          {translate(
+            'auto.components.right.sidebar.SourceControl.comparingAgainstRef',
+            'Comparing against {{ref}}',
+            {
+              ref: summary?.baseRef ?? '…'
+            }
+          )}
         </span>
       </div>
     )
@@ -114,12 +119,12 @@ export function CompareSummary({
     ? undefined
     : commitsAhead === 1
       ? translate(
-          'auto.components.right.sidebar.source.control.compare.summary.commitsAheadSingular',
+          'auto.components.right.sidebar.source.control.compare.summary.commitsAhead_one',
           '{{count}} commit ahead of {{ref}}',
           { count: commitsAhead, ref: summary.baseRef }
         )
       : translate(
-          'auto.components.right.sidebar.source.control.compare.summary.commitsAheadPlural',
+          'auto.components.right.sidebar.source.control.compare.summary.commitsAhead_other',
           '{{count}} commits ahead of {{ref}}',
           { count: commitsAhead, ref: summary.baseRef }
         )
@@ -133,8 +138,21 @@ export function CompareSummary({
       <span className="flex min-w-0 items-center gap-1" title={commitsAheadTitle}>
         <ArrowUp className="size-3" />
         <span>
-          {commitsAhead}{' '}
-          {translate('auto.components.right.sidebar.SourceControl.3278b2767b', 'ahead')}
+          {commitsAhead === 1
+            ? translate(
+                'auto.components.right.sidebar.SourceControl.commitsAheadShort_one',
+                '{{count}} ahead',
+                {
+                  count: commitsAhead
+                }
+              )
+            : translate(
+                'auto.components.right.sidebar.SourceControl.commitsAheadShort_other',
+                '{{count}} ahead',
+                {
+                  count: commitsAhead
+                }
+              )}
         </span>
       </span>
       <div className="ml-auto flex shrink-0 items-center gap-2">

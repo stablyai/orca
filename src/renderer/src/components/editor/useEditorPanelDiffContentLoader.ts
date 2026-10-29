@@ -13,6 +13,7 @@ import type { DiffContent, InFlightContentRead } from './editor-panel-content-ty
 import { canUseChangesModeForFile } from './editor-panel-file-mode'
 import type { EditorPanelContentLoadOptions } from './useEditorPanelExternalContentEvents'
 import { stampCleanTabDiskBaseline } from './editor-clean-tab-disk-baseline'
+import { translate } from '@/i18n/i18n'
 
 const inFlightDiffReads = new Map<string, InFlightContentRead<DiffContent>>()
 
@@ -175,7 +176,13 @@ export function useEditorPanelDiffContentLoader({
           [file.id]: {
             kind: 'text',
             originalContent: '',
-            modifiedContent: `Error loading diff: ${String(err)}`,
+            modifiedContent: translate(
+              'auto.components.editor.EditorPanel.diffLoadError',
+              'Error loading diff: {{error}}',
+              {
+                error: String(err)
+              }
+            ),
             originalIsBinary: false,
             modifiedIsBinary: false
           }

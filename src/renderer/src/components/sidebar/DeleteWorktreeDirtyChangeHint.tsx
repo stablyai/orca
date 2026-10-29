@@ -157,11 +157,17 @@ export function DeleteWorktreeDirtyChangeHint({
             </div>
             {preview.remainingPathCount > 0 ? (
               <p className="mt-1 text-muted-foreground">
-                {translate(
-                  'auto.components.sidebar.DeleteWorktreeDirtyChangeHint.moreLoadedPaths',
-                  'and {{value0}} more loaded paths',
-                  { value0: preview.remainingPathCount }
-                )}
+                {preview.remainingPathCount === 1
+                  ? translate(
+                      'auto.components.sidebar.DeleteWorktreeDirtyChangeHint.moreLoadedPaths_one',
+                      'and {{count}} more loaded path',
+                      { count: preview.remainingPathCount }
+                    )
+                  : translate(
+                      'auto.components.sidebar.DeleteWorktreeDirtyChangeHint.moreLoadedPaths_other',
+                      'and {{count}} more loaded paths',
+                      { count: preview.remainingPathCount }
+                    )}
               </p>
             ) : null}
           </div>

@@ -82,11 +82,14 @@ describe('a live listing beside the account-level discovery', () => {
   it('merges a discovery that resolves after a live save instead of dropping it', async () => {
     let settle!: (success: AgentModelCatalogSuccess) => void
     const run = harness(() => new Promise((resolve) => (settle = resolve)))
+    // Explicit demand starts discovery; a chat lists while it is still running.
+    void run.catalog.demand({ agent: 'grok' })
     expect(await run.catalog.read({ agent: 'grok' })).toEqual({
       origin: 'unknown',
       listingInProgress: true
     })
     run.saveLive()
+    await vi.waitFor(() => expect(run.probes).toHaveBeenCalledTimes(1))
     settle(discovery('grok-4'))
     await vi.waitFor(() =>
       expect(run.store.get(agentModelCatalogFingerprintForRecord(RECORD))?.discovered).not.toBe(
@@ -105,9 +108,9 @@ describe('a live listing beside the account-level discovery', () => {
   it('names the default on a cold account whose first listing came from a live chat', async () => {
     const run = harness(async () => discovery('grok-4'))
     run.saveLive()
-    // Live membership cannot establish discovery freshness or the configured default.
-    await run.catalog.read({ agent: 'grok' })
-    expect(run.probes).toHaveBeenCalledTimes(1)
+    // A live listing alone names no default and does not count as fresh, so explicit demand lists the account.
+    await run.catalog.demand({ agent: 'grok' })
+    await vi.waitFor(() => expect(run.probes).toHaveBeenCalledTimes(1))
     await vi.waitFor(async () => expect(await run.defaultOf()).toBe('grok-4'))
   })
 
@@ -123,8 +126,8 @@ describe('a live listing beside the account-level discovery', () => {
       run.saveLive()
     }
     expect(run.store.shouldRefresh(agentModelCatalogFingerprintForRecord(RECORD))).toBe(true)
-    await run.catalog.read({ agent: 'grok' })
-    expect(run.probes).toHaveBeenCalledTimes(2)
+    await run.catalog.demand({ agent: 'grok' })
+    await vi.waitFor(() => expect(run.probes).toHaveBeenCalledTimes(2))
     await vi.waitFor(async () => expect(await run.defaultOf()).toBe('grok-3-mini'))
   })
 

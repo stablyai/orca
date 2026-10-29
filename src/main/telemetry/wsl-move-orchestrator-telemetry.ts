@@ -53,6 +53,8 @@ function parkReason(reason: WslMoveOrchestratorParkReason): Props['park_reason']
       return 'removal_pending'
     case 'stuck':
       return 'stuck'
+    case 'finish-pending':
+      return 'finish_pending'
   }
 }
 

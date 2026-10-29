@@ -66,6 +66,7 @@ function renderMenu(overrides: Record<string, unknown> = {}): string {
     menuPoint: { x: 0, y: 0 },
     menuOpenedAtRef: { current: 0 },
     canClosePane: true,
+    closePaneLabel: 'Close Pane',
     canExpandPane: true,
     menuPaneIsExpanded: false,
     onCopy: vi.fn(),

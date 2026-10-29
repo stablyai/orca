@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { EventEmitter } from 'node:events'
 import { spawnMock } from './pty-ipc-mock-registry'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import { makePaneKey } from '../../../shared/stable-pane-id'
@@ -216,22 +217,16 @@ describe('registerPtyHandlers', () => {
   it('clears pending pane serializer declarations when their renderer is destroyed', async () => {
     registerPtyHandlers(mainWindow as never)
     const paneKey = makePaneKey('tab-crash', '22222222-2222-4222-8222-222222222222')
-    const destroyedListeners: (() => void)[] = []
-    const sender = {
+    const sender = Object.assign(new EventEmitter(), {
       id: 42,
-      isDestroyed: () => false,
-      once: vi.fn((event: string, listener: () => void) => {
-        if (event === 'destroyed') {
-          destroyedListeners.push(listener)
-        }
-      })
-    }
+      isDestroyed: () => false
+    })
 
     await handlers.get('pty:declarePendingPaneSerializer')!({ sender }, { paneKey })
 
     expect(hasPendingRendererSerializerForPaneKey(paneKey)).toBe(true)
-    expect(destroyedListeners).toHaveLength(1)
-    destroyedListeners[0]()
+    expect(sender.listenerCount('destroyed')).toBe(1)
+    sender.emit('destroyed')
     expect(hasPendingRendererSerializerForPaneKey(paneKey)).toBe(false)
   })
   it('does not retain a serializer declaration from an already-destroyed renderer', async () => {

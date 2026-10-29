@@ -34,7 +34,7 @@ import {
   suppressDevEducationForStore
 } from './dev-education-suppression'
 import {
-  applyBrowserSessionProxies,
+  awaitBrowserSessionProxies,
   setBrowserNetworkProxySettingsResolver
 } from '../browser/browser-session-proxy'
 import { installDocPreviewProtocolHandler } from '../browser/doc-preview-protocol'
@@ -299,7 +299,7 @@ export async function initializeReadyFoundation(): Promise<void> {
   browserManager.setSiteDisplayController(browserSiteDisplayController)
   try {
     // Await proxy writes so first guest navigation cannot race them.
-    await applyBrowserSessionProxies(browserSessionRegistry.listProfiles(), store.getSettings())
+    await awaitBrowserSessionProxies(browserSessionRegistry.listProfiles())
   } catch {
     console.warn('[proxy] Failed to apply network proxy settings to browser sessions')
   }

@@ -26,6 +26,9 @@ export const queuedMessageStyles = themedStyleSheet(() => ({
     borderColor: colors.composerBorder,
     overflow: 'hidden'
   },
+  // Full editors and menus scroll above the ordinary composer instead of tucking under it.
+  inlineList: { flexShrink: 1, minHeight: 0, marginBottom: 0 },
+  inlineBox: { flexShrink: 1, minHeight: 0, paddingBottom: 0 },
   header: {
     minHeight: HEADER_HEIGHT,
     flexDirection: 'row',

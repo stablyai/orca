@@ -422,9 +422,9 @@ describe('the Phase C budget', () => {
         key
       ).toBeGreaterThanOrEqual(measured)
     }
-    // Observed 1–15 scripts/route rules out a four-per-route bound or linear fit.
+    // Observed 1–14 scripts/route rules out a four-per-route bound or linear fit.
     expect(Math.min(...MOBILE_WEB_APP_BUNDLE_ROUTE_SCRIPT_SPREAD)).toBe(1)
-    expect(Math.max(...MOBILE_WEB_APP_BUNDLE_ROUTE_SCRIPT_SPREAD)).toBe(15)
+    expect(Math.max(...MOBILE_WEB_APP_BUNDLE_ROUTE_SCRIPT_SPREAD)).toBe(14)
   })
 
   it('sits exactly one margin over the swept tree and grants the worst route beyond it', () => {
@@ -476,11 +476,11 @@ describe('the Phase C budget', () => {
   )
 
   it('fails the build when the derived ceiling passes what the phone will accept', async () => {
-    // Fail build before derived assets exceed phone’s 256 limit; current 42-image envelope crosses at 24 routes, requiring remeasurement.
+    // Fail build before derived assets exceed phone’s 256 limit; current 42-image envelope crosses at 25 routes, requiring remeasurement.
     expect(await readMobileWebBundleMaxAssets()).toBe(MOBILE_WEB_BUNDLE_MAX_ASSETS)
-    expect(assertAssetCeilingFitsShell(23, 42, MOBILE_WEB_BUNDLE_MAX_ASSETS)).toBe(248)
-    expect(() => assertAssetCeilingFitsShell(24, 42, MOBILE_WEB_BUNDLE_MAX_ASSETS)).toThrow(
-      /263 .*256/
+    expect(assertAssetCeilingFitsShell(24, 42, MOBILE_WEB_BUNDLE_MAX_ASSETS)).toBe(254)
+    expect(() => assertAssetCeilingFitsShell(25, 42, MOBILE_WEB_BUNDLE_MAX_ASSETS)).toThrow(
+      /268 .*256/
     )
   })
 })

@@ -30,6 +30,7 @@ import {
   isFolderWorkspaceDelete as getIsFolderWorkspaceDelete
 } from './delete-worktree-dialog-copy'
 import { translate } from '@/i18n/i18n'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import type { WorktreeRemovalTarget } from '../../../../shared/worktree/removal'
 import { useDeleteWorktreeStatusHydration } from './use-delete-worktree-status-hydration'
 import { useConfirmedWorktreeDeleteTargets } from './use-confirmed-worktree-delete-targets'
@@ -43,6 +44,7 @@ import { useDeleteWorktreeDialogTargets } from './use-delete-worktree-dialog-tar
 import { collectRemovalUnsavedFiles } from '@/components/editor/removal-unsaved-editor-files'
 
 const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
+  useUiLanguageRevision()
   const activeModal = useAppStore((s) => s.activeModal)
   const modalData = useAppStore((s) => s.modalData)
   const closeModal = useAppStore((s) => s.closeModal)

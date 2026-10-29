@@ -1,3 +1,4 @@
+import { translateMain } from '../i18n/main-i18n'
 import { validatePathExistenceBatch } from '../../shared/path-existence-batch'
 import { ipcMain, shell, dialog } from 'electron'
 import { constants, copyFile, readFile, stat } from 'node:fs/promises'
@@ -240,7 +241,10 @@ export function registerShellHandlers(
     const result = await dialog.showOpenDialog({
       properties: ['openFile'],
       filters: [
-        { name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp', 'ico'] }
+        {
+          name: translateMain('native.dialog.images', 'Images'),
+          extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp', 'ico']
+        }
       ]
     })
     if (result.canceled || result.filePaths.length === 0) {
@@ -254,7 +258,12 @@ export function registerShellHandlers(
     async (): Promise<{ dataUrl: string; fileName: string } | null> => {
       const result = await dialog.showOpenDialog({
         properties: ['openFile'],
-        filters: [{ name: 'Repo icon images', extensions: ['png'] }]
+        filters: [
+          {
+            name: translateMain('native.dialog.repoIconImages', 'Repo icon images'),
+            extensions: ['png']
+          }
+        ]
       })
       if (result.canceled || result.filePaths.length === 0) {
         return null
@@ -283,7 +292,12 @@ export function registerShellHandlers(
   ipcMain.handle('shell:pickAudio', async (): Promise<string | null> => {
     const result = await dialog.showOpenDialog({
       properties: ['openFile'],
-      filters: [{ name: 'Audio', extensions: ['ogg', 'mp3', 'wav', 'm4a', 'aac', 'flac'] }]
+      filters: [
+        {
+          name: translateMain('native.dialog.audio', 'Audio'),
+          extensions: ['ogg', 'mp3', 'wav', 'm4a', 'aac', 'flac']
+        }
+      ]
     })
     if (result.canceled || result.filePaths.length === 0) {
       return null

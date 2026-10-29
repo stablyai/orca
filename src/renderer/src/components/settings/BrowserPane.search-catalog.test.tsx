@@ -28,6 +28,7 @@ vi.mock('@/store', () => ({
       settingsSearchQuery: fake.query,
       browserDefaultUrl: '',
       browserSessionProfiles: fake.profiles,
+      defaultBrowserSessionProfileIdByHostId: {},
       repos: fake.repos,
       sshTargetLabels: fake.map,
       sshConnectionStates: fake.map,
@@ -119,6 +120,10 @@ it('keeps targeted search visibility', () => {
   render(<BrowserPane settings={getDefaultSettings('/synthetic')} updateSettings={vi.fn()} />)
   expect(screen.getByRole('textbox')).toBeTruthy()
   expect(screen.queryByText('Cookies row')).toBeNull()
+  fake.query = 'google'
+  cleanup()
+  render(<BrowserPane settings={getDefaultSettings('/synthetic')} updateSettings={vi.fn()} />)
+  expect(screen.getByText('Cookies row')).toBeTruthy()
 })
 
 it('rebuilds metadata in the next render after the language changes', () => {

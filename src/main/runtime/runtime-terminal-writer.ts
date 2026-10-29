@@ -1,6 +1,7 @@
 import { resolveAgentPromptSubmitDelayForAgent } from '../../shared/agent-prompt-injection'
 import type { TerminalAgent } from '../../shared/terminal-agent'
 import { iterateTerminalInputChunks } from '../../shared/terminal-input'
+import type { TerminalInputSource } from './terminal-input-admission'
 import type { TerminalInputKind } from '../../shared/terminal-input-kind'
 import {
   WRITE_ACCEPTED,
@@ -10,6 +11,7 @@ import {
 } from '../../shared/pty-write-settlement'
 
 export type RuntimeTerminalWriteOptions = {
+  inputSource?: TerminalInputSource
   inputKind: TerminalInputKind
   signal?: AbortSignal
   beforeWrite?: (ptyId: string) => void | Promise<void>

@@ -31,12 +31,15 @@ export function createActiveWorkspaceTerminalActions(
       if (runtimeEnvironmentId) {
         const { createWebRuntimeSessionTerminal } =
           await import('@/runtime/web-runtime-terminal-creation')
-        await createWebRuntimeSessionTerminal({
-          worktreeId,
-          environmentId: runtimeEnvironmentId,
-          targetGroupId: groupId,
-          activate: true
-        })
+        await createWebRuntimeSessionTerminal(
+          {
+            worktreeId,
+            environmentId: runtimeEnvironmentId,
+            targetGroupId: groupId,
+            activate: true
+          },
+          { userAct: true }
+        )
         return
       }
       if (isWebClientLocation() && worktreeId !== FLOATING_TERMINAL_WORKTREE_ID) {

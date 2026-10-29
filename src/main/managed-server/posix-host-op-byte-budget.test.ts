@@ -208,7 +208,8 @@ const BUILDERS: Readonly<Record<string, (c: HostCase) => string>> = {
   remoteOrcadBuildHashCommand: ({ host }) => remoteOrcadBuildHashCommand(host, slotDir),
   sweepStaleRuntimeStagesCommand: ({ host }) =>
     sweepStaleRuntimeStagesCommand(`${baseDir}/node-runtimes`, host),
-  orcadProfilePreflightCommand: ({ host }) => orcadProfilePreflightCommand(host, slotDir, token),
+  orcadProfilePreflightCommand: ({ host }) =>
+    orcadProfilePreflightCommand(host, slotDir, token, userDataDir),
   recordedNodeRuntimeProbeCommand: ({ host, nodePath }) =>
     recordedNodeRuntimeProbeCommand(host, nodePath, token),
   recordedRemoteNodeRuntimeProbeCommand: ({ host, nodePath, target }) =>

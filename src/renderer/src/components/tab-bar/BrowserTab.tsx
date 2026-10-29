@@ -39,7 +39,7 @@ import { useAppStore } from '@/store'
 
 export function formatBrowserTabUrlLabel(url: string): string {
   if (url === ORCA_BROWSER_BLANK_URL || url === 'about:blank') {
-    return 'New Tab'
+    return translate('auto.components.browser.pane.BrowserPane.366bf5d62c', 'New Tab')
   }
   try {
     const parsed = new URL(url)

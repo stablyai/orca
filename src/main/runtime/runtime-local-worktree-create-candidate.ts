@@ -34,6 +34,7 @@ import {
 } from './runtime-worktree-create-git'
 import { runtimePathExists } from './runtime-worktree-filesystem'
 import { findPendingWorktreeRemovalConflict } from '../worktree-removal-table'
+import type { WorktreeCreatePathClaim } from '../worktree-create-in-flight'
 import type { RuntimeStore } from './runtime-store-contract'
 import type { HostedReviewExecutionOptions } from '../source-control/hosted-review-git-options'
 
@@ -62,6 +63,7 @@ export async function resolveRuntimeLocalWorktreeCreateCandidate(args: {
   baseBranch: string
   localWorktreeGitOptions: { wslDistro?: string }
   hostedReviewExecutionContext?: HostedReviewExecutionOptions
+  pathClaim: WorktreeCreatePathClaim
 }): Promise<RuntimeLocalWorktreeCreateCandidate> {
   const branchSeed = selectWorktreeCreateBranchSeed(
     args.request,
@@ -124,7 +126,8 @@ export async function resolveRuntimeLocalWorktreeCreateCandidate(args: {
     // Orca owns the path until background removal settles.
     return (
       !findPendingWorktreeRemovalConflict(args.repo.path, { worktreePath }) &&
-      !(await runtimePathExists(worktreePath))
+      !(await runtimePathExists(worktreePath)) &&
+      args.pathClaim.claim(worktreePath)
     )
   }
   for (let suffix = 1, attempts = 0; attempts < WORKTREE_CREATE_MAX_SUFFIX_ATTEMPTS; suffix += 1) {

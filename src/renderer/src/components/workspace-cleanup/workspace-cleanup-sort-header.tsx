@@ -34,13 +34,14 @@ export function WorkspaceCleanupSortHeader({
   const selectAllLabel =
     selectableCount === 1
       ? translate(
-          'components.workspace.cleanup.browse.selectAllCountOne',
-          'Select 1 safety-checked workspace'
+          'components.workspace.cleanup.browse.selectAllSafetyChecked_one',
+          'Select {{count}} safety-checked workspace',
+          { count: selectableCount }
         )
       : translate(
-          'components.workspace.cleanup.browse.selectAllCount',
-          'Select all {{value0}} safety-checked workspaces',
-          { value0: selectableCount }
+          'components.workspace.cleanup.browse.selectAllSafetyChecked_other',
+          'Select all {{count}} safety-checked workspaces',
+          { count: selectableCount }
         )
   return (
     <div className="flex items-center gap-1 border-b border-border bg-muted/25 px-3 py-1.5">

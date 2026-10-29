@@ -16,8 +16,13 @@ export type WslMoveProjectRef = { repoId: string } | { folderWorkspaceId: string
 
 export class WslMoveProjectFencedError extends Error {
   readonly code = 'wsl_move_in_progress'
-  constructor() {
-    super('This project is moving to its WSL host. Try again when the move finishes.')
+  /** `hostDistro`: the move already committed, so the host, not a retry, is the way forward. */
+  constructor(hostDistro?: string | null) {
+    super(
+      hostDistro
+        ? `This project now runs on its ${hostDistro} WSL host, so its terminals open there. Use it on this computer again to open one here.`
+        : 'This project is moving to its WSL host. Try again when the move finishes.'
+    )
     this.name = 'WslMoveProjectFencedError'
   }
 }

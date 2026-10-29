@@ -7,6 +7,7 @@ import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { OrchestrationDb } from '../../../../orchestration/db'
 import { WORKER_START_VOCABULARY } from '../../orchestration-worker-start-mode'
 import type { WorkerSetupReceipt } from '../worker/worker-topology'
+import { resolveWorkerWorktreeName } from '../worker/worker-worktree-creation'
 import {
   appendFederationSetupEffect,
   appendFederationTerminalEffects,
@@ -59,10 +60,10 @@ export async function launchFederatedWorkerAgent(args: {
         if (startupAgent === undefined) {
           throw new Error(TERMINAL_ONLY_MESSAGE)
         }
-        const { repo, name } = params
-        if (!repo || !name) {
+        const { repo } = params
+        if (!repo) {
           // Validation refuses this before the attachment exists; this only narrows the types.
-          throw new Error('A remote new-top-level worktree requires --name and an explicit --repo.')
+          throw new Error('A remote new-top-level worktree requires an explicit --repo.')
         }
         db.recordRemoteAttachmentStage({
           dispatchId: params.dispatchId,
@@ -71,7 +72,7 @@ export async function launchFederatedWorkerAgent(args: {
         const setupDecision = params.setup ?? 'run'
         const result = await runtime.createManagedWorktree({
           repoSelector: repo,
-          name,
+          ...(await resolveWorkerWorktreeName(runtime, repo, params.name)),
           baseBranch: params.baseBranch,
           displayName: params.displayName,
           displayNameKind: params.displayNameKind,
@@ -91,7 +92,12 @@ export async function launchFederatedWorkerAgent(args: {
         })
         created = result.worktree
         const terminalHandle = result.startupTerminal?.handle
-        effects.push({ kind: 'worktree', action: 'created_top_level', id: result.worktree.id })
+        effects.push({
+          kind: 'worktree',
+          action: 'created_top_level',
+          id: result.worktree.id,
+          name: result.worktree.displayName
+        })
         const setup: WorkerSetupReceipt = {
           requested: setupDecision,
           effective: setupDecision,

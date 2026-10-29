@@ -1,3 +1,4 @@
+import type { agentVerdictDisplayMark } from './agent-main-agent-verdict'
 import type { AgentType, AgentWorkingMode } from './agent-status-types'
 import type { ExecutionHostId } from './execution-host'
 import type { RepoIcon } from './repo-icon'
@@ -27,16 +28,25 @@ export const DASHBOARD_MAX_MAP_WORKSPACES = 2_000
 
 /** Kept distinct from `bucket` so attention cards retain their precise dot state. */
 export type DashboardCardDotState = 'working' | 'blocked' | 'waiting' | 'done' | 'idle'
-export type DashboardCardDisplayState = DashboardCardDotState | 'monitoring'
+export type DashboardCardVerdict = NonNullable<ReturnType<typeof agentVerdictDisplayMark>>
+export type DashboardCardBaseDisplayState = DashboardCardDotState | 'monitoring'
+export type DashboardCardDisplayState = DashboardCardBaseDisplayState | DashboardCardVerdict
 
 /** Completed agents stay green until acknowledged, then settle into gray idle. */
-export function dashboardCardDisplayState(
+export function dashboardCardBaseDisplayState(
   card: Pick<DashboardCard, 'dotState' | 'workingMode' | 'unseen'>
-): DashboardCardDisplayState {
+): DashboardCardBaseDisplayState {
   if (card.dotState === 'working' && card.workingMode === 'monitoring') {
     return 'monitoring'
   }
   return card.dotState === 'done' && !card.unseen ? 'idle' : card.dotState
+}
+
+/** Turn verdicts survive row decay and acknowledgment without changing column membership. */
+export function dashboardCardDisplayState(
+  card: Pick<DashboardCard, 'dotState' | 'workingMode' | 'unseen' | 'verdict'>
+): DashboardCardDisplayState {
+  return card.verdict ?? dashboardCardBaseDisplayState(card)
 }
 
 export type DashboardCardReview = {
@@ -74,13 +84,14 @@ export type DashboardWorkspace = {
 export type DashboardCard = {
   /** Stable identity for React keys. */
   paneKey: string
-  /** Null when retained/done cards have no live pane; otherwise resolve the live preview PTY. */
+  /** Live preview PTY; null does not imply that the agent's destination is closed. */
   ptyId: string | null
   agentType: AgentType
   bucket: DashboardBucket
   dotState: DashboardCardDotState
   /** Additive discriminator; older pop-outs render this as ordinary working. */
   workingMode?: AgentWorkingMode
+  verdict?: DashboardCardVerdict
   task: string
   lastUserMessage?: string
   lastAgentMessage?: string

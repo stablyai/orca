@@ -99,9 +99,19 @@ export const WorktreeCardMetaBadges = React.forwardRef<
       !jiraIssue &&
       !review ? (
         <MetaIconBadge
-          label={translate('workspace.links.show', 'Show {{count}} linked reviews and tasks', {
-            count: linkedItemCount
-          })}
+          label={
+            linkedItemCount === 1
+              ? translate(
+                  'workspace.links.showLinked_one',
+                  'Show {{count}} linked review or task',
+                  { count: linkedItemCount }
+                )
+              : translate(
+                  'workspace.links.showLinked_other',
+                  'Show {{count}} linked reviews and tasks',
+                  { count: linkedItemCount }
+                )
+          }
         >
           <Link2 />
         </MetaIconBadge>

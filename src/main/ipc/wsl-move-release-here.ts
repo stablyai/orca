@@ -23,7 +23,10 @@ import {
   reloadWslMoveWindowWithWritesHeld
 } from '../persistence/moving-wsl-projects/wsl-move-window-write-hold'
 import type { WslMoveUndoPorts } from './wsl-move-undo-wiring'
+import { beginWslMoveUndoRun } from '../persistence/moving-wsl-projects/wsl-move-running-moves'
 import { runWslMoveHostAutomationsExclusive } from '../persistence/moving-wsl-projects/wsl-move-undo-host-automations'
+import { listEnvironments } from '../../shared/runtime-environment-store'
+import { wasWslHostKeptForPeers } from '../wsl/wsl-host-kept-for-peers'
 
 const COMMITTED_FROM = WSL_MOVE_CUTOVER_PHASES.indexOf('destination-committed')
 
@@ -76,6 +79,27 @@ export async function releaseWslMoveChainHere(
 }
 
 async function releaseWslMovesHere(
+  userDataPath: string,
+  newestFirst: readonly WslMoveCutover[],
+  unsavedWorkspaceIdsAsked: readonly string[],
+  createUndoPorts: () => WslMoveUndoPorts
+): Promise<WslMoveUseLocallyResult> {
+  // Taken before any guard or host connect: that connect wakes the move orchestrator, whose run of
+  // this distro must not claim one mid-undo. An update install also waits until this returns.
+  const endUndoRun = beginWslMoveUndoRun(newestFirst[0].manifest.source.distro)
+  try {
+    return await releaseWslMovesHereNow(
+      userDataPath,
+      newestFirst,
+      unsavedWorkspaceIdsAsked,
+      createUndoPorts
+    )
+  } finally {
+    endUndoRun()
+  }
+}
+
+async function releaseWslMovesHereNow(
   userDataPath: string,
   newestFirst: readonly WslMoveCutover[],
   unsavedWorkspaceIdsAsked: readonly string[],
@@ -150,6 +174,18 @@ async function releaseWslMovesHere(
   }
 }
 
+/** R39: removed here but kept running for another Orca; only re-adding the host reaches it again. */
+function wslMoveHostKeptForPeers(userDataPath: string, move: WslMoveCutover): boolean {
+  return (
+    wasWslHostKeptForPeers(userDataPath, move.destinationEnvironmentId) &&
+    !listEnvironments(userDataPath).some((env) => env.id === move.destinationEnvironmentId)
+  )
+}
+
+function keptForPeersRefusal(): WslMoveUseLocallyResult {
+  return { released: false, reason: 'host-unreachable', detail: 'host-kept-for-peers' }
+}
+
 /** One move: host automations off, host terminals stopped, then released; refused, all undone. */
 async function releaseOneMoveHere(
   userDataPath: string,
@@ -163,6 +199,9 @@ async function releaseOneMoveHere(
     applyHere: () => () => {}
   }
   if (automations.outcome !== 'stopped') {
+    if (automations.outcome === 'unreachable' && wslMoveHostKeptForPeers(userDataPath, move)) {
+      return keptForPeersRefusal()
+    }
     return {
       released: false,
       reason: automations.outcome === 'unreachable' ? 'host-unreachable' : 'failed',
@@ -170,10 +209,19 @@ async function releaseOneMoveHere(
         automations.outcome === 'removal-pending' ? 'host-removal-pending' : 'host-automations'
     }
   }
+  // Re-checked last before the stop: a refusal after it would leave the host's terminals stopped.
+  const late = wslMoveReleaseRefusal(userDataPath, move)
+  if (late) {
+    await automations.restore()
+    return late
+  }
   // The host's copies stop next, or an agent the move resumed there runs beside this one.
   const stop = await ports.stopHostCopies(move).catch(() => 'unreachable' as const)
   if (stop !== 'stopped') {
     await automations.restore()
+    if (stop === 'unreachable' && wslMoveHostKeptForPeers(userDataPath, move)) {
+      return keptForPeersRefusal()
+    }
     return {
       released: false,
       reason: stop === 'unreachable' ? 'host-unreachable' : 'host-still-running'

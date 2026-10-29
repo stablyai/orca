@@ -12,7 +12,16 @@ export type PluginWorkerSpawnSpec = {
   rootDir: string
   mainEntry: string
   manifestRevision?: string
+  /** Tree identity the user approved, so changed bytes count as a new revision. */
+  reviewedContentHash?: string | null
   grantedCapabilities: readonly PluginCapabilityKind[]
+}
+
+/** A requested worker and the checks every spawn of it, including crash restarts, must pass. */
+export type PluginWorkerAdmission = {
+  spec: PluginWorkerSpawnSpec
+  assertApproved: () => void
+  verifyBeforeSpawn?: () => Promise<void>
 }
 
 export type PluginWorkerFactory = (options: {
@@ -44,6 +53,7 @@ export async function startPluginWorkerAttempt(options: {
   executeHostCall: PluginWorkerHostCallExecutor
   log: PluginWorkerLogSink
   assertActive: () => void
+  verifyBeforeSpawn?: () => Promise<void>
   onExit: (worker: StartedPluginWorker, code: number | null) => void
 }): Promise<StartedPluginWorker> {
   const lease = await options.slots.acquire(options.signal)
@@ -51,6 +61,10 @@ export async function startPluginWorkerAttempt(options: {
   let retained = false
   try {
     options.assertActive()
+    if (options.verifyBeforeSpawn) {
+      await untilAborted(options.verifyBeforeSpawn(), options.signal)
+      options.assertActive()
+    }
     const factory = options.factory ?? startPluginWorker
     handle = await factory({
       pluginId: options.spec.pluginKey,
@@ -96,4 +110,17 @@ export async function startPluginWorkerAttempt(options: {
       lease.release()
     }
   }
+}
+
+// Why: deactivation awaits the activation, so it must not also wait out a slow tree hash.
+function untilAborted(task: Promise<void>, signal: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const onAbort = (): void => reject(new Error('plugin worker activation was cancelled'))
+    if (signal.aborted) {
+      onAbort()
+      return
+    }
+    signal.addEventListener('abort', onAbort, { once: true })
+    task.then(resolve, reject).finally(() => signal.removeEventListener('abort', onAbort))
+  })
 }

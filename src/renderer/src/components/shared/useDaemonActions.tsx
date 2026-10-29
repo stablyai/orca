@@ -241,8 +241,8 @@ function getCopy(kind: DaemonActionKind): DaemonActionCopy {
           )}
         </>
       ),
-      confirmLabel: 'Restart',
-      busyLabel: 'Restarting…'
+      confirmLabel: translate('auto.components.shared.useDaemonActions.confirmRestart', 'Restart'),
+      busyLabel: translate('auto.components.shared.useDaemonActions.busyRestarting', 'Restarting…')
     }
   }
   return {
@@ -258,8 +258,11 @@ function getCopy(kind: DaemonActionKind): DaemonActionCopy {
         )}
       </>
     ),
-    confirmLabel: 'Kill all sessions',
-    busyLabel: 'Killing…'
+    confirmLabel: translate(
+      'auto.components.shared.useDaemonActions.confirmKillAll',
+      'Kill all sessions'
+    ),
+    busyLabel: translate('auto.components.shared.useDaemonActions.busyKilling', 'Killing…')
   }
 }
 

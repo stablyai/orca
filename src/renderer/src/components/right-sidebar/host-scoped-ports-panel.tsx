@@ -55,7 +55,12 @@ export function HostScopedPortsPanel({
           platform: 'unknown',
           scannedAt: Date.now(),
           ports: [],
-          unavailableReason: message || 'Workspace port scan failed.'
+          unavailableReason:
+            message ||
+            translate(
+              'auto.components.right.sidebar.PortsPanel.740aca88ab',
+              'Workspace port scan failed.'
+            )
         }
       })
     } finally {

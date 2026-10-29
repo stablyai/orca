@@ -44,7 +44,7 @@ it.each([
       const source = "import type { Shape } from './model'; const shape: Shape = { value: 1 }"
       writeFileSync(test, source)
       const clean = collectTypecheckPass(root)
-      expect(clean).toEqual({ failing: [], programTestFiles: ['value.test.ts'] })
+      expect(clean).toEqual({ failing: [], diagnostics: [], programTestFiles: ['value.test.ts'] })
       if (buildInfo) {
         expect(existsSync(buildInfo)).toBe(true)
       }
@@ -54,6 +54,9 @@ it.each([
       writeFileSync(join(root, 'model.ts'), 'export interface Shape { value: string }')
       const failed = collectTypecheckPass(root)
       expect(failed.failing).toEqual(['value.test.ts'])
+      expect(failed.diagnostics).toEqual([
+        expect.stringMatching(/^value\.test\.ts\(1,\d+\): error TS2322:/)
+      ])
       expect(collectTypecheckPass(root)).toEqual(failed)
 
       writeFileSync(join(root, 'new.test.ts'), 'export const value: number = 1')
@@ -64,7 +67,11 @@ it.each([
       expect(findTsNocheckFiles(root, nocheck.programTestFiles)).toEqual(['value.test.ts'])
 
       unlinkSync(test)
-      expect(collectTypecheckPass(root)).toEqual({ failing: [], programTestFiles: ['new.test.ts'] })
+      expect(collectTypecheckPass(root)).toEqual({
+        failing: [],
+        diagnostics: [],
+        programTestFiles: ['new.test.ts']
+      })
     } finally {
       vi.unstubAllEnvs()
       removeTreeSync(root)

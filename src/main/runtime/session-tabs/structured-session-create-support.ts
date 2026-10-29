@@ -4,7 +4,7 @@ import {
 } from '../../native-chat/structured-agent-cli-source'
 import type { OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce as RestoreStructuredAgentSessionTabsOnceMethods } from './structured-session-tab-restoration'
 import { agentSessionRefusalError } from '../../../shared/agent-session-wire-refusals'
-import { OrcaRuntimeWithStructuredSessionAccountHome } from './structured-session-account-home'
+import { StructuredSessionWorkspaceScope } from './structured-session-workspace-scope'
 import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-registry'
 import {
   resolveCommittedStructuredAgentSessionAdoptionIntent,
@@ -13,8 +13,6 @@ import {
   structuredAgentSessionAdoptAttach,
   type StructuredAgentSessionCreateIntentInput
 } from '../structured-agent-session-create-adoption'
-import { isNativeLocalLocation, LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
-import { getLocalProjectWorktreeGitOptions } from '../../project-runtime-git-options'
 import type { AgentSessionAttachParams } from '../../native-chat/agent-session-wire/structured-agent-session-attach'
 import {
   resolveHostStructuredAgentCreateSupport,
@@ -26,16 +24,11 @@ import { structuredLaunchSeedOptions } from '../../../shared/native-chat/input/n
 import { hasPersistedStructuredAgentSessionStore as hasPersistedStructuredAgentSessionStoreOnDisk } from '../structured-agent-session-runtime'
 import { ensureStructuredAgentSessionHostUnlessRefused } from '../structured-agent-session-host-refusal'
 import { getProfileUserDataPath } from '../../orca-profiles/profile-storage-paths'
-import { parseWslUncPath } from '../../../shared/wsl-paths'
-import {
-  isFloatingWorkspaceId,
-  isFloatingWorkspaceSelector
-} from '../../../shared/floating-workspace-worktree'
-import { parseWorkspaceKey } from '../../../shared/workspace-scope'
+import { isFloatingWorkspaceSelector } from '../../../shared/floating-workspace-worktree'
 import type { AgentSessionAccountHome } from '../../../shared/agent-session-account-home'
 import type { StructuredAgentId } from '../../../shared/agent-session-provider-handle'
 
-export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport extends OrcaRuntimeWithStructuredSessionAccountHome {
+export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport extends StructuredSessionWorkspaceScope {
   protected abstract restoreStructuredAgentSessionTabsOnce(
     ...args: Parameters<
       RestoreStructuredAgentSessionTabsOnceMethods['restoreStructuredAgentSessionTabsOnce']
@@ -82,42 +75,6 @@ export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport exte
     agent: StructuredAgentId
   ): Record<string, string> | undefined {
     return structuredLaunchSeedOptions(this.requireStore().getSettings(), agent)
-  }
-
-  protected async resolveStructuredAgentSessionLocation(worktreeSelector: string) {
-    const target = await this.resolveRuntimeFileTarget(worktreeSelector)
-    const repo = this.store?.getRepo(target.worktree.repoId)
-    const folderScope = parseWorkspaceKey(target.worktree.id)
-    // Floating workspaces are plain managed directories; folder describes management, not whether they contain Git.
-    const folderWorkspace =
-      folderScope?.type === 'folder' || isFloatingWorkspaceId(target.worktree.id)
-    // WSL routing is local-machine authority; use executionHostId so remote/runtime hosts cannot inherit it.
-    const isLocalHost = target.executionHostId === LOCAL_EXECUTION_HOST_ID
-    const configuredWslDistro =
-      repo && isLocalHost
-        ? (getLocalProjectWorktreeGitOptions(this.requireStore(), repo).wslDistro ?? null)
-        : null
-    // Folder workspaces lack repo Git options; WSL UNC paths are their durable signal to refuse native Windows Codex.
-    const wslDistro =
-      configuredWslDistro ??
-      (folderWorkspace && isLocalHost
-        ? (parseWslUncPath(target.worktree.path)?.distro ?? null)
-        : null)
-    return {
-      executionHostId: target.executionHostId,
-      wslDistro,
-      workspaceId: target.worktree.id,
-      workspaceKind: folderWorkspace ? ('folder' as const) : ('git-worktree' as const)
-    }
-  }
-
-  /** Where a structured chat here would run, when that is a directory on this machine. */
-  async resolveStructuredAgentSessionLocalWorkspacePath(worktreeSelector: string) {
-    const location = await this.resolveStructuredAgentSessionLocation(worktreeSelector)
-    if (!isNativeLocalLocation(location)) {
-      return null
-    }
-    return (await this.resolveRuntimeFileTarget(worktreeSelector)).worktree.path
   }
 
   async resolveStructuredAgentSessionCreateIntent(

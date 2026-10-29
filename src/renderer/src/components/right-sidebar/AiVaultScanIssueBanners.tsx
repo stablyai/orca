@@ -47,11 +47,17 @@ export function AiVaultScanIssueBanners({
           ))}
           {skippedTranscriptCount > 0 ? (
             <div className="border-b border-sidebar-border px-3 py-1.5 text-[11px] text-muted-foreground">
-              {translate(
-                'auto.components.right.sidebar.AiVaultPanel.transcriptsSkipped',
-                '{{count}} transcript skipped',
-                { count: skippedTranscriptCount }
-              )}
+              {skippedTranscriptCount === 1
+                ? translate(
+                    'auto.components.right.sidebar.AiVaultPanel.transcriptsSkippedCount_one',
+                    '{{count}} transcript skipped',
+                    { count: skippedTranscriptCount }
+                  )
+                : translate(
+                    'auto.components.right.sidebar.AiVaultPanel.transcriptsSkippedCount_other',
+                    '{{count}} transcripts skipped',
+                    { count: skippedTranscriptCount }
+                  )}
             </div>
           ) : null}
           {reasons.map((reason) => (

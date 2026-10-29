@@ -64,11 +64,11 @@ export async function fetchMobileWebBundle(args: {
   const stopped = new AbortController()
   throwIfCallerAborted(args.signal)
   const opened = await runRpcOperation(args.client, mobileWebBundleManifestRead, null)
+  throwIfCallerAborted(args.signal)
   const manifest = opened.manifest
   const reader = mobileWebBundleWindowReader(args.client, opened)
-  const reusable = args.reusable
   const candidates = new Set(
-    reusable === undefined ? [] : manifest.assets.filter((entry) => reusable.has(entry))
+    args.reusable === undefined ? [] : manifest.assets.filter((entry) => args.reusable?.has(entry))
   )
   const fetched = manifest.assets.filter((entry) => !candidates.has(entry))
   const assets = new Map<string, Uint8Array>()
@@ -119,6 +119,7 @@ export async function fetchMobileWebBundle(args: {
       { buildId: manifest.buildId, path: asset.entry.path, offset },
       { timeoutMs: WINDOW_READ_BACKSTOP_MS }
     )
+    throwIfCallerAborted(args.signal)
     armStallClock()
     // A sibling already failed the fetch; this reply is not worth checking, decoding or reporting.
     if (stopped.signal.aborted) {
@@ -137,6 +138,7 @@ export async function fetchMobileWebBundle(args: {
     asset.outstandingWindows -= 1
     if (asset.outstandingWindows === 0) {
       const verified = await verifyReassembledAsset(asset)
+      throwIfCallerAborted(args.signal)
       // A sibling failed while this hashed; the fetch already rejected with that failure.
       if (stopped.signal.aborted) {
         return
@@ -186,7 +188,7 @@ export async function fetchMobileWebBundle(args: {
         break
       }
       throwIfCallerAborted(args.signal)
-      if (await reusable?.check(entry)) {
+      if (await args.reusable?.check(entry)) {
         reused.push(entry.path)
       } else {
         missed.push(entry)
@@ -208,6 +210,7 @@ export async function fetchMobileWebBundle(args: {
     }
     // Overlap native cache stats with network reads rather than delaying download.
     const [, missed] = await Promise.all([readWindows(fetched), reuseCandidates()])
+    throwIfCallerAborted(args.signal)
     if (missed.length > 0 && !stopped.signal.aborted) {
       countDownload(missed)
       reportProgress()
@@ -334,6 +337,5 @@ function throwIfCallerAborted(caller: AbortSignal | undefined): void {
   }
 }
 
-function toHex(bytes: Uint8Array): string {
-  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('')
-}
+const toHex = (bytes: Uint8Array): string =>
+  Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('')

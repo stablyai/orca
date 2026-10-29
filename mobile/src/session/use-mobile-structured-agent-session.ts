@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useRef } from 'react'
-import { encodeNativeChatTranscriptIdentity } from '../../../src/shared/native-chat-transcript-retention'
+import { encodeNativeChatTranscriptIdentity } from '../../../src/shared/native-chat/transcript/native-chat-transcript-retention'
 import { projectStructuredAgentSessionMessages } from '../../../src/shared/structured-agent-session-message-projection'
 import {
   projectStructuredQuestionMessages,
@@ -53,7 +53,6 @@ export function useMobileStructuredAgentSession(
 ): StructuredMobileSession {
   const {
     agent,
-    appendComposerText,
     client,
     connected,
     sessionId,
@@ -220,6 +219,8 @@ export function useMobileStructuredAgentSession(
     [approvalPrompt, questionPrompt, queueSendsNext, turnId]
   )
   const queued = useMobileStructuredQueuedMessageControls({
+    ...args,
+    appendComposerText: args.appendComposerText,
     sessionKey,
     agentName: agent ? (tuiAgentDisplayName(agent) ?? agent) : undefined,
     journalItems: state.items,
@@ -227,15 +228,13 @@ export function useMobileStructuredAgentSession(
     queuePause,
     submissions: state.submissions,
     agentWorking: isWorking,
-    client,
-    sessionId,
+    imagesCapable: hostSupport?.queuedMessageImageEdit === true,
+    skillsCapable: hostSupport?.queuedMessageSkillsEdit === true,
     reorderCapable: hostSupport?.queuedMessageReorder === true,
     editCapable: hostSupport ? hostSupport.queuedMessageEdit === true : null,
     chatActive: enabled,
     enabled: enabled && connected,
     mutate,
-    appendComposerText,
-    onSendError,
     ...(onActionResolved ? { onActionResolved } : {})
   })
   // Stop preserves host-held cards under queue pause; only a later user action resumes them.

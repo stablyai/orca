@@ -18,7 +18,7 @@ export class RuntimeBrowserCommandTargets {
     private readonly host: Pick<
       RuntimeBrowserCommandHost,
       | 'getAgentBrowserBridge'
-      | 'resolveWorktreeSelector'
+      | 'resolveWorkspaceSelector'
       | 'getAuthoritativeWindow'
       | 'retireRuntimeOwnedBrowserSessionTab'
       | 'serveBrowserTabs'
@@ -81,7 +81,7 @@ export class RuntimeBrowserCommandTargets {
       return undefined
     }
 
-    const worktreeId = (await this.host.resolveWorktreeSelector(selector)).id
+    const worktreeId = (await this.host.resolveWorkspaceSelector(selector)).id
     // Explicit selector failures must surface instead of widening scope; activation alone is best-effort.
     const bridge = this.host.getAgentBrowserBridge()
     if (bridge && !this.hasLiveRegisteredBrowserTab(bridge, worktreeId)) {
@@ -104,7 +104,7 @@ export class RuntimeBrowserCommandTargets {
     }
 
     const worktreeId = params.worktree
-      ? (await this.host.resolveWorktreeSelector(params.worktree)).id
+      ? (await this.host.resolveWorkspaceSelector(params.worktree)).id
       : undefined
     const bridge = this.host.getAgentBrowserBridge()
     if (bridge && !this.hasLiveRegisteredBrowserPage(bridge, worktreeId, browserPageId)) {

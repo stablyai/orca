@@ -231,7 +231,7 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
     }
   }
   readOptions = (input: { sessionId: string; fence: number }) =>
-    readClaudeStructuredSessionOptions(this.session(input.sessionId), this.deps.requestTimeoutMs)
+    readClaudeStructuredSessionOptions(this.session(input.sessionId))
   readOptionRestoreFailures = (sessionId: string): readonly string[] => {
     const session = this.sessions.get(sessionId)
     return session?.retiredModel !== undefined && !session.options.has('model') ? ['model'] : []

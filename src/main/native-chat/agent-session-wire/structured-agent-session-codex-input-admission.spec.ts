@@ -48,6 +48,7 @@ it.each(CODEX_INPUT_FINALIZATION_ADMISSION_CASES)(
       }
     })
     await host.flushStreamedEvents(SESSION)
+    await fixture.pick('auto')
     const measured = population > 0 ? fixture.measureInputWork('close', population) : undefined
     let later = ''
     const paused = Promise.withResolvers<unknown>()

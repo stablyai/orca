@@ -195,10 +195,10 @@ it('does not attach a file reference removed while uploading', async () => {
   expect(result.target.text).toBe('next question')
 })
 
-it('keeps the original file owner when the mounted composer switches draft scopes', async () => {
+it('keeps original file ownership and ordinary insertion when the mounted composer switches scopes', async () => {
   const result = await uploadFixture('pdf', { switchScope: true })
   expect(result.pending).toEqual([])
-  expect(result.target.text).toBe(`next question\n\n@${result.path}`)
+  expect(result.target.text).toBe(`next question @${result.path}`)
   expect(result.otherInput).toBe('other question')
   expect(result.other.images).toEqual([])
 })

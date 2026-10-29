@@ -237,7 +237,13 @@ export type BrowserSlice = {
     error: string | null
   } | null
   /** Loads one host's profiles; defaults to the host Browser settings is showing. */
-  fetchBrowserSessionProfiles: (hostId?: ExecutionHostId) => Promise<void>
+  fetchBrowserSessionProfiles: (hostId?: ExecutionHostId) => Promise<void | {
+    hostId: ExecutionHostId
+    environmentId: string
+    pairingRevision: number | undefined
+    profiles: BrowserSessionProfile[]
+    executorRuntimeId?: string
+  }>
   createBrowserSessionProfile: (
     scope: 'isolated' | 'imported',
     label: string

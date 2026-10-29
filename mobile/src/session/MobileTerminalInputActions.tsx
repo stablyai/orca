@@ -45,6 +45,8 @@ export function MobileTerminalInputActions({
 }: MobileTerminalInputActionsProps) {
   useMobileColorScheme()
   const dictationActive = dictation.isStarting || dictation.isRecording
+  // Dictation outlives a reconnect, so its stop and cancel must too; only starting needs the connection.
+  const micDisabled = !canSend && !dictationActive && !dictation.isProcessing
   return (
     <>
       <Pressable
@@ -68,9 +70,9 @@ export function MobileTerminalInputActions({
           style={[
             buttonStyle,
             dictationActive && activeButtonStyle,
-            !canSend && disabledButtonStyle
+            micDisabled && disabledButtonStyle
           ]}
-          disabled={!canSend}
+          disabled={micDisabled}
           onPress={dictationMode === 'toggle' ? onDictationToggle : undefined}
           onPressIn={dictationMode === 'hold' ? onDictationPressIn : undefined}
           onPressOut={dictationMode === 'hold' ? onDictationPressOut : undefined}
@@ -83,11 +85,13 @@ export function MobileTerminalInputActions({
                 }
               : keepHeldPressThroughLongPress
           }
+          accessibilityRole="button"
+          aria-busy={dictation.isStarting || dictation.isProcessing}
           accessibilityLabel={
             dictation.isRecording
               ? 'Stop voice dictation'
               : dictation.isProcessing
-                ? 'Cancel voice dictation'
+                ? 'Transcribing voice dictation'
                 : dictation.isStarting
                   ? 'Starting voice dictation'
                   : 'Start voice dictation'

@@ -2,6 +2,10 @@ import { findSqliteRuntimeTests } from './vitest-sqlite-runtime-scan.mjs'
 
 // SQLite publication, native bindings, worker IPC, socket liveness, and V8 retention use Node.
 const NODE_RUNTIME_INCLUDE = [
+  // Exercise the native fetch error and abort contracts used by the Linear SDK in Electron.
+  'src/main/linear/linear-request-recovery.test.ts',
+  'src/main/linear/linear-issue-detail-deadline.test.ts',
+  'tests/e2e/linear-cli-recovery.unit.test.ts',
   'src/main/runtime/structured-agent-cli-writers.test.ts',
   'config/scripts/vitest-sqlite-runtime-boundary.test.ts',
   'config/scripts/cloud-security-history-workflow.test.mjs',
@@ -28,6 +32,8 @@ const NODE_RUNTIME_INCLUDE = [
   'src/renderer/src/components/terminal-pane/pty-input-write-queue.test.ts',
   'src/renderer/src/lib/react-commit-cascade-observer.test.ts',
   'src/renderer/src/lib/react-commit-cascade-telemetry.test.ts',
+  // Asserts payloads are collected; Bun's GC scans the stack conservatively and may keep one alive.
+  'src/shared/ws-inbound-message-queue.test.ts',
   // These reach Node SQLite through a shared helper or a dynamic import, which the scan skips.
   'src/main/claude/claude-transcript-catch-up.test.ts',
   'src/main/claude/claude-transcript-duration.test.ts',

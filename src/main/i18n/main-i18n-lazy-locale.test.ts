@@ -18,19 +18,12 @@ import {
   UI_LANGUAGE_RUSSIAN,
   UI_LANGUAGE_SPANISH
 } from '../../shared/ui-language'
-import {
-  ensureMainI18n,
-  mainI18n,
-  setMainPluginLanguagePacks,
-  setMainUiLanguage,
-  translateMain
-} from './main-i18n'
+import { mainI18n, setMainPluginLanguagePacks, setMainUiLanguage, translateMain } from './main-i18n'
 import { pluginLanguageResourceId } from '../../shared/plugins/plugin-language-pack-artifact'
 
 describe('main-i18n lazy locale loading', () => {
   afterEach(() => vi.restoreAllMocks())
   beforeEach(async () => {
-    await ensureMainI18n()
     setMainPluginLanguagePacks([])
     await setMainUiLanguage(UI_LANGUAGE_ENGLISH)
   })
@@ -135,5 +128,28 @@ describe('main-i18n lazy locale loading', () => {
     setMainPluginLanguagePacks([])
     expect(await setMainUiLanguage(id)).toBe('en')
     expect(translateMain('menu.file', 'File')).toBe('File')
+  })
+
+  it("uses a contributed pack's plural rules and English for its empty values", async () => {
+    const id = 'plugin:orca-samples.russian/ru-RU' as const
+    setMainPluginLanguagePacks([
+      {
+        id,
+        resourceLanguage: pluginLanguageResourceId(id),
+        pluginKey: 'orca-samples.russian',
+        locale: 'ru-RU',
+        catalog: {
+          terminals_one: '{{count}} one',
+          terminals_few: '{{count}} few',
+          terminals_other: '{{count}} other',
+          empty: ''
+        }
+      }
+    ])
+    await setMainUiLanguage(id)
+    expect(
+      [1, 3, 5, 21].map((count) => translateMain('terminals_other', '{{count}} terms', { count }))
+    ).toEqual(['1 one', '3 few', '5 other', '21 one'])
+    expect(translateMain('empty', '{{count}} terminals', { count: 2 })).toBe('2 terminals')
   })
 })

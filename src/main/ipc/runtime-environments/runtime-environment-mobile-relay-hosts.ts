@@ -1,4 +1,3 @@
-import { app } from 'electron'
 import { pairedRuntimeBrowserClientHostsPage } from '../../browser/paired-runtime-browser-client-host-runtime'
 import { listEnvironments } from '../../../shared/runtime-environment-store'
 import {
@@ -30,6 +29,7 @@ import { isRuntimeSubscriptionReplayResponse } from '../../../shared/runtime-sub
 import { isRuntimeEnvironmentManuallyDisconnected } from './runtime-environment-manual-disconnect'
 import { onRuntimeEnvironmentStatusPublished } from './runtime-environment-status-owner'
 import { getRuntimeEnvironmentTransportGeneration } from './runtime-environment-transport-generation'
+import { getRuntimeEnvironmentRegistryRoot } from './runtime-environment-registry-root'
 
 const retirementListeners = new Set<(environmentId: string) => void>()
 
@@ -56,7 +56,7 @@ function isRelayableToPhones(environment: KnownRuntimeEnvironment): boolean {
 
 /** Relay requests use exact saved environment IDs. */
 export function createRuntimeEnvironmentMobileRelayHosts(): MobileDesktopRelayHosts {
-  const userDataPath = app.getPath('userData')
+  const userDataPath = getRuntimeEnvironmentRegistryRoot()
   return {
     list: () => {
       const environments = listRelayableEnvironments(userDataPath)

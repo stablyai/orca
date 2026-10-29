@@ -486,6 +486,56 @@ async function updatePhase(distro: string): Promise<Receipt> {
   return result
 }
 
+const LARGE_FILE_BYTES = 100 * 1024 * 1024
+// The editor's chunk size (runtime-paged-file-read.ts).
+const LARGE_FILE_CHUNK_BYTES = 384 * 1024
+
+/**
+ * Record-only (E7): a 100 MB file paged over the host the way the editor pages one, on the shared
+ * control socket the editor uses, with orcad's peak RSS. Failures are recorded, never asserted.
+ */
+async function measureLargeFileRead(
+  control: RemoteRuntimeSharedControlConnection,
+  orcadPid: number | null,
+  distro: string
+): Promise<Receipt> {
+  if (orcadPid === null) {
+    return { error: 'no orcad pid' }
+  }
+  try {
+    const repo = (
+      await guest(
+        distro,
+        `set -e; d="${LANE_REPO}"; head -c ${LARGE_FILE_BYTES} /dev/zero | tr '\\0' a > "$d/big.txt"; ` +
+          'printf %s "$d"'
+      )
+    ).trim()
+    // Reset the peak, so VmHWM is this read's.
+    await asRoot(distro, `echo 5 > /proc/${orcadPid}/clear_refs`)
+    const started = performance.now()
+    let chunks = 0
+    for (let offset = 0; offset < LARGE_FILE_BYTES; offset += LARGE_FILE_CHUNK_BYTES) {
+      await control.request(
+        'files.readChunk',
+        {
+          worktree: `path:${repo}`,
+          relativePath: 'big.txt',
+          offset,
+          length: LARGE_FILE_CHUNK_BYTES
+        },
+        60_000
+      )
+      chunks += 1
+    }
+    const readMs = Math.round(performance.now() - started)
+    const peak = (await guest(distro, `grep VmHWM /proc/${orcadPid}/status`)).trim()
+    await guest(distro, `rm -f "${repo}/big.txt"`)
+    return { bytes: LARGE_FILE_BYTES, chunks, readMs, orcadVmHWM: peak }
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : String(error) }
+  }
+}
+
 async function launchPhase(distro: string, systemd: boolean): Promise<Receipt> {
   const result: Receipt = {}
   visibleWork = true
@@ -524,6 +574,9 @@ async function launchPhase(distro: string, systemd: boolean): Promise<Receipt> {
     clientCapabilities: ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES
   })
   await control.request('status.get', undefined, 30_000)
+  if (!systemd) {
+    result.largeFileRead = await measureLargeFileRead(control, connection.pid, distro)
+  }
   result.watchFiresOnNormalCloses = await countWatchFiresAcrossRpcs(connection, 10)
   expect(result.watchFiresOnNormalCloses, 'normal socket closes must not read as orcad exit').toBe(
     0

@@ -36,18 +36,26 @@ export function WorkspaceSpaceManagerToolbar({
         <div className="flex items-center justify-between gap-2 rounded-md border border-border/70 bg-background/95 px-2 py-1 shadow-xs">
           <div className="min-w-0 text-xs text-muted-foreground">
             <span className="font-medium text-foreground">
-              {selectedDeletableIds.length}{' '}
-              {translate(
-                'auto.components.status.bar.WorkspaceSpaceManagerPanel.65402b7192',
-                'selected'
-              )}
+              {selectedDeletableIds.length === 1
+                ? translate(
+                    'auto.components.status.bar.WorkspaceSpaceManagerPanel.selectedCount_one',
+                    '{{count}} selected',
+                    { count: selectedDeletableIds.length }
+                  )
+                : translate(
+                    'auto.components.status.bar.WorkspaceSpaceManagerPanel.selectedCount_other',
+                    '{{count}} selected',
+                    { count: selectedDeletableIds.length }
+                  )}
             </span>
             <span className="mx-1.5">·</span>
             <span>
-              {formatBytes(selectedReclaimableBytes)}{' '}
               {translate(
-                'auto.components.status.bar.WorkspaceSpaceManagerPanel.0cb1501ccf',
-                'reclaimable'
+                'auto.components.status.bar.WorkspaceSpaceManagerPanel.reclaimableSize',
+                '{{size}} reclaimable',
+                {
+                  size: formatBytes(selectedReclaimableBytes)
+                }
               )}
             </span>
           </div>

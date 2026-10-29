@@ -49,7 +49,7 @@ export function TaskPageLinearCustomViewList({
         errors={linearCustomViewsResult.errors}
         hasMore={linearCustomViewsResult.hasMore}
         count={linearCustomViewsResult.items.length}
-        label={translate('auto.components.TaskPage.3cb855080f', 'views')}
+        kind="views"
       />
     </div>
   )

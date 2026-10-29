@@ -13,6 +13,8 @@ import {
 import {
   isWslMoveCwdFenced,
   isWslMoveWorkspaceBlocked,
+  wslMoveHostDistro,
+  wslMoveProjectRefForWorkspace,
   WslMoveProjectFencedError
 } from '../../../persistence/moving-wsl-projects/wsl-move-scope-guard'
 import { listLiveDaemonPtyIds } from '../../../daemon/daemon-provider-state'
@@ -31,7 +33,7 @@ export function assertWorkspaceAcceptsNewPty(
 ): Promise<void> | void {
   const fencedByCwd = !!cwd && isWslMoveCwdFenced(cwd)
   if (fencedByCwd || isWslMoveWorkspaceBlocked(store, worktreeId)) {
-    return assertReattachesLiveSession(sessionId).then(() =>
+    return assertReattachesLiveSession(sessionId, worktreeId).then(() =>
       assertFolderWorkspacePtyPathUsable(store, worktreeId)
     )
   }
@@ -46,11 +48,17 @@ export function localPtySpawnCwd(args: {
   return args.connectionId ? undefined : args.cwd
 }
 
-async function assertReattachesLiveSession(sessionId: string | undefined): Promise<void> {
+async function assertReattachesLiveSession(
+  sessionId: string | undefined,
+  worktreeId: string | undefined
+): Promise<void> {
   // An unanswered census is never proof the session lives, so it refuses.
   const live = sessionId ? await listLiveDaemonPtyIds() : null
   if (!sessionId || !live?.includes(sessionId)) {
-    throw new WslMoveProjectFencedError()
+    // A committed move's project names its host: "try again when the move finishes" never comes true.
+    throw new WslMoveProjectFencedError(
+      worktreeId ? wslMoveHostDistro(wslMoveProjectRefForWorkspace(worktreeId)) : null
+    )
   }
 }
 

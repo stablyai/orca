@@ -174,7 +174,7 @@ export type CodexSession = {
   }
   /** The configured personality and tier a reset returns to, read before the first override. */
   nativeDefaults?: { personality?: string; serviceTier?: string }
-  /** Overrides actually attempted on this child, independently of future saved picks. */
+  /** Acquisition facts overlaid by controls actually sent, independently of reports or saved picks. */
   appliedTurnOptions?: Readonly<Record<string, string>>
   appliedSettings?: CodexAppliedSettings
   /** Optional for adapters without a host catalog store. */

@@ -596,6 +596,7 @@ test('with the internal gate closed and no saved WSL work, no WSL host surface s
     await expect(page.getByText(WSL_HOST_LABEL)).toHaveCount(0)
 
     expect(fakeWslConnects(connectLogFile)).toEqual([])
+    await expect(page.getByText(/WSL hosts are paused/)).toHaveCount(0)
     expect(findWslHostDeployment(userDataDir, WSL_ENVIRONMENT_ID)).toBeNull()
     await page.screenshot({ path: testInfo.outputPath('wsl-hosts-gated-off-settings.png') })
   } finally {
@@ -603,7 +604,7 @@ test('with the internal gate closed and no saved WSL work, no WSL host surface s
     rmSync(logDir, { recursive: true, force: true })
   }
 })
-test('with the internal gate closed, a saved WSL host stays listed and reachable (serve-only)', async ({
+test('with the internal gate closed, a saved WSL host stays reachable but nothing new is added or moved (serve-only)', async ({
   orcaPage
 }, testInfo) => {
   // Launches a second desktop beside the paired server, like the gate-closed case above.
@@ -654,12 +655,42 @@ test('with the internal gate closed, a saved WSL host stays listed and reachable
       .poll(() => fakeWslConnects(connectLogFile), { timeout: 30_000 })
       .toContain('Ubuntu')
 
+    // Serve-only admits nothing new: main refuses, and the entry points are gone.
+    expect(
+      await page.evaluate(() => window.api.runtimeEnvironments.wslHosts?.add({ distro: 'Ubuntu' }))
+    ).toMatchObject({ ok: false, kind: 'disabled' })
+    expect(
+      await page.evaluate(() => window.api.wslMove.start({ distro: 'Ubuntu', repoIds: [] }))
+    ).toMatchObject({ outcome: 'refused', code: 'wsl_move_unavailable' })
+    await openSidebarProjectDialog(page)
+    await page
+      .getByRole('dialog', { name: /Add a project/i })
+      .getByRole('combobox')
+      .click()
+    await page.locator('[cmdk-item]').filter({ hasText: 'Add remote host' }).click()
+    await expect(page.getByRole('button', { name: /Add SSH host/ })).toBeVisible()
+    await expect(page.getByRole('button', { name: /Add WSL distro/ })).toHaveCount(0)
+    await expect(page.getByText('Adding WSL distros is paused in this build.')).toBeVisible()
+    await settleAnimations(page)
+    await page.screenshot({ path: testInfo.outputPath('wsl-hosts-paused-add-host-menu.png') })
+    // Two menus and the dialog: close them all so the Settings screenshot shows the section.
+    const addProject = page.getByRole('dialog', { name: /Add a project/i })
+    await expect
+      .poll(async () => {
+        await page.keyboard.press('Escape')
+        return addProject.count()
+      })
+      .toBe(0)
+
     await page.evaluate(() => {
       const state = window.__store?.getState()
       state?.openSettingsPage()
       state?.openSettingsTarget({ pane: 'servers', repoId: null })
     })
     await expect(page.getByText(WSL_HOST_LABEL).first()).toBeVisible({ timeout: 30_000 })
+    await expect(page.getByRole('button', { name: 'Add WSL distro' })).toHaveCount(0)
+    await expect(page.getByText(/WSL hosts are paused in this build/)).toBeVisible()
+    await settleAnimations(page)
     expect(findWslHostDeployment(userDataDir, WSL_ENVIRONMENT_ID)).not.toBeNull()
     await page.screenshot({ path: testInfo.outputPath('wsl-hosts-serve-only-settings.png') })
   } finally {

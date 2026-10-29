@@ -17,9 +17,11 @@ import { useAppStore } from '../../store'
 import { BUNDLED_PET, BUNDLED_PETS, findBundledPet, isBundledPetId } from '../pet/pet-models'
 import { PET_SIZE_MAX, PET_SIZE_MIN } from '../../../../shared/pet-types'
 import { translate } from '@/i18n/i18n'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 
 // Keep visibility separate from experimental enablement so users can dismiss the pet without revisiting Settings.
 function PetStatusSegmentInner(): React.JSX.Element {
+  useUiLanguageRevision()
   const petVisible = useAppStore((s) => s.petVisible)
   const setPetVisible = useAppStore((s) => s.setPetVisible)
   const petId = useAppStore((s) => s.petId)

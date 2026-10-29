@@ -128,11 +128,12 @@ describe('a Grok model pick Grok never answers during send', () => {
     await waitFor(() => expect(framesOf(rig.child(), 'session/set_config_option')).toHaveLength(2))
     const [old, current] = framesOf(rig.child(), 'session/set_config_option')
     rig.child().agent.reply(current!, { configOptions: GROK_CONFIG_OPTIONS })
-    await waitFor(() => expect(framesOf(rig.child(), 'session/set_config_option')).toHaveLength(3))
-    rig.child().agent.reply(framesOf(rig.child(), 'session/set_config_option')[2]!, {
-      configOptions: GROK_CONFIG_OPTIONS
-    })
     await restore
+    expect(framesOf(rig.child(), 'session/set_config_option')).toHaveLength(2)
+    expect([old?.params, current?.params]).toEqual([
+      { sessionId: expect.any(String), configId: 'model', value: 'grok-4.6' },
+      { sessionId: expect.any(String), configId: 'model', value: 'grok-4.7' }
+    ])
     expect(framesOf(rig.child(), 'session/prompt')).toHaveLength(1)
     rig.child().agent.reply(old!, {
       configOptions: GROK_CONFIG_OPTIONS.map((option) =>

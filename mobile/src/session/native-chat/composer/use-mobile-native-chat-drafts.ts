@@ -17,7 +17,7 @@ import {
 import {
   normalizeImageTranscriptMessages,
   normalizeNativeChatUserText as normalizeReconcileText
-} from '../../../../../src/shared/native-chat-image-transcript-markers'
+} from '../../../../../src/shared/native-chat/transcript/native-chat-image-transcript-markers'
 import { useMobileNativeChatUnconfirmedSends } from '../use-mobile-native-chat-unconfirmed-sends'
 import {
   appendMobileNativeChatPending,

@@ -106,6 +106,8 @@ export function createBrowserApi(): NonNullable<Partial<PreloadApi>['browser']> 
           'Cookie import is unavailable in the web client.'
         )
       }),
+    sessionGoogleCookieClearTarget: () => Promise.resolve(null),
+    sessionClearGoogleCookies: () => Promise.resolve('unverified' as const),
     sessionClearDefaultCookies: () => Promise.resolve(false),
     sitePermissionsList: () => Promise.resolve([]),
     sitePermissionsSet: () => Promise.resolve([]),

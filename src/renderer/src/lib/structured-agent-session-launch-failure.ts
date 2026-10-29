@@ -24,7 +24,13 @@ export type StructuredLaunchFailure = AgentSessionWriteRefusal & {
 
 /** A WSL distro added as a host runs chat itself, so point there once this desktop can add one. */
 function wslHostChatAvailable(): boolean {
-  return wslHostsAvailable() && useAppStore.getState().settings?.experimentalWslHosts === true
+  const state = useAppStore.getState()
+  // Serve-only hides Add WSL distro, so the hint would point at a missing button.
+  return (
+    wslHostsAvailable() &&
+    state.settings?.experimentalWslHosts === true &&
+    state.wslHostsAcceptNewWork
+  )
 }
 
 /** Why a host said it can't run a chat in this workspace, and what to do instead. */

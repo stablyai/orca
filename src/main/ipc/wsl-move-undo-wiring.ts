@@ -16,13 +16,15 @@ import { wslMoveReleasedSessionFocusPatch } from '../persistence/moving-wsl-proj
 import { applyWslMoveSessionFocus } from '../persistence/moving-wsl-projects/wsl-move-main-rewrite-stores'
 import { listEnvironments } from '../../shared/runtime-environment-store'
 import { callRuntimeEnvironment } from './runtime-environments/runtime-environment-transport-routing'
+import { wasWslHostKeptForPeers } from '../wsl/wsl-host-kept-for-peers'
 import {
   stopWslMoveHostAutomations,
   wslMoveMovedAutomationIds,
   type WslMoveHostAutomationStop
 } from '../persistence/moving-wsl-projects/wsl-move-undo-host-automations'
 import { scheduleWslMoveRewriteRetry } from '../persistence/moving-wsl-projects/wsl-move-rewrite-retry'
-import { wslHostRemovalPending } from './wsl-move-host-connect'
+import { connectWslMoveHostService, wslHostRemovalPending } from './wsl-move-host-connect'
+import { getWslHostService } from '../wsl/wsl-host-service-instance'
 import {
   disableWslHostAutomations,
   readWslHostAutomationStates,
@@ -54,6 +56,21 @@ const HOST_TERMINAL_LIST_LIMIT = 10_000
 const SLEEP_TIMEOUT_MS = 60_000
 const LIST_TIMEOUT_MS = 10_000
 
+/** Undo is the user's act: after a relaunch a host with no open work connects first, as Connect would. */
+async function connectUndoHost(userDataPath: string, move: WslMoveCutover): Promise<boolean> {
+  const service = getWslHostService()
+  if (!service) {
+    return true
+  }
+  try {
+    await connectWslMoveHostService(service, userDataPath, move.manifest.source.distro, 'user')
+    return true
+  } catch (error) {
+    console.warn('[wsl-move] The host did not connect for undo:', error)
+    return false
+  }
+}
+
 export function createWslMoveUndoPorts(
   store: Pick<
     Store,
@@ -63,15 +80,21 @@ export function createWslMoveUndoPorts(
 ): WslMoveUndoPorts {
   return {
     stopHostCopies: async (move) => {
-      // A host the user removed ran its terminals down with it; nothing of the project runs there.
+      // A host the user removed ran its terminals down with it, unless its Remove kept the server
+      // running for another Orca (R39): then its copies may still run, and nothing here reaches them.
       if (!listEnvironments(userDataPath).some((env) => env.id === move.destinationEnvironmentId)) {
-        return 'stopped'
+        return wasWslHostKeptForPeers(userDataPath, move.destinationEnvironmentId)
+          ? 'unreachable'
+          : 'stopped'
       }
       const scope = wslMoveRewriteScope(wslMoveDesktopRewriteContext(userDataPath, move))
       const local = store.getWorkspaceSession(LOCAL_EXECUTION_HOST_ID)
       const hostIds = [...new Set(Object.keys(local.tabsByWorktree).filter(scope.inScope))].map(
         (id) => scope.worktreeId(id)
       )
+      if (!(await connectUndoHost(userDataPath, move))) {
+        return 'unreachable'
+      }
       const call = async (method: string, params: unknown, timeoutMs: number) => {
         try {
           return await callRuntimeEnvironment(
@@ -129,15 +152,20 @@ export function createWslMoveUndoPorts(
     stopHostAutomations: async (move) => {
       // Inside a try: a throw here would otherwise escape past undo's spawn fence.
       try {
-        // A removed host took its automations with it.
+        // A removed host took its automations with it, unless another Orca keeps its server (R39).
         if (
           !listEnvironments(userDataPath).some((env) => env.id === move.destinationEnvironmentId)
         ) {
-          return { outcome: 'stopped', restore: async () => {}, applyHere: () => () => {} }
+          return wasWslHostKeptForPeers(userDataPath, move.destinationEnvironmentId)
+            ? { outcome: 'unreachable' }
+            : { outcome: 'stopped', restore: async () => {}, applyHere: () => () => {} }
         }
         // E11: a Remove that could not prove the server stopped; the host is not to be touched.
         if (wslHostRemovalPending(userDataPath, move.manifest.source.distro)) {
           return { outcome: 'removal-pending' }
+        }
+        if (!(await connectUndoHost(userDataPath, move))) {
+          return { outcome: 'unreachable' }
         }
         const environmentId = move.destinationEnvironmentId
         const stop = await stopWslMoveHostAutomations(

@@ -23,9 +23,9 @@ beforeEach(async () => {
   useLanguageReadiness.setState({ ...useLanguageReadiness.getInitialState(), ready: true })
   usePluginLanguagePackStore.setState({ entries: [], loaded: true })
   vi.spyOn(languageReadiness, 'initializeLanguageDetection').mockResolvedValue(
-    detectUiLanguage(['de-DE'], 'native')
+    detectUiLanguage(['it-IT'], 'native')
   )
-  setRendererLanguageDetection(detectUiLanguage(['de-DE'], 'native'))
+  setRendererLanguageDetection(detectUiLanguage(['it-IT'], 'native'))
   Object.defineProperty(window, 'api', {
     configurable: true,
     value: { feedback: { submit }, telemetryTrack }
@@ -321,7 +321,7 @@ describe('onboarding language request', () => {
     expect(screen.getByRole('radio', { name: 'Français' }).getAttribute('data-state')).toBe(
       'checked'
     )
-    expect(screen.getAllByRole('radio')).toHaveLength(10)
+    expect(screen.getAllByRole('radio')).toHaveLength(11)
     expect(screen.getByRole('radio', { name: 'Русский' })).toBeTruthy()
     expect(save).not.toHaveBeenCalled()
     expect(useAppStore.getState().settings?.uiLanguage).toBe('system')
@@ -333,7 +333,7 @@ describe('onboarding language request', () => {
     useAppStore.setState({ settings: { ...getDefaultSettings('/tmp'), uiLanguage: 'fr' } })
     render(<OnboardingLanguageSwitcher open onOpenChange={vi.fn()} />)
     expect(
-      screen.getByText('System language: de-DE. This language is not supported yet.')
+      screen.getByText('System language: it-IT. This language is not supported yet.')
     ).toBeTruthy()
     expect(screen.queryByText(/Orca uses English/)).toBeNull()
     expect(screen.getByRole('radio', { name: 'Français' }).getAttribute('data-state')).toBe(
@@ -460,7 +460,7 @@ describe('onboarding language request', () => {
       })
       installWebPreloadApi()
       render(<OnboardingLanguageSwitcher open onOpenChange={vi.fn()} />)
-      expect(screen.getAllByRole('radio')).toHaveLength(10)
+      expect(screen.getAllByRole('radio')).toHaveLength(11)
       expect(screen.queryByRole('button', { name: 'Other language…' })).toBeNull()
       expect(screen.queryByRole('textbox')).toBeNull()
     } finally {
@@ -476,7 +476,7 @@ describe('onboarding language request', () => {
     const save = vi.fn().mockResolvedValue(undefined)
     useAppStore.setState({ updateSettingsOrThrow: save })
     render(<OnboardingLanguageSwitcher open onOpenChange={vi.fn()} />)
-    expect(screen.getAllByRole('radio')).toHaveLength(10)
+    expect(screen.getAllByRole('radio')).toHaveLength(11)
     expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull()
     expect(save).not.toHaveBeenCalled()
   })

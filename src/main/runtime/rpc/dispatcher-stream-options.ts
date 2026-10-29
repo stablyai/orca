@@ -20,6 +20,7 @@ export type RpcDispatchStreamingOptions = Pick<
   | 'pairing'
   | 'deviceSelf'
   | 'mobileRelayHosts'
+  | 'peerDesktops'
   | 'delegatedMobileDevices'
   | 'sendBinary'
   | 'registerBinaryStreamHandler'
@@ -60,6 +61,7 @@ export function rpcContextFromTransport(
     pairing: options?.pairing,
     deviceSelf: options?.deviceSelf,
     mobileRelayHosts: options?.mobileRelayHosts,
+    peerDesktops: options?.peerDesktops,
     delegatedMobileDevices: options?.delegatedMobileDevices,
     sendBinary: options?.sendBinary,
     registerBinaryStreamHandler: options?.registerBinaryStreamHandler,

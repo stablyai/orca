@@ -1,4 +1,5 @@
 import { toast } from 'sonner'
+import { Trans } from 'react-i18next'
 import type { AppState } from '@/store/types'
 import type { LocalBaseRefUpdateSuggestion } from '../../../../shared/worktree/base-ref-drift-types'
 import { Button } from '../ui/button'
@@ -6,7 +7,7 @@ import {
   KEEP_LOCAL_MAIN_UP_TO_DATE_SECTION_ID,
   getKeepLocalMainUpToDateTitle
 } from '../settings/keep-local-main-up-to-date-setting'
-import { translate } from '@/i18n/i18n'
+import { i18n, translate } from '@/i18n/i18n'
 
 type SuggestionToastDeps = {
   updateSettings: AppState['updateSettings']
@@ -30,10 +31,6 @@ function SuggestionToastBody({
   deps: SuggestionToastDeps
 }): React.JSX.Element {
   const { updateSettings, getSettings, openSettingsPage, openSettingsTarget } = deps
-  const commitNoun =
-    suggestion.behind === 1
-      ? translate('auto.components.sidebar.local.base.ref.suggestion.toast.commit', 'commit')
-      : translate('auto.components.sidebar.local.base.ref.suggestion.toast.commits', 'commits')
   const keepLocalMainUpToDateTitle = getKeepLocalMainUpToDateTitle()
 
   const turnOn = (): void => {
@@ -84,26 +81,35 @@ function SuggestionToastBody({
   return (
     <div className="flex w-full flex-col gap-3">
       <p className="text-sm leading-5 text-popover-foreground/80">
-        {translate(
-          'auto.components.sidebar.local.base.ref.suggestion.toast.f15fd80989',
-          'Your new worktree is current, but local {{value0}} is {{value1}} {{value2}} behind, so AI diffs may compare to stale history. Let Orca keep it up to date automatically. Change this anytime in',
-          {
-            value0: suggestion.localBranch,
-            value1: suggestion.behind,
-            value2: commitNoun
+        <Trans
+          i18n={i18n}
+          defaults={
+            suggestion.behind === 1
+              ? translate(
+                  'auto.components.sidebar.local.base.ref.suggestion.toast.staleLocalBranch_one',
+                  'Your new worktree is current, but local {{branch}} is {{count}} commit behind, so AI diffs may compare to stale history. Let Orca keep it up to date automatically. Change this anytime in <settings>Settings › {{setting}}</settings>',
+                  { count: suggestion.behind }
+                )
+              : translate(
+                  'auto.components.sidebar.local.base.ref.suggestion.toast.staleLocalBranch_other',
+                  'Your new worktree is current, but local {{branch}} is {{count}} commits behind, so AI diffs may compare to stale history. Let Orca keep it up to date automatically. Change this anytime in <settings>Settings › {{setting}}</settings>',
+                  { count: suggestion.behind }
+                )
           }
-        )}{' '}
-        <button
-          type="button"
-          onClick={openSetting}
-          className="cursor-pointer font-medium text-popover-foreground underline underline-offset-2 hover:text-primary"
-        >
-          {translate(
-            'auto.components.sidebar.local.base.ref.suggestion.toast.3d260e1a5d',
-            'Settings › {{value0}}',
-            { value0: keepLocalMainUpToDateTitle }
-          )}
-        </button>
+          values={{
+            branch: suggestion.localBranch,
+            setting: keepLocalMainUpToDateTitle
+          }}
+          components={{
+            settings: (
+              <button
+                type="button"
+                onClick={openSetting}
+                className="cursor-pointer font-medium text-popover-foreground underline underline-offset-2 hover:text-primary"
+              />
+            )
+          }}
+        />
       </p>
       <div className="flex justify-end">
         {/* Sonner’s close button already persists decline; no additional dismiss action is needed. */}

@@ -27,8 +27,8 @@ type BrowserClientHostPlacementPreparationOptions = {
 export async function prepareBrowserClientHostPlacement(
   options: BrowserClientHostPlacementPreparationOptions
 ): Promise<BrowserPageCreationPlacement> {
-  // Avoid a status round trip when local settings already require server placement.
-  if (!options.enabled || options.preference === 'server') {
+  // Avoid a status round trip for an explicit server request; the setting alone defers to the server's ability to stream.
+  if (options.preference === 'server') {
     return SERVER_PLACEMENT
   }
 

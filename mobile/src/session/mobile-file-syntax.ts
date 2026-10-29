@@ -52,7 +52,9 @@ const LANGUAGE_ALIASES: Record<string, string> = {
   yml: 'yaml',
   'cuda-cpp': 'cpp',
   'glimmer-js': 'javascript',
-  'glimmer-ts': 'typescript'
+  'glimmer-ts': 'typescript',
+  // lowlight has no dotenv grammar; ini covers KEY=value and # comments.
+  dotenv: 'ini'
 }
 
 export function resolveMobileSyntaxLanguage(filePath: string, preferredLanguage?: string): string {

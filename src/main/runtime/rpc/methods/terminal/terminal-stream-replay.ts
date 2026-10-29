@@ -88,7 +88,7 @@ export function stripSnapshotBoundaryQuerySuffixes(
 export function appendAckPendingOutput(
   stream: TerminalMultiplexStream,
   chunk: TerminalOutputFrameChunk
-): void {
+): TerminalOutputFrameChunk[] {
   stream.ackPendingOutput.push(chunk)
   stream.ackPendingOutputBytes += chunk.bytes.byteLength
   const trimmed = trimHeadToBudget(
@@ -98,6 +98,7 @@ export function appendAckPendingOutput(
   )
   stream.ackPendingOutputBytes = trimmed.bytes
   stream.ackPendingOutputOverflowed ||= trimmed.overflowed
+  return trimmed.omitted
 }
 
 export function trimPendingOutputToBudget(
@@ -111,16 +112,14 @@ function trimHeadToBudget<T>(
   items: T[],
   bytes: number,
   sizeOf: (item: T) => number
-): { bytes: number; overflowed: boolean } {
+): { bytes: number; overflowed: boolean; omitted: T[] } {
   let omittedCount = 0
   while (bytes > TERMINAL_MULTIPLEX_PENDING_MAX_BYTES && omittedCount < items.length) {
     bytes -= sizeOf(items[omittedCount]!)
     omittedCount += 1
   }
-  if (omittedCount > 0) {
-    items.splice(0, omittedCount)
-  }
-  return { bytes, overflowed: omittedCount > 0 }
+  const omitted = omittedCount > 0 ? items.splice(0, omittedCount) : []
+  return { bytes, overflowed: omittedCount > 0, omitted }
 }
 
 export function trimPendingOutputCoveredBySnapshot(

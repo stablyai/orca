@@ -222,7 +222,8 @@ export class BrowserClientPageRendererBridgeRegistry {
         resolve,
         reject
       }
-      if (signal) {
+      // Mount identity must reach creation's lifecycle claim before canceled guest cleanup.
+      if (signal && request.type !== 'mountPage') {
         pending.onAbort = () =>
           this.rejectPending(request.requestId, 'browser_client_page_renderer_request_aborted')
         signal.addEventListener('abort', pending.onAbort, { once: true })

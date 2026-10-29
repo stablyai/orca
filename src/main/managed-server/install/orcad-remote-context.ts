@@ -3,6 +3,8 @@ import type { SshTarget } from '../../../shared/ssh-types'
 import type { OrcadActivationRecord } from '../activation/orcad-activation-record'
 import { readOrcadActivationRecord } from '../activation/orcad-activation-record-store'
 import { resolveOrcadRuntimeTarget } from '../lifecycle/orcad-runtime-target'
+import { LINUX_LIBC_FIRST_PROBE } from '../../node-runtime/linux-libc-probe'
+import { execCommand } from '../../ssh/remote-exec/remote-exec-command'
 import { prepareWindowsOrcadHost } from '../host-state/orcad-windows-host-preparation'
 import {
   isWslOrcadHostTarget,
@@ -52,21 +54,45 @@ export async function resolveOrcadRemoteContext<Target extends OrcadHostTarget =
   target: Target,
   connection: OrcadHostTransport,
   signal?: AbortSignal,
-  detectedHost?: RemoteHostPlatform
+  detectedHost?: RemoteHostPlatform,
+  /**
+   * Facts the caller already read on this host. `loginHome` serves only login-home placement;
+   * `firstLibcProbeOutput` answers the libc probe's first command, whose fallbacks still run.
+   */
+  known: { loginHome?: string; firstLibcProbeOutput?: string } = {}
 ): Promise<OrcadRemoteContext<Target>> {
   const host = detectedHost ?? (await detectRemoteHostPlatform(connection, { signal }))
   if (!host) {
-    throw new OrcadHostUnsupportedError('Orca’s server doesn’t support this SSH host’s platform.')
+    throw new OrcadHostUnsupportedError(
+      isWslOrcadHostTarget(target)
+        ? 'Orca’s server doesn’t support this WSL distro’s platform. Use an x64 or arm64 Linux distro.'
+        : 'Orca’s server doesn’t support this SSH host’s platform.'
+    )
   }
   const remote = { conn: connection, host, signal }
   const { orcadHome: remoteHome, userDataDir } = await resolveOrcadMachineHome(
     remote,
-    !isWslOrcadHostTarget(target)
+    !isWslOrcadHostTarget(target),
+    known.loginHome
   )
+  let firstLibcProbeOutput = known.firstLibcProbeOutput
   const serverTarget = await resolveOrcadRuntimeTarget({
     conn: connection,
     host,
-    signal
+    signal,
+    ...(firstLibcProbeOutput === undefined
+      ? {}
+      : {
+          exec: async (command: string) => {
+            if (command === LINUX_LIBC_FIRST_PROBE && firstLibcProbeOutput !== undefined) {
+              const output = firstLibcProbeOutput
+              firstLibcProbeOutput = undefined
+              return output
+            }
+            // The fallbacks run exactly as the default exec would.
+            return execCommand(connection, command, { signal })
+          }
+        })
   })
   if (!isWslOrcadHostTarget(target)) {
     rememberSshHostPlatform(target.id, host, serverTarget)
@@ -99,12 +125,13 @@ export async function resolveOrcadRemoteContext<Target extends OrcadHostTarget =
 /** Resolve per-machine state for shared POSIX homes; Windows and WSL retain login-home placement. */
 export async function resolveOrcadMachineHome(
   remote: OrcadRemoteExecTarget,
-  keyByMachine: boolean
+  keyByMachine: boolean,
+  knownLoginHome?: string
 ): Promise<{ loginHome: string; orcadHome: string; userDataDir: string }> {
   const { host } = remote
   if (!keyByMachine || isWindowsRemoteHost(host)) {
     const loginHome = normalizeRemoteHome(
-      await execOrcadRemote(remote, readRemoteHomeCommand(host)),
+      knownLoginHome ?? (await execOrcadRemote(remote, readRemoteHomeCommand(host))),
       host
     )
     if (!validateRemoteHome(loginHome, host)) {

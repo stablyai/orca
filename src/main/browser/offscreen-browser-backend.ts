@@ -127,6 +127,10 @@ export class OffscreenBrowserBackend implements BrowserBackend {
     }
   }
 
+  ownsTab(browserPageId: string): boolean {
+    return this.windowsByPageId.has(browserPageId)
+  }
+
   getWebContentsId(browserPageId: string): number | null {
     const win = this.windowsByPageId.get(browserPageId)
     return win && !win.isDestroyed() ? win.webContents.id : null

@@ -23,6 +23,7 @@ const BUNDLED_MAIN_DEPENDENCIES = new Set([
   '@xterm/addon-serialize',
   'tldts',
   'smol-toml',
+  'yaml',
   'fflate',
   // Linear save confirmation; bundled like orcad so packaging needs no extra node_modules.
   'unified',

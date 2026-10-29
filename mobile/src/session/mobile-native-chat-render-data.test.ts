@@ -41,6 +41,13 @@ describe('mobileNativeChatEmptyState', () => {
     }
   )
 
+  it('invites a first message when the running agent reported a session with no transcript yet', () => {
+    expect(mobileNativeChatEmptyState('awaiting-transcript', 'claude', undefined, true)).toEqual({
+      title: 'Start a chat with Claude',
+      subtitle: 'Ask Claude to inspect code, explain output, or make a change.'
+    })
+  })
+
   it('falls back to "the agent" when the agent is unknown', () => {
     expect(mobileNativeChatEmptyState('ready', null)?.title).toBe('Start a chat with the agent')
   })

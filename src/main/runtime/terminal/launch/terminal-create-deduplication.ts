@@ -158,7 +158,7 @@ export abstract class OrcaRuntimeWithTerminalCreateDeduplication extends OrcaRun
       suppressStartupUpdatePrompt?: boolean
     }
   ): Promise<RuntimeTerminalCreate> {
-    const worktree = await this.resolveWorktreeSelector(worktreeSelector)
+    const worktree = await this.resolveGitWorktreeSelector(worktreeSelector)
     // Repo ids are host-blind; resolve against the worktree owner before quoting its launch (#11163).
     const resolution = resolveWorktreeLaunchHost(this.store?.getRepos() ?? [], worktree)
     if (resolution.kind === 'ambiguous') {

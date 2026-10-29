@@ -37,6 +37,7 @@ import {
 } from '../../../../shared/execution-host'
 import { isMacUserAgent } from '@/components/terminal-pane/pane-helpers'
 import { translate } from '@/i18n/i18n'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { resolveAvailableBrowserSessionHostId } from './browser-session-host-selection'
 import { motionSafeScrollBehavior } from '@/hooks/usePrefersReducedMotion'
 export { getBrowserPaneCombinedSearchEntries }
@@ -59,6 +60,7 @@ export function BrowserPane({
   updateSettings,
   onOpenComputerUse
 }: BrowserPaneProps): React.JSX.Element {
+  const languageRevision = useUiLanguageRevision()
   const searchQuery = useAppStore((s) => s.settingsSearchQuery)
   const browserDefaultUrl = useAppStore((s) => s.browserDefaultUrl)
   const setBrowserDefaultUrl = useAppStore((s) => s.setBrowserDefaultUrl)
@@ -154,6 +156,7 @@ export function BrowserPane({
                   'Browser profiles on this Orca server.'
                 )
         })),
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- translate() reads the UI language implicitly.
     [
       repos,
       sshTargetLabels,
@@ -161,7 +164,8 @@ export function BrowserPane({
       settings,
       runtimeEnvironments,
       runtimeStatusByEnvironmentId,
-      hostLabelOverrides
+      hostLabelOverrides,
+      languageRevision
     ]
   )
   const settingsFocusedHostId = getSettingsFocusedExecutionHostId(settings)
@@ -170,6 +174,12 @@ export function BrowserPane({
     browserSessionHostIdOverride,
     settingsFocusedHostId
   )
+  const activeBrowserSessionProfileId =
+    useAppStore((s) => s.defaultBrowserSessionProfileIdByHostId[selectedBrowserSessionHostId]) ??
+    ((browserSessionHostIdOverride ?? settingsFocusedHostId) === selectedBrowserSessionHostId
+      ? defaultBrowserSessionProfileId
+      : null) ??
+    'default'
   useEffect(() => {
     const requestedHostId = browserSessionHostIdOverride ?? settingsFocusedHostId
     if (selectedBrowserSessionHostId !== requestedHostId) {
@@ -324,9 +334,9 @@ export function BrowserPane({
           nonDefaultProfiles={nonDefaultProfiles}
           detectedBrowsers={detectedBrowsers}
           importState={browserSessionImportState}
-          defaultBrowserSessionProfileId={defaultBrowserSessionProfileId}
           hostOptions={browserSessionHostOptions}
           selectedHostId={selectedBrowserSessionHostId}
+          activeProfileId={activeBrowserSessionProfileId}
           onAddProfile={() => setNewProfileDialogOpen(true)}
           onSelectHost={selectBrowserSessionHost}
           onSelectDefaultProfile={() => setDefaultBrowserSessionProfileId(null)}

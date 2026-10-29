@@ -34,6 +34,29 @@ import { runtimeAdvertisesBrowserClientHosting } from '../../../shared/browser-c
 import { hostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 
 describe('OrcaRuntimeService', () => {
+  it('advertises Google clear only for a live supporting executor, independently of client hosting', async () => {
+    for (const supported of [undefined, false, true]) {
+      let available = true
+      setRuntimeBrowserCommandsFactory((host) => new RuntimeBrowserCommands(host), {
+        headless: true,
+        clientHostingWithoutEngine: true,
+        isAvailable: () => available,
+        supportsGoogleCookieClear: supported === undefined ? undefined : () => supported
+      })
+      const runtime = createRuntime()
+      const capabilities = runtime.getStatus().capabilities ?? []
+      expect(capabilities.includes('browser.google-cookie-clear.v1')).toBe(supported === true)
+      available = false
+      expect(runtime.getStatus().capabilities).not.toContain('browser.google-cookie-clear.v1')
+      expect(runtimeAdvertisesBrowserClientHosting(runtime.getStatus().capabilities)).toBe(true)
+    }
+    const { installElectronBrowserCommands } = await import('../../host/electron-browser-commands')
+    installElectronBrowserCommands()
+    expect(createRuntime().getStatus().capabilities).toContain('browser.google-cookie-clear.v1')
+    setRuntimeBrowserCommandsFactory(null)
+    expect(createRuntime().getStatus().capabilities).not.toContain('browser.google-cookie-clear.v1')
+  })
+
   it('advertises client hosting when its factory implements client page creation', () => {
     const capabilities = createRuntime().getStatus().capabilities
     expect(runtimeAdvertisesBrowserClientHosting(capabilities)).toBe(true)
@@ -78,7 +101,11 @@ describe('OrcaRuntimeService', () => {
 
   it('advertises headless browser capability when an offscreen backend backs a windowless host', () => {
     const runtime = createRuntime()
-    runtime.setOffscreenBrowserBackend({ createTab: vi.fn(), closeTab: vi.fn() })
+    runtime.setOffscreenBrowserBackend({
+      createTab: vi.fn(),
+      closeTab: vi.fn(),
+      ownsTab: () => true
+    })
 
     const capabilities = runtime.getStatus().capabilities
     expect(capabilities).toContain('browser.screencast.v1')
@@ -117,7 +144,11 @@ describe('OrcaRuntimeService', () => {
   })
   it('surfaces live offscreen load failures in headless browser snapshots', () => {
     const runtime = createRuntime()
-    runtime.setOffscreenBrowserBackend({ createTab: vi.fn(), closeTab: vi.fn() })
+    runtime.setOffscreenBrowserBackend({
+      createTab: vi.fn(),
+      closeTab: vi.fn(),
+      ownsTab: () => true
+    })
     runtime.setAgentBrowserBridge({
       tabList: vi.fn(() => ({
         tabs: [
@@ -392,7 +423,11 @@ describe('OrcaRuntimeService', () => {
     const runtime = createRuntime()
     electronMocks.BrowserWindow.fromId.mockReturnValue({ isDestroyed: () => false } as never)
     runtime.attachWindow(TEST_WINDOW_ID)
-    runtime.setOffscreenBrowserBackend({ createTab: vi.fn(), closeTab: vi.fn() })
+    runtime.setOffscreenBrowserBackend({
+      createTab: vi.fn(),
+      closeTab: vi.fn(),
+      ownsTab: () => true
+    })
 
     expect(runtime.getStatus().capabilities).not.toContain('browser.headless.v1')
     // Remote certificate proceed also applies to desktop webviews.
@@ -528,7 +563,7 @@ describe('OrcaRuntimeService', () => {
   it('closes a worktree’s offscreen browser pages when its metadata is removed (leak fix)', () => {
     const runtime = createRuntime()
     const closeTab = vi.fn().mockResolvedValue(undefined)
-    runtime.setOffscreenBrowserBackend({ createTab: vi.fn(), closeTab })
+    runtime.setOffscreenBrowserBackend({ createTab: vi.fn(), closeTab, ownsTab: () => true })
     runtime.setAgentBrowserBridge({
       tabList: vi.fn((worktreeId: string) =>
         worktreeId === TEST_WORKTREE_ID

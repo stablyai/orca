@@ -8,6 +8,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { OptionsFilterCountBadge } from './options-filter-count-badge'
 import {
   useWorkspaceOptionsFilterBadge,
@@ -23,6 +24,7 @@ const SidebarWorkspaceOptionsMenu = React.memo(function SidebarWorkspaceOptionsM
   preserveWorkspaceBoardOpen = false,
   onMenuOpenChange
 }: SidebarWorkspaceOptionsMenuProps) {
+  useUiLanguageRevision()
   const [open, setOpen] = useState(false)
   const { hasAnyFilter, activeFilterCount, activeFilterLabel } = useWorkspaceOptionsFilterBadge()
 

@@ -2,6 +2,7 @@
 
 import type { AgentLaunchPreferences } from '../../../../../../shared/agent-session-host-authority'
 import type { TuiAgent } from '../../../../../../shared/tui-agent'
+import { suggestCreatureNameForPaths } from '../../../../../../shared/worktree-name-suggestion'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { OrchestrationDb } from '../../../../orchestration/db'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
@@ -38,6 +39,40 @@ export async function resolveWorkerWorktreeCreationTarget(args: {
   }
 }
 
+/** No --name gets the creature name a nameless UI create gets, so first-work rename can replace it. */
+export async function resolveWorkerWorktreeName(
+  runtime: {
+    listManagedWorktrees(
+      repoSelector: undefined,
+      limit: number
+    ): Promise<{ worktrees: readonly { path: string }[] }>
+    listRetiredWorktreeNames(repoSelector: string): Promise<{
+      retiredNamesByRepo: Record<string, readonly string[]>
+      retiredNameTiersByRepo: Record<string, number>
+    }>
+  },
+  repoSelector: string,
+  name: string | undefined
+): Promise<{ name: string; nameWasGenerated?: true }> {
+  if (name) {
+    return { name }
+  }
+  // Live names dedupe across projects like the sidebar's; retired names only within this one.
+  const [listed, retired] = await Promise.all([
+    runtime.listManagedWorktrees(undefined, Number.MAX_SAFE_INTEGER),
+    runtime.listRetiredWorktreeNames(repoSelector)
+  ])
+  const generated = suggestCreatureNameForPaths(
+    listed.worktrees.map((worktree) => worktree.path),
+    undefined,
+    {
+      names: Object.values(retired.retiredNamesByRepo).flat(),
+      exhaustedTiers: Math.max(0, ...Object.values(retired.retiredNameTiersByRepo))
+    }
+  )
+  return { name: generated, nameWasGenerated: true }
+}
+
 export async function createWorkerWorktree(args: {
   runtime: OrcaRuntimeService
   db: OrchestrationDb
@@ -69,7 +104,7 @@ export async function createWorkerWorktree(args: {
   db.recordWorkerStage({ dispatchId, stage: 'worktree_creating', effects })
   const created = await runtime.createManagedWorktree({
     repoSelector: target.repoSelector,
-    name: params.name as string,
+    ...(await resolveWorkerWorktreeName(runtime, target.repoSelector, params.name)),
     baseBranch: params.baseBranch,
     displayName: params.displayName,
     ...(params.displayName !== undefined ? { displayNameKind: 'user' as const } : {}),
@@ -101,7 +136,8 @@ export async function createWorkerWorktree(args: {
   effects.push({
     kind: 'worktree',
     action: requestedWorktree === 'new-child' ? 'created_child' : 'created_top_level',
-    id: created.worktree.id
+    id: created.worktree.id,
+    name: created.worktree.displayName
   })
   db.recordWorkerStage({
     dispatchId,

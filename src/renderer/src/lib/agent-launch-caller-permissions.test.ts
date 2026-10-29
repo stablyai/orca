@@ -15,7 +15,7 @@ const store = createLaunchFunnelStore()
 vi.mock('@/store', () => ({ useAppStore: { getState: () => store } }))
 vi.mock('@/lib/new-workspace', () => ({ CLIENT_PLATFORM: 'darwin' }))
 vi.mock('@/lib/connection-context', () => ({ getConnectionIdFromState: () => null }))
-vi.mock('@/lib/native-chat-transcript-readability', () => ({
+vi.mock('../../../shared/native-chat/transcript/native-chat-transcript-readability', () => ({
   isNativeChatTranscriptLocalReadable: () => true
 }))
 vi.mock('@/runtime/web-runtime-session-environment', () => ({

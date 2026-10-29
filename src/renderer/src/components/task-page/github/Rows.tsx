@@ -82,7 +82,23 @@ export function TaskPageGitHubRows({
             <span
               // Avoid a pill fill that would stack with the row hover tint.
               className="inline-flex items-center gap-1 rounded-md border border-border/40 px-1.5 py-0.5 text-muted-foreground"
-              aria-label={`${item.type === 'pr' ? (isTaskPageGitHubDraftPR(item) ? 'Draft pull request' : 'Pull request') : 'Issue'} #${item.number}`}
+              aria-label={
+                item.type === 'pr'
+                  ? isTaskPageGitHubDraftPR(item)
+                    ? translate(
+                        'auto.components.TaskPage.draftPullRequestNumber',
+                        'Draft pull request #{{number}}',
+                        { number: item.number }
+                      )
+                    : translate(
+                        'auto.components.TaskPage.pullRequestNumber',
+                        'Pull request #{{number}}',
+                        { number: item.number }
+                      )
+                  : translate('auto.components.TaskPage.issueNumber', 'Issue #{{number}}', {
+                      number: item.number
+                    })
+              }
             >
               {item.type === 'pr' ? (
                 isTaskPageGitHubDraftPR(item) ? (

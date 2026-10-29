@@ -98,7 +98,15 @@ export default function MermaidBlock({
         if (!cancelled) {
           setRendered({
             content,
-            result: { error: err instanceof Error ? err.message : 'Invalid mermaid syntax' }
+            result: {
+              error:
+                err instanceof Error
+                  ? err.message
+                  : translate(
+                      'auto.components.editor.MermaidBlock.invalidSyntax',
+                      'Invalid mermaid syntax'
+                    )
+            }
           })
           // Mermaid leaves an error element in the DOM on failure — clean it up.
           const errorEl = document.getElementById(`d${`mermaid-${id}`}`)

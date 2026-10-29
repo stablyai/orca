@@ -53,6 +53,9 @@ export function useMobileStructuredQueuedMessageControls(args: {
   chatActive: boolean
   enabled: boolean
   editCapable: boolean | null
+  imagesCapable?: boolean
+  skillsCapable?: boolean
+  composerScopeKey?: string | null
   reorderCapable?: boolean
   agentName?: string
   journalItems?: readonly AgentJournalRenderItem[]
@@ -63,6 +66,7 @@ export function useMobileStructuredQueuedMessageControls(args: {
   mutate: MobileStructuredAgentMutate
   // Without a live composer or a successful copy, Edit must refuse.
   appendComposerText: ((text: string) => boolean) | undefined
+  onQueuedEditNotice?: (message: string) => void
   onSendError: (message: string) => void
   onActionResolved?: () => void
 }): MobileStructuredQueuedMessageControls {

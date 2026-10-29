@@ -18,7 +18,11 @@ import { ClaudePromptRegistry } from '../claude-prompt-registry'
 import { adoptClaudeStructuredSpawnOptions } from '../claude-structured-spawn-options'
 import { observeClaudeExecutionModel } from '../claude-structured-execution-observations'
 import { observeClaudeFastModeFacts } from '../claude-structured-session-options'
-import { createClaudeSessionPublication } from './claude-structured-session-publication'
+import {
+  claudeSessionInitialization,
+  createClaudeSessionPublication,
+  reportClaudeOptions
+} from './claude-structured-session-publication'
 import * as sessionState from './claude-structured-session-state'
 import { resolveClaudeAcquisitionError } from '../claude-structured-session-close'
 import { withObservedProviderExit } from '../../native-chat/agent-session-wire/structured-agent-session-failure-text'
@@ -39,7 +43,10 @@ export async function acquireClaudeSession({
   acquisitions,
   exits,
   callbacks
-}: sessionState.ClaudeSessionAcquisitionInput): Promise<AgentSessionAcquisition> {
+}: Omit<
+  Parameters<typeof resolveClaudeAcquisitionLaunch>[0],
+  'previous' | 'attempt'
+>): Promise<AgentSessionAcquisition> {
   const sessionId = input.identity.sessionId
   const prompts = new ClaudePromptRegistry()
   const { previous, attempt } = acquisitions.start(sessionId, prompts)
@@ -97,6 +104,9 @@ export async function acquireClaudeSession({
     if (liveSession) {
       liveSession.leafUuid = observedLeafUuid
       observeClaudeFastModeFacts(liveSession, message)
+      if (message.type === 'result' && sessions.get(sessionId) === liveSession) {
+        reportClaudeOptions(liveSession, sessions, input, deps.requestTimeoutMs, attempt, callbacks)
+      }
       if (claudeSessionStateEndsTurn(message) && sessions.get(sessionId) === liveSession) {
         settleClaudeTurnEndWaiters(liveSession)
       }
@@ -257,19 +267,9 @@ export async function acquireClaudeSession({
       process,
       acquisitionGeneration: sessionState.mintClaudeAcquisitionGeneration(deps),
       options: launch.savedOptions.options,
-      initialization: {
-        proof: initProof,
-        account: launch.account,
-        resumesTranscript: launch.resumesTranscript,
-        claudeConfigDir: launch.claudeConfigDir,
-        cwd: launch.cwd,
-        history: {
-          leafUuid: launch.resumeLeafUuid,
-          covered: !launch.resumesTranscript || launch.resumeLeafUuid === null,
-          contextActivity
-        },
-        onLateRefusal: (error) => callbacks.handleExit(sessionId, attempt, error)
-      },
+      initialization: claudeSessionInitialization(launch, initProof, contextActivity, (error) =>
+        callbacks.handleExit(sessionId, attempt, error)
+      ),
       ...(deps.mintLinkId ? { linkId: deps.mintLinkId() } : {}),
       observedAt: deps.now?.() ?? Date.now()
     })

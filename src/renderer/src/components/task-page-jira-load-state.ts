@@ -1,5 +1,6 @@
 import type { JiraIssue } from '../../../shared/jira/jira-types'
 import { parseJiraStatusError } from '../../../shared/jira/jira-status-error'
+import { translate } from '@/i18n/i18n'
 
 export type TaskPageJiraLoadError = {
   title: string
@@ -12,7 +13,12 @@ export type TaskPageJiraLoadFailureState = {
 }
 
 function getErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : 'Failed to load Jira issues.'
+  return error instanceof Error
+    ? error.message
+    : translate(
+        'auto.components.taskPageJiraLoadState.failedToLoadIssues',
+        'Failed to load Jira issues.'
+      )
 }
 
 function inferErrorCode(message: string): number | null {
@@ -33,24 +39,45 @@ function inferErrorCode(message: string): number | null {
 
 function getIssueSearchErrorSummary(message: string, code: number | null): string {
   if (code === 401) {
-    return 'Jira authentication failed. Reconnect Jira in Settings, then try again.'
+    return translate(
+      'auto.components.taskPageJiraLoadState.authFailed',
+      'Jira authentication failed. Reconnect Jira in Settings, then try again.'
+    )
   }
   if (code === 403) {
-    return 'Jira denied access to this issue search. Check project permissions or try a different JQL query.'
+    return translate(
+      'auto.components.taskPageJiraLoadState.accessDenied',
+      'Jira denied access to this issue search. Check project permissions or try a different JQL query.'
+    )
   }
   if (code === 429) {
-    return 'Jira rate-limited this issue search. Try again in a moment.'
+    return translate(
+      'auto.components.taskPageJiraLoadState.rateLimited',
+      'Jira rate-limited this issue search. Try again in a moment.'
+    )
   }
   if (code !== null && code >= 500) {
-    return 'Jira had a server error while loading issues. Try again in a moment.'
+    return translate(
+      'auto.components.taskPageJiraLoadState.serverError',
+      'Jira had a server error while loading issues. Try again in a moment.'
+    )
   }
   if (/\bjql\b|\bsyntax\b/i.test(message)) {
-    return "Jira couldn't run this JQL query. Check the syntax and try again."
+    return translate(
+      'auto.components.taskPageJiraLoadState.jqlFailed',
+      "Jira couldn't run this JQL query. Check the syntax and try again."
+    )
   }
   if (/\bnetwork\b|\bfetch failed\b|\btimed? ?out\b|\beconn/i.test(message)) {
-    return "Couldn't reach Jira. Check your connection and try again."
+    return translate(
+      'auto.components.taskPageJiraLoadState.unreachable',
+      "Couldn't reach Jira. Check your connection and try again."
+    )
   }
-  return "Couldn't load Jira issues. Try again in a moment."
+  return translate(
+    'auto.components.taskPageJiraLoadState.loadFailed',
+    "Couldn't load Jira issues. Try again in a moment."
+  )
 }
 
 /** Jira's reason when it rejected the request as malformed (HTTP 400); null for other failures. */
@@ -67,7 +94,14 @@ export function createTaskPageJiraLoadFailureState(error: unknown): TaskPageJira
   return {
     issues: [],
     error: {
-      title: code === null ? summary : `Error ${code}: ${summary}`,
+      title:
+        code === null
+          ? summary
+          : translate(
+              'auto.components.taskPageJiraLoadState.errorWithCode',
+              'Error {{code}}: {{summary}}',
+              { code, summary }
+            ),
       details: (status?.details ?? message).trim() || null
     }
   }

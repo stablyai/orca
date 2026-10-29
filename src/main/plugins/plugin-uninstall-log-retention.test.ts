@@ -102,8 +102,12 @@ it.each(['panel', 'event'] as const)(
         : { events: [{ on: 'worktree.created' }] }
     const key = await install(`late-${kind}`, contributes)
     const held = uninstallGate()
+    if (kind === 'event') {
+      // Why: a running worker takes events without re-hashing; a stopped one verifies at spawn.
+      await service.deactivatePlugin(key)
+    }
     const verify = vi
-      .spyOn(uninstallContentVerifier(service), 'verify')
+      .spyOn(uninstallContentVerifier(service), kind === 'panel' ? 'verify' : 'verifyNow')
       .mockImplementationOnce(() => held.promise)
     const panelResult = kind === 'panel' ? service.panels.readEntry(key, 'panel') : null
     if (kind === 'event') {
@@ -113,7 +117,7 @@ it.each(['panel', 'event'] as const)(
         branch: 'main'
       })
     }
-    expect(verify).toHaveBeenCalledOnce()
+    await vi.waitFor(() => expect(verify).toHaveBeenCalledOnce())
     verify.mockRestore()
     try {
       await removeThroughPluginIpc(key)

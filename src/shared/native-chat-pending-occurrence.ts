@@ -2,7 +2,7 @@ import { nativeChatContinuationSendText } from './native-chat-continuation-send'
 import {
   normalizeNativeChatUserText,
   normalizedNativeChatUserMessageText
-} from './native-chat-image-transcript-markers'
+} from './native-chat/transcript/native-chat-image-transcript-markers'
 import { isImageRefBlock, type NativeChatMessage } from './native-chat-types'
 
 export type NativeChatPendingOccurrence = {

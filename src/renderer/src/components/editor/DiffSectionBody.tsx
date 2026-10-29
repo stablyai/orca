@@ -1,3 +1,4 @@
+import { DiffTooLargeNotice } from './DiffTooLargeNotice'
 import { useEffect, useLayoutEffect, useRef } from 'react'
 import type { editor } from 'monaco-editor'
 import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
@@ -152,7 +153,9 @@ export function DiffSectionBody({
           </Button>
         </div>
       ) : section.diffResult?.kind === 'binary' ? (
-        section.diffResult.isImage ? (
+        section.diffResult.tooLarge ? (
+          <DiffTooLargeNotice />
+        ) : section.diffResult.isImage ? (
           <ImageDiffViewer
             originalContent={section.diffResult.originalContent}
             modifiedContent={section.diffResult.modifiedContent}

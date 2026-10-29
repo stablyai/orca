@@ -127,11 +127,17 @@ function SwitchPromptDialog({ prompt }: { prompt: ClaudeAccountSwitchPrompt }): 
             <RefreshCw className="size-3.5" aria-hidden="true" />
             {chosen.length <= 1
               ? translate('accounts.claude.switchSessions.restartOne', 'Restart session')
-              : translate(
-                  'accounts.claude.switchSessions.restartOther',
-                  'Restart {{count}} sessions',
-                  { count: chosen.length }
-                )}
+              : chosen.length === 1
+                ? translate(
+                    'accounts.claude.switchSessions.restartCount_one',
+                    'Restart {{count}} session',
+                    { count: chosen.length }
+                  )
+                : translate(
+                    'accounts.claude.switchSessions.restartCount_other',
+                    'Restart {{count}} sessions',
+                    { count: chosen.length }
+                  )}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -146,12 +152,12 @@ function promptDescription(prompt: ClaudeAccountSwitchPrompt): string {
     const count = elsewhere.length + cantMove.length
     return count === 1
       ? translate(
-          'accounts.claude.switchSessions.reviewBodyOne',
-          "1 other Claude session wasn't moved to {{next}}.",
-          { next }
+          'accounts.claude.switchSessions.reviewBody_one',
+          "{{count}} other Claude session wasn't moved to {{next}}.",
+          { count, next }
         )
       : translate(
-          'accounts.claude.switchSessions.reviewBodyOther',
+          'accounts.claude.switchSessions.reviewBody_other',
           "{{count}} other Claude sessions weren't moved to {{next}}.",
           { count, next }
         )
@@ -159,12 +165,12 @@ function promptDescription(prompt: ClaudeAccountSwitchPrompt): string {
   const accounts = { count: onAccount.length, previous: prompt.previousAccountLabel, next }
   return onAccount.length === 1
     ? translate(
-        'accounts.claude.switchSessions.bodyOne',
-        '1 Claude session is still running on {{previous}}. Restarting continues the conversation on {{next}}. Busy sessions wait for idle before restarting.',
+        'accounts.claude.switchSessions.body_one',
+        '{{count}} Claude session is still running on {{previous}}. Restarting continues the conversation on {{next}}. Busy sessions wait for idle before restarting.',
         accounts
       )
     : translate(
-        'accounts.claude.switchSessions.bodyOther',
+        'accounts.claude.switchSessions.body_other',
         '{{count}} Claude sessions are still running on {{previous}}. Restarting continues each conversation on {{next}}. Busy sessions wait for idle before restarting.',
         accounts
       )

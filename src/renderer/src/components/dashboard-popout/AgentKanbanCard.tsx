@@ -86,6 +86,7 @@ function sameCard(a: DashboardCard, b: DashboardCard): boolean {
     a.bucket === b.bucket &&
     a.dotState === b.dotState &&
     a.workingMode === b.workingMode &&
+    a.verdict === b.verdict &&
     a.task === b.task &&
     a.lastUserMessage === b.lastUserMessage &&
     a.lastAgentMessage === b.lastAgentMessage &&

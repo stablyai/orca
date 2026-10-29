@@ -142,6 +142,17 @@ export function isStructuredAgentSessionComposerCommand(
   )
 }
 
+export function prepareStructuredAgentSessionComposerCommand(
+  agent: AgentType,
+  reported?: readonly AgentSessionSlashCommand[]
+): (text: string) => boolean {
+  const names = new Set(structuredRecognizedCommands(agent, reported).map((entry) => entry.name))
+  return (text) => {
+    const command = commandParts(text)
+    return command !== null && names.has(command.name)
+  }
+}
+
 /** `/clear` or `/compact` alone: a conversation command with nothing after it. */
 export function isLoneStructuredAgentSessionConversationCommand(text: string): boolean {
   const command = commandParts(text.trim())
@@ -229,13 +240,6 @@ export async function dispatchStructuredAgentSessionComposerCommand(
     return unavailable(command.name)
   }
   const descriptor = controller.snapshot.find((entry) => entry.id === command.name)
-  if (!descriptor || descriptor.kind.type !== 'select') {
-    return {
-      handled: true,
-      accepted: true,
-      error: `${command.name === 'model' ? 'Models' : 'Reasoning effort'} are unavailable for this chat session.`
-    }
-  }
   if (!command.argument) {
     const opened = await controller.invokeAction(command.name)
     return {
@@ -245,20 +249,18 @@ export async function dispatchStructuredAgentSessionComposerCommand(
     }
   }
   const normalized = command.argument.toLowerCase()
-  const choice = descriptor.kind.choices.find(
-    (entry) => entry.value.toLowerCase() === normalized || entry.label.toLowerCase() === normalized
-  )
-  if (!choice) {
-    return {
-      handled: true,
-      accepted: false,
-      error: `${command.argument} is not an available ${command.name} for this chat session.`
-    }
-  }
-  const applied = await controller.setOption(command.name, choice.value)
+  const choice =
+    descriptor?.kind.type === 'select'
+      ? descriptor.kind.choices.find(
+          (entry) =>
+            entry.value.toLowerCase() === normalized || entry.label.toLowerCase() === normalized
+        )
+      : undefined
+  const value = choice?.value ?? command.argument
+  const applied = await controller.setOption(command.name, value)
   return {
     handled: true,
     accepted: applied,
-    error: applied ? null : `Could not apply ${command.name} ${choice.label}.`
+    error: applied ? null : `Could not apply ${command.name} ${choice?.label ?? value}.`
   }
 }

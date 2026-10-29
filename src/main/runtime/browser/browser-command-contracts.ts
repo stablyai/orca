@@ -24,8 +24,9 @@ export type ResolvedBrowserPageWebContents = {
 }
 
 export type RuntimeBrowserCommandHost = {
+  getRuntimeId(): string
   getAgentBrowserBridge(): AgentBrowserBridge | null
-  resolveWorktreeSelector(selector: string): Promise<{
+  resolveWorkspaceSelector(selector: string): Promise<{
     id: string
     repoId?: string
     hostId?: ExecutionHostId

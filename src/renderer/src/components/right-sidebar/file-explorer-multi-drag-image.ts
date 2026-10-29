@@ -1,4 +1,5 @@
 import { basename } from '@/lib/path'
+import { translate } from '@/i18n/i18n'
 
 export function createMultiSelectDragGhost(paths: string[], rowW: number): HTMLDivElement {
   const MAX_SHOWN = 5
@@ -33,7 +34,26 @@ export function createMultiSelectDragGhost(paths: string[], rowW: number): HTMLD
     ghost.appendChild(makeRow(basename(p)))
   }
   if (paths.length > MAX_SHOWN) {
-    ghost.appendChild(makeRow(`+${paths.length - MAX_SHOWN} more`, true))
+    ghost.appendChild(
+      makeRow(
+        paths.length - MAX_SHOWN === 1
+          ? translate(
+              'auto.components.right.sidebar.fileExplorerMultiDrag.moreItems_one',
+              '+{{count}} more',
+              {
+                count: paths.length - MAX_SHOWN
+              }
+            )
+          : translate(
+              'auto.components.right.sidebar.fileExplorerMultiDrag.moreItems_other',
+              '+{{count}} more',
+              {
+                count: paths.length - MAX_SHOWN
+              }
+            ),
+        true
+      )
+    )
   }
 
   return ghost

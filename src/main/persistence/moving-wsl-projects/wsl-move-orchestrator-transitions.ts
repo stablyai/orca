@@ -2,10 +2,11 @@
  * The orchestrator's pure state machine: which trigger may start a distro's move, and what each
  * preview, move result, distro check (R38) or user action leaves the distro in.
  */
-import type {
-  WslMovePreview,
-  WslMoveRefusalCode,
-  WslMoveResult
+import {
+  WSL_MOVE_FINISH_PENDING_DETAIL,
+  type WslMovePreview,
+  type WslMoveRefusalCode,
+  type WslMoveResult
 } from '../../../shared/wsl-move/wsl-move-driver-types'
 import type {
   WslMoveOrchestratorParkReason,
@@ -13,6 +14,7 @@ import type {
   WslMoveOrchestratorState,
   WslMoveOrchestratorTrigger
 } from '../../../shared/wsl-move/wsl-move-orchestrator-types'
+import { parkedMayStart } from './wsl-move-orchestrator-park'
 
 /** Delay after failed automatic attempt n; the attempt after the last delay parks if it fails. */
 export const WSL_MOVE_ORCHESTRATOR_BACKOFF_MS = [
@@ -65,7 +67,9 @@ function refusalOutcome(
     case 'wsl_move_nothing_new':
     case 'wsl_move_unavailable':
       return { next: 'idle' }
+    // Retried on the next trigger; an undo that releases parks the distro as declined.
     case 'wsl_move_already_running':
+    case 'wsl_move_undo_running':
       return { next: 'stay' }
     case 'wsl_move_terminals_blocked':
       return { next: 'deferred', blockers: 'blockers' in preview ? (preview.blockers ?? []) : [] }
@@ -81,11 +85,14 @@ function refusalOutcome(
         next: 'transient',
         reason: 'detail' in preview && preview.detail !== undefined ? IN_FLIGHT_UNVERIFIABLE : code
       }
+    case 'wsl_move_finished_earlier_move':
+      return 'detail' in preview && preview.detail === WSL_MOVE_FINISH_PENDING_DETAIL
+        ? { next: 'parked', reason: 'finish-pending' }
+        : { next: 'transient', reason: code }
     case 'wsl_move_host_update_required':
     case 'wsl_move_host_unavailable':
     case 'wsl_move_pause_failed':
     case 'wsl_move_scope_changed':
-    case 'wsl_move_finished_earlier_move':
       return { next: 'transient', reason: code }
   }
 }
@@ -113,27 +120,6 @@ export function newWslMoveOrchestratorRecord(
   now: number
 ): WslMoveOrchestratorRecord {
   return { distro, state: { kind: 'pending' }, attempts: 0, appVersion, updatedAt: now }
-}
-
-function parkedMayStart(
-  state: Extract<WslMoveOrchestratorState, { kind: 'parked' }>,
-  newBuild: boolean,
-  now: number
-): boolean {
-  switch (state.reason) {
-    case 'not-now':
-      return state.until !== undefined && now >= state.until
-    // A new build may carry the fix for whatever kept failing, or the host's update.
-    case 'attempts-exhausted':
-    case 'host-update-required':
-    case 'stuck':
-      return newBuild
-    case 'export-incomplete':
-    case 'manifest-too-large':
-    case 'declined':
-    case 'removal-pending':
-      return false
-  }
 }
 
 /** Whether a trigger may preview the distro's move now. Never true while one runs. */

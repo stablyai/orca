@@ -17,11 +17,56 @@ const INTENSITY_CLASS: Record<UsageOverviewDailyPoint['intensity'], string> = {
   4: 'border-border/60 bg-foreground/75'
 }
 
-function translateActivityLabel(label: UsageProviderOverview['activityLabel']): string {
-  if (label === 'turns') {
-    return translate('auto.components.stats.usage.overview.sections.c8f3a2d1e0b4', 'turns')
+function sessionCountLabel(sessions: number): string {
+  const values = { count: sessions, formatted: sessions.toLocaleString() }
+  return sessions === 1
+    ? translate(
+        'auto.components.stats.usage.overview.sections.sessionCount_one',
+        '{{formatted}} session',
+        values
+      )
+    : translate(
+        'auto.components.stats.usage.overview.sections.sessionCount_other',
+        '{{formatted}} sessions',
+        values
+      )
+}
+
+function activityCountLabel(provider: UsageProviderOverview): string {
+  const count = provider.activityCount
+  const values = { count, formatted: count.toLocaleString() }
+  if (provider.activityLabel === 'turns') {
+    return count === 1
+      ? translate(
+          'auto.components.stats.usage.overview.sections.turnCount_one',
+          '{{formatted}} turn',
+          values
+        )
+      : translate(
+          'auto.components.stats.usage.overview.sections.turnCount_other',
+          '{{formatted}} turns',
+          values
+        )
   }
-  return translate('auto.components.stats.usage.overview.sections.d9a4b3e2f1c5', 'events')
+  return count === 1
+    ? translate(
+        'auto.components.stats.usage.overview.sections.eventCount_one',
+        '{{formatted}} event',
+        values
+      )
+    : translate(
+        'auto.components.stats.usage.overview.sections.eventCount_other',
+        '{{formatted}} events',
+        values
+      )
+}
+
+function providerSessionsSummary(provider: UsageProviderOverview): string {
+  return translate(
+    'auto.components.stats.usage.overview.sections.sessionsAndActivity',
+    '{{sessions}} - {{activity}}',
+    { sessions: sessionCountLabel(provider.sessions), activity: activityCountLabel(provider) }
+  )
 }
 
 function formatDayLabel(day: string): string {
@@ -235,20 +280,15 @@ export function ProviderUsageRow({
 
       <div className="mt-3 grid gap-2 text-xs text-muted-foreground sm:grid-cols-3">
         <span>
-          {formatUsageTokens(provider.totalTokens)}{' '}
-          {translate('auto.components.stats.usage.overview.sections.6762f6a682', 'tokens')}
-        </span>
-        <span>
           {translate(
-            'auto.components.stats.usage.overview.sections.a7f937fb29',
-            '{{value0}} sessions - {{value1}} {{value2}}',
+            'auto.components.stats.usage.overview.sections.tokenTotal',
+            '{{tokens}} tokens',
             {
-              value0: provider.sessions.toLocaleString(),
-              value1: provider.activityCount.toLocaleString(),
-              value2: translateActivityLabel(provider.activityLabel)
+              tokens: formatUsageTokens(provider.totalTokens)
             }
           )}
         </span>
+        <span>{providerSessionsSummary(provider)}</span>
         <span>{formatUsageCost(provider.estimatedCostUsd)}</span>
       </div>
       <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-muted">

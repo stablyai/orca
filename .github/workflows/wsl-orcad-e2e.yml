@@ -151,8 +151,8 @@ jobs:
     name: WSL2 distro (${{ matrix.family }})
     needs: [template, container-rootfs]
     runs-on: windows-2025
-    # Healthy runs take 4-11 min; a runner frozen during WSL2 setup is only reaped here (retried by wsl-orcad-e2e-frozen-runner-retry.yml).
-    timeout-minutes: 30
+    # Healthy runs take 4-11 min plus the phase 3 restart baseline; a runner frozen during WSL2 setup is only reaped here (retried by wsl-orcad-e2e-frozen-runner-retry.yml).
+    timeout-minutes: 40
     strategy:
       fail-fast: false
       matrix:
@@ -355,8 +355,8 @@ jobs:
           if ($global:LASTEXITCODE -ne 0) { throw "WSL move real pause failed: $global:LASTEXITCODE" }
           wsl.exe --terminate $env:PLAIN_DISTRO
       # R40: with no terminal left, orcad idle-exits and the holder lets the distro stop on its own.
-      - name: 'Phase 3: idle orcad releases the distro'
-        timeout-minutes: 15
+      - name: 'Phase 3: idle orcad releases the distro; distro restart to first output baseline'
+        timeout-minutes: 30
         env:
           ORCA_RUN_WSL_ORCAD_LANE: '1'
           ORCA_WSL_ORCAD_LANE_PHASE: idle-release

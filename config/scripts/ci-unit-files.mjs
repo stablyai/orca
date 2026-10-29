@@ -43,6 +43,7 @@ export const UNIT_EXCLUDE = [
   'src/shared/posix-command-path-lookup.test.ts',
   'tests/e2e/relay-region-compatibility.unit.test.ts',
   'tests/e2e/relay-region-correction.unit.test.ts',
+  'src/main/browser/cookies/browser-google-cookie-clear.electron.test.ts',
   // Electron probes with in-process deadlines; the package job runs them serially.
   'src/main/browser/popup-origin-chrome.electron.test.ts',
   'src/main/browser/browser-link-materialization.electron.test.ts',

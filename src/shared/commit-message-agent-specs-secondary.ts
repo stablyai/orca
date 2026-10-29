@@ -100,7 +100,8 @@ export function buildSecondaryCommitMessageAgentSpecs({
           // Kimi requires provider/model IDs; bare names fail with LLM not set.
           id: 'kimi-code/kimi-for-coding',
           label: 'Kimi K2.6'
-        }
+        },
+        { id: 'kimi-code/k3', label: 'Kimi K3' }
       ],
       defaultModelId: 'default'
     },

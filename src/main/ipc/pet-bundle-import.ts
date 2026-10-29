@@ -1,3 +1,4 @@
+import { translateMain } from '../i18n/main-i18n'
 import { BrowserWindow, dialog } from 'electron'
 import { mkdir, readFile, rename, rm, stat } from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
@@ -18,7 +19,7 @@ export async function importPetBundle(
     BrowserWindow.fromWebContents(event.sender) ?? BrowserWindow.getFocusedWindow()
   // Finder may select pet.json inside the bundle; accept it and use its parent.
   const options: Electron.OpenDialogOptions = {
-    title: 'Pick a .codex-pet bundle',
+    title: translateMain('native.dialog.importPetBundle', 'Pick a .codex-pet bundle'),
     properties: ['openFile', 'openDirectory', 'treatPackageAsDirectory']
   }
   const result = senderWindow

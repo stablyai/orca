@@ -60,22 +60,18 @@ export function AddRepoNestedImportStep({
     setPendingImportMode('folder')
     onOpenAsFolder()
   }
-  const repoCountLabel =
+  const foundSentence =
     scan.repos.length === 1
-      ? translate('auto.components.sidebar.AddRepoNestedImportStep.8401a7a0d0', '1 repository')
-      : translate(
-          'auto.components.sidebar.AddRepoNestedImportStep.d4f1df62ef',
-          '{{value0}} repositories',
-          { value0: scan.repos.length }
+      ? translate(
+          'auto.components.sidebar.AddRepoNestedImportStep.foundRepositories_one',
+          'Found {{count}} repository in {{path}}.',
+          { count: scan.repos.length, path: scan.selectedPath }
         )
-  const foundSentence = translate(
-    'auto.components.sidebar.AddRepoNestedImportStep.b4263a2ac4',
-    'Found {{value0}} in {{value1}}.',
-    {
-      value0: repoCountLabel,
-      value1: scan.selectedPath
-    }
-  )
+      : translate(
+          'auto.components.sidebar.AddRepoNestedImportStep.foundRepositories_other',
+          'Found {{count}} repositories in {{path}}.',
+          { count: scan.repos.length, path: scan.selectedPath }
+        )
 
   return (
     <>

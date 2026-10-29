@@ -41,9 +41,11 @@ import { useFileExplorerNameFilter } from './use-file-explorer-name-filter'
 import { useFileExplorerTreePaneState } from './use-file-explorer-tree-pane-state'
 import { useWslHostUnavailableReason } from '../terminal-pane/use-wsl-host-unavailable-reason'
 import { translate } from '@/i18n/i18n'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 
 /** Coordinates scoped navigation while retaining the actual worktree root for file operations and runtime routing. */
 function FileExplorerFiles(): React.JSX.Element {
+  useUiLanguageRevision()
   const explorerView = useAppStore((s) => s.rightSidebarExplorerView)
   const setRightSidebarExplorerView = useAppStore((s) => s.setRightSidebarExplorerView)
   const searchPanel = useFileSearchPanel(explorerView)

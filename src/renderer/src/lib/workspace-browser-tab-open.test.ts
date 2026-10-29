@@ -574,31 +574,39 @@ describe('openWorkspaceBrowserTab', () => {
     )
   })
 
-  it('opens an asserted runtime link through desktop hosting without screencast support', async () => {
-    mocks.state = {
-      ...ownerState(toRuntimeExecutionHostId('hub-a')),
-      runtimeStatusByEnvironmentId: new Map([
-        ['hub-a', { status: { capabilities: [...BROWSER_CLIENT_HOSTING_RUNTIME_CAPABILITIES] } }]
-      ]),
-      createBrowserTab: vi.fn()
+  it.each([
+    ['desktop hosting is on', true],
+    ['the setting asks for server rendering', false]
+  ])(
+    'opens an asserted runtime link through desktop hosting without screencast support when %s',
+    async (_label, enabled) => {
+      mocks.state = {
+        ...ownerState(toRuntimeExecutionHostId('hub-a')),
+        settings: { browserClientHostedRemoteEnabled: enabled },
+        runtimeStatusByEnvironmentId: new Map([
+          ['hub-a', { status: { capabilities: [...BROWSER_CLIENT_HOSTING_RUNTIME_CAPABILITIES] } }]
+        ]),
+        createBrowserTab: vi.fn()
+      }
+
+      expect(canOpenWorkspaceBrowserTabOnRuntime(mocks.getState(), WORKSPACE_ID, 'hub-a')).toBe(
+        true
+      )
+      await openWorkspaceBrowserTab({
+        workspaceId: WORKSPACE_ID,
+        url: 'http://localhost:3000/',
+        intent: { kind: 'url' },
+        expectedRuntimeEnvironmentId: 'hub-a'
+      })
+
+      expect(mocks.createRemote).toHaveBeenCalledWith(
+        expect.objectContaining({ environmentId: 'hub-a', waitForRegistration: true })
+      )
+      expect(mocks.state.createBrowserTab).not.toHaveBeenCalled()
     }
-
-    expect(canOpenWorkspaceBrowserTabOnRuntime(mocks.getState(), WORKSPACE_ID, 'hub-a')).toBe(true)
-    await openWorkspaceBrowserTab({
-      workspaceId: WORKSPACE_ID,
-      url: 'http://localhost:3000/',
-      intent: { kind: 'url' },
-      expectedRuntimeEnvironmentId: 'hub-a'
-    })
-
-    expect(mocks.createRemote).toHaveBeenCalledWith(
-      expect.objectContaining({ environmentId: 'hub-a', waitForRegistration: true })
-    )
-    expect(mocks.state.createBrowserTab).not.toHaveBeenCalled()
-  })
+  )
 
   it.each([
-    ['desktop hosting is disabled', [...BROWSER_CLIENT_HOSTING_RUNTIME_CAPABILITIES], false, false],
     ['an older peer lacks capabilities', undefined, true, false],
     [
       'a peer lacks a hosting capability',

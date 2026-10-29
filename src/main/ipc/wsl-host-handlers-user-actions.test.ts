@@ -83,7 +83,7 @@ describe('WSL host IPC: the user Add and Remove (D3a)', () => {
     expect(heard).toEqual([{ kind: 'added', distro: 'Ubuntu' }])
   })
 
-  it('refuses an Add in serve-only, keeping saved hosts usable', async () => {
+  it('refuses an Add in serve-only and says so in its capability, keeping saved hosts usable', async () => {
     vi.stubEnv('ORCA_INTERNAL_WSL_HOSTS', undefined)
     register()
 
@@ -92,6 +92,9 @@ describe('WSL host IPC: the user Add and Remove (D3a)', () => {
       kind: 'disabled'
     })
     expect(service.add).not.toHaveBeenCalled()
+    expect(await handlers.get('wslHosts:getCapability')?.({})).toMatchObject({
+      acceptsNewWork: false
+    })
     await handlers.get('wslHosts:remove')?.({}, { environmentId: 'wsl:Ubuntu' })
     expect(service.remove).toHaveBeenCalledWith('wsl:Ubuntu')
   })

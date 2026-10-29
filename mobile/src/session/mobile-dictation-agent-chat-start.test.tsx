@@ -25,7 +25,9 @@ vi.mock('@orca/expo-two-way-audio', () => ({
     return true
   },
   requestMicrophonePermissionsAsync: async () => ({ granted: true }),
-  tearDown: () => {},
+  tearDown: () => {
+    device.recording = false
+  },
   toggleRecording: (recording: boolean) => {
     device.recording = recording
     return true
@@ -34,6 +36,9 @@ vi.mock('@orca/expo-two-way-audio', () => ({
 vi.mock('expo-keep-awake', () => ({
   activateKeepAwakeAsync: async () => {},
   deactivateKeepAwake: async () => {}
+}))
+vi.mock('../platform/clipboard', () => ({
+  useClipboardWriter: () => ({ writeText: async () => {} })
 }))
 vi.mock('expo-router', () => ({ useFocusEffect: () => {} }))
 vi.mock('../platform/haptics', () => ({ triggerError: () => {} }))
@@ -105,6 +110,7 @@ type SessionScope = Pick<
   | 'activeHandleRef'
   | 'flushPendingLiveInputBeforeExternalSend'
   | 'canSend'
+  | 'canCompose'
   | 'liveInputEnabled'
   | 'showToast'
   | 'resetLiveInputFocus'
@@ -138,6 +144,11 @@ let terminalText = ''
 function Probe({ client, tab, connState, dictationEnabled }: ProbeOptions): null {
   const activeHandle = tab.type === 'terminal' ? tab.terminal : null
   const activeHandleRef = useRef(activeHandle)
+  const gate = resolveMobileTerminalInputGate({
+    connState,
+    activeHandle,
+    activeSessionTabType: tab.type
+  })
   const scope: SessionScope = {
     hostId: 'h1',
     worktreeId: 'w1',
@@ -161,11 +172,8 @@ function Probe({ client, tab, connState, dictationEnabled }: ProbeOptions): null
     dictationRouteContextRef: useRef(null),
     activeHandleRef,
     flushPendingLiveInputBeforeExternalSend: async () => true,
-    canSend: resolveMobileTerminalInputGate({
-      connState,
-      activeHandle,
-      activeSessionTabType: tab.type
-    }).canSend,
+    canSend: gate.canSend,
+    canCompose: gate.canCompose,
     liveInputEnabled: false,
     showToast: () => {},
     resetLiveInputFocus: () => {}
@@ -274,7 +282,8 @@ describe('dictation uses the active composer readiness', () => {
     expect(draft.text).toBe('Draft')
   })
 
-  it('cancels an in-flight agent-chat start when the connection drops', async () => {
+  // The host keeps the session through a reconnect, so a drop is not the end of the input.
+  it('keeps a start that spans a connection drop, and records once it lands', async () => {
     const client = createFakeRpcClient()
     const options = {
       client,
@@ -284,21 +293,14 @@ describe('dictation uses the active composer readiness', () => {
     } satisfies ProbeOptions
     await render(options)
     await act(async () => model().startDictation())
-    const pendingStart = client.requests.shift()
-    expect(pendingStart?.method).toBe('speech.dictation.start')
-    await render({ ...options, connState: 'disconnected' })
-    await reply(client, 'speech.dictation.cancel', {})
-    await act(async () =>
-      pendingStart?.resolve({ id: 'desktop', ok: true, result: { started: true } })
-    )
-    await reply(client, 'speech.dictation.cancel', {})
-    expect(device.recording).toBe(false)
-    expect(draft.text).toBe('Draft')
+    await render({ ...options, connState: 'reconnecting' })
     await render(options)
-    await start(client)
+    await reply(client, 'speech.dictation.start', { started: true })
+    expect(model().dictation.status).toBe('recording')
+    expect(device.recording).toBe(true)
   })
 
-  it('drops a late transcript after disconnecting, then starts again on reconnect', async () => {
+  it('delivers the transcript of a finish that spans a connection drop', async () => {
     const client = createFakeRpcClient()
     const options = {
       client,
@@ -308,19 +310,14 @@ describe('dictation uses the active composer readiness', () => {
     } satisfies ProbeOptions
     await render(options)
     await start(client)
+    await render({ ...options, connState: 'reconnecting' })
+    expect(model().dictation.status).toBe('recording')
     await act(async () => {
       void model().dictation.stop()
     })
-    const pendingFinish = client.requests.shift()
-    expect(pendingFinish?.method).toBe('speech.dictation.finish')
-    await render({ ...options, connState: 'disconnected' })
-    await reply(client, 'speech.dictation.cancel', {})
-    await act(async () =>
-      pendingFinish?.resolve({ id: 'desktop', ok: true, result: { text: 'late words' } })
-    )
-    expect(draft.text).toBe('Draft')
-    expect(device.recording).toBe(false)
     await render(options)
-    await start(client)
+    await reply(client, 'speech.dictation.finish', { text: 'words across the drop' })
+    expect(client.requests).toEqual([])
+    expect(draft.text).toBe('Draft words across the drop')
   })
 })

@@ -8,7 +8,7 @@ import {
   normalizeImageTranscriptMessages,
   normalizeNativeChatUserText,
   normalizedNativeChatUserMessageText
-} from '../../../../../src/shared/native-chat-image-transcript-markers'
+} from '../../../../../src/shared/native-chat/transcript/native-chat-image-transcript-markers'
 import { nativeChatPendingOccurrence } from '../../../../../src/shared/native-chat-pending-occurrence'
 import type { NativeChatPendingSend } from '../../../../../src/shared/native-chat-pending-sends'
 

@@ -1,10 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { hostStableKey, ownerKey } from '../../../../shared/automation-owner-key'
 import { RUNTIME_OWNED_SSH_TARGET_ID_PREFIX } from '../../../../shared/execution-host'
-import {
-  AUTOMATION_ORPHAN_ENTRY_LABEL,
-  buildAutomationHostCatalog
-} from './automation-host-catalog'
+import { automationOrphanEntryLabel, buildAutomationHostCatalog } from './automation-host-catalog'
 import type {
   AutomationCatalogSshMirrorInput,
   AutomationHostCatalog,
@@ -368,7 +365,7 @@ describe('buildAutomationHostCatalog', () => {
     )
     const orphan = catalog.entries.find((entry) => entry.kind === 'orphan')
     expect(orphan).toMatchObject({
-      label: AUTOMATION_ORPHAN_ENTRY_LABEL,
+      label: automationOrphanEntryLabel(),
       catalogState: 'authoritative',
       executionHealth: 'unavailable',
       owner: null

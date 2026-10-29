@@ -66,7 +66,9 @@ vi.mock('@/store', () => ({
 
 vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, fallback: string, values?: Record<string, unknown>) =>
-    values ? fallback.replace('{{value0}}', String(values.value0)) : fallback
+    fallback.replace(/\{\{(\w+)\}\}/g, (match, name: string) =>
+      values && name in values ? String(values[name]) : match
+    )
 }))
 
 vi.mock('@/components/sidebar/WorktreeCard', () => ({

@@ -1,6 +1,8 @@
 import React from 'react'
 import { Activity, CircleCheck, CircleDashed } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { translate } from '@/i18n/i18n'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { AgentQuestionIcon } from '@/components/AgentQuestionIcon'
 import { AgentWorkingSpinner } from '@/components/AgentWorkingSpinner'
 import {
@@ -36,27 +38,27 @@ export type AgentDotState =
 export function agentStateLabel(state: AgentDotState): string {
   switch (state) {
     case 'working':
-      return 'Working'
+      return translate('auto.components.AgentStateDot.working', 'Working')
     case 'monitoring':
-      return 'Monitoring background tasks'
+      return translate('auto.components.AgentStateDot.monitoring', 'Monitoring background tasks')
     case 'blocked':
-      return 'Blocked'
+      return translate('auto.components.AgentStateDot.blocked', 'Blocked')
     case 'waiting':
-      return 'Waiting for input'
+      return translate('auto.components.AgentStateDot.waiting', 'Waiting for input')
     case 'interrupted':
-      return 'Interrupted'
+      return translate('auto.components.AgentStateDot.interrupted', 'Interrupted')
     case 'failed':
-      return 'Failed'
+      return translate('auto.components.AgentStateDot.failed', 'Failed')
     case 'done':
-      return 'Done'
+      return translate('auto.components.AgentStateDot.done', 'Done')
     case 'idle':
-      return 'Idle'
+      return translate('auto.components.AgentStateDot.idle', 'Idle')
     case 'unverifiable':
-      return 'No recent update'
+      return translate('auto.components.AgentStateDot.unverifiable', 'No recent update')
     case 'unconfirmed':
-      return 'Couldn’t confirm'
+      return translate('auto.components.AgentStateDot.unconfirmed', 'Couldn’t confirm')
     case 'permission':
-      return 'Needs attention'
+      return translate('auto.components.AgentStateDot.permission', 'Needs attention')
   }
 }
 
@@ -108,6 +110,7 @@ export const AgentStateDot = React.memo(function AgentStateDot({
   tooltipSide,
   progress
 }: Props): React.JSX.Element {
+  useUiLanguageRevision()
   const box = size === 'md' ? 'h-3 w-3' : 'h-2.5 w-2.5'
   const inner = size === 'md' ? 'size-2' : 'size-1.5'
   const icon = size === 'md' ? 'size-3' : 'size-2.5'

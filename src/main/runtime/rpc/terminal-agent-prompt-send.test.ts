@@ -3,7 +3,14 @@ import { describe, expect, it, vi } from 'vitest'
 import type { OrcaRuntimeService } from '../orca-runtime'
 import type { RpcRequest } from './core'
 import { RpcDispatcher } from './dispatcher'
+import { createAgentPromptSubmissionRuntime } from '../agent-prompt-submission-runtime-test-fixture'
 import { TERMINAL_METHODS } from './methods/terminal'
+
+vi.mock('../../git/worktree', () => ({
+  listWorktreesStrict: async () => [
+    { path: '/tmp/worktree-a', head: 'abc', branch: 'test', isBare: false, isMainWorktree: false }
+  ]
+}))
 
 function makeRequest(params: unknown): RpcRequest {
   return { id: 'request', authToken: 'token', method: 'terminal.send', params }
@@ -47,6 +54,7 @@ describe('terminal agent prompt send RPC', () => {
     expect(runtime.isTerminalRunningSettledPromptAgent).toHaveBeenCalledWith('terminal-1')
     expect(sendTerminalAgentPrompt).toHaveBeenCalledWith('terminal-1', 'review this change', {
       inputKind: 'driving',
+      inputSource: 'programmatic',
       beforeWrite: undefined,
       observationSignal: undefined
     })
@@ -83,7 +91,7 @@ describe('terminal agent prompt send RPC', () => {
     expect(sendTerminal).toHaveBeenCalledWith(
       'terminal-1',
       { text: 'echo x', enter: true, interrupt: false },
-      { inputKind: 'driving', beforeWrite: undefined, signal: undefined }
+      expect.objectContaining({ inputKind: 'driving', inputSource: 'programmatic' })
     )
     expect(sendTerminalAgentPrompt).not.toHaveBeenCalled()
   })
@@ -116,4 +124,39 @@ describe('terminal agent prompt send RPC', () => {
     expect(response.ok).toBe(true)
     expect(sendTerminal.mock.calls[0][2].signal).toBe(controller.signal)
   })
+
+  it.each([false, true])(
+    'refuses desktop input after late phone takeover (prompt=%s)',
+    async (agentPrompt) => {
+      const { runtime, handle, writes } = await createAgentPromptSubmissionRuntime(
+        () => {},
+        'claude'
+      )
+      const selecting = Promise.withResolvers<void>()
+      const release = Promise.withResolvers<boolean>()
+      vi.spyOn(runtime, 'isTerminalRunningSettledPromptAgent').mockImplementation(() => {
+        selecting.resolve()
+        return release.promise
+      })
+      const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
+      const sending = dispatcher.dispatch(
+        makeRequest({
+          terminal: handle,
+          text: 'first',
+          enter: true,
+          agentPrompt: true,
+          client: { id: 'desktop-1', type: 'desktop' }
+        }),
+        { caller: { kind: 'paired-device', deviceId: 'desktop-pair' } }
+      )
+      await selecting.promise
+      await runtime.handleMobileSubscribe('pty-prompt', 'phone-A', { cols: 45, rows: 20 })
+      release.resolve(agentPrompt)
+      await expect(sending).resolves.toMatchObject({
+        ok: true,
+        result: { send: { handle, accepted: false, bytesWritten: 0 } }
+      })
+      expect(writes).toEqual([])
+    }
+  )
 })

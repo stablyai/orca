@@ -120,9 +120,13 @@ export async function installOnJournal(
   const stopCommands = bindAtRestCommandContexts(
     registrations.map(({ adapter }) => adapter.atRestCommands)
   )
+  const unbindEnvironment = envResolvers.bindCatalogSources(
+    registrations.map(({ definition }) => definition.agent)
+  )
   try {
     setStructuredAgentSessionHost(host)
   } catch (error) {
+    unbindEnvironment()
     stopCommands()
     throw error
   }
@@ -132,6 +136,7 @@ export async function installOnJournal(
     journalDatabase,
     waitForRecovery: lifecycle.drain,
     stopBackgroundWork: () => {
+      unbindEnvironment()
       stopCommands()
       stopVisualsSweep?.()
       modelCatalog?.stop()

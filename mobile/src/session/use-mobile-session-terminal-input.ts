@@ -45,9 +45,10 @@ export function useMobileSessionTerminalInput(scope: MobileSessionFileActionsMod
     sendLiveInputClick,
     sendLiveTerminalInputRef,
     showToast,
-    getTerminalRef,
     hostQueryReplyInputSupportedRef,
-    hostProgramStatusSupportedRef
+    hostProgramStatusSupportedRef,
+    unsubscribeTerminal,
+    subscribeToTerminal
   } = scope
   const toggleLiveInput = useCallback(() => {
     if (!activeHandle) {
@@ -242,13 +243,31 @@ export function useMobileSessionTerminalInput(scope: MobileSessionFileActionsMod
     if (!client) {
       return
     }
-    getTerminalRef(target.handle)?.clear()
+    // Why: only a different client is stale; the WebView handle is rebuilt on re-render and a path cutover keeps the same host.
+    const isCurrent = () => clientRef.current === client
     try {
-      // Reply is intentionally unread; historical success feedback follows any fulfilled envelope, including refusal.
-      await terminalBufferClear.request(client, { terminal: target.handle })
+      const response = await terminalBufferClear.request(
+        client,
+        { terminal: target.handle },
+        { failWhenDisconnected: true }
+      )
+      if (!isCurrent()) {
+        return
+      }
+      if (terminalBufferClear.interpret(response) !== true) {
+        showToast("Couldn't clear terminal", 1500)
+        return
+      }
+      // Why: an unsubscribed tab draws a fresh snapshot when it next subscribes; subscribing it here would leak a background stream.
+      if (terminalUnsubsRef.current.has(target.handle)) {
+        unsubscribeTerminal(target.handle)
+        subscribeToTerminal(target.handle)
+      }
       showToast('Terminal cleared')
     } catch {
-      showToast("Couldn't clear terminal", 1500)
+      if (isCurrent()) {
+        showToast("Couldn't clear terminal", 1500)
+      }
     }
   }
   return {

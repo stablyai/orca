@@ -62,7 +62,12 @@ export function DeleteNestedWorktreesDialog({
     try {
       const preview = window.api.worktrees.previewNestedRemoval
       if (!preview) {
-        throw new Error('This host does not support nested worktree deletion.')
+        throw new Error(
+          translate(
+            'auto.components.sidebar.DeleteNestedWorktreesDialog.unsupportedHost',
+            'This host does not support nested worktree deletion.'
+          )
+        )
       }
       const result = await preview({
         worktreeId: target.id,

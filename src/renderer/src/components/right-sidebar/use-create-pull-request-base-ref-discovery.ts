@@ -1,3 +1,4 @@
+import { translate } from '@/i18n/i18n'
 import { useEffect, useState, type Dispatch, type SetStateAction } from 'react'
 import { useAppStore } from '@/store'
 import { findRepoForHost } from '@/store/slices/repo-host-identity'
@@ -87,7 +88,12 @@ export function useCreatePullRequestBaseRefDiscovery({
         .catch(() => {
           if (!stale) {
             setBaseResults([])
-            setBaseSearchError('Branch discovery failed.')
+            setBaseSearchError(
+              translate(
+                'auto.components.right.sidebar.CreatePullRequest.branchDiscoveryFailed',
+                'Branch discovery failed.'
+              )
+            )
           }
         })
         .finally(() => {

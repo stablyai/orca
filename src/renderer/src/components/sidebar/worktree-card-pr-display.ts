@@ -1,4 +1,5 @@
 import type { HostedReviewInfo } from '../../../../shared/hosted-review'
+import { translate } from '@/i18n/i18n'
 import type { PRInfo } from '../../../../shared/github/pull-request-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { isGitHubPRSuppressed } from '../../../../shared/worktree/github-pr-suppression'
@@ -69,12 +70,24 @@ function makeLinkedReviewFallback(
   number: number,
   review: HostedReviewInfo | null | undefined
 ): WorktreeCardPrDisplay {
-  const label = provider === 'gitlab' ? 'MR' : 'PR'
+  const isMergeRequest = provider === 'gitlab'
+  const unavailable = isMergeRequest
+    ? translate(
+        'auto.components.sidebar.worktreeCardPrDisplay.mrDetailsUnavailable',
+        'MR details unavailable'
+      )
+    : translate(
+        'auto.components.sidebar.worktreeCardPrDisplay.prDetailsUnavailable',
+        'PR details unavailable'
+      )
+  const loading = isMergeRequest
+    ? translate('auto.components.sidebar.worktreeCardPrDisplay.loadingMr', 'Loading MR...')
+    : translate('auto.components.sidebar.worktreeCardPrDisplay.loadingPr', 'Loading PR...')
   return {
     provider,
     number,
     // Persisted review links must remain visible while provider details warm up.
-    title: review === null ? `${label} details unavailable` : `Loading ${label}...`
+    title: review === null ? unavailable : loading
   }
 }
 

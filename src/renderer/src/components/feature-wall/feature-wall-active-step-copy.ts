@@ -2,6 +2,13 @@ import type { AgentsStep } from '../../../../shared/agents-orchestration-steps'
 import type { ReviewStep } from '../../../../shared/review-steps'
 import type { WorkbenchStep } from '../../../../shared/workbench-steps'
 import type { FeatureWallActiveStepCopy } from './FeatureWallTourPanel'
+import { translate } from '@/i18n/i18n'
+
+export function tourContinueLabel(finished: boolean, doneLabel: string): string {
+  return finished
+    ? doneLabel
+    : translate('auto.components.feature.wall.FeatureWallTourSurface.continue', 'Continue')
+}
 
 export function getFeatureWallActiveStepCopy(
   agentsActiveStep: AgentsStep | null,

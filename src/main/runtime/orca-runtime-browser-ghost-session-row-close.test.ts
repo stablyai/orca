@@ -85,7 +85,11 @@ describe('browserTabClose on a session row with no runtime page', () => {
     const closeTab = vi.fn(async () => {})
     const commands = new RuntimeBrowserCommands(
       createHost({
-        getOffscreenBrowserBackend: vi.fn(() => ({ createTab: vi.fn(), closeTab })),
+        getOffscreenBrowserBackend: vi.fn(() => ({
+          createTab: vi.fn(),
+          closeTab,
+          ownsTab: () => true
+        })),
         retireRuntimeOwnedBrowserSessionTab
       })
     )
@@ -131,7 +135,7 @@ describe('browserTabClose on a host with no browser engine', () => {
       createHost({
         retireRuntimeOwnedBrowserSessionTab,
         // Folder workspaces bypass git selectors; resolve them through browser workspace routing.
-        resolveWorktreeSelector: async () => {
+        resolveWorkspaceSelector: async () => {
           throw new Error('selector_not_found')
         }
       })
@@ -192,8 +196,9 @@ function createHost(overrides: Partial<RuntimeBrowserCommandHost> = {}): Runtime
           getActiveWebContentsId: vi.fn(() => 100),
           tabList: vi.fn(() => ({ tabs: [] }))
         } as unknown as AgentBrowserBridge)
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a partial host fake; these tests reach only the methods it defines.
   return {
-    resolveWorktreeSelector: async (selector: string) => ({ id: selector.replace(/^id:/, '') }),
+    resolveWorkspaceSelector: async (selector: string) => ({ id: selector.replace(/^id:/, '') }),
     resolveBrowserWorkspace: async (selector: string) => ({ id: selector.replace(/^id:/, '') }),
     getRuntimeBrowserPageRegistry: () => runtimeBrowserPages,
     getBrowserHostLeaseRegistry: () => ({ getPlacement: () => undefined }),

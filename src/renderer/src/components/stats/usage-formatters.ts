@@ -1,3 +1,5 @@
+import { translate } from '@/i18n/i18n'
+
 export function formatTokens(value: number): string {
   if (value >= 1_000_000) {
     return `${(value / 1_000_000).toFixed(1)}M`
@@ -17,9 +19,11 @@ export function formatCost(value: number | null): string {
 
 export function formatUpdatedAt(timestamp: number | null): string {
   if (!timestamp) {
-    return 'Not scanned yet'
+    return translate('auto.components.stats.usageFormatters.notScannedYet', 'Not scanned yet')
   }
-  return `Updated ${new Date(timestamp).toLocaleString()}`
+  return translate('auto.components.stats.usageFormatters.updatedAt', 'Updated {{time}}', {
+    time: new Date(timestamp).toLocaleString()
+  })
 }
 
 export function formatSessionTime(timestamp: string): string {

@@ -62,6 +62,16 @@ export function wslMoveOrchestratorLine(
           { distro: record.distro, reason: pausedReason(state.reason) }
         )
       }
+    case 'finish-pending':
+      // Check again is the user's step, which finishes it now; on its own it waits for a restart.
+      return {
+        kind: 'stuck',
+        text: translate(
+          'wslMove.orchestrator.finishPending',
+          'An earlier move to the {{distro}} host is done there. Orca finishes it here when it restarts, or now with Check again.',
+          { distro: record.distro }
+        )
+      }
     // The host row already explains a pending Remove; Retry would only park again.
     case 'removal-pending':
     case 'not-now':

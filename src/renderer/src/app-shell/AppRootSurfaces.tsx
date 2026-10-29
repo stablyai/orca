@@ -1,8 +1,9 @@
+import { useTranslation } from 'react-i18next'
 import { ModalBoundary, OverlayBoundary } from './app-root-surface-boundaries'
 import { OnboardingLanguageLoading } from '../components/onboarding/OnboardingLanguageLoading'
 import { useLanguageReadiness } from '../i18n/language-readiness'
 import { NotificationCardStack } from '../components/NotificationCardStack'
-import { Suspense } from 'react'
+import { memo, Suspense } from 'react'
 import { createPortal } from 'react-dom'
 import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
 import { translate } from '@/i18n/i18n'
@@ -108,12 +109,14 @@ function shouldMountUpdateCardForStatus(status: UpdateStatus): boolean {
   return true
 }
 
-/** Keep root overlays in stable sibling order; fetch gated chunks only when their surfaces can appear. */
-export function AppRootSurfaces(props: {
+/** Keep root overlays in stable sibling order; fetch gated chunks only when their surfaces can appear. Memoized so active-workspace App renders skip every root overlay. */
+export const AppRootSurfaces = memo(function AppRootSurfaces(props: {
   floatingWorkspace: FloatingWorkspacePanelState
   onboardingGate: OnboardingGate
 }): React.JSX.Element {
   const { floatingWorkspace, onboardingGate } = props
+  // Memoized: subscribe so a language change still repaints its labels.
+  useTranslation()
   const languageReady = useLanguageReadiness((state) => state.ready)
   const { mountedLazyModalIds, shouldMountAddRepoDialog } = useLazyModalMounts()
   usePreloadWorktreeJumpPalette()
@@ -398,4 +401,4 @@ export function AppRootSurfaces(props: {
       </Suspense>
     </>
   )
-}
+})

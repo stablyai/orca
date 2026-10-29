@@ -98,11 +98,19 @@ export function PortsStatusSegment({ iconOnly }: PortsStatusSegmentProps): React
               type="button"
               {...STATUS_BAR_CONTEXT_MENU_EXEMPT_PROPS}
               className="inline-flex cursor-pointer items-center gap-1.5 rounded px-1 py-0.5 hover:bg-accent/70"
-              aria-label={translate(
-                'auto.components.status.bar.PortsStatusSegment.b8bc3e420a',
-                'Ports, {{value0}} workspace {{value1}}',
-                { value0: workspacePortCount, value1: workspacePortCount === 1 ? 'port' : 'ports' }
-              )}
+              aria-label={
+                workspacePortCount === 1
+                  ? translate(
+                      'auto.components.status.bar.PortsStatusSegment.portsAria_one',
+                      'Ports, {{count}} workspace port',
+                      { count: workspacePortCount }
+                    )
+                  : translate(
+                      'auto.components.status.bar.PortsStatusSegment.portsAria_other',
+                      'Ports, {{count}} workspace ports',
+                      { count: workspacePortCount }
+                    )
+              }
             >
               {refreshing ? (
                 <LoaderCircle className="size-3 animate-spin text-muted-foreground" />
@@ -123,25 +131,35 @@ export function PortsStatusSegment({ iconOnly }: PortsStatusSegmentProps): React
           </PopoverTrigger>
         </TooltipTrigger>
         <TooltipContent side="top" sideOffset={6}>
-          {translate(
-            'auto.components.status.bar.PortsStatusSegment.ca41be2802',
-            'Ports — {{value0}} workspace {{value1}}{{value2}}',
-            {
-              value0: workspacePortCount,
-              value1:
-                workspacePortCount === 1
-                  ? translate('auto.components.status.bar.PortsStatusSegment.45834a9ace', 'port')
-                  : translate('auto.components.status.bar.PortsStatusSegment.8caaa86e9a', 'ports'),
-              value2:
-                externalPorts.length > 0
-                  ? translate(
-                      'auto.components.status.bar.PortsStatusSegment.a8e4bdb412',
-                      ' · {{value0}} external',
-                      { value0: externalPorts.length }
-                    )
-                  : ''
-            }
-          )}
+          {externalPorts.length > 0
+            ? workspacePortCount === 1
+              ? translate(
+                  'auto.components.status.bar.PortsStatusSegment.portsTooltipWithExternal_one',
+                  'Ports — {{count}} workspace port · {{externalCount}} external',
+                  {
+                    count: workspacePortCount,
+                    externalCount: externalPorts.length
+                  }
+                )
+              : translate(
+                  'auto.components.status.bar.PortsStatusSegment.portsTooltipWithExternal_other',
+                  'Ports — {{count}} workspace ports · {{externalCount}} external',
+                  {
+                    count: workspacePortCount,
+                    externalCount: externalPorts.length
+                  }
+                )
+            : workspacePortCount === 1
+              ? translate(
+                  'auto.components.status.bar.PortsStatusSegment.portsTooltip_one',
+                  'Ports — {{count}} workspace port',
+                  { count: workspacePortCount }
+                )
+              : translate(
+                  'auto.components.status.bar.PortsStatusSegment.portsTooltip_other',
+                  'Ports — {{count}} workspace ports',
+                  { count: workspacePortCount }
+                )}
         </TooltipContent>
       </Tooltip>
 
