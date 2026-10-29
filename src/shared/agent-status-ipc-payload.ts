@@ -53,6 +53,8 @@ export type AgentStatusIpcPayload = ParsedAgentStatusPayload & {
   stateStartedAt: number
   /** Host-stamped lead turn opening; older hosts/unseen openings fall back to stateStartedAt. */
   turnStartedAt?: number
+  flowStartedAt?: number
+  flowInventorySettled?: boolean
   /** Host-stamped lead turn end, retained across restatements; omitted by old hosts/unclassified agents. */
   turnEndedAt?: number
   /** How the host identified that end; absent from old hosts (legacy). */

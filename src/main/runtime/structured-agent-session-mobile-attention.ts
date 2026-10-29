@@ -1,5 +1,6 @@
 // Push phone attention from the execution host so headless sessions need no desktop relay. Desktop retains presentation and marks local delivery to avoid duplicate pushes.
 // Read labels synchronously at the raising commit so alerts cannot outlive prompts; edge ids dedupe delivery and address retirement.
+import { usesWholeFlowNotifications } from '../../shared/agent-flow-notification-policy'
 import type { AgentSessionStatusSummary } from '../../shared/agent-session-wire'
 import {
   agentSessionAttentionKey,
@@ -80,6 +81,11 @@ export function createStructuredAttentionMobileDelivery(
 ): StructuredAttentionMobileDelivery {
   return {
     deliver: (edge, summary) => {
+      const settings = deps.readNotificationSettings()!
+      const wholeFlow = usesWholeFlowNotifications(settings?.agentNotificationMode, summary?.agent)
+      if (wholeFlow !== !!edge.flowAlert) {
+        return
+      }
       const news = agentSessionAttentionNews(edge)
       if (!news) {
         return
@@ -88,10 +94,12 @@ export function createStructuredAttentionMobileDelivery(
       if (deps.isWorkspaceMuted(scope)) {
         return
       }
-      const settings = deps.readNotificationSettings()!
-      const attentionKey = agentSessionAttentionKey(edge)
+      const attentionKey = edge.flowAlert?.alertId ?? agentSessionAttentionKey(edge)
       const request: NotificationDispatchRequest = {
         source: 'agent-task-complete',
+        ...(edge.flowAlert
+          ? { agentFlowId: edge.flowAlert.flowId, agentNotificationReason: edge.flowAlert.reason }
+          : {}),
         surface: 'agent-session',
         worktreeId: scope.workspaceId,
         ...readLabels(deps, scope),
@@ -111,6 +119,9 @@ export function createStructuredAttentionMobileDelivery(
       const desktopAllowed = settings.enabled && settings.agentTaskComplete
       deps.dispatch({
         type: 'notification',
+        ...(edge.flowAlert
+          ? { agentFlowId: edge.flowAlert.flowId, agentNotificationReason: edge.flowAlert.reason }
+          : {}),
         emittedAt: deps.now(),
         source: 'agent-task-complete',
         ...(!desktopAllowed ? { desktopAllowed: false } : {}),

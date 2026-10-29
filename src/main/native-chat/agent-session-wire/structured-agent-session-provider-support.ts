@@ -72,3 +72,7 @@ export function knownAgentIds(deps: {
     ])
   ]
 }
+
+export function loadedSessionIds(sessions: ReadonlyMap<string, { child: unknown }>): string[] {
+  return [...sessions].flatMap(([sessionId, { child }]) => (child ? [sessionId] : []))
+}

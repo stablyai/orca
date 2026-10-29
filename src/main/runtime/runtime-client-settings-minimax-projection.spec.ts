@@ -40,3 +40,21 @@ describe('RuntimeClientSettingsController MiniMax projection', () => {
     expect(projected.minimaxEndpoint).toBe('overseas')
   })
 })
+
+describe('execution-host agent notification mode', () => {
+  it('saves the host choice through paired settings without replacing sound and delivery preferences', async () => {
+    const settings = createGlobalSettingsFixture()
+    const original = settings.notifications
+    const controller = new RuntimeClientSettingsController({
+      getSettings: () => settings,
+      updateSettings: (updates: Partial<GlobalSettings>) => Object.assign(settings, updates)
+    })
+    expect(controller.get().agentNotificationMode).toBe('current')
+    await controller.update({ agentNotificationMode: 'action-or-flow-complete' })
+    expect(controller.get().agentNotificationMode).toBe('action-or-flow-complete')
+    expect(settings.notifications).toEqual({
+      ...original,
+      agentNotificationMode: 'action-or-flow-complete'
+    })
+  })
+})

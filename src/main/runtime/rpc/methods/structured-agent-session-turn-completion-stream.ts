@@ -7,6 +7,7 @@ import {
 } from './structured-agent-session-gate'
 import {
   AcknowledgeAttentionParams,
+  ValidateFlowAttentionParams,
   SubscribeTurnCompletionsParams
 } from './structured-agent-session-schemas'
 import { structuredAgentSessionTurnCompletionSubscriptionId } from './structured-agent-session-subscription-id'
@@ -28,6 +29,19 @@ export const STRUCTURED_AGENT_SESSION_TURN_COMPLETION_METHODS = [
       return { acknowledged: true }
     }
   }),
+  defineMethod({
+    name: 'agentSession.validateFlowAttention',
+    permission: 'workspace',
+    params: ValidateFlowAttentionParams,
+    handler: (params, ctx) => {
+      const host = requireHost(ctx)
+      return {
+        current:
+          clientReadsStructuredSessionAgent(ctx, host.sessionAgent(params.sessionId) ?? '') &&
+          host.isFlowAttentionCurrent(params.sessionId, params.alert)
+      }
+    }
+  }),
   defineStreamingMethod({
     name: 'agentSession.subscribeTurnCompletions',
     permission: 'workspace',
@@ -45,11 +59,15 @@ export const STRUCTURED_AGENT_SESSION_TURN_COMPLETION_METHODS = [
         // A client that cannot read an agent's rows is not told that agent's edges either.
         emit: (event) => {
           const sessionId =
-            event.type === 'completion'
-              ? event.completion.sessionId
-              : event.type === 'prompt'
-                ? event.prompt.sessionId
-                : undefined
+            event.type === 'flow-attention'
+              ? event.edge.type === 'prompt'
+                ? event.edge.prompt.sessionId
+                : event.edge.completion.sessionId
+              : event.type === 'completion'
+                ? event.completion.sessionId
+                : event.type === 'prompt'
+                  ? event.prompt.sessionId
+                  : undefined
           if (
             sessionId === undefined ||
             clientReadsStructuredSessionAgent(ctx, host.sessionAgent(sessionId) ?? '')
@@ -57,7 +75,8 @@ export const STRUCTURED_AGENT_SESSION_TURN_COMPLETION_METHODS = [
             emit(event)
           }
         },
-        includePrompts: params.includePrompts === true
+        includePrompts: params.includePrompts === true,
+        includeFlowAttention: params.includeFlowAttention === true
       })
       if (stream.isClosed()) {
         dispose()

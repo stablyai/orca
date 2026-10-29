@@ -1,3 +1,4 @@
+import type { AgentFlowAlert } from '../../../shared/agent-flow-notification-policy'
 import type {
   AgentJournalCursor,
   AgentJournalRenderItem
@@ -315,9 +316,26 @@ export function subscribeStructuredAgentSessionTurnCompletions(
     target,
     'agentSession.subscribeTurnCompletions',
     // An older host ignores this and sends completions only: it raises no prompt alert, as before.
-    { includePrompts: true },
+    { includePrompts: true, includeFlowAttention: true },
     onEvent,
     onError,
     onClose
   )
+}
+
+export async function validateStructuredAgentFlowAttention(
+  target: RuntimeClientTarget,
+  sessionId: string,
+  alert: AgentFlowAlert
+): Promise<boolean> {
+  try {
+    const result = await callRuntimeRpc<{ current: boolean }>(
+      target,
+      'agentSession.validateFlowAttention',
+      { sessionId, alert }
+    )
+    return result.current
+  } catch {
+    return false
+  }
 }

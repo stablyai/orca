@@ -47,3 +47,30 @@ describe('muted notification machines', () => {
     expect(persistedNotificationSettingsRepaired(persisted, normalized)).toBe(true)
   })
 })
+
+describe('agent notification mode persistence', () => {
+  it.each([undefined, null, 'unknown', true, 42])(
+    'defaults %s to current behavior',
+    (agentNotificationMode) => {
+      expect(normalizeNotificationSettings({ agentNotificationMode }).agentNotificationMode).toBe(
+        'current'
+      )
+    }
+  )
+  it('preserves the opt-in mode across normalization and marks invalid persisted modes for repair', () => {
+    const saved = {
+      ...getDefaultNotificationSettings(),
+      agentNotificationMode: 'action-or-flow-complete'
+    }
+    expect(normalizeNotificationSettings(saved).agentNotificationMode).toBe(
+      'action-or-flow-complete'
+    )
+    expect(persistedNotificationSettingsRepaired(saved, normalizeNotificationSettings(saved))).toBe(
+      false
+    )
+    const invalid = { ...saved, agentNotificationMode: 'invalid' }
+    expect(
+      persistedNotificationSettingsRepaired(invalid, normalizeNotificationSettings(invalid))
+    ).toBe(true)
+  })
+})

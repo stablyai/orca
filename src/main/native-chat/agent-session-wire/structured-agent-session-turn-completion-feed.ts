@@ -1,14 +1,20 @@
 // Derive attention edges on the host so background chats work without a renderer reader.
 // Completion and prompt events are live-only; late subscribers receive no replay.
 
+import {
+  AgentFlowNotificationDelivery,
+  type AgentFlowNotificationState,
+  type AgentFlowAlert
+} from '../../../shared/agent-flow-notification-policy'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import type {
   AgentSessionTurnCompletion,
   AgentSessionTurnCompletionEvent
 } from '../../../shared/agent-session-wire'
-import type {
-  AgentSessionAttentionEdge,
-  StructuredAttentionState
+import {
+  agentSessionAttentionSubjectPrefix,
+  type AgentSessionAttentionEdge,
+  type StructuredAttentionState
 } from '../../../shared/agent-session-attention'
 import type { StructuredAgentSessionLatestRequest } from '../../../shared/structured-agent-session-latest-request'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
@@ -19,6 +25,7 @@ export type StructuredAgentSessionTurnCompletionSubscriber = {
   emit: (event: AgentSessionTurnCompletionEvent) => void
   /** Older clients misread prompt arms, so delivery requires opt-in. */
   includePrompts?: boolean
+  includeFlowAttention?: boolean
   /** In-process reconciliation on restore and prompt removal. */
   onState?: (state: StructuredAttentionState) => void
 }
@@ -33,6 +40,7 @@ type CompletionFeedSession = {
 export type StructuredAgentSessionTurnCompletionFeedDeps = {
   sessions: ReadonlyMap<string, CompletionFeedSession>
   now: () => number
+  readFlowState?: (sessionId: string) => AgentFlowNotificationState | null
   /** Reuse this commit’s status projection so events identify the request shown in the row. */
   readStatusState: (
     sessionId: string,
@@ -54,6 +62,7 @@ function settledMark(request: StructuredAgentSessionLatestRequest | null): Reque
 
 export class StructuredAgentSessionTurnCompletionFeed {
   private readonly subscribers = new Map<string, StructuredAgentSessionTurnCompletionSubscriber>()
+  private readonly flows = new Map<string, AgentFlowNotificationDelivery>()
   private readonly baselines = new Map<string, SessionBaseline>()
 
   constructor(private readonly deps: StructuredAgentSessionTurnCompletionFeedDeps) {}
@@ -78,6 +87,8 @@ export class StructuredAgentSessionTurnCompletionFeed {
 
   /** Reattachments baseline silently instead of announcing old work. */
   forget(sessionId: string): void {
+    this.flows.get(sessionId)?.dispose()
+    this.flows.delete(sessionId)
     this.baselines.delete(sessionId)
   }
 
@@ -93,6 +104,7 @@ export class StructuredAgentSessionTurnCompletionFeed {
     if (!session || !state) {
       return
     }
+    this.observeFlow(sessionId, options?.historical || !this.baselines.has(sessionId))
     const cursor = (journal ?? session.journal).cursor()
     const request = state.latestRequest
     const prompts = new Set(state.pendingPromptIds)
@@ -140,6 +152,88 @@ export class StructuredAgentSessionTurnCompletionFeed {
       },
       'prompt-aware'
     )
+  }
+
+  observeFlow(sessionId: string, historical?: boolean): void {
+    if (!this.deps.readFlowState) {
+      return
+    }
+    let flow = this.flows.get(sessionId)
+    if (!flow) {
+      flow = new AgentFlowNotificationDelivery({
+        read: () => this.deps.readFlowState?.(sessionId) ?? null,
+        deliver: (alert) => this.broadcastFlow(sessionId, alert),
+        setTimer: (run, delay) => {
+          const timer = setTimeout(run, delay)
+          timer.unref?.()
+          return { cancel: () => clearTimeout(timer) }
+        }
+      })
+      this.flows.set(sessionId, flow)
+    }
+    flow.observe(historical ?? !this.baselines.has(sessionId))
+  }
+
+  dispose(): void {
+    for (const flow of this.flows.values()) {
+      flow.dispose()
+    }
+    this.flows.clear()
+    this.baselines.clear()
+    for (const id of this.subscribers.keys()) {
+      this.unsubscribe(id)
+    }
+  }
+
+  private broadcastFlow(sessionId: string, alert: AgentFlowAlert): void {
+    const session = this.deps.sessions.get(sessionId)
+    const state = this.deps.readStatusState(sessionId)
+    if (!session || !state) {
+      return
+    }
+    alert = {
+      ...alert,
+      alertId:
+        agentSessionAttentionSubjectPrefix(session.params.location, sessionId) + alert.alertId
+    }
+    const base = {
+      scope: session.params.location,
+      sessionId,
+      journalCursor: session.journal.cursor()
+    }
+    const promptId = state.pendingPromptIds.find((id) =>
+      alert.alertId.endsWith(`:${encodeURIComponent(id)}`)
+    )
+    const edge: AgentSessionAttentionEdge =
+      alert.reason === 'input-required' && promptId
+        ? {
+            type: 'prompt',
+            prompt: { ...base, promptId, raisedAt: this.deps.now() },
+            flowAlert: alert
+          }
+        : {
+            type: 'completion',
+            completion: {
+              ...base,
+              turnId: alert.flowId,
+              outcome: alert.reason === 'action-required' ? 'failure' : 'success',
+              completedAt: this.deps.now()
+            },
+            flowAlert: alert
+          }
+    if (alert.reason === 'input-required' && !promptId) {
+      return
+    }
+    for (const subscriber of this.subscribers.values()) {
+      if (!subscriber.includeFlowAttention) {
+        continue
+      }
+      try {
+        subscriber.emit({ type: 'flow-attention', edge: { ...edge, flowAlert: alert } })
+      } catch {
+        this.subscribers.delete(subscriber.id)
+      }
+    }
   }
 
   private publishState(

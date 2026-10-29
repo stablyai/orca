@@ -1,3 +1,4 @@
+import { getDefaultNotificationSettings } from '../../../../shared/notification-settings-defaults'
 // Use real unread/acknowledgment reducers so broken wiring cannot pass on mocked sink call counts.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -29,6 +30,11 @@ vi.mock('@/lib/desktop-notification-sound', () => ({
 }))
 vi.mock('@/lib/blocked-notification-fallback', () => ({
   showBlockedNotificationFallbackToast: vi.fn()
+}))
+
+const validation = vi.hoisted(() => ({ current: vi.fn(async () => true) }))
+vi.mock('@/runtime/structured-agent-session-client', () => ({
+  validateStructuredAgentFlowAttention: validation.current
 }))
 
 const store = createTestStore()
@@ -160,6 +166,7 @@ const NOTHING_LIT = {
 
 describe('dispatchStructuredTurnCompletionAttention', () => {
   beforeEach(() => {
+    validation.current.mockReset().mockResolvedValue(true)
     dispatched.length = 0
     dismissed.length = 0
     vi.stubGlobal('window', {
@@ -305,6 +312,7 @@ describe('dispatchStructuredTurnCompletionAttention', () => {
       ['cancellation', 'turn-2'],
       ['failure', 'turn-3']
     ] as const) {
+      validation.current.mockReset().mockResolvedValue(true)
       dispatched.length = 0
       seed()
       dispatchStructuredTurnCompletionAttention(structuredTab(), completion({ outcome, turnId }))
@@ -326,6 +334,7 @@ describe('dispatchStructuredTurnCompletionAttention', () => {
     expect(indicators().paneDot).toBe('agent-completion')
     expect(onlyDispatch()).toMatchObject({ agentState: 'blocked', agentTurnOutcome: 'success' })
 
+    validation.current.mockReset().mockResolvedValue(true)
     dispatched.length = 0
     seed()
     dispatchStructuredTurnCompletionAttention(structuredTab(), completion())
@@ -448,5 +457,71 @@ describe('dispatchStructuredTurnCompletionAttention', () => {
     dispatchStructuredTurnCompletionAttention(structuredTab(), completion())
     dispatchStructuredTurnCompletionAttention(structuredTab(), completion())
     expect(indicators().paneDot).toBe('agent-completion')
+  })
+  function enableWholeFlow(): void {
+    const settings = store.getState().settings
+    if (!settings) {
+      throw new Error('settings missing')
+    }
+    store.setState({
+      settings: {
+        ...settings,
+        notifications: {
+          ...getDefaultNotificationSettings(),
+          agentNotificationMode: 'action-or-flow-complete'
+        }
+      }
+    })
+  }
+
+  it('keeps ordinary unread markers while waiting for separately validated flow delivery', async () => {
+    enableWholeFlow()
+    dispatchStructuredTurnCompletionAttention(structuredTab(), completion(), { kind: 'local' })
+    expect(indicators().workspaceBold).toBe(true)
+    expect(dispatched).toEqual([])
+    dispatchStructuredTurnCompletionAttention(
+      structuredTab(),
+      completion(),
+      { kind: 'local' },
+      {
+        flowId: 'request-1',
+        reason: 'flow-complete',
+        alertId: 'flow-alert-1'
+      }
+    )
+    await Promise.resolve()
+    expect(dispatched).toHaveLength(1)
+    expect(dispatched[0]).toMatchObject({
+      agentFlowId: 'request-1',
+      agentNotificationReason: 'flow-complete'
+    })
+    expect(indicators().workspaceBold).toBe(true)
+  })
+
+  it('rechecks tab ownership after host validation returns', async () => {
+    enableWholeFlow()
+    let answer: (current: boolean) => void = () => {
+      throw new Error('validation did not start')
+    }
+    validation.current.mockReturnValue(
+      new Promise<boolean>((resolve) => {
+        answer = resolve
+      })
+    )
+    dispatchStructuredTurnCompletionAttention(
+      structuredTab(),
+      completion(),
+      { kind: 'local' },
+      {
+        flowId: 'request-1',
+        reason: 'flow-complete',
+        alertId: 'flow-alert-1'
+      }
+    )
+    seed({ sessionId: 'session-2' })
+    enableWholeFlow()
+    answer(true)
+    await Promise.resolve()
+    expect(dispatched).toEqual([])
   })
 })

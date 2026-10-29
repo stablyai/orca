@@ -301,3 +301,43 @@ it("tells the phone which server and pane raised it, through the gateway's push"
     expect(push.sends[0]?.notification.executionHost).toBe(executionHost)
   }
 })
+
+describe('whole-flow eligibility before transport fanout', () => {
+  it.each(['claude', 'codex'])(
+    'keeps %s bells and unclassified activity off desktop and mobile',
+    (agentType) => {
+      const h = makeHarness(makeSettings({ agentNotificationMode: 'action-or-flow-complete' }))
+      const service = createNotificationDeliveryService(h.deps)
+      service.dispatch(makeRequest({ agentType, source: 'terminal-bell' }))
+      service.dispatch(makeRequest({ agentType, agentState: 'working' }))
+      expect(h.dispatchMobileNotification).not.toHaveBeenCalled()
+      expect(h.deliverNative).not.toHaveBeenCalled()
+    }
+  )
+  it('dedupes the same flow alert across clients beyond the ordinary cooldown, retaining distinct prompts', () => {
+    const h = makeHarness(makeSettings({ agentNotificationMode: 'action-or-flow-complete' }))
+    const service = createNotificationDeliveryService(h.deps)
+    const request = makeRequest({
+      agentType: 'claude',
+      agentState: 'waiting',
+      agentFlowId: 'request-1',
+      agentNotificationReason: 'input-required',
+      notificationId: 'prompt-1',
+      attentionKey: 'prompt-1'
+    })
+    service.dispatch(request)
+    now += 60000
+    service.dispatch(request)
+    service.dispatch({ ...request, notificationId: 'prompt-2', attentionKey: 'prompt-2' })
+    expect(h.dispatchMobileNotification).toHaveBeenCalledTimes(2)
+    expect(h.deliverNative).toHaveBeenCalledTimes(2)
+  })
+  it('retains explicitly identified legacy-host behavior', () => {
+    const h = makeHarness(makeSettings({ agentNotificationMode: 'action-or-flow-complete' }))
+    createNotificationDeliveryService(h.deps).dispatch(
+      makeRequest({ agentType: 'codex', agentState: 'done', agentFlowCapability: 'legacy' })
+    )
+    expect(h.dispatchMobileNotification).toHaveBeenCalledTimes(1)
+    expect(h.deliverNative).toHaveBeenCalledTimes(1)
+  })
+})

@@ -1,3 +1,6 @@
+import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
+import { agentFlowAlerts } from '../../shared/agent-flow-notification-policy'
+import { terminalFlowNotificationState } from '../../shared/terminal-flow-notification-state'
 import { BrowserWindow, Notification, ipcMain, powerMonitor } from 'electron'
 import { readDesktopAwayState } from '../notifications/desktop-away-state'
 import type { Store } from '../persistence'
@@ -148,6 +151,33 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
 
   const deliveryService = createNotificationDeliveryService({
     readNotificationSettings: () => store.getSettings().notifications,
+    isCurrent: (request) => {
+      if (!request.agentFlowId || request.executionHost) {
+        return true
+      }
+      if (
+        request.surface === 'agent-session' &&
+        request.structuredOrigin &&
+        request.agentNotificationReason &&
+        request.attentionKey
+      ) {
+        return (
+          getStructuredAgentSessionHost()?.isFlowAttentionCurrent(
+            request.structuredOrigin.sessionId,
+            {
+              flowId: request.agentFlowId,
+              reason: request.agentNotificationReason,
+              alertId: request.attentionKey
+            }
+          ) === true
+        )
+      }
+      const row = request.paneKey && runtime?.agentTransitions.latestRow(request.paneKey)
+      const state = row && terminalFlowNotificationState(row, row.paneKey, 'local')
+      return (
+        !!state && agentFlowAlerts(state).some((alert) => alert.alertId === request.attentionKey)
+      )
+    },
     findActiveWindow: () =>
       BrowserWindow.getAllWindows().find((window) => !window.isDestroyed()) ?? null,
     isWindowVisible: isMainWindowVisible,

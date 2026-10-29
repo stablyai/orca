@@ -1,4 +1,10 @@
 // Share desktop completion/input timing and hook rows; phone/connector listeners choose wording and transport.
+import {
+  AgentFlowNotificationDelivery,
+  usesWholeFlowNotifications,
+  type AgentFlowAlert
+} from '../../shared/agent-flow-notification-policy'
+import { terminalFlowNotificationState } from '../../shared/terminal-flow-notification-state'
 import type { AgentPaneChange } from '../agent-hooks/agent-transition-detector'
 import { agentTurnEndedOnPurpose } from '../../shared/agent-main-agent-verdict'
 import type { AgentStatusIpcPayload } from '../../shared/agent-status-ipc-payload'
@@ -9,10 +15,12 @@ export type TerminalAgentTurnNewsItem = {
   paneKey: string
   worktreeId: string
   row: AgentStatusIpcPayload
+  flowAlert?: AgentFlowAlert
 }
 
 export type TerminalAgentTurnNewsDeps<Prepared> = {
   readHookRow: (paneKey: string) => AgentStatusIpcPayload | null
+  readNotificationMode?: () => unknown
   /** Runs when the news is decided, so what it reads is that moment's even if delivery waits. */
   prepare: (news: TerminalAgentTurnNewsItem) => Prepared
   deliver: (prepared: Prepared) => void
@@ -30,6 +38,7 @@ type PendingFinish = {
 
 export class TerminalAgentTurnNews<Prepared> {
   // A pane's pending finish, until it is sent or the pane moves on.
+  private readonly flows = new Map<string, AgentFlowNotificationDelivery>()
   private readonly pendingByPane = new Map<string, PendingFinish>()
   // Per pane, the `turnCompletedAt` of the turn last announced (or restored), until the next turn.
   private readonly finishedTurnByPane = new Map<string, number>()
@@ -41,6 +50,14 @@ export class TerminalAgentTurnNews<Prepared> {
 
   observe(change: AgentPaneChange): void {
     const { paneKey } = change
+    const rowForFlow = this.deps.readNotificationMode ? this.deps.readHookRow(paneKey) : null
+    if (usesWholeFlowNotifications(this.deps.readNotificationMode?.(), rowForFlow?.agentType)) {
+      this.cancelPending(paneKey)
+      this.observeFlow(change)
+      return
+    }
+    this.flows.get(paneKey)?.dispose()
+    this.flows.delete(paneKey)
     if (change.kind === 'seeded') {
       if (change.phase !== 'rest') {
         this.seed(paneKey)
@@ -85,7 +102,46 @@ export class TerminalAgentTurnNews<Prepared> {
     this.announce(paneKey, change.workspace.worktreeId, row, waitOutQuiet)
   }
 
+  private observeFlow(change: AgentPaneChange): void {
+    const { paneKey } = change
+    let flow = this.flows.get(paneKey)
+    const firstObservation = !flow
+    if (!flow) {
+      flow = new AgentFlowNotificationDelivery({
+        read: () => {
+          const row = this.deps.readHookRow(paneKey)
+          return row &&
+            !row.structuredHost &&
+            usesWholeFlowNotifications(this.deps.readNotificationMode?.(), row.agentType)
+            ? terminalFlowNotificationState(row, paneKey, 'local')
+            : null
+        },
+        deliver: (flowAlert) => {
+          const row = this.deps.readHookRow(paneKey)
+          const worktreeId = row?.worktreeId ?? change.workspace?.worktreeId
+          if (row && worktreeId) {
+            this.deps.deliver(this.deps.prepare({ paneKey, worktreeId, row, flowAlert }))
+          }
+        },
+        setTimer: this.deps.setTimer
+      })
+      this.flows.set(paneKey, flow)
+    }
+    flow.observe(
+      change.kind === 'seeded' ||
+        (firstObservation && change.kind === 'observed' && change.phase !== 'working')
+    )
+    if (change.kind === 'moved' && change.to === 'rest') {
+      flow.dispose()
+      this.flows.delete(paneKey)
+    }
+  }
+
   dispose(): void {
+    for (const flow of this.flows.values()) {
+      flow.dispose()
+    }
+    this.flows.clear()
     for (const paneKey of this.pendingByPane.keys()) {
       this.cancelPending(paneKey)
     }

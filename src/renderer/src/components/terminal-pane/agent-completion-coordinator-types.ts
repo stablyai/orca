@@ -7,6 +7,10 @@ import type { RuntimeTerminalProcessInspection } from '@/runtime/runtime-termina
 
 export type AgentCompletionStatusSnapshot = ParsedAgentStatusPayload & {
   stateStartedAt?: number
+  turnStartedAt?: number
+  flowStartedAt?: number
+  flowInventorySettled?: boolean
+  orchestration?: { parentPaneKey?: string; parentTerminalHandle?: string }
   /** The host's stamp for the turn end this `done` reports; restatements keep it. */
   turnEndedAt?: number
   /** How the host identified that end (`TurnEndDisposition`). */

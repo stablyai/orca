@@ -26,6 +26,7 @@ export type EnrichedAgentHookEventPayload = AgentHookEventPayload & {
   stateStartedAt: number
   /** Server-stamped main-agent turn start; absent until a live boundary establishes it. */
   turnStartedAt?: number
+  flowStartedAt?: number
   /** Runtime provenance and ordering, including hook/OSC precedence. */
   observation?: AgentStatusObservation
   /** Hydrated work remains unconfirmed until reconciled; this marker is never persisted. */

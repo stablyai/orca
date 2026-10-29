@@ -20833,6 +20833,16 @@
     "startupRegistration": {
       "title": "Orca is ready to notify you",
       "body": "Allow notifications so Orca can alert you when agents finish or terminals need attention."
+    },
+    "agentMode": {
+      "updateHost": "Update this host to use whole-flow notifications",
+      "hostFailed": "Could not read or save this host’s notification mode.",
+      "hostDescription": "Notification mode saved on this execution host for phone delivery.",
+      "current": "Current behavior",
+      "wholeFlow": "User action or whole flow complete",
+      "label": "Agent notification mode",
+      "description": "For Claude and Codex, notify when input is needed or all tracked work has finished. Background commands keep completion pending until they finish.",
+      "bells": "Claude and Codex terminal bells are silent in this mode."
     }
   },
   "sessionSearch": {

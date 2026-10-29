@@ -1,3 +1,4 @@
+import { BoundedMap } from '../../shared/bounded-map'
 import { reserveNotificationCooldown } from '../../shared/notification-burst-cooldown'
 import type { AgentStatusState } from '../../shared/agent-status-types'
 import {
@@ -34,6 +35,8 @@ export type MobileNotificationDispatchEvent = {
   /** See `NotificationDispatchRequest.executionHost`; old phones ignore it and open the desktop's. */
   executionHost?: `runtime:${string}`
   notificationId?: string
+  agentFlowId?: string
+  agentNotificationReason?: 'input-required' | 'action-required' | 'flow-complete'
   notificationSeq?: number
   notificationEpoch?: string
   // Additive state distinguishes input-needed from finished in push; old clients ignore it.
@@ -64,6 +67,7 @@ export type MobilePushRegistrar = {
 
 export class RuntimeMobileNotificationController {
   private readonly listeners = new Set<(event: MobileNotificationEvent) => void>()
+  private readonly flowAlerts = new BoundedMap<string, true>({ maxEntries: 1024 })
   private readonly legacyCooldown = new Map<string, number>()
   private readonly replay = new MobileNotificationReplayBuffer()
   private pushRegistrar: MobilePushRegistrar | null = null
@@ -142,6 +146,12 @@ export class RuntimeMobileNotificationController {
 
   dispatch(event: MobileNotificationEvent): void {
     if (event.type === 'notification') {
+      if (event.agentFlowId && event.notificationId) {
+        if (this.flowAlerts.has(event.notificationId)) {
+          return
+        }
+        this.flowAlerts.set(event.notificationId, true)
+      }
       // Decide once before recording so reconnect and buffer eviction cannot reset cooldown.
       const legacySocketAllowed =
         event.desktopAllowed !== false &&

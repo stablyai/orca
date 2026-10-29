@@ -118,6 +118,7 @@ export type AgentStatusEntry = {
   /** Short preview of the tool input (e.g. file path, command). */
   toolInput?: string
   /** Keep full AskUserQuestion JSON for cards, not toolInput previews; clear when the agent moves on. */
+  inputRequestId?: string
   interactivePrompt?: string
   /** Most recent assistant message preview, when the hook carried one. */
   lastAssistantMessage?: string
@@ -170,6 +171,7 @@ export type AgentStatusPayload = {
   toolInput?: string
   /** JSON string of the AskUserQuestion tool input, captured live. See the
    *  AgentStatusEntry field for semantics. Not truncated like toolInput. */
+  inputRequestId?: string
   interactivePrompt?: string
   lastAssistantMessage?: string
   /** See the AgentStatusEntry field for semantics. */
@@ -188,6 +190,7 @@ export type AgentStatusPayload = {
   mainAgent?: AgentMainAgentStatus
   /** The execution host awaits a launched Claude task’s wake-up or its finishing turn. */
   claudeTaskWakeupPending?: 'notification' | 'finishing-turn'
+  automaticContinuation?: true
 }
 
 /** Parsing always supplies prompt (empty if omitted); optional tool/assistant fields distinguish no update from explicit clearing. */
@@ -206,6 +209,7 @@ export function pickParsedAgentStatusPayload(
     ...(row.modelSwitchCommand ? { modelSwitchCommand: row.modelSwitchCommand } : {}),
     ...(row.toolName !== undefined ? { toolName: row.toolName } : {}),
     ...(row.toolInput !== undefined ? { toolInput: row.toolInput } : {}),
+    ...(row.inputRequestId !== undefined ? { inputRequestId: row.inputRequestId } : {}),
     ...(row.interactivePrompt !== undefined ? { interactivePrompt: row.interactivePrompt } : {}),
     ...(row.lastAssistantMessage !== undefined
       ? { lastAssistantMessage: row.lastAssistantMessage }
@@ -218,6 +222,7 @@ export function pickParsedAgentStatusPayload(
     ...(row.turnCompletedAt !== undefined ? { turnCompletedAt: row.turnCompletedAt } : {}),
     ...(row.subagents !== undefined ? { subagents: row.subagents } : {}),
     ...(row.mainAgent !== undefined ? { mainAgent: row.mainAgent } : {}),
+    ...(row.automaticContinuation === true ? { automaticContinuation: true } : {}),
     ...(row.claudeTaskWakeupPending !== undefined
       ? { claudeTaskWakeupPending: row.claudeTaskWakeupPending }
       : {})
@@ -335,6 +340,12 @@ function normalizeAgentStatusObject(parsed: unknown): ParsedAgentStatusPayload |
     turnCompletedAt: normalizeTurnCompletedAtField(obj.turnCompletedAt, state),
     subagents: normalizeAgentSubagentsField(obj.subagents),
     mainAgent: normalizeMainAgentStatusField(obj.mainAgent),
+    ...(typeof obj.inputRequestId === 'string' &&
+    obj.inputRequestId.length > 0 &&
+    obj.inputRequestId.length <= 512
+      ? { inputRequestId: obj.inputRequestId }
+      : {}),
+    ...(obj.automaticContinuation === true ? { automaticContinuation: true as const } : {}),
     ...(obj.agentType === 'claude' &&
     state !== 'done' &&
     (obj.claudeTaskWakeupPending === 'notification' ||

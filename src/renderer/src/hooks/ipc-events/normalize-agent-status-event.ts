@@ -17,6 +17,8 @@ export function normalizeAgentStatusEvent(
     toolName: data.toolName,
     toolInput: data.toolInput,
     interactivePrompt: data.interactivePrompt,
+    inputRequestId: data.inputRequestId,
+    claudeTaskWakeupPending: data.claudeTaskWakeupPending,
     lastAssistantMessage: data.lastAssistantMessage,
     lastAssistantMessageIsToolOutput: data.lastAssistantMessageIsToolOutput,
     interrupted: data.interrupted,

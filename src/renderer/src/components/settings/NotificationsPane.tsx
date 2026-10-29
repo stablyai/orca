@@ -2,6 +2,9 @@ import { useEffect, useRef, useState } from 'react'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { Button } from '../ui/button'
 import { Separator } from '../ui/separator'
+import { SettingsRow } from './SettingsFormControls'
+import { NotificationHostModes } from './NotificationHostModes'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
 import { BellRing, Bot, EyeOff, Siren } from 'lucide-react'
 import { useAppStore } from '@/store'
 import {
@@ -147,6 +150,49 @@ export function NotificationsPane({
         }
       />
 
+      <SettingsRow
+        labelId="agent-notification-mode-label"
+        label={translate('notifications.agentMode.label', 'Agent notification mode')}
+        description={
+          <>
+            {translate(
+              'notifications.agentMode.description',
+              'For Claude and Codex, notify when input is needed or all tracked work has finished. Background commands keep completion pending until they finish.'
+            )}{' '}
+            {translate(
+              'notifications.agentMode.bells',
+              'Claude and Codex terminal bells are silent in this mode.'
+            )}
+          </>
+        }
+        control={
+          <Select
+            value={notificationSettings.agentNotificationMode ?? 'current'}
+            disabled={!notificationSettings.enabled || !notificationSettings.agentTaskComplete}
+            onValueChange={(value) => {
+              if (value === 'current' || value === 'action-or-flow-complete') {
+                void updateNotificationSettings({ agentNotificationMode: value })
+              }
+            }}
+          >
+            <SelectTrigger aria-labelledby="agent-notification-mode-label" className="w-80">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="current">
+                {translate('notifications.agentMode.current', 'Current behavior')}
+              </SelectItem>
+              <SelectItem value="action-or-flow-complete">
+                {translate(
+                  'notifications.agentMode.wholeFlow',
+                  'User action or whole flow complete'
+                )}
+              </SelectItem>
+            </SelectContent>
+          </Select>
+        }
+      />
+
       <NotificationSettingToggle
         icon={<Siren className="size-4" />}
         label={translate('auto.components.settings.NotificationsPane.591fe605b9', 'Terminal Bell')}
@@ -162,6 +208,8 @@ export function NotificationsPane({
           })
         }
       />
+
+      <NotificationHostModes />
 
       <NotificationHostToggles
         mutedNotificationSourceIds={notificationSettings.mutedNotificationSourceIds}

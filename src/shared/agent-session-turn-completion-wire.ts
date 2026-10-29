@@ -1,3 +1,5 @@
+import type { AgentFlowAlert } from './agent-flow-notification-policy'
+import type { AgentSessionAttentionEdge } from './agent-session-attention'
 import type { AgentJournalCursor, AgentJournalTurnOutcome } from './agent-session-journal-types'
 import type { AgentSessionExecutionLocation } from './agent-session-record'
 
@@ -35,4 +37,5 @@ export type AgentSessionTurnCompletionEvent =
   | { type: 'completion'; completion: AgentSessionTurnCompletion }
   /** Sent only to a subscriber that asked with `includePrompts`, so an older client never sees it. */
   | { type: 'prompt'; prompt: AgentSessionPromptAttention }
+  | { type: 'flow-attention'; edge: AgentSessionAttentionEdge & { flowAlert: AgentFlowAlert } }
   | { type: 'end' }

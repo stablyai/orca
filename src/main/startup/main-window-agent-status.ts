@@ -23,6 +23,7 @@ export function installMainWindowAgentStatusListeners(options: MainWindowAgentSt
       evidenceObservedAt,
       stateStartedAt,
       turnStartedAt,
+      flowStartedAt,
       turnEndedAt,
       turnEndDisposition,
       launchToken,
@@ -36,7 +37,9 @@ export function installMainWindowAgentStatusListeners(options: MainWindowAgentSt
       structuredHost,
       programStatus,
       programStatusOnly,
-      agentPresence
+      agentPresence,
+      claudeRunningNonAgentTask,
+      source
     }) => {
       if (state.mainWindow?.isDestroyed()) {
         return
@@ -78,6 +81,17 @@ export function installMainWindowAgentStatusListeners(options: MainWindowAgentSt
         receivedAt,
         ...(evidenceObservedAt !== undefined ? { evidenceObservedAt } : {}),
         stateStartedAt,
+        ...(connectionId === null &&
+        source === payload.agentType &&
+        (payload.agentType === 'claude' || payload.agentType === 'codex')
+          ? {
+              flowInventorySettled:
+                payload.state === 'done' &&
+                !claudeRunningNonAgentTask &&
+                !payload.claudeTaskWakeupPending
+            }
+          : {}),
+        ...(flowStartedAt !== undefined ? { flowStartedAt } : {}),
         ...(turnStartedAt !== undefined ? { turnStartedAt } : {}),
         ...pickHostTurnEnd({ turnEndedAt, turnEndDisposition }),
         ...(providerSession ? { providerSession } : {}),

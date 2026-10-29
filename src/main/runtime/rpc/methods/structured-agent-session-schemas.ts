@@ -1,6 +1,7 @@
 // Use strict wire objects: silently stripping a newer client's key could change its requested effect.
 export {
   AcknowledgeAttentionParams,
+  ValidateFlowAttentionParams,
   AgentsParams,
   AttachParams,
   AvailabilityParams,

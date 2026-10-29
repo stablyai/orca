@@ -235,6 +235,10 @@ export function createAgentStatusEventApplicator(args: {
         const notificationPayload = {
           ...resolvedPayload,
           stateStartedAt: data.stateStartedAt,
+          turnStartedAt: data.turnStartedAt,
+          flowStartedAt: data.flowStartedAt,
+          flowInventorySettled: data.flowInventorySettled,
+          orchestration: data.orchestration,
           ...pickHostTurnEnd(data)
         }
         observeAgentHookCompletionForNotification({

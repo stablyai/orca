@@ -1,3 +1,8 @@
+import type {
+  AgentFlowAlert,
+  AgentFlowNotificationState
+} from '../../../shared/agent-flow-notification-policy'
+import { isCurrentAgentSessionFlowAlert } from '../../../shared/agent-session-attention'
 import { StructuredAgentSessionRequestFailures } from './structured-agent-session-request-failures'
 import { structuredAgentSessionFailureWordsContext } from './structured-agent-session-send-preparation'
 import { AT_REST_COMMANDS_READ_BUDGET_MS } from './at-rest-command-catalog'
@@ -75,6 +80,7 @@ export class StructuredAgentSessionClientDelivery {
     this.turnCompletionFeed = new StructuredAgentSessionTurnCompletionFeed({
       sessions,
       now,
+      readFlowState: (sessionId) => this.readFlowState(sessionId),
       readStatusState: (sessionId, journal) =>
         this.statusFeed.journalProjection(sessionId, journal)?.state ?? null
     })
@@ -125,7 +131,10 @@ export class StructuredAgentSessionClientDelivery {
     return adapter.readCommands?.(sessionId) ?? commands
   }
 
-  publishStatus = (sessionId: string): void => this.statusFeed.publish(sessionId)
+  publishStatus = (sessionId: string): void => {
+    this.statusFeed.publish(sessionId)
+    this.turnCompletionFeed.observeFlow(sessionId)
+  }
 
   publishConversationName = (sessionId: string): void =>
     this.statusFeed.publishConversationName(sessionId)
@@ -136,7 +145,10 @@ export class StructuredAgentSessionClientDelivery {
     sessionId: string,
     evidence: AgentChildWorkEvidence[],
     producer?: StructuredAgentSessionChildWorkProducer
-  ): void => this.statusFeed.publishChildWork(sessionId, evidence, producer)
+  ): void => {
+    this.statusFeed.publishChildWork(sessionId, evidence, producer)
+    this.turnCompletionFeed.observeFlow(sessionId)
+  }
 
   readStopping = (sessionId: string): boolean => {
     const projection = this.statusFeed.journalProjection(sessionId)
@@ -244,6 +256,7 @@ export class StructuredAgentSessionClientDelivery {
     this.stopAtRestCommandUpdates()
     this.sendSettlement.closeAll()
     this.journalObservers.clear()
+    this.turnCompletionFeed.dispose()
   }
 
   private publishJournal(sessionId: string, journal: AgentSessionJournal, activity = true): void {
@@ -262,6 +275,39 @@ export class StructuredAgentSessionClientDelivery {
           error
         })
       }
+    }
+  }
+
+  isFlowAttentionCurrent = (sessionId: string, alert: AgentFlowAlert): boolean => {
+    const scope = this.sessions.get(sessionId)?.params.location
+    return scope
+      ? isCurrentAgentSessionFlowAlert(scope, sessionId, this.readFlowState(sessionId), alert)
+      : false
+  }
+
+  private readFlowState(sessionId: string): AgentFlowNotificationState | null {
+    const session = this.sessions.get(sessionId)
+    const projection = this.statusFeed.journalProjection(sessionId)
+    if (
+      !session ||
+      !projection ||
+      (session.params.provider !== 'claude' && session.params.provider !== 'codex')
+    ) {
+      return null
+    }
+    const request = projection.state.latestRequest
+    const children = this.statusFeed.readChildWork(sessionId)
+    return {
+      hostId: session.params.location.executionHostId,
+      rootId: sessionId,
+      flowId: projection.acceptedSendKey,
+      parentEnded: !!request && request.turnState !== 'running',
+      ...(request?.outcome ? { outcome: request.outcome } : {}),
+      children,
+      inventoryKnown: children !== undefined && !this.statusFeed.childWorkIncomplete(sessionId),
+      pendingPromptIds: projection.state.pendingPromptIds,
+      owesWork: projection.state.owesWork,
+      live: !projection.stopping
     }
   }
 

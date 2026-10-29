@@ -2,7 +2,10 @@
 
 import type { AgentSessionTurnCompletionEvent } from '../../../shared/agent-session-wire'
 import type { AgentSessionAttentionEdge } from '../../../shared/agent-session-attention'
-import { AGENT_SESSION_TURN_COMPLETION_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
+import {
+  AGENT_SESSION_FLOW_ATTENTION_RUNTIME_CAPABILITY,
+  AGENT_SESSION_TURN_COMPLETION_RUNTIME_CAPABILITY
+} from '../../../shared/protocol-version'
 import { runtimeEnvironmentSupportsCapability } from './runtime-rpc-client'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import { subscribeStructuredAgentSessionTurnCompletions } from './structured-agent-session-client'
@@ -32,6 +35,7 @@ function createOwner(target: RuntimeClientTarget): OwnedTurnCompletionFeed {
   let handle: { unsubscribe: () => void } | null = null
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null
   let reconnectAttempt = 0
+  let flowAttentionSupported = target.kind === 'local'
 
   const deliver = (edge: AgentSessionAttentionEdge): void => {
     // A copy, so a listener that unsubscribes mid-fanout does not skip its neighbour.
@@ -90,8 +94,10 @@ function createOwner(target: RuntimeClientTarget): OwnedTurnCompletionFeed {
         }
         reconnectAttempt = 0
         // An arm this build cannot name is dropped, not handed on half-read.
-        if (event.type === 'completion' || event.type === 'prompt') {
-          deliver(event)
+        if (event.type === 'flow-attention') {
+          deliver(event.edge)
+        } else if (event.type === 'completion' || event.type === 'prompt') {
+          deliver(flowAttentionSupported ? event : { ...event, flowAttentionSupported: false })
         }
       },
       () => {
@@ -133,7 +139,18 @@ function createOwner(target: RuntimeClientTarget): OwnedTurnCompletionFeed {
         }
         // Unsupported methods stop permanently; failed probes remain retryable to avoid endless relay probing.
         if (supported) {
-          subscribeToHost(candidate)
+          void runtimeEnvironmentSupportsCapability(
+            environmentId,
+            AGENT_SESSION_FLOW_ATTENTION_RUNTIME_CAPABILITY
+          )
+            .then((flowSupported) => {
+              if (!active(candidate)) {
+                return
+              }
+              flowAttentionSupported = flowSupported
+              subscribeToHost(candidate)
+            })
+            .catch(() => loseConnection(candidate))
           return
         }
         console.warn(

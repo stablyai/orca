@@ -120,7 +120,7 @@ describe('host prompt delivery and retirement', () => {
           includePrompts: true,
           emit: (event) => {
             if (event.type !== 'end') {
-              delivery.deliver(event, undefined)
+              delivery.deliver(event.type === 'flow-attention' ? event.edge : event, undefined)
             }
           },
           onState: delivery.reconcile

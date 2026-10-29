@@ -44,6 +44,13 @@ export function buildClaudeStatusPayload(
       resetOnNewTurn: options.updateToolSnapshot && isNewTurnEvent('claude', eventName)
     }),
     agentType: 'claude',
+    inputRequestId:
+      options.stateName === 'waiting' || options.stateName === 'blocked'
+        ? (mainAgentRecord?.waitingToolUseId ??
+          hookPayload.tool_use_id ??
+          hookPayload.request_id ??
+          hookPayload.elicitation_id)
+        : undefined,
     toolName: snapshot.toolName,
     toolInput: snapshot.toolInput,
     interactivePrompt: snapshot.interactivePrompt,
@@ -52,6 +59,7 @@ export function buildClaudeStatusPayload(
     interrupted: mainAgentTurnInterrupted(mainAgentRecord),
     sessionBoundary: options.sessionBoundary,
     turnCompletedAt: mainAgentRecord?.turnCompletedAt,
+    automaticContinuation: mainAgentRecord?.taskWakeupTurn === true ? true : undefined,
     subagents: claudeRosterToSnapshots(state.claudeSubagentRosterByPaneKey.get(paneKey)),
     mainAgent: mainAgentRecord ? claudeMainAgentStatusForPayload(mainAgentRecord) : undefined
   })

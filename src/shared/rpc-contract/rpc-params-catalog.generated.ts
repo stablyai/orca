@@ -568,6 +568,7 @@ import {
   SshTargetAdd,
   SshTargetUpdate
 } from './ssh-params'
+import { ValidateFlowAttentionParams } from './structured-agent-session-attention-params'
 import { ContinueInterruptedParams } from './structured-agent-session-continue-params'
 import { ContinuationContextParams } from './structured-agent-session-identifiers'
 import {
@@ -789,6 +790,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'agentSession.subscribeTurnCompletions': SubscribeTurnCompletionsParams,
   'agentSession.threadGoal': ThreadGoalParams,
   'agentSession.unsubscribe': UnsubscribeParams,
+  'agentSession.validateFlowAttention': ValidateFlowAttentionParams,
   'agentSessionAttachment.read': AttachmentReadParams,
   'agentSessionAttachment.uploadAbort': AttachmentUploadIdParams,
   'agentSessionAttachment.uploadAppend': AttachmentUploadAppendParams,

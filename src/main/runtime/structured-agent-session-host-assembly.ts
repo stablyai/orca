@@ -90,13 +90,14 @@ export async function installOnJournal(
     installed.subscribeTurnCompletions({
       id: 'host-attention-delivery',
       includePrompts: true,
+      includeFlowAttention: true,
       emit: (event) => {
         if (event.type === 'end') {
           return
         }
-        const sessionId =
-          event.type === 'prompt' ? event.prompt.sessionId : event.completion.sessionId
-        delivery.deliver(event, installed.readStatusSummary(sessionId))
+        const edge = event.type === 'flow-attention' ? event.edge : event
+        const sessionId = edge.type === 'prompt' ? edge.prompt.sessionId : edge.completion.sessionId
+        delivery.deliver(edge, installed.readStatusSummary(sessionId))
       },
       onState: delivery.reconcile
     })

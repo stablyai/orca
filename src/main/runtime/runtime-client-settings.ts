@@ -1,3 +1,4 @@
+import { normalizeNotificationSettings } from '../persistence/applying-settings/onboarding-normalization'
 import { publishedLegacyChatPermissionMode } from '../../shared/agent-chat-permission-mode'
 import { getClaudeAgentViewService } from '../claude/agent-view-service'
 import { getAppEnvironment } from '../../shared/app-environment'
@@ -66,6 +67,7 @@ export class RuntimeClientSettingsController {
     // Older clients read permission from composed argument text, before a stored choice existed.
     const launchProfile = composeAgentLaunchProfile(settings, process.platform)
     return {
+      agentNotificationMode: settings.notifications?.agentNotificationMode ?? 'current',
       defaultTuiAgent: settings.defaultTuiAgent ?? null,
       newWorkspaceSetupOnly: false,
       disabledTuiAgents: settings.disabledTuiAgents ?? [],
@@ -131,10 +133,19 @@ export class RuntimeClientSettingsController {
     }
     const beforeSettings = this.store.getSettings()
     const before = beforeSettings.agentStatusHooksEnabled !== false
+    const { agentNotificationMode, ...otherUpdates } = updates
     // Legacy clients can select an agent or a shell, but cannot select None.
     this.store.updateSettings(
       {
-        ...updates,
+        ...otherUpdates,
+        ...(agentNotificationMode !== undefined
+          ? {
+              notifications: normalizeNotificationSettings({
+                ...beforeSettings.notifications,
+                agentNotificationMode
+              })
+            }
+          : {}),
         // An older client writes Arguments as it reads them, flag included.
         ...(updates.agentDefaultArgs !== undefined || updates.agentDefaultEnv !== undefined
           ? legacyLaunchTextUpdates(

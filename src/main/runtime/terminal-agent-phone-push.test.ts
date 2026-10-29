@@ -52,7 +52,7 @@ function harness(
   const clock = { now: 10_000 }
   const sent: MobileNotificationDispatchEvent[] = []
   const timers: { at: number; run: () => void; cancelled: boolean }[] = []
-  const state = {
+  const state: { muted: boolean; hasWindow: boolean; hookRow: AgentStatusIpcPayload | null } = {
     muted: options.muted ?? false,
     hasWindow: false,
     hookRow: options.hookRow ?? row()
@@ -328,4 +328,79 @@ describe('TerminalAgentPhonePush', () => {
     // The window's request was made with desktop banners off; only that flag differs.
     expect(fromWindow).toEqual([{ ...sent[0], desktopAllowed: false }])
   })
+})
+
+describe.each(['claude', 'codex'])('%s whole-flow phone delivery', (agentType) => {
+  const flow = {
+    agentType,
+    turnStartedAt: 1000,
+    flowInventorySettled: false,
+    mainAgent: { state: 'working' as const, stateStartedAt: 1000 }
+  }
+  it('keeps the parent ending quiet while background work runs, then sends one settled flow', () => {
+    const h = harness({ settings: { agentNotificationMode: 'action-or-flow-complete' } })
+    h.working(flow)
+    h.working({
+      ...flow,
+      turnCompletedAt: 2000,
+      mainAgent: { state: 'done', outcome: 'success', stateStartedAt: 2000 }
+    })
+    h.advance(10000)
+    expect(h.sent).toEqual([])
+    h.finish({
+      ...flow,
+      flowInventorySettled: true,
+      mainAgent: { state: 'done', outcome: 'success', stateStartedAt: 2000 }
+    })
+    h.advance(1499)
+    expect(h.sent).toEqual([])
+    h.advance(1)
+    h.finish({
+      ...flow,
+      flowInventorySettled: true,
+      mainAgent: { state: 'done', outcome: 'success', stateStartedAt: 2000 }
+    })
+    h.advance(10000)
+    expect(h.sent).toHaveLength(1)
+    expect(h.sent[0]).toMatchObject({
+      agentNotificationReason: 'flow-complete',
+      agentFlowId: '1000',
+      agentState: 'done'
+    })
+  })
+  it('sends different questions in one waiting period and suppresses replay', () => {
+    const h = harness({ settings: { agentNotificationMode: 'action-or-flow-complete' } })
+    h.working(flow)
+    for (const inputRequestId of ['q1', 'q1', 'q2']) {
+      h.state.hookRow = row({ ...flow, state: 'waiting', inputRequestId })
+      h.push.observe(moved('needs-input', 'needs-you'))
+    }
+    expect(h.sent.map((event) => event.agentNotificationReason)).toEqual([
+      'input-required',
+      'input-required'
+    ])
+    expect(new Set(h.sent.map((event) => event.notificationId)).size).toBe(2)
+  })
+  it('revalidates pending completion on host disappearance and new work', () => {
+    const h = harness({ settings: { agentNotificationMode: 'action-or-flow-complete' } })
+    h.working(flow)
+    h.finish({
+      ...flow,
+      flowInventorySettled: true,
+      mainAgent: { state: 'done', outcome: 'success', stateStartedAt: 2000 }
+    })
+    h.state.hookRow = null
+    h.advance(1500)
+    expect(h.sent).toEqual([])
+  })
+})
+
+it('drops a current-mode quiet timer after the host mode changes before delivery', () => {
+  const settings: Partial<NotificationSettings> = { agentNotificationMode: 'current' }
+  const h = harness({ settings })
+  h.working()
+  h.finish()
+  settings.agentNotificationMode = 'action-or-flow-complete'
+  h.advance(1500)
+  expect(h.sent).toEqual([])
 })

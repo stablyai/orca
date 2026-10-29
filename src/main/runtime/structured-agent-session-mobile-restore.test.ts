@@ -47,7 +47,10 @@ function wire(host: StructuredAgentSessionHost, controller: RuntimeMobileNotific
     includePrompts: true,
     emit: (event) => {
       if (event.type !== 'end') {
-        delivery.deliver(event, host.readStatusSummary(SESSION))
+        delivery.deliver(
+          event.type === 'flow-attention' ? event.edge : event,
+          host.readStatusSummary(SESSION)
+        )
       }
     },
     onState: delivery.reconcile

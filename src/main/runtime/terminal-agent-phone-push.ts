@@ -1,4 +1,8 @@
 // Push hook-agent finish/input alerts from windowless execution hosts using desktop rules. A window already pushes these phones; the phone suppresses its own visible chat.
+import {
+  usesWholeFlowNotifications,
+  type AgentFlowAlert
+} from '../../shared/agent-flow-notification-policy'
 import type { AgentPaneChange } from '../agent-hooks/agent-transition-detector'
 import { agentMainAgentVerdict } from '../../shared/agent-main-agent-verdict'
 import { buildAgentNotificationId } from '../../shared/agent-notification-id'
@@ -15,6 +19,7 @@ import { TerminalAgentTurnNews } from './terminal-agent-turn-news'
 export type TerminalAgentWorkspaceLabels = { repoLabel?: string; worktreeLabel?: string }
 
 type PaneNews = {
+  agentType?: string
   worktreeId: string
   event: MobileNotificationDispatchEvent
 }
@@ -41,9 +46,11 @@ export class TerminalAgentPhonePush {
   constructor(private readonly deps: TerminalAgentPhonePushDeps) {
     this.turnNews = new TerminalAgentTurnNews({
       readHookRow: (paneKey) => deps.readHookRow(paneKey),
-      prepare: ({ paneKey, worktreeId, row }) => ({
+      readNotificationMode: () => deps.readNotificationSettings()?.agentNotificationMode,
+      prepare: ({ paneKey, worktreeId, row, flowAlert }) => ({
         worktreeId,
-        event: this.buildEvent(worktreeId, paneKey, row)
+        agentType: row.agentType,
+        event: this.buildEvent(worktreeId, paneKey, row, flowAlert)
       }),
       deliver: (news) => this.send(news),
       setTimer: (run, delayMs) => deps.setTimer(run, delayMs)
@@ -57,7 +64,8 @@ export class TerminalAgentPhonePush {
   private buildEvent(
     worktreeId: string,
     paneKey: string,
-    row: AgentStatusIpcPayload
+    row: AgentStatusIpcPayload,
+    flowAlert?: AgentFlowAlert
   ): MobileNotificationDispatchEvent {
     const outcome = agentMainAgentVerdict(row)
     const request: NotificationDispatchRequest = {
@@ -65,7 +73,7 @@ export class TerminalAgentPhonePush {
       worktreeId,
       paneKey,
       ...this.readLabels(worktreeId, paneKey),
-      agentState: row.state,
+      agentState: flowAlert?.reason === 'action-required' ? 'done' : row.state,
       ...(row.agentType ? { agentType: row.agentType } : {}),
       ...(row.prompt ? { agentPrompt: row.prompt } : {}),
       ...(row.toolName ? { agentToolName: row.toolName } : {}),
@@ -74,11 +82,13 @@ export class TerminalAgentPhonePush {
       ...(outcome ? { agentTurnOutcome: outcome } : {})
     }
     const { title, body } = buildNotificationOptions(request, this.deps.translate)
-    const notificationId = buildAgentNotificationId({
-      worktreeId,
-      paneKey,
-      stateStartedAt: row.stateStartedAt
-    })
+    const notificationId =
+      flowAlert?.alertId ??
+      buildAgentNotificationId({
+        worktreeId,
+        paneKey,
+        stateStartedAt: row.stateStartedAt
+      })
     return {
       type: 'notification',
       source: 'agent-task-complete',
@@ -87,7 +97,14 @@ export class TerminalAgentPhonePush {
       worktreeId,
       paneKey,
       ...(notificationId ? { notificationId } : {}),
-      agentState: row.state
+      ...(flowAlert
+        ? {
+            attentionKey: flowAlert.alertId,
+            agentFlowId: flowAlert.flowId,
+            agentNotificationReason: flowAlert.reason
+          }
+        : {}),
+      agentState: flowAlert?.reason === 'action-required' ? 'done' : row.state
     }
   }
 
@@ -97,10 +114,20 @@ export class TerminalAgentPhonePush {
       return
     }
     const settings = this.deps.readNotificationSettings()
+    if (
+      usesWholeFlowNotifications(settings?.agentNotificationMode, news.agentType) !==
+      !!news.event.agentNotificationReason
+    ) {
+      return
+    }
     // The window's own fan-out gates the phone on these same preferences.
     const desktopAllowed = settings?.enabled !== false && settings?.agentTaskComplete !== false
     const now = this.deps.now()
-    const burstKey = JSON.stringify([desktopAllowed, news.event.agentState, news.worktreeId])
+    const burstKey = JSON.stringify([
+      desktopAllowed,
+      news.event.agentState,
+      news.event.attentionKey ?? news.worktreeId
+    ])
     if (!reserveNotificationCooldown(this.recentDispatches, burstKey, now)) {
       return
     }

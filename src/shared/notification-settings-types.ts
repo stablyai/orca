@@ -6,6 +6,7 @@ import type { NotificationSourceId } from './notification-source'
 export type NotificationSettings = {
   enabled: boolean
   agentTaskComplete: boolean
+  agentNotificationMode?: 'current' | 'action-or-flow-complete'
   terminalBell: boolean
   suppressWhenFocused: boolean
   customSoundId:
@@ -37,6 +38,9 @@ export type StructuredNotificationRead = StructuredAttentionRead & {
 export type NotificationDispatchRequest = {
   source: NotificationEventSource
   notificationId?: string
+  agentNotificationReason?: 'input-required' | 'action-required' | 'flow-complete'
+  agentFlowId?: string
+  agentFlowCapability?: 'legacy'
   /** Why: useful for fast native failures, but macOS can still drop notifications after 'show'. */
   requireDisplayConfirmation?: boolean
   worktreeId?: string

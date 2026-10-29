@@ -60,6 +60,10 @@ export function buildCodexStatusPayload(
       resetOnNewTurn: options.updateLead && isNewTurnEvent('codex', eventName)
     }),
     agentType: 'codex',
+    inputRequestId:
+      options.stateName === 'waiting' || options.stateName === 'blocked'
+        ? readFirstString(hookPayload, ['request_id', 'tool_use_id', 'call_id'])
+        : undefined,
     model: lead?.model,
     toolName: snapshot.toolName,
     toolInput: snapshot.toolInput,

@@ -1,4 +1,6 @@
 // Set tray attention before gates and fan out to phones before desktop early returns.
+import { BoundedMap } from '../../shared/bounded-map'
+import { usesWholeFlowNotifications } from '../../shared/agent-flow-notification-policy'
 import type { BrowserWindow } from 'electron'
 import type {
   NotificationDispatchRequest,
@@ -13,6 +15,7 @@ import { toHostSessionPaneKey } from '../../shared/terminal-surface-id'
 
 export type NotificationDeliveryDependencies = {
   readNotificationSettings: () => NotificationSettings
+  isCurrent?: (request: NotificationDispatchRequest) => boolean
   findActiveWindow: () => BrowserWindow | null
   isWindowVisible: (window: BrowserWindow | null) => boolean
   setTrayAttention: (attention: boolean) => void
@@ -42,6 +45,7 @@ export type NotificationDeliveryService = {
 export function createNotificationDeliveryService(
   deps: NotificationDeliveryDependencies
 ): NotificationDeliveryService {
+  const flowAlerts = new BoundedMap<string, true>({ maxEntries: 1024 })
   const recentDesktopNotifications = new Map<string, number>()
   const recentMobileNotifications = new Map<string, number>()
 
@@ -60,6 +64,9 @@ export function createNotificationDeliveryService(
       }
       return result
     }
+    if (deps.isCurrent?.(request) === false) {
+      return { delivered: false, reason: 'invalid-request' }
+    }
     const result = deps.deliverNative(request, options, settings)
     return result instanceof Promise ? result.then(recordIfDelivered) : recordIfDelivered(result)
   }
@@ -73,7 +80,24 @@ export function createNotificationDeliveryService(
         }
       }
 
+      if (deps.isCurrent?.(request) === false) {
+        return { delivered: false, reason: 'invalid-request' }
+      }
       const settings = deps.readNotificationSettings()
+      if (
+        request.agentFlowCapability !== 'legacy' &&
+        usesWholeFlowNotifications(settings.agentNotificationMode, request.agentType) &&
+        (request.source === 'terminal-bell' ||
+          (request.source === 'agent-task-complete' && !request.agentNotificationReason))
+      ) {
+        return { delivered: false, reason: 'source-disabled' }
+      }
+      if (request.agentFlowId && request.attentionKey) {
+        if (flowAlerts.has(request.attentionKey)) {
+          return { delivered: false, reason: 'cooldown' }
+        }
+        flowAlerts.set(request.attentionKey, true)
+      }
       const hostMuted =
         request.notificationSourceId !== undefined &&
         settings.mutedNotificationSourceIds.includes(request.notificationSourceId)
@@ -107,6 +131,12 @@ export function createNotificationDeliveryService(
             type: 'notification',
             emittedAt: deps.now(),
             source: request.source,
+            ...(request.agentFlowId
+              ? {
+                  agentFlowId: request.agentFlowId,
+                  agentNotificationReason: request.agentNotificationReason
+                }
+              : {}),
             ...(!desktopAllowed ? { desktopAllowed: false } : {}),
             title: notificationOptions.title,
             body: notificationOptions.body,

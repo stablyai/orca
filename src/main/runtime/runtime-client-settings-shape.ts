@@ -43,6 +43,7 @@ export type RuntimeClientSettings = Pick<
   /** Older clients still read these; neither is persisted or accepted as an update. */
   openAgentTabsInChatByDefault?: boolean
   experimentalStructuredNativeChat?: boolean
+  agentNotificationMode?: NonNullable<GlobalSettings['notifications']['agentNotificationMode']>
   hostSettingOverrides: RuntimeHostDisplayLabelOverrides
   sourceControlAi: RuntimeClientSourceControlAi
 }
@@ -55,29 +56,34 @@ export type RuntimeHostDisplayLabelOverrides = Partial<
   Record<ExecutionHostId, { displayLabel: string }>
 >
 
-export type RuntimeClientSettingsUpdate = Pick<
-  Partial<GlobalSettings>,
-  | 'agentStatusHooksEnabled'
-  | 'claudeSubagentNavigationEnabled'
-  | 'experimentalConnectors'
-  | 'defaultTuiAgent'
-  | 'disabledTuiAgents'
-  | 'agentDefaultArgs'
-  | 'agentDefaultEnv'
-  | 'defaultTaskSource'
-  | 'defaultTaskViewPreset'
-  | 'visibleTaskProviders'
-  | 'defaultRepoSelection'
-  | 'defaultLinearTeamSelection'
-  | 'githubProjects'
-  | 'experimentalNewWorktreeCardStyle'
-  | 'compactWorktreeCards'
-  | 'minimaxGroupId'
-  | 'minimaxUsageModels'
-  | 'minimaxEndpoint'
-  | 'zcodePlanSite'
-  | 'prBotAuthorOverrides'
-  | 'worktreeVisibilityDefaults'
-  | 'machineName'
-  | 'nativeChatPermissionMode'
->
+export type RuntimeClientSettingsUpdate = AgentNotificationModeUpdate &
+  Pick<
+    Partial<GlobalSettings>,
+    | 'agentStatusHooksEnabled'
+    | 'claudeSubagentNavigationEnabled'
+    | 'experimentalConnectors'
+    | 'defaultTuiAgent'
+    | 'disabledTuiAgents'
+    | 'agentDefaultArgs'
+    | 'agentDefaultEnv'
+    | 'defaultTaskSource'
+    | 'defaultTaskViewPreset'
+    | 'visibleTaskProviders'
+    | 'defaultRepoSelection'
+    | 'defaultLinearTeamSelection'
+    | 'githubProjects'
+    | 'experimentalNewWorktreeCardStyle'
+    | 'compactWorktreeCards'
+    | 'minimaxGroupId'
+    | 'minimaxUsageModels'
+    | 'minimaxEndpoint'
+    | 'zcodePlanSite'
+    | 'prBotAuthorOverrides'
+    | 'worktreeVisibilityDefaults'
+    | 'machineName'
+    | 'nativeChatPermissionMode'
+  >
+
+export type AgentNotificationModeUpdate = {
+  agentNotificationMode?: NonNullable<GlobalSettings['notifications']['agentNotificationMode']>
+}

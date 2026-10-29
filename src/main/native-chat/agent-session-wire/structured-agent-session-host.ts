@@ -164,8 +164,7 @@ export class StructuredAgentSessionHost {
   private now = (): number => this.deps.now?.() ?? Date.now()
 
   hasSession = (sessionId: string): boolean => this.sessions.has(sessionId)
-  loadedSessionIds = (): string[] =>
-    [...this.sessions].flatMap(([sessionId, { child }]) => (child ? [sessionId] : []))
+  loadedSessionIds = (): string[] => providerSupport.loadedSessionIds(this.sessions)
   hasLoadedProviders = (): boolean => this.loadedSessionIds().length > 0
   sessionAgent = (sessionId: string) => this.deps.store.getConversation(sessionId)?.provider ?? null
 
@@ -348,6 +347,7 @@ export class StructuredAgentSessionHost {
   /** Live-only completion/prompt events; missed events are never replayed. */
   subscribeTurnCompletions = this.clientDelivery.subscribeTurnCompletions
   readStatusSummary = this.clientDelivery.readStatusSummary
+  isFlowAttentionCurrent = this.clientDelivery.isFlowAttentionCurrent
 
   collaboratorsForTests = () => ({
     sessions: this.sessions,

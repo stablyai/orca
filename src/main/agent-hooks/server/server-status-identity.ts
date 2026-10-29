@@ -64,6 +64,17 @@ export function toAgentStatusIpcPayload(
       ? { evidenceObservedAt: entry.evidenceObservedAt }
       : {}),
     stateStartedAt: entry.stateStartedAt,
+    ...(entry.connectionId === null &&
+    entry.source === entry.payload.agentType &&
+    (entry.payload.agentType === 'claude' || entry.payload.agentType === 'codex')
+      ? {
+          flowInventorySettled:
+            entry.payload.state === 'done' &&
+            !entry.claudeRunningNonAgentTask &&
+            !entry.payload.claudeTaskWakeupPending
+        }
+      : {}),
+    ...(entry.flowStartedAt !== undefined ? { flowStartedAt: entry.flowStartedAt } : {}),
     ...(entry.turnStartedAt !== undefined ? { turnStartedAt: entry.turnStartedAt } : {}),
     ...pickHostTurnEnd(entry),
     ...(entry.providerSession ? { providerSession: entry.providerSession } : {}),

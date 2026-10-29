@@ -1,4 +1,8 @@
 import {
+  usesWholeFlowNotifications,
+  type AgentFlowAlert
+} from '../../../../shared/agent-flow-notification-policy'
+import {
   resolveTerminalNotificationOwner,
   type TerminalNotificationBinding
 } from '@/attention/notification-subject-owner'
@@ -59,6 +63,7 @@ function hasFreshActiveHookStatus(
 
 export type TerminalNotificationEvent = TerminalNotificationBinding & {
   source: 'terminal-bell' | 'agent-task-complete'
+  flowAlert?: AgentFlowAlert
   terminalTitle?: string
   agentStatusSnapshot?: AgentCompletionStatusSnapshot
   agentCompletionSource?: AgentCompletionDispatchMeta['source']
@@ -73,10 +78,9 @@ export function dispatchTerminalNotification(
 ): boolean {
   const state = useAppStore.getState()
   // Explicit completion-title identity rejects other-agent snapshot prompts/timing as pane-reuse residue.
-  const explicitTitleAgentType =
-    event.source === 'agent-task-complete' && event.terminalTitle
-      ? resolveCommittedTitleAgentType(event.terminalTitle)
-      : null
+  const explicitTitleAgentType = event.terminalTitle
+    ? resolveCommittedTitleAgentType(event.terminalTitle)
+    : null
   const storedAgentStatus =
     event.source === 'agent-task-complete' && event.paneKey
       ? state.agentStatusByPaneKey[event.paneKey]
@@ -142,7 +146,8 @@ export function dispatchTerminalNotification(
   const agentSnapshot = agentStatus
     ? {
         agentType: agentStatus.agentType,
-        agentState: agentStatus.state,
+        agentState:
+          event.flowAlert?.reason === 'action-required' ? ('done' as const) : agentStatus.state,
         agentPrompt: agentStatus.prompt,
         agentToolName: agentStatus.toolName,
         agentToolInput: agentStatus.toolInput,
@@ -162,13 +167,45 @@ export function dispatchTerminalNotification(
 
   let requested = false
   const requestDelivery = (request: AgentAttentionDeliveryRequest): void => {
-    requested = true
     const owner = resolveTerminalNotificationOwner(state, worktreeId, event)
+    const legacyHost =
+      event.agentStatusSnapshot?.flowInventorySettled === undefined &&
+      (!!owner?.runtimeEnvironmentId ||
+        (!!owner?.executionHostId && owner.executionHostId !== 'local'))
+    const agent =
+      agentStatus?.agentType ??
+      (event.paneKey ? state.agentStatusByPaneKey[event.paneKey]?.agentType : undefined) ??
+      explicitTitleAgentType
+    if (
+      event.source === 'terminal-bell' &&
+      usesWholeFlowNotifications(state.settings?.notifications?.agentNotificationMode, agent)
+    ) {
+      return
+    }
+    if (
+      usesWholeFlowNotifications(state.settings?.notifications?.agentNotificationMode, agent) &&
+      !legacyHost &&
+      !event.flowAlert
+    ) {
+      return
+    }
+    requested = true
     const executionHost = notificationExecutionHostForOwner(owner)
     deliverAgentAttentionNotification(
       {
         source: event.source,
+        ...(event.source === 'agent-task-complete' && legacyHost && !event.flowAlert
+          ? { agentFlowCapability: 'legacy' as const }
+          : {}),
         ...(notificationId ? { notificationId } : {}),
+        ...(event.flowAlert
+          ? {
+              notificationId: event.flowAlert.alertId,
+              attentionKey: event.flowAlert.alertId,
+              agentFlowId: event.flowAlert.flowId,
+              agentNotificationReason: event.flowAlert.reason
+            }
+          : {}),
         worktreeId: request.workspaceId,
         ...(executionHost ? { executionHost } : {}),
         paneKey: request.subjectKey ?? undefined,
@@ -184,7 +221,7 @@ export function dispatchTerminalNotification(
   }
 
   applyAgentAttention(attentionDecision, {
-    unread: state.markAgentAttentionUnread,
+    unread: event.flowAlert ? () => undefined : state.markAgentAttentionUnread,
     requestDelivery
   })
   return requested

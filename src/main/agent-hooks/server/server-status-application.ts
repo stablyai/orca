@@ -146,6 +146,15 @@ export abstract class AgentHookServerStatusApplication extends AgentHookServerSt
         ? previous.stateStartedAt
         : (observedAt ?? now)
     const turnStartedAt = resolveTurnStartedAt(previous, payload, observedAt ?? now)
+    const opensFlow =
+      payload.source !== undefined &&
+      payload.toolAgentId === undefined &&
+      payload.isReplay !== true &&
+      payload.providerSessionOnly !== true &&
+      payload.payload.sessionBoundary !== true &&
+      payload.payload.automaticContinuation !== true &&
+      isNewTurnEvent(payload.source, payload.hookEventName)
+    const flowStartedAt = opensFlow ? (observedAt ?? now) : previous?.flowStartedAt
     // Relay rows carry their execution host's turn-end evidence.
     const { hostTurn, ...turnEnd } = reduceHostTurnEnd(
       previous,
@@ -168,6 +177,7 @@ export abstract class AgentHookServerStatusApplication extends AgentHookServerSt
       stateStartedAt,
       // Producers cannot declare a main-agent turn start.
       turnStartedAt,
+      flowStartedAt,
       ...turnEnd,
       ...(hostTurn ? { hostTurn } : {})
     }

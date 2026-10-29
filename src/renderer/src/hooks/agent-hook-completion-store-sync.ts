@@ -4,6 +4,7 @@ export { isAgentHookCompletionTrackingEnabled }
 type CompletionNotificationSettings = {
   readonly enabled?: boolean
   readonly agentTaskComplete?: boolean
+  readonly agentNotificationMode?: string
 }
 
 type CompletionStoreSettings = {
@@ -79,6 +80,8 @@ function shouldSync(
   visitTab?: TabVisit
 ): boolean {
   if (
+    current.settings?.notifications?.agentNotificationMode !==
+      previous.settings?.notifications?.agentNotificationMode ||
     isAgentHookCompletionTrackingEnabled(current) !== isAgentHookCompletionTrackingEnabled(previous)
   ) {
     return true

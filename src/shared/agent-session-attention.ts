@@ -1,6 +1,11 @@
 // Share attention identity/wording across desktop banners/unread and execution-host mobile pushes.
 
 import {
+  agentFlowAlerts,
+  type AgentFlowAlert,
+  type AgentFlowNotificationState
+} from './agent-flow-notification-policy'
+import {
   agentSessionScopeKey,
   isAgentSessionExecutionLocation,
   type AgentSessionExecutionLocation
@@ -13,7 +18,7 @@ import { AGENT_JOURNAL_TURN_OUTCOMES, type AgentJournalTurnOutcome } from './age
 export type AgentSessionAttentionEdge = Extract<
   AgentSessionTurnCompletionEvent,
   { type: 'completion' | 'prompt' }
->
+> & { flowAlert?: AgentFlowAlert; flowAttentionSupported?: boolean }
 
 export type StructuredAttentionOrigin = {
   scope: AgentSessionExecutionLocation
@@ -162,4 +167,22 @@ export function agentSessionAttentionNews(
     agentState: awaitingUser === true && outcome === 'success' ? 'blocked' : 'done',
     outcome
   }
+}
+
+export function isCurrentAgentSessionFlowAlert(
+  scope: AgentSessionExecutionLocation,
+  sessionId: string,
+  state: AgentFlowNotificationState | null,
+  alert: AgentFlowAlert
+): boolean {
+  const prefix = agentSessionAttentionSubjectPrefix(scope, sessionId)
+  return (
+    state !== null &&
+    agentFlowAlerts(state).some(
+      (current) =>
+        current.flowId === alert.flowId &&
+        current.reason === alert.reason &&
+        prefix + current.alertId === alert.alertId
+    )
+  )
 }

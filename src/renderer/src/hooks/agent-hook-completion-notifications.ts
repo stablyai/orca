@@ -1,3 +1,6 @@
+import { buildTabIndex, resolveTabById, type TabIndex } from './agent-hook-completion-tab-index'
+import type { AgentFlowNotificationDelivery } from '../../../shared/agent-flow-notification-policy'
+import { createHookFlowNotificationDelivery } from './agent-hook-flow-notification-delivery'
 import { useAppStore } from '@/store'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
 import { createAgentCompletionCoordinator } from '@/components/terminal-pane/agent-completion-coordinator'
@@ -24,12 +27,11 @@ import {
 type CoordinatorEntry = {
   worktreeId: string
   coordinator: AgentCompletionCoordinator
+  flowDelivery: AgentFlowNotificationDelivery
+  snapshot?: AgentCompletionStatusSnapshot
 }
 
 type StoreSnapshot = ReturnType<typeof useAppStore.getState>
-type WorktreeTab = NonNullable<StoreSnapshot['tabsByWorktree']>[string][number]
-// Index paneKey → tab once per prune instead of flattening all tabs per coordinator.
-type TabIndex = ReadonlyMap<string, WorktreeTab>
 type PaneCoordinatorLivenessSnapshot = Pick<
   StoreSnapshot,
   'tabsByWorktree' | 'ptyIdsByTabId' | 'terminalLayoutsByTabId' | 'suppressedPtyExitIds'
@@ -43,22 +45,10 @@ let lastPrunedLivenessSnapshot: PaneCoordinatorLivenessSnapshot | null = null
 
 function disposeCoordinatorForPaneKey(paneKey: string): void {
   coordinatorsByPaneKey.get(paneKey)?.coordinator.dispose()
+  coordinatorsByPaneKey.get(paneKey)?.flowDelivery.dispose()
   coordinatorsByPaneKey.delete(paneKey)
   discardHookLaneCompletionRequests(paneKey)
   paneKeysRequiringFreshWorking.delete(paneKey)
-}
-
-function buildTabIndex(tabsByWorktree: StoreSnapshot['tabsByWorktree']): TabIndex {
-  const index = new Map<string, WorktreeTab>()
-  for (const tabs of Object.values(tabsByWorktree ?? {})) {
-    for (const tab of tabs) {
-      // Preserve first-wins lookup when tab IDs collide across worktrees.
-      if (!index.has(tab.id)) {
-        index.set(tab.id, tab)
-      }
-    }
-  }
-  return index
 }
 
 function pruneClosedPaneCoordinators(): void {
@@ -137,28 +127,14 @@ export function syncAgentHookCompletionNotificationsForStoreUpdate(
     syncAgentTaskCompleteTrackingEnabled(isAgentHookCompletionTrackingEnabled(previous))
   }
   syncAgentHookCompletionNotificationSettings()
+  for (const entry of coordinatorsByPaneKey.values()) {
+    entry.flowDelivery.observe(true)
+  }
   return true
 }
 
 function paneHasLivePty(paneKey: string): boolean {
   return getPtyIdForPaneKey(paneKey) !== null
-}
-
-function resolveTabById(
-  state: StoreSnapshot,
-  tabId: string,
-  tabIndex?: TabIndex
-): WorktreeTab | undefined {
-  if (tabIndex) {
-    return tabIndex.get(tabId)
-  }
-  for (const tabs of Object.values(state.tabsByWorktree ?? {})) {
-    const found = tabs.find((candidate) => candidate.id === tabId)
-    if (found) {
-      return found
-    }
-  }
-  return undefined
 }
 
 function paneKeyHasUnsuppressedPtyHint(
@@ -275,10 +251,17 @@ export function observeAgentHookCompletionForNotification({
   let entry = coordinatorsByPaneKey.get(paneKey)
   if (!entry || entry.worktreeId !== worktreeId) {
     entry?.coordinator.dispose()
+    entry?.flowDelivery.dispose()
     discardHookLaneCompletionRequests(paneKey)
     entry = {
       worktreeId,
-      coordinator: createCoordinator(paneKey, worktreeId)
+      coordinator: createCoordinator(paneKey, worktreeId),
+      flowDelivery: createHookFlowNotificationDelivery(
+        paneKey,
+        worktreeId,
+        () => coordinatorsByPaneKey.get(paneKey)?.snapshot,
+        () => hookLaneDispatchEnabled(paneKey) && paneCanReceiveHookCompletion(paneKey)
+      )
     }
     coordinatorsByPaneKey.set(paneKey, entry)
     if (requireFreshWorkingForNewTrackingCoordinators) {
@@ -289,6 +272,8 @@ export function observeAgentHookCompletionForNotification({
   if (payload.state === 'working' && payload.turnCompletedAt === undefined && trackingEnabled) {
     paneKeysRequiringFreshWorking.delete(paneKey)
   }
+  entry.snapshot = payload
+  entry.flowDelivery.observe(seedOnly === true)
   // Why: on a legacy pane the host's end facts must not change main's done identity or replay guard.
   const { turnEndedAt: _turnEndedAt, turnEndDisposition: _disposition, ...legacyPayload } = payload
   const observed =
@@ -317,6 +302,7 @@ export function hasPendingHookLaneCompletion(paneKey: string, ptyId: string | nu
 export function resetAgentHookCompletionNotificationCoordinators(): void {
   for (const [paneKey, entry] of coordinatorsByPaneKey) {
     entry.coordinator.dispose()
+    entry.flowDelivery.dispose()
     discardHookLaneCompletionRequests(paneKey)
   }
   coordinatorsByPaneKey.clear()

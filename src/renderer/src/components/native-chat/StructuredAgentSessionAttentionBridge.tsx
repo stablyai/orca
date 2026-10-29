@@ -153,18 +153,31 @@ function StructuredAgentSessionOwnedAttention({
                 raisedAt: Math.max(edge.prompt.raisedAt, relayedPrompt.current?.raisedAt ?? 0)
               }
             }
-            dispatchStructuredPromptAttention(tab, edge.prompt, target, () => {
-              const read = readFrontier.current
-              return read?.sessionId === tab.entityId &&
-                sameStructuredReadTarget(read.target, target)
-                ? read
-                : undefined
-            })
+            dispatchStructuredPromptAttention(
+              tab,
+              edge.prompt,
+              target,
+              () => {
+                const read = readFrontier.current
+                return read?.sessionId === tab.entityId &&
+                  sameStructuredReadTarget(read.target, target)
+                  ? read
+                  : undefined
+              },
+              edge.flowAlert,
+              edge.flowAttentionSupported
+            )
             // Its own resolution may already be mirrored; the relay above is already in main.
             settleRelayedPrompt.current()
           }
         } else if (edge.completion.sessionId === tab.entityId) {
-          dispatchStructuredTurnCompletionAttention(tab, edge.completion, target)
+          dispatchStructuredTurnCompletionAttention(
+            tab,
+            edge.completion,
+            target,
+            edge.flowAlert,
+            edge.flowAttentionSupported
+          )
         }
       }),
     [feed, tab, target]

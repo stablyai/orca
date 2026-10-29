@@ -86,6 +86,7 @@ export const GitHubProjectSettings = z
 
 export const SettingsUpdate = z
   .object({
+    agentNotificationMode: z.enum(['current', 'action-or-flow-complete']).optional(),
     machineName: z.string().trim().max(MACHINE_NAME_MAX_LENGTH).optional(),
     worktreeVisibilityDefaults: WorktreeVisibilityDefaultsUpdate.optional(),
     defaultTuiAgent: z
