@@ -31,12 +31,22 @@ describe('PowerShell OSC 133 bootstrap', () => {
       cwd,
       cwd,
       undefined,
-      // 6000 = windows-shell-args STARTUP_COMMAND_TEXT_MAX_CHARS (module-private).
-      `orca ${'x'.repeat(6000)}`
+      // Exactly STARTUP_COMMAND_TEXT_MAX_CHARS (module-private, windows-shell-args): the
+      // text gate passes, but bootstrap + command together exceed the encoded arg budget,
+      // so argv carries the bootstrap only and the daemon queues the command on stdin
+      // behind the pwsh startup barrier.
+      `orca ${'x'.repeat(5995)}`
     )
 
     expect(result.startupCommandDeliveredInShellArgs).toBeUndefined()
     expect(result.shellArgs.slice(0, 2)).toEqual(['-NoLogo', '-NoExit'])
+    // The oversized command contributes nothing to argv: the encoded arg is byte-identical
+    // to a launch with no startup command at all, proving stdin (barrier-queued) delivery.
+    const noCommand = resolveWindowsShellLaunchArgs('pwsh.exe', cwd, cwd, undefined, undefined)
+    const encodedArg = result.shellArgs[result.shellArgs.indexOf('-EncodedCommand') + 1]
+    const noCommandEncodedArg =
+      noCommand.shellArgs[noCommand.shellArgs.indexOf('-EncodedCommand') + 1]
+    expect(encodedArg).toBe(noCommandEncodedArg)
   })
 
   it('wraps prompt/readline without bypassing profiles or execution policy', () => {
