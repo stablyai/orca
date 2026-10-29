@@ -13,6 +13,11 @@ import {
 } from './native-chat/input/native-chat-slash-commands'
 import type { AgentSessionConversationCommand } from './agent-session/agent-session-conversation-command'
 import type { AgentSessionSlashCommand } from './agent-session-wire'
+import {
+  structuredComposerFailure,
+  type StructuredComposerFailureCode,
+  type StructuredComposerFailureParams
+} from './structured-agent-session-composer-failure'
 
 const MODEL_COMMAND: SlashCommandSuggestion = {
   name: 'model',
@@ -62,6 +67,9 @@ export type StructuredAgentSessionCommandOutcome = {
   handled: boolean
   accepted: boolean
   error: string | null
+  /** Set on refusals this module words, so a client can translate `error`. */
+  errorCode?: StructuredComposerFailureCode
+  errorParams?: StructuredComposerFailureParams
   /** Show refusal only while this condition holds. */
   refusedWhile?: StructuredAgentSessionCommandRefusalCause
 }
@@ -194,7 +202,7 @@ function unavailable(name: string): StructuredAgentSessionCommandOutcome {
   return {
     handled: true,
     accepted: true,
-    error: `/${name} is not available in chat sessions. Use the slash menu to see available commands.`
+    ...structuredComposerFailure('commandUnavailable', { name })
   }
 }
 
@@ -205,7 +213,11 @@ export async function dispatchStructuredAgentSessionComposerCommand(
   const command = commandParts(text)
   if (command?.name === 'goal' && controller.setThreadGoalObjective) {
     if (!command.argument) {
-      return { handled: true, accepted: false, error: 'Describe the goal after /goal.' }
+      return {
+        handled: true,
+        accepted: false,
+        ...structuredComposerFailure('goalObjectiveMissing')
+      }
     }
     // A refusal reaches the user through the session's own error surface.
     return {
@@ -222,7 +234,11 @@ export async function dispatchStructuredAgentSessionComposerCommand(
   }
   if (command.name === 'clear' || command.name === 'compact') {
     if (command.argument) {
-      return { handled: true, accepted: false, error: `Use /${command.name} without arguments.` }
+      return {
+        handled: true,
+        accepted: false,
+        ...structuredComposerFailure('commandTakesNoArguments', { name: command.name })
+      }
     }
     if (
       !controller.conversationCommands?.includes(command.name) ||
@@ -231,7 +247,7 @@ export async function dispatchStructuredAgentSessionComposerCommand(
       return {
         handled: true,
         accepted: false,
-        error: `/${command.name} is not supported by this chat host.`
+        ...structuredComposerFailure('commandUnsupportedByHost', { name: command.name })
       }
     }
     return { handled: true, ...(await controller.runConversationCommand(command.name)) }
@@ -245,7 +261,11 @@ export async function dispatchStructuredAgentSessionComposerCommand(
     return {
       handled: true,
       accepted: opened,
-      error: opened ? null : `Could not open the ${command.name} picker.`
+      ...(opened
+        ? { error: null }
+        : structuredComposerFailure(
+            command.name === 'model' ? 'modelPickerFailed' : 'effortPickerFailed'
+          ))
     }
   }
   const normalized = command.argument.toLowerCase()
@@ -261,6 +281,11 @@ export async function dispatchStructuredAgentSessionComposerCommand(
   return {
     handled: true,
     accepted: applied,
-    error: applied ? null : `Could not apply ${command.name} ${choice?.label ?? value}.`
+    ...(applied
+      ? { error: null }
+      : structuredComposerFailure(
+          command.name === 'model' ? 'modelApplyFailed' : 'effortApplyFailed',
+          { value: choice?.label ?? String(value) }
+        ))
   }
 }

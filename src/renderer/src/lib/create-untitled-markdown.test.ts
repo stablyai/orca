@@ -108,6 +108,47 @@ describe('createUntitledMarkdownFile', () => {
     }
   )
 
+  it('creates a plugin new-file type with its extension and verbatim template', async () => {
+    const pathExists = vi.fn().mockResolvedValueOnce(true).mockResolvedValue(false)
+    const createFile = vi.fn().mockResolvedValue(undefined)
+    const writeFile = vi.fn().mockResolvedValue(undefined)
+    vi.stubGlobal('window', { api: { fs: { pathExists, createFile, writeFile } } })
+    const content = '{"type":"excalidraw","title":"{{title}}"}\n'
+    await expect(
+      createUntitledMarkdownFile('/repo', 'wt', undefined, LOCAL, {
+        newFile: { extension: '.excalidraw', content }
+      })
+    ).resolves.toMatchObject({
+      filePath: '/repo/untitled-2.excalidraw',
+      relativePath: 'untitled-2.excalidraw',
+      isUntitled: true,
+      deleteUntouchedOnClose: false
+    })
+    // Why verbatim: placeholders are a Markdown template feature, not a plugin template one.
+    expect(writeFile).toHaveBeenCalledWith(
+      expect.objectContaining({ filePath: '/repo/untitled-2.excalidraw', content })
+    )
+  })
+
+  it('leaves an empty plugin new file unwritten, like a blank markdown file', async () => {
+    const writeFile = vi.fn()
+    vi.stubGlobal('window', {
+      api: {
+        fs: {
+          pathExists: vi.fn().mockResolvedValue(false),
+          createFile: vi.fn().mockResolvedValue(undefined),
+          writeFile
+        }
+      }
+    })
+    const created = await createUntitledMarkdownFile('/repo', 'wt', undefined, LOCAL, {
+      newFile: { extension: '.drawio', content: '' }
+    })
+    expect(created.filePath).toBe('/repo/untitled.drawio')
+    expect(created.deleteUntouchedOnClose).toBeUndefined()
+    expect(writeFile).not.toHaveBeenCalled()
+  })
+
   it('never overwrites or deletes a file another writer filled after the create', async () => {
     const createFile = vi.fn().mockResolvedValue(undefined)
     const writeFile = vi

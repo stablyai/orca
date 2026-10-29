@@ -7,6 +7,8 @@ import { markOnboardingProjectAdded } from '@/lib/onboarding-project-checklist'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import type { Repo } from '../../../../shared/repo-types'
+import type { RepoCreateFailure } from '../../../../shared/repo-create-failure-copy'
+import { repoCreateErrorText } from './repo-create-error-copy'
 import { translate } from '@/i18n/i18n'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
 import { upsertAddedRepoWithProjectHostSetup } from './add-repo-store-upsert'
@@ -96,7 +98,9 @@ export function useCreateRepo(
       const createKind = 'git' as const
       const result =
         target.kind === 'environment'
-          ? await callRuntimeRpc<{ repo: Repo } | { error: string; windowsDriveRefusal?: unknown }>(
+          ? await callRuntimeRpc<
+              { repo: Repo } | (RepoCreateFailure & { windowsDriveRefusal?: unknown })
+            >(
               target,
               'repo.create',
               {
@@ -122,7 +126,7 @@ export function useCreateRepo(
         if (refusal && onWindowsDriveRefusal) {
           onWindowsDriveRefusal(refusal)
         } else {
-          setCreateError(result.error)
+          setCreateError(repoCreateErrorText(result))
         }
         return
       }

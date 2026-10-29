@@ -1,3 +1,4 @@
+import type { TextGenerationFailureFields } from '../../shared/text-generation-failure-copy'
 import type { BranchNameWorkContext } from '../../shared/branch-name-from-work'
 import type { ConversationNameContext } from '../../shared/conversation-name-generation'
 import type { CommitMessageDraftContext } from '../../shared/commit-message-generation'
@@ -55,7 +56,7 @@ export type GeneratePullRequestFieldsResult =
 
 type ResolveCommitMessageSettingsResult =
   | { ok: true; params: GenerateCommitMessageParams }
-  | { ok: false; error: string }
+  | ({ ok: false } & TextGenerationFailureFields)
 
 export function trimGeneratedCommitMessage(message: string): string {
   return trimCommitMessage(message)

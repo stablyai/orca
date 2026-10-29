@@ -5,6 +5,7 @@ import type { GitHubPrRepoSlug } from './github-pr-rpc'
 import type { RpcOperationSender } from '../transport/rpc-operation-sender'
 import { fetchUpdatePRTitle, type GitHubPrMutationOutcome } from './github-pr-mutations'
 import { triggerError, triggerSuccess } from '../platform/haptics'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { buildUpdatePRTitleParams } from './pr-title-edit'
 
 export type PrTitleMutations = {
@@ -32,9 +33,12 @@ function realMutations(client: RpcOperationSender, worktreeId: string): PrTitleM
 }
 
 export function useMobilePrTitleAction(input: PrTitleActionInput) {
+  const t = useMobileTranslation()
   const { client, connState, worktreeId, prNumber, prRepo, refetch } = input
   const [saving, setSaving] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<string | { kind: 'disconnected' | 'updateFailed' } | null>(
+    null
+  )
   const inFlightRef = useRef(false)
 
   const mutations = useMemo(
@@ -54,7 +58,7 @@ export function useMobilePrTitleAction(input: PrTitleActionInput) {
       }
       // Offline Save must explain failure and leave the editor open rather than silently do nothing.
       if (!ready || !mutations) {
-        setError('Not connected to desktop.')
+        setError({ kind: 'disconnected' })
         return false
       }
       inFlightRef.current = true
@@ -73,7 +77,7 @@ export function useMobilePrTitleAction(input: PrTitleActionInput) {
       } catch (err) {
         // Contain fire-and-forget save/refetch rejection and return false with feedback.
         triggerError()
-        setError(err instanceof Error ? err.message : 'Failed to update title.')
+        setError(err instanceof Error ? err.message : { kind: 'updateFailed' })
         return false
       } finally {
         inFlightRef.current = false
@@ -86,7 +90,12 @@ export function useMobilePrTitleAction(input: PrTitleActionInput) {
   return {
     ready,
     saving,
-    error,
+    error:
+      typeof error === 'string' || error === null
+        ? error
+        : error.kind === 'disconnected'
+          ? t('session.usePrTitleAction.disconnected', 'Not connected to desktop.')
+          : t('session.usePrTitleAction.updateFailed', 'Failed to update title.'),
     clearError: useCallback(() => setError(null), []),
     setTitle
   }

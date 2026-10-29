@@ -95,23 +95,15 @@ export function WorkspaceSpaceBreakdownList({
               {formatBytes(worktree.sizeBytes)}
             </div>
             <div className="text-[11px] text-muted-foreground">
-              {topLevelItemCount === 1
-                ? translate(
-                    'auto.components.status.bar.WorkspaceSpaceManagerPanel.topLevelItems_one',
-                    '{{formattedCount}} top-level item',
-                    {
-                      count: topLevelItemCount,
-                      formattedCount: formatCompactCount(topLevelItemCount)
-                    }
-                  )
-                : translate(
-                    'auto.components.status.bar.WorkspaceSpaceManagerPanel.topLevelItems_other',
-                    '{{formattedCount}} top-level items',
-                    {
-                      count: topLevelItemCount,
-                      formattedCount: formatCompactCount(topLevelItemCount)
-                    }
-                  )}
+              {translate(
+                'auto.components.status.bar.WorkspaceSpaceManagerPanel.topLevelItems',
+                '{{formattedCount}} top-level items',
+                {
+                  count: topLevelItemCount,
+                  formattedCount: formatCompactCount(topLevelItemCount),
+                  defaultValue_one: '{{formattedCount}} top-level item'
+                }
+              )}
             </div>
           </div>
         </div>

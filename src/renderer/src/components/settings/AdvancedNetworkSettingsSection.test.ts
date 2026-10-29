@@ -50,7 +50,7 @@ describe('AdvancedNetworkSettingsSection proxy drafts', () => {
         'bad proxy'
       ),
       'http://old.test:8080',
-      'Invalid proxy URL'
+      'invalid'
     )
 
     expect(

@@ -1,3 +1,4 @@
+import { chatNamingFailure } from '../../shared/chat-naming-failure-copy'
 import { agentSessionCurrentContextRows } from '../../shared/agent-session-context-clear'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../shared/execution-host'
 import type { CommitMessageAgentEnvironmentResolvers } from '../text-generation/commit-message-agent-environment'
@@ -70,9 +71,9 @@ export function structuredChatNamingDeps(
       }
       const target = await resolveGenerationTarget(workspace.path, settings.params.agentId, runtime)
       if (!target) {
-        const error = 'No chat-name agent can run in this workspace.'
-        logger.warn(error, log)
-        return { error }
+        const failure = chatNamingFailure('noAgentAvailable')
+        logger.warn(failure.error, log)
+        return failure
       }
       const result = await generateConversationNameFromContext(
         { firstPrompt },

@@ -73,6 +73,7 @@ export function nativeChatToolRunClauses(
 export function joinNativeChatToolRunClauses(
   clauses: readonly string[],
   format: {
+    continuation?: (clause: string) => string
     pair: (first: string, second: string) => string
     list: (leading: readonly string[], last: string) => string
   }
@@ -80,7 +81,9 @@ export function joinNativeChatToolRunClauses(
   const continued = clauses.map((clause, index) =>
     index === 0 || clause.length === 0
       ? clause
-      : `${clause[0].toLocaleLowerCase()}${clause.slice(1)}`
+      : format.continuation
+        ? format.continuation(clause)
+        : `${clause[0].toLocaleLowerCase()}${clause.slice(1)}`
   )
   if (continued.length === 0) {
     return ''
@@ -95,6 +98,7 @@ export function joinNativeChatToolRunClauses(
 }
 
 export type NativeChatToolRunSentenceWords = {
+  continuation?: (clause: string) => string
   clause: (category: NativeChatToolCategory, count: number, live: boolean) => string
   pair: (first: string, second: string) => string
   list: (leading: readonly string[], last: string) => string

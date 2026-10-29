@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { i18n } from '@/i18n/i18n'
 import {
   buildWorkspaceCleanupFacetList,
   countWorkspaceCleanupMeasuredRows
@@ -195,6 +196,22 @@ describe('query search', () => {
       expect(matchesWorkspaceCleanupFilters(facets, { ...ANY, query: term }, FACET_NOW)).toBe(true)
     }
     expect(matchesWorkspaceCleanupFilters(facets, { ...ANY, query: 'nope' }, FACET_NOW)).toBe(false)
+  })
+
+  it('matches the displayed git chip label in the current language', async () => {
+    await i18n.changeLanguage('es')
+    try {
+      const facets = makeFacets({
+        candidate: {
+          git: { clean: false, upstreamAhead: 0, upstreamBehind: 0, checkedAt: FACET_NOW }
+        }
+      })
+      expect(
+        matchesWorkspaceCleanupFilters(facets, { ...ANY, query: 'con cambios' }, FACET_NOW)
+      ).toBe(true)
+    } finally {
+      await i18n.changeLanguage('en')
+    }
   })
 })
 

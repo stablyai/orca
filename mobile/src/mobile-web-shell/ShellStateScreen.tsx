@@ -5,6 +5,8 @@ import { SideSafeArea } from '../layout/side-safe-area'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import type { Translate } from '../i18n/mobile-i18n'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { HostDisplaySource } from '../transport/use-host-display'
 import type { DownloadProgressFeed } from './download-progress-feed'
 import type {
@@ -15,21 +17,36 @@ import { PageRouteUnavailableScreen } from './PageRouteUnavailableScreen'
 import { ShellDownloadProgress } from './ShellDownloadProgress'
 import { SHELL_OPENING_LABEL, ShellWaitingFrame } from './ShellWaitingFrame'
 
-function failureMessage(reason: MobileWebShellFailureCause): string {
+function failureMessage(reason: MobileWebShellFailureCause, t: Translate): string {
   switch (reason) {
     case 'isolation-unavailable':
-      return "This device's WebView is too old to open the workspace safely."
+      return t(
+        'webShell.shellStateScreen.isolationUnavailable',
+        "This device's WebView is too old to open the workspace safely."
+      )
     case 'download-failed':
-      return 'The latest app could not be downloaded from this host.'
+      return t(
+        'webShell.shellStateScreen.downloadFailed',
+        'The latest app could not be downloaded from this host.'
+      )
     case 'host-profile-unreadable':
-      return 'Could not read this host on your device. Try again.'
+      return t(
+        'webShell.shellStateScreen.hostProfileUnreadable',
+        'Could not read this host on your device. Try again.'
+      )
     case 'status-unreadable':
-      return "Could not read this host's status. Go back and reopen it."
+      return t(
+        'webShell.shellStateScreen.statusUnreadable',
+        "Could not read this host's status. Go back and reopen it."
+      )
     case 'render-process-gone':
-      return 'The workspace stopped responding.'
+      return t('webShell.shellStateScreen.renderProcessGone', 'The workspace stopped responding.')
     case 'generation-unreadable':
     case 'document-load-failed':
-      return 'The downloaded app could not be opened.'
+      return t(
+        'webShell.shellStateScreen.documentLoadFailed',
+        'The downloaded app could not be opened.'
+      )
   }
 }
 
@@ -45,13 +62,14 @@ function Failed({
   state: Extract<MobileWebShellSessionState, { kind: 'failed' }>
   onRetry: () => void
 }) {
+  const t = useMobileTranslation()
   useMobileColorScheme()
   // Retry cannot change a settled isolation gate or give an unsupported WebView the missing fence.
   const retryable = state.reason !== 'isolation-unavailable' && state.reason !== 'status-unreadable'
   return (
     <Centered>
       <Text style={styles.failedMessage} testID="mobile-web-shell-failed">
-        {failureMessage(state.reason)}
+        {failureMessage(state.reason, t)}
       </Text>
       {retryable ? (
         <Pressable
@@ -59,7 +77,9 @@ function Failed({
           testID="mobile-web-shell-retry"
           onPress={onRetry}
         >
-          <Text style={styles.retryLabel}>Try again</Text>
+          <Text style={styles.retryLabel}>
+            {t('webShell.shellStateScreen.tryAgain', 'Try again')}
+          </Text>
         </Pressable>
       ) : null}
     </Centered>
@@ -81,6 +101,7 @@ function StateView({
   host: HostDisplaySource | null
   openingLabel?: string
 }) {
+  const t = useMobileTranslation()
   switch (state.kind) {
     case 'route-unavailable':
       return <PageRouteUnavailableScreen hostId={hostId} />
@@ -92,7 +113,10 @@ function StateView({
       return (
         <Centered>
           <Text style={styles.waitingLabel} testID="mobile-web-shell-offline">
-            Connect to this host to download the latest app
+            {t(
+              'webShell.shellStateScreen.connectToDownload',
+              'Connect to this host to download the latest app'
+            )}
           </Text>
         </Centered>
       )
@@ -106,7 +130,15 @@ function StateView({
     case 'activating':
       return (
         <Centered>
-          <ShellWaitingFrame label={state.kind === 'activating' ? openingLabel : 'Checking host'} />
+          <ShellWaitingFrame
+            label={
+              state.kind === 'activating'
+                ? openingLabel === SHELL_OPENING_LABEL
+                  ? t('webShell.shellStateScreen.openingWorkspace', 'Opening workspace')
+                  : openingLabel
+                : t('webShell.shellStateScreen.checkingHost', 'Checking host')
+            }
+          />
         </Centered>
       )
   }

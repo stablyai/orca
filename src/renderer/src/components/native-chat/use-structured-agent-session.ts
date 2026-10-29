@@ -36,7 +36,7 @@ import { structuredConversationCommandRunner } from './structured-conversation-c
 import { structuredAgentSessionQueueEnabled } from '../../../../shared/structured-agent-session-queued-cards'
 import { pendingSendsOutsideQueuedCards } from './structured-agent-session-sending-queued-cards'
 import { hostStatesTurnScopes } from '../../../../shared/native-chat-turn-membership'
-import { withNativeChatCutTurnNotices } from '../../../../shared/native-chat-cut-turn-notice'
+import { withNativeChatCutTurnNotices } from '../../../../shared/native-chat/transcript/native-chat-cut-turn-notice'
 import { useNativeChatContextClearFloor } from './use-native-chat-context-clear-floor'
 import { useStructuredAgentSessionRewind } from './use-structured-agent-session-rewind'
 

@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process'
 import { EmulatorError } from '../emulator-errors'
+import { emulatorFailureText } from '../../../shared/emulator-failure-copy'
 import type { AndroidCommandRunner } from './android-command-runner'
 import type { AndroidSdkPaths } from './android-sdk-discovery'
 import { bootCompletedArgs, isBootCompleted } from './adb-devices'
@@ -32,7 +33,7 @@ export async function bootAndroidDevice(
   if (!avds.includes(deviceOrName)) {
     throw new EmulatorError(
       'emulator_device_not_found',
-      `"${deviceOrName}" is not a running device or a known AVD.`
+      emulatorFailureText('unknownDeviceOrAvd', { device: deviceOrName })
     )
   }
   const known = new Set(running.map((device) => device.serial))
@@ -74,6 +75,6 @@ async function waitForNewBootedSerial(
   }
   throw new EmulatorError(
     'emulator_helper_failed',
-    `AVD "${avdName}" did not finish booting in time.`
+    emulatorFailureText('avdBootTimeout', { avdName })
   )
 }

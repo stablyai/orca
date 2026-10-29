@@ -220,7 +220,7 @@ describe('Floating Workspace authority', () => {
     expect(activeResult.current?.detectedIds).toEqual(['claude'])
     expect(floatingResult.current?.detectedIds).toEqual(['codex'])
     expect(useAppStore.getState().detectedAgentIds).toEqual(['claude'])
-    expect(refreshLocalAgents).toHaveBeenLastCalledWith({ enabledOnly: true })
+    expect(refreshLocalAgents).toHaveBeenLastCalledWith({ enabledOnly: true, wakeWslDistro: true })
   })
 })
 

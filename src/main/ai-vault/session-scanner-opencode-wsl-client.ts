@@ -9,6 +9,11 @@ import { createOpenCodeSqliteProcessClient } from './session-scanner-opencode-sq
 import type { OpenCodeSqliteWorkerClient } from './session-scanner-opencode-sqlite-worker-client'
 import type { OpenCodeWslRuntime } from './session-scanner-opencode-wsl-runtime'
 import { buildRelayAiVaultServiceEnv } from './session-scanner-service-env'
+import { AiVaultScanIssueError } from './session-scan-issues'
+import {
+  AI_VAULT_SCAN_ISSUE_COPY,
+  aiVaultScanIssueText
+} from '../../shared/ai-vault-scan-issue-copy'
 
 const runtimes = new Map<string, OpenCodeWslRuntime>()
 const clients = new Map<string, OpenCodeSqliteWorkerClient>()
@@ -49,10 +54,14 @@ export async function openCodeWslClient(
   throwIfSignalAborted(signal)
   const key = distro.toLowerCase()
   const runtime = runtimes.get(key)
-  if (!runtime || runtime.error !== undefined) {
-    throw new Error(
-      runtime?.error ?? 'The WSL SQLite reader is not prepared. Refresh Vault to retry.'
-    )
+  if (!runtime) {
+    throw new AiVaultScanIssueError(aiVaultScanIssueText('openCodeWslReaderNotPrepared'))
+  }
+  if (runtime.error !== undefined) {
+    // The preparing placeholder is Orca's own table text; real setup failures stay verbatim.
+    throw runtime.error === AI_VAULT_SCAN_ISSUE_COPY.openCodeWslReaderPreparing
+      ? new AiVaultScanIssueError(aiVaultScanIssueText('openCodeWslReaderPreparing'))
+      : new Error(runtime.error)
   }
   let client = clients.get(key)
   if (!client) {

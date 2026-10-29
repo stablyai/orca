@@ -52,13 +52,12 @@ describe('hooks:check on a stopped WSL distro', () => {
     expect(mocks.hasHooksFile).not.toHaveBeenCalled()
   })
 
-  it('leaves an unverifiable distro a plain error, which a retry may clear', async () => {
+  it('marks an unverifiable distro unread, not hook-free, so callers retry instead of storing it', async () => {
     mocks.blocked.mockResolvedValue({ distro: 'Ubuntu', state: 'unverifiable' })
 
     const result = await check({ background: true })
 
-    expect(result).toMatchObject({ status: 'error' })
-    expect(result).not.toHaveProperty('unavailable')
+    expect(result).toMatchObject({ status: 'error', unavailable: 'wsl-distro-unverifiable' })
     expect(mocks.hasHooksFile).not.toHaveBeenCalled()
   })
 

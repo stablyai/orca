@@ -7,7 +7,7 @@ import {
 } from '../../editor-autosave'
 import { ORCA_WORKTREE_FILE_CHANGE_EVENT } from '@/hooks/worktree-file-change-event'
 import { normalizeRuntimePathForComparison } from '../../../../../../shared/cross-platform-path'
-import { buildCombinedGitStatusSignature } from '../resolve-changes/combined-diff-git-status-signature'
+import { buildCombinedGitStatusSnapshot } from '../resolve-changes/combined-diff-git-status-signature'
 import {
   getCombinedDiffFileTreeSectionKey,
   type CombinedDiffFileTreeMode
@@ -36,36 +36,39 @@ export function useCombinedDiffSectionRevalidation({
   treeMode: CombinedDiffFileTreeMode
 }): string {
   const { loadedIndicesRef, loadingIndicesRef } = registry
-  const combinedGitStatusSignature = React.useMemo(() => {
+  const statusSnapshot = React.useMemo(() => {
     if (!shouldAutoReloadFromGitStatus) {
-      return ''
+      return null
     }
-    return buildCombinedGitStatusSignature(sectionEntries, gitStatusEntries)
+    return buildCombinedGitStatusSnapshot(sectionEntries, gitStatusEntries)
   }, [gitStatusEntries, sectionEntries, shouldAutoReloadFromGitStatus])
-  const prevCombinedGitStatusSignatureRef = useRef<string | null>(null)
+  const previousStatusSnapshotRef = useRef<ReturnType<
+    typeof buildCombinedGitStatusSnapshot
+  > | null>(null)
 
   useEffect(() => {
-    if (!shouldAutoReloadFromGitStatus) {
-      prevCombinedGitStatusSignatureRef.current = null
+    if (statusSnapshot === null) {
+      previousStatusSnapshotRef.current = null
       return
     }
-    if (prevCombinedGitStatusSignatureRef.current === null) {
-      prevCombinedGitStatusSignatureRef.current = combinedGitStatusSignature
+    const previousStatusSnapshot = previousStatusSnapshotRef.current
+    previousStatusSnapshotRef.current = statusSnapshot
+    if (
+      previousStatusSnapshot === null ||
+      previousStatusSnapshot.signature === statusSnapshot.signature
+    ) {
       return
     }
-    if (prevCombinedGitStatusSignatureRef.current === combinedGitStatusSignature) {
-      return
+    for (const index of new Set([...loadedIndicesRef.current, ...loadingIndicesRef.current])) {
+      const path = sectionEntries[index]?.path
+      if (
+        path !== undefined &&
+        previousStatusSnapshot.pathSignatures.get(path) !== statusSnapshot.pathSignatures.get(path)
+      ) {
+        requestSectionReload(index)
+      }
     }
-    prevCombinedGitStatusSignatureRef.current = combinedGitStatusSignature
-    for (const index of loadedIndicesRef.current) {
-      requestSectionReload(index)
-    }
-  }, [
-    combinedGitStatusSignature,
-    loadedIndicesRef,
-    requestSectionReload,
-    shouldAutoReloadFromGitStatus
-  ])
+  }, [loadedIndicesRef, loadingIndicesRef, requestSectionReload, sectionEntries, statusSnapshot])
 
   useEffect(() => {
     if (treeMode !== 'all' && treeMode !== 'uncommitted') {
@@ -136,5 +139,5 @@ export function useCombinedDiffSectionRevalidation({
     treeMode
   ])
 
-  return combinedGitStatusSignature
+  return statusSnapshot?.signature ?? ''
 }

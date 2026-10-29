@@ -15,6 +15,7 @@ import { gitExecFileAsync } from '../../git/runner'
 import { detectRepoIconAndUpstream } from '../../repo-icon-autodetect'
 import { prepareLocalWorktreeRootForRepo } from '../../worktree-root-preparation'
 import { invalidateAuthorizedRootsCache } from '../registered-worktree-roots-cache'
+import { repoCreateFailure, type RepoCreateFailure } from '../../../shared/repo-create-failure-copy'
 import { emitRepoAdded } from './repo-added-telemetry'
 import { notifyReposChanged } from './repos-changed-notification'
 import { addLocalRepoFromPath } from './local-repo-registration'
@@ -78,25 +79,25 @@ export function registerRepoCreationHandlers(mainWindow: BrowserWindow, store: S
     async (
       _event,
       args: { parentPath: string; name: string; kind: 'git' | 'folder' }
-    ): Promise<{ repo: Repo } | { error: string }> => {
+    ): Promise<{ repo: Repo } | RepoCreateFailure> => {
       const name = args.name?.trim() ?? ''
       const parentPath = args.parentPath?.trim() ?? ''
       // Untrusted IPC kinds must not skip Git initialization yet persist as Git projects.
       const repoKind: 'git' | 'folder' = args.kind === 'folder' ? 'folder' : 'git'
 
       if (!name) {
-        return { error: 'Name cannot be empty' }
+        return repoCreateFailure('nameEmpty')
       }
       // Reject traversal even for direct IPC callers.
       if (/[\\/]/.test(name) || name === '.' || name === '..') {
-        return { error: 'Name cannot contain slashes or be "." / ".."' }
+        return repoCreateFailure('nameInvalid')
       }
       if (!parentPath) {
-        return { error: 'Parent directory is required' }
+        return repoCreateFailure('parentRequired')
       }
       // Absolute parents keep target paths stable across process cwd changes.
       if (!isAbsolute(parentPath)) {
-        return { error: 'Parent directory must be an absolute path' }
+        return repoCreateFailure('parentNotAbsolute')
       }
 
       const targetPath = join(parentPath, name)
@@ -127,7 +128,7 @@ export function registerRepoCreationHandlers(mainWindow: BrowserWindow, store: S
           (code === undefined && err instanceof Error && /ENOENT/.test(err.message))
         if (!looksLikeEnoent) {
           const message = err instanceof Error ? err.message : String(err)
-          return { error: `Cannot access target path: ${message}` }
+          return repoCreateFailure('targetInaccessible', { detail: message })
         }
       }
 
@@ -135,13 +136,11 @@ export function registerRepoCreationHandlers(mainWindow: BrowserWindow, store: S
         try {
           const entries = await readdir(targetPath)
           if (entries.length > 0) {
-            return {
-              error: `"${name}" already exists at this location and is not empty.`
-            }
+            return repoCreateFailure('targetNotEmpty', { name })
           }
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err)
-          return { error: `Failed to read directory: ${message}` }
+          return repoCreateFailure('readDirectoryFailed', { detail: message })
         }
       } else {
         try {
@@ -161,7 +160,9 @@ export function registerRepoCreationHandlers(mainWindow: BrowserWindow, store: S
             }
           }
           const message = err instanceof Error ? err.message : String(err)
-          return { error: `Failed to create directory: ${message}` }
+          return repoCreateFailure('createDirectoryFailed', {
+            detail: message
+          })
         }
       }
 
@@ -179,23 +180,21 @@ export function registerRepoCreationHandlers(mainWindow: BrowserWindow, store: S
           if (createdDir) {
             await rm(targetPath, { recursive: true, force: true }).catch(() => {})
           } else if (step === 'commit') {
-            await rm(join(targetPath, '.git'), { recursive: true, force: true }).catch(() => {})
+            await rm(join(targetPath, '.git'), {
+              recursive: true,
+              force: true
+            }).catch(() => {})
           }
           const message = err instanceof Error ? err.message : String(err)
           if (
             step === 'commit' &&
             /Please tell me who you are|user\.name|user\.email/i.test(message)
           ) {
-            return {
-              error:
-                'Git author identity is not configured. Run `git config --global user.name "Your Name"` and `git config --global user.email "you@example.com"`, then try again.'
-            }
+            return repoCreateFailure('gitIdentityMissing')
           }
-          const stepLabel =
-            step === 'init'
-              ? 'Failed to initialize git repository'
-              : 'Failed to create initial commit'
-          return { error: `${stepLabel}: ${message}` }
+          return repoCreateFailure(step === 'init' ? 'gitInitFailed' : 'initialCommitFailed', {
+            detail: message
+          })
         }
       }
 

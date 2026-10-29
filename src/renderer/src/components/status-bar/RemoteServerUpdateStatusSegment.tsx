@@ -41,18 +41,11 @@ export function RemoteServerUpdateStatusSegment({
     : failed > 0
       ? {
           icon: <AlertCircle className="size-3 text-destructive" />,
-          label:
-            failed === 1
-              ? translate(
-                  'auto.components.status.bar.RemoteServerUpdateStatusSegment.failedCount_one',
-                  '{{count}} server update failed',
-                  { count: failed }
-                )
-              : translate(
-                  'auto.components.status.bar.RemoteServerUpdateStatusSegment.failedCount_other',
-                  '{{count}} server updates failed',
-                  { count: failed }
-                ),
+          label: translate(
+            'auto.components.status.bar.RemoteServerUpdateStatusSegment.failedCount',
+            '{{count}} server updates failed',
+            { count: failed, defaultValue_one: '{{count}} server update failed' }
+          ),
           tooltip: translate(
             'auto.components.status.bar.RemoteServerUpdateStatusSegment.failedTooltip',
             'Open Remote Orca Server updates to review and retry'
@@ -60,18 +53,11 @@ export function RemoteServerUpdateStatusSegment({
         }
       : {
           icon: <CheckCircle2 className="size-3 text-muted-foreground" />,
-          label:
-            updated === 1
-              ? translate(
-                  'auto.components.status.bar.RemoteServerUpdateStatusSegment.updatedCount_one',
-                  '{{count}} server updated',
-                  { count: updated }
-                )
-              : translate(
-                  'auto.components.status.bar.RemoteServerUpdateStatusSegment.updatedCount_other',
-                  '{{count}} servers updated',
-                  { count: updated }
-                ),
+          label: translate(
+            'auto.components.status.bar.RemoteServerUpdateStatusSegment.updatedCount',
+            '{{count}} servers updated',
+            { count: updated, defaultValue_one: '{{count}} server updated' }
+          ),
           tooltip: translate(
             'auto.components.status.bar.RemoteServerUpdateStatusSegment.updatedTooltip',
             'Remote Orca Server updates completed'

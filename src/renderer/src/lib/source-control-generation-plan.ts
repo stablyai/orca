@@ -1,3 +1,4 @@
+import { textGenerationErrorText } from '@/lib/text-generation-error-copy'
 import { planCommitMessageGeneration } from '../../../shared/commit-message-plan'
 import {
   renderSourceControlActionCommandTemplate,
@@ -73,10 +74,11 @@ export function planSourceControlTextGeneration(
   }
   const planned = planCommitMessageGeneration(params, prompt)
   if (!planned.ok) {
-    return { ok: false, error: planned.error }
+    return { ok: false, error: textGenerationErrorText(planned) }
   }
-  const delivery =
-    planned.plan.stdinPayload === null
+  const delivery = planned.plan.promptFile
+    ? 'Prompt is delivered as a temporary file attachment.'
+    : planned.plan.stdinPayload === null
       ? 'Prompt is delivered as command arguments.'
       : 'Prompt is piped to the agent over stdin.'
   return {

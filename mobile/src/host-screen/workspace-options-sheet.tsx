@@ -11,15 +11,13 @@ import {
   type ExecutionHostId
 } from '../../../src/shared/execution-host'
 import {
-  WORKSPACE_VIEW_SECTION_LABELS,
   getShownWorkspaceViewSections,
-  type WorkspaceViewOptionKey
+  type WorkspaceViewOptionKey,
+  type WorkspaceViewSection
 } from '../../../src/shared/workspace-view/workspace-view-options'
 import { getHostContextLabel } from '../../../src/shared/worktree/host-context-labels'
-import {
-  WORKSPACE_OPTIONS_TITLE,
-  WORKSPACE_VIEW_SHARED_NOTE
-} from '../worktree/workspace-options-copy'
+import type { Translate } from '../i18n/mobile-i18n'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { resolveWorktreeHostId } from '../worktree/worktree-host-context-labels'
 import { withServerHosts } from '../worktree/server-workspaces'
 import { hostScreenStyles as styles } from './host-screen-styles'
@@ -32,7 +30,55 @@ import {
   type WorkspaceOptionProps
 } from './workspace-option-controls'
 
+function workspaceOptionLabels(t: Translate): Record<WorkspaceViewOptionKey, string> {
+  return {
+    hosts: t('hostScreen.workspaceOptionsSheet.hosts', 'Hosts'),
+    projects: t('hostScreen.workspaceOptionsSheet.projects', 'Projects'),
+    groupBy: t('hostScreen.workspaceOptionsSheet.groupBy', 'Group by'),
+    sortBy: t('hostScreen.workspaceOptionsSheet.sortBy', 'Sort by'),
+    projectOrderBy: t('hostScreen.workspaceOptionsSheet.projectOrder', 'Project order'),
+    cardLayout: t('hostScreen.workspaceOptionsSheet.cardLayout', 'Card layout'),
+    cardProperties: t('hostScreen.workspaceOptionsSheet.showProperties', 'Show properties'),
+    cardDisplay: t('hostScreen.workspaceOptionsSheet.cardDisplay', 'Card display'),
+    hideSleepingWorkspaces: t('hostScreen.workspaceOptionsSheet.hideSleeping', 'Hide sleeping'),
+    alwaysShowDefaultBranchWorkspace: t(
+      'hostScreen.workspaceOptionsSheet.exceptDefaultBranch',
+      'Except default branch'
+    ),
+    hideDefaultBranchWorkspace: t(
+      'hostScreen.workspaceOptionsSheet.hideDefaultBranch',
+      'Hide default branch'
+    ),
+    hideAutomationGeneratedWorkspaces: t(
+      'hostScreen.workspaceOptionsSheet.hideAutomationCreated',
+      'Hide automation-created'
+    ),
+    hideCliCreatedWorkspaces: t(
+      'hostScreen.workspaceOptionsSheet.hideCliCreated',
+      'Hide CLI-created'
+    ),
+    hideWorkspacesFromOtherDevices: t(
+      'hostScreen.workspaceOptionsSheet.hideOtherClientWorkspaces',
+      'Hide other-client workspaces'
+    ),
+    hideDetachedHeadWorkspaces: t(
+      'hostScreen.workspaceOptionsSheet.hideDetachedHead',
+      'Hide detached HEAD'
+    )
+  }
+}
+
+function workspaceSectionLabels(t: Translate): Record<WorkspaceViewSection, string | null> {
+  return {
+    show: t('hostScreen.workspaceOptionsSheet.show', 'Show'),
+    group: t('hostScreen.workspaceOptionsSheet.groupBy', 'Group by'),
+    arrange: null,
+    filters: t('hostScreen.workspaceOptionsSheet.filters', 'Filters')
+  }
+}
+
 function useWorkspaceOptionHosts(controller: HostScreenController): WorkspaceOptionHost[] {
+  const t = useMobileTranslation()
   const { displayWorktrees, state } = controller
   return useMemo(() => {
     const ids = new Set<ExecutionHostId>([LOCAL_EXECUTION_HOST_ID])
@@ -44,16 +90,27 @@ function useWorkspaceOptionHosts(controller: HostScreenController): WorkspaceOpt
       state.serverWorkspaces.hosts,
       (host) => host.label
     )
-    return [...ids].map((id) => ({
-      id,
-      label: getHostContextLabel(id, { hostLabelById, hostPlatform: state.hostPlatform })
-    }))
+    return [...ids].map((id) => {
+      let label = getHostContextLabel(id, { hostLabelById, hostPlatform: state.hostPlatform })
+      if (!hostLabelById.get(id)?.trim() && parseExecutionHostId(id)?.kind === 'local') {
+        label =
+          state.hostPlatform === 'darwin'
+            ? t('hostScreen.workspaceOptionsSheet.localMac', 'Local Mac')
+            : state.hostPlatform === 'win32'
+              ? t('hostScreen.workspaceOptionsSheet.localWindows', 'Local Windows')
+              : state.hostPlatform === 'linux'
+                ? t('hostScreen.workspaceOptionsSheet.localLinux', 'Local Linux')
+                : t('hostScreen.workspaceOptionsSheet.thisComputer', 'This computer')
+      }
+      return { id, label }
+    })
   }, [
     displayWorktrees,
     state.repoHostIdByRepoId,
     state.serverWorkspaces.hosts,
     state.hostLabelById,
-    state.hostPlatform
+    state.hostPlatform,
+    t
   ])
 }
 
@@ -73,6 +130,7 @@ export function WorkspaceOptionsSheet({ controller }: { controller: HostScreenCo
 }
 
 function WorkspaceOptionsPending({ settings }: Pick<HostScreenController, 'settings'>) {
+  const t = useMobileTranslation()
   useMobileColorScheme()
   const { pending, stale } = settings.pendingViewChanges
   if (!pending.some((change) => change.kind === 'view')) {
@@ -82,7 +140,9 @@ function WorkspaceOptionsPending({ settings }: Pick<HostScreenController, 'setti
     <View style={styles.optionPending} accessibilityLiveRegion="polite">
       <ActivityIndicator size="small" color={colors.textMuted} />
       <Text style={styles.filterModalSubtitle}>
-        {stale ? 'Still waiting for the desktop' : 'Saving to the desktop'}
+        {stale
+          ? t('hostScreen.workspaceOptionsSheet.waitingForDesktop', 'Still waiting for the desktop')
+          : t('hostScreen.workspaceOptionsSheet.savingToDesktop', 'Saving to the desktop')}
       </Text>
     </View>
   )
@@ -96,9 +156,12 @@ function WorkspaceOptionsContent({
   controller: HostScreenController
   pager: OptionPagerControls<WorkspaceViewOptionKey>
 }) {
+  const t = useMobileTranslation()
   useMobileColorScheme()
   const { settings, state } = controller
   const hosts = useWorkspaceOptionHosts(controller)
+  const optionLabels = workspaceOptionLabels(t)
+  const sectionLabels = workspaceSectionLabels(t)
   const sections = getShownWorkspaceViewSections({
     groupBy: state.view.groupBy,
     hideSleepingWorkspaces: state.view.filters.hideSleepingWorkspaces,
@@ -109,7 +172,10 @@ function WorkspaceOptionsContent({
     // Why the host's say-so: a host that keeps the filter to itself cannot apply the phone's value.
     mayHaveServerHosts:
       state.view.sharesOtherClientFilter === true && state.serverWorkspaces.hosts.length > 0
-  })
+  }).map(({ section, options }) => ({
+    section,
+    options: options.map((option) => ({ ...option, label: optionLabels[option.key] }))
+  }))
 
   const pageOption = sections
     .flatMap(({ options }) => options)
@@ -131,10 +197,15 @@ function WorkspaceOptionsContent({
           style={styles.optionBack}
           onPress={pager.close}
           accessibilityRole="button"
-          accessibilityLabel={`Back to ${WORKSPACE_OPTIONS_TITLE}`}
+          accessibilityLabel={t(
+            'hostScreen.workspaceOptionsSheet.backToOptions',
+            'Back to Workspace options'
+          )}
         >
           <ChevronLeft size={16} color={colors.textSecondary} />
-          <Text style={styles.optionBackText}>{WORKSPACE_OPTIONS_TITLE}</Text>
+          <Text style={styles.optionBackText}>
+            {t('hostScreen.workspaceOptionsSheet.workspaceOptions', 'Workspace options')}
+          </Text>
         </Pressable>
         <Text style={[styles.filterModalTitle, styles.optionPageTitle]}>{pageOption.label}</Text>
         <pageControl.Page controller={controller} hosts={hosts} label={pageOption.label} />
@@ -145,19 +216,28 @@ function WorkspaceOptionsContent({
     <>
       <View style={styles.filterModalHeader}>
         <View style={styles.filterModalHeading}>
-          <Text style={styles.filterModalTitle}>{WORKSPACE_OPTIONS_TITLE}</Text>
-          <Text style={styles.filterModalSubtitle}>{WORKSPACE_VIEW_SHARED_NOTE}</Text>
+          <Text style={styles.filterModalTitle}>
+            {t('hostScreen.workspaceOptionsSheet.workspaceOptions', 'Workspace options')}
+          </Text>
+          <Text style={styles.filterModalSubtitle}>
+            {t(
+              'hostScreen.workspaceOptionsSheet.syncedAcrossDevices',
+              'Synced across your devices'
+            )}
+          </Text>
           <WorkspaceOptionsPending settings={settings} />
         </View>
         {controller.activeFilterCount > 0 && (
           <Pressable onPress={settings.clearFilters}>
-            <Text style={styles.clearFiltersText}>Clear filters</Text>
+            <Text style={styles.clearFiltersText}>
+              {t('hostScreen.workspaceOptionsSheet.clearFilters', 'Clear filters')}
+            </Text>
           </Pressable>
         )}
       </View>
 
       {sections.map(({ section, options }) => {
-        const sectionLabel = WORKSPACE_VIEW_SECTION_LABELS[section]
+        const sectionLabel = sectionLabels[section]
         const bareRows: ReactNode[] = []
         const framedRows: ReactNode[] = []
         for (const option of options) {
@@ -168,7 +248,7 @@ function WorkspaceOptionsContent({
               <DrillRow
                 key={option.key}
                 label={option.label}
-                value={control.value(props)}
+                value={control.value(props, t)}
                 onPress={() => pager.open(option.key)}
               />
             )

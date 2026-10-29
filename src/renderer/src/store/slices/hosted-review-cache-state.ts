@@ -34,6 +34,8 @@ export type HostedReviewFetchOptions = {
    */
   active?: boolean
   repoOwnerExecutionHostId?: string
+  /** An explicit Refresh: may start a stopped WSL distro. Local IPC only. */
+  wakeWslDistro?: boolean
 }
 export type CreateHostedReviewStoreInput = CreateHostedReviewInput & { repoId?: string | null }
 export type CreateStackedHostedReviewStoreInput = CreateStackedHostedReviewInput & {
@@ -114,10 +116,15 @@ export function findHostedReviewRepoForFetch(
 
 export function hostedReviewOwnerIpcArgs(options: HostedReviewFetchOptions | undefined): {
   repoOwnerExecutionHostId?: string
+  wakeWslDistro?: true
 } {
-  return options?.repoOwnerExecutionHostId
-    ? { repoOwnerExecutionHostId: options.repoOwnerExecutionHostId }
-    : {}
+  return {
+    ...(options?.repoOwnerExecutionHostId
+      ? { repoOwnerExecutionHostId: options.repoOwnerExecutionHostId }
+      : {}),
+    // Not admissionTier: the visible scheduler sends 'interactive' for the selected card on a timer.
+    ...(options?.wakeWslDistro ? { wakeWslDistro: true as const } : {})
+  }
 }
 
 export function shouldRefetchForLinkedHint(

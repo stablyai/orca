@@ -184,23 +184,15 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
   const participatesInLineage = isLineageChild || lineageChildCount > 0
   const identityTitle =
     lineageChildCount > 0
-      ? lineageChildCount === 1
-        ? translate(
-            'auto.components.dashboard.DashboardAgentRow.dispatchedAgents_one',
-            '{{agentType}} - dispatched {{count}} agent',
-            {
-              agentType: formatAgentTypeLabel(agent.agentType),
-              count: lineageChildCount
-            }
-          )
-        : translate(
-            'auto.components.dashboard.DashboardAgentRow.dispatchedAgents_other',
-            '{{agentType}} - dispatched {{count}} agents',
-            {
-              agentType: formatAgentTypeLabel(agent.agentType),
-              count: lineageChildCount
-            }
-          )
+      ? translate(
+          'auto.components.dashboard.DashboardAgentRow.dispatchedAgents',
+          '{{agentType}} - dispatched {{count}} agents',
+          {
+            agentType: formatAgentTypeLabel(agent.agentType),
+            count: lineageChildCount,
+            defaultValue_one: '{{agentType}} - dispatched {{count}} agent'
+          }
+        )
       : [formatAgentTypeLabel(agent.agentType), model].filter(Boolean).join(' · ')
   // Surface failed main-agent outcomes even while subagents continue running.
   const dotState: AgentDotState = dotStateOverride ?? agentRowDisplayDotState(agent)

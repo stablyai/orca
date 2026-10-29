@@ -59,66 +59,42 @@ export function ChecksList(props: ChecksListProps): React.JSX.Element {
           {passingCount > 0 && (
             <span className="flex items-center gap-1">
               <CircleCheck className="size-3 text-emerald-500" />
-              {passingCount === 1
-                ? translate(
-                    'auto.components.right.sidebar.checks.panel.content.passingCount_one',
-                    '{{count}} passing',
-                    { count: passingCount }
-                  )
-                : translate(
-                    'auto.components.right.sidebar.checks.panel.content.passingCount_other',
-                    '{{count}} passing',
-                    { count: passingCount }
-                  )}
+              {translate(
+                'auto.components.right.sidebar.checks.panel.content.passingCount',
+                '{{count}} passing',
+                { count: passingCount, defaultValue_one: '{{count}} passing' }
+              )}
             </span>
           )}
           {failingCount > 0 && (
             <span className="flex items-center gap-1">
               <CircleX className="size-3 text-rose-500" />
-              {failingCount === 1
-                ? translate(
-                    'auto.components.right.sidebar.checks.panel.content.failingCount_one',
-                    '{{count}} failing',
-                    { count: failingCount }
-                  )
-                : translate(
-                    'auto.components.right.sidebar.checks.panel.content.failingCount_other',
-                    '{{count}} failing',
-                    { count: failingCount }
-                  )}
+              {translate(
+                'auto.components.right.sidebar.checks.panel.content.failingCount',
+                '{{count}} failing',
+                { count: failingCount, defaultValue_one: '{{count}} failing' }
+              )}
             </span>
           )}
           {pendingCount > 0 && (
             <span className="flex items-center gap-1">
               <LoaderCircle className="size-3 text-amber-500" />
-              {pendingCount === 1
-                ? translate(
-                    'auto.components.right.sidebar.checks.panel.content.pendingCount_one',
-                    '{{count}} pending',
-                    { count: pendingCount }
-                  )
-                : translate(
-                    'auto.components.right.sidebar.checks.panel.content.pendingCount_other',
-                    '{{count}} pending',
-                    { count: pendingCount }
-                  )}
+              {translate(
+                'auto.components.right.sidebar.checks.panel.content.pendingCount',
+                '{{count}} pending',
+                { count: pendingCount, defaultValue_one: '{{count}} pending' }
+              )}
             </span>
           )}
           {/* Name unresolved counts so an all-neutral list still explains its grey pill. */}
           {neutralCount > 0 && (
             <span className="flex items-center gap-1">
               <CircleDashed className="size-3 text-muted-foreground" />
-              {neutralCount === 1
-                ? translate(
-                    'auto.components.right.sidebar.checks.panel.content.unresolvedCount_one',
-                    '{{count}} unresolved',
-                    { count: neutralCount }
-                  )
-                : translate(
-                    'auto.components.right.sidebar.checks.panel.content.unresolvedCount_other',
-                    '{{count}} unresolved',
-                    { count: neutralCount }
-                  )}
+              {translate(
+                'auto.components.right.sidebar.checks.panel.content.unresolvedCount',
+                '{{count}} unresolved',
+                { count: neutralCount, defaultValue_one: '{{count}} unresolved' }
+              )}
             </span>
           )}
           <span className="flex-1" />

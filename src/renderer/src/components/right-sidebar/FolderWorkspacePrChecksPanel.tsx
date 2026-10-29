@@ -306,43 +306,25 @@ function formatReviewChecksHeaderSummary(summary: {
 }
 
 function formatWorktreeCount(count: number): string {
-  return count === 1
-    ? translate(
-        'auto.components.rightSidebar.FolderWorkspacePrChecksPanel.worktreeCountLabel_one',
-        '{{count}} worktree',
-        { count }
-      )
-    : translate(
-        'auto.components.rightSidebar.FolderWorkspacePrChecksPanel.worktreeCountLabel_other',
-        '{{count}} worktrees',
-        { count }
-      )
+  return translate(
+    'auto.components.rightSidebar.FolderWorkspacePrChecksPanel.worktreeCountLabel',
+    '{{count}} worktrees',
+    { count, defaultValue_one: '{{count}} worktree' }
+  )
 }
 
 function formatFailingCount(count: number): string {
-  return count === 1
-    ? translate(
-        'auto.components.rightSidebar.FolderWorkspacePrChecksPanel.failingCountLabel_one',
-        '{{count}} failing',
-        { count }
-      )
-    : translate(
-        'auto.components.rightSidebar.FolderWorkspacePrChecksPanel.failingCountLabel_other',
-        '{{count}} failing',
-        { count }
-      )
+  return translate(
+    'auto.components.rightSidebar.FolderWorkspacePrChecksPanel.failingCountLabel',
+    '{{count}} failing',
+    { count, defaultValue_one: '{{count}} failing' }
+  )
 }
 
 function formatPendingCount(count: number): string {
-  return count === 1
-    ? translate(
-        'auto.components.rightSidebar.FolderWorkspacePrChecksPanel.pendingCountLabel_one',
-        '{{count}} pending',
-        { count }
-      )
-    : translate(
-        'auto.components.rightSidebar.FolderWorkspacePrChecksPanel.pendingCountLabel_other',
-        '{{count}} pending',
-        { count }
-      )
+  return translate(
+    'auto.components.rightSidebar.FolderWorkspacePrChecksPanel.pendingCountLabel',
+    '{{count}} pending',
+    { count, defaultValue_one: '{{count}} pending' }
+  )
 }

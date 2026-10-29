@@ -5,6 +5,7 @@ import { useSideRailClaim, useSideRailEdge } from '../layout/side-rail'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { colors, spacing } from '../theme/mobile-theme'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { MobileSessionAccessoryKeys } from './MobileSessionAccessoryKeys'
 import { sessionCommandDockShown } from './MobileSessionCommandDock'
 import type { MobileSessionController } from './use-mobile-session-controller'
@@ -34,6 +35,7 @@ function SessionRail({
   back: boolean
   keys: boolean
 }) {
+  const t = useMobileTranslation()
   useMobileColorScheme()
   return (
     <View style={[styles.rail, { paddingBottom: controller.keyboardLift }]}>
@@ -42,7 +44,7 @@ function SessionRail({
           style={({ pressed }) => [styles.back, pressed && styles.backPressed]}
           onPress={controller.requestLeaveSession}
           accessibilityRole="button"
-          accessibilityLabel="Back to worktrees"
+          accessibilityLabel={t('session.sideRail.backToWorktrees', 'Back to worktrees')}
         >
           <ChevronLeft size={22} color={colors.textPrimary} />
         </Pressable>

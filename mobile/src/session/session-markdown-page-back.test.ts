@@ -39,6 +39,7 @@ import {
   type MobileSessionMarkdownActionsScope
 } from './use-mobile-session-markdown-actions'
 import type { DirtyMarkdownDraft, MarkdownDocState } from './mobile-session-route-types'
+import { holdSessionLeave } from './session-leave-guard'
 
 function stack(): PageBackConsumers {
   if (page.consumers === null) {
@@ -49,6 +50,8 @@ function stack(): PageBackConsumers {
 
 const router = { canGoBack: vi.fn(() => true), back: vi.fn(), replace: vi.fn() }
 const setLeaveDrafts: Mock<(drafts: SetStateAction<DirtyMarkdownDraft[] | null>) => void> = vi.fn()
+
+const dictationLeaveHold = { holdsLeave: false, hold: vi.fn(() => false) }
 
 function scopeWith(markdownDocs: Map<string, MarkdownDocState>): MobileSessionMarkdownActionsScope {
   return {
@@ -66,7 +69,8 @@ function scopeWith(markdownDocs: Map<string, MarkdownDocState>): MobileSessionMa
     markdownSaveSeqRef: { current: new Map() },
     markdownSaveInFlightRef: { current: new Set() },
     showToast: () => {},
-    readMarkdownTab: async () => {}
+    readMarkdownTab: async () => {},
+    dictationLeaveHold
   }
 }
 
@@ -109,6 +113,8 @@ beforeEach(() => {
   router.back.mockClear()
   router.replace.mockClear()
   setLeaveDrafts.mockClear()
+  dictationLeaveHold.holdsLeave = false
+  dictationLeaveHold.hold.mockReset().mockReturnValue(false)
 })
 
 // Dirty page drafts must claim Back before the shell’s own pop can discard them without a prompt.
@@ -146,6 +152,19 @@ describe("the session's Back on the page", () => {
       )
     })
     expect(page.claims).toEqual([true, false])
+  })
+
+  it('claims the key while dictation holds the leave, and a press or a sidebar switch goes to the dictation', () => {
+    dictationLeaveHold.holdsLeave = true
+    dictationLeaveHold.hold.mockReturnValue(true)
+    render(new Map())
+    expect(page.claims).toEqual([true])
+    act(() => stack().press())
+    expect(dictationLeaveHold.hold).toHaveBeenCalledTimes(1)
+    expect(page.unclaimed).not.toHaveBeenCalled()
+    expect(router.back).not.toHaveBeenCalled()
+    // The page sidebar asks the same hold before it switches workspace.
+    expect(holdSessionLeave()).toBe(true)
   })
 
   it('never reaches for the native key', () => {

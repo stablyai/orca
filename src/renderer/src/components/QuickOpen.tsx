@@ -276,13 +276,10 @@ function QuickOpenContent({ visible }: { visible: boolean }): React.JSX.Element 
       {/* Announce result count changes to assistive technology. */}
       <div aria-live="polite" className="sr-only">
         {deferredQuery.trim()
-          ? filtered.length === 1
-            ? translate('auto.components.QuickOpen.filesFound_one', '{{count}} file found', {
-                count: filtered.length
-              })
-            : translate('auto.components.QuickOpen.filesFound_other', '{{count}} files found', {
-                count: filtered.length
-              })
+          ? translate('auto.components.QuickOpen.filesFound', '{{count}} files found', {
+              count: filtered.length,
+              defaultValue_one: '{{count}} file found'
+            })
           : ''}
       </div>
     </CommandDialog>

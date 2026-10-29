@@ -128,17 +128,11 @@ async function uploadRuntimeDropPaths(
   const targetShell = getTerminalTargetShellForWorktreePath(args.worktreePath)
   const destinationDir = joinRuntimeTerminalDropDir(args.worktreePath)
   const pending = toast.loading(
-    args.dataPaths.length === 1
-      ? translate(
-          'auto.components.terminal.pane.terminal.drop.handler.uploadingFiles_one',
-          'Uploading {{count}} file to runtime…',
-          { count: args.dataPaths.length }
-        )
-      : translate(
-          'auto.components.terminal.pane.terminal.drop.handler.uploadingFiles_other',
-          'Uploading {{count}} files to runtime…',
-          { count: args.dataPaths.length }
-        )
+    translate(
+      'auto.components.terminal.pane.terminal.drop.handler.uploadingFiles',
+      'Uploading {{count}} files to runtime…',
+      { count: args.dataPaths.length, defaultValue_one: 'Uploading {{count}} file to runtime…' }
+    )
   )
   try {
     const { results } = await importExternalPathsToRuntime(
@@ -209,17 +203,11 @@ async function uploadRemoteDropPaths(
   }
 ): Promise<void> {
   const pending = toast.loading(
-    args.dataPaths.length === 1
-      ? translate(
-          'auto.components.terminal.pane.terminal.drop.handler.uploadingFilesToRemote_one',
-          'Uploading {{count}} file to remote…',
-          { count: args.dataPaths.length }
-        )
-      : translate(
-          'auto.components.terminal.pane.terminal.drop.handler.uploadingFilesToRemote_other',
-          'Uploading {{count}} files to remote…',
-          { count: args.dataPaths.length }
-        )
+    translate(
+      'auto.components.terminal.pane.terminal.drop.handler.uploadingFilesToRemote',
+      'Uploading {{count}} files to remote…',
+      { count: args.dataPaths.length, defaultValue_one: 'Uploading {{count}} file to remote…' }
+    )
   )
   try {
     const { resolvedPaths, skipped, failed } = await window.api.fs.resolveDroppedPathsForAgent({

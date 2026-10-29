@@ -41,7 +41,7 @@ vi.mock('electron', () => ({
     events = new EventEmitter()
     destroyed = false
     webContents = Object.assign(this.events, {
-      executeJavaScript: fake.images,
+      mainFrame: { executeJavaScript: fake.images },
       printToPDF: fake.print
     })
     constructor() {

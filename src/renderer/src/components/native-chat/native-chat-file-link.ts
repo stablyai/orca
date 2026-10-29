@@ -2,7 +2,7 @@ import { chatWorkspaceByTabId } from '@/lib/structured-chat-tab-index'
 import {
   routeNativeChatHref,
   type NativeChatHrefRoute
-} from '../../../../shared/native-chat-href-routing'
+} from '../../../../shared/native-chat/native-chat-href-routing'
 import { WINDOWS_DRIVE_PATH_PREFIX } from '../../../../shared/file-uri-path'
 import { normalizeAbsolutePath } from '../../../../shared/terminal-path-normalization'
 import {

@@ -108,7 +108,8 @@ describe('legacy automation on a repo id two hosts share', () => {
 
     expect(target).toEqual({
       ok: false,
-      error: expect.stringContaining('Open the automation and pick the host')
+      error: expect.stringContaining('Open the automation and pick the host'),
+      errorCode: 'legacyTwinHosts'
     })
     expect(storedAutomation(store).runContext ?? null).toBeNull()
   })

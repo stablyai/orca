@@ -45,8 +45,9 @@ export type ChecksPanelRefreshInput = {
 
 export type ChecksPanelReviewStateInput = {
   operationLabel: string | null
-  reviewLabel: 'pull request' | 'merge request'
-  reviewShortLabel: 'PR' | 'MR'
+  /** Localized review noun, e.g. "pull request" (see localizedHostedReviewCopy). */
+  reviewLabel: string
+  reviewShortLabel: string
   /** Localized provider display name, e.g. "GitHub". */
   providerName: string
   /** GitHub gets typed error rows; other providers use neutral copy. */

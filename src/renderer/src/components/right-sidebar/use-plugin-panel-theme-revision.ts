@@ -1,5 +1,9 @@
-import { useEffect, useRef, useState } from 'react'
-import { buildPanelDesignTokenCss, currentPanelColorScheme } from './plugin-panel-design-token-css'
+import { useEffect, useRef, useState, type RefObject } from 'react'
+import {
+  buildPanelDesignTokenCss,
+  currentPanelColorScheme,
+  postPluginFrameTheme
+} from './plugin-panel-design-token-css'
 
 function readPanelThemeSnapshot(): string {
   return `${currentPanelColorScheme()}|${buildPanelDesignTokenCss()}`
@@ -26,4 +30,14 @@ export function usePluginPanelThemeRevision(): number {
     return () => observer.disconnect()
   }, [])
   return revision
+}
+
+/** Pushes theme changes into a plugin frame without remounting it. */
+export function usePluginFrameThemeSync(iframeRef: RefObject<HTMLIFrameElement | null>): void {
+  const revision = usePluginPanelThemeRevision()
+  useEffect(() => {
+    if (revision > 0) {
+      postPluginFrameTheme(iframeRef.current?.contentWindow)
+    }
+  }, [revision, iframeRef])
 }

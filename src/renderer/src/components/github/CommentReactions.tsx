@@ -41,17 +41,11 @@ function reactionLabel(content: GitHubReactionContent): string {
 }
 
 function reactionCountLabel(count: number, reaction: string): string {
-  return count === 1
-    ? translate(
-        'auto.components.GitHubItemDialog.reactionCount_one',
-        '{{count}} {{reaction}} reaction',
-        { count, reaction }
-      )
-    : translate(
-        'auto.components.GitHubItemDialog.reactionCount_other',
-        '{{count}} {{reaction}} reactions',
-        { count, reaction }
-      )
+  return translate(
+    'auto.components.GitHubItemDialog.reactionCount',
+    '{{count}} {{reaction}} reactions',
+    { count, reaction, defaultValue_one: '{{count}} {{reaction}} reaction' }
+  )
 }
 
 export function CommentReactions({

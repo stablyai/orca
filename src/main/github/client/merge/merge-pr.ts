@@ -9,6 +9,7 @@ import { detectRepositoryMergeMetadata } from './../detect/repository-merge-meta
 import type { PullRequestLookupData } from './../lookup/pull-request-lookup-data'
 import { getRestPRByNumber, getPRByNumber } from './../lookup/pr-number-lookup'
 import { STACK_METADATA_UNAVAILABLE_ERROR } from './../lookup/pr-stack-summary-cache'
+import { codeHostFailure } from '../../../../shared/code-host-failure-copy'
 export async function mergePR(
   repoPath: string,
   prNumber: number,
@@ -24,7 +25,7 @@ export async function mergePR(
     localGitOptions
   )
   if (!ownerRepo) {
-    return { ok: false, error: 'Could not resolve GitHub owner/repo for this repository' }
+    return codeHostFailure('github.repoUnresolved')
   }
   await acquire()
   let concurrencySlotHeld = true

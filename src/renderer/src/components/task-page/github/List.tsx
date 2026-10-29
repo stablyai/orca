@@ -136,17 +136,15 @@ export function TaskPageGitHubList({
         {!tasksError && !githubUnavailable && failedCount > 0 ? (
           // Why: per-repo partial-failure signal, distinct from a hard IPC reject (tasksError); the two are mutually exclusive.
           <div className="border-b border-border/50 bg-amber-500/10 px-4 py-3 text-sm text-amber-700 dark:text-amber-200">
-            {selectedRepos.length === 1
-              ? translate(
-                  'auto.components.TaskPage.projectsFailedToLoad_one',
-                  '{{failed}} of {{count}} project failed to load',
-                  { failed: failedCount, count: selectedRepos.length }
-                )
-              : translate(
-                  'auto.components.TaskPage.projectsFailedToLoad_other',
-                  '{{failed}} of {{count}} projects failed to load',
-                  { failed: failedCount, count: selectedRepos.length }
-                )}
+            {translate(
+              'auto.components.TaskPage.projectsFailedToLoad',
+              '{{failed}} of {{count}} projects failed to load',
+              {
+                failed: failedCount,
+                count: selectedRepos.length,
+                defaultValue_one: '{{failed}} of {{count}} project failed to load'
+              }
+            )}
           </div>
         ) : null}
 

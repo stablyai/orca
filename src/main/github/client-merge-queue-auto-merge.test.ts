@@ -91,7 +91,7 @@ describe('GitHub GraphQL rate-limit guard', () => {
       })
     ).resolves.toEqual({ ok: true })
     await expect(
-      updatePRTitle('/repo-root', 7, 'New title', undefined, {
+      updatePRTitle('/repo-root', 7, '  New title @literal  ', undefined, {
         owner: 'stablyai',
         repo: 'orca',
         host: 'github.com'
@@ -131,7 +131,14 @@ describe('GitHub GraphQL rate-limit guard', () => {
     )
     expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
       4,
-      ['pr', 'edit', '7', '--title', 'New title', '--repo', 'stablyai/orca'],
+      [
+        'api',
+        '-X',
+        'PATCH',
+        'repos/stablyai/orca/pulls/7',
+        '--raw-field',
+        'title=  New title @literal  '
+      ],
       { cwd: '/repo-root', host: 'github.com' }
     )
   })
@@ -251,7 +258,7 @@ describe('GitHub GraphQL rate-limit guard', () => {
         repo: 'orca',
         host: 'github.com'
       })
-    ).resolves.toEqual({
+    ).resolves.toMatchObject({
       ok: false,
       error: 'GitHub does not support auto-merge for stacked pull requests.'
     })
@@ -272,7 +279,7 @@ describe('GitHub GraphQL rate-limit guard', () => {
         repo: 'orca',
         host: 'github.com'
       })
-    ).resolves.toEqual({
+    ).resolves.toMatchObject({
       ok: false,
       error: 'This pull request can already be merged. Use Merge instead of auto-merge.'
     })
@@ -294,7 +301,7 @@ describe('GitHub GraphQL rate-limit guard', () => {
         repo: 'orca',
         host: 'github.com'
       })
-    ).resolves.toEqual({
+    ).resolves.toMatchObject({
       ok: false,
       error: `Failed to enable auto-merge for pull request: ${providerError}`
     })
@@ -311,9 +318,11 @@ describe('GitHub GraphQL rate-limit guard', () => {
         repo: 'orca',
         host: 'github.com'
       })
-    ).resolves.toEqual({
+    ).resolves.toMatchObject({
       ok: false,
-      error: 'Failed to disable auto-merge for pull request: gh: pull request is already closed'
+      error: 'Failed to disable auto-merge for pull request: gh: pull request is already closed',
+      errorCode: 'github.autoMergeDisableFailed',
+      errorDetail: 'gh: pull request is already closed'
     })
   })
 

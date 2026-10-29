@@ -14,7 +14,11 @@ import {
   getGitLabWorkItemWorkspaceSeed,
   getTaskPageRepoSourceContext
 } from './task-page-source-context'
-export function useTaskPageWorkspaceActions(model: TaskPageSearchActionsModel) {
+type TaskPageWorkspaceActionsInput = Pick<TaskPageSearchActionsModel, 'repos' | 'openModal'>
+
+export function useTaskPageWorkspaceActions<Model extends TaskPageWorkspaceActionsInput>(
+  model: Model
+) {
   const { repos, openModal } = model
   const openComposerForItem = useCallback(
     (item: GitHubWorkItem): void => {
@@ -132,4 +136,6 @@ export function useTaskPageWorkspaceActions(model: TaskPageSearchActionsModel) {
   nextModel.handleUseGitLabItem = handleUseGitLabItem
   return nextModel
 }
-export type TaskPageWorkspaceActionsModel = ReturnType<typeof useTaskPageWorkspaceActions>
+export type TaskPageWorkspaceActionsModel = ReturnType<
+  typeof useTaskPageWorkspaceActions<TaskPageSearchActionsModel>
+>

@@ -153,6 +153,9 @@ export type AutomationRun = {
   precheckResult: AutomationPrecheckResult | null
   usage: AutomationRunUsage | null
   error: string | null
+  /** Localizes `error`; old records omit it and clients show `error` as stored. */
+  errorCode?: string
+  errorParams?: Record<string, string | number>
   startedAt: number | null
   dispatchedAt: number | null
   createdAt: number
@@ -238,6 +241,8 @@ export type AutomationDispatchResult = {
   precheckResult?: AutomationPrecheckResult | null
   usage?: AutomationRunUsage | null
   error?: string | null
+  errorCode?: string | null
+  errorParams?: Record<string, string | number> | null
   /** With `dispatched`: when the agent was handed the run, if not now. */
   dispatchedAt?: number
 }

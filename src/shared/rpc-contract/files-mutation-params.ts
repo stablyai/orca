@@ -91,6 +91,16 @@ export const FileCommitUpload = WorktreeSelector.extend({
     .pipe(z.string().min(1, 'Missing final path'))
 })
 
+export const FileReplaceWithUpload = FileCommitUpload.extend({
+  bytesPrecondition: z.object({
+    expectedSha256: z
+      .string()
+      .regex(/^[0-9a-f]{64}$/)
+      .optional(),
+    allowMissing: z.boolean().optional()
+  })
+})
+
 export const FileDelete = FileMutationOpen.extend({
   recursive: z.boolean().optional()
 })

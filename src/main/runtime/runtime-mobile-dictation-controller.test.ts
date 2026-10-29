@@ -11,11 +11,18 @@ import type { RuntimeStore } from './runtime-store-contract'
 type Sink = (event: { type: string; text?: string }) => void
 
 let sink: Sink = () => {}
-const stopDictation = vi.fn(async () => {})
+// A finish transcribes what was said; tests that never settle it model a slow transcription.
+let transcription: Promise<void> = Promise.resolve()
+const stopDictation = vi.fn(async (_owner: string, options?: { discard?: boolean }) => {
+  if (!options?.discard) {
+    await transcription
+  }
+})
 
 beforeEach(() => {
   vi.useFakeTimers()
   stopDictation.mockClear()
+  transcription = Promise.resolve()
   const factories = {
     createModelManager: () => ({ getModelState: async () => ({ status: 'ready' }) }),
     createSttService: () => ({
@@ -67,10 +74,24 @@ describe('mobile dictation across a phone reconnect', () => {
 
   it('releases the speech model when the phone goes quiet for the grace', async () => {
     const controller = await startPhoneDictation()
+    transcription = new Promise(() => {})
 
     await vi.advanceTimersByTimeAsync(MOBILE_DICTATION_RECONNECT_GRACE_MS)
 
     expect(stopDictation).toHaveBeenCalledOnce()
     expect(() => controller.feed(chunk)).toThrow('dictation_stream_not_started')
+  })
+})
+
+describe('mobile dictation cancel', () => {
+  it('lets the phone start again right after it cancels', async () => {
+    const controller = await startPhoneDictation()
+    transcription = new Promise(() => {})
+
+    await controller.cancel({ dictationId: 'd-1', clientId: 'phone-a' })
+
+    await expect(
+      controller.start({ dictationId: 'd-2', modelId: 'test-model', clientId: 'phone-a' })
+    ).resolves.toEqual({ dictationId: 'd-2', modelId: 'test-model' })
   })
 })

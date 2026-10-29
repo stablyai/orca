@@ -1,3 +1,4 @@
+import { vi } from 'vitest'
 import { z } from 'zod'
 import { folderWorkspaceKey } from '../../shared/workspace-scope'
 import { readFileSync } from 'node:fs'
@@ -126,3 +127,34 @@ export const WslChatProviderReport = z.object({
   controlRequests: z.array(z.object({ request: z.object({ subtype: z.string() }) })),
   controlResponses: z.array(z.object({ response: z.object({ response: z.unknown().optional() }) }))
 })
+
+const PROVIDER_REPORT_TIMEOUT_MS = 30_000
+
+/** Scripted providers rewrite their report in place after each act, so one read can see a torn file or a stale one. */
+export async function waitForProviderReport<T>(
+  host: WslChatHost,
+  path: string,
+  schema: z.ZodType<T>,
+  settled: (report: T) => boolean,
+  awaiting: string
+): Promise<T> {
+  let lastRead = ''
+  try {
+    return await vi.waitFor(
+      async () => {
+        lastRead = await host.guest(`cat ${quotePosixShell(path)} 2>/dev/null || true`)
+        const report = schema.parse(JSON.parse(lastRead))
+        if (!settled(report)) {
+          throw new Error(`report does not show ${awaiting} yet`)
+        }
+        return report
+      },
+      { timeout: PROVIDER_REPORT_TIMEOUT_MS, interval: 250 }
+    )
+  } catch (error) {
+    throw new Error(
+      `Provider report ${path} did not show ${awaiting} within ${PROVIDER_REPORT_TIMEOUT_MS} ms; last read ${JSON.stringify(lastRead.slice(-600))}`,
+      { cause: error }
+    )
+  }
+}

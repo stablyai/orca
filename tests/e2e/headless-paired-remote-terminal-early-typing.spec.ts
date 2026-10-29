@@ -103,6 +103,13 @@ test("keys typed before a new remote terminal's first prompt are all delivered, 
       const typed = `echo EARLY_TYPING_${round}_$((40+2))`
       await page.keyboard.insertText(typed)
       await page.keyboard.press('Enter')
+      // Release only once the tty has echoed the line: the bytes then reached the PTY during the rc.
+      await expect
+        .poll(async () => (await paneText(page, tabId)).includes(typed), {
+          timeout: 30_000,
+          message: `round ${round}: the typed line never reached the host's tty while its rc waited`
+        })
+        .toBe(true)
       expect(existsSync(release)).toBe(false)
       writeFileSync(release, '')
 
@@ -114,9 +121,9 @@ test("keys typed before a new remote terminal's first prompt are all delivered, 
         })
         .toBeGreaterThan(0)
       const text = await paneText(page, tabId)
-      // The rc file's own prompt proves it ran. Where the typed line's echo lands is not asserted:
-      // it varies by host (macOS echoes it during the rc; Linux CI shows it only after the prompt).
+      // The rc file's own prompt proves it ran, and the keys arrived before it.
       expect(text).toContain(PROMPT)
+      expect(text.indexOf(typed)).toBeLessThan(text.indexOf(PROMPT))
       expect(text.match(ran)).toHaveLength(1)
     }
   } finally {

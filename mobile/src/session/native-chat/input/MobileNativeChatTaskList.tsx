@@ -2,24 +2,19 @@ import { Pressable, Text, View } from 'react-native'
 import { ChevronRight, Circle, CircleCheck, CircleDot, ListChecks } from 'lucide-react-native'
 import {
   diffNativeChatTaskLists,
-  NATIVE_CHAT_TASK_LIST_COPY,
   nativeChatCompletedTaskCount,
   nativeChatTaskChangeWords,
   nativeChatTaskLabel,
   type NativeChatTask,
   type NativeChatTaskList as TaskList
 } from '../../../../../src/shared/native-chat/input/native-chat-task-list'
+import { nativeChatTaskListCopy } from './native-chat-task-list-copy'
+import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { colors } from '../../../theme/mobile-theme'
 import { useMobileNativeChatOpenedDetail } from '../visual/mobile-native-chat-opened-detail'
 import { toolStyles as styles, toolType } from '../transcript/mobile-native-chat-tool-styles'
 import { useMobileNativeChatDisclosure } from '../transcript/mobile-native-chat-disclosure-store'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
-
-const STATUS_WORD: Record<NativeChatTask['status'], string> = {
-  completed: NATIVE_CHAT_TASK_LIST_COPY.completed,
-  in_progress: NATIVE_CHAT_TASK_LIST_COPY.inProgress,
-  pending: NATIVE_CHAT_TASK_LIST_COPY.pending
-}
 
 /** Content plus occurrence is the only identity the providers give these entries. */
 function occurrenceKeyed<T>(items: readonly T[], content: (item: T) => string): [T, string][] {
@@ -42,13 +37,23 @@ function TaskRow({
   fontScale: number
 }): React.JSX.Element {
   useMobileColorScheme()
+  const t = useMobileTranslation()
+  const copy = nativeChatTaskListCopy(t)
+  const statusWord = {
+    completed: copy.completed,
+    in_progress: copy.inProgress,
+    pending: copy.pending
+  }
   const Icon =
     task.status === 'completed' ? CircleCheck : task.status === 'in_progress' ? CircleDot : Circle
   const active = task.status === 'in_progress'
   return (
     <View
       style={styles.taskRow}
-      accessibilityLabel={`${STATUS_WORD[task.status]}: ${label ?? nativeChatTaskLabel(task)}`}
+      accessibilityLabel={t('chat.taskList.taskStatus', '{{status}}: {{task}}', {
+        status: statusWord[task.status],
+        task: label ?? nativeChatTaskLabel(task)
+      })}
     >
       <View style={[styles.taskIcon, { height: toolType(fontScale).row.lineHeight }]}>
         <Icon
@@ -73,9 +78,10 @@ function TaskRow({
 
 function Checklist({ list, fontScale }: { list: TaskList; fontScale: number }) {
   useMobileColorScheme()
+  const t = useMobileTranslation()
   return list.tasks.length === 0 ? (
     <Text style={[styles.lineMeta, toolType(fontScale).meta]}>
-      {NATIVE_CHAT_TASK_LIST_COPY.empty}
+      {nativeChatTaskListCopy(t).empty}
     </Text>
   ) : (
     <View style={styles.taskList}>
@@ -96,6 +102,7 @@ function FullList({
   disclosureKey?: string
 }) {
   useMobileColorScheme()
+  const t = useMobileTranslation()
   const [open, setOpen] = useMobileNativeChatDisclosure(disclosureKey, false)
   return (
     <View>
@@ -109,7 +116,7 @@ function FullList({
           <ChevronRight size={14 * fontScale} color={colors.textMuted} strokeWidth={2} />
         </View>
         <Text style={[styles.lineMeta, toolType(fontScale).meta]}>
-          {NATIVE_CHAT_TASK_LIST_COPY.showAll}
+          {nativeChatTaskListCopy(t).showAll}
         </Text>
       </Pressable>
       {open ? <OpenedChecklist list={list} fontScale={fontScale} /> : null}
@@ -138,21 +145,16 @@ export function MobileNativeChatTaskList({
   disclosureKey?: string
 }): React.JSX.Element {
   useMobileColorScheme()
+  const t = useMobileTranslation()
   const completed = nativeChatCompletedTaskCount(list)
+  const copy = nativeChatTaskListCopy(t, { completed, total: list.tasks.length })
   const changes = previous ? diffNativeChatTaskLists(previous, list) : null
   const type = toolType(fontScale)
   return (
     <View style={styles.taskCard}>
-      <View
-        style={styles.taskHeader}
-        accessibilityLabel={NATIVE_CHAT_TASK_LIST_COPY.progress
-          .replace('{{completed}}', String(completed))
-          .replace('{{total}}', String(list.tasks.length))}
-      >
+      <View style={styles.taskHeader} accessibilityLabel={copy.progress}>
         <ListChecks size={15 * fontScale} color={colors.textMuted} strokeWidth={2} />
-        <Text style={[styles.lineMeta, styles.taskTitle, type.meta]}>
-          {NATIVE_CHAT_TASK_LIST_COPY.title}
-        </Text>
+        <Text style={[styles.lineMeta, styles.taskTitle, type.meta]}>{copy.title}</Text>
         <Text style={[styles.lineMeta, type.meta]}>{`${completed}/${list.tasks.length}`}</Text>
       </View>
       {changes ? (
@@ -166,7 +168,7 @@ export function MobileNativeChatTaskList({
                     <TaskRow
                       key={rowKey}
                       task={change.task}
-                      label={NATIVE_CHAT_TASK_LIST_COPY[key].replace('{{task}}', task)}
+                      label={nativeChatTaskListCopy(t, { task })[key]}
                       fontScale={fontScale}
                     />
                   )
@@ -174,7 +176,7 @@ export function MobileNativeChatTaskList({
               )}
             </View>
           ) : (
-            <Text style={[styles.lineMeta, type.meta]}>{NATIVE_CHAT_TASK_LIST_COPY.unchanged}</Text>
+            <Text style={[styles.lineMeta, type.meta]}>{copy.unchanged}</Text>
           )}
           <FullList list={list} fontScale={fontScale} disclosureKey={disclosureKey} />
         </>

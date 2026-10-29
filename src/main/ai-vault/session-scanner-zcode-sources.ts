@@ -4,6 +4,7 @@ import type { AiVaultScanIssue } from '../../shared/ai-vault-types'
 import { throwIfSignalAborted } from '../../shared/abort-signal-reason'
 import { wslGatedAccess } from '../native-chat/wsl-transcript-fs-access'
 import { listZcodeSqliteSessionsViaWorker } from './session-scanner-opencode-sqlite-worker-spawn'
+import { scanIssueTextFromError } from './session-scan-issues'
 import type { AiVaultScanOptions, SessionFileDiscovery } from './session-scanner-types'
 import { scopeWalksAgentFiles } from './session-scope-cwd'
 
@@ -57,7 +58,7 @@ async function zcodeDatabaseExists(
     issues.push({
       agent: 'zcode',
       path: dbPath,
-      message: error instanceof Error ? error.message : String(error)
+      ...scanIssueTextFromError(error)
     })
     return false
   }

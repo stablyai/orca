@@ -10,6 +10,7 @@ import { translate } from '@/i18n/i18n'
 import { useWslMoveTargetForRepo } from '../../../wsl-move/wsl-move-entry'
 import { WslMoveRuntimeRow } from '../../../wsl-move/WslMoveRuntimeRow'
 import { WslDriveProjectGitRow } from '../../../wsl-drive-project/WslDriveProjectGitRow'
+import { WslDriveUncConversionRow } from '../../../wsl-drive-project/WslDriveUncConversionRow'
 import { useWslHostsEnabled } from '../../../sidebar/use-wsl-hosts-enabled'
 import { resolveProjectExecutionRuntime } from '../../../../../../shared/project-execution-runtime'
 import { isGitRepoKind } from '../../../../../../shared/repo-kind'
@@ -105,6 +106,7 @@ export function RepositoryWindowsRuntimeSection({
           updateProject={updateProject}
         />
       ) : null}
+      {wslHostsEnabled && repo ? <WslDriveUncConversionRow repo={repo} /> : null}
     </SearchableSetting>
   )
 }

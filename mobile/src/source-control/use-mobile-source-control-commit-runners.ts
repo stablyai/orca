@@ -1,4 +1,5 @@
 import { useCallback, type MutableRefObject } from 'react'
+import { translate } from '../i18n/mobile-i18n'
 import { triggerError, triggerSuccess } from '../platform/haptics'
 import type { LoadStatusOptions } from './mobile-source-control-screen-state'
 import type {
@@ -69,7 +70,10 @@ export function useMobileSourceControlCommitRunners(params: Params) {
           await sendCommitRequest(message)
         } catch (err) {
           recordCommitFailure({
-            error: err instanceof Error ? err.message : 'Commit failed',
+            error:
+              err instanceof Error
+                ? err.message
+                : translate('sourceControl.commitRunners.commitFailed', 'Commit failed'),
             commitMessage: message,
             stagedEntries
           })
@@ -110,7 +114,10 @@ export function useMobileSourceControlCommitRunners(params: Params) {
           return false
         }
         triggerError()
-        const errorMessage = err instanceof Error ? err.message : 'Source control action failed'
+        const errorMessage =
+          err instanceof Error
+            ? err.message
+            : translate('sourceControl.commitRunners.actionFailed', 'Source control action failed')
         if (!didCommit) {
           recordCommitFailure({ error: errorMessage, commitMessage: message, stagedEntries })
         }

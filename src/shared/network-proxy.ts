@@ -3,9 +3,23 @@ export type NetworkProxySettings = {
   httpProxyBypassRules?: string | null
 }
 
+// One English table: `message` stays English; the settings UI translates by code.
+export const PROXY_URL_FAILURE_COPY = {
+  tooLong: 'Proxy URL is too long.',
+  invalid: 'Enter a valid proxy URL.',
+  unsupportedProtocol: 'Use an http, https, socks, socks4, or socks5 proxy URL.',
+  missingHost: 'Proxy URL must include a host.'
+} as const
+
+export type ProxyUrlFailureCode = keyof typeof PROXY_URL_FAILURE_COPY
+
 export type ProxyUrlValidationResult =
   | { ok: true; value: string; message?: undefined }
-  | { ok: false; value: ''; message: string }
+  | { ok: false; value: ''; message: string; code: ProxyUrlFailureCode }
+
+function proxyUrlFailure(code: ProxyUrlFailureCode): ProxyUrlValidationResult {
+  return { ok: false, value: '', message: PROXY_URL_FAILURE_COPY[code], code }
+}
 
 const PROXY_URL_MAX_LENGTH = 2048
 const PROXY_BYPASS_RULES_MAX_LENGTH = 4096
@@ -35,24 +49,20 @@ export function normalizeProxyUrl(value: unknown): ProxyUrlValidationResult {
     return { ok: true, value: '' }
   }
   if (trimmed.length > PROXY_URL_MAX_LENGTH) {
-    return { ok: false, value: '', message: 'Proxy URL is too long.' }
+    return proxyUrlFailure('tooLong')
   }
 
   let parsed: URL
   try {
     parsed = new URL(trimmed)
   } catch {
-    return { ok: false, value: '', message: 'Enter a valid proxy URL.' }
+    return proxyUrlFailure('invalid')
   }
   if (!PROXY_PROTOCOLS.has(parsed.protocol)) {
-    return {
-      ok: false,
-      value: '',
-      message: 'Use an http, https, socks, socks4, or socks5 proxy URL.'
-    }
+    return proxyUrlFailure('unsupportedProtocol')
   }
   if (!parsed.hostname) {
-    return { ok: false, value: '', message: 'Proxy URL must include a host.' }
+    return proxyUrlFailure('missingHost')
   }
   return { ok: true, value: formatProxyUrl(parsed) }
 }

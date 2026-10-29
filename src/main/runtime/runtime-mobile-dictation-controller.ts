@@ -55,7 +55,7 @@ export class RuntimeMobileDictationController {
     }
     if (this.session?.clientId === params.clientId && this.session.state === 'active') {
       // A phone runs one dictation at a time, so its new start retires one it lost track of (app relaunch inside the grace).
-      await this.stopSession(this.session)
+      await this.stopSession(this.session, { discard: true })
     }
     if (this.session) {
       throw new Error('dictation_already_active')
@@ -88,7 +88,7 @@ export class RuntimeMobileDictationController {
       const session = this.session
       // Owned by the phone, not its socket; it streams continuously, so this long without a request means it is gone.
       session.abandonTimer = setTimeout(
-        () => void this.stopSession(session).catch(() => undefined),
+        () => void this.stopSession(session, { discard: true }).catch(() => undefined),
         MOBILE_DICTATION_RECONNECT_GRACE_MS
       )
     } catch (error) {
@@ -134,7 +134,7 @@ export class RuntimeMobileDictationController {
     clientId?: string
   }): Promise<{ dictationId: string; text: string }> {
     const session = this.requireOwnedSession(params)
-    await this.stopSession(session)
+    await this.stopSession(session, { discard: false })
     if (session.errors.length > 0) {
       throw new Error(session.errors[0])
     }
@@ -147,7 +147,7 @@ export class RuntimeMobileDictationController {
   }): Promise<{ dictationId: string }> {
     const session = this.session
     if (session?.id === params.dictationId && session.clientId === params.clientId) {
-      await this.stopSession(session)
+      await this.stopSession(session, { discard: true })
     }
     return { dictationId: params.dictationId }
   }
@@ -192,11 +192,15 @@ export class RuntimeMobileDictationController {
     return session
   }
 
-  private async stopSession(session: MobileDictationSession): Promise<void> {
+  // Only finish transcribes; text nobody will read must not hold the speech session.
+  private async stopSession(
+    session: MobileDictationSession,
+    options: { discard: boolean }
+  ): Promise<void> {
     clearTimeout(session.abandonTimer)
     session.state = 'closing'
     try {
-      await getSpeechSttService(this.requireStore()).stopDictation(session.owner)
+      await getSpeechSttService(this.requireStore()).stopDictation(session.owner, options)
     } finally {
       if (this.session?.id === session.id) {
         this.session = null

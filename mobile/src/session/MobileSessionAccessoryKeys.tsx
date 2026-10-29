@@ -13,6 +13,7 @@ import { createTerminalLiveAccessoryInput } from '../terminal/terminal-live-acce
 import { keepHeldPressThroughLongPress } from './held-press-long-press'
 import { isTerminalPhoneDisplayMode } from './mobile-session-route-helpers'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { colors } from '../theme/mobile-theme'
 import { styles } from './mobile-session-styles'
 import { useKeyboardPersistingTaps } from '../platform/keyboard-persisting-taps'
@@ -27,6 +28,7 @@ export function MobileSessionAccessoryKeys({
   vertical?: boolean
 }) {
   useMobileColorScheme()
+  const t = useMobileTranslation()
   const {
     activeHandle,
     customKeys,
@@ -62,8 +64,11 @@ export function MobileSessionAccessoryKeys({
           onPress={dismissSoftwareKeyboard}
           hitSlop={8}
           accessibilityRole="button"
-          accessibilityLabel="Dismiss keyboard"
-          accessibilityHint="Hides the software keyboard and keeps the current terminal session open."
+          accessibilityLabel={t('session.accessoryKeys.dismissKeyboard', 'Dismiss keyboard')}
+          accessibilityHint={t(
+            'session.accessoryKeys.dismissKeyboardHint',
+            'Hides the software keyboard and keeps the current terminal session open.'
+          )}
         >
           <View style={styles.keyboardDismissGlyph}>
             <KeyboardIcon size={15} color={colors.textSecondary} strokeWidth={2} />
@@ -100,8 +105,8 @@ export function MobileSessionAccessoryKeys({
           }}
           accessibilityLabel={
             isTerminalPhoneDisplayMode(activeHandle, terminalModes)
-              ? 'Switch to desktop mode'
-              : 'Switch to phone mode'
+              ? t('session.accessoryKeys.switchToDesktopMode', 'Switch to desktop mode')
+              : t('session.accessoryKeys.switchToPhoneMode', 'Switch to phone mode')
           }
         >
           {isTerminalPhoneDisplayMode(activeHandle, terminalModes) ? (
@@ -122,7 +127,9 @@ export function MobileSessionAccessoryKeys({
           disabled={!canCompose}
           onPress={toggleLiveInput}
           accessibilityLabel={
-            liveInputEnabled ? 'Switch to buffered command input' : 'Switch to live terminal input'
+            liveInputEnabled
+              ? t('session.accessoryKeys.switchToBufferedInput', 'Switch to buffered command input')
+              : t('session.accessoryKeys.switchToLiveInput', 'Switch to live terminal input')
           }
         >
           <ChevronsRight
@@ -147,10 +154,13 @@ export function MobileSessionAccessoryKeys({
             ]}
             disabled={!canSend}
             onPress={() => void handlePaste()}
-            accessibilityLabel="Paste from clipboard"
+            accessibilityLabel={t(
+              'session.accessoryKeys.pasteFromClipboard',
+              'Paste from clipboard'
+            )}
           >
             <Text style={[styles.accessoryKeyText, !canSend && styles.accessoryKeyTextDisabled]}>
-              Paste
+              {t('session.accessoryKeys.paste', 'Paste')}
             </Text>
           </Pressable>
         )}
@@ -183,7 +193,10 @@ export function MobileSessionAccessoryKeys({
               void handleAccessoryKey(createTerminalLiveAccessoryInput(key))
             }}
             onLongPress={key.repeatable ? keepHeldPressThroughLongPress : undefined}
-            accessibilityLabel={key.accessibilityLabel ?? `Send ${key.label}`}
+            accessibilityLabel={
+              key.accessibilityLabel ??
+              t('session.accessoryKeys.sendKey', 'Send {{label}}', { label: key.label })
+            }
           >
             <Text style={[styles.accessoryKeyText, !canSend && styles.accessoryKeyTextDisabled]}>
               {key.label}
@@ -208,7 +221,9 @@ export function MobileSessionAccessoryKeys({
               setDeleteKeyTarget(key)
             }}
             delayLongPress={400}
-            accessibilityLabel={`Send ${key.label}`}
+            accessibilityLabel={t('session.accessoryKeys.sendKey', 'Send {{label}}', {
+              label: key.label
+            })}
           >
             <Text style={[styles.accessoryKeyText, !canSend && styles.accessoryKeyTextDisabled]}>
               {key.label}
@@ -222,7 +237,7 @@ export function MobileSessionAccessoryKeys({
             pressed && styles.accessoryKeyPressed
           ]}
           onPress={() => setShowCustomKeyModal(true)}
-          accessibilityLabel="Add custom shortcut"
+          accessibilityLabel={t('session.accessoryKeys.addCustomShortcut', 'Add custom shortcut')}
         >
           <Plus size={14} color={colors.textSecondary} strokeWidth={2.2} />
         </Pressable>

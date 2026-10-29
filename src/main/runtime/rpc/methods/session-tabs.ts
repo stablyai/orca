@@ -1,3 +1,4 @@
+import { terminalCreateFeatureRequirement } from '../agent-launch-feature-requirement'
 import { terminalImageViewerSupported } from '../../terminal-image-viewer-env'
 import { resolveRuntimeNavigationTarget } from '../../../../shared/runtime-navigation'
 import { getExplicitWorktreeIdSelector } from '../../runtime-worktree-selection'
@@ -53,6 +54,7 @@ export const SESSION_TAB_METHODS = [
   ...SESSION_TAB_CLOSE_METHODS,
   defineMethod({
     name: 'session.tabs.createTerminal',
+    requires: terminalCreateFeatureRequirement,
     permission: 'workspace',
     params: CreateTerminalTab,
     handler: async (params, context) => {

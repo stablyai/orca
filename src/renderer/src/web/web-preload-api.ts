@@ -155,6 +155,12 @@ function createWebPreloadApi(): Partial<PreloadApi> {
       onOrchestratorSleptPanesRequest: () => () => {},
       answerOrchestratorSleptPanes: () => Promise.resolve()
     },
+    // Desktop-only: a web client never converts this computer's projects.
+    wslDriveUnc: {
+      convert: () => Promise.resolve({ outcome: 'refused', blockers: [] }),
+      listPendingRendererRewrites: () => Promise.resolve([]),
+      recordStoreRewritten: () => Promise.resolve({ recorded: false, reason: 'gated-off' })
+    },
     pwsh: {
       isAvailable: () => callRuntimeResult<boolean>('host.pwsh.isAvailable').catch(() => false)
     },

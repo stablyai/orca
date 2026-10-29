@@ -3,8 +3,10 @@ import { colors, spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import type { SectionPendingCreation } from '../worktree/workspace-list-types'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 
 export function HostPendingCreationRow({ creation }: { creation: SectionPendingCreation }) {
+  const t = useMobileTranslation()
   useMobileColorScheme()
   return (
     <View style={styles.row} accessibilityRole="progressbar">
@@ -13,7 +15,7 @@ export function HostPendingCreationRow({ creation }: { creation: SectionPendingC
       </View>
       <View style={styles.main}>
         <Text style={styles.title} numberOfLines={1}>
-          Creating workspace…
+          {t('hostScreen.hostPendingCreationRow.creatingWorkspace', 'Creating workspace…')}
         </Text>
         {creation.repoName ? (
           <Text style={styles.meta} numberOfLines={1}>

@@ -1,5 +1,6 @@
 /** C4 recovery uses bounded relaunch backoff, then census before publishing terminal verdicts. Recovery is never a user action, so it needs a confirmed-running distro and never boots one (E9). */
 import type { OrcadTerminalCensus } from '../../shared/orcad-terminal-census'
+import { wslHostStatusDetailText } from '../../shared/wsl-host-failure-copy'
 import type { WslRunningDistrosRead } from '../wsl-background-distro-gate'
 import { wslDistroHolderKey } from './wsl-distro-holder-record'
 import type { WslOrcadConnection, WslOrcadConnectOptions } from './wsl-orcad-connection'
@@ -33,9 +34,15 @@ export async function recoverWslOrcad(
   for (;;) {
     const decision = context.backoff.next(context.now())
     if (decision.kind === 'give-up') {
+      const gaveUp = wslHostStatusDetailText('restartGaveUp', {
+        distro: context.distro,
+        count: decision.attempts
+      })
       context.publish({
         state: 'failed',
-        reason: `Could not restart the Orca server in ${context.distro} after ${decision.attempts} attempts`,
+        reason: gaveUp.text,
+        reasonCode: gaveUp.code,
+        reasonParams: gaveUp.params,
         terminals
       })
       return null

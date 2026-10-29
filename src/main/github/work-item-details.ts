@@ -82,7 +82,11 @@ export async function getWorkItemDetails(
       return null
     }
   }
-  const { item, repository: selectedRepository } = issueRepositoryOverride
+  const {
+    item,
+    repository: selectedRepository,
+    issueDetails
+  } = issueRepositoryOverride
     ? {
         item: await getWorkItemByOwnerRepo(
           repoPath,
@@ -92,7 +96,8 @@ export async function getWorkItemDetails(
           connectionId,
           localGitOptions
         ),
-        repository: issueRepositoryOverride
+        repository: issueRepositoryOverride,
+        issueDetails: undefined
       }
     : await getWorkItemWithRepository(
         repoPath,
@@ -100,7 +105,8 @@ export async function getWorkItemDetails(
         type,
         connectionId,
         localGitOptions,
-        preference
+        preference,
+        type === 'issue'
       )
   if (!item) {
     return null
@@ -115,13 +121,16 @@ export async function getWorkItemDetails(
 
   if (item.type === 'issue') {
     return withWorkItemDetailsPermit(async () => {
-      const collapsed = await getIssueDetailsViaGraphQL(
-        repoPath,
-        item.number,
-        resolvedRepository,
-        connectionId,
-        localGitOptions
-      )
+      const collapsed =
+        issueDetails === undefined
+          ? await getIssueDetailsViaGraphQL(
+              repoPath,
+              item.number,
+              resolvedRepository,
+              connectionId,
+              localGitOptions
+            )
+          : issueDetails
       if (collapsed) {
         return {
           item: enrichItemDisplayAvatars(item, [

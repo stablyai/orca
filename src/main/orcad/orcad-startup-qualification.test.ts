@@ -46,8 +46,9 @@ describe('orcad startup qualification', () => {
     const key = JSON.parse(await orcadStartupQualificationKey(slot, '0.1.0+aaaaaaaaaaaa'))
 
     expect(Object.keys(key)).toEqual(
-      expect.arrayContaining(['runtime', 'node', 'abi', 'kernel', 'files'])
+      expect.arrayContaining(['runtime', 'node', 'execPath', 'abi', 'kernel', 'files'])
     )
+    expect(key.execPath).toBe(process.execPath)
     expect(key.abi).toHaveProperty('glibcVersion')
   })
 
@@ -72,6 +73,13 @@ describe('orcad startup qualification', () => {
       ).not.toBe(key)
     }
   )
+
+  it('never matches a marker written under the older schema', async () => {
+    const key = await orcadStartupQualificationKey(slot, '0.1.0+aaaaaaaaaaaa')
+    await recordOrcadStartupQualification(slot, JSON.stringify({ ...JSON.parse(key), schema: 1 }))
+
+    expect(await consumeOrcadStartupQualification(slot, key)).toBe(false)
+  })
 
   it('fails the key closed when an installed file is missing', async () => {
     rmSync(join(slot, 'daemon-entry.js'))

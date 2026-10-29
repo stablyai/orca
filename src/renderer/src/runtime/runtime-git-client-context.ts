@@ -8,10 +8,11 @@ import type { HostedReviewProvider } from '../../../shared/hosted-review'
 import type { ResolvedSourceControlAiGenerationParams } from '../../../shared/source-control-ai'
 import { splitWorktreeIdForFilesystem } from '../../../shared/worktree/id'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
+import type { TextGenerationFailureFields } from '../../../shared/text-generation-failure-copy'
 
 export type RuntimeGenerateCommitMessageResult =
   | { success: true; message: string; agentLabel?: string }
-  | { success: false; error: string; canceled?: boolean }
+  | ({ success: false; canceled?: boolean } & TextGenerationFailureFields)
 
 export type RuntimeGeneratePullRequestFieldsResult =
   | {
@@ -20,7 +21,11 @@ export type RuntimeGeneratePullRequestFieldsResult =
       agentLabel?: string
       branchChangedByPreparation?: boolean
     }
-  | { success: false; error: string; canceled?: boolean; branchChangedByPreparation?: boolean }
+  | ({
+      success: false
+      canceled?: boolean
+      branchChangedByPreparation?: boolean
+    } & TextGenerationFailureFields)
 
 export type RuntimePullRequestGenerationInput = {
   base: string

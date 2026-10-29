@@ -470,8 +470,8 @@ const JA_AUDIT_OVERRIDES = {
     'ダークモードでのペイン間の分割線を制御します。',
   'Countdown timer showing time until prompt cache expires (Claude agents).':
     'プロンプトキャッシュが期限切れになるまでの時間を示すカウントダウンタイマー（Claude Agent ）。',
-  'Install and manage experimental Orca plugins.':
-    '実験的機能の Orca プラグインをインストール・管理します。',
+  'Install and manage Orca plugins (Alpha).':
+    'Orca プラグインをインストール・管理します（アルファ版）。',
   "Resident memory held by Orca plus the processes under each worktree's terminals.":
     'Orca が保持する常駐メモリと、各ワークツリーのターミナル配下で実行中のプロセス。',
   'No local Claude, Codex, or OpenCode usage found yet. The overview will populate after the next agent session writes token logs.':

@@ -56,7 +56,9 @@ export function useSourceControlActionAgentChoice(args: {
           : NO_PROJECT_ROWS,
     [args.worktreeId, args.repoId, args.repo, worktreeDetectionTarget]
   )
-  const observation = useAgentMenuObservation(rows.target, args.open, rows.detectionTarget)
+  const observation = useAgentMenuObservation(rows.target, args.open, rows.detectionTarget, {
+    wakeOnOpen: true
+  })
   const { detectedIds, detectionFailed, needsServerUpdate } = observation.detection
   const detectedAgents =
     observation.model.state === 'settled'

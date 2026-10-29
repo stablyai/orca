@@ -2,6 +2,7 @@ import { useCallback, useRef, useState } from 'react'
 import type { ConnectionState } from '../transport/types'
 import type { RpcClient } from '../transport/rpc-client'
 import { triggerError, triggerSuccess } from '../platform/haptics'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { launchAgentWithPrompt, promptedLaunchNotice } from './pr-ai-triage-launch'
 import {
   resolveMobileAgentLaunchAvailability,
@@ -23,6 +24,8 @@ export type PrAiTriageLaunchNotice = {
   undeliveredPrompt: string | null
 }
 
+type StoredLaunchNotice = PrAiTriageLaunchNotice | { kind: 'waitingForDesktop' | 'launchFailed' }
+
 const NO_LAUNCH_NOTICE: PrAiTriageLaunchNotice = {
   success: null,
   error: null,
@@ -41,6 +44,7 @@ type Input = {
 }
 
 export function useMobilePrAiTriage(input: Input) {
+  const t = useMobileTranslation()
   const {
     client,
     connState,
@@ -52,7 +56,7 @@ export function useMobilePrAiTriage(input: Input) {
   } = input
   const [busyKey, setBusyKey] = useState<PrAiTriageKey | null>(null)
   // Scope feedback by button so launches cannot display another action’s prompt-copy state.
-  const [notices, setNotices] = useState<Partial<Record<PrAiTriageKey, PrAiTriageLaunchNotice>>>({})
+  const [notices, setNotices] = useState<Partial<Record<PrAiTriageKey, StoredLaunchNotice>>>({})
   // Lock synchronously because async busy state cannot stop same-frame double-tap launches.
   const inFlightRef = useRef(false)
   const availability: MobileAgentLaunchAvailability = resolveMobileAgentLaunchAvailability({
@@ -61,7 +65,7 @@ export function useMobilePrAiTriage(input: Input) {
     statusReadable: hostStatusReadable
   })
 
-  const setNotice = useCallback((key: PrAiTriageKey, notice: PrAiTriageLaunchNotice) => {
+  const setNotice = useCallback((key: PrAiTriageKey, notice: StoredLaunchNotice) => {
     setNotices((current) => ({ ...current, [key]: notice }))
   }, [])
 
@@ -71,7 +75,7 @@ export function useMobilePrAiTriage(input: Input) {
         return false
       }
       if (!client || connState !== 'connected') {
-        setNotice(key, { ...NO_LAUNCH_NOTICE, error: 'Waiting for desktop…' })
+        setNotice(key, { kind: 'waitingForDesktop' })
         triggerError()
         return false
       }
@@ -102,10 +106,12 @@ export function useMobilePrAiTriage(input: Input) {
         return notice.succeeded
       } catch (err) {
         triggerError()
-        setNotice(key, {
-          ...NO_LAUNCH_NOTICE,
-          error: err instanceof Error ? err.message : 'Failed to launch agent'
-        })
+        setNotice(
+          key,
+          err instanceof Error
+            ? { ...NO_LAUNCH_NOTICE, error: err.message }
+            : { kind: 'launchFailed' }
+        )
         return false
       } finally {
         inFlightRef.current = false
@@ -117,7 +123,19 @@ export function useMobilePrAiTriage(input: Input) {
 
   return {
     availability,
-    noticeFor: (key: PrAiTriageKey): PrAiTriageLaunchNotice => notices[key] ?? NO_LAUNCH_NOTICE,
+    noticeFor: (key: PrAiTriageKey): PrAiTriageLaunchNotice => {
+      const notice = notices[key] ?? NO_LAUNCH_NOTICE
+      if (!('kind' in notice)) {
+        return notice
+      }
+      return {
+        ...NO_LAUNCH_NOTICE,
+        error:
+          notice.kind === 'waitingForDesktop'
+            ? t('session.usePrAiTriage.waitingForDesktop', 'Waiting for desktop…')
+            : t('session.usePrAiTriage.launchFailed', 'Failed to launch agent')
+      }
+    },
     isBusy: useCallback((key: PrAiTriageKey) => busyKey === key, [busyKey]),
     launch
   }

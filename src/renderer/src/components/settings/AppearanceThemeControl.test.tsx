@@ -2,7 +2,7 @@
 import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
-import { AppearanceThemeControl } from './AppearanceThemeControl'
+import { AppearanceThemeSlotSelect } from './AppearanceThemeControl'
 
 const themes = vi.hoisted((): { app: unknown[]; terminal: unknown[] } => ({
   app: [],
@@ -29,20 +29,18 @@ const dusk = {
   tokens: { '--background': '#1b1430', '--foreground': '#e8e0ff' }
 }
 
-it('keeps the System/Dark/Light segments until a plugin offers a theme', () => {
-  render(
-    <AppearanceThemeControl
-      label="Theme"
-      settings={getDefaultSettings('/tmp')}
-      updateSettings={vi.fn()}
-      applyTheme={vi.fn()}
-    />
-  )
-  expect(screen.getByRole('radiogroup', { name: 'Theme' })).toBeDefined()
-})
-
-it('lists plugin themes in the one Theme select and offers the plugin terminal colors', () => {
-  themes.app = [dusk]
+it('lists only themes of its mode, grouped by plugin, and offers the plugin terminal colors', async () => {
+  themes.app = [
+    dusk,
+    { ...dusk, id: 'plugin:samples.dusk/dawn', label: 'Dawn', base: 'light' },
+    {
+      ...dusk,
+      id: 'plugin:acme.night/night',
+      pluginKey: 'acme.night',
+      pluginName: 'Acme',
+      label: 'Night'
+    }
+  ]
   themes.terminal = [
     {
       ...dusk,
@@ -52,19 +50,18 @@ it('lists plugin themes in the one Theme select and offers the plugin terminal c
   ]
   const updateSettings = vi.fn()
   render(
-    <AppearanceThemeControl
-      label="Theme"
+    <AppearanceThemeSlotSelect
+      base="dark"
+      label="Dark theme"
       settings={{
         ...getDefaultSettings('/tmp'),
-        theme: 'dark',
-        pluginAppTheme: 'plugin:samples.dusk/dusk',
+        pluginAppThemeDark: 'plugin:samples.dusk/dusk',
         terminalColorOverrides: { red: '#123456' }
       }}
       updateSettings={updateSettings}
-      applyTheme={vi.fn()}
     />
   )
-  expect(screen.getByRole('combobox', { name: 'Theme' }).textContent).toContain('Dusk')
+  expect(screen.getByRole('combobox', { name: 'Dark theme' }).textContent).toContain('Dusk')
   screen.getByRole('button', { name: 'Use its terminal colors' }).click()
   expect(updateSettings).toHaveBeenCalledWith({
     terminalThemeDark: 'plugin:samples.dusk/dusk',
@@ -77,28 +74,25 @@ it('lists plugin themes in the one Theme select and offers the plugin terminal c
   })
   // Overrides would otherwise mask the palette the user just chose.
   expect(updateSettings.mock.calls[0]?.[0]).toHaveProperty('terminalColorOverrides', undefined)
+  screen.getByRole('combobox', { name: 'Dark theme' }).click()
+  expect(await screen.findByText('Acme')).toBeDefined()
+  expect(screen.queryByRole('option', { name: 'Dawn' })).toBeNull()
+  screen.getByRole('option', { name: 'Night' }).click()
+  expect(updateSettings).toHaveBeenLastCalledWith({ pluginAppThemeDark: 'plugin:acme.night/night' })
 })
 
-it('remembers the built-in choice and names the publisher when theme names collide', async () => {
-  themes.app = [
-    dusk,
-    { ...dusk, id: 'plugin:acme.dusk/dusk', pluginKey: 'acme.dusk', pluginName: 'Acme Dusk' }
-  ]
+it('returns a slot to the built-in colors', async () => {
+  themes.app = [dusk]
   const updateSettings = vi.fn()
   render(
-    <AppearanceThemeControl
-      label="Theme"
-      settings={{ ...getDefaultSettings('/tmp'), theme: 'system' }}
+    <AppearanceThemeSlotSelect
+      base="dark"
+      label="Dark theme"
+      settings={{ ...getDefaultSettings('/tmp'), pluginAppThemeDark: 'plugin:samples.dusk/dusk' }}
       updateSettings={updateSettings}
-      applyTheme={vi.fn()}
     />
   )
-  screen.getByRole('combobox', { name: 'Theme' }).click()
-  const option = await screen.findByRole('option', { name: 'Dusk · acme' })
-  option.click()
-  expect(updateSettings).toHaveBeenCalledWith({
-    theme: 'dark',
-    pluginAppTheme: 'plugin:acme.dusk/dusk',
-    themeBeforePlugin: 'system'
-  })
+  screen.getByRole('combobox', { name: 'Dark theme' }).click()
+  ;(await screen.findByRole('option', { name: 'Built-in' })).click()
+  expect(updateSettings).toHaveBeenCalledWith({ pluginAppThemeDark: null })
 })

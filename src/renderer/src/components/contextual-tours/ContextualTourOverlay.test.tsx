@@ -14,7 +14,7 @@ import {
 } from './ContextualTourOverlaySurface'
 import { getContextualTourPanelHost } from './contextual-tour-gate'
 import { useAppStore } from '@/store'
-import { setRendererUiLanguage } from '@/i18n/i18n'
+import { i18n, loadRendererUiLanguage } from '@/i18n/i18n'
 
 const baseRenderState: ActiveTourRenderState = {
   rect: {
@@ -381,11 +381,11 @@ function renderLocalizedSurface(isLastStep: boolean): ReactElement {
 
 describe('ContextualTourOverlaySurface localization', () => {
   afterEach(async () => {
-    await setRendererUiLanguage('en')
+    await i18n.changeLanguage(await loadRendererUiLanguage('en'))
   })
 
   it('renders default tour actions in Korean when the UI locale is Korean', async () => {
-    await setRendererUiLanguage('ko')
+    await i18n.changeLanguage(await loadRendererUiLanguage('ko'))
 
     const firstStep = renderToStaticMarkup(renderLocalizedSurface(false))
     const finalStep = renderToStaticMarkup(renderLocalizedSurface(true))

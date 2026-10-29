@@ -21,6 +21,7 @@ export type MobileTerminalArtifactPreviewSource = {
 export type TerminalArtifactRetryOptions = {
   onTerminalArtifactSourceRefreshed?: (source: MobileTerminalArtifactPreviewSource) => void
   refreshGrant?: boolean
+  isCurrent?: () => boolean
 }
 
 /** Takes the refusal rather than the envelope: every caller already routed on its own acceptance. */
@@ -30,7 +31,7 @@ export async function refreshTerminalArtifactSourceAfterGrantFailure(
   refusal: RpcFailure['error'],
   options: TerminalArtifactRetryOptions = {}
 ): Promise<MobileTerminalArtifactPreviewSource | null> {
-  if (!isTerminalArtifactGrantFailure(refusal, options)) {
+  if (options.isCurrent?.() === false || !isTerminalArtifactGrantFailure(refusal, options)) {
     return null
   }
   const reply = await terminalArtifactPathResolve.request(client, {
@@ -40,6 +41,9 @@ export async function refreshTerminalArtifactSourceAfterGrantFailure(
     ...(source.terminalHandle ? { terminal: source.terminalHandle } : {}),
     ...(source.nativeChatContext ? { nativeChatContext: source.nativeChatContext } : {})
   })
+  if (options.isCurrent?.() === false) {
+    return null
+  }
   const resolved = terminalArtifactPathResolve.interpret(reply)
   if (!resolved.accepted) {
     return null

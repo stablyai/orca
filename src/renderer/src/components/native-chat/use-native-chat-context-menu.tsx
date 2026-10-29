@@ -242,7 +242,7 @@ export function useNativeChatContextMenu({
         </DropdownMenuTrigger>
         <DropdownMenuContent
           data-native-chat-context-menu=""
-          className="w-56"
+          className="min-w-56"
           sideOffset={0}
           align="start"
           onCloseAutoFocus={(event) => {

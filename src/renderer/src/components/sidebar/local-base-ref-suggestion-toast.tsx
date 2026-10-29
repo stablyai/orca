@@ -83,19 +83,15 @@ function SuggestionToastBody({
       <p className="text-sm leading-5 text-popover-foreground/80">
         <Trans
           i18n={i18n}
-          defaults={
-            suggestion.behind === 1
-              ? translate(
-                  'auto.components.sidebar.local.base.ref.suggestion.toast.staleLocalBranch_one',
-                  'Your new worktree is current, but local {{branch}} is {{count}} commit behind, so AI diffs may compare to stale history. Let Orca keep it up to date automatically. Change this anytime in <settings>Settings › {{setting}}</settings>',
-                  { count: suggestion.behind }
-                )
-              : translate(
-                  'auto.components.sidebar.local.base.ref.suggestion.toast.staleLocalBranch_other',
-                  'Your new worktree is current, but local {{branch}} is {{count}} commits behind, so AI diffs may compare to stale history. Let Orca keep it up to date automatically. Change this anytime in <settings>Settings › {{setting}}</settings>',
-                  { count: suggestion.behind }
-                )
-          }
+          defaults={translate(
+            'auto.components.sidebar.local.base.ref.suggestion.toast.staleLocalBranch',
+            'Your new worktree is current, but local {{branch}} is {{count}} commits behind, so AI diffs may compare to stale history. Let Orca keep it up to date automatically. Change this anytime in <settings>Settings › {{setting}}</settings>',
+            {
+              count: suggestion.behind,
+              defaultValue_one:
+                'Your new worktree is current, but local {{branch}} is {{count}} commit behind, so AI diffs may compare to stale history. Let Orca keep it up to date automatically. Change this anytime in <settings>Settings › {{setting}}</settings>'
+            }
+          )}
           values={{
             branch: suggestion.localBranch,
             setting: keepLocalMainUpToDateTitle

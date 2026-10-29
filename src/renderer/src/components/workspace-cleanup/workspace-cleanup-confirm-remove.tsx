@@ -143,17 +143,15 @@ export function WorkspaceCleanupConfirmRemove({
           </div>
           {riskCount > 0 ? (
             <div className="text-xs text-destructive">
-              {riskCount === 1
-                ? translate(
-                    'components.workspace.cleanup.browse.forceDeleteRisk_one',
-                    '{{count}} workspace currently shows risk and may need a force delete',
-                    { count: riskCount }
-                  )
-                : translate(
-                    'components.workspace.cleanup.browse.forceDeleteRisk_other',
-                    '{{count}} workspaces currently show risk and may need a force delete',
-                    { count: riskCount }
-                  )}
+              {translate(
+                'components.workspace.cleanup.browse.forceDeleteRisk',
+                '{{count}} workspaces currently show risk and may need a force delete',
+                {
+                  count: riskCount,
+                  defaultValue_one:
+                    '{{count}} workspace currently shows risk and may need a force delete'
+                }
+              )}
             </div>
           ) : null}
         </div>

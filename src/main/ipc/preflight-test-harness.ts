@@ -14,6 +14,7 @@ export type PreflightMocks = {
   getAzureDevOpsAuthStatusMock: Mock
   getGiteaAuthStatusMock: Mock
   resolveCliCommandsMock: Mock
+  findCommandsOnLocalPathMock: Mock
   isCommandOnLocalPathMock: Mock
   listLocalCommandPathsMock: Mock
   mergePersistedWindowsPathAsyncMock: Mock
@@ -49,6 +50,7 @@ export function resetPreflightMocks(mocks: PreflightMocks, handlers: HandlerMap)
     getAzureDevOpsAuthStatusMock,
     getGiteaAuthStatusMock,
     resolveCliCommandsMock,
+    findCommandsOnLocalPathMock,
     isCommandOnLocalPathMock,
     listLocalCommandPathsMock,
     mergePersistedWindowsPathAsyncMock,
@@ -88,6 +90,13 @@ export function resetPreflightMocks(mocks: PreflightMocks, handlers: HandlerMap)
     } catch {
       return false
     }
+  })
+  findCommandsOnLocalPathMock.mockReset()
+  findCommandsOnLocalPathMock.mockImplementation(async (commands: readonly string[]) => {
+    const matches = await Promise.all(
+      commands.map(async (command) => ((await isCommandOnLocalPathMock(command)) ? command : null))
+    )
+    return new Set(matches.filter((command) => command !== null))
   })
   getBitbucketAuthStatusMock.mockResolvedValue(defaultBitbucketStatus)
   getAzureDevOpsAuthStatusMock.mockResolvedValue(defaultAzureDevOpsStatus)

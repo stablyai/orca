@@ -17,7 +17,8 @@ const {
   getHostedReviewCreationEligibilityMock,
   getHostedReviewForBranchMock,
   resolveRegisteredWorktreePathMock,
-  listRepoWorktreeGraphMock
+  listRepoWorktreeGraphMock,
+  readWslDistroRunningStateMock
 } = vi.hoisted(() => ({
   handleMock: vi.fn(),
   createHostedReviewMock: vi.fn(),
@@ -25,7 +26,13 @@ const {
   getHostedReviewCreationEligibilityMock: vi.fn(),
   getHostedReviewForBranchMock: vi.fn(),
   resolveRegisteredWorktreePathMock: vi.fn(),
-  listRepoWorktreeGraphMock: vi.fn()
+  listRepoWorktreeGraphMock: vi.fn(),
+  readWslDistroRunningStateMock: vi.fn()
+}))
+
+vi.mock('../wsl-background-distro-gate', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  readWslDistroRunningState: readWslDistroRunningStateMock
 }))
 
 vi.mock('electron', () => ({
@@ -56,6 +63,7 @@ vi.mock('../repo-worktrees', () => ({
 }))
 
 import { registerHostedReviewHandlers } from './hosted-review'
+import { WslDistroStoppedError } from '../wsl/wsl-unc-access-gate'
 import { WorktreeCatalogUnavailableError } from '../../shared/worktree/worktree-catalog-availability'
 
 type HandlerMap = Record<string, (_event: unknown, args: unknown) => unknown>
@@ -99,6 +107,7 @@ describe('registerHostedReviewHandlers', () => {
     getHostedReviewForBranchMock.mockReset()
     resolveRegisteredWorktreePathMock.mockReset()
     listRepoWorktreeGraphMock.mockReset()
+    readWslDistroRunningStateMock.mockReset().mockResolvedValue('running')
     store.getRepo.mockReset()
     store.getRepos.mockReset()
     store.getProjects.mockReset()
@@ -302,6 +311,95 @@ describe('registerHostedReviewHandlers', () => {
     )
     // Card-list polling is the O(N) tier and must not claim the fast one.
     expect(getHostedReviewForBranchMock.mock.calls[0][0]).not.toHaveProperty('active')
+  })
+
+  it('refuses a card poll for a stopped WSL distro without running gh or glab in it', async () => {
+    setPlatform('win32')
+    const localRepo = {
+      id: 'repo-local',
+      path: '/workspace/repo',
+      displayName: 'local',
+      badgeColor: '#000',
+      addedAt: 0
+    }
+    store.getRepo.mockImplementation((repoId: string) =>
+      repoId === localRepo.id ? localRepo : null
+    )
+    store.getRepos.mockReturnValue([localRepo])
+    store.getProjects.mockReturnValue([
+      {
+        id: 'project-1',
+        displayName: 'local',
+        badgeColor: '#000',
+        sourceRepoIds: [localRepo.id],
+        localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' },
+        createdAt: 0,
+        updatedAt: 0
+      }
+    ])
+    readWslDistroRunningStateMock.mockResolvedValue('stopped')
+    registerHostedReviewHandlers(store as never, stats as never)
+
+    await expect(
+      handlers['hostedReview:forBranch'](null, {
+        repoPath: localRepo.path,
+        repoId: localRepo.id,
+        branch: 'feature/wsl',
+        force: true
+      })
+    ).rejects.toBeInstanceOf(WslDistroStoppedError)
+    expect(readWslDistroRunningStateMock).toHaveBeenCalledWith('Ubuntu', expect.anything())
+    expect(getHostedReviewForBranchMock).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    [
+      "refuses the visible scheduler's interactive-priority poll",
+      { admissionTier: 'interactive' },
+      0
+    ],
+    [
+      'lets an explicit Refresh start the distro',
+      { admissionTier: 'interactive', wakeWslDistro: true },
+      1
+    ]
+  ] as const)('%s for a stopped distro', async (_case, extra, reads) => {
+    setPlatform('win32')
+    const localRepo = {
+      id: 'repo-local',
+      path: '/workspace/repo',
+      displayName: 'local',
+      badgeColor: '#000',
+      addedAt: 0
+    }
+    store.getRepo.mockImplementation((repoId: string) =>
+      repoId === localRepo.id ? localRepo : null
+    )
+    store.getRepos.mockReturnValue([localRepo])
+    store.getProjects.mockReturnValue([
+      {
+        id: 'project-1',
+        displayName: 'local',
+        badgeColor: '#000',
+        sourceRepoIds: [localRepo.id],
+        localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' },
+        createdAt: 0,
+        updatedAt: 0
+      }
+    ])
+    readWslDistroRunningStateMock.mockResolvedValue('stopped')
+    getHostedReviewForBranchMock.mockResolvedValue(null)
+    registerHostedReviewHandlers(store as never, stats as never)
+
+    const read = handlers['hostedReview:forBranch'](null, {
+      repoPath: localRepo.path,
+      repoId: localRepo.id,
+      branch: 'feature/wsl',
+      ...extra
+    })
+
+    await (reads === 0 ? expect(read).rejects.toBeInstanceOf(WslDistroStoppedError) : read)
+    expect(getHostedReviewForBranchMock).toHaveBeenCalledTimes(reads)
   })
 
   it('carries a selected-worktree claim and explicit refresh through to the branch lookup', async () => {

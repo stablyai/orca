@@ -11,6 +11,7 @@ import { LINUX_LIBC_FIRST_PROBE } from '../node-runtime/linux-libc-probe'
 import type { WslDistroHolder } from './wsl-distro-holder'
 import { refuseMissingWslDistro, WslDistroVersion1Error } from './wsl-distro-unsupported'
 import type { WslOrcadHostTarget } from './wsl-orcad-host-target'
+import { createWslOrcadConnectStateReader } from './wsl-orcad-connect-state-snapshot'
 
 const KERNEL_MARKER = '__ORCA_WSL_KERNEL__ '
 const HOME_MARKER = '__ORCA_WSL_HOME__ '
@@ -90,6 +91,7 @@ export async function holdWslDistroWithContext(
   }
   const stopProbes = (): void => probes.abort(signal?.reason)
   signal?.addEventListener('abort', stopProbes, { once: true })
+  const connectState = createWslOrcadConnectStateReader()
   try {
     const [held, context] = await Promise.all([
       holder.ensureHeld(name).catch((error: unknown) => {
@@ -98,11 +100,12 @@ export async function holdWslDistroWithContext(
       }),
       resolveOrcadRemoteContext(target, conn, probes.signal, facts.platform, {
         loginHome: facts.loginHome,
+        readActivationRecord: connectState.readActivationRecord,
         // Only with a proven platform: the libc answer belongs to the same host shape.
         ...(facts.platform ? { firstLibcProbeOutput: facts.firstLibcProbeOutput } : {})
       })
     ])
-    return { held, context }
+    return { held, context, connectState: connectState.snapshot() }
   } catch (error) {
     probes.abort(error)
     throw error

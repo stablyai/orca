@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { isLayoutOracleSource } from './pr-layout-oracle-route.mjs'
+import { SHELL_PREFIXES } from './pr-shell-contract-prefixes.mjs'
 import {
   isCloudTestRunnerInput,
   isWindowsProcessProbePath,
@@ -122,33 +123,6 @@ const XTERM_PREFIXES = [
   'config/patches/@xterm',
   'config/patches/xterm-src/',
   'config/scripts/regenerate-xterm-patches'
-]
-
-const SHELL_PREFIXES = [
-  'src/main/daemon/repro-13767-shell-ready-marker-lost-to-exec',
-  'src/main/daemon/shell-ready',
-  'src/main/daemon/daemon-bash-shell-ready',
-  'src/main/daemon/daemon-shell-ready-wrapper',
-  'src/main/daemon/node-pty-fd-leak',
-  'src/main/providers/local-pty-shell-ready',
-  'src/main/providers/__tests__/shell-ready-framework-example',
-  'src/main/pty/',
-  'src/main/shell-templates',
-  'src/main/shell-startup-',
-  'src/main/shell-wrapper-',
-  'src/main/terminal-history-fish',
-  'src/main/zsh-',
-  'src/main/runtime/structured-session-cli-login-shell',
-  'src/main/runtime/structured-session-login-shell-test-harness',
-  'src/main/runtime/structured-session-child-env',
-  'src/renderer/src/components/terminal-pane/fish-color-scheme',
-  'src/shared/fish-',
-  'src/shared/pty-reply-echo-shapes',
-  'src/shared/startup-shell-portability',
-  'src/shared/posix-command-path-lookup',
-  'config/patches/node-pty@',
-  'config/scripts/ensure-native-runtime',
-  'config/scripts/node-pty-job-ownership'
 ]
 
 const ORCAD_BROWSER_PREFIXES = [

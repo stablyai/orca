@@ -41,13 +41,10 @@ export function filterLabelsValue(labels: string[]): string | null {
   if (labels.length === 1) {
     return labels[0]
   }
-  return labels.length === 1
-    ? translate('auto.components.github.PRFilterSections.labelCount_one', '{{count}} label', {
-        count: labels.length
-      })
-    : translate('auto.components.github.PRFilterSections.labelCount_other', '{{count}} labels', {
-        count: labels.length
-      })
+  return translate('auto.components.github.PRFilterSections.labelCount', '{{count}} labels', {
+    count: labels.length,
+    defaultValue_one: '{{count}} label'
+  })
 }
 
 function statusLabel(parsed: ParsedTaskQuery): string {

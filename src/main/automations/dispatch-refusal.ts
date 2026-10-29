@@ -10,33 +10,36 @@ import { resolveAutomationRunTarget, type AutomationRunTargetResult } from './ru
 import type { AutomationRunWriter } from './automation-run-writer'
 import { wslMoveRepoBackoff } from '../persistence/moving-wsl-projects/wsl-move-background-backoff'
 import { isOrcadFencedAutomation } from './orcad-fenced-automation'
+import {
+  AUTOMATION_RUN_FAILURE_COPY,
+  automationRunFailure,
+  type AutomationRunFailure
+} from '../../shared/automation-run-failure-copy'
 
-export const NO_DISPATCH_HOST = 'No Orca window was available to launch the automation.'
+export const NO_DISPATCH_HOST = AUTOMATION_RUN_FAILURE_COPY.noDispatchHost
+export const WSL_MOVE_IN_PROGRESS = AUTOMATION_RUN_FAILURE_COPY.wslMoveInProgress
+export const WSL_MOVE_OWNED_BY_HOST = AUTOMATION_RUN_FAILURE_COPY.wslMoveOwnedByHost
 
-export const UNEVALUABLE_SCHEDULE =
-  'Orca could not evaluate this automation and skipped the occurrence.'
-
-export const NO_RUNNABLE_HOST = 'This automation has no host to run on.'
-
-export const WSL_MOVE_IN_PROGRESS =
-  "This automation's project is moving to its WSL host, so Orca skipped this run. Runs resume when the move finishes."
-
-export const WSL_MOVE_OWNED_BY_HOST =
-  "This automation's project now runs on its WSL host, which runs this automation there. Orca no longer runs this local copy."
+function targetFailure({
+  ok: _ok,
+  ...failure
+}: Extract<AutomationRunTargetResult, { ok: false }>): AutomationRunFailure {
+  return failure
+}
 
 /** Decide refusals before creating rows so repeated skips can coalesce. */
 export function describeScheduledRefusal(input: {
   target: AutomationRunTargetResult
   canDispatch: boolean
-}): string | null {
+}): AutomationRunFailure | null {
   if (!input.target.ok) {
-    return input.target.error
+    return targetFailure(input.target)
   }
   const backoff = wslMoveRepoBackoff(input.target.repo)
   if (backoff) {
-    return backoff === 'moving' ? WSL_MOVE_IN_PROGRESS : WSL_MOVE_OWNED_BY_HOST
+    return automationRunFailure(backoff === 'moving' ? 'wslMoveInProgress' : 'wslMoveOwnedByHost')
   }
-  return input.canDispatch ? null : NO_DISPATCH_HOST
+  return input.canDispatch ? null : automationRunFailure('noDispatchHost')
 }
 
 /** Record refused manual attempts so run history agrees with the caller’s typed conflict. */
@@ -53,11 +56,12 @@ export async function recordRefusedAutomationRun(input: {
     allowRemoteHostScheduling: input.allowRemoteHostScheduling
   })
   const run = await input.runs.createRun(input.automation, Date.now(), 'manual')
+  const failure = target.ok ? automationRunFailure('noRunnableHost') : targetFailure(target)
   await input.runs.updateRun({
     runId: run.id,
     status: 'skipped_unavailable',
     workspaceId: input.automation.workspaceId,
-    error: target.ok ? NO_RUNNABLE_HOST : target.error
+    ...failure
   })
 }
 
@@ -68,9 +72,10 @@ export async function recordUnevaluableAutomation(input: {
   error: unknown
 }): Promise<void> {
   const { automation } = input
+  const failure = automationRunFailure('unevaluableSchedule')
   try {
     // Keep nextRunAt for automatic retry after repair; fold repeated failures to avoid row churn.
-    if (await input.runs.repeatSkip(automation.id, UNEVALUABLE_SCHEDULE, automation.nextRunAt)) {
+    if (await input.runs.repeatSkip(automation.id, failure.error, automation.nextRunAt)) {
       return
     }
     console.error('[automations] failed to evaluate automation:', automation.id, input.error)
@@ -82,7 +87,7 @@ export async function recordUnevaluableAutomation(input: {
       runId: run.id,
       status: 'skipped_unavailable',
       workspaceId: automation.workspaceId,
-      error: UNEVALUABLE_SCHEDULE
+      ...failure
     })
   } catch (writeError) {
     console.error(
@@ -140,6 +145,6 @@ export async function recordMissedRun(input: {
     runId: missed.id,
     status: 'skipped_missed',
     workspaceId: input.automation.workspaceId,
-    error: 'This run was past its missed-run grace window when Orca next checked.'
+    ...automationRunFailure('missedGraceWindow')
   })
 }

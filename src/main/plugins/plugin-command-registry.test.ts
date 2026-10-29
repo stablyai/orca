@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import { fingerprintPluginConsent } from '../../shared/plugins/plugin-consent-fingerprint'
-import { pluginManifestSchema } from '../../shared/plugins/plugin-manifest'
+import { fingerprintPluginConsent } from '../../shared/plugins/approval/plugin-consent-fingerprint'
+import { pluginManifestSchema } from '../../shared/plugins/manifest/plugin-manifest'
 import type { ValidDiscoveredPlugin } from './plugin-discovery'
 import { PluginCommandRegistry } from './plugin-command-registry'
 
@@ -14,7 +14,7 @@ function commandPlugin(
   const manifest = pluginManifestSchema.parse({
     manifestVersion: 1,
     id,
-    publisher: 'orca-samples',
+    publisher: 'samples',
     name: id,
     version: '1.0.0',
     engines: { orca: '>=1.0.0' },
@@ -26,7 +26,7 @@ function commandPlugin(
     capabilities: []
   })
   return {
-    pluginKey: `orca-samples.${id}`,
+    pluginKey: `samples.${id}`,
     rootDir: `/plugins/${id}`,
     manifest,
     consentFingerprint: fingerprintPluginConsent(manifest, `content-${id}`),
@@ -102,7 +102,7 @@ describe('PluginCommandRegistry', () => {
     const plugin = commandPlugin('repeat', {
       commands: [
         { id: 'one', title: 'One', action: 'view.tasks' },
-        { id: 'two', title: 'Two', action: 'view.tasks', context: 'worktree' }
+        { id: 'two', title: 'Two', action: 'view.tasks', context: 'workspace' }
       ]
     })
     const registry = new PluginCommandRegistry()
@@ -110,8 +110,8 @@ describe('PluginCommandRegistry', () => {
       [plugin],
       () => true,
       {
-        'plugin:orca-samples.repeat/one': ['Mod+Alt+T', 'Mod+Alt+Y'],
-        'plugin:orca-samples.repeat/two': ['Ctrl+Alt+T', 'Ctrl+Alt+Y']
+        'plugin:samples.repeat/one': ['Mod+Alt+T', 'Mod+Alt+Y'],
+        'plugin:samples.repeat/two': ['Ctrl+Alt+T', 'Ctrl+Alt+Y']
       },
       'linux'
     )
@@ -147,7 +147,7 @@ describe('PluginCommandRegistry', () => {
 
   it('projects worker commands and inherited worktree keybinding context', () => {
     const plugin = commandPlugin('worker', {
-      commands: [{ id: 'create', title: 'Create Task', context: 'worktree' }],
+      commands: [{ id: 'create', title: 'Create Task', context: 'workspace' }],
       keybindings: [{ command: 'create', key: 'Mod+Shift+A' }]
     })
     const registry = new PluginCommandRegistry()
@@ -156,9 +156,9 @@ describe('PluginCommandRegistry', () => {
 
     expect(registry.list()).toMatchObject([
       {
-        context: 'worktree',
+        context: 'workspace',
         handler: { type: 'worker' },
-        keybindings: [{ key: 'Mod+Shift+A', when: 'worktree' }]
+        keybindings: [{ key: 'Mod+Shift+A', when: 'workspace' }]
       }
     ])
   })
@@ -169,8 +169,8 @@ describe('PluginCommandRegistry', () => {
       keybindings: [{ command: 'tasks', key: 'Mod+Alt+T', when: 'global' }]
     })
     const worktree = commandPlugin('worktree', {
-      commands: [{ id: 'tasks', title: 'Tasks', context: 'worktree', action: 'view.tasks' }],
-      keybindings: [{ command: 'tasks', key: 'Mod+Alt+T', when: 'worktree' }]
+      commands: [{ id: 'tasks', title: 'Tasks', context: 'workspace', action: 'view.tasks' }],
+      keybindings: [{ command: 'tasks', key: 'Mod+Alt+T', when: 'workspace' }]
     })
     const registry = new PluginCommandRegistry()
 
@@ -195,7 +195,7 @@ describe('PluginCommandRegistry', () => {
     registry.reconcile(
       [first, second],
       () => true,
-      { 'plugin:orca-samples.first/tasks': ['Mod+Shift+T'] },
+      { 'plugin:samples.first/tasks': ['Mod+Shift+T'] },
       'linux'
     )
 
@@ -217,8 +217,8 @@ describe('PluginCommandRegistry', () => {
       [plugin],
       () => true,
       {
-        'plugin:orca-samples.aliases/tasks': ['Mod+Alt+T'],
-        'plugin:orca-samples.aliases/sidebar': ['Mod+Alt+T']
+        'plugin:samples.aliases/tasks': ['Mod+Alt+T'],
+        'plugin:samples.aliases/sidebar': ['Mod+Alt+T']
       },
       'linux'
     )
@@ -247,11 +247,11 @@ describe('PluginCommandRegistry', () => {
 
   it('allows the same worktree-only chord after one plugin is disabled', () => {
     const first = commandPlugin('first', {
-      commands: [{ id: 'tasks', title: 'Tasks', context: 'worktree', action: 'view.tasks' }],
+      commands: [{ id: 'tasks', title: 'Tasks', context: 'workspace', action: 'view.tasks' }],
       keybindings: [{ command: 'tasks', key: 'Mod+Alt+T' }]
     })
     const second = commandPlugin('second', {
-      commands: [{ id: 'tasks', title: 'Tasks', context: 'worktree', action: 'view.tasks' }],
+      commands: [{ id: 'tasks', title: 'Tasks', context: 'workspace', action: 'view.tasks' }],
       keybindings: [{ command: 'tasks', key: 'Mod+Alt+T' }]
     })
     const registry = new PluginCommandRegistry()

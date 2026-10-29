@@ -35,6 +35,7 @@ import {
 import { quotePosixShell } from '../../shared/shell-argument-quoting'
 import { joinRemotePath } from '../ssh/ssh-remote-platform'
 import { readWslGuestIdentity, wslGuestOrcadIncarnation } from './wsl-guest-process-identity'
+import type { WslOrcadInstanceLockRead } from './wsl-orcad-connect-state-snapshot'
 
 const LOCK_RECORD_MAX_BYTES = 64 * 1024
 const UNRECORDED_ORCAD_CODE = 'wsl_orcad_unrecorded_instance_unverifiable'
@@ -53,9 +54,13 @@ export class WslOrcadUnrecordedInstanceError extends Error {
 
 type LockHolder = { pid: number; version: string }
 
-async function readLiveLockHolder(slot: OrcadSlotOptions): Promise<LockHolder | null> {
+async function readLiveLockHolder(
+  slot: OrcadSlotOptions,
+  preRead?: WslOrcadInstanceLockRead
+): Promise<LockHolder | null> {
   const lockPath = joinRemotePath(slot.host, slot.userDataDir, ORCAD_LOCK_FILE_NAME)
-  const read = await readBoundedOrcadRemoteRecord(slot, lockPath, LOCK_RECORD_MAX_BYTES)
+  const read =
+    preRead ?? (await readBoundedOrcadRemoteRecord(slot, lockPath, LOCK_RECORD_MAX_BYTES))
   const lock = read.state === 'present' ? parseOrcadInstanceLockRecord(read.raw) : null
   // Desktop-role or malformed locks identify no orcad to adopt.
   if (!lock || lock.role === 'desktop') {
@@ -155,9 +160,11 @@ function adoptedRecord(
 export async function adoptUnrecordedWslOrcad(
   slot: OrcadSlotOptions,
   record: OrcadActivationRecord,
-  now: () => Date = () => new Date()
+  now: () => Date = () => new Date(),
+  /** This connect's snapshot of the lock; the fenced re-check below always reads the host. */
+  preReadLock?: WslOrcadInstanceLockRead
 ): Promise<WslOrcadAdoption> {
-  const holder = await readLiveLockHolder(slot)
+  const holder = await readLiveLockHolder(slot, preReadLock)
   if (!holder) {
     return { outcome: 'none' }
   }

@@ -3,8 +3,11 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { disposeWatcherProcess } from '../ipc/filesystem/watcher-process/parcel-watcher-process'
-import { fingerprintPluginConsent } from '../../shared/plugins/plugin-consent-fingerprint'
-import { pluginManifestSchema, type PluginManifest } from '../../shared/plugins/plugin-manifest'
+import { fingerprintPluginConsent } from '../../shared/plugins/approval/plugin-consent-fingerprint'
+import {
+  pluginManifestSchema,
+  type PluginManifest
+} from '../../shared/plugins/manifest/plugin-manifest'
 import {
   PLUGIN_PANEL_ENTRY_MAX_BYTES,
   validateDeclaredPluginArtifacts,
@@ -31,7 +34,7 @@ function manifest(overrides: ManifestOverrides = {}): PluginManifest {
   return pluginManifestSchema.parse({
     manifestVersion: 1,
     id: 'demo',
-    publisher: 'orca-samples',
+    publisher: 'samples',
     name: 'Demo',
     version: '1.0.0',
     engines: { orca: '>=1.0.0' },
@@ -52,11 +55,7 @@ afterEach(async () => {
 describe('declared plugin artifacts', () => {
   it('validates every content-pack file and directory before enablement', async () => {
     const root = await tempRoot()
-    await Promise.all([
-      mkdir(join(root, 'locales')),
-      mkdir(join(root, 'recipes')),
-      writeFile(join(root, 'agent.json'), '{}')
-    ])
+    await Promise.all([mkdir(join(root, 'locales')), mkdir(join(root, 'recipes'))])
     await Promise.all([
       writeFile(join(root, 'locales', 'pt-BR.json'), '{}'),
       writeFile(join(root, 'recipes', 'vm.json'), '{}')
@@ -64,8 +63,7 @@ describe('declared plugin artifacts', () => {
     const pluginManifest = manifest({
       contributes: {
         languagePacks: [{ locale: 'pt-BR', path: 'locales/pt-BR.json' }],
-        vmRecipes: [{ path: 'recipes/vm.json' }],
-        agents: [{ path: 'agent.json' }]
+        vmRecipes: [{ path: 'recipes/vm.json' }]
       }
     })
 

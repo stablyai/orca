@@ -27,6 +27,12 @@ const { detectInstalledMock, refreshMock } = vi.hoisted(() => ({
   refreshMock: vi.fn()
 }))
 
+// These cases cover a running distro; the E9 stopped-distro gate has its own suite.
+vi.mock('../wsl/wsl-background-exec-gate', () => ({
+  assertWslDistroRunningForExec: async () => {},
+  runAsWslExecUserAct: async (_distro: unknown, act: () => Promise<unknown>) => act()
+}))
+
 vi.mock('./agent-detection', () => ({
   detectInstalledAgentsWithShellPathHydration: detectInstalledMock,
   refreshShellPathAndDetectAgents: refreshMock,

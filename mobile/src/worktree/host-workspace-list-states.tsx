@@ -3,6 +3,7 @@ import { colors, spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { isConnectionOutage, verdictDisplayLabel } from '../transport/connection-health'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import {
   selectHostWorkspaceListState,
   type HostWorkspaceListStateInput
@@ -14,6 +15,7 @@ export function HostWorkspaceListStates(
     activeFilterCount: number
   }
 ) {
+  const t = useMobileTranslation()
   useMobileColorScheme()
   const state = selectHostWorkspaceListState(props)
   if (state === 'loading') {
@@ -30,7 +32,10 @@ export function HostWorkspaceListStates(
         <Text style={styles.emptyText}>{verdictDisplayLabel(connectionVerdict)}</Text>
         <Text style={styles.catalogErrorDetail}>
           {(isConnectionOutage(connectionVerdict) ? connectionVerdict.detail : undefined) ??
-            'Check that your computer is awake and Orca is running'}
+            t(
+              'worktree.hostWorkspaceListStates.checkHost',
+              'Check that your computer is awake and Orca is running'
+            )}
         </Text>
       </View>
     )
@@ -38,9 +43,18 @@ export function HostWorkspaceListStates(
   if (state === 'catalog-error') {
     return (
       <View style={styles.centered}>
-        <Text style={styles.emptyText}>Could not load workspaces from this host</Text>
+        <Text style={styles.emptyText}>
+          {t(
+            'worktree.hostWorkspaceListStates.loadFailed',
+            'Could not load workspaces from this host'
+          )}
+        </Text>
         <Text style={styles.catalogErrorDetail}>
-          {`worktree.ps failed (${props.catalogError}) — retrying automatically`}
+          {t(
+            'worktree.hostWorkspaceListStates.retrying',
+            'worktree.ps failed ({{error}}) — retrying automatically',
+            { error: props.catalogError }
+          )}
         </Text>
       </View>
     )
@@ -50,10 +64,10 @@ export function HostWorkspaceListStates(
       <View style={styles.centered}>
         <Text style={styles.emptyText}>
           {props.search
-            ? 'No matching workspaces'
+            ? t('worktree.hostWorkspaceListStates.noMatches', 'No matching workspaces')
             : props.activeFilterCount > 0
-              ? 'No workspaces match filters'
-              : 'No workspaces'}
+              ? t('worktree.hostWorkspaceListStates.noFilterMatches', 'No workspaces match filters')
+              : t('worktree.hostWorkspaceListStates.empty', 'No workspaces')}
         </Text>
       </View>
     )
@@ -63,12 +77,18 @@ export function HostWorkspaceListStates(
 
 /** A list this page cannot build; shown above the rows it already holds, so it never blanks. */
 export function HostWorkspaceListReopen({ aboveRows }: { aboveRows: boolean }) {
+  const t = useMobileTranslation()
   useMobileColorScheme()
   return (
     <View style={aboveRows ? styles.aboveRows : styles.centered}>
-      <Text style={styles.emptyText}>Reopen to update</Text>
+      <Text style={styles.emptyText}>
+        {t('worktree.hostWorkspaceListStates.reopen', 'Reopen to update')}
+      </Text>
       <Text style={styles.catalogErrorDetail}>
-        This host lists workspaces in a way this page does not know yet.
+        {t(
+          'worktree.hostWorkspaceListStates.reopenDetail',
+          'This host lists workspaces in a way this page does not know yet.'
+        )}
       </Text>
     </View>
   )

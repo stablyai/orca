@@ -220,7 +220,7 @@ describe('resolveCommitMessageSettings', () => {
     }
     syncSourceControlAiFromLegacy(settings)
 
-    expect(resolveCommitMessageSettings(settings)).toEqual({
+    expect(resolveCommitMessageSettings(settings)).toMatchObject({
       ok: false,
       error: 'Custom command is empty. Add one in Settings -> Git -> Source Control AI.'
     })

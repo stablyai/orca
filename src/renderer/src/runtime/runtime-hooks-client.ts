@@ -19,8 +19,8 @@ export type HookCheckResult = {
   hasHooks: boolean
   hooks: OrcaHooks | null
   mayNeedUpdate: boolean
-  /** A background check refused because the repo's WSL distro is stopped. */
-  unavailable?: 'wsl-distro-stopped'
+  /** A background check refused because the repo's WSL distro is stopped or didn't answer. */
+  unavailable?: 'wsl-distro-stopped' | 'wsl-distro-unverifiable'
 }
 
 export type IssueCommandReadResult = {

@@ -3,6 +3,7 @@ import { Check, ChevronRight, ShieldAlert, type LucideIcon } from 'lucide-react-
 import { colors, radii, spacing, typography } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
+import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import {
   sessionOptionValueMarker,
   type SessionOptionDescriptor,
@@ -12,9 +13,9 @@ import {
 import {
   nativeChatSessionChoiceLabel,
   nativeChatSessionOptionActionLabel,
-  nativeChatSessionOptionLabel,
-  sayNativeChatSessionOptionEnglish as say
+  nativeChatSessionOptionLabel
 } from '../../../../../src/shared/native-chat-session-option-labels'
+import { sayMobileNativeChatSessionOption as say } from './native-chat-session-option-copy'
 
 export function SessionOptionCaption({ children }: { children: string }): React.JSX.Element {
   useMobileColorScheme()
@@ -137,13 +138,18 @@ function ToggleRow({
   onToggle: (next: boolean) => void
 }): React.JSX.Element {
   useMobileColorScheme()
+  const t = useMobileTranslation()
   return (
     <View style={[styles.row, grouped && styles.rowGrouped]}>
       <View style={styles.rowBody}>
         <Text style={[styles.rowLabel, disabled && styles.labelDisabled]}>{label}</Text>
       </View>
       {marker ? (
-        <Text style={styles.rowMarker}>{marker === 'default' ? 'Default' : 'Not reported'}</Text>
+        <Text style={styles.rowMarker}>
+          {marker === 'default'
+            ? t('chat.sessionOptionRows.defaultMarker', 'Default')
+            : t('chat.sessionOptionRows.notReportedMarker', 'Not reported')}
+        </Text>
       ) : null}
       <Switch
         accessibilityLabel={label}
@@ -254,6 +260,7 @@ export function DescriptorRows({
   onInvokeAction: () => void
   choiceLabelColor?: (value: string) => string | undefined
 }): React.JSX.Element {
+  useMobileTranslation()
   const locked = disabled || !descriptor.settable
   // Why: flip-only and agent-picker options are actions, not values or radio choices.
   if (descriptor.action) {

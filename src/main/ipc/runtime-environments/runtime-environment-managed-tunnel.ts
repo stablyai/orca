@@ -27,14 +27,19 @@ import {
 import { getSshHostServerStatus, setSshHostServerStatus } from '../../ssh/ssh-host-server-status'
 import { getSshTargetRegistryStore } from '../../ssh/targets/ssh-target-registry'
 import { connectionManager, getCurrentMainWindow } from '../ssh/ssh-ipc-context'
-import { getWslHostService } from '../../wsl/wsl-host-service-instance'
+import { getWslHostPhoneGate, getWslHostService } from '../../wsl/wsl-host-service-instance'
 import { assertWslHostReachable } from '../../wsl/wsl-host-gate'
+import { wslHostPhoneRefusal } from '../../wsl/wsl-host-phone-reach'
 import { broadcastSshState } from '../ssh/ssh-renderer-broadcast'
 import { restoreManagedHostPortForwards } from '../ssh/ssh-managed-port-forward-restore'
 
+/** `wslStart: 'never'` serves a WSL host only while it runs: a paired phone never boots a distro. */
+export type ManagedRuntimeCallPreparation = { wslStart?: 'never' }
+
 export async function resolveManagedRuntimeEnvironment(
   userDataPath: string,
-  selector: string
+  selector: string,
+  preparation?: ManagedRuntimeCallPreparation
 ): Promise<ReturnType<typeof resolveEnvironment>> {
   const environment = resolveEnvironment(userDataPath, selector)
   // Enforce the WSL gate for calls, subscriptions and status probes.
@@ -42,14 +47,44 @@ export async function resolveManagedRuntimeEnvironment(
   const host = classifyRuntimeEnvironmentHost(environment)
   switch (host.kind) {
     case 'wsl':
-      // Reached over the wsl.exe bridge; connects only when an open project or terminal needs it.
-      await getWslHostService()?.ensureForRuntimeCall(environment.id)
+      await prepareWslHostForCall(environment, preparation)
       break
     case 'network':
       await prepareNetworkServerForCall(userDataPath, environment)
       break
   }
   return resolveEnvironment(userDataPath, environment.id)
+}
+
+/** Check-only: a WSL host is held to the preparation; every other server is left untouched. */
+export async function requireWslHostWithoutStart(
+  userDataPath: string,
+  selector: string,
+  preparation: ManagedRuntimeCallPreparation
+): Promise<void> {
+  const environment = resolveEnvironment(userDataPath, selector)
+  if (classifyRuntimeEnvironmentHost(environment).kind === 'wsl') {
+    assertWslHostReachable(environment)
+    await prepareWslHostForCall(environment, preparation)
+  }
+}
+
+async function prepareWslHostForCall(
+  environment: KnownRuntimeEnvironment,
+  preparation: ManagedRuntimeCallPreparation | undefined
+): Promise<void> {
+  if (preparation?.wslStart === 'never') {
+    const gate = getWslHostPhoneGate()
+    if (!gate) {
+      const distro =
+        environment.orcadDeployment?.kind === 'wsl' ? environment.orcadDeployment.distro : null
+      throw wslHostPhoneRefusal('unavailable', distro ?? environment.id)
+    }
+    await gate.requireRunningWithoutStart(environment.id)
+    return
+  }
+  // Reached over the wsl.exe bridge; connects only when an open project or terminal needs it.
+  await getWslHostService()?.ensureForRuntimeCall(environment.id)
 }
 
 async function prepareNetworkServerForCall(

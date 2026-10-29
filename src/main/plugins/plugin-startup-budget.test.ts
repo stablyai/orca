@@ -3,15 +3,16 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { performance } from 'node:perf_hooks'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
-import { fingerprintPluginConsent } from '../../shared/plugins/plugin-consent-fingerprint'
+import { fingerprintPluginConsent } from '../../shared/plugins/approval/plugin-consent-fingerprint'
 import {
   PLUGIN_MANIFEST_FILENAME,
   pluginManifestSchema,
   qualifiedPluginKey,
   type PluginManifest
-} from '../../shared/plugins/plugin-manifest'
-import { PluginService, type PluginServiceOptions } from './plugin-service'
-import type { PluginWorkerFactory } from './plugin-worker-manager'
+} from '../../shared/plugins/manifest/plugin-manifest'
+import { PluginService } from './plugin-service'
+import type { PluginServiceOptions } from './plugin-service-options'
+import type { PluginWorkerFactory } from './workers/plugin-worker-manager'
 
 const PLUGIN_COUNT = 20
 const SAMPLE_COUNT = 20

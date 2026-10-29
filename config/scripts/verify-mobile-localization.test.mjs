@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  collectExtractionProblems,
   collectIncompletePluralFamilies,
   collectLiveSwitchViolations
 } from './verify-mobile-localization.mjs'
@@ -50,5 +51,21 @@ describe('verify-mobile-localization', () => {
     expect(
       collectIncompletePluralFamilies(english, new Map([['files_other', '{{count}} 件']]), 'ja')
     ).toEqual([])
+  })
+
+  it('keeps a plural family while any of its forms is referenced', () => {
+    const english = {
+      items_one: '{{count}} item',
+      items_other: '{{count}} items',
+      gone_one: '{{count}} gone',
+      gone_other: '{{count}} gone'
+    }
+    const references = [{ key: 'items_one', fallback: '{{count}} item' }]
+    const evidence = { literals: new Set(), dynamicPrefixes: new Set() }
+
+    expect(collectExtractionProblems(references, english, evidence).unreferenced).toEqual([
+      'gone_one',
+      'gone_other'
+    ])
   })
 })

@@ -20,18 +20,17 @@ type RunState = AgentSessionBackgroundTaskRunState
 export const NARROW_BACKGROUND_TASKS_STRIP_REM = 24
 
 function kindCountLabel(kind: TaskKind, count: number, say: BackgroundTaskSay): string {
-  const value = { value0: count }
   switch (kind) {
     case 'agent':
-      return count === 1 ? say('countAgentsOne') : say('countAgentsMany', value)
+      return say('countAgents', { count })
     case 'command':
-      return count === 1 ? say('countShellOne') : say('countShellMany', value)
+      return say('countShell', { count })
     case 'monitor':
-      return count === 1 ? say('countMonitorsOne') : say('countMonitorsMany', value)
+      return say('countMonitors', { count })
     case 'workflow':
-      return count === 1 ? say('countWorkflowsOne') : say('countWorkflowsMany', value)
+      return say('countWorkflows', { count })
     case 'unknown':
-      return count === 1 ? say('countTasksOne') : say('countTasksMany', value)
+      return say('countTasks', { count })
   }
 }
 
@@ -76,7 +75,7 @@ export function backgroundTasksHeaderContent(
   }
   if (groups.length > HEADER_SEGMENT_CAP || (options.narrow && groups.length > 1)) {
     return {
-      segments: [{ text: say('headerTotal', { value0: all.length }), kind: null }],
+      segments: [{ text: say('headerTotal', { count: all.length }), kind: null }],
       detail: null
     }
   }
@@ -99,9 +98,10 @@ export function backgroundTasksHeaderContent(
       segments: [
         {
           text: backgroundTaskCountedState(
-            kindCountLabel(group.kind, count, say),
+            count,
             uniformState,
-            say
+            say,
+            kindCountLabel(group.kind, count, say)
           ),
           kind: group.kind
         }

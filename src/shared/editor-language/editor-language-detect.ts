@@ -22,6 +22,8 @@ const EXT_TO_LANGUAGE: Record<string, string> = {
   '.cjs': 'javascript',
   '.json': 'json',
   '.jsonc': 'json',
+  // Excalidraw scenes are JSON documents; Source shows them as such.
+  '.excalidraw': 'json',
   // Dedicated jsonl coloring avoids whole-document JSON diagnostics flagging every record after the first.
   '.jsonl': 'jsonl',
   '.env': 'dotenv',
@@ -71,6 +73,7 @@ const EXT_TO_LANGUAGE: Record<string, string> = {
   '.php': 'php',
   '.swift': 'swift',
   '.sh': 'shell',
+  '.just': 'shell',
   '.bash': 'shell',
   '.zsh': 'shell',
   '.fish': 'shell',
@@ -133,6 +136,8 @@ const FILENAME_TO_LANGUAGE: Record<string, string> = {
   Dockerfile: 'dockerfile',
   Jenkinsfile: 'groovy',
   Makefile: 'makefile',
+  Justfile: 'shell',
+  '.justfile': 'shell',
   'CMakeLists.txt': 'cmake',
   '.gitignore': 'ini',
   '.gitattributes': 'ini',

@@ -101,22 +101,16 @@ function automationUsageText(summary: AutomationUsageSummary | undefined): strin
 }
 
 function usageAmountText(summary: AutomationUsageSummary): string {
-  const params = {
-    count: summary.totalTokens,
-    cost: formatAutomationCost(summary.estimatedCostUsd),
-    tokens: formatAutomationTokens(summary.totalTokens)
-  }
-  return summary.totalTokens === 1
-    ? translate(
-        'auto.components.automations.AutomationsPage.runUsageSummaryTokens_one',
-        '{{cost}} est. · {{tokens}} token',
-        params
-      )
-    : translate(
-        'auto.components.automations.AutomationsPage.runUsageSummaryTokens_other',
-        '{{cost}} est. · {{tokens}} tokens',
-        params
-      )
+  return translate(
+    'auto.components.automations.AutomationsPage.runUsageSummaryTokens',
+    '{{cost}} est. · {{tokens}} tokens',
+    {
+      count: summary.totalTokens,
+      cost: formatAutomationCost(summary.estimatedCostUsd),
+      tokens: formatAutomationTokens(summary.totalTokens),
+      defaultValue_one: '{{cost}} est. · {{tokens}} token'
+    }
+  )
 }
 
 export function AutomationListLocalRow({

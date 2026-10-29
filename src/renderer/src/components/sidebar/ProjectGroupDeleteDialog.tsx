@@ -46,18 +46,11 @@ export function ProjectGroupDeleteDialog({
   const mountedRef = useRef(true)
   const confirmButtonRef = useRef<HTMLButtonElement>(null)
   const removeProjectsId = useId()
-  const removeContainedProjectCopy =
-    projectCount === 1
-      ? translate(
-          'auto.components.sidebar.ProjectGroupDeleteDialog.removeContainedProjects_one',
-          'Remove {{count}} contained project',
-          { count: projectCount }
-        )
-      : translate(
-          'auto.components.sidebar.ProjectGroupDeleteDialog.removeContainedProjects_other',
-          'Remove {{count}} contained projects',
-          { count: projectCount }
-        )
+  const removeContainedProjectCopy = translate(
+    'auto.components.sidebar.ProjectGroupDeleteDialog.removeContainedProjects',
+    'Remove {{count}} contained projects',
+    { count: projectCount, defaultValue_one: 'Remove {{count}} contained project' }
+  )
 
   const handleDialogContentRef = useCallback((node: HTMLDivElement | null): void => {
     // Track content attachment so late deletions cannot update closed dialog state.
@@ -157,17 +150,11 @@ export function ProjectGroupDeleteDialog({
                   ))}
                   {projectNames.length > 4 ? (
                     <li className="text-muted-foreground">
-                      {projectNames.length - 4 === 1
-                        ? translate(
-                            'auto.components.sidebar.ProjectGroupDeleteDialog.moreProjects_one',
-                            '+{{count}} more',
-                            { count: projectNames.length - 4 }
-                          )
-                        : translate(
-                            'auto.components.sidebar.ProjectGroupDeleteDialog.moreProjects_other',
-                            '+{{count}} more',
-                            { count: projectNames.length - 4 }
-                          )}
+                      {translate(
+                        'auto.components.sidebar.ProjectGroupDeleteDialog.moreProjects',
+                        '+{{count}} more',
+                        { count: projectNames.length - 4, defaultValue_one: '+{{count}} more' }
+                      )}
                     </li>
                   ) : null}
                 </ul>

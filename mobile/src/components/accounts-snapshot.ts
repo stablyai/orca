@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { translate } from '../i18n/mobile-i18n'
 
 const TimestampSchema = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER)
 const AccountIdSchema = z.string().min(1)
@@ -227,10 +228,22 @@ export type ClaudeAccountSummary = z.infer<typeof ClaudeAccountSummarySchema>
 export type CodexAccountSummary = z.infer<typeof CodexAccountSummarySchema>
 export type AccountsSnapshot = z.infer<typeof AccountsSnapshotSchema>
 
+export class AccountsSnapshotError extends Error {
+  constructor() {
+    super(
+      translate(
+        'components.accountsSnapshot.invalidSnapshot',
+        'Invalid accounts snapshot from host'
+      )
+    )
+    this.name = 'AccountsSnapshotError'
+  }
+}
+
 export function decodeAccountsSnapshot(value: unknown): AccountsSnapshot {
   const result = AccountsSnapshotSchema.safeParse(value)
   if (!result.success) {
-    throw new Error('Invalid accounts snapshot from host')
+    throw new AccountsSnapshotError()
   }
   return result.data
 }

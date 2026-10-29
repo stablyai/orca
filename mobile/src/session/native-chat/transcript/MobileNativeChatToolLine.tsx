@@ -8,13 +8,11 @@ import {
 } from '../../../../../src/shared/native-chat/tools/native-chat-diff'
 import type { NativeChatDiffLine } from '../../../../../src/shared/native-chat/tools/native-chat-diff'
 import {
-  formatToolDuration,
   mcpToolIdentity,
   type NativeChatWebSearchResult
 } from '../../../../../src/shared/native-chat/tools/native-chat-tool-identity'
-import { NATIVE_CHAT_TOOL_ACTIVITY_COPY } from '../../../../../src/shared/native-chat/tools/native-chat-tool-activity'
 import { nativeChatToolIconName } from '../../../../../src/shared/native-chat/tools/native-chat-tool-icon'
-import { NATIVE_CHAT_TOOL_ROW_VERB_COPY } from '../../../../../src/shared/native-chat/tools/native-chat-tool-line-label'
+import { nativeChatToolRowVerbCopy } from './native-chat-tool-row-verb-copy'
 import { nativeChatToolLineView } from '../../../../../src/shared/native-chat/tools/native-chat-tool-line-view'
 import type {
   NativeChatToolCallBlock,
@@ -32,6 +30,36 @@ import { MobileNativeChatToolOutput } from '../../MobileNativeChatFullContent'
 import { useMobileNativeChatOpenedDetail } from '../visual/mobile-native-chat-opened-detail'
 import { useMobileNativeChatDisclosure } from './mobile-native-chat-disclosure-store'
 import { toolStyles as styles, toolType } from './mobile-native-chat-tool-styles'
+import type { Translate } from '../../../i18n/mobile-i18n'
+import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
+
+function toolDuration(durationMs: unknown, t: Translate): string | null {
+  if (typeof durationMs !== 'number' || !Number.isFinite(durationMs) || durationMs < 0) {
+    return null
+  }
+  if (durationMs < 1000) {
+    return t('chat.nativeChatToolLine.durationMilliseconds', '{{milliseconds}}ms', {
+      milliseconds: Math.round(durationMs)
+    })
+  }
+  const totalSeconds = Math.floor(durationMs / 1000)
+  const seconds = totalSeconds % 60
+  const minutes = Math.floor(totalSeconds / 60)
+  if (totalSeconds < 60) {
+    return t('chat.nativeChatToolLine.durationSeconds', '{{seconds}}s', { seconds })
+  }
+  if (minutes < 60) {
+    return t('chat.nativeChatToolLine.durationMinutes', '{{minutes}}m {{seconds}}s', {
+      minutes,
+      seconds
+    })
+  }
+  return t('chat.nativeChatToolLine.durationHours', '{{hours}}h {{minutes}}m {{seconds}}s', {
+    hours: Math.floor(minutes / 60),
+    minutes: minutes % 60,
+    seconds
+  })
+}
 
 function SearchResults({
   results,
@@ -164,6 +192,7 @@ export function MobileNativeChatToolLine({
   onOpenFile?: (path: string) => void
 }): React.JSX.Element {
   useMobileColorScheme()
+  const t = useMobileTranslation()
   const [expanded, setExpanded] = useMobileNativeChatDisclosure(disclosureKey, false)
   const { call, label, body, resultPreview, failed, results, hasDetail } = useMemo(
     () => nativeChatToolLineView(block, result),
@@ -171,20 +200,20 @@ export function MobileNativeChatToolLine({
   )
   const commandDetail = label?.commandDetail ?? null
   const fullCommand = label?.fullCommand ?? null
-  const verb = label?.verb ? NATIVE_CHAT_TOOL_ROW_VERB_COPY[label.verb] : null
+  const verb = label?.verb ? nativeChatToolRowVerbCopy(t)[label.verb] : null
   const commandAlone = label?.command === true && verb !== null && label.target.length > 0
   const mcp = call ? mcpToolIdentity(call.name, call.mcpIdentity) : null
   const name = call
     ? mcp
       ? `${mcp.server} / ${mcp.tool}`
       : call.name
-    : NATIVE_CHAT_TOOL_ACTIVITY_COPY.result
+    : t('chat.nativeChatToolLine.result', 'Result')
   const target = label ? label.target : resultPreview
   const filePath = label?.filePath ?? null
   const type = toolType(fontScale)
   const iconSize = 15 * fontScale
   const exitCode = call && Number.isSafeInteger(call.exitCode) ? call.exitCode : undefined
-  const duration = call ? formatToolDuration(call.durationMs) : null
+  const duration = call ? toolDuration(call.durationMs, t) : null
 
   return (
     <View testID={memberId}>
@@ -225,7 +254,7 @@ export function MobileNativeChatToolLine({
           <View style={styles.lineTrailing}>
             {exitCode !== undefined ? (
               <Text style={[styles.lineMeta, type.meta, exitCode !== 0 && styles.errorText]}>
-                {`exit ${exitCode}`}
+                {t('chat.nativeChatToolLine.exitCode', 'exit {{exitCode}}', { exitCode })}
               </Text>
             ) : null}
             {duration ? <Text style={[styles.lineMeta, type.meta]}>{duration}</Text> : null}
@@ -237,7 +266,10 @@ export function MobileNativeChatToolLine({
           </View>
         </Pressable>
         {fullCommand ? (
-          <MobileSourceCopyButton text={fullCommand} accessibilityLabel="Copy command" />
+          <MobileSourceCopyButton
+            text={fullCommand}
+            accessibilityLabel={t('chat.nativeChatToolLine.copyCommand', 'Copy command')}
+          />
         ) : null}
       </View>
       {hasDetail && expanded ? (

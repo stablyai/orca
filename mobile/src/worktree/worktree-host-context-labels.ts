@@ -26,6 +26,8 @@ export type HostLabelSources = {
   hostPlatform: NodeJS.Platform | null
   /** Health per host the desktop reports one for; an absent host keeps the bare label. */
   hostHealthById: ReadonlyMap<ExecutionHostId, ExecutionHostHealth>
+  /** A host's own badge word, over its health's; older desktops send none. */
+  hostHealthLabelById?: ReadonlyMap<ExecutionHostId, string>
 }
 
 export function buildRepoHostIdByRepoId(
@@ -74,15 +76,17 @@ export function applyWorktreeHostContextLabels(
 ): Worktree[] {
   const labels = getWorktreeHostContextLabels(worktrees, sources)
   // Why: the desktop card shows SSH status on any host count, so an unhealthy host is named even alone.
-  const anyUnhealthy = [...sources.hostHealthById.values()].some(getHostHealthBadgeLabel)
+  const anyUnhealthy =
+    [...sources.hostHealthById.values()].some(getHostHealthBadgeLabel) ||
+    (sources.hostHealthLabelById?.size ?? 0) > 0
   if (!labels && !anyUnhealthy) {
     return worktrees
   }
   return worktrees.map((worktree) => {
     const hostContextHostId = resolveWorktreeHostId(worktree, sources.repoHostIdByRepoId)
-    const hostContextHealthLabel = getHostHealthBadgeLabel(
-      sources.hostHealthById.get(hostContextHostId)
-    )
+    const hostContextHealthLabel =
+      sources.hostHealthLabelById?.get(hostContextHostId) ??
+      getHostHealthBadgeLabel(sources.hostHealthById.get(hostContextHostId))
     const hostContextLabel = labels
       ? labels.get(getResolvedWorktreeRowIdentity(worktree, sources.repoHostIdByRepoId))
       : hostContextHealthLabel && getHostContextLabel(hostContextHostId, sources)

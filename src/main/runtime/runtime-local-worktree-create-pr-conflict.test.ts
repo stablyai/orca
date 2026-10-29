@@ -89,7 +89,9 @@ describe('runtime create PR conflict probe', () => {
 
       expect(mocks.remoteBase.mock.calls).toEqual([['/repo', 'origin/main', options]])
       expect(mocks.branchName).toHaveBeenCalledOnce()
-      expect(mocks.branchConflict.mock.calls).toEqual([['/repo', 'main', 'origin/main', options]])
+      expect(mocks.branchConflict.mock.calls).toEqual([
+        ['/repo', 'main', remoteTrackingBase.ref, options]
+      ])
       expect(mocks.pathExists).toHaveBeenCalledTimes(occupied + 1)
       expect(mocks.githubPr).not.toHaveBeenCalled()
       expect(mocks.consume).not.toHaveBeenCalled()
@@ -100,7 +102,7 @@ describe('runtime create PR conflict probe', () => {
         ['src'],
         remoteTrackingBase.base,
         false,
-        expect.objectContaining({ remoteTrackingBase, ...options })
+        expect.objectContaining({ remoteTrackingBase, trackRemoteBranch: true, ...options })
       )
     }
   )
@@ -117,21 +119,23 @@ describe('runtime create PR conflict probe', () => {
       mocks.pathExists.mockImplementation(async (path) => path === worktreePath)
       mocks.consume.mockResolvedValue({ status: 'miss', reason: 'not_prepared' })
 
+      if (!reusable) {
+        await expect(createWorktree(pickedBranch)).rejects.toThrow('was not found locally')
+        expect(mocks.add).not.toHaveBeenCalled()
+        expect(mocks.consume).not.toHaveBeenCalled()
+        return
+      }
       await createWorktree(pickedBranch)
-
       expect(mocks.add).toHaveBeenCalledWith(
         '/repo',
         resolve('/worktrees', 'app-2'),
-        reusable ? 'main' : 'main-2',
+        'main',
         'origin/main',
         false,
         false,
-        expect.objectContaining(reusable ? { checkoutExistingBranch: true } : {})
+        expect.objectContaining({ checkoutExistingBranch: true })
       )
-      expect(mocks.githubPr.mock.calls.map(([, branch]) => branch)).toEqual(
-        reusable ? [] : ['main-2']
-      )
-      expect(mocks.add.mock.calls[0][6].checkoutExistingBranch ?? false).toBe(reusable)
+      expect(mocks.githubPr).not.toHaveBeenCalled()
     }
   )
 

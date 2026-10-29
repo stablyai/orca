@@ -181,3 +181,23 @@ describe('dictation through a reconnect', () => {
     expect(errors).toEqual(['Connection closed'])
   })
 })
+
+describe('the text so far', () => {
+  it('shows what the host heard while recording and clears it as the final text lands', async () => {
+    const rpc = createFakeRpcClient()
+    const sent: SentRequest[] = []
+    const transcripts: string[] = []
+    mount(rpc, transcripts, [])
+
+    await record(rpc, sent, [{ text: 'hello' }, {}, { text: 'hello wor' }])
+    expect(dictation().transcriptSoFar).toBe('hello wor')
+
+    await act(async () => {
+      const stopped = dictation().stop()
+      await pump(rpc, sent, [])
+      await stopped
+    })
+    expect(dictation().transcriptSoFar).toBe('')
+    expect(transcripts).toEqual(['hello world'])
+  })
+})

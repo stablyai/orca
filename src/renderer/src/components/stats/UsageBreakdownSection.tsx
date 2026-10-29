@@ -20,20 +20,23 @@ type UsageBreakdownSectionProps = {
 }
 
 function sessionCountLabel(count: number): string {
-  return count === 1
-    ? translate('stats.usageBreakdown.sessions_one', '{{count}} session', { count })
-    : translate('stats.usageBreakdown.sessions_other', '{{count}} sessions', { count })
+  return translate('stats.usageBreakdown.sessions', '{{count}} sessions', {
+    count,
+    defaultValue_one: '{{count}} session'
+  })
 }
 
 function activityCountLabel(count: number, unit: 'events' | 'turns'): string {
   if (unit === 'turns') {
-    return count === 1
-      ? translate('stats.usageBreakdown.turns_one', '{{count}} turn', { count })
-      : translate('stats.usageBreakdown.turns_other', '{{count}} turns', { count })
+    return translate('stats.usageBreakdown.turns', '{{count}} turns', {
+      count,
+      defaultValue_one: '{{count}} turn'
+    })
   }
-  return count === 1
-    ? translate('stats.usageBreakdown.events_one', '{{count}} event', { count })
-    : translate('stats.usageBreakdown.events_other', '{{count}} events', { count })
+  return translate('stats.usageBreakdown.events', '{{count}} events', {
+    count,
+    defaultValue_one: '{{count}} event'
+  })
 }
 
 function usageRowCounts(row: UsageBreakdownRow, unit: 'events' | 'turns'): string {

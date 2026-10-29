@@ -111,7 +111,7 @@ describe('shortcut label memoization', () => {
     const overrides = overridesFor('Mod+Shift+K')
     expect(formatShortcutLabel('tab.close', overrides)).toBe('⌘⇧K')
     platformRef.current = 'win32'
-    expect(formatShortcutLabel('tab.close', overrides)).toBe('Ctrl+Shift+K')
+    expect(formatShortcutLabel('tab.close', overrides)).toBe('Ctrl+⇧+K')
     platformRef.current = 'darwin'
     expect(formatShortcutLabel('tab.close', overrides)).toBe('⌘⇧K')
   })

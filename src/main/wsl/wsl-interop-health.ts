@@ -1,4 +1,5 @@
-import { listRunningWslDistrosAsync, listWslDistrosAsync } from '../wsl'
+import { listWslDistrosAsync } from '../wsl'
+import { isWslDistroRunning } from '../wsl-background-distro-gate'
 import { onRunningWslDistrosStopped } from '../wsl-running-distro-cache'
 import { runWslProcess } from './wsl-runner'
 import {
@@ -19,7 +20,8 @@ export type WslInteropCheckOutcome =
 
 export type WslInteropHealthDeps = {
   platform(): NodeJS.Platform
-  listRunningDistros(): Promise<string[]>
+  /** A settled running read: a list taken while a distro stops can still name it. */
+  isRunning(distro: string): Promise<boolean>
   resolveDefaultDistro(): Promise<string | null>
   runScript(
     distro: string,
@@ -74,7 +76,7 @@ export class WslInteropHealthMonitor {
       health.scheduled = true
       this.deps.schedule(() => {
         health.scheduled = false
-        void this.check(name, { confirmRunning: true })
+        void this.check(name)
       }, ACTIVITY_CHECK_DELAY_MS)
     })
   }
@@ -84,19 +86,19 @@ export class WslInteropHealthMonitor {
     const runningKeys = new Set(running.map((name) => name.toLowerCase()))
     for (const [key, health] of this.distros) {
       if (runningKeys.has(key) && this.deps.now() - health.lastCheckAt >= STOP_CHECK_FLOOR_MS) {
-        // The confirmed list that reported the stop also proves this distro is up.
-        void this.check(health.name, { confirmRunning: false })
+        // The stop's list can still name a distro that is stopping too; check() takes a settled read (E9).
+        void this.check(health.name)
       }
     }
   }
 
-  check(distro: string, options: { confirmRunning: boolean }): Promise<WslInteropCheckOutcome> {
+  check(distro: string): Promise<WslInteropCheckOutcome> {
     const health = this.healthFor(distro)
     if (health.inFlight) {
       return health.inFlight
     }
     health.lastCheckAt = this.deps.now()
-    const run = this.runCheck(health, options.confirmRunning)
+    const run = this.runCheck(health)
       .catch((error: unknown) => {
         this.deps.log(`[wsl] interop check failed for ${distro}: ${String(error)}`)
         return 'unknown' as const
@@ -110,12 +112,9 @@ export class WslInteropHealthMonitor {
     return run
   }
 
-  private async runCheck(
-    health: DistroHealth,
-    confirmRunning: boolean
-  ): Promise<WslInteropCheckOutcome> {
+  private async runCheck(health: DistroHealth): Promise<WslInteropCheckOutcome> {
     const distro = health.name
-    if (confirmRunning && !(await this.isRunning(distro))) {
+    if (!(await this.isRunning(distro))) {
       return 'not-running'
     }
     const probe = await this.deps.runScript(distro, WSL_INTEROP_PROBE_SCRIPT)
@@ -134,6 +133,10 @@ export class WslInteropHealthMonitor {
     }
     if (this.deps.now() - health.repairFailedAt < REPAIR_FAILURE_BACKOFF_MS) {
       return 'repair-failed'
+    }
+    // A missing entry is what a stopping distro's systemd leaves; the repair must not restart it.
+    if (!(await this.isRunning(distro))) {
+      return 'not-running'
     }
     const repair = await this.deps.runScript(distro, WSL_INTEROP_REPAIR_SCRIPT, 'root')
     const repaired = repair.code === 0 ? parseWslInteropRepairOutput(repair.stdout) : 'unknown'
@@ -155,8 +158,7 @@ export class WslInteropHealthMonitor {
 
   private async isRunning(distro: string): Promise<boolean> {
     try {
-      const running = await this.deps.listRunningDistros()
-      return running.some((name) => name.toLowerCase() === distro.toLowerCase())
+      return await this.deps.isRunning(distro)
     } catch {
       // Unconfirmed: `wsl -d` would boot a stopped distro, so skip.
       return false
@@ -200,7 +202,7 @@ export class WslInteropHealthMonitor {
 
 export const wslInteropHealthMonitor = new WslInteropHealthMonitor({
   platform: () => process.platform,
-  listRunningDistros: () => listRunningWslDistrosAsync({ requireConfirmed: true }),
+  isRunning: (distro) => isWslDistroRunning(distro),
   resolveDefaultDistro: async () => (await listWslDistrosAsync())[0] ?? null,
   runScript: (distro, script, user) =>
     runWslProcess({ distro, user, loginPath: 'none', script, timeoutMs: PROBE_TIMEOUT_MS }),

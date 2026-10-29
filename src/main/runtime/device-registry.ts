@@ -3,11 +3,9 @@ import { join } from 'node:path'
 import type { DeviceScope } from '../../shared/runtime-types'
 import { removeStaleDurableWriteTempFiles } from '../durable-file-write'
 import { DEVICE_REGISTRY_FILENAME } from './mobile-pairing-files'
-import { mintDeviceCredential } from './device-credential'
+import { mintTokenDevice } from './device-credential'
 import { planDeviceKeyFork } from './device-key-fork'
 import { planIdleEphemeralPrune, withoutEphemeralRows } from './ephemeral-device-rows'
-import { quarantineCorruptRegistry } from './device-registry-corruption'
-import { readDeviceRegistryFile } from './device-registry-file-read'
 import { DeviceRegistryWriter } from './device-registry-disk-merge'
 import type { RelayDeviceBinding } from './mobile-cloud-relay/relay-revoke-outbox'
 import type { MobilePairingConnectionMode } from '../../shared/mobile-pairing-connection-mode'
@@ -77,16 +75,7 @@ export class DeviceRegistry {
     pairingReach: RuntimePairingReach,
     grants: readonly RuntimeDeviceGrant[]
   ): TokenDeviceEntry {
-    const validatedGrants = validGrants(grants, scope)
-    const entry: TokenDeviceEntry = {
-      ...mintDeviceCredential(),
-      name,
-      scope,
-      pairedAt: Date.now(),
-      lastSeenAt: 0,
-      pairingReach,
-      ...(validatedGrants ? { grants: validatedGrants } : {})
-    }
+    const entry = mintTokenDevice(name, scope, pairingReach, grants)
     const nextDevices = [...existingDevices, entry]
     // Credentials become valid only after durable persistence.
     this.devices = this.save(nextDevices)
@@ -100,6 +89,8 @@ export class DeviceRegistry {
     pairingReach: RuntimePairingReach = 'network',
     grants: readonly RuntimeDeviceGrant[] = []
   ): TokenDeviceEntry {
+    // Never show a QR for an offer an admin removed on disk.
+    this.adoptExternalEdits()
     // Reuse only identical grants so re-advertisement cannot expand permissions.
     const existing = this.devices.find(
       (d): d is TokenDeviceEntry =>
@@ -148,7 +139,8 @@ export class DeviceRegistry {
     if (nextDevices !== this.devices) {
       this.devices = this.save(nextDevices)
     }
-    return entries
+    // A child the file had already lost is dropped by the save: never hand out its token.
+    return entries.filter((entry) => this.getDevice(entry.deviceId) !== null)
   }
 
   removeDevice(deviceId: string): boolean {
@@ -166,6 +158,7 @@ export class DeviceRegistry {
   }
 
   getPendingDevice(scope: DeviceScope = 'mobile'): TokenDeviceEntry | null {
+    this.adoptExternalEdits()
     return (
       this.devices.find(
         (device): device is TokenDeviceEntry => isPendingTokenRow(device) && device.scope === scope
@@ -206,6 +199,7 @@ export class DeviceRegistry {
   }
 
   validateToken(token: string): DeviceEntry | null {
+    this.adoptExternalEdits()
     return (
       (token && this.devices.find((d) => d.credentialKind === undefined && d.token === token)) ||
       null
@@ -214,6 +208,7 @@ export class DeviceRegistry {
 
   // Clients erase keys on unknown; reserve that verdict for readable absence.
   lookupDeviceKey(deviceId: string): DeviceKeyLookup {
+    this.adoptExternalEdits()
     const lookup = lookupDeviceKeyRow(this.getDevice(deviceId))
     return lookup.kind === 'unknown' && (this.registryUnreadable || this.registryDoubtful)
       ? { kind: 'unavailable' }
@@ -250,6 +245,7 @@ export class DeviceRegistry {
   }
 
   resolveAuthenticatedPrincipal(principal: AuthenticatedPrincipalBinding): DeviceEntry | null {
+    this.adoptExternalEdits()
     const device = this.getDevice(principal.deviceId)
     return device && isStillAuthenticated(device, principal) ? device : null
   }
@@ -305,8 +301,16 @@ export class DeviceRegistry {
     }
   }
 
+  /** Auth checks see a removal made on disk (an admin revoke) without waiting for orcad's next save. */
+  private adoptExternalEdits(): void {
+    // An unreadable load refuses everything until restart; there is nothing to merge into.
+    if (!this.registryUnreadable) {
+      this.devices = this.writer.adoptExternalEdits(this.devices) ?? this.devices
+    }
+  }
+
   private load(): void {
-    const read = readDeviceRegistryFile(this.registryPath)
+    const read = this.writer.read()
     this.registryUnreadable = read.unreadable
     this.registryDoubtful = read.doubtful
     this.corruptFilePending = read.corruptFilePending
@@ -338,7 +342,7 @@ export class DeviceRegistry {
       )
     }
     if (this.corruptFilePending) {
-      quarantineCorruptRegistry(this.registryPath)
+      this.writer.quarantineCorrupt()
       this.corruptFilePending = false
     }
   }

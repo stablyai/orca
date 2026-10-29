@@ -93,49 +93,35 @@ export function getChecksSummaryLabel(checks: readonly PRCheckDetail[]): string 
     return translate('auto.components.prCheckCounts.noChecksFound', 'No checks found')
   }
   if (counts.failing > 0) {
-    return counts.failing === 1
-      ? translate('auto.components.prCheckCounts.checksFailing_one', '{{count}} check failing', {
-          count: counts.failing
-        })
-      : translate('auto.components.prCheckCounts.checksFailing_other', '{{count}} checks failing', {
-          count: counts.failing
-        })
+    return translate('auto.components.prCheckCounts.checksFailing', '{{count}} checks failing', {
+      count: counts.failing,
+      defaultValue_one: '{{count}} check failing'
+    })
   }
   // Why: action_required (e.g. workflow awaiting approval) blocks merge but isn't a failure, so surface it distinctly.
   if (counts.needsAction > 0) {
-    return counts.needsAction === 1
-      ? translate(
-          'auto.components.prCheckCounts.checksNeedAction_one',
-          '{{count}} check needs action',
-          { count: counts.needsAction }
-        )
-      : translate(
-          'auto.components.prCheckCounts.checksNeedAction_other',
-          '{{count}} checks need action',
-          { count: counts.needsAction }
-        )
+    return translate(
+      'auto.components.prCheckCounts.checksNeedAction',
+      '{{count}} checks need action',
+      { count: counts.needsAction, defaultValue_one: '{{count}} check needs action' }
+    )
   }
   if (counts.pending > 0) {
-    return counts.pending === 1
-      ? translate('auto.components.prCheckCounts.checksPending_one', '{{count}} check pending', {
-          count: counts.pending
-        })
-      : translate('auto.components.prCheckCounts.checksPending_other', '{{count}} checks pending', {
-          count: counts.pending
-        })
+    return translate('auto.components.prCheckCounts.checksPending', '{{count}} checks pending', {
+      count: counts.pending,
+      defaultValue_one: '{{count}} check pending'
+    })
   }
   if (counts.passing === checks.length) {
     return translate('auto.components.prCheckCounts.allChecksPassing', 'All checks passing')
   }
-  return checks.length === 1
-    ? translate(
-        'auto.components.prCheckCounts.checksPassingOfTotal_one',
-        '{{passing}} of {{count}} check passing',
-        { count: checks.length, passing: counts.passing }
-      )
-    : translate(
-        'auto.components.prCheckCounts.checksPassingOfTotal_other',
-        '{{passing}} of {{count}} checks passing',
-        { count: checks.length, passing: counts.passing }
-      )
+  return translate(
+    'auto.components.prCheckCounts.checksPassingOfTotal',
+    '{{passing}} of {{count}} checks passing',
+    {
+      count: checks.length,
+      passing: counts.passing,
+      defaultValue_one: '{{passing}} of {{count}} check passing'
+    }
+  )
 }
