@@ -129,7 +129,9 @@ describe('useAddRepoLocalFolderFlow', () => {
       executionHostId: 'local'
     })
     expect(onGitRepoReady).toHaveBeenCalledTimes(1)
-    expect(onGitRepoReady).toHaveBeenCalledWith('alpha', 'local_folder_picker', 'local')
+    expect(onGitRepoReady).toHaveBeenCalledWith('alpha', 'local_folder_picker', 'local', {
+      selectedPath: '/projects/alpha'
+    })
   })
 
   it('skips nested-review folders in a multi-folder add and continues with git folders', async () => {
@@ -169,7 +171,9 @@ describe('useAddRepoLocalFolderFlow', () => {
       runtimeEnvironmentId: null
     })
     expect(scanNestedRepos).toHaveBeenCalledTimes(2)
-    expect(onGitRepoReady).toHaveBeenCalledWith('later', 'local_folder_picker', 'local')
+    expect(onGitRepoReady).toHaveBeenCalledWith('later', 'local_folder_picker', 'local', {
+      selectedPath: '/projects/later'
+    })
   })
 
   it('still completes handoff when a later selected folder is skipped', async () => {
@@ -206,7 +210,9 @@ describe('useAddRepoLocalFolderFlow', () => {
     expect(addRepoPath).toHaveBeenCalledWith('/projects/git', undefined, {
       runtimeEnvironmentId: null
     })
-    expect(onGitRepoReady).toHaveBeenCalledWith('git', 'local_folder_picker', 'local')
+    expect(onGitRepoReady).toHaveBeenCalledWith('git', 'local_folder_picker', 'local', {
+      selectedPath: '/projects/git'
+    })
   })
 
   it('ignores stale scans and offers Open as Folder only for the current plain directory', async () => {

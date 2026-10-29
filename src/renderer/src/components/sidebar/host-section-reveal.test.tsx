@@ -81,7 +81,6 @@ function sections(
       visibleReposForRows: [localRepo, remoteRepo],
       visibleProjectGroupsForRows: [],
       visibleFolderWorkspacesForRows: [],
-      importedWorktreesByRepo: new Map(),
       newExternalWorktreesInboxByRepo: new Map(),
       filterRepoIds: [],
       visibleWorkspaceHostIds,

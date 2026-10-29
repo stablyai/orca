@@ -117,7 +117,6 @@ describe('project groups', () => {
       [group],
       new Set(),
       new Map(),
-      new Map(),
       [],
       undefined,
       [folderWorkspace]
@@ -195,7 +194,6 @@ describe('project groups', () => {
       [rootGroup, childGroup],
       new Set(),
       new Map(),
-      new Map(),
       [],
       undefined,
       [folderWorkspace]
@@ -264,7 +262,6 @@ describe('project groups', () => {
       undefined,
       [group],
       new Set(),
-      new Map(),
       new Map(),
       [],
       undefined,

@@ -25,7 +25,6 @@ describe('buildRows pending creations', () => {
       [],
       new Set(),
       new Map(),
-      new Map(),
       [makePendingCreation('c1', repo.id)]
     )
 
@@ -57,7 +56,6 @@ describe('buildRows pending creations', () => {
       [],
       new Set(),
       new Map(),
-      new Map(),
       [makePendingCreation('c1', repo.id)]
     )
 
@@ -80,7 +78,6 @@ describe('buildRows pending creations', () => {
       undefined,
       [],
       new Set(),
-      new Map(),
       new Map(),
       [makePendingCreation('c1', repo.id)]
     )
@@ -107,7 +104,6 @@ describe('buildRows pending creations', () => {
       undefined,
       [],
       new Set(),
-      new Map(),
       new Map(),
       [makePendingCreation('c1', repo.id)]
     )

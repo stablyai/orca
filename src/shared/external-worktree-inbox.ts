@@ -99,20 +99,11 @@ export function isExternalWorktreeDiscoverySuppressed(
   return typeof repo.externalWorktreeDiscoverySuppressedAt === 'number'
 }
 
-export function hasCompletedInitialExternalWorktreeImportPrompt(
-  repo: Pick<Repo, 'externalWorktreeVisibilityPromptDismissedAt'>
-): boolean {
-  return typeof repo.externalWorktreeVisibilityPromptDismissedAt === 'number'
-}
-
 export function shouldOfferNewExternalWorktreeInbox(
   repo: Repo,
   defaults?: WorktreeVisibilityDefaults
 ): boolean {
   if (isExternalWorktreeDiscoverySuppressed(repo)) {
-    return false
-  }
-  if (!hasCompletedInitialExternalWorktreeImportPrompt(repo)) {
     return false
   }
   return (

@@ -209,5 +209,11 @@ describe('useAddRepoServerPathFlow', () => {
       requireAuthoritative: true,
       executionHostId: 'runtime:box1-environment-id'
     })
+    expect(mocks.onGitRepoReady).toHaveBeenCalledWith(
+      'server-git',
+      'runtime_server_path',
+      'runtime:box1-environment-id',
+      { selectedPath: '/server/docs' }
+    )
   })
 })

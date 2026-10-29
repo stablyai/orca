@@ -62,22 +62,6 @@ export type WorktreeRow = {
   showProjectName?: boolean
 }
 
-export type ImportedWorktreesCardCandidate = {
-  repo: Repo
-  hiddenWorktrees: DetectedWorktree[]
-}
-
-export type ImportedWorktreesCardRow = {
-  type: 'imported-worktrees-card'
-  key: string
-  repo: Repo
-  hiddenWorktrees: DetectedWorktree[]
-  placement: 'repo-group' | 'pinned-fallback'
-  /** Set only when the row's project is checked out on more than one host. */
-  hostContextLabel?: string
-  hostContextHostId?: ExecutionHostId
-}
-
 export type NewExternalWorktreesInboxCandidate = {
   repo: Repo
   inboxWorktrees: DetectedWorktree[]
@@ -115,7 +99,6 @@ export type PendingCreationRef = { creationId: string; repoId: string }
 export type Row =
   | GroupHeaderRow
   | WorktreeRow
-  | ImportedWorktreesCardRow
   | NewExternalWorktreesInboxRow
   | PendingCreationRow
   | FolderWorkspaceRow

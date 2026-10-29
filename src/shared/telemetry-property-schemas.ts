@@ -96,6 +96,7 @@ export type AddRepoDefaultCheckoutHandoffSource = z.infer<
 >
 export const addRepoDefaultCheckoutHandoffResultSchema = z.enum([
   'opened_default_checkout',
+  'opened_selected_checkout',
   'revealed_project'
 ])
 export const addRepoDefaultCheckoutHandoffReasonSchema = z.enum([

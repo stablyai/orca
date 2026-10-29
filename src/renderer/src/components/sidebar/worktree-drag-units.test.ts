@@ -16,8 +16,8 @@ function item(
   return { type: 'item', worktree: { id }, depth, sectionKey }
 }
 
-function importedCard(): { type: 'imported-worktrees-card' } {
-  return { type: 'imported-worktrees-card' }
+function externalWorktreesNotice(): { type: 'new-external-worktrees-inbox' } {
+  return { type: 'new-external-worktrees-inbox' }
 }
 
 describe('getWorktreeDragUnitGroups', () => {
@@ -42,14 +42,14 @@ describe('getWorktreeDragUnitGroups', () => {
     ])
   })
 
-  it('ignores imported worktree card rows without splitting drag groups', () => {
+  it('ignores hidden-worktree notice rows without splitting drag groups', () => {
     const groups = getWorktreeDragUnitGroups([
       header('repo:one'),
       item('main'),
-      importedCard(),
+      externalWorktreesNotice(),
       item('feature'),
       header('repo:two'),
-      importedCard(),
+      externalWorktreesNotice(),
       item('other')
     ])
 

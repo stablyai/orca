@@ -64,18 +64,19 @@ describe('new external worktree inbox actions', () => {
     const updateRepo = vi.fn().mockResolvedValue(true)
     const setInboxState = vi.fn()
 
-    await keepNewExternalWorktreeInboxHidden({
+    const kept = await keepNewExternalWorktreeInboxHidden({
       projectId,
-      repo,
+      repo: { ...repo, externalWorktreeVisibilityPromptDismissedAt: 123 },
       worktreePaths: ['/scratch/new'],
       updateRepo,
-      fetchWorktrees: vi.fn(),
       setInboxState
     })
 
+    expect(kept).toBe(true)
     expect(setInboxState).toHaveBeenNthCalledWith(1, projectId, { pending: true, error: null })
     expect(updateRepo).toHaveBeenCalledWith(projectId, {
-      externalWorktreeInboxBaselinePaths: ['/scratch/old', '/scratch/new']
+      externalWorktreeInboxBaselinePaths: ['/scratch/old', '/scratch/new'],
+      externalWorktreeVisibilityPromptDismissedAt: 123
     })
     expect(setInboxState).toHaveBeenLastCalledWith(projectId, null)
   })
@@ -95,7 +96,8 @@ describe('new external worktree inbox actions', () => {
     expect(suppressed).toBe(true)
     expect(updateRepo).toHaveBeenCalledWith(projectId, {
       externalWorktreeDiscoverySuppressedAt: expect.any(Number),
-      externalWorktreeInboxBaselinePaths: ['/scratch/old', '/scratch/new']
+      externalWorktreeInboxBaselinePaths: ['/scratch/old', '/scratch/new'],
+      externalWorktreeVisibilityPromptDismissedAt: expect.any(Number)
     })
     expect(setInboxState).toHaveBeenLastCalledWith(projectId, null)
   })

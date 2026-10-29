@@ -16,6 +16,7 @@ type SuppressExternalWorktreeInboxDialogProps = {
   pending: boolean
   onOpenChange: (open: boolean) => void
   onConfirm: () => void
+  onKeepHidden: () => void
   onOpenRecovery: () => void
 }
 
@@ -25,6 +26,7 @@ export default function SuppressExternalWorktreeInboxDialog({
   pending,
   onOpenChange,
   onConfirm,
+  onKeepHidden,
   onOpenRecovery
 }: SuppressExternalWorktreeInboxDialogProps): React.JSX.Element {
   return (
@@ -44,6 +46,12 @@ export default function SuppressExternalWorktreeInboxDialog({
               { value0: repoDisplayName }
             )}
           </DialogDescription>
+          <p className="text-sm text-muted-foreground">
+            {translate(
+              'auto.components.sidebar.SuppressExternalWorktreeInboxDialog.0d6b8f3e5c',
+              'To hide only the current ones and still see worktrees created later, choose Keep these hidden.'
+            )}
+          </p>
         </DialogHeader>
 
         <div className="rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
@@ -73,6 +81,12 @@ export default function SuppressExternalWorktreeInboxDialog({
             {translate(
               'auto.components.sidebar.SuppressExternalWorktreeInboxDialog.5d1c9f0a82',
               'Cancel'
+            )}
+          </Button>
+          <Button type="button" variant="outline" disabled={pending} onClick={onKeepHidden}>
+            {translate(
+              'auto.components.sidebar.SuppressExternalWorktreeInboxDialog.e5a9c27d14',
+              'Keep these hidden'
             )}
           </Button>
           <Button type="button" disabled={pending} onClick={onConfirm}>

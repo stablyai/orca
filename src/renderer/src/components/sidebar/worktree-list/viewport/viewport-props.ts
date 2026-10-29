@@ -19,7 +19,6 @@ import type {
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import type { ExecutionHostRegistryEntry } from '../../../../../../shared/execution-host-registry'
 import type { HostSectionRow } from '../../../../../../shared/sidebar-list/host-section-rows'
-import type { ImportedWorktreeCardActionState } from '../../imported-worktrees-card-actions'
 import type { NewExternalWorktreesInboxActionState } from '../../new-external-worktrees-inbox-actions'
 import type {
   ShouldShowWorkspaceBoardDropIndicator,
@@ -50,9 +49,6 @@ export type VirtualizedWorktreeViewportProps = {
   handleCreateForRepo: (projectId: string) => void
   handleOpenRepoSettings: (projectId: string, sectionId?: string) => void
   handleOpenWorktreeVisibility: (repo: Repo) => void
-  handleShowImportedWorktrees: (projectId: string) => void
-  handleKeepImportedWorktreesHidden: (projectId: string) => void
-  importedWorktreeCardActionState: ReadonlyMap<string, ImportedWorktreeCardActionState>
   handleOpenSuppressExternalWorktreeInbox: (projectId: string) => void
   newExternalWorktreeInboxActionState: ReadonlyMap<string, NewExternalWorktreesInboxActionState>
   handleRemoveProject: (repo: Repo) => void

@@ -5321,26 +5321,6 @@
         "DeleteWorktreeWarningPanels": {
           "mainWorktreeNotice": "これは<strong>メインワークツリー</strong>（元のクローンディレクトリ）です。"
         },
-        "ImportedWorktreesVisibilityLine": {
-          "b7a87dc32f": "ワークツリーリストに表示",
-          "ad99f4eea9": "非表示のままにする",
-          "9f4f14e821": "後でプロジェクトメニューから変更できます。",
-          "b47ba1a9d2": "{{value0}} プレビュー",
-          "2251d41ebb": "非表示のワークツリーグループ",
-          "5a9688802a": "{{value0}} をもっと見る",
-          "294de4aeb2": "表示数を減らす",
-          "collapseAriaLabel": "{{repo}} の非表示のワークツリー一覧を折りたたむ",
-          "expandAriaLabel": "{{repo}} の非表示のワークツリー一覧を展開",
-          "hiding_one": "{{count}} 件のワークツリーを非表示中",
-          "hiding_other": "{{count}} 件のワークツリーを非表示中",
-          "hidingInRepo_one": "{{repo}} の {{count}} 件のワークツリーを非表示中",
-          "hidingInRepo_other": "{{repo}} の {{count}} 件のワークツリーを非表示中",
-          "keepHiddenAriaLabel_one": "{{repo}} で検出されたワークツリー {{count}} 件を非表示のままにする（プロジェクトメニューから再表示できます）",
-          "keepHiddenAriaLabel_other": "{{repo}} で検出されたワークツリー {{count}} 件を非表示のままにする（プロジェクトメニューから再表示できます）",
-          "keepHiddenTooltip": "非表示のままにする（プロジェクトメニューから再表示できます）",
-          "repoOnHost": "{{repo}}（{{host}}）",
-          "moreLocations_other": "ほか {{count}} か所"
-        },
         "NonGitFolderDialog": {
           "e52454b7f6": "フォルダーとして開く",
           "05b33a17a9": "キャンセル",
@@ -6282,7 +6262,9 @@
           "1f8a5d9e73": "後でプロジェクト設定から再度有効にできます。",
           "8c0b2e7a41": "Non-Orca ワークツリー設定を開く",
           "5d1c9f0a82": "キャンセル",
-          "3b7e4a1c96": "外部ワークツリーを非表示"
+          "3b7e4a1c96": "外部ワークツリーを非表示",
+          "0d6b8f3e5c": "現在のものだけを非表示にして、今後作成されるワークツリーは引き続き表示するには、「これらだけ非表示にする」を選択してください。",
+          "e5a9c27d14": "これらだけ非表示にする"
         },
         "useAddRepoHostSelection": {
           "connectionFailed": "SSH 接続に失敗しました。",
@@ -6512,10 +6494,6 @@
         },
         "RemoteFileBrowserEntryList": {
           "pathEmpty": "{{path}} は空です"
-        },
-        "importedWorktreesCardActions": {
-          "keepHiddenError": "検出されたワークツリーを非表示のままにできませんでした。もう一度お試しください。",
-          "showError": "検出されたワークツリーを表示できませんでした。もう一度お試しください。"
         },
         "repoHeaderProjectActions": {
           "hideNonOrcaWorktrees": "Orca 以外のワークツリーを非表示にする",

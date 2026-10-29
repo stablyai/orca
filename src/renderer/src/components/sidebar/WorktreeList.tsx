@@ -224,7 +224,7 @@ const WorktreeList = React.memo(function WorktreeList({
     visibleWorktreeCount: visibleWorktrees.length,
     visibleFolderWorkspaceCount: visibleScope.visibleFolderWorkspacesForRows.length,
     placeholderRepoCount: rowModel.placeholderRepoIds.size,
-    importedWorktreeCardCount: externalWorktreeCards.importedWorktreesByRepo.size
+    externalWorktreeNoticeCount: externalWorktreeCards.newExternalWorktreesInboxByRepo.size
   })
   // Clear Filters must outrank empty project headers when filtering hides every workspace.
   if (rowModel.rows.length === 0 || filtersHideAllRows) {
@@ -249,6 +249,9 @@ const WorktreeList = React.memo(function WorktreeList({
         onConfirmSuppressExternalWorktreeInbox={() => {
           void externalWorktreeCards.handleConfirmSuppressExternalWorktreeInbox()
         }}
+        onKeepExternalWorktreeInboxHidden={() => {
+          void externalWorktreeCards.handleKeepExternalWorktreeInboxHidden()
+        }}
         onOpenWorktreeVisibility={handleOpenWorktreeVisibility}
       />
       <VirtualizedWorktreeViewport
@@ -272,9 +275,6 @@ const WorktreeList = React.memo(function WorktreeList({
         handleCreateForRepo={handleCreateForRepo}
         handleOpenRepoSettings={handleOpenRepoSettings}
         handleOpenWorktreeVisibility={handleOpenWorktreeVisibility}
-        handleShowImportedWorktrees={externalWorktreeCards.handleShowImportedWorktrees}
-        handleKeepImportedWorktreesHidden={externalWorktreeCards.handleKeepImportedWorktreesHidden}
-        importedWorktreeCardActionState={externalWorktreeCards.importedWorktreeCardActionState}
         handleOpenSuppressExternalWorktreeInbox={
           externalWorktreeCards.handleOpenSuppressExternalWorktreeInbox
         }

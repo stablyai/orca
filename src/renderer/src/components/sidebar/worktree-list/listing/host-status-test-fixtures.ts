@@ -129,7 +129,6 @@ export function sectionArgs(): Parameters<typeof useSidebarSectionRows>[0] {
     visibleReposForRows: [repo],
     visibleProjectGroupsForRows: [],
     visibleFolderWorkspacesForRows: [],
-    importedWorktreesByRepo: new Map(),
     newExternalWorktreesInboxByRepo: new Map(),
     filterRepoIds: [],
     visibleWorkspaceHostIds: null,

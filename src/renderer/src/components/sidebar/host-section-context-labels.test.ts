@@ -36,10 +36,8 @@ function rowsFor(groupBy: WorktreeGroupBy) {
     nestLineage: false,
     projectGroups: [],
     placeholderRepoIds: new Set(),
-    importedWorktreesByRepo: new Map([
-      [repo.id, { repo, hiddenWorktrees: [makeDetectedWorktree()] }]
-    ]),
     newExternalWorktreesInboxByRepo: new Map([
+      [repo.id, { repo, inboxWorktrees: [makeDetectedWorktree()] }],
       [remoteRepo.id, { repo: remoteRepo, inboxWorktrees: [makeDetectedWorktree()] }]
     ]),
     pendingCreations: [],
@@ -55,7 +53,7 @@ function rowsFor(groupBy: WorktreeGroupBy) {
 describe.each(['repo', 'workspace-status', 'pr-status', 'none'] as const)(
   'host context in %s grouping',
   (groupBy) => {
-    it('names the host once above its cards and notices, including duplicate pinned rows', () => {
+    it('names the host once above its rows and notices, including duplicate pinned rows', () => {
       const rows = rowsFor(groupBy)
       const sectioned = addHostSectionRows({
         rows,
@@ -72,9 +70,8 @@ describe.each(['repo', 'workspace-status', 'pr-status', 'none'] as const)(
       )
       expect(sectioned.filter((row) => row.type === 'item')).toHaveLength(3)
       if (groupBy === 'repo') {
-        expect(sectioned.filter((row) => row.type === 'imported-worktrees-card')).toHaveLength(1)
         expect(sectioned.filter((row) => row.type === 'new-external-worktrees-inbox')).toHaveLength(
-          1
+          2
         )
       }
       for (const row of sectioned) {

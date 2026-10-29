@@ -6015,27 +6015,6 @@
         "DeleteWorktreeWarningPanels": {
           "mainWorktreeNotice": "This is the <strong>main worktree</strong> (the original clone directory)."
         },
-        "ImportedWorktreesVisibilityLine": {
-          "b7a87dc32f": "Show in worktree list",
-          "ad99f4eea9": "Keep hidden",
-          "9f4f14e821": "Change this later from the project menu.",
-          "b47ba1a9d2": "{{value0}} preview",
-          "2251d41ebb": "Hidden worktree groups",
-          "5a9688802a": "Show {{value0}} more",
-          "294de4aeb2": "Show fewer",
-          "collapseAriaLabel": "Collapse hidden worktrees for {{repo}}",
-          "expandAriaLabel": "Expand hidden worktrees for {{repo}}",
-          "hiding_one": "Hiding {{count}} discovered worktree",
-          "hiding_other": "Hiding {{count}} discovered worktrees",
-          "hidingInRepo_one": "Hiding {{count}} discovered worktree in {{repo}}",
-          "hidingInRepo_other": "Hiding {{count}} discovered worktrees in {{repo}}",
-          "keepHiddenAriaLabel_one": "Keep {{count}} discovered worktree hidden for {{repo}}; recover from the project menu",
-          "keepHiddenAriaLabel_other": "Keep {{count}} discovered worktrees hidden for {{repo}}; recover from the project menu",
-          "keepHiddenTooltip": "Keep hidden - recover from the project menu",
-          "repoOnHost": "{{repo}} on {{host}}",
-          "moreLocations_one": "+ {{count}} more location",
-          "moreLocations_other": "+ {{count}} more locations"
-        },
         "NonGitFolderDialog": {
           "e52454b7f6": "Open as Folder",
           "05b33a17a9": "Cancel",
@@ -6938,7 +6917,9 @@
           "1f8a5d9e73": "You can turn this back on later from project settings.",
           "8c0b2e7a41": "Open Non-Orca worktrees settings",
           "5d1c9f0a82": "Cancel",
-          "3b7e4a1c96": "Hide external worktrees"
+          "3b7e4a1c96": "Hide external worktrees",
+          "0d6b8f3e5c": "To hide only the current ones and still see worktrees created later, choose Keep these hidden.",
+          "e5a9c27d14": "Keep these hidden"
         },
         "useAddRepoHostSelection": {
           "connectionFailed": "SSH connection failed.",
@@ -7202,10 +7183,6 @@
         },
         "RemoteFileBrowserEntryList": {
           "pathEmpty": "{{path}} is empty"
-        },
-        "importedWorktreesCardActions": {
-          "keepHiddenError": "Could not keep discovered worktrees hidden. Try again.",
-          "showError": "Could not show discovered worktrees. Try again."
         },
         "repoHeaderProjectActions": {
           "hideNonOrcaWorktrees": "Hide non-Orca worktrees",

@@ -16,7 +16,6 @@ export function getWorktreeDragGroups(rows: HostSectionRow[]): WorktreeDragGroup
     }
     if (
       row.type === 'host-header' ||
-      row.type === 'imported-worktrees-card' ||
       row.type === 'new-external-worktrees-inbox' ||
       row.type === 'pending-creation' ||
       row.type === 'folder-workspace'

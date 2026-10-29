@@ -867,16 +867,6 @@
           "workspaceCount_one": "{{count}} workspace",
           "workspaceCount_other": "{{count}} workspaces"
         },
-        "ImportedWorktreesVisibilityLine": {
-          "hidingInRepo_one": "Hiding {{count}} discovered worktree in {{repo}}",
-          "hidingInRepo_other": "Hiding {{count}} discovered worktrees in {{repo}}",
-          "hiding_one": "Hiding {{count}} discovered worktree",
-          "hiding_other": "Hiding {{count}} discovered worktrees",
-          "keepHiddenAriaLabel_one": "Keep {{count}} discovered worktree hidden for {{repo}}; recover from the project menu",
-          "keepHiddenAriaLabel_other": "Keep {{count}} discovered worktrees hidden for {{repo}}; recover from the project menu",
-          "moreLocations_one": "+ {{count}} more location",
-          "moreLocations_other": "+ {{count}} more locations"
-        },
         "LocalGitToolchainScanBanner": {
           "affectedProjects_one": "Worktree scan paused for {{count}} project",
           "affectedProjects_other": "Worktree scan paused for {{count}} projects"

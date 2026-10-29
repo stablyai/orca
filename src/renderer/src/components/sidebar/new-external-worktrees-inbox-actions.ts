@@ -13,12 +13,18 @@ type RepoExternalWorktreeInboxUpdate = Partial<
     | 'externalWorktreeInboxBaselinePaths'
     | 'importedExternalWorktreePaths'
     | 'externalWorktreeDiscoverySuppressedAt'
+    | 'externalWorktreeVisibilityPromptDismissedAt'
   >
 >
 
 type NewExternalWorktreesInboxActionDeps = {
   projectId: string
-  repo: Pick<Repo, 'externalWorktreeInboxBaselinePaths' | 'importedExternalWorktreePaths'>
+  repo: Pick<
+    Repo,
+    | 'externalWorktreeInboxBaselinePaths'
+    | 'importedExternalWorktreePaths'
+    | 'externalWorktreeVisibilityPromptDismissedAt'
+  >
   worktreePaths: readonly string[]
   setInboxState: (projectId: string, state: NewExternalWorktreesInboxActionState | null) => void
   updateRepo: (projectId: string, updates: RepoExternalWorktreeInboxUpdate) => Promise<boolean>
@@ -53,6 +59,11 @@ function rollbackPathList(paths: readonly string[] | undefined): string[] {
   return [...(paths ?? [])]
 }
 
+// Older clients still show their initial import card until this is set.
+function promptDismissedAt(repo: NewExternalWorktreesInboxActionDeps['repo']): number {
+  return repo.externalWorktreeVisibilityPromptDismissedAt ?? Date.now()
+}
+
 async function refreshAfterRepoInboxUpdate(
   args: NewExternalWorktreesInboxActionDeps,
   updates: RepoExternalWorktreeInboxUpdate,
@@ -81,24 +92,26 @@ async function refreshAfterRepoInboxUpdate(
 }
 
 export async function keepNewExternalWorktreeInboxHidden(
-  args: NewExternalWorktreesInboxActionDeps
-): Promise<void> {
+  args: Omit<NewExternalWorktreesInboxActionDeps, 'fetchWorktrees'>
+): Promise<boolean> {
   args.setInboxState(args.projectId, { pending: true, error: null })
   const baseline = mergeExternalWorktreeInboxPaths(
     args.repo.externalWorktreeInboxBaselinePaths,
     args.worktreePaths
   )
   const updated = await args.updateRepo(args.projectId, {
-    externalWorktreeInboxBaselinePaths: baseline
+    externalWorktreeInboxBaselinePaths: baseline,
+    externalWorktreeVisibilityPromptDismissedAt: promptDismissedAt(args.repo)
   })
   if (!updated) {
     args.setInboxState(args.projectId, {
       pending: false,
       error: newExternalWorktreeInboxKeepHiddenError()
     })
-    return
+    return false
   }
   args.setInboxState(args.projectId, null)
+  return true
 }
 
 export async function importNewExternalWorktreeInboxPaths(
@@ -134,7 +147,8 @@ export async function suppressNewExternalWorktreeInbox(
   )
   const updated = await args.updateRepo(args.projectId, {
     externalWorktreeDiscoverySuppressedAt: Date.now(),
-    externalWorktreeInboxBaselinePaths
+    externalWorktreeInboxBaselinePaths,
+    externalWorktreeVisibilityPromptDismissedAt: promptDismissedAt(args.repo)
   })
   if (!updated) {
     args.setInboxState(args.projectId, {

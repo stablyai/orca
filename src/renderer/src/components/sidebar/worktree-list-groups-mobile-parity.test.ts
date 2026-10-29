@@ -132,7 +132,6 @@ async function desktopHeaders(projectOrderBy: ProjectOrderBy) {
     [],
     new Set(repos.filter((repo) => !withWorktrees.has(repo.id)).map((repo) => repo.id)),
     new Map(),
-    new Map(),
     [],
     { projects: projection.projects, projectHostSetups: projection.setups }
   ).flatMap((row) => (row.type === 'header' ? [{ key: row.key, label: row.label }] : []))

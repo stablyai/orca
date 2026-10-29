@@ -42,7 +42,6 @@ import {
   type HostSectionRow
 } from './host-section-rows'
 import type {
-  ImportedWorktreesCardCandidate,
   NewExternalWorktreesInboxCandidate,
   PinnedWorktreeDisplayPolicy,
   Row,
@@ -93,7 +92,6 @@ export type SidebarFeedRows = {
 /** What only the desktop window adds over the inputs: transient reveals and its own cards. */
 export type SidebarFeedWindowExtras = {
   forcedVisibleWorktreeIds?: readonly string[]
-  importedWorktreesByRepo?: ReadonlyMap<string, ImportedWorktreesCardCandidate>
   newExternalWorktreesInboxByRepo?: ReadonlyMap<string, NewExternalWorktreesInboxCandidate>
 }
 
@@ -240,7 +238,6 @@ export function planSidebarFeedRows(
     nestLineage: true,
     projectGroups: visibleProjectGroups,
     placeholderRepoIds,
-    importedWorktreesByRepo: extras.importedWorktreesByRepo ?? new Map(),
     newExternalWorktreesInboxByRepo: extras.newExternalWorktreesInboxByRepo ?? new Map(),
     pendingCreations,
     projectGrouping: catalog.projectGrouping,

@@ -107,15 +107,6 @@ export function serializeSidebarRow(
         field('creation', row.creationId),
         field('repo', row.repo?.id)
       ])
-    case 'imported-worktrees-card':
-      return line('IMPORTED', [
-        field('key', row.key),
-        field('repo', row.repo.id),
-        field('placement', row.placement),
-        field('hidden', row.hiddenWorktrees.map((worktree) => worktree.id).join(',')),
-        field('hostLabel', row.hostContextLabel ? JSON.stringify(row.hostContextLabel) : undefined),
-        field('hostId', row.hostContextHostId)
-      ])
     case 'new-external-worktrees-inbox':
       return line('INBOX', [
         field('key', row.key),

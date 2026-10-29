@@ -11789,31 +11789,6 @@
           "removeWithChildrenGit_other": "Remover <target/> e <descendants>{{count}} espaços de trabalho filhos</descendants> do git e excluir suas pastas de espaço de trabalho.",
           "removeWithChildrenGit_many": "Remover <target/> e <descendants>{{count}} espaços de trabalho filhos</descendants> do git e excluir suas pastas de espaço de trabalho."
         },
-        "ImportedWorktreesVisibilityLine": {
-          "b7a87dc32f": "Mostrar na lista de worktrees",
-          "ad99f4eea9": "Manter oculta",
-          "9f4f14e821": "Altere isso depois no menu do projeto.",
-          "b47ba1a9d2": "Pré-visualização de {{value0}}",
-          "2251d41ebb": "Grupos de worktrees ocultas",
-          "5a9688802a": "Mostrar mais {{value0}}",
-          "294de4aeb2": "Mostrar menos",
-          "collapseAriaLabel": "Recolher worktrees ocultas de {{repo}}",
-          "expandAriaLabel": "Expandir worktrees ocultas de {{repo}}",
-          "hiding_one": "Ocultando {{count}} worktree descoberta",
-          "hiding_other": "Ocultando {{count}} worktrees descobertas",
-          "hiding_many": "Ocultando {{count}} worktrees descobertas",
-          "hidingInRepo_one": "Ocultando {{count}} worktree descoberta em {{repo}}",
-          "hidingInRepo_other": "Ocultando {{count}} worktrees descobertas em {{repo}}",
-          "hidingInRepo_many": "Ocultando {{count}} worktrees descobertas em {{repo}}",
-          "keepHiddenAriaLabel_one": "Manter {{count}} worktree descoberta oculta para {{repo}}; recupere-a pelo menu do projeto",
-          "keepHiddenAriaLabel_other": "Manter {{count}} worktrees descobertas ocultas para {{repo}}; recupere-as pelo menu do projeto",
-          "keepHiddenAriaLabel_many": "Manter {{count}} worktrees descobertas ocultas para {{repo}}; recupere-as pelo menu do projeto",
-          "keepHiddenTooltip": "Manter oculto - recupere pelo menu do projeto",
-          "repoOnHost": "{{repo}} em {{host}}",
-          "moreLocations_one": "+ {{count}} local a mais",
-          "moreLocations_other": "+ {{count}} locais a mais",
-          "moreLocations_many": "+ {{count}} locais a mais"
-        },
         "WorkspaceKanbanSettingsMenu": {
           "79eb990aa4": "Adicionar status",
           "054cb50df7": "Remover {{value0}}",
@@ -11991,7 +11966,9 @@
           "1f8a5d9e73": "Você pode reativar isso depois nas configurações do projeto.",
           "8c0b2e7a41": "Abrir configurações de worktrees não-Orca",
           "5d1c9f0a82": "Cancelar",
-          "3b7e4a1c96": "Ocultar worktrees externas"
+          "3b7e4a1c96": "Ocultar worktrees externas",
+          "0d6b8f3e5c": "Para ocultar apenas as atuais e continuar vendo as worktrees criadas depois, escolha Manter estas ocultas.",
+          "e5a9c27d14": "Manter estas ocultas"
         },
         "WorkspaceKanbanSearchField": {
           "bdb753c78d": "Nenhum espaço de trabalho corresponde",
@@ -12324,10 +12301,6 @@
         },
         "RemoteFileBrowserEntryList": {
           "pathEmpty": "A pasta {{path}} está vazia"
-        },
-        "importedWorktreesCardActions": {
-          "keepHiddenError": "Não foi possível manter ocultas as worktrees descobertas. Tente novamente.",
-          "showError": "Não foi possível mostrar as worktrees descobertas. Tente novamente."
         },
         "repoHeaderProjectActions": {
           "hideNonOrcaWorktrees": "Ocultar worktrees que não são do Orca",

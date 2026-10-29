@@ -83,8 +83,7 @@ describe('cross-project sidebar lineage', () => {
       undefined,
       [],
       new Set(),
-      new Map([[childRepo.id, { repo: childRepo, hiddenWorktrees: [] }]]),
-      new Map(),
+      new Map([[childRepo.id, { repo: childRepo, inboxWorktrees: [] }]]),
       [{ creationId: 'creating-child', repoId: childRepo.id }]
     )
     expect(
@@ -103,7 +102,7 @@ describe('cross-project sidebar lineage', () => {
       (row) => row.type === 'header' && row.repo?.id === gammaRepo.id
     )
     expect(rows.slice(1, nextSection).map((row) => row.type)).toEqual([
-      'imported-worktrees-card',
+      'new-external-worktrees-inbox',
       'pending-creation'
     ])
     expect(rows.find((row) => row.type === 'pending-creation')).toMatchObject({ repo: childRepo })
@@ -143,7 +142,6 @@ describe('cross-project sidebar lineage', () => {
         true,
         undefined,
         [group],
-        undefined,
         undefined,
         undefined,
         undefined,

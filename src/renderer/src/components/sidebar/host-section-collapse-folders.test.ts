@@ -58,7 +58,6 @@ for (const hostId of ['ssh:builder', 'runtime:managed-builder'] as const) {
       undefined,
       undefined,
       undefined,
-      undefined,
       [local, remote]
     )
     const sectioned = addHostSectionRows({

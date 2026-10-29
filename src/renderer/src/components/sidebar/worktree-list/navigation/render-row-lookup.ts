@@ -27,9 +27,6 @@ export function getRenderRowSidebarKey(row: RenderRow): string | null {
   if (row.type === 'pending-creation') {
     return `pending:${row.creationId}`
   }
-  if (row.type === 'imported-worktrees-card') {
-    return row.key
-  }
   if (row.type === 'new-external-worktrees-inbox') {
     return row.key
   }

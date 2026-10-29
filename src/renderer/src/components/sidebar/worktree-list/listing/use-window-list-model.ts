@@ -54,7 +54,6 @@ export function useWindowSidebarListModel(args: SidebarListModelArgs): SidebarLi
     visibleReposForRows: visibleScope.visibleReposForRows,
     visibleProjectGroupsForRows: visibleScope.visibleProjectGroupsForRows,
     visibleFolderWorkspacesForRows: visibleScope.visibleFolderWorkspacesForRows,
-    importedWorktreesByRepo: externalWorktreeCards.importedWorktreesByRepo,
     newExternalWorktreesInboxByRepo: externalWorktreeCards.newExternalWorktreesInboxByRepo,
     filterRepoIds: filterState.filterRepoIds,
     visibleWorkspaceHostIds: filterState.visibleWorkspaceHostIds,

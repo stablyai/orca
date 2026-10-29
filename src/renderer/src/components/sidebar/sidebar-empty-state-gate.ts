@@ -4,13 +4,13 @@ export function shouldFiltersHideAllRows(counts: {
   visibleWorktreeCount: number
   visibleFolderWorkspaceCount: number
   placeholderRepoCount: number
-  importedWorktreeCardCount: number
+  externalWorktreeNoticeCount: number
 }): boolean {
   return (
     counts.hasFilters &&
     counts.visibleWorktreeCount === 0 &&
     counts.visibleFolderWorkspaceCount === 0 &&
     counts.placeholderRepoCount === 0 &&
-    counts.importedWorktreeCardCount === 0
+    counts.externalWorktreeNoticeCount === 0
   )
 }

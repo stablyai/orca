@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { buildImportedWorktreesCardCandidates } from '@/components/sidebar/imported-worktrees-card-candidates'
+import { buildNewExternalWorktreesInboxCandidates } from '@/components/sidebar/new-external-worktrees-inbox-candidates'
 import {
   hasCmdJProjectSearchCandidates,
   searchCmdJProjectResults
@@ -68,7 +68,7 @@ export function useWorktreeJumpPaletteProjectTargets({
         ids.add(repo.id)
       }
     }
-    for (const repoId of buildImportedWorktreesCardCandidates({
+    for (const repoId of buildNewExternalWorktreesInboxCandidates({
       repos,
       detectedWorktreesByRepo,
       visibilityDefaultsByHost: worktreeVisibilityDefaultsByHost

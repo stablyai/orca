@@ -17,6 +17,7 @@ export function SidebarWorktreeListDialogs({
   setSuppressExternalWorktreeInboxRepoId,
   newExternalWorktreeInboxActionState,
   onConfirmSuppressExternalWorktreeInbox,
+  onKeepExternalWorktreeInboxHidden,
   onOpenWorktreeVisibility
 }: {
   dialogs: ProjectGroupDialogs
@@ -26,6 +27,7 @@ export function SidebarWorktreeListDialogs({
   setSuppressExternalWorktreeInboxRepoId: (repoId: string | null) => void
   newExternalWorktreeInboxActionState: ReadonlyMap<string, NewExternalWorktreesInboxActionState>
   onConfirmSuppressExternalWorktreeInbox: () => void
+  onKeepExternalWorktreeInboxHidden: () => void
   onOpenWorktreeVisibility: (repo: Repo) => void
 }): React.JSX.Element {
   const { nameDialog, setNameDialog, deleteDialog, setDeleteDialog } = dialogs
@@ -92,6 +94,7 @@ export function SidebarWorktreeListDialogs({
           }
         }}
         onConfirm={onConfirmSuppressExternalWorktreeInbox}
+        onKeepHidden={onKeepExternalWorktreeInboxHidden}
         onOpenRecovery={() => {
           if (!suppressExternalWorktreeInboxRepoId) {
             return

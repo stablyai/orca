@@ -281,7 +281,6 @@ describe('project header host context', () => {
         nestLineage: false,
         projectGroups: [],
         placeholderRepoIds: new Set(empty ? listedRepoIds : []),
-        importedWorktreesByRepo: new Map(),
         newExternalWorktreesInboxByRepo: new Map(),
         pendingCreations: [],
         projectGrouping: { projects: [project], projectHostSetups },

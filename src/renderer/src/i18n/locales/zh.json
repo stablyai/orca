@@ -5321,26 +5321,6 @@
         "DeleteWorktreeWarningPanels": {
           "mainWorktreeNotice": "这是<strong>主工作树</strong>（最初的克隆目录）。"
         },
-        "ImportedWorktreesVisibilityLine": {
-          "b7a87dc32f": "在工作树列表中显示",
-          "ad99f4eea9": "保持隐藏",
-          "9f4f14e821": "稍后从项目菜单中更改此设置。",
-          "b47ba1a9d2": "{{value0}} 预览",
-          "2251d41ebb": "隐藏的工作树组",
-          "5a9688802a": "显示 {{value0}} 更多",
-          "294de4aeb2": "显示较少",
-          "collapseAriaLabel": "折叠 {{repo}} 的隐藏工作树",
-          "expandAriaLabel": "展开 {{repo}} 的隐藏工作树",
-          "hiding_one": "已隐藏 {{count}} 个检测到的工作树",
-          "hiding_other": "已隐藏 {{count}} 个检测到的工作树",
-          "hidingInRepo_one": "已隐藏 {{repo}} 中的 {{count}} 个检测到的工作树",
-          "hidingInRepo_other": "已隐藏 {{repo}} 中的 {{count}} 个检测到的工作树",
-          "keepHiddenAriaLabel_one": "为 {{repo}} 保留 {{count}} 个检测到的工作树为隐藏状态；可从项目菜单恢复",
-          "keepHiddenAriaLabel_other": "为 {{repo}} 保留 {{count}} 个检测到的工作树为隐藏状态；可从项目菜单恢复",
-          "keepHiddenTooltip": "保持隐藏 - 从项目菜单恢复",
-          "repoOnHost": "{{host}} 上的 {{repo}}",
-          "moreLocations_other": "另有 {{count}} 个位置"
-        },
         "NonGitFolderDialog": {
           "e52454b7f6": "作为文件夹打开",
           "05b33a17a9": "取消",
@@ -6282,7 +6262,9 @@
           "1f8a5d9e73": "之后可以在项目设置中重新开启。",
           "8c0b2e7a41": "打开 Non-Orca 工作树设置",
           "5d1c9f0a82": "取消",
-          "3b7e4a1c96": "隐藏外部工作树"
+          "3b7e4a1c96": "隐藏外部工作树",
+          "0d6b8f3e5c": "如果只想隐藏当前这些工作树，并继续显示之后创建的工作树，请选择“仅隐藏这些”。",
+          "e5a9c27d14": "仅隐藏这些"
         },
         "useAddRepoHostSelection": {
           "connectionFailed": "SSH 连接失败。",
@@ -6512,10 +6494,6 @@
         },
         "RemoteFileBrowserEntryList": {
           "pathEmpty": "{{path}} 为空"
-        },
-        "importedWorktreesCardActions": {
-          "keepHiddenError": "无法保持检测到的工作树为隐藏状态。请重试。",
-          "showError": "无法显示检测到的工作树。请重试。"
         },
         "repoHeaderProjectActions": {
           "hideNonOrcaWorktrees": "隐藏非 Orca 工作树",

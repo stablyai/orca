@@ -35,12 +35,14 @@ const makeHeaderRow = (
   ...overrides
 })
 
-const makeImportedCardRow = (): Extract<Row, { type: 'imported-worktrees-card' }> => ({
-  type: 'imported-worktrees-card',
-  key: 'imported-worktrees-card:repo-group:repo-1',
+const makeExternalWorktreesNoticeRow = (): Extract<
+  Row,
+  { type: 'new-external-worktrees-inbox' }
+> => ({
+  type: 'new-external-worktrees-inbox',
+  key: 'new-external-worktrees-inbox:repo-1',
   repo,
-  hiddenWorktrees: [],
-  placement: 'repo-group'
+  inboxWorktrees: []
 })
 
 const makeScrollContainer = (scrollTop: number, clientHeight: number): HTMLElement =>
@@ -311,8 +313,8 @@ describe('estimateRenderRowSize', () => {
     expect(activeSize).toBe(32)
   })
 
-  it('estimates imported worktree line rows with a stable compact height', () => {
-    const rows = [makeHeaderRow('repo:repo-1'), makeImportedCardRow()]
+  it('estimates hidden-worktree notice rows with a stable compact height', () => {
+    const rows = [makeHeaderRow('repo:repo-1'), makeExternalWorktreesNoticeRow()]
 
     expect(estimateRenderRowSize(rows, 1, 0, null)).toBe(36)
   })

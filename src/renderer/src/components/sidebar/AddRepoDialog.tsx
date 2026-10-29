@@ -100,7 +100,7 @@ export default React.memo(function AddRepoDialog({ hosted }: AddRepoDialogProps)
     setStep,
     // Only the non-git confirmation handoff closes this remote flow.
     closeForFolderHandoff,
-    (repoId, executionHostId) => completeGitRepoAdd(repoId, 'ssh_remote_path', executionHostId),
+    (repoId, hostId, outcome) => completeGitRepoAdd(repoId, 'ssh_remote_path', hostId, outcome),
     selectedRuntimeEnvironmentId
   )
   const {

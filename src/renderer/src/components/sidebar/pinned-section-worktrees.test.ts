@@ -136,7 +136,6 @@ describe('getPinnedSectionWorktrees', () => {
       [],
       new Set(),
       new Map(),
-      new Map(),
       [],
       undefined,
       [],

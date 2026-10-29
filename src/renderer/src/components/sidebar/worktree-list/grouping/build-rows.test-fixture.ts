@@ -13,7 +13,6 @@ import {
 import type { ProjectGroupingModel } from '../../../../../../shared/project-section-grouping'
 import { getPinnedWorktreeDisplayPolicy } from '../../../../../../shared/sidebar-list/row-types'
 import type {
-  ImportedWorktreesCardCandidate,
   NewExternalWorktreesInboxCandidate,
   PendingCreationRef,
   PinnedWorktreeDisplayPolicy,
@@ -40,7 +39,6 @@ export function buildSidebarRowPlan(
   settings?: AppState['settings'],
   projectGroups: readonly ProjectGroup[] = [],
   placeholderRepoIds: ReadonlySet<string> = new Set(),
-  importedWorktreesByRepo: ReadonlyMap<string, ImportedWorktreesCardCandidate> = new Map(),
   newExternalWorktreesInboxByRepo: ReadonlyMap<
     string,
     NewExternalWorktreesInboxCandidate
@@ -66,7 +64,6 @@ export function buildSidebarRowPlan(
     nestLineage,
     projectGroups,
     placeholderRepoIds,
-    importedWorktreesByRepo,
     newExternalWorktreesInboxByRepo,
     pendingCreations,
     projectGrouping,

@@ -5321,26 +5321,6 @@
         "DeleteWorktreeWarningPanels": {
           "mainWorktreeNotice": "이 워크트리는 <strong>메인 워크트리</strong>(원래 복제 디렉터리)입니다."
         },
-        "ImportedWorktreesVisibilityLine": {
-          "b7a87dc32f": "워크트리 목록에 표시",
-          "ad99f4eea9": "숨김 유지",
-          "9f4f14e821": "나중에 프로젝트 메뉴에서 이를 변경하세요.",
-          "b47ba1a9d2": "{{value0}} 미리보기",
-          "2251d41ebb": "숨겨진 워크트리 그룹",
-          "5a9688802a": "{{value0}} 더 보기",
-          "294de4aeb2": "간략히 표시",
-          "collapseAriaLabel": "{{repo}}의 숨겨진 워크트리 접기",
-          "expandAriaLabel": "{{repo}}의 숨겨진 워크트리 펼치기",
-          "hiding_one": "발견된 워크트리 {{count}}개 숨김",
-          "hiding_other": "발견된 워크트리 {{count}}개 숨김",
-          "hidingInRepo_one": "{{repo}}에서 발견된 워크트리 {{count}}개 숨김",
-          "hidingInRepo_other": "{{repo}}에서 발견된 워크트리 {{count}}개 숨김",
-          "keepHiddenAriaLabel_one": "{{repo}}에서 발견된 워크트리 {{count}}개를 숨김 상태로 유지합니다. 프로젝트 메뉴에서 복구할 수 있습니다",
-          "keepHiddenAriaLabel_other": "{{repo}}에서 발견된 워크트리 {{count}}개를 숨김 상태로 유지합니다. 프로젝트 메뉴에서 복구할 수 있습니다",
-          "keepHiddenTooltip": "숨김 유지 - 프로젝트 메뉴에서 복구",
-          "repoOnHost": "{{host}}의 {{repo}}",
-          "moreLocations_other": "+ 위치 {{count}}개 더"
-        },
         "NonGitFolderDialog": {
           "e52454b7f6": "폴더로 열기",
           "05b33a17a9": "취소",
@@ -6282,7 +6262,9 @@
           "1f8a5d9e73": "나중에 프로젝트 설정에서 다시 켤 수 있습니다.",
           "8c0b2e7a41": "Non-Orca 워크트리 설정 열기",
           "5d1c9f0a82": "취소",
-          "3b7e4a1c96": "외부 워크트리 숨기기"
+          "3b7e4a1c96": "외부 워크트리 숨기기",
+          "0d6b8f3e5c": "현재 항목만 숨기고 나중에 생성되는 워크트리는 계속 표시하려면 '이 항목만 숨기기'를 선택하세요.",
+          "e5a9c27d14": "이 항목만 숨기기"
         },
         "useAddRepoHostSelection": {
           "connectionFailed": "SSH 연결에 실패했습니다.",
@@ -6512,10 +6494,6 @@
         },
         "RemoteFileBrowserEntryList": {
           "pathEmpty": "{{path}}이(가) 비어 있습니다"
-        },
-        "importedWorktreesCardActions": {
-          "keepHiddenError": "발견된 워크트리를 숨김 상태로 유지할 수 없습니다. 다시 시도하세요.",
-          "showError": "발견된 워크트리를 표시할 수 없습니다. 다시 시도하세요."
         },
         "repoHeaderProjectActions": {
           "hideNonOrcaWorktrees": "Orca 외부 워크트리 숨기기",

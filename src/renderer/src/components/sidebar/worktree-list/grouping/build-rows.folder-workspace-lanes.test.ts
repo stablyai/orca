@@ -70,7 +70,6 @@ function buildSidebarRows(options: {
     options.projectGroups ?? [GROUP],
     new Set(),
     new Map(),
-    new Map(),
     [],
     undefined,
     options.folderWorkspaces ?? [makeFolderWorkspace()]
@@ -214,7 +213,6 @@ describe('host bookkeeping for lanes containing folder workspaces', () => {
       [sshGroup],
       new Set(),
       new Map(),
-      new Map(),
       [],
       undefined,
       [makeFolderWorkspace()]
@@ -243,7 +241,6 @@ describe('host bookkeeping for lanes containing folder workspaces', () => {
       undefined,
       [sshGroup],
       new Set(),
-      new Map(),
       new Map(),
       [],
       undefined,

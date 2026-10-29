@@ -15,12 +15,10 @@ import type { ProjectGroupingIndex } from '../project-section-grouping'
 import {
   appendWorktreeRows,
   buildFolderWorkspaceRow,
-  buildImportedWorktreesCardRow,
   buildNewExternalWorktreesInboxRow,
   buildPendingCreationRow
 } from './row-builders'
 import type {
-  ImportedWorktreesCardCandidate,
   NewExternalWorktreesInboxCandidate,
   PendingCreationRef,
   RepoOfWorktree,
@@ -39,7 +37,6 @@ export type SectionAppendContext = {
   defaultHostId: ExecutionHostId
   hostLabelById: ReadonlyMap<string, string> | undefined
   projectIndex: ProjectGroupingIndex | null
-  importedWorktreesByRepo: ReadonlyMap<string, ImportedWorktreesCardCandidate>
   newExternalWorktreesInboxByRepo: ReadonlyMap<string, NewExternalWorktreesInboxCandidate>
   pendingByRepo: ReadonlyMap<string, PendingCreationRef[]>
   mixedWorktreeHostContextLabels: Map<string, string> | undefined
@@ -62,7 +59,6 @@ export function appendOrderedGroups(
     defaultHostId,
     hostLabelById,
     projectIndex,
-    importedWorktreesByRepo,
     newExternalWorktreesInboxByRepo,
     pendingByRepo,
     mixedWorktreeHostContextLabels,
@@ -145,18 +141,6 @@ export function appendOrderedGroups(
               : key.startsWith('repo:')
                 ? [key.slice('repo:'.length)]
                 : []
-        for (const repoId of repoIds) {
-          const candidate = importedWorktreesByRepo.get(repoId)
-          if (candidate) {
-            result.push(
-              buildImportedWorktreesCardRow(
-                candidate,
-                'repo-group',
-                ctx.noticeHostContextLabelByRepoId?.get(repoId)
-              )
-            )
-          }
-        }
         for (const repoId of repoIds) {
           const candidate = newExternalWorktreesInboxByRepo.get(repoId)
           if (candidate) {

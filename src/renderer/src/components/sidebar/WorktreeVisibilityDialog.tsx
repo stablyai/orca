@@ -58,6 +58,7 @@ import {
 import { createWorktreeVisibilitySourceMutation } from './worktree-visibility-source-mutation'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { selectDetectedWorktreesByRepo } from '@/store/workspace-record-selectors'
+import type { RepoUpdate } from '@/store/repos/repo-state'
 
 export default function WorktreeVisibilityDialog(): React.JSX.Element | null {
   const activeModal = useAppStore((s) => s.activeModal)
@@ -184,10 +185,7 @@ export default function WorktreeVisibilityDialog(): React.JSX.Element | null {
   )
 
   const commitSourceUpdate = useCallback(
-    async (
-      updates: Parameters<typeof updateTargetRepo>[1],
-      isAccepted: (latestRepo: Repo) => boolean
-    ): Promise<boolean> => {
+    async (updates: RepoUpdate, isAccepted: (latestRepo: Repo) => boolean): Promise<boolean> => {
       if (!repoId) {
         return false
       }

@@ -3,9 +3,9 @@ import type { Worktree } from '../worktree/types'
 import { getWorktreeExecutionHostId } from '../execution-host'
 import type { ExecutionHostId } from '../execution-host'
 import { PINNED_GROUP_KEY } from './group-keys'
-import { appendWorktreeRows, buildImportedWorktreesCardRow } from './row-builders'
+import { appendWorktreeRows, buildNewExternalWorktreesInboxRow } from './row-builders'
 import type { NoticeHostContext } from './host-labels'
-import type { ImportedWorktreesCardCandidate, RepoOfWorktree, Row } from './row-types'
+import type { NewExternalWorktreesInboxCandidate, RepoOfWorktree, Row } from './row-types'
 
 export function emitPinnedGroup(
   pinnedSectionWorktrees: Worktree[],
@@ -13,8 +13,8 @@ export function emitPinnedGroup(
   defaultHostId: ExecutionHostId,
   collapsedGroups: Set<string>,
   renderedNaturalAnchorRepoIds: ReadonlySet<string>,
-  importedWorktreesByRepo: ReadonlyMap<string, ImportedWorktreesCardCandidate>,
-  allowImportedFallback: boolean,
+  newExternalWorktreesInboxByRepo: ReadonlyMap<string, NewExternalWorktreesInboxCandidate>,
+  allowNoticeFallback: boolean,
   result: Row[],
   occurrencePlan: WorktreeOccurrencePlan<Worktree>,
   noticeHostContextLabelByRepoId?: ReadonlyMap<string, NoticeHostContext>,
@@ -48,17 +48,18 @@ export function emitPinnedGroup(
     hostWorktreeIds,
     worktreeIds: pinnedSectionWorktrees.map((worktree) => worktree.id)
   })
+  const getFallbackNotice = (repoId: string): Row | null => {
+    const candidate = newExternalWorktreesInboxByRepo.get(repoId)
+    if (!allowNoticeFallback || !candidate || renderedNaturalAnchorRepoIds.has(repoId)) {
+      return null
+    }
+    return buildNewExternalWorktreesInboxRow(candidate, noticeHostContextLabelByRepoId?.get(repoId))
+  }
   if (collapsedGroups.has(PINNED_GROUP_KEY)) {
     for (const repoId of pinnedRepoOrder) {
-      const candidate = importedWorktreesByRepo.get(repoId)
-      if (allowImportedFallback && candidate && !renderedNaturalAnchorRepoIds.has(repoId)) {
-        result.push(
-          buildImportedWorktreesCardRow(
-            candidate,
-            'pinned-fallback',
-            noticeHostContextLabelByRepoId?.get(repoId)
-          )
-        )
+      const notice = getFallbackNotice(repoId)
+      if (notice) {
+        result.push(notice)
       }
     }
     return
@@ -71,10 +72,10 @@ export function emitPinnedGroup(
     sectionKey: PINNED_GROUP_KEY,
     hostContextLabelByWorktreeIdentity
   })
-  if (!allowImportedFallback) {
+  if (!allowNoticeFallback) {
     return
   }
-  // Insert imported fallbacks after the repo’s last row, backwards to avoid shifting later targets.
+  // Insert notice fallbacks after the repo’s last row, backwards to avoid shifting later targets.
   const lastResultIndexByRepoId = new Map<string, number>()
   for (let index = firstItemIndex; index < result.length; index++) {
     const row = result[index]
@@ -84,17 +85,9 @@ export function emitPinnedGroup(
   }
   const inserts = [...lastResultIndexByRepoId.entries()].sort((left, right) => right[1] - left[1])
   for (const [repoId, index] of inserts) {
-    const candidate = importedWorktreesByRepo.get(repoId)
-    if (candidate && !renderedNaturalAnchorRepoIds.has(repoId)) {
-      result.splice(
-        index + 1,
-        0,
-        buildImportedWorktreesCardRow(
-          candidate,
-          'pinned-fallback',
-          noticeHostContextLabelByRepoId?.get(repoId)
-        )
-      )
+    const notice = getFallbackNotice(repoId)
+    if (notice) {
+      result.splice(index + 1, 0, notice)
     }
   }
 }

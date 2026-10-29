@@ -167,14 +167,13 @@ export function useMainSidebarListModel(args: SidebarListModelArgs): SidebarList
     detectedWorktreesByRepo: args.detectedWorktreesByRepo,
     filterRepoIds: filterState.filterRepoIds
   })
-  const { importedWorktreesByRepo, newExternalWorktreesInboxByRepo } = externalWorktreeCards
+  const { newExternalWorktreesInboxByRepo } = externalWorktreeCards
   const planned = useMemo(
     () =>
       planSidebarFeedRows(domains, index, catalog, view, rankedIds, {
         forcedVisibleWorktreeIds: args.agentSendTargetWorktreeId
           ? [args.agentSendTargetWorktreeId]
           : undefined,
-        importedWorktreesByRepo,
         newExternalWorktreesInboxByRepo
       }),
     [
@@ -184,7 +183,6 @@ export function useMainSidebarListModel(args: SidebarListModelArgs): SidebarList
       view,
       rankedIds,
       args.agentSendTargetWorktreeId,
-      importedWorktreesByRepo,
       newExternalWorktreesInboxByRepo
     ]
   )

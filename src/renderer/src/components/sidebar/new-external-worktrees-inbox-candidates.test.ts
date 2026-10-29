@@ -63,7 +63,7 @@ function detectedResult(worktrees: DetectedWorktree[]): DetectedWorktreeListResu
 }
 
 describe('buildNewExternalWorktreesInboxCandidates', () => {
-  it('builds inbox candidates only after the initial prompt is dismissed', () => {
+  it('builds inbox candidates whether or not the legacy initial prompt was dismissed', () => {
     const detectedWorktreesByRepo = {
       [repo.id]: detectedResult([detectedWorktree()])
     }
@@ -85,7 +85,7 @@ describe('buildNewExternalWorktreesInboxCandidates', () => {
         visibleWorktrees: [visibleWorktree],
         detectedWorktreesByRepo
       }).size
-    ).toBe(0)
+    ).toBe(1)
   })
 
   it('suppresses inbox candidates when discovery is permanently hidden or visibility is show', () => {

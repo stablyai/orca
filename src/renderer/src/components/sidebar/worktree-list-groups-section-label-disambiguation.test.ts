@@ -44,7 +44,6 @@ function buildHeaders(repos: Repo[], projects: Project[], setups: ProjectHostSet
     [],
     new Set(),
     new Map(),
-    new Map(),
     [],
     { projects, projectHostSetups: setups }
   )

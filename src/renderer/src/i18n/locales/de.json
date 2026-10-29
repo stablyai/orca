@@ -5967,27 +5967,6 @@
         "DeleteWorktreeWarningPanels": {
           "mainWorktreeNotice": "Dies ist der <strong>Haupt-Worktree</strong> (das ursprüngliche Klonverzeichnis)."
         },
-        "ImportedWorktreesVisibilityLine": {
-          "b7a87dc32f": "In Worktree-Liste anzeigen",
-          "ad99f4eea9": "Ausgeblendet lassen",
-          "9f4f14e821": "Dies lässt sich später im Projektmenü ändern.",
-          "b47ba1a9d2": "Vorschau für {{value0}}",
-          "2251d41ebb": "Ausgeblendete Worktree-Gruppen",
-          "5a9688802a": "{{value0}} weitere anzeigen",
-          "294de4aeb2": "Weniger anzeigen",
-          "collapseAriaLabel": "Ausgeblendete Worktrees für {{repo}} einklappen",
-          "expandAriaLabel": "Ausgeblendete Worktrees für {{repo}} ausklappen",
-          "hiding_one": "{{count}} entdeckter Worktree ausgeblendet",
-          "hiding_other": "{{count}} entdeckte Worktrees ausgeblendet",
-          "hidingInRepo_one": "{{count}} entdeckter Worktree in {{repo}} ausgeblendet",
-          "hidingInRepo_other": "{{count}} entdeckte Worktrees in {{repo}} ausgeblendet",
-          "keepHiddenAriaLabel_one": "{{count}} entdeckten Worktree für {{repo}} ausgeblendet lassen; über das Projektmenü wieder einblenden",
-          "keepHiddenAriaLabel_other": "{{count}} entdeckte Worktrees für {{repo}} ausgeblendet lassen; über das Projektmenü wieder einblenden",
-          "keepHiddenTooltip": "Ausgeblendet lassen - über das Projektmenü wieder einblenden",
-          "repoOnHost": "{{repo}} auf {{host}}",
-          "moreLocations_one": "+ {{count}} weiterer Speicherort",
-          "moreLocations_other": "+ {{count}} weitere Speicherorte"
-        },
         "NonGitFolderDialog": {
           "e52454b7f6": "Als Ordner öffnen",
           "05b33a17a9": "Abbrechen",
@@ -7149,10 +7128,6 @@
         },
         "RemoteFileBrowserEntryList": {
           "pathEmpty": "{{path}} ist leer"
-        },
-        "importedWorktreesCardActions": {
-          "keepHiddenError": "Entdeckte Worktrees konnten nicht weiter ausgeblendet werden. Erneut versuchen.",
-          "showError": "Entdeckte Worktrees konnten nicht angezeigt werden. Erneut versuchen."
         },
         "repoHeaderProjectActions": {
           "hideNonOrcaWorktrees": "Nicht von Orca erstellte Worktrees ausblenden",

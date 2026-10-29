@@ -5814,26 +5814,6 @@
         "DeleteWorktreeWarningPanels": {
           "mainWorktreeNotice": "這是<strong>主工作樹</strong>（原始複製目錄）。"
         },
-        "ImportedWorktreesVisibilityLine": {
-          "b7a87dc32f": "在工作樹清單中顯示",
-          "ad99f4eea9": "保持隱藏",
-          "9f4f14e821": "稍後從專案選單中變更此設定。",
-          "b47ba1a9d2": "{{value0}} 預覽",
-          "2251d41ebb": "隱藏的工作樹群組",
-          "5a9688802a": "再顯示 {{value0}} 個",
-          "294de4aeb2": "顯示較少",
-          "collapseAriaLabel": "收合 {{repo}} 的隱藏工作樹",
-          "expandAriaLabel": "展開 {{repo}} 中隱藏的工作樹",
-          "hiding_one": "已隱藏 {{count}} 個偵測到的工作樹",
-          "hiding_other": "已隱藏 {{count}} 個偵測到的工作樹",
-          "hidingInRepo_one": "已隱藏 {{repo}} 中的 {{count}} 個偵測到的工作樹",
-          "hidingInRepo_other": "已隱藏 {{repo}} 中的 {{count}} 個偵測到的工作樹",
-          "keepHiddenAriaLabel_one": "讓 {{repo}} 中的 {{count}} 個偵測到的工作樹保持隱藏；可從專案選單恢復顯示",
-          "keepHiddenAriaLabel_other": "讓 {{repo}} 中的 {{count}} 個偵測到的工作樹保持隱藏；可從專案選單恢復顯示",
-          "keepHiddenTooltip": "保持隱藏，可從專案選單恢復顯示",
-          "repoOnHost": "{{host}} 上的 {{repo}}",
-          "moreLocations_other": "另有 {{count}} 個位置"
-        },
         "NonGitFolderDialog": {
           "e52454b7f6": "作為資料夾開啟",
           "05b33a17a9": "取消",
@@ -6974,10 +6954,6 @@
         },
         "RemoteFileBrowserEntryList": {
           "pathEmpty": "{{path}} 中沒有內容"
-        },
-        "importedWorktreesCardActions": {
-          "keepHiddenError": "無法讓偵測到的工作樹保持隱藏。請再試一次。",
-          "showError": "無法顯示偵測到的工作樹。請再試一次。"
         },
         "repoHeaderProjectActions": {
           "hideNonOrcaWorktrees": "隱藏非 Orca 工作樹",

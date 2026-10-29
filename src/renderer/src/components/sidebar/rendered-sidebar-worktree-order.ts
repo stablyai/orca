@@ -12,7 +12,6 @@ import { planSidebarRows } from '../../../../shared/sidebar-list/sidebar-row-pla
 import { createSidebarPRGroupReader } from './worktree-list/grouping/pr-group-key'
 import {
   getPinnedWorktreeDisplayPolicy,
-  type ImportedWorktreesCardCandidate,
   type NewExternalWorktreesInboxCandidate,
   type PendingCreationRef
 } from '../../../../shared/sidebar-list/row-types'
@@ -34,7 +33,6 @@ import { selectFolderWorkspaces } from '@/store/workspace-record-selectors'
 import { selectWorkspaceBoardStatuses } from '@/store/host-workspace-status-columns'
 
 const EMPTY_REPO_ID_SET: ReadonlySet<string> = Object.freeze(new Set<string>())
-const EMPTY_IMPORTED_BY_REPO: ReadonlyMap<string, ImportedWorktreesCardCandidate> = new Map()
 const EMPTY_INBOX_BY_REPO: ReadonlyMap<string, NewExternalWorktreesInboxCandidate> = new Map()
 const EMPTY_PENDING_CREATIONS: readonly PendingCreationRef[] = []
 
@@ -84,9 +82,8 @@ export function computeRenderedSidebarRows(
       visibleHostIdSet,
       defaultHostId
     ),
-    // Why empty: placeholder/imported/inbox/pending inputs never emit item or folder-workspace rows, the only two the order reads.
+    // Why empty: placeholder/inbox/pending inputs never emit item or folder-workspace rows, the only two the order reads.
     placeholderRepoIds: EMPTY_REPO_ID_SET,
-    importedWorktreesByRepo: EMPTY_IMPORTED_BY_REPO,
     newExternalWorktreesInboxByRepo: EMPTY_INBOX_BY_REPO,
     pendingCreations: EMPTY_PENDING_CREATIONS,
     projectGrouping: { projects: projection.projects, projectHostSetups: projection.setups },

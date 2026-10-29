@@ -101,7 +101,6 @@ function noticeRows(args: {
     undefined,
     [],
     new Set(),
-    new Map(),
     inboxMap(args.eligibleRepoIds) as never,
     [],
     args.grouping ?? TWIN_GROUPING,

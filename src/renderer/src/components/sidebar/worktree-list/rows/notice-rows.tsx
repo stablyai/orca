@@ -3,17 +3,8 @@ import type { VirtualItem } from '@tanstack/react-virtual'
 import type { Row } from '../../../../../../shared/sidebar-list/row-types'
 import { getVirtualRowTransform } from '../viewport/virtual-rows'
 import { PendingWorktreeRow } from '../../PendingWorktreeRow'
-import ImportedWorktreesVisibilityLine from '../../ImportedWorktreesVisibilityLine'
 import NewExternalWorktreesInboxLine from '../../NewExternalWorktreesInboxLine'
-import type { ImportedWorktreeCardActionState } from '../../imported-worktrees-card-actions'
 import type { NewExternalWorktreesInboxActionState } from '../../new-external-worktrees-inbox-actions'
-
-export function canKeepImportedWorktreesHidden(
-  row: Extract<Row, { type: 'imported-worktrees-card' }>,
-  actionState: ImportedWorktreeCardActionState | undefined
-): boolean {
-  return row.placement === 'repo-group' && actionState?.forceVisible !== true
-}
 
 type NoticeRowFrameProps = {
   vItem: VirtualItem
@@ -22,7 +13,7 @@ type NoticeRowFrameProps = {
   children: React.ReactNode
 }
 
-// Share the absolute virtual frame across non-card rows.
+// Share the absolute virtual frame across notice rows.
 function NoticeRowFrame({
   vItem,
   measureVirtualRowElement,
@@ -42,40 +33,6 @@ function NoticeRowFrame({
     >
       {children}
     </div>
-  )
-}
-
-export function renderImportedWorktreesVirtualRow(args: {
-  row: Extract<Row, { type: 'imported-worktrees-card' }>
-  vItem: VirtualItem
-  measureVirtualRowElement: (element: HTMLDivElement | null) => void
-  actionState: ImportedWorktreeCardActionState | undefined
-  onShow: (projectId: string) => void
-  onKeepHidden: (projectId: string) => void
-}): React.JSX.Element {
-  const { row, actionState } = args
-  return (
-    <NoticeRowFrame
-      key={args.vItem.key}
-      vItem={args.vItem}
-      measureVirtualRowElement={args.measureVirtualRowElement}
-    >
-      <ImportedWorktreesVisibilityLine
-        repoDisplayName={row.repo.displayName}
-        hostContextLabel={row.hostContextLabel}
-        hostContextHostId={row.hostContextHostId}
-        hiddenWorktrees={row.hiddenWorktrees}
-        placement={row.placement}
-        pending={actionState?.pending ?? false}
-        error={actionState?.error ?? null}
-        onShow={() => args.onShow(row.repo.id)}
-        onKeepHidden={
-          canKeepImportedWorktreesHidden(row, actionState)
-            ? () => args.onKeepHidden(row.repo.id)
-            : undefined
-        }
-      />
-    </NoticeRowFrame>
   )
 }
 

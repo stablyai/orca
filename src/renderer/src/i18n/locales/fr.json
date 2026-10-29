@@ -5792,31 +5792,6 @@
         "DeleteWorktreeWarningPanels": {
           "mainWorktreeNotice": "Il s’agit du <strong>worktree principal</strong> (le répertoire du clone d’origine)."
         },
-        "ImportedWorktreesVisibilityLine": {
-          "b7a87dc32f": "Afficher dans la liste des worktrees",
-          "ad99f4eea9": "Garder masqué",
-          "9f4f14e821": "Modifiable plus tard depuis le menu du projet.",
-          "b47ba1a9d2": "Aperçu de {{value0}}",
-          "2251d41ebb": "Groupes de worktrees masqués",
-          "5a9688802a": "Afficher {{value0}} de plus",
-          "294de4aeb2": "Afficher moins",
-          "collapseAriaLabel": "Réduire les worktrees masqués de {{repo}}",
-          "expandAriaLabel": "Développer les worktrees masqués de {{repo}}",
-          "hiding_one": "{{count}} worktree détecté masqué",
-          "hiding_other": "{{count}} worktrees détectés masqués",
-          "hiding_many": "{{count}} worktrees détectés masqués",
-          "hidingInRepo_one": "{{count}} worktree détecté masqué dans {{repo}}",
-          "hidingInRepo_other": "{{count}} worktrees détectés masqués dans {{repo}}",
-          "hidingInRepo_many": "{{count}} worktrees détectés masqués dans {{repo}}",
-          "keepHiddenAriaLabel_one": "Garder {{count}} worktree détecté masqué pour {{repo}} ; récupérez-le depuis le menu du projet",
-          "keepHiddenAriaLabel_other": "Garder {{count}} worktrees détectés masqués pour {{repo}} ; récupérez-les depuis le menu du projet",
-          "keepHiddenAriaLabel_many": "Garder {{count}} worktrees détectés masqués pour {{repo}} ; récupérez-les depuis le menu du projet",
-          "keepHiddenTooltip": "Garder masqué - récupérable depuis le menu du projet",
-          "repoOnHost": "{{repo}} sur {{host}}",
-          "moreLocations_one": "+ {{count}} autre emplacement",
-          "moreLocations_other": "+ {{count}} autres emplacements",
-          "moreLocations_many": "+ {{count}} autres emplacements"
-        },
         "NonGitFolderDialog": {
           "e52454b7f6": "Ouvrir comme dossier",
           "05b33a17a9": "Annuler",
@@ -6724,7 +6699,9 @@
           "1f8a5d9e73": "Vous pourrez réactiver cela plus tard depuis les paramètres du projet.",
           "8c0b2e7a41": "Ouvrir les paramètres des worktrees non Orca",
           "5d1c9f0a82": "Annuler",
-          "3b7e4a1c96": "Masquer les worktrees externes"
+          "3b7e4a1c96": "Masquer les worktrees externes",
+          "0d6b8f3e5c": "Pour masquer uniquement les worktrees actuels et continuer à voir ceux créés ultérieurement, choisissez Garder ceux-ci masqués.",
+          "e5a9c27d14": "Garder ceux-ci masqués"
         },
         "useAddRepoHostSelection": {
           "connectionFailed": "Échec de la connexion SSH.",
@@ -7006,10 +6983,6 @@
         },
         "RemoteFileBrowserEntryList": {
           "pathEmpty": "Le dossier {{path}} est vide"
-        },
-        "importedWorktreesCardActions": {
-          "keepHiddenError": "Impossible de garder masqués les worktrees détectés. Réessayez.",
-          "showError": "Impossible d'afficher les worktrees détectés. Réessayez."
         },
         "repoHeaderProjectActions": {
           "hideNonOrcaWorktrees": "Masquer les worktrees hors Orca",

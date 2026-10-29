@@ -119,14 +119,14 @@ describe('external worktree inbox', () => {
     ])
   })
 
-  it('offers the inbox only after the initial prompt is dismissed and discovery is not suppressed', () => {
+  it('offers the inbox whenever external worktrees are hidden and discovery is not suppressed', () => {
     expect(shouldOfferNewExternalWorktreeInbox(repo)).toBe(true)
     expect(
       shouldOfferNewExternalWorktreeInbox({
         ...repo,
         externalWorktreeVisibilityPromptDismissedAt: undefined
       })
-    ).toBe(false)
+    ).toBe(true)
     expect(
       shouldOfferNewExternalWorktreeInbox({
         ...repo,

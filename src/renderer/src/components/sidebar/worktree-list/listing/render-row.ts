@@ -15,9 +15,6 @@ export function getRenderRowKey(row: RenderRow): string {
   if (row.type === 'lineage-group') {
     return `lineage-group:${row.key}`
   }
-  if (row.type === 'imported-worktrees-card') {
-    return `imported:${row.key}`
-  }
   if (row.type === 'new-external-worktrees-inbox') {
     return `inbox:${row.key}`
   }

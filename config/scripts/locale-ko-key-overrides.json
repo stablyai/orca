@@ -3506,18 +3506,6 @@
   "auto.components.sidebar.HostSectionHeaderMenu.bf07aee59e": {
     "ko": "연결 해제 실패"
   },
-  "auto.components.sidebar.ImportedWorktreesVisibilityLine.2251d41ebb": {
-    "ko": "숨겨진 워크트리 그룹"
-  },
-  "auto.components.sidebar.ImportedWorktreesVisibilityLine.ad99f4eea9": {
-    "ko": "숨김 유지"
-  },
-  "auto.components.sidebar.ImportedWorktreesVisibilityLine.b7a87dc32f": {
-    "ko": "워크트리 목록에 표시"
-  },
-  "auto.components.sidebar.ImportedWorktreesVisibilityLine.f54f2bec5d": {
-    "ko": "{{value1}}의 숨겨진 워크트리 {{value0}}개"
-  },
   "auto.components.sidebar.NonGitFolderDialog.c49fb13492": {
     "ko": "이 호스트에 폴더를 추가하지 못했습니다."
   },

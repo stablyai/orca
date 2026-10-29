@@ -6,7 +6,6 @@ import type { ProjectGroupingModel } from '../../../../../../shared/project-sect
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { ProjectOrderBy } from '../../../../../../shared/ui-chrome-types'
 import type {
-  ImportedWorktreesCardCandidate,
   NewExternalWorktreesInboxCandidate,
   PinnedWorktreeDisplayPolicy,
   WorktreeGroupBy
@@ -68,7 +67,6 @@ export type SectionRowsArgs = {
   visibleReposForRows: readonly Repo[]
   visibleProjectGroupsForRows: readonly ProjectGroup[]
   visibleFolderWorkspacesForRows: readonly FolderWorkspace[]
-  importedWorktreesByRepo: ReadonlyMap<string, ImportedWorktreesCardCandidate>
   newExternalWorktreesInboxByRepo: ReadonlyMap<string, NewExternalWorktreesInboxCandidate>
   filterRepoIds: readonly string[]
   visibleWorkspaceHostIds: readonly ExecutionHostId[] | null

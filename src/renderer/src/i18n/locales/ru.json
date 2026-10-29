@@ -6237,35 +6237,6 @@
         "DeleteWorktreeWarningPanels": {
           "mainWorktreeNotice": "Это <strong>основное рабочее дерево</strong> (исходная папка клонирования)."
         },
-        "ImportedWorktreesVisibilityLine": {
-          "b7a87dc32f": "Показать в списке рабочих деревьев",
-          "ad99f4eea9": "Оставить скрытыми",
-          "9f4f14e821": "Это можно изменить позже в меню проекта.",
-          "b47ba1a9d2": "Просмотр {{value0}}",
-          "2251d41ebb": "Скрытые группы рабочих деревьев",
-          "5a9688802a": "Показать ещё {{value0}}",
-          "294de4aeb2": "Показать меньше",
-          "hiding_few": "Скрыты {{count}} найденные рабочие деревья",
-          "hiding_many": "Скрыто {{count}} найденных рабочих деревьев",
-          "hiding_other": "Скрыто найденных рабочих деревьев: {{count}}",
-          "collapseAriaLabel": "Свернуть скрытые рабочие деревья репозитория {{repo}}",
-          "expandAriaLabel": "Развернуть скрытые рабочие деревья репозитория {{repo}}",
-          "hidingInRepo_few": "Скрыты {{count}} найденных рабочих дерева в {{repo}}",
-          "hidingInRepo_many": "Скрыто {{count}} найденных рабочих деревьев в {{repo}}",
-          "hidingInRepo_one": "Скрыто {{count}} найденное рабочее дерево в {{repo}}",
-          "hidingInRepo_other": "Скрыто {{count}} найденного рабочего дерева в {{repo}}",
-          "hiding_one": "Скрыто {{count}} найденное рабочее дерево",
-          "keepHiddenAriaLabel_few": "Оставить скрытыми {{count}} найденных рабочих дерева в {{repo}}; показать их снова можно через меню проекта",
-          "keepHiddenAriaLabel_many": "Оставить скрытыми {{count}} найденных рабочих деревьев в {{repo}}; показать их снова можно через меню проекта",
-          "keepHiddenAriaLabel_one": "Оставить скрытым {{count}} найденное рабочее дерево в {{repo}}; показать его снова можно через меню проекта",
-          "keepHiddenAriaLabel_other": "Оставить скрытыми {{count}} найденного рабочего дерева в {{repo}}; показать их снова можно через меню проекта",
-          "keepHiddenTooltip": "Оставить скрытыми — показать снова можно через меню проекта",
-          "repoOnHost": "{{repo}} на {{host}}",
-          "moreLocations_one": "+ ещё {{count}} расположение",
-          "moreLocations_few": "+ ещё {{count}} расположения",
-          "moreLocations_many": "+ ещё {{count}} расположений",
-          "moreLocations_other": "+ ещё {{count}} расположения"
-        },
         "NonGitFolderDialog": {
           "e52454b7f6": "Открыть как папку",
           "05b33a17a9": "Отмена",
@@ -7489,10 +7460,6 @@
           "openingFolder": "Открытие папки…",
           "openingProject": "Открытие проекта…",
           "scanningRepositories": "Поиск репозиториев…"
-        },
-        "importedWorktreesCardActions": {
-          "keepHiddenError": "Не удалось оставить найденные рабочие деревья скрытыми. Повторите попытку.",
-          "showError": "Не удалось показать найденные рабочие деревья. Повторите попытку."
         },
         "repoHeaderProjectActions": {
           "hideNonOrcaWorktrees": "Скрыть рабочие деревья, созданные вне Orca",

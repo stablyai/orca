@@ -4,6 +4,7 @@ import { mkdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { mkdtemp } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
+import type { Page } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
 import { waitForSessionReady } from './helpers/store'
 
@@ -70,6 +71,36 @@ async function createLinkedWorktreeFixture(): Promise<{
   return { mainPath, siblingPath }
 }
 
+async function addProjectFromFolder(page: Page, folderPath: string): Promise<void> {
+  await page.evaluate((selectedPath) => {
+    window.__store?.getState().openModal('confirm-add-project-from-folder', {
+      folderPath: selectedPath
+    })
+  }, folderPath)
+  const addProjectDialog = page.getByRole('dialog', { name: /^Add Project$/i })
+  await expect(addProjectDialog).toBeVisible()
+  await addProjectDialog.getByRole('button', { name: /^Add Project$/ }).click()
+  await expect(addProjectDialog).toBeHidden()
+  await expect(page.getByRole('dialog', { name: /Repo added/i })).toBeHidden()
+  await expect(page.getByText('Use existing worktrees')).toBeHidden()
+}
+
+async function readOpenedProject(page: Page, repoPath: string) {
+  return page.evaluate((path) => {
+    const state = window.__store?.getState()
+    const repo = state?.repos.find((candidate) => candidate.path === path)
+    if (!state || !repo) {
+      return null
+    }
+    const worktrees = state.worktreesByRepo[repo.id] ?? []
+    return {
+      activePath: worktrees.find((worktree) => worktree.id === state.activeWorktreeId)?.path,
+      repoVisibility: repo.externalWorktreeVisibility,
+      visibleBranches: worktrees.map((worktree) => worktree.branch).sort()
+    }
+  }, repoPath)
+}
+
 test.afterEach(() => {
   for (const root of tempRoots.splice(0)) {
     rmSync(root, { recursive: true, force: true })
@@ -130,56 +161,129 @@ test.describe('Add project default checkout', () => {
         defaultCheckoutLooksCloned: true,
         oldSetupModalOpen: false
       })
+    await expect(
+      orcaPage.locator('[data-worktree-sidebar] [role="option"][aria-current="page"]')
+    ).toContainText('main')
   })
 
-  test('reveals sibling git worktrees before opening the default checkout', async ({
+  test('keeps sibling git worktrees hidden behind a hint that opens the visibility dialog', async ({
     orcaPage
   }) => {
     await waitForSessionReady(orcaPage)
     const fixture = await createLinkedWorktreeFixture()
 
-    await orcaPage.evaluate((folderPath) => {
-      window.__store?.getState().openModal('confirm-add-project-from-folder', { folderPath })
-    }, fixture.mainPath)
-    const addProjectDialog = orcaPage.getByRole('dialog', { name: /^Add Project$/i })
-    await expect(addProjectDialog).toBeVisible()
-    await addProjectDialog.getByRole('button', { name: /^Add Project$/ }).click()
-
-    await expect(addProjectDialog).toBeHidden()
-    await expect(orcaPage.getByRole('dialog', { name: /Repo added/i })).toBeHidden()
-    await expect(orcaPage.getByText('Use existing worktrees')).toBeHidden()
+    await addProjectFromFolder(orcaPage, fixture.mainPath)
 
     await expect
-      .poll(
-        () =>
-          orcaPage.evaluate((mainPath) => {
-            const state = window.__store?.getState()
-            if (!state) {
-              return null
-            }
-            const repo = state.repos.find((candidate) => candidate.path === mainPath)
-            if (!repo) {
-              return null
-            }
-            const worktrees = state.worktreesByRepo[repo.id] ?? []
-            const defaultCheckout = worktrees.find((worktree) => worktree.isMainWorktree)
-            return {
-              activeCheckoutIsDefault: state.activeWorktreeId === defaultCheckout?.id,
-              linkedRepoVisibility: repo.externalWorktreeVisibility,
-              visibleBranches: worktrees.map((worktree) => worktree.branch).sort(),
-              visibleCount: worktrees.length
-            }
-          }, fixture.mainPath),
-        {
-          timeout: 30_000,
-          message: 'linked worktrees were not revealed before opening the default checkout'
-        }
-      )
+      .poll(() => readOpenedProject(orcaPage, fixture.mainPath), {
+        timeout: 30_000,
+        message: 'the default checkout did not open with its sibling hidden'
+      })
       .toEqual({
-        activeCheckoutIsDefault: true,
-        linkedRepoVisibility: 'show',
-        visibleBranches: ['refs/heads/feature', 'refs/heads/main'],
-        visibleCount: 2
+        activePath: fixture.mainPath,
+        repoVisibility: undefined,
+        visibleBranches: ['refs/heads/main']
+      })
+
+    const hint = orcaPage
+      .locator('[data-worktree-sidebar]')
+      .getByRole('button', { name: /^Review 1 hidden worktree in linked-source$/ })
+    await expect(hint).toBeVisible()
+    await hint.click()
+    await expect(orcaPage.getByRole('dialog', { name: /Non-Orca worktrees/i })).toBeVisible()
+  })
+
+  test('keeps current siblings hidden while still surfacing worktrees created later', async ({
+    orcaPage
+  }) => {
+    await waitForSessionReady(orcaPage)
+    const fixture = await createLinkedWorktreeFixture()
+
+    await addProjectFromFolder(orcaPage, fixture.mainPath)
+
+    const sidebar = orcaPage.locator('[data-worktree-sidebar]')
+    const hint = sidebar.getByRole('button', {
+      name: /^Review 1 hidden worktree in linked-source$/
+    })
+    await expect(hint).toBeVisible()
+    await hint.hover()
+    await sidebar
+      .getByRole('button', { name: /^Hide external worktrees permanently for linked-source$/ })
+      .click()
+    const dismissDialog = orcaPage.getByRole('dialog', { name: /^Hide external worktrees\?$/ })
+    await dismissDialog.getByRole('button', { name: /^Keep these hidden$/ }).click()
+    await expect(dismissDialog).toBeHidden()
+    await expect(hint).toBeHidden()
+
+    execFileSync(
+      'git',
+      ['worktree', 'add', '-b', 'later', path.join(path.dirname(fixture.mainPath), 'later')],
+      { cwd: fixture.mainPath, stdio: 'pipe' }
+    )
+    await orcaPage.evaluate(async (mainPath) => {
+      const state = window.__store?.getState()
+      const repo = state?.repos.find((candidate) => candidate.path === mainPath)
+      if (state && repo) {
+        await state.fetchWorktrees(repo.id, { requireAuthoritative: true })
+      }
+    }, fixture.mainPath)
+
+    await expect(hint).toBeVisible()
+  })
+
+  test('opens the linked checkout picked in the folder dialog', async ({ orcaPage }) => {
+    await waitForSessionReady(orcaPage)
+    const fixture = await createLinkedWorktreeFixture()
+
+    await addProjectFromFolder(orcaPage, fixture.siblingPath)
+
+    await expect
+      .poll(() => readOpenedProject(orcaPage, fixture.siblingPath), {
+        timeout: 30_000,
+        message: 'the picked linked checkout was not opened'
+      })
+      .toEqual({
+        activePath: fixture.siblingPath,
+        repoVisibility: undefined,
+        visibleBranches: ['refs/heads/feature']
+      })
+    await expect(
+      orcaPage.locator('[data-worktree-sidebar] [role="option"][aria-current="page"]')
+    ).toContainText('feature')
+  })
+
+  test('opens a hidden linked checkout picked inside an already-added project', async ({
+    orcaPage
+  }) => {
+    await waitForSessionReady(orcaPage)
+    const fixture = await createLinkedWorktreeFixture()
+    const pickedPath = path.join(fixture.siblingPath, 'packages', 'web')
+    mkdirSync(pickedPath, { recursive: true })
+
+    await addProjectFromFolder(orcaPage, fixture.mainPath)
+    await expect
+      .poll(() => readOpenedProject(orcaPage, fixture.mainPath), {
+        timeout: 30_000,
+        message: 'the main checkout did not open with its linked checkout hidden'
+      })
+      .toEqual({
+        activePath: fixture.mainPath,
+        repoVisibility: undefined,
+        visibleBranches: ['refs/heads/main']
+      })
+
+    // Registration resolves the linked checkout to the existing main project row.
+    await addProjectFromFolder(orcaPage, pickedPath)
+
+    await expect
+      .poll(() => readOpenedProject(orcaPage, fixture.mainPath), {
+        timeout: 30_000,
+        message: 'the picked linked checkout was not revealed and opened'
+      })
+      .toEqual({
+        activePath: fixture.siblingPath,
+        repoVisibility: undefined,
+        visibleBranches: ['refs/heads/feature', 'refs/heads/main']
       })
   })
 })

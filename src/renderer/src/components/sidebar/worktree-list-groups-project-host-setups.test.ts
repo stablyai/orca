@@ -40,7 +40,6 @@ describe('buildRows with pinned worktrees', () => {
       [],
       new Set(),
       new Map(),
-      new Map(),
       [],
       { projects: [project], projectHostSetups }
     )
@@ -88,7 +87,6 @@ describe('buildRows with pinned worktrees', () => {
         undefined,
         [],
         new Set(),
-        new Map(),
         new Map(),
         [],
         { projects: [project], projectHostSetups }
@@ -184,7 +182,6 @@ describe('buildRows with pinned worktrees', () => {
       [],
       new Set(),
       new Map(),
-      new Map(),
       [],
       {
         projects: projection.projects,
@@ -269,7 +266,6 @@ describe('buildRows with pinned worktrees', () => {
       undefined,
       [],
       new Set(),
-      new Map(),
       new Map([
         [
           localRepo.id,
@@ -352,7 +348,6 @@ describe('buildRows with pinned worktrees', () => {
       [],
       new Set(),
       new Map(),
-      new Map(),
       [],
       {
         projects: [project, analyticsProject],
@@ -408,7 +403,6 @@ describe('buildRows with pinned worktrees', () => {
       undefined,
       [],
       new Set(),
-      new Map(),
       new Map(),
       [],
       {
@@ -477,7 +471,6 @@ describe('buildRows with pinned worktrees', () => {
       undefined,
       [],
       new Set(),
-      new Map(),
       new Map(),
       [],
       {
@@ -669,7 +662,6 @@ describe('buildRows with pinned worktrees', () => {
       [],
       new Set(),
       new Map(),
-      new Map(),
       [],
       {
         projects: [{ ...project, sourceRepoIds: [repo.id, runtimeRepoB.id] }],
@@ -752,7 +744,6 @@ describe('buildRows with pinned worktrees', () => {
       undefined,
       [],
       new Set(),
-      new Map(),
       new Map(),
       [],
       {

@@ -56,7 +56,6 @@ export function getWorktreeRevealCollapsedGroupKeys(args: {
       nestLineage: true,
       projectGroups: args.projectGroups,
       placeholderRepoIds: new Set(),
-      importedWorktreesByRepo: new Map(),
       newExternalWorktreesInboxByRepo: new Map(),
       pendingCreations: [],
       projectGrouping: args.projectGrouping,

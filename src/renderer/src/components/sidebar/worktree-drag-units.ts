@@ -10,7 +10,6 @@ type WorktreeDragUnitRow =
   | { type: 'host-header' }
   | { type: 'header'; key: string }
   | { type: 'item'; worktree: { id: string }; depth: number; sectionKey: string }
-  | { type: 'imported-worktrees-card' }
   | { type: 'new-external-worktrees-inbox' }
   | { type: 'pending-creation' }
   | { type: 'folder-workspace' }
@@ -34,7 +33,6 @@ export function getWorktreeDragUnitGroups(
     }
     if (
       row.type === 'host-header' ||
-      row.type === 'imported-worktrees-card' ||
       row.type === 'new-external-worktrees-inbox' ||
       row.type === 'pending-creation' ||
       row.type === 'folder-workspace'

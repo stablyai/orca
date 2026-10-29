@@ -14,6 +14,7 @@ import { extractIpcErrorMessage } from '@/lib/ipc-error'
 import { upsertAddedRepoWithProjectHostSetup } from './add-repo-store-upsert'
 import { worktreeRefreshOptions } from './add-repo-runtime-owner'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { GitRepoAddOutcome } from './use-complete-git-repo-add'
 
 export function useRemoteRepo(
   fetchWorktrees: (
@@ -25,7 +26,11 @@ export function useRemoteRepo(
   ) => Promise<unknown>,
   setStep: (step: 'add' | 'clone' | 'remote' | 'create' | 'nested') => void,
   closeModal: () => void,
-  onGitRepoReady: (repoId: string, executionHostId?: ExecutionHostId) => void | Promise<void>,
+  onGitRepoReady: (
+    repoId: string,
+    executionHostId?: ExecutionHostId,
+    outcome?: GitRepoAddOutcome
+  ) => void | Promise<void>,
   /** A paired server: its own SSH hosts are listed, browsed and added by that server only. */
   serverEnvironmentId: string | null
 ) {
@@ -149,7 +154,10 @@ export function useRemoteRepo(
       if (!mountedRef.current || gen !== remoteGenRef.current) {
         return
       }
-      await onGitRepoReady(repo.id, ownerOptions.executionHostId)
+      // The server may resolve a picked linked checkout to its registered primary, so hand off the picked path.
+      await onGitRepoReady(repo.id, ownerOptions.executionHostId, {
+        selectedPath: trimmedRemotePath
+      })
     } catch (err) {
       const message = extractIpcErrorMessage(err, String(err))
       if (message.includes('Not a valid git repository')) {

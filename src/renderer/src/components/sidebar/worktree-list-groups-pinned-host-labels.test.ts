@@ -40,7 +40,6 @@ function buildPinnedRows(
     [],
     new Set(),
     new Map(),
-    new Map(),
     [],
     undefined,
     [],

@@ -5953,27 +5953,6 @@
         "DeleteWorktreeWarningPanels": {
           "mainWorktreeNotice": "Bu, <strong>ana worktree</strong> (ilk klonlama dizini)."
         },
-        "ImportedWorktreesVisibilityLine": {
-          "b7a87dc32f": "Worktree listesinde göster",
-          "ad99f4eea9": "Gizli tut",
-          "9f4f14e821": "Bunu daha sonra proje menüsünden değiştirebilirsiniz.",
-          "b47ba1a9d2": "{{value0}} önizlemesi",
-          "2251d41ebb": "Gizli worktree grupları",
-          "5a9688802a": "{{value0}} tane daha göster",
-          "294de4aeb2": "Daha az göster",
-          "collapseAriaLabel": "{{repo}} için gizli worktree'leri daralt",
-          "expandAriaLabel": "{{repo}} için gizli worktree'leri genişlet",
-          "hiding_one": "Bulunan {{count}} worktree gizleniyor",
-          "hiding_other": "Bulunan {{count}} worktree gizleniyor",
-          "hidingInRepo_one": "{{repo}} içinde bulunan {{count}} worktree gizleniyor",
-          "hidingInRepo_other": "{{repo}} içinde bulunan {{count}} worktree gizleniyor",
-          "keepHiddenAriaLabel_one": "{{repo}} için bulunan {{count}} worktree'yi gizli tut; proje menüsünden geri getir",
-          "keepHiddenAriaLabel_other": "{{repo}} için bulunan {{count}} worktree'yi gizli tut; proje menüsünden geri getir",
-          "keepHiddenTooltip": "Gizli tut - proje menüsünden geri getir",
-          "repoOnHost": "{{host}} üzerindeki {{repo}}",
-          "moreLocations_other": "+ {{count}} konum daha",
-          "moreLocations_one": "+ {{count}} konum daha"
-        },
         "NonGitFolderDialog": {
           "e52454b7f6": "Klasör Olarak Aç",
           "05b33a17a9": "İptal",
@@ -7135,10 +7114,6 @@
         },
         "RemoteFileBrowserEntryList": {
           "pathEmpty": "{{path}} boş"
-        },
-        "importedWorktreesCardActions": {
-          "keepHiddenError": "Bulunan worktree'ler gizli tutulamadı. Tekrar deneyin.",
-          "showError": "Bulunan worktree'ler gösterilemedi. Tekrar deneyin."
         },
         "repoHeaderProjectActions": {
           "hideNonOrcaWorktrees": "Orca dışında oluşturulan worktree'leri gizle",

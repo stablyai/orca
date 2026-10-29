@@ -75,7 +75,6 @@ describe('recent project rank scan budget', () => {
       defaultHostId: 'local',
       hostLabelById: undefined,
       projectIndex: null,
-      importedWorktreesByRepo: new Map(),
       newExternalWorktreesInboxByRepo: new Map(),
       pendingByRepo: new Map(),
       mixedWorktreeHostContextLabels: undefined,

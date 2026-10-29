@@ -13,13 +13,11 @@ import {
   shouldUseHeaderTopSpacing
 } from '../viewport/virtual-rows'
 import type { RenderRow } from '../listing/render-row'
-import type { ImportedWorktreeCardActionState } from '../../imported-worktrees-card-actions'
 import type { NewExternalWorktreesInboxActionState } from '../../new-external-worktrees-inbox-actions'
 import type { useHostHeaderDrag } from '../../host-header-drag'
 import { HostSectionHeader } from './HostSectionHeader'
 import { renderFolderWorkspaceVirtualRow, type FolderWorkspaceRowContext } from './folder-row'
 import {
-  renderImportedWorktreesVirtualRow,
   renderNewExternalWorktreesInboxVirtualRow,
   renderPendingCreationVirtualRow
 } from './notice-rows'
@@ -47,10 +45,7 @@ export type WorktreeVirtualRowContext = {
   header: SectionHeaderRowContext
   item: WorktreeItemRowContext
   folderWorkspace: FolderWorkspaceRowContext
-  importedWorktreeCardActionState: ReadonlyMap<string, ImportedWorktreeCardActionState>
   newExternalWorktreeInboxActionState: ReadonlyMap<string, NewExternalWorktreesInboxActionState>
-  onShowImportedWorktrees: (projectId: string) => void
-  onKeepImportedWorktreesHidden: (projectId: string) => void
   onOpenWorktreeVisibility: (
     repo: Parameters<SectionHeaderRowContext['projectActions']['onOpenWorktreeVisibility']>[0]
   ) => void
@@ -173,17 +168,6 @@ export function renderWorktreeVirtualRow(
 
   if (row.type === 'lineage-group') {
     return renderLineageGroupVirtualRow(ctx, row, vItem)
-  }
-
-  if (row.type === 'imported-worktrees-card') {
-    return renderImportedWorktreesVirtualRow({
-      row,
-      vItem,
-      measureVirtualRowElement: ctx.measureVirtualRowElement,
-      actionState: ctx.importedWorktreeCardActionState.get(row.repo.id),
-      onShow: ctx.onShowImportedWorktrees,
-      onKeepHidden: ctx.onKeepImportedWorktreesHidden
-    })
   }
 
   if (row.type === 'new-external-worktrees-inbox') {

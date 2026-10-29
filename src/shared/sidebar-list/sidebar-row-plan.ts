@@ -38,7 +38,6 @@ import {
   getRenderableFolderWorkspaces
 } from './folder-workspace-lanes'
 import type {
-  ImportedWorktreesCardCandidate,
   NewExternalWorktreesInboxCandidate,
   PendingCreationRef,
   PinnedWorktreeDisplayPolicy,
@@ -70,7 +69,6 @@ export type SidebarRowPlanInputs = {
   nestLineage: boolean
   projectGroups: readonly ProjectGroup[]
   placeholderRepoIds: ReadonlySet<string>
-  importedWorktreesByRepo: ReadonlyMap<string, ImportedWorktreesCardCandidate>
   newExternalWorktreesInboxByRepo: ReadonlyMap<string, NewExternalWorktreesInboxCandidate>
   pendingCreations: readonly PendingCreationRef[]
   projectGrouping?: ProjectSectionModel
@@ -97,7 +95,6 @@ export function planSidebarRows(inputs: SidebarRowPlanInputs) {
     nestLineage,
     projectGroups,
     placeholderRepoIds,
-    importedWorktreesByRepo,
     newExternalWorktreesInboxByRepo,
     pendingCreations,
     projectGrouping,
@@ -143,7 +140,6 @@ export function planSidebarRows(inputs: SidebarRowPlanInputs) {
               projectIndex,
               displayRootByIdentity,
               placeholderRepoIds,
-              importedWorktreesByRepo,
               newExternalWorktreesInboxByRepo,
               pendingByRepo,
               repoOrder,
@@ -193,7 +189,7 @@ export function planSidebarRows(inputs: SidebarRowPlanInputs) {
     )
     // Project ambiguity is independent of section/host filters; repoMap decides it, candidate maps gate notice eligibility.
     const noticeHostContextLabelByRepoId = getNoticeHostContextLabels(
-      new Set([...importedWorktreesByRepo.keys(), ...newExternalWorktreesInboxByRepo.keys()]),
+      new Set(newExternalWorktreesInboxByRepo.keys()),
       repoMap.keys(),
       repoMap,
       projectIndex,
@@ -214,7 +210,7 @@ export function planSidebarRows(inputs: SidebarRowPlanInputs) {
       defaultHostId,
       collapsedGroups,
       renderedNaturalAnchorRepoIds,
-      importedWorktreesByRepo,
+      newExternalWorktreesInboxByRepo,
       groupBy !== 'repo',
       result,
       occurrencePlan,
@@ -270,7 +266,6 @@ export function planSidebarRows(inputs: SidebarRowPlanInputs) {
       defaultHostId,
       hostLabelById,
       projectIndex,
-      importedWorktreesByRepo,
       newExternalWorktreesInboxByRepo,
       pendingByRepo,
       mixedWorktreeHostContextLabels,

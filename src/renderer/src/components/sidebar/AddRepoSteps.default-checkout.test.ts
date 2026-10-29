@@ -217,7 +217,9 @@ describe('useRemoteRepo', () => {
         requireAuthoritative: true,
         executionHostId: 'runtime:env-linux'
       })
-      expect(mocks.onGitRepoReady).toHaveBeenCalledWith(repo.id, 'runtime:env-linux')
+      expect(mocks.onGitRepoReady).toHaveBeenCalledWith(repo.id, 'runtime:env-linux', {
+        selectedPath: '/srv/repo'
+      })
     })
 
     it('hands a non-git folder to the confirm dialog bound to the server', async () => {
