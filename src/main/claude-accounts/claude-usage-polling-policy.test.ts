@@ -28,7 +28,7 @@ describe('claude usage polling policy', () => {
       pollWithoutWindow: true
     })
 
-    expect(polling.apply({ theme: 'dark' })).toBe(true)
+    expect(polling.apply({})).toBe(true)
     expect(rateLimits.stop).not.toHaveBeenCalled()
 
     settings = { claudeAutoSwitchEnabled: false }

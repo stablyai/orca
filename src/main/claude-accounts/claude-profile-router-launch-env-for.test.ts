@@ -90,6 +90,9 @@ function fixture(env: NodeJS.ProcessEnv = {}) {
   return { root, userHome, dataRoot, router, describe, home, setup, settings, account }
 }
 
+/** Fixture mtimes step forward so equal-size revisions invalidate the reader's cache. */
+let nextSignInMtimeMs = 1_700_000_000_000
+
 /** Claude's own sign-in state in a folder (the login the router reads). Copied from claude-profile-router.test.ts. */
 function signIn(stateDir: string, email: string, organizationUuid?: string): void {
   mkdirSync(stateDir, { recursive: true })
@@ -100,12 +103,8 @@ function signIn(stateDir: string, email: string, organizationUuid?: string): voi
     JSON.stringify({ oauthAccount: { emailAddress: email, organizationUuid } })
   )
   // Why: equal-size fixture revisions must invalidate the real reader's mtime cache.
-  const mtime = new Date(
-    Math.max(
-      Math.floor(Date.now() / 1000) * 1000,
-      Math.floor(previousMtimeMs / 1000) * 1000 + 2_000
-    )
-  )
+  nextSignInMtimeMs = Math.max(nextSignInMtimeMs, Math.floor(previousMtimeMs / 1000) * 1000) + 2_000
+  const mtime = new Date(nextSignInMtimeMs)
   utimesSync(stateFile, mtime, mtime)
 }
 

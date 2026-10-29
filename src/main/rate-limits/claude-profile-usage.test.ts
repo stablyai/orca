@@ -125,7 +125,7 @@ it('tags a successful reading with the account it was read for', async () => {
   const f = profile()
   writeFileSync(
     join(f.home, '.credentials.json'),
-    JSON.stringify({ claudeAiOauth: { accessToken: 'fake', expiresAt: Date.now() + 3_600_000 } })
+    JSON.stringify({ claudeAiOauth: { accessToken: 'fake', expiresAt: 4_102_444_800_000 } })
   )
   calls.usage.mockResolvedValueOnce({ provider: 'claude', status: 'ok' })
   expect(await fetchActiveClaudeRateLimits(f.options)).toMatchObject({
