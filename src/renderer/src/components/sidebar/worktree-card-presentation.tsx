@@ -35,6 +35,7 @@ export function buildWorktreeCardPresentation(card: WorktreeCardController) {
     contentIndent,
     newCardStyle,
     compactCards,
+    compactCardHover,
     isFolder,
     detachedHeadDisplay,
     branch,
@@ -149,7 +150,7 @@ export function buildWorktreeCardPresentation(card: WorktreeCardController) {
       : undefined
   const hasHoverIdentity = Boolean(hoverWorkspaceTitle || hoverBranchName)
   const hasHoverDetails =
-    (newCardStyle || compactCards) &&
+    (newCardStyle || (compactCards && compactCardHover)) &&
     (getWorkspaceAttachments(worktree).length > 0 ||
       hasWorktreeCardDetails({
         issue: hoverIssue,
