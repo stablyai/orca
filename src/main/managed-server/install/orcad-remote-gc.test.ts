@@ -50,7 +50,10 @@ function scriptHost(options: {
     if (command.includes('ORCAD_RECENT_STAGED_DONE')) {
       return options.recentlyStaged === undefined
         ? ''
-        : [...options.recentlyStaged, 'ORCAD_RECENT_STAGED_DONE'].join('\n')
+        : [
+            ...options.recentlyStaged.map((name) => `RECENT ${name}`),
+            'ORCAD_RECENT_STAGED_DONE'
+          ].join('\n')
     }
     if (command.includes('__ORCAD_RECORD_PRESENT__') && command.includes('transaction.json')) {
       if (options.journal instanceof Error) {

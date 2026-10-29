@@ -45,7 +45,8 @@ type OrcadGcOptions = {
 
 /** True when no stale version dir was left behind (skipped, kept or unlistable ones make it false). */
 export async function gcOldOrcadVersions(options: OrcadGcOptions): Promise<boolean> {
-  if (options.keepStagedWithinDays !== undefined && isWindowsRemoteHost(options.host)) {
+  const keepDays = options.keepStagedWithinDays
+  if (keepDays !== undefined && isWindowsRemoteHost(options.host)) {
     // The Windows host script cannot date staged builds, so keep them all.
     return false
   }
@@ -68,10 +69,10 @@ export async function gcOldOrcadVersions(options: OrcadGcOptions): Promise<boole
       // Screen Windows candidates together, then recheck dead candidates individually under the GC claim.
       ...(isWindowsRemoteHost(options.host)
         ? { resolveExtraPinnedDirNames: (candidates) => windowsLiveCandidates(options, candidates) }
-        : options.keepStagedWithinDays !== undefined
+        : keepDays !== undefined
           ? {
               resolveExtraPinnedDirNames: (candidates) =>
-                recentlyStagedCandidates(options, candidates, options.keepStagedWithinDays!)
+                recentlyStagedCandidates(options, candidates, keepDays)
             }
           : {}),
       isDirLive: async (dir) => {
@@ -139,28 +140,40 @@ async function windowsLiveCandidates(
   )
 }
 
-/** Null on any failure, which keeps every candidate. */
+/** Null on any failure or unanswerable date, which keeps every candidate. */
 async function recentlyStagedCandidates(
   options: OrcadGcOptions,
   candidates: readonly string[],
   days: number
 ): Promise<readonly string[] | null> {
+  if (!Number.isInteger(days) || days < 1) {
+    return null
+  }
   const checks = candidates.map((name) => {
-    const marker = joinRemotePath(
-      options.host,
-      options.remoteHome,
-      RELAY_REMOTE_DIR,
-      name,
-      ORCAD_INSTALL_COMPLETE_FILENAME
+    const marker = quotePosixShell(
+      joinRemotePath(
+        options.host,
+        options.remoteHome,
+        RELAY_REMOTE_DIR,
+        name,
+        ORCAD_INSTALL_COMPLETE_FILENAME
+      )
     )
-    return `[ -n "$(find ${quotePosixShell(marker)} -mtime -${days} 2>/dev/null)" ] && echo ${quotePosixShell(name)};`
+    // A find without -mtime must read as unknown, not as an old build.
+    return (
+      `if [ ! -e ${marker} ]; then :; elif recent=$(find ${marker} -mtime -${days} 2>/dev/null); then ` +
+      `if [ -n "$recent" ]; then echo RECENT ${quotePosixShell(name)}; fi; else echo ERR; fi;`
+    )
   })
   try {
     const output = await execCommand(options.conn, `${checks.join(' ')} echo ${RECENT_DONE}`, {
       signal: options.signal
     })
     const lines = output.split('\n').map((line) => line.trim())
-    return lines.includes(RECENT_DONE) ? candidates.filter((name) => lines.includes(name)) : null
+    if (!lines.includes(RECENT_DONE) || lines.includes('ERR')) {
+      return null
+    }
+    return candidates.filter((name) => lines.includes(`RECENT ${name}`))
   } catch (error) {
     if (isUnconfirmedSshCommandTermination(error)) {
       throw error
