@@ -16,6 +16,10 @@ describe('getDefaultSettings', () => {
   it('asks before closing terminals with running processes by default', () => {
     expect(getDefaultSettings('/tmp').skipCloseTerminalWithRunningProcessConfirm).toBe(false)
   })
+
+  it('shows terminal quick commands by default', () => {
+    expect(getDefaultSettings('/tmp').showTerminalQuickCommandsButton).toBe(true)
+  })
 })
 
 describe('getDefaultPrimarySelectionMiddleClickPaste', () => {

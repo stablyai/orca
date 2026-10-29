@@ -141,6 +141,8 @@ export type GlobalSettings = GlobalSettingsBase & {
   terminalMouseHideWhileTyping?: boolean
   terminalWordSeparator?: string
   terminalCursorOpacity?: number
+  /** Shows the terminal toolbar quick-command button; missing legacy values stay visible. */
+  showTerminalQuickCommandsButton?: boolean
   terminalQuickCommands?: TerminalQuickCommand[]
   windowBackgroundBlur?: boolean
   /** Windows-only: close (X) hides to tray instead of quitting; the tray icon is always present regardless. */

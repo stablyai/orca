@@ -74,6 +74,10 @@ function normalizeSettingsUpdates(
     // The web client stores its own list without main's check, so refuse here too, before any write.
     assertTerminalQuickCommandsStorable(sanitizedUpdates.terminalQuickCommands)
   }
+  if ('showTerminalQuickCommandsButton' in updates) {
+    sanitizedUpdates.showTerminalQuickCommandsButton =
+      updates.showTerminalQuickCommandsButton !== false
+  }
   if ('terminalCustomThemes' in updates) {
     sanitizedUpdates.terminalCustomThemes = normalizeTerminalCustomThemes(
       updates.terminalCustomThemes
