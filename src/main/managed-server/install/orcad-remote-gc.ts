@@ -55,6 +55,7 @@ export async function gcOldOrcadVersions(options: OrcadGcOptions): Promise<boole
     console.warn('[orcad-gc] An activation transaction is unreadable or unjournaled; skipping GC.')
     return false
   }
+  let keptRecent = false
   const versionsClean = await gcOldRemoteInstallVersions(
     options.conn,
     ORCAD_INSTALL_MODEL,
@@ -71,8 +72,11 @@ export async function gcOldOrcadVersions(options: OrcadGcOptions): Promise<boole
         ? { resolveExtraPinnedDirNames: (candidates) => windowsLiveCandidates(options, candidates) }
         : keepDays !== undefined
           ? {
-              resolveExtraPinnedDirNames: (candidates) =>
-                recentlyStagedCandidates(options, candidates, keepDays)
+              resolveExtraPinnedDirNames: async (candidates) => {
+                const recent = await recentlyStagedCandidates(options, candidates, keepDays)
+                keptRecent = recent === null || recent.length > 0
+                return recent
+              }
             }
           : {}),
       isDirLive: async (dir) => {
@@ -103,7 +107,8 @@ export async function gcOldOrcadVersions(options: OrcadGcOptions): Promise<boole
       signal: options.signal
     })
   }
-  return versionsClean
+  // A recent build kept now still needs pruning once it ages.
+  return versionsClean && !keptRecent
 }
 
 /** Null means unknown host state and keeps every candidate; otherwise pin anything not proven dead. */

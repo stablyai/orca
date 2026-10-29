@@ -271,7 +271,7 @@ describe('orcad GC', () => {
     const listing = ['orcad-0.1.0+01d', 'orcad-0.2.0+9ee0', 'orcad-0.3.0+cc0', 'orcad-0.4.0+dd0']
     const removed: string[] = []
     scriptHost({ listing, removed, recentlyStaged: ['orcad-0.3.0+cc0'] })
-    await gcOldOrcadVersions(args)
+    expect(await gcOldOrcadVersions(args)).toBe(false)
     expect(removed).toEqual(['orcad-0.2.0+9ee0'])
 
     const kept: string[] = []
