@@ -689,7 +689,7 @@ describe('Linear issue queries', () => {
   it('creates agent attachments with a client supplied id', async () => {
     const createAttachment = vi.fn().mockResolvedValue({
       success: true,
-      attachment: Promise.resolve({ id: 'attachment-1' })
+      attachmentId: 'attachment-1'
     })
     rawRequest.mockResolvedValueOnce({
       data: {
@@ -732,7 +732,7 @@ describe('Linear issue queries', () => {
   it('treats post-mutation attachment readback misses as unconfirmed', async () => {
     const createAttachment = vi.fn().mockResolvedValue({
       success: true,
-      attachment: Promise.resolve({ id: 'attachment-1' })
+      attachmentId: 'attachment-1'
     })
     rawRequest.mockResolvedValueOnce({ data: { attachment: null } })
     getClients.mockReturnValue([
@@ -759,7 +759,7 @@ describe('Linear issue queries', () => {
   it('creates parented agent issues with a client supplied id and project id', async () => {
     const createIssue = vi.fn().mockResolvedValue({
       success: true,
-      issue: Promise.resolve({ id: 'issue-created' })
+      issueId: 'issue-created'
     })
     rawRequest.mockResolvedValueOnce({
       data: {
@@ -808,7 +808,7 @@ describe('Linear issue queries', () => {
   it('treats post-create readback misses as unconfirmed', async () => {
     const createIssue = vi.fn().mockResolvedValue({
       success: true,
-      issue: Promise.resolve({ id: 'issue-created' })
+      issueId: 'issue-created'
     })
     rawRequest.mockResolvedValueOnce({ data: { issue: null } })
     getClients.mockReturnValue([
@@ -831,7 +831,7 @@ describe('Linear issue queries', () => {
     isAuthError.mockImplementation((error) => error === authError)
     const createIssue = vi.fn().mockResolvedValue({
       success: true,
-      issue: Promise.resolve({ id: 'issue-created' })
+      issueId: 'issue-created'
     })
     rawRequest.mockRejectedValueOnce(authError)
     getClients.mockReturnValue([
