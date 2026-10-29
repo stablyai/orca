@@ -10,7 +10,10 @@ import { STARTUP_COMMAND_FEATURES } from './shell-startup-launch-intent-fixtures
 describe('PowerShell OSC 133 bootstrap', () => {
   // Bootstrap and startup commands share the EncodedCommand size limit: reasonable
   // commands ride in the shell args, and oversized ones fall back to barrier-queued
-  // stdin delivery, which the pwsh startup barrier makes safe (#27293).
+  // stdin delivery, which the pwsh startup barrier makes safe (#27293). The
+  // launch-arg tests below pin only the argv side of that split; stdin delivery
+  // itself is exercised by the daemon/barrier suites (daemon-pty-startup-delivery,
+  // the terminal-host queueing specs, and the live pwsh shell-ready spec).
   it('leaves room for a realistic startup command to ride in the shell args', () => {
     const cwd = `C:\\Users\\alice\\${'nested-project-folder\\'.repeat(5)}repo`
     const result = resolveWindowsShellLaunchArgs(
@@ -24,7 +27,7 @@ describe('PowerShell OSC 133 bootstrap', () => {
     expect(result.startupCommandDeliveredInShellArgs).toBe(true)
   })
 
-  it('lets an oversized startup command fall back to barrier-queued stdin', () => {
+  it('keeps argv at the bootstrap-only fallback when an oversized startup command exceeds the encoded budget', () => {
     const cwd = `C:\\Users\\alice\\${'nested-project-folder\\'.repeat(5)}repo`
     const result = resolveWindowsShellLaunchArgs(
       'pwsh.exe',
@@ -33,15 +36,18 @@ describe('PowerShell OSC 133 bootstrap', () => {
       undefined,
       // Exactly STARTUP_COMMAND_TEXT_MAX_CHARS (module-private, windows-shell-args): the
       // text gate passes, but bootstrap + command together exceed the encoded arg budget,
-      // so argv carries the bootstrap only and the daemon queues the command on stdin
-      // behind the pwsh startup barrier.
+      // so argv must carry the bootstrap alone. Whether the daemon then queues the command
+      // on stdin (behind the pwsh startup barrier on Unix) is the delivery suites' job to
+      // verify — this unit sees only the argv seam.
       `orca ${'x'.repeat(5995)}`
     )
 
     expect(result.startupCommandDeliveredInShellArgs).toBeUndefined()
     expect(result.shellArgs.slice(0, 2)).toEqual(['-NoLogo', '-NoExit'])
     // The oversized command contributes nothing to argv: the encoded arg is byte-identical
-    // to a launch with no startup command at all, proving stdin (barrier-queued) delivery.
+    // to a launch with no startup command at all. This pins the bootstrap-only argv
+    // fallback, not stdin delivery or the barrier — those live in the daemon/barrier
+    // delivery suites.
     const noCommand = resolveWindowsShellLaunchArgs('pwsh.exe', cwd, cwd, undefined, undefined)
     const encodedArg = result.shellArgs[result.shellArgs.indexOf('-EncodedCommand') + 1]
     const noCommandEncodedArg =
