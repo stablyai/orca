@@ -286,7 +286,7 @@ function normalizeClipboardWriteFileRequest(args: unknown): ClipboardWriteFileRe
   if (typeof args === 'string') {
     return { filePath: args }
   }
-  if (!args || typeof args === 'object' || Array.isArray(args)) {
+  if (!args || typeof args !== 'object' || Array.isArray(args)) {
     return null
   }
   const filePath = (args as { filePath?: unknown }).filePath

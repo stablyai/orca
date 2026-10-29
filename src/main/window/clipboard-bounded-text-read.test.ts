@@ -3,7 +3,8 @@ import type * as ProcessHost from '@orca/process-host'
 import { installFakeAppEnvironment } from '../../../config/scripts/test-runtime/environment/vitest-host-ports-setup'
 import {
   CLIPBOARD_TEXT_READ_MAX_BYTES,
-  CLIPBOARD_TEXT_READ_UNRESPONSIVE_ERROR
+  CLIPBOARD_TEXT_READ_UNRESPONSIVE_ERROR,
+  CLIPBOARD_TEXT_TOO_LARGE_ERROR
 } from '../../shared/clipboard-text'
 
 const { runProcessMock, readClipboardTextDirectMock, handlerMocks } = vi.hoisted(() => ({
@@ -82,9 +83,19 @@ describe('bounded clipboard text read', () => {
       program: '/usr/bin/pbpaste',
       timeoutMs: CLIPBOARD_TEXT_READ_BOUND_MS,
       maxOutputBytes: CLIPBOARD_TEXT_READ_MAX_BYTES + 1,
-      killOnOutputLimit: true
+      killOnOutputLimit: true,
+      env: { ...process.env, LANG: 'en_US.UTF-8', LC_ALL: 'en_US.UTF-8' }
     })
     expect(readClipboardTextDirectMock).not.toHaveBeenCalled()
+  })
+
+  it('pins the helper to a UTF-8 locale so non-ASCII pasteboard text survives the capture', async () => {
+    runProcessMock.mockResolvedValue(helperResult({ stdout: 'héllo 東京 🌐' }))
+
+    await expect(readClipboardTextWithBoundedWait(darwinDeps())).resolves.toBe('héllo 東京 🌐')
+    const spec = runProcessMock.mock.calls[0]?.[0]
+    expect(spec.env?.LC_ALL).toBe('en_US.UTF-8')
+    expect(spec.env?.LANG).toBe('en_US.UTF-8')
   })
 
   it('reports the clipboard as unresponsive instead of blocking when the owner never delivers', async () => {
@@ -94,6 +105,23 @@ describe('bounded clipboard text read', () => {
 
     await expect(readClipboardTextWithBoundedWait(darwinDeps())).rejects.toThrow(
       CLIPBOARD_TEXT_READ_UNRESPONSIVE_ERROR
+    )
+    expect(readClipboardTextDirectMock).not.toHaveBeenCalled()
+  })
+
+  it('reports a capture-cap overrun as too large instead of pasting silently truncated text', async () => {
+    // Mirror the real overrun: killOnOutputLimit stops the helper past the capture cap.
+    runProcessMock.mockResolvedValue(
+      helperResult({
+        code: null,
+        signal: 'SIGTERM',
+        stdout: 'x'.repeat(CLIPBOARD_TEXT_READ_MAX_BYTES + 1),
+        outputTruncated: true
+      })
+    )
+
+    await expect(readClipboardTextWithBoundedWait(darwinDeps())).rejects.toThrow(
+      CLIPBOARD_TEXT_TOO_LARGE_ERROR
     )
     expect(readClipboardTextDirectMock).not.toHaveBeenCalled()
   })

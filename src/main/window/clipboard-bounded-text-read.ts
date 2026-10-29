@@ -2,7 +2,8 @@ import { clipboard } from 'electron'
 import { runProcess } from '@orca/process-host'
 import {
   CLIPBOARD_TEXT_READ_MAX_BYTES,
-  CLIPBOARD_TEXT_READ_UNRESPONSIVE_ERROR
+  CLIPBOARD_TEXT_READ_UNRESPONSIVE_ERROR,
+  CLIPBOARD_TEXT_TOO_LARGE_ERROR
 } from '../../shared/clipboard-text'
 
 /**
@@ -40,12 +41,21 @@ export function readClipboardTextWithBoundedWait(
       // Capture one byte past the shared read limit so an over-limit item reaches the
       // caller's limit assertion as too-large instead of being silently truncated.
       maxOutputBytes: CLIPBOARD_TEXT_READ_MAX_BYTES + 1,
-      killOnOutputLimit: true
+      killOnOutputLimit: true,
+      // A GUI launch can leave the environment without a locale while the helper's
+      // stdout is decoded as UTF-8; pin pbpaste to UTF-8 so the pasteboard text
+      // arrives as those bytes instead of a legacy-encoding transcode.
+      env: { ...process.env, LANG: 'en_US.UTF-8', LC_ALL: 'en_US.UTF-8' }
     })
     .then(
       (result) => {
         if (result.timedOut) {
           throw new Error(CLIPBOARD_TEXT_READ_UNRESPONSIVE_ERROR)
+        }
+        if (result.outputTruncated) {
+          // killOnOutputLimit stopped the helper at the capture cap, so the item is
+          // larger than what was captured; fail loudly instead of pasting partial text.
+          throw new Error(CLIPBOARD_TEXT_TOO_LARGE_ERROR)
         }
         return result.stdout
       },
