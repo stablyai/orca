@@ -12,8 +12,8 @@ vi.mock('../TextInputModal', () => ({ TextInputModal: () => null }))
 vi.mock('react-native-gesture-handler', () => ({ GestureDetector: 'GestureDetector' }))
 vi.mock('../../platform/external-link', () => ({ openExternalLink: vi.fn() }))
 vi.mock(
-  '../../platform/text-input-font-size',
-  async () => await import('../../platform/text-input-font-size.web')
+  '../../platform/text-input/text-input-font-size',
+  async () => await import('../../platform/text-input/text-input-font-size.web')
 )
 
 import { MobileRichMarkdownEditor } from '../MobileRichMarkdownEditor'

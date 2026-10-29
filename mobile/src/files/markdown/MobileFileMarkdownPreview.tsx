@@ -1,10 +1,9 @@
 import { MobileMarkdownPreviewImage } from './MobileMarkdownPreviewImage'
 import type { MobileFilePreviewRpcSender } from '../preview/mobile-file-preview-operations'
-import { ScrollView } from 'react-native'
 import { MobileMarkdown } from '../../components/MobileMarkdown'
 import { MOBILE_MARKDOWN_DOCUMENT_SCALE } from '../../components/mobile-markdown-styles'
-import { useEffect, useRef } from 'react'
-import { Platform, View } from 'react-native'
+import { useEffect, useRef, type ComponentRef } from 'react'
+import { Platform, ScrollView, View } from 'react-native'
 import { GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler'
 import {
   MobileFilePreviewSourceText,
@@ -40,7 +39,7 @@ export function MobileFileMarkdownPreview({
   onOpenFile
 }: Props) {
   useMobileColorScheme()
-  const scrollRef = useRef<ScrollView>(null)
+  const scrollRef = useRef<ComponentRef<typeof ScrollView>>(null)
   const { textScale, setLiveScale, commitTextScale } = useMarkdownTextScale()
   const pinchGesture = useMarkdownTextScalePinchGesture({
     textScale,
@@ -53,7 +52,7 @@ export function MobileFileMarkdownPreview({
     if (Platform.OS !== 'web') {
       return
     }
-    const scroller = scrollRef.current?.getScrollableNode()
+    const scroller: unknown = scrollRef.current?.getScrollableNode()
     if (scroller instanceof HTMLElement) {
       scroller.style.touchAction = 'pan-x pan-y'
     }

@@ -45,7 +45,12 @@ export function MarkdownReader({
   useMobileColorScheme()
   const t = useMobileTranslation()
   const { textScale, setLiveScale, commitTextScale } = useMarkdownTextScale()
-  const pinchGesture = useMarkdownTextScalePinchGesture({ textScale, onLiveScale: setLiveScale, onCommit: commitTextScale, combineWithNativeScroll: false })
+  const pinchGesture = useMarkdownTextScalePinchGesture({
+    textScale,
+    onLiveScale: setLiveScale,
+    onCommit: commitTextScale,
+    combineWithNativeScroll: false
+  })
   // Native Keyboard events under-report the WebView editor's covered area, so prefer the larger WebView-measured inset.
   const [webviewKeyboardInset, setWebviewKeyboardInset] = useState(0)
   const effectiveKeyboardLift = Math.max(keyboardLift, webviewKeyboardInset)
@@ -114,7 +119,11 @@ export function MarkdownReader({
             </Text>
           ) : null}
           <View style={styles.markdownFloatingActions}>
-            <MarkdownTextSizeButton textScale={textScale} onSelect={commitTextScale} style={[styles.markdownFloatingButton, styles.markdownKeyboardDismissButton]} />
+            <MarkdownTextSizeButton
+              textScale={textScale}
+              onSelect={commitTextScale}
+              style={[styles.markdownFloatingButton, styles.markdownKeyboardDismissButton]}
+            />
             <Pressable
               style={({ pressed }) => [
                 styles.markdownFloatingButton,

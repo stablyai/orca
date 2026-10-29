@@ -1,6 +1,10 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { loadMarkdownTextScale, loadTerminalLinkOpenMode, saveTerminalLinkOpenMode } from './preferences'
+import {
+  loadMarkdownTextScale,
+  loadTerminalLinkOpenMode,
+  saveTerminalLinkOpenMode
+} from './preferences'
 import {
   loadDefaultSessionView,
   loadSessionViewOverrides,

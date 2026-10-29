@@ -11,7 +11,8 @@ import {
   type ForwardedRef
 } from 'react'
 import { View, type HostInstance } from 'react-native'
-import { GestureDetector, type ComposedGesture, type PinchGesture } from 'react-native-gesture-handler'
+import { GestureDetector } from 'react-native-gesture-handler'
+import type { useMarkdownTextScalePinchGesture } from '../markdown-text-scale/use-markdown-text-scale-pinch-gesture'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { colors } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
@@ -42,7 +43,7 @@ export type MobileRichMarkdownEditorComponentProps = Omit<
   onOpenLink?: (url: string) => void
   /** Loads a workspace-relative image path; without it those images stay unloaded. */
   loadImageSource?: (path: string) => Promise<string>
-  pinchGesture?: ComposedGesture | PinchGesture
+  pinchGesture?: ReturnType<typeof useMarkdownTextScalePinchGesture>
 }
 
 export type MobileRichMarkdownEditorHandle = {
