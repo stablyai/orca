@@ -10,6 +10,7 @@ import { MobileTerminalCommandDictationPreview } from './MobileTerminalCommandDi
 import { readMobileDictationAnchor } from '../dictation/mobile-dictation-text-insertion'
 import { MobileTerminalInputActions } from './MobileTerminalInputActions'
 import { MobileSessionAccessoryKeys } from './MobileSessionAccessoryKeys'
+import { commandDockBottomPadding } from './command-dock-bottom-padding'
 import { colors } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
@@ -69,7 +70,10 @@ export function MobileSessionCommandDock({
       <View
         style={[
           styles.commandDock,
-          { paddingBottom: insets.bottom, transform: [{ translateY: -keyboardLift }] }
+          {
+            paddingBottom: commandDockBottomPadding(insets.bottom, keyboardLift),
+            transform: [{ translateY: -keyboardLift }]
+          }
         ]}
       >
         {}
