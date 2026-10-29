@@ -1,7 +1,8 @@
 import {
   finishAutomationWorkspaceProvenanceRequest,
   releaseAutomationWorkspaceProvenanceRequest,
-  resolveAutomationWorkspaceProvenance
+  resolveAutomationWorkspaceProvenance,
+  resolveClientAutomationWorkspaceProvenance
 } from '../../../automations/workspace-provenance'
 import { getLocalWorktreeCatalogVersion } from '../../../local-worktree-scan-generation'
 import { getExplicitWorktreeIdSelector } from '../../runtime-worktree-selection'
@@ -91,13 +92,18 @@ export const WORKTREE_METHODS = [
       context.runtime.dedupeWorktreeCreate(params, params.clientMutationId, async () => {
         const { runtime } = context
         const repo = await runtime.showRepo(worktreeCreateRepoSelector(params))
-        const automationProvenance = resolveAutomationWorkspaceProvenance({
-          authority: runtime,
-          repoSelector: params.repo,
-          repo,
-          request: params.automationProvenanceRequest,
-          ignoreUnknownAutomation: true
-        })
+        const automationProvenance =
+          resolveAutomationWorkspaceProvenance({
+            authority: runtime,
+            repoSelector: params.repo,
+            repo,
+            request: params.automationProvenanceRequest,
+            ignoreUnknownAutomation: true
+          }) ??
+          resolveClientAutomationWorkspaceProvenance({
+            authority: runtime,
+            provenance: params.clientAutomationProvenance
+          })
         // Reserve provenance before create for recovery, but release failed reservations so retry is safe.
         try {
           const result = await createWorktreeWithStartupAgent(

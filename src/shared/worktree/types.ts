@@ -195,7 +195,15 @@ export type AutomationWorkspaceProvenance = {
   projectId: string
   repoId?: string
   hostId?: ExecutionHostId
+  /** Recorded by a host for another owner's run; the host's own run bookkeeping ignores it. */
+  origin?: 'client'
 }
+
+/** What another owner sends a host; the host stamps `createdAt` and `origin` itself. */
+export type ClientAutomationWorkspaceProvenance = Omit<
+  AutomationWorkspaceProvenance,
+  'kind' | 'createdAt' | 'origin'
+>
 
 export type AutomationWorkspaceProvenanceRequest = {
   automationId: string

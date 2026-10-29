@@ -25,6 +25,10 @@ export function buildManagedWorktreeCreateArgs(
   origin?: Parameters<typeof terminalImageViewerSupported>[0]
 ): ManagedWorktreeCreateArgs {
   const viewerSupported = origin && terminalImageViewerSupported(origin)
+  // Why: another owner's provenance is a label only; this host's create policy stays as before.
+  const hostAutomationCreate =
+    provenance.automationProvenance !== undefined &&
+    provenance.automationProvenance.origin !== 'client'
   return {
     repoSelector: worktreeCreateRepoSelector(params),
     // A phone's retry key is the identity of its creation.
@@ -88,9 +92,9 @@ export function buildManagedWorktreeCreateArgs(
     createdWithAgent: params.createdWithAgent ?? params.startupAgent,
     ...provenance,
     // Only user-visible creates offer offline fallback; automation retains the network error.
-    ...(provenance.automationProvenance ? {} : { allowLocalBaseFallback: true }),
+    ...(hostAutomationCreate ? {} : { allowLocalBaseFallback: true }),
     // An automation's create is background work: its terminals never start a stopped WSL distro (E9).
-    ...(provenance.automationProvenance ? {} : { wslUserAct: true as const }),
+    ...(hostAutomationCreate ? {} : { wslUserAct: true as const }),
     startup: params.startupCommand
       ? {
           command: params.startupCommand,
