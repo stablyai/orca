@@ -1,6 +1,7 @@
 import * as monaco from 'monaco-editor'
 import type { editor as monacoEditor } from 'monaco-editor'
 import { getDragAutoScrollStepPx, REFERENCE_FRAME_MS } from './diff-comment-drag-auto-scroll'
+import { scrollDiffEditorTo } from '../editor/use-diff-section-viewport'
 import {
   areLineRangesEqual,
   clampFocusLineToCommentable,
@@ -146,7 +147,7 @@ export function installDiffCommentRangeDrag({
     if (nextScrollTop === scrollTop) {
       return false
     }
-    editor.setScrollTop(nextScrollTop)
+    scrollDiffEditorTo(editor, nextScrollTop, editorDomNode)
     return true
   }
 

@@ -108,7 +108,11 @@ export function PRFilesCombinedDiffBody({
           onCollapsedChange={setFileTreeCollapsed}
           onNavigate={handleTreeNavigate}
         />
-        <div ref={scrollContainerRef} className="min-w-0 flex-1 overflow-auto scrollbar-editor">
+        <div
+          ref={scrollContainerRef}
+          data-diff-scroll-viewport
+          className="min-w-0 flex-1 overflow-auto scrollbar-editor"
+        >
           <div className="relative w-full" style={{ height: `${virtualizer.getTotalSize()}px` }}>
             {virtualizer.getVirtualItems().map((virtualItem) => {
               const section = sections[virtualItem.index]

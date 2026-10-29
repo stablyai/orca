@@ -83,6 +83,7 @@ export function CombinedDiffSectionList({
     <div className="relative min-w-0 flex-1">
       <div
         ref={setScrollContainerRef}
+        data-diff-scroll-viewport
         className="combined-diff-scroll-container h-full overflow-auto pr-5 scrollbar-editor"
         onWheel={markDirectScrollInput}
         onTouchMove={markDirectScrollInput}

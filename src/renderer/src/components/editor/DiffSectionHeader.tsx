@@ -29,6 +29,7 @@ export function DiffSectionHeader({
   const displayPath = splitPathForDisplay(path)
   return (
     <div
+      data-diff-section-header
       className="sticky top-0 z-10 bg-background flex items-center w-full px-3 py-1.5 text-left text-xs hover:bg-accent transition-colors group cursor-pointer"
       onClick={onToggle}
     >

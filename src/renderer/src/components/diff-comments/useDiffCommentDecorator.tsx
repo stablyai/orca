@@ -4,6 +4,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { getCommentBodyLayoutLineCount } from '@/lib/comment-body-line-count'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
+import { scrollDiffEditorTo } from '../editor/use-diff-section-viewport'
 import {
   installDiffCommentAddButtonOverlay,
   type DiffCommentAddButtonOverlayHandle
@@ -277,7 +278,11 @@ export function useDiffCommentDecorator({
         }
         const top = editor.getTopForLineNumber(entry.delegate.afterLineNumber, true)
         const editorHeight = editor.getLayoutInfo().height
-        editor.setScrollTop(Math.max(0, top - editorHeight / 2))
+        scrollDiffEditorTo(
+          editor,
+          Math.max(0, top - editorHeight / 2),
+          editor.getContainerDomNode()
+        )
         pendingScrollRef.current = null
         onPendingScrollConsumedRef.current?.()
       })

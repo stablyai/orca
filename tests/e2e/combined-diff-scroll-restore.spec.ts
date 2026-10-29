@@ -406,6 +406,18 @@ test.describe('Combined diff scroll restore', () => {
       await expect(orcaPage.locator('.combined-diff-scroll-container')).toBeVisible()
       await expect(orcaPage.getByText(`${FILE_COUNT} changed files`)).toBeVisible()
 
+      await expect(orcaPage.locator('.monaco-diff-editor').first()).toBeVisible()
+      const viewportHeight = await orcaPage
+        .locator('.combined-diff-scroll-container')
+        .evaluate((element) => element.clientHeight)
+      await expect
+        .poll(() =>
+          orcaPage
+            .locator('.monaco-diff-editor')
+            .evaluateAll((editors) => Math.max(...editors.map((editor) => editor.clientHeight)))
+        )
+        .toBeLessThanOrEqual(viewportHeight)
+
       await scrollCombinedDiffDeep(orcaPage)
       await waitForStableViewportAnchor(orcaPage)
       const activeScrollSamples = await wheelCombinedDiffDown(orcaPage)
@@ -448,5 +460,163 @@ test.describe('Combined diff scroll restore', () => {
     } finally {
       rmSync(fixture.repoPath, { recursive: true, force: true })
     }
+  })
+
+  test('reaches far lines, retains edits, and reveals notes inside a bounded section', async ({
+    orcaPage,
+    registerPostElectronShutdownCleanup
+  }) => {
+    await waitForSessionReady(orcaPage)
+    const fixture = createCombinedDiffScrollRepo()
+    registerPostElectronShutdownCleanup(async () => {
+      rmSync(fixture.repoPath, { recursive: true, force: true })
+    })
+    const worktreeId = await addAndActivateRepo(orcaPage, fixture.repoPath)
+    const diffTabId = await openCombinedDiff(orcaPage, worktreeId, fixture.repoPath)
+    const modifiedLines = orcaPage.locator(
+      '[data-combined-diff-section-row][data-index="0"] .editor.modified .view-line'
+    )
+    await expect(modifiedLines.first()).toBeVisible()
+    await modifiedLines.first().click({ position: { x: 30, y: 8 } })
+    await orcaPage.keyboard.press(process.platform === 'darwin' ? 'Meta+ArrowDown' : 'Control+End')
+    await expect(modifiedLines.filter({ hasText: 'changed_0_179' })).toBeInViewport()
+
+    const draft = '// viewport draft survives remount'
+    await orcaPage.keyboard.type(draft)
+    await expect(modifiedLines.filter({ hasText: draft })).toBeInViewport()
+    await orcaPage.evaluate((id) => window.__store?.getState().createTab(id), worktreeId)
+    await expect(orcaPage.locator('.combined-diff-scroll-container')).toHaveCount(0)
+    await orcaPage.locator(`[data-tab-id="${diffTabId}"]`).click({ force: true })
+    await modifiedLines.filter({ hasText: 'changed_0_179' }).click({ position: { x: 30, y: 8 } })
+    await orcaPage.keyboard.press(process.platform === 'darwin' ? 'Meta+ArrowDown' : 'Control+End')
+    await expect(modifiedLines.filter({ hasText: draft })).toBeInViewport()
+
+    await orcaPage.keyboard.press('ControlOrMeta+f')
+    await orcaPage.getByRole('textbox', { name: 'Find', exact: true }).fill('changed_0_90')
+    const match = modifiedLines.filter({ hasText: 'changed_0_90' })
+    await expect(match).toBeInViewport()
+    await orcaPage.locator('.combined-diff-scroll-container').evaluate((element) => {
+      element.scrollTop += 19
+    })
+    await expect(match).toBeInViewport()
+    await orcaPage.keyboard.press('Escape')
+
+    const note = 'Reveal this note without focusing the editor'
+    await orcaPage.evaluate(
+      async ({ id, body }) => {
+        const state = window.__store!.getState()
+        const comment = await state.addDiffComment({
+          worktreeId: id,
+          filePath: 'src/scroll-00.ts',
+          source: 'diff',
+          side: 'modified',
+          lineNumber: 60,
+          body
+        })
+        if (!comment) {
+          throw new Error('could not create viewport note')
+        }
+        state.setScrollToDiffCommentId(comment.id)
+      },
+      { id: worktreeId, body: note }
+    )
+    await expect(
+      orcaPage.locator('.orca-diff-comment-card').filter({ hasText: note })
+    ).toBeInViewport()
+  })
+
+  test('reveals Find matches when the next file starts partway down the viewport', async ({
+    orcaPage,
+    registerPostElectronShutdownCleanup
+  }) => {
+    await waitForSessionReady(orcaPage)
+    const fixture = createCombinedDiffScrollRepo()
+    registerPostElectronShutdownCleanup(async () => {
+      rmSync(fixture.repoPath, { recursive: true, force: true })
+    })
+    const worktreeId = await addAndActivateRepo(orcaPage, fixture.repoPath)
+    await openCombinedDiff(orcaPage, worktreeId, fixture.repoPath)
+    const firstSection = orcaPage.locator('[data-combined-diff-section-row][data-index="0"]')
+    await expect(firstSection.locator('.monaco-diff-editor')).toBeVisible()
+    await firstSection.evaluate((element) => {
+      const container = element.closest<HTMLElement>('.combined-diff-scroll-container')!
+      container.scrollTop +=
+        element.getBoundingClientRect().bottom - container.getBoundingClientRect().top - 268
+    })
+    const section = orcaPage.locator('[data-combined-diff-section-row][data-index="1"]')
+    await expect(section.locator('.monaco-diff-editor')).toBeVisible()
+    await section.evaluate((element) => {
+      const container = element.closest<HTMLElement>('.combined-diff-scroll-container')!
+      const body = element.querySelector('[data-diff-editor-viewport]')!.parentElement!
+      const visibleBodyHeight = Math.min(400, container.clientHeight / 2)
+      container.scrollTop +=
+        body.getBoundingClientRect().top -
+        container.getBoundingClientRect().top -
+        (container.clientHeight - visibleBodyHeight)
+    })
+    const modifiedLines = section.locator('.editor.modified .view-line')
+    await expect(modifiedLines.first()).toBeInViewport()
+    await modifiedLines.first().click({ position: { x: 30, y: 8 } })
+    await expect(modifiedLines.filter({ hasText: 'changed_1_35' })).not.toBeInViewport()
+    await orcaPage.keyboard.press('ControlOrMeta+f')
+    await orcaPage.getByRole('textbox', { name: 'Find', exact: true }).fill('changed_1_35')
+    await expect
+      .poll(() =>
+        modifiedLines.filter({ hasText: 'changed_1_35' }).evaluate((element) => {
+          const container = element.closest('.combined-diff-scroll-container')
+          if (!element.isConnected || !container) {
+            return false
+          }
+          const viewportTop = container.getBoundingClientRect().top + container.clientTop
+          const { top, bottom } = element.getBoundingClientRect()
+          return top >= viewportTop && bottom <= viewportTop + container.clientHeight
+        })
+      )
+      .toBe(true)
+  })
+
+  test('keeps Find controls and upward cursor navigation below the sticky file header', async ({
+    orcaPage,
+    registerPostElectronShutdownCleanup
+  }) => {
+    await waitForSessionReady(orcaPage)
+    const fixture = createCombinedDiffScrollRepo()
+    registerPostElectronShutdownCleanup(async () => {
+      rmSync(fixture.repoPath, { recursive: true, force: true })
+    })
+    const worktreeId = await addAndActivateRepo(orcaPage, fixture.repoPath)
+    await openCombinedDiff(orcaPage, worktreeId, fixture.repoPath)
+    const section = orcaPage.locator('[data-combined-diff-section-row][data-index="0"]')
+    const modifiedLines = section.locator('.editor.modified .view-line')
+    await modifiedLines.filter({ hasText: 'changed_0_40' }).click({ position: { x: 30, y: 8 } })
+    await orcaPage.locator('.combined-diff-scroll-container').evaluate((element) => {
+      element.scrollTop = 400
+    })
+
+    const isUnobscured = (element: Element): boolean => {
+      const row = element.closest('[data-combined-diff-section-row]')
+      const header = row?.querySelector('.sticky')
+      const container = row?.closest('.combined-diff-scroll-container')
+      if (!element.isConnected || !header || !container) {
+        return false
+      }
+      const { top, bottom } = element.getBoundingClientRect()
+      const viewportTop = container.getBoundingClientRect().top + container.clientTop
+      return (
+        top >= header.getBoundingClientRect().bottom &&
+        bottom <= viewportTop + container.clientHeight
+      )
+    }
+
+    await orcaPage.keyboard.press('ControlOrMeta+f')
+    const findWidget = section.locator('.find-widget:visible')
+    await expect.poll(() => findWidget.evaluate(isUnobscured)).toBe(true)
+    await orcaPage.keyboard.press('Escape')
+    for (let index = 0; index < 40; index++) {
+      await orcaPage.keyboard.press('ArrowUp')
+    }
+    await expect
+      .poll(() => modifiedLines.filter({ hasText: 'changed_0_0' }).evaluate(isUnobscured))
+      .toBe(true)
   })
 })
