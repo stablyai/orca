@@ -1,3 +1,4 @@
+import { initializeFilesystemHost } from '../filesystem-host/filesystem-host-lifetime'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -23,6 +24,7 @@ const WINDOWS_FIRST_PTY_PROBE_TIMEOUT_MS = 15_000
 export async function preflightOrcadNativeRuntime(
   options: { nativeFeatures?: boolean } = {}
 ): Promise<void> {
+  initializeFilesystemHost(resolveOrcadInstallRoot(), false)
   if (process.platform === 'win32') {
     await preflightWindowsProcessIdentity()
   }

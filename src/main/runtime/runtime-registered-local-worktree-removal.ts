@@ -13,7 +13,7 @@ import { assertWorktreeUnlockedForRemoval } from '../../shared/worktree/removal'
 import type { LocalProjectWorktreeGitOptions } from '../project-runtime-git-options'
 import { assertWorktreeCleanForRemoval, listWorktreesStrict, removeWorktree } from '../git/worktree'
 import { getWorktreeSharedLinkPaths } from '../git/worktree-shared-directories'
-import { runHook, getEffectiveHooks } from '../hooks'
+import { runHook, getEffectiveHooksThroughFilesystemHost } from '../hooks'
 import {
   findExistingWorktreeSymlinkPaths,
   removeWorktreeLinkedPaths
@@ -85,7 +85,7 @@ async function acceptRuntimeRegisteredLocalWorktreeRemoval(args: {
 }): Promise<RemoveWorktreeResult & { warning?: string }> {
   const { repo, registeredWorktree, localOptions } = args
   const canonicalPath = registeredWorktree.path
-  const hooks = getEffectiveHooks(repo)
+  const hooks = await getEffectiveHooksThroughFilesystemHost(repo)
   let warning: string | undefined
   // Archive refusal precedes refresh, preflights, PTY stop and Git deletion; failure must leave them untouched (#19334).
   let archiveHookOverride: ArchiveHookOverride | undefined
@@ -99,7 +99,9 @@ async function acceptRuntimeRegisteredLocalWorktreeRemoval(args: {
       canonicalPath,
       repo,
       undefined,
-      args.hasLocalOptions ? localOptions : undefined
+      args.hasLocalOptions ? localOptions : undefined,
+      undefined,
+      hooks.scripts.archive
     )
     archiveHookOverride = gateWorktreeRemovalOnArchiveHook({
       worktreePath: canonicalPath,

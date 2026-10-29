@@ -1,4 +1,5 @@
 import { EventEmitter } from 'node:events'
+import type { Serializable } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { Worker } from 'node:worker_threads'
 import { LazyWorkerThreadHost, type WorkerThreadFactory } from '../lazy-worker-thread-host'
@@ -7,7 +8,8 @@ import type {
   WorkerThreadChildErrorPayload,
   WorkerThreadChildEvent,
   WorkerThreadChildRequest,
-  WorkerThreadChildSpec
+  WorkerThreadChildSpec,
+  WorkerThreadForkSpec
 } from './worker-thread-child-process-protocol'
 
 // #27362: Windows code-integrity hashing can block CreateProcessW for seconds on the calling loop. Spawn in a worker and fail closed if unavailable (#11161).
@@ -51,6 +53,9 @@ class WorkerThreadChildStdin extends EventEmitter {
 
 /** Main-thread stand-in for a piped ChildProcess whose real process lives on the worker. */
 export class WorkerThreadChildProcess extends EventEmitter {
+  connected = true
+  private nextSendId = 1
+  private readonly sends = new Map<number, (error: Error | null) => void>()
   pid: number | undefined = undefined
   exitCode: number | null = null
   signalCode: NodeJS.Signals | null = null
@@ -60,21 +65,48 @@ export class WorkerThreadChildProcess extends EventEmitter {
 
   constructor(
     readonly id: number,
-    private readonly send: SendRequest
+    private readonly sendRequest: SendRequest
   ) {
     super()
-    this.stdin = new WorkerThreadChildStdin(id, send)
+    this.stdin = new WorkerThreadChildStdin(id, sendRequest)
   }
 
   kill(signal?: NodeJS.Signals): boolean {
     if (this.exitCode !== null || this.signalCode !== null) {
       return false
     }
-    return this.send({ type: 'kill', id: this.id, signal })
+    return this.sendRequest({ type: 'kill', id: this.id, signal })
+  }
+
+  send(message: Serializable, callback?: (error: Error | null) => void): boolean {
+    const sendId = this.nextSendId++
+    if (callback) {
+      this.sends.set(sendId, callback)
+    }
+    if (this.connected && this.sendRequest({ type: 'ipc-send', id: this.id, sendId, message })) {
+      return true
+    }
+    this.sends.delete(sendId)
+    process.nextTick(() => callback?.(new Error('Child process worker is unavailable')))
+    return false
   }
 
   receive(event: WorkerThreadChildEvent): void {
     switch (event.type) {
+      case 'ipc-message':
+        this.emit('message', event.message)
+        return
+      case 'ipc-sent': {
+        const callback = this.sends.get(event.sendId)
+        this.sends.delete(event.sendId)
+        callback?.(event.error ? toError(event.error) : null)
+        return
+      }
+      case 'disconnect':
+        this.connected = false
+        this.failPendingSends()
+        this.emit('disconnect')
+        return
       case 'spawn':
         this.pid = event.pid
         this.emit('spawn')
@@ -87,10 +119,13 @@ export class WorkerThreadChildProcess extends EventEmitter {
             Buffer.from(event.chunk.buffer, event.chunk.byteOffset, event.chunk.byteLength)
           )
         } finally {
-          this.send({ type: 'output-consumed', id: this.id, bytes: event.chunk.byteLength })
+          this.sendRequest({ type: 'output-consumed', id: this.id, bytes: event.chunk.byteLength })
         }
         return
       case 'error':
+        if (!this.connected) {
+          this.failPendingSends()
+        }
         this.emitErrorIfObserved(event.error)
         return
       case 'spawn-error':
@@ -99,12 +134,22 @@ export class WorkerThreadChildProcess extends EventEmitter {
         this.receive({ type: 'close', id: this.id, code: SPAWN_FAILED_EXIT_CODE, signal: null })
         return
       case 'exit':
+        this.connected = false
+        this.failPendingSends()
         this.exitCode = event.code
         this.signalCode = event.signal
         this.emit('exit', event.code, event.signal)
         return
       case 'close':
         this.emit('close', event.code, event.signal)
+    }
+  }
+
+  private failPendingSends(): void {
+    const callbacks = [...this.sends.values()]
+    this.sends.clear()
+    for (const callback of callbacks) {
+      callback(new Error('Child process IPC is unavailable'))
     }
   }
 
@@ -121,10 +166,13 @@ export class WorkerThreadChildProcessHost {
   private readonly children = new Map<number, WorkerThreadChildProcess>()
   private nextId = 1
 
-  constructor(factory: WorkerThreadFactory) {
+  constructor(
+    private readonly factory: WorkerThreadFactory,
+    idleTeardownMs = IDLE_TEARDOWN_MS
+  ) {
     this.host = new LazyWorkerThreadHost<WorkerThreadChildEvent>({
       factory,
-      idleTeardownMs: IDLE_TEARDOWN_MS,
+      idleTeardownMs,
       onMessage: (event) => this.route(event),
       onError: (error) => this.abandonAll(`Child process worker failed: ${error.message}`),
       onExit: (code) => this.abandonAll(`Child process worker exited with code ${code}`),
@@ -137,12 +185,24 @@ export class WorkerThreadChildProcessHost {
   }
 
   spawn(spec: WorkerThreadChildSpec): WorkerThreadChildProcess {
-    const id = this.nextId++
+    return this.start({ type: 'spawn', id: this.nextId++, spec })
+  }
+
+  fork(spec: WorkerThreadForkSpec): WorkerThreadChildProcess {
+    // A blocked fork must not stall an established sibling's IPC, kill, or exit delivery.
+    const isolated = new WorkerThreadChildProcessHost(this.factory, 0)
+    return isolated.start({ type: 'fork', id: 1, spec })
+  }
+
+  private start(
+    request: Extract<WorkerThreadChildRequest, { type: 'spawn' | 'fork' }>
+  ): WorkerThreadChildProcess {
+    const { id } = request
     const child = new WorkerThreadChildProcess(id, (request) => this.post(request))
     if (this.host.ensure()) {
       this.host.clearIdleTimer()
       this.children.set(id, child)
-      if (this.post({ type: 'spawn', id, spec })) {
+      if (this.post(request)) {
         return child
       }
       this.forget(id)
@@ -195,6 +255,7 @@ export class WorkerThreadChildProcessHost {
     this.children.clear()
     this.host.destroy()
     for (const child of abandoned) {
+      child.connected = false
       child.receive({ type: 'error', id: child.id, error: { message } })
     }
   }
@@ -213,8 +274,14 @@ function defaultWorkerFactory(): Worker {
 }
 
 let sharedHost: WorkerThreadChildProcessHost | null = null
+let sharedForkHost: WorkerThreadChildProcessHost | null = null
 
 export function spawnProcessOnWorkerThread(spec: WorkerThreadChildSpec): WorkerThreadChildProcess {
   sharedHost ??= new WorkerThreadChildProcessHost(defaultWorkerFactory)
   return sharedHost.spawn(spec)
+}
+
+export function forkProcessOnWorkerThread(spec: WorkerThreadForkSpec): WorkerThreadChildProcess {
+  sharedForkHost ??= new WorkerThreadChildProcessHost(defaultWorkerFactory)
+  return sharedForkHost.fork(spec)
 }

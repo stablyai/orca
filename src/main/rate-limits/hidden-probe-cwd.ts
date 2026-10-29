@@ -1,4 +1,4 @@
-import { mkdirSync, realpathSync, statSync } from 'node:fs'
+import { prepareRateLimitPtyCwdThroughFilesystemHost } from '../filesystem-host/filesystem-host-read-client'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -17,11 +17,12 @@ function resolveUserDataRoot(userDataPath?: string | null): string {
   return join(tmpdir(), 'orca-rate-limit-pty')
 }
 
-export function resolveHiddenProbeCwd(options?: { userDataPath?: string | null }): string {
+export async function resolveHiddenProbeCwd(options?: {
+  userDataPath?: string | null
+}): Promise<string> {
   const cwd = join(resolveUserDataRoot(options?.userDataPath), HIDDEN_PROBE_CWD_DIR)
-  mkdirSync(cwd, { recursive: true })
-  const realCwd = realpathSync(cwd)
-  if (isRootLikePath(realCwd) || !statSync(realCwd).isDirectory()) {
+  const realCwd = await prepareRateLimitPtyCwdThroughFilesystemHost(cwd)
+  if (isRootLikePath(realCwd)) {
     throw new Error(`Hidden probe cwd is not a safe directory: ${realCwd}`)
   }
   return realCwd

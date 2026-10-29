@@ -1,3 +1,6 @@
+import { broadcastKeybindingsChanged } from '../ipc/keybindings'
+import { hydrateFilesystemHostFailureDomains } from '../filesystem-host/filesystem-host-read-client'
+import { refreshGrokAuthSnapshot } from '../rate-limits/grok-auth-snapshot'
 import { app } from 'electron'
 import { KeybindingService } from '../keybindings/keybinding-service'
 import { createProviderAccountServices } from '../provider-account-services'
@@ -52,6 +55,8 @@ export function initializeMainProcessAccountServices(): void {
     startBackfill: startCodexSessionBackfillInBackground,
     startIndexHeal: startCodexSessionIndexHealInBackground
   })
+  hydrateFilesystemHostFailureDomains([app.getPath('home'), app.getPath('userData')])
+  void refreshGrokAuthSnapshot()
   const services = createProviderAccountServices(store, {
     codexAccountLifecycle: { onHostSystemDefaultSelected: state.codexSessionMigration.requestRun },
     setClaudeStatusLineListener: (listener) => agentHookServer.setClaudeStatusLineListener(listener)
@@ -83,5 +88,12 @@ export function initializeMainProcessAccountServices(): void {
       markSeeded: () => store.updateSettings({ tabSwitchKeybindingSeed: 'done' })
     }
   })
+  void state.keybindings
+    .reload()
+    .then(async (snapshot) => {
+      broadcastKeybindingsChanged(snapshot)
+      await state.pluginService?.reconcileActivationState()
+    })
+    .catch((error) => console.warn('Keybindings preparation failed', error))
   browserManager.setSettingsResolver(() => ({ keybindings: state.keybindings?.getOverrides() }))
 }

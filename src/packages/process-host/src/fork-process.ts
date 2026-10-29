@@ -19,6 +19,7 @@ export type ForkSpec = {
   execPath?: string
   /** Replaces the inherited process.execArgv (Node/V8 flags placed before the module path). */
   execArgv?: readonly string[]
+  serialization?: ForkOptions['serialization']
 }
 
 export function forkProcess(spec: ForkSpec): SpawnedProcess {
@@ -27,6 +28,7 @@ export function forkProcess(spec: ForkSpec): SpawnedProcess {
     env: spec.env,
     detached: spec.detached,
     stdio: spec.stdio,
+    ...(spec.serialization ? { serialization: spec.serialization } : {}),
     // Node treats an explicit undefined execPath differently from an absent key.
     ...(spec.execPath ? { execPath: spec.execPath } : {}),
     ...(spec.execArgv ? { execArgv: [...spec.execArgv] } : {})

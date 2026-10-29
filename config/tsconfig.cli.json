@@ -4,6 +4,7 @@
   // keeps Electron out of that graph.
   "include": [
     "../src/cli/**/*",
+    "../src/main/filesystem-host/filesystem-host-entry.ts",
     "../src/shared/**/*",
     "../src/shared/editor-language/monaco-language-associations.json",
     "../src/packages/process-host/src/__fixtures__/**/*",

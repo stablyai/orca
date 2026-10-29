@@ -96,7 +96,7 @@ async function fetchViaRpc(options?: CodexRateLimitFetchOptions): Promise<Provid
     program: wslCodex ? wslCodex.command : codexCommand,
     args: wslCodex ? wslCodex.args : codexArgs,
     // wsl.exe holds cwd busy for ~60s; keep probes outside profile folders (#29845).
-    cwd: wslCodex ? resolveWslInteropSpawnCwd() : resolveHiddenProbeCwd(),
+    cwd: wslCodex ? resolveWslInteropSpawnCwd() : await resolveHiddenProbeCwd(),
     env: withCliRuntimeOnPath(codexCommand, {
       ...(wslCodex ? processEnvWithoutCodexHome() : process.env),
       // WSL probes keep the guest's own proxy env; a Windows proxy address may not resolve there.

@@ -4,6 +4,7 @@ import { CLI_MAIN_ENTRY_NAMES } from './plain-node-entry-guard'
 
 /** Main-build Rollup inputs: output file name (without .js) to its source entry. */
 export const MAIN_BUILD_ENTRY_POINTS: Record<string, string> = {
+  'filesystem-host-entry': resolve('src/main/filesystem-host/filesystem-host-entry.ts'),
   index: resolve('src/main/index.ts'),
   // Why: sandboxed webview preloads cannot load Rollup helper chunks.
   'browser-window-close-preload': resolve('src/preload/browser-window-close.ts'),

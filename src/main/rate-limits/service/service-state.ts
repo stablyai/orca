@@ -22,7 +22,6 @@ import {
   type NetworkProxySettings,
   DEFAULT_POLL_MS
 } from './service-types'
-import { readGrokAuthSession } from '../grok-auth'
 
 export abstract class RateLimitServiceState {
   protected state: InternalRateLimitState = {
@@ -37,7 +36,7 @@ export abstract class RateLimitServiceState {
     cursor: null,
     zcode: null
   }
-  protected grokAuthConfigured = readGrokAuthSession().status === 'ok'
+  protected grokAuthConfigured = false
   // Async Keychain/desktop DB probing belongs in fetch cycles, never synchronous construction.
   protected cursorAuthConfigured = false
   protected openCodeGoApiKeyConfigured = false

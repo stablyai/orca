@@ -1,5 +1,6 @@
-import type { PipedChildProcess } from '@orca/process-host/process-spec'
+import type { ChildProcess } from 'node:child_process'
 import { spawnProcess } from '@orca/process-host'
+import { forkProcess } from '@orca/process-host/fork-process'
 import type {
   WorkerThreadChildErrorPayload,
   WorkerThreadChildEvent,
@@ -24,12 +25,22 @@ function toErrorPayload(error: unknown): WorkerThreadChildErrorPayload {
 }
 
 export function serveWorkerThreadChildProcesses(port: WorkerThreadChildPort): void {
-  const children = new Map<number, { child: PipedChildProcess; pendingOutputBytes: number }>()
+  const children = new Map<number, { child: ChildProcess; pendingOutputBytes: number }>()
 
-  const spawnChild = ({ id, spec }: Extract<WorkerThreadChildRequest, { type: 'spawn' }>): void => {
-    let child: PipedChildProcess
+  const spawnChild = (
+    request: Extract<WorkerThreadChildRequest, { type: 'spawn' | 'fork' }>
+  ): void => {
+    const { id } = request
+    let child: ChildProcess
     try {
-      child = spawnProcess({ ...spec, stdio: ['pipe', 'pipe', 'pipe'] })
+      child =
+        request.type === 'fork'
+          ? forkProcess({
+              ...request.spec,
+              serialization: 'advanced',
+              stdio: ['ignore', 'ignore', 'ignore', 'ipc']
+            })
+          : spawnProcess({ ...request.spec, stdio: ['pipe', 'pipe', 'pipe'] })
     } catch (error) {
       port.postMessage({ type: 'spawn-error', id, error: toErrorPayload(error) })
       return
@@ -49,6 +60,10 @@ export function serveWorkerThreadChildProcesses(port: WorkerThreadChildPort): vo
     const postError = (error: Error): void =>
       port.postMessage({ type: 'error', id, error: toErrorPayload(error) })
     child.on('spawn', () => port.postMessage({ type: 'spawn', id, pid: child.pid }))
+    child.on('message', (message: unknown) =>
+      port.postMessage({ type: 'ipc-message', id, message })
+    )
+    child.on('disconnect', () => port.postMessage({ type: 'disconnect', id }))
     child.stdout?.on('data', (chunk: Buffer) => postOutput('stdout', chunk))
     child.stderr?.on('data', (chunk: Buffer) => postOutput('stderr', chunk))
     // An unhandled stream error would take the whole worker, and every other child, down.
@@ -65,7 +80,7 @@ export function serveWorkerThreadChildProcesses(port: WorkerThreadChildPort): vo
   }
 
   port.on('message', (request) => {
-    if (request.type === 'spawn') {
+    if (request.type === 'spawn' || request.type === 'fork') {
       spawnChild(request)
       return
     }
@@ -75,7 +90,16 @@ export function serveWorkerThreadChildProcesses(port: WorkerThreadChildPort): vo
     }
     const { child } = state
     try {
-      if (request.type === 'output-consumed') {
+      if (request.type === 'ipc-send') {
+        child.send(request.message, (error: Error | null) => {
+          port.postMessage({
+            type: 'ipc-sent',
+            id: request.id,
+            sendId: request.sendId,
+            ...(error ? { error: toErrorPayload(error) } : {})
+          })
+        })
+      } else if (request.type === 'output-consumed') {
         state.pendingOutputBytes = Math.max(0, state.pendingOutputBytes - request.bytes)
         if (state.pendingOutputBytes < OUTPUT_HIGH_WATER_BYTES) {
           child.stdout?.resume()
@@ -88,7 +112,15 @@ export function serveWorkerThreadChildProcesses(port: WorkerThreadChildPort): vo
       } else {
         child.kill(request.signal)
       }
-    } catch {
+    } catch (error) {
+      if (request.type === 'ipc-send') {
+        port.postMessage({
+          type: 'ipc-sent',
+          id: request.id,
+          sendId: request.sendId,
+          error: toErrorPayload(error)
+        })
+      }
       // Races with exit; the exit/close events still reach the stand-in.
     }
   })

@@ -12,6 +12,10 @@ const {
   verifyPackagedMacTerminalHostBoots
 } = require('./scripts/verify-packaged-daemon-entry.cjs')
 const {
+  assertPackagedFilesystemHostEntryExists,
+  verifyPackagedFilesystemHostEntryBoots
+} = require('./scripts/verify-packaged-filesystem-host-entry.cjs')
+const {
   buildMacTerminalHost,
   macTerminalHostSignIgnore,
   verifyMacTerminalHost
@@ -316,6 +320,8 @@ module.exports = {
   // Keep out/package.json’s CommonJS boundary and remote CLI WebSocket/E2EE deps. Electron-only workers may stay packed.
   // Renderer/mobile-web assets need real paths: swept temporary asar extracts are not recreated (#27976).
   asarUnpack: [
+    'out/main/filesystem-host-entry.js',
+    'out/main/filesystem-host-entry.js.map',
     'out/package.json',
     'out/cli/**',
     'out/shared/**',
@@ -450,12 +456,14 @@ module.exports = {
     }
     if (canExecuteTargetArch) {
       verifyPackagedDaemonEntryBoots(resourcesDir)
+      verifyPackagedFilesystemHostEntryBoots(resourcesDir)
       if (appImageNodeRuntime) {
         await verifyAppImageNodeRuntimeServesPty(resourcesDir, appImageNodeRuntime)
       }
     } else {
       // Cross-arch smoke cannot run, but missing unpacked entry is always a packaging error.
       assertPackagedDaemonEntryExists(resourcesDir)
+      assertPackagedFilesystemHostEntryExists(resourcesDir)
       console.log(
         `[verify-packaged-daemon-entry] skipped boot on cross-arch slice (target ${context.arch}, host ${process.arch})`
       )

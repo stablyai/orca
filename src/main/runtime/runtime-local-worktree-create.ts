@@ -1,6 +1,6 @@
 import { worktreeCreateGit } from '../git/worktree-create-git-executor'
 import { shouldRunSetupForCreate } from '../effective-hook-config'
-import { getEffectiveHooks } from '../hooks'
+import { getEffectiveHooksThroughFilesystemHost } from '../hooks'
 import type { Repo } from '../../shared/repo-types'
 import type { Worktree } from '../../shared/worktree/types'
 import type { RuntimeStore } from './runtime-store-contract'
@@ -94,7 +94,7 @@ async function performRuntimeLocalWorktreeCreate<T>(
   const worktreeGitOptions = getLocalProjectWorktreeGitOptions(store, repo)
   args.timing.recordExecutionHost(localWorktreeCreateExecutionHost(gitExecOptions))
   // Resolve ask setup before Git work; checking after add formerly orphaned refused worktrees.
-  if (getEffectiveHooks(repo)?.scripts.setup) {
+  if ((await getEffectiveHooksThroughFilesystemHost(repo))?.scripts.setup) {
     try {
       shouldRunSetupForCreate(repo, resolveRuntimeSetupDecision(request))
     } catch (error) {

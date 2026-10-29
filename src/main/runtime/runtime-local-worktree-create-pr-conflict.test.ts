@@ -32,7 +32,7 @@ vi.mock('../git/repo', () => ({
   getBranchConflictKind: mocks.branchConflict
 }))
 vi.mock('../git/git-username', () => ({ resolveLocalGitUsername: async () => '' }))
-vi.mock('../hooks', () => ({ getEffectiveHooks: mocks.effectiveHooks }))
+vi.mock('../hooks', () => ({ getEffectiveHooksThroughFilesystemHost: mocks.effectiveHooks }))
 vi.mock('../git/worktree-base-ref-probe', () => ({ hasLocalWorktreeBaseRef: mocks.hasBase }))
 vi.mock('./runtime-worktree-create-git', () => ({
   resolveCreateBranchName: mocks.branchName,

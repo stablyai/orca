@@ -1,6 +1,7 @@
 import type { CreateWorktreeResult, SetupDecision } from '../../shared/worktree/create-types'
 import type { Repo } from '../../shared/repo-types'
-import { getEffectiveHooks, loadHooks, runHook } from '../hooks'
+import { loadHooksThroughFilesystemHost, runHook } from '../hooks'
+import { getEffectiveHooksFromConfig } from '../effective-hook-config'
 import { createSetupRunnerScript, resolveSetupRunnerShell } from '../worktree-runner-script'
 import { getDefaultTabsLaunch, shouldRunSetupForCreate } from '../effective-hook-config'
 import type { RuntimeManagedWorktreeCreateArgs } from './runtime-managed-worktree-create-types'
@@ -33,9 +34,22 @@ export async function prepareRuntimeLocalWorktreeSetup(args: {
   const { request, repo, worktreePath, settings } = args
   let warning = args.warning
   let setup: CreateWorktreeResult['setup']
-  const yamlHooks = loadHooks(worktreePath)
-  const hooks = getEffectiveHooks(repo, worktreePath)
   const effectiveDecision = resolveRuntimeSetupDecision(request)
+  let yamlHooks: Awaited<ReturnType<typeof loadHooksThroughFilesystemHost>>
+  try {
+    yamlHooks = await loadHooksThroughFilesystemHost(worktreePath)
+  } catch (error) {
+    const skipped = `Worktree created, but orca.yaml could not be inspected; setup and default tab commands skipped.`
+    console.warn(`[hooks] ${skipped}`, error)
+    return {
+      warning: warning ? `${warning} Also ${skipped}` : skipped,
+      effectiveDecision,
+      hookFound: false,
+      shouldRunSetup: false,
+      didStartInProcessSetupHook: false
+    }
+  }
+  const hooks = getEffectiveHooksFromConfig(repo, yamlHooks)
   let defaultTabs: CreateWorktreeResult['defaultTabs']
   try {
     defaultTabs = getDefaultTabsLaunch(yamlHooks, repo, effectiveDecision)
@@ -70,7 +84,15 @@ export async function prepareRuntimeLocalWorktreeSetup(args: {
       }
     } else {
       didStartInProcessSetupHook = true
-      void runHook('setup', worktreePath, repo, worktreePath, args.runtimeTarget).then((result) => {
+      void runHook(
+        'setup',
+        worktreePath,
+        repo,
+        worktreePath,
+        args.runtimeTarget,
+        undefined,
+        hooks.scripts.setup
+      ).then((result) => {
         if (!result.success) {
           console.error(`[hooks] setup hook failed for ${worktreePath}:`, result.output)
         }

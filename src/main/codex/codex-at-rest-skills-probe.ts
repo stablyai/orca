@@ -161,7 +161,7 @@ export async function probe(
       command: pool.command,
       args: [...pool.args, 'app-server'],
       // skills/list takes the folder per request; a settling probe in it blocks Windows worktree removal (#33174).
-      cwd: resolveHiddenProbeCwd(),
+      cwd: await resolveHiddenProbeCwd(),
       cliPath: pool.command,
       env: { ...pool.environment, CODEX_HOME: pool.accountHomePath },
       envToDelete: [NATIVE_CHAT_SCRATCH_DIR_ENV, LEGACY_NATIVE_CHAT_VISUALS_DIR_ENV],

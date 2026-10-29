@@ -133,7 +133,7 @@ describe('RateLimitService', () => {
     expect(service.getState().zcode?.session?.usedPercent).toBe(42)
   })
 
-  it('does not reread Grok auth when callers read state snapshots', () => {
+  it('does not reread Grok auth when callers read state snapshots', async () => {
     vi.mocked(readGrokAuthSession).mockReturnValue({
       status: 'ok',
       session: {
@@ -146,6 +146,7 @@ describe('RateLimitService', () => {
       }
     })
     const service = new RateLimitService()
+    await service.refreshGrok()
     vi.mocked(readGrokAuthSession).mockClear()
 
     expect(service.getState().grokAuthConfigured).toBe(true)
@@ -371,7 +372,7 @@ describe('RateLimitService', () => {
     const refresh = service.refresh().then(() => {
       refreshResolved = true
     })
-    await flushMicrotasks(8)
+    await flushMicrotasks(20)
 
     const pendingGrokState = service.getState()
     expect(pendingGrokState.claude?.status).toBe('ok')
@@ -430,8 +431,7 @@ describe('RateLimitService', () => {
     )
 
     const activeFetch = serviceInternals(service).fetchAll()
-    await Promise.resolve()
-    await Promise.resolve()
+    await flushMicrotasks(12)
 
     const queuedRefresh = service.refresh()
     await Promise.resolve()
@@ -674,3 +674,163 @@ describe('RateLimitService', () => {
     expect(state.opencodeGo?.error).toBe('No workspace ID found')
   })
 })
+
+describe('account preparation failure settlement', () => {
+  beforeEach(() => {
+    resetRateLimitProviderMocks()
+    mockFreshBackgroundProviderFetches()
+    vi.mocked(fetchClaudeRateLimits).mockResolvedValue(okProvider('claude', 17))
+  })
+  it.each(['full', 'single'] as const)(
+    'settles cold and warm preparation failures in a %s cycle',
+    async (cycle) => {
+      const service = new RateLimitService()
+      let failed = false
+      service.setCodexHomePathResolver(async () => {
+        if (failed) {
+          throw new Error('private path')
+        }
+        return { kind: 'ready', codexHomePath: '/account-A' }
+      })
+      service.setClaudeAuthPreparationResolver(async () => {
+        if (failed) {
+          throw new Error('private path')
+        }
+        return { configDir: '/account-A', envPatch: {}, provenance: 'A' }
+      })
+      const run = async () => {
+        if (cycle === 'full') {
+          await service.refresh()
+        } else {
+          await service.refreshCodexForTarget()
+          await service.refreshClaudeForTarget()
+        }
+      }
+      failed = true
+      await run()
+      expect(service.getState().codex?.status).toBe('error')
+      expect(service.getState().claude?.status).toBe('error')
+      failed = false
+      await run()
+      expect(service.getState().codex?.status).toBe('ok')
+      expect(service.getState().claude?.status).toBe('ok')
+      failed = true
+      await run()
+      expect(service.getState().codex).toMatchObject({
+        status: 'error',
+        session: { usedPercent: 24 }
+      })
+      expect(service.getState().claude).toMatchObject({
+        status: 'error',
+        session: { usedPercent: 17 }
+      })
+      vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 24 * 60 * 60 * 1000)
+      try {
+        await run()
+        expect(service.getState().codex?.session).toBeNull()
+        expect(service.getState().claude?.session).toBeNull()
+      } finally {
+        vi.restoreAllMocks()
+        service.stop()
+      }
+    }
+  )
+})
+
+it('starts sibling providers during parked host discovery, settles on stop, and retries after physical recovery', async () => {
+  resetRateLimitProviderMocks()
+  mockFreshBackgroundProviderFetches()
+  vi.mocked(fetchClaudeRateLimits).mockResolvedValue(okProvider('claude', 3))
+  const { FilesystemHostSupervisor } = await import('../filesystem-host/filesystem-host-supervisor')
+  const { FilesystemHostProcess } = await import('../filesystem-host/filesystem-host-process')
+  const { FilesystemHostReadAuthority } =
+    await import('../filesystem-host/filesystem-host-read-authority')
+  const { configureFilesystemHostReadAuthority, setFilesystemHostReadClientForTests } =
+    await import('../filesystem-host/filesystem-host-read-client')
+  const { extractOAuthClientCredentials } = await import('./gemini-cli-oauth-extractor')
+  const { fileURLToPath } = await import('node:url')
+  const fixture = fileURLToPath(
+    new URL('../filesystem-host/__fixtures__/filesystem-host-hang-fixture.cjs', import.meta.url)
+  )
+  let launches = 0
+  let ready = false
+  const supervisor = new FilesystemHostSupervisor({
+    entryPath: fixture,
+    breakerRecoveryDelayMs: 1,
+    startProcess: async (options) => {
+      if (++launches === 1) {
+        const child = await FilesystemHostProcess.start({
+          ...options,
+          exitDeadlineMs: 100,
+          hardKillDelayMs: 10
+        })
+        ready = true
+        return child
+      }
+      return {
+        invoke: async () => ({
+          kind: 'discover-gemini-oauth',
+          credentials: { clientId: 'recovered', clientSecret: 'secret' }
+        }),
+        retire: async () => {
+          options.onPhysicalExit?.()
+          return true
+        }
+      }
+    }
+  })
+  const authority = new FilesystemHostReadAuthority({
+    entryPath: fixture,
+    supervisor: {
+      dispatch: (input) => supervisor.dispatch({ ...input, deadlineMs: 250 }),
+      publishFailureDomain: () => {},
+      removeFailureDomain: () => {},
+      dispose: () => supervisor.dispose()
+    }
+  })
+  configureFilesystemHostReadAuthority(authority)
+  vi.mocked(fetchGeminiRateLimits).mockImplementation(async () => {
+    await extractOAuthClientCredentials()
+    return okProvider('gemini', 2)
+  })
+  const service = new RateLimitService()
+  try {
+    const refresh = service.refresh()
+    await vi.waitFor(() => expect(ready).toBe(true))
+    expect(fetchClaudeRateLimits).toHaveBeenCalledOnce()
+    expect(fetchCodexRateLimits).toHaveBeenCalledOnce()
+    service.stop()
+    await refresh
+    await vi.waitFor(() => expect(supervisor.health().physicalChildren).toBe(0))
+    await service.refresh()
+    expect(service.getState().gemini?.status).toBe('ok')
+  } finally {
+    service.stop()
+    await authority.dispose()
+    setFilesystemHostReadClientForTests(null)
+  }
+})
+
+it.each(['full', 'single'] as const)(
+  'settles a transient Claude preparation failure that recovers during %s result validation',
+  async (cycle) => {
+    resetRateLimitProviderMocks()
+    mockFreshBackgroundProviderFetches()
+    const service = new RateLimitService()
+    const resolver = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('unavailable'))
+      .mockResolvedValue({ configDir: '/account', envPatch: {}, provenance: 'A' })
+    service.setClaudeAuthPreparationResolver(resolver)
+    try {
+      await (cycle === 'full' ? service.refresh() : service.refreshClaudeForTarget())
+      expect(service.getState().claude).toMatchObject({
+        status: 'error',
+        error: 'Claude account preparation is unavailable'
+      })
+      expect(fetchClaudeRateLimits).not.toHaveBeenCalled()
+    } finally {
+      service.stop()
+    }
+  }
+)

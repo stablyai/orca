@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs'
+import { readSnapshotFileThroughFilesystemHost } from '../filesystem-host/filesystem-host-read-client'
 import { join } from 'node:path'
 import { resolveGrokHomeDir } from '../../shared/grok-session-paths'
 
@@ -80,13 +80,23 @@ function isPreferredGrokAuthKey(key: string): boolean {
   return key === PREFERRED_GROK_AUTH_ISSUER || key.startsWith(`${PREFERRED_GROK_AUTH_ISSUER}::`)
 }
 
-export function readGrokAuthSession(): GrokAuthReadResult {
+export async function readGrokAuthSession(): Promise<GrokAuthReadResult> {
   const path = getGrokAuthPath()
-  if (!existsSync(path)) {
-    return { status: 'missing' }
-  }
   try {
-    const parsed: unknown = JSON.parse(readFileSync(path, 'utf-8'))
+    return parseGrokAuthSession(
+      (await readSnapshotFileThroughFilesystemHost(path, 'grok-auth')).toString('utf8')
+    )
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException)?.code === 'ENOENT') {
+      return { status: 'missing' }
+    }
+    return { status: 'error', error: getGrokAuthReadError(err) }
+  }
+}
+
+export function parseGrokAuthSession(contents: string): GrokAuthReadResult {
+  try {
+    const parsed: unknown = JSON.parse(contents)
     if (typeof parsed !== 'object' || parsed === null) {
       return { status: 'error', error: 'Grok auth file is invalid' }
     }

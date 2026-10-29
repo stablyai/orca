@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { realpathSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -12,6 +12,7 @@ import {
   FOREIGN_SQLITE_READER_ENTRY_FILENAME,
   resolveForeignSqliteReaderEntryPath
 } from '../foreign-sqlite-readers/foreign-sqlite-reader-entry-path'
+import { resolveFilesystemHostEntryPath } from '../filesystem-host/filesystem-host-entry-path'
 import { currentWorkerEntryLayout } from '../worker-thread-entry-path'
 import { installOrcadHostAdapters } from './orcad-host-adapters'
 
@@ -21,8 +22,9 @@ describe('orcad forked-child paths', () => {
   let originalArgv: string[]
 
   beforeEach(() => {
-    deployRoot = mkdtempSync(join(tmpdir(), 'orcad-deploy-'))
+    deployRoot = realpathSync(mkdtempSync(join(tmpdir(), 'orcad-deploy-')))
     writeFileSync(join(deployRoot, 'orcad.js'), '')
+    writeFileSync(join(deployRoot, 'filesystem-host-entry.js'), '')
     writeFileSync(join(deployRoot, 'parcel-watcher-process-entry.js'), '')
     writeFileSync(join(deployRoot, FOREIGN_SQLITE_READER_ENTRY_FILENAME), '')
     writeFileSync(join(deployRoot, AI_VAULT_SERVICE_ENTRY_FILENAME), '')
@@ -34,6 +36,12 @@ describe('orcad forked-child paths', () => {
   afterEach(() => {
     process.argv = originalArgv
     rmSync(deployRoot, { recursive: true, force: true })
+  })
+
+  it('forks the filesystem host shipped beside orcad.js', () => {
+    expect(resolveFilesystemHostEntryPath(getAppEnvironment().getAppPath(), false)).toBe(
+      join(deployRoot, 'filesystem-host-entry.js')
+    )
   })
 
   it('forks the watcher child shipped beside orcad.js', () => {

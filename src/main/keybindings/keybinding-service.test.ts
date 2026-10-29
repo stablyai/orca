@@ -66,13 +66,14 @@ describe('KeybindingService tab-switch cohort seeding', () => {
 
   it.each(PLATFORMS)(
     'fresh install (%s) adopts the swapped defaults and writes no file',
-    (platform) => {
+    async (platform) => {
       const cohort = makeCohort(false)
       const service = new KeybindingService({
         homePath: home,
         platform,
         legacyTabSwitchSeed: cohort.controller
       })
+      await service.reload()
 
       expect(cohort.seeded()).toBe(false)
       expect(existsSync(getUserKeybindingsPath(home))).toBe(false)
@@ -106,13 +107,14 @@ describe('KeybindingService tab-switch cohort seeding', () => {
 
   it.each(PLATFORMS)(
     'existing install (%s) keeps the pre-swap chords exactly, on a clean profile',
-    (platform) => {
+    async (platform) => {
       const cohort = makeCohort(true)
       const service = new KeybindingService({
         homePath: home,
         platform,
         legacyTabSwitchSeed: cohort.controller
       })
+      await service.reload()
 
       expect(cohort.seeded()).toBe(true)
       const overrides = service.getOverrides()
@@ -142,7 +144,7 @@ describe('KeybindingService tab-switch cohort seeding', () => {
     }
   )
 
-  it('existing install keeps a rebound action AND pins the pre-swap default on the rest', () => {
+  it('existing install keeps a rebound action AND pins the pre-swap default on the rest', async () => {
     const platform: NodeJS.Platform = 'darwin'
     writeKeybindingOverride(getUserKeybindingsPath(home), platform, 'tab.nextSameType', ['Mod+K'])
 
@@ -152,6 +154,7 @@ describe('KeybindingService tab-switch cohort seeding', () => {
       platform,
       legacyTabSwitchSeed: cohort.controller
     })
+    await service.reload()
     const overrides = service.getOverrides()
 
     expect(getEffectiveKeybindingsForAction('tab.nextSameType', platform, overrides)).toEqual([
@@ -168,7 +171,7 @@ describe('KeybindingService tab-switch cohort seeding', () => {
     ])
   })
 
-  it('is idempotent: a second launch after the seed changes nothing', () => {
+  it('is idempotent: a second launch after the seed changes nothing', async () => {
     const platform: NodeJS.Platform = 'linux'
     const cohort = makeCohort(true)
     const first = new KeybindingService({
@@ -176,6 +179,7 @@ describe('KeybindingService tab-switch cohort seeding', () => {
       platform,
       legacyTabSwitchSeed: cohort.controller
     })
+    await first.reload()
     const afterFirst = first.getOverrides()
 
     // Reuse the cohort after markSeeded to model the persisted done flag.
@@ -184,6 +188,7 @@ describe('KeybindingService tab-switch cohort seeding', () => {
       platform,
       legacyTabSwitchSeed: cohort.controller
     })
+    await second.reload()
     expect(second.getOverrides()).toEqual(afterFirst)
     for (const actionId of SWAPPED_ACTIONS) {
       expect(getEffectiveKeybindingsForAction(actionId, platform, second.getOverrides())).toEqual(
@@ -192,20 +197,16 @@ describe('KeybindingService tab-switch cohort seeding', () => {
     }
   })
 
-  it('leaves the cohort pending when the seed write fails (retries next launch)', () => {
-    // A file at homePath forces mkdir failure; the cohort must remain pending.
+  it('leaves the cohort pending when the seed write fails (retries next launch)', async () => {
     const fileHome = join(home, 'not-a-dir')
     writeFileSync(fileHome, 'x', 'utf8')
     const cohort = makeCohort(true)
-
-    expect(
-      () =>
-        new KeybindingService({
-          homePath: fileHome,
-          platform: 'darwin',
-          legacyTabSwitchSeed: cohort.controller
-        })
-    ).not.toThrow()
+    const service = new KeybindingService({
+      homePath: fileHome,
+      platform: 'darwin',
+      legacyTabSwitchSeed: cohort.controller
+    })
+    await expect(service.reload()).rejects.toThrow()
     expect(cohort.seeded()).toBe(false)
     expect(cohort.controller.isPending()).toBe(true)
   })

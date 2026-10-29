@@ -31,11 +31,13 @@ export function getUserKeybindingsPath(homePath: string): string {
 
 export function readKeybindingFile(
   path: string,
-  platform: NodeJS.Platform = process.platform
+  platform: NodeJS.Platform = process.platform,
+  contents?: string | null
 ): KeybindingFileSnapshot {
   const keybindingPlatform = getKeybindingPlatform(platform)
   const diagnostics: KeybindingFileDiagnostic[] = []
-  const readResult = readJsonDocument(path)
+  const readResult =
+    contents === undefined ? readJsonDocument(path) : parseKeybindingContents(contents)
   if (!readResult.document) {
     return {
       path,
@@ -236,4 +238,18 @@ export function writeKeybindingOverride(
       }
     }
   )
+}
+
+function parseKeybindingContents(contents: string | null): ReturnType<typeof readJsonDocument> {
+  if (contents === null) {
+    return { exists: false, document: createEmptyDocument() }
+  }
+  try {
+    const parsed: unknown = JSON.parse(contents)
+    return isJsonObject(parsed)
+      ? { exists: true, document: parsed }
+      : { exists: true, document: null, error: 'Keybindings file must contain a JSON object.' }
+  } catch {
+    return { exists: true, document: null, error: 'Invalid keybindings JSON' }
+  }
 }

@@ -321,13 +321,25 @@ vi.mock('../../agent-trust-presets', () => ({
   markCursorWorkspaceTrusted: markCursorWorkspaceTrustedMock
 }))
 
-vi.mock('../../hooks', () => ({
-  getEffectiveHooks: vi.fn().mockReturnValue(null),
-  loadHooks: vi.fn().mockReturnValue(null),
-  runHook: vi.fn().mockResolvedValue({ success: true, output: '' }),
-  hasHooksFile: vi.fn().mockReturnValue(false),
-  parseOrcaYaml: vi.fn().mockReturnValue(null)
-}))
+vi.mock('../../hooks', () => {
+  const getEffectiveHooks = vi.fn().mockReturnValue(null)
+  const loadHooks = vi.fn().mockReturnValue(null)
+  const hasHooksFile = vi.fn().mockReturnValue(false)
+  return {
+    getEffectiveHooks,
+    getEffectiveHooksThroughFilesystemHost: getEffectiveHooks,
+    loadHooks,
+    loadHooksThroughFilesystemHost: loadHooks,
+    hasHooksFile,
+    readHooksDocument: async () => ({
+      exists: hasHooksFile(),
+      hooks: loadHooks(),
+      mayNeedUpdate: false
+    }),
+    runHook: vi.fn().mockResolvedValue({ success: true, output: '' }),
+    parseOrcaYaml: vi.fn().mockReturnValue(null)
+  }
+})
 
 vi.mock('../../setup-runner-script-text', () => ({
   buildPosixRunnerScript: (script: string) => `#!/usr/bin/env bash\nset -e\n${script}\n`,

@@ -3,7 +3,7 @@ import type { KeybindingActionId, KeybindingFileSnapshot } from '../../shared/ke
 import type { KeybindingService } from '../keybindings/keybinding-service'
 import { rebuildAppMenu } from '../menu/register-app-menu'
 
-function broadcastKeybindingsChanged(snapshot: KeybindingFileSnapshot): void {
+export function broadcastKeybindingsChanged(snapshot: KeybindingFileSnapshot): void {
   for (const window of BrowserWindow.getAllWindows()) {
     if (!window.isDestroyed()) {
       window.webContents.send('keybindings:changed', snapshot)
@@ -18,8 +18,8 @@ export function registerKeybindingHandlers(
 ): void {
   ipcMain.handle('keybindings:get', () => service.getSnapshot())
 
-  ipcMain.handle('keybindings:ensureFile', () => {
-    const snapshot = service.ensureFile()
+  ipcMain.handle('keybindings:ensureFile', async () => {
+    const snapshot = await service.ensureFile()
     broadcastKeybindingsChanged(snapshot)
     onChanged?.()
     return snapshot
@@ -27,23 +27,23 @@ export function registerKeybindingHandlers(
 
   ipcMain.handle(
     'keybindings:setAction',
-    (_event, args: { actionId: KeybindingActionId; bindings: string[] | null }) => {
-      const snapshot = service.setActionBindings(args.actionId, args.bindings)
+    async (_event, args: { actionId: KeybindingActionId; bindings: string[] | null }) => {
+      const snapshot = await service.setActionBindings(args.actionId, args.bindings)
       broadcastKeybindingsChanged(snapshot)
       onChanged?.()
       return snapshot
     }
   )
 
-  ipcMain.handle('keybindings:reload', () => {
-    const snapshot = service.reload()
+  ipcMain.handle('keybindings:reload', async () => {
+    const snapshot = await service.reload()
     broadcastKeybindingsChanged(snapshot)
     onChanged?.()
     return snapshot
   })
 
   ipcMain.handle('keybindings:openFile', async () => {
-    const snapshot = service.ensureFile()
+    const snapshot = await service.ensureFile()
     const error = await shell.openPath(snapshot.path)
     if (error) {
       throw new Error(error)
@@ -51,8 +51,8 @@ export function registerKeybindingHandlers(
     return snapshot
   })
 
-  ipcMain.handle('keybindings:revealFile', () => {
-    const snapshot = service.ensureFile()
+  ipcMain.handle('keybindings:revealFile', async () => {
+    const snapshot = await service.ensureFile()
     shell.showItemInFolder(snapshot.path)
     return snapshot
   })

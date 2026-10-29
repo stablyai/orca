@@ -3,7 +3,8 @@ import { createHash } from 'node:crypto'
 import { windowsFsPath } from '../wsl/wsl-unc-drive-fs-path'
 import { readFile } from 'node:fs/promises'
 import type { Repo } from '../../shared/repo-types'
-import { getEffectiveHooks, hasHooksFile, hasUnrecognizedOrcaYamlKeys, loadHooks } from '../hooks'
+import { readHooksDocument } from '../hooks'
+import { getEffectiveHooksFromConfig } from '../effective-hook-config'
 import { getEffectiveSetupRunPolicy } from '../effective-hook-config'
 import { getSetupConfig, getSetupTrustContent } from '../../shared/orca-hook-setup-config'
 import { isENOENT } from '../ipc/filesystem/filesystem-path-containment'
@@ -31,9 +32,12 @@ export class RuntimeRepositoryHooksCommands {
         source: null
       }
     }
-    const hasFile = hasHooksFile(repo.path)
-    const hooks = getEffectiveHooks(repo)
-    const sharedHooks = hasFile ? loadHooks(repo.path) : null
+    const document = isFolderRepo(repo)
+      ? { exists: false, hooks: null, mayNeedUpdate: false }
+      : await readHooksDocument(repo.path)
+    const hasFile = document.exists
+    const sharedHooks = document.hooks
+    const hooks = getEffectiveHooksFromConfig(repo, sharedHooks)
     const setupConfig = isFolderRepo(repo) ? null : getSetupConfig(repo, sharedHooks)
     return {
       hasHooksFile: hasFile,
@@ -59,13 +63,14 @@ export class RuntimeRepositoryHooksCommands {
     if (connectionId) {
       return { status: 'error' as const, hasHooks: false, hooks: null, mayNeedUpdate: false }
     }
-    const has = hasHooksFile(repo.path)
-    const hooks = has ? loadHooks(repo.path) : null
+    const document = await readHooksDocument(repo.path)
+    const has = document.exists
+    const hooks = document.hooks
     return {
       status: 'ok' as const,
       hasHooks: has,
       hooks,
-      mayNeedUpdate: has && !hooks && hasUnrecognizedOrcaYamlKeys(repo.path)
+      mayNeedUpdate: document.mayNeedUpdate
     }
   }
 

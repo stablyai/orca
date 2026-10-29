@@ -36,13 +36,15 @@ export abstract class RateLimitServiceProviderCycles extends RateLimitServiceFul
       ? null
       : this.getMissingWslCodexHomeResult(codexTarget)
     const codex = await (
-      missingWslCodexHome
-        ? Promise.resolve(missingWslCodexHome)
-        : fetchCodexRateLimits({
-            codexHomePath,
-            networkProxySettings: this.networkProxySettingsResolver?.(),
-            signal
-          })
+      codexHome.error
+        ? Promise.resolve(this.preparationFailure('codex', codexHome.error))
+        : missingWslCodexHome
+          ? Promise.resolve(missingWslCodexHome)
+          : fetchCodexRateLimits({
+              codexHomePath,
+              networkProxySettings: this.networkProxySettingsResolver?.(),
+              signal
+            })
     ).catch((err): ProviderRateLimits => ({
       provider: 'codex',
       session: null,
@@ -67,14 +69,21 @@ export abstract class RateLimitServiceProviderCycles extends RateLimitServiceFul
     const shouldApplyCodex =
       !latestCodexHome.skip &&
       codexGeneration === this.codexFetchGeneration &&
-      codexProvenance === this.getCodexProvenance(codexTarget, latestCodexHome.homePath)
+      (codexHome.error !== undefined ||
+        latestCodexHome.error !== undefined ||
+        codexProvenance === this.getCodexProvenance(codexTarget, latestCodexHome.homePath))
 
     if (shouldApplyCodex) {
       this.trackActiveFailureStreak('codex', codex)
     }
     this.updateState({
       ...this.state,
-      codex: shouldApplyCodex ? this.applyStalePolicy(codex, previousState.codex) : this.state.codex
+      codex: shouldApplyCodex
+        ? this.applyStalePolicy(
+            latestCodexHome.error ? this.preparationFailure('codex', latestCodexHome.error) : codex,
+            previousState.codex
+          )
+        : this.state.codex
     })
   }
 
@@ -92,7 +101,7 @@ export abstract class RateLimitServiceProviderCycles extends RateLimitServiceFul
     const claudeTarget = this.claudeFetchTarget
     // Why: capture before the resolver await so an account switch during it invalidates both the snapshot and the state apply.
     const claudeGeneration = this.claudeFetchGeneration
-    const claudeAuthPreparation = await this.claudeAuthPreparationResolver?.(claudeTarget)
+    const claudeAuthPreparation = await this.resolveClaudePreparation(claudeTarget)
     if (signal.aborted) {
       return
     }
@@ -105,13 +114,17 @@ export abstract class RateLimitServiceProviderCycles extends RateLimitServiceFul
       claude: this.withFetchingStatus(previousState.claude, 'claude')
     })
 
-    const claude = await fetchClaudeRateLimits({
-      authPreparation: claudeAuthPreparation,
-      allowPtyFallback: this.shouldAllowClaudePtyFallback(claudeAuthPreparation),
-      allowUsagePanelSupplement: this.shouldAllowClaudeUsagePanelSupplement(),
-      networkProxySettings: this.networkProxySettingsResolver?.(),
-      signal
-    }).catch((err): ProviderRateLimits => ({
+    const claude = await (
+      claudeAuthPreparation?.usageError
+        ? Promise.resolve(this.preparationFailure('claude', claudeAuthPreparation.usageError))
+        : fetchClaudeRateLimits({
+            authPreparation: claudeAuthPreparation,
+            allowPtyFallback: this.shouldAllowClaudePtyFallback(claudeAuthPreparation),
+            allowUsagePanelSupplement: this.shouldAllowClaudeUsagePanelSupplement(),
+            networkProxySettings: this.networkProxySettingsResolver?.(),
+            signal
+          })
+    ).catch((err): ProviderRateLimits => ({
       provider: 'claude',
       session: null,
       weekly: null,
@@ -124,14 +137,16 @@ export abstract class RateLimitServiceProviderCycles extends RateLimitServiceFul
       return
     }
 
-    const latestClaudeAuthPreparation = await this.claudeAuthPreparationResolver?.(claudeTarget)
+    const latestClaudeAuthPreparation = await this.resolveClaudePreparation(claudeTarget)
     if (signal.aborted) {
       return
     }
     const latestClaudeProvenance = latestClaudeAuthPreparation?.provenance ?? 'system'
     const shouldApplyClaude =
       claudeGeneration === this.claudeFetchGeneration &&
-      claudeProvenance === latestClaudeProvenance &&
+      (claudeAuthPreparation?.usageError !== undefined ||
+        claudeProvenance === latestClaudeProvenance ||
+        latestClaudeAuthPreparation?.usageError !== undefined) &&
       this.isSameClaudeTarget(claudeTarget, this.claudeFetchTarget)
 
     if (shouldApplyClaude) {
@@ -140,7 +155,12 @@ export abstract class RateLimitServiceProviderCycles extends RateLimitServiceFul
     this.updateState({
       ...this.state,
       claude: shouldApplyClaude
-        ? this.resolveClaudeFetchApply(claude, previousState.claude)
+        ? this.resolveClaudeFetchApply(
+            latestClaudeAuthPreparation?.usageError
+              ? this.preparationFailure('claude', latestClaudeAuthPreparation.usageError)
+              : claude,
+            previousState.claude
+          )
         : this.state.claude
     })
   }
@@ -149,8 +169,11 @@ export abstract class RateLimitServiceProviderCycles extends RateLimitServiceFul
     if (signal.aborted) {
       return
     }
+    const grokAuthReadResult = await readGrokAuthSession()
+    if (signal.aborted) {
+      return
+    }
     const previousState = this.state
-    const grokAuthReadResult = readGrokAuthSession()
     this.grokAuthConfigured = grokAuthReadResult.status === 'ok'
 
     this.updateState({

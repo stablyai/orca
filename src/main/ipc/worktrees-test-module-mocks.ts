@@ -164,7 +164,9 @@ export const worktreeSymlinksModuleMock = (): {
 
 export const hooksModuleMock = () => ({
   getEffectiveHooks: getEffectiveHooksMock,
+  getEffectiveHooksThroughFilesystemHost: getEffectiveHooksMock,
   loadHooks: loadHooksMock,
+  loadHooksThroughFilesystemHost: loadHooksMock,
   parseOrcaYaml: parseOrcaYamlMock,
   runHook: runHookMock,
   hasHooksFile: hasHooksFileMock

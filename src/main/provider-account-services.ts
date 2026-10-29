@@ -1,4 +1,5 @@
 // Keep Electron imports out: both desktop and orcad bundle these account services.
+import { refreshGrokAuthSnapshot } from './rate-limits/grok-auth-snapshot'
 import { getClaudeAgentViewService } from './claude/agent-view-service'
 import type { Store } from './persistence'
 import { RateLimitService } from './rate-limits/service'
@@ -38,6 +39,7 @@ export function createProviderAccountServices(
 ): ProviderAccountServices {
   const agentView = getClaudeAgentViewService()
   void agentView.reconcile(store.getSettings())
+  void refreshGrokAuthSnapshot()
   const rateLimits = new RateLimitService()
   const codexRuntimeHome = new CodexRuntimeHomeService(store)
   const codexAccounts = new CodexAccountService(

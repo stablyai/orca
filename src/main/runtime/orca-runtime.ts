@@ -1,3 +1,4 @@
+import { attachFilesystemHostRuntimeCatalog } from '../filesystem-host/filesystem-host-runtime-catalog'
 import { conversationRecordReader } from './orchestration/structured-session-lineage'
 import type { RuntimeLinearCommandSurface } from './runtime-linear-command-surface'
 import { installRuntimeLinearCommandSurface } from './runtime-linear-command-surface'
@@ -163,6 +164,10 @@ class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
 
   constructor(...args: ConstructorParameters<typeof OrcaRuntimeWithAgentTransitions>) {
     super(...args)
+    attachFilesystemHostRuntimeCatalog({
+      getRepos: () => this.store?.getRepos?.() ?? [],
+      onClientEvent: (listener) => this.onClientEvent(listener)
+    })
     // Headless hosts must register both invalidators themselves; they never load desktop IPC.
     registerDetectedWorktreeScanInvalidation()
     registerWorktreeChangeInvalidator((repoId) => this.invalidateWorktreeCatalog(repoId))

@@ -1,3 +1,4 @@
+import { readOrcaYamlThroughFilesystemHost } from './filesystem-host/filesystem-host-read-client'
 import { readFileSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { parseOrcaYaml } from '../shared/orca-yaml'
@@ -104,6 +105,40 @@ function orcaYamlPath(repoPath: string): string {
   return windowsFsPath(join(repoPath, 'orca.yaml'))
 }
 
+export async function readHooksDocument(
+  repoPath: string
+): Promise<{ exists: boolean; hooks: OrcaHooks | null; mayNeedUpdate: boolean }> {
+  try {
+    const contents = await readOrcaYamlThroughFilesystemHost(orcaYamlPath(repoPath))
+    const hooks = parseOrcaYaml(contents)
+    return {
+      exists: true,
+      hooks,
+      mayNeedUpdate: !hooks && hasUnrecognizedOrcaYamlContent(contents)
+    }
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException)?.code
+    if (code === 'ENOENT' || code === 'ENOTDIR') {
+      return { exists: false, hooks: null, mayNeedUpdate: false }
+    }
+    throw error
+  }
+}
+
+export async function loadHooksThroughFilesystemHost(repoPath: string): Promise<OrcaHooks | null> {
+  return (await readHooksDocument(repoPath)).hooks
+}
+
+export async function getEffectiveHooksThroughFilesystemHost(
+  repo: Repo,
+  worktreePath?: string
+): Promise<OrcaHooks | null> {
+  return getEffectiveHooksFromConfig(
+    repo,
+    await loadHooksThroughFilesystemHost(worktreePath ?? repo.path)
+  )
+}
+
 export function loadHooks(repoPath: string): OrcaHooks | null {
   const yamlPath = orcaYamlPath(repoPath)
   if (!existsSync(yamlPath)) {
@@ -135,14 +170,7 @@ const RECOGNIZED_ORCA_YAML_KEYS = new Set([
 export function hasUnrecognizedOrcaYamlKeys(repoPath: string): boolean {
   try {
     const content = readFileSync(orcaYamlPath(repoPath), 'utf-8')
-    for (const line of iterateLfScriptLines(content)) {
-      // A bare key: is valid YAML when its block value follows on the next line.
-      const m = line.match(/^([A-Za-z][A-Za-z0-9_-]*):(\s|$)/)
-      if (m != null && !RECOGNIZED_ORCA_YAML_KEYS.has(m[1])) {
-        return true
-      }
-    }
-    return false
+    return hasUnrecognizedOrcaYamlContent(content)
   } catch {
     return false
   }
@@ -187,11 +215,11 @@ export function runHook(
   repo: Repo,
   hooksPath?: string,
   projectRuntime?: ProjectExecutionRuntimeResolution | HookRuntimeTarget,
-  timeoutMs: number = HOOK_TIMEOUT
+  timeoutMs: number = HOOK_TIMEOUT,
+  scriptOverride?: string
   // Failed hooks without an observed exit are unverifiable to the removal gate (#19334).
 ): Promise<{ success: boolean; output: string; exitCode?: number }> {
-  const hooks = getEffectiveHooks(repo, hooksPath)
-  const script = hooks?.scripts[hookName]
+  const script = scriptOverride ?? getEffectiveHooks(repo, hooksPath)?.scripts[hookName]
 
   if (!script) {
     return Promise.resolve({ success: true, output: '' })
@@ -305,4 +333,15 @@ export function runHook(
       }, timeoutMs)
     }
   })
+}
+
+function hasUnrecognizedOrcaYamlContent(content: string): boolean {
+  for (const line of iterateLfScriptLines(content)) {
+    // A bare key: is valid YAML when its block value follows on the next line.
+    const m = line.match(/^([A-Za-z][A-Za-z0-9_-]*):(\s|$)/)
+    if (m != null && !RECOGNIZED_ORCA_YAML_KEYS.has(m[1])) {
+      return true
+    }
+  }
+  return false
 }

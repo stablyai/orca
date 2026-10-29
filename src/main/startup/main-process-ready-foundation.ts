@@ -1,3 +1,4 @@
+import { initializeFilesystemHost } from '../filesystem-host/filesystem-host-lifetime'
 import { app, session } from 'electron'
 import { applyBackgroundActivationPolicy } from '../window/foreground-activation-policy'
 import { applyElectronProxySettings } from '../network/proxy-settings'
@@ -66,6 +67,7 @@ import { reportProfileStateWriteFailure } from './profile-state-write-failure'
 import { reportProfileStateSaveDelay } from './profile-state-save-delay'
 
 export async function initializeReadyFoundation(): Promise<void> {
+  initializeFilesystemHost(app.getAppPath(), app.isPackaged)
   logStartupMilestone('app-ready')
   // Background automation and a windowless serve must not claim the macOS Dock/menu bar.
   applyBackgroundActivationPolicy({

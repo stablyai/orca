@@ -16,9 +16,11 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
       claudeTarget,
       claudeGeneration,
       claudeProvenance,
+      claudeAuthPreparation,
       codexTarget,
       previousState,
       codexFetchGated,
+      codexPreparationFailed,
       codexStateBeforeFetch,
       codexProvenance,
       codexGeneration,
@@ -130,7 +132,7 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
           } satisfies ProviderRateLimits)
 
     const latestCodexHome = await this.resolveCodexHome(codexTarget)
-    const latestClaudeAuthPreparation = await this.claudeAuthPreparationResolver?.(claudeTarget)
+    const latestClaudeAuthPreparation = await this.resolveClaudePreparation(claudeTarget)
     if (signal.aborted) {
       return
     }
@@ -140,14 +142,18 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
       !codexFetchGated &&
       !latestCodexHome.skip &&
       codexGeneration === this.codexFetchGeneration &&
-      codexProvenance === this.getCodexProvenance(codexTarget, latestCodexHome.homePath)
+      (codexPreparationFailed ||
+        latestCodexHome.error !== undefined ||
+        codexProvenance === this.getCodexProvenance(codexTarget, latestCodexHome.homePath))
     const codexBecameUnavailable =
       !codexFetchGated && latestCodexHome.skip && codexGeneration === this.codexFetchGeneration
     // Gated Claude made no attempt; passthrough must not advance failure or stale-policy clocks.
     const shouldApplyClaude =
       !claudeFetchGated &&
       claudeGeneration === this.claudeFetchGeneration &&
-      claudeProvenance === latestClaudeProvenance &&
+      (claudeAuthPreparation?.usageError !== undefined ||
+        claudeProvenance === latestClaudeProvenance ||
+        latestClaudeAuthPreparation?.usageError !== undefined) &&
       this.isSameClaudeTarget(claudeTarget, this.claudeFetchTarget)
     const shouldApplyOpencode = opencodeGeneration === this.opencodeFetchGeneration
     const shouldApplyMiniMax = miniMaxGeneration === this.minimaxFetchGeneration
@@ -171,10 +177,18 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
     this.updateState({
       ...this.state,
       claude: shouldApplyClaude
-        ? this.resolveClaudeFetchApply(claude, previousState.claude)
+        ? this.resolveClaudeFetchApply(
+            latestClaudeAuthPreparation?.usageError
+              ? this.preparationFailure('claude', latestClaudeAuthPreparation.usageError)
+              : claude,
+            previousState.claude
+          )
         : this.state.claude,
       codex: shouldApplyCodex
-        ? this.applyStalePolicy(codex, previousState.codex)
+        ? this.applyStalePolicy(
+            latestCodexHome.error ? this.preparationFailure('codex', latestCodexHome.error) : codex,
+            previousState.codex
+          )
         : codexBecameUnavailable
           ? codexStateBeforeFetch
           : this.state.codex,

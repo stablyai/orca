@@ -47,14 +47,39 @@ export abstract class RateLimitServiceFetchTargets extends RateLimitServiceResul
   protected async resolveCodexHome(target?: CodexAccountSelectionTarget): Promise<{
     skip: boolean
     homePath: string | null
+    error?: string
   }> {
-    const resolution = await this.codexHomePathResolver?.(target)
+    let resolution
+    try {
+      resolution = await this.codexHomePathResolver?.(target)
+    } catch {
+      return { skip: false, homePath: null, error: 'Codex account preparation is unavailable' }
+    }
     if (!resolution) {
       return { skip: false, homePath: null }
     }
     return resolution.kind === 'skip'
       ? { skip: true, homePath: null }
       : { skip: false, homePath: resolution.codexHomePath }
+  }
+
+  protected async resolveClaudePreparation(
+    target: NormalizedClaudeAccountSelectionTarget
+  ): Promise<ClaudeRuntimeAuthPreparation | undefined> {
+    try {
+      return await this.claudeAuthPreparationResolver?.(target)
+    } catch {
+      return {
+        configDir: '',
+        envPatch: {},
+        provenance: 'preparation:unavailable',
+        usageError: 'Claude account preparation is unavailable'
+      }
+    }
+  }
+
+  protected preparationFailure(provider: 'claude' | 'codex', error: string): ProviderRateLimits {
+    return { provider, status: 'error', error, updatedAt: Date.now(), session: null, weekly: null }
   }
 
   // WSL home resolution probes wsl.exe; chain it so other providers start immediately.

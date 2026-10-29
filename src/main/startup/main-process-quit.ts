@@ -1,3 +1,4 @@
+import { disposeFilesystemHost } from '../filesystem-host/filesystem-host-lifetime'
 import { killWslChannelsInCloseGrace } from '../wsl/wsl-command-channel'
 import { app, type Event } from 'electron'
 import { closeAllWatchers } from '../ipc/filesystem/watchers/filesystem-watcher-shutdown'
@@ -270,6 +271,7 @@ function installWillQuitHandler(): void {
       { name: 'local-ssh-browser-routes', promise: localSshRouteShutdown },
       { name: 'ssh', promise: sshShutdown },
       { name: 'plugin-hosts', promise: pluginHostShutdown },
+      { name: 'filesystem-hosts', promise: disposeFilesystemHost() },
       { name: 'skill-uploads', promise: skillUploadShutdown },
       { name: 'grok-hooks', promise: grokHookCleanup },
       { name: 'ref-maintenance', promise: refMaintenanceShutdown },

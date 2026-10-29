@@ -87,7 +87,9 @@ const testOptions = {
   server: { deps: { inline: ['zod'] } },
   // Node's storage globals and V8 retention checks require the existing child flags.
   execArgv: ['--no-experimental-webstorage', '--expose-gc'],
-  setupFiles: UNIT_SETUP_FILES.map((file) => resolve(file)),
+  setupFiles: [...UNIT_SETUP_FILES, 'config/vitest-filesystem-host-read-client.ts'].map((file) =>
+    resolve(file)
+  ),
   include: UNIT_INCLUDE,
   exclude: balancedShards ? UNIT_EXCLUDE : defaultExclude,
   hookTimeout: 60_000,

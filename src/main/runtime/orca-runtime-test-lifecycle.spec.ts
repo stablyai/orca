@@ -148,7 +148,7 @@ function resetRuntimeTestMocks(): void {
   vi.mocked(shouldRunSetupForCreate).mockReset()
   vi.mocked(shouldRunSetupForCreate).mockImplementation((_repo, decision) => decision === 'run')
   vi.mocked(getEffectiveHooks).mockReturnValue(null)
-  vi.mocked(getEffectiveHooksFromConfig).mockReturnValue(null)
+  vi.mocked(getEffectiveHooksFromConfig).mockImplementation(() => getEffectiveHooks({} as never))
   vi.mocked(getDefaultTabsLaunch).mockReturnValue(undefined)
   vi.mocked(loadHooks).mockReturnValue(null)
   vi.mocked(resolveSetupRunnerShell).mockReturnValue(undefined)

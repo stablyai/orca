@@ -29,6 +29,7 @@ export type FetchAllCyclePrepared = {
   claudeProvenance: string
   codexTarget: NormalizedCodexAccountSelectionTarget
   previousState: InternalRateLimitState
+  codexPreparationFailed: boolean
   codexFetchGated: boolean
   codexStateBeforeFetch: ProviderRateLimits | null
   codexProvenance: string | null
@@ -66,7 +67,7 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
     const claudeTarget = this.claudeFetchTarget
     // Capture before await so a switch invalidates both attribution and result application.
     const claudeGeneration = this.claudeFetchGeneration
-    const claudeAuthPreparation = await this.claudeAuthPreparationResolver?.(claudeTarget)
+    const claudeAuthPreparation = await this.resolveClaudePreparation(claudeTarget)
     if (signal.aborted) {
       return null
     }
@@ -77,6 +78,9 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
     const codexGeneration = this.codexFetchGeneration
     // Gate only Codex, never siblings, when its runtime is skipped (#STA-4422).
     const codexHome = await this.resolveCodexHome(codexTarget)
+    if (signal.aborted) {
+      return null
+    }
     const previousState = this.state
     const antigravityGeneration = this.antigravityFetchGeneration
     const codexFetchGated = codexHome.skip
@@ -99,9 +103,6 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
     const miniMaxEndpoint = miniMaxConfigResult.config.endpoint
     const miniMaxApiKey = miniMaxConfigResult.config.apiKey
     const geminiCliOAuthEnabled = this.geminiCliOAuthEnabledResolver?.() ?? false
-    // Probe auth during fetch, not hot renderer/mobile getState calls.
-    const grokAuthReadResult = readGrokAuthSession()
-    this.grokAuthConfigured = grokAuthReadResult.status === 'ok'
 
     // Config changes discard old-account usage; hash credentials because only identity changes matter.
     const apiKeyFingerprint = openCodeGoApiKey
@@ -203,13 +204,17 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
 
     const missingWslCodexHome =
       codexFetchGated || codexHomePath ? null : this.getMissingWslCodexHomeResult(codexTarget)
-    const grokResultPromise = fetchGrokRateLimits({
-      signal,
-      authReadResult: grokAuthReadResult
-    }).then(
-      (value) => ({ status: 'fulfilled', value }) as const,
-      (reason) => ({ status: 'rejected', reason }) as const
-    )
+    const grokResultPromise = Promise.resolve()
+      .then(() => readGrokAuthSession())
+      .then((authReadResult) => {
+        signal.throwIfAborted()
+        this.grokAuthConfigured = authReadResult.status === 'ok'
+        return fetchGrokRateLimits({ signal, authReadResult })
+      })
+      .then(
+        (value) => ({ status: 'fulfilled', value }) as const,
+        (reason) => ({ status: 'rejected', reason }) as const
+      )
 
     // Live display does not waive automated Retry-After gates.
     const claudeFetchGated =
@@ -219,21 +224,25 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
       await Promise.allSettled([
         claudeFetchGated
           ? Promise.resolve(previousState.claude as ProviderRateLimits)
-          : fetchClaudeRateLimits({
-              authPreparation: claudeAuthPreparation,
-              allowPtyFallback: this.shouldAllowClaudePtyFallback(claudeAuthPreparation),
-              allowUsagePanelSupplement: this.shouldAllowClaudeUsagePanelSupplement(),
-              networkProxySettings: this.networkProxySettingsResolver?.(),
-              signal
-            }),
+          : claudeAuthPreparation?.usageError
+            ? Promise.resolve(this.preparationFailure('claude', claudeAuthPreparation.usageError))
+            : fetchClaudeRateLimits({
+                authPreparation: claudeAuthPreparation,
+                allowPtyFallback: this.shouldAllowClaudePtyFallback(claudeAuthPreparation),
+                allowUsagePanelSupplement: this.shouldAllowClaudeUsagePanelSupplement(),
+                networkProxySettings: this.networkProxySettingsResolver?.(),
+                signal
+              }),
         codexFetchGated
           ? Promise.resolve(previousState.codex as ProviderRateLimits)
-          : (missingWslCodexHome ??
-            fetchCodexRateLimits({
-              codexHomePath,
-              networkProxySettings: this.networkProxySettingsResolver?.(),
-              signal
-            })),
+          : codexHome.error
+            ? Promise.resolve(this.preparationFailure('codex', codexHome.error))
+            : (missingWslCodexHome ??
+              fetchCodexRateLimits({
+                codexHomePath,
+                networkProxySettings: this.networkProxySettingsResolver?.(),
+                signal
+              })),
         fetchGeminiRateLimits(geminiCliOAuthEnabled),
         fetchOpenCodeGoUsage({
           settingsApiKey: openCodeGoApiKey,
@@ -289,6 +298,7 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
       codexTarget,
       previousState,
       codexFetchGated,
+      codexPreparationFailed: codexHome.error !== undefined,
       codexStateBeforeFetch,
       codexProvenance,
       codexGeneration,

@@ -1,9 +1,11 @@
-import { readFile } from 'node:fs/promises'
+import {
+  readSnapshotFileThroughFilesystemHost,
+  requireFilesystemHostReadClient
+} from '../filesystem-host/filesystem-host-read-client'
 import { homedir } from 'node:os'
 import path from 'node:path'
 import { getMainHttpClient } from '../network/http-client'
 import { extractOAuthClientCredentials } from './gemini-cli-oauth-extractor'
-import { writeCredentialFileAtomic } from '../integration-credential-file'
 
 const API_TIMEOUT_MS = 10_000
 const OAUTH_CREDS_PATH = path.join(homedir(), '.gemini', 'oauth_creds.json')
@@ -40,7 +42,9 @@ export async function readAuthJson(): Promise<AuthJson | null> {
 
   for (const candidate of candidates) {
     try {
-      const raw = await readFile(candidate, 'utf-8')
+      const raw = (await readSnapshotFileThroughFilesystemHost(candidate, 'gemini-auth')).toString(
+        'utf8'
+      )
       return JSON.parse(raw) as AuthJson
     } catch (err) {
       if (err && typeof err === 'object' && 'code' in err && err.code === 'ENOENT') {
@@ -55,7 +59,9 @@ export async function readAuthJson(): Promise<AuthJson | null> {
 
 export async function readGeminiCredentials(): Promise<GeminiCredentials | null> {
   try {
-    const raw = await readFile(OAUTH_CREDS_PATH, 'utf-8')
+    const raw = (
+      await readSnapshotFileThroughFilesystemHost(OAUTH_CREDS_PATH, 'gemini-oauth-credentials')
+    ).toString('utf8')
     const parsed = JSON.parse(raw) as unknown
     if (
       parsed &&
@@ -80,7 +86,15 @@ export async function readGeminiCredentials(): Promise<GeminiCredentials | null>
 
 // Atomic replacement must preserve owner-only credentials despite orcad's login umask (#31125).
 export async function saveGeminiCredentials(creds: GeminiCredentials): Promise<void> {
-  writeCredentialFileAtomic(OAUTH_CREDS_PATH, Buffer.from(JSON.stringify(creds, null, 2), 'utf-8'))
+  const client = requireFilesystemHostReadClient()
+  if (!client.writeRateLimitCredential) {
+    throw new Error('Credential persistence is unavailable')
+  }
+  await client.writeRateLimitCredential(
+    OAUTH_CREDS_PATH,
+    'gemini-oauth-credentials',
+    JSON.stringify(creds, null, 2)
+  )
 }
 
 export type RefreshTokenResult = {

@@ -1,4 +1,5 @@
 import * as Files from 'node:fs/promises'
+import * as HiddenCwd from '../rate-limits/hidden-probe-cwd'
 import { scanClaudeCommandFolders } from '../claude/claude-command-folder-scan'
 import * as Catalog from '../native-chat/agent-session-wire/at-rest-command-catalog'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -144,6 +145,38 @@ describe('a resting Codex chat lists the skills Codex would load', () => {
     expect(invocations[0]?.envToDelete).toEqual(['ORCA_CHAT_SCRATCH_DIR', 'ORCA_CHAT_VISUALS_DIR'])
     expect(settling).toHaveLength(1)
     settling.forEach((resolve) => resolve())
+  })
+
+  it('waits for hidden cwd preparation before starting a skill probe', async () => {
+    const cwd = Promise.withResolvers<string>()
+    const preparing = vi.spyOn(HiddenCwd, 'resolveHiddenProbeCwd').mockReturnValueOnce(cwd.promise)
+    const runSession = vi.fn(
+      async (
+        _invocation: CodexAppServerInvocation,
+        body: Parameters<NonNullable<CodexAtRestSkillsDeps['runSession']>>[1]
+      ) => body(listingRpc)
+    )
+    const catalog = createCodexAtRestSkillCatalog({
+      resolveWorkspacePath: async () => '/work/one',
+      resolveLaunchArgs: () => [],
+      resolveCommand: () => '/bin/codex',
+      sleep: async () => {},
+      runSession
+    })
+    const record = floatingCodexChat('waiting-cwd', '/work/one')
+    try {
+      catalog.read(record)
+      await vi.waitFor(() => expect(preparing).toHaveBeenCalledOnce())
+      expect(runSession).not.toHaveBeenCalled()
+      cwd.resolve('/safe/probe')
+      await catalog.settled(record, 1_000)
+      expect(runSession).toHaveBeenCalledWith(
+        expect.objectContaining({ cwd: '/safe/probe' }),
+        expect.any(Function)
+      )
+    } finally {
+      preparing.mockRestore()
+    }
   })
 
   it.each(['method not found', 'temporary failure'])(
