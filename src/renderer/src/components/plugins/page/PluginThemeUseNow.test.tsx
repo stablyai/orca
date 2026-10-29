@@ -32,6 +32,8 @@ vi.mock('@/store/plugin-themes', () => ({
 }))
 vi.mock('@/store/plugin-icon-themes', () => ({ usePluginIconThemes: () => state.icons }))
 vi.mock('@/lib/document-theme', () => ({ resolveDocumentTheme: () => true }))
+const toast = vi.hoisted(() => ({ success: vi.fn() }))
+vi.mock('sonner', () => ({ toast }))
 
 const pluginKey = 'samples.theme'
 const id = 'plugin:samples.theme/dusk'
@@ -42,6 +44,7 @@ afterEach(() => {
   state.icons = []
   state.settings = null
   state.updateSettings.mockClear()
+  toast.success.mockClear()
 })
 
 const appTheme = (name: string, base: 'dark' | 'light'): PluginThemeRegistration => ({
@@ -63,6 +66,39 @@ it('fills only the slot of the theme it was asked for', () => {
   expect(state.updateSettings).toHaveBeenCalledExactlyOnceWith({
     pluginAppThemeDark: `plugin:${pluginKey}/Dusk`
   })
+  expect(toast.success).not.toHaveBeenCalled()
+})
+
+it('switches to the mode of a theme picked for the other mode, with a way back', () => {
+  state.settings = { ...getDefaultSettings('/tmp'), theme: 'dark' }
+  state.app = [appTheme('Dusk', 'dark'), appTheme('Dawn', 'light')]
+  render(<PluginThemeUseNow pluginKey={pluginKey} />)
+  expect(screen.getByText('Use for light:')).toBeDefined()
+  fireEvent.click(screen.getByRole('button', { name: 'Use for light: Dawn' }))
+  expect(state.updateSettings).toHaveBeenCalledExactlyOnceWith({
+    pluginAppThemeLight: `plugin:${pluginKey}/Dawn`,
+    theme: 'light'
+  })
+  expect(toast.success).toHaveBeenCalledExactlyOnceWith(
+    'Now using Dawn',
+    expect.objectContaining({ action: expect.objectContaining({ label: 'Switch back' }) })
+  )
+})
+
+it('fills the selected chip and outlines the others', () => {
+  state.settings = {
+    ...getDefaultSettings('/tmp'),
+    theme: 'dark',
+    pluginAppThemeDark: `plugin:${pluginKey}/Dusk`
+  }
+  state.app = [appTheme('Dusk', 'dark'), appTheme('Night', 'dark')]
+  render(<PluginThemeUseNow pluginKey={pluginKey} />)
+  const dusk = screen.getByRole('button', { name: 'Use now: Dusk' })
+  expect(dusk.getAttribute('aria-pressed')).toBe('true')
+  expect(dusk.getAttribute('data-variant')).toBe('default')
+  expect(screen.getByRole('button', { name: 'Use now: Night' }).getAttribute('data-variant')).toBe(
+    'outline'
+  )
 })
 
 it('offers an installed icon theme without selecting it until asked', () => {
@@ -86,10 +122,12 @@ it.each(['dark', 'light', 'unknown'] as const)(
     state.terminal = [{ id, pluginKey, pluginName: 'Dusk', label: 'Dusk Terminal', mode, terminal }]
     render(<PluginThemeUseNow pluginKey={pluginKey} />)
     expect(state.updateSettings).not.toHaveBeenCalled()
-    fireEvent.click(screen.getByRole('button', { name: 'Use now: Dusk Terminal' }))
+    // Why "Use for light": the tests render dark mode, where a light terminal theme waits.
+    const prefix = mode === 'light' ? 'Use for light:' : 'Use now:'
+    fireEvent.click(screen.getByRole('button', { name: `${prefix} Dusk Terminal` }))
     expect(state.updateSettings).toHaveBeenCalledExactlyOnceWith({
       ...(mode === 'light'
-        ? { terminalThemeLight: id, terminalUseSeparateLightTheme: true }
+        ? { terminalThemeLight: id, terminalUseSeparateLightTheme: true, theme: 'light' }
         : { terminalThemeDark: id }),
       terminalPluginPalettes: [{ id, colors: terminal }]
     })
