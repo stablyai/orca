@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { DelegatedMobileDeviceSyncParams } from '../../../shared/delegated-mobile-device-contract'
+import {
+  DELEGATED_MOBILE_DEVICE_SYNC_MAX_PHONES,
+  type DelegatedMobileDeviceSyncParams
+} from '../../../shared/delegated-mobile-device-contract'
 import type { DelegatedPhoneGrants } from './delegated-phone-grants'
 import { DelegatedPhoneGrantCache } from './delegated-phone-grant-cache'
 import type { MobileDesktopRelayHost, MobileDesktopRelayHosts } from './mobile-desktop-relay-hosts'
@@ -68,5 +71,22 @@ describe('DelegatedPhoneGrantCache', () => {
 
     const grants = await second
     expect(grants.kind === 'ready' && grants.asked.has('browser')).toBe(true)
+  })
+
+  it('refuses a device past the sync cap without syncing for it', async () => {
+    const phones = Array.from({ length: DELEGATED_MOBILE_DEVICE_SYNC_MAX_PHONES }, (_, i) => ({
+      phoneKey: `phone-${i}`,
+      name: `Phone ${i}`
+    }))
+    const cache = new DelegatedPhoneGrantCache(unusedHosts, () => [
+      ...phones,
+      { phoneKey: 'laptop', name: 'Laptop' }
+    ])
+    const syncsBefore = heldSyncs.length
+
+    await expect(cache.get(host, 'laptop')).rejects.toMatchObject({
+      code: 'remote_runtime_unavailable'
+    })
+    expect(heldSyncs).toHaveLength(syncsBefore)
   })
 })

@@ -741,7 +741,7 @@ describe('mobile desktop relay: phone -> desktop -> server', () => {
       client: { id: client.token, type: 'desktop' }
     })
     await client.next('watch')
-    host.runtime.onPtyData('pty-shared', 'relayed-output', Date.now())
+    host.runtime.onPtyData('pty-shared', 'relayed-output', 1_700_000_000_000)
     await client.next('watch', (frame) => JSON.stringify(frame).includes('relayed-output'))
     expect(JSON.stringify(client.frames)).not.toContain(delegated.token)
   })
