@@ -88,9 +88,15 @@ export function installTerminalKeydownFit(session: ConnectPanePtySession): void 
   session.setPanePtyFitBinding = (ptyId: string): void => {
     const previousPtyId = session.activePanePtyBinding
     if (previousPtyId && previousPtyId !== ptyId) {
-      unregisterPtyKittyKeyboardModeTracker(previousPtyId, session.kittyKeyboardModes)
+      unregisterPtyKittyKeyboardModeTracker(
+        previousPtyId,
+        session.activePtyKittyKeyboardModeRegistration
+      )
     }
-    registerPtyKittyKeyboardModeTracker(ptyId, session.kittyKeyboardModes)
+    session.activePtyKittyKeyboardModeRegistration = registerPtyKittyKeyboardModeTracker(
+      ptyId,
+      session.kittyKeyboardModes
+    )
     bindPanePtyId(session.pane.id, ptyId, session.deps.tabId)
     session.pane.container.dataset.ptyId = ptyId
     if (
@@ -116,6 +122,7 @@ export function installTerminalKeydownFit(session: ConnectPanePtySession): void 
     session.claimPendingVisibleRemoteViewport()
   }
   session.activePanePtyBinding = null
+  session.activePtyKittyKeyboardModeRegistration = null
   // Why: bind time lets async liveness reconcile ignore a request started
   // before this PTY bound (newborn race). Null disables the guard (fail-safe).
   session.activePanePtyBindingBoundAt = null
@@ -176,13 +183,14 @@ export function installTerminalKeydownFit(session: ConnectPanePtySession): void 
     if (session.activePanePtyBinding) {
       unregisterPtyKittyKeyboardModeTracker(
         session.activePanePtyBinding,
-        session.kittyKeyboardModes
+        session.activePtyKittyKeyboardModeRegistration
       )
     }
     bindPanePtyId(session.pane.id, null, session.deps.tabId)
     session.visibleRemoteViewportClaimPtyId = null
     session.pendingVisibleRemoteViewportClaim = false
     session.activePanePtyBinding = null
+    session.activePtyKittyKeyboardModeRegistration = null
     session.activePanePtyBindingBoundAt = null
     delete session.pane.container.dataset.ptyId
     delete session.pane.container.dataset.ptyRecoveryState

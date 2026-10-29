@@ -2,6 +2,7 @@ import { useChatSettingsOwnPermissions } from '@/runtime/structured-agent-sessio
 import { toast } from 'sonner'
 import { getAgentLabel } from '@/lib/agent-catalog'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
+import type { AgentPostPasteSubmitInput } from '../../../../../../shared/tui-agent-post-paste-submit'
 import { wholeAgentEnvironmentUpdates } from '../../../../../../shared/agent-launch/choices/agent-launch-permission-updates'
 import { useRef } from 'react'
 import { useAppStore } from '@/store/index'
@@ -173,6 +174,16 @@ function LocalAgentLaunchSettings({
     apply(agent, (current, platform) =>
       wholeAgentEnvironmentUpdates(current, agent, requested, platform)
     )
+  const savePostPasteSubmitInput = (
+    agent: TuiAgent,
+    value: AgentPostPasteSubmitInput
+  ): Promise<void> =>
+    apply(agent, (current) => ({
+      agentPostPasteSubmitInputs: {
+        ...current.agentPostPasteSubmitInputs,
+        [agent]: value
+      }
+    }))
 
   return (
     <AgentLaunchSettingsCatalog
@@ -183,7 +194,7 @@ function LocalAgentLaunchSettings({
       renderPermissions={renderPermissions}
       nativeChatPermissionsSupported
       chatOwnSupported={chatOwnSupported}
-      local={{ settings, updateSettings, saveEnvironment }}
+      local={{ settings, updateSettings, saveEnvironment, savePostPasteSubmitInput }}
     />
   )
 }
