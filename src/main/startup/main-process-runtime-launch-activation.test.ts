@@ -196,6 +196,7 @@ describe('desktop startup activation', () => {
   beforeEach(() => {
     windows = []
     showWindowWithoutStealingFocus.mockClear()
+    isOrcadSidecarLaunch.mockReturnValue(false)
     ipcHandles = new Set()
     trustedRendererId = null
     firstLoadListeners = []
@@ -355,7 +356,6 @@ describe('desktop startup activation', () => {
         },
         handleMacAppActivation: vi.fn()
       })
-      isOrcadSidecarLaunch.mockReturnValue(false)
 
       expect(rpcOptions.at(-1)).toMatchObject({ exposeNetworkByDefault: true })
       expect(rpcOptions.at(-1)?.pinnedBindHost).toBe(pinnedBindHost)
