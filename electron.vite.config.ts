@@ -9,6 +9,7 @@ import { createBootstrapFatalExitBanner } from './config/build-plugins/bootstrap
 import { createBrowserExtensionWorkerShimPlugin } from './config/build-plugins/browser-extension-worker-shim'
 import { createMainLocaleSubsetPlugin } from './config/build-plugins/main-locale-subset'
 import { createPdfjsViewerAssetsPlugin } from './config/build-plugins/pdfjs-viewer-assets'
+import { createVadModelAssetsPlugin } from './config/build-plugins/vad-model-assets'
 import { createProcessHostDevRebuildPlugin } from './config/build-plugins/process-host-dev-rebuild'
 import { createViteCacheRetentionPlugin } from './config/build-plugins/vite-cache-retention'
 import { MAIN_BUILD_ENTRY_POINTS } from './config/build-plugins/main-build-entry-points'
@@ -283,6 +284,7 @@ export const electronViteConfig: UserConfig = {
       react(),
       tailwindcss(),
       createPdfjsViewerAssetsPlugin(),
+      createVadModelAssetsPlugin(),
       createViteCacheRetentionPlugin()
     ],
     worker: {

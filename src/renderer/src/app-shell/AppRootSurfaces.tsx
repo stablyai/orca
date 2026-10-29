@@ -28,6 +28,7 @@ import { usePreloadWorktreeJumpPalette, WorktreeJumpPalette } from './worktree-j
 import {
   selectAppRootSurfacePetEnabled,
   selectAppRootSurfaceTelemetryOptedIn,
+  selectAppRootSurfaceVoiceControlEnabled,
   selectAppRootSurfaceVoiceEnabled
 } from './app-root-surface-settings'
 import type { FloatingWorkspacePanelState } from './use-floating-workspace-panel'
@@ -61,6 +62,11 @@ const PreservedBranchBatchReviewModal = lazy(
 const DictationController = lazy(() =>
   import('../components/dictation/DictationController').then((module) => ({
     default: module.DictationController
+  }))
+)
+const VoiceControlController = lazy(() =>
+  import('../components/voice-control/VoiceControlController').then((module) => ({
+    default: module.VoiceControlController
   }))
 )
 const SshPassphraseDialog = lazy(() =>
@@ -124,6 +130,7 @@ export const AppRootSurfaces = memo(function AppRootSurfaces(props: {
   const activeModal = useAppStore((s) => s.activeModal)
   // Subscribe only to consumed settings so unrelated preferences cannot rerender every overlay.
   const voiceEnabled = useAppStore(selectAppRootSurfaceVoiceEnabled)
+  const voiceControlEnabled = useAppStore(selectAppRootSurfaceVoiceControlEnabled)
   const petEnabled = useAppStore(selectAppRootSurfacePetEnabled)
   const telemetryOptedIn = useAppStore(selectAppRootSurfaceTelemetryOptedIn)
   const statusBarVisible = useAppStore((s) => s.statusBarVisible)
@@ -384,6 +391,13 @@ export const AppRootSurfaces = memo(function AppRootSurfaces(props: {
         <Suspense fallback={null}>
           <OverlayBoundary boundaryId="overlay.dictation" resetKey={activeView}>
             <DictationController />
+          </OverlayBoundary>
+        </Suspense>
+      ) : null}
+      {voiceControlEnabled ? (
+        <Suspense fallback={null}>
+          <OverlayBoundary boundaryId="overlay.voice-control" resetKey={activeView}>
+            <VoiceControlController />
           </OverlayBoundary>
         </Suspense>
       ) : null}

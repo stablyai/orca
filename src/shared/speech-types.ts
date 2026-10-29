@@ -1,3 +1,5 @@
+import type { VoiceControlSettings } from './voice-control-types'
+
 export type SpeechModelType =
   | 'transducer'
   | 'paraformer'
@@ -79,4 +81,5 @@ export type VoiceSettings = {
   microphoneDeviceId: string | null
   /** Cached label for display when the preferred device is unplugged */
   microphoneDeviceLabel: string | null
+  control: VoiceControlSettings
 }

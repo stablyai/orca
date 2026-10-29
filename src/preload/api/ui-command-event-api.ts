@@ -80,6 +80,11 @@ export type UiCommandEventApi = {
   recordFeatureInteraction: (id: FeatureInteractionId) => Promise<PersistedUIState>
   onStateChanged: (callback: (ui: PersistedUIState) => void) => () => void
   onOpenSettings: (callback: () => void) => () => void
+  /** Voice navigate_ui's close-settings verb — the settings back button, over IPC. */
+  onCloseSettings: (callback: () => void) => () => void
+  /** Voice navigate_ui's new-browser-tab verb — the lane #31859 deleted with its last listener. Optional: the web client has no menu-driven new-tab intent. */
+  onNewBrowserTab?: (callback: () => void) => () => void
+  /** Consumes a one-shot tray/menu-bar "open settings" intent queued before mount. */
   consumePendingOpenSettings: () => Promise<boolean>
   /** Main confirmed Quit Completely; consume the request before acting. */
   onQuitAndStopAllSessions: (callback: () => void) => () => void
@@ -174,6 +179,7 @@ export type UiCommandEventApi = {
   onCtrlTabKeyUp: (callback: () => void) => () => void
   onToggleStatusBar: (callback: () => void) => () => void
   onDictationKeyDown: (callback: () => void) => () => void
+  onVoiceControlToggle: (callback: () => void) => () => void
   onExportPdfRequested: (callback: () => void) => () => void
   onAppMenuPaste: (callback: () => void) => () => void
   onAppMenuSelectionAction: (callback: (action: 'copy' | 'select-all') => void) => () => void
