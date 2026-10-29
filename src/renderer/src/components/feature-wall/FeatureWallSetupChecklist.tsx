@@ -22,6 +22,12 @@ import {
   SetupWorkspacesVisual
 } from './FeatureWallSetupStepVisuals'
 import { AgentStep } from '../onboarding/AgentStep'
+import { useChatAgentDetection } from '../onboarding/use-onboarding-agent-surface'
+import type { AgentSurface } from '../onboarding/use-onboarding-flow-types'
+import { agentSurfaceSettingsUpdate } from '../onboarding/onboarding-flow-state'
+import { onboardingChatPermissionSetting } from '../onboarding/use-onboarding-flow-persistence'
+import { savedYoloPermissions } from '../onboarding/use-onboarding-yolo-permissions'
+import { applyAllAgentsPermission } from '../../../../shared/tui-agent-permission-choice'
 import { NotificationStep } from '../onboarding/NotificationStep'
 import { useAppStore } from '@/store'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
@@ -192,10 +198,12 @@ function DefaultAgentAction(): React.JSX.Element {
   const refreshDetectedAgents = useAppStore((s) => s.refreshDetectedAgents)
   const detectedAgentIds = useAppStore((s) => s.detectedAgentIds)
   const isDetectingAgents = useAppStore((s) => s.isDetectingAgents || s.isRefreshingAgents)
+  const { chatAgents, chatDetected } = useChatAgentDetection()
   const selectedAgent =
     settings?.defaultTuiAgent && settings.defaultTuiAgent !== 'blank'
       ? settings.defaultTuiAgent
       : null
+  const agentSurface: AgentSurface = settings?.experimentalNativeChat === true ? 'chat' : 'terminal'
   const detectedSet = useMemo(() => new Set(detectedAgentIds ?? []), [detectedAgentIds])
   const handleSelectAgent = useCallback(
     (agent: TuiAgent) => {
@@ -203,6 +211,22 @@ function DefaultAgentAction(): React.JSX.Element {
     },
     [updateSettings]
   )
+  // Unlike onboarding, there is no Continue here, so each choice saves as it is made.
+  const handleAgentSurfaceChange = (surface: AgentSurface): void => {
+    const updates = agentSurfaceSettingsUpdate(settings, surface)
+    if (Object.keys(updates).length > 0) {
+      void updateSettings(updates)
+    }
+  }
+  const handleYoloPermissionsChange = (enabled: boolean): void => {
+    if (!settings) {
+      return
+    }
+    void updateSettings({
+      ...applyAllAgentsPermission(settings, enabled ? 'full-access' : 'own'),
+      ...onboardingChatPermissionSetting(settings.nativeChatPermissionMode, enabled, true)
+    })
+  }
 
   useEffect(() => {
     void refreshDetectedAgents()
@@ -211,10 +235,18 @@ function DefaultAgentAction(): React.JSX.Element {
   return (
     <div className="max-w-3xl">
       <AgentStep
+        agentSurface={agentSurface}
+        onAgentSurfaceChange={handleAgentSurfaceChange}
+        agentSurfaceSwitchable
+        chatAgents={chatAgents}
+        chatDetected={chatDetected}
+        nativeChatProviders={settings?.nativeChatProviders}
         selectedAgent={selectedAgent}
         onSelect={handleSelectAgent}
         detectedSet={detectedSet}
         isDetecting={isDetectingAgents}
+        yoloPermissions={savedYoloPermissions(settings)}
+        onYoloPermissionsChange={handleYoloPermissionsChange}
       />
     </div>
   )

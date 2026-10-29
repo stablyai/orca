@@ -18,6 +18,7 @@ function RadioGroup({
 
 function RadioGroupItem({
   className,
+  children,
   ...props
 }: React.ComponentProps<typeof RadioGroupPrimitive.Item>) {
   return (
@@ -29,9 +30,11 @@ function RadioGroupItem({
       )}
       {...props}
     >
-      <RadioGroupPrimitive.Indicator className="flex items-center justify-center">
-        <Circle className="size-2 fill-current" />
-      </RadioGroupPrimitive.Indicator>
+      {children ?? (
+        <RadioGroupPrimitive.Indicator className="flex items-center justify-center">
+          <Circle className="size-2 fill-current" />
+        </RadioGroupPrimitive.Indicator>
+      )}
     </RadioGroupPrimitive.Item>
   )
 }

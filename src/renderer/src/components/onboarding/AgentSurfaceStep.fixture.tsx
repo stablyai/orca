@@ -51,6 +51,25 @@ export const terminalAgentsPage = defineFixture({
   )
 })
 
+export const setupGuideAgentsPage = defineFixture({
+  width: 760,
+  render: () => (
+    <div className="flex h-[640px] flex-col">
+      <AgentStep
+        agentSurface="chat"
+        onAgentSurfaceChange={() => {}}
+        agentSurfaceSwitchable
+        selectedAgent="claude"
+        onSelect={() => {}}
+        detectedSet={detected}
+        isDetecting={false}
+        chatAgents={chatAgents}
+        chatDetected={['claude', 'codex']}
+      />
+    </div>
+  )
+})
+
 export const terminalTipDemo = defineFixture({
   width: 520,
   render: () => (

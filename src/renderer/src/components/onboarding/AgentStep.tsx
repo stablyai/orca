@@ -24,9 +24,11 @@ import {
 const NO_CHAT_AGENTS: readonly TuiAgent[] = []
 
 type AgentStepProps = {
-  /** Omitted outside onboarding: a plain default-agent picker without Chat UI labels. */
+  /** Omitted: a plain default-agent picker without Chat UI labels. */
   agentSurface?: AgentSurface
   onAgentSurfaceChange?: (surface: AgentSurface) => void
+  /** Pick Chat UI or Terminal on this page, where no earlier page chose it. */
+  agentSurfaceSwitchable?: boolean
   selectedAgent: TuiAgent | null
   // Record whether the click came from the details disclosure for onboarding_agent_picked telemetry.
   onSelect: (agent: TuiAgent, fromCollapsedSection: boolean) => void
@@ -42,6 +44,7 @@ type AgentStepProps = {
 export function AgentStep({
   agentSurface,
   onAgentSurfaceChange,
+  agentSurfaceSwitchable = false,
   selectedAgent,
   onSelect,
   detectedSet,
@@ -123,7 +126,12 @@ export function AgentStep({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-5">
-      {agentSurface && <AgentSurfaceModeRow surface={agentSurface} />}
+      {agentSurface && (
+        <AgentSurfaceModeRow
+          surface={agentSurface}
+          onChange={agentSurfaceSwitchable ? onAgentSurfaceChange : undefined}
+        />
+      )}
       {!hasDetected && !isDetecting && !chatMode && (
         <div className="shrink-0 rounded-lg border border-border px-4 py-3 text-xs text-muted-foreground">
           {translate(
@@ -235,7 +243,7 @@ export function AgentStep({
         )}
       </section>
       {agentSurface === 'chat' && <ChatModeTerminalTip />}
-      {agentSurface === 'terminal' && (
+      {agentSurface === 'terminal' && !agentSurfaceSwitchable && (
         <TerminalModeChatTip onUseChat={() => onAgentSurfaceChange?.('chat')} />
       )}
       <YoloPermissionsControl

@@ -8,6 +8,7 @@ import {
 import { Trans } from 'react-i18next'
 import { cn } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { i18n, translate } from '@/i18n/i18n'
 import type { AgentSurface } from './use-onboarding-flow-types'
 
@@ -25,8 +26,17 @@ export function AgentSurfaceStep({
 }: AgentSurfaceStepProps) {
   return (
     <div className="space-y-5">
-      <div role="radiogroup" className="grid gap-3 md:grid-cols-2">
+      <RadioGroup
+        value={agentSurface}
+        onValueChange={(value) => {
+          if (value === 'chat' || value === 'terminal') {
+            onSelect(value)
+          }
+        }}
+        className="gap-3 md:grid-cols-2"
+      >
         <SurfaceOption
+          value="chat"
           icon={MessagesSquare}
           label={translate('components.onboarding.agentSurface.chat.label', 'Chat UI')}
           badge={translate('components.onboarding.agentSurface.chat.badge', 'Experimental')}
@@ -44,9 +54,9 @@ export function AgentSurfaceStep({
           }
           preview={<ChatPreview />}
           selected={agentSurface === 'chat'}
-          onClick={() => onSelect('chat')}
         />
         <SurfaceOption
+          value="terminal"
           icon={SquareTerminal}
           label={translate('components.onboarding.agentSurface.terminal.label', 'Terminal')}
           description={translate(
@@ -55,9 +65,8 @@ export function AgentSurfaceStep({
           )}
           preview={<TerminalPreview />}
           selected={agentSurface === 'terminal'}
-          onClick={() => onSelect('terminal')}
         />
-      </div>
+      </RadioGroup>
       <div className="flex items-start gap-3 rounded-lg border border-border px-4 py-3">
         <span className="grid size-8 shrink-0 place-items-center rounded-md bg-muted text-foreground">
           <ArrowLeftRight className="size-4" />
@@ -86,15 +95,16 @@ export function AgentSurfaceStep({
 }
 
 function SurfaceOption({
+  value,
   icon: Icon,
   label,
   badge,
   description,
   warning,
   preview,
-  selected,
-  onClick
+  selected
 }: {
+  value: AgentSurface
   icon: LucideIcon
   label: string
   badge?: string
@@ -102,19 +112,15 @@ function SurfaceOption({
   warning?: string
   preview: React.ReactNode
   selected: boolean
-  onClick: () => void
 }) {
   return (
-    <button
-      type="button"
-      role="radio"
-      aria-checked={selected}
+    <RadioGroupItem
+      value={value}
       className={cn(
-        'overflow-hidden rounded-xl border p-3 text-left transition-colors',
+        'size-auto overflow-hidden rounded-xl border p-3 text-left text-foreground transition-colors',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
         selected ? 'border-foreground/60 bg-accent' : 'border-border hover:bg-accent/60'
       )}
-      onClick={onClick}
     >
       <div
         aria-hidden
@@ -134,7 +140,7 @@ function SurfaceOption({
       </div>
       <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">{description}</p>
       {warning ? <p className="mt-1.5 text-xs text-status-warning-text">{warning}</p> : null}
-    </button>
+    </RadioGroupItem>
   )
 }
 

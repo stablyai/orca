@@ -16,6 +16,23 @@ type AgentSurfaceArgs = {
   setSelectedAgent: Dispatch<SetStateAction<TuiAgent | null>>
 }
 
+/** Which agents can open as a chat on this computer, and which of those are installed natively. */
+export function useChatAgentDetection() {
+  const ensureNativeDetectedAgents = useAppStore((s) => s.ensureNativeDetectedAgents)
+  const nativeDetected = useAppStore(readNativeDetectedAgents)
+  useHostStructuredAgentsVersion()
+  useEffect(() => {
+    void ensureNativeDetectedAgents()
+    // Chat UI may still be off, so the background sync has not asked the local host yet.
+    void relearnHostStructuredAgents(LOCAL_EXECUTION_HOST_ID, null, undefined)
+  }, [ensureNativeDetectedAgents])
+  // Claude and Codex, then the agents this computer's host registered for chat.
+  const chatAgents = chatProviderAgents(LOCAL_EXECUTION_HOST_ID, undefined)
+  // Chat never runs in WSL, so only native installs count; null while detection is pending.
+  const chatDetected = nativeDetected?.filter((agent) => chatAgents.includes(agent)) ?? null
+  return { chatAgents, chatDetected }
+}
+
 export function useOnboardingAgentSurface({
   settings,
   selectedAgent,
@@ -27,18 +44,7 @@ export function useOnboardingAgentSurface({
   const agentSurface: AgentSurface =
     choice ?? (settings?.experimentalNativeChat === true ? 'chat' : 'terminal')
 
-  const ensureNativeDetectedAgents = useAppStore((s) => s.ensureNativeDetectedAgents)
-  const nativeDetected = useAppStore(readNativeDetectedAgents)
-  useHostStructuredAgentsVersion()
-  useEffect(() => {
-    void ensureNativeDetectedAgents()
-    // Chat UI is usually still off here, so the background sync has not asked the local host yet.
-    void relearnHostStructuredAgents(LOCAL_EXECUTION_HOST_ID, null, undefined)
-  }, [ensureNativeDetectedAgents])
-  // Claude and Codex, then the agents this computer's host registered for chat.
-  const chatAgents = chatProviderAgents(LOCAL_EXECUTION_HOST_ID, undefined)
-  // Chat never runs in WSL, so only native installs count; null while detection is pending.
-  const chatDetected = nativeDetected?.filter((agent) => chatAgents.includes(agent)) ?? null
+  const { chatAgents, chatDetected } = useChatAgentDetection()
   const chatSettings = {
     experimentalNativeChat: true,
     nativeChatProviders: settings?.nativeChatProviders

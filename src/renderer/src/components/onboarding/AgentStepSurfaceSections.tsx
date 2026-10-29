@@ -33,26 +33,70 @@ export function agentSurfaceDetail(surface: AgentSurface, opensAsChat: boolean):
   )
 }
 
-export function AgentSurfaceModeRow({ surface }: { surface: AgentSurface }) {
+const surfacePillClass =
+  'inline-flex h-6 items-center gap-1.5 rounded-full border px-2.5 font-medium text-foreground'
+
+function AgentSurfaceLabel({ surface }: { surface: AgentSurface }) {
+  return surface === 'chat' ? (
+    <>
+      <MessagesSquare className="size-3.5" />
+      {translate('components.onboarding.agentSurface.chat.label', 'Chat UI')}
+      <Badge variant="outline">
+        {translate('components.onboarding.agentSurface.chat.badge', 'Experimental')}
+      </Badge>
+    </>
+  ) : (
+    <>
+      <SquareTerminal className="size-3.5" />
+      {translate('components.onboarding.agentStep.terminalUi', 'Terminal UI')}
+    </>
+  )
+}
+
+/** Read-only in onboarding, where the previous page chose; with onChange, both options are pickable. */
+export function AgentSurfaceModeRow({
+  surface,
+  onChange
+}: {
+  surface: AgentSurface
+  onChange?: (surface: AgentSurface) => void
+}) {
+  const label = translate('components.onboarding.agentStep.agentsOpenIn', 'Agents open in')
+  if (!onChange) {
+    return (
+      <div className="flex shrink-0 items-center gap-2.5 text-xs text-muted-foreground">
+        <span>{label}</span>
+        <span className={cn(surfacePillClass, 'border-foreground/60 bg-accent')}>
+          <AgentSurfaceLabel surface={surface} />
+        </span>
+      </div>
+    )
+  }
   return (
-    <div className="flex shrink-0 items-center gap-2.5 text-xs text-muted-foreground">
-      <span>{translate('components.onboarding.agentStep.agentsOpenIn', 'Agents open in')}</span>
-      <span className="inline-flex h-6 items-center gap-1.5 rounded-full border border-foreground/60 bg-accent px-2.5 font-medium text-foreground">
-        {surface === 'chat' ? (
-          <>
-            <MessagesSquare className="size-3.5" />
-            {translate('components.onboarding.agentSurface.chat.label', 'Chat UI')}
-            <Badge variant="outline">
-              {translate('components.onboarding.agentSurface.chat.badge', 'Experimental')}
-            </Badge>
-          </>
-        ) : (
-          <>
-            <SquareTerminal className="size-3.5" />
-            {translate('components.onboarding.agentStep.terminalUi', 'Terminal UI')}
-          </>
-        )}
-      </span>
+    <div
+      role="radiogroup"
+      aria-label={label}
+      className="flex shrink-0 flex-wrap items-center gap-2.5 text-xs text-muted-foreground"
+    >
+      <span aria-hidden>{label}</span>
+      {(['chat', 'terminal'] as const).map((option) => (
+        <button
+          key={option}
+          type="button"
+          role="radio"
+          aria-checked={surface === option}
+          className={cn(
+            surfacePillClass,
+            'transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+            surface === option
+              ? 'border-foreground/60 bg-accent'
+              : 'border-border hover:bg-accent/60'
+          )}
+          onClick={() => onChange(option)}
+        >
+          <AgentSurfaceLabel surface={option} />
+        </button>
+      ))}
     </div>
   )
 }
