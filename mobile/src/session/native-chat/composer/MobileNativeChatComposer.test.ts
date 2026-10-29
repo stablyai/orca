@@ -162,6 +162,9 @@ describe('MobileNativeChatComposer', () => {
       onKeyPress?: (event: {
         nativeEvent: { key: string; shiftKey?: boolean; isComposing?: boolean }
       }) => void
+      onSelectionChange?: (event: {
+        nativeEvent: { selection: { start: number; end: number } }
+      }) => void
     }
   } {
     if (!renderer) {
@@ -225,7 +228,9 @@ describe('MobileNativeChatComposer', () => {
         createElement(MobileNativeChatComposer, {
           value: '   ',
           onChangeText: vi.fn(),
-          onSend
+          onSend,
+          sendSurfaceId: 'tab-a',
+          getSendCompletionGeneration: () => 0
         })
       )
     })
@@ -255,7 +260,9 @@ describe('MobileNativeChatComposer', () => {
         createElement(MobileNativeChatComposer, {
           value: 'hello',
           onChangeText,
-          onSend
+          onSend,
+          sendSurfaceId: 'tab-a',
+          getSendCompletionGeneration: () => 0
         })
       )
     })
