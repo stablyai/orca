@@ -30,6 +30,12 @@ import {
   getSelectedClaudeAccountIdForTarget,
   type ClaudeAccountSelectionTarget
 } from '../../../claude-accounts/runtime-selection'
+import type { ClaudeAuthProxyStatus } from '../../../../shared/claude-auth-proxy-status'
+import { claudeAuthProxyStatus as readClaudeAuthProxyStatus } from '../../../claude-accounts/claude-auth-proxy/claude-auth-proxy-host'
+import {
+  assignClaudePaneOnExecutionHost,
+  type AssignClaudePaneRequest
+} from '../../../claude-accounts/claude-pane-account-assign'
 import {
   hostAccountsManagedByDesktopMessage,
   type HostAccountLaunchEnv
@@ -212,6 +218,20 @@ export class RuntimeAccountController {
 
   setClaudeAutoSwitch(enabled: boolean): ClaudeRateLimitAccountsState {
     return this.requireServices().claudeAccounts.setAutoSwitch(enabled)
+  }
+
+  setClaudeAuthProxy(enabled: boolean): ClaudeRateLimitAccountsState {
+    return this.requireServices().claudeAccounts.setAuthProxy(enabled)
+  }
+
+  /** Live listener. Does not require the account service: the proxy is process-global. */
+  claudeAuthProxyStatus(): ClaudeAuthProxyStatus {
+    return readClaudeAuthProxyStatus()
+  }
+
+  /** Works without account services: a WSL guest has the proxy and the pane registry, not the desktop's accounts. */
+  assignClaudePane(request: AssignClaudePaneRequest): { assigned: boolean } {
+    return assignClaudePaneOnExecutionHost(request)
   }
 
   selectCodex(accountId: string | null): Promise<CodexRateLimitAccountsState> {

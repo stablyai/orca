@@ -31,7 +31,8 @@ import { resolvePaneAgentSessionId } from '@/components/terminal-pane/pane-agent
 import { resolveAgentAccountRestartResumeStartup } from './agent-account-restart-startup'
 import { isSessionHeldByAnotherPane } from './claude-session-pane-holders'
 import {
-  isClaudePaneOnAccount,
+  assignedClaudePaneAccount,
+  isClaudePaneOnAssignedAccount,
   resolveClaudePaneFolder,
   type ClaudeHostFolders
 } from './claude-pane-account-folder'
@@ -148,14 +149,11 @@ export function findQueuedClaudeRestartsOnAccount(args: {
   const host = isHostTarget(args.target) ? args.host : undefined
   const ptyIds: string[] = []
   for (const pane of localClaudePanes(state, args.owner, args.target)) {
+    const folder = resolveClaudePaneFolder(pane.transcriptPath, saved, host)
     if (
       pane.inLane &&
       state.pendingPaneAccountRestarts[pane.ptyId] === 'claude' &&
-      isClaudePaneOnAccount(
-        resolveClaudePaneFolder(pane.transcriptPath, saved, host),
-        args.accountId,
-        host
-      )
+      isClaudePaneOnAssignedAccount(pane.ptyId, folder, args.accountId, host)
     ) {
       ptyIds.push(pane.ptyId)
     }
@@ -212,7 +210,7 @@ function scanPane(
   if (folder.kind === 'own-folder') {
     return { group: 'cantMove', pane, reason: 'own-folder' }
   }
-  if (isClaudePaneOnAccount(folder, args.toAccountId, args.host)) {
+  if (isClaudePaneOnAssignedAccount(pane.ptyId, folder, args.toAccountId, args.host)) {
     return null
   }
   const resumable = resolveAgentAccountRestartResumeStartup('claude', {
@@ -224,12 +222,14 @@ function scanPane(
   if (!resumable) {
     return { group: 'cantMove', pane, reason: 'no-session' }
   }
-  return isClaudePaneOnAccount(folder, args.fromAccountId, args.host)
+  return isClaudePaneOnAssignedAccount(pane.ptyId, folder, args.fromAccountId, args.host)
     ? { group: 'onAccount', pane }
     : {
         group: 'elsewhere',
         pane,
-        accountId: folder.kind === 'account' ? folder.accountId : null
+        accountId:
+          assignedClaudePaneAccount(pane.ptyId, args.host) ??
+          (folder.kind === 'account' ? folder.accountId : null)
       }
 }
 

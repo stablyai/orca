@@ -206,6 +206,7 @@ export function buildDefaultSettings(args: {
     activeCodexManagedAccountIdsByRuntime: { host: null, wsl: {} },
     claudeManagedAccounts: [],
     activeClaudeManagedAccountId: null,
+    claudeAuthProxy: false,
     claudeAutoSwitchEnabled: false,
     terminalScopeHistoryByWorktree: true,
     terminalHiddenViewParking: true,

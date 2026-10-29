@@ -95,6 +95,23 @@ describe('recordClaudePaneAccountForSpawn', () => {
     expect(getClaudePaneAccount('pty-1')).toBeNull()
   })
 
+  it('records the proxy slot and bills the spawn account until a move', () => {
+    spawn({
+      claudeAuth: {
+        ...auth('profile:b'),
+        envPatch: {
+          CLAUDE_CONFIG_DIR: '/data/claude-profiles/b/home',
+          ANTHROPIC_BASE_URL: 'http://127.0.0.1:9/p/abc123/'
+        }
+      }
+    })
+    expect(getClaudePaneAccount('pty-1')).toMatchObject({
+      accountId: 'b',
+      proxySlot: 'abc123',
+      assignedAccountId: 'b'
+    })
+  })
+
   it('stores an empty configDir as unknown', () => {
     spawn({ claudeAuth: auth('profile:b', '') })
     expect(getClaudePaneAccount('pty-1')).toMatchObject({ accountId: 'b', configDir: null })

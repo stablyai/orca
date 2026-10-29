@@ -42,6 +42,7 @@ import {
   formatAntigravityAccounts,
   formatDataAccounts
 } from './account-list-format'
+import { setClaudeAuthProxy } from './account-auth-proxy'
 import { resolveOpenCodeLoginCommand } from './opencode-account-login-command'
 import {
   listAgentAccounts,
@@ -303,5 +304,6 @@ export const ACCOUNT_HANDLERS: Record<string, CommandHandler> = {
     rejectAccountRemoteSelectionFlags(ctx, 'orca account rm')
     await removeAgentAccount(ctx)
   },
-  'account auto-switch': setClaudeAutoSwitch
+  'account auto-switch': setClaudeAutoSwitch,
+  'account auth-proxy': setClaudeAuthProxy
 }

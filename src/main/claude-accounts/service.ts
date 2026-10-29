@@ -140,6 +140,10 @@ export class ClaudeAccountService {
     return this.selection.setAutoSwitch(enabled)
   }
 
+  setAuthProxy(enabled: boolean): ClaudeRateLimitAccountsState {
+    return this.selection.setAuthProxy(enabled)
+  }
+
   getRuntimeConfigDir(target?: ClaudeAccountSelectionTarget): string {
     return this.runtimeAuth.getRuntimeConfigDir(target)
   }

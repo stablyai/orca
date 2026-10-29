@@ -3,6 +3,7 @@ import {
   forgetClaudePaneAccount,
   recordClaudePaneAccount
 } from '../../../claude-accounts/claude-pane-account-registry'
+import type { ClaudeEnvPatch } from '../../../claude-accounts/environment'
 import type { ClaudeRuntimeAuthPreparation } from '../../../claude-accounts/runtime-auth-service'
 import {
   getSelectedClaudeAccountIdForTarget,
@@ -44,6 +45,19 @@ export function claudeAccountIdFromProvenance(
   return null
 }
 
+/** Slot id from `http://127.0.0.1:<port>/p/<slot>/`. A trailing slash is required for URL joining. */
+function proxySlotFromBaseUrl(envPatch: ClaudeEnvPatch): string | undefined {
+  const base = envPatch.ANTHROPIC_BASE_URL
+  if (!base) {
+    return undefined
+  }
+  try {
+    return new URL(base).pathname.match(/^\/p\/([^/]+)\/?$/)?.[1]
+  } catch {
+    return undefined
+  }
+}
+
 /**
  * Records the account a Claude launch runs on; both spawn choke points (renderer pty:spawn and the
  * runtime controller) call this after the spawn committed and its pane key was remembered, so the
@@ -79,6 +93,7 @@ export function recordClaudePaneAccountForSpawn(args: {
     forgetClaudePaneAccount(args.ptyId)
     return
   }
+  const proxySlot = proxySlotFromBaseUrl(args.claudeAuth.envPatch)
   recordClaudePaneAccount({
     ptyId: args.ptyId,
     paneKey: args.paneKey,
@@ -88,6 +103,7 @@ export function recordClaudePaneAccountForSpawn(args: {
     // Why false: Orca chose this folder; a session whose shell chose its own is learned from its
     // transcript later and marked pinned there.
     pinned: false,
-    source: 'spawn'
+    source: 'spawn',
+    ...(proxySlot ? { proxySlot, assignedAccountId: accountId } : {})
   })
 }

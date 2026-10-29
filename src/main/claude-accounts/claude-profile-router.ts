@@ -19,6 +19,7 @@ import { systemDefaultRunsAnotherAccount } from './claude-profile-system-default
 import { claudeAccountUsagePreparation } from './claude-account-usage-preparation'
 import { claudeProfileSelectionHomes } from './claude-profile-selection-homes'
 import type { GlobalSettings } from '../../shared/global-settings-types'
+import { claudeAuthProxyEnabled } from '../../shared/claude-account-switch-settings'
 import type { ClaudeManagedAccount } from '../../shared/managed-account-types'
 import { writeFileAtomically } from '../codex-accounts/fs-utils'
 import {
@@ -46,6 +47,7 @@ import {
   type ClaudeFolderLogin
 } from './claude-account-folder'
 import { resolveLoginShellEnvironment } from '../startup/login-shell-environment'
+import { claudeAuthProxyBaseUrl } from './claude-auth-proxy/claude-auth-proxy-host'
 import { claudeAssignedAccountForProviderSession } from './claude-pane-account-registry'
 
 export type ClaudeProfileRouterSettings = Pick<
@@ -55,6 +57,7 @@ export type ClaudeProfileRouterSettings = Pick<
   | 'activeClaudeManagedAccountIdsByRuntime'
   | 'agentStatusHooksEnabled'
   | 'disabledTuiAgents'
+  | 'claudeAuthProxy'
 >
 
 /** Mirror the settings selection to a pointer file for Claude in existing terminals. */
@@ -229,19 +232,36 @@ export class ClaudeProfileRouter {
     })
   }
 
-  /** Account recorded for this provider session, so a later resume can stay on it. */
+  /** Account a previous proxy move billed, so a `--resume` of that session stays there. */
   assignedAccountForResume(sessionId: string): string | null {
     return claudeAssignedAccountForProviderSession(sessionId)
+  }
+
+  /** Adds the pane's proxy slot when the proxy is on and the user has not set a base URL. */
+  private withAuthProxy(
+    accountId: string | null | undefined,
+    patch: ClaudeEnvPatch
+  ): ClaudeEnvPatch {
+    if (patch.ANTHROPIC_BASE_URL) {
+      return patch
+    }
+    const url = claudeAuthProxyBaseUrl(
+      accountId,
+      this.env,
+      claudeAuthProxyEnabled(this.args.getSettings())
+    )
+    return url ? { ...patch, ANTHROPIC_BASE_URL: url } : patch
   }
 
   /** Env for a launch Orca makes itself. Throws like routedHome. */
   launchEnv(): ClaudeEnvPatch {
     const home = this.routedHome()
-    return {
+    const accountId = this.routedProfile()?.accountId ?? this.selectedProfile()?.accountId
+    return this.withAuthProxy(accountId, {
       [CLAUDE_PROFILE_POINTER_ENV]: this.pointerPath,
       // Preserve the user's inherited CLAUDE_CONFIG_DIR for System default.
       ...(home ? { CLAUDE_CONFIG_DIR: home, [CLAUDE_INJECTED_CONFIG_DIR_ENV]: home } : {})
-    }
+    })
   }
 
   /** What chosen-account launches borrow from this router. */
@@ -263,7 +283,7 @@ export class ClaudeProfileRouter {
    * judged against process.env and can misclassify; real launches use prepareLaunchFor.
    */
   launchEnvFor(accountId: string): ClaudeEnvPatch {
-    return chosenAccountLaunchEnv(this.chosen, accountId)
+    return this.withAuthProxy(accountId, chosenAccountLaunchEnv(this.chosen, accountId))
   }
 
   /**
@@ -271,12 +291,14 @@ export class ClaudeProfileRouter {
    * coverage is judged against process.env and can misclassify; real launches use prepareLaunchFor.
    */
   preparationFor(accountId: string): ClaudeRuntimeAuthPreparation {
-    return chosenAccountPreparation(this.chosen, accountId)
+    const preparation = chosenAccountPreparation(this.chosen, accountId)
+    return { ...preparation, envPatch: this.withAuthProxy(accountId, preparation.envPatch) }
   }
 
   /** Like prepareLaunch(), for a chosen host account. */
-  prepareLaunchFor(accountId: string): Promise<ClaudeRuntimeAuthPreparation> {
-    return prepareChosenAccountLaunch(this.chosen, accountId)
+  async prepareLaunchFor(accountId: string): Promise<ClaudeRuntimeAuthPreparation> {
+    const preparation = await prepareChosenAccountLaunch(this.chosen, accountId)
+    return { ...preparation, envPatch: this.withAuthProxy(accountId, preparation.envPatch) }
   }
 
   /** A pane's spawn env. Never throws, so a broken selection cannot stop a terminal opening. */

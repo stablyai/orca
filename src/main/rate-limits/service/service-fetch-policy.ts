@@ -17,6 +17,7 @@ import {
 } from '../claude-usage-window'
 import { readUserClaudeConfigDir } from '../../claude-accounts/claude-profile-paths'
 import { getClaudeProfileRouter } from '../../claude-accounts/claude-profile-installed-router'
+import { noteClaudeAuthSnapshot } from '../../claude-accounts/claude-auth-proxy/claude-auth-proxy-host'
 
 export abstract class RateLimitServiceFetchPolicy extends RateLimitServiceFetchTargets {
   protected getMiniMaxCredentialError(message: string): ProviderRateLimits {
@@ -103,7 +104,8 @@ export abstract class RateLimitServiceFetchPolicy extends RateLimitServiceFetchT
       ),
       provenance: authPreparation?.provenance ?? 'system'
     }
-    // A changed folder or provenance means the bearer may have rotated.
+    // A changed folder or provenance means the bearer may have rotated. Same snapshot keeps the TTL.
+    noteClaudeAuthSnapshot(this.lastClaudeAuthSnapshot, nextSnapshot)
     this.lastClaudeAuthSnapshot = nextSnapshot
   }
 
@@ -117,9 +119,9 @@ export abstract class RateLimitServiceFetchPolicy extends RateLimitServiceFetchT
   }
 
   ingestLiveClaudeRateLimits(event: ClaudeStatusLineRateLimits): void {
-    // Why first: a session of another managed account reports that account's own quota; keeping it
-    // gives auto-switch a fresh reading between polls.
-    // A pane whose billed account differs from its spawn folder names that account on the event.
+    // Why first: a session of another managed account reports that account's own quota; keeping it in
+    // the account's entry gives auto-switch and the session mover a fresh reading between polls.
+    // A proxy move bills `billingAccountId` while the spawn folder (configDir) stays put.
     const inactive = this.inactiveClaudeAccountsResolver?.() ?? []
     const billed = event.billingAccountId
     if (billed && inactive.some((account) => account.id === billed)) {

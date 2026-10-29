@@ -1,3 +1,4 @@
+import { claudeAuthProxyEnabled } from '../../shared/claude-account-switch-settings'
 import type {
   ClaudeManagedAccount,
   ClaudeManagedAccountSummary,
@@ -8,6 +9,7 @@ import type { RateLimitService } from '../rate-limits/service'
 import { claudeStateFile, readClaudeFolderLogin } from './claude-account-folder'
 import { claudeListedPaneAccounts } from './claude-listed-pane-accounts'
 import { listClaudePaneAccounts } from './claude-pane-account-registry'
+import { wslAuthProxyStatus } from './wsl-auth-proxy-status'
 import { savedWslClaudeAccountHome } from './claude-profile-wsl-paths'
 import type { ClaudeRuntimeAuthService } from './runtime-auth-service'
 import {
@@ -34,6 +36,7 @@ export type ClaudeAccountSettings = Pick<
   | 'activeClaudeManagedAccountId'
   | 'activeClaudeManagedAccountIdsByRuntime'
   | 'claudeAutoSwitchEnabled'
+  | 'claudeAuthProxy'
 >
 
 export type ClaudeAccountStore = {
@@ -70,6 +73,11 @@ export class ClaudeAccountSelection {
     private readonly runtimeAuth: ClaudeAccountRuntime
   ) {}
 
+  setAuthProxy(enabled: boolean): ClaudeRateLimitAccountsState {
+    this.saveSettings({ claudeAuthProxy: enabled })
+    return this.list()
+  }
+
   list(): ClaudeRateLimitAccountsState {
     this.pruneSelection()
     const settings = this.store.getSettings()
@@ -95,11 +103,15 @@ export class ClaudeAccountSelection {
     // Throttle parsing of the large, frequently rewritten personal state file.
     const systemDefault =
       accounts.length > 0 ? readClaudeFolderLogin(claudeStateFile(userConfigDir), 5_000) : null
+    const wslAuthProxy =
+      process.platform === 'win32' ? wslAuthProxyStatus(settings.claudeManagedAccounts) : undefined
     return {
       accounts,
       activeAccountId: selection.host,
       activeAccountIdsByRuntime: selection,
       autoSwitchEnabled: settings.claudeAutoSwitchEnabled === true,
+      authProxy: claudeAuthProxyEnabled(settings) ? 'on' : 'off',
+      ...(wslAuthProxy ? { wslAuthProxy } : {}),
       assignedSessions,
       paneAccounts,
       ...(paneAssignments.length > 0 ? { paneAssignments } : {}),

@@ -34,7 +34,14 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
   },
   {
     name: 'account',
-    keys: ['account add', 'account list', 'account select', 'account rm', 'account auto-switch'],
+    keys: [
+      'account add',
+      'account list',
+      'account select',
+      'account rm',
+      'account auto-switch',
+      'account auth-proxy'
+    ],
     load: async () => (await import('./handlers/account.js')).ACCOUNT_HANDLERS
   },
   {

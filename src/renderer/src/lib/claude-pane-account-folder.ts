@@ -83,3 +83,24 @@ export function isClaudePaneOnAccount(
     account.email.trim().toLowerCase() === host.systemDefaultEmail.trim().toLowerCase()
   )
 }
+
+/** The registry's live assignment for a pane, when the host reports one. */
+export function assignedClaudePaneAccount(
+  ptyId: string,
+  host?: ClaudeHostFolders
+): string | undefined {
+  return host?.paneAssignments?.find((entry) => entry.ptyId === ptyId)?.accountId
+}
+
+/** A live assignment wins over the transcript folder; without one the folder decides. */
+export function isClaudePaneOnAssignedAccount(
+  ptyId: string,
+  folder: ClaudePaneFolder | undefined,
+  accountId: string | null,
+  host?: ClaudeHostFolders
+): boolean {
+  const assigned = assignedClaudePaneAccount(ptyId, host)
+  return assigned !== undefined
+    ? assigned === accountId
+    : isClaudePaneOnAccount(folder, accountId, host)
+}

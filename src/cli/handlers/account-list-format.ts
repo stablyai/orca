@@ -12,6 +12,10 @@ type AccountsBlock = {
   autoSwitchEnabled?: boolean
   /** Claude only: live sessions billed to each account (absent from older hosts). */
   assignedSessions?: readonly { accountId: string; count: number }[]
+  /** Claude only: whether launches bill through the local auth proxy. */
+  authProxy?: 'on' | 'off'
+  /** Claude only: Windows view of WSL guest billing. */
+  wslAuthProxy?: 'on' | 'unsupported:wsl'
   /** Claude only: panes whose billed account differs from the folder they launched in. */
   paneAssignments?: readonly { ptyId: string; accountId: string }[]
 }
@@ -58,6 +62,12 @@ export function formatAccountsBlock(label: string, block: AccountsBlock): string
   }
   for (const assignment of block.paneAssignments ?? []) {
     lines.push(`  pane ${assignment.ptyId}: account ${assignment.accountId}`)
+  }
+  if (block.authProxy !== undefined) {
+    lines.push(`  auth-proxy: ${block.authProxy}`)
+  }
+  if (block.wslAuthProxy !== undefined) {
+    lines.push(`  wsl auth-proxy: ${block.wslAuthProxy}`)
   }
   return `Managed ${label} accounts (${block.accounts.length}):\n${system}\n${lines.join('\n')}`
 }

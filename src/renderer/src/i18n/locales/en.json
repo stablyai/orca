@@ -22290,6 +22290,10 @@
       "keyword": {
         "auto": "auto"
       },
+      "authProxy": {
+        "settingTitle": "Bill Claude through a local auth proxy",
+        "settingDescription": "A running Claude session can change accounts without restarting. The next request uses the new account."
+      },
       "switchSessions": {
         "title": "Switched to {{account}}",
         "dontAskAgain": "Don't ask again (restart automatically)",

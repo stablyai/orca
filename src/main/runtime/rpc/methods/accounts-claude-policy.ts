@@ -1,5 +1,10 @@
 import { defineMethod } from '../core'
-import { SetClaudeAutoSwitchParams } from '../../../../shared/rpc-contract/accounts-params'
+import {
+  AssignClaudePaneParams,
+  ClaudeAuthProxyStatusParams,
+  SetClaudeAuthProxyParams,
+  SetClaudeAutoSwitchParams
+} from '../../../../shared/rpc-contract/accounts-params'
 
 /** Claude account policy RPCs. Kept beside accounts.ts so that file stays within the line limit. */
 export const CLAUDE_ACCOUNT_POLICY_METHODS = [
@@ -8,5 +13,23 @@ export const CLAUDE_ACCOUNT_POLICY_METHODS = [
     permission: 'accounts-admin',
     params: SetClaudeAutoSwitchParams,
     handler: async (params, { runtime }) => runtime.setClaudeAutoSwitch(params.enabled)
+  }),
+  defineMethod({
+    name: 'accounts.setClaudeAuthProxy',
+    permission: 'accounts-admin',
+    params: SetClaudeAuthProxyParams,
+    handler: async (params, { runtime }) => runtime.setClaudeAuthProxy(params.enabled)
+  }),
+  defineMethod({
+    name: 'accounts.claudeAuthProxyStatus',
+    permission: 'accounts-admin',
+    params: ClaudeAuthProxyStatusParams,
+    handler: async (_params, { runtime }) => runtime.claudeAuthProxyStatus()
+  }),
+  defineMethod({
+    name: 'accounts.assignClaudePane',
+    permission: 'accounts-admin',
+    params: AssignClaudePaneParams,
+    handler: async (params, { runtime }) => runtime.assignClaudePane(params)
   })
 ]
