@@ -838,6 +838,11 @@ body[data-modal-overlay-open]
   mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 1.5rem), transparent);
 }
 
+.terminal-tab-strip[data-active-tab-dock-disabled] > [data-active-tab-dock] {
+  position: relative;
+  z-index: auto;
+}
+
 /* Why: tabs only draw a right border, so a tab docked at the end has no seam against the tab it covers. */
 .terminal-tab-strip[data-active-tab-docked='end'] > [data-active-tab-dock]::before {
   content: '';

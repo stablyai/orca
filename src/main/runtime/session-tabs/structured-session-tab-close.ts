@@ -1,3 +1,4 @@
+import type { OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab as BrowserOwnership } from './mobile-session-publication-preservation'
 import type { OrcaRuntimeWithPruneMobileSessionTabGroupLayout as PruneMobileSessionTabGroupLayoutMethods } from '../session-lifecycle/projection/prune-mobile-session-tab-group-layout'
 import type { RuntimeHeadlessTabGroups as HeadlessTabGroupsMethods } from './headless-tab-group-moves'
 import { OrcaRuntimeWithCloseMobileSessionTab } from '../session-lifecycle/close/close-mobile-session-tab'
@@ -10,7 +11,6 @@ import type {
   RuntimeMobileSessionTerminalTab
 } from '../../../shared/runtime-types'
 import type { RuntimePtyWorktreeRecord } from '../runtime-terminal-state-records'
-import { getMobileSessionSnapshotTabIdentityKeys } from '../mobile-session-tab-merge'
 import type { BrowserSessionTabSelectionOptions } from '../browser-tab-create-publication'
 import { getRuntimeBrowserPageRegistry } from '../runtime-browser-page-registry'
 import { applyBrowserSessionTabSelection } from '../browser-session-tab-selection-snapshot'
@@ -33,6 +33,14 @@ import { structuredSessionTabRetired } from '../structured-worker-custody'
 import type { StructuredAgentId } from '../../../shared/agent-session-provider-handle'
 
 export abstract class OrcaRuntimeWithCloseStructuredAgentSessionTab extends OrcaRuntimeWithCloseMobileSessionTab {
+  protected abstract isHeadlessOwnedMobileBrowserTab(
+    ...args: Parameters<BrowserOwnership['isHeadlessOwnedMobileBrowserTab']>
+  ): ReturnType<BrowserOwnership['isHeadlessOwnedMobileBrowserTab']>
+  protected abstract getMobileSessionPublicationEpochAfterHeadlessBrowserClose(
+    ...args: Parameters<
+      BrowserOwnership['getMobileSessionPublicationEpochAfterHeadlessBrowserClose']
+    >
+  ): ReturnType<BrowserOwnership['getMobileSessionPublicationEpochAfterHeadlessBrowserClose']>
   protected abstract getListedBrowserTabsByPageId(worktreeId: string): Map<string, BrowserTabInfo>
   protected abstract getMobileTerminalLeafPtyIds(
     ...args: Parameters<PruneMobileSessionTabGroupLayoutMethods['getMobileTerminalLeafPtyIds']>
@@ -155,18 +163,7 @@ export abstract class OrcaRuntimeWithCloseStructuredAgentSessionTab extends Orca
     if (!this.offscreenBrowserBackend || !tab.browserPageId) {
       return false
     }
-    if (this.isHeadlessBuiltMobileSessionPublicationBase(snapshot.publicationEpoch)) {
-      return true
-    }
-    const accepted = this.acceptedRendererMobileSnapshotByWorktree.get(snapshot.worktree)
-    return (
-      snapshot.publicationEpoch.includes(':headless-merge:') &&
-      accepted !== undefined &&
-      !getMobileSessionSnapshotTabIdentityKeys(tab).some((id) =>
-        accepted.rendererTabIdentityKeys.has(id)
-      ) &&
-      this.getListedBrowserTabsByPageId(snapshot.worktree).has(tab.browserPageId)
-    )
+    return this.isHeadlessOwnedMobileBrowserTab(snapshot, tab)
   }
 
   // Public so runtime-side page release (lease fencing) can prune a tab whose page is gone.
@@ -191,7 +188,7 @@ export abstract class OrcaRuntimeWithCloseStructuredAgentSessionTab extends Orca
     const active = nextTabs.find((candidate) => candidate.isActive) ?? nextTabs[0] ?? null
     const nextSnapshot: RuntimeMobileSessionTabsSnapshot = {
       ...snapshot,
-      publicationEpoch: `headless:${Date.now().toString(36)}`,
+      publicationEpoch: this.getMobileSessionPublicationEpochAfterHeadlessBrowserClose(snapshot),
       snapshotVersion: snapshot.snapshotVersion + 1,
       activeTabId: active?.id ?? null,
       activeTabType: active?.type ?? null,

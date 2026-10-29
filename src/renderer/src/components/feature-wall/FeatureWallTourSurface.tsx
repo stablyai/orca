@@ -28,7 +28,7 @@ import { useFeatureWallCompletion } from './use-feature-wall-completion'
 import { useFeatureWallTourTelemetry } from './use-feature-wall-tour-telemetry'
 import { FeatureWallContinueButton } from './FeatureWallContinueButton'
 import { FeatureWallTourPanel } from './FeatureWallTourPanel'
-import { getFeatureWallActiveStepCopy } from './feature-wall-active-step-copy'
+import { getFeatureWallActiveStepCopy, tourContinueLabel } from './feature-wall-active-step-copy'
 import { getScreenSubmitModifierLabel } from '@/lib/screen-submit-shortcut'
 import { useFeatureWallTourKeyboardShortcut } from './use-feature-wall-tour-keyboard-shortcut'
 import { useFeatureWallTourRailKeydown } from './use-feature-wall-tour-rail-keydown'
@@ -54,7 +54,7 @@ export function FeatureWallTourSurface({
   onDone,
   className,
   panelClassName,
-  doneLabel = 'Done',
+  doneLabel = translate('auto.components.feature.wall.FeatureWallTourSurface.done', 'Done'),
   footerText = translate(
     'auto.components.feature.wall.FeatureWallTourSurface.reopenHint',
     'Reopen any time from Help > Explore Orca.'
@@ -277,7 +277,7 @@ export function FeatureWallTourSurface({
         : workbenchStepIndex < workbenchSteps.length - 1)) ||
     (selected.id === 'review' &&
       (reviewStepIndex < 0 ? reviewSteps.length > 0 : reviewStepIndex < reviewSteps.length - 1))
-  const continueLabel = isLastWorkflow && !hasNextSubStep ? doneLabel : 'Continue'
+  const continueLabel = tourContinueLabel(isLastWorkflow && !hasNextSubStep, doneLabel)
   const handleContinue = useCallback((): void => {
     markWorkflowVisited(selected.id)
     if (selected.id === 'agents-orchestration') {

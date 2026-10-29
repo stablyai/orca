@@ -24,6 +24,7 @@ export function encodeNodeRuntimeMessage(value) {
   return stringify(value, reducers)
 }
 
+// Why pass non-strings through: tests that fake a parent with process.emit('message') reach this listener too.
 export function decodeNodeRuntimeMessage(text) {
-  return parse(text, revivers)
+  return typeof text === 'string' ? parse(text, revivers) : text
 }

@@ -81,24 +81,26 @@ function failedText(count: number): SegmentText {
     label:
       count === 1
         ? translate(
-            'auto.components.status.bar.NativeChatResumeStatusSegment.failedLabelOne',
-            '1 chat failed to resume'
+            'auto.components.status.bar.NativeChatResumeStatusSegment.chatsFailedLabel_one',
+            '{{count}} chat failed to resume',
+            { count }
           )
         : translate(
-            'auto.components.status.bar.NativeChatResumeStatusSegment.failedLabel',
-            '{{value0}} chats failed to resume',
-            { value0: count }
+            'auto.components.status.bar.NativeChatResumeStatusSegment.chatsFailedLabel_other',
+            '{{count}} chats failed to resume',
+            { count }
           ),
     ariaLabel:
       count === 1
         ? translate(
-            'auto.components.status.bar.NativeChatResumeStatusSegment.failedAriaOne',
-            '1 chat failed to resume. Click for details.'
+            'auto.components.status.bar.NativeChatResumeStatusSegment.chatsFailedAria_one',
+            '{{count}} chat failed to resume. Click for details.',
+            { count }
           )
         : translate(
-            'auto.components.status.bar.NativeChatResumeStatusSegment.failedAria',
-            '{{value0}} chats failed to resume. Click for details.',
-            { value0: count }
+            'auto.components.status.bar.NativeChatResumeStatusSegment.chatsFailedAria_other',
+            '{{count}} chats failed to resume. Click for details.',
+            { count }
           ),
     tooltip: translate(
       'auto.components.status.bar.NativeChatResumeStatusSegment.failedTooltip',
@@ -112,24 +114,26 @@ function resumedText(count: number): SegmentText {
     label:
       count === 1
         ? translate(
-            'auto.components.status.bar.NativeChatResumeStatusSegment.resumedLabelOne',
-            '1 chat resumed'
+            'auto.components.status.bar.NativeChatResumeStatusSegment.resumedLabelCount_one',
+            '{{count}} chat resumed',
+            { count }
           )
         : translate(
-            'auto.components.status.bar.NativeChatResumeStatusSegment.resumedLabel',
-            '{{value0}} chats resumed',
-            { value0: count }
+            'auto.components.status.bar.NativeChatResumeStatusSegment.resumedLabelCount_other',
+            '{{count}} chats resumed',
+            { count }
           ),
     ariaLabel:
       count === 1
         ? translate(
-            'auto.components.status.bar.NativeChatResumeStatusSegment.resumedAriaOne',
-            '1 chat resumed. Click to see it.'
+            'auto.components.status.bar.NativeChatResumeStatusSegment.resumedAriaCount_one',
+            '{{count}} chat resumed. Click to see it.',
+            { count }
           )
         : translate(
-            'auto.components.status.bar.NativeChatResumeStatusSegment.resumedAria',
-            '{{value0}} chats resumed. Click to see them.',
-            { value0: count }
+            'auto.components.status.bar.NativeChatResumeStatusSegment.resumedAriaCount_other',
+            '{{count}} chats resumed. Click to see them.',
+            { count }
           ),
     tooltip: translate(
       'auto.components.status.bar.NativeChatResumeStatusSegment.resumedTooltip',
@@ -143,24 +147,26 @@ function checkText(count: number): SegmentText {
     label:
       count === 1
         ? translate(
-            'auto.components.status.bar.NativeChatResumeStatusSegment.checkLabelOne',
-            '1 chat to check'
+            'auto.components.status.bar.NativeChatResumeStatusSegment.checkLabelCount_one',
+            '{{count}} chat to check',
+            { count }
           )
         : translate(
-            'auto.components.status.bar.NativeChatResumeStatusSegment.checkLabel',
-            '{{value0}} chats to check',
-            { value0: count }
+            'auto.components.status.bar.NativeChatResumeStatusSegment.checkLabelCount_other',
+            '{{count}} chats to check',
+            { count }
           ),
     ariaLabel:
       count === 1
         ? translate(
-            'auto.components.status.bar.NativeChatResumeStatusSegment.checkAriaOne',
-            '1 chat to check after resuming. Click for details.'
+            'auto.components.status.bar.NativeChatResumeStatusSegment.checkAriaCount_one',
+            '{{count}} chat to check after resuming. Click for details.',
+            { count }
           )
         : translate(
-            'auto.components.status.bar.NativeChatResumeStatusSegment.checkAria',
-            '{{value0}} chats to check after resuming. Click for details.',
-            { value0: count }
+            'auto.components.status.bar.NativeChatResumeStatusSegment.checkAriaCount_other',
+            '{{count}} chats to check after resuming. Click for details.',
+            { count }
           ),
     tooltip: translate(
       'auto.components.status.bar.NativeChatResumeStatusSegment.checkTooltip',
@@ -253,25 +259,27 @@ function NativeChatRuntimeResumeStatusSegment({
           label={
             pending === 1
               ? translate(
-                  'auto.components.status.bar.NativeChatResumeStatusSegment.labelOne',
-                  '1 chat to resume'
+                  'auto.components.status.bar.NativeChatResumeStatusSegment.labelCount_one',
+                  '{{count}} chat to resume',
+                  { count: pending }
                 )
               : translate(
-                  'auto.components.status.bar.NativeChatResumeStatusSegment.label',
-                  '{{value0}} chats to resume',
-                  { value0: pending }
+                  'auto.components.status.bar.NativeChatResumeStatusSegment.labelCount_other',
+                  '{{count}} chats to resume',
+                  { count: pending }
                 )
           }
           ariaLabel={
             pending === 1
               ? translate(
-                  'auto.components.status.bar.NativeChatResumeStatusSegment.ariaLabelOne',
-                  '1 chat available to resume'
+                  'auto.components.status.bar.NativeChatResumeStatusSegment.ariaLabelCount_one',
+                  '{{count}} chat available to resume',
+                  { count: pending }
                 )
               : translate(
-                  'auto.components.status.bar.NativeChatResumeStatusSegment.ariaLabel',
-                  '{{value0}} chats available to resume',
-                  { value0: pending }
+                  'auto.components.status.bar.NativeChatResumeStatusSegment.ariaLabelCount_other',
+                  '{{count}} chats available to resume',
+                  { count: pending }
                 )
           }
           tooltip={translate(

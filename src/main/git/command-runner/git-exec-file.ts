@@ -77,6 +77,8 @@ async function gitExecFileAsyncUnlocked(
             signal: options.admissionSignal ?? options.signal
           })
       span?.setAttribute('git.queue_wait_ms', grant.queueWaitMs)
+      // Which Git ran: a project's runtime can route it into a distro whatever its cwd.
+      span?.setAttribute('git.runs_in', resolved.wsl ? `wsl:${resolved.wsl.distro}` : 'host')
       const timeoutMs = gitCommandTimeoutMs(args, options.timeout, options.timeoutMsForTest)
       const capture = (
         command: ResolvedCommand
@@ -240,6 +242,7 @@ async function gitExecFileAsyncBufferInSpan(
       signal: options.signal
     })
     span?.setAttribute('git.queue_wait_ms', grant.queueWaitMs)
+    span?.setAttribute('git.runs_in', resolved.wsl ? `wsl:${resolved.wsl.distro}` : 'host')
     const timeoutMs = gitCommandTimeoutMs(args, options.timeout, options.timeoutMsForTest)
     let termination: Promise<void> | null = null
     try {

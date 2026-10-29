@@ -10,6 +10,8 @@ import type { PluginManifest } from './plugin-manifest'
 // v2 catalog drops it instead of listing a plugin this client cannot install.
 export const PLUGIN_CATALOG_TYPES = [
   'interface-language',
+  'app-theme',
+  'terminal-theme',
   'instructions',
   'panel',
   'worker'
@@ -59,6 +61,12 @@ export function pluginCatalogTypes(manifest: PluginManifest): PluginCatalogType[
   const types: PluginCatalogType[] = []
   if (c.languagePacks.length > 0) {
     types.push('interface-language')
+  }
+  if (c.themes.length > 0) {
+    types.push('app-theme')
+  }
+  if (c.terminalThemes.length > 0) {
+    types.push('terminal-theme')
   }
   if (c.commands.length || c.keybindings.length || c.vmRecipes.length || c.agents.length) {
     types.push('instructions')

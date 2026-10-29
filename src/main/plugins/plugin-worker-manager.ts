@@ -12,6 +12,7 @@ import type { PluginWorkerHandle, PluginWorkerHostCallExecutor } from './plugin-
 import { PluginWorkerSlotPool } from './plugin-worker-slot-pool'
 import {
   startPluginWorkerAttempt,
+  type PluginWorkerAdmission,
   type PluginWorkerFactory,
   type PluginWorkerSpawnSpec,
   type StartedPluginWorker
@@ -52,7 +53,7 @@ export class PluginWorkerManager {
   private readonly supervisor = new PluginSupervisor()
   private readonly workers = new Map<string, StartedPluginWorker>()
   private readonly activations = new Map<string, ActivationRecord>()
-  private readonly knownSpecs = new Map<string, PluginWorkerSpawnSpec>()
+  private readonly known = new Map<string, PluginWorkerAdmission>()
   private readonly generations = new Map<string, number>()
   private readonly stoppingWorkers = new Set<Promise<void>>()
   private readonly slots: PluginWorkerSlotPool
@@ -73,7 +74,7 @@ export class PluginWorkerManager {
   }
 
   trackedSpecs(): ReadonlyMap<string, PluginWorkerSpawnSpec> {
-    return new Map(this.knownSpecs)
+    return new Map([...this.known].map(([key, { spec }]) => [key, spec]))
   }
 
   /** @internal - exposed for lifecycle retention tests. */
@@ -83,7 +84,7 @@ export class PluginWorkerManager {
 
   async ensureActive(
     spec: PluginWorkerSpawnSpec,
-    assertApproved: () => void = () => undefined
+    admission: Omit<PluginWorkerAdmission, 'spec'> = { assertApproved: () => undefined }
   ): Promise<PluginWorkerHandle> {
     if (this.disposed) {
       throw new Error('plugin workers are shut down')
@@ -93,7 +94,7 @@ export class PluginWorkerManager {
     }
     for (;;) {
       // Removal may finish while a stale revision waits for its worker to stop.
-      assertApproved()
+      admission.assertApproved()
       const existing = this.workers.get(spec.pluginKey)
       const pending = this.activations.get(spec.pluginKey)
       const activeSpec = existing?.spec ?? pending?.spec
@@ -110,7 +111,7 @@ export class PluginWorkerManager {
       }
     }
     const generation = this.nextGeneration(spec.pluginKey)
-    this.knownSpecs.set(spec.pluginKey, spec)
+    this.known.set(spec.pluginKey, { ...admission, spec })
     this.supervisor.markRunning(spec.pluginKey, { resetRestarts: true })
     return this.beginActivation(spec, generation)
   }
@@ -154,6 +155,7 @@ export class PluginWorkerManager {
             this.options.executeHostCall(spec.pluginKey, method, params),
           log,
           assertActive: () => this.throwIfCancelled(spec.pluginKey, generation, signal),
+          verifyBeforeSpawn: this.known.get(spec.pluginKey)?.verifyBeforeSpawn,
           onExit: (record, code) => this.handleUnexpectedExit(spec.pluginKey, record, code)
         })
         this.workers.set(spec.pluginKey, worker)
@@ -233,7 +235,7 @@ export class PluginWorkerManager {
     }
     this.options.onWorkerGone(pluginKey)
     this.supervisor.reset(pluginKey)
-    this.knownSpecs.delete(pluginKey)
+    this.known.delete(pluginKey)
     await Promise.all([
       activation?.task.catch(() => undefined),
       record?.handle.dispose().catch(() => undefined)
@@ -251,7 +253,7 @@ export class PluginWorkerManager {
         continue
       }
       this.nextGeneration(pluginKey)
-      this.knownSpecs.delete(pluginKey)
+      this.known.delete(pluginKey)
       this.workers.delete(pluginKey)
       this.options.onWorkerGone(pluginKey)
       this.supervisor.markExited(pluginKey, { crashed: false })
@@ -283,7 +285,7 @@ export class PluginWorkerManager {
     this.slots.dispose()
     const workers = [...this.workers.values()]
     this.workers.clear()
-    this.knownSpecs.clear()
+    this.known.clear()
     const stoppingWorkers = [...this.stoppingWorkers]
     await Promise.all([
       ...stoppingWorkers,
@@ -304,7 +306,7 @@ export class PluginWorkerManager {
       pluginKey,
       this.activations,
       this.workers,
-      this.knownSpecs,
+      this.known,
       this.generations
     )
   }
@@ -319,5 +321,7 @@ export class PluginWorkerManager {
     if (this.isCancelled(pluginKey, generation, signal)) {
       throw new Error('plugin worker activation was cancelled')
     }
+    // Why: a revoked plugin must stop (re)starting, not count as a crash.
+    this.known.get(pluginKey)?.assertApproved()
   }
 }

@@ -157,7 +157,7 @@ export function PluginConsentDialog({
               <p className="border-l-2 border-foreground/25 py-0.5 pl-3 text-sm leading-6">
                 {translate(
                   'auto.components.settings.PluginConsentDialog.reconsent',
-                  'Permissions, the worker trust tier, or instructional content changed since you last reviewed this plugin. Review it again before it can run.'
+                  'This plugin changed since you approved it. Review it to run it again.'
                 )}
               </p>
             ) : null}

@@ -15,7 +15,7 @@ import {
   hasImagePromptMarker,
   isImageSourceUserTurn,
   normalizeImageTranscriptMessages
-} from '../../../../shared/native-chat-image-transcript-markers'
+} from '../../../../shared/native-chat/transcript/native-chat-image-transcript-markers'
 import { isLaunchPromptMessageId } from './native-chat-pending'
 import { isPendingMessageId } from '../../../../shared/native-chat-pending-sends'
 

@@ -148,6 +148,10 @@ import {
 } from '../worktree-name-retirement'
 import { createRetiredNameLookup } from '../../shared/worktree/retired-name-registry'
 import { findPendingWorktreeRemovalConflict } from '../worktree-removal-table'
+import {
+  openWorktreeCreatePathClaim,
+  type WorktreeCreatePathClaim
+} from '../worktree-create-in-flight'
 import { isWslMoveWorktreeBlocked } from '../persistence/moving-wsl-projects/wsl-move-background-backoff'
 import {
   hostWorktreeTarget,
@@ -946,6 +950,7 @@ export function createLocalWorktree(
 ): Promise<CreateWorktreeResult> {
   // Always rearm consumed preparation, even if later copy, metadata or startup work fails.
   const rearm: PreparationRearmHolder = { fire: () => {} }
+  const pathClaim = openWorktreeCreatePathClaim()
   return worktreeCreateGit
     .run(() =>
       performLocalWorktreeCreate(
@@ -956,10 +961,12 @@ export function createLocalWorktree(
         rearm,
         timing,
         runtime,
+        pathClaim,
         onWorkspaceCreated
       )
     )
     .finally(() => {
+      pathClaim.release()
       // Finish create timing before rearm so replacement preparation is not charged to this request.
       timing.finish()
       rearm.fire()
@@ -974,6 +981,7 @@ async function performLocalWorktreeCreate(
   rearm: PreparationRearmHolder,
   timing: WorktreeCreateTimingRecorder,
   runtime: OrcaRuntimeService,
+  pathClaim: WorktreeCreatePathClaim,
   onWorkspaceCreated?: (worktreeId: string) => void
 ): Promise<CreateWorktreeResult> {
   const settings = store.getSettings()
@@ -1184,7 +1192,9 @@ async function performLocalWorktreeCreate(
     )
     // Pending removals still own paths Git may already have deleted; skip them until teardown settles.
     return (
-      !existsSync(worktreePath) && !findPendingWorktreeRemovalConflict(repo.path, { worktreePath })
+      !existsSync(worktreePath) &&
+      !findPendingWorktreeRemovalConflict(repo.path, { worktreePath }) &&
+      pathClaim.claim(worktreePath)
     )
   }
   await timing.time('resolve_name', async () => {

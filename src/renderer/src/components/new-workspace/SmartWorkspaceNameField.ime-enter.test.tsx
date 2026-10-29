@@ -5,6 +5,8 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import SmartWorkspaceNameField from './SmartWorkspaceNameField'
+import type * as ReactI18nextModule from 'react-i18next'
+import type * as I18nModule from '@/i18n/i18n'
 
 vi.mock('@/store', () => {
   const state = {
@@ -36,11 +38,13 @@ vi.mock('@/lib/local-preflight-context', () => ({
   localPreflightContextKey: () => 'test-preflight-context'
 }))
 
-vi.mock('react-i18next', () => ({
+vi.mock('react-i18next', async (importOriginal) => ({
+  ...(await importOriginal<typeof ReactI18nextModule>()),
   useTranslation: () => ({ t: (key: string, fallback?: string) => fallback ?? key })
 }))
 
-vi.mock('@/i18n/i18n', () => ({
+vi.mock('@/i18n/i18n', async (importOriginal) => ({
+  ...(await importOriginal<typeof I18nModule>()),
   translate: (_key: string, fallback: string) => fallback
 }))
 

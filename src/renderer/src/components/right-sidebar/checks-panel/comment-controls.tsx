@@ -29,7 +29,10 @@ import { translate } from '@/i18n/i18n'
 
 export function CopyButton({
   text,
-  title = 'Copy comment'
+  title = translate(
+    'auto.components.right.sidebar.checks.panel.content.copyComment',
+    'Copy comment'
+  )
 }: {
   text: string
   title?: string

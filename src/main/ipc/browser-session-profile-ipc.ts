@@ -1,3 +1,5 @@
+import { retainLocalGoogleCookieClearTarget } from '../browser/browser-google-cookie-clear-target'
+import { registerGoogleCookieClearHandlers } from './browser-google-cookie-clear-ipc'
 import { BrowserWindow, ipcMain } from 'electron'
 import { browserSessionRegistry } from '../browser/browser-session-registry'
 import { importCookiesIntoClientRoutePartition } from '../browser/browser-client-route-cookie-import'
@@ -123,7 +125,7 @@ export function registerBrowserSessionProfileHandlers(): void {
           browserFamily: 'manual',
           importedAt: Date.now()
         })
-        return { ...result, profileId: args.profileId }
+        return retainLocalGoogleCookieClearTarget(result, profile, args.profileId)
       }
       return result
     }
@@ -179,6 +181,8 @@ export function registerBrowserSessionProfileHandlers(): void {
       return listBrowserSitePermissions(args.profileId)
     }
   )
+
+  registerGoogleCookieClearHandlers()
 
   ipcMain.removeHandler('browser:session:clearDefaultCookies')
 
@@ -301,7 +305,7 @@ export function registerBrowserSessionProfileHandlers(): void {
           profileName,
           importedAt: Date.now()
         })
-        return { ...result, profileId: args.profileId }
+        return retainLocalGoogleCookieClearTarget(result, profile, args.profileId)
       }
       return result
     }

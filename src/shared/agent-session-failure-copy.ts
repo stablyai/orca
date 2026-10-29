@@ -96,6 +96,8 @@ export const AGENT_SESSION_FAILURE_COPY = {
   providerExitedRejection: '{{agent}} stopped before this message was sent.',
   providerExitedAnswer:
     '{{agent}} has stopped, so your answer was not sent. Send a message to continue.',
+  claudeEffortInvalid:
+    'Claude effort is invalid; choose low, medium, high, xhigh, or max and send again.',
   providerRejected: "{{agent}} didn't accept this message.",
   providerRejectedQuoted: "{{agent}} didn't accept this message: {{detail}}.",
   attachmentEmpty: 'An image on this message is empty, so the message was not sent.',

@@ -100,6 +100,48 @@ describe('useStructuredAgentSessionRead history window', () => {
     mocks.subscribe.mockResolvedValue({ unsubscribe: vi.fn() })
   })
 
+  it('keeps a row removed when its upsert and removal arrive within one streaming window', async () => {
+    mocks.call.mockResolvedValueOnce({ ok: true, page: page('tail', [], false) })
+    const { result, unmount } = renderHook(() =>
+      useStructuredAgentSessionRead({ sessionId: 'session-a', target: LOCAL_TARGET })
+    )
+    await waitFor(() => expect(result.current.state.status).toBe('ready'))
+    const emit: (event: AgentSessionSubscribeEvent) => void = mocks.subscribe.mock.calls[0][2]
+    act(() =>
+      emit({ type: 'snapshot', sessionId: 'session-a', page: page('tail', [], false), fence: 1 })
+    )
+    vi.useFakeTimers()
+    try {
+      const batch = {
+        cursor: { epoch: 'epoch-a', sequence: 501 },
+        items: [message('answer', 501, 'assistant')],
+        removedItemIds: [],
+        submissions: []
+      }
+      act(() => emit({ type: 'batch', sessionId: 'session-a', batch }))
+      act(() =>
+        emit({
+          type: 'batch',
+          sessionId: 'session-a',
+          batch: {
+            ...batch,
+            cursor: { epoch: 'epoch-a', sequence: 502 },
+            items: [],
+            removedItemIds: ['answer']
+          }
+        })
+      )
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(STRUCTURED_AGENT_SESSION_CLIENT_COALESCE_MS)
+      })
+      expect(result.current.state.items).toEqual([])
+      expect(result.current.state.cursor?.sequence).toBe(502)
+    } finally {
+      unmount()
+      vi.useRealTimers()
+    }
+  })
+
   it('restores a realistic 21-turn window across the wire-safe bridge-sized read', async () => {
     const items = Array.from({ length: 21 }, (_, turn) => [
       message(`user-${turn}`, turn * 2 + 1, 'user'),

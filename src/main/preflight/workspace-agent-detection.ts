@@ -158,12 +158,11 @@ export async function refreshAgentsOnHost(
   }
   const wsl = getPreflightWslTarget(host.context)
   const refresh = async (): Promise<RefreshAgentsResult> => {
-    const result = await (options
-      ? refreshShellPathAndDetectAgents(host.context, options)
-      : refreshShellPathAndDetectAgents(host.context))
-    if (!wsl) {
-      await captureHostShellEnvironment()
-    }
+    const detect = () =>
+      options
+        ? refreshShellPathAndDetectAgents(host.context, options)
+        : refreshShellPathAndDetectAgents(host.context)
+    const result = wsl ? await detect() : await captureHostShellEnvironment(detect)
     agentRefreshListeners.forEach((listener) => listener())
     return result
   }

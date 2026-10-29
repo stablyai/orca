@@ -40,6 +40,8 @@ export type WslMoveRefusalCode =
   | 'wsl_move_unavailable'
   /** This app is already moving projects into the distro. */
   | 'wsl_move_already_running'
+  /** A moved project of the distro is coming back to this computer; no move starts until it has. */
+  | 'wsl_move_undo_running'
   /** An earlier move of the distro has not finished; it resumes or resets first. */
   | 'wsl_move_already_in_flight'
   /** Every selected project is already on the host. */

@@ -142,6 +142,7 @@ function Probe() {
     deviceTokenRef,
     flushPendingLiveInputBeforeExternalSend: async () => true,
     canSend: env.connected,
+    canCompose: true,
     liveInputEnabled: false,
     showToast: () => {},
     resetLiveInputFocus: () => {}

@@ -1,4 +1,4 @@
-import { stripSentImagePromptMarkers } from '../../../src/shared/native-chat-image-transcript-markers'
+import { stripSentImagePromptMarkers } from '../../../src/shared/native-chat/transcript/native-chat-image-transcript-markers'
 // The shared projection decides each card's hold; this layer words it for the phone.
 
 import type { AgentSessionFailureFact } from '../../../src/shared/agent-session-failure'

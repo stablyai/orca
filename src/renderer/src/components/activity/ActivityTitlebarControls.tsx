@@ -45,8 +45,17 @@ export function ActivityTitlebarControls(): React.JSX.Element {
           {translate('auto.components.activity.ActivityTitlebarControls.d6a8de3934', 'agents')}
         </span>
         <Badge variant="secondary" className="h-5 px-1.5 text-[11px] font-normal">
-          {unreadCount}{' '}
-          {translate('auto.components.activity.ActivityTitlebarControls.f915168c8e', 'unread')}
+          {unreadCount === 1
+            ? translate(
+                'auto.components.activity.ActivityTitlebarControls.unreadCount_one',
+                '{{count}} unread',
+                { count: unreadCount }
+              )
+            : translate(
+                'auto.components.activity.ActivityTitlebarControls.unreadCount_other',
+                '{{count}} unread',
+                { count: unreadCount }
+              )}
         </Badge>
       </div>
     </div>

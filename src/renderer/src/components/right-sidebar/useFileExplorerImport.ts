@@ -131,28 +131,54 @@ export function useFileExplorerImport({
         }
 
         if (failed.length > 0) {
-          const noun = failed.length === 1 ? 'file' : 'files'
           toast.error(
-            translate(
-              'auto.components.right.sidebar.useFileExplorerImport.132fd0e1e9',
-              'Failed to import {{value0}} {{value1}}.',
-              { value0: failed.length, value1: noun }
-            ),
+            failed.length === 1
+              ? translate(
+                  'auto.components.right.sidebar.useFileExplorerImport.importFailedCount_one',
+                  'Failed to import {{count}} file.',
+                  {
+                    count: failed.length
+                  }
+                )
+              : translate(
+                  'auto.components.right.sidebar.useFileExplorerImport.importFailedCount_other',
+                  'Failed to import {{count}} files.',
+                  {
+                    count: failed.length
+                  }
+                ),
             { description: describeSharedDropFailureReason(failed) }
           )
         } else if (skipped.length > 0 && imported.length === 0) {
-          const noun = skipped.length === 1 ? 'file' : 'files'
           toast.error(
-            translate(
-              'auto.components.right.sidebar.useFileExplorerImport.25919b2050',
-              'Skipped {{value0}} {{value1}}.',
-              { value0: skipped.length, value1: noun }
-            ),
+            skipped.length === 1
+              ? translate(
+                  'auto.components.right.sidebar.useFileExplorerImport.importSkippedCount_one',
+                  'Skipped {{count}} file.',
+                  {
+                    count: skipped.length
+                  }
+                )
+              : translate(
+                  'auto.components.right.sidebar.useFileExplorerImport.importSkippedCount_other',
+                  'Skipped {{count}} files.',
+                  {
+                    count: skipped.length
+                  }
+                ),
             { description: describeSharedDropSkipReason(skipped) }
           )
         }
       } catch (err) {
-        toast.error(extractIpcErrorMessage(err, 'Failed to import files.'))
+        toast.error(
+          extractIpcErrorMessage(
+            err,
+            translate(
+              'auto.components.right.sidebar.useFileExplorerImport.importFailed',
+              'Failed to import files.'
+            )
+          )
+        )
       } finally {
         clearNativeDragState()
       }

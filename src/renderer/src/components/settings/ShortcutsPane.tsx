@@ -162,7 +162,9 @@ export function ShortcutsPane(): React.JSX.Element {
     if (!Array.isArray(normalizedResult)) {
       setErrors((prev) => ({
         ...prev,
-        [actionId]: normalizedResult.ok ? 'Unable to parse shortcut.' : normalizedResult.error
+        [actionId]: normalizedResult.ok
+          ? translate('settings.shortcuts.parseFailed', 'Unable to parse shortcut.')
+          : normalizedResult.error
       }))
       return false
     }

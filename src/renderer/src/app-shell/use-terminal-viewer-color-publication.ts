@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { getSystemPrefersDark } from '@/lib/terminal-theme'
 import { publishTerminalViewAttributesAtAppStart } from '../components/terminal-pane/terminal-appearance'
-import { subscribeToPublishedTerminalViewColors } from '../components/terminal-pane/terminal-view-attributes-publisher'
+import { subscribeToPublishedTerminalViewAttributes } from '../components/terminal-pane/terminal-view-attributes-publisher'
 import { remoteRuntimeTerminalColorPush } from '../runtime/remote-runtime-terminal-color-push'
 import { useAppStore } from '../store'
 
@@ -24,8 +24,8 @@ export function useTerminalViewerColorPublication(): void {
   }, [settings])
 
   useEffect(() => {
-    const unsubscribe = subscribeToPublishedTerminalViewColors(
-      remoteRuntimeTerminalColorPush.setColors
+    const unsubscribe = subscribeToPublishedTerminalViewAttributes(
+      remoteRuntimeTerminalColorPush.setAttributes
     )
     window.addEventListener('focus', remoteRuntimeTerminalColorPush.pushToAllHosts)
     return () => {

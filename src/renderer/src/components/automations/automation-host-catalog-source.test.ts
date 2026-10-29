@@ -12,9 +12,6 @@ import {
 
 function status(overrides: Partial<RuntimeStatus> = {}): RuntimeStatus {
   const response = createCompatibleRuntimeStatusResponse()
-  if (!response.ok) {
-    throw new Error(response.error.message)
-  }
   return { ...response.result, ...overrides }
 }
 

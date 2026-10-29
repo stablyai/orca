@@ -240,13 +240,6 @@ export async function dispatchStructuredAgentSessionComposerCommand(
     return unavailable(command.name)
   }
   const descriptor = controller.snapshot.find((entry) => entry.id === command.name)
-  if (!descriptor || descriptor.kind.type !== 'select') {
-    return {
-      handled: true,
-      accepted: true,
-      error: `${command.name === 'model' ? 'Models' : 'Reasoning effort'} are unavailable for this chat session.`
-    }
-  }
   if (!command.argument) {
     const opened = await controller.invokeAction(command.name)
     return {
@@ -256,20 +249,18 @@ export async function dispatchStructuredAgentSessionComposerCommand(
     }
   }
   const normalized = command.argument.toLowerCase()
-  const choice = descriptor.kind.choices.find(
-    (entry) => entry.value.toLowerCase() === normalized || entry.label.toLowerCase() === normalized
-  )
-  if (!choice) {
-    return {
-      handled: true,
-      accepted: false,
-      error: `${command.argument} is not an available ${command.name} for this chat session.`
-    }
-  }
-  const applied = await controller.setOption(command.name, choice.value)
+  const choice =
+    descriptor?.kind.type === 'select'
+      ? descriptor.kind.choices.find(
+          (entry) =>
+            entry.value.toLowerCase() === normalized || entry.label.toLowerCase() === normalized
+        )
+      : undefined
+  const value = choice?.value ?? command.argument
+  const applied = await controller.setOption(command.name, value)
   return {
     handled: true,
     accepted: applied,
-    error: applied ? null : `Could not apply ${command.name} ${choice.label}.`
+    error: applied ? null : `Could not apply ${command.name} ${choice?.label ?? value}.`
   }
 }

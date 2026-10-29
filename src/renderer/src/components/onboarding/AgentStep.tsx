@@ -1,12 +1,13 @@
 import { useId, useState } from 'react'
 import { Check, ExternalLink } from 'lucide-react'
+import { Trans } from 'react-i18next'
 import { getAgentCatalog, AgentIcon, type AgentCatalogEntry } from '@/lib/agent-catalog'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Switch } from '@/components/ui/switch'
 import type { TuiAgent } from '../../../../shared/tui-agent'
-import { translate } from '@/i18n/i18n'
+import { i18n, translate } from '@/i18n/i18n'
 
 type AgentStepProps = {
   selectedAgent: TuiAgent | null
@@ -50,13 +51,17 @@ export function AgentStep({
   }
   const fallbackRestLabel = openState
     ? translate('auto.components.onboarding.AgentStep.hideAgents', 'Hide agents')
-    : translate(
-        'auto.components.onboarding.AgentStep.showMoreAgents',
-        'Show {{value0}} more agents →',
-        {
-          value0: fallbackRest.length
-        }
-      )
+    : fallbackRest.length === 1
+      ? translate(
+          'auto.components.onboarding.AgentStep.showMoreAgents_one',
+          'Show {{count}} more agent →',
+          { count: fallbackRest.length }
+        )
+      : translate(
+          'auto.components.onboarding.AgentStep.showMoreAgents_other',
+          'Show {{count}} more agents →',
+          { count: fallbackRest.length }
+        )
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-5">
@@ -71,11 +76,15 @@ export function AgentStep({
       {selectedEntry && (
         <div className="flex shrink-0 items-center justify-between gap-3 rounded-lg border border-status-warning-border px-4 py-2.5 text-xs text-muted-foreground">
           <span>
-            <span className="font-medium text-foreground">{selectedEntry.label}</span>{' '}
-            {translate(
-              'auto.components.onboarding.AgentStep.69af7e9c1c',
-              "isn't on your PATH yet. Orca will set it as your default and you can install it any time."
-            )}
+            <Trans
+              i18n={i18n}
+              defaults={translate(
+                'auto.components.onboarding.AgentStep.agentNotOnPath',
+                "<agent>{{agent}}</agent> isn't on your PATH yet. Orca will set it as your default and you can install it any time.",
+                { agent: selectedEntry.label }
+              )}
+              components={{ agent: <span className="font-medium text-foreground" /> }}
+            />
           </span>
           <Button
             type="button"

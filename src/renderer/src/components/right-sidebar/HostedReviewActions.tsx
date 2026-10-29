@@ -37,6 +37,7 @@ import {
   RIGHT_SIDEBAR_SPLIT_ACTION_ROW_CLASS
 } from './right-sidebar-primary-action-layout'
 import { translate } from '@/i18n/i18n'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { getGitHubPRStackMergeBlocker, getGitHubPRStackMergeScope } from './github-pr-stack-merge'
 
 export default function HostedReviewActions({
@@ -52,6 +53,7 @@ export default function HostedReviewActions({
   worktree: Worktree
   onRefreshReview: () => Promise<void>
 }): React.JSX.Element | null {
+  const languageRevision = useUiLanguageRevision()
   const isDeletingWorktree = useAppStore(
     (s) => getDeleteStateForWorktreeHost(worktree, s.deleteStateByWorktreeId)?.isDeleting ?? false
   )
@@ -121,7 +123,16 @@ export default function HostedReviewActions({
       }).directMergeAvailable,
       autoMergeAction: null
     }
-  }, [githubPR, isGitLab, review, stackMergeLabel, stackMergeScope, stackUsesMergeQueue])
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- translate() reads the UI language implicitly.
+  }, [
+    githubPR,
+    isGitLab,
+    review,
+    stackMergeLabel,
+    stackMergeScope,
+    stackUsesMergeQueue,
+    languageRevision
+  ])
   const mergeMethods = useMemo(
     () => resolveGitHubPRMergeMethods(isGitLab ? null : (githubPR?.mergeMethodSettings ?? null)),
     [githubPR?.mergeMethodSettings, isGitLab]

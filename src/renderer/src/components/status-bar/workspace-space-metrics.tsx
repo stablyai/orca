@@ -75,7 +75,10 @@ export function UpdatedMetric({
       value={
         scannedAt === null
           ? isScanning
-            ? 'Scanning'
+            ? translate(
+                'auto.components.status.bar.WorkspaceSpaceManagerPanel.scanning',
+                'Scanning'
+              )
             : '—'
           : getWorkspaceSpaceScanTimeLabel(scannedAt, now)
       }

@@ -51,6 +51,7 @@ export function useMobileSessionNativeChatDictation(
     activeSessionTab,
     flushPendingLiveInputBeforeExternalSend,
     canSend,
+    canCompose,
     liveInputEnabled,
     showToast,
     resetLiveInputFocus
@@ -129,10 +130,11 @@ export function useMobileSessionNativeChatDictation(
   }
 
   const chatDictationDestination = useRef<((text: string) => boolean | void) | undefined>(undefined)
-  const dictationTargetReady = showNativeChat ? connState === 'connected' : canSend
+  // Starting needs the host, but a reconnect must not end a recording: the host keeps the session through it.
+  const dictationCanStart = showNativeChat ? connState === 'connected' : canSend
   const dictation = useMobileDictation({
     client,
-    enabled: dictationTargetReady && dictationEnabled,
+    enabled: (showNativeChat || canCompose) && dictationEnabled,
     onTranscript: (text) => {
       // Route dictation to the visible chat composer locally; terminal mode retains live-input routing.
       if (showNativeChatRef.current || chatDictationDestination.current) {
@@ -185,6 +187,9 @@ export function useMobileSessionNativeChatDictation(
   const dictationNeedsSetupRef = useRef(false)
 
   const startDictation = useCallback(() => {
+    if (!dictationCanStart) {
+      return
+    }
     if (dictationNeedsSetupRef.current) {
       // Explain setup before the OS microphone prompt: mic access cannot help until the host can transcribe.
       setShowDictationSetup(true)
@@ -204,6 +209,7 @@ export function useMobileSessionNativeChatDictation(
   }, [
     activeHandle,
     dictation,
+    dictationCanStart,
     liveInputTerminalHandles,
     reportDictationFailure,
     setShowDictationSetup

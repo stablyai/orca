@@ -195,8 +195,14 @@ export function CommentCodeContext({
   } = codeContext
   const language = detectLanguage(comment.path)
   const blockTooltip = shouldUseBlockRange
-    ? 'Show surrounding code block'
-    : 'Show nearby code context'
+    ? translate(
+        'auto.components.github.CommentCodeContext.showSurroundingCodeBlock',
+        'Show surrounding code block'
+      )
+    : translate(
+        'auto.components.github.CommentCodeContext.showNearbyCodeContext',
+        'Show nearby code context'
+      )
 
   return (
     <div className="mb-3 overflow-hidden rounded-md border border-border/50 bg-muted/20">

@@ -8,12 +8,7 @@ import { AppearanceAdvancedDisclosure } from './AppearanceAdvancedDisclosure'
 import { useAppStore } from '../../store'
 import { useShortcutKeyComboDetails } from '@/hooks/useShortcutLabel'
 import { ShortcutHintList } from './AppearanceShortcutHintList'
-import {
-  FontAutocomplete,
-  SettingsRow,
-  SettingsSegmentedControl,
-  SettingsSwitchRow
-} from './SettingsFormControls'
+import { FontAutocomplete, SettingsRow, SettingsSwitchRow } from './SettingsFormControls'
 import { DEFAULT_APP_FONT_FAMILY } from '../../../../shared/constants'
 import {
   getLanguageEntries,
@@ -33,6 +28,7 @@ import { translate } from '@/i18n/i18n'
 import type { UiLanguage } from '../../../../shared/ui-language'
 import { matchesSettingsSearch, normalizeSettingsSearchQuery } from './settings-search'
 import { usePluginLanguagePacks } from '@/store/plugin-language-packs'
+import { AppearanceThemeControl } from './AppearanceThemeControl'
 
 type AppearanceInterfaceSectionProps = {
   settings: GlobalSettings
@@ -87,27 +83,11 @@ export function AppearanceInterfaceSection({
         <SettingsRow
           label={themeLabel}
           control={
-            <SettingsSegmentedControl
-              ariaLabel={themeLabel}
-              value={settings.theme}
-              onChange={(option) => {
-                updateSettings({ theme: option })
-                applyTheme(option)
-              }}
-              options={[
-                {
-                  value: 'system',
-                  label: translate('auto.components.settings.AppearancePane.fb0e0b4453', 'System')
-                },
-                {
-                  value: 'dark',
-                  label: translate('auto.components.settings.AppearancePane.7d26ccabe8', 'Dark')
-                },
-                {
-                  value: 'light',
-                  label: translate('auto.components.settings.AppearancePane.fd89b5487c', 'Light')
-                }
-              ]}
+            <AppearanceThemeControl
+              label={themeLabel}
+              settings={settings}
+              updateSettings={updateSettings}
+              applyTheme={applyTheme}
             />
           }
         />

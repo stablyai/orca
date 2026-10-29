@@ -1,3 +1,7 @@
+import {
+  assertStructuredAgentResolutionCurrent,
+  type StructuredAgentResolutionOperation
+} from '../native-chat/structured-agent-command-resolution'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import type { AgentCliVersionReader } from '../agent-cli-version-probe'
@@ -57,6 +61,8 @@ export function createAcpModelCatalogProbe(
   deps: AcpModelCatalogProbeDeps
 ): AgentModelCatalogProbe {
   return async (accountHome, options): Promise<AgentModelCatalogSuccess> => {
+    const operation = options?.operation ?? { signal: options?.signal }
+    assertStructuredAgentResolutionCurrent(operation)
     const discovery = spec.modelDiscovery
     if (discovery.kind === 'unavailable') {
       throw new Error(discovery.reason)
@@ -70,14 +76,17 @@ export function createAcpModelCatalogProbe(
     const cwd = deps.homePath ?? homedir()
     const { command, env, envToDelete } = await resolveAcpLaunchInvocation(spec, accountHome, {
       ...deps,
+      operation,
       resolveWorkingDirectory: () => cwd
     })
+    assertStructuredAgentResolutionCurrent(operation)
     const release = await checkAcpLaunchVersion(
       spec,
       { command, cwd, env },
       discovery.kind === 'command' && discovery.supportsVersion !== undefined,
       deps.probeVersion
     )
+    assertStructuredAgentResolutionCurrent(operation)
     if (release.status === 'tooOld') {
       throw new Error(`${spec.agent} at ${command} does not run structured chats`)
     }
@@ -110,11 +119,12 @@ export function createAcpModelCatalogProbe(
         ? await acpRunFolder(join(deps.dataDirectory, 'acp-listing-sessions', spec.agent))
         : null
       try {
+        assertStructuredAgentResolutionCurrent(operation)
         const args =
           folderArgs && folder ? [...launch.args, ...folderArgs(folder.path)] : launch.args
         models = await runAgentModelCatalogSession(
           () => (deps.connectSession ?? createAcpAgentConnection)({ ...launch, args }),
-          (connection) => readSessionModels(spec, listing, connection, workspace),
+          (connection) => readSessionModels(spec, listing, connection, workspace, operation),
           run
         )
       } finally {
@@ -123,7 +133,11 @@ export function createAcpModelCatalogProbe(
     } else {
       models = await runAgentModelCatalogSession(
         () => (deps.connect ?? createAcpAgentConnection)(launch),
-        async (connection) => listing.read(await connection.initialize(), connection),
+        async (connection) => {
+          const initialized = await connection.initialize()
+          assertStructuredAgentResolutionCurrent(operation)
+          return listing.read(initialized, connection)
+        },
         run
       )
     }
@@ -155,9 +169,11 @@ async function readSessionModels(
   spec: AcpLaunchSpec,
   listing: AcpSessionModelDiscovery,
   connection: AcpModelCatalogSessionConnection,
-  workspace: string
+  workspace: string,
+  operation?: StructuredAgentResolutionOperation
 ): Promise<AgentSessionModelOption[]> {
   const initialized = await connection.initialize()
+  assertStructuredAgentResolutionCurrent(operation)
   const deletes = Boolean(initialized.agentCapabilities?.sessionCapabilities?.delete)
   if (!deletes && !listing.sessionFolderArgs) {
     throw new Error(`${spec.agent} cannot delete a session, so it lists its models only in chats`)

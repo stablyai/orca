@@ -93,23 +93,43 @@ export function UntitledFileRenameDialog({
   const handleSubmit = useCallback(() => {
     const trimmedName = name.trim().replace(/\.md$/, '')
     if (!trimmedName) {
-      setError('Name cannot be empty')
+      setError(
+        translate(
+          'auto.components.editor.UntitledFileRenameDialog.nameEmpty',
+          'Name cannot be empty'
+        )
+      )
       return
     }
     if (/[/\\]/.test(trimmedName)) {
-      setError('Name cannot contain path separators')
+      setError(
+        translate(
+          'auto.components.editor.UntitledFileRenameDialog.nameHasSeparators',
+          'Name cannot contain path separators'
+        )
+      )
       return
     }
 
     const trimmedDir = dir.trim().replace(/[\\/]+$/, '')
     if (!trimmedDir) {
-      setError('Folder path cannot be empty')
+      setError(
+        translate(
+          'auto.components.editor.UntitledFileRenameDialog.folderEmpty',
+          'Folder path cannot be empty'
+        )
+      )
       return
     }
 
     const relDir = getRelativePathInsideRoot(trimmedDir, worktreePath)
     if (relDir === null) {
-      setError('Folder must be inside the current workspace')
+      setError(
+        translate(
+          'auto.components.editor.UntitledFileRenameDialog.folderOutsideWorkspace',
+          'Folder must be inside the current workspace'
+        )
+      )
       return
     }
 

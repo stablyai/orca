@@ -1,3 +1,4 @@
+import type { GoogleCookieClearLocalTarget } from '../../shared/browser-google-cookie-clear'
 import { ipcRenderer } from 'electron'
 import {
   BROWSER_AGENT_ACTIVITY_CHANNEL,
@@ -191,6 +192,10 @@ export const browserPageInteractionAndSessionsApi = {
   }) => ipcRenderer.invoke('browser:session:importFromBrowserForClientHost', args),
   sessionClientRouteImportSources: (args: { environmentId: string }) =>
     ipcRenderer.invoke('browser:session:clientRouteImportSources', args),
+  sessionGoogleCookieClearTarget: (args: { profileId: string; environmentId: string | null }) =>
+    ipcRenderer.invoke('browser:session:googleCookieClearTarget', args),
+  sessionClearGoogleCookies: (target: GoogleCookieClearLocalTarget) =>
+    ipcRenderer.invoke('browser:session:clearGoogleCookies', target),
   sessionClearDefaultCookies: (): Promise<boolean> =>
     ipcRenderer.invoke('browser:session:clearDefaultCookies'),
   sitePermissionsList: (args: { profileId: string }) =>

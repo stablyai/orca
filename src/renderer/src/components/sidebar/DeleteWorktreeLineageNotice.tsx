@@ -72,13 +72,14 @@ export function DeleteWorktreeLineageNotice({
           <div className="mt-1 text-muted-foreground">
             {childWorkspaceCount === 1
               ? translate(
-                  'auto.components.sidebar.DeleteWorktreeLineageNotice.66798cc6a2',
-                  'Deleting this workspace also deletes 1 child workspace.'
+                  'auto.components.sidebar.DeleteWorktreeLineageNotice.alsoDeletesChildren_one',
+                  'Deleting this workspace also deletes {{count}} child workspace.',
+                  { count: childWorkspaceCount }
                 )
               : translate(
-                  'auto.components.sidebar.DeleteWorktreeLineageNotice.29b98bf9cd',
-                  'Deleting this workspace also deletes {{value0}} child workspaces.',
-                  { value0: childWorkspaceCount }
+                  'auto.components.sidebar.DeleteWorktreeLineageNotice.alsoDeletesChildren_other',
+                  'Deleting this workspace also deletes {{count}} child workspaces.',
+                  { count: childWorkspaceCount }
                 )}
             {foreignProjects.length > 0 ? ` (${foreignProjects.join(', ')})` : null}
           </div>
@@ -108,11 +109,17 @@ export function DeleteWorktreeLineageNotice({
             ))}
             {descendants.length > 4 ? (
               <div className="text-muted-foreground">
-                +{descendants.length - 4}{' '}
-                {translate(
-                  'auto.components.sidebar.DeleteWorktreeLineageNotice.ad407c2d55',
-                  'more'
-                )}
+                {descendants.length - 4 === 1
+                  ? translate(
+                      'auto.components.sidebar.DeleteWorktreeLineageNotice.moreChildren_one',
+                      '+{{count}} more',
+                      { count: descendants.length - 4 }
+                    )
+                  : translate(
+                      'auto.components.sidebar.DeleteWorktreeLineageNotice.moreChildren_other',
+                      '+{{count}} more',
+                      { count: descendants.length - 4 }
+                    )}
               </div>
             ) : null}
           </div>

@@ -50,9 +50,9 @@ function UpToDateLine({
             { value0: upToDate[0].name }
           )
         : translate(
-            'auto.components.skills.SkillFreshnessUpdateDialog.upToDateMany',
-            '{{value0}} skills are up to date.',
-            { value0: upToDate.length }
+            'auto.components.skills.SkillFreshnessUpdateDialog.upToDate_other',
+            '{{count}} skills are up to date.',
+            { count: upToDate.length }
           )}
     </p>
   )

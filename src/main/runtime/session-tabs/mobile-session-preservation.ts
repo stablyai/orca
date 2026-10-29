@@ -14,6 +14,10 @@ import { terminalLayoutContainsLeaf } from '../../../shared/workspace-session-pa
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { terminalIsOfTab } from '../session-lifecycle/close/closed-tab-terminal'
 import { getHeadlessMobileSessionGroupId } from '../mobile-session-layout-projection'
+import {
+  appendBrowserTabOrder,
+  collectBrowserGroupAssignment
+} from '../mobile-session-browser-group-projection'
 
 export abstract class OrcaRuntimeWithMergePreservedHeadlessMobileSessionTabs extends OrcaRuntimeWithSyncMobileSessionTabs {
   protected abstract collectPreservedHeadlessMobileSessionTabs(
@@ -56,11 +60,19 @@ export abstract class OrcaRuntimeWithMergePreservedHeadlessMobileSessionTabs ext
       tabs.find((tab) => tab.isActive) ??
       tabs[0] ??
       null
-    const tabGroups = mergeMobileSessionTabGroups(
-      snapshot.worktree,
-      snapshot.tabGroups ?? existing.tabGroups ?? [],
-      tabs,
-      activeTab?.type === 'terminal' ? activeTab : null
+    const browserTabIds = normalizedPreservedTabs
+      .filter((tab) => tab.type === 'browser')
+      .map((tab) => tab.id)
+    const tabGroups = appendBrowserTabOrder(
+      mergeMobileSessionTabGroups(
+        snapshot.worktree,
+        snapshot.tabGroups ?? existing.tabGroups ?? [],
+        tabs,
+        activeTab?.type === 'terminal' ? activeTab : null
+      ),
+      browserTabIds,
+      undefined,
+      collectBrowserGroupAssignment(existing.tabGroups, browserTabIds)
     )
     return {
       ...snapshot,
@@ -191,9 +203,16 @@ export abstract class OrcaRuntimeWithMergePreservedHeadlessMobileSessionTabs ext
       tabs.find((tab) => tab.isActive) ??
       tabs[0] ??
       null
+    // Retained offscreen pages need headless ownership; terminal-only rebases would loosen terminal liveness checks.
+    const rebaseToHeadless =
+      !this.isHeadlessBuiltMobileSessionPublicationBase(existing.publicationEpoch) &&
+      tabs.some((tab) => tab.type === 'browser' && tab.placement?.kind !== 'client')
+    const publicationBase = rebaseToHeadless
+      ? { ...existing, publicationEpoch: `headless-hydrated:${Date.now().toString(36)}` }
+      : existing
     return {
       ...existing,
-      publicationEpoch: this.getMergedMobileSessionPublicationEpoch(existing, tabs),
+      publicationEpoch: this.getMergedMobileSessionPublicationEpoch(publicationBase, tabs),
       // Bump version or clients discard same-epoch prune frames.
       snapshotVersion: existing.snapshotVersion + 1,
       activeGroupId: existing.activeGroupId ?? getHeadlessMobileSessionGroupId(existing.worktree),

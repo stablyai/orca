@@ -202,14 +202,14 @@ export function renderResourceUsagePopoverFooter({
         >
           {orphanCount === 1
             ? translate(
-                'auto.components.status.bar.ResourceUsageStatusSegment.c7e3b1a0d9f2',
-                'End {{value0}} orphan terminal',
-                { value0: orphanCount }
+                'auto.components.status.bar.ResourceUsageStatusSegment.endOrphanTerminals_one',
+                'End {{count}} orphan terminal',
+                { count: orphanCount }
               )
             : translate(
-                'auto.components.status.bar.ResourceUsageStatusSegment.d8f4c2b1e0a3',
-                'End {{value0}} orphan terminals',
-                { value0: orphanCount }
+                'auto.components.status.bar.ResourceUsageStatusSegment.endOrphanTerminals_other',
+                'End {{count}} orphan terminals',
+                { count: orphanCount }
               )}
         </button>
       ) : null}

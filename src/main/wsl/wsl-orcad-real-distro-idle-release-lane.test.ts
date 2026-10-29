@@ -411,6 +411,29 @@ async function restartThroughBridgeExec(): Promise<Receipt> {
   return { firstOutputMs }
 }
 
+// A guest command's output is capped at 1 MiB; read big files in base64 chunks below that.
+const GUEST_READ_BLOCK_BYTES = 64 * 1024
+const GUEST_READ_BLOCKS_PER_CHUNK = 8
+
+async function readGuestFile(path: string): Promise<Buffer> {
+  const quoted = quotePosixShell(path)
+  const size = Number((await guest(`wc -c < ${quoted}`)).trim())
+  const chunkBytes = GUEST_READ_BLOCK_BYTES * GUEST_READ_BLOCKS_PER_CHUNK
+  const chunks: Buffer[] = []
+  for (let offset = 0; offset < size; offset += chunkBytes) {
+    const encoded = await guest(
+      `dd if=${quoted} bs=${GUEST_READ_BLOCK_BYTES} skip=${offset / GUEST_READ_BLOCK_BYTES} count=${GUEST_READ_BLOCKS_PER_CHUNK} 2>/dev/null | base64 | tr -d '\\n'`
+    )
+    chunks.push(Buffer.from(encoded.trim(), 'base64'))
+  }
+  const result = Buffer.concat(chunks)
+  // execCommand keeps only the tail past its cap, so a short or odd read must not pass as whole.
+  if (!Number.isFinite(size) || result.length !== size) {
+    throw new Error(`Read ${result.length} of ${size} bytes of ${path} from the lane distro`)
+  }
+  return result
+}
+
 /**
  * One extra, unrecorded restart with orcad (and the Node children it starts) under --cpu-prof.
  * Profiles are written on exit, so wait for the idle exit, then copy them into the receipts.
@@ -433,10 +456,7 @@ async function profileOrcadRestart(repoPath: string): Promise<string[]> {
   )
   const names = (await guest(`ls ${PROFILE_DIR} 2>/dev/null || true`)).split('\n').filter(Boolean)
   for (const name of names) {
-    writeFileSync(
-      join(RECEIPT_DIR, name),
-      await guest(`cat ${quotePosixShell(`${PROFILE_DIR}/${name}`)}`)
-    )
+    writeFileSync(join(RECEIPT_DIR, name), await readGuestFile(`${PROFILE_DIR}/${name}`))
   }
   return names
 }

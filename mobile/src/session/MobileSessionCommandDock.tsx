@@ -85,6 +85,7 @@ export function MobileSessionCommandDock({
               <KeyboardIcon size={16} color={colors.textSecondary} strokeWidth={2} />
               <MobileTerminalLiveInputStatus
                 dictation={dictation}
+                dictationMode={dictationMode}
                 isAttaching={isAttaching}
                 liveInputText={liveInputCapture}
               />

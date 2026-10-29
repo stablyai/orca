@@ -189,6 +189,11 @@ const PIECES: Record<AgentSessionFailureCopyId, (values: AgentSessionFailureCopy
         COPY.chooseClaudeAccountThenSend
       ),
     ...PROVIDER_EXIT_PIECES,
+    claudeEffortInvalid: () =>
+      translate(
+        'components.native-chat.failureWords.claudeEffortInvalid',
+        COPY.claudeEffortInvalid
+      ),
     providerRejected: (values) =>
       translate(
         'components.native-chat.failureWords.providerRejected',

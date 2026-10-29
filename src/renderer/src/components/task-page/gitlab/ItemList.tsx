@@ -114,14 +114,19 @@ export function TaskPageGitLabItemList({
                         event.stopPropagation()
                         handleUseGitLabItem(item)
                       }}
-                      aria-label={translate(
-                        'auto.components.TaskPage.5e8061b088',
-                        'Start workspace from {{value0}} {{value1}}',
-                        {
-                          value0: item.type === 'mr' ? 'MR' : 'issue',
-                          value1: item.number
-                        }
-                      )}
+                      aria-label={
+                        item.type === 'mr'
+                          ? translate(
+                              'auto.components.TaskPage.startWorkspaceFromMr',
+                              'Start workspace from MR {{number}}',
+                              { number: item.number }
+                            )
+                          : translate(
+                              'auto.components.TaskPage.startWorkspaceFromIssue',
+                              'Start workspace from issue {{number}}',
+                              { number: item.number }
+                            )
+                      }
                     >
                       <ArrowRight className="size-3.5" />
                     </Button>

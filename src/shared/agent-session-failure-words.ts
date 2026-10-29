@@ -192,6 +192,7 @@ const FAILURE_SENTENCES = {
       agent(say, context)
     ),
   restartFailed: couldNot('couldNotRestart'),
+  claudeEffortInvalid: (_context, _fact, _surface, say) => say('claudeEffortInvalid'),
   providerRejected: (context, fact, _surface, say) =>
     quotingPersonDetail(
       say,

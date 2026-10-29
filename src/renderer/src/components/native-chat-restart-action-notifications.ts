@@ -11,37 +11,43 @@ export type RestartContinuationOutcome = {
 
 function continuedCountText(count: number): string {
   return count === 1
-    ? translate('auto.components.NativeChatResumeOnRestartModal.continuedOne', 'Resumed 1 chat')
+    ? translate(
+        'auto.components.NativeChatResumeOnRestartModal.continuedCount_one',
+        'Resumed {{count}} chat',
+        { count }
+      )
     : translate(
-        'auto.components.NativeChatResumeOnRestartModal.continuedMany',
-        'Resumed {{value0}} chats',
-        { value0: count }
+        'auto.components.NativeChatResumeOnRestartModal.continuedCount_other',
+        'Resumed {{count}} chats',
+        { count }
       )
 }
 
 function refusedCountText(count: number): string {
   return count === 1
     ? translate(
-        'auto.components.NativeChatResumeOnRestartModal.notContinuedOne',
-        '1 chat couldn’t be resumed'
+        'auto.components.NativeChatResumeOnRestartModal.notContinuedCount_one',
+        '{{count}} chat couldn’t be resumed',
+        { count }
       )
     : translate(
-        'auto.components.NativeChatResumeOnRestartModal.notContinuedMany',
-        '{{value0}} chats couldn’t be resumed',
-        { value0: count }
+        'auto.components.NativeChatResumeOnRestartModal.notContinuedCount_other',
+        '{{count}} chats couldn’t be resumed',
+        { count }
       )
 }
 
 function unconfirmedCountText(count: number): string {
   return count === 1
     ? translate(
-        'auto.components.NativeChatResumeOnRestartModal.notConfirmedOne',
-        'Couldn’t confirm 1 chat was resumed'
+        'auto.components.NativeChatResumeOnRestartModal.notConfirmedCount_one',
+        'Couldn’t confirm {{count}} chat was resumed',
+        { count }
       )
     : translate(
-        'auto.components.NativeChatResumeOnRestartModal.notConfirmedMany',
-        'Couldn’t confirm {{value0}} chats were resumed',
-        { value0: count }
+        'auto.components.NativeChatResumeOnRestartModal.notConfirmedCount_other',
+        'Couldn’t confirm {{count}} chats were resumed',
+        { count }
       )
 }
 
@@ -49,13 +55,14 @@ function unconfirmedCountText(count: number): string {
 function otherUnconfirmedCountText(count: number): string {
   return count === 1
     ? translate(
-        'auto.components.NativeChatResumeOnRestartModal.notConfirmedOtherOne',
-        'Couldn’t confirm 1 other chat was resumed'
+        'auto.components.NativeChatResumeOnRestartModal.notConfirmedOtherCount_one',
+        'Couldn’t confirm {{count}} other chat was resumed',
+        { count }
       )
     : translate(
-        'auto.components.NativeChatResumeOnRestartModal.notConfirmedOtherMany',
-        'Couldn’t confirm {{value0}} other chats were resumed',
-        { value0: count }
+        'auto.components.NativeChatResumeOnRestartModal.notConfirmedOtherCount_other',
+        'Couldn’t confirm {{count}} other chats were resumed',
+        { count }
       )
 }
 

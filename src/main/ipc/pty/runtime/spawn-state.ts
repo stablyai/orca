@@ -1,3 +1,4 @@
+import type { TerminalViewAttributes } from '../../../../shared/terminal-view-attributes'
 import type { PtySpawnSizeSeed } from '../spawn-options-assembly'
 import type { PtySpawnOutcome } from '../spawn-outcome'
 import type { PtyRegistrationClaim } from '../../../runtime/runtime-terminal-state-records'
@@ -145,6 +146,10 @@ export type RuntimePtySpawnArgs = {
   placement?: TerminalPanePlacement
   terminalKittyKeyboardProtocol?: boolean
   terminalColorQueryReplies?: { foreground?: string; background?: string }
+  /** A paired launcher's theme: its PTY answers OSC 10/11 with it over the host-wide theme. */
+  launcherColorQueryReplies?: { foreground?: string; background?: string }
+  /** That launcher's palette and cursor, so its PTY's OSC 4/12 agree with its OSC 10/11. */
+  launcherViewAttributes?: TerminalViewAttributes
   agentSessionEnsure?: {
     claim: AgentSessionExecutionClaim
     surface: AgentSessionSurfaceBinding

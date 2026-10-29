@@ -18,9 +18,11 @@ import {
   getActiveTabDockSide,
   readTabStripSlotIds,
   revealTabStripSlot,
+  updateTabStripDockAvailability,
   type ActiveTabDockSide
 } from './tab-strip-slot-geometry'
 import { motionSafeScrollBehavior } from '@/hooks/usePrefersReducedMotion'
+import { useTabDragActive } from '../tab-group/tab-drag-context'
 
 const TAB_STRIP_SCROLL_FRACTION = 0.75
 const TAB_STRIP_MIN_SCROLL_STEP_PX = 120
@@ -69,6 +71,7 @@ export function useTabStripOverflowNavigation({
   scrollTabStrip: (direction: 'start' | 'end', behavior?: ScrollBehavior) => void
   subscribeToStripResize: (listener: () => void) => () => void
 } {
+  const isTabDragActive = useTabDragActive()
   const tabStripRef = useRef<HTMLDivElement>(null)
   const stripResizeListenersRef = useRef<Set<() => void>>(new Set())
   const prevStripRef = useRef<{ worktreeId: string; tabIds: ReadonlySet<string> } | null>(null)
@@ -94,6 +97,7 @@ export function useTabStripOverflowNavigation({
     setTabStripOverflowState((previous) =>
       sameTabStripOverflowState(previous, next) ? previous : next
     )
+    updateTabStripDockAvailability(el)
     setActiveTabDockSide(getActiveTabDockSide(el))
   }, [])
   const scrollTabStrip = useCallback(
@@ -291,10 +295,10 @@ export function useTabStripOverflowNavigation({
     recordScrollAnchor()
   }, [activeVisibleTabId, recordScrollAnchor, updateTabStripOverflowState])
 
-  // Why: moving the dock between slots shifts which edge it is drawn at with no scroll or resize.
+  // Dock ownership and drag transitions change sticky layout without scrolling or resizing.
   useLayoutEffect(() => {
     updateTabStripOverflowState()
-  }, [activeDockSlotId, updateTabStripOverflowState])
+  }, [activeDockSlotId, isTabDragActive, updateTabStripOverflowState])
 
   // Why every render: the close flag belongs to the commit that set it, not a later tab switch.
   useLayoutEffect(() => {

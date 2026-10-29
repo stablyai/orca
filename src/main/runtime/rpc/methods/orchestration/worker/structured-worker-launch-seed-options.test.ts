@@ -2,7 +2,6 @@
 
 import { describe, expect, it, vi } from 'vitest'
 import type { AgentSessionModelCatalogResult } from '../../../../../../shared/agent-session-wire'
-import { structuredLaunchSeedOnSavedListing } from '../../../../session-tabs/structured-launch-seed-listing'
 
 const createStructuredWorkerSession = vi.fn(async (_args: Record<string, unknown>) => ({
   identity: { handle: 'structworker_1', sessionId: 'sess_1' },
@@ -101,7 +100,7 @@ describe('the create the seed options land in', () => {
 })
 
 describe('a new Claude chat seeded from a remembered model the saved listing no longer names', () => {
-  it("starts on the listing's default, effort moved to the nearest level, as on main", async () => {
+  it('keeps the literal saved choice without consulting the catalog', async () => {
     const levels = ['low', 'high'].map((value) => ({ value, label: value }))
     const read = vi.fn(async (): Promise<AgentSessionModelCatalogResult> => ({
       origin: 'probe',
@@ -109,18 +108,31 @@ describe('a new Claude chat seeded from a remembered model the saved listing no 
       models: [{ id: 'opus', label: 'Opus', isDefault: true, efforts: levels }]
     }))
     const host = { deps: { modelCatalog: { read } } }
-    const seeded = await structuredLaunchSeedOnSavedListing(
-      host,
-      'claude',
-      { model: 'claude-gone', effort: 'max' },
-      async () => '/repo/wt'
-    )
-    expect(seeded).toEqual({ model: 'opus', effort: 'high' })
-    expect(read).toHaveBeenCalledWith({
+    const prepared = await prepareStructuredAgentSessionCreateForWorktree({
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: create preparation uses only these runtime methods.
+      runtime: {
+        resolveStructuredAgentSessionCreateIntent: async () => ({
+          location: { executionHostId: 'local', wslDistro: null, workspaceId: 'repo::wt' },
+          provider: 'claude',
+          agent: 'claude',
+          accountHome: { variable: 'CLAUDE_CONFIG_DIR', path: '/home' },
+          runtimeKind: 'native',
+          options: { model: 'claude-gone', effort: 'max' }
+        })
+      } as never,
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: create preparation reads only deps.modelCatalog on this host.
+      ensureHost: async () => host as never,
+      envelope: {
+        sessionId: 'sess_1',
+        clientOperationId: 'op_1',
+        expectedRuntimeFence: null,
+        payloadFingerprint: ''
+      },
+      worktree: 'id:repo::wt',
       agent: 'claude',
-      workspacePath: '/repo/wt',
-      savedOnly: true,
-      verifiedOnly: true
+      caller: { callerKey: 'renderer:test' }
     })
+    expect(prepared.attachParams.options).toEqual({ model: 'claude-gone', effort: 'max' })
+    expect(read).not.toHaveBeenCalled()
   })
 })

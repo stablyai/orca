@@ -9,6 +9,9 @@ export const PCM_BYTES_PER_SAMPLE = 2
 
 export const MAX_DICTATION_AUDIO_SECONDS = 5
 
+// The host drops a phone dictation it hasn't heard from for this long, so the phone waits no longer for a reconnect.
+export const MOBILE_DICTATION_RECONNECT_GRACE_MS = 30_000
+
 export const MAX_DICTATION_AUDIO_CHUNK_BYTES =
   DICTATION_SAMPLE_RATE * PCM_BYTES_PER_SAMPLE * MAX_DICTATION_AUDIO_SECONDS
 

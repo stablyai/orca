@@ -2,6 +2,7 @@ import process from 'node:process'
 import { pathToFileURL } from 'node:url'
 
 export const LINUX_PACKAGE_TESTS = [
+  'src/main/browser/cookies/browser-google-cookie-clear.electron.test.ts',
   'config/scripts/packaged-repository-input-exclusion.test.mjs',
   'src/main/browser/popup-origin-chrome.electron.test.ts',
   'src/main/browser/browser-link-materialization.electron.test.ts',

@@ -155,11 +155,14 @@ export function ChecksPanelEmptyContent({
     const operationInProgress = conflictOperation !== 'unknown'
     const operationLabel =
       conflictOperation === 'rebase'
-        ? 'Rebase'
+        ? translate('auto.components.right.sidebar.checks.panel.content.operation.rebase', 'Rebase')
         : conflictOperation === 'merge'
-          ? 'Merge'
+          ? translate('auto.components.right.sidebar.checks.panel.content.operation.merge', 'Merge')
           : conflictOperation === 'cherry-pick'
-            ? 'Cherry-pick'
+            ? translate(
+                'auto.components.right.sidebar.checks.panel.content.operation.cherryPick',
+                'Cherry-pick'
+              )
             : null
     const emptyReviewIsGitLab =
       linkedGitLabMR !== null || hostedReviewCreation?.provider === 'gitlab'

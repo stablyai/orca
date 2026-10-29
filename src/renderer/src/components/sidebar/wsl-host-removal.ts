@@ -10,7 +10,12 @@ import { workspaceOwnerHostId } from '@/lib/workspace-row-owner-host'
 async function removeWslHostImpl(environmentId: string): Promise<void> {
   const api = window.api.runtimeEnvironments?.wslHosts
   if (!api) {
-    throw new Error('WSL hosts are not available on this computer.')
+    throw new Error(
+      translate(
+        'auto.components.sidebar.wslHostRemoval.unavailable',
+        'WSL hosts are not available on this computer.'
+      )
+    )
   }
   const serverStop = await api.remove({ environmentId })
   const state = useAppStore.getState()

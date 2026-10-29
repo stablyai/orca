@@ -103,7 +103,8 @@ describe('OrcaRuntimeService', () => {
       if (withOffscreen) {
         runtime.setOffscreenBrowserBackend({
           createTab: vi.fn(),
-          closeTab: closeOffscreenTab
+          closeTab: closeOffscreenTab,
+          ownsTab: () => true
         })
       }
       runtime.syncWindowGraph(0, {
@@ -168,7 +169,8 @@ describe('OrcaRuntimeService', () => {
     const runtime = new OrcaRuntimeService(store)
     runtime.setOffscreenBrowserBackend({
       createTab: vi.fn(),
-      closeTab: closeOffscreenTab
+      closeTab: closeOffscreenTab,
+      ownsTab: () => true
     })
     runtime.setNotifier({
       worktreesChanged: vi.fn(),

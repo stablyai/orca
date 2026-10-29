@@ -10,6 +10,7 @@ import {
   getLinearStatePillStyle
 } from '@/components/linear-state-pill-style'
 import { LinearPriorityIcon } from '@/components/linear-priority-icon'
+import { getLinearPriorityLabel } from '@/components/task-page/task-page-localized-options'
 import { translate } from '@/i18n/i18n'
 import {
   LINEAR_EDIT_CHIP_CLASS,
@@ -17,7 +18,6 @@ import {
   LINEAR_EDIT_MENU_ITEM_WITH_ICON_CLASS,
   LINEAR_ESTIMATE_PRESETS,
   LinearEditChipAdornment,
-  PRIORITY_LABELS,
   formatLinearEstimateLabel
 } from '@/components/linear-item-drawer-edit-controls'
 import type { LinearIssueEditController } from '@/components/linear-item-drawer-edit-controller'
@@ -121,9 +121,7 @@ export function renderLinearIssueChipsLayout(
             aria-busy={priorityPending}
           >
             <LinearPriorityIcon priority={localPriority} />
-            <span className="truncate">
-              {PRIORITY_LABELS[localPriority] ?? `P${localPriority}`}
-            </span>
+            <span className="truncate">{getLinearPriorityLabel(localPriority)}</span>
             <LinearEditChipAdornment pending={priorityPending} />
           </button>
         </PopoverTrigger>
@@ -139,7 +137,7 @@ export function renderLinearIssueChipsLayout(
               )}
             >
               <LinearPriorityIcon priority={p} />
-              {PRIORITY_LABELS[p]}
+              {getLinearPriorityLabel(p)}
             </button>
           ))}
         </PopoverContent>

@@ -139,6 +139,20 @@ test('runs hello-orca panel, command, and event behind visible consent', async (
       window.__store?.setState({ settings })
       await window.api.plugins.refresh()
     }, pluginRoot)
+    // A dev folder taking over the approved install is different code, so it needs its own review.
+    await orcaPage.evaluate(async (pluginKey) => {
+      const plugin = (await window.api.plugins.list()).find(
+        (entry) => entry.pluginKey === pluginKey
+      )
+      if (!plugin?.consentFingerprint || plugin.status !== 'pending') {
+        throw new Error('the dev copy should wait for review')
+      }
+      await window.api.plugins.consent({
+        pluginKey,
+        reviewedFingerprint: plugin.consentFingerprint,
+        decision: 'approve'
+      })
+    }, installed.pluginKey)
 
     await openDemoPanel(orcaPage)
 

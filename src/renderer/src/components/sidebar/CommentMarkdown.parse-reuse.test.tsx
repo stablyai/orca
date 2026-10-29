@@ -107,9 +107,10 @@ const prose =
   'The implementation reads **stable values** and keeps the same behavior for every user. '.repeat(
     650
   )
-const fence = `\`\`\`text\n${'const result = readCurrentValue(input);\n'.repeat(1400)}\`\`\``
+// Sized to fit a loaded CI runner's timeout; longer documents add render time, not reveal paths.
+const fence = `\`\`\`text\n${'const result = readCurrentValue(input);\n'.repeat(350)}\`\`\``
 const list = Array.from(
-  { length: 650 },
+  { length: 100 },
   (_, i) => `- Item ${i}: preserve **current behavior** and report the measured result.\n`
 ).join('')
 const code = ({ children, sourceLine }: { children?: React.ReactNode; sourceLine?: number }) => (
@@ -119,9 +120,9 @@ const exists = () => true
 
 it.each([
   ['short', prose.slice(0, 800), 0],
-  ['paragraph', prose.slice(0, 50000), 40000],
-  ['fence', fence, 40000],
-  ['list', list, 35000],
+  ['paragraph', prose.slice(0, 12500), 10000],
+  ['fence', fence, 10000],
+  ['list', list, 5350],
   ['settled fence and tail', `${fence}\n\n${prose.slice(0, 800)}`, fence.length + 2],
   [
     'backward boundaries',

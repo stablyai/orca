@@ -143,8 +143,7 @@ export function applyNativeChatSessionOptionPicks(args: {
   return persisted
 }
 
-/** Applies one host-owned delta to the latest record. Returning null means the
- * authoritative model list found nothing to retire. */
+/** Applies a host-owned delta; null means no future launch default needs retirement. */
 export function applyNativeChatSessionOptionSettingsMutation(
   persisted: PersistedNativeChatSessionOptions | null | undefined,
   mutation: NativeChatSessionOptionSettingsMutation

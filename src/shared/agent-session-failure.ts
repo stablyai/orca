@@ -49,6 +49,7 @@ export const AGENT_SESSION_FAILURE_KINDS = [
   'providerExited',
   'restartFailed',
   'providerRejected',
+  'claudeEffortInvalid',
   'attachmentInvalid',
   'attachmentUnreadable',
   'emptyMessage',

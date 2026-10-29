@@ -81,6 +81,10 @@ describe('CodexAccountService config sync', () => {
         return null
       }
     }))
+    // The distro runs: the config mirror may read its home.
+    vi.doMock('../wsl-background-distro-gate', () => ({
+      wasWslDistroLastSeenRunningSettled: () => true
+    }))
     vi.doMock('../wsl', () => ({
       toWindowsWslPath: (linuxPath: string) =>
         linuxPath === wslLinuxCanonicalHomePath ||
@@ -145,6 +149,10 @@ describe('CodexAccountService config sync', () => {
     vi.doMock('../../shared/wsl-paths', () => ({
       parseWslUncPath: (path: string) =>
         path === wslManagedHomePath ? { distro: 'Ubuntu', linuxPath: wslLinuxHomePath } : null
+    }))
+    // The distro runs: the config mirror may read its home.
+    vi.doMock('../wsl-background-distro-gate', () => ({
+      wasWslDistroLastSeenRunningSettled: () => true
     }))
     vi.doMock('../wsl', () => ({
       toWindowsWslPath: (linuxPath: string) =>
@@ -282,6 +290,10 @@ describe('CodexAccountService config sync', () => {
             ? { distro: 'Debian', linuxPath: '/home/alice/.codex' }
             : null
     }))
+    // The distro runs: the config mirror may read its home.
+    vi.doMock('../wsl-background-distro-gate', () => ({
+      wasWslDistroLastSeenRunningSettled: () => true
+    }))
     vi.doMock('../wsl', () => ({
       toWindowsWslPath: (linuxPath: string) =>
         linuxPath.endsWith('/.codex/config.toml')
@@ -374,6 +386,10 @@ describe('CodexAccountService config sync', () => {
       parseWslUncPath: (path: string) =>
         path === wslManagedHomePath ? { distro: 'Debian', linuxPath: wslLinuxHomePath } : null
     }))
+    // The distro runs: the config mirror may read its home.
+    vi.doMock('../wsl-background-distro-gate', () => ({
+      wasWslDistroLastSeenRunningSettled: () => true
+    }))
     vi.doMock('../wsl', () => ({
       toWindowsWslPath: () => wslManagedHomePath
     }))
@@ -448,6 +464,10 @@ describe('CodexAccountService config sync', () => {
     vi.doMock('../../shared/wsl-paths', () => ({
       parseWslUncPath: (path: string) =>
         path === wslManagedHomePath ? { distro: 'Debian', linuxPath: wslLinuxHomePath } : null
+    }))
+    // The distro runs: the config mirror may read its home.
+    vi.doMock('../wsl-background-distro-gate', () => ({
+      wasWslDistroLastSeenRunningSettled: () => true
     }))
     vi.doMock('../wsl', () => ({
       toWindowsWslPath: () => wslManagedHomePath
@@ -554,6 +574,10 @@ describe('CodexAccountService config sync', () => {
               linuxPath: `${wslLinuxHomePath}${path.slice(wslManagedHomePath.length).replaceAll('\\', '/')}`
             }
           : null
+    }))
+    // The distro runs: the config mirror may read its home.
+    vi.doMock('../wsl-background-distro-gate', () => ({
+      wasWslDistroLastSeenRunningSettled: () => true
     }))
     vi.doMock('../wsl', () => ({
       toWindowsWslPath: () => wslManagedHomePath
@@ -698,6 +722,10 @@ describe('CodexAccountService config sync', () => {
             }
           : null
     }))
+    // The distro runs: the config mirror may read its home.
+    vi.doMock('../wsl-background-distro-gate', () => ({
+      wasWslDistroLastSeenRunningSettled: () => true
+    }))
     vi.doMock('../wsl', () => ({
       toWindowsWslPath: () => wslManagedHomePath
     }))
@@ -787,6 +815,10 @@ describe('CodexAccountService config sync', () => {
     vi.doMock('../../shared/wsl-paths', () => ({
       parseWslUncPath: (path: string) =>
         path === wslManagedHomePath ? { distro: 'Ubuntu', linuxPath: wslLinuxHomePath } : null
+    }))
+    // The distro runs: the config mirror may read its home.
+    vi.doMock('../wsl-background-distro-gate', () => ({
+      wasWslDistroLastSeenRunningSettled: () => true
     }))
     vi.doMock('../wsl', () => ({
       toWindowsWslPath: () => wslManagedHomePath

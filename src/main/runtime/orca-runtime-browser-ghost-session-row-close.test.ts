@@ -85,7 +85,11 @@ describe('browserTabClose on a session row with no runtime page', () => {
     const closeTab = vi.fn(async () => {})
     const commands = new RuntimeBrowserCommands(
       createHost({
-        getOffscreenBrowserBackend: vi.fn(() => ({ createTab: vi.fn(), closeTab })),
+        getOffscreenBrowserBackend: vi.fn(() => ({
+          createTab: vi.fn(),
+          closeTab,
+          ownsTab: () => true
+        })),
         retireRuntimeOwnedBrowserSessionTab
       })
     )

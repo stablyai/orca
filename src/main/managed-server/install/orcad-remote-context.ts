@@ -3,6 +3,8 @@ import type { SshTarget } from '../../../shared/ssh-types'
 import type { OrcadActivationRecord } from '../activation/orcad-activation-record'
 import { readOrcadActivationRecord } from '../activation/orcad-activation-record-store'
 import { resolveOrcadRuntimeTarget } from '../lifecycle/orcad-runtime-target'
+import { LINUX_LIBC_FIRST_PROBE } from '../../node-runtime/linux-libc-probe'
+import { execCommand } from '../../ssh/remote-exec/remote-exec-command'
 import { prepareWindowsOrcadHost } from '../host-state/orcad-windows-host-preparation'
 import {
   isWslOrcadHostTarget,
@@ -53,8 +55,11 @@ export async function resolveOrcadRemoteContext<Target extends OrcadHostTarget =
   connection: OrcadHostTransport,
   signal?: AbortSignal,
   detectedHost?: RemoteHostPlatform,
-  /** A login home the caller already read on this host; only login-home placement uses it. */
-  knownLoginHome?: string
+  /**
+   * Facts the caller already read on this host. `loginHome` serves only login-home placement;
+   * `firstLibcProbeOutput` answers the libc probe's first command, whose fallbacks still run.
+   */
+  known: { loginHome?: string; firstLibcProbeOutput?: string } = {}
 ): Promise<OrcadRemoteContext<Target>> {
   const host = detectedHost ?? (await detectRemoteHostPlatform(connection, { signal }))
   if (!host) {
@@ -68,12 +73,26 @@ export async function resolveOrcadRemoteContext<Target extends OrcadHostTarget =
   const { orcadHome: remoteHome, userDataDir } = await resolveOrcadMachineHome(
     remote,
     !isWslOrcadHostTarget(target),
-    knownLoginHome
+    known.loginHome
   )
+  let firstLibcProbeOutput = known.firstLibcProbeOutput
   const serverTarget = await resolveOrcadRuntimeTarget({
     conn: connection,
     host,
-    signal
+    signal,
+    ...(firstLibcProbeOutput === undefined
+      ? {}
+      : {
+          exec: async (command: string) => {
+            if (command === LINUX_LIBC_FIRST_PROBE && firstLibcProbeOutput !== undefined) {
+              const output = firstLibcProbeOutput
+              firstLibcProbeOutput = undefined
+              return output
+            }
+            // The fallbacks run exactly as the default exec would.
+            return execCommand(connection, command, { signal })
+          }
+        })
   })
   if (!isWslOrcadHostTarget(target)) {
     rememberSshHostPlatform(target.id, host, serverTarget)

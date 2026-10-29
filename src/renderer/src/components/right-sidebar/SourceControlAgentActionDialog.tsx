@@ -17,6 +17,7 @@ import type { LaunchSource } from '../../../../shared/telemetry-events'
 import type { SourceControlAiWriteTarget } from '../../../../shared/source-control-ai-recipe-save'
 import { SourceControlAgentActionDialogForm } from './SourceControlAgentActionDialogForm'
 import { useSourceControlAgentActionDialog } from './useSourceControlAgentActionDialog'
+import { translate } from '@/i18n/i18n'
 
 export type SourceControlAgentActionDialogProps = {
   open: boolean
@@ -70,7 +71,10 @@ function SourceControlAgentActionEditor(
     baseCommandInput,
     savedCommandInputTemplate,
     onOpenSettings,
-    startLabel = 'Start agent',
+    startLabel = translate(
+      'auto.components.right.sidebar.SourceControlAgentActionDialog.startAgent',
+      'Start agent'
+    ),
     onSaveAgentDefault
   } = props
   const {

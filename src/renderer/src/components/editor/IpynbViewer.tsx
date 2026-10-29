@@ -65,7 +65,10 @@ export default function IpynbViewer({
     } catch (error) {
       return {
         notebook: null,
-        error: error instanceof Error ? error.message : 'Invalid notebook'
+        error:
+          error instanceof Error
+            ? error.message
+            : translate('auto.components.editor.IpynbViewer.invalidNotebook', 'Invalid notebook')
       }
     }
   }, [content])
@@ -174,8 +177,13 @@ export default function IpynbViewer({
       <div className="sticky top-0 z-10 flex items-center gap-3 border-b border-border/60 bg-background/95 px-4 py-2 text-xs text-muted-foreground backdrop-blur">
         <span className="font-medium text-foreground">{filePath.split(/[/\\]/).pop()}</span>
         <span>
-          {notebook.cells.length}{' '}
-          {translate('auto.components.editor.IpynbViewer.07e7d96612', 'cells')}
+          {notebook.cells.length === 1
+            ? translate('auto.components.editor.IpynbViewer.cellCount_one', '{{count}} cell', {
+                count: notebook.cells.length
+              })
+            : translate('auto.components.editor.IpynbViewer.cellCount_other', '{{count}} cells', {
+                count: notebook.cells.length
+              })}
         </span>
         <span>{notebook.language}</span>
         <div className="ml-auto flex items-center gap-2">

@@ -1,3 +1,6 @@
+import { joinResolvedWorktreeScans } from './workspaces/resolved-worktree-scan-join'
+import { getRepoHostIdentityForParts } from '../../shared/repo-host-identity'
+import { WorkspaceGitIdentity } from './sidebar-inputs/workspace-git-identity'
 import { describe, expect, it, vi } from 'vitest'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import type { Repo } from '../../shared/repo-types'
@@ -438,4 +441,36 @@ describe('folder-to-Git checkout identity', () => {
       expect(Object.keys(deps.metaById)).toEqual([oldId])
     }
   )
+})
+
+it('stamps the scan/sidebar join while cached catalog projection stays pure across detach', () => {
+  const owner = repo('row-owner', '/repo', { executionHostId: 'local' })
+  const deps = createDeps([owner])
+  const writes = vi.spyOn(deps.store, 'setWorktreeMeta').mockImplementation(({ id }, updates) => {
+    const next = mergeWorktreeMetaForWrite(deps.metaById[id], updates)
+    deps.metaById[id] = next
+    return next
+  })
+  const key = getRepoHostIdentityForParts(owner.id, 'local')
+  const scans = new Map([
+    [key, { ok: true as const, worktrees: [gitWorktree('/repo/work')], gitRun: {} }]
+  ])
+  joinResolvedWorktreeScans(deps.store, () => deps, scans, true)
+  expect(writes).not.toHaveBeenCalled()
+  const first = joinResolvedWorktreeScans(deps.store, () => deps, scans)
+  expect(writes).toHaveBeenCalledOnce()
+  const identity = new WorkspaceGitIdentity()
+  const rows = (joined: typeof first) => joined.worktrees.map((row) => ({ ...row, gitRun: {} }))
+  identity.observeScan(rows(first), first.scannedRepoKeys)
+  scans.set(key, {
+    ok: true,
+    worktrees: [{ ...gitWorktree('/repo/work'), branch: '' }],
+    gitRun: {}
+  })
+  const detached = joinResolvedWorktreeScans(deps.store, () => deps, scans)
+  identity.observeScan(rows(detached), detached.scannedRepoKeys)
+  expect(identity.title(detached.worktrees[0]!)).toBe(first.worktrees[0]!.displayName)
+  expect(writes).toHaveBeenCalledOnce()
+  joinResolvedWorktreeScans(deps.store, () => deps, scans, true)
+  expect(writes).toHaveBeenCalledOnce()
 })

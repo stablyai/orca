@@ -40,7 +40,12 @@ export async function insertRichMarkdownImageFromPath({
     const parsedWorkspace = worktreeId ? parseWorkspaceKey(worktreeId) : null
     const resolvedConnectionId = getConnectionId(worktreeId)
     if (parsedWorkspace?.type === 'folder' && resolvedConnectionId === undefined) {
-      throw new Error("Couldn't verify which host owns this file. Reopen the file and try again.")
+      throw new Error(
+        translate(
+          'auto.components.editor.richMarkdownImageInsert.hostUnverified',
+          "Couldn't verify which host owns this file. Reopen the file and try again."
+        )
+      )
     }
     const connectionId = resolvedConnectionId ?? undefined
     const fileContext =
@@ -121,7 +126,12 @@ export async function insertRichMarkdownImageFromPath({
       )
     }
   } catch (err) {
-    toast.error(extractIpcErrorMessage(err, 'Failed to insert image.'))
+    toast.error(
+      extractIpcErrorMessage(
+        err,
+        translate('auto.components.editor.useLocalImagePick.175cb8b8ce', 'Failed to insert image.')
+      )
+    )
   }
 }
 

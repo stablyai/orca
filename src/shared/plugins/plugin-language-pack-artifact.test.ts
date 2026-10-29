@@ -8,12 +8,14 @@ import {
 } from './plugin-language-pack-artifact'
 
 describe('plugin language-pack artifacts', () => {
-  it('maps qualified IDs to distinct alphanumeric i18next resource languages', () => {
-    const first = pluginLanguageResourceId('plugin:a.bc/d-ef')
-    const second = pluginLanguageResourceId('plugin:ab.c/de-f')
+  it('maps qualified IDs to distinct canonical private-use tags on the pack locale', () => {
+    const first = pluginLanguageResourceId('plugin:a.bc/ru-RU')
+    const second = pluginLanguageResourceId('plugin:ab.c/ru-RU')
 
-    expect(first).toMatch(/^plugin[0-9a-f]+$/)
-    expect(second).toMatch(/^plugin[0-9a-f]+$/)
+    for (const resourceLanguage of [first, second]) {
+      expect(resourceLanguage).toMatch(/^ru-RU-x-orcapk-/)
+      expect(Intl.getCanonicalLocales(resourceLanguage)).toEqual([resourceLanguage])
+    }
     expect(first).not.toBe(second)
   })
 

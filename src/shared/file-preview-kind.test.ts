@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { filePreviewForPath, streamsPreviewByRange } from './file-preview-kind'
+import { filePreviewForPath } from './file-preview-kind'
 
 describe('filePreviewForPath', () => {
   it.each([
@@ -12,11 +12,5 @@ describe('filePreviewForPath', () => {
     ['notes.txt', null]
   ])('%s', (path, expected) => {
     expect(filePreviewForPath(path)).toEqual(expected)
-  })
-
-  it('streams audio and video by range; images and PDFs still arrive whole', () => {
-    expect(
-      ['a.mp3', 'a.webm', 'a.png', 'a.pdf'].map((p) => streamsPreviewByRange(filePreviewForPath(p)))
-    ).toEqual([true, true, false, false])
   })
 })

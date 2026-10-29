@@ -36,6 +36,7 @@ type DetectedBrowserEntry = {
   selectedProfile: string
 }
 import { BROWSER_VIEWPORT_PRESETS } from '../../../../../shared/browser-viewport-presets'
+import { browserViewportPresetLabel } from './browser-viewport-preset-label'
 import { translate } from '@/i18n/i18n'
 import {
   BrowserChromeFoldedMenuItems,
@@ -265,7 +266,7 @@ export function BrowserToolbarMenuDropdown({
                 <DropdownMenuSeparator />
                 {BROWSER_VIEWPORT_PRESETS.map((preset) => (
                   <DropdownMenuRadioItem key={preset.id} value={preset.id}>
-                    <span className="truncate">{preset.label}</span>
+                    <span className="truncate">{browserViewportPresetLabel(preset)}</span>
                   </DropdownMenuRadioItem>
                 ))}
               </DropdownMenuRadioGroup>

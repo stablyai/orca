@@ -32,11 +32,17 @@ export function SkillUpdateStatusSegment({
                 'Updating {{value0}}…',
                 { value0: run.names[0] }
               )
-            : translate(
-                'auto.components.status.bar.SkillUpdateStatusSegment.runningMany',
-                'Updating {{value0}} skills…',
-                { value0: run.names.length }
-              ),
+            : run.names.length === 1
+              ? translate(
+                  'auto.components.status.bar.SkillUpdateStatusSegment.runningSkills_one',
+                  'Updating {{count}} skill…',
+                  { count: run.names.length }
+                )
+              : translate(
+                  'auto.components.status.bar.SkillUpdateStatusSegment.runningSkills_other',
+                  'Updating {{count}} skills…',
+                  { count: run.names.length }
+                ),
         ariaLabel: translate(
           'auto.components.status.bar.SkillUpdateStatusSegment.runningAria',
           'Skills updating. Click to open details.'

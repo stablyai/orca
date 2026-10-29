@@ -94,15 +94,16 @@ export function ExternalAutomationManagers({
           </div>
         </div>
         <Badge variant="outline">
-          {automationCount}{' '}
           {automationCount === 1
             ? translate(
-                'auto.components.automations.ExternalAutomationManagers.701515f010',
-                'automation'
+                'auto.components.automations.ExternalAutomationManagers.automationCount_one',
+                '{{count}} automation',
+                { count: automationCount }
               )
             : translate(
-                'auto.components.automations.ExternalAutomationManagers.e2532150ed',
-                'automations'
+                'auto.components.automations.ExternalAutomationManagers.automationCount_other',
+                '{{count}} automations',
+                { count: automationCount }
               )}
         </Badge>
       </div>

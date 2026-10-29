@@ -23,7 +23,12 @@ import {
 } from '@/lib/notes-send-in-flight'
 import { translate } from '@/i18n/i18n'
 
-const ENABLED_SEND_TOOLTIP = 'Send notes to an agent'
+function enabledSendTooltip(): string {
+  return translate(
+    'auto.components.editor.NotesSendMenu.sendNotesToAgent',
+    'Send notes to an agent'
+  )
+}
 
 export type NotesSendMenuScope<TNote> = {
   id: string
@@ -77,7 +82,7 @@ export function NotesSendMenu<TNote extends DiffCommentDeliverySnapshot>({
   triggerLabel,
   triggerCount,
   actionLabel,
-  disabledTooltip = 'All notes sent',
+  disabledTooltip,
   iconClassName = 'size-3.5',
   align = 'end',
   openRequestNonce = null,
@@ -110,7 +115,8 @@ export function NotesSendMenu<TNote extends DiffCommentDeliverySnapshot>({
   // Notes only on their way to an agent are not sent yet.
   const disabledTitle = scopes.some((scope) => scope.notes.length > 0)
     ? translate('components.native-chat.question.sending', 'Sending…')
-    : disabledTooltip
+    : (disabledTooltip ??
+      translate('auto.components.editor.NotesSendMenu.allNotesSent', 'All notes sent'))
 
   const markDelivered = useCallback(
     (notes: readonly TNote[]) => {
@@ -209,7 +215,7 @@ export function NotesSendMenu<TNote extends DiffCommentDeliverySnapshot>({
                 triggerClassName
               )}
               disabled={!hasDeliverableNotes}
-              title={hasDeliverableNotes ? ENABLED_SEND_TOOLTIP : disabledTitle}
+              title={hasDeliverableNotes ? enabledSendTooltip() : disabledTitle}
               aria-label={
                 triggerLabel
                   ? translate(
@@ -217,7 +223,7 @@ export function NotesSendMenu<TNote extends DiffCommentDeliverySnapshot>({
                       'Send {{value0}} to an agent',
                       { value0: triggerLabel }
                     )
-                  : ENABLED_SEND_TOOLTIP
+                  : enabledSendTooltip()
               }
               onMouseDown={(event) => event.stopPropagation()}
               onClick={(event) => event.stopPropagation()}
@@ -240,7 +246,7 @@ export function NotesSendMenu<TNote extends DiffCommentDeliverySnapshot>({
           </DropdownMenuTrigger>
         </TooltipTrigger>
         <TooltipContent side="bottom" sideOffset={6}>
-          {hasDeliverableNotes ? ENABLED_SEND_TOOLTIP : disabledTitle}
+          {hasDeliverableNotes ? enabledSendTooltip() : disabledTitle}
         </TooltipContent>
       </Tooltip>
       <DropdownMenuContent

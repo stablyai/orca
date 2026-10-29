@@ -1,7 +1,10 @@
-import { resolveAgentStatusWorktreeId } from '../../../../shared/agent-status-worktree-attribution'
+import type { Tab } from '../../../../shared/tab-types'
+import {
+  parseAgentStatusPaneIdentity,
+  resolveAgentStatusWorktreeId
+} from '../../../../shared/agent-status-worktree-attribution'
 import type { AppState } from '@/store/types'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
-import { parsePaneKey } from '../../../../shared/stable-pane-id'
 import { isWebTerminalSurfaceTabId } from '../../../../shared/terminal-surface-id'
 
 export type LiveEntriesByWorktreeCache = {
@@ -24,9 +27,10 @@ export function recordLiveEntriesFullRebuild(): void {
 export function liveEntryWorktreeId(
   paneKey: string,
   entry: AgentStatusEntry,
-  tabIdToWorktreeId: Map<string, string>
+  tabIdToWorktreeId: Map<string, string>,
+  representedTabs?: ReadonlyMap<string, Tab>
 ): string | undefined {
-  const parsed = parsePaneKey(paneKey)
+  const parsed = parseAgentStatusPaneIdentity(paneKey, representedTabs?.get(paneKey))
   if (!parsed) {
     return undefined
   }
@@ -42,7 +46,8 @@ export function liveEntryWorktreeId(
 export function patchLiveEntriesByWorktree(
   cache: LiveEntriesByWorktreeCache,
   agentStatusByPaneKey: AppState['agentStatusByPaneKey'],
-  tabIdToWorktreeId: Map<string, string>
+  tabIdToWorktreeId: Map<string, string>,
+  representedTabs?: ReadonlyMap<string, Tab>
 ): Map<string, AgentStatusEntry[]> | null {
   const previousMap = cache.agentStatusByPaneKey
   const changed: { paneKey: string; entry: AgentStatusEntry }[] = []
@@ -76,7 +81,7 @@ export function patchLiveEntriesByWorktree(
   const entriesByWorktree = new Map(cache.entriesByWorktree)
   const clonedBuckets = new Set<string>()
   for (const { paneKey, entry } of changed) {
-    const worktreeId = liveEntryWorktreeId(paneKey, entry, tabIdToWorktreeId)
+    const worktreeId = liveEntryWorktreeId(paneKey, entry, tabIdToWorktreeId, representedTabs)
     if (!worktreeId) {
       continue
     }

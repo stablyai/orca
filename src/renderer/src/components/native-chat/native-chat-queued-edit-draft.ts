@@ -4,7 +4,7 @@ import { imageReferenceToken } from '../../../../shared/native-chat-image-refere
 import {
   imageReferencesToPromptMarkers,
   promptMarkersToImageReferences
-} from '../../../../shared/native-chat-image-transcript-markers'
+} from '../../../../shared/native-chat/transcript/native-chat-image-transcript-markers'
 import {
   queuedEditKeptImages,
   queuedMessageEditableText,

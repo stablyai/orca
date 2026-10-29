@@ -301,7 +301,25 @@ describe('structured agent session options', () => {
       structuredAgentSessionOptionSnapshot(fast).find(({ id }) => id === 'serviceTier')
     ).toMatchObject({ settable: true, kind: { currentValue: 'priority' } })
     const standard = commitStructuredAgentSessionOption(fast, 'serviceTier', 'default')
-    // With no model, nothing says which other speed the chat can take.
-    expect(canSetStructuredAgentSessionOption(standard, 'serviceTier', 'priority')).toBe(false)
+    // Inventory does not authorize a literal pick.
+    expect(canSetStructuredAgentSessionOption(standard, 'serviceTier', 'priority')).toBe(true)
   })
+})
+
+it('separates typed literal readiness from an empty or refreshing catalog', () => {
+  const state = createStructuredAgentSessionOptionState('codex')
+  const snapshot = structuredAgentSessionOptionSnapshot(state)
+  expect(canSetStructuredAgentSessionOption(state, 'model', 'unlisted', snapshot, false)).toBe(
+    false
+  )
+  expect(canSetStructuredAgentSessionOption(state, 'model', 'unlisted', snapshot, true)).toBe(true)
+  expect(
+    canSetStructuredAgentSessionOption(
+      { ...state, listingInProgress: true },
+      'effort',
+      'high',
+      snapshot,
+      true
+    )
+  ).toBe(true)
 })

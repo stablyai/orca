@@ -79,7 +79,9 @@ describe('content-pack manifest contributions', () => {
       languagePacks: [],
       keybindings: [],
       vmRecipes: [],
-      agents: []
+      agents: [],
+      themes: [],
+      terminalThemes: []
     })
   })
 

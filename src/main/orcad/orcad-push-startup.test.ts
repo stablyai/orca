@@ -20,6 +20,7 @@ const state = vi.hoisted(() => ({
   onSettingsChanged: vi.fn<ProfilePreferences['onSettingsChanged']>(),
   removeSettingsListener: vi.fn(),
   startDaemon: vi.fn(async () => {}),
+  stopDaemon: vi.fn(async () => {}),
   browserProvider: vi.fn(async () => null),
   register: vi.fn(async () => ({ ok: true, registrationId: 'headless-registration' })),
   send: vi.fn(async () => ({ ok: true, results: [] })),
@@ -75,7 +76,7 @@ vi.mock('./orcad-instance-lock', () => ({
 }))
 vi.mock('./orcad-daemon-supervision', () => ({
   startOrcadDaemon: state.startDaemon,
-  stopOrcadDaemon: async () => {}
+  stopOrcadDaemon: state.stopDaemon
 }))
 vi.mock('./orcad-health', () => ({ collectOrcadHealth: async () => ({}) }))
 vi.mock('./orcad-automations', () => ({
@@ -306,6 +307,42 @@ it('unsubscribes settings when daemon startup fails after hook setup', async () 
   expect(state.onSettingsChanged).toHaveBeenCalledOnce()
   expect(state.removeSettingsListener).toHaveBeenCalledOnce()
   expect(readdirSync(profileStateAccessPaths(state.root).participants)).toEqual([])
+  acquireProfileStateMaintenance(state.root).release()
+})
+
+it('spawns the daemon while the hook server is still starting', async () => {
+  state.root = mkdtempSync(join(tmpdir(), 'orca-headless-daemon-parallel-'))
+  const { agentHookServer } = await import('../agent-hooks/server')
+  const hookStart = Promise.withResolvers<void>()
+  const start = vi.spyOn(agentHookServer, 'start').mockReturnValue(hookStart.promise)
+  const { startOrcad } = await import('./orcad-entry')
+  const starting = startOrcad({ noPairing: true, json: true })
+
+  await vi.waitFor(() => expect(start).toHaveBeenCalledOnce())
+  await vi.waitFor(() => expect(state.startDaemon).toHaveBeenCalledOnce())
+  hookStart.resolve()
+
+  const host = await starting
+  await host.stop()
+})
+
+it('disconnects a daemon still spawning only after it settles, when the hook server fails', async () => {
+  state.root = mkdtempSync(join(tmpdir(), 'orca-headless-hook-failure-'))
+  const daemonSpawn = Promise.withResolvers<void>()
+  state.startDaemon.mockReturnValueOnce(daemonSpawn.promise)
+  const { agentHookServer } = await import('../agent-hooks/server')
+  vi.spyOn(agentHookServer, 'start').mockRejectedValueOnce(new Error('hook port taken'))
+  const { startOrcad } = await import('./orcad-entry')
+
+  const starting = startOrcad()
+  await vi.waitFor(() => expect(state.startDaemon).toHaveBeenCalledOnce())
+  // The cleanup waits on the in-flight spawn rather than disconnecting a half-started provider.
+  await new Promise((resolve) => setImmediate(resolve))
+  expect(state.stopDaemon).not.toHaveBeenCalled()
+  daemonSpawn.resolve()
+
+  await expect(starting).rejects.toThrow('hook port taken')
+  expect(state.stopDaemon).toHaveBeenCalledOnce()
   acquireProfileStateMaintenance(state.root).release()
 })
 

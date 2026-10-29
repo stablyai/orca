@@ -134,11 +134,27 @@ function AgentRow({
   const complete = showBar && settled === read.total
   const label = agentLabel(agent.agent)
   const checked = hasWork
-    ? translate(
-        'auto.components.right.sidebar.AiVaultScanProgressStrip.agentChecked',
-        '{{agent}}: {{settled}} of {{total}} history candidates checked',
-        { agent: label, settled: formatCount(settled), total: formatCount(read.total) }
-      )
+    ? read.total === 1
+      ? translate(
+          'auto.components.right.sidebar.AiVaultScanProgressStrip.agentCheckedCount_one',
+          '{{agent}}: {{settled}} of {{total}} history candidate checked',
+          {
+            agent: label,
+            settled: formatCount(settled),
+            total: formatCount(read.total),
+            count: read.total
+          }
+        )
+      : translate(
+          'auto.components.right.sidebar.AiVaultScanProgressStrip.agentCheckedCount_other',
+          '{{agent}}: {{settled}} of {{total}} history candidates checked',
+          {
+            agent: label,
+            settled: formatCount(settled),
+            total: formatCount(read.total),
+            count: read.total
+          }
+        )
     : undefined
   return (
     <div role="listitem" className="px-3 py-1.5 text-xs">

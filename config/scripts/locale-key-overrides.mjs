@@ -139,11 +139,6 @@ const BASE_LOCALE_KEY_OVERRIDES = {
     zh: '知道了',
     ja: '了解'
   },
-  'auto.components.GitHubItemDialog.55962099bc': {
-    ko: '이 이슈를 열었습니다',
-    zh: '创建了此议题',
-    ja: 'このイシューを作成しました'
-  },
   'auto.components.GitHubItemDialog.726db41722': {
     ko: '워크스페이스 열기',
     zh: '打开工作区',

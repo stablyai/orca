@@ -10,6 +10,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import {
   getRepoExecutionHostId,
   isRuntimeOwnedSshTargetId,
@@ -29,6 +30,7 @@ import {
 const NAME_TOKEN = '\u0000'
 
 const RemoveFolderDialog = React.memo(function RemoveFolderDialog() {
+  useUiLanguageRevision()
   const activeModal = useAppStore((s) => s.activeModal)
   const modalData = useAppStore((s) => s.modalData)
   const closeModal = useAppStore((s) => s.closeModal)

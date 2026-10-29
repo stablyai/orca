@@ -56,7 +56,7 @@ export function runBundledRipgrepTextSearch({
     const rgArgs = buildRgArgs(options.query, '.', options)
 
     const acc = createAccumulator()
-    const lines = new SearchSubprocessLineAccumulator()
+    const lines = new SearchSubprocessLineAccumulator(undefined, 'discard')
     const diagnostics = new RipgrepSearchDiagnostics(
       process.platform === 'win32' && !wslDistroForOutput
         ? WINDOWS_UNOPENABLE_PATH_OS_ERRORS
@@ -134,8 +134,10 @@ export function runBundledRipgrepTextSearch({
     releaseChild = onSpawn(nextChild)
 
     const handleStdoutData = (chunk: string): void => {
-      const withinLineLimit = lines.push(chunk, processLine)
-      if (!withinLineLimit || acc.totalMatches >= maxResults) {
+      if (!lines.push(chunk, processLine)) {
+        acc.truncated = true
+      }
+      if (acc.totalMatches >= maxResults) {
         acc.truncated = true
         child?.once('error', ignoreCompletedSearchTerminationError)
         resolveOnce()

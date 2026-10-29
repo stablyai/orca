@@ -214,7 +214,11 @@ export function NativeChatImageAttachments({
     return (
       <div className="mb-2 flex flex-wrap gap-1.5">
         {images.map((image) => {
-          const label = image.alt ?? image.path ?? image.url ?? 'Image'
+          const label =
+            image.alt ??
+            image.path ??
+            image.url ??
+            translate('components.native-chat.transcript.imageFallback', 'Image')
           const imageKeyBase = `${label}-${image.url ?? ''}-${image.path ?? ''}`
           const occurrence = imageKeyCounts.get(imageKeyBase) ?? 0
           imageKeyCounts.set(imageKeyBase, occurrence + 1)
@@ -241,7 +245,11 @@ export function NativeChatImageAttachments({
   return (
     <div className="mb-2 flex flex-wrap gap-1.5">
       {images.map((image) => {
-        const label = image.alt ?? image.path ?? image.url ?? 'Image'
+        const label =
+          image.alt ??
+          image.path ??
+          image.url ??
+          translate('components.native-chat.transcript.imageFallback', 'Image')
         const imageKeyBase = `${label}-${image.url ?? ''}-${image.path ?? ''}`
         const occurrence = imageKeyCounts.get(imageKeyBase) ?? 0
         imageKeyCounts.set(imageKeyBase, occurrence + 1)
@@ -316,9 +324,17 @@ export function ProviderFrameRow({
         frame?.payload.truncated ? (
           <span>
             ·{' '}
-            {translate('components.native-chat.providerFrame.byteLength', '{{value0}} bytes', {
-              value0: frame.payload.byteLength
-            })}
+            {frame.payload.byteLength === 1
+              ? translate('components.native-chat.providerFrame.byteCount_one', '{{count}} byte', {
+                  count: frame.payload.byteLength
+                })
+              : translate(
+                  'components.native-chat.providerFrame.byteCount_other',
+                  '{{count}} bytes',
+                  {
+                    count: frame.payload.byteLength
+                  }
+                )}
           </span>
         ) : null
       }

@@ -35,7 +35,10 @@ import {
   claudeUserMessageWasProvablyUnwritten
 } from './claude-agent-sdk-user-message-queue'
 import { AgentSessionPreDispatchError } from '../native-chat/agent-session-wire/structured-agent-session-operation-settlement'
-import { isAgentSessionOptionRejectedError } from '../native-chat/agent-session-wire/structured-agent-session-option-error'
+import {
+  ClaudeEffortValidationError,
+  isAgentSessionOptionRejectedError
+} from '../native-chat/agent-session-wire/structured-agent-session-option-error'
 import { ClaudeControlRequestError } from './claude-stream-json-connection'
 
 const MAX_ACTIVE_DISPATCH_WAITERS = 64
@@ -189,6 +192,12 @@ export async function dispatchClaudeTurn(
         isAbortSignalReason(input.signal, error)
       ) {
         throw error
+      }
+      if (error instanceof ClaudeEffortValidationError) {
+        return {
+          state: 'rejected',
+          ...claudeDispatchRejection(agentSessionFailureFact('claudeEffortInvalid'))
+        }
       }
       if (isAgentSessionOptionRejectedError(error)) {
         return {

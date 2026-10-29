@@ -1,11 +1,17 @@
 import { z } from 'zod'
-import { pluginCommandIdSchema, pluginRelativePathSchema } from './plugin-manifest-fields'
+import {
+  pluginCommandIdSchema,
+  pluginIdSchema,
+  pluginRelativePathSchema
+} from './plugin-manifest-fields'
 import { normalizeKeybinding } from '../keybindings'
 
 export const PLUGIN_LANGUAGE_PACK_LIMIT = 16
 export const PLUGIN_KEYBINDING_LIMIT = 256
 export const PLUGIN_VM_RECIPE_LIMIT = 64
 export const PLUGIN_AGENT_PROFILE_LIMIT = 64
+export const PLUGIN_THEME_LIMIT = 64
+export const PLUGIN_TERMINAL_THEME_LIMIT = 64
 
 /** True when Intl can parse the tag's grammar, not just its shape. */
 function isWellFormedLocaleId(value: string): boolean {
@@ -62,7 +68,17 @@ export const pluginAgentProfileContributionSchema = z
   .object({ path: pluginRelativePathSchema })
   .strict()
 
+/** App and terminal themes share one shape: a labelled JSON artifact. */
+export const pluginThemeContributionSchema = z
+  .object({
+    id: pluginIdSchema,
+    label: z.string().min(1).max(128),
+    path: pluginRelativePathSchema
+  })
+  .strict()
+
 export type PluginLanguagePackContribution = z.infer<typeof pluginLanguagePackContributionSchema>
 export type PluginKeybindingContribution = z.infer<typeof pluginKeybindingContributionSchema>
 export type PluginVmRecipeContribution = z.infer<typeof pluginVmRecipeContributionSchema>
 export type PluginAgentProfileContribution = z.infer<typeof pluginAgentProfileContributionSchema>
+export type PluginThemeContribution = z.infer<typeof pluginThemeContributionSchema>

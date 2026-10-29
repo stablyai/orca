@@ -72,7 +72,17 @@ export function AutomationRunHistory({
   }))
   const runCountLabel = useMemo(() => {
     const completed = runs.filter((run) => run.status === 'completed').length
-    return `${runs.length} ${runs.length === 1 ? 'run' : 'runs'} · ${completed} completed`
+    return runs.length === 1
+      ? translate(
+          'auto.components.automations.runHistory.runCountSummary_one',
+          '{{count}} run · {{completed}} completed',
+          { count: runs.length, completed }
+        )
+      : translate(
+          'auto.components.automations.runHistory.runCountSummary_other',
+          '{{count}} runs · {{completed}} completed',
+          { count: runs.length, completed }
+        )
   }, [runs])
 
   const selectedRunId =

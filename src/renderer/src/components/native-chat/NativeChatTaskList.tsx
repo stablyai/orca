@@ -81,6 +81,26 @@ function Checklist({ list }: { list: TaskList }): React.JSX.Element {
   )
 }
 
+function taskProgressLabel(completed: number, total: number): string {
+  return total === 1
+    ? translate(
+        'components.native-chat.taskList.progress_one',
+        '{{completed}} of {{count}} task completed',
+        {
+          completed,
+          count: total
+        }
+      )
+    : translate(
+        'components.native-chat.taskList.progress_other',
+        '{{completed}} of {{count}} tasks completed',
+        {
+          completed,
+          count: total
+        }
+      )
+}
+
 export function NativeChatTaskList({
   list,
   previous,
@@ -101,11 +121,7 @@ export function NativeChatTaskList({
           </span>
           <span
             className="tabular-nums"
-            aria-label={translate(
-              'components.native-chat.taskList.progress',
-              '{{completed}} of {{total}} tasks completed',
-              { completed, total: list.tasks.length }
-            )}
+            aria-label={taskProgressLabel(completed, list.tasks.length)}
           >
             {completed}/{list.tasks.length}
           </span>
@@ -132,14 +148,7 @@ export function NativeChatTaskList({
         <span className="font-medium">
           {translate('components.native-chat.taskList.title', 'Tasks')}
         </span>
-        <span
-          className="tabular-nums"
-          aria-label={translate(
-            'components.native-chat.taskList.progress',
-            '{{completed}} of {{total}} tasks completed',
-            { completed, total: list.tasks.length }
-          )}
-        >
+        <span className="tabular-nums" aria-label={taskProgressLabel(completed, list.tasks.length)}>
           {completed}/{list.tasks.length}
         </span>
       </div>

@@ -139,11 +139,19 @@ export function PRCommentsList(props: PRCommentsListProps): React.JSX.Element {
                           variant="default"
                           size="icon-xs"
                           className="relative"
-                          aria-label={translate(
-                            'auto.components.right.sidebar.checks.panel.content.d91f2a6c39',
-                            'Send {{value0}} queued comments to AI',
-                            { value0: selectedCommentQueueCount }
-                          )}
+                          aria-label={
+                            selectedCommentQueueCount === 1
+                              ? translate(
+                                  'auto.components.right.sidebar.checks.panel.content.sendQueuedCommentsToAi_one',
+                                  'Send {{count}} queued comment to AI',
+                                  { count: selectedCommentQueueCount }
+                                )
+                              : translate(
+                                  'auto.components.right.sidebar.checks.panel.content.sendQueuedCommentsToAi_other',
+                                  'Send {{count}} queued comments to AI',
+                                  { count: selectedCommentQueueCount }
+                                )
+                          }
                           disabled={
                             selectedCommentQueueCount === 0 ||
                             commentsLoading ||
@@ -165,11 +173,17 @@ export function PRCommentsList(props: PRCommentsListProps): React.JSX.Element {
                       <TooltipContent side="top" sideOffset={4}>
                         {resolveCommentsWithAIDisabled && resolveCommentsWithAIDisabledReason
                           ? resolveCommentsWithAIDisabledReason
-                          : translate(
-                              'auto.components.right.sidebar.checks.panel.content.d91f2a6c39',
-                              'Send {{value0}} queued comments to AI',
-                              { value0: selectedCommentQueueCount }
-                            )}
+                          : selectedCommentQueueCount === 1
+                            ? translate(
+                                'auto.components.right.sidebar.checks.panel.content.sendQueuedCommentsToAi_one',
+                                'Send {{count}} queued comment to AI',
+                                { count: selectedCommentQueueCount }
+                              )
+                            : translate(
+                                'auto.components.right.sidebar.checks.panel.content.sendQueuedCommentsToAi_other',
+                                'Send {{count}} queued comments to AI',
+                                { count: selectedCommentQueueCount }
+                              )}
                       </TooltipContent>
                     </Tooltip>
                     <Tooltip>

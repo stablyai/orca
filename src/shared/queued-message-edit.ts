@@ -15,7 +15,7 @@ import {
   imageReferencesToPromptMarkers,
   promptMarkersToImageReferences,
   stripSentImagePromptMarkers
-} from './native-chat-image-transcript-markers'
+} from './native-chat/transcript/native-chat-image-transcript-markers'
 
 export type QueuedMessageImageBlock = Extract<
   AgentJournalMessageItem['blocks'][number],

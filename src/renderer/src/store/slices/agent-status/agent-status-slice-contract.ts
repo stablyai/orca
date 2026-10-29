@@ -121,7 +121,8 @@ export type AgentStatusSlice = {
   clearAgentLaunchConfig: (paneKey: string) => void
 
   setRuntimeAgentOrchestrationByPaneKey: (
-    entries: Record<string, AgentStatusOrchestrationContext>
+    entries: Record<string, AgentStatusOrchestrationContext>,
+    producerHost?: string
   ) => void
 
   setMigrationUnsupportedPty: (entry: MigrationUnsupportedPtyEntry) => void

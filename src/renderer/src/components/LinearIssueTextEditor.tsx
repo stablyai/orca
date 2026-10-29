@@ -1,3 +1,4 @@
+import { taskProviderErrorMessage } from '@/lib/task-provider-error-copy'
 import { ImeTextarea } from '@/lib/ime-text-field'
 import React, { useCallback, useRef, useState } from 'react'
 import { LoaderCircle } from 'lucide-react'
@@ -102,7 +103,7 @@ export function LinearIssueTextEditor({
       try {
         const result = await linearUpdateIssue(providerSettings, issue.id, patch, issue.workspaceId)
         if (!result.ok) {
-          throw new Error(result.error)
+          throw new Error(taskProviderErrorMessage(result))
         }
       } catch (error) {
         const revert =
@@ -124,11 +125,12 @@ export function LinearIssueTextEditor({
         toast.error(
           error instanceof Error
             ? error.message
-            : translate(
-                'auto.components.LinearIssueTextEditor.e8ff595db3',
-                'Failed to update {{value0}}',
-                { value0: field }
-              )
+            : field === 'title'
+              ? translate('taskProviders.linear.titleUpdateFailed', 'Failed to update title')
+              : translate(
+                  'taskProviders.linear.descriptionUpdateFailed',
+                  'Failed to update description'
+                )
         )
       } finally {
         if (mountedRef.current && lastIssueIdRef.current === issue.id) {

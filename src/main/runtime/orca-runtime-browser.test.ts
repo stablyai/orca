@@ -734,7 +734,11 @@ describe('RuntimeBrowserCommands headless offscreen routing', () => {
       createHost({
         getAgentBrowserBridge: () => bridge,
         getAvailableAuthoritativeWindow: vi.fn(() => null),
-        getOffscreenBrowserBackend: vi.fn(() => ({ createTab, closeTab: vi.fn() }))
+        getOffscreenBrowserBackend: vi.fn(() => ({
+          createTab,
+          closeTab: vi.fn(),
+          ownsTab: () => true
+        }))
       })
     )
 

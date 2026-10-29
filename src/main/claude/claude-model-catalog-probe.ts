@@ -1,5 +1,9 @@
 import { waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
 import {
+  assertStructuredAgentResolutionCurrent,
+  type StructuredAgentResolutionOperation
+} from '../native-chat/structured-agent-command-resolution'
+import {
   buildClaudeModelListArgs,
   CLAUDE_MODEL_LIST_STDIN
 } from '../../shared/claude-model-list-probe'
@@ -103,11 +107,14 @@ export function createClaudeModelCatalogProbe(
   const resolve = async (
     accountHome: Parameters<AgentModelCatalogProbe>[0],
     cwd?: string,
-    lookup: AgentModelCatalogLookup = 'recover'
+    lookup: AgentModelCatalogLookup = 'recover',
+    operation?: StructuredAgentResolutionOperation
   ) => {
+    assertStructuredAgentResolutionCurrent(operation)
     const configuredArgs = claudeStructuredLaunchArgs(
       cwd ? ((await deps.resolveLaunchArgs?.()) ?? []) : []
     )
+    assertStructuredAgentResolutionCurrent(operation)
     const userArgs = [
       ...Object.entries(configuredArgs.extraArgs).flatMap(([key, value]) =>
         value === null ? [`--${key}`] : [`--${key}`, value]
@@ -122,11 +129,13 @@ export function createClaudeModelCatalogProbe(
     const args = argsFor(true)
     const launchDeps = {
       ...deps,
+      operation,
       ...(lookup === 'saved' ? { resolveInheritedEnv: deps.resolveSavedEnvironment } : {}),
       ...(lookup === 'recover' ? {} : { refreshEnvironmentAfterMiss: undefined }),
       ...(cwd ? { resolveWorkingDirectory: () => cwd } : {})
     }
     const sources = await resolveClaudeChildEnvSources(launchDeps)
+    assertStructuredAgentResolutionCurrent(operation)
     const { command, env } = await resolveClaudeStructuredInvocation(
       launchDeps,
       (base) => ({
@@ -137,13 +146,18 @@ export function createClaudeModelCatalogProbe(
       }),
       sources
     )
+    assertStructuredAgentResolutionCurrent(operation)
     return {
       identity: { command, args, cwd, overlay: Object.entries(sources.overlay ?? {}).sort() },
       run: async (signal?: AbortSignal): Promise<AgentModelCatalogSuccess> => {
+        assertStructuredAgentResolutionCurrent(operation)
+        signal?.throwIfAborted()
         const outcome = await runClaudeBackgroundAttempts({
           agentId: 'claude',
-          run: (strictMcp) =>
-            (deps.runListing ?? runAgentModelCatalogListing)(
+          run: (strictMcp) => {
+            assertStructuredAgentResolutionCurrent(operation)
+            signal?.throwIfAborted()
+            return (deps.runListing ?? runAgentModelCatalogListing)(
               {
                 command,
                 args: argsFor(strictMcp),
@@ -156,7 +170,8 @@ export function createClaudeModelCatalogProbe(
                 return error
               }
               throw error
-            }),
+            })
+          },
           failedExit: (outcome) =>
             outcome instanceof AgentModelCatalogProbeError && outcome.reason === 'exit'
               ? outcome.failedExit
@@ -219,9 +234,14 @@ export function createClaudeModelCatalogProbe(
     Pick<AgentModelCatalogProbe, 'resolve' | 'resolveLegacy'>
   >(
     async (home, options) =>
-      (await resolve(home, options?.cwd ?? options?.workspacePath ?? process.cwd())).run(
-        options?.signal
-      ),
-    { resolve, resolveLegacy: (home) => resolve(home) }
+      (
+        await resolve(
+          home,
+          options?.cwd ?? options?.workspacePath ?? process.cwd(),
+          'recover',
+          options?.operation
+        )
+      ).run(options?.signal),
+    { resolve, resolveLegacy: (home, operation) => resolve(home, undefined, 'recover', operation) }
   )
 }

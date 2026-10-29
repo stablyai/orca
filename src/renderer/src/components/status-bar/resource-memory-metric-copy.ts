@@ -11,8 +11,11 @@ export type ResourceMemoryMetricCopy = {
 export function getResourceMemoryMetricCopy(metric: ProcessMemoryMetric): ResourceMemoryMetricCopy {
   if (metric === 'footprint') {
     return {
-      columnLabel: 'Mem',
-      summaryLabel: 'Σ Memory',
+      columnLabel: translate('auto.components.status.bar.resource.memory.metric.memColumn', 'Mem'),
+      summaryLabel: translate(
+        'auto.components.status.bar.resource.memory.metric.memorySummary',
+        'Σ Memory'
+      ),
       description: translate(
         'auto.components.status.bar.resource.memory.metric.footprintDescription',
         'Summed memory footprint, the same figure Activity Monitor shows: memory each process owns, including graphics memory. Pages shared between processes are not counted twice.'
@@ -42,7 +45,10 @@ export function getResourceMemoryMetricCopy(metric: ProcessMemoryMetric): Resour
 /** No column of its own yet, so no `columnLabel`: the commit figure is a summary + tooltip. */
 export function getResourceCommitMetricCopy(): Omit<ResourceMemoryMetricCopy, 'columnLabel'> {
   return {
-    summaryLabel: 'Σ Private',
+    summaryLabel: translate(
+      'auto.components.status.bar.resource.memory.metric.privateSummary',
+      'Σ Private'
+    ),
     description: translate(
       'auto.components.status.bar.resource.memory.metric.privateBytesDescription',
       'Summed private bytes: memory these processes have committed, counted whether it is resident or paged out. This is what the host charges against its commit limit, so it keeps rising while the working set above shrinks under paging.'

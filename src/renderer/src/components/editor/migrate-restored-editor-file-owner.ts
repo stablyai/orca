@@ -1,4 +1,5 @@
 import { useAppStore } from '@/store'
+import { translate } from '@/i18n/i18n'
 import {
   findWorkspaceFileRoute,
   type RuntimeWorkspaceFileRoute
@@ -15,6 +16,20 @@ import { afterPendingEntityTabs } from '@/runtime/layout-owner-pending-tabs'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 
 export type RestoredEditorOwnerMigrationResult = RestoredEditorOwnerResult
+
+export function restoredOwnerMigrationErrorMessage(
+  reason: Extract<RestoredEditorOwnerMigrationResult, { ok: false }>['reason']
+): string {
+  return reason === 'collision'
+    ? translate(
+        'auto.components.editor.EditorPanel.siblingFileAlreadyOpen',
+        'The sibling file is already open; close one tab before restoring it.'
+      )
+    : translate(
+        'auto.components.editor.EditorPanel.siblingFileOwnerChanged',
+        'The sibling file owner changed while the tab was restoring.'
+      )
+}
 
 export async function migrateRestoredEditorFileOwner(
   fileId: string,

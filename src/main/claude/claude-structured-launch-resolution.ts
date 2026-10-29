@@ -1,3 +1,4 @@
+import { assertStructuredAgentResolutionCurrent } from '../native-chat/structured-agent-command-resolution'
 import { activeProviderContext } from '../../shared/agent-session-provider-context'
 import { getClaudeProfileRouter } from '../claude-accounts/claude-profile-installed-router'
 import { requireLegacyAgentSessionAccountHome } from '../../shared/agent-session-account-home'
@@ -144,8 +145,10 @@ export async function resolveClaudeStructuredInvocation(
   options?: Parameters<typeof claudeChildEnv>[2]
 ): Promise<ClaudeStructuredInvocation> {
   const sources = resolvedSources ?? (await resolveClaudeChildEnvSources(deps))
+  assertStructuredAgentResolutionCurrent(deps.operation)
   deps.signal?.throwIfAborted()
   const auth = await deps.resolveAuthPolicy()
+  assertStructuredAgentResolutionCurrent(deps.operation)
   deps.signal?.throwIfAborted()
   // Preserve proxy credentials alongside ANTHROPIC_BASE_URL for every account.
   return {

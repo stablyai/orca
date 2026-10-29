@@ -33,9 +33,11 @@ describe('reportTerminalDropUploadSkipsAndFailures', () => {
     const mixedSkipKey = mocks.translate.mock.calls[0]?.[0]
 
     expect(symlinkOnlyKey).toBe(
-      'auto.components.terminal.pane.terminal.drop.handler.skippedSymlinkSingular'
+      'auto.components.terminal.pane.terminal.drop.handler.skippedSymlinks_one'
     )
-    expect(mixedSkipKey).toBe('auto.components.terminal.pane.terminal.drop.handler.b4cf68e889')
+    expect(mixedSkipKey).toBe(
+      'auto.components.terminal.pane.terminal.drop.handler.skippedItems_other'
+    )
     expect(symlinkOnlyKey).not.toBe(mixedSkipKey)
     expect(toast.message).toHaveBeenCalledTimes(2)
   })
@@ -44,9 +46,9 @@ describe('reportTerminalDropUploadSkipsAndFailures', () => {
     reportTerminalDropUploadSkipsAndFailures([], [{ reason: '/secret/project/file.txt' }])
 
     expect(mocks.translate).toHaveBeenCalledWith(
-      'auto.components.terminal.pane.terminal.drop.handler.1e072f611e',
-      'Failed to upload {{value0}} {{value1}}.',
-      { value0: 1, value1: 'file' }
+      'auto.components.terminal.pane.terminal.drop.handler.failedUploads_one',
+      'Failed to upload {{count}} file.',
+      { count: 1 }
     )
     expect(toast.error).toHaveBeenCalledWith(
       expect.not.stringContaining('/secret/project/file.txt'),
@@ -61,7 +63,7 @@ describe('reportTerminalDropUploadSkipsAndFailures', () => {
     )
 
     expect(toast.message).toHaveBeenCalledWith(
-      'auto.components.terminal.pane.terminal.drop.handler.b4cf68e889:Skipped {{value0}} {{value1}}.',
+      'auto.components.terminal.pane.terminal.drop.handler.skippedItems_other:Skipped {{count}} items.',
       { description: 'auto.lib.dropSkipReason.permissionDenied:Permission denied.' }
     )
   })
@@ -82,9 +84,9 @@ describe('reportTerminalDropUploadSkipsAndFailures', () => {
     reportTerminalDropUploadSkipsAndFailures([], [{ reason: 'a' }, { reason: 'b' }])
 
     expect(mocks.translate).toHaveBeenCalledWith(
-      'auto.components.terminal.pane.terminal.drop.handler.1e072f611e',
-      'Failed to upload {{value0}} {{value1}}.',
-      { value0: 2, value1: 'files' }
+      'auto.components.terminal.pane.terminal.drop.handler.failedUploads_other',
+      'Failed to upload {{count}} files.',
+      { count: 2 }
     )
   })
 

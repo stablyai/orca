@@ -1,3 +1,4 @@
+import { translate } from '@/i18n/i18n'
 import { resolveAgentTypeFromTerminalTitle } from '@/components/sidebar/worktree-title-derived-agent-rows'
 import { classifyTitleActivity } from '@/lib/pane-agent-evidence'
 import { tabHasLivePty } from '../../../shared/tab-has-live-pty'
@@ -31,15 +32,33 @@ type WorktreeStatusHeuristicOptions = {
 }
 
 const STATUS_LABELS: Record<WorktreeStatus, string> = {
-  active: 'Active',
-  working: 'Working',
-  monitoring: 'Monitoring background tasks',
-  permission: 'Needs permission',
-  failed: 'Failed',
-  interrupted: 'Interrupted',
-  unconfirmed: 'Couldn’t confirm',
-  done: 'Done',
-  inactive: 'Inactive'
+  get active() {
+    return translate('workspace.activity.active', 'Active')
+  },
+  get working() {
+    return translate('workspace.activity.working', 'Working')
+  },
+  get monitoring() {
+    return translate('workspace.activity.monitoring', 'Monitoring background tasks')
+  },
+  get permission() {
+    return translate('workspace.activity.permission', 'Needs permission')
+  },
+  get failed() {
+    return translate('workspace.activity.failed', 'Failed')
+  },
+  get interrupted() {
+    return translate('workspace.activity.interrupted', 'Interrupted')
+  },
+  get unconfirmed() {
+    return translate('workspace.activity.unconfirmed', 'Couldn’t confirm')
+  },
+  get done() {
+    return translate('workspace.activity.done', 'Done')
+  },
+  get inactive() {
+    return translate('workspace.activity.inactive', 'Inactive')
+  }
 }
 
 export function getWorktreeStatus(

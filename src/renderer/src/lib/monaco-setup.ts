@@ -10,6 +10,7 @@ import htmlWorker from 'monaco-editor/esm/vs/language/html/html.worker?worker'
 import tsWorker from 'monaco-editor/esm/vs/language/typescript/ts.worker?worker'
 import { registerAstroLanguage } from './monaco-languages/register-astro'
 import { registerCudaLanguage } from './monaco-languages/register-cuda'
+import { registerDotenvLanguage } from './monaco-languages/register-dotenv'
 import { registerGlimmerLanguages } from './monaco-languages/register-glimmer'
 import { registerGroovyLanguage } from './monaco-languages/register-groovy'
 import { registerJsonlLanguage } from './monaco-languages/register-jsonl'
@@ -82,6 +83,7 @@ runMonacoSetupSteps([
   ['Zig language registration', () => registerZigLanguage(monaco)],
   ['Groovy language registration', () => registerGroovyLanguage(monaco)],
   ['JSONL language registration', () => registerJsonlLanguage(monaco)],
+  ['dotenv language registration', () => registerDotenvLanguage(monaco)],
   ['Quarto language registration', () => registerQuartoLanguage(monaco)],
   ['Markdown language registration', () => registerMarkdownLanguage(monaco)],
   ['shell Markdown alias registration', () => registerShellMarkdownAliases(monaco)],

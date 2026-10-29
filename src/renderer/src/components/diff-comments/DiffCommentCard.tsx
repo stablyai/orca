@@ -135,7 +135,12 @@ export function DiffCommentCard({
   const canSubmit = !submitting && trimmedDraft.length > 0 && trimmedDraft !== body
   const lineLabel =
     label === undefined ? getDiffCommentLineLabel({ lineNumber, startLine }).toLowerCase() : label
-  const metaText = [author || 'Note', lineLabel, createdAtLabel || (sentAt ? 'sent' : null)]
+  const metaText = [
+    author || translate('auto.components.diff.comments.DiffCommentCard.noteAuthorFallback', 'Note'),
+    lineLabel,
+    createdAtLabel ||
+      (sentAt ? translate('auto.components.diff.comments.DiffCommentCard.sentMeta', 'sent') : null)
+  ]
     .filter(Boolean)
     .join(' ')
 

@@ -312,11 +312,17 @@ export default function ImportedWorktreesVisibilityLine({
           ))}
           {remainingGroupCount > 0 ? (
             <div className="py-1 pl-7 pr-2 text-[11px] leading-4 text-muted-foreground">
-              + {remainingGroupCount}{' '}
-              {translate(
-                'auto.components.sidebar.ImportedWorktreesVisibilityLine.b2bc47c080',
-                'more locations'
-              )}
+              {remainingGroupCount === 1
+                ? translate(
+                    'auto.components.sidebar.ImportedWorktreesVisibilityLine.moreLocations_one',
+                    '+ {{count}} more location',
+                    { count: remainingGroupCount }
+                  )
+                : translate(
+                    'auto.components.sidebar.ImportedWorktreesVisibilityLine.moreLocations_other',
+                    '+ {{count}} more locations',
+                    { count: remainingGroupCount }
+                  )}
             </div>
           ) : null}
           <div className="grid gap-1 px-1.5 pb-1 pt-1">

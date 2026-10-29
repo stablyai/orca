@@ -123,7 +123,10 @@ function presentMergeStateKind(
     case 'merge_queue':
     case 'merge_queue_auto_merge_on':
       return {
-        label: kind === 'merge_queue_auto_merge_on' ? 'Auto-merge on' : 'Merge when ready',
+        label:
+          kind === 'merge_queue_auto_merge_on'
+            ? translate('auto.components.github.pr.merge.state.autoMergeOn', 'Auto-merge on')
+            : translate('auto.components.github.pr.merge.state.b169f943e1', 'Merge when ready'),
         tone: WARNING_TONE,
         tooltip: translate(
           'auto.components.github.pr.merge.state.35ec24bc43',

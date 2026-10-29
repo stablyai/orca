@@ -2,6 +2,7 @@ import { createPortal } from 'react-dom'
 import { memo, useEffect, useRef, useLayoutEffect, useState } from 'react'
 import { Package, RotateCcw } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { cn } from '@/lib/utils'
 import type { SkillSourceKind } from '../../../../shared/skills'
 import { FilenameFirstPath } from '@/components/file-path-cursor-tooltip'
@@ -27,6 +28,7 @@ export const NativeChatPickerMenu = memo(function NativeChatPickerMenu({
   onChoose: (item: NativeChatPickerItem) => void
   onRetry: () => void
 }): React.JSX.Element {
+  useUiLanguageRevision()
   const activeItemRef = useRef<HTMLButtonElement | null>(null)
   const commands = autocomplete.items.filter(
     (item): item is Extract<NativeChatPickerItem, { kind: 'command' }> => item.kind === 'command'
@@ -368,6 +370,7 @@ export const NativeChatMentionMenu = memo(function NativeChatMentionMenu({
   listboxId: string
   onChoose: (path: string) => void
 }): React.JSX.Element {
+  useUiLanguageRevision()
   const activeItemRef = useRef<HTMLButtonElement | null>(null)
   const { files } = mention
   const selectedIndex = Math.min(activeIndex, files.length - 1)
@@ -387,23 +390,21 @@ export const NativeChatMentionMenu = memo(function NativeChatMentionMenu({
 
   return (
     <PickerListbox id={listboxId}>
-      {files.map((path, index) => {
-        return (
-          <PickerOptionButton
-            key={path}
-            id={`${listboxId}-option-${index}`}
-            selected={index === selectedIndex}
-            activeItemRef={activeItemRef}
-            onChoose={() => onChoose(path)}
-          >
-            <FileTypeIcon
-              filePath={path}
-              className="mt-0.5 size-3.5 shrink-0 text-muted-foreground"
-            />
-            <FilenameFirstPath path={path} />
-          </PickerOptionButton>
-        )
-      })}
+      {files.map((path, index) => (
+        <PickerOptionButton
+          key={path}
+          id={`${listboxId}-option-${index}`}
+          selected={index === selectedIndex}
+          activeItemRef={activeItemRef}
+          onChoose={() => onChoose(path)}
+        >
+          <FileTypeIcon
+            filePath={path}
+            className="mt-0.5 size-3.5 shrink-0 text-muted-foreground"
+          />
+          <FilenameFirstPath path={path} />
+        </PickerOptionButton>
+      ))}
       {statusText ? (
         <PickerStatus>
           {mention.loading ? <LoadingSpinner className="size-3.5" /> : null}

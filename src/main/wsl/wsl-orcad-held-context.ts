@@ -7,15 +7,23 @@ import {
   UNAME_PLATFORM_PROBE_MARKER
 } from '../ssh/ssh-remote-platform-detection'
 import type { RemoteHostPlatform } from '../ssh/ssh-remote-platform'
+import { LINUX_LIBC_FIRST_PROBE } from '../node-runtime/linux-libc-probe'
 import type { WslDistroHolder } from './wsl-distro-holder'
 import { refuseMissingWslDistro, WslDistroVersion1Error } from './wsl-distro-unsupported'
 import type { WslOrcadHostTarget } from './wsl-orcad-host-target'
 
 const KERNEL_MARKER = '__ORCA_WSL_KERNEL__ '
 const HOME_MARKER = '__ORCA_WSL_HOME__ '
-export const WSL_HOST_FACTS_COMMAND = `printf '${KERNEL_MARKER}%s\\n${HOME_MARKER}%s\\n' "$(uname -r)" "$HOME"; ${UNAME_PLATFORM_PROBE_COMMAND}`
+const LIBC_MARKER = '__ORCA_WSL_LIBC__'
+// The libc probe goes last: its output may span lines, so it takes everything after its marker.
+export const WSL_HOST_FACTS_COMMAND = `printf '${KERNEL_MARKER}%s\\n${HOME_MARKER}%s\\n' "$(uname -r)" "$HOME"; ${UNAME_PLATFORM_PROBE_COMMAND}; printf '\\n%s\\n' '${LIBC_MARKER}'; ${LINUX_LIBC_FIRST_PROBE}`
 
-type WslHostFacts = { kernel: string; loginHome?: string; platform?: RemoteHostPlatform }
+type WslHostFacts = {
+  kernel: string
+  loginHome?: string
+  platform?: RemoteHostPlatform
+  firstLibcProbeOutput?: string
+}
 
 /**
  * Accepts only the exact shape the facts command prints; anything else (startup noise, a HOME
@@ -23,13 +31,15 @@ type WslHostFacts = { kernel: string; loginHome?: string; platform?: RemoteHostP
  */
 export function readWslHostFacts(output: string): WslHostFacts | null {
   const lines = output.split('\n')
-  const [kernelLine = '', homeLine = '', gap, platformLine = '', ...rest] = lines
+  const [kernelLine = '', homeLine = '', gap, platformLine = '', libcGap, libcMarker, ...libc] =
+    lines
   if (
     !kernelLine.startsWith(KERNEL_MARKER) ||
     !homeLine.startsWith(HOME_MARKER) ||
     gap !== '' ||
     !platformLine.startsWith(UNAME_PLATFORM_PROBE_MARKER) ||
-    rest.some((line) => line.trim() !== '')
+    libcGap !== '' ||
+    libcMarker !== LIBC_MARKER
   ) {
     return null
   }
@@ -37,7 +47,8 @@ export function readWslHostFacts(output: string): WslHostFacts | null {
   return {
     kernel: kernelLine.slice(KERNEL_MARKER.length).trim(),
     ...(loginHome.trim() ? { loginHome } : {}),
-    ...withPlatform(remoteHostPlatformFromUnameProbe(`\n${platformLine}`))
+    ...withPlatform(remoteHostPlatformFromUnameProbe(`\n${platformLine}`)),
+    firstLibcProbeOutput: libc.join('\n')
   }
 }
 
@@ -85,7 +96,11 @@ export async function holdWslDistroWithContext(
         probes.abort(error)
         throw error
       }),
-      resolveOrcadRemoteContext(target, conn, probes.signal, facts.platform, facts.loginHome)
+      resolveOrcadRemoteContext(target, conn, probes.signal, facts.platform, {
+        loginHome: facts.loginHome,
+        // Only with a proven platform: the libc answer belongs to the same host shape.
+        ...(facts.platform ? { firstLibcProbeOutput: facts.firstLibcProbeOutput } : {})
+      })
     ])
     return { held, context }
   } catch (error) {

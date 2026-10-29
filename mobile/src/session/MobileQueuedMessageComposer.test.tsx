@@ -49,6 +49,8 @@ describe('queued phone composer action boundary', () => {
               onError,
               onMicPress: undefined,
               micActive: false,
+              micStarting: false,
+              micProcessing: false,
               dictationMode: undefined,
               onMicPressIn: vi.fn(),
               onMicPressOut: vi.fn()

@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button'
 import { useAppStore } from '@/store'
 import type { OrcaHookScriptKind } from '@/lib/orca-hook-trust'
 import { translate } from '@/i18n/i18n'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 
 type ScriptKind = OrcaHookScriptKind
 
@@ -29,6 +30,7 @@ const SCRIPT_KIND_TRIGGER: Record<ScriptKind, string> = {
 }
 
 const OrcaYamlTrustDialog = React.memo(function OrcaYamlTrustDialog() {
+  useUiLanguageRevision()
   const activeModal = useAppStore((s) => s.activeModal)
   const modalData = useAppStore((s) => s.modalData)
   const closeModal = useAppStore((s) => s.closeModal)

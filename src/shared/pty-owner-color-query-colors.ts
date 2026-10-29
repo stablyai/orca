@@ -61,10 +61,12 @@ export function _resetPtyOwnerHostColorsForTest(): void {
   hostColors = null
 }
 
-/** Host-wide viewer theme overrides spawn colors so old panes track theme changes; use the default before any viewer reports. */
+/** A launching client's theme pins its PTY; otherwise the host-wide viewer theme overrides spawn colors so old panes
+ * track theme changes; use the default before any viewer reports. */
 export function resolvePtyOwnerColorQueryColors(
   host: TerminalOscColorQueryReplyColors | null | undefined,
-  spawn: TerminalOscColorQueryReplyColors | null | undefined
+  spawn: TerminalOscColorQueryReplyColors | null | undefined,
+  launcher?: TerminalOscColorQueryReplyColors | null
 ): TerminalOscColorQueryReplyColors {
-  return [host, spawn].find(answersBothSlots) ?? ORCA_DEFAULT_COLOR_QUERY_REPLY_COLORS
+  return [launcher, host, spawn].find(answersBothSlots) ?? ORCA_DEFAULT_COLOR_QUERY_REPLY_COLORS
 }

@@ -126,6 +126,7 @@ function mount(
       activeHandleRef: useRef('t1'),
       flushPendingLiveInputBeforeExternalSend: async () => true,
       canSend: true,
+      canCompose: true,
       liveInputEnabled: options.liveInput,
       showToast: (message: string) => {
         seen.toasts.push(message)

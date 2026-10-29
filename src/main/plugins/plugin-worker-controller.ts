@@ -25,7 +25,9 @@ export type PluginWorkerControllerOptions = {
   registry: PluginExtensionRegistry
   contentVerifier: PluginContentVerifier
   capabilities: (pluginKey: string) => readonly PluginCapabilityKind[] | null
-  isCurrentApproved: (plugin: ValidDiscoveredPlugin) => boolean
+  isCurrentApproved: (spec: PluginWorkerSpawnSpec) => boolean
+  /** Gates crash restarts: a refresh's temporary pause is not revocation. */
+  isApprovalKept?: (spec: PluginWorkerSpawnSpec) => boolean
   invokeCommand: (pluginKey: string, commandId: string, args: unknown) => Promise<unknown>
   executeHostCall: (
     pluginKey: string,
@@ -41,6 +43,7 @@ export class PluginWorkerController {
   private readonly manager: PluginWorkerManager
   private readonly activationErrors = new Map<string, string>()
   private readonly registeredSpecs = new Map<string, PluginWorkerSpawnSpec>()
+  private reconcileGeneration = 0
 
   constructor(private readonly options: PluginWorkerControllerOptions) {
     this.manager = new PluginWorkerManager({
@@ -71,17 +74,30 @@ export class PluginWorkerController {
       throw new Error(`plugin ${plugin.pluginKey} has no worker entry`)
     }
     try {
-      this.assertCurrentApproved(plugin)
-      await this.options.contentVerifier.verify(plugin)
-      await resolveContainedPluginArtifact(plugin.rootDir, plugin.manifest.main)
-      this.assertCurrentApproved(plugin)
       const capabilities = this.options.capabilities(plugin.pluginKey)
       if (!capabilities) {
         throw new Error(`plugin ${plugin.pluginKey} is no longer approved`)
       }
       const spec = buildPluginWorkerSpawnSpec(plugin, capabilities)
-      const handle = await this.manager.ensureActive(spec, () => this.assertCurrentApproved(plugin))
-      if (!this.options.isCurrentApproved(plugin)) {
+      this.assertCurrentApproved(spec)
+      await resolveContainedPluginArtifact(plugin.rootDir, plugin.manifest.main)
+      this.assertCurrentApproved(spec)
+      // Why per spawn and uncached: an integrity check (not a sandbox) that bytes didn't change
+      // between a crash and its restart; an already running worker is reused without hashing.
+      const handle = await this.manager.ensureActive(spec, {
+        assertApproved: () => {
+          if (!(this.options.isApprovalKept ?? this.options.isCurrentApproved)(spec)) {
+            throw new Error(`plugin ${spec.pluginKey} changed or is no longer approved`)
+          }
+        },
+        verifyBeforeSpawn: () =>
+          this.options.contentVerifier.verifyNow({
+            pluginKey: plugin.pluginKey,
+            rootDir: plugin.rootDir,
+            contentHash: spec.reviewedContentHash ?? null
+          })
+      })
+      if (!this.options.isCurrentApproved(spec)) {
         await this.manager.deactivate(plugin.pluginKey)
         throw new Error(`plugin ${plugin.pluginKey} changed or was disabled during activation`)
       }
@@ -110,14 +126,22 @@ export class PluginWorkerController {
     }
   }
 
-  private assertCurrentApproved(plugin: ValidDiscoveredPlugin): void {
-    if (!this.options.isCurrentApproved(plugin)) {
-      throw new Error(`plugin ${plugin.pluginKey} changed or is no longer approved`)
+  private assertCurrentApproved(spec: PluginWorkerSpawnSpec): void {
+    if (!this.options.isCurrentApproved(spec)) {
+      throw new Error(`plugin ${spec.pluginKey} changed or is no longer approved`)
     }
   }
 
-  async reconcile(nextSpecs: ReadonlyMap<string, PluginWorkerSpawnSpec>): Promise<void> {
-    const current = new Map([...this.registeredSpecs, ...this.manager.trackedSpecs()])
+  /** Stops workers whose spec changed. With `resolveUpdated`, a worker that was running
+   *  restarts on its new spec so an update doesn't leave it stopped until the next trigger. */
+  async reconcile(
+    nextSpecs: ReadonlyMap<string, PluginWorkerSpawnSpec>,
+    resolveUpdated?: (pluginKey: string) => ValidDiscoveredPlugin | null
+  ): Promise<void> {
+    const generation = ++this.reconcileGeneration
+    const running = this.manager.trackedSpecs()
+    const current = new Map([...this.registeredSpecs, ...running])
+    const restarts: ValidDiscoveredPlugin[] = []
     for (const [pluginKey, spec] of current) {
       const next = nextSpecs.get(pluginKey)
       if (next && pluginWorkerSpawnSpecsEqual(spec, next)) {
@@ -127,7 +151,16 @@ export class PluginWorkerController {
       this.registeredSpecs.delete(pluginKey)
       this.activationErrors.delete(pluginKey)
       await this.manager.deactivate(pluginKey)
+      const updated = next && running.has(pluginKey) ? resolveUpdated?.(pluginKey) : null
+      if (updated) {
+        restarts.push(updated)
+      }
     }
+    // Why after every stop and generation-checked: a newer reconcile or dispose owns the workers.
+    if (generation !== this.reconcileGeneration) {
+      return
+    }
+    await Promise.all(restarts.map((plugin) => this.ensure(plugin).catch(() => undefined)))
   }
 
   async deactivate(pluginKey: string): Promise<void> {
@@ -146,6 +179,7 @@ export class PluginWorkerController {
   }
 
   dispose(): Promise<void> {
+    this.reconcileGeneration += 1
     return this.manager.disposeAll()
   }
 

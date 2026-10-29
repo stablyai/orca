@@ -142,6 +142,8 @@ const BROWSER_PAGE_CHANNELS = [
   'browser:session:importCookies',
   'browser:session:resolvePartition',
   'browser:session:clearDefaultCookies',
+  'browser:session:clearGoogleCookies',
+  'browser:session:googleCookieClearTarget',
   'browser:session:importFromBrowserForClientHost',
   'browser:session:clientRouteImportSources',
   'browser:session:detectBrowsers',

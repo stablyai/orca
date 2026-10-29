@@ -8,7 +8,8 @@ import {
   DialogTitle
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { translate } from '@/i18n/i18n'
+import { Trans } from 'react-i18next'
+import { i18n, translate } from '@/i18n/i18n'
 
 type AutoRenameFailedDialogProps = {
   open: boolean
@@ -36,17 +37,15 @@ export function AutoRenameFailedDialog({
         'Branch auto-name failed'
       )}
       description={
-        <>
-          {translate(
-            'auto.components.sidebar.AutoRenameFailedDialog.ff62a18580',
-            "Orca couldn't generate a branch name for"
-          )}{' '}
-          <span className="font-medium text-foreground">{worktreeName}</span>{' '}
-          {translate(
-            'auto.components.sidebar.AutoRenameFailedDialog.3afcad0497',
-            'from the first agent message.'
+        <Trans
+          i18n={i18n}
+          defaults={translate(
+            'auto.components.sidebar.AutoRenameFailedDialog.couldNotGenerateBranchName',
+            "Orca couldn't generate a branch name for <name>{{name}}</name> from the first agent message."
           )}
-        </>
+          values={{ name: worktreeName }}
+          components={{ name: <span className="font-medium text-foreground" /> }}
+        />
       }
       readFullOutput={readFullOutput}
     />

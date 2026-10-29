@@ -94,6 +94,7 @@ describe('classifyWslMoveOutcome', () => {
     ).toEqual({ next: 'parked', reason: 'finish-pending' })
     expect(refused('wsl_move_nothing_new')).toEqual({ next: 'idle' })
     expect(refused('wsl_move_already_running')).toEqual({ next: 'stay' })
+    expect(refused('wsl_move_undo_running')).toEqual({ next: 'stay' })
     expect(
       classifyWslMoveOutcome({
         outcome: 'refused',

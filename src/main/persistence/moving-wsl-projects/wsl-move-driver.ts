@@ -40,7 +40,12 @@ import { pauseWslMoveScope } from './wsl-move-driver-pause'
 import { quiesceWslMove, type WslMoveQuiesceRefusalReason } from './wsl-move-quiesce'
 import { finishWslMove as finish } from './wsl-move-driver-finish'
 import { resetWslMoveToZero } from './wsl-move-reset'
-import { claimWslMoveRun, releaseWslMoveRun, type RunningWslMove } from './wsl-move-running-moves'
+import {
+  claimWslMoveRun,
+  releaseWslMoveRun,
+  wslMoveClaimRefusal,
+  type RunningWslMove
+} from './wsl-move-running-moves'
 import {
   holdWslMoveWindowWritesForCommit,
   settleWslMoveWindowWriteHoldForCommit
@@ -62,7 +67,7 @@ export async function moveProjectsToWslHost(
 ): Promise<WslMoveResult> {
   const running = claimWslMoveRun(request.distro)
   if (!running) {
-    return refusal('wsl_move_already_running')
+    return refusal(wslMoveClaimRefusal(request.distro))
   }
   const migrationId = deps.newMigrationId()
   running.migrationId = migrationId

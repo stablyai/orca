@@ -96,11 +96,19 @@ function hostMessage(hostPermissions: string[]): string | null {
       }
     )
   }
-  return translate(
-    'browserExtensions.permission.manySites',
-    'Read and change your data on {{hosts}} and {{count}} other sites',
-    { hosts: hosts.slice(0, MAX_NAMED_HOSTS).join(', '), count: hosts.length - MAX_NAMED_HOSTS }
-  )
+  const named = hosts.slice(0, MAX_NAMED_HOSTS).join(', ')
+  const count = hosts.length - MAX_NAMED_HOSTS
+  return count === 1
+    ? translate(
+        'browserExtensions.permission.manyOtherSites_one',
+        'Read and change your data on {{hosts}} and {{count}} other site',
+        { hosts: named, count }
+      )
+    : translate(
+        'browserExtensions.permission.manyOtherSites_other',
+        'Read and change your data on {{hosts}} and {{count}} other sites',
+        { hosts: named, count }
+      )
 }
 
 /** Why skip unsupported ones: "It can" must not promise what Orca does not do; they get their own line. */

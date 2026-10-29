@@ -2,13 +2,13 @@ import { translate } from '@/i18n/i18n'
 
 // Callers only pass counts of one or more.
 export function linearLabelCountLabel(count: number): string {
-  return count > 1
-    ? translate('auto.components.TaskPage.labelCountPlural', '{{count}} labels', { count })
-    : translate('auto.components.TaskPage.labelCountSingular', '{{count}} label', { count })
+  return count === 1
+    ? translate('auto.components.TaskPage.labelCount_one', '{{count}} label', { count })
+    : translate('auto.components.TaskPage.labelCount_other', '{{count}} labels', { count })
 }
 
 export function linearMemberCountLabel(count: number): string {
-  return count > 1
-    ? translate('auto.components.TaskPage.memberCountPlural', '{{count}} members', { count })
-    : translate('auto.components.TaskPage.memberCountSingular', '{{count}} member', { count })
+  return count === 1
+    ? translate('auto.components.TaskPage.memberCount_one', '{{count}} member', { count })
+    : translate('auto.components.TaskPage.memberCount_other', '{{count}} members', { count })
 }

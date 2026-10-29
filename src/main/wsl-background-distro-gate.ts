@@ -100,12 +100,20 @@ export async function settledWslRunningReadAnchor(
   return anchor
 }
 
-/** Without probing: the last confirmed list names `distro` and was probed after any stop settled. */
-export function wasWslDistroLastSeenRunningSettled(distro: string): boolean {
+/**
+ * Without probing: the last confirmed list names `distro` and was probed after any stop settled.
+ * `maxAgeMs` also bounds the list's age, for stops nothing reports (e.g. WSL's own idle stop).
+ */
+export function wasWslDistroLastSeenRunningSettled(
+  distro: string,
+  options: { maxAgeMs?: number } = {}
+): boolean {
   const observation = peekConfirmedRunningWslDistrosObservation()
   return (
     observation !== null &&
     observation.probeStartedAt >= settledRunningFloor(distro) &&
+    (options.maxAgeMs === undefined ||
+      performance.now() - observation.probeStartedAt <= options.maxAgeMs) &&
     observation.distros.some((candidate) => distroKey(candidate) === distroKey(distro))
   )
 }

@@ -1,6 +1,8 @@
 import React from 'react'
 import type { GitHubOwnerRepo } from '../../../../shared/github/pull-request-types'
 import RepoBadgeLabel from '@/components/repo/RepoBadgeLabel'
+import { Trans } from 'react-i18next'
+import { i18n, translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
 import {
   githubRepoIdentityKey,
@@ -19,8 +21,11 @@ export type IssueSourceIndicatorProps = {
 }
 
 // Name the resolved repository, not remote aliases that could imply a stable UI-to-git-config mapping.
-const LABEL_PREFIX_LIST = 'Issues from '
-const LABEL_PREFIX_ITEM = 'Issue from '
+function issueSourceTemplate(variant: 'list' | 'item'): string {
+  return variant === 'item'
+    ? translate('auto.components.github.IssueSourceIndicator.issueFromRepo', 'Issue from <repo/>')
+    : translate('auto.components.github.IssueSourceIndicator.issuesFromRepo', 'Issues from <repo/>')
+}
 
 export function sameGitHubOwnerRepo(
   left: GitHubOwnerRepo | null,
@@ -52,14 +57,15 @@ export default function IssueSourceIndicator({
     host && !isDefaultGitHubHost(host)
       ? `${host}/${issues.owner}/${issues.repo}`
       : `${issues.owner}/${issues.repo}`
-  const prefix = variant === 'item' ? LABEL_PREFIX_ITEM : LABEL_PREFIX_LIST
+  const template = issueSourceTemplate(variant)
+  const label = template.replace('<repo/>', slug)
   return (
     <span
       className={cn(
         'inline-flex items-center gap-1 rounded border border-border/50 bg-muted/40 px-1.5 py-0.5 text-[10px] text-muted-foreground',
         className
       )}
-      title={localRepo ? `${localRepo.displayName}: ${prefix}${slug}` : `${prefix}${slug}`}
+      title={localRepo ? `${localRepo.displayName}: ${label}` : label}
     >
       {localRepo ? (
         // Disambiguate which local repo this issue-source chip describes in multi-repo views.
@@ -70,8 +76,15 @@ export default function IssueSourceIndicator({
           className="text-[10px] text-muted-foreground"
         />
       ) : null}
-      <span className="shrink-0">{prefix}</span>
-      <span className="font-mono text-foreground/80">{slug}</span>
+      <span>
+        <Trans
+          i18n={i18n}
+          defaults={template}
+          components={{
+            repo: <span className="font-mono text-foreground/80">{slug}</span>
+          }}
+        />
+      </span>
     </span>
   )
 }

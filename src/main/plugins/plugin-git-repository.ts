@@ -20,6 +20,18 @@ export const PLUGIN_GIT_DOWNLOAD_MAX_BYTES = MAX_PLUGIN_TOTAL_BYTES + 16 * 1024 
 const DOWNLOAD_POLL_MS = 200
 const SHA1_COMMIT_PATTERN = /^[0-9a-f]{40}$/
 
+/** Overrides any user `protocol.<helper>.allow`, so an insteadOf rewrite cannot reach a custom
+ *  git-remote-* helper; a stricter inherited allowlist still narrows it. */
+export function pluginGitAllowedProtocols(inherited = process.env.GIT_ALLOW_PROTOCOL): string {
+  const allowed = ['https', 'ssh']
+  if (inherited === undefined) {
+    return allowed.join(':')
+  }
+  const narrowed = new Set(inherited.split(':'))
+  // An empty list allows no transport, matching Git's reading of an empty variable.
+  return allowed.filter((name) => narrowed.has(name)).join(':')
+}
+
 /** Runs system Git with argv-only invocation so credential helpers and SSH
  * remotes work without exposing an executable remote-helper surface. */
 export async function runPluginGit(
@@ -29,6 +41,7 @@ export async function runPluginGit(
 ): Promise<string> {
   const { stdout } = await gitExecFileAsync(args, {
     cwd,
+    env: { ...process.env, GIT_ALLOW_PROTOCOL: pluginGitAllowedProtocols() },
     timeout: PLUGIN_GIT_TIMEOUT_MS,
     // Why: abort must stop remote-https and index-pack too, and settle only once they exit.
     ...(signal ? { signal, terminationBarrier: true } : {})

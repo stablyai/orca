@@ -38,24 +38,24 @@ export function buildGitHubPRStackMergeConfirmation({
       description:
         scope.count === 1
           ? translate(
-              'auto.components.right.sidebar.github.pr.stack.confirmation.4809f55cdb',
+              'auto.components.right.sidebar.github.pr.stack.confirmation.queueDescription_one',
               '{{included}}GitHub will add {{count}} pull request to the merge queue together. The queue chooses the merge method and may merge them in separate groups.',
               { included, count: scope.count }
             )
           : translate(
-              'auto.components.right.sidebar.github.pr.stack.confirmation.be8f2621be',
+              'auto.components.right.sidebar.github.pr.stack.confirmation.queueDescription_other',
               '{{included}}GitHub will add {{count}} pull requests to the merge queue together. The queue chooses the merge method and may merge them in separate groups.',
               { included, count: scope.count }
             ),
       confirmLabel:
         scope.count === 1
           ? translate(
-              'auto.components.right.sidebar.github.pr.stack.confirmation.92ca033e72',
+              'auto.components.right.sidebar.github.pr.stack.confirmation.queueConfirm_one',
               'Queue {{count}} PR',
               { count: scope.count }
             )
           : translate(
-              'auto.components.right.sidebar.github.pr.stack.confirmation.478a527b15',
+              'auto.components.right.sidebar.github.pr.stack.confirmation.queueConfirm_other',
               'Queue {{count}} PRs',
               { count: scope.count }
             )
@@ -71,24 +71,24 @@ export function buildGitHubPRStackMergeConfirmation({
     description:
       scope.count === 1
         ? translate(
-            'auto.components.right.sidebar.github.pr.stack.confirmation.c3e036c99f',
+            'auto.components.right.sidebar.github.pr.stack.confirmation.mergeDescription_one',
             '{{included}}GitHub will merge {{count}} pull request atomically using {{method}}. If it cannot merge, nothing will be merged.',
             { included, count: scope.count, method }
           )
         : translate(
-            'auto.components.right.sidebar.github.pr.stack.confirmation.369aba4b32',
+            'auto.components.right.sidebar.github.pr.stack.confirmation.mergeDescription_other',
             '{{included}}GitHub will merge {{count}} pull requests atomically using {{method}}. If any cannot merge, none will.',
             { included, count: scope.count, method }
           ),
     confirmLabel:
       scope.count === 1
         ? translate(
-            'auto.components.right.sidebar.github.pr.stack.confirmation.493c78f521',
+            'auto.components.right.sidebar.github.pr.stack.confirmation.mergeConfirm_one',
             'Merge {{count}} PR',
             { count: scope.count }
           )
         : translate(
-            'auto.components.right.sidebar.github.pr.stack.confirmation.eb7051d268',
+            'auto.components.right.sidebar.github.pr.stack.confirmation.mergeConfirm_other',
             'Merge {{count}} PRs',
             { count: scope.count }
           )

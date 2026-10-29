@@ -13,7 +13,7 @@ import {
 import type { NativeChatSkillDiscoverySnapshot } from '../../../../../src/shared/native-chat/input/native-chat-picker-items'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { ActivityIndicator, Keyboard, Pressable, type TextInput, Text, View } from 'react-native'
-import { ArrowUp, Mic, Plus, Square } from 'lucide-react-native'
+import { ArrowUp, Plus } from 'lucide-react-native'
 import { colors } from '../../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { NATIVE_CHAT_COMPOSER_PLACEHOLDER } from '../../../../../src/shared/native-chat-turn-status'
@@ -31,10 +31,13 @@ import {
 import type { PendingNativeChatImage } from './mobile-native-chat-image-attachment'
 import type { MobileComposerStructuredCatalog } from './mobile-native-chat-composer-menu'
 import { useMobileNativeChatComposerMenu } from './use-mobile-native-chat-composer-menu'
-import { keepHeldPressThroughLongPress } from '../../held-press-long-press'
 import { mobileNativeChatComposerShowsStop } from './mobile-native-chat-composer-layout'
 import { MobileNativeChatStopButton } from '../input/MobileNativeChatStopButton'
 import { mobileNativeChatComposerStyles as styles } from './mobile-native-chat-composer-styles'
+import {
+  MobileNativeChatComposerMic,
+  type MobileNativeChatMicProps
+} from './MobileNativeChatComposerMic'
 
 const NO_FILE_PATHS: string[] = []
 const NO_ATTACHMENTS: PendingNativeChatImage[] = []
@@ -49,7 +52,7 @@ export type MobileNativeChatStructuredComposer = {
   onRemoveFile: (id: string) => void
 }
 
-type Props = {
+type Props = MobileNativeChatMicProps & {
   insertDictation?: (text: string) => boolean | void
   draftScopeKey?: string | null
   editSession?: { cancel: () => void; refuseCommand: (text: string) => boolean; locked: boolean }
@@ -71,11 +74,6 @@ type Props = {
   attachments?: PendingNativeChatImage[]
   onRemoveAttachment?: (id: string) => void
   isAttaching?: boolean
-  onMicPress?: () => void
-  micActive?: boolean
-  dictationMode?: string
-  onMicPressIn?: () => void
-  onMicPressOut?: () => void
   disabled?: boolean
   /** Only Send is unavailable; typing, dictation and attachments still edit the draft. */
   sendDisabled?: boolean
@@ -110,7 +108,9 @@ export function MobileNativeChatComposer({
   isAttaching = false,
   onMicPress,
   micActive = false,
-  dictationMode = 'toggle',
+  micStarting,
+  micProcessing,
+  dictationMode,
   onMicPressIn,
   onMicPressOut,
   disabled = false,
@@ -330,35 +330,16 @@ export function MobileNativeChatComposer({
             ) : null}
             <View style={styles.actionSpacer} />
             {onMicPress ? (
-              <Pressable
-                accessibilityLabel={micActive ? 'Stop dictation' : 'Dictate'}
-                style={({ pressed }) => [styles.ghostButton, pressed && styles.pressed]}
-                // Hold mode is walkie-talkie (press-in/out); toggle mode taps.
-                onPress={dictationMode === 'hold' ? undefined : onMicPress}
-                onPressIn={dictationMode === 'hold' ? onMicPressIn : undefined}
-                onPressOut={dictationMode === 'hold' ? onMicPressOut : undefined}
-                onLongPress={dictationMode === 'hold' ? keepHeldPressThroughLongPress : undefined}
-                disabled={disabled && !micActive}
-              >
-                {/* The icon swaps on press; as the page's touch target, its removal would send
-                    touchend to a detached node and lose the release. */}
-                {micActive ? (
-                  <Square
-                    pointerEvents="none"
-                    size={16}
-                    color={colors.statusRed}
-                    strokeWidth={2.4}
-                    fill={colors.statusRed}
-                  />
-                ) : (
-                  <Mic
-                    pointerEvents="none"
-                    size={19}
-                    color={colors.textSecondary}
-                    strokeWidth={2}
-                  />
-                )}
-              </Pressable>
+              <MobileNativeChatComposerMic
+                onMicPress={onMicPress}
+                micActive={micActive}
+                micStarting={micStarting}
+                micProcessing={micProcessing}
+                dictationMode={dictationMode}
+                onMicPressIn={onMicPressIn}
+                onMicPressOut={onMicPressOut}
+                disabled={disabled}
+              />
             ) : null}
             {editSession ? (
               <Pressable

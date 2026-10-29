@@ -71,6 +71,7 @@ vi.mock('./command-path-resolver', async (importOriginal) => ({
 }))
 
 vi.mock('../pty/windows-environment-path', () => ({
+  cachedPersistedWindowsPathSegments: () => [],
   readPersistedWindowsPathSegmentsAsync: async () => [],
   mergePersistedWindowsPathAsync: mergePersistedWindowsPathAsyncMock,
   mergePersistedWindowsPath: mergePersistedWindowsPathMock

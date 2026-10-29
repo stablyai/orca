@@ -4,10 +4,13 @@ import {
   PLUGIN_AGENT_PROFILE_LIMIT,
   PLUGIN_KEYBINDING_LIMIT,
   PLUGIN_LANGUAGE_PACK_LIMIT,
+  PLUGIN_TERMINAL_THEME_LIMIT,
+  PLUGIN_THEME_LIMIT,
   PLUGIN_VM_RECIPE_LIMIT,
   pluginAgentProfileContributionSchema,
   pluginKeybindingContributionSchema,
   pluginLanguagePackContributionSchema,
+  pluginThemeContributionSchema,
   pluginVmRecipeContributionSchema
 } from './plugin-content-pack-contributions'
 import {
@@ -111,6 +114,11 @@ const pluginManifestV1Object = z.object({
       agents: z
         .array(pluginAgentProfileContributionSchema)
         .max(PLUGIN_AGENT_PROFILE_LIMIT)
+        .default([]),
+      themes: z.array(pluginThemeContributionSchema).max(PLUGIN_THEME_LIMIT).default([]),
+      terminalThemes: z
+        .array(pluginThemeContributionSchema)
+        .max(PLUGIN_TERMINAL_THEME_LIMIT)
         .default([])
     })
     .strict()

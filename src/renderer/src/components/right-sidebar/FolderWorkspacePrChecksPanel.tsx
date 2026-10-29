@@ -308,32 +308,41 @@ function formatReviewChecksHeaderSummary(summary: {
 function formatWorktreeCount(count: number): string {
   return count === 1
     ? translate(
-        'auto.components.rightSidebar.FolderWorkspacePrChecksPanel.oneWorktree',
-        '1 worktree'
+        'auto.components.rightSidebar.FolderWorkspacePrChecksPanel.worktreeCountLabel_one',
+        '{{count}} worktree',
+        { count }
       )
     : translate(
-        'auto.components.rightSidebar.FolderWorkspacePrChecksPanel.worktreeCount',
-        '{{value0}} worktrees',
-        { value0: count }
+        'auto.components.rightSidebar.FolderWorkspacePrChecksPanel.worktreeCountLabel_other',
+        '{{count}} worktrees',
+        { count }
       )
 }
 
 function formatFailingCount(count: number): string {
   return count === 1
-    ? translate('auto.components.rightSidebar.FolderWorkspacePrChecksPanel.oneFailing', '1 failing')
+    ? translate(
+        'auto.components.rightSidebar.FolderWorkspacePrChecksPanel.failingCountLabel_one',
+        '{{count}} failing',
+        { count }
+      )
     : translate(
-        'auto.components.rightSidebar.FolderWorkspacePrChecksPanel.failingCount',
-        '{{value0}} failing',
-        { value0: count }
+        'auto.components.rightSidebar.FolderWorkspacePrChecksPanel.failingCountLabel_other',
+        '{{count}} failing',
+        { count }
       )
 }
 
 function formatPendingCount(count: number): string {
   return count === 1
-    ? translate('auto.components.rightSidebar.FolderWorkspacePrChecksPanel.onePending', '1 pending')
+    ? translate(
+        'auto.components.rightSidebar.FolderWorkspacePrChecksPanel.pendingCountLabel_one',
+        '{{count}} pending',
+        { count }
+      )
     : translate(
-        'auto.components.rightSidebar.FolderWorkspacePrChecksPanel.pendingCount',
-        '{{value0}} pending',
-        { value0: count }
+        'auto.components.rightSidebar.FolderWorkspacePrChecksPanel.pendingCountLabel_other',
+        '{{count}} pending',
+        { count }
       )
 }

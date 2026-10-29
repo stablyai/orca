@@ -1,9 +1,12 @@
+import { resolveCodexStructuredInvocation } from '../codex/codex-structured-launch-resolution'
 import { chmodSync, mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
-import { resolveCodexStructuredInvocation } from '../codex/codex-structured-launch-resolution'
-import { resolveStructuredAgentCommand } from './structured-agent-command-resolution'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import {
+  resolveStructuredAgentCommand,
+  resolveAgainAfterRefreshOnMissingProgram
+} from './structured-agent-command-resolution'
 import { resolveCliCommand } from '../../shared/node-cli-command-resolution'
 
 const NOT_RUNNABLE = expect.objectContaining({
@@ -194,4 +197,33 @@ describe('structured agent executable resolution', () => {
       ).toBe(shim)
     })
   })
+})
+
+it('does not refresh or look up again after an expired async missing-program check', async () => {
+  const cwd = Promise.withResolvers<string>()
+  const entered = Promise.withResolvers<void>()
+  let current = true
+  const resolve = vi.fn(async () => ({
+    command: 'absent-fixture-program',
+    env: { PATH: 'relative-bin' }
+  }))
+  const refresh = vi.fn(async () => {})
+  const result = resolveAgainAfterRefreshOnMissingProgram(
+    resolve,
+    refresh,
+    {
+      env: (row) => row.env,
+      cwd: () => {
+        entered.resolve()
+        return cwd.promise
+      }
+    },
+    { current: () => current }
+  ).catch((error: unknown) => error)
+  await entered.promise
+  current = false
+  cwd.resolve('/fixture')
+  expect(await result).toBeInstanceOf(Error)
+  expect(refresh).not.toHaveBeenCalled()
+  expect(resolve).toHaveBeenCalledOnce()
 })

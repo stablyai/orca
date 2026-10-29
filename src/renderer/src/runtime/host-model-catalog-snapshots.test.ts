@@ -94,6 +94,33 @@ describe('host model catalog snapshots', () => {
       })
     ).toBeUndefined()
   })
+
+  it('retires a workspace answer and its derived account fallback, retaining independent answers', () => {
+    const worldwide = { ...list(true), defaultHoldsInEveryWorkspace: true as const }
+    const scoped = { ...list(false), modelsDifferByWorkspace: true as const }
+    const other = { ...NEW_CHAT, worktree: 'wt-2' }
+    recordHostModelCatalogSnapshot(PAIRED, 'grok', 'wt-1', worldwide)
+    recordHostModelCatalogSnapshot(LOCAL, 'omp', 'wt-1', scoped)
+    for (const retired of [{ origin: 'unknown' } as const, { ...worldwide, models: [] }]) {
+      recordHostModelCatalogSnapshot(LOCAL, 'grok', 'wt-2', scoped)
+      recordHostModelCatalogSnapshot(LOCAL, 'grok', 'wt-1', worldwide)
+      expect(readHostModelCatalogSnapshot(LOCAL, 'grok', NEW_CHAT)).toBe(worldwide)
+      recordHostModelCatalogSnapshot(LOCAL, 'grok', 'wt-1', retired)
+      expect(readHostModelCatalogSnapshot(LOCAL, 'grok', NEW_CHAT)).toBeUndefined()
+      expect(readHostModelCatalogSnapshot(LOCAL, 'grok', other)).toBe(scoped)
+      expect(readHostModelCatalogSnapshot(PAIRED, 'grok', NEW_CHAT)).toBe(worldwide)
+      expect(readHostModelCatalogSnapshot(LOCAL, 'omp', NEW_CHAT)).toBe(scoped)
+    }
+    const newer = { ...worldwide, fetchedAt: 2 }
+    recordHostModelCatalogSnapshot(LOCAL, 'grok', 'wt-1', worldwide)
+    recordHostModelCatalogSnapshot(LOCAL, 'grok', 'wt-2', newer)
+    recordHostModelCatalogSnapshot(LOCAL, 'grok', 'wt-1', { origin: 'unknown' })
+    expect(readHostModelCatalogSnapshot(LOCAL, 'grok', NEW_CHAT)).toBe(newer)
+    recordHostModelCatalogSnapshot(LOCAL, 'grok', null, worldwide)
+    recordHostModelCatalogSnapshot(LOCAL, 'grok', 'wt-1', scoped)
+    recordHostModelCatalogSnapshot(LOCAL, 'grok', 'wt-1', { origin: 'unknown' })
+    expect(readHostModelCatalogSnapshot(LOCAL, 'grok', NEW_CHAT)).toBe(worldwide)
+  })
 })
 
 const SAVED_ONLY = 'agent-session.model-catalog.saved-only.v1'

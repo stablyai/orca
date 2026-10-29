@@ -1,4 +1,4 @@
-import type { JSX } from 'react'
+import type { JSX, ReactNode } from 'react'
 import type { FeatureTip } from '../../../../shared/feature-tips'
 import { Button } from '@/components/ui/button'
 import {
@@ -9,12 +9,13 @@ import {
   DialogHeader,
   DialogTitle
 } from '@/components/ui/dialog'
-import { translate } from '@/i18n/i18n'
+import { i18n, translate } from '@/i18n/i18n'
+import { Trans } from 'react-i18next'
 import { CliFeatureTipVisual } from './CliFeatureTipVisual'
 import { CliSkillSetupPanel } from './CliSkillSetupPanel'
 import { FeatureTipActions } from './FeatureTipActions'
 
-function WorktreePromptTerm({ children }: { children: string }): JSX.Element {
+function WorktreePromptTerm({ children }: { children?: ReactNode }): JSX.Element {
   return (
     <span className="rounded-sm bg-foreground/10 px-1 py-0.5 font-medium text-foreground">
       {children}
@@ -78,20 +79,14 @@ export function CliSetupTipDialog({
                   )}
                 </p>
                 <p>
-                  {translate(
-                    'auto.components.feature.tips.FeatureTipsModal.55846c7f95',
-                    '“Split this PR into two'
-                  )}
-                  <WorktreePromptTerm>
-                    {translate(
-                      'auto.components.feature.tips.FeatureTipsModal.27c567a89c',
-                      'worktrees'
+                  <Trans
+                    i18n={i18n}
+                    defaults={translate(
+                      'auto.components.feature.tips.FeatureTipsModal.splitPrPrompt',
+                      '“Split this PR into two <term>worktrees</term> and create PRs for each.”'
                     )}
-                  </WorktreePromptTerm>{' '}
-                  {translate(
-                    'auto.components.feature.tips.FeatureTipsModal.7fc6f02099',
-                    'and create PRs for each.”'
-                  )}
+                    components={{ term: <WorktreePromptTerm /> }}
+                  />
                 </p>
                 <p>
                   {translate(

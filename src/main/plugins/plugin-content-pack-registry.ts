@@ -5,6 +5,10 @@ import {
   type ValidDiscoveredPlugin
 } from './plugin-discovery'
 import { PluginLanguagePackRegistry } from './plugin-language-pack-registry'
+import {
+  createPluginTerminalThemeRegistry,
+  createPluginThemeRegistry
+} from './plugin-theme-registries'
 import { PluginVmRecipeRegistry } from './plugin-vm-recipe-registry'
 import { PluginCommandRegistry } from './plugin-command-registry'
 import { verifyInstructionalPluginContent } from './plugin-instructional-content-integrity'
@@ -20,6 +24,8 @@ type ContentFamily = {
 
 export class PluginContentPackRegistry {
   readonly languagePacks: PluginLanguagePackRegistry
+  readonly themes: ReturnType<typeof createPluginThemeRegistry>
+  readonly terminalThemes: ReturnType<typeof createPluginTerminalThemeRegistry>
   readonly vmRecipes: PluginVmRecipeRegistry
   readonly commands: PluginCommandRegistry
   private readonly activationErrors = new Map<string, string>()
@@ -30,6 +36,8 @@ export class PluginContentPackRegistry {
     private readonly isKilled: (pluginKey: string) => boolean
   ) {
     this.languagePacks = new PluginLanguagePackRegistry(contentVerifier)
+    this.themes = createPluginThemeRegistry(contentVerifier)
+    this.terminalThemes = createPluginTerminalThemeRegistry(contentVerifier)
     this.vmRecipes = new PluginVmRecipeRegistry()
     this.commands = new PluginCommandRegistry()
   }
@@ -112,6 +120,8 @@ export class PluginContentPackRegistry {
   private families(keybindings: KeybindingOverrides = {}): readonly ContentFamily[] {
     return [
       this.languagePacks,
+      this.themes,
+      this.terminalThemes,
       this.vmRecipes,
       {
         reconcile: async (discovered, isApproved) =>

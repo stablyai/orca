@@ -26,6 +26,7 @@ export function getLocalZshWrapperSpec(): ZshStartupHookSpec {
     readyMarkerEscaped: SHELL_READY_MARKER_ESCAPED,
     osc133CommandMarkers: true,
     startupCommandDelivery: true,
+    wslCwdReports: true,
     overlayRestoreComment:
       "# Why: ~/.zshrc can export the user's default OpenCode config after spawn.",
     restores: {

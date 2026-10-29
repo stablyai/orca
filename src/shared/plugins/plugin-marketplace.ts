@@ -15,13 +15,12 @@ export const OFFICIAL_PLUGIN_ID_PREFIX = 'orca-'
 export const OFFICIAL_MARKETPLACE_OWNER = 'stablyai'
 export const OFFICIAL_MARKETPLACE_REPOSITORY = 'orca-plugins'
 
-// Hide unsupported contribution categories still advertised by the externally maintained index; otherwise their manifests
-// fail wholesale and present a dead install path until the marketplace catches up.
+// Why: icon-theme and skill contributions are not supported, so a plugin declaring one fails
+// to install. Shared catalogs this build does not control still list such packs; hide them so
+// users never reach a dead install.
 export const UNSUPPORTED_MARKETPLACE_CATEGORIES: readonly string[] = [
-  'themes',
   'icons',
   'icon-themes',
-  'terminal-themes',
   'skills'
 ]
 

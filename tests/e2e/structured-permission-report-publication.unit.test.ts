@@ -4,6 +4,7 @@ import {
   THREAD_ID as CODEX_THREAD_ID
 } from '../../src/main/codex/codex-structured-session-adapter-fixture'
 import { structuredAgentRuntimeRegistration } from '../../src/main/runtime/structured-agent-runtime-registrations'
+import { createStructuredAgentEnvironmentResolvers } from '../../src/main/runtime/structured-agent-shell-environment'
 import { act, renderHook, waitFor, cleanup } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import type { SDKStatusMessage } from '@anthropic-ai/claude-agent-sdk'
@@ -486,11 +487,9 @@ it('publishes accepted Codex fresh policy to desktop and phone without stale sta
     },
     store,
     journalDatabase: host.deps.journalDatabase,
-    environment: {
-      resolveBaseEnvironment: async () => ({}),
-      resolveAgentEnvironment: async () => ({}),
-      refreshAfterMissingProgram: async () => {}
-    },
+    environment: createStructuredAgentEnvironmentResolvers({
+      resolveEnvironment: async () => ({})
+    }),
     host: () => host,
     followUps: { onDispatchSettledLate: () => {} },
     deliverLifecycle: (event) => {
@@ -528,7 +527,8 @@ it('publishes accepted Codex fresh policy to desktop and phone without stale sta
       expect(await desktop.result.current.setStructuredOption('permissionMode', 'ask')).toBe(true)
     })
     const saved = structuredClone(store.getRecord(sessionId))
-    const staleRead = (await adapter.prepareReadOptions!({ sessionId, fence }))!
+    const readCurrentOptions = adapter.readOptions!.bind(adapter, { sessionId, fence })
+    expect((await readCurrentOptions()).current.reportedPermissionMode).toBe('auto')
     sending = adapter.dispatch({
       sessionId,
       clientMessageId: 'same-child-ask',
@@ -555,7 +555,7 @@ it('publishes accepted Codex fresh policy to desktop and phone without stale sta
       await Promise.all(settlements)
     })
     await waitFor(() => expect(descriptions()).toEqual(['Ask for approval', 'Ask for approval']))
-    expect(staleRead().current.reportedPermissionMode).toBe('ask')
+    expect((await readCurrentOptions()).current.reportedPermissionMode).toBe('ask')
     expect(store.getRecord(sessionId)).toEqual(saved)
     expect((await host.readOptions(sessionId)).current).toMatchObject({
       permissionMode: 'ask',

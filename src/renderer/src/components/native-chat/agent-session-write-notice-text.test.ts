@@ -15,7 +15,22 @@ afterEach(async () => {
 
 describe('desktop words for a write that did not happen', () => {
   it('does not promise the old goal survived a refused replacement, including older translations', async () => {
-    for (const language of ['en', 'fr']) {
+    const id = 'plugin:example.older-french/fr' as const
+    const resourceLanguage = pluginLanguageResourceId(id)
+    setRendererPluginLanguagePacks([
+      {
+        id,
+        resourceLanguage,
+        pluginKey: 'example.older-french',
+        locale: 'fr',
+        catalog: {}
+      }
+    ])
+    for (const [language, expected] of [
+      ['en', "Couldn't finish changing the goal. Check the chat."],
+      ['fr', 'Impossible de terminer la modification de l’objectif. Consultez le chat.'],
+      [resourceLanguage, "Couldn't finish changing the goal. Check the chat."]
+    ]) {
       await i18n.changeLanguage(language)
       expect(
         agentSessionWriteFailureText(
@@ -26,7 +41,7 @@ describe('desktop words for a write that did not happen', () => {
           },
           'goal'
         )
-      ).toContain("Couldn't finish changing the goal. Check the chat.")
+      ).toContain(expected)
     }
   })
 

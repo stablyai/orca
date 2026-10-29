@@ -211,6 +211,6 @@ function unsupportedReason(
 
 function skillDeletedToast(count: number): string {
   return count === 1
-    ? translate('auto.components.skills.count.deletedOne', 'Deleted {{count}} skill', { count })
-    : translate('auto.components.skills.count.deletedOther', 'Deleted {{count}} skills', { count })
+    ? translate('auto.components.skills.count.deleted_one', 'Deleted {{count}} skill', { count })
+    : translate('auto.components.skills.count.deleted_other', 'Deleted {{count}} skills', { count })
 }

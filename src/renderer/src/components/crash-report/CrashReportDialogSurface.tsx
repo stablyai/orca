@@ -33,7 +33,16 @@ import { useCrashReportCopy } from './use-crash-report-copy'
 function formatSummary(report: CrashReportRecord): string {
   if (isReactErrorBoundaryReport(report)) {
     const surface = typeof report.details.surface === 'string' ? report.details.surface : null
-    return surface ? `React render error in ${surface}` : 'React render error'
+    return surface
+      ? translate(
+          'auto.components.crash.report.CrashReportDialogSurface.renderErrorIn',
+          'React render error in {{surface}}',
+          { surface }
+        )
+      : translate(
+          'auto.components.crash.report.CrashReportDialogSurface.renderError',
+          'React render error'
+        )
   }
   return `${report.processType} ${report.reason}${
     report.exitCode === null ? '' : ` (exit ${report.exitCode})`

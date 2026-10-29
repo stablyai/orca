@@ -52,7 +52,9 @@ vi.mock('child_process', () => {
 })
 
 vi.mock('../runtime/structured-agent-shell-environment', () => ({
-  captureHostShellEnvironment: vi.fn(async () => undefined)
+  captureHostShellEnvironment: vi.fn(async (beforeCapture?: () => Promise<unknown>) =>
+    beforeCapture?.()
+  )
 }))
 
 vi.mock('../startup/hydrate-shell-path', () => ({

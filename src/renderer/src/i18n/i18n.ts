@@ -26,6 +26,7 @@ import { DEFAULT_LOCALE, resolveUiLocale } from './supported-languages'
 import type { SupportedUiLocale } from '../../../shared/ui-locale'
 import { isPluginUiLanguage, type UiLanguage } from '../../../shared/ui-language'
 import type { PluginLanguagePackRegistration } from '../../../shared/plugins/plugin-language-pack-artifact'
+import { replacePluginLanguagePackResources } from '../../../shared/plugins/plugin-language-pack-i18n-resources'
 import { withTimeout } from '../../../shared/promise-timeout-fallback'
 import {
   resolvePluralFamilyKey,
@@ -94,6 +95,8 @@ void i18n
         translation: enRuntimeRequired
       }
     },
+    // An empty catalog value falls back to English instead of rendering blank.
+    returnEmptyString: false,
     interpolation: {
       escapeValue: false
     },
@@ -105,13 +108,7 @@ void i18n
 // Plugin packs can replace translations without changing the active language.
 i18n.store.on('added', advanceTranslationResourceVersion)
 i18n.store.on('removed', advanceTranslationResourceVersion)
-
-// Synthetic plugin<hex> tags would get English plurals; plugin-pack-plurals.test.ts guards i18next upgrades.
-const pluralLocaleByResourceLanguage = new Map<string, string>()
-const pluralResolver = i18n.services.pluralResolver
-const getPluralRule = pluralResolver.getRule.bind(pluralResolver)
-pluralResolver.getRule = (code: string, options?: { ordinal?: boolean }) =>
-  getPluralRule(pluralLocaleByResourceLanguage.get(code) ?? code, options)
+i18n.on('languageChanged', advanceTranslationResourceVersion)
 
 // Re-rendered chrome resolves hundreds of option-free strings per workspace switch; they only change with language or resources.
 const PLAIN_TRANSLATION_CACHE_LIMIT = 5000
@@ -170,10 +167,9 @@ export async function setRendererUiLanguage(language: UiLanguage): Promise<void>
   }
 }
 
-const registeredPluginLanguages = new Set<string>()
 let pluginLanguagePacks: readonly PluginLanguagePackRegistration[] = []
 
-/** Resolve an Intl-compatible BCP-47 tag: synthetic plugin<hex> resource names use the pack’s declared tag, then the default locale. */
+/** Resolve an Intl-compatible BCP-47 tag: plugin pack resources use the pack’s declared tag, then the default locale. */
 export function getIntlLocale(): string {
   const active = i18n.language
   const pack = pluginLanguagePacks.find((entry) => entry.resourceLanguage === active)
@@ -199,23 +195,6 @@ export function resolveRendererResourceLanguage(language: string): string {
 export function setRendererPluginLanguagePacks(
   packs: readonly PluginLanguagePackRegistration[]
 ): void {
-  for (const language of registeredPluginLanguages) {
-    i18n.removeResourceBundle(language, 'translation')
-  }
-  registeredPluginLanguages.clear()
-  pluralLocaleByResourceLanguage.clear()
+  replacePluginLanguagePackResources(i18n, pluginLanguagePacks, packs)
   pluginLanguagePacks = packs
-  for (const pack of packs) {
-    const pluralLocale = supportedIntlLocale(pack.locale, Intl.PluralRules)
-    pluralLocaleByResourceLanguage.set(pack.resourceLanguage, pluralLocale)
-    const categories = new Intl.PluralRules(pluralLocale).resolvedOptions().pluralCategories
-    i18n.addResourceBundle(
-      pack.resourceLanguage,
-      'translation',
-      withPluralCategoriesFromOther(pack.catalog, categories),
-      true,
-      true
-    )
-    registeredPluginLanguages.add(pack.resourceLanguage)
-  }
 }

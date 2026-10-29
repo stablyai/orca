@@ -183,7 +183,7 @@ describe('PluginMarketplaceService', () => {
         {
           id: 'community.midnight',
           source: { kind: 'git', url: 'https://github.com/community/midnight.git', ref: 'v1' },
-          categories: ['themes', 'official']
+          categories: ['icon-themes', 'official']
         },
         {
           id: 'community.recipes',
@@ -199,6 +199,7 @@ describe('PluginMarketplaceService', () => {
 
     const added = await service.addSource(source())
 
+    // The icon-theme pack is filtered out; only the supported recipe listing remains.
     await expect(service.listPlugins()).resolves.toEqual([
       expect.objectContaining({ pluginKey: 'community.recipes' })
     ])

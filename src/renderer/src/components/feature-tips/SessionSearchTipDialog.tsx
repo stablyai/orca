@@ -130,13 +130,9 @@ export function SessionSearchTipDialog({
               <IndexProgress indexing={stage === 'indexing'} status={status} />
             )}
             <FeatureTipSettingsLine
-              lead={translate(
-                'featureTips.sessionSearch.consentInstruction',
-                'Change or turn it off anytime in'
-              )}
-              link={translate(
-                'featureTips.sessionSearch.settingsLink',
-                'Settings → Agent Session Search'
+              text={translate(
+                'featureTips.sessionSearch.changeInSettings',
+                'Change or turn it off anytime in <link>Settings → Agent Session Search</link>.'
               )}
               onClick={onSettingsClick}
             />
