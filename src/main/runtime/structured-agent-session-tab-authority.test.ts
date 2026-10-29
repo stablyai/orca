@@ -2,14 +2,16 @@ import './rpc/unused-default-rpc-methods.test-fixture'
 import { beforeEach, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from './rpc/dispatcher'
 import { STRUCTURED_AGENT_SESSION_REVEAL_METHODS } from './rpc/methods/structured-agent-session-reveal'
-import { seedTestAgentSessionStoreFromNewerBuild } from './agent-session-record-store-test-harness'
+import {
+  seedTestAgentSessionStoreFromNewerBuild,
+  editPersistedTestAgentSessionStore
+} from './agent-session-record-store-test-harness'
 import { STRUCTURED_AGENT_SESSION_STATUS_METHODS } from './rpc/methods/structured-agent-session-status-stream'
 import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../shared/protocol-version'
-import { editPersistedTestAgentSessionStore } from './agent-session-record-store-test-harness'
 import { folderWorkspaceKey } from '../../shared/workspace-scope'
 import { toSshExecutionHostId } from '../../shared/execution-host'
-import { root } from './structured-agent-session-tab-authority.test-support'
 import {
+  root,
   B,
   C,
   G,
