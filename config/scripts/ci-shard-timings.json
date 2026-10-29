@@ -7764,7 +7764,6 @@
       "src/renderer/src/components/feature-wall/agents-orchestration/UsageAccountsCard.test.tsx": 644,
       "src/renderer/src/components/feature-wall/browser-animated-visual-sequence.test.ts": 42,
       "src/renderer/src/components/feature-wall/feature-wall-animation-visibility.test.tsx": 592,
-      "src/renderer/src/components/feature-wall/feature-wall-setup-checklist-localized-copy.test.ts": 578,
       "src/renderer/src/components/feature-wall/feature-wall-setup-progress.test.ts": 62,
       "src/renderer/src/components/feature-wall/use-feature-wall-completion.test.ts": 47,
       "src/renderer/src/components/feature-wall/use-feature-wall-tour-telemetry.test.ts": 31,

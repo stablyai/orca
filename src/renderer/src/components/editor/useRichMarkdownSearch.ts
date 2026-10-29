@@ -276,23 +276,18 @@ export function useRichMarkdownSearch({
 
       const target = event.target
       const targetInsideEditor = target instanceof Node && root.contains(target)
-      if (
-        isMarkdownPreviewFindShortcut(event, getShortcutPlatform(), keybindings) &&
-        targetInsideEditor
-      ) {
+      const platform = getShortcutPlatform()
+      const openFromShortcut = !targetInsideEditor
+        ? null
+        : isMarkdownPreviewFindShortcut(event, platform, keybindings)
+          ? openSearch
+          : isMarkdownPreviewReplaceShortcut(event, platform, keybindings)
+            ? openReplace
+            : null
+      if (openFromShortcut) {
         event.preventDefault()
         event.stopPropagation()
-        openSearch()
-        return
-      }
-
-      if (
-        isMarkdownPreviewReplaceShortcut(event, getShortcutPlatform(), keybindings) &&
-        targetInsideEditor
-      ) {
-        event.preventDefault()
-        event.stopPropagation()
-        openReplace()
+        openFromShortcut()
         return
       }
 
