@@ -21,7 +21,14 @@ import type {
 } from '../../../../../../shared/sidebar-list/row-types'
 import { PINNED_GROUP_KEY } from '../../../../../../shared/sidebar-list/group-keys'
 import { getWorkspaceStatusFromGroupKey } from '../../workspace-status'
-import { getVirtualRowTransform } from '../viewport/virtual-rows'
+import { getVirtualRowTransform, SECONDARY_GROUP_HEADER_TOP_MARGIN } from '../viewport/virtual-rows'
+import { getRepoSectionPreviewOffsetY } from '../../worktree-header-section-boundaries'
+import {
+  getHeaderRowRenderedTop,
+  getHeaderRowTransformStart,
+  getPinnedHeaderTopOffsetPx,
+  PROJECT_HEADER_DRAG_TRANSITION_CLASS
+} from '../../worktree-list-header-row-position'
 import { getSidebarHeaderVisual } from './header-visuals'
 import { resolveProjectGroupHeaderColor } from '../../project-header-color'
 import { ProjectHeaderActions } from '../../ProjectHeaderActions'
@@ -57,6 +64,10 @@ export type SectionHeaderRowContext = {
   dragOverStatus: WorkspaceStatus | null
   pinDragOver: boolean
   headerDrag: WorktreeSidebarHeaderDrag
+  repoSectionRepoIdByRowIndex?: readonly (string | undefined)[]
+  draggedHeaderAnchorTopRef?: React.MutableRefObject<number | null>
+  scrollOffset?: number
+  readScrollTop?: () => number
   getCachedFolderWorkspacePathStatus: (request: {
     scope: 'project-group'
     projectGroupId: string
@@ -143,6 +154,27 @@ export function renderWorktreeSectionHeaderRow(args: {
     headerDrag.canReorderProjectGroupHeaders &&
     headerDrag.projectGroupDrag.state.draggingGroupId !== null &&
     headerDrag.projectGroupDrag.state.draggingGroupId === projectGroupIdForHeader
+  const repoDragState = headerDrag.repoDrag.state
+  const headerDragOffsetY = ctx.repoSectionRepoIdByRowIndex
+    ? getRepoSectionPreviewOffsetY({
+        repoSectionRepoIdByRowIndex: ctx.repoSectionRepoIdByRowIndex,
+        rowIndex: vItem.index,
+        previewOffsetsByRepoId: repoDragState.previewOffsetsByRepoId,
+        draggingRepoId: repoDragState.draggingRepoId,
+        draggedSectionOffsetY: repoDragState.pointerOffsetY
+      })
+    : 0
+  const headerRowPosition = {
+    virtualStart: vItem.start,
+    isPinned: isActiveStickyHeader,
+    scrollOffset: ctx.scrollOffset ?? 0,
+    pinnedTopOffsetPx: getPinnedHeaderTopOffsetPx(args.hasStickyHost),
+    headerTopSpacingPx: args.hasHeaderTopSpacing ? SECONDARY_GROUP_HEADER_TOP_MARGIN : 0,
+    dragAnchorTop: isDraggingThis ? (ctx.draggedHeaderAnchorTopRef?.current ?? null) : null,
+    offsetY: headerDragOffsetY
+  }
+  const animateHeaderRow =
+    repoDragState.draggingRepoId !== null && (!isDraggingThis || repoDragState.settling)
   const headerWorkspaceStatus =
     ctx.groupBy === 'workspace-status'
       ? getWorkspaceStatusFromGroupKey(row.key, ctx.workspaceStatuses)
@@ -198,9 +230,13 @@ export function renderWorktreeSectionHeaderRow(args: {
               // Why: when a host card is pinned, the group tier pins flush beneath it, not at the viewport top.
               args.hasStickyHost ? 'top-[35px]' : '-top-px'
             )
-          : 'absolute top-0'
+          : 'absolute top-0',
+        animateHeaderRow && PROJECT_HEADER_DRAG_TRANSITION_CLASS,
+        isDraggingThis && 'z-30 will-change-transform'
       )}
-      style={isActiveStickyHeader ? undefined : { transform: getVirtualRowTransform(vItem.start) }}
+      style={{
+        transform: getVirtualRowTransform(getHeaderRowTransformStart(headerRowPosition))
+      }}
     >
       <ProjectHeaderHostTooltip label={label} context={hostContext}>
         <div
@@ -275,7 +311,19 @@ export function renderWorktreeSectionHeaderRow(args: {
           }
           onPointerDown={
             isDraggableRepoHeader && headerRepo
-              ? (event) => headerDrag.repoDrag.onHandlePointerDown(event, headerRepo)
+              ? (event) => {
+                  // Capture where the header actually rendered so the follow
+                  // transform does not jump from virtualStart to the sticky slot.
+                  if (ctx.draggedHeaderAnchorTopRef) {
+                    ctx.draggedHeaderAnchorTopRef.current = getHeaderRowRenderedTop({
+                      ...headerRowPosition,
+                      scrollOffset: ctx.readScrollTop?.() ?? headerRowPosition.scrollOffset,
+                      dragAnchorTop: null,
+                      offsetY: 0
+                    })
+                  }
+                  headerDrag.repoDrag.onHandlePointerDown(event, headerRepo)
+                }
               : isDraggableProjectGroupHeader && projectGroupIdForHeader
                 ? (event) =>
                     headerDrag.projectGroupDrag.onHandlePointerDown(event, projectGroupIdForHeader)

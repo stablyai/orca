@@ -15,6 +15,8 @@ import { folderWorkspaceToWorktree } from '../../../../../../shared/folder-works
 import WorktreeCard from '../../WorktreeCard'
 import type { WorktreeGroupBy } from '../../../../../../shared/sidebar-list/row-types'
 import { getVirtualRowTransform } from '../viewport/virtual-rows'
+import { cn } from '@/lib/utils'
+import { PROJECT_HEADER_DRAG_TRANSITION_CLASS } from '../../worktree-list-header-row-position'
 import { getFolderWorkspaceRowGeometry } from './indentation'
 import { getFolderWorkspaceCardPrDisplay } from '../../folder-workspace-card-pr-display'
 import { FolderPathStatusIndicator } from './FolderPathStatusIndicator'
@@ -58,6 +60,8 @@ export function renderFolderWorkspaceVirtualRow(args: {
   row: FolderWorkspaceItemRow
   vItem: VirtualItem
   measureVirtualRowElement: (element: HTMLDivElement | null) => void
+  offsetY?: number
+  animate?: boolean
 }): React.JSX.Element {
   const { ctx, row, vItem } = args
   const folderWorktree = folderWorkspaceToWorktree(row.folderWorkspace)
@@ -106,8 +110,11 @@ export function renderFolderWorkspaceVirtualRow(args: {
       data-worktree-virtual-row-start={vItem.start}
       data-index={vItem.index}
       ref={args.measureVirtualRowElement}
-      className="absolute left-0 right-0 top-0"
-      style={{ transform: getVirtualRowTransform(vItem.start) }}
+      className={cn(
+        'absolute left-0 right-0 top-0',
+        args.animate && PROJECT_HEADER_DRAG_TRANSITION_CLASS
+      )}
+      style={{ transform: getVirtualRowTransform(vItem.start + (args.offsetY ?? 0)) }}
       onClick={forwardOptionPressToCardSurface}
       onClickCapture={ctx.onRowClickCapture}
       onPointerDown={(event) => ctx.onRowPointerDown(event, folderWorktree, folderWorktreeIdentity)}

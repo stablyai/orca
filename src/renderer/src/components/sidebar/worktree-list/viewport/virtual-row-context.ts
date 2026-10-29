@@ -18,6 +18,7 @@ import type { WorktreeVirtualRowContext } from '../rows/virtual-row-dispatch'
 import type { RepoHeaderProjectActions } from '../rows/repo-header-project-actions'
 
 import type { ProjectHeaderHostContext } from '../rows/project-header-host-context'
+import { getRepoSectionRepoIdByRowIndex } from '../../worktree-header-section-boundaries'
 
 type BuildArgs = {
   props: VirtualizedWorktreeViewportProps
@@ -38,6 +39,9 @@ type BuildArgs = {
   nativeDrag: ReturnType<typeof useWorktreeNativeDrag>
   projectHeaderHostContexts: ReadonlyMap<string, ProjectHeaderHostContext>
   headerDrag: WorktreeSidebarHeaderDrag
+  draggedHeaderAnchorTopRef: React.MutableRefObject<number | null>
+  scrollOffset: number
+  readScrollTop: () => number
   getCachedFolderWorkspacePathStatus: ReturnType<typeof useFolderWorkspacePathStatusRows>
   getLineageToggleHandler: (groupKey: string) => LineageToggleHandler
   toggleGroupWithScrollAnchor: (groupKey: string) => void
@@ -51,8 +55,10 @@ type BuildArgs = {
 
 export function buildWorktreeVirtualRowContext(args: BuildArgs): WorktreeVirtualRowContext {
   const { props, runtime, session, statusDrag, headerDrag, primaryActive, reveal } = args
+  const repoSectionRepoIdByRowIndex = getRepoSectionRepoIdByRowIndex(args.renderRows)
   return {
     renderRows: args.renderRows,
+    repoSectionRepoIdByRowIndex,
     firstHeaderIndex: args.firstHeaderIndex,
     activeStickyHeaderIndexRef: args.virtualization.activeStickyHeaderIndexRef,
     activeStickyHostIndexRef: args.virtualization.activeStickyHostIndexRef,
@@ -82,6 +88,10 @@ export function buildWorktreeVirtualRowContext(args: BuildArgs): WorktreeVirtual
       dragOverStatus: runtime.dragOverStatus,
       pinDragOver: runtime.pinDragOver,
       headerDrag,
+      repoSectionRepoIdByRowIndex,
+      draggedHeaderAnchorTopRef: args.draggedHeaderAnchorTopRef,
+      scrollOffset: args.scrollOffset,
+      readScrollTop: args.readScrollTop,
       projectHeaderHostContexts: args.projectHeaderHostContexts,
       getCachedFolderWorkspacePathStatus: args.getCachedFolderWorkspacePathStatus,
       toggleGroupWithScrollAnchor: args.toggleGroupWithScrollAnchor,

@@ -60,6 +60,7 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
     scrollAnchorRef
   } = props
   const scrollRef = useRef<HTMLDivElement>(null)
+  const draggedHeaderAnchorTopRef = useRef<number | null>(null)
   // Why: callback-ref only mutates scrollRef; state re-runs the scroll-to-top listener attach.
   const [scrollElement, setScrollElement] = useState<HTMLDivElement | null>(null)
   const settings = useAppStore((s) => s.settings)
@@ -361,6 +362,9 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
     statusDrag,
     nativeDrag,
     headerDrag,
+    draggedHeaderAnchorTopRef,
+    scrollOffset: virtualization.virtualizer.scrollOffset ?? scrollOffsetRef.current,
+    readScrollTop: () => scrollRef.current?.scrollTop ?? scrollOffsetRef.current,
     projectHeaderHostContexts,
     getCachedFolderWorkspacePathStatus,
     getLineageToggleHandler,
