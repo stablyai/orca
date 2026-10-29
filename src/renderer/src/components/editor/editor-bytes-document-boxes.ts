@@ -11,7 +11,8 @@ export type BytesDocument = {
 }
 
 // Why a shared box: tabs of one file share one dirty flag, so they must share one draft too.
-export type BytesDocumentBox = { current: BytesDocument }
+// `edits` counts edits and saves, so a read that started before one can be told apart.
+export type BytesDocumentBox = { current: BytesDocument; edits: number }
 
 /** Per tab id. Its own module so the store's rename can move entries without importing the store. */
 export const bytesDocumentBoxes = new Map<string, BytesDocumentBox>()

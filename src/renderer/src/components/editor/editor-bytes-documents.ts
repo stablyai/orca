@@ -26,12 +26,20 @@ function notify(): void {
 }
 
 /** Drops a draft once its tab is clean (saved, reverted, discarded) and the entry once it closes. */
-function dropSettledDrafts(state: AppState): void {
+function dropSettledDrafts(state: AppState, previous: AppState): void {
   let changed = false
+  const isOpen = (id: string): boolean => state.openFiles.some((file) => file.id === id)
   for (const [fileId, box] of bytesDocumentBoxes) {
     const tab = state.openFiles.find((file) => file.id === fileId)
     if (!tab) {
       bytesDocumentBoxes.delete(fileId)
+      // Why: a twin still open keeps the record dirty, so it inherits the draft even if not yet shown.
+      const heir = box.current.draft
+        ? editorBufferSiblingViewIds(previous, fileId).find((id) => id !== fileId && isOpen(id))
+        : undefined
+      if (heir !== undefined && !bytesDocumentBoxes.has(heir)) {
+        bytesDocumentBoxes.set(heir, box)
+      }
       changed = true
     } else if (box.current.draft && !tab.isDirty) {
       box.current = { ...box.current, draft: null }
@@ -67,7 +75,9 @@ export function editorBytesDocument(fileId: string): CustomEditorBinaryDocument 
 export function loadEditorBytes(
   fileId: string,
   saved: CustomEditorBinaryDocument,
-  savedSha256: string
+  savedSha256: string,
+  /** `editorBytesEdits` when the read started. */
+  editsAtRead: number | undefined
 ): void {
   unsubscribeStore ??= useAppStore.subscribe(dropSettledDrafts)
   const own = bytesDocumentBoxes.get(fileId)
@@ -75,11 +85,18 @@ export function loadEditorBytes(
     const siblings = editorBufferSiblingViewIds(useAppStore.getState(), fileId)
     const shared = siblings.map((id) => bytesDocumentBoxes.get(id)).find(Boolean)
     // Why adopt as is: the twin's box is newer than a read that may have started before its save.
-    bytesDocumentBoxes.set(fileId, shared ?? { current: { saved, savedSha256, draft: null } })
+    bytesDocumentBoxes.set(
+      fileId,
+      shared ?? { current: { saved, savedSha256, draft: null }, edits: 0 }
+    )
     notify()
     return
   }
   const existing = own.current
+  // Why: an edit or save since the read started is newer than what the read returns.
+  if (own.edits !== editsAtRead) {
+    return
+  }
   // Why keep the draft's baseline: a later read must not vouch for bytes the edit never saw.
   // Why keep unchanged bytes: a new object resends the document, so an edit in flight conflicts.
   if (
@@ -97,6 +114,7 @@ export function setEditorBytesDraft(fileId: string, draft: CustomEditorBinaryDoc
     return
   }
   box.current = { ...box.current, draft }
+  box.edits += 1
   useAppStore.getState().markFileDirty(fileId, true)
   notify()
 }
@@ -120,6 +138,10 @@ export function releaseEditorBytes(fileId: string): void {
     bytesDocumentBoxes.delete(fileId)
     notify()
   }
+}
+
+export function editorBytesEdits(fileId: string): number | undefined {
+  return bytesDocumentBoxes.get(fileId)?.edits
 }
 
 export function hasEditorBytesDraft(fileId: string): boolean {
@@ -184,6 +206,7 @@ export async function saveEditorBytesDraft(
     // An edit made while the write ran stays unsaved, now against the bytes just written.
     const newer = box.current.draft !== draft ? box.current.draft : null
     box.current = { saved: draft, savedSha256, draft: newer }
+    box.edits += 1
     const state = getState()
     state.markFileDirty(holder, newer !== null, { written: true })
     if (state.openFiles.find((tab) => tab.id === holder)?.externalMutation) {

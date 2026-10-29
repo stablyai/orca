@@ -28,7 +28,19 @@ const state = vi.hoisted(() => {
     })
   }
 })
-vi.mock('@/store', () => ({ useAppStore: { subscribe: () => () => {}, getState: () => state } }))
+const storeListener = vi.hoisted(() => {
+  const holder: { current: ((next: unknown, prev: unknown) => void) | null } = { current: null }
+  return holder
+})
+vi.mock('@/store', () => ({
+  useAppStore: {
+    subscribe: (listener: (next: unknown, prev: unknown) => void) => {
+      storeListener.current = listener
+      return () => {}
+    },
+    getState: () => state
+  }
+}))
 const writeRuntimeFileBytes = vi.fn()
 vi.mock('@/runtime/runtime-file-bytes-write', () => ({
   writeRuntimeFileBytes: (...args: unknown[]) => writeRuntimeFileBytes(...args)
@@ -36,12 +48,12 @@ vi.mock('@/runtime/runtime-file-bytes-write', () => ({
 
 import {
   editorBytesDocument,
+  editorBytesEdits,
   loadEditorBytes,
   releaseEditorBytes,
   retainEditorBytes,
   saveEditorBytesDraft,
-  setEditorBytesDraft,
-  sha256Hex
+  setEditorBytesDraft
 } from './editor-bytes-documents'
 import { bytesDocumentBoxes, rekeyEditorBytesDocuments } from './editor-bytes-document-boxes'
 
@@ -54,12 +66,14 @@ const save = () => saveEditorBytesDraft(getState, file, context, 'user', () => f
 const loaded = new Uint8Array([0x50, 0x4b, 1])
 const edited = { bytes: new Uint8Array([0x50, 0x4b, 2, 0xff]), fileType: 'xlsx' }
 const hex = (bytes: Uint8Array) => createHash('sha256').update(bytes).digest('hex')
+const load = (id: string, bytes: Uint8Array<ArrayBuffer>, editsAtRead = editorBytesEdits(id)) =>
+  loadEditorBytes(id, { bytes, fileType: 'xlsx' }, hex(bytes), editsAtRead)
 
 beforeEach(async () => {
   writeRuntimeFileBytes.mockReset()
   state.openFiles[0].isDirty = false
   state.openFiles[0].externalMutation = undefined
-  loadEditorBytes('book', { bytes: loaded, fileType: 'xlsx' }, await sha256Hex(loaded))
+  load('book', loaded)
 })
 
 describe('binary custom editor saves', () => {
@@ -117,7 +131,7 @@ describe('binary custom editor views', () => {
   it('keeps an edit guarded by the bytes it started from when a later read lands', async () => {
     setEditorBytesDraft('book', edited)
     const newer = new Uint8Array([9])
-    loadEditorBytes('book', { bytes: newer, fileType: 'xlsx' }, await sha256Hex(newer))
+    load('book', newer)
     writeRuntimeFileBytes.mockResolvedValue({ ok: true })
     await save()
     expect(writeRuntimeFileBytes.mock.calls[0]?.[4]).toEqual({
@@ -131,13 +145,22 @@ describe('binary custom editor reloads', () => {
   it('keeps the same document when a reload reads unchanged bytes', async () => {
     const before = editorBytesDocument('book')
     const reread = new Uint8Array(loaded)
-    loadEditorBytes('book', { bytes: reread, fileType: 'xlsx' }, await sha256Hex(reread))
+    load('book', reread)
     // A new object would resend the document and turn the frame's in-flight edit into a conflict.
     expect(editorBytesDocument('book')).toBe(before)
   })
 })
 
 describe('binary custom editor tabs', () => {
+  it('ignores a read that started before an edit and save it does not include', async () => {
+    const editsAtRead = editorBytesEdits('book')
+    setEditorBytesDraft('book', edited)
+    writeRuntimeFileBytes.mockResolvedValue({ ok: true })
+    await save()
+    load('book', loaded, editsAtRead)
+    expect(editorBytesDocument('book')).toBe(edited)
+  })
+
   it('moves an unsaved edit with its tab when the file is renamed', () => {
     setEditorBytesDraft('book', edited)
     rekeyEditorBytesDocuments([{ oldFileId: 'book', newFileId: 'renamed' }])
@@ -150,7 +173,7 @@ describe('binary custom editor tabs', () => {
     state.editorBufferIdOf = { book: 'record', twin: 'record' }
     state.editorBufferViews = { record: ['book', 'twin'] }
     state.openFiles.push({ id: 'twin', isDirty: false })
-    loadEditorBytes('twin', { bytes: new Uint8Array(loaded), fileType: 'xlsx' }, hex(loaded))
+    load('twin', new Uint8Array(loaded))
     setEditorBytesDraft('twin', edited)
     expect(editorBytesDocument('book')).toBe(edited)
     // The saving tab closes mid-write; its twin still ends up clean against the written bytes.
@@ -160,6 +183,16 @@ describe('binary custom editor tabs', () => {
     })
     await save()
     expect(state.markFileDirty).toHaveBeenLastCalledWith('twin', false, { written: true })
+    bytesDocumentBoxes.set('book', bytesDocumentBoxes.get('twin')!)
+
+    // The tab holding a draft closes before its twin has shown it: the twin inherits the draft.
+    setEditorBytesDraft('book', edited)
+    bytesDocumentBoxes.delete('twin')
+    const previous = { ...state, openFiles: [...state.openFiles] }
+    state.openFiles.splice(0, 1)
+    storeListener.current?.(state, previous)
+    expect(editorBytesDocument('twin')).toBe(edited)
+    state.openFiles.unshift({ id: 'book', isDirty: false })
     bytesDocumentBoxes.set('book', bytesDocumentBoxes.get('twin')!)
     state.openFiles.pop()
     state.editorBufferIdOf = {}
