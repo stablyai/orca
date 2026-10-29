@@ -1,3 +1,4 @@
+import { acquireTranscriptCurrentQuestions } from './transcript-current-questions'
 import type { NativeChatMessage, NativeChatTurnLifecycle } from '../../shared/native-chat-types'
 import {
   boundaryFingerprint,
@@ -7,10 +8,10 @@ import {
 } from './transcript-file-version'
 import {
   createIncrementalTranscriptState,
+  createTranscriptWatchReader,
   readIncrementalTranscriptMessages,
   resetIncrementalTranscriptState
 } from './transcript-incremental-reader'
-import { readNativeChatTranscriptTailFile } from './transcript-tail-reader'
 import { emitTranscriptUnavailableSnapshot } from './transcript-unavailable-snapshot'
 import { transcriptWatcherPathIsInstallable } from './transcript-watcher-install-probe'
 import { nativeChatTurnLifecycleDecoderForAgent } from './transcript-turn-lifecycle'
@@ -41,6 +42,15 @@ export async function installTranscriptWatcher(
   const { onAppend, onInitialSnapshot, onReplace, initialLimit } = args
   const decodeLifecycle = nativeChatTurnLifecycleDecoderForAgent(args.agent)
 
+  const questions = args.onCurrentRequests
+    ? acquireTranscriptCurrentQuestions(
+        filePath,
+        args.agent,
+        args.sessionId,
+        decode,
+        args.onCurrentRequests
+      )
+    : undefined
   const state = createIncrementalTranscriptState()
   let watchedVersion: TranscriptFileVersion | null = null
   let initialDrain = true,
@@ -48,6 +58,16 @@ export async function installTranscriptWatcher(
   let closed = false
   // Abort detaches gate waiters immediately and prevents in-flight drains admitting work after teardown.
   const gateAbort = new AbortController()
+  const reader = createTranscriptWatchReader({
+    filePath,
+    state,
+    decode,
+    onAppend,
+    decodeLifecycle: decodeLifecycle ?? undefined,
+    signal: gateAbort.signal,
+    sourceOrder: args.sourceOrder,
+    active: () => !closed
+  })
   let reading = false
   let pendingReadRequested = false
   let rotationRetryCount = 0
@@ -60,45 +80,6 @@ export async function installTranscriptWatcher(
     if (scheduler.scheduleRetry(retryDelay)) {
       rotationRetryCount += 1
     }
-  }
-
-  async function readAndEmitAppends(): Promise<void> {
-    let lifecycle: NativeChatTurnLifecycle | undefined
-    const remaining = await readIncrementalTranscriptMessages(
-      filePath,
-      state,
-      decode,
-      (messages) => {
-        if (!closed) {
-          onAppend(messages)
-        }
-      },
-      decodeLifecycle ?? undefined,
-      (nextLifecycle) => {
-        lifecycle = nextLifecycle
-      },
-      gateAbort.signal,
-      args.sourceOrder
-    )
-    if (!closed && (remaining.length > 0 || lifecycle)) {
-      onAppend(remaining, lifecycle)
-    }
-  }
-
-  async function readSnapshot(limit: number) {
-    return readNativeChatTranscriptTailFile(
-      filePath,
-      limit,
-      decode,
-      false,
-      undefined,
-      decodeLifecycle,
-      gateAbort.signal,
-      (boundary) => {
-        state.boundary = boundary
-      },
-      args.sourceOrder
-    )
   }
 
   async function finishSuccessfulDrain(startVersion: TranscriptFileVersion): Promise<void> {
@@ -146,12 +127,16 @@ export async function installTranscriptWatcher(
     if (contentReplaced) {
       resetIncrementalTranscriptState(state)
     }
+    await questions?.refresh()
+    if (closed) {
+      return
+    }
     watchedVersion ??= current
 
     const replacementSnapshot =
       // Zero is a valid bounded window; do not fall back to an unbounded incremental read.
       contentReplaced && !initialDrain && onReplace && initialLimit !== undefined
-        ? await readSnapshot(initialLimit)
+        ? await reader.snapshot(initialLimit)
         : null
     if (closed) {
       return
@@ -172,7 +157,7 @@ export async function installTranscriptWatcher(
 
     const initialSnapshot =
       initialDrain && onInitialSnapshot && initialLimit !== undefined
-        ? await readSnapshot(initialLimit)
+        ? await reader.snapshot(initialLimit)
         : null
     if (closed) {
       return
@@ -211,7 +196,7 @@ export async function installTranscriptWatcher(
       }
     } else {
       initialDrain = false
-      await readAndEmitAppends()
+      await reader.append()
     }
     await finishSuccessfulDrain(current)
   }
@@ -310,6 +295,7 @@ export async function installTranscriptWatcher(
         return
       }
       closed = true
+      questions?.dispose()
       gateAbort.abort(new Error('Native Chat transcript watcher unsubscribed'))
       scheduler.dispose()
       stopWslObservation()

@@ -1,10 +1,20 @@
+import type {
+  NativeChatReadSessionArgs,
+  NativeChatSubscribeArgs,
+  NativeChatAppendedPayload
+} from './native-chat-contract'
+export type {
+  NativeChatReadSessionArgs,
+  NativeChatSubscribeArgs,
+  NativeChatAppendedPayload
+} from './native-chat-contract'
+import {
+  readCurrentRequestsPiece,
+  type CurrentRequestsProjection
+} from '../native-chat/agent-session-wire/agent-session-current-requests'
+import type { AgentSessionCurrentRequestsRead } from '../../shared/agent-session-current-requests-wire'
 import { DESKTOP_READ_WINDOW } from '../native-chat/transcript-watch-contract'
 import { ipcMain, type IpcMainEvent, type WebContents } from 'electron'
-import type {
-  AgentType,
-  NativeChatMessage,
-  NativeChatTurnLifecycle
-} from '../../shared/native-chat-types'
 import { clearNativeChatTranscriptCache } from '../native-chat/transcript-read-cache'
 import type { ReadTranscriptResult } from '../native-chat/transcript-reader'
 import {
@@ -18,15 +28,6 @@ import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire
 import { openNativeChatTranscript } from '../native-chat/native-chat-open-wake'
 
 export { clearNativeChatTranscriptCache }
-
-export type NativeChatReadSessionArgs = {
-  agent: AgentType
-  sessionId: string
-  /** Recent-turn window; increase it to page backward. */
-  limit?: number
-  /** Hook-authoritative path when session IDs no longer identify transcript filenames. */
-  transcriptPath?: string
-}
 
 // Bound parsing and rendering to the recent window; pagination raises the limit.
 
@@ -45,43 +46,10 @@ async function readSession(args: NativeChatReadSessionArgs): Promise<ReadTranscr
   })
 }
 
-export type NativeChatSubscribeArgs = {
-  /** Renderer ID unique within WebContents, echoed on updates to route each viewer. */
-  subscriptionId: string
-  agent: AgentType
-  sessionId: string
-  /** Authoritative transcript path from the agent hook (providerSession). */
-  transcriptPath?: string
-  limit?: number
-}
-
-export type NativeChatAppendedPayload = {
-  subscriptionId: string
-  frame:
-    | {
-        type: 'snapshot'
-        messages: NativeChatMessage[]
-        hasMore: boolean
-        error?: string
-        lifecycle?: NativeChatTurnLifecycle
-        /** The current window has no transcript yet; do not treat it as settled history. */
-        pending?: boolean
-      }
-    | {
-        type: 'replacement'
-        messages: NativeChatMessage[]
-        hasMore: boolean
-        lifecycle?: NativeChatTurnLifecycle
-      }
-    | {
-        type: 'appended'
-        messages: NativeChatMessage[]
-        lifecycle?: NativeChatTurnLifecycle
-      }
-}
-
 type LiveSubscription = {
   subscription: NativeChatTranscriptSubscription
+  sessionId: string
+  projection: () => CurrentRequestsProjection | undefined
 }
 
 type PendingSubscription = {
@@ -187,11 +155,22 @@ async function handleSubscribe(event: IpcMainEvent, args: NativeChatSubscribeArg
     !sender.isDestroyed() && !rendererSignal.aborted && !pending.controller.signal.aborted
 
   // Opening a chat is a user act on its WSL distro; the watch that follows stays background.
+  let projection: CurrentRequestsProjection | undefined
+  let publishedSnapshot = false
   const opened = openNativeChatTranscript(sessionId, transcriptPath)
   const subscribeArgs: SubscribeNativeChatTranscriptArgs = {
     agent,
     sessionId,
     transcriptPath: opened.transcriptPath,
+    onCurrentRequests: (next) => {
+      projection = next
+      if (publishedSnapshot && canPublish()) {
+        sender.send('nativeChat:appended', {
+          subscriptionId,
+          frame: { type: 'appended', messages: [], currentRequests: next.marker }
+        } satisfies NativeChatAppendedPayload)
+      }
+    },
     initialLimit: limit,
     sourceOrder: true,
     onTranscriptPending: () => {
@@ -209,11 +188,13 @@ async function handleSubscribe(event: IpcMainEvent, args: NativeChatSubscribeArg
       if (!canPublish()) {
         return
       }
+      publishedSnapshot = true
       // Put initial drain errors on the first frame so clients cannot remain stuck loading.
       const payload: NativeChatAppendedPayload = {
         subscriptionId,
         frame: {
           type: 'snapshot',
+          ...(projection ? { currentRequests: projection.marker } : {}),
           messages,
           hasMore,
           ...(error ? { error } : {}),
@@ -230,6 +211,7 @@ async function handleSubscribe(event: IpcMainEvent, args: NativeChatSubscribeArg
         subscriptionId,
         frame: {
           type: 'replacement',
+          ...(projection ? { currentRequests: projection.marker } : {}),
           messages,
           hasMore,
           ...(lifecycle ? { lifecycle } : {})
@@ -273,7 +255,7 @@ async function handleSubscribe(event: IpcMainEvent, args: NativeChatSubscribeArg
   if (existing) {
     existing.subscription.unsubscribe()
   }
-  bySubId.set(subscriptionId, { subscription })
+  bySubId.set(subscriptionId, { subscription, sessionId, projection: () => projection })
   liveSubscriptions.set(sender.id, bySubId)
   if (!subscription.watching && canPublish()) {
     const payload: NativeChatAppendedPayload = {
@@ -315,6 +297,17 @@ export function _getNativeChatPendingSubscriptionCountForTest(): number {
 }
 
 export function registerNativeChatHandlers(): void {
+  ipcMain.handle(
+    'nativeChat:currentRequests',
+    (event, request: AgentSessionCurrentRequestsRead & { subscriptionId: string }) => {
+      const live = liveSubscriptions.get(event.sender.id)?.get(request.subscriptionId)
+      const projection = live?.projection()
+      if (!projection || live?.sessionId !== request.sessionId) {
+        throw new Error('Current questions unavailable')
+      }
+      return readCurrentRequestsPiece(projection, request)
+    }
+  )
   ipcMain.handle('nativeChat:readSession', (_event, args: NativeChatReadSessionArgs) =>
     readSession(args)
   )

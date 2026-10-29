@@ -1,7 +1,7 @@
+import { useNativeChatCurrentQuestions } from './use-native-chat-current-questions'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import {
   NATIVE_CHAT_SOURCE_PRIORITY,
-  type AgentType,
   type NativeChatMessage
 } from '../../../../shared/native-chat-types'
 import {
@@ -16,39 +16,26 @@ import {
   nextNativeChatLimit,
   type NativeChatOlderPageResult
 } from './native-chat-pagination'
-import type { NativeChatLiveSession, ReadState } from './native-chat-live-session-contract'
+import type {
+  NativeChatLiveSession,
+  ReadState,
+  UseNativeChatLiveSessionArgs
+} from './native-chat-live-session-contract'
 import { getNativeChatSessionTransport } from './native-chat-session-transport'
 import { useNativeChatTranscriptLifecycle } from './use-native-chat-transcript-lifecycle'
 import { useNativeChatHookStatus } from './use-native-chat-hook-status'
 import { useNativeChatAssembledMessages } from './use-native-chat-assembled-messages'
 import { createNativeChatReadRetryTimer } from './native-chat-read-retry-timer'
-import { openNativeChatTranscriptStream } from './native-chat-stream-teardown'
+import { nextTranscriptId, openNativeChatTranscriptStream } from './native-chat-stream-teardown'
 
-export type { NativeChatLiveSession, ReadState } from './native-chat-live-session-contract'
-
-export type UseNativeChatLiveSessionArgs = {
-  /** Composite `${tabId}:${leafId}` hook-entry key. */
-  paneKey: string
-  agent: AgentType
-  /** Null until reported; use live hook state before there is a session to read. */
-  sessionId: string | null
-  /** Prefer the hook’s authoritative path over reconstruction from sessionId. */
-  transcriptPath?: string | null
-  /** Non-null routes reads/subscriptions to the owning remote host; null uses local IPC. */
-  runtimeEnvironmentId?: string | null
-  /** False suspends transcript IO while retaining the last committed session. */
-  enabled?: boolean
-}
+export type {
+  NativeChatLiveSession,
+  ReadState,
+  UseNativeChatLiveSessionArgs
+} from './native-chat-live-session-contract'
 
 // Keep the base axis stable through non-ready reads.
 const EMPTY_MESSAGES: readonly NativeChatMessage[] = []
-
-let subscriptionCounter = 0
-
-function nextSubscriptionId(): string {
-  subscriptionCounter += 1
-  return `native-chat-${subscriptionCounter}-${Date.now()}`
-}
 
 // New transcripts may take minutes to flush (#8401); explicit host-pending frames override this guessed retry window.
 export const NOTFOUND_RETRY_WINDOW_MS = 60_000
@@ -88,13 +75,7 @@ export function useNativeChatLiveSession(
   const latestTransport = useRef(transport)
   latestTransport.current = transport
   const transcriptEpochRef = useRef(0)
-  const sourceKey = JSON.stringify([
-    paneKey,
-    runtimeEnvironmentId ?? null,
-    agent,
-    sessionId,
-    transcriptPath ?? null
-  ])
+  const [sourceKey, currentQuestionView, bindCurrentQuestions] = useNativeChatCurrentQuestions(args)
   const retainedSourceKeyRef = useRef(sourceKey)
 
   useEffect(() => {
@@ -180,7 +161,10 @@ export function useNativeChatLiveSession(
 
     loadSession(0)
 
-    const subscriptionId = nextSubscriptionId()
+    const subscriptionId = nextTranscriptId()
+    const requestReader = bindCurrentQuestions((request) =>
+      transport.currentRequests({ ...request, subscriptionId })
+    )
     const closeStream = openNativeChatTranscriptStream(
       transport,
       {
@@ -194,6 +178,7 @@ export function useNativeChatLiveSession(
         if (cancelled || !latestEnabled.current) {
           return
         }
+        requestReader.observe(frame)
         if (frame.type === 'snapshot' || frame.type === 'replacement') {
           // Snapshots/inode replacements start authoritative generations that stale pagination must not repaint.
           transcriptEpochRef.current += 1
@@ -229,9 +214,19 @@ export function useNativeChatLiveSession(
     return () => {
       cancelled = true
       retryTimer.cancel()
+      requestReader.invalidate()
       closeStream()
     }
-  }, [agent, enabled, sessionId, sourceKey, transcriptPath, transport, transcriptLifecycleControl])
+  }, [
+    agent,
+    enabled,
+    sessionId,
+    sourceKey,
+    transcriptPath,
+    transport,
+    transcriptLifecycleControl,
+    bindCurrentQuestions
+  ])
 
   // Concurrent callers share the current epoch’s page.
   const olderPageRef = useRef<{
@@ -316,6 +311,7 @@ export function useNativeChatLiveSession(
     })
     return {
       ...session,
+      ...currentQuestionView,
       hasMore,
       loadingEarlier,
       olderHistoryGeneration,
@@ -325,6 +321,7 @@ export function useNativeChatLiveSession(
   }, [
     normalizedMessages,
     assembledMessages,
+    currentQuestionView,
     read,
     sessionId,
     agent,

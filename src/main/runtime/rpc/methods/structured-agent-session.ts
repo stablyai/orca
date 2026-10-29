@@ -1,5 +1,6 @@
 import {
   clientReadsCurrentRequests,
+  currentRequestsContract,
   STRUCTURED_AGENT_SESSION_CURRENT_REQUESTS_METHODS
 } from './structured-agent-session-current-requests'
 import { clientSupportsSnapshotCatchUp } from './structured-agent-session-history-capability'
@@ -256,6 +257,7 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
       // Resolve after opening snapshot/missed batch; a racing close disposes the bound stream.
       dispose = await host.subscribe({
         readsCurrentRequests: clientReadsCurrentRequests(ctx),
+        requestContract: currentRequestsContract(ctx),
         id: subscriptionId,
         sessionId: params.sessionId,
         projectQueuePublication: (publication) =>

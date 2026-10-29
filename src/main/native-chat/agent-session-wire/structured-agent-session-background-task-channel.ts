@@ -1,3 +1,4 @@
+import type { CurrentRequestsContract } from '../../../shared/agent-session-current-requests-capability'
 import type { AgentSessionCurrentRequestsRead } from '../../../shared/agent-session-current-requests-wire'
 import { readCurrentRequestsPiece } from './agent-session-current-requests'
 import type {
@@ -75,7 +76,10 @@ export class StructuredAgentSessionBackgroundTaskChannel {
     }
   }
 
-  async currentRequests(request: AgentSessionCurrentRequestsRead) {
+  async currentRequests(
+    request: AgentSessionCurrentRequestsRead,
+    contract?: CurrentRequestsContract
+  ) {
     await this.conversation(request.sessionId)
     const work = hostStructuredAgentSessionCurrentWork(
       { store: this.deps.store, sessions: this.sessions },
@@ -84,7 +88,7 @@ export class StructuredAgentSessionBackgroundTaskChannel {
     if (!work) {
       throw new Error('Current requests unavailable')
     }
-    return readCurrentRequestsPiece(work.requestProjection(request.sessionId), request)
+    return readCurrentRequestsPiece(work.requestProjection(request.sessionId, contract), request)
   }
 
   async subscribe(input: AgentSessionSubscribeInput): Promise<() => void> {

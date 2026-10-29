@@ -1,4 +1,9 @@
 import type {
+  AgentSessionCurrentRequestsMarker,
+  AgentSessionCurrentRequestsRead,
+  AgentSessionCurrentRequestsPiece
+} from '../../shared/agent-session-current-requests-wire'
+import type {
   AgentType,
   NativeChatMessage,
   NativeChatTurnLifecycle
@@ -14,7 +19,9 @@ export type NativeChatReadSessionResult =
 
 export type NativeChatAppendedMessages = NativeChatMessage[]
 
-export type NativeChatSubscriptionFrame =
+export type NativeChatSubscriptionFrame = {
+  currentRequests?: AgentSessionCurrentRequestsMarker
+} & (
   | {
       type: 'snapshot'
       messages: NativeChatMessage[]
@@ -35,6 +42,7 @@ export type NativeChatSubscriptionFrame =
       messages: NativeChatMessage[]
       lifecycle?: NativeChatTurnLifecycle
     }
+)
 
 export type NativeChatAppendedPayload = {
   subscriptionId: string
@@ -53,6 +61,9 @@ export type NativeChatSubscribeArgs = {
 }
 
 export type NativeChatApi = {
+  currentRequests: (
+    request: AgentSessionCurrentRequestsRead & { subscriptionId: string }
+  ) => Promise<AgentSessionCurrentRequestsPiece>
   /** Reads the latest limit turns; the hook-reported transcriptPath takes precedence over ID globbing. */
   readSession: (
     agent: AgentType,

@@ -22,3 +22,10 @@ export function openNativeChatTranscriptStream(
     })
   }
 }
+
+let subscriptionCounter = 0
+
+export function nextTranscriptId(): string {
+  subscriptionCounter += 1
+  return `native-chat-${subscriptionCounter}-${Date.now()}`
+}

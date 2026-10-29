@@ -1,3 +1,8 @@
+import { structuredAsyncQuestions } from './structured-agent-session-async-questions'
+import {
+  AGENT_SESSION_CURRENT_REQUESTS_V2,
+  type CurrentRequestsContract
+} from '../../../shared/agent-session-current-requests-capability'
 import type { AgentSessionConversationView } from '../../../shared/agent-session-conversation-view'
 import { isHistoricalProviderTimelineItem } from '../agent-session-timeline/provider-timeline-history'
 import { currentRequestsProjection } from './agent-session-current-requests'
@@ -262,7 +267,17 @@ export class StructuredAgentSessionCurrentWork {
     return stable
   }
 
-  requestProjection(sessionId: string) {
+  requestProjection(sessionId: string, contract?: CurrentRequestsContract) {
+    if (contract === AGENT_SESSION_CURRENT_REQUESTS_V2) {
+      const payload = structuredAsyncQuestions(this.journal, sessionId, this)
+      return currentRequestsProjection(
+        this.journal,
+        sessionId,
+        { actionablePrompts: () => payload.blocking, viewKey: () => payload.context.boundary },
+        contract,
+        payload
+      )
+    }
     return currentRequestsProjection(this.journal, sessionId, this)
   }
 

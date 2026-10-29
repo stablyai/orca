@@ -1,5 +1,8 @@
 import { AGENT_SESSION_COHERENT_MODEL_CATALOG_CAPABILITY } from './structured-agent-session-surface-capabilities'
-import { AGENT_SESSION_CURRENT_REQUESTS_CLIENT_CAPABILITY } from './agent-session-current-requests-capability'
+import {
+  AGENT_SESSION_CURRENT_REQUESTS_CLIENT_CAPABILITY,
+  AGENT_SESSION_CURRENT_REQUESTS_V2
+} from './agent-session-current-requests-capability'
 import { AGENT_SESSION_BACKGROUND_TASK_CHILD_VIEWS_CAPABILITY } from './agent-session-background-task-child-views-capability'
 import { AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY } from './agent-session-create-capabilities'
 import { AGENT_SESSION_OPTIONAL_MODEL_CLIENT_CAPABILITY } from './agent-session-optional-model-capability'
@@ -33,6 +36,7 @@ export const STRUCTURED_AGENT_SESSION_RENDERER_CLIENT_CAPABILITIES = [
   AGENT_SESSION_OPTIONAL_MODEL_CLIENT_CAPABILITY,
   AGENT_SESSION_COHERENT_MODEL_CATALOG_CAPABILITY,
   AGENT_SESSION_CURRENT_REQUESTS_CLIENT_CAPABILITY,
+  AGENT_SESSION_CURRENT_REQUESTS_V2,
   // Read cursors settle acknowledged echoes even when snapshots omit their rows.
   AGENT_SESSION_SNAPSHOT_CATCH_UP_CLIENT_CAPABILITY,
   AGENT_SESSION_TURN_ITEM_CAPABILITY,

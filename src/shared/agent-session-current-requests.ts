@@ -1,10 +1,22 @@
+import {
+  aggregateAsyncQuestions,
+  extractPendingMessageReplyAsk,
+  type AsyncQuestionContributor
+} from './native-chat/input/native-chat-ask'
+import type { NativeChatMessage } from './native-chat-types'
+import type { SourceContext } from './agent-session-current-requests-wire'
 import { agentSessionCurrentContextRows } from './agent-session-context-clear'
 import type { AgentJournalRenderItem } from './agent-session-journal-types'
 import type { AgentSessionSubscribeEvent } from './agent-session-wire'
 import type { AgentSessionCurrentRequestsMarker } from './agent-session-current-requests-wire'
-import { AGENT_SESSION_CURRENT_REQUESTS_CLIENT_CAPABILITY } from './agent-session-current-requests-capability'
+import {
+  AGENT_SESSION_CURRENT_REQUESTS_CLIENT_CAPABILITY,
+  AGENT_SESSION_CURRENT_REQUESTS_V2
+} from './agent-session-current-requests-capability'
 
 export type AgentSessionCurrentRequestsState = {
+  asyncQuestions?: AsyncQuestionContributor[]
+  requestContext?: SourceContext
   currentRequests?: AgentJournalRenderItem[]
   requestMarker?: AgentSessionCurrentRequestsMarker
   /** Qualification survives contact loss alongside the last complete answer. */
@@ -16,6 +28,8 @@ export function currentRequestsState(
 ): AgentSessionCurrentRequestsState {
   return {
     currentRequests: state.currentRequests,
+    asyncQuestions: state.asyncQuestions,
+    requestContext: state.requestContext,
     requestMarker: state.requestMarker,
     requestAuthority: state.requestAuthority
   }
@@ -25,7 +39,10 @@ export function applyCurrentRequestsMarker(
   state: AgentSessionCurrentRequestsState,
   marker: AgentSessionCurrentRequestsMarker
 ): AgentSessionCurrentRequestsState {
-  if (marker.contract !== AGENT_SESSION_CURRENT_REQUESTS_CLIENT_CAPABILITY) {
+  if (
+    marker.contract !== AGENT_SESSION_CURRENT_REQUESTS_CLIENT_CAPABILITY &&
+    marker.contract !== AGENT_SESSION_CURRENT_REQUESTS_V2
+  ) {
     return state
   }
   const prior = state.requestMarker ?? state.requestAuthority
@@ -39,6 +56,13 @@ export function applyCurrentRequestsMarker(
     prior.sessionId === marker.sessionId
   return {
     currentRequests: sameOwner ? state.currentRequests : [],
+    asyncQuestions:
+      marker.contract === AGENT_SESSION_CURRENT_REQUESTS_V2
+        ? sameOwner
+          ? state.asyncQuestions
+          : []
+        : undefined,
+    requestContext: sameOwner ? state.requestContext : undefined,
     requestAuthority: sameOwner ? state.requestAuthority : undefined,
     requestMarker: marker
   }
@@ -61,7 +85,13 @@ export function currentRequestsAfterEvent(
     state.requestMarker &&
     (epoch !== state.epoch || (event.fence !== undefined && event.fence !== state.fence))
   ) {
-    return { currentRequests: [], requestMarker: undefined, requestAuthority: undefined }
+    return {
+      currentRequests: [],
+      asyncQuestions: undefined,
+      requestContext: undefined,
+      requestMarker: undefined,
+      requestAuthority: undefined
+    }
   }
   return currentRequestsState(state)
 }
@@ -80,4 +110,20 @@ export function selectAgentSessionCurrentRequests(state: {
       (item.body.kind === 'approval' || item.body.kind === 'question') &&
       item.body.resolution.state === 'pending'
   )
+}
+
+/** A negotiated feed owns async controls even before its first complete read. */
+export function authoritativeAsyncQuestion(state: AgentSessionCurrentRequestsState) {
+  return state.requestMarker?.contract === AGENT_SESSION_CURRENT_REQUESTS_V2
+    ? aggregateAsyncQuestions(state.asyncQuestions ?? [])
+    : undefined
+}
+
+export function currentAsyncQuestion(
+  state: AgentSessionCurrentRequestsState,
+  messages: readonly NativeChatMessage[]
+) {
+  return state.requestMarker?.contract === AGENT_SESSION_CURRENT_REQUESTS_V2
+    ? aggregateAsyncQuestions(state.asyncQuestions ?? [])
+    : extractPendingMessageReplyAsk(messages)
 }

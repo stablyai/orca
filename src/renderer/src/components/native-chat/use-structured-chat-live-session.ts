@@ -5,6 +5,7 @@ import type { structuredChatHistoryPhase } from './native-chat-view-state'
 
 type StructuredChatController = Pick<
   ReturnType<typeof useStructuredAgentSession>,
+  | 'asyncQuestion'
   | 'messages'
   | 'status'
   | 'isWorking'
@@ -27,6 +28,7 @@ export function useStructuredChatLiveSession(
   return useMemo<NativeChatLiveSession>(
     () => ({
       messages: controller.messages,
+      asyncQuestion: controller.asyncQuestion,
       status:
         controller.status === 'error'
           ? 'error'

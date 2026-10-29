@@ -1,3 +1,4 @@
+import type { CurrentRequestsPayload } from './agent-session-current-requests-wire'
 import type { AgentSessionCurrentRequestsMarker } from './agent-session-current-requests-wire'
 import {
   hostClockField,
@@ -102,6 +103,7 @@ export type StructuredAgentSessionAction =
   | { type: 'requests-marker'; marker: AgentSessionCurrentRequestsMarker }
   | {
       type: 'requests-complete'
+      payload?: CurrentRequestsPayload
       marker: AgentSessionCurrentRequestsMarker
       items: AgentJournalRenderItem[]
     }
@@ -142,7 +144,13 @@ export function reduceStructuredAgentSession(
   }
   if (action.type === 'requests-complete') {
     return action.marker.version === state.requestMarker?.version
-      ? { ...state, currentRequests: action.items, requestAuthority: action.marker }
+      ? {
+          ...state,
+          currentRequests: action.items,
+          asyncQuestions: action.payload?.asyncQuestions,
+          requestContext: action.payload?.context,
+          requestAuthority: action.marker
+        }
       : state
   }
   if (action.type === 'loading') {

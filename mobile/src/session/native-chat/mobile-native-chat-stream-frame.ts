@@ -1,3 +1,4 @@
+import type { AgentSessionCurrentRequestsMarker } from '../../../../src/shared/agent-session-current-requests-wire'
 import { applyAppend, replaceList } from '../../../../src/shared/native-chat/native-chat-merge'
 import { translate } from '../../i18n/mobile-i18n'
 import type { NativeChatMerger } from '../../../../src/shared/native-chat/native-chat-merge'
@@ -7,6 +8,7 @@ import type {
 } from '../../../../src/shared/native-chat-types'
 
 export type MobileNativeChatStreamFrame = {
+  currentRequests?: AgentSessionCurrentRequestsMarker
   type?: string
   messages?: NativeChatMessage[]
   hasMore?: boolean

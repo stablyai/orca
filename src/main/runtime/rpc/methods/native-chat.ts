@@ -1,3 +1,8 @@
+import { AGENT_SESSION_CURRENT_REQUESTS_V2 } from '../../../../shared/agent-session-current-requests-capability'
+import {
+  readCurrentRequestsPiece,
+  type CurrentRequestsProjection
+} from '../../../native-chat/agent-session-wire/agent-session-current-requests'
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 import { resolveNativeChatTranscriptAgent } from '../../../../shared/native-chat-agent-support'
 import {
@@ -16,8 +21,14 @@ import {
 import {
   MOBILE_NATIVE_CHAT_MAX_WINDOW,
   NativeChatSession,
+  NativeChatCurrentRequests,
   NativeChatUnsubscribe
 } from '../../../../shared/rpc-contract/native-chat-params'
+
+const requestReaders = new WeakMap<
+  object,
+  Map<string, () => CurrentRequestsProjection | undefined>
+>()
 
 // Default to a small transcript tail for fast paired-client paint; clients page older history, while local IPC stays virtualized.
 const MOBILE_NATIVE_CHAT_DEFAULT_WINDOW = 40
@@ -106,9 +117,23 @@ export const NATIVE_CHAT_METHODS = [
     name: 'nativeChat.subscribe',
     permission: 'workspace',
     params: NativeChatSession,
-    handler: async (params, { runtime, connectionId, clientKind, signal }, emit) => {
+    handler: async (
+      params,
+      { runtime, connectionId, clientKind, clientCapabilities, signal },
+      emit
+    ) => {
       if (signal?.aborted) {
         return
+      }
+      let projection: CurrentRequestsProjection | undefined
+      let opened = false
+      const capable =
+        params.capabilities?.currentRequests === 2 &&
+        clientCapabilities?.includes(AGENT_SESSION_CURRENT_REQUESTS_V2) === true
+      let readers = requestReaders.get(runtime)
+      if (!readers) {
+        readers = new Map()
+        requestReaders.set(runtime, readers)
       }
       let closed = false
       let unsubscribe = (): void => {}
@@ -125,6 +150,7 @@ export const NATIVE_CHAT_METHODS = [
         signal?.removeEventListener('abort', handleAbort)
         setupController.abort()
         unsubscribe()
+        readers.delete(subscriptionId)
         emit({ type: 'end' })
       }
       function handleAbort(): void {
@@ -132,6 +158,9 @@ export const NATIVE_CHAT_METHODS = [
       }
       signal?.addEventListener('abort', handleAbort, { once: true })
       runtime.registerSubscriptionCleanup(subscriptionId, cleanup, connectionId)
+      if (capable) {
+        readers.set(subscriptionId, () => projection)
+      }
       if (signal?.aborted) {
         runtime.cleanupSubscription(subscriptionId)
         return
@@ -147,15 +176,30 @@ export const NATIVE_CHAT_METHODS = [
           params.sessionId,
           params.transcriptPath
         ),
+        ...(capable
+          ? {
+              onCurrentRequests: (next: CurrentRequestsProjection) => {
+                if (closed) {
+                  return
+                }
+                projection = next
+                if (opened) {
+                  emit({ type: 'appended', messages: [], currentRequests: next.marker })
+                }
+              }
+            }
+          : {}),
         initialLimit: limit,
         sourceOrder: params.capabilities?.transcriptSourceOrder === 1,
         onInitialSnapshot: (messages, hasMore, beforeOffset, error, lifecycle) => {
           if (closed) {
             return
           }
+          opened = true
           // Emit initial-read errors so a watching view cannot remain loading forever.
           emit({
             type: 'snapshot',
+            ...(projection ? { currentRequests: projection.marker } : {}),
             ...pageForClient(messages, hasMore, beforeOffset, clientKind, limit, params.agent),
             ...(error ? { error } : {}),
             ...(lifecycle ? { lifecycle } : {})
@@ -176,6 +220,7 @@ export const NATIVE_CHAT_METHODS = [
           }
           emit({
             type: 'replacement',
+            ...(projection ? { currentRequests: projection.marker } : {}),
             ...pageForClient(messages, hasMore, beforeOffset, clientKind, limit, params.agent),
             ...(lifecycle ? { lifecycle } : {})
           })
@@ -221,6 +266,20 @@ export const NATIVE_CHAT_METHODS = [
         })
       }
       unsubscribe = subscription.unsubscribe
+    }
+  }),
+  defineMethod({
+    name: 'nativeChat.currentRequests',
+    permission: 'workspace',
+    params: NativeChatCurrentRequests,
+    handler: async (params, { runtime, connectionId }) => {
+      const projection = requestReaders
+        .get(runtime)
+        ?.get(`nativeChat:${connectionId ?? 'local'}:${params.subscriptionId}`)?.()
+      if (!projection || projection.marker.sessionId !== params.sessionId) {
+        throw new Error('Current questions unavailable')
+      }
+      return readCurrentRequestsPiece(projection, params)
     }
   }),
   defineMethod({

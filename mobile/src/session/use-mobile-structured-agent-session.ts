@@ -1,3 +1,4 @@
+import { authoritativeAsyncQuestion } from '../../../src/shared/agent-session-current-requests'
 import { useCallback, useMemo, useRef } from 'react'
 import { encodeNativeChatTranscriptIdentity } from '../../../src/shared/native-chat/transcript/native-chat-transcript-retention'
 import { projectStructuredAgentSessionMessages } from '../../../src/shared/structured-agent-session-message-projection'
@@ -271,10 +272,12 @@ export function useMobileStructuredAgentSession(
 
   return {
     ...options,
+    asyncQuestion: authoritativeAsyncQuestion(state),
     visualSource,
     imagePreviewsByMessageId: sends.imagePreviewsByMessageId,
     session: {
       messages,
+      asyncQuestion: authoritativeAsyncQuestion(state),
       status,
       transcriptLoading: status === 'loading',
       error: state.error,

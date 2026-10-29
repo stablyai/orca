@@ -102,6 +102,7 @@ export function parseInteractivePrompt(
 
 /** A live approval wins, then the live or unresolved transcript ask, so a parked selector cannot consume the next message as its answer. */
 export function resolveNativeChatInteractivePromptCard(args: {
+  asyncQuestion?: AskPrompt | null
   interactivePrompt: string | undefined | null
   toolName?: string
   agent?: string
@@ -120,6 +121,7 @@ export function resolveNativeChatInteractivePromptCard(args: {
     return statusCard
   }
   const prompt = resolveNativeChatAsk({
+    asyncQuestion: args.asyncQuestion,
     liveAsk: statusCard?.prompt ?? null,
     messages: args.messages,
     transcriptSettled: args.transcriptSettled

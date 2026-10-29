@@ -18,11 +18,15 @@ vi.mock('./use-native-chat-retained-session', () => ({
 vi.mock('./NativeChatComposer', async () => {
   const { useEffect } = await import('react')
   return {
-    NativeChatComposer: () => {
+    NativeChatComposer: ({ onSlashCommand }: { onSlashCommand: (command: string) => void }) => {
       useEffect(() => {
         composer.mounts += 1
       }, [])
-      return <div data-testid="native-chat-composer" />
+      return (
+        <div data-testid="native-chat-composer">
+          <button onClick={() => onSlashCommand('/clear')}>Dispatch clear</button>
+        </div>
+      )
     }
   }
 })
@@ -305,4 +309,42 @@ describe('NativeChatResolvedView prompt cards own the input region', () => {
     expect(screen.getByTestId('native-chat-question-card-title')).toHaveTextContent('Which mode?')
     expect(screen.getByPlaceholderText('Type your answer')).toHaveValue('turbo')
   })
+})
+
+it('keeps the composer usable beside host async controls and applies clear to the source feed before it rewrites', () => {
+  const now = Date.now()
+  const prompt = {
+    replyAsMessage: true as const,
+    occurrenceKey: '["q1"]',
+    questions: [{ question: 'Which color?', multiSelect: false, options: [{ label: 'Blue' }] }]
+  }
+  const row = {
+    sourceRowId: 'q1',
+    timestamp: now - 1000,
+    responseMode: 'message' as const,
+    questions: prompt.questions
+  }
+  retained.session = {
+    ...transcript(),
+    hookAwaitingInput: false,
+    asyncQuestion: prompt,
+    asyncQuestionContributors: [row]
+  }
+  setStatus({ state: 'working' })
+  const view = renderPane()
+  expect(screen.getByTestId('native-chat-question-card-title')).toHaveTextContent('Which color?')
+  expect(screen.getByTestId('native-chat-composer').closest('[hidden]')).toBeNull()
+  fireEvent.click(screen.getByRole('button', { name: 'Dispatch clear' }))
+  expect(screen.queryByTestId('native-chat-question-card-title')).toBeNull()
+  view.rerender(paneElement())
+  expect(screen.queryByTestId('native-chat-question-card-title')).toBeNull()
+  retained.session = {
+    ...transcript(),
+    hookAwaitingInput: false,
+    asyncQuestion: { ...prompt, occurrenceKey: '["q2"]' },
+    asyncQuestionContributors: [{ ...row, sourceRowId: 'q2', timestamp: now + 1000 }]
+  }
+  view.rerender(paneElement())
+  expect(screen.getByTestId('native-chat-question-card-title')).toHaveTextContent('Which color?')
+  expect(screen.getByTestId('native-chat-composer').closest('[hidden]')).toBeNull()
 })

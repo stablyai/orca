@@ -1,3 +1,4 @@
+import type { AskPrompt } from '../../../../shared/native-chat/input/native-chat-ask-types'
 import { useMemo } from 'react'
 import { useAppStore } from '../../store'
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
@@ -7,9 +8,11 @@ import type { InteractivePromptCard } from '../../../../shared/native-chat-inter
 
 export function useNativeChatInteractivePromptCard({
   paneKey,
+  asyncQuestion,
   messages,
   transcriptSettled
 }: {
+  asyncQuestion?: AskPrompt | null
   paneKey: string
   /** Pass the command-boundary-trimmed messages so an ask abandoned via `/clear` stays gone. */
   messages: readonly NativeChatMessage[]
@@ -27,6 +30,7 @@ export function useNativeChatInteractivePromptCard({
   return useMemo(
     () =>
       resolveNativeChatInteractivePromptCard({
+        asyncQuestion,
         interactivePrompt,
         toolName: interactiveToolName ?? undefined,
         agent,
@@ -34,6 +38,6 @@ export function useNativeChatInteractivePromptCard({
         transcriptSettled,
         say: sayNativeChatApprovalTranslated
       }),
-    [interactivePrompt, interactiveToolName, agent, messages, transcriptSettled]
+    [asyncQuestion, interactivePrompt, interactiveToolName, agent, messages, transcriptSettled]
   )
 }

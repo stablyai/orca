@@ -33,7 +33,7 @@ import { pendingSendsAsMessages } from '../../../../shared/native-chat-pending-s
 import { useNativeChatPendingDelivery } from './use-native-chat-pending-delivery'
 import {
   appendCommandMarkerCache,
-  applyCommandMarkerBoundaries,
+  applySessionCommandMarkerBoundaries,
   commandMarkersAsMessages,
   readCommandMarkerCache,
   type NativeChatCommandMarker
@@ -161,19 +161,10 @@ export function NativeChatResolvedView({
     () => launchPromptAsMessage(paneLaunchPrompt, session.messages),
     [paneLaunchPrompt, session.messages]
   )
-  const sessionWithLaunchPrompt = useMemo<typeof session>(() => {
-    if (!launchPromptMessage) {
-      return session
-    }
-    return { ...session, messages: [...session.messages, launchPromptMessage] }
-  }, [launchPromptMessage, session])
-
-  const sessionAfterCommandBoundaries = useMemo<typeof session>(() => {
-    const messages = applyCommandMarkerBoundaries(sessionWithLaunchPrompt.messages, commandMarkers)
-    return messages === sessionWithLaunchPrompt.messages
-      ? sessionWithLaunchPrompt
-      : { ...sessionWithLaunchPrompt, messages }
-  }, [sessionWithLaunchPrompt, commandMarkers])
+  const sessionAfterCommandBoundaries = useMemo(
+    () => applySessionCommandMarkerBoundaries(session, launchPromptMessage, commandMarkers),
+    [session, launchPromptMessage, commandMarkers]
+  )
   // Why: answer from the conversation the pane shows, so a `/clear` sent here reads as reset.
   const answerLocally = useNativeChatLocalCommandAnswer(agent, sessionAfterCommandBoundaries)
   const launchPromptDeliveryNotices = useNativeChatLaunchPromptDeliveryNotice(
@@ -191,9 +182,10 @@ export function NativeChatResolvedView({
   const promptCard = useNativeChatInteractivePromptCard({
     paneKey,
     messages: sessionAfterCommandBoundaries.messages,
+    asyncQuestion: sessionAfterCommandBoundaries.asyncQuestion,
     transcriptSettled: session.readPhase === 'ready'
   })
-  // A prompt card and composer must never share the input region: composer text would answer the agent’s selector.
+  // Callback-backed controls own the composer input region.
   const promptCardPresentation = useNativeChatPromptCardPresentation({
     paneKey,
     targetPtyId,
@@ -202,6 +194,9 @@ export function NativeChatResolvedView({
     transcriptSettled: session.readPhase === 'ready'
   })
   const { card: shownPromptCard, collapsedCard } = promptCardPresentation
+  const cardOwnsInput =
+    shownPromptCard !== null &&
+    (shownPromptCard.kind !== 'question' || !shownPromptCard.prompt.replyAsMessage)
   const mountedPromptCard = shownPromptCard ?? collapsedCard
   const rootInput = useNativeChatRootInputRouting({
     tabId: terminalTabId,
@@ -276,7 +271,8 @@ export function NativeChatResolvedView({
     working: liveWorking,
     hookAwaitingInput: session.hookAwaitingInput === true,
     interrupted: workingInterrupted,
-    hasPromptCard: promptCard !== null
+    hasPromptCard:
+      promptCard !== null && (promptCard.kind !== 'question' || !promptCard.prompt.replyAsMessage)
   })
   const turnTiming = useNativeChatTerminalTurnTiming(paneKey, session.messages, turnActive)
   useRecheckNativeChatFileLinksWhenTurnEnds(turnActive)
@@ -385,7 +381,7 @@ export function NativeChatResolvedView({
             onAnswerInTerminal={onSwitchToTerminal}
             onDismiss={promptCardPresentation.dismiss}
             onCollapse={promptCardPresentation.collapse}
-            shouldFocus={shownPromptCard !== null && isVisible && isFocusedGroup}
+            shouldFocus={cardOwnsInput && isVisible && isFocusedGroup}
             answerInputRef={questionAnswerInputRef}
           />
         </div>
@@ -394,10 +390,10 @@ export function NativeChatResolvedView({
         <NativeChatPromptStrip card={collapsedCard} onExpand={promptCardPresentation.expand} />
       ) : null}
       {/* Honor mobile PTY ownership; retain the hidden composer’s state but detach its ref from typing, paste and focus routes. */}
-      <div hidden={shownPromptCard !== null} className="contents">
+      <div hidden={cardOwnsInput} className="contents">
         <NativeChatComposer
-          ref={shownPromptCard ? undefined : composerRef}
-          inputOwnedByCard={shownPromptCard !== null}
+          ref={cardOwnsInput ? undefined : composerRef}
+          inputOwnedByCard={cardOwnsInput}
           terminalTabId={terminalTabId}
           paneKey={paneKey}
           targetPtyId={targetPtyId}

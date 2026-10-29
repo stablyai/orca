@@ -1,3 +1,10 @@
+import { callAgentSession } from './mobile-structured-agent-session-rpc'
+import { createNativeChatCurrentRequestsBinding } from '../../../src/shared/native-chat-current-requests-binding'
+import {
+  authoritativeAsyncQuestion,
+  type AgentSessionCurrentRequestsState
+} from '../../../src/shared/agent-session-current-requests'
+import type { AskPrompt } from '../../../src/shared/native-chat/input/native-chat-ask-types'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   createNativeChatTranscriptRetention,
@@ -31,6 +38,7 @@ export type MobileNativeChatStatus =
   | 'error'
 
 export type MobileNativeChatSession = {
+  asyncQuestion?: AskPrompt | null
   messages: NativeChatMessage[]
   status: MobileNativeChatStatus
   // Unsettled reads or passive resets may still hold another tab’s history; wait before interpreting empty messages as a seed/retirement boundary.
@@ -68,6 +76,7 @@ type ReadSessionResult =
 // Retain paged history across contiguous replay; ordered read windows replace while live appends merge by id.
 export function useMobileNativeChatSession(args: {
   client: RpcClient | null
+  currentRequests?: boolean
   /** Stable host/workspace source; unlike `client`, it survives manual reconnect. */
   sourceIdentity: string
   agent: string | null
@@ -75,6 +84,9 @@ export function useMobileNativeChatSession(args: {
   transcriptPath: string | null
 }): MobileNativeChatSession {
   const { client, sourceIdentity, agent, sessionId, transcriptPath } = args
+  const [requests, setRequests] = useState<
+    AgentSessionCurrentRequestsState & { identity?: string }
+  >({})
   const [messages, setMessages] = useState<NativeChatMessage[]>([])
   const identity = encodeNativeChatTranscriptIdentity([
     sourceIdentity,
@@ -145,6 +157,12 @@ export function useMobileNativeChatSession(args: {
       return
     }
 
+    const subscriptionId = buildNativeChatSubscriptionId(agent, sessionId, randomV4Uuid())
+    const requestReader = createNativeChatCurrentRequestsBinding({
+      read: (request) =>
+        callAgentSession(client, 'nativeChat.currentRequests', { ...request, subscriptionId }),
+      publish: (state) => setRequests({ ...state, identity })
+    })
     const unsubscribe = client.subscribe(
       'nativeChat.subscribe',
       {
@@ -152,8 +170,12 @@ export function useMobileNativeChatSession(args: {
         sessionId,
         limit: limitRef.current,
         // Use a distinct token per screen so another viewer cannot evict this host feed.
-        subscriptionId: buildNativeChatSubscriptionId(agent, sessionId, randomV4Uuid()),
-        capabilities: { transcriptPending: 1, transcriptSourceOrder: 1 },
+        subscriptionId,
+        capabilities: {
+          transcriptPending: 1,
+          transcriptSourceOrder: 1,
+          ...(args.currentRequests ? { currentRequests: 2 } : {})
+        },
         ...(transcriptPath ? { transcriptPath } : {})
       },
       (raw) => {
@@ -161,6 +183,7 @@ export function useMobileNativeChatSession(args: {
           return
         }
         const frame = raw as MobileNativeChatStreamFrame
+        requestReader.observe(frame)
         const applied = applyMobileNativeChatStreamFrame({
           merger: mergerRef.current,
           frame,
@@ -216,9 +239,10 @@ export function useMobileNativeChatSession(args: {
     return () => {
       cancelled = true
       supersede()
+      requestReader.invalidate()
       unsubscribe()
     }
-  }, [client, agent, sessionId, transcriptPath, identity, setList, supersede])
+  }, [client, agent, sessionId, transcriptPath, identity, setList, supersede, args.currentRequests])
 
   const loadEarlier = useCallback(() => {
     if (!client || !agent || !sessionId || !hasMore) {
@@ -296,6 +320,8 @@ export function useMobileNativeChatSession(args: {
   return {
     // Withhold rows until they belong to this identity; passive reset otherwise exposes previous-tab history for one commit.
     messages: visibleMessages,
+    asyncQuestion:
+      requests.identity === identity ? authoritativeAsyncQuestion(requests) : undefined,
     status,
     transcriptLoading: status === 'loading' || status === 'awaiting-transcript',
     error,

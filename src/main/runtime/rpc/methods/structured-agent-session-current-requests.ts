@@ -2,16 +2,28 @@ import { defineMethod } from '../core'
 import type { RpcContext } from '../core'
 import { requireInstalledStructuredHost } from './structured-agent-session-gate'
 import { CurrentRequestsParams } from '../../../../shared/rpc-contract/agent-session-current-requests-params'
-import { AGENT_SESSION_CURRENT_REQUESTS_CLIENT_CAPABILITY } from '../../../../shared/agent-session-current-requests-capability'
+import {
+  AGENT_SESSION_CURRENT_REQUESTS_CLIENT_CAPABILITY,
+  AGENT_SESSION_CURRENT_REQUESTS_V2
+} from '../../../../shared/agent-session-current-requests-capability'
 import { agentSessionRefusalError } from '../../../../shared/agent-session-wire-refusals'
 
 export function clientReadsCurrentRequests(
   context: Pick<RpcContext, 'clientKind' | 'clientCapabilities'>
 ): boolean {
-  return (
-    context.clientKind === undefined ||
-    context.clientCapabilities?.includes(AGENT_SESSION_CURRENT_REQUESTS_CLIENT_CAPABILITY) === true
-  )
+  return currentRequestsContract(context) !== undefined
+}
+
+export function currentRequestsContract(
+  context: Pick<RpcContext, 'clientKind' | 'clientCapabilities'>
+) {
+  if (context.clientCapabilities?.includes(AGENT_SESSION_CURRENT_REQUESTS_V2)) {
+    return AGENT_SESSION_CURRENT_REQUESTS_V2
+  }
+  return context.clientKind === undefined ||
+    context.clientCapabilities?.includes(AGENT_SESSION_CURRENT_REQUESTS_CLIENT_CAPABILITY)
+    ? AGENT_SESSION_CURRENT_REQUESTS_CLIENT_CAPABILITY
+    : undefined
 }
 
 export const STRUCTURED_AGENT_SESSION_CURRENT_REQUESTS_METHODS = [
@@ -26,7 +38,8 @@ export const STRUCTURED_AGENT_SESSION_CURRENT_REQUESTS_METHODS = [
         })
       }
       return (await requireInstalledStructuredHost(ctx, params.sessionId)).readCurrentRequests(
-        params
+        params,
+        currentRequestsContract(ctx)
       )
     }
   })

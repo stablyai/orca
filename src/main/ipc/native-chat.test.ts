@@ -39,6 +39,7 @@ beforeEach(() => {
 afterEach(async () => {
   await Promise.all(tempRoots.map((root) => rm(root, { recursive: true, force: true })))
   tempRoots = []
+  vi.unstubAllEnvs()
 })
 
 function jsonLines(records: unknown[]): string {
@@ -108,6 +109,8 @@ describe('nativeChat:readSession handler', () => {
     // Point homedir-based Claude transcript resolution at the temporary fixture.
     const previousHome = process.env.HOME
     process.env.HOME = root
+    vi.stubEnv('USERPROFILE', root)
+    vi.stubEnv('CLAUDE_CONFIG_DIR', join(root, '.claude'))
     try {
       const result = (await invokeReadSession({ agent: 'claude', sessionId: 'sess-ipc' })) as {
         messages?: unknown[]
@@ -143,6 +146,8 @@ describe('nativeChat:readSession handler', () => {
 
     const previousHome = process.env.HOME
     process.env.HOME = root
+    vi.stubEnv('USERPROFILE', root)
+    vi.stubEnv('CLAUDE_CONFIG_DIR', join(root, '.claude'))
     try {
       const windowed = (await invokeReadSession({
         agent: 'claude',
@@ -198,6 +203,8 @@ describe('nativeChat:readSession handler', () => {
 
     const previousHome = process.env.HOME
     process.env.HOME = root
+    vi.stubEnv('USERPROFILE', root)
+    vi.stubEnv('CLAUDE_CONFIG_DIR', join(root, '.claude'))
     try {
       subscribe!(
         { sender },
@@ -264,6 +271,8 @@ describe('nativeChat:readSession handler', () => {
 
     const previousHome = process.env.HOME
     process.env.HOME = root
+    vi.stubEnv('USERPROFILE', root)
+    vi.stubEnv('CLAUDE_CONFIG_DIR', join(root, '.claude'))
     try {
       subscribe!({ sender }, { subscriptionId: 'sub-pending', agent: 'claude', sessionId: 'ghost' })
 
@@ -316,6 +325,8 @@ describe('nativeChat:readSession handler', () => {
 
     const previousHome = process.env.HOME
     process.env.HOME = root
+    vi.stubEnv('USERPROFILE', root)
+    vi.stubEnv('CLAUDE_CONFIG_DIR', join(root, '.claude'))
     try {
       subscribe!(
         { sender },
@@ -346,6 +357,8 @@ describe('nativeChat:readSession handler', () => {
     tempRoots.push(root)
     const previousHome = process.env.HOME
     process.env.HOME = root
+    vi.stubEnv('USERPROFILE', root)
+    vi.stubEnv('CLAUDE_CONFIG_DIR', join(root, '.claude'))
     try {
       const result = (await invokeReadSession({ agent: 'claude', sessionId: 'nope' })) as {
         error?: string

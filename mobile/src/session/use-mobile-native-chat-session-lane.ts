@@ -59,6 +59,7 @@ export function useMobileNativeChatSessionLane({
   const bridgeSession = useMobileNativeChatSession({
     client,
     sourceIdentity,
+    currentRequests: hostSupport?.currentAsyncQuestions === true,
     agent: structured ? null : agent,
     sessionId: structured ? null : sessionId,
     transcriptPath: structured ? null : (resolution?.transcriptPath ?? null)

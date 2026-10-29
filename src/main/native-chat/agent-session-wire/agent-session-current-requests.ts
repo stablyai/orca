@@ -6,31 +6,40 @@ import type {
   AgentSessionCurrentRequestsRead
 } from '../../../shared/agent-session-current-requests-wire'
 import { AGENT_SESSION_CURRENT_REQUESTS_CLIENT_CAPABILITY } from '../../../shared/agent-session-current-requests-capability'
-import type { StructuredAgentSessionCurrentWorkJournal } from './structured-agent-session-current-work'
+import type { CurrentRequestsContract } from '../../../shared/agent-session-current-requests-capability'
+import type { CurrentRequestsPayload } from '../../../shared/agent-session-current-requests-wire'
 
 export type CurrentRequestsSubscriber = {
   readsCurrentRequests?: boolean
+  requestContract?: CurrentRequestsContract
   requestVersion?: string
 }
 
-type Projection = {
+export type CurrentRequestsProjection = {
   identity: string
   marker: AgentSessionCurrentRequestsMarker
-  items: AgentJournalRenderItem[]
+  items: AgentJournalRenderItem[] | CurrentRequestsPayload
   json?: string
 }
-const projections = new WeakMap<StructuredAgentSessionCurrentWorkJournal, Projection>()
+const projections = new WeakMap<object, Map<CurrentRequestsContract, CurrentRequestsProjection>>()
 // Even six escaped bytes per UTF-16 unit leave room for the RPC and phone envelopes.
 const REQUEST_PIECE_UNITS = 24 * 1024
 
 export function currentRequestsProjection(
-  journal: StructuredAgentSessionCurrentWorkJournal,
+  source: object & { cursor?: () => { epoch: string } },
   sessionId: string,
-  work: { actionablePrompts: () => AgentJournalRenderItem[]; viewKey: () => string }
-): Projection {
-  const items = work.actionablePrompts()
-  const epoch = journal.cursor().epoch
-  const previous = projections.get(journal)
+  work: { actionablePrompts: () => AgentJournalRenderItem[]; viewKey: () => string },
+  contract: CurrentRequestsContract = AGENT_SESSION_CURRENT_REQUESTS_CLIENT_CAPABILITY,
+  payload?: CurrentRequestsPayload,
+  epoch = source.cursor?.().epoch ?? 'source'
+): CurrentRequestsProjection {
+  const items = payload ?? work.actionablePrompts()
+  let versions = projections.get(source)
+  if (!versions) {
+    versions = new Map()
+    projections.set(source, versions)
+  }
+  const previous = versions.get(contract)
   const identity = previous?.identity ?? randomUUID()
   const owner = `${identity}:${work.viewKey()}`
   if (
@@ -41,11 +50,11 @@ export function currentRequestsProjection(
   ) {
     return previous
   }
-  const projection: Projection = {
+  const projection: CurrentRequestsProjection = {
     identity,
     items,
     marker: {
-      contract: AGENT_SESSION_CURRENT_REQUESTS_CLIENT_CAPABILITY,
+      contract,
       sessionId,
       epoch,
       publisher: identity,
@@ -54,13 +63,13 @@ export function currentRequestsProjection(
       version: randomUUID()
     }
   }
-  projections.set(journal, projection)
+  versions.set(contract, projection)
   return projection
 }
 
 /** Only the current projection is retained; superseded cursors restart at its version. */
 export function readCurrentRequestsPiece(
-  projection: Projection,
+  projection: CurrentRequestsProjection,
   request: AgentSessionCurrentRequestsRead
 ): AgentSessionCurrentRequestsPiece {
   if (request.version !== projection.marker.version) {

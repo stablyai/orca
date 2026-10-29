@@ -138,7 +138,8 @@ export function emitSubscriberFrame(
 ): void {
   const marker =
     event.type !== 'end' && subscriber.readsCurrentRequests
-      ? options?.currentWork?.requestProjection(subscriber.sessionId).marker
+      ? options?.currentWork?.requestProjection(subscriber.sessionId, subscriber.requestContract)
+          .marker
       : undefined
   const includeMarker =
     marker && (event.type !== 'batch' || marker.version !== subscriber.requestVersion)

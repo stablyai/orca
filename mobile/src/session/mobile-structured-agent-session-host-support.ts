@@ -1,3 +1,4 @@
+import { AGENT_SESSION_CURRENT_REQUESTS_V2 } from '../../../src/shared/agent-session-current-requests-capability'
 import { AGENT_SESSION_COHERENT_MODEL_CATALOG_CAPABILITY } from '../../../src/shared/structured-agent-session-surface-capabilities'
 import {
   AGENT_SESSION_CONVERSATION_STOP_RUNTIME_CAPABILITY,
@@ -28,6 +29,7 @@ import { SKILL_DISCOVER_WORKSPACE_CAPABILITY } from '../../../src/shared/skill-i
 
 export type StructuredAgentSessionHostSupport = {
   coherentModelCatalog?: boolean
+  currentAsyncQuestions?: boolean
   promptCancel: boolean
   questionAnswers: boolean
   // Older hosts send mid-turn messages immediately instead of queueing drafts.
@@ -62,6 +64,7 @@ export function structuredAgentSessionHostSupport(
 ): StructuredAgentSessionHostSupport {
   return {
     coherentModelCatalog: capabilities.includes(AGENT_SESSION_COHERENT_MODEL_CATALOG_CAPABILITY),
+    currentAsyncQuestions: capabilities.includes(AGENT_SESSION_CURRENT_REQUESTS_V2),
     promptCancel: capabilities.includes(AGENT_SESSION_PROMPT_CANCEL_RUNTIME_CAPABILITY),
     questionAnswers: capabilities.includes(AGENT_SESSION_QUESTION_ANSWERS_RUNTIME_CAPABILITY),
     queuedMessages: capabilities.includes(AGENT_SESSION_QUEUED_MESSAGES_RUNTIME_CAPABILITY),

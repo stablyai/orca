@@ -1,10 +1,15 @@
+import type { SubscribeNativeChatTranscriptArgs } from '../../../native-chat/transcript-watch-contract'
 import { describe, expect, it, vi } from 'vitest'
 import { RuntimeSubscriptionRegistry } from '../../runtime-subscription-registry'
 import type { RpcContext } from '../core'
 
+const sourceHooks = vi.hoisted(() => ({ subscribe: vi.fn() }))
 vi.mock('../../../native-chat/transcript-watch', () => ({
   readNativeChatTranscriptTail: vi.fn(),
-  subscribeNativeChatTranscript: () => Promise.resolve({ unsubscribe: () => {}, watching: true })
+  subscribeNativeChatTranscript: (...args: unknown[]) => {
+    sourceHooks.subscribe(...args)
+    return Promise.resolve({ unsubscribe: () => {}, watching: true })
+  }
 }))
 
 import { NATIVE_CHAT_METHODS } from './native-chat'
@@ -26,6 +31,7 @@ function handler(name: string): Handler {
 
 /** One phone connection on a runtime whose subscriptions live in the real registry. */
 function phoneConnection(): {
+  context: RpcContext
   subscribe: (subscriptionId: string) => Promise<unknown[]>
   unsubscribe: (subscriptionId: string) => Promise<void>
 } {
@@ -42,6 +48,7 @@ function phoneConnection(): {
     clientKind: 'mobile'
   }
   return {
+    context,
     subscribe: async (subscriptionId) => {
       const emitted: unknown[] = []
       await handler('nativeChat.subscribe')(
@@ -77,4 +84,50 @@ describe('nativeChat subscription tokens on one connection', () => {
     expect(older).toEqual([{ type: 'end' }])
     expect(newer).toEqual([])
   })
+})
+
+it('allows only the owning negotiated terminal subscription to read its complete current feed', async () => {
+  const phone = phoneConnection()
+  const contract = 'agent-session.current-requests.v2' as const
+  const marker = {
+    contract,
+    sessionId: 'session',
+    epoch: 'e',
+    publisher: 'host',
+    owner: 'source',
+    revision: 1,
+    version: 'v'
+  }
+  const items = {
+    blocking: [],
+    asyncQuestions: [],
+    context: { sessionId: 'session', boundary: 'file' }
+  }
+  sourceHooks.subscribe.mockImplementation((args: SubscribeNativeChatTranscriptArgs) => {
+    args.onCurrentRequests?.({ identity: 'host', marker, items })
+  })
+  try {
+    await handler('nativeChat.subscribe')(
+      {
+        agent: 'codex',
+        sessionId: 'session',
+        subscriptionId: 'current',
+        capabilities: { currentRequests: 2 }
+      },
+      { ...phone.context, clientCapabilities: [contract] },
+      () => {}
+    )
+    const read = handler('nativeChat.currentRequests')
+    const request = { sessionId: 'session', subscriptionId: 'current', version: 'v' }
+    await expect(read(request, phone.context, () => {})).resolves.toMatchObject({
+      json: JSON.stringify(items)
+    })
+    await expect(
+      read(request, { ...phone.context, connectionId: 'another-phone' }, () => {})
+    ).rejects.toThrow('unavailable')
+    await phone.unsubscribe('current')
+    await expect(read(request, phone.context, () => {})).rejects.toThrow('unavailable')
+  } finally {
+    sourceHooks.subscribe.mockReset()
+  }
 })

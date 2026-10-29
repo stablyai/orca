@@ -265,3 +265,43 @@ describe('structured async question occurrences', () => {
     }
   )
 })
+
+it('uses host async controls with no loaded row on both phone input paths', async () => {
+  const prompt = {
+    replyAsMessage: true as const,
+    occurrenceKey: '["host-row"]',
+    questions: [
+      {
+        question: 'Which color?',
+        multiSelect: false,
+        options: [{ label: 'Red' }, { label: 'Blue' }]
+      }
+    ]
+  }
+  const sendWithOutcome = vi.fn(async () => 'accepted' as const)
+  for (const structured of [
+    null,
+    { permission: null, question: null, sendWithOutcome, asyncQuestion: prompt }
+  ]) {
+    let captured: ReturnType<typeof useMobileNativeChatPrompts> | undefined
+    function Probe(): null {
+      captured = useMobileNativeChatPrompts({
+        enabled: true,
+        structured,
+        asyncQuestion: prompt,
+        status: null,
+        messages: [],
+        transcriptLoading: false
+      })
+      return null
+    }
+    TestRenderer.act(() => {
+      renderers.push(TestRenderer.create(createElement(Probe)))
+    })
+    expect(captured?.ask).toEqual(prompt)
+    if (structured) {
+      await expect(captured?.structuredAnswer?.(prompt, [{ indices: [1] }])).resolves.toBe(true)
+    }
+  }
+  expect(sendWithOutcome).toHaveBeenCalledWith('> Which color?\n\nBlue')
+})

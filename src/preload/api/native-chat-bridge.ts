@@ -8,6 +8,8 @@ import type {
 import type { AgentType } from '../../shared/native-chat-types'
 
 export const nativeChatApi = {
+  currentRequests: (request: Parameters<PreloadApi['nativeChat']['currentRequests']>[0]) =>
+    ipcRenderer.invoke('nativeChat:currentRequests', request),
   readSession: (
     agent: AgentType,
     sessionId: string,

@@ -100,7 +100,7 @@ function explainedCutTurns(items: readonly AgentJournalRenderItem[]): Set<string
 }
 
 /** Last scoped row, or journal-order row for legacy hosts; a new root turn ends the run. */
-function lastRowOfTurn(
+export function lastRowOfTurn(
   items: readonly AgentJournalRenderItem[],
   turnIndex: number,
   statesScopes: boolean

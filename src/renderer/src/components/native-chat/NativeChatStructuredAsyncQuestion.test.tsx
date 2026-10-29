@@ -130,3 +130,46 @@ describe('NativeChatStructuredAsyncQuestion', () => {
     }
   )
 })
+
+it('renders authoritative choices and free text without a question in loaded history, and Cancel sends nothing', () => {
+  const prompt = {
+    replyAsMessage: true as const,
+    occurrenceKey: '["source-row"]',
+    questions: [
+      {
+        question: 'Which color?',
+        multiSelect: false,
+        options: [{ label: 'Red' }, { label: 'Blue' }]
+      }
+    ]
+  }
+  const send = vi.fn(() => true)
+  const render = (asyncQuestion: typeof prompt | null) =>
+    act(() =>
+      root.render(
+        <NativeChatStructuredAsyncQuestion
+          paneKey="host-current"
+          session={{ messages: [], readPhase: 'ready', asyncQuestion }}
+          send={send}
+        />
+      )
+    )
+  render(prompt)
+  expect(container.textContent).toContain('Which color?')
+  expect(container.querySelector('textarea, input')).not.toBeNull()
+  act(() =>
+    container
+      .querySelector('button[aria-label="Cancel"]')
+      ?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+  )
+  expect(send).not.toHaveBeenCalled()
+  render({ ...prompt, occurrenceKey: '["later-row"]' })
+  const blue = [...container.querySelectorAll('button[aria-pressed]')].find((node) =>
+    node.textContent?.includes('Blue')
+  )
+  act(() => blue?.dispatchEvent(new MouseEvent('click', { bubbles: true })))
+  act(() => vi.runAllTimers())
+  expect(send).toHaveBeenCalledWith('> Which color?\n\nBlue', [])
+  render(null)
+  expect(container.textContent).not.toContain('Which color?')
+})

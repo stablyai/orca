@@ -1,7 +1,6 @@
 import type { AgentSessionSubscribeInput } from './agent-session-subscribe-input'
 export type { AgentSessionSubscribeInput } from './agent-session-subscribe-input'
 import type { CurrentRequestsSubscriber } from './agent-session-current-requests'
-// Advance subscriber cursors independently, sending resets or reducer-projected batches as needed.
 
 import type { AgentJournalCursor } from '../../../shared/agent-session-journal-types'
 import type {
@@ -82,16 +81,16 @@ export class AgentSessionSubscribers {
   open(
     input: AgentSessionSubscribeInput & { journal: AgentSessionJournal; fence: number }
   ): () => void {
-    const liveCursor = input.journal.cursor()
     const subscriber: Subscriber = {
       id: input.id,
       sessionId: input.sessionId,
       emit: input.emit,
-      cursor: input.cursor ?? { epoch: liveCursor.epoch, sequence: 0 },
+      cursor: input.cursor ?? { epoch: input.journal.cursor().epoch, sequence: 0 },
       fence: input.fence,
       boundedFrames: input.boundedFrames === true,
       projectQueuePublication: input.projectQueuePublication,
       readsCurrentRequests: input.readsCurrentRequests === true,
+      requestContract: input.requestContract,
       snapshotCatchUp: input.snapshotCatchUp !== false
     }
     const session = this.bySession.get(input.sessionId) ?? new Map<string, Subscriber>()

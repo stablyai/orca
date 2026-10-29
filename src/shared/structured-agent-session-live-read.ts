@@ -132,7 +132,8 @@ export function startStructuredAgentSessionLiveRead(args: {
   }
   const requestReader = createAgentSessionCurrentRequestsReader({
     read: args.readCurrentRequests,
-    complete: (marker, items) => args.applyRequests?.({ type: 'requests-complete', marker, items }),
+    complete: (marker, items, payload) =>
+      args.applyRequests?.({ type: 'requests-complete', marker, items, payload }),
     replaceMarker: (marker) => args.applyRequests?.({ type: 'requests-marker', marker }),
     error: reportReadFailure
   })

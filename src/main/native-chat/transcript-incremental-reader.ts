@@ -4,6 +4,7 @@ import { extendTranscriptBoundary } from './transcript-file-version'
 import { inTranscriptFileOrder } from './transcript-file-order'
 import {
   MAX_NATIVE_CHAT_TRANSCRIPT_RECORD_BYTES,
+  readNativeChatTranscriptTailFile,
   type NativeChatLineDecoder
 } from './transcript-tail-reader'
 import { openTranscriptReadStream, transcriptFileStat } from './wsl-transcript-fs-access'
@@ -141,5 +142,59 @@ export async function readIncrementalTranscriptMessages(
     if (onBatch && messages.length >= APPEND_BATCH_MESSAGE_LIMIT) {
       onBatch(messages.splice(0))
     }
+  }
+}
+
+export async function emitIncrementalTranscriptMessages(args: {
+  filePath: string
+  state: IncrementalTranscriptState
+  decode: NativeChatLineDecoder
+  onAppend: (messages: NativeChatMessage[], lifecycle?: NativeChatTurnLifecycle) => void
+  decodeLifecycle?: (line: string, fallbackId: string) => NativeChatTurnLifecycle | null
+  signal: AbortSignal
+  sourceOrder?: boolean
+  active: () => boolean
+}): Promise<void> {
+  let lifecycle: NativeChatTurnLifecycle | undefined
+  const remaining = await readIncrementalTranscriptMessages(
+    args.filePath,
+    args.state,
+    args.decode,
+    (messages) => {
+      if (args.active()) {
+        args.onAppend(messages)
+      }
+    },
+    args.decodeLifecycle,
+    (next) => {
+      lifecycle = next
+    },
+    args.signal,
+    args.sourceOrder
+  )
+  if (args.active() && (remaining.length > 0 || lifecycle)) {
+    args.onAppend(remaining, lifecycle)
+  }
+}
+
+export function createTranscriptWatchReader(
+  args: Parameters<typeof emitIncrementalTranscriptMessages>[0]
+) {
+  return {
+    append: () => emitIncrementalTranscriptMessages(args),
+    snapshot: (limit: number) =>
+      readNativeChatTranscriptTailFile(
+        args.filePath,
+        limit,
+        args.decode,
+        false,
+        undefined,
+        args.decodeLifecycle,
+        args.signal,
+        (boundary) => {
+          args.state.boundary = boundary
+        },
+        args.sourceOrder
+      )
   }
 }

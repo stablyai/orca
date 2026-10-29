@@ -23,6 +23,7 @@ export type MobileNativeChatPrompts = {
 }
 
 export function useMobileNativeChatPrompts(args: {
+  asyncQuestion?: AskPrompt | null
   enabled: boolean
   /** A structured chat reads only its async question here; its journal prompts are its own cards. */
   structured?: MobileStructuredAskSession | null
@@ -38,13 +39,14 @@ export function useMobileNativeChatPrompts(args: {
   const card = useMemo(
     () =>
       resolveNativeChatInteractivePromptCard({
+        asyncQuestion: args.asyncQuestion,
         interactivePrompt,
         toolName,
         agent,
         messages,
         transcriptSettled: !transcriptLoading
       }),
-    [interactivePrompt, toolName, agent, messages, transcriptLoading]
+    [args.asyncQuestion, interactivePrompt, toolName, agent, messages, transcriptLoading]
   )
   const structuredAsk = useMobileStructuredAsyncQuestion({
     structured,

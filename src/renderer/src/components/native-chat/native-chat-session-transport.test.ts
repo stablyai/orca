@@ -1,3 +1,4 @@
+import type * as RuntimeRpcClient from '@/runtime/runtime-rpc-client'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 import {
@@ -17,6 +18,12 @@ const nativeChatSubscribe = vi.fn()
 const runtimeEnvironmentsCall = vi.fn()
 const runtimeEnvironmentsSubscribe = vi.fn()
 
+const supportsCurrentRequests = vi.hoisted(() => vi.fn())
+vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) => ({
+  ...(await importOriginal<typeof RuntimeRpcClient>()),
+  runtimeEnvironmentSupportsCapability: supportsCurrentRequests
+}))
+
 const ENV = 'env-1'
 
 function message(id: string): NativeChatMessage {
@@ -34,12 +41,19 @@ function okEnvelope(result: unknown): { ok: true; result: unknown } {
 }
 
 /** Let the compatibility-gate await chain reach the runtime bridge. */
+async function flushMicrotasks(): Promise<void> {
+  await Promise.resolve()
+  await Promise.resolve()
+  await Promise.resolve()
+}
+
 function flush(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve))
 }
 
 beforeEach(() => {
   vi.clearAllMocks()
+  supportsCurrentRequests.mockResolvedValue(false)
   clearRuntimeCompatibilityCacheForTests()
   delete (globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__
   vi.stubGlobal('window', {
@@ -183,7 +197,7 @@ describe('runtime subscribe', () => {
     const transport = getNativeChatSessionTransport(ENV)
 
     transport.subscribe({ subscriptionId: 's-1', agent: 'claude', sessionId: 'sess-1' }, onFrame)
-    await Promise.resolve()
+    await flushMicrotasks()
 
     expect(runtimeEnvironmentsSubscribe).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -227,7 +241,7 @@ describe('runtime subscribe', () => {
     const lifecycle = { state: 'completed', turnId: 'turn-1', timestamp: 42 } as const
 
     transport.subscribe({ subscriptionId: 's-1', agent: 'claude', sessionId: 'sess-1' }, onFrame)
-    await Promise.resolve()
+    await flushMicrotasks()
     deliver({
       type: 'snapshot',
       messages: [message('valid')],
@@ -258,7 +272,7 @@ describe('runtime subscribe', () => {
     const transport = getNativeChatSessionTransport(ENV)
 
     transport.subscribe({ subscriptionId: 's-1', agent: 'claude', sessionId: 'sess-1' }, onFrame)
-    await Promise.resolve()
+    await flushMicrotasks()
     deliver({
       type: 'snapshot',
       messages: [message('seed')],
@@ -284,7 +298,7 @@ describe('runtime subscribe', () => {
     const transport = getNativeChatSessionTransport(ENV)
 
     transport.subscribe({ subscriptionId: 's-1', agent: 'claude', sessionId: 'sess-1' }, onFrame)
-    await Promise.resolve()
+    await flushMicrotasks()
 
     // Settle unrecognized successful payloads once, carrying any host error.
     deliver({ type: 'ready', error: 'boom' })
@@ -309,7 +323,7 @@ describe('runtime subscribe', () => {
       { subscriptionId: 's-1', agent: 'claude', sessionId: 'sess-1', limit: 1 },
       onFrame
     )
-    await Promise.resolve()
+    await flushMicrotasks()
 
     deliver({ type: 'snapshot', messages: [], hasMore: false, pending: true })
     deliver({ type: 'snapshot', messages: [message('m-1')] })
@@ -335,7 +349,7 @@ describe('runtime subscribe', () => {
     const transport = getNativeChatSessionTransport(ENV)
 
     transport.subscribe({ subscriptionId: 's-1', agent: 'claude', sessionId: 'sess-1' }, onFrame)
-    await Promise.resolve()
+    await flushMicrotasks()
 
     deliver({ type: 'snapshot', messages: [message('m-1')] })
     deliver({ type: 'snapshot', messages: [], error: 'runtime too old' })
@@ -413,6 +427,7 @@ describe('runtime subscribe', () => {
       const transport = getNativeChatSessionTransport(ENV)
 
       transport.subscribe({ subscriptionId: 's-1', agent: 'claude', sessionId: 'sess-1' }, vi.fn())
+      await flushMicrotasks()
       attempts[0]!.resolve({ unsubscribe: vi.fn(), sendBinary: vi.fn() })
       attempts[0]!.callbacks.onResponse({
         ok: true,
@@ -487,14 +502,15 @@ describe('runtime subscribe', () => {
         vi.fn()
       )
 
+      await flushMicrotasks()
       attempts[0]!.callbacks.onClose?.()
       await vi.advanceTimersByTimeAsync(RUNTIME_NATIVE_CHAT_RECONNECT_MS)
       const activeUnsubscribe = vi.fn()
       attempts[1]!.resolve({ unsubscribe: activeUnsubscribe, sendBinary: vi.fn() })
-      await Promise.resolve()
+      await flushMicrotasks()
       const staleUnsubscribe = vi.fn()
       attempts[0]!.resolve({ unsubscribe: staleUnsubscribe, sendBinary: vi.fn() })
-      await Promise.resolve()
+      await flushMicrotasks()
       stop()
 
       expect(staleUnsubscribe).toHaveBeenCalledOnce()
@@ -518,13 +534,51 @@ describe('runtime subscribe', () => {
       { subscriptionId: 's-1', agent: 'claude', sessionId: 'sess-1' },
       onAppended
     )
+    await flushMicrotasks()
     stop() // teardown before the subscribe promise resolves
     resolveHandle({ unsubscribe, sendBinary: vi.fn() })
-    await Promise.resolve()
-    await Promise.resolve()
+    await flushMicrotasks()
+    await flushMicrotasks()
 
     expect(unsubscribe).toHaveBeenCalledOnce()
     expect(onAppended).not.toHaveBeenCalled()
+  })
+
+  it('opts into current controls only on a capable runtime and preserves its marker', async () => {
+    supportsCurrentRequests.mockResolvedValue(true)
+    markRuntimeEnvironmentCompatible(ENV)
+    const { deliver } = stubSubscribe()
+    const onFrame = vi.fn()
+    const stop = getNativeChatSessionTransport(ENV).subscribe(
+      { subscriptionId: 's-1', agent: 'codex', sessionId: 'sess-1' },
+      onFrame
+    )
+    await flushMicrotasks()
+    expect(runtimeEnvironmentsSubscribe).toHaveBeenCalledWith(
+      expect.objectContaining({
+        params: expect.objectContaining({
+          capabilities: { transcriptPending: 1, transcriptSourceOrder: 1, currentRequests: 2 }
+        })
+      }),
+      expect.any(Object)
+    )
+    const currentRequests = {
+      contract: 'agent-session.current-requests.v2',
+      sessionId: 'sess-1',
+      epoch: 'e',
+      publisher: 'p',
+      revision: 1,
+      owner: 'o',
+      version: 'v'
+    }
+    deliver({ type: 'snapshot', messages: [], currentRequests })
+    expect(onFrame).toHaveBeenCalledWith({
+      type: 'snapshot',
+      messages: [],
+      hasMore: false,
+      currentRequests
+    })
+    stop()
   })
 })
 

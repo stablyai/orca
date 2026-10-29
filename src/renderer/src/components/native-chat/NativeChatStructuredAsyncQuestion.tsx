@@ -13,14 +13,19 @@ export function NativeChatStructuredAsyncQuestion({
   send
 }: {
   paneKey: string
-  session: Pick<NativeChatLiveSession, 'messages' | 'readPhase'>
+  session: Pick<NativeChatLiveSession, 'messages' | 'readPhase' | 'asyncQuestion'>
   send: NativeChatStructuredComposerTransport['send']
 }): React.JSX.Element | null {
-  const settled = session.readPhase === 'ready'
+  const settled = session.asyncQuestion !== undefined || session.readPhase === 'ready'
   const pending = useMemo(() => {
-    const prompt = settled ? extractPendingMessageReplyAsk(session.messages) : null
+    const prompt =
+      session.asyncQuestion !== undefined
+        ? session.asyncQuestion
+        : settled
+          ? extractPendingMessageReplyAsk(session.messages)
+          : null
     return prompt ? { kind: 'question' as const, prompt } : null
-  }, [session.messages, settled])
+  }, [session.messages, session.asyncQuestion, settled])
   const presentation = useNativeChatPromptCardPresentation({
     paneKey,
     card: pending,

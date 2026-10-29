@@ -9,7 +9,10 @@ import {
   RUNTIME_CAPABILITIES,
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
 } from '../../../../shared/protocol-version'
-import { AGENT_SESSION_CURRENT_REQUESTS_CLIENT_CAPABILITY } from '../../../../shared/agent-session-current-requests-capability'
+import {
+  AGENT_SESSION_CURRENT_REQUESTS_CLIENT_CAPABILITY,
+  AGENT_SESSION_CURRENT_REQUESTS_V2
+} from '../../../../shared/agent-session-current-requests-capability'
 import { remoteRuntimeClientCapabilities } from '../../../../shared/remote-runtime/remote-runtime-client-capabilities'
 import { AcpStructuredOptions } from '../../../acp/acp-structured-options'
 import { NewSessionResponseSchema } from '../../../acp/generated/acp-protocol.generated'
@@ -574,4 +577,32 @@ describe('agentSession.subscribeTurnCompletions', () => {
     expect(replies.filter((reply) => !reply.ok)).toEqual([])
     expect(subscribed().map((sub) => sub.includePrompts)).toEqual([true])
   })
+})
+
+it('negotiates current-request versions without sending async semantics to legacy clients', async () => {
+  let input: AgentSessionSubscribeInput | undefined
+  hostCalls.subscribe.mockImplementation((opened: AgentSessionSubscribeInput) => {
+    input = opened
+    opened.emit({ type: 'end' })
+    return () => {}
+  })
+  for (const capability of [
+    undefined,
+    AGENT_SESSION_CURRENT_REQUESTS_CLIENT_CAPABILITY,
+    AGENT_SESSION_CURRENT_REQUESTS_V2
+  ]) {
+    await call(
+      'agentSession.subscribe',
+      { sessionId: SESSION },
+      {
+        ...STRUCTURED_CLIENT,
+        clientCapabilities: [
+          ...STRUCTURED_CLIENT.clientCapabilities,
+          ...(capability ? [capability] : [])
+        ]
+      }
+    )
+    expect(input?.requestContract).toBe(capability)
+    expect(input?.readsCurrentRequests).toBe(capability !== undefined)
+  }
 })

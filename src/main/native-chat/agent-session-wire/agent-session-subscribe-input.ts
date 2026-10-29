@@ -1,3 +1,4 @@
+import type { CurrentRequestsContract } from '../../../shared/agent-session-current-requests-capability'
 import type { AgentJournalCursor } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionSubscribeEvent } from '../../../shared/agent-session-wire'
 import type { SubscriberFieldState } from './agent-session-subscriber-frame-fields'
@@ -11,6 +12,7 @@ export type AgentSessionSubscribeInput = {
   boundedFrames?: boolean
   projectQueuePublication?: SubscriberFieldState['projectQueuePublication']
   readsCurrentRequests?: boolean
+  requestContract?: CurrentRequestsContract
   /** False for desktops that need exact replay to keep send echoes and current requests. */
   snapshotCatchUp?: boolean
 }

@@ -11,7 +11,7 @@ import type { useMobileStructuredAgentSession } from './use-mobile-structured-ag
 export type MobileStructuredAskSession = Pick<
   ReturnType<typeof useMobileStructuredAgentSession>,
   'permission' | 'question' | 'sendWithOutcome'
->
+> & { asyncQuestion?: AskPrompt | null }
 
 // Keep nonblocking structured questions pending until the next user message; answer by ordinary send without touching the draft.
 export function useMobileStructuredAsyncQuestion(args: {
@@ -25,10 +25,18 @@ export function useMobileStructuredAsyncQuestion(args: {
   const { structured, messages, transcriptLoading } = args
   // A journal prompt takes the card slot first, as on desktop.
   const readable =
-    structured !== null && !structured.permission && !structured.question && !transcriptLoading
+    structured !== null &&
+    !structured.permission &&
+    !structured.question &&
+    (structured.asyncQuestion !== undefined || !transcriptLoading)
   const ask = useMemo(
-    () => (readable ? extractPendingMessageReplyAsk(messages) : null),
-    [readable, messages]
+    () =>
+      readable
+        ? structured.asyncQuestion !== undefined
+          ? structured.asyncQuestion
+          : extractPendingMessageReplyAsk(messages)
+        : null,
+    [readable, messages, structured?.asyncQuestion]
   )
   const sendWithOutcome = structured?.sendWithOutcome
   const answer = useCallback(

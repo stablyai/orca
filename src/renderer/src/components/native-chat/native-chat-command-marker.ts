@@ -1,3 +1,5 @@
+import { aggregateAsyncQuestions } from '../../../../shared/native-chat/input/native-chat-ask'
+import type { NativeChatLiveSession } from './native-chat-live-session-contract'
 // Slash-command feedback and transcript boundaries stay separate from optimistic user-send pruning.
 
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
@@ -75,6 +77,14 @@ function latestClearSentAt(markers: readonly NativeChatCommandMarker[]): number 
   return latest
 }
 
+export function afterCommandMarkerBoundary(
+  timestamp: number | null,
+  markers: readonly NativeChatCommandMarker[]
+): boolean {
+  const clearSentAt = latestClearSentAt(markers)
+  return clearSentAt === null || (timestamp !== null && timestamp > clearSentAt)
+}
+
 export function applyCommandMarkerBoundaries(
   messages: readonly NativeChatMessage[],
   markers: readonly NativeChatCommandMarker[]
@@ -84,7 +94,7 @@ export function applyCommandMarkerBoundaries(
     return messages as NativeChatMessage[]
   }
   // Hide pre-clear history immediately while the TUI asynchronously replaces or truncates its transcript.
-  return messages.filter((message) => message.timestamp !== null && message.timestamp > clearSentAt)
+  return messages.filter((message) => afterCommandMarkerBoundary(message.timestamp, markers))
 }
 
 /** Use system asides without harness-noise prefixes; host-answered commands show their answer instead of Ran. */
@@ -108,4 +118,22 @@ export function commandMarkersAsMessages(
     timestamp: marker.sentAt,
     source: 'scrape' as const
   }))
+}
+
+export function applySessionCommandMarkerBoundaries(
+  session: NativeChatLiveSession,
+  launchPrompt: NativeChatMessage | null,
+  markers: readonly NativeChatCommandMarker[]
+): NativeChatLiveSession {
+  const messages = applyCommandMarkerBoundaries(
+    launchPrompt ? [...session.messages, launchPrompt] : session.messages,
+    markers
+  )
+  if (session.asyncQuestionContributors) {
+    const contributors = session.asyncQuestionContributors.filter((row) =>
+      afterCommandMarkerBoundary(row.timestamp, markers)
+    )
+    return { ...session, messages, asyncQuestion: aggregateAsyncQuestions(contributors) }
+  }
+  return messages === session.messages ? session : { ...session, messages }
 }

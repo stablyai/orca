@@ -26,7 +26,7 @@ export function useMobileNativeChatPromptController({
   status: AgentStatusEntry | null | undefined
   session: Pick<
     ReturnType<typeof useMobileNativeChatSession>,
-    'messages' | 'transcriptLoading' | 'status'
+    'messages' | 'transcriptLoading' | 'status' | 'asyncQuestion'
   >
   scopeKey: string | null
   sessionId: string | null
@@ -65,6 +65,7 @@ export function useMobileNativeChatPromptController({
     structured,
     status,
     messages: session.messages,
+    asyncQuestion: session.asyncQuestion,
     transcriptLoading: session.transcriptLoading
   })
   // A never-read transcript cannot prove that a dismissed prompt cleared.

@@ -137,3 +137,63 @@ it('retires positive owner changes, rejects late reads, and relinquishes authori
     expect(state.currentRequests).toBeUndefined()
   }
 })
+
+it('negotiates lossless message-answerable controls separately from v1 callbacks and installs restarted reads atomically', async () => {
+  const v2 = { ...marker, contract: 'agent-session.current-requests.v2' as const }
+  const question = {
+    sourceRowId: 'outside-history',
+    timestamp: 10,
+    responseMode: 'message' as const,
+    questions: [
+      {
+        header: 'Choose',
+        question: 'Which?',
+        multiSelect: false,
+        options: [{ label: 'Blue', description: '\\"😀'.repeat(20_000) }]
+      }
+    ]
+  }
+  const payload = {
+    blocking: [prompt],
+    asyncQuestions: [question],
+    context: { sessionId: 's', boundary: 'context' }
+  }
+  let current = { identity: 'host', items: payload, marker: v2 }
+  const complete = vi.fn()
+  const error = vi.fn()
+  let reads = 0
+  const reader = createAgentSessionCurrentRequestsReader({
+    read: async (request) => {
+      reads++
+      if (reads === 2) {
+        current = {
+          identity: 'host',
+          marker: { ...v2, version: 'replacement', revision: 2 },
+          items: { ...payload, asyncQuestions: [] }
+        }
+      }
+      return readCurrentRequestsPiece(current, request)
+    },
+    complete,
+    replaceMarker: vi.fn(),
+    error
+  })
+  reader.observe(v2)
+  await vi.waitFor(() => expect(complete).toHaveBeenCalledOnce())
+  expect(complete).toHaveBeenCalledWith(current.marker, [prompt], current.items)
+  expect(reads).toBeGreaterThan(3)
+  expect(error).not.toHaveBeenCalled()
+  reader.invalidate()
+  const legacyComplete = vi.fn()
+  const legacyError = vi.fn()
+  const legacy = createAgentSessionCurrentRequestsReader({
+    read: async () => ({ marker, json: JSON.stringify(payload), nextCursor: null }),
+    complete: legacyComplete,
+    replaceMarker: vi.fn(),
+    error: legacyError
+  })
+  legacy.observe(marker)
+  await vi.waitFor(() => expect(legacyError).toHaveBeenCalledOnce())
+  expect(legacyComplete).not.toHaveBeenCalled()
+  legacy.invalidate()
+})

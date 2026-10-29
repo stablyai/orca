@@ -152,19 +152,48 @@ function reachedAgent(message: NativeChatMessage): boolean {
   )
 }
 
-function scanPendingAsks(messages: readonly NativeChatMessage[]): {
-  blocking: AskPrompt | null
-  replyAsMessage: AskPrompt | null
-} {
+export type AsyncQuestionContributor = {
+  sourceRowId: string
+  timestamp: number | null
+  questions: AskQuestion[]
+  responseMode: 'message'
+}
+
+export function aggregateAsyncQuestions(
+  contributors: readonly AsyncQuestionContributor[]
+): AskPrompt | null {
+  return contributors.length > 0
+    ? {
+        questions: contributors.flatMap((row) => row.questions),
+        replyAsMessage: true,
+        occurrenceKey: JSON.stringify(contributors.map((row) => row.sourceRowId))
+      }
+    : null
+}
+
+export function scanPendingAsks(messages: readonly NativeChatMessage[]) {
+  const scan = createPendingAskScanner()
+  messages.forEach(scan.append)
+  return scan.current()
+}
+
+/** The source owner streams into the same scanner used by legacy history readers. */
+export function createPendingAskScanner() {
   let pending: AskPrompt | null = null
   // Two counters track pending’s FIFO depth without retaining a queue entry per call.
   let outstanding = 0
   let pendingDepth = -1
   // Each async question stays open past its immediate result until the agent receives a message.
-  let asyncQuestions: AskQuestion[] = []
-  let asyncOccurrences: string[] = []
+  let contributors: AsyncQuestionContributor[] = []
   const asyncCallIds = new Set<string>()
-  for (const message of messages) {
+  function interrupt(): void {
+    outstanding = 0
+    pendingDepth = -1
+    pending = null
+    contributors = []
+    asyncCallIds.clear()
+  }
+  function append(message: NativeChatMessage): void {
     // New user turns/interrupts abandon unresolved calls. Decoding drops tool_use_id, so orphan results cannot match by id;
     // reset the FIFO or one orphan strands later answered asks forever (#11761). Claude tool results decode as role tool.
     const interrupted = isInterruptedStatusMessage(message)
@@ -173,9 +202,7 @@ function scanPendingAsks(messages: readonly NativeChatMessage[]): {
       pendingDepth = -1
       pending = null
       if (interrupted || reachedAgent(message)) {
-        asyncQuestions = []
-        asyncOccurrences = []
-        asyncCallIds.clear()
+        interrupt()
       }
     }
     for (const block of message.blocks) {
@@ -185,9 +212,12 @@ function scanPendingAsks(messages: readonly NativeChatMessage[]): {
           : parseToolInput(block.name, block.input)
         if (parsed?.replyAsMessage) {
           if (block.callId === undefined || !asyncCallIds.has(block.callId)) {
-            asyncQuestions = [...asyncQuestions, ...parsed.questions]
-            // Canonical rows survive provider renumbering/block reshaping and distinguish later items.
-            asyncOccurrences.push(message.id)
+            contributors.push({
+              sourceRowId: message.id,
+              timestamp: message.timestamp ?? null,
+              questions: parsed.questions,
+              responseMode: 'message'
+            })
           }
           if (block.callId !== undefined) {
             asyncCallIds.add(block.callId)
@@ -209,23 +239,29 @@ function scanPendingAsks(messages: readonly NativeChatMessage[]): {
     }
   }
   return {
-    blocking: pending,
-    replyAsMessage:
-      asyncQuestions.length > 0
-        ? {
-            questions: asyncQuestions,
-            replyAsMessage: true,
-            occurrenceKey: JSON.stringify(asyncOccurrences)
-          }
-        : null
+    append,
+    interrupt,
+    current: () => ({
+      blocking: pending,
+      contributors: contributors.slice(),
+      replyAsMessage: aggregateAsyncQuestions(contributors)
+    })
   }
 }
 
 /** Prefers live status and consults transcript history only after its read settles. */
 export function resolveNativeChatAsk(args: {
+  asyncQuestion?: AskPrompt | null
   liveAsk: AskPrompt | null
   messages: readonly NativeChatMessage[]
   transcriptSettled: boolean
 }): AskPrompt | null {
-  return args.liveAsk ?? (args.transcriptSettled ? extractPendingAsk(args.messages) : null)
+  return (
+    args.liveAsk ??
+    (args.transcriptSettled
+      ? args.asyncQuestion !== undefined
+        ? (scanPendingAsks(args.messages).blocking ?? args.asyncQuestion)
+        : extractPendingAsk(args.messages)
+      : (args.asyncQuestion ?? null))
+  )
 }

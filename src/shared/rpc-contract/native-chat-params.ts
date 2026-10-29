@@ -27,6 +27,7 @@ export const NativeChatSession = z.object({
   // Gate pending snapshots: legacy clients mistake them for settled empty history and overwrite retention/unblock drafts.
   capabilities: z
     .object({
+      currentRequests: z.literal(2).optional(),
       transcriptPending: z.literal(1).optional(),
       transcriptSourceOrder: z.literal(1).optional()
     })
@@ -39,3 +40,12 @@ export const NativeChatUnsubscribe = z.object({
 })
 
 export const MOBILE_NATIVE_CHAT_MAX_WINDOW = 2000
+
+export const NativeChatCurrentRequests = z
+  .object({
+    subscriptionId: z.string().min(1),
+    sessionId: z.string().min(1),
+    version: z.string().uuid(),
+    cursor: z.number().int().nonnegative().optional()
+  })
+  .strict()

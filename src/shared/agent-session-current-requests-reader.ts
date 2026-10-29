@@ -1,4 +1,9 @@
-import { AGENT_SESSION_CURRENT_REQUESTS_CLIENT_CAPABILITY } from './agent-session-current-requests-capability'
+import { z } from 'zod'
+import type { CurrentRequestsPayload } from './agent-session-current-requests-wire'
+import {
+  AGENT_SESSION_CURRENT_REQUESTS_CLIENT_CAPABILITY,
+  AGENT_SESSION_CURRENT_REQUESTS_V2
+} from './agent-session-current-requests-capability'
 import type { AgentJournalRenderItem } from './agent-session-journal-types'
 import { isAdmissibleAgentJournalRenderItem } from './agent-session-journal-schemas'
 import { readAgentSessionErrorRefusal } from './agent-session-write-failure'
@@ -10,10 +15,42 @@ import type {
   AgentSessionCurrentRequestsRead
 } from './agent-session-current-requests-wire'
 
+const asyncContributorSchema = z.object({
+  sourceRowId: z.string(),
+  timestamp: z.number().finite().nullable(),
+  responseMode: z.literal('message'),
+  questions: z
+    .array(
+      z.object({
+        question: z.string(),
+        header: z.string().optional(),
+        multiSelect: z.boolean(),
+        hasPreviews: z.literal(true).optional(),
+        options: z.array(z.object({ label: z.string(), description: z.string().optional() }))
+      })
+    )
+    .min(1)
+})
+const payloadSchema = z.object({
+  blocking: z.array(z.custom<AgentJournalRenderItem>(isAdmissibleAgentJournalRenderItem)),
+  asyncQuestions: z.array(asyncContributorSchema),
+  context: z.object({ sessionId: z.string(), boundary: z.string() })
+})
+function supported(contract: string): boolean {
+  return (
+    contract === AGENT_SESSION_CURRENT_REQUESTS_CLIENT_CAPABILITY ||
+    contract === AGENT_SESSION_CURRENT_REQUESTS_V2
+  )
+}
+
 /** One in-flight piece per owner, including replacement subscriptions awaiting an old reply. */
 export function createAgentSessionCurrentRequestsReader(args: {
   read: (request: AgentSessionCurrentRequestsRead) => Promise<AgentSessionCurrentRequestsPiece>
-  complete: (marker: AgentSessionCurrentRequestsMarker, items: AgentJournalRenderItem[]) => void
+  complete: (
+    marker: AgentSessionCurrentRequestsMarker,
+    items: AgentJournalRenderItem[],
+    payload?: CurrentRequestsPayload
+  ) => void
   replaceMarker: (marker: AgentSessionCurrentRequestsMarker) => void
   /** Only failures that will not be retried are reported. */
   error: (error: unknown) => void
@@ -59,7 +96,7 @@ export function createAgentSessionCurrentRequestsReader(args: {
           if (
             piece.marker.sessionId !== marker.sessionId ||
             piece.marker.version === marker.version ||
-            piece.marker.contract !== AGENT_SESSION_CURRENT_REQUESTS_CLIENT_CAPABILITY
+            piece.marker.contract !== marker.contract
           ) {
             throw new Error('Invalid request owner')
           }
@@ -71,6 +108,7 @@ export function createAgentSessionCurrentRequestsReader(args: {
           continue
         }
         if (
+          piece.marker.contract !== marker.contract ||
           piece.marker.version !== marker.version ||
           piece.marker.owner !== marker.owner ||
           piece.marker.epoch !== marker.epoch ||
@@ -80,8 +118,14 @@ export function createAgentSessionCurrentRequestsReader(args: {
         }
         chunks.push(piece.json)
         if (piece.nextCursor === null) {
-          const value: unknown = JSON.parse(chunks.join(''))
+          const decoded: unknown = JSON.parse(chunks.join(''))
+          const payload =
+            marker.contract === AGENT_SESSION_CURRENT_REQUESTS_V2
+              ? payloadSchema.parse(decoded)
+              : undefined
+          const value: unknown = payload ? payload.blocking : decoded
           if (
+            (payload && payload.context.sessionId !== marker.sessionId) ||
             !Array.isArray(value) ||
             !value.every(isAdmissibleAgentJournalRenderItem) ||
             !value.every(
@@ -93,7 +137,11 @@ export function createAgentSessionCurrentRequestsReader(args: {
             throw new Error('Invalid current requests')
           }
           retry.reset()
-          args.complete(marker, value)
+          if (payload) {
+            args.complete(marker, value, payload)
+          } else {
+            args.complete(marker, value)
+          }
           return
         }
         if (!Number.isSafeInteger(piece.nextCursor) || piece.nextCursor <= cursor) {
@@ -119,7 +167,7 @@ export function createAgentSessionCurrentRequestsReader(args: {
   }
   return {
     observe(marker: AgentSessionCurrentRequestsMarker | undefined): void {
-      if (marker && marker.contract !== AGENT_SESSION_CURRENT_REQUESTS_CLIENT_CAPABILITY) {
+      if (marker && !supported(marker.contract)) {
         return
       }
       if (desired?.version === marker?.version) {

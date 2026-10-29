@@ -1,3 +1,5 @@
+import { AGENT_SESSION_CURRENT_REQUESTS_V2 } from '../../../../shared/agent-session-current-requests-capability'
+import type { AgentSessionCurrentRequestsMarker } from '../../../../shared/agent-session-current-requests-wire'
 import type { NativeChatApi, NativeChatAppendedMessages } from '../../../../preload/api-types'
 import { buildNativeChatUnsubscribe } from '../../../../shared/native-chat/native-chat-stream-unsubscribe'
 import {
@@ -10,6 +12,7 @@ import { getClientForEnvironment, requireActiveEnvironmentOrNull } from './web-r
 
 export function createWebNativeChatApi(): NativeChatApi {
   return {
+    currentRequests: (request) => callRuntimeResult('nativeChat.currentRequests', request),
     // The full output stays on the host that ran the agent; the web client shows the message.
     getConversationNameFailureOutput: async () => null,
     readSession: async (agent, sessionId, limit, transcriptPath) =>
@@ -40,106 +43,130 @@ export function createWebNativeChatApi(): NativeChatApi {
       let handle: { unsubscribe: () => void } | null = null
       let cancelled = false
       let receivedInitial = false
-      void getClientForEnvironment(environment)
-        .subscribe(
-          'nativeChat.subscribe',
-          {
-            agent: args.agent,
-            sessionId: args.sessionId,
-            subscriptionId: args.subscriptionId,
-            transcriptPath: args.transcriptPath,
-            limit: args.limit,
-            capabilities: { transcriptPending: 1, transcriptSourceOrder: 1 }
-          },
-          {
-            onResponse: (response) => {
-              if (cancelled) {
-                return
+      void callRuntimeResult<{ capabilities?: string[] }>('status.get')
+        .then((status) => {
+          if (cancelled) {
+            return { unsubscribe: () => {} }
+          }
+          const supported =
+            status.capabilities?.includes(AGENT_SESSION_CURRENT_REQUESTS_V2) === true
+          return getClientForEnvironment(environment).subscribe(
+            'nativeChat.subscribe',
+            {
+              agent: args.agent,
+              sessionId: args.sessionId,
+              subscriptionId: args.subscriptionId,
+              transcriptPath: args.transcriptPath,
+              limit: args.limit,
+              capabilities: {
+                transcriptPending: 1,
+                transcriptSourceOrder: 1,
+                ...(supported ? { currentRequests: 2 } : {})
               }
-              if (!response.ok) {
-                if (!receivedInitial) {
+            },
+            {
+              onResponse: (response) => {
+                if (cancelled) {
+                  return
+                }
+                if (!response.ok) {
+                  if (!receivedInitial) {
+                    receivedInitial = true
+                    onFrame({
+                      type: 'snapshot',
+                      messages: [],
+                      hasMore: false,
+                      error: response.error.message
+                    })
+                  }
+                  return
+                }
+                const result = response.result as {
+                  type?: string
+                  messages?: NativeChatAppendedMessages
+                  hasMore?: boolean
+                  error?: string
+                  lifecycle?: unknown
+                  currentRequests?: AgentSessionCurrentRequestsMarker
+                  pending?: boolean
+                }
+                const lifecycle = parseRuntimeNativeChatTurnLifecycle(result?.lifecycle)
+                // No transcript behind this window yet — forwarded so the view can stop spinning, but it is not the settled initial read.
+                const pending = result?.pending === true
+                if (
+                  (result?.type === 'appended' ||
+                    result?.type === 'snapshot' ||
+                    result?.type === 'replacement') &&
+                  Array.isArray(result.messages)
+                ) {
+                  if (!receivedInitial) {
+                    if (!pending) {
+                      receivedInitial = true
+                    }
+                    onFrame({
+                      type: 'snapshot',
+                      messages: result.messages,
+                      hasMore: result.hasMore ?? result.messages.length >= (args.limit ?? 300),
+                      ...(result.error ? { error: result.error } : {}),
+                      ...(lifecycle ? { lifecycle } : {}),
+                      ...(result.currentRequests
+                        ? { currentRequests: result.currentRequests }
+                        : {}),
+                      ...(pending ? { pending: true } : {})
+                    })
+                  } else if (result.type === 'snapshot') {
+                    onFrame({
+                      type: 'snapshot',
+                      messages: result.messages,
+                      hasMore: result.hasMore ?? false,
+                      ...(result.error ? { error: result.error } : {}),
+                      ...(lifecycle ? { lifecycle } : {}),
+                      ...(result.currentRequests
+                        ? { currentRequests: result.currentRequests }
+                        : {}),
+                      ...(pending ? { pending: true } : {})
+                    })
+                  } else {
+                    onFrame(
+                      result.type === 'replacement'
+                        ? {
+                            type: 'replacement',
+                            messages: result.messages,
+                            hasMore: result.hasMore ?? false,
+                            ...(lifecycle ? { lifecycle } : {}),
+                            ...(result.currentRequests
+                              ? { currentRequests: result.currentRequests }
+                              : {})
+                          }
+                        : {
+                            type: 'appended',
+                            messages: result.messages,
+                            ...(lifecycle ? { lifecycle } : {}),
+                            ...(result.currentRequests
+                              ? { currentRequests: result.currentRequests }
+                              : {})
+                          }
+                    )
+                  }
+                } else if (!receivedInitial) {
+                  // Unknown ok payloads otherwise never set receivedInitial, leaving the view loading forever.
                   receivedInitial = true
                   onFrame({
                     type: 'snapshot',
                     messages: [],
                     hasMore: false,
-                    error: response.error.message
+                    ...(result?.error ? { error: result.error } : {})
                   })
                 }
-                return
               }
-              const result = response.result as {
-                type?: string
-                messages?: NativeChatAppendedMessages
-                hasMore?: boolean
-                error?: string
-                lifecycle?: unknown
-                pending?: boolean
-              }
-              const lifecycle = parseRuntimeNativeChatTurnLifecycle(result?.lifecycle)
-              // No transcript behind this window yet — forwarded so the view can stop spinning, but it is not the settled initial read.
-              const pending = result?.pending === true
-              if (
-                (result?.type === 'appended' ||
-                  result?.type === 'snapshot' ||
-                  result?.type === 'replacement') &&
-                Array.isArray(result.messages)
-              ) {
-                if (!receivedInitial) {
-                  if (!pending) {
-                    receivedInitial = true
-                  }
-                  onFrame({
-                    type: 'snapshot',
-                    messages: result.messages,
-                    hasMore: result.hasMore ?? result.messages.length >= (args.limit ?? 300),
-                    ...(result.error ? { error: result.error } : {}),
-                    ...(lifecycle ? { lifecycle } : {}),
-                    ...(pending ? { pending: true } : {})
-                  })
-                } else if (result.type === 'snapshot') {
-                  onFrame({
-                    type: 'snapshot',
-                    messages: result.messages,
-                    hasMore: result.hasMore ?? false,
-                    ...(result.error ? { error: result.error } : {}),
-                    ...(lifecycle ? { lifecycle } : {}),
-                    ...(pending ? { pending: true } : {})
-                  })
-                } else {
-                  onFrame(
-                    result.type === 'replacement'
-                      ? {
-                          type: 'replacement',
-                          messages: result.messages,
-                          hasMore: result.hasMore ?? false,
-                          ...(lifecycle ? { lifecycle } : {})
-                        }
-                      : {
-                          type: 'appended',
-                          messages: result.messages,
-                          ...(lifecycle ? { lifecycle } : {})
-                        }
-                  )
-                }
-              } else if (!receivedInitial) {
-                // Unknown ok payloads otherwise never set receivedInitial, leaving the view loading forever.
-                receivedInitial = true
-                onFrame({
-                  type: 'snapshot',
-                  messages: [],
-                  hasMore: false,
-                  ...(result?.error ? { error: result.error } : {})
-                })
-              }
+            },
+            {
+              // Unsubscribe reaps the watcher on view toggle; pane tokens prevent cross-pane teardown.
+              buildUnsubscribe: () =>
+                buildNativeChatUnsubscribe(args.agent, args.sessionId, args.subscriptionId)
             }
-          },
-          {
-            // Unsubscribe reaps the watcher on view toggle; pane tokens prevent cross-pane teardown.
-            buildUnsubscribe: () =>
-              buildNativeChatUnsubscribe(args.agent, args.sessionId, args.subscriptionId)
-          }
-        )
+          )
+        })
         .then((h) => {
           if (cancelled) {
             h.unsubscribe()

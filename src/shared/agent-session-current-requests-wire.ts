@@ -1,7 +1,16 @@
-import type { AGENT_SESSION_CURRENT_REQUESTS_CLIENT_CAPABILITY } from './agent-session-current-requests-capability'
+import type { CurrentRequestsContract } from './agent-session-current-requests-capability'
+import type { AgentJournalRenderItem } from './agent-session-journal-types'
+import type { AsyncQuestionContributor } from './native-chat/input/native-chat-ask'
+
+export type SourceContext = { sessionId: string; boundary: string }
+export type CurrentRequestsPayload = {
+  blocking: AgentJournalRenderItem[]
+  asyncQuestions: AsyncQuestionContributor[]
+  context: SourceContext
+}
 
 export type AgentSessionCurrentRequestsMarker = {
-  contract: typeof AGENT_SESSION_CURRENT_REQUESTS_CLIENT_CAPABILITY
+  contract: CurrentRequestsContract
   sessionId: string
   epoch: string
   publisher: string
