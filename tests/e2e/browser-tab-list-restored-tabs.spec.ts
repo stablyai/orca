@@ -47,6 +47,7 @@ function activeBrowserTabId(page: Page, worktreeId: string): Promise<string | nu
 
 test('tab list reports restored tabs, and commands load them in the background', async (// oxlint-disable-next-line no-empty-pattern -- Playwright's second fixture arg is testInfo; the first must be an object destructure to opt out of the default fixture set.
 {}, testInfo) => {
+  // Launches Orca twice and waits out a 10 s visibility lease.
   test.setTimeout(300_000)
   const repoPath = existsSync(TEST_REPO_PATH_FILE)
     ? readFileSync(TEST_REPO_PATH_FILE, 'utf-8').trim()
@@ -104,6 +105,7 @@ test('tab list reports restored tabs, and commands load them in the background',
     expect(await activeBrowserTabId(second.page, worktreeId)).toBe(visibleTabId)
 
     // The wake's 10 s visibility lease lapsing must not unload the page again.
+    // ast-grep-ignore: test-no-real-time-wait -- the lease is real time in the app and exposes no expiry signal
     await second.page.waitForTimeout(12_000)
     const later = await callRuntime(second.page, 'browser.eval', {
       worktree,
