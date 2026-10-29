@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
+import { MARKDOWN_TEXT_SCALES } from '../markdown-text-scale/markdown-text-scales'
 import { persistMirrored } from './mirrored-storage-keys'
 import { TERMINAL_TEXT_SCALES } from '../terminal/terminal-text-scales'
 import { HOST_SIDEBAR_MIN_WIDTH } from '../layout/responsive-layout-metrics'
@@ -91,6 +92,21 @@ export async function loadTerminalTextScale(): Promise<number> {
 export async function saveTerminalTextScale(scale: number): Promise<void> {
   const value = String(scale)
   await persistMirrored(TEXT_SCALE_KEY, value)
+}
+
+const MARKDOWN_TEXT_SCALE_KEY = 'orca:markdownTextScale'
+
+export async function loadMarkdownTextScale(): Promise<number> {
+  try {
+    const parsed = Number(await AsyncStorage.getItem(MARKDOWN_TEXT_SCALE_KEY))
+    return MARKDOWN_TEXT_SCALES.some((scale) => scale === parsed) ? parsed : 1
+  } catch {
+    return 1
+  }
+}
+
+export async function saveMarkdownTextScale(scale: number): Promise<void> {
+  await persistMirrored(MARKDOWN_TEXT_SCALE_KEY, String(scale))
 }
 
 const AUTOCOMPLETE_KEY = 'orca:terminalAutocompleteEnabled'

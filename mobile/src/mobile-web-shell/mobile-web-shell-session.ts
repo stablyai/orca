@@ -203,8 +203,7 @@ function decideDownloadFailed(
   session: MobileWebShellSession,
   cause: MobileWebShellUpdateFailureCause
 ): MobileWebShellStep {
-  const cached = session.cached
-  const gates = session.gates
+  const { cached, gates } = session
   if (cached === null || gates === null) {
     return step(session, {
       state: { kind: 'failed', reason: 'download-failed', retriedOnce: session.retriedOnce }
@@ -285,6 +284,7 @@ export function reduceMobileWebShellSession(
             generationDirectory: event.generationDirectory,
             sessionId: event.sessionId,
             buildId: event.buildId,
+            pageVersion: event.pageVersion,
             totalBytes: event.totalBytes,
             elapsedMs: event.elapsedMs
           }

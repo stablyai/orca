@@ -4,6 +4,24 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { MarkdownReader } from './MobileSessionMarkdownReader'
 import type { MarkdownDocState } from './mobile-session-route-types'
 
+vi.mock('react-native-gesture-handler', () => ({
+  GestureDetector: 'GestureDetector',
+  GestureHandlerRootView: 'GestureHandlerRootView'
+}))
+vi.mock('../markdown-text-scale/MarkdownTextSizeButton', () => ({
+  MarkdownTextSizeButton: 'MarkdownTextSizeButton'
+}))
+vi.mock('../markdown-text-scale/use-markdown-text-scale', () => ({
+  useMarkdownTextScale: () => ({
+    textScale: 1,
+    setLiveScale: vi.fn(),
+    commitTextScale: vi.fn()
+  })
+}))
+vi.mock('../markdown-text-scale/use-markdown-text-scale-pinch-gesture', () => ({
+  useMarkdownTextScalePinchGesture: () => ({})
+}))
+
 vi.mock('react-native', () => ({
   View: 'View',
   Text: 'Text',

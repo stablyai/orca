@@ -1,10 +1,14 @@
 import { MobileMarkdownPreviewImage } from './MobileMarkdownPreviewImage'
 import type { MobileFilePreviewRpcSender } from './mobile-file-preview-operations'
-import { useState } from 'react'
-import { Pressable, ScrollView, View } from 'react-native'
+import { useEffect, useRef, useState } from 'react'
+import { Platform, Pressable, ScrollView, View } from 'react-native'
 import { Code, Pencil } from 'lucide-react-native'
+import { GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler'
 import { MobileMarkdown } from '../components/MobileMarkdown'
 import { MobileSourceCopyButton } from '../components/MobileSourceCopyButton'
+import { MarkdownTextSizeButton } from '../markdown-text-scale/MarkdownTextSizeButton'
+import { useMarkdownTextScale } from '../markdown-text-scale/use-markdown-text-scale'
+import { useMarkdownTextScalePinchGesture } from '../markdown-text-scale/use-markdown-text-scale-pinch-gesture'
 import { colors } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import {
@@ -48,6 +52,54 @@ export function MobileFileMarkdownPreview({
   }
   const previewSelected = mode === 'preview'
   const sourceSelected = mode === 'source'
+  const scrollRef = useRef<ScrollView>(null)
+  const { textScale, setLiveScale, commitTextScale } = useMarkdownTextScale()
+  const pinchGesture = useMarkdownTextScalePinchGesture({
+    textScale,
+    onLiveScale: setLiveScale,
+    onCommit: commitTextScale,
+    combineWithNativeScroll: true
+  })
+
+  useEffect(() => {
+    if (Platform.OS !== 'web') {
+      return
+    }
+    const scroller = scrollRef.current?.getScrollableNode()
+    if (scroller instanceof HTMLElement) {
+      scroller.style.touchAction = 'pan-x pan-y'
+    }
+  }, [previewSelected])
+
+  const preview = (
+    <ScrollView
+      ref={scrollRef}
+      style={styles.scroll}
+      contentContainerStyle={styles.markdownContent}
+    >
+      {truncated ? <MobileFilePreviewTruncatedNote byteLength={byteLength} /> : null}
+      <MobileMarkdown
+        content={content}
+        textScale={textScale}
+        scaleListMarkers
+        onOpenFile={onOpenFile}
+        renderImage={
+          worktreeId
+            ? (href, alt) => (
+                <MobileMarkdownPreviewImage
+                  key={`${worktreeId}:${relativePath}:${href}`}
+                  client={client ?? null}
+                  worktreeId={worktreeId}
+                  documentPath={relativePath}
+                  href={href}
+                  alt={alt}
+                />
+              )
+            : undefined
+        }
+      />
+    </ScrollView>
+  )
 
   return (
     <View style={styles.modeContainer}>
@@ -81,6 +133,9 @@ export function MobileFileMarkdownPreview({
             strokeWidth={2.2}
           />
         </Pressable>
+        {previewSelected ? (
+          <MarkdownTextSizeButton textScale={textScale} onSelect={commitTextScale} />
+        ) : null}
         <MobileSourceCopyButton
           key={relativePath}
           text={content}
@@ -93,27 +148,16 @@ export function MobileFileMarkdownPreview({
         />
       </View>
       {mode === 'preview' ? (
-        <ScrollView style={styles.scroll} contentContainerStyle={styles.markdownContent}>
-          {truncated ? <MobileFilePreviewTruncatedNote byteLength={byteLength} /> : null}
-          <MobileMarkdown
-            content={content}
-            onOpenFile={onOpenFile}
-            renderImage={
-              worktreeId
-                ? (href, alt) => (
-                    <MobileMarkdownPreviewImage
-                      key={`${worktreeId}:${relativePath}:${href}`}
-                      client={client ?? null}
-                      worktreeId={worktreeId}
-                      documentPath={relativePath}
-                      href={href}
-                      alt={alt}
-                    />
-                  )
-                : undefined
-            }
-          />
-        </ScrollView>
+        <GestureHandlerRootView style={styles.scroll}>
+          <GestureDetector
+            gesture={pinchGesture}
+            touchAction="pan-y"
+            userSelect="auto"
+            enableContextMenu
+          >
+            {Platform.OS === 'web' ? <View style={styles.scroll}>{preview}</View> : preview}
+          </GestureDetector>
+        </GestureHandlerRootView>
       ) : (
         <MobileFilePreviewSourceText
           relativePath={relativePath}

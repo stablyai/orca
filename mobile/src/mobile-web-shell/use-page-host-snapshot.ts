@@ -26,7 +26,7 @@ export type PageHostSnapshotView = {
   unreadable: boolean
   retry: () => void
   // Keep init synchronous from a mirror updated by native writers and refreshed from the store.
-  readStorage: () => PageStorageForInit
+  readStorage: (pageVersion?: number) => PageStorageForInit
   refreshStorage: () => Promise<void>
   writeStorage: (key: string, value: string | null) => void
   readWorkspaceKey: (key: string) => Promise<string | null>
@@ -134,16 +134,19 @@ export function usePageHostSnapshot(
     snapshot,
     unreadable,
     retry: useCallback(() => setReadAttempt((attempt) => attempt + 1), []),
-    readStorage: useCallback(() => {
-      // Bound values here or one oversized preference rejects all of init; report omissions so defaulted preferences are diagnosable.
-      const held = readMirroredStorage(pageStorageKeysForRoute(hostId, routePathname))
-      const { entries, dropped, oversize } = pageStorageEntriesForInit(held)
-      if (dropped.length > 0) {
-        console.warn('[web-shell] a stored value is too large for the page', { keys: dropped })
-      }
-      // Tell the page which oversized values are missing so it cannot replace unseen contents (ruling 33.6).
-      return { storage: entries, storageOversize: oversize }
-    }, [hostId, routePathname]),
+    readStorage: useCallback(
+      (pageVersion?: number) => {
+        // Bound values here or one oversized preference rejects all of init; report omissions so defaulted preferences are diagnosable.
+        const held = readMirroredStorage(pageStorageKeysForRoute(hostId, routePathname))
+        const { entries, dropped, oversize } = pageStorageEntriesForInit(held, pageVersion)
+        if (dropped.length > 0) {
+          console.warn('[web-shell] a stored value is too large for the page', { keys: dropped })
+        }
+        // Tell the page which oversized values are missing so it cannot replace unseen contents (ruling 33.6).
+        return { storage: entries, storageOversize: oversize }
+      },
+      [hostId, routePathname]
+    ),
     refreshStorage,
     writeStorage,
     readWorkspaceKey

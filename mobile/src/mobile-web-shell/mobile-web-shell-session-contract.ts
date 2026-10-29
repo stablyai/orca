@@ -67,6 +67,7 @@ export type MobileWebShellSessionState =
   | {
       readonly kind: 'ready'
       readonly generationDirectory: string
+      readonly pageVersion?: number
       readonly sessionId: string
       readonly buildId: string
       readonly totalBytes: number
@@ -89,6 +90,7 @@ export type MobileWebShellSessionEffect =
   | { readonly kind: 'download' }
   | {
       readonly kind: 'open-generation'
+      readonly pageVersion?: number
       readonly directory: string
       readonly buildId: string
       readonly totalBytes: number
@@ -129,6 +131,7 @@ export type MobileWebShellSessionEvent =
       readonly type: 'activated'
       readonly flow: number
       readonly generationDirectory: string
+      readonly pageVersion?: number
       readonly sessionId: string
       readonly buildId: string
       readonly totalBytes: number

@@ -3910,5 +3910,8 @@
     "webviewReadyWatchdog": {
       "initializeFailed": "Terminal did not initialize - no ready signal from the terminal view"
     }
+  },
+  "markdownTextScale": {
+    "button": "Markdown text size"
   }
 }

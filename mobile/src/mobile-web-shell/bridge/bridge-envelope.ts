@@ -107,12 +107,18 @@ export const BridgeUiLocaleSchema = z.enum(SUPPORTED_UI_LOCALES)
 
 export type BridgeUiLocale = z.infer<typeof BridgeUiLocaleSchema>
 
-export const BridgeInitStorageSchema = z
-  .record(
-    z.string().min(1).max(PAGE_STORAGE_MAX_KEY_CHARS).refine(isPageStorageKey),
-    z.string().max(PAGE_STORAGE_MAX_VALUE_CHARS)
-  )
-  .refine((entries) => Object.keys(entries).length <= PAGE_STORAGE_MAX_ENTRIES)
+export const BridgeInitStorageSchema = z.preprocess(
+  (entries) =>
+    typeof entries === 'object' && entries !== null && !Array.isArray(entries)
+      ? Object.fromEntries(Object.entries(entries).filter(([key]) => isPageStorageKey(key)))
+      : entries,
+  z
+    .record(
+      z.string().min(1).max(PAGE_STORAGE_MAX_KEY_CHARS).refine(isPageStorageKey),
+      z.string().max(PAGE_STORAGE_MAX_VALUE_CHARS)
+    )
+    .refine((entries) => Object.keys(entries).length <= PAGE_STORAGE_MAX_ENTRIES)
+)
 
 export const BridgeSendRequestOptionsSchema = z.object({
   timeoutMs: z.number().int().positive().optional(),
@@ -257,10 +263,16 @@ const BridgeHostMessageSchema = z.union([
     host: BridgeInitHostSchema.optional(),
     storage: BridgeInitStorageSchema.optional(),
     // Advisory page fast path for oversized keys; the shell independently refuses writes because older pages ignore this additive field (ruling 33.6).
-    storageOversize: z
-      .array(z.string().min(1).max(PAGE_STORAGE_MAX_KEY_CHARS).refine(isPageStorageKey))
-      .max(PAGE_STORAGE_MAX_ENTRIES)
-      .optional(),
+    storageOversize: z.preprocess(
+      (keys) =>
+        Array.isArray(keys)
+          ? keys.filter((key) => typeof key !== 'string' || isPageStorageKey(key))
+          : keys,
+      z
+        .array(z.string().min(1).max(PAGE_STORAGE_MAX_KEY_CHARS).refine(isPageStorageKey))
+        .max(PAGE_STORAGE_MAX_ENTRIES)
+        .optional()
+    ),
     pageRoutes: z
       .array(z.string().min(1).max(BRIDGE_MAX_ROUTE_PATHNAME_CHARS))
       .max(BRIDGE_MAX_PAGE_ROUTES)

@@ -71,7 +71,7 @@ export type MobileWebShellBridgeArgs = {
   onNavigateBack: () => BridgeNavigateBackOutcome
   // Wait for host profile and storage before building the host, or its first init would mount a page against missing identity/preferences.
   snapshot: PageHostSnapshot | null
-  readStorage: () => PageStorageForInit
+  readStorage: (pageVersion?: number) => PageStorageForInit
   onStorageWrite: (key: string, value: string | null) => void
   onPageFault: (error: BridgeErrorCapture) => void
   onPageReady: () => void
@@ -114,6 +114,7 @@ export function useMobileWebShellBridge(args: MobileWebShellBridgeArgs): MobileW
       return
     }
     const latest = argsRef.current
+    const pageVersion = latest.session.kind === 'ready' ? latest.session.pageVersion : undefined
     // Read callbacks from the current committed ref; captured render closures would outlive their screen state.
     const host = createBridgeHost({
       client,
@@ -151,7 +152,7 @@ export function useMobileWebShellBridge(args: MobileWebShellBridgeArgs): MobileW
       onExternalLink: (url) => argsRef.current.onExternalLink(url),
       onHaptic: (kind) => argsRef.current.onHaptic(kind),
       serveNativeVerb: (verb, params) => argsRef.current.serveNativeVerb(verb, params),
-      readStorage: () => argsRef.current.readStorage(),
+      readStorage: () => argsRef.current.readStorage(pageVersion),
       onStorageWrite: (key, value) => argsRef.current.onStorageWrite(key, value),
       onPageFault: (error) => argsRef.current.onPageFault(error),
       onRouteParamClear: (param, value) => argsRef.current.onRouteParamClear(param, value),

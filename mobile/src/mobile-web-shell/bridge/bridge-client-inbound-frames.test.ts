@@ -2,7 +2,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { isRpcDeliveryUnknown } from '../../transport/rpc-delivery-ambiguity'
 import { BRIDGE_MAX_MESSAGE_BYTES } from './bridge-caps'
 import { BRIDGE_PROTOCOL_VERSION } from './bridge-envelope'
-import { createPageClient as createPage, idOf, readError } from './bridge-page-client-test-harness'
+import { pageStorageEntriesForInit } from '../page-storage-keys'
+import {
+  createPageClient as createPage,
+  idOf,
+  INIT,
+  readError
+} from './bridge-page-client-test-harness'
 
 const resources = new Set<ReturnType<typeof createPage>>()
 function createPageClient(...args: Parameters<typeof createPage>): ReturnType<typeof createPage> {
@@ -27,6 +33,26 @@ afterEach(() => {
 })
 
 describe('bridge client refusals and send failures', () => {
+  it('initializes across page versions and drops storage keys the page does not know', () => {
+    const held = { 'orca:terminalTextScale': '1', 'orca:markdownTextScale': '1.5' }
+    for (const pageVersion of [undefined, 1, 2]) {
+      const { entries } = pageStorageEntriesForInit(held, pageVersion)
+      expect(entries).toEqual(pageVersion === 2 ? held : { 'orca:terminalTextScale': '1' })
+      const page = createPageClient()
+      const ready = vi.fn()
+      page.client.onReady(ready)
+      page.deliver({
+        ...INIT,
+        storage: { ...entries, 'orca:futurePreference': 'new value' },
+        storageOversize: ['orca:futureOversizedPreference']
+      })
+      expect(ready).toHaveBeenCalledOnce()
+      expect(page.client.getShellSession()?.storage).toEqual(entries)
+      expect(page.client.getShellSession()?.storageOversize).toEqual([])
+      expect(page.diagnostics).toEqual([])
+    }
+  })
+
   it('reports a frame its own reader will not take, and changes nothing', () => {
     const page = createPageClient()
     page.start()
