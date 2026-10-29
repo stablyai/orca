@@ -32,8 +32,20 @@ describe('ProjectViewWrapper GitHub source context boundary', () => {
       // Why: the slug-matched row's host, so a twin id never reaches the other host's row.
       repoHostId: 'ssh:builder',
       type: 'pr',
+      assignees: [],
       prRepo: { owner: 'acme', repo: 'orca', host: 'ghe.example.com' }
     })
     expect(buildProjectWorkItem(row, { id: 'repo-1' })?.prRepo?.host).toBe('github.com')
+  })
+
+  it('threads the matched repo source context into direct start assignment', () => {
+    const actionSource = componentSource('useProjectRowActions.ts')
+    const wrapperSource = componentSource('ProjectViewWrapper.tsx')
+    const startSection = sourceBetween(actionSource, 'const startWork = useCallback(', 'return {')
+    const onUseSection = sourceBetween(wrapperSource, 'onUse={(item) => {', 'onClose=')
+
+    expect(startSection).toContain('sourceContext: buildTaskSourceContextFromRepo({')
+    expect(startSection).toContain('repo: resolution.repo')
+    expect(onUseSection).toContain('sourceContext: rowActions.dialogSourceContext')
   })
 })

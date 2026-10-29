@@ -214,6 +214,7 @@ export function buildDefaultSettings(args: {
     skipCodexRateLimitResetConfirm: false,
     defaultTaskViewPreset: 'all',
     defaultTaskSource: 'github',
+    assignUnassignedGitHubIssuesOnStart: false,
     visibleTaskProviders: [...TASK_PROVIDERS],
     visibleTaskProvidersDefaultedForJira: true,
     defaultRepoSelection: null,

@@ -28,6 +28,7 @@ import { completeWorktreeCreation } from '@/lib/worktree-creation-completion'
 import { showWorktreeCreationReadyToast } from '@/lib/worktree-creation-ready-toast'
 import { mountCreatedWorktreeStartupTabsInBackground } from '@/lib/worktree-creation-background-mount'
 import { ensureWebRuntimeWorktreeTerminalAfterWake } from '@/lib/web-runtime-worktree-terminal-after-wake'
+import { assignUnassignedGitHubIssueOnStart } from '@/lib/assign-unassigned-github-issue-on-start'
 
 // The pending pointer can survive app-view changes; only terminal view actually displays creation UI.
 function isPendingCreationSurfaceVisible(creationId: string): boolean {
@@ -158,6 +159,18 @@ export async function executeWorktreeCreation(
     }
     return
   }
+  // Why: assignment is best-effort and can wait on gh; do not delay reveal.
+  void assignUnassignedGitHubIssueOnStart({
+    enabled: useAppStore.getState().settings?.assignUnassignedGitHubIssuesOnStart === true,
+    item: preparedRequest.linkedWorkItem
+      ? {
+          ...preparedRequest.linkedWorkItem,
+          assignees: preparedRequest.githubStartAssignees
+        }
+      : preparedRequest.linkedWorkItem,
+    repoId: preparedRequest.repoId,
+    sourceContext: preparedRequest.taskSourceContext
+  }).catch(() => undefined)
   await attachEphemeralVmRuntimeToWorkspace(preparedRequest, worktree.id)
 
   const backendSpawned = result.startupTerminal?.spawned === true

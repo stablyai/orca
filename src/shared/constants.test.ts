@@ -13,6 +13,10 @@ describe('getDefaultSettings', () => {
     )
   })
 
+  it('does not assign unassigned GitHub issues on Start until the user opts in', () => {
+    expect(getDefaultSettings('/tmp').assignUnassignedGitHubIssuesOnStart).toBe(false)
+  })
+
   it('asks before closing terminals with running processes by default', () => {
     expect(getDefaultSettings('/tmp').skipCloseTerminalWithRunningProcessConfirm).toBe(false)
   })
