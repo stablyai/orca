@@ -147,7 +147,7 @@ it('writes turn and attention edges, ignores streamed previews, and clears an em
     at: 10,
     prompt: 'p'.repeat(280)
   })
-  // Reopen dedupes against the saved row, so no writer retains closed chats.
+  // A new writer dedupes against the saved row.
   new StructuredAgentSessionSavedStatus(() => ({ store, logger: log.logger })).observe(summary)
   expect(transition).toHaveBeenCalledTimes(1)
   writer.observe({ ...summary, status: 'attention', statusStartedAt: 11 })
@@ -352,7 +352,10 @@ it('lists only indexed unopened chats, keeps legacy targets, and opens history o
 it('keeps queued leftovers closed at startup and shows their paused cards on demand', async () => {
   const { host, store } = await interruptedRestart('queued-cards')
   await host.setSessionTabVisibility(SESSION, true)
-  await store.transitionHandoff(SESSION, ({ lastTurn: _lastTurn, ...record }) => record)
+  await store.transitionHandoff(SESSION, (record) => ({
+    ...record,
+    lastTurn: { state: 'open', at: 40, prompt: 'saved prompt from the closed chat' }
+  }))
   const openJournal = vi.spyOn(journalFactory, 'openAgentSessionJournal')
   openJournal.mockClear()
   await host.seedSessionTabs([SESSION])
@@ -361,7 +364,9 @@ it('keeps queued leftovers closed at startup and shows their paused cards on dem
     status: 'idle',
     turnOutcome: 'cancellation'
   })
-  await host.restartResume.list()
+  expect(await host.restartResume.list()).toMatchObject([
+    { sessionId: SESSION, latestPrompt: 'saved prompt from the closed chat' }
+  ])
   await host.restartResume.listFailures()
   expect(openJournal).not.toHaveBeenCalled()
   const history = await host.history({ sessionId: SESSION, direction: 'tail' })

@@ -2,7 +2,9 @@ import { expect, it, vi } from 'vitest'
 import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session-journal-types'
 import { agentSessionOperationKey } from '../../shared/agent-session-operation-ledger'
-import { scaleStore, scaleJournal } from './agent-session-scale.test-fixture'
+import type { AgentSessionRecord } from '../../shared/agent-session-record'
+import type { AgentSessionStatusSummary } from '../../shared/agent-session-wire'
+import { scaleStore, scaleJournal, scaleRecord } from './agent-session-scale.test-fixture'
 import {
   editPersistedTestAgentSessionStore,
   openTestAgentSessionRecordStore
@@ -131,3 +133,142 @@ it.each([10, 100])(
     unsubscribe()
   }
 )
+
+// Inspect all writer-owned collections so a renamed historical cache cannot escape the contract.
+function retainedEntries(writer: StructuredAgentSessionSavedStatus): Record<string, number> {
+  return Object.fromEntries(
+    Object.entries(writer)
+      .filter(([, value]) => value instanceof Map || value instanceof Set)
+      .map(([key, value]) => [key, value.size])
+  )
+}
+
+function turnSummary(sessionId: string, at: number): AgentSessionStatusSummary {
+  return {
+    sessionId,
+    workspaceId: 'workspace-1',
+    agent: 'claude',
+    status: 'idle',
+    turnOutcome: 'success',
+    latestPrompt: 'saved prompt',
+    statusStartedAt: at,
+    updatedAt: at
+  }
+}
+
+it.each([1_000, 10_000])(
+  'releases production writer retention after %i distinct historical chats',
+  async (n) => {
+    const { store } = await scaleStore(1)
+    const rows = new Map<string, AgentSessionRecord>()
+    vi.spyOn(store, 'getRecord').mockImplementation((id) => rows.get(id) ?? null)
+    // Benchmark writer retention only; avoid quadratic whole-store transactions in this corpus.
+    const transition = vi
+      .spyOn(store, 'transitionHandoff')
+      .mockImplementation(async (id, apply) => {
+        const record = rows.get(id)
+        if (!record) {
+          throw new Error('missing benchmark row')
+        }
+        const next = apply(record)
+        rows.set(id, next)
+        return next
+      })
+    const writer = new StructuredAgentSessionSavedStatus(() => ({
+      store,
+      logger: createStructuredAgentSessionLogger()
+    }))
+    const started = performance.now()
+    let maxSettledEntries = 0
+    for (let i = 0; i < n; i++) {
+      const id = `historical-${i}`
+      rows.set(id, scaleRecord(id))
+      for (const at of [1, 2]) {
+        const summary = turnSummary(id, at)
+        writer.observe(summary)
+        writer.observe({ ...summary, lastAssistantMessage: 'streamed preview' })
+        await writer.drain()
+        // A second publication after settlement must also dedupe against the saved row.
+        writer.observe(summary)
+        maxSettledEntries = Math.max(maxSettledEntries, ...Object.values(retainedEntries(writer)))
+      }
+    }
+    await writer.drain()
+    console.info('saved-status writer retention benchmark', {
+      chats: n,
+      writes: transition.mock.calls.length,
+      maxSettledEntries,
+      retained: retainedEntries(writer),
+      elapsedMs: performance.now() - started
+    })
+    expect(transition).toHaveBeenCalledTimes(2 * n)
+    expect(rows.size).toBe(n)
+    expect([...rows.values()].every((row) => row.lastTurn?.at === 2)).toBe(true)
+    expect(maxSettledEntries).toBe(0)
+    expect(Object.values(retainedEntries(writer)).every((size) => size === 0)).toBe(true)
+  }
+)
+
+it('keeps the latest X/Y/X/Y owner through held writes and retries on publication after rejection', async () => {
+  const { store, rows } = await scaleStore(1)
+  const id = rows[0]!.sessionId
+  const original = store.transitionHandoff
+  const held: { gate: PromiseWithResolvers<void>; done: Promise<AgentSessionRecord> }[] = []
+  let tail = Promise.resolve()
+  const transition = vi.spyOn(store, 'transitionHandoff').mockImplementation((id, apply) => {
+    const gate = Promise.withResolvers<void>()
+    // Match production FIFO: only a successful commit publishes the row, rejection advances the tail.
+    const done = tail.then(() => gate.promise).then(() => original(id, apply))
+    tail = done.then(
+      () => {},
+      () => {}
+    )
+    held.push({ gate, done })
+    return done
+  })
+  const warn = vi.fn()
+  const writer = new StructuredAgentSessionSavedStatus(() => ({
+    store,
+    logger: { warn, error: vi.fn() }
+  }))
+  const x = turnSummary(id, 1)
+  const y = turnSummary(id, 2)
+  for (const summary of [x, y, x, y]) {
+    writer.observe(summary)
+  }
+  expect(transition).toHaveBeenCalledTimes(4)
+  expect(retainedEntries(writer)).toEqual({ queued: 1, pending: 4 })
+  const owner = Reflect.get(writer, 'queued').get(id)
+  for (let i = 0; i < held.length; i++) {
+    const write = held[i]!
+    if (i % 2) {
+      write.gate.reject(new Error('controlled persistence rejection'))
+    } else {
+      write.gate.resolve()
+    }
+    await write.done.catch(() => {})
+    await Promise.resolve()
+    await Promise.resolve()
+    if (i < 3) {
+      expect(Reflect.get(writer, 'queued').get(id)).toBe(owner)
+      expect(retainedEntries(writer)).toEqual({ queued: 1, pending: 3 - i })
+      writer.observe(y)
+      expect(transition).toHaveBeenCalledTimes(4)
+    }
+  }
+  await writer.drain()
+  expect(retainedEntries(writer)).toEqual({ queued: 0, pending: 0 })
+  expect(warn).toHaveBeenCalledTimes(2)
+  expect(store.getRecord(id)?.lastTurn?.at).toBe(1)
+  // A normal same-edge publication is the retry wake; drain alone schedules nothing.
+  expect(transition).toHaveBeenCalledTimes(4)
+  writer.observe(y)
+  writer.observe(y)
+  expect(transition).toHaveBeenCalledTimes(5)
+  held[4]!.gate.resolve()
+  await writer.drain()
+  expect(store.getRecord(id)?.lastTurn).toMatchObject({ at: 2, prompt: 'saved prompt' })
+  writer.observe(y)
+  expect(transition).toHaveBeenCalledTimes(5)
+  expect(retainedEntries(writer)).toEqual({ queued: 0, pending: 0 })
+})
