@@ -369,7 +369,7 @@ describe('handleReattachResult empty reattach under a hibernation note', () => {
 
     expect(bag.transport.disconnect).not.toHaveBeenCalled()
     expect(bag.session.startFreshColdRestoreAgentResume).not.toHaveBeenCalled()
-    expect(bag.session.setPanePtyFitBinding).toHaveBeenCalledWith(REMOTE_PTY_ID)
+    expect(bag.session.setPanePtyFitBinding).toHaveBeenCalledWith(REMOTE_PTY_ID, true)
   })
 
   it.runIf(ORCA_LAYOUT_OWNER_IS_MAIN)(
@@ -387,7 +387,7 @@ describe('handleReattachResult empty reattach under a hibernation note', () => {
 
       expect(bag.transport.disconnect).not.toHaveBeenCalled()
       expect(bag.session.startFreshColdRestoreAgentResume).not.toHaveBeenCalled()
-      expect(bag.session.setPanePtyFitBinding).toHaveBeenCalledWith('local-pty-1')
+      expect(bag.session.setPanePtyFitBinding).toHaveBeenCalledWith('local-pty-1', false)
     }
   )
 

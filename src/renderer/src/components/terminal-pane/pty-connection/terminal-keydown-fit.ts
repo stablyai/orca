@@ -12,6 +12,7 @@ import {
 import { isFreshNonDoneAgentStatus } from '../../../../../shared/agent-status/contracts/agent-status-freshness'
 =======
 import {
+  primeReattachedPtyKittyKeyboardModeTracker,
   registerPtyKittyKeyboardModeTracker,
   unregisterPtyKittyKeyboardModeTracker
 } from '../terminal-pty-kitty-keyboard-flags'
@@ -85,7 +86,7 @@ export function installTerminalKeydownFit(session: ConnectPanePtySession): void 
 
   session.visibleRemoteViewportClaimPtyId = null
   session.pendingVisibleRemoteViewportClaim = false
-  session.setPanePtyFitBinding = (ptyId: string): void => {
+  session.setPanePtyFitBinding = (ptyId: string, replayReattachment = false): void => {
     const previousPtyId = session.activePanePtyBinding
     if (previousPtyId && previousPtyId !== ptyId) {
       unregisterPtyKittyKeyboardModeTracker(
@@ -97,6 +98,12 @@ export function installTerminalKeydownFit(session: ConnectPanePtySession): void 
       ptyId,
       session.kittyKeyboardModes
     )
+    if (replayReattachment) {
+      primeReattachedPtyKittyKeyboardModeTracker(
+        ptyId,
+        session.activePtyKittyKeyboardModeRegistration
+      )
+    }
     bindPanePtyId(session.pane.id, ptyId, session.deps.tabId)
     session.pane.container.dataset.ptyId = ptyId
     if (

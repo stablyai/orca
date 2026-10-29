@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal-kitty-keyboard-mode-tracker'
 import {
   getPtyKittyKeyboardFlags,
+  primeReattachedPtyKittyKeyboardModeTracker,
   registerPtyKittyKeyboardModeTracker,
   resetPtyKittyKeyboardModeTrackersForTests,
   unregisterPtyKittyKeyboardModeTracker
@@ -43,5 +44,23 @@ describe('terminal PTY Kitty keyboard flags registry', () => {
 
     unregisterPtyKittyKeyboardModeTracker('pty-1', successorRegistration)
     expect(getPtyKittyKeyboardFlags('pty-1')).toBe(2)
+  })
+
+  it('reconciles a reattached tracker with replay after priming its last proven mode', () => {
+    const previous = new TerminalKittyKeyboardModeTracker()
+    const previousRegistration = registerPtyKittyKeyboardModeTracker('pty-1', previous)
+    previous.scan('\x1b[>1u')
+    unregisterPtyKittyKeyboardModeTracker('pty-1', previousRegistration)
+
+    const reattached = new TerminalKittyKeyboardModeTracker()
+    const reattachedRegistration = registerPtyKittyKeyboardModeTracker('pty-1', reattached)
+    expect(getPtyKittyKeyboardFlags('pty-1')).toBe(0)
+
+    primeReattachedPtyKittyKeyboardModeTracker('pty-1', reattachedRegistration)
+    reattached.adoptSnapshot('replayed screen', undefined)
+    expect(getPtyKittyKeyboardFlags('pty-1')).toBe(1)
+
+    reattached.adoptSnapshot('\x1b[=3u', undefined)
+    expect(getPtyKittyKeyboardFlags('pty-1')).toBe(3)
   })
 })

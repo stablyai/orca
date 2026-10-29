@@ -28,6 +28,8 @@ import {
   type SelectPermissionOverrides
 } from '../permissions/agent-permission-override-notice'
 
+let localAgentLaunchSettingsWriteTail: Promise<void> | null = null
+
 export function AgentLaunchSettingsSection({
   settings,
   updateSettings,
@@ -80,10 +82,11 @@ function LocalAgentLaunchSettings({
 }): React.JSX.Element {
   const notify = useAgentPermissionOverrideNotice()
   const chatOwnSupported = useChatSettingsOwnPermissions()
-  const tail = useRef<Promise<void> | null>(null)
   const enqueue = (operation: () => Promise<void>): Promise<void> => {
-    const write = (tail.current ?? Promise.resolve()).catch(() => {}).then(operation)
-    tail.current = write
+    const write = (localAgentLaunchSettingsWriteTail ?? Promise.resolve())
+      .catch(() => {})
+      .then(operation)
+    localAgentLaunchSettingsWriteTail = write
     return write
   }
   const current = () => useAppStore.getState().settings ?? settings

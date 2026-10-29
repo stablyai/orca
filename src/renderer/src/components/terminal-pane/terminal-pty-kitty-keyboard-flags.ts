@@ -13,7 +13,6 @@ export function registerPtyKittyKeyboardModeTracker(
   tracker: TerminalKittyKeyboardModeTracker
 ): symbol {
   const token = Symbol(ptyId)
-  retainedPtyKittyKeyboardFlags.delete(ptyId)
   ptyKittyKeyboardModeTrackers.set(ptyId, { tracker, token })
   return token
 }
@@ -24,7 +23,9 @@ export function unregisterPtyKittyKeyboardModeTracker(ptyId: string, token: symb
     return
   }
 
-  const snapshotFlags = registration.tracker.snapshotFlags
+  const snapshotFlags = registration.tracker.hasProvenBaseline
+    ? registration.tracker.snapshotFlags
+    : undefined
   if (snapshotFlags === undefined) {
     retainedPtyKittyKeyboardFlags.delete(ptyId)
   } else {
@@ -34,12 +35,23 @@ export function unregisterPtyKittyKeyboardModeTracker(ptyId: string, token: symb
   ptyKittyKeyboardModeTrackers.delete(ptyId)
 }
 
+/** Reattach replay is ordered after the prior binding, so it can correct a previously proven mode. */
+export function primeReattachedPtyKittyKeyboardModeTracker(ptyId: string, token: symbol): void {
+  const registration = ptyKittyKeyboardModeTrackers.get(ptyId)
+  if (!registration || registration.token !== token || registration.tracker.hasProvenBaseline) {
+    return
+  }
+  const retainedFlags = retainedPtyKittyKeyboardFlags.get(ptyId)
+  if (retainedFlags !== undefined) {
+    registration.tracker.restoreSnapshotFlags(retainedFlags)
+  }
+}
+
 export function getPtyKittyKeyboardFlags(ptyId: string): number {
-  return (
-    ptyKittyKeyboardModeTrackers.get(ptyId)?.tracker.snapshotFlags ??
-    retainedPtyKittyKeyboardFlags.get(ptyId) ??
-    0
-  )
+  const active = ptyKittyKeyboardModeTrackers.get(ptyId)
+  return active
+    ? (active.tracker.snapshotFlags ?? 0)
+    : (retainedPtyKittyKeyboardFlags.get(ptyId) ?? 0)
 }
 
 export function resetPtyKittyKeyboardModeTrackersForTests(): void {
