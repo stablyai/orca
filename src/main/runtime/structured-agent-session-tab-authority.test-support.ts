@@ -28,11 +28,6 @@ import { collectSavedStructuredAgentSessionIds } from './saved-structured-agent-
 import { chatTabCommandsSettled } from './session-layout-apply.test-fixture'
 import { stopStructuredAgentSessionRuntime } from './structured-agent-session-runtime'
 
-// CLI capability probing is outside tab authority and must not start a real CLI in this fixture.
-vi.mock('../claude/claude-cli-flag-prewarm', () => ({
-  prewarmClaudeCliFlags: async () => undefined
-}))
-
 export const B = 'chat-b-0002',
   C = 'chat-c-0003',
   G = 'chat-gone-0004'

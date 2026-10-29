@@ -29,6 +29,11 @@ import * as journalFactory from '../native-chat/agent-session-journal/journal-st
 import { discardStructuredWorkerSession } from './rpc/methods/orchestration-structured-worker-session'
 import { closeStructuredAgentSessionChild } from './agent-session/structured-agent-session-close'
 
+// CLI capability probing is outside tab authority and must not start a real CLI in this fixture.
+vi.mock('../claude/claude-cli-flag-prewarm', () => ({
+  prewarmClaudeCliFlags: async () => undefined
+}))
+
 const layoutOwner = vi.hoisted(() => ({ main: false }))
 vi.mock('../../shared/layout-owner-switch', () => ({
   get ORCA_LAYOUT_OWNER_IS_MAIN() {

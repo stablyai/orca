@@ -16,6 +16,11 @@ import { closeTestStores } from '../persistence/persistence-test-harness'
 import { closeTestJournalHostDatabases } from '../native-chat/agent-session-journal/journal-host-database-test-support'
 import { chatTabCommandsSettled } from './session-layout-apply.test-fixture'
 
+// CLI capability probing is outside tab authority and must not start a real CLI in this fixture.
+vi.mock('../claude/claude-cli-flag-prewarm', () => ({
+  prewarmClaudeCliFlags: async () => undefined
+}))
+
 it.each([10, 100])(
   'counts actual capture/materialization/projection work for %i selected chats',
   async (n) => {
