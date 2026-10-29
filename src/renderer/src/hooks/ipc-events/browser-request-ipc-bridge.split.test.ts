@@ -17,9 +17,7 @@ const mocks = vi.hoisted(() => {
     ...listeners,
     getState: vi.fn(),
     replyTabCreate: vi.fn(),
-    createBrowserTab: vi.fn(),
-    createEmptySplitGroup: vi.fn(),
-    closeEmptyGroup: vi.fn()
+    createBrowserTab: vi.fn()
   }
 })
 
@@ -48,10 +46,8 @@ function storeState() {
     unifiedTabsByWorktree: {
       [WT]: [{ id: 'u-term', entityId: 'term-1', groupId: 'g-terminal', contentType: 'terminal' }]
     },
-    createBrowserTab: mocks.createBrowserTab,
-    createEmptySplitGroup: mocks.createEmptySplitGroup.mockReturnValue('g-split'),
-    ensureWorktreeRootGroup: vi.fn(() => 'g-active'),
-    closeEmptyGroup: mocks.closeEmptyGroup
+    createBrowserTab: mocks.createBrowserTab.mockReturnValue({ id: 'ws-new' }),
+    ensureWorktreeRootGroup: vi.fn(() => 'g-root')
   }
 }
 
@@ -80,9 +76,7 @@ describe('browser tab create with a split pane', () => {
     registerBrowserRequestIpcBridge([])
   })
 
-  it("puts the tab in a new pane beside the caller's terminal", () => {
-    mocks.createBrowserTab.mockReturnValue({ id: 'ws-new' })
-
+  it("opens the tab in a new pane beside the caller's terminal without taking focus", () => {
     mocks.createListener?.({
       requestId: 'r1',
       worktreeId: WT,
@@ -91,36 +85,32 @@ describe('browser tab create with a split pane', () => {
       splitFromTabId: 'term-1'
     })
 
-    expect(mocks.createEmptySplitGroup).toHaveBeenCalledWith(WT, 'g-terminal', 'right', {
+    const options = mocks.createBrowserTab.mock.calls[0]?.[2]
+    expect(options).toMatchObject({
+      split: { sourceGroupId: 'g-terminal', splitDirection: 'right', activate: false },
       activate: false
     })
-    expect(mocks.createBrowserTab).toHaveBeenCalledWith(
-      WT,
-      'https://example.com',
-      expect.objectContaining({ targetGroupId: 'g-split' })
-    )
+    expect(options).not.toHaveProperty('targetGroupId')
     expect(mocks.replyTabCreate).toHaveBeenCalledWith({ requestId: 'r1', browserPageId: 'ws-new' })
   })
 
-  it('leaves the layout alone without --split', () => {
-    mocks.createBrowserTab.mockReturnValue({ id: 'ws-new' })
+  it('splits beside the active pane when the caller tab is unknown', () => {
+    mocks.createListener?.({
+      requestId: 'r2',
+      worktreeId: WT,
+      url: 'about:blank',
+      split: 'down',
+      splitFromTabId: 'stale-tab'
+    })
 
-    mocks.createListener?.({ requestId: 'r2', worktreeId: WT, url: 'about:blank' })
-
-    expect(mocks.createEmptySplitGroup).not.toHaveBeenCalled()
+    expect(mocks.createBrowserTab.mock.calls[0]?.[2]).toMatchObject({
+      split: { sourceGroupId: 'g-active', splitDirection: 'down' }
+    })
   })
 
-  it('removes the empty pane when the tab cannot be created', () => {
-    mocks.createBrowserTab.mockImplementation(() => {
-      throw new Error('Browser page page-1 already exists')
-    })
+  it('adds a plain tab without --split', () => {
+    mocks.createListener?.({ requestId: 'r3', worktreeId: WT, url: 'about:blank' })
 
-    mocks.createListener?.({ requestId: 'r3', worktreeId: WT, url: 'about:blank', split: 'down' })
-
-    expect(mocks.closeEmptyGroup).toHaveBeenCalledWith(WT, 'g-split')
-    expect(mocks.replyTabCreate).toHaveBeenCalledWith({
-      requestId: 'r3',
-      error: 'Browser page page-1 already exists'
-    })
+    expect(mocks.createBrowserTab.mock.calls[0]?.[2]).not.toHaveProperty('split')
   })
 })

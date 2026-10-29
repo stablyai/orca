@@ -52,6 +52,8 @@ const TAB_CREATE_STRIPPED_PARAMS = [
   'profileId',
   'placement',
   'targetGroupId',
+  'split',
+  'splitFromTabId',
   'activate',
   'navigation'
 ] as const

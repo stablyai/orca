@@ -227,7 +227,7 @@ describe('executeDesktopBrowserBridgeRequest', () => {
     expect(dispatched).toEqual([])
   })
 
-  it('creates a tab only with the host’s url and workspace, never its profile, group, page id or focus', async () => {
+  it('creates a tab only with the host’s url and workspace, never its profile, group, split, page id or focus', async () => {
     const { value, dispatched } = deps()
 
     await executeDesktopBrowserBridgeRequest(
@@ -240,6 +240,8 @@ describe('executeDesktopBrowserBridgeRequest', () => {
           page: 'local-page',
           profileId: 'work-profile',
           targetGroupId: 'local-group',
+          split: 'right',
+          splitFromTabId: 'local-tab',
           activate: true,
           navigation: 'caller',
           placement: { kind: 'client', browserHostClientId: 'x' }
