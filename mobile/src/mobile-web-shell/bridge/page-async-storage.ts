@@ -34,7 +34,7 @@ export class PageStorageRefusedError extends Error {
 const values = new Map<string, string>()
 let write: PageStorageWriter = () => false
 // Refuse withheld oversized keys as too-large: the page holds no starting value, so any write would overwrite rather than extend the native value (ruling 33.6).
-let oversizeKeys: ReadonlySet<string> = new Set()
+let oversizeKeys = new Set<string>()
 let hostId = ''
 let routePathname = ''
 // Host-area pages read workspace-scoped keys on demand and may write them across this host’s workspaces.
@@ -43,10 +43,13 @@ let readWorkspaceKey: ((key: string) => Promise<string | null>) | null = null
 export function acceptPageStorageUpdate(key: string, value: string | null): void {
   if (
     !isPageStorageKeyForRoute(key, hostId, routePathname, readWorkspaceKey !== null) ||
-    oversizeKeys.has(key) ||
-    (value !== null && value.length > PAGE_STORAGE_MAX_VALUE_CHARS) ||
-    (values.get(key) ?? null) === value
+    (value !== null && value.length > PAGE_STORAGE_MAX_VALUE_CHARS)
   ) {
+    return
+  }
+  // The shell sent the whole current value, so a key withheld at init is no longer unseen.
+  const wasWithheld = oversizeKeys.delete(key)
+  if (!wasWithheld && (values.get(key) ?? null) === value) {
     return
   }
   if (value === null) {

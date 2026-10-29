@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { notifyMirroredKey } from '../storage/mirrored-storage-keys'
+import { clientFrame } from './bridge-host-test-fakes'
 import { harness } from './bridge-host-test-harness'
 import { subscribePageStorage } from './bridge-host-storage-subscription'
 import { PAGE_STORAGE_MAX_VALUE_CHARS } from './page-storage-keys'
@@ -21,5 +22,23 @@ describe('page storage subscription', () => {
     stopCurrent()
     notifyMirroredKey('orca:markdownTextScale', '2')
     expect(current.frames().filter((frame) => frame.type === 'storage')).toHaveLength(1)
+  })
+
+  it("does not echo a page's own write back to it, but still tells other pages", () => {
+    // The app store notes a page write synchronously, which is what reaches the subscriptions.
+    const writer = harness({ ready: true, onStorageWrite: notifyMirroredKey })
+    const other = harness({ ready: true })
+    const stopWriter = subscribePageStorage('host-a', '/h/host-a', 2, writer.host.publishStorage)
+    const stopOther = subscribePageStorage('host-a', '/h/host-a', 2, other.host.publishStorage)
+    writer.host.receive(
+      clientFrame({ type: 'notify', name: 'storage', key: 'orca:markdownTextScale', value: '1.5' })
+    )
+    expect(writer.storageWrites).toEqual([{ key: 'orca:markdownTextScale', value: '1.5' }])
+    expect(writer.frames().filter((frame) => frame.type === 'storage')).toEqual([])
+    expect(other.frames().filter((frame) => frame.type === 'storage')).toEqual([
+      { v: 1, type: 'storage', key: 'orca:markdownTextScale', value: '1.5' }
+    ])
+    stopWriter()
+    stopOther()
   })
 })

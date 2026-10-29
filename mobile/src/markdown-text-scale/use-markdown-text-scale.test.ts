@@ -114,6 +114,16 @@ describe('useMarkdownTextScale', () => {
     expect(storage.save).not.toHaveBeenCalled()
   })
 
+  it('does not let a late storage load overwrite a mirrored value', async () => {
+    let finishLoad!: (scale: number) => void
+    storage.load.mockReturnValue(new Promise((resolve) => (finishLoad = resolve)))
+    const stores = await mountSubscribers(1)
+    const listener = storage.subscribe.mock.calls[0][1]
+    await act(async () => listener('1'))
+    await act(async () => finishLoad(0.65))
+    expect(stores[0].textScale).toBe(1)
+  })
+
   it('keeps the optimistic scale when saving fails', async () => {
     storage.save.mockRejectedValue(new Error('Storage unavailable'))
     const stores = await mountSubscribers(1)

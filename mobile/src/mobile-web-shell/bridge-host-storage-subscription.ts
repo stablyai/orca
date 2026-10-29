@@ -1,5 +1,9 @@
 import { subscribeMirroredKey } from '../storage/mirrored-storage-keys'
-import { pageStorageEntriesForInit, pageStorageKeysForRoute } from './page-storage-keys'
+import {
+  LIVE_PAGE_STORAGE_PAGE_VERSION,
+  pageStorageEntriesForInit,
+  pageStorageKeysForRoute
+} from './page-storage-keys'
 
 export function subscribePageStorage(
   hostId: string,
@@ -7,7 +11,7 @@ export function subscribePageStorage(
   pageVersion: number | undefined,
   publish: (key: string, value: string | null) => void
 ): () => void {
-  if ((pageVersion ?? 0) < 2) {
+  if ((pageVersion ?? 0) < LIVE_PAGE_STORAGE_PAGE_VERSION) {
     return () => {}
   }
   const unsubscribers = pageStorageKeysForRoute(hostId, pathname).map((key) =>

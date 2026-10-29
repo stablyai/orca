@@ -184,8 +184,20 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
     ...(options.sessionBack === undefined ? {} : { established: options.sessionBack })
   })
 
+  // Page writes note synchronously; skip pushing that note back to the page that wrote it.
+  let applyingPageWrite = false
   const forwardNotify = createBridgeNotifyForwarder({
-    options,
+    options: {
+      ...options,
+      onStorageWrite: (key, value) => {
+        applyingPageWrite = true
+        try {
+          options.onStorageWrite(key, value)
+        } finally {
+          applyingPageWrite = false
+        }
+      }
+    },
     granted,
     initSent: () => initSent,
     route: () => routes.current(),
@@ -284,7 +296,7 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
       routes.publish(next, serving && initSent)
     },
     publishStorage: (key, value) => {
-      if (deliverable()) {
+      if (!applyingPageWrite && deliverable()) {
         send({ v: BRIDGE_PROTOCOL_VERSION, type: 'storage', key, value })
       }
     },

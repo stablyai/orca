@@ -1,6 +1,10 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { PAGE_STORAGE_MAX_VALUE_CHARS } from '../page-storage-keys'
-import pageAsyncStorage, { PageStorageRefusedError, publishPageStorage } from './page-async-storage'
+import pageAsyncStorage, {
+  acceptPageStorageUpdate,
+  PageStorageRefusedError,
+  publishPageStorage
+} from './page-async-storage'
 
 type Write = { key: string; value: string | null }
 
@@ -206,5 +210,28 @@ describe('what the page will not keep', () => {
     granted = false
     await expect(pageAsyncStorage.setItem('orca:pins:host-1', '["wt-1"]')).resolves.toBeUndefined()
     await expect(pageAsyncStorage.getItem('orca:pins:host-1')).resolves.toBeNull()
+  })
+})
+
+describe('a value the shell pushes later', () => {
+  it('replaces a key withheld as oversized at init, so the page can read and write it again', async () => {
+    const key = 'orca:custom-accessory-keys'
+    publishPageStorage(
+      {},
+      (written, value) => {
+        writes.push({ key: written, value })
+        return true
+      },
+      HOST_ID,
+      SESSION_ROUTE,
+      [key]
+    )
+    expect((await refusalOf(pageAsyncStorage.setItem(key, '[]'))).refusal).toBe('too-large')
+
+    acceptPageStorageUpdate(key, '["esc"]')
+
+    expect(await pageAsyncStorage.getItem(key)).toBe('["esc"]')
+    await pageAsyncStorage.setItem(key, '[]')
+    expect(writes).toEqual([{ key, value: '[]' }])
   })
 })

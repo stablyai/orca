@@ -7,7 +7,7 @@ import {
   subscribeLastVisitedWorktree
 } from './last-visited-worktree-by-host'
 
-// Track stored and locally noted visits; other pages reach a web page’s load-time copy only on reload.
+// Track stored and locally noted visits; open pages get other pages' visits as the shell pushes them (page version 2+).
 // Null until history loads or when this host has no visit.
 export function useLastVisitedWorktreeOnHost(
   hostId: string | undefined

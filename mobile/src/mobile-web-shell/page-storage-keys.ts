@@ -24,6 +24,8 @@ export const PAGE_STORAGE_KEY_PREFIXES = [
 export const PAGE_STORAGE_MAX_VALUE_CHARS = 16 * 1024
 export const PAGE_STORAGE_MAX_KEY_CHARS = 256
 export const PAGE_STORAGE_MAX_ENTRIES = 32
+// Pages from this version accept orca:markdownTextScale and live 'storage' frames.
+export const LIVE_PAGE_STORAGE_PAGE_VERSION = 2
 
 export function isPageStorageKey(key: string): boolean {
   if (key.length > PAGE_STORAGE_MAX_KEY_CHARS) {
@@ -138,7 +140,7 @@ export function pageStorageEntriesForInit(
   const oversize: string[] = []
   for (const [key, value] of Object.entries(held)) {
     // Version 1 pages reject the entire init when storage contains this newer key.
-    if (key === 'orca:markdownTextScale' && pageVersion < 2) {
+    if (key === 'orca:markdownTextScale' && pageVersion < LIVE_PAGE_STORAGE_PAGE_VERSION) {
       continue
     }
     if (value.length > PAGE_STORAGE_MAX_VALUE_CHARS) {
