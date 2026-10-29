@@ -42,6 +42,25 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     return { environmentId, hostUpdates }
   }
   let zoomLevel = readLocalWebUIState().uiZoomLevel
+  const cacheHostUiState = (incoming: PairedUiState) => {
+    const local = readLocalWebUIState()
+    const next = {
+      ...mergeHostWebUIState(local, incoming),
+      ...workerWindowLocalUiState(local),
+      osc52ClipboardDefaultOnNoticePending: mergeOsc52ClipboardNoticePending(local, incoming),
+      featureInteractions: mergeFeatureInteractionState(
+        local.featureInteractions,
+        incoming.featureInteractions
+      ),
+      contextualToursSeenIds: mergeContextualTourSeenIds(
+        local.contextualToursSeenIds,
+        incoming.contextualToursSeenIds
+      )
+    }
+    writeJson(UI_STORAGE_KEY, next)
+    zoomLevel = next.uiZoomLevel
+    return next
+  }
   return {
     ...createWebJiraFilterStateApi(),
     /** Hydrates from the active host after replaying pending roots, falling back to local state on failure or host changes. */
@@ -56,23 +75,7 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
         if (environmentId !== requireActiveEnvironmentOrNull()?.id) {
           return readLocalWebUIState()
         }
-        const local = readLocalWebUIState()
-        const next = {
-          ...mergeHostWebUIState(local, result.ui),
-          ...workerWindowLocalUiState(local),
-          osc52ClipboardDefaultOnNoticePending: mergeOsc52ClipboardNoticePending(local, result.ui),
-          featureInteractions: mergeFeatureInteractionState(
-            local.featureInteractions,
-            result.ui.featureInteractions
-          ),
-          contextualToursSeenIds: mergeContextualTourSeenIds(
-            local.contextualToursSeenIds,
-            result.ui.contextualToursSeenIds
-          )
-        }
-        writeJson(UI_STORAGE_KEY, next)
-        zoomLevel = next.uiZoomLevel
-        return next
+        return cacheHostUiState(result.ui)
       } catch {
         return readLocalWebUIState()
       }
@@ -126,22 +129,7 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
           id,
           15_000
         )
-        const local = readLocalWebUIState()
-        const next = {
-          ...mergeHostWebUIState(local, result.ui),
-          osc52ClipboardDefaultOnNoticePending: mergeOsc52ClipboardNoticePending(local, result.ui),
-          featureInteractions: mergeFeatureInteractionState(
-            local.featureInteractions,
-            result.ui.featureInteractions
-          ),
-          contextualToursSeenIds: mergeContextualTourSeenIds(
-            local.contextualToursSeenIds,
-            result.ui.contextualToursSeenIds
-          )
-        }
-        writeJson(UI_STORAGE_KEY, next)
-        zoomLevel = next.uiZoomLevel
-        return next
+        return cacheHostUiState(result.ui)
       } catch {
         return optimistic
       }

@@ -1,17 +1,21 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+type MenuEditTarget = Pick<Electron.WebContents, 'copy' | 'selectAll' | 'paste' | 'send'>
+
 const {
   buildFromTemplateMock,
   setApplicationMenuMock,
   getFocusedWindowMock,
   getFocusedWebContentsMock,
-  sendActionToFirstResponderMock
+  sendActionToFirstResponderMock,
+  workerContents
 } = vi.hoisted(() => ({
   buildFromTemplateMock: vi.fn(),
   setApplicationMenuMock: vi.fn(),
   getFocusedWindowMock: vi.fn(),
   getFocusedWebContentsMock: vi.fn(),
-  sendActionToFirstResponderMock: vi.fn()
+  sendActionToFirstResponderMock: vi.fn(),
+  workerContents: new Set<MenuEditTarget>()
 }))
 
 vi.mock('electron', () => ({
@@ -31,7 +35,15 @@ vi.mock('electron', () => ({
   }
 }))
 
-import { getNextDefaultOnAppearanceSettingValue, registerAppMenu } from './register-app-menu'
+vi.mock('../window/worker-window', () => ({
+  isWorkerWindowRenderer: (contents: MenuEditTarget) => workerContents.has(contents)
+}))
+
+import {
+  getNextDefaultOnAppearanceSettingValue,
+  rebuildAppMenu,
+  registerAppMenu
+} from './register-app-menu'
 import { markNativeBrowserPopupWindow } from '../browser/native-browser-popup-windows'
 
 const isMac = process.platform === 'darwin'
@@ -72,18 +84,66 @@ function getSubmenu(
   return (item?.submenu ?? []) as Electron.MenuItemConstructorOptions[]
 }
 
+function clickMenuItem(item: Electron.MenuItemConstructorOptions | undefined): void {
+  const click: unknown = item?.click
+  expect(click).toBeTypeOf('function')
+  if (typeof click === 'function') {
+    click()
+  }
+}
+
 describe('registerAppMenu', () => {
-  it('exposes New Window only while multiple windows are enabled', () => {
-    const onNewWindow = vi.fn()
-    registerAppMenu({ ...buildMenuOptions(), multiWindowEnabled: () => false, onNewWindow })
-    expect(
-      getSubmenu(getTemplate(), 'File').find((item) => item.id === 'new-window')
-    ).toBeUndefined()
-    buildFromTemplateMock.mockClear()
-    registerAppMenu({ ...buildMenuOptions(), multiWindowEnabled: () => true, onNewWindow })
-    const item = getSubmenu(getTemplate(), 'File').find((item) => item.id === 'new-window')
-    expect(item?.click).toBe(onNewWindow)
-  })
+  it.each(['linux', 'win32', 'darwin'] as const)(
+    'rebuilds New Window with the feature setting while preserving menu conventions on %s',
+    (platform) => {
+      vi.spyOn(process, 'platform', 'get').mockReturnValue(platform)
+      let enabled = false
+      const onNewWindow = vi.fn()
+      registerAppMenu({ ...buildMenuOptions(), multiWindowEnabled: () => enabled, onNewWindow })
+      expect(
+        getSubmenu(getTemplate(), 'File').find((item) => item.id === 'new-window')
+      ).toBeUndefined()
+      expect(getTemplate().some((item) => item.label === 'File')).toBe(platform !== 'darwin')
+
+      enabled = true
+      buildFromTemplateMock.mockClear()
+      rebuildAppMenu()
+      const template = getTemplate()
+      const fileSubmenu = getSubmenu(template, 'File')
+      const item = fileSubmenu.find((entry) => entry.id === 'new-window')
+      clickMenuItem(item)
+      expect(onNewWindow).toHaveBeenCalledOnce()
+      if (platform === 'darwin') {
+        expect(fileSubmenu).toEqual([item])
+      }
+      const settingsAndQuitMenu = getSubmenu(template, platform === 'darwin' ? 'Orca' : 'File')
+      expect(settingsAndQuitMenu.some((entry) => entry.label === 'Settings')).toBe(true)
+      expect(settingsAndQuitMenu.at(-1)?.role).toBe('quit')
+
+      enabled = false
+      buildFromTemplateMock.mockClear()
+      rebuildAppMenu()
+      expect(
+        getSubmenu(getTemplate(), 'File').find((entry) => entry.id === 'new-window')
+      ).toBeUndefined()
+      expect(getTemplate().some((entry) => entry.label === 'File')).toBe(platform !== 'darwin')
+    }
+  )
+
+  it.each(['linux', 'win32', 'darwin'] as const)(
+    'omits New Window without both the setting and a creation handler on %s',
+    (platform) => {
+      vi.spyOn(process, 'platform', 'get').mockReturnValue(platform)
+      for (const options of [{}, { multiWindowEnabled: () => true }, { onNewWindow: vi.fn() }]) {
+        buildFromTemplateMock.mockClear()
+        registerAppMenu({ ...buildMenuOptions(), ...options })
+        expect(
+          getSubmenu(getTemplate(), 'File').find((item) => item.id === 'new-window')
+        ).toBeUndefined()
+        expect(getTemplate().some((item) => item.label === 'File')).toBe(platform !== 'darwin')
+      }
+    }
+  )
   it.each(['linux', 'win32', 'darwin'] as const)(
     'leaves Ctrl+M to the terminal while preserving macOS minimize on %s',
     (platform) => {
@@ -127,6 +187,7 @@ describe('registerAppMenu', () => {
     getFocusedWindowMock.mockReset()
     getFocusedWebContentsMock.mockReset()
     sendActionToFirstResponderMock.mockReset()
+    workerContents.clear()
     buildFromTemplateMock.mockImplementation((template) => ({ template }))
   })
 
@@ -351,6 +412,46 @@ describe('registerAppMenu', () => {
     expect(devToolsContents.paste).toHaveBeenCalledOnce()
     expect(send).not.toHaveBeenCalled()
   })
+
+  it.each(
+    (['darwin', 'linux', 'win32'] as const).flatMap((platform) =>
+      ['worker', 'devtools', 'unavailable'].map((focus) => ({ platform, focus }))
+    )
+  )(
+    'routes worker Edit actions to the native $focus target on $platform',
+    ({ platform, focus }) => {
+      vi.spyOn(process, 'platform', 'get').mockReturnValue(platform)
+      const worker = { paste: vi.fn(), copy: vi.fn(), selectAll: vi.fn(), send: vi.fn() }
+      const devtools = { paste: vi.fn(), copy: vi.fn(), selectAll: vi.fn(), send: vi.fn() }
+      workerContents.add(worker)
+      getFocusedWindowMock.mockReturnValue({ webContents: worker })
+      getFocusedWebContentsMock.mockReturnValue(
+        focus === 'devtools' ? devtools : focus === 'worker' ? worker : null
+      )
+      registerAppMenu(buildMenuOptions())
+
+      const editSubmenu = getSubmenu(getTemplate(), 'Edit')
+      const copyItem = editSubmenu.find((item) => item.label === 'Copy')
+      const selectAllItem = editSubmenu.find((item) => item.label === 'Select All')
+      expect(copyItem?.accelerator).toBe(platform === 'darwin' ? 'Command+C' : undefined)
+      expect(selectAllItem?.accelerator).toBe(platform === 'darwin' ? 'Command+A' : undefined)
+      clickMenuItem(copyItem)
+      clickMenuItem(selectAllItem)
+      clickMenuItem(editSubmenu.find((item) => item.label === 'Paste'))
+
+      const target = focus === 'devtools' ? devtools : worker
+      const other = focus === 'devtools' ? worker : devtools
+      expect(target.copy).toHaveBeenCalledOnce()
+      expect(target.selectAll).toHaveBeenCalledOnce()
+      expect(target.paste).toHaveBeenCalledOnce()
+      expect(other.copy).not.toHaveBeenCalled()
+      expect(other.selectAll).not.toHaveBeenCalled()
+      expect(other.paste).not.toHaveBeenCalled()
+      expect(worker.send).not.toHaveBeenCalled()
+      expect(devtools.send).not.toHaveBeenCalled()
+      expect(sendActionToFirstResponderMock).not.toHaveBeenCalled()
+    }
+  )
 
   it.each(['darwin', 'linux', 'win32'] as const)(
     'routes Edit selection actions through the focused Orca window on %s',

@@ -72,6 +72,7 @@ export function normalizeLoadedDeviceRow(device: unknown): DeviceEntry | null {
       device.mobilePairingConnectionMode === 'local-only' ? 'local-only' : 'automatic',
     // Older grants reached the network; preserve all-interface binding on reconnect.
     pairingReach: device.pairingReach === 'this-computer' ? 'this-computer' : 'network',
+    dedicatedPairing: device.dedicatedPairing === true ? true : undefined,
     // Bad push metadata must not fail registry load and strand all devices.
     pushRegistration: parseMobilePushRegistration(device.pushRegistration),
     parentDeviceId: typeof device.parentDeviceId === 'string' ? device.parentDeviceId : undefined,

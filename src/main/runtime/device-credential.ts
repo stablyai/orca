@@ -14,7 +14,8 @@ export function mintTokenDevice(
   name: string,
   scope: DeviceScope,
   pairingReach: RuntimePairingReach,
-  grants: readonly RuntimeDeviceGrant[]
+  grants: readonly RuntimeDeviceGrant[],
+  options: { dedicated?: boolean } = {}
 ): TokenDeviceEntry {
   const validatedGrants = validGrants(grants, scope)
   return {
@@ -24,6 +25,7 @@ export function mintTokenDevice(
     pairedAt: Date.now(),
     lastSeenAt: 0,
     pairingReach,
+    ...(options.dedicated ? { dedicatedPairing: true as const } : {}),
     ...(validatedGrants ? { grants: validatedGrants } : {})
   }
 }

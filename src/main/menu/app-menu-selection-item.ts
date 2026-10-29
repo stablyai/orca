@@ -1,14 +1,17 @@
 import { BrowserWindow, Menu, webContents } from 'electron'
 import { isNativeBrowserPopupWindow } from '../browser/native-browser-popup-windows'
+import { isWorkerWindowRenderer } from '../window/worker-window'
 
 export type AppMenuSelectionAction = 'copy' | 'select-all'
 
-/** Native pages/popups own Edit actions; null leaves renderer surfaces to Orca. */
+/** Workers have no menu IPC bridge; host renderer surfaces keep Orca's terminal routing. */
 export function resolveNativeEditTarget(
   focusedWindow: Electron.BrowserWindow
 ): Electron.WebContents | null {
   const focusedContents = webContents.getFocusedWebContents() ?? focusedWindow.webContents
-  return isNativeBrowserPopupWindow(focusedWindow) || focusedContents !== focusedWindow.webContents
+  return isNativeBrowserPopupWindow(focusedWindow) ||
+    isWorkerWindowRenderer(focusedWindow.webContents) ||
+    focusedContents !== focusedWindow.webContents
     ? focusedContents
     : null
 }

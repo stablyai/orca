@@ -7,6 +7,7 @@ import { translateMain } from '../i18n/main-i18n'
 import { installPrivilegedWindowNavigationPolicy } from './privileged-window-navigation'
 import { showWindowWithoutStealingFocus } from './foreground-activation-policy'
 import { stepUIZoomLevel, type UIZoomDirection } from '../../shared/ui-zoom-level'
+import { QUIT_RENDERER_ACK_TIMEOUT_MS } from '../../shared/quit-teardown-deadline'
 
 type WorkerWindowRuntime = Pick<
   OrcaRuntimeRpcServer,
@@ -20,6 +21,45 @@ type WorkerWindowStore = Pick<Store, 'getUI'>
 
 const workerWindows = new Set<BrowserWindow>()
 let retainedHostWindow: BrowserWindow | null = null
+
+export function getWorkerWindows(): readonly BrowserWindow[] {
+  return [...workerWindows].filter((window) => !window.isDestroyed())
+}
+
+export function forgetRetainedHostWindow(window: BrowserWindow): void {
+  if (retainedHostWindow === window) {
+    retainedHostWindow = null
+  }
+}
+
+export async function closeWorkerWindowsForUserQuit(): Promise<boolean> {
+  const results = await Promise.all(
+    getWorkerWindows().map(
+      (window) =>
+        new Promise<boolean>((resolve) => {
+          const contents = window.webContents
+          const finish = (closed: boolean): void => {
+            clearTimeout(timeout)
+            window.removeListener('closed', onClosed)
+            contents.removeListener('will-prevent-unload', onVeto)
+            resolve(closed)
+          }
+          const onClosed = (): void => finish(true)
+          const onVeto = (): void => finish(false)
+          const timeout = setTimeout(() => finish(false), QUIT_RENDERER_ACK_TIMEOUT_MS)
+          timeout.unref?.()
+          window.once('closed', onClosed)
+          contents.once('will-prevent-unload', onVeto)
+          try {
+            window.close()
+          } catch {
+            finish(false)
+          }
+        })
+    )
+  )
+  return results.every(Boolean)
+}
 
 function revokeWorkerWindowAccess(runtime: WorkerWindowRuntime, deviceId: string): void {
   // Browser key upgrades fork a new identity; closing its window must revoke that grant too.
@@ -82,7 +122,8 @@ export async function createWorkerWindow(
     address: '127.0.0.1',
     name: `Orca window ${id}`,
     scope: 'runtime',
-    reach: 'this-computer'
+    reach: 'this-computer',
+    dedicated: true
   })
   if (!offer.available) {
     throw new Error(

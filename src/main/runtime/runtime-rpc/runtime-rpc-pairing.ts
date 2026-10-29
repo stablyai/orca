@@ -139,6 +139,8 @@ export class RuntimeRpcPairing extends RuntimeRpcNetworkExposure {
     address?: string | null
     name?: string
     rotate?: boolean
+    // A dedicated client's lifetime owns this grant independently of advertised offers.
+    dedicated?: boolean
     scope?: DeviceScope
     // Persist local-only policy on grants so reconnect cannot expose every interface; other callers default to network reach (STA-2370).
     reach?: RuntimePairingReach
@@ -182,9 +184,15 @@ export class RuntimeRpcPairing extends RuntimeRpcNetworkExposure {
     try {
       const reach = args.reach ?? 'network'
       const grants = args.grants ?? []
-      device = args.rotate
-        ? this.deviceRegistry.rotatePendingDevice(deviceName, scope, reach, grants)
-        : this.deviceRegistry.getOrCreatePendingDevice(deviceName, scope, reach, grants)
+      if (args.dedicated) {
+        device = this.deviceRegistry.addDevice(deviceName, scope, reach, grants, {
+          dedicated: true
+        })
+      } else {
+        device = args.rotate
+          ? this.deviceRegistry.rotatePendingDevice(deviceName, scope, reach, grants)
+          : this.deviceRegistry.getOrCreatePendingDevice(deviceName, scope, reach, grants)
+      }
     } catch (error) {
       console.error('[runtime] Failed to persist pairing credential:', error)
       return pairingUnavailable('device_registry_unavailable', DEVICE_REGISTRY_UNAVAILABLE_GUIDANCE)

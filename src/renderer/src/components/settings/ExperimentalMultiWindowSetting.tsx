@@ -4,6 +4,7 @@ import { SearchableSetting } from './SearchableSetting'
 import { SettingsSwitch } from './SettingsFormControls'
 import { getMultiWindowSearchEntry } from './multi-window-search-entry'
 import { translate } from '@/i18n/i18n'
+import { isWebClientLocation } from '@/lib/web-client-location'
 
 export function ExperimentalMultiWindowSetting({
   settings,
@@ -11,7 +12,10 @@ export function ExperimentalMultiWindowSetting({
 }: {
   settings: GlobalSettings
   updateSettings: (updates: Partial<GlobalSettings>) => void
-}): React.JSX.Element {
+}): React.JSX.Element | null {
+  if (isWebClientLocation()) {
+    return null
+  }
   const entry = getMultiWindowSearchEntry()
   return (
     <SearchableSetting {...entry} id="experimental-multi-window" className="space-y-3 py-2">

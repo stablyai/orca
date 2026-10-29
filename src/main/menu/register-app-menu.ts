@@ -11,7 +11,6 @@ import { createAppMenuSelectionItem, resolveNativeEditTarget } from './app-menu-
 import { createAppMenuQuitItems, type AppMenuQuitHandlers } from './app-menu-quit-item'
 import { createAppMenuReloadAndDevToolsItems } from './app-menu-reload-devtools-items'
 import { createAppWindowMenu } from './app-menu-window'
-import { isWorkerWindowRenderer } from '../window/worker-window'
 import { createNewWindowMenuItems } from './app-menu-new-window'
 
 export type AppearanceMenuState = {
@@ -147,13 +146,17 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
     ]
   }
 
+  const newWindowItems = createNewWindowMenuItems(
+    options.multiWindowEnabled?.(),
+    options.onNewWindow
+  )
   const fileMenu: Electron.MenuItemConstructorOptions = {
     label: translateMain('menu.file', 'File'),
     submenu: [
-      ...createNewWindowMenuItems(options.multiWindowEnabled?.(), options.onNewWindow),
-      settingsItem,
-      { type: 'separator' },
-      ...createAppMenuQuitItems(options)
+      ...newWindowItems,
+      ...(isMac
+        ? []
+        : [settingsItem, { type: 'separator' } as const, ...createAppMenuQuitItems(options)])
     ]
   }
 
@@ -180,10 +183,6 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
           // Electron paste cannot resolve ownership among Orca terminal/chat surfaces.
           const focusedWindow = BrowserWindow.getFocusedWindow()
           if (focusedWindow) {
-            if (isWorkerWindowRenderer(focusedWindow.webContents)) {
-              focusedWindow.webContents.paste()
-              return
-            }
             // Focused DevTools must own paste over the renderer's last-focused terminal (#16285).
             const nativeTarget = resolveNativeEditTarget(focusedWindow)
             if (nativeTarget) {
@@ -308,7 +307,7 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
 
   const template: Electron.MenuItemConstructorOptions[] = [
     ...(isMac ? [macAppMenu] : []),
-    ...(isMac ? [] : [fileMenu]),
+    ...(!isMac || newWindowItems.length ? [fileMenu] : []),
     editMenu,
     viewMenu,
     windowMenu,

@@ -141,7 +141,7 @@ export function buildRemoteSettingsSections(
         'New features that are still taking shape. Give them a try.'
       ),
       icon: FlaskConical,
-      searchEntries: getExperimentalPaneSearchEntries(),
+      searchEntries: getExperimentalPaneSearchEntries({ isWebClient }),
       group: 'experimental'
     },
     ...(showDesktopOnlySettings

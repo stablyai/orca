@@ -8,8 +8,9 @@ import { getEphemeralVmsSearchEntry } from './ephemeral-vms-search'
 import { getBrowserExtensionsExperimentalSearchEntry } from './browser-extensions-experimental-search'
 import { getWslHostsExperimentalSearchEntry } from './wsl-hosts-experimental-search'
 import { getMultiWindowSearchEntry } from './multi-window-search-entry'
+import { isWebClientLocation } from '@/lib/web-client-location'
 
-export const getExperimentalPaneSearchEntries = createLocalizedCatalog(
+const getExperimentalPaneConnectedClientSearchEntries = createLocalizedCatalog(
   (): SettingsSearchEntry[] => [
     {
       title: translate('auto.components.settings.experimental.search.87d99e634b', 'Pet'),
@@ -185,13 +186,27 @@ export const getExperimentalPaneSearchEntries = createLocalizedCatalog(
     getNewWorktreeCardStyleSearchEntry(),
     getEphemeralVmsSearchEntry(),
     getBrowserExtensionsExperimentalSearchEntry(),
-    getMultiWindowSearchEntry(),
     // Index WSL toggles only on Windows desktops that expose them.
     ...(typeof window !== 'undefined' && window.api?.runtimeEnvironments?.wslHosts
       ? [getWslHostsExperimentalSearchEntry()]
       : [])
   ]
 )
+
+const getExperimentalPaneDesktopSearchEntries = createLocalizedCatalog(
+  (): SettingsSearchEntry[] => [
+    ...getExperimentalPaneConnectedClientSearchEntries(),
+    getMultiWindowSearchEntry()
+  ]
+)
+
+export function getExperimentalPaneSearchEntries({
+  isWebClient = isWebClientLocation()
+}: { isWebClient?: boolean } = {}): SettingsSearchEntry[] {
+  return isWebClient
+    ? getExperimentalPaneConnectedClientSearchEntries()
+    : getExperimentalPaneDesktopSearchEntries()
+}
 
 // Resolve by title and fail loudly on renames so changing catalog shape cannot silently retarget numeric indexes.
 function findEntry(title: string): SettingsSearchEntry {

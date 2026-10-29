@@ -43,7 +43,7 @@ it.each(['verbose', 'compact'] as const)(
     expect(hydrated.statusBarCompactChangeNoticeDismissed).toBe(true)
 
     const store = createUIStore()
-    vi.stubGlobal('window', { localStorage, api: { ui } })
+    vi.stubGlobal('window', { localStorage, location: window.location, api: { ui } })
     store.getState().hydratePersistedUI(hydrated)
     store.getState().setStatusBarUsageMode(mode)
 

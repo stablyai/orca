@@ -63,9 +63,10 @@ export class DeviceRegistry {
     name: string,
     scope: DeviceScope = 'mobile',
     pairingReach: RuntimePairingReach = 'network',
-    grants: readonly RuntimeDeviceGrant[] = []
+    grants: readonly RuntimeDeviceGrant[] = [],
+    options: { dedicated?: boolean } = {}
   ): TokenDeviceEntry {
-    return this.createAndPersistDevice(this.devices, name, scope, pairingReach, grants)
+    return this.createAndPersistDevice(this.devices, name, scope, pairingReach, grants, options)
   }
 
   private createAndPersistDevice(
@@ -73,9 +74,10 @@ export class DeviceRegistry {
     name: string,
     scope: DeviceScope,
     pairingReach: RuntimePairingReach,
-    grants: readonly RuntimeDeviceGrant[]
+    grants: readonly RuntimeDeviceGrant[],
+    options: { dedicated?: boolean } = {}
   ): TokenDeviceEntry {
-    const entry = mintTokenDevice(name, scope, pairingReach, grants)
+    const entry = mintTokenDevice(name, scope, pairingReach, grants, options)
     const nextDevices = [...existingDevices, entry]
     // Credentials become valid only after durable persistence.
     this.devices = this.save(nextDevices)

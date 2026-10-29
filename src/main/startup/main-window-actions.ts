@@ -25,7 +25,7 @@ import { focusExistingMainWindow, safelyRevealWindow } from '../window/focus-exi
 import { mainProcessState as state } from './main-process-state'
 import { getDashboardPopoutWindow } from '../window/dashboard-popout-window'
 import { getWorkspaceSpaceWindow } from '../window/workspace-space-window'
-import { markUserQuitWindowClose } from '../window/user-quit-window-close'
+import { closeServeDesktopWindows } from '../window/close-serve-desktop-windows'
 import { loadMainWindow } from '../window/createMainWindow'
 import {
   describeInstallDirAclPoison,
@@ -100,15 +100,7 @@ export function openSettingsFromSystemMenu(): void {
 /** On serve, user Quit closes desktop windows while paired clients keep the server (#15537); signals/supervisor/updates still quit the process. */
 export function quitFromUserCommand(): void {
   if (state.isServeMode) {
-    // Offscreen automation windows belong to the runtime and must survive desktop-window close.
-    for (const window of [state.mainWindow, getDashboardPopoutWindow()]) {
-      if (window && !window.isDestroyed()) {
-        if (window === state.mainWindow) {
-          markUserQuitWindowClose(window)
-        }
-        window.close()
-      }
-    }
+    closeServeDesktopWindows(state.mainWindow, getDashboardPopoutWindow())
     return
   }
   state.isQuitting = true

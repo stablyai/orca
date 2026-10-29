@@ -17,6 +17,8 @@ export type DeviceEntry = {
   mobilePairingConnectionMode?: MobilePairingConnectionMode
   // STA-2370: local-only grants prove no off-host reach for listener binding.
   pairingReach?: RuntimePairingReach
+  // Dedicated clients own their root; ordinary offers must not reuse or rotate it.
+  dedicatedPairing?: true
   // Persist push across desktop restart; older registries have none.
   pushRegistration?: MobilePushRegistration
   // Relayed phones lose access with their parent desktop grant.
@@ -46,10 +48,13 @@ export type DeviceKeyLookup =
   | { kind: 'not-keyed' }
   | { kind: 'unavailable' }
 
-// Only unscanned token rows are rotatable pairing offers; keyed rows never are.
+// Only reusable, unscanned token rows are pairing offers; keyed rows never are.
 export function isPendingTokenRow(device: DeviceEntry): device is TokenDeviceEntry {
   return (
-    device.lastSeenAt === 0 && device.token !== undefined && device.credentialKind === undefined
+    device.lastSeenAt === 0 &&
+    device.token !== undefined &&
+    device.credentialKind === undefined &&
+    device.dedicatedPairing !== true
   )
 }
 

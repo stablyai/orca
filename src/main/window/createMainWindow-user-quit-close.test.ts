@@ -1,5 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+const workerWindows = vi.hoisted(() => ({ retain: vi.fn(() => false), forget: vi.fn() }))
+vi.mock('./worker-window', () => ({
+  retainHostWindowForWorkers: workerWindows.retain,
+  forgetRetainedHostWindow: workerWindows.forget
+}))
+
 vi.mock('electron', async () =>
   (await import('./createMainWindow-test-harness')).electronModuleMock()
 )
@@ -77,6 +83,8 @@ describe('serve user-Quit window close', () => {
   beforeEach(() => {
     resetMainWindowMocks()
     resetExpectedTeardownStateForTest()
+    workerWindows.retain.mockReset().mockReturnValue(false)
+    workerWindows.forget.mockReset()
     vi.useFakeTimers()
   })
 
@@ -113,6 +121,22 @@ describe('serve user-Quit window close', () => {
     await vi.advanceTimersByTimeAsync(WINDOW_QUIT_RENDERER_ACK_TIMEOUT_MS)
 
     expect(instance.destroy).not.toHaveBeenCalled()
+  })
+
+  it('honors explicit Quit instead of retaining the host for worker windows', () => {
+    const { windowHandlers, webContents, instance } = setupWindow()
+    createMainWindow(null, { getIsQuitting: () => false })
+    workerWindows.retain.mockReturnValue(true)
+
+    markUserQuitWindowClose(instance)
+    windowHandlers.close({ preventDefault: vi.fn() })
+
+    expect(workerWindows.retain).not.toHaveBeenCalled()
+    expect(workerWindows.forget).toHaveBeenCalledWith(instance)
+    expect(webContents.send).toHaveBeenCalledWith(
+      'window:close-requested',
+      expect.objectContaining({ isQuitting: false })
+    )
   })
 
   it('keeps a plain window close without a deadline', async () => {

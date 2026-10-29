@@ -284,6 +284,27 @@ describe('settings navigation metadata', () => {
     expect(entry?.targetSectionId).toBe('ephemeral-vms')
   })
 
+  it.each([false, true])(
+    'offers Multiple windows in Settings and Cmd+J only on desktop (web: %s)',
+    (isWebClient) => {
+      const sections = buildSettingsNavigationMetadata({
+        isMac: false,
+        isWindows: false,
+        isWebClient,
+        repos: []
+      })
+
+      expect(
+        sections.some((section) => matchesSettingsSearch('multiple windows', section.searchEntries))
+      ).toBe(!isWebClient)
+      expect(
+        buildCmdJSettingsResults(sections).some((result) =>
+          result.configKeywords.includes('multiple windows')
+        )
+      ).toBe(!isWebClient)
+    }
+  )
+
   it('places Plugins under Experimental on desktop and omits it on the web', () => {
     const desktopSections = buildSettingsNavigationMetadata({
       isMac: false,

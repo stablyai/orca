@@ -47,7 +47,11 @@ async function captureWindow(app: ElectronApplication, page: Page): Promise<Buff
   }
 }
 
-async function typeAndReadOutput(page: Page, marker: string): Promise<void> {
+async function typeAndReadOutput(
+  page: Page,
+  marker: string,
+  command = `echo ${marker}`
+): Promise<void> {
   await waitForActivePanePtyId(page, 30_000)
   await expect
     .poll(async () => (await getTerminalContent(page)).trim().length, { timeout: 30_000 })
@@ -55,7 +59,7 @@ async function typeAndReadOutput(page: Page, marker: string): Promise<void> {
   const session = await page.context().newCDPSession(page)
   await session.send('Emulation.setFocusEmulationEnabled', { enabled: true })
   await focusActiveTerminalInput(page)
-  await page.keyboard.type(`echo ${marker}`)
+  await page.keyboard.type(command)
   await page.keyboard.press('Enter')
   let lastOutput = ''
   try {
@@ -146,6 +150,12 @@ test('opens independent project windows from File and keeps terminals alive when
   let first: Page | null = null
   let second: Page | null = null
   try {
+    const pendingOffer = await orcaPage.evaluate(() =>
+      window.api.mobile.getRuntimePairingUrl({ address: '127.0.0.1', reach: 'this-computer' })
+    )
+    if (!pendingOffer.available) {
+      throw new Error('Could not create the unrelated pending offer')
+    }
     first = await openWindow(electronApp)
     await selectWorktree(first, ids.first)
     second = await openWindow(electronApp)
@@ -170,8 +180,22 @@ test('opens independent project windows from File and keeps terminals alive when
       []
     )
 
-    await typeAndReadOutput(first, 'ORCA_FIRST_WINDOW_OK')
+    await first.evaluate(() => window.api.ui.recordFeatureInteraction('terminal-tabs'))
+    expect(await first.evaluate(async () => (await window.api.ui.get()).filterRepoIds)).toEqual([
+      ids.firstRepo
+    ])
+    const initializeShell =
+      process.platform === 'win32'
+        ? '$env:ORCA_WINDOW_CONTINUITY="ORCA_RELOADED_WINDOW_OK"; echo ORCA_FIRST_WINDOW_OK'
+        : 'export ORCA_WINDOW_CONTINUITY=ORCA_RELOADED_WINDOW_OK; echo ORCA_FIRST_WINDOW_OK'
+    await typeAndReadOutput(first, 'ORCA_FIRST_WINDOW_OK', initializeShell)
     await typeAndReadOutput(second, 'ORCA_SECOND_WINDOW_OK')
+    const ptyBeforeReload = await waitForActivePanePtyId(first, 30_000)
+    const tabBeforeReload = await first.evaluate(
+      (worktree) => window.__store?.getState().activeTabIdByWorktree[worktree],
+      ids.first
+    )
+    expect(tabBeforeReload).toBeTruthy()
     if (process.env.ORCA_E2E_CAPTURE_VISUALS === '1') {
       await testInfo.attach('after-first-project', {
         body: await captureWindow(electronApp, first),
@@ -204,13 +228,30 @@ test('opens independent project windows from File and keeps terminals alive when
     await first.reload()
     await expect(worktreeRow(first, ids.first)).toBeVisible({ timeout: 30_000 })
     await expect(worktreeRow(first, ids.second)).toHaveCount(0)
-    await typeAndReadOutput(first, 'ORCA_RELOADED_WINDOW_OK')
+    await expect(first.locator('[data-rendered-active-worktree-id]')).toHaveAttribute(
+      'data-rendered-active-worktree-id',
+      ids.first
+    )
+    expect(await waitForActivePanePtyId(first, 30_000)).toBe(ptyBeforeReload)
+    expect(
+      await first.evaluate(
+        (worktree) => window.__store?.getState().activeTabIdByWorktree[worktree],
+        ids.first
+      )
+    ).toBe(tabBeforeReload)
+    await typeAndReadOutput(
+      first,
+      'ORCA_RELOADED_WINDOW_OK',
+      process.platform === 'win32'
+        ? 'echo $env:ORCA_WINDOW_CONTINUITY'
+        : 'echo "$ORCA_WINDOW_CONTINUITY"'
+    )
     await first.close()
     first = null
     await typeAndReadOutput(second, 'ORCA_SURVIVING_WINDOW_OK')
-    expect(
-      (await orcaPage.evaluate(() => window.api.mobile.listRuntimeAccessGrants())).grants
-    ).toHaveLength(2)
+    const remaining = await orcaPage.evaluate(() => window.api.mobile.listRuntimeAccessGrants())
+    expect(remaining.grants).toHaveLength(3)
+    expect(remaining.grants.some((grant) => grant.deviceId === pendingOffer.deviceId)).toBe(true)
 
     await electronApp.evaluate(({ BrowserWindow }) => {
       const host = BrowserWindow.getAllWindows().find((window) =>
