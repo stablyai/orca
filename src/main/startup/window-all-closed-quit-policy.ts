@@ -22,5 +22,10 @@ export function closingLastWindowQuitsApp(options: {
   platform: NodeJS.Platform
   isServeMode: boolean
 }): boolean {
-  return shouldQuitWhenAllWindowsClosed({ ...options, isQuitting: false })
+  // Asked from the main window's own close, so that window has opened.
+  return shouldQuitWhenAllWindowsClosed({
+    ...options,
+    isQuitting: false,
+    hasOpenedMainWindow: true
+  })
 }
