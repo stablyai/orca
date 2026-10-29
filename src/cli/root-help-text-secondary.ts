@@ -36,7 +36,7 @@ export const ROOT_HELP_TEXT_SECONDARY = [
   '',
   'Common Commands:',
   '  orca open [--json]',
-  '  orca serve [--port <port>] [--pairing-address <host>] [--mobile-pairing] [--no-pairing] [--grant-desktop-control] [--project-root <path>] [--recipe-json] [--supervise] [--json]',
+  '  orca serve [--port <port>] [--bind <ip>] [--pairing-address <host>] [--mobile-pairing] [--no-pairing] [--grant-desktop-control] [--project-root <path>] [--recipe-json] [--supervise] [--json]',
   '  orca status [--json]',
   '  orca diagnostics memory [--json]',
   '  orca agent-context [--json]',

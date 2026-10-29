@@ -72,10 +72,11 @@ The result includes this machine, its registered [SSH targets](/docs/ssh), and p
 ```bash
 orca open --json
 orca status --json
-orca serve --port 6768 --pairing-address 100.64.1.20 --json
+orca serve --port 6768 --bind 100.64.1.20 --pairing-address 100.64.1.20 --json
 ```
 
 `orca serve` starts a runtime server in the foreground without opening the desktop window. Use it for [Remote Orca Servers](/docs/remote-servers) or headless environments, and stop it with `Ctrl-C`.
+Use `--bind <literal-ip>` to choose the listening interface; `--pairing-address` changes the address advertised to clients.
 
 ## Repos
 

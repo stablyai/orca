@@ -6,10 +6,11 @@ export const SERVE_COMMAND_SPECS: CommandSpec[] = [
     path: ['serve'],
     summary: 'Start an Orca runtime server without opening a desktop window',
     usage:
-      'orca serve [--port <port>] [--pairing-address <host>] [--mobile-pairing] [--no-pairing] [--grant-desktop-control] [--project-root <path>] [--recipe-json] [--supervise] [--force] [--reclaim-stale-lock [--data-root <dir>] [--yes]] [--json]',
+      'orca serve [--port <port>] [--bind <ip>] [--pairing-address <host>] [--mobile-pairing] [--no-pairing] [--grant-desktop-control] [--project-root <path>] [--recipe-json] [--supervise] [--force] [--reclaim-stale-lock [--data-root <dir>] [--yes]] [--json]',
     allowedFlags: [
       ...LOCAL_COMMAND_FLAGS,
       'port',
+      'bind',
       'pairing-address',
       'mobile-pairing',
       'no-pairing',
@@ -26,6 +27,7 @@ export const SERVE_COMMAND_SPECS: CommandSpec[] = [
       'Runs in the foreground and prints the bound endpoint, advertised endpoint, and pairing status. Stop it with Ctrl+C.',
       'With --port, serve exits with an error when that port is already in use. Without it, serve uses 6768 and moves to another port when 6768 is taken.',
       '--pairing-address changes only the client-advertised address; use a reachable LAN, Tailscale, SSH-forward, or reverse-proxy endpoint.',
+      '--bind controls the interface the runtime listens on; it accepts a literal IP such as 127.0.0.1, a Tailscale address, or 0.0.0.0.',
       'Use --recipe-json with --project-root from VM recipes to print the recipe result JSON and leave the server running.',
       'Use --mobile-pairing to print a mobile-scoped pairing QR/link instead of the default runtime-environment pairing link.',
       "A paired client cannot drive this machine's desktop (orca computer) unless the offer was created with --grant-desktop-control.",
@@ -41,7 +43,7 @@ export const SERVE_COMMAND_SPECS: CommandSpec[] = [
       'orca serve',
       'orca serve --json',
       'orca serve --project-root /workspace/repo --pairing-address wss://sandbox.example.com --recipe-json',
-      'orca serve --port 6768 --pairing-address 100.64.1.20',
+      'orca serve --port 6768 --bind 100.64.1.20 --pairing-address 100.64.1.20',
       'orca serve --pairing-address 100.64.1.20 --mobile-pairing',
       'orca serve --reclaim-stale-lock'
     ]
@@ -62,8 +64,8 @@ export const SERVE_COMMAND_SPECS: CommandSpec[] = [
     path: ['serve', 'service', 'install'],
     summary: 'Run orca serve as a per-user background service that restarts itself',
     usage:
-      'orca serve service install [--port <port>] [--pairing-address <host>] [--command <path>] [--dry-run] [--json]',
-    allowedFlags: [...LOCAL_COMMAND_FLAGS, 'port', 'pairing-address', 'command', 'dry-run'],
+      'orca serve service install [--port <port>] [--bind <ip>] [--pairing-address <host>] [--command <path>] [--dry-run] [--json]',
+    allowedFlags: [...LOCAL_COMMAND_FLAGS, 'port', 'bind', 'pairing-address', 'command', 'dry-run'],
     notes: [
       'macOS writes a LaunchAgent; Linux writes a systemd user unit. Both run `orca serve --supervise --no-pairing` for this profile, so the server restarts with growing delays and gives up after repeated failures instead of looping.',
       'The service never prints a pairing link to its log. Pair clients from the desktop app, or with `orca serve` in a terminal while the service is stopped.',
@@ -72,7 +74,10 @@ export const SERVE_COMMAND_SPECS: CommandSpec[] = [
       "Needs the Orca app installed on this machine. The `orca` command in an Orca terminal on an SSH host belongs to that connection's server and cannot install a service.",
       'Not available on Windows yet.'
     ],
-    examples: ['orca serve service install', 'orca serve service install --port 6768 --dry-run']
+    examples: [
+      'orca serve service install',
+      'orca serve service install --port 6768 --bind 127.0.0.1 --dry-run'
+    ]
   },
   {
     path: ['serve', 'service', 'status'],

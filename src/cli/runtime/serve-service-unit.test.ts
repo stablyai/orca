@@ -12,12 +12,14 @@ const base: ServeServiceInput = {
 
 describe('renderServeService', () => {
   it('writes a LaunchAgent that supervises, never pairs, and stops after a give-up', () => {
-    const spec = renderServeService({ ...base, port: '6768' })
+    const spec = renderServeService({ ...base, port: '6768', bind: '127.0.0.1' })
     expect(spec.name).toBe('com.stablyai.orca.serve')
     expect(spec.unitPath).toBe('/Users/me/Library/LaunchAgents/com.stablyai.orca.serve.plist')
     expect(spec.content).toContain('<string>--supervise</string>')
     expect(spec.content).toContain('<string>--no-pairing</string>')
     expect(spec.content).toContain('<string>6768</string>')
+    expect(spec.content).toContain('<string>--bind</string>')
+    expect(spec.content).toContain('<string>127.0.0.1</string>')
     expect(spec.content).toMatch(/<key>ExitTimeOut<\/key>\s*<integer>90<\/integer>/)
     expect(spec.content).toMatch(/<key>SuccessfulExit<\/key>\s*<false\/>/)
     expect(spec.content).toContain('<key>ORCA_USER_DATA_PATH</key>')
@@ -44,6 +46,18 @@ describe('renderServeService', () => {
     expect(spec.content).toContain('TimeoutStopSec=90')
     expect(spec.content).toContain(
       'ExecStart="/home/me/My Apps/orca-ide" serve --supervise --no-pairing --pairing-address 100.64.0.1'
+    )
+  })
+
+  it('passes bind through to a systemd user unit', () => {
+    const spec = renderServeService({
+      ...base,
+      platform: 'linux',
+      homeDir: '/home/me',
+      bind: '127.0.0.1'
+    })
+    expect(spec.content).toContain(
+      'ExecStart=/usr/local/bin/orca serve --supervise --no-pairing --bind 127.0.0.1'
     )
   })
 

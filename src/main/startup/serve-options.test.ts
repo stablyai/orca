@@ -24,14 +24,30 @@ describe('getServeOptions', () => {
         '/AppRun',
         '--serve',
         '--serve-port=6768',
+        '--serve-bind=127.0.0.1',
         '--serve-pairing-address=127.0.0.1',
         '--serve-project-root=/tmp/repo'
       ])
     ).toMatchObject({
       wsPort: 6768,
+      bind: '127.0.0.1',
       pairingAddress: '127.0.0.1',
       projectRoot: '/tmp/repo'
     })
+  })
+
+  it('accepts a CLI-form bind address and normalizes localhost', () => {
+    const argv = normalizeServeModeArgv(['/AppRun', 'serve', '--bind', 'localhost'])
+    expect(getServeOptions(argv).bind).toBe('127.0.0.1')
+  })
+
+  it('requires a literal IP bind address', () => {
+    expect(() => getServeOptions(['/AppRun', '--serve', '--serve-bind'])).toThrow(
+      'Missing value for --serve-bind.'
+    )
+    expect(() => getServeOptions(['/AppRun', '--serve', '--serve-bind', 'server.example'])).toThrow(
+      /--bind expects a literal IP address/
+    )
   })
 
   it('uses the final occurrence of each value flag', () => {

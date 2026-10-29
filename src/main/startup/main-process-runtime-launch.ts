@@ -79,6 +79,7 @@ function e2eHeadlessServeWithoutBrowser(): boolean {
   )
 }
 
+/** Construct the runtime RPC server with serve-specific bind and port exposure settings. */
 function installRuntimeRpc(
   runtime: RuntimeService,
   serveOptions: ReturnType<typeof getServeOptions> | null
@@ -101,6 +102,7 @@ function installRuntimeRpc(
     enableWebSocket: true,
     // STA-2370: desktop stays loopback until pairing; serve explicitly opts into remote access and E2E needs harness-wide bind.
     exposeNetworkByDefault: Boolean(serveOptions) || isE2E,
+    ...(serveOptions?.bind !== undefined ? { pinnedBindHost: serveOptions.bind } : {}),
     ...(isE2E ? { wsPort: e2eWsPort } : {}),
     ...(devWsPort !== undefined ? { wsPort: devWsPort } : {}),
     ...(serveOptions?.wsPort !== undefined

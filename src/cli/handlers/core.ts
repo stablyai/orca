@@ -3,6 +3,7 @@ import { resolve } from 'node:path'
 import type { CommandHandler } from '../dispatch'
 import { formatCliStatus, formatStatus, printResult } from '../format'
 import { RuntimeClientError, serveOrcaApp } from '../runtime-client'
+import { getOptionalServeBind } from '../runtime/serve-bind-flag'
 import { stripElectronRunAsNode } from '../runtime/orca-app-executable'
 import { resolveCliStatusCaller } from '../runtime/status-caller'
 import { getServeSuperviseValidationError } from '../runtime/serve-supervised-service'
@@ -128,10 +129,12 @@ export const CORE_HANDLERS: Record<string, CommandHandler> = {
       throw new RuntimeClientError('invalid_argument', validationError)
     }
     const port = getOptionalServePort(flags)
+    const bind = getOptionalServeBind(flags) ?? null
     const pairingAddressValue = flags.get('pairing-address')
     const exitCode = await serveOrcaApp({
       json,
       port,
+      bind,
       pairingAddress: typeof pairingAddressValue === 'string' ? pairingAddressValue : null,
       noPairing,
       mobilePairing,

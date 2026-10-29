@@ -43,6 +43,8 @@ const SERVE_SECURITY_FLAG_NAMES = [
 const SERVE_VALUE_FLAG_NAMES = new Set([
   '--port',
   '--serve-port',
+  '--bind',
+  '--serve-bind',
   '--pairing-address',
   '--serve-pairing-address',
   '--project-root',

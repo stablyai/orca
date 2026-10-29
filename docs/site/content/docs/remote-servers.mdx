@@ -140,6 +140,15 @@ orca serve --pairing-address <server-tailscale-ip-or-hostname>
 orca-ide serve --pairing-address <server-tailscale-ip-or-hostname>
 ```
 
+Use `--bind <literal-ip>` to choose the interface that accepts runtime connections. For a
+server reached through an SSH tunnel or reverse proxy, bind locally; use a Tailscale or LAN IP
+when the client should connect directly. `--pairing-address` still controls only the address
+embedded in pairing links.
+
+```bash
+orca-ide serve --bind 127.0.0.1 --pairing-address 127.0.0.1
+```
+
 For example:
 
 ```bash

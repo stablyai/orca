@@ -23,18 +23,20 @@ export type ServeServiceInput = {
   defaultUserDataPath: string
   path: string
   port?: string | null
+  bind?: string | null
   pairingAddress?: string | null
 }
 
 /** Service logs must never contain a live pairing offer. */
 export function serveServiceArgs(
-  input: Pick<ServeServiceInput, 'port' | 'pairingAddress'>
+  input: Pick<ServeServiceInput, 'port' | 'bind' | 'pairingAddress'>
 ): string[] {
   return [
     'serve',
     '--supervise',
     '--no-pairing',
     ...(input.port ? ['--port', input.port] : []),
+    ...(input.bind ? ['--bind', input.bind] : []),
     ...(input.pairingAddress ? ['--pairing-address', input.pairingAddress] : [])
   ]
 }

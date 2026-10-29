@@ -119,11 +119,6 @@ const DECLARED_HOST_DIFFERENCES: readonly DeclaredDifference[] = [
     reason: 'It notifies a desktop window.'
   },
   {
-    wiring: 'rpc-option:pinnedBindHost',
-    missingOn: 'electron',
-    reason: 'The desktop binds loopback until a device pairs (STA-2370).'
-  },
-  {
     wiring: 'host:setMainHttpClient',
     missingOn: 'orcad',
     reason: "The port's default is Node's fetch; Chromium's network stack is desktop-only."
@@ -432,6 +427,7 @@ describe('runtime composition parity (Electron vs orcad)', () => {
       'ctor:agentSessionClaimSigner',
       'rpc-option:webClientRoot',
       'rpc-option:wsPort',
+      'rpc-option:pinnedBindHost',
       'runtime.setAccountServices',
       // #31112: without it `stats.summary` answers {} and mobile home shows zeros.
       'ctor-arg:stats',

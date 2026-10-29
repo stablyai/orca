@@ -84,6 +84,18 @@ describe('orca serve service', () => {
     await expect(installServeService({ command: null, dryRun: false }, d)).rejects.toThrow(/denied/)
   })
 
+  it('validates and normalizes --bind before installing a service', async () => {
+    const d = deps('darwin')
+    await expect(
+      installServeService({ command: null, bind: 'server.example', dryRun: true }, d)
+    ).rejects.toThrow(/--bind expects a literal IP address/)
+    expect(calls).toEqual([])
+
+    const dry = await installServeService({ command: null, bind: 'localhost', dryRun: true }, d)
+    expect(String(dry.content)).toContain('<string>--bind</string>')
+    expect(String(dry.content)).toContain('<string>127.0.0.1</string>')
+  })
+
   it('reports live, exited and unverifiable from the manager', async () => {
     const d = deps('darwin')
     const dry = await installServeService({ command: null, dryRun: true }, d)

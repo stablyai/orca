@@ -79,6 +79,7 @@ describe('orca serve asking the app which host to run', () => {
       orcadServeArgs({
         json: true,
         port: '6768',
+        bind: '127.0.0.1',
         pairingAddress: '10.0.0.5',
         noPairing: true,
         mobilePairing: true,
@@ -87,7 +88,7 @@ describe('orca serve asking the app which host to run', () => {
       })
     ).toEqual([
       '--bind',
-      '0.0.0.0',
+      '127.0.0.1',
       '--json',
       '--port',
       '6768',
@@ -121,6 +122,7 @@ describe('orca serve asking the app which host to run', () => {
         {
           json: true,
           port: '6768',
+          bind: '127.0.0.1',
           pairingAddress: '10.0.0.5',
           noPairing: true,
           mobilePairing: true,
@@ -134,6 +136,8 @@ describe('orca serve asking the app which host to run', () => {
       '--serve-json',
       '--serve-port',
       '6768',
+      '--serve-bind',
+      '127.0.0.1',
       '--serve-pairing-address',
       '10.0.0.5',
       '--serve-no-pairing',
