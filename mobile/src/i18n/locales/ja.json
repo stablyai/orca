@@ -97,6 +97,7 @@
       "connecting": "接続中…",
       "invalidPairingCode": "ペアリングコードが無効です。コンピュータからコピーして、もう一度貼り付けてください。",
       "invalidQrCode": "Orca の有効な QR コードではありません",
+      "downloadQrCode": "これはダウンロード用のコードです。デスクトップのステップ2にあるペアリングコードをスキャンしてください。",
       "openDesktopStep": "コンピュータで Orca を開く",
       "openMobileSettingsStep": "「設定」→「モバイル」を開く",
       "openSettings": "設定を開く",
@@ -2514,7 +2515,8 @@
       "saveFailed": "クイックコマンドの保存に失敗しました"
     },
     "useSessionTerminalSendActions": {
-      "inputTooLarge": "入力データが大きすぎます（最大 256 KiB）。"
+      "inputTooLarge": "入力データが大きすぎます（最大 256 KiB）。",
+      "liveInputInterrupted": "ライブ入力が中断されました。入力欄をクリアしました。続行する前にターミナルを確認してください。"
     },
     "useStartup": {
       "wakeAgents": "スリープ中の Agent を再開するには、ホストで Orca を開いてください。"

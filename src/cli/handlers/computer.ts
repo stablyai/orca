@@ -236,6 +236,7 @@ function formatComputerCapabilities(value: ComputerProviderCapabilities): string
     `  Actions: ${Object.entries(value.supports.actions)
       .filter(([, enabled]) => enabled)
       .map(([name]) => name)
-      .join(', ')}`
+      .join(', ')}`,
+    ...(value.supports.input ? [`  Input: background=${value.supports.input.background}`] : [])
   ].join('\n')
 }

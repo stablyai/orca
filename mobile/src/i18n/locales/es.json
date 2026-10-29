@@ -99,6 +99,7 @@
       "connecting": "Conectando…",
       "invalidPairingCode": "No es un código de emparejamiento válido; cópialo de tu ordenador y vuelve a pegarlo.",
       "invalidQrCode": "No es un código QR de Orca válido",
+      "downloadQrCode": "Ese es el código de descarga. Escanea el código de emparejamiento del paso 2 en tu ordenador.",
       "openDesktopStep": "Abre Orca en tu ordenador",
       "openMobileSettingsStep": "Ve a Ajustes → Móvil",
       "openSettings": "Abrir Ajustes",
@@ -2594,7 +2595,8 @@
       "saveFailed": "Error al guardar el comando rápido"
     },
     "useSessionTerminalSendActions": {
-      "inputTooLarge": "Entrada demasiado grande (máx. 256 KiB)"
+      "inputTooLarge": "Entrada demasiado grande (máx. 256 KiB)",
+      "liveInputInterrupted": "Se interrumpió la entrada en vivo. Se vació el campo; revisa la terminal antes de continuar."
     },
     "useStartup": {
       "wakeAgents": "Abre Orca en el host para reanudar los agentes en reposo."

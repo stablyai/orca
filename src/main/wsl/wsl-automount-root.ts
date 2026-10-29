@@ -22,7 +22,11 @@ const READ_TIMEOUT_MS = 5_000
 export type WslAutomountRootReader = (distro: string) => Promise<string | null>
 
 const roots = new Map<string, string>()
+// Read since its last start, the default `/mnt/` too: one guest launch per start, not per probe.
+const readSinceStart = new Set<string>()
 const pending = new Set<string>()
+// Bumped on a stop, so a read still in flight then neither marks the restarted distro read.
+const stopCounts = new Map<string, number>()
 const changeListeners = new Set<() => void>()
 
 function distroKey(distro: string): string {
@@ -57,7 +61,7 @@ export function followWslAutomountRoots(
     const wantedKeys = new Set(wanted().map(distroKey))
     for (const distro of running) {
       const key = distroKey(distro)
-      if (!wantedKeys.has(key) || roots.has(key) || pending.has(key)) {
+      if (!wantedKeys.has(key) || readSinceStart.has(key) || pending.has(key)) {
         continue
       }
       // A list probed mid-stop still names the distro, and wsl.exe would boot it again. The cache
@@ -66,9 +70,15 @@ export function followWslAutomountRoots(
         continue
       }
       pending.add(key)
+      const stopCount = stopCounts.get(key) ?? 0
       void read(distro)
         .then((root) => {
-          if (root && root !== DEFAULT_WSL_AUTOMOUNT_ROOT) {
+          // Unread (null) retries on the next probe; a stop mid-read leaves it for the restart.
+          if (!root || (stopCounts.get(key) ?? 0) !== stopCount) {
+            return
+          }
+          readSinceStart.add(key)
+          if (root !== DEFAULT_WSL_AUTOMOUNT_ROOT) {
             roots.set(key, root)
             changed()
           }
@@ -81,7 +91,10 @@ export function followWslAutomountRoots(
   const stopStopped = onRunningWslDistrosStopped((stopped) => {
     let removed = false
     for (const distro of stopped) {
-      removed = roots.delete(distroKey(distro)) || removed
+      const key = distroKey(distro)
+      stopCounts.set(key, (stopCounts.get(key) ?? 0) + 1)
+      readSinceStart.delete(key)
+      removed = roots.delete(key) || removed
     }
     if (removed) {
       changed()
@@ -132,6 +145,8 @@ export function parseWslAutomountRoot(drivePath: string | null): string | null {
 
 export function resetWslAutomountRootsForTests(): void {
   roots.clear()
+  readSinceStart.clear()
   pending.clear()
+  stopCounts.clear()
   changeListeners.clear()
 }

@@ -43,7 +43,6 @@ function postRaw(
     const chunks: Buffer[] = []
     let responseBytes = 0
     function cleanupListeners(): void {
-      req?.off('error', onRequestError)
       req?.off('timeout', onRequestTimeout)
       res?.off('data', onResponseData)
       res?.off('end', onResponseEnd)
@@ -143,6 +142,7 @@ function postRaw(
       }
     )
     req.on('error', onRequestError)
+    req.once('close', () => req?.off('error', onRequestError))
     req.on('timeout', onRequestTimeout)
     req.write(body)
     req.end()

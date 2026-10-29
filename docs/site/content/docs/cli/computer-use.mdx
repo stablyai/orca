@@ -73,6 +73,8 @@ orca computer perform-secondary-action --app <app> --element-index <i> --action 
 
 Prefer semantic actions (`click`, `set-value`, `perform-secondary-action`) over raw `type-text` or `press-key` — they target accessibility elements directly and survive focus changes that keyboard input doesn't.
 
+On macOS, actions run in the background: the target app isn't brought forward, your frontmost app and key window stay put, and the pointer doesn't move, so you can keep working while an agent drives another window. Each action result reports `action.delivery` (`background` or `foreground`). Pass `--restore-window` only when an app ignores background input, such as drags in Chromium or Electron apps or games; it brings the app forward and uses the real pointer and keyboard. Popup menus and web `<select>` controls are set with `set-value` instead of a click. On Linux and Windows, clicks, scrolling, drags and keyboard input still bring the window forward.
+
 When accessibility targeting fails, fall back carefully to coordinates:
 
 ```bash

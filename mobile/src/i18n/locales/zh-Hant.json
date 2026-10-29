@@ -97,6 +97,7 @@
       "connecting": "連線中…",
       "invalidPairingCode": "配對碼無效，請從電腦複製後重新貼上",
       "invalidQrCode": "無效的 Orca QR Code",
+      "downloadQrCode": "這是下載碼。請掃描桌面端第 2 步中的配對碼。",
       "openDesktopStep": "在電腦上開啟 Orca",
       "openMobileSettingsStep": "前往「設定」→「行動版」",
       "openSettings": "開啟設定",
@@ -2514,7 +2515,8 @@
       "saveFailed": "儲存快速命令失敗"
     },
     "useSessionTerminalSendActions": {
-      "inputTooLarge": "輸入內容太大（上限為 256 KiB）"
+      "inputTooLarge": "輸入內容太大（上限為 256 KiB）",
+      "liveInputInterrupted": "即時輸入已中斷，輸入框已清空。繼續前請檢查終端。"
     },
     "useStartup": {
       "wakeAgents": "請在主機上開啟 Orca，以喚醒休眠中的代理程式。"

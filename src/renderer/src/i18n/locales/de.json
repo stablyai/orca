@@ -14828,7 +14828,7 @@
           "aa97420ba4": "Installationslink kopieren",
           "ac1eb64952": "Android",
           "711e6f4b47": "iOS",
-          "e75647ace0": "Den QR-Code mit dem Smartphone scannen oder den Installationslink öffnen, um Orca Mobile herunterzuladen.",
+          "e75647ace0": "Scanne diesen Download-QR-Code mit der Kamera deines Smartphones. Orca Mobile ist schon installiert? Weiter zu Schritt 2 für den Kopplungs-QR-Code.",
           "0d9b33299e": "App herunterladen.",
           "92ddfdfa1f": "Schritt 1 von 2",
           "ff48d9d520": "Weiteres Gerät koppeln",
@@ -16971,7 +16971,10 @@
                     "024467ceac": "Abbrechen",
                     "449d2c2629": "Zweck der Anmerkung",
                     "38d320108c": "Anmerkungen einklappen",
-                    "9f209891a7": "Anmerkungen ausklappen"
+                    "9f209891a7": "Anmerkungen ausklappen",
+                    "includePageDetails": "Seitendetails einbeziehen",
+                    "copyFeedback": "Feedback kopieren",
+                    "copyFeedbackWithPageDetails": "Feedback mit Seitendetails kopieren"
                   }
                 }
               }

@@ -3,6 +3,7 @@ export const COMPUTER_ERROR_CODES = {
   app_blocked: 'app_blocked',
   window_not_found: 'window_not_found',
   window_not_focused: 'window_not_focused',
+  background_unavailable: 'background_unavailable',
   window_stale: 'window_stale',
   provider_incompatible: 'provider_incompatible',
   unsupported_capability: 'unsupported_capability',
@@ -89,6 +90,8 @@ export type ComputerActionMetadata = {
   fallbackReason?: string | null
   targetWindowId?: number | null
   targetWindowIndex?: number | null
+  // Absent from providers that predate background input (Linux, Windows, older macOS helpers).
+  delivery?: 'background' | 'foreground'
   verification?: ComputerActionVerification
 }
 
@@ -163,6 +166,10 @@ export type ComputerProviderCapabilities = {
       dialogs: boolean
       dock: boolean
       menubar: boolean
+    }
+    // Absent from providers that predate background input.
+    input?: {
+      background: boolean
     }
   }
 }

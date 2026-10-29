@@ -116,6 +116,7 @@ async function mounted(initial: ReturnType<typeof peer>, sessionId: string, conn
     createWarningState: { source: '', visible: '' },
     setCreateWarningState: vi.fn(),
     setToastMessage: vi.fn(),
+    onLiveInputSendFailureRef: { current: vi.fn() },
     toastOpacityRef: { current: new Animated.Value(0) },
     toastHideTimerRef: { current: null },
     toastSeqRef: { current: 0 },

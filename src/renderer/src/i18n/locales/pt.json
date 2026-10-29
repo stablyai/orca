@@ -16325,8 +16325,8 @@
           "aa97420ba4": "Copiar link de instalação",
           "ac1eb64952": "Android",
           "711e6f4b47": "iOS",
-          "e75647ace0": "Escaneie o QR com o seu celular ou abra o link de instalação para obter o Orca Mobile.",
-          "0d9b33299e": "Obtenha o aplicativo.",
+          "e75647ace0": "Leia este QR de download com a câmera do celular. Já tem o Orca Mobile? Continue para a etapa 2 para ver o QR de pareamento.",
+          "0d9b33299e": "Baixe o app.",
           "92ddfdfa1f": "Etapa 1 de 2",
           "ff48d9d520": "Parear outro dispositivo",
           "f9cbf4bb53": "Revogar dispositivo",
@@ -17034,7 +17034,10 @@
                     "024467ceac": "Cancelar",
                     "449d2c2629": "Intenção da anotação",
                     "38d320108c": "Recolher anotações",
-                    "9f209891a7": "Expandir anotações"
+                    "9f209891a7": "Expandir anotações",
+                    "includePageDetails": "Incluir detalhes da página",
+                    "copyFeedback": "Copiar feedback",
+                    "copyFeedbackWithPageDetails": "Copiar feedback com detalhes da página"
                   }
                 }
               }

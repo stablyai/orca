@@ -14814,8 +14814,8 @@
           "aa97420ba4": "Kurulum bağlantısını kopyala",
           "ac1eb64952": "Android",
           "711e6f4b47": "iOS",
-          "e75647ace0": "Orca Mobile'ı almak için QR kodunu telefonunuzla tarayın veya kurulum bağlantısını açın.",
-          "0d9b33299e": "Uygulamayı edinin.",
+          "e75647ace0": "Bu indirme QR kodunu telefonunuzun kamerasıyla tarayın. Orca Mobile zaten yüklü mü? Eşleştirme QR kodu için 2. adıma geçin.",
+          "0d9b33299e": "Uygulamayı indirin.",
           "92ddfdfa1f": "Adım 1/2",
           "ff48d9d520": "Başka bir cihaz eşleştir",
           "f9cbf4bb53": "Cihazı iptal et",
@@ -16957,7 +16957,10 @@
                     "024467ceac": "İptal",
                     "449d2c2629": "Ek açıklama amacı",
                     "38d320108c": "Ek açıklamaları daralt",
-                    "9f209891a7": "Ek açıklamaları genişlet"
+                    "9f209891a7": "Ek açıklamaları genişlet",
+                    "includePageDetails": "Sayfa ayrıntılarını ekle",
+                    "copyFeedback": "Geri bildirimi kopyala",
+                    "copyFeedbackWithPageDetails": "Geri bildirimi sayfa ayrıntılarıyla kopyala"
                   }
                 }
               }

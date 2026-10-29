@@ -97,6 +97,7 @@
       "connecting": "연결 중…",
       "invalidPairingCode": "유효한 페어링 코드가 아닙니다. 컴퓨터에서 코드를 복사해 다시 붙여넣으세요.",
       "invalidQrCode": "유효한 Orca QR 코드가 아닙니다.",
+      "downloadQrCode": "다운로드용 코드입니다. 데스크톱의 2단계에 있는 페어링 코드를 스캔하세요.",
       "openDesktopStep": "컴퓨터에서 Orca를 실행하세요",
       "openMobileSettingsStep": "설정 → 모바일로 이동하세요",
       "openSettings": "설정 열기",
@@ -2514,7 +2515,8 @@
       "saveFailed": "빠른 명령을 저장하지 못했습니다."
     },
     "useSessionTerminalSendActions": {
-      "inputTooLarge": "입력 내용이 너무 큼 (최대 256 KiB)"
+      "inputTooLarge": "입력 내용이 너무 큼 (최대 256 KiB)",
+      "liveInputInterrupted": "실시간 입력이 중단되었습니다. 입력란을 비웠습니다. 계속하기 전에 터미널을 확인하세요."
     },
     "useStartup": {
       "wakeAgents": "슬립 중인 에이전트를 활성화하려면 호스트에서 Orca를 실행하세요."

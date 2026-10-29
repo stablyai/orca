@@ -31,7 +31,10 @@ import type {
 } from './plugin-marketplace-service'
 import { marketplaceSourceId } from './plugin-marketplace-store'
 import { isSamePluginSource } from '../../../shared/plugins/catalog/plugin-marketplace'
-import type { PluginInstallSource } from '../../../shared/plugins/installation/plugin-install-lockfile'
+import type {
+  PluginInstallSource,
+  PluginLockfile
+} from '../../../shared/plugins/installation/plugin-install-lockfile'
 
 export type PluginMarketplaceInstallPreview = {
   marketplaceSourceId: string
@@ -190,13 +193,17 @@ export class PluginMarketplaceInstaller {
     return result.ok && repositoryMoved ? { ...result, repositoryMoved: true } : result
   }
 
+  /** Why: one read lets a pass over every plugin skip a full lockfile recovery per plugin. */
+  readInstallLockfile(): Promise<PluginLockfile> {
+    return readPluginLockfile(getUserPluginsDir(this.userDataPath))
+  }
+
   /** The catalog an installed plugin came from, or null when it was not a marketplace install. */
   private async readMarketplaceInstall(
-    pluginKey: string
+    pluginKey: string,
+    lock?: PluginLockfile
   ): Promise<{ sourceId: string; plugin: MarketplaceInstallSource['plugin'] } | null> {
-    const entry = (await readPluginLockfile(getUserPluginsDir(this.userDataPath))).plugins[
-      pluginKey
-    ]
+    const entry = (lock ?? (await this.readInstallLockfile())).plugins[pluginKey]
     if (entry?.source.kind !== 'marketplace') {
       return null
     }
@@ -219,11 +226,14 @@ export class PluginMarketplaceInstaller {
   }
 
   /** The own-catalog listing an installed plugin would update from, read from caches only. */
-  async findInstalledUpdateListing(pluginKey: string): Promise<{
+  async findInstalledUpdateListing(
+    pluginKey: string,
+    lock?: PluginLockfile
+  ): Promise<{
     listing: PluginMarketplaceListing
     officialCatalog: boolean
   } | null> {
-    const installed = await this.readMarketplaceInstall(pluginKey)
+    const installed = await this.readMarketplaceInstall(pluginKey, lock)
     const listing = installed
       ? await this.marketplace.findPlugin(installed.sourceId, pluginKey)
       : null
