@@ -305,14 +305,10 @@ function repositoryIdentity(host: string, repositoryPath: string): GitRepository
   if (!repository) {
     return null
   }
-  const normalizedHost = host.toLowerCase()
-  const path = [...segments.slice(0, -1), repository].join('/')
-  return {
-    host: normalizedHost,
-    owner: segments[0]!,
-    repository,
-    path: CASE_INSENSITIVE_GIT_HOSTS.has(normalizedHost) ? path.toLowerCase() : path
-  }
+  const lowerHost = host.toLowerCase()
+  const exactPath = [...segments.slice(0, -1), repository].join('/')
+  const path = CASE_INSENSITIVE_GIT_HOSTS.has(lowerHost) ? exactPath.toLowerCase() : exactPath
+  return { host: lowerHost, owner: segments[0]!, repository, path }
 }
 
 /** `host/owner` of a repository, with every GitLab subgroup (`gitlab.com/acme/tools`). */
