@@ -65,6 +65,7 @@ export const ListWindows = z
   .strict()
 
 export const Click = ComputerObserveTargetBase.extend({
+  accessibilityOnly: OptionalBoolean,
   elementIndex: OptionalNonNegativeInt,
   x: OptionalFiniteNumber,
   y: OptionalFiniteNumber,
@@ -74,6 +75,9 @@ export const Click = ComputerObserveTargetBase.extend({
 }).superRefine((value, ctx) => {
   validateComputerTarget(value, ctx)
   const hasElement = value.elementIndex !== undefined
+  if (value.accessibilityOnly && !hasElement) {
+    ctx.addIssue({ code: 'custom', message: '--accessibility-only requires --element-index' })
+  }
   const hasX = value.x !== undefined
   const hasY = value.y !== undefined
   if (!hasElement && !(hasX && hasY)) {

@@ -47,6 +47,7 @@ export const CLI_BOOLEAN_FLAGS = new Set([
   'removed',
   'reinstall',
   'restore-window',
+  'accessibility-only',
   'return-preamble',
   'run-hooks',
   'show-profile',

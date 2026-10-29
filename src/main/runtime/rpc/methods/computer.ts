@@ -37,7 +37,11 @@ export const COMPUTER_METHODS = [
     permission: 'workspace',
     params: ComputerCapabilitiesParams,
     handler: async () => {
-      return await callComputerSidecarCapabilities()
+      const capabilities = await callComputerSidecarCapabilities()
+      return {
+        ...capabilities,
+        clickAccessibilityOnly: capabilities.supports.actions.accessibilityOnlyClick === true
+      }
     }
   }),
   defineMethod({

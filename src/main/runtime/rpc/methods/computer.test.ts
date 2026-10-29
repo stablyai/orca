@@ -59,10 +59,18 @@ describe('computer RPC methods', () => {
   })
 
   it('returns provider capabilities through the sidecar', async () => {
-    const result = { platform: 'darwin', provider: 'orca-computer-use-macos', protocolVersion: 1 }
+    const result = {
+      platform: 'darwin',
+      provider: 'orca-computer-use-macos',
+      protocolVersion: 1,
+      supports: { actions: { click: true } }
+    }
     computerMocks.callComputerSidecarCapabilities.mockResolvedValue(result)
 
-    await expect(call('computer.capabilities', {})).resolves.toBe(result)
+    await expect(call('computer.capabilities', {})).resolves.toEqual({
+      ...result,
+      clickAccessibilityOnly: false
+    })
     expect(computerMocks.callComputerSidecarCapabilities).toHaveBeenCalledWith()
   })
 
@@ -77,6 +85,29 @@ describe('computer RPC methods', () => {
 
     await expect(call('computer.permissions', { id: 'accessibility' })).resolves.toBe(result)
     expect(computerMocks.openComputerUsePermissions).toHaveBeenCalledWith('accessibility')
+  })
+
+  it('advertises host support only when the provider can refuse mouse fallback', async () => {
+    computerMocks.callComputerSidecarCapabilities.mockResolvedValue({
+      supports: { actions: { accessibilityOnlyClick: true } }
+    })
+    await expect(call('computer.capabilities', {})).resolves.toMatchObject({
+      clickAccessibilityOnly: true
+    })
+  })
+
+  it('preserves accessibility-only clicks and rejects coordinate requests', async () => {
+    await call('computer.click', { app: 'Finder', elementIndex: 0, accessibilityOnly: true })
+    expect(computerMocks.callComputerSidecarAction).toHaveBeenCalledWith('click', {
+      app: 'Finder',
+      elementIndex: 0,
+      accessibilityOnly: true
+    })
+    computerMocks.callComputerSidecarAction.mockClear()
+    await expect(
+      call('computer.click', { app: 'Finder', x: 0, y: 0, accessibilityOnly: true })
+    ).rejects.toThrow('requires --element-index')
+    expect(computerMocks.callComputerSidecarAction).not.toHaveBeenCalled()
   })
 
   it('returns computer-use permission status', async () => {
