@@ -2018,6 +2018,15 @@
       "workspacePortBrowserOpen": {
         "systemBrowserHint": "{{shortcut}}+щелчок, чтобы открыть в системном браузере",
         "tooltip": "{{label}}. {{hint}}"
+      },
+      "worktreePaletteEvidence": {
+        "workspaceComment": "Комментарий рабочего пространства",
+        "createdByAutomation": "Создано автоматизацией",
+        "linkedTask": "Связанная задача",
+        "pullRequest": "Пул-реквест",
+        "mergeRequest": "Запрос на слияние",
+        "linkedIssue": "Связанная задача",
+        "listeningPort": "Прослушиваемый порт"
       }
     },
     "hooks": {

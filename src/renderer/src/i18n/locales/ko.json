@@ -1483,6 +1483,15 @@
       "workspacePortBrowserOpen": {
         "systemBrowserHint": "{{shortcut}}+클릭하여 시스템 브라우저에서 열기",
         "tooltip": "{{label}}. {{hint}}"
+      },
+      "worktreePaletteEvidence": {
+        "workspaceComment": "워크스페이스 댓글",
+        "createdByAutomation": "자동화가 생성함",
+        "linkedTask": "연결된 작업",
+        "pullRequest": "PR",
+        "mergeRequest": "MR",
+        "linkedIssue": "연결된 이슈",
+        "listeningPort": "수신 대기 포트"
       }
     },
     "hooks": {

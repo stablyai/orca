@@ -1758,6 +1758,15 @@
       "workspacePortBrowserOpen": {
         "systemBrowserHint": "{{shortcut}}+clic pour ouvrir dans le navigateur système",
         "tooltip": "{{label}}. {{hint}}"
+      },
+      "worktreePaletteEvidence": {
+        "workspaceComment": "Commentaire de l'espace de travail",
+        "createdByAutomation": "Créé par automatisation",
+        "linkedTask": "Tâche liée",
+        "pullRequest": "Pull request",
+        "mergeRequest": "Merge request",
+        "linkedIssue": "Issue liée",
+        "listeningPort": "Port en écoute"
       }
     },
     "hooks": {
