@@ -97,24 +97,22 @@ export function announceReopenedTerminals(outcomes: readonly HeldPaneReopenOutco
   const resumed = outcomes.filter((outcome) => outcome.reopened && outcome.agentResumed).length
   toast.success(
     translate('terminal.newerDaemonBanner.reopened', 'Reopened {{count}} terminals', {
-      count: reopened
+      count: reopened,
+      defaultValue_one: 'Reopened {{count}} terminal'
     }),
     resumed > 0
       ? {
           description: translate(
             'terminal.newerDaemonBanner.resumed',
             '{{count}} agent sessions resumed.',
-            { count: resumed }
+            { count: resumed, defaultValue_one: '{{count}} agent session resumed.' }
           )
         }
       : undefined
   )
 }
 
-/**
- * A paired server's held panes as its frames publish them now: a pane its frames stop holding
- * leaves, and one still held keeps its banner's phase. `reopen` asks that server to release them.
- */
+/** Reconcile server-held panes from its frames, preserving phases for ongoing holds; reopen targets that server. */
 export function showServerHeldPanes(
   environmentId: string,
   paneKeys: readonly string[],
@@ -144,7 +142,7 @@ export function showServerHeldPanes(
 /** Stops the newer build holding this pane, then lets each of that host's held panes start. */
 export async function reopenHeldTerminals(paneKey: string): Promise<void> {
   const { panes } = newerDaemonHoldStore.getState()
-  // Why no fallback host: a server pane that just left must never stop this machine's service.
+  // Never fall back to this machine’s service when a server-owned pane disappears.
   const host = panes[paneKey]?.host
   if (host === undefined) {
     return

@@ -41,19 +41,7 @@ function resolveQuickCommandLaunchGroupId(
   return requestedGroupId ?? useAppStore.getState().activeGroupIdByWorktree[worktreeId] ?? null
 }
 
-/**
- * Spawn a fresh terminal tab in the given group and queue the quick-command
- * text as the startup command. The PTY connection layer writes the command
- * once the shell is ready, so the user always sees their first prompt before
- * the command runs (mirrors the agent quick-launch path in
- * `launchAgentInNewTab`).
- *
- * Terminal-command quick commands always append Enter — the split-button is
- * a "run" affordance, distinct from the right-click "Insert" mode where
- * `appendEnter: false` is honored. Agent-prompt quick commands use the
- * agent's prompt launch path; OpenCode2 submits through the ready-state TUI
- * delivery path because its `--prompt` startup can leave text unsent.
- */
+/** Queue terminal commands until shell readiness and always append Enter (run differs from right-click Insert). Agent prompts use their launch path; OpenCode2 submits after TUI readiness because --prompt can remain unsent. */
 export function runQuickCommandInNewTab({
   command,
   worktreeId,
@@ -96,8 +84,7 @@ export function runQuickCommandInNewTab({
     return null
   }
 
-  // Why: a whitespace-only command would still spawn a terminal but feed it an
-  // empty string, leaving the user with an unexplained blank tab. Refuse early.
+  // Reject whitespace-only input before spawning an unexplained empty terminal.
   if (!command.command.trim()) {
     return null
   }
@@ -107,14 +94,10 @@ export function runQuickCommandInNewTab({
     pendingStartup: { command: flattenTerminalQuickCommand(command).command }
   })
 
-  // Why: match `+` button's createNewTerminalTab — without this, a worktree
-  // currently showing an editor file keeps rendering the editor and the new
-  // terminal tab stays invisible.
+  // Switch to terminal view like the + button; otherwise an editor keeps the new tab invisible.
   store.setActiveTabType('terminal', worktreeId)
 
-  // Why: persist tab-bar order with the new terminal appended. Without this,
-  // reconcileTabOrder falls back to terminals-first when the stored order is
-  // unset, jumping the new tab to index 0.
+  // Persist appended order or reconciliation’s terminals-first fallback moves the new tab to index zero.
   persistAgentLaunchTabOrder(worktreeId, tab.id)
 
   const launchedGroupId = resolveQuickCommandGroupId(worktreeId, tab.id, groupId)

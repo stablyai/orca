@@ -1,7 +1,4 @@
-// A terminal close in a layout-owner build matches what the switch-off window shows: the tab or
-// pane is gone once closed. A failed profile write (unwritable profile, full disk) is logged and
-// written again later, never refused, so main's frame does not bring the tab back. A freeze
-// (`writesFrozen`, a WSL move) refuses before the close changes anything.
+// Keep applied closes after failed saves and retry persistence; frozen writes still refuse before mutation.
 
 import type { LayoutCommand } from '../../../shared/workspace-layout/workspace-layout-command-types'
 import type { DurableProfileStateMutation } from '../loading-store/store-runtime-state'
@@ -10,7 +7,7 @@ export function isTerminalClose(command: LayoutCommand): boolean {
   return command.type === 'closeTabs' || command.type === 'closePane'
 }
 
-/** Runs `mutate` without its rollback: once applied, the close stands even if its write fails. */
+/** Omit rollback so failed persistence cannot reopen an applied close. */
 export async function keptOnWriteFailure<V>(
   run: (mutate: () => DurableProfileStateMutation<V>) => Promise<V>,
   mutate: () => DurableProfileStateMutation<V>,

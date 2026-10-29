@@ -82,6 +82,7 @@ function renderVisibleTree(strict = false) {
     ({ visible }) => {
       const tree = useFileExplorerTree('/repo', expanded, 'wt')
       useFileExplorerTreeLoadEffects({
+        workspaceKey: null,
         visibleFilesWorktreePath: visible ? '/repo' : null,
         expanded,
         dirCache: tree.dirCache,

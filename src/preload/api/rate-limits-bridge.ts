@@ -15,13 +15,10 @@ export const rateLimitsApi = {
     ipcRenderer.invoke('rateLimits:consumeCodexResetCredit'),
   refreshClaudeForTarget: (target: RateLimitRuntimeTarget): Promise<RateLimitState> =>
     ipcRenderer.invoke('rateLimits:refreshClaudeForTarget', target),
-  setPollingInterval: (ms: number): Promise<void> =>
-    ipcRenderer.invoke('rateLimits:setPollingInterval', ms),
   fetchInactiveClaudeAccounts: (): Promise<void> =>
     ipcRenderer.invoke('rateLimits:fetchInactiveClaudeAccounts'),
   fetchInactiveCodexAccounts: (): Promise<void> =>
     ipcRenderer.invoke('rateLimits:fetchInactiveCodexAccounts'),
-  refreshMiniMax: (): Promise<RateLimitState> => ipcRenderer.invoke('rateLimits:refreshMiniMax'),
   refreshGrok: (): Promise<RateLimitState> => ipcRenderer.invoke('rateLimits:refreshGrok'),
   onUpdate: (callback: (state: RateLimitState) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, state: RateLimitState) => callback(state)

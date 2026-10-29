@@ -13,12 +13,7 @@ const CSV_VIEW_MODES = ['source', 'rich'] as const satisfies readonly MarkdownVi
 const NOTEBOOK_VIEW_MODES = ['source', 'rich'] as const satisfies readonly MarkdownViewMode[]
 const NO_VIEW_MODES = [] as const satisfies readonly MarkdownViewMode[]
 
-// Why: every editable file (markdown, mermaid, or plain code) can flip into
-// Changes view mode. The toggle surfaces this alongside any language-specific
-// modes so there is one UI control per pane, not two. Non-edit tabs (diff,
-// conflict) do NOT get Changes because they are already a diff/review surface.
-// Plain code files have no markdown-style sub-modes, so their toggle is just
-// Edit | Changes.
+// Expose Changes alongside language modes in one control; diff/conflict tabs already provide review surfaces.
 const CODE_EDIT_TOGGLE_MODES = ['edit', 'changes'] as const satisfies readonly EditorToggleValue[]
 
 export function getEditorToggleModes(target: MarkdownPreviewTarget): readonly EditorToggleValue[] {
@@ -26,8 +21,7 @@ export function getEditorToggleModes(target: MarkdownPreviewTarget): readonly Ed
     return getMarkdownViewModes(target)
   }
   if (target.language === 'notebook') {
-    // Why: notebook source mode is raw JSON and Changes would diff that JSON,
-    // which is noisy and currently invalid for restored external notebooks.
+    // Notebook source/Changes would expose raw JSON and fails for restored external notebooks.
     return NOTEBOOK_VIEW_MODES
   }
   const languageModes = getMarkdownViewModes(target)

@@ -80,7 +80,12 @@ export function PRAssigneesPanel({
     ownerTarget,
     projectOrigin?.host ?? assigneeSlug?.host
   )
-  const repoAssigneesByPath = useRepoAssignees(repoPath, item.repoId, { target: ownerTarget })
+  const usesSlug = Boolean(slugOwner && slugRepo)
+  const repoAssigneesByPath = useRepoAssignees(
+    usesSlug ? null : repoPath,
+    usesSlug ? null : item.repoId,
+    { target: ownerTarget }
+  )
   const repoAssignees = slugOwner && slugRepo ? repoAssigneesBySlug : repoAssigneesByPath
   const canEditAssignees = Boolean(projectOrigin || repoPath)
   const assigneesByLogin = useMemo(

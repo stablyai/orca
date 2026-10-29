@@ -8,7 +8,8 @@ import {
   launchAgentInExistingWorkspace,
   reserveMobileAgentLaunch
 } from './mobile-existing-agent-launch'
-import { AGENT_PROMPT_NOT_SENT_MESSAGE } from './pr-ai-triage-launch'
+import { agentPromptNotSentMessage } from './pr-ai-triage-launch'
+import { translate } from '../i18n/mobile-i18n'
 import {
   isLaunchedSurfaceListed,
   launchedSelection,
@@ -17,7 +18,6 @@ import {
   type PendingSessionSelection
 } from './pending-session-selection'
 
-const NOTES_NOT_SENT_MESSAGE = "The agent started, but the notes weren't sent."
 export const PROMPT_UNCONFIRMED_MESSAGE =
   "The agent started, but couldn't confirm the prompt was sent."
 export const NOTES_UNCONFIRMED_MESSAGE =
@@ -27,13 +27,12 @@ export type NewTabAgentLaunchOptions = MobileQuickCommandLaunch['options'] & {
   onPromptSent?: () => void
 }
 
-/** Agent launches that `agent.launch` can carry: bare, or with a prompt to submit. A shell command
- *  or an unsent draft stays a plain terminal. */
+// Shell commands and unsent drafts require plain terminals rather than agent.launch.
 export function launchesThroughHost(options: NewTabAgentLaunchOptions | undefined): boolean {
   return options?.startupCommand === undefined && options?.enter !== false
 }
 
-/** The host's id for a session tab: a terminal pane is listed under its parent tab. */
+// Host placement uses the parent tab id for terminal panes.
 function hostTabIdOf(
   tabs: readonly MobileSessionTab[],
   sessionTabId: string | null | undefined
@@ -45,20 +44,14 @@ function hostTabIdOf(
   return tab.type === 'terminal' ? tab.parentTabId : tab.id
 }
 
-/**
- * The "+" menu's agent start through `agent.launch`. The phone lands on the tab when it is listed,
- * which for a paste-after-start agent is long before the reply; the reply only reports delivery.
- * `false` means this host can't take the launch and nothing was started.
- */
+// Listed tabs may precede prompt-delivery replies; false permits fallback only when this host started nothing.
 export async function launchNewTabAgentThroughHost(args: {
   client: RpcClient
   hostCapabilities: readonly string[] | null | undefined
   worktreeId: string
   agent: TuiAgent
   options: NewTabAgentLaunchOptions | undefined
-  /** Names this launch's pending selection, as it names the "+" lock. */
   lock: string
-  /** The session tab the user is on; the new tab follows it, as the plain "+" terminal does. */
   activeSessionTabId?: string | null
   pendingSelectionRef: { current: PendingSessionSelection | null }
   fetchSessionTabs: () => Promise<void>
@@ -70,12 +63,10 @@ export async function launchNewTabAgentThroughHost(args: {
   const { options, pendingSelectionRef, showToast } = args
   const prompt = options?.agentPrompt ?? options?.initialPrompt
   const reservation = reserveMobileAgentLaunch(args.agent)
-  // An older host would drop it anyway; asking only a host that reads it keeps the request as before.
   const afterTabId = args.hostCapabilities?.includes(AGENT_LAUNCH_PLACEMENT_RUNTIME_CAPABILITY)
     ? hostTabIdOf(args.getSessionTabs(), args.activeSessionTabId)
     : undefined
-  // Why: armed before asking, because the reply waits for prompt delivery while the tab is listed
-  // as soon as it exists. A tab the user picks meanwhile replaces this.
+  // Arm selection before requesting: tabs publish before prompt delivery settles, and later user picks must win.
   pendingSelectionRef.current = launchedSelection(args.lock, reservation, null)
   const launched = await launchAgentInExistingWorkspace({
     client: args.client,
@@ -100,17 +91,25 @@ export async function launchNewTabAgentThroughHost(args: {
     return true
   }
   if (launched.kind === 'tab-closed') {
-    // Why silent: the tab this "+" opened is gone, which is the answer; the close was a user's own.
+    // Closing the newly opened tab is a user action, so settle silently.
     pendingSelectionRef.current = withoutUnansweredLaunch(pendingSelectionRef.current, args.lock)
     return true
   }
   if (launched.kind === 'unknown') {
-    // Why: a listed tab proves the agent started, so only the prompt is in doubt; notes stay unsent.
+    // A listed tab proves startup, leaving only prompt delivery uncertain; keep notes unsent.
     if (isLaunchedSurfaceListed(args.getSessionTabs(), reservation)) {
       if (prompt?.trim()) {
         triggerError()
         showToast(
-          options?.initialPrompt ? NOTES_UNCONFIRMED_MESSAGE : PROMPT_UNCONFIRMED_MESSAGE,
+          options?.initialPrompt
+            ? translate(
+                'session.newTabAgentHostLaunch.notesUnconfirmed',
+                "The agent started, but couldn't confirm the notes were sent."
+              )
+            : translate(
+                'session.newTabAgentHostLaunch.promptUnconfirmed',
+                "The agent started, but couldn't confirm the prompt was sent."
+              ),
           2400
         )
       }
@@ -129,14 +128,24 @@ export async function launchNewTabAgentThroughHost(args: {
     args.lock,
     outcome.kind === 'structured' ? { sessionId: outcome.sessionId } : { handle: outcome.handle }
   )
-  // Why: the host publishes the tab before it replies, so read it now rather than after a delay.
+  // Refresh immediately because the host publishes the tab before replying.
   void args.fetchSessionTabs()
   if (launched.promptDelivered === false) {
     triggerError()
-    showToast(options?.initialPrompt ? NOTES_NOT_SENT_MESSAGE : AGENT_PROMPT_NOT_SENT_MESSAGE, 2400)
+    showToast(
+      options?.initialPrompt
+        ? translate(
+            'session.newTabAgentHostLaunch.notesNotSent',
+            "The agent started, but the notes weren't sent."
+          )
+        : agentPromptNotSentMessage(),
+      2400
+    )
   } else if (launched.promptDelivered && options?.initialPrompt) {
     triggerSuccess()
-    showToast(options.successToast ?? 'Notes sent')
+    showToast(
+      options.successToast ?? translate('session.newTabAgentHostLaunch.notesSent', 'Notes sent')
+    )
     options.onPromptSent?.()
   } else if (warning?.trim()) {
     showToast(warning.trim(), 2400)

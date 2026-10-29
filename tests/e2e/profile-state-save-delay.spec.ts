@@ -31,7 +31,8 @@ test('shows one delayed-save notice, restores it after reload, and clears on rec
   await expect(notice).toHaveCount(1)
   await expect(notice).toBeVisible()
   await expect(notice).toContainText('Further saves may be delayed while this operation finishes.')
-  await expect(notice.getByRole('button')).toHaveCount(0)
+  // The app toaster's close button is the only control; the notice has no action button.
+  await expect(notice.getByRole('button')).toHaveAttribute('data-close-button')
   await expect(notice).toHaveCSS('opacity', '1')
   const screenshot = testInfo.outputPath('delayed-save-notice.png')
   await orcaPage.screenshot({ path: screenshot })

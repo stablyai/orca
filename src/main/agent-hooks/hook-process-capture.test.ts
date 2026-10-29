@@ -30,7 +30,7 @@ describe('Claude outer hook process capture', () => {
             `HOME=${home}`,
             'PATH=/usr/bin:/bin',
             'ORCA_PANE_KEY=presence-test-pane',
-            // Why: the agent's shell zone may differ from Orca's; the identity must not.
+            // Agent timezone differences must not change process identity.
             ...(timeZone ? [`TZ=${timeZone}`] : []),
             '/bin/sh',
             '-c',

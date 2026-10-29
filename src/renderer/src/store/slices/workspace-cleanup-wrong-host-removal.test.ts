@@ -1,25 +1,4 @@
-/**
- * STA-4343: workspace cleanup must delete on the host whose row was confirmed.
- *
- * Two hosts can expose cleanup candidates with the SAME `repoId::path` identity
- * (the scan composes `worktreeId` from `repo.id` + `::` + the workspace path
- * with no host component). Before the fix, selection, confirmation, preflight
- * and removal kept only `worktreeId` and removal routing preferred the ACTIVE
- * workspace's host, so confirming host B's row issued the destructive IPC
- * against host A and destroyed host A's real directory (and uncommitted work).
- *
- * Rig: two REAL temp directories stand in for the two hosts. The removal
- * boundary (`window.api.worktrees.remove` for the local/SSH transport,
- * `callRuntimeRpc('worktree.rm')` for a paired runtime) is the only fake, and
- * it ACTUALLY deletes the directory on the host it is routed to. The gate is
- * filesystem state, not arguments: after confirming host B's row, host A's
- * marker must still exist and host B's must be gone.
- *
- * The soundness controls matter as much as the wrong-host cases: the same rig
- * with host B ACTIVE (and with host A confirmed) still deletes exactly the
- * confirmed row, so a passing assertion cannot come from a rig that never
- * deletes anything.
- */
+/** Cleanup must delete the confirmed host’s same-ID workspace (STA-4343). Transport fakes delete real per-host directories; assert one survives and one is gone across local/SSH/runtime and active-host controls so inert or indiscriminate deletion cannot pass. */
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import * as fs from 'node:fs'
 import * as os from 'node:os'
@@ -328,7 +307,6 @@ describe('STA-4343 wrong-host cleanup removal (git worktree identity)', () => {
       }
     } as Partial<AppState>)
 
-    // The user confirms HOST B's cleanup row.
     const removal = await store
       .getState()
       .removeWorkspaceCleanupCandidates([worktreeId], { approvedCandidates: [hostBCandidate] })
@@ -709,7 +687,6 @@ describe('STA-4343 wrong-host cleanup removal (paired runtime host)', () => {
     expect(fs.existsSync(hosts.hostAMarkerPath), 'local host A must survive').toBe(true)
     expect(fs.existsSync(hosts.hostBMarkerPath)).toBe(false)
     expect(routedHostIds).toEqual([HOST_B_RUNTIME_HOST_ID])
-    // The destructive call left over the paired transport, not the local IPC.
     expect(mockApi.worktrees.remove).not.toHaveBeenCalled()
     expect(runtimeRpc.callRuntimeRpc).toHaveBeenCalledWith(
       { kind: 'environment', environmentId: 'hub-1' },
@@ -719,10 +696,7 @@ describe('STA-4343 wrong-host cleanup removal (paired runtime host)', () => {
     )
   })
 
-  // Why: routing depends on the HOST honouring `hostId`. Local main always does —
-  // it ships with this renderer. A paired remote server may be an older build that
-  // strips the field and routes by its own preference, which on a colliding id
-  // deletes the wrong workspace. Fail closed there until a capability gate exists.
+  // Older paired hosts may discard hostId and delete another same-ID owner; refuse collisions until capability proves host-qualified routing.
   it('refuses a colliding removal over the paired transport rather than trusting it', async () => {
     const worktreeId = 'repo1::/shared/workspace/path'
     const worktreePath = '/shared/workspace/path'

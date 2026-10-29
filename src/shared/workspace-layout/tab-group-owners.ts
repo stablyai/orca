@@ -1,11 +1,6 @@
-// The one group that owns each tab when stored groups and tab-bar entries disagree.
-
 import type { TabGroup } from '../tab-types'
 
-/**
- * A tab belongs to the stored group its tab-bar entry names; failing that, to the first group
- * listing it. Keeps one tab from showing in several groups.
- */
+/** Prefer the tab-bar entry’s stored group, else its first listed group; one tab must not appear in several groups. */
 export function resolveTabGroupOwners(
   tabs: readonly { id: string; groupId?: string }[],
   groups: readonly TabGroup[],

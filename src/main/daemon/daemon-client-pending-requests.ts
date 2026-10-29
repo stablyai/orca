@@ -44,10 +44,7 @@ export class DaemonPendingRequests {
     }
   }
 
-  // Why: only reached when the socket itself is gone, so the error class must stay
-  // DaemonConnectionLostError — daemon-client-rpc-request keys "may tear down the
-  // shared connection" off it, and a plain DaemonProtocolError would look like an
-  // ordinary error reply.
+  // Keep transport failures distinct from refusal replies: only the former may tear down shared sockets.
   rejectAll(reason: string): void {
     for (const [id, pending] of this.requests) {
       clearTimeout(pending.timer)

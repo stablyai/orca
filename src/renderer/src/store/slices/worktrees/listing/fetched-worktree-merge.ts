@@ -137,7 +137,7 @@ export function preserveConcurrentDisplayName<T extends Worktree>(
 }
 
 export function mergeFetchedWorktrees(
-  set: Parameters<StateCreator<AppState, [], [], WorktreeSlice>>[0],
+  _set: Parameters<StateCreator<AppState, [], [], WorktreeSlice>>[0],
   get: () => AppState,
   args: FencedWorktreeMergeArgs
 ): WorktreeListingMergeOutcome {
@@ -158,10 +158,8 @@ export function mergeFetchedWorktrees(
   const decision: { outcome: WorktreeListingMergeOutcome } = { outcome: 'not-current' }
   let authoritativelyRemovedIds: readonly string[] = []
   let authoritativelySeenIds: readonly string[] = []
-  set((s) => {
-    // Why against live state: a create or remove reply can have landed while this listing was in
-    // flight. A listing that describes the catalog before that reply must not undo it, so it is
-    // not applied at all -- rows, detected rows and purge alike.
+  get().updateAgentStatusState((s, changedPaneKeys) => {
+    // Check live applied catalog before any row/detection/purge merge so in-flight listings cannot undo newer create/remove replies.
     const refusal = worktreeListingRefusal(
       s,
       args.refresh,
@@ -287,7 +285,8 @@ export function mergeFetchedWorktrees(
       ...(removedIds.length > 0
         ? buildWorktreePurgeState(
             s,
-            removedIds.map((id) => hostWorktreeTarget({ id, hostId: args.hostId }))
+            removedIds.map((id) => hostWorktreeTarget({ id, hostId: args.hostId })),
+            changedPaneKeys
           )
         : {})
     }
@@ -296,9 +295,7 @@ export function mergeFetchedWorktrees(
     // Why: applied outside the updater so a repeated updater call cannot double-apply the removal memory.
     forgetAuthoritativelyRemovedWorktrees(args.hostId, authoritativelySeenIds)
     rememberAuthoritativelyRemovedWorktrees(args.hostId, authoritativelyRemovedIds)
-    // Only a real scan retires persisted metadata. `session-fallback` also reports authoritative,
-    // but it is the truncated, visibility-filtered `worktree.list` reply from a host too old for
-    // `worktree.detectedList` -- its omissions are not evidence a checkout is gone.
+    // Retire metadata only on real scans; legacy session-fallback claims authority but truncates/filter rows, so omissions prove no deletion.
     forgetPersistedWorktreeMetaForRemovals(
       args.repoId,
       args.hostId,

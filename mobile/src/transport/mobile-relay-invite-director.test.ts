@@ -73,7 +73,7 @@ describe('pairing invite director resolution', () => {
         type: 'relay-moved',
         v: 1,
         cellUrl: 'https://relay-c2.onorca.dev',
-        assignmentEpoch: 7,
+        assignmentEpoch: 8,
         targetFromCell: true
       })
     })

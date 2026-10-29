@@ -74,8 +74,7 @@ export class DaemonPtyAdapterSubscriptionFanout {
     )
   }
 
-  // Why: main subscribes on the routed provider, so without this the dead-endpoint
-  // fan-out never reaches the renderer and only the written pane recovers (STA-2373).
+  // Main subscribes through the router; forward recovery for passive sibling panes too.
   onWriteUnavailable(callback: (payload: { id: string }) => void): () => void {
     return combineUnsubscribes(this.adapters.map((adapter) => adapter.onWriteUnavailable(callback)))
   }

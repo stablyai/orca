@@ -99,6 +99,29 @@ describe('agent question-answered inference', () => {
     }
   })
 
+  it('waits for Enter when option previews make a digit only move focus', () => {
+    const interactivePrompt = JSON.stringify({
+      questions: [
+        {
+          question: 'pick a layout',
+          multiSelect: false,
+          options: [
+            { label: 'A', preview: '+--+' },
+            { label: 'B', preview: '|  |' }
+          ]
+        }
+      ]
+    })
+    const { inference, inferQuestionAnswered } = makeInference(
+      makeWaitingQuestionEntry({ interactivePrompt })
+    )
+
+    inference.observeSentTerminalInput('2')
+    expect(inferQuestionAnswered).not.toHaveBeenCalled()
+    inference.observeSentTerminalInput('\r')
+    expect(inferQuestionAnswered).toHaveBeenCalledOnce()
+  })
+
   it('keeps waiting when the synthetic free-text row is selected', () => {
     const { inference, inferQuestionAnswered } = makeInference(makeWaitingQuestionEntry())
 
@@ -162,8 +185,7 @@ describe('agent question-answered inference', () => {
       makeWaitingQuestionEntry({ state: 'working' }),
       makeWaitingQuestionEntry({ toolName: 'Bash' }),
       makeWaitingQuestionEntry({ agentType: 'codex' }),
-      // Why: a stale wait past the freshness horizon no longer renders amber,
-      // so a keystroke must not synthesize activity for it.
+      // Stale waits no longer render attention, so input must not revive them as inferred activity.
       makeWaitingQuestionEntry({ updatedAt: -100_000_000, stateStartedAt: -100_000_000 })
     ]
     for (const entry of cases) {

@@ -44,8 +44,7 @@ describe('createElectronHomeIsolation', () => {
       realHome: '/real/home'
     })
 
-    // Why: the disposable home must be the canonical spelling (no tmpdir
-    // symlink/8.3 alias) or git-canonicalized worktree paths stop matching.
+    // Require canonical HOME so git-normalized worktree paths still match.
     const canonicalHome = realpathSync.native(path.join(userDataDir, 'home'))
     expect(isolation.isolatedHome).toBe(canonicalHome)
     expect(isolation.env).toMatchObject({
@@ -63,8 +62,7 @@ describe('createElectronHomeIsolation', () => {
     expect(isolation.env.ORCA_DISABLE_MACOS_LOGIN_SHELL).toBe(
       process.platform === 'darwin' ? '1' : undefined
     )
-    // Codex always routes to the resolved home, so the post-launch guard must
-    // accept the boundary this env produces.
+    // The post-launch guard must accept the isolated boundary used by Codex’s real-home route.
     expect(() =>
       assertElectronResolvedIsolatedHome(isolation.isolatedHome, isolation)
     ).not.toThrow()

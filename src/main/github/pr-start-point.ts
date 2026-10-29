@@ -11,6 +11,7 @@ import {
   githubPullRequestHeadLocalRef,
   reviewHeadRemoteRefComponent
 } from '../../shared/review-head-tracking-ref'
+import { reviewStartPointFailure } from '../../shared/review-start-point-failure-copy'
 
 type GitExec = (args: string[]) => Promise<{ stdout: string; stderr: string }>
 
@@ -25,8 +26,7 @@ type ResolveGitHubPrStartPointArgs = {
   localGitOptions?: { wslDistro?: string; ghAccount?: GhAccountBinding }
   gitExec: GitExec
   fetchRemoteTrackingRef: (remote: string, branch: string) => Promise<void>
-  // Why: returns the durable local ref the fetch wrote so resolve can rev-parse
-  // that exact path instead of re-hashing remote identity.
+  // Return the written durable ref so success never recomputes its remote identity.
   fetchPullRequestHeadRef: (remote: string, prNumber: number) => Promise<string>
   resolveRemote: () => Promise<string>
 }
@@ -57,8 +57,7 @@ export async function resolveGitHubPrStartPoint(
       pushTarget = resolved?.pushTarget
       maintainerCanModify = resolved?.maintainerCanModify
     } catch {
-      // Why: deleted/inaccessible fork metadata can prevent push-target
-      // discovery, but GitHub still exposes the PR head ref for checkout.
+      // Missing fork metadata can block push-target discovery while the PR head ref remains fetchable.
       pushTarget = undefined
     }
   }
@@ -73,12 +72,12 @@ export async function resolveGitHubPrStartPoint(
       args.issueSourcePreference
     )
     if (!item || item.type !== 'pr') {
-      return { error: `PR #${args.prNumber} not found.` }
+      return reviewStartPointFailure('github.prNotFound', { number: args.prNumber })
     }
     headRefName = (item.branchName ?? '').trim()
     baseRefName = (item.baseRefName ?? '').trim()
     if (!headRefName) {
-      return { error: `PR #${args.prNumber} has no head branch.` }
+      return reviewStartPointFailure('github.prHeadBranchMissing', { number: args.prNumber })
     }
     if (item.isCrossRepository === true) {
       isCrossRepository = true
@@ -109,8 +108,7 @@ export async function resolveGitHubPrStartPoint(
 
   const fetchPullRequestHeadSha = async (): Promise<{ baseBranch: string } | { error: string }> => {
     const pullRef = `refs/pull/${args.prNumber}/head`
-    // Why: soft-keep needs identity when the fetch throws before returning a path.
-    // Success uses the path returned by the fetch itself (writer-authoritative).
+    // Failed fetches return no ref path, so only soft-keep must independently resolve its identity.
     let softKeepLocalRefPromise: Promise<string | null> | undefined
     const resolveSoftKeepLocalRef = (): Promise<string | null> => {
       softKeepLocalRefPromise ??= (async () => {
@@ -145,16 +143,12 @@ export async function resolveGitHubPrStartPoint(
       const localRef = await args.fetchPullRequestHeadRef(remote, args.prNumber)
       const sha = await resolveDurableHeadSha(localRef)
       if (!sha) {
-        return { error: `Could not resolve fork PR #${args.prNumber} head after fetch.` }
+        return reviewStartPointFailure('github.forkHeadUnresolved', { number: args.prNumber })
       }
       return { baseBranch: sha }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
-      // Why: mirror compare-base — a transient transport failure must not fail
-      // the resolve when a prior fetch already pinned the durable head ref. A
-      // missing remote ref (deleted PR/fork), auth failure, or stale-relay
-      // error must fail hard: serving the durable ref there would check out a
-      // dead or unauthorized tip and mask the actionable error.
+      // Reuse durable heads only for transient transport failures; deleted/auth/stale-relay errors stay actionable.
       if (isTransientReviewHeadFetchError(error)) {
         const localSha = await resolveDurableHeadSha(await resolveSoftKeepLocalRef())
         if (localSha) {
@@ -169,24 +163,21 @@ export async function resolveGitHubPrStartPoint(
           return { baseBranch: localSha }
         }
       }
-      return {
-        error: `Failed to fetch ${pullRef}: ${message.split('\n')[0]}`
-      }
+      return reviewStartPointFailure('fetchFailed', {
+        ref: pullRef,
+        detail: message.split('\n')[0]
+      })
     }
   }
 
-  // Why: fork PR heads live on a remote we don't have configured, so
-  // `git fetch <remote> <headRefName>` would fail. GitHub exposes every
-  // PR head (fork or same-repo) as refs/pull/<N>/head on the upstream repo.
+  // Upstream exposes fork heads through refs/pull/<N>/head even without a configured fork remote.
   if (isCrossRepository) {
     const result = await fetchPullRequestHeadSha()
     if ('error' in result) {
       return result
     }
     const compareBaseFetched = await fetchCompareBaseRef()
-    // Why: adopt the contributor's branch name locally (mirroring the same-repo
-    // return below) so fork-PR worktrees aren't renamed with the maintainer's
-    // branch prefix (e.g. `me/866`). The push refspec still targets the fork.
+    // Keep the contributor's branch name locally; push still targets the fork.
     return {
       ...result,
       ...(compareBaseFetched && compareBaseRef ? { compareBaseRef } : {}),
@@ -201,8 +192,7 @@ export async function resolveGitHubPrStartPoint(
     await args.fetchRemoteTrackingRef(remote, headRefName)
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
-    // Why: missing fork metadata can make a fork PR look like a same-repo
-    // branch. Only that missing-ref case should fall back to refs/pull.
+    // Missing fork metadata can mimic a same-repo branch; only missing-ref errors allow pull-head fallback.
     if (isMissingRemoteRefGitError(error)) {
       const result = await fetchPullRequestHeadSha()
       if (!('error' in result)) {
@@ -217,13 +207,13 @@ export async function resolveGitHubPrStartPoint(
           ...(maintainerCanModify !== undefined ? { maintainerCanModify } : {})
         }
       }
-      // Why: the branch fetch missed and the pull-head fallback is what actually
-      // failed, so surface its (more actionable) error rather than the branch miss.
+      // Return the actionable pull-head fallback failure instead of the earlier branch miss.
       return result
     }
-    return {
-      error: `Failed to fetch ${remote}/${headRefName}: ${message.split('\n')[0]}`
-    }
+    return reviewStartPointFailure('fetchFailed', {
+      ref: `${remote}/${headRefName}`,
+      detail: message.split('\n')[0]
+    })
   }
 
   const remoteRef = `${remote}/${headRefName}`
@@ -232,10 +222,10 @@ export async function resolveGitHubPrStartPoint(
     const { stdout } = await args.gitExec(['rev-parse', '--verify', remoteRef])
     headSha = stdout.trim()
   } catch {
-    return { error: `Remote ref ${remoteRef} does not exist after fetch.` }
+    return reviewStartPointFailure('remoteRefMissing', { ref: remoteRef })
   }
   if (!headSha) {
-    return { error: `Empty SHA resolving PR #${args.prNumber} head.` }
+    return reviewStartPointFailure('github.headShaEmpty', { number: args.prNumber })
   }
   const compareBaseFetched = await fetchCompareBaseRef()
 

@@ -7,8 +7,6 @@ import {
 } from './skill-install-provider-groups'
 
 describe('groupSkillInstallProviders', () => {
-  // Why: an agent that reads .agents/skills is reached by every install, so
-  // offering a checkbox for it would imply a choice that does not exist.
   it('separates agents that read the canonical root from agents with their own', () => {
     const workspace = groupSkillInstallProviders('workspace')
     const global = groupSkillInstallProviders('global')
@@ -38,8 +36,7 @@ describe('defaultSelectedSkillProviders', () => {
     expect([...selected]).toEqual(['codex', 'claude'])
   })
 
-  // Why: a runtime Orca cannot probe from here must not read as "no agents
-  // installed" — that would quietly install nothing.
+  // Unavailable detection is unknown, not proof that no agents are installed.
   it('falls back to every agent when detection is unavailable', () => {
     const selected = defaultSelectedSkillProviders(null)
     expect(selected.has('claude')).toBe(true)

@@ -1,5 +1,5 @@
 import { BrowserWindow } from 'electron'
-import { sendRemoteRuntimeRequest } from '../../../shared/remote-runtime-client'
+import { sendRemoteRuntimeRequest } from '../../../shared/remote-runtime/remote-runtime-client'
 import { REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY } from '../../../shared/protocol-version'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../shared/electron-remote-runtime-client-capabilities'
 import {
@@ -29,16 +29,12 @@ import { resolveManagedRuntimeEnvironment } from './runtime-environment-managed-
 
 const statusListeners = new Set<() => void>()
 
-/** Main's own readers of server status, alongside the windows it is sent to. */
 export function onRuntimeEnvironmentStatusPublished(listener: () => void): () => void {
   statusListeners.add(listener)
   return () => statusListeners.delete(listener)
 }
 
-/**
- * A managed server is paired over SSH, so its refusal re-pairs there instead of blocking on a
- * re-pair only the user could do. A failed re-pair keeps the block, with the reason it failed.
- */
+/** SSH-managed servers recover pairing automatically; failed repair keeps authentication blocked. */
 async function answerRefusedPairing(
   environment: KnownRuntimeEnvironment,
   refused: RuntimeHostStatusResponse
@@ -55,8 +51,7 @@ async function answerRefusedPairing(
       ? runtimeHostStatusFailure('unauthorized', error.message)
       : runtimeHostStatusError(error)
   }
-  // Why changed, not the refusal: the rebuild re-proved the server, so this answer is stale; only
-  // a re-pair changed the pairing (and retired this owner for a successor that verifies anew).
+  // Rebuild re-proved the server, making refusal stale; only re-pairing retires this status owner.
   return runtimeEnvironmentChangedFailure(environment, 'status.get', outcome === 'repaired')
 }
 

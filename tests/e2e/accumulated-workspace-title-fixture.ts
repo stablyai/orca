@@ -11,9 +11,7 @@ export async function startAccumulatedTitleTraffic(
 ): Promise<{ registeredTabs: number; registeredPanes: number }> {
   return page.evaluate((interval) => {
     const target: TitleFixtureWindow = window
-    // __paneManagers only contains mounted TerminalPane instances. Their
-    // mount effect registers the same runtime owner used by production graph
-    // publication, so this cannot manufacture ownership for cold tabs.
+    // Only mounted managers own runtime registration; cold synthetic tabs must not gain manufactured ownership.
     const panes = [...(target.__paneManagers?.entries() ?? [])].flatMap(([tabId, manager]) =>
       manager.getPanes().map((pane) => ({ tabId, pane }))
     )
@@ -28,9 +26,7 @@ export async function startAccumulatedTitleTraffic(
         return
       }
       for (const { tabId, pane } of panes) {
-        // Call the production store writer with the mount-local pane id. The
-        // target came from a mounted manager, whose effect owns runtime
-        // registration; cold synthetic tabs are never addressed.
+        // Use the production writer with pane ids from registered mounted managers only.
         store
           .getState()
           .setRuntimePaneTitle(tabId, pane.id, `Synthetic title ${sequence++}-${Date.now()}`)

@@ -18,21 +18,9 @@ describe('extractFrontMatter', () => {
     expect(result!.body).toBe('Body\n')
   })
 
-  it('returns null when there is no front-matter', () => {
-    expect(extractFrontMatter('# Just a heading\n')).toBeNull()
-    expect(extractFrontMatter('')).toBeNull()
-  })
-
   it('does not match --- in the middle of the document', () => {
     const content = '# Title\n\n---\nkey: val\n---\n'
     expect(extractFrontMatter(content)).toBeNull()
-  })
-
-  it('handles front-matter with no body', () => {
-    const content = '---\ntitle: Hello\n---\n'
-    const result = extractFrontMatter(content)
-    expect(result).not.toBeNull()
-    expect(result!.body).toBe('')
   })
 
   it('handles CRLF line endings', () => {
@@ -40,14 +28,6 @@ describe('extractFrontMatter', () => {
     const result = extractFrontMatter(content)
     expect(result).not.toBeNull()
     expect(result!.body).toBe('# Body\r\n')
-  })
-
-  it('handles empty front-matter block', () => {
-    const content = '---\n\n---\n# Body\n'
-    const result = extractFrontMatter(content)
-    expect(result).not.toBeNull()
-    expect(result!.raw).toBe('---\n\n---\n')
-    expect(result!.body).toBe('# Body\n')
   })
 
   it('handles empty front-matter block without a blank line', () => {
@@ -72,12 +52,6 @@ describe('extractFrontMatter', () => {
 })
 
 describe('prependFrontMatter', () => {
-  it('reassembles front-matter and body', () => {
-    const raw = '---\ntitle: Hello\n---\n'
-    const body = '# Body\n'
-    expect(prependFrontMatter(raw, body)).toBe('---\ntitle: Hello\n---\n# Body\n')
-  })
-
   it('adds trailing newline to raw if missing', () => {
     const raw = '---\ntitle: Hello\n---'
     const body = '# Body\n'

@@ -82,11 +82,11 @@ describe('claude account folder', () => {
     const stateFile = join(home, '.claude.json')
     await expect(readClaudeFolderLoginAsync(stateFile)).resolves.toBeNull()
     writeFileSync(stateFile, JSON.stringify({ oauthAccount: { emailAddress: 'a@example.test' } }))
-    // Whole seconds, which every filesystem stores exactly.
+    // Whole seconds avoid filesystem timestamp rounding.
     const mtime = new Date(Math.floor(Date.now() / 1000) * 1000)
     utimesSync(stateFile, mtime, mtime)
     expect((await readClaudeFolderLoginAsync(stateFile))?.email).toBe('a@example.test')
-    // Same size and mtime: the cached answer, so the file was not read again.
+    // Hold size and mtime constant to prove the cached answer is reused.
     writeFileSync(stateFile, JSON.stringify({ oauthAccount: { emailAddress: 'b@example.test' } }))
     utimesSync(stateFile, mtime, mtime)
     expect((await readClaudeFolderLoginAsync(stateFile))?.email).toBe('a@example.test')

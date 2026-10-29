@@ -1,6 +1,8 @@
+import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { agentSessionConversationView } from '../../../shared/agent-session-conversation-view'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentJournalRenderItem } from '../../../shared/agent-session-journal-types'
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import type { AgentSessionLease } from '../../../shared/agent-session-record'
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
@@ -25,10 +27,11 @@ const {
 } = await import('../structured-worker-identity')
 
 const SESSION_ID = 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d'
-/** The worker's session as the resolved running session the status read takes. */
 const RUNNING: RunningStructuredSession = {
   sessionId: SESSION_ID,
-  record: agentSessionRecordFixture(agentSessionLeaseFixture({ sessionId: SESSION_ID })),
+  record: agentSessionConversationView(
+    agentSessionRecordFixture(agentSessionLeaseFixture({ sessionId: SESSION_ID }))
+  ),
   lineage: [SESSION_ID]
 }
 
@@ -59,23 +62,34 @@ function transcript(count: number): AgentJournalRenderItem[] {
 
 function installHost(options: {
   items?: AgentJournalRenderItem[]
-  lease?: { runtimeKind: string; claimStatus: string }
+  lease?: Pick<AgentSessionLease, 'runtimeKind' | 'claimStatus'>
   hasSession?: boolean
   tabListed?: boolean
 }): void {
-  const lease = options.lease ?? { runtimeKind: 'native', claimStatus: 'live' }
+  const lease = options.lease ?? { runtimeKind: 'native' as const, claimStatus: 'live' as const }
   hostRef.current = {
     deps: {
       store: {
         // No committed /clear: each session is its own lineage's root.
-        listRecords: () => [],
-        getRecord: (sessionId: string) =>
-          ({
-            sessionId,
+        listConversations: () => [],
+        getVisibleSessionTabIndex: () => ({
+          present: true,
+          sessionIds: options.tabListed ? [SESSION_ID] : []
+        }),
+        getConversation: (sessionId: string) => {
+          const base = agentSessionRecordFixture(
+            agentSessionLeaseFixture({ sessionId, ...lease, runtimeFence: 1 })
+          )
+          return agentSessionConversationView({
+            ...base,
             provider: 'codex',
-            location: { executionHostId: 'local', wslDistro: null },
-            lease: { ...lease, runtimeFence: 1, deathEvidence: null }
-          }) as unknown as AgentSessionRecord
+            accountHome: { variable: 'CODEX_HOME', path: '/tmp/codex-home' },
+            providerHandleChain: base.providerHandleChain.map((link) => ({
+              ...link,
+              handle: codexProviderHandle('worker')
+            }))
+          })
+        }
       }
     },
     hasSession: () => options.hasSession ?? true,
@@ -88,7 +102,6 @@ function installHost(options: {
   }
 }
 
-/** The durable worker-terminal rows group addressing enumerates. */
 const rows: {
   terminal_handle: string
   pane_key: string
@@ -140,7 +153,6 @@ describe('group addressing and structured workers', () => {
   })
 
   it('keeps a worker at rest and leaves out a retired one', () => {
-    // At rest: its agent was stopped while idle, its chat tab still lists it, and mail starts it.
     const handle = registerWorker()
     installHost({ lease: { runtimeKind: 'native', claimStatus: 'released' }, tabListed: true })
     expect(listAddressableStructuredWorkers(workerDb)).toEqual([
@@ -152,9 +164,7 @@ describe('group addressing and structured workers', () => {
   })
 
   it('reaches a structured worker through @all', () => {
-    // The defect this pins: recipients came only from `listTerminals`, which enumerates leaves and
-    // PTYs, so a structured worker was excluded BEFORE per-recipient resolution — the warning
-    // machinery never ran and the sender got exit 0 with a receipt naming only who did resolve.
+    // Candidate enumeration must include structured workers before per-recipient resolution.
     const handle = registerWorker()
     installHost({})
     const recipients = [PTY_TERMINAL, ...listAddressableStructuredWorkers(workerDb)]
@@ -175,10 +185,7 @@ describe('group addressing and structured workers', () => {
   })
 
   it('reads @idle status off the FULL timeline, never a bounded tail', async () => {
-    // The same trap that already cost this branch once: settlement tombstones the lifecycle item
-    // rather than rewriting it, so a long tool-calling turn pushes it arbitrarily far from the
-    // tail and any page-sized read reports a BUSY worker as idle — then `@idle` broadcasts into a
-    // running turn, which Codex refuses outright and Claude folds into it.
+    // A busy lifecycle can scroll beyond any tail page; @idle must read the full timeline.
     registerWorker()
     installHost({ items: [runningTurn(), ...transcript(500)] })
     expect(await structuredWorkerAgentStatus(RUNNING)).toBe('working')
@@ -218,13 +225,7 @@ describe('sendGroupMessage actually composes structured workers in', () => {
     hostRef.current = null
   })
 
-  /**
-   * Drives the real `sendGroupMessage`, not `resolveGroupAddress`.
-   *
-   * The suite above hand-composed `[PTY_TERMINAL, ...listAddressableStructuredWorkers(workerDb)]` itself,
-   * so deleting the composition at the call site left it green — the exact regression the fix
-   * describes could come straight back. This test owns that seam.
-   */
+  /** Exercise real sendGroupMessage composition; hand-assembled candidates cannot catch omission of structured workers. */
   it('addresses a structured worker that only the call site can enumerate', async () => {
     const handle = registerWorker('wt_2')
     installHost({})
@@ -242,8 +243,6 @@ describe('sendGroupMessage actually composes structured workers in', () => {
       }
     }
     const runtime = {
-      // No PTY terminals at all: if the call site does not compose structured workers in, the
-      // group resolves empty and this throws instead of delivering.
       listTerminals: async () => ({ terminals: [] }),
       getAgentStatusForHandle: async () => 'idle',
       getLiveTerminalPaneKey: () => structuredWorkerIdentities.get(handle)!.paneKey,

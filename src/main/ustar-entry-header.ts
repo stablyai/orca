@@ -7,7 +7,6 @@ export type UstarEntry = {
   type: 'file' | 'directory'
 }
 
-/** `errorPrefix` keeps each caller's failure codes (`<prefix>-tar-path-limit`). */
 function writeField(
   header: Buffer,
   offset: number,
@@ -50,7 +49,7 @@ function splitTarPath(path: string, errorPrefix: string): { name: string; prefix
   throw new Error(`${errorPrefix}-tar-path-limit`)
 }
 
-/** A ustar header with root ownership and a zero mtime, so equal inputs archive identically. */
+// Fixed ownership and mtime make archives reproducible.
 export function buildUstarEntryHeader(entry: UstarEntry, errorPrefix: string): Buffer {
   const header = Buffer.alloc(USTAR_BLOCK_BYTES)
   const { name, prefix } = splitTarPath(entry.path, errorPrefix)
@@ -71,7 +70,6 @@ export function buildUstarEntryHeader(entry: UstarEntry, errorPrefix: string): B
   return header
 }
 
-/** Zero bytes that round `size` up to a whole block. */
 export function ustarPaddingBytes(size: number): number {
   return (USTAR_BLOCK_BYTES - (size % USTAR_BLOCK_BYTES)) % USTAR_BLOCK_BYTES
 }

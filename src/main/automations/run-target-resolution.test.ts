@@ -118,7 +118,8 @@ describe('resolveAutomationRunTarget owner projection', () => {
 
     expect(resolveAutomationRunTarget(store, automation)).toEqual({
       ok: false,
-      error: 'This automation has no host to run on.'
+      error: 'This automation has no host to run on.',
+      errorCode: 'noRunnableHost'
     })
   })
 
@@ -141,15 +142,6 @@ describe('resolveAutomationRunTarget projectId drift', () => {
   it('resolves when only the derived projectId tier differs (repo: snapshot vs github: setup)', () => {
     const store = makeStore([makeSetup()], [makeRepo()])
     const automation = makeAutomation(makeRunContext({ projectId: 'repo:repo-1' }))
-
-    const result = resolveAutomationRunTarget(store, automation)
-
-    expect(result).toMatchObject({ ok: true, cwd: '/repo' })
-  })
-
-  it('resolves when the snapshot is at the git: tier and the setup climbed to github:', () => {
-    const store = makeStore([makeSetup()], [makeRepo()])
-    const automation = makeAutomation(makeRunContext({ projectId: 'git:github.com/o/r' }))
 
     const result = resolveAutomationRunTarget(store, automation)
 

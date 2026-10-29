@@ -63,7 +63,7 @@ export function registerPtyConnectionForegroundAgentSamplingTests(): void {
     })
 
     describe('visible foreground agent sampling (perf)', () => {
-      // Why: bindings share the tab-1/LEAF_1 pane key; give each sampling case its own tabId so no other test's publish pollutes it.
+      // Use unique tab IDs to isolate published identity from sibling tests sharing LEAF_1.
       async function connectRestoredPaneForForegroundSampling(
         args: {
           ptyId?: string

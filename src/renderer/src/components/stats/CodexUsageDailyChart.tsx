@@ -1,6 +1,6 @@
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip'
 import type { CodexUsageDailyPoint } from '../../../../shared/codex-usage-types'
-import { translate } from '@/i18n/i18n'
+import { getIntlLocale, translate } from '@/i18n/i18n'
 
 function formatTokens(value: number): string {
   if (value >= 1_000_000) {
@@ -9,13 +9,12 @@ function formatTokens(value: number): string {
   if (value >= 1_000) {
     return `${(value / 1_000).toFixed(1)}k`
   }
-  return value.toLocaleString()
+  return value.toLocaleString(getIntlLocale())
 }
 
 function getMaxDailyTotal(daily: CodexUsageDailyPoint[]): number {
   let max = 1
-  // Why: all-time usage histories can exceed V8's argument limit if spread
-  // into Math.max, even though the chart only renders the last 10 days.
+  // Avoid spreading unbounded usage history into Math.max, which can exceed V8’s argument limit.
   for (const entry of daily) {
     max = Math.max(max, entry.totalTokens)
   }
@@ -98,7 +97,7 @@ export function CodexUsageDailyChart({ daily }: CodexUsageDailyChartProps): Reac
                               <div className="text-xs">
                                 <div>{entry.day}</div>
                                 <div>
-                                  {segment.label}: {segment.value.toLocaleString()}{' '}
+                                  {segment.label}: {segment.value.toLocaleString(getIntlLocale())}{' '}
                                   {translate(
                                     'auto.components.stats.CodexUsageDailyChart.e4bdcf0071',
                                     'tokens'

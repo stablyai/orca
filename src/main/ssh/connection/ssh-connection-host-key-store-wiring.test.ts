@@ -1,20 +1,9 @@
-/**
- * The wire from "the verifier accepted a first-contact key" to "a record exists on disk".
- *
- * Its own file because `initSshHostKeyStoreFile` binds module-level state for the rest of the
- * process, and because binding it makes the connect prelude do real disk I/O — which the shared
- * connection suite cannot absorb, since its reconnect tests drive the clock with fake timers and an
- * fs round trip does not complete inside an advanced tick.
- *
- * Without this, nothing covers the store end to end: an unknown host would connect every time and
- * never be learned, and the second connection would be first contact again.
- */
+/** Prove accepted first-contact keys persist and inform later connections. Isolate the bound module-level store: real disk I/O cannot settle inside the shared reconnect suite's fake ticks. */
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import { Socket } from 'node:net'
 import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-// Type-only, so it is erased before vi.mock's hoisted factory runs.
 import type * as SshGConfigResolution from '../config/ssh-g-config-resolution'
 import type * as Ssh2 from 'ssh2'
 
@@ -47,8 +36,7 @@ vi.mock('ssh2', async (importOriginal) => {
     }
     end() {}
     destroy() {}
-    // ssh2 calls hostVerifier(key, verify) and only accepts synchronously when the return is not
-    // undefined; a mock that ignored the callback would pass against a verifier that never decides.
+    // Honor ssh2's callback/synchronous verifier decision so a never-deciding verifier cannot pass.
     connect(config?: unknown) {
       const hostVerifier = (
         config as
@@ -110,10 +98,7 @@ afterEach(() => {
   rmSync(profileDir, { recursive: true, force: true })
 })
 
-/**
- * The record is written fire-and-forget on purpose — a failed write must not fail a connection whose
- * key we already verified — so the test waits for it rather than assuming it landed.
- */
+/** Recording is deliberately fire-and-forget; wait for it rather than assume disk I/O landed. */
 async function waitForStoredKeys(count: number): Promise<unknown[]> {
   for (let attempt = 0; attempt < 100; attempt += 1) {
     const trusted = await loadTrustedHostKeys()
@@ -135,7 +120,6 @@ describe('recording a first-contact host key', () => {
     )
   })
 
-  // A record is only worth writing if the next connection reads it back and believes it.
   it('accepts the same key from the store on the next connection', async () => {
     await new SshConnection(target(), callbacks()).connect()
     await waitForStoredKeys(1)
@@ -150,20 +134,17 @@ describe('recording a first-contact host key', () => {
     ).resolves.toBe('match')
   })
 
-  // Two records for one endpoint would grow a row per connection and eventually read as a change
-  // against a host that did nothing wrong.
   it('does not record the same key twice', async () => {
     await new SshConnection(target(), callbacks()).connect()
     await waitForStoredKeys(1)
     await new SshConnection(target(), callbacks()).connect()
-    // Give a second write the same chance to land before asserting it did not happen.
+    // Give a duplicate write time to land before asserting it never did.
     await new Promise((resolve) => setTimeout(resolve, 50))
 
     expect(await loadTrustedHostKeys()).toHaveLength(1)
   })
 
-  // The whole point of recording: a host we learned once must be refused when it changes, even
-  // though known_hosts has never heard of it.
+  // Recorded trust must refuse changed keys even when known_hosts has no entry.
   it('refuses a different key for a host it recorded itself', async () => {
     await new SshConnection(target(), callbacks()).connect()
     await waitForStoredKeys(1)
@@ -175,9 +156,7 @@ describe('recording a first-contact host key', () => {
     expect(hostKeyAccepted).toBe(false)
   })
 
-  // The load-bearing half of the unreadable-known_hosts decision. We connect as ssh does, but the
-  // whole reason that is acceptable is that we write nothing: a first contact we could not check
-  // must never become durable trust that a later connection then believes.
+  // Unreadable known_hosts permits connection without recording; withheld evidence must never become durable first-contact trust.
   it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)(
     'records nothing when a known_hosts file exists but cannot be read',
     async () => {
@@ -201,8 +180,6 @@ describe('recording a first-contact host key', () => {
     }
   )
 
-  // A record per launch would accumulate, and a stale one would eventually read as a mismatch
-  // against a VM that is behaving exactly as designed.
   it('records nothing for an on-demand runtime target', async () => {
     await new SshConnection(
       target({ owner: { type: 'on-demand-runtime', runtimeId: 'rt-1' } }),

@@ -16,9 +16,7 @@ import {
 } from './codex-structured-item-translation'
 import type { CodexActiveJournalItem } from './codex-structured-journal-contracts'
 
-/** What an item still open is built from, whoever ends it — its turn, its provider, the bounded
- *  live set, or a completion that carried nothing: the text streamed so far when there is any,
- *  else the item as it started, which usually carries none. */
+/** Prefer streamed text so unfinished rows retain partial output. */
 export function codexActiveItemBody(
   active: CodexActiveJournalItem,
   streams: Pick<CodexStructuredItemStreams, 'snapshot'>
@@ -31,8 +29,7 @@ export function codexActiveItemBody(
   ).body
 }
 
-/** A reasoning completion that carried no text of its own still ends the row its stream wrote,
- *  from the same text a settle would use. */
+/** Empty reasoning completions still close the row built from streamed text. */
 export function codexCompletedItem(
   completed: CodexJournalItem,
   active: CodexActiveJournalItem | undefined,
@@ -44,9 +41,6 @@ export function codexCompletedItem(
   return { body: codexActiveItemBody(active, streams), handled: true }
 }
 
-/** The row an item that will never complete is left with: a running call ended as its turn or
- *  session did (`end.call`; failed when nothing says), a patch said to be interrupted, a prompt
- *  cancelled, a message ended — at `end.at` when the host saw the end. */
 export function interruptedCodexItemBody(
   body: AgentJournalItemBody | null,
   end: { at?: number; call?: AgentJournalRunningCallEnd } = {}

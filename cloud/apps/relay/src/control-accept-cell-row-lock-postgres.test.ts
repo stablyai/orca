@@ -19,10 +19,7 @@ const userId = 'accept-lock-postgres-user'
 const first = { userId, relayHostId: 'acceptlockhost01' }
 const second = { userId, relayHostId: 'acceptlockhost02' }
 
-// Why: the accept path now enforces the capacity ceiling inside its single
-// conditional cell-row write instead of behind a SELECT ... FOR UPDATE it held
-// for the rest of the transaction. Two accepts reaching for the same last slot
-// are what would expose a lost update if that check were no longer atomic.
+// Race accepts for the last slot: the final conditional cell UPDATE must enforce capacity atomically without an earlier held SELECT lock.
 describePostgres('PostgreSQL control accept without a held cell row', () => {
   const databases: RelayDatabase[] = []
 
@@ -151,10 +148,7 @@ describePostgres('PostgreSQL control accept without a held cell row', () => {
     })
     await heldPromise
 
-    // Retiring generation 1 and installing generation 2 leaves the cell's
-    // reservation where it was, so the accept has no reason to wait on the row
-    // at all. Reading it up front is what used to make it wait, and then fail
-    // at the request-path lock bound.
+    // Same-cell generation replacement changes no reservation; reading the shared row would needlessly wait and hit the request bound.
     try {
       await expect(
         store.activateControl(first, {
@@ -180,8 +174,7 @@ describePostgres('PostgreSQL control accept without a held cell row', () => {
     expect(Number(cells[0]!.reserved_requests)).toBe(Number(units[0]!.units))
   }, 20_000)
 
-  // The fused commit is optional on RelayDatabase, so a wrapper that stopped forwarding it
-  // would silently fall back to a separate COMMIT. Drive the store the server builds.
+  // Drive the production store: wrappers can omit optional fused commit and silently restore a separate COMMIT round trip.
   it('commits every counter write in one message through the production store', async () => {
     await removeTestRows(databases[0]!)
     const store = new RelayAssignmentStore(databases[0]!, () => 100)

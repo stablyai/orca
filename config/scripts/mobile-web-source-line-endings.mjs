@@ -1,11 +1,7 @@
 import { readFile, readdir } from 'node:fs/promises'
 import { join } from 'node:path'
 
-/**
- * Pinned `-text` in .gitattributes and skipped below, because a 0x0d in them means nothing. .svg
- * is absent on purpose: it is text, so the eol=lf pin applies and a CRLF .svg forks the buildId.
- * A test keeps this list and the .gitattributes exemptions in step.
- */
+// Skip .gitattributes -text binaries; SVG stays textual because CRLF changes hashed buildId. Test holds exemptions to attributes.
 export const BINARY_SOURCE_EXTENSIONS = [
   '.png',
   '.jpg',
@@ -33,17 +29,14 @@ async function listSourceFiles(directory) {
   return files.sort()
 }
 
-/**
- * A CRLF checkout changes the bytes of every text source, which changes every asset hash and so
- * the buildId. .gitattributes pins eol=lf; this is what notices when that pin stops working.
- */
+// Require LF-pinned checkout: CRLF changes source bytes, asset hashes and buildId across platforms.
 export async function assertNoCarriageReturnsInSource(directory) {
   const offenders = []
   for (const file of await listSourceFiles(directory)) {
     if (BINARY_SOURCE_EXTENSIONS.some((extension) => file.endsWith(extension))) {
       continue
     }
-    // Written by mobile's postinstall, gitignored, so no eol pin applies and none is needed.
+    // Postinstall-generated ignored source needs no git EOL pin.
     if (file.endsWith('.generated.ts')) {
       continue
     }

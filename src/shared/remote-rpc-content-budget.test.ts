@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES } from './remote-runtime-memory-limits'
+import { REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES } from './remote-runtime/remote-runtime-memory-limits'
 import {
   REMOTE_RPC_MAX_CONTENT_BYTES,
   remoteRpcContentBudget,

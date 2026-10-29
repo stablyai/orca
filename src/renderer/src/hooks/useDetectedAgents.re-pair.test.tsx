@@ -71,7 +71,6 @@ const STATUS = {
   minCompatibleRuntimeClientVersion: MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION
 }
 
-/** Answers status.get; hands each detect call to `detect` with its 1-based index. */
 function mockHost(detect: (call: number, method: string) => Promise<unknown>): () => number {
   let detectCalls = 0
   runtimeEnvironmentCall.mockImplementation(({ method }: { method: string }) => {

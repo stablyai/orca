@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { isQualifiedPluginKey } from '../plugins/plugin-manifest'
+import { isQualifiedPluginKey } from '../plugins/manifest/plugin-manifest'
 
 export const PluginSetEnabledParams = z.object({
   pluginKey: z.string().refine(isQualifiedPluginKey, 'invalid qualified plugin key'),

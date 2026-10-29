@@ -1,6 +1,4 @@
-// What a stored session holds besides the layout: the desktop view's own selection, content facts
-// views report, and fields this module passes through untouched. The Loader splits a session into
-// these and the layout; the Serializer joins them back into today's on-disk shape.
+// Loader separates layout from view selections, reported content facts and untouched carried fields; Serializer recombines them into compatible disk records.
 
 import type { SleepingAgentSessionRecord } from '../agent-session-resume'
 import type { BrowserWorkspace } from '../browser-workspace-types'
@@ -48,7 +46,8 @@ export const SESSION_FIELD_OWNERS = {
   terminalTopologyRevisionByRepoId: 'layout',
   // Applied and cleared by the Loader; never written again.
   terminalSurfaceTombstonesByPaneKey: 'legacy',
-  closedTerminalTabTombstonesByTabId: 'layout'
+  closedTerminalTabTombstonesByTabId: 'layout',
+  closedTerminalPanesByPaneKey: 'layout'
 } as const satisfies Record<keyof WorkspaceSessionState, SessionFieldOwner>
 
 type FieldsOwnedBy<Owner extends SessionFieldOwner> = {
@@ -116,10 +115,7 @@ export const BLANK_BROWSER_TAB_STATE: BrowserTabLiveState = {
   loadError: null
 }
 
-/**
- * The row's last terminal is not a fact here: the Serializer derives it from the pane bindings.
- * `generation` is the window's: its pane renderer's remount key, bumped only by the window.
- */
+/** Serializer derives last PTY from pane bindings; generation remains the window-owned remount key. */
 export type TerminalRowFacts = Pick<TerminalTab, 'title' | 'generation'>
 
 export type PaneScrollback = { buffer?: string; scrollbackRef?: string }

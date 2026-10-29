@@ -9,12 +9,8 @@ import type { AgentBrowserBridge } from './agent-browser-bridge'
 import { browserSessionRegistry } from './browser-session-registry'
 import type { ServeBrowserPageState } from '../runtime/serve-browser-tab-layout'
 
-// Why: headless orca serve has no renderer window to host a <webview>, so each
-// browser page is backed by a main-process offscreen BrowserWindow. The window
-// is never shown — it exists only so its WebContents can be driven over CDP and
-// streamed via the existing screencast path. Verified on macOS and on headless
-// Linux under Xvfb (Electron --headless segfaults; a virtual display is
-// required there — provisioned in the serve image, not by this code).
+// orca serve has no renderer for webviews; hidden BrowserWindows host its pages.
+// Headless Linux requires Xvfb; Electron --headless segfaults.
 
 const DEFAULT_VIEWPORT_WIDTH = 1280
 const DEFAULT_VIEWPORT_HEIGHT = 800
@@ -23,8 +19,7 @@ const OWNER_RETIREMENT_CONCURRENCY = 4
 
 export class OffscreenBrowserBackend implements BrowserBackend {
   private readonly windowsByPageId = new Map<string, BrowserWindow>()
-  // Shutdown is terminal for this backend; rejecting creates closes the race
-  // where destroyAll snapshots ownership and a new page appears afterward.
+  // Reject creates once shutdown starts so pages cannot escape destroyAll's ownership snapshot.
   private shutdownStarted = false
   private readonly pendingOwnerRetirements = new Set<Promise<void>>()
 
@@ -32,7 +27,6 @@ export class OffscreenBrowserBackend implements BrowserBackend {
     private readonly browserManager: BrowserManager,
     private readonly options: {
       getAgentBrowserBridge?: () => Pick<AgentBrowserBridge, 'onPageClosed'> | null
-      /** A page's committed address or title changed, so its saved tab can follow. */
       onPageNavigated?: (page: ServeBrowserPageState) => void
     } = {}
   ) {}
@@ -45,8 +39,7 @@ export class OffscreenBrowserBackend implements BrowserBackend {
     if (this.windowsByPageId.has(browserPageId)) {
       throw new Error(`Browser page ${browserPageId} already exists`)
     }
-    // Why: profiles map to Electron partitions; using the profile's partition
-    // makes cookies/storage persist in the same SQLite DB the desktop path uses.
+    // Reuse desktop profile partitions to preserve cookies and storage.
     const profile = params.profileId
       ? browserSessionRegistry.getProfile(params.profileId)
       : browserSessionRegistry.getDefaultProfile()
@@ -57,8 +50,6 @@ export class OffscreenBrowserBackend implements BrowserBackend {
       width: DEFAULT_VIEWPORT_WIDTH,
       height: DEFAULT_VIEWPORT_HEIGHT,
       webPreferences: {
-        // Why: offscreen pages are the SSH/headless browser backend; keep their
-        // HTML fullscreen behavior aligned with desktop <webview> guests.
         ...ORCA_BROWSER_GUEST_WEB_PREFERENCES,
         partition,
         sandbox: true,
@@ -69,12 +60,7 @@ export class OffscreenBrowserBackend implements BrowserBackend {
 
     this.windowsByPageId.set(browserPageId, win)
 
-    // Why: register the guest and return immediately so the new tab appears
-    // without waiting for the page to finish loading. Previously createTab
-    // awaited the full navigation, so clicking "New Browser Tab" did nothing for
-    // up to a second on real URLs. The page loads asynchronously and streams
-    // once it paints; a failed load leaves the (usable) tab open, matching how a
-    // normal browser tab survives a failed navigation.
+    // Do not wait for navigation: slow or failed loads must leave an operable tab.
     const registered = this.browserManager.registerOffscreenGuest({
       browserPageId,
       worktreeId: params.worktreeId,
@@ -82,22 +68,15 @@ export class OffscreenBrowserBackend implements BrowserBackend {
       webContentsId: win.webContents.id
     })
     if (!registered) {
-      // Why destroy rather than carry on: the window already exists but carries none of the guest
-      // policies registration installs, so leaving it would navigate an unvalidated URL with no
-      // policy on it and hand back a page id nothing can drive. The renderer door aborts its mount
-      // the same way; this is that abort.
+      // Registration installs guest policies; destroy refused windows before any navigation.
       this.windowsByPageId.delete(browserPageId)
       win.destroy()
       throw new Error(`Browser page ${browserPageId} was refused`)
     }
 
-    // Why only once registration took: this teardown unregisters the page id, and a refused id is
-    // one the other authority may own — cancelling its work would be the confusion we just refused.
-    // Why at all: if the window dies out from under us (crash, app teardown), drop the registry
-    // entry so commands fail cleanly instead of resolving a dead WebContents.
+    // Install teardown only after registration; a refused id may belong to a document preview.
     win.webContents.once('destroyed', () => {
-      // Explicit close removes the page first and performs awaited cleanup;
-      // only an unexpected destruction still owns the bridge retirement here.
+      // Explicit close already removed ownership and awaits bridge retirement.
       if (this.windowsByPageId.get(browserPageId) !== win) {
         return
       }
@@ -116,7 +95,7 @@ export class OffscreenBrowserBackend implements BrowserBackend {
           url: win.webContents.getURL(),
           title: win.webContents.getTitle()
         })
-      // Committed navigations only: a title a page keeps changing (a counter) is not saved each time.
+      // Persist at navigation milestones, avoiding writes for every dynamic title update.
       win.webContents.on('did-navigate-in-page', report)
       win.webContents.on('did-stop-loading', report)
     }
@@ -146,6 +125,10 @@ export class OffscreenBrowserBackend implements BrowserBackend {
         win.destroy()
       }
     }
+  }
+
+  ownsTab(browserPageId: string): boolean {
+    return this.windowsByPageId.has(browserPageId)
   }
 
   getWebContentsId(browserPageId: string): number | null {
@@ -183,8 +166,7 @@ export class OffscreenBrowserBackend implements BrowserBackend {
         }
         settled = true
         cleanup()
-        // Why: about:blank and slow pages can resolve via timeout without a
-        // did-finish-load; treat that as success so the tab is still operable.
+        // Missing did-finish-load must not make a slow or about:blank tab unusable.
         resolve()
       }, LOAD_TIMEOUT_MS)
 
@@ -203,9 +185,7 @@ export class OffscreenBrowserBackend implements BrowserBackend {
         _validatedURL: string,
         isMainFrame: boolean
       ): void => {
-        // Why: subframe/iframe (e.g. ad/tracker) load failures also fire
-        // did-fail-load. Only the main frame failing means the page itself
-        // failed; ignore the rest or an otherwise-usable page gets rejected.
+        // Subframe load failures do not make the whole page unusable.
         if (!isMainFrame) {
           return
         }
@@ -214,8 +194,7 @@ export class OffscreenBrowserBackend implements BrowserBackend {
         }
         settled = true
         cleanup()
-        // Why: aborted loads (-3) happen on redirects/SPA navigations and are not
-        // real failures; the page is still usable.
+        // Redirects and SPA navigations can abort loads with ERR_ABORTED (-3).
         if (errorCode === -3) {
           resolve()
           return
@@ -247,11 +226,7 @@ export class OffscreenBrowserBackend implements BrowserBackend {
   }
 }
 
-/**
- * Why: destroy() rejects a live screencast's pending CDP command, and the snapshot it was awaiting
- * then calls capturePage on the half-torn-down page, which segfaults Electron (43.7.8). Detaching
- * first emits 'detach' synchronously, so every stream on the page is closed before that resumes.
- */
+// Detach before destroy: rejected CDP snapshots can call capturePage during teardown and crash Electron 43.7.8.
 function endDebuggerSessions(win: BrowserWindow): void {
   const dbg = win.webContents.debugger
   if (!dbg.isAttached()) {

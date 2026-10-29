@@ -16,6 +16,7 @@ import { openRpcRequestBudget, resolvePostConnectRequestTimeout } from './rpc-re
 import { isRpcResponse } from './rpc-response-shape'
 import { RelayDialStageTracker, type RelayDialStageSource } from './relay-dial-stage'
 import { RelayPendingRequests } from './relay-pending-requests'
+import { MobileRelayConnectWaiters } from './mobile-relay-connect-waiters'
 import { RpcSessionLivenessWatchdog } from './rpc-session-liveness-watchdog'
 import { settleMobileRuntimeCapabilities } from './mobile-runtime-capability-negotiation'
 import type { RelayHostCloseReason } from '../../../src/shared/relay-host-close-reason'
@@ -25,16 +26,13 @@ import type { ConnectionLogSink, ConnectionState, RpcResponse } from './types'
 const RELAY_PROBE_TIMEOUT_MS = 4_000
 const RELAY_MISSED_PROBE_LIMIT = 2
 const RELAY_FOREGROUND_PROBE_MIN_INTERVAL_MS = 10_000
-// Why: a relay kept through the background grace may have died while the app was
-// suspended; one miss redials instead of two. Not shorter: the first packet after
-// resume can pay radio wake-up plus a TCP retransmit.
+// Use one decisive post-background probe, allowing radio wake/TCP retransmit latency before redial.
 const RELAY_RESUME_PROBE_MS = 4_000
 let relayRpcSessionSequence = 0
 
 export type MobileRelayRpcSession = RpcClient &
   RelayDialStageSource & {
-    // The cell's attach-reservation deadline (~10s). Diagnostics only — never
-    // schedule anything from it; rotation keys off getResumeExpiresAt().
+    // Attach reservation is diagnostics only; rotate against getResumeExpiresAt instead.
     getAttachDeadlineAt(): number | null
     getResumeExpiresAt(): number | null
     getResumeConfirmation(): DeviceResumeConfirmed | null
@@ -141,6 +139,7 @@ export function connectMobileRelayRpcSession(args: {
       }
     },
     close() {
+      connectWaiters.releaseAll()
       if (closed) {
         return
       }
@@ -160,6 +159,7 @@ export function connectMobileRelayRpcSession(args: {
     probeAfterBackground: () =>
       state === 'connected' && livenessWatchdog.probeNow(livenessIdentity, RELAY_RESUME_PROBE_MS)
   }
+  const connectWaiters = new MobileRelayConnectWaiters(client)
   const livenessWatchdog = new RpcSessionLivenessWatchdog({
     transport: 'relay',
     idleProbeMs: null,
@@ -228,7 +228,7 @@ export function connectMobileRelayRpcSession(args: {
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         pending.drop(id)
-        // Why: the frame was written long ago — the desktop may have processed it.
+        // Written requests may already have committed; timeout remains delivery-unknown.
         reject(markRpcDeliveryUnknown(new Error(`relay RPC timed out: ${method}`)))
       }, timeoutMs)
       pending.track(id, { resolve, reject, timer, written: false })
@@ -268,31 +268,7 @@ export function connectMobileRelayRpcSession(args: {
   }
 
   function waitForConnected(timeoutMs = requestTimeoutMs): Promise<void> {
-    if (state === 'connected') {
-      return Promise.resolve()
-    }
-    return new Promise((resolve, reject) => {
-      let timer: ReturnType<typeof setTimeout> | null = null
-      const unsubscribe = client.onStateChange((next) => {
-        if (next === 'connected') {
-          finish()
-          resolve()
-        } else if (next === 'disconnected' || next === 'auth-failed') {
-          finish()
-          reject(new Error(`relay session ${next}`))
-        }
-      })
-      timer = setTimeout(() => {
-        finish()
-        reject(new Error('relay session connection timed out'))
-      }, timeoutMs)
-      function finish(): void {
-        if (timer) {
-          clearTimeout(timer)
-        }
-        unsubscribe()
-      }
-    })
+    return connectWaiters.wait(timeoutMs)
   }
 
   function publishState(next: ConnectionState): void {

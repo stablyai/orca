@@ -1,5 +1,25 @@
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { Plus } from 'lucide-react'
+import { translate } from '@/i18n/i18n'
+
+function AddReferenceAction({
+  onClick
+}: {
+  onClick?: (event: React.MouseEvent) => void
+}): React.JSX.Element | null {
+  if (!onClick) {
+    return null
+  }
+  return (
+    <MetadataActionIcon
+      label={translate('workspace.links.addReference', 'Add reference')}
+      onClick={onClick}
+    >
+      <Plus className="size-3" />
+    </MetadataActionIcon>
+  )
+}
 
 export function MetaIconBadge({
   label,
@@ -19,11 +39,13 @@ export function MetaIconBadge({
 export function DetailHeader({
   icon,
   label,
-  actions
+  actions,
+  onAddReference
 }: {
   icon: React.ReactNode
   label: string
   actions?: React.ReactNode
+  onAddReference?: (event: React.MouseEvent) => void
 }): React.JSX.Element {
   return (
     <div className="flex items-center justify-between gap-2">
@@ -31,7 +53,12 @@ export function DetailHeader({
         {icon}
         <span className="truncate">{label}</span>
       </div>
-      {actions ? <div className="flex shrink-0 items-center gap-0.5">{actions}</div> : null}
+      {actions || onAddReference ? (
+        <div className="flex shrink-0 items-center gap-0.5">
+          {actions}
+          <AddReferenceAction onClick={onAddReference} />
+        </div>
+      ) : null}
     </div>
   )
 }

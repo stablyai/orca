@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { runOrcadNativePreflight } from './orcad-native-preflight'
+import { runOrcadNativePreflight, runOrcadNativePreflightVerdict } from './orcad-native-preflight'
 import { ORCAD_EXIT_CONFIGURATION } from './orcad-configuration-exit'
 import {
   runtimeTerminalDegradation,
@@ -42,7 +42,6 @@ afterEach(() => {
 
 describe('runOrcadNativePreflight', () => {
   it('stops the boot on a proven-unloadable binary instead of reaching the require', () => {
-    // Continuing here would hit the very dlopen the probe just proved fatal, and the
     // operator would get the loader's stack trace instead of the sentence below.
     const { fail, exit, warn } = harness(
       verdict({ status: 'blocked', reason: 'libc_floor', detail: 'the binary requires GLIBC_2.34' })
@@ -54,7 +53,6 @@ describe('runOrcadNativePreflight', () => {
     expect(message).toContain('newer C library')
     expect(message).toContain('the binary requires GLIBC_2.34')
     expect(message).toContain('libc glibc 2.31')
-    // The toolchain hint is what makes it actionable rather than merely accurate.
     expect(message).toContain('sudo apt-get install -y build-essential python3')
   })
 
@@ -89,7 +87,6 @@ describe('runOrcadNativePreflight', () => {
 
     expect(continued).toBe(true)
     expect(exit).not.toHaveBeenCalled()
-    // Still reported: an unverifiable host must not look identical to a proven-healthy one.
     expect(runtimeTerminalDegradation()?.reason).toBe('unknown')
   })
 
@@ -114,5 +111,26 @@ describe('runOrcadNativePreflight', () => {
       exit: vi.fn(() => undefined as never)
     })
     expect(toolchainHints).not.toHaveBeenCalled()
+  })
+})
+
+describe('runOrcadNativePreflightVerdict', () => {
+  it('skips the probe for a qualified slot and clears any stale degradation', () => {
+    setRuntimeTerminalUnavailableCause({ reason: 'load_failed', detail: 'old' })
+    const check = vi.fn(() => verdict({ status: 'blocked' }))
+
+    expect(runOrcadNativePreflightVerdict({ qualified: true, check })).toBe('ok')
+
+    expect(check).not.toHaveBeenCalled()
+    expect(runtimeTerminalDegradation()).toBeNull()
+  })
+
+  it('reports a degraded probe as such, so it cannot qualify the slot', () => {
+    expect(
+      runOrcadNativePreflightVerdict({
+        check: () => verdict({ status: 'degraded', reason: 'spawn_helper_missing' }),
+        warn: vi.fn()
+      })
+    ).toBe('degraded')
   })
 })

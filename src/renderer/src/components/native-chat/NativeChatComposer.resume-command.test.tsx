@@ -3,13 +3,16 @@
 import { act, cleanup, render } from '@testing-library/react'
 import type { RefObject } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { NativeChatPickerItem } from '../../../../shared/native-chat-picker-items'
+import type { NativeChatPickerItem } from '../../../../shared/native-chat/input/native-chat-picker-items'
+import type { QueuedMessageInlineEditor } from './use-structured-agent-session-queued-edit'
 import type { NativeChatStructuredComposerTransport } from './native-chat-composer-types'
 
 type CommandItem = Extract<NativeChatPickerItem, { kind: 'command' }>
 
 type FieldProps = {
   textareaRef: RefObject<HTMLTextAreaElement | null>
+  autocomplete?: { mode: string; items?: NativeChatPickerItem[] }
+  onChooseMentionFile?: (path: string) => void
   onSend?: () => void
   onChoosePickerItem?: (item: NativeChatPickerItem) => void
 }
@@ -38,6 +41,9 @@ vi.mock('../../store', () => {
     activeWorkspaceExecutionHostId: 'ssh:box',
     tabsByWorktree: { 'wt-1': [{ id: 'tab-1' }] },
     unifiedTabsByWorktree: {},
+    worktreesByRepo: {},
+    detectedWorktreesByRepo: {},
+    folderWorkspaces: [],
     clearNativeChatLaunchDraft: vi.fn()
   }
   const useAppStore = (selector: (value: typeof state) => unknown) => selector(state)
@@ -81,6 +87,10 @@ vi.mock('./use-native-chat-composer-keydown', () => ({
   }
 }))
 
+import {
+  createNativeChatQueuedEditDraft,
+  discardNativeChatQueuedEdit
+} from './native-chat-queued-edit-draft'
 import { NativeChatComposer } from './NativeChatComposer'
 
 const RESUME: CommandItem = {
@@ -92,8 +102,10 @@ const RESUME: CommandItem = {
   orcaOwned: true
 }
 
-function renderStructuredChat() {
+function renderStructuredChat(editSession?: QueuedMessageInlineEditor) {
   const transport: NativeChatStructuredComposerTransport = {
+    capturePresentation: () => () => true,
+    ...(editSession ? { threadGoal: { setObjective: vi.fn(async () => true) } } : {}),
     send: vi.fn(() => true),
     dispatchCommand: vi.fn(async () => ({ handled: false, accepted: false, error: null })),
     optionsSurface: {
@@ -112,6 +124,8 @@ function renderStructuredChat() {
   const chat = () => (
     <NativeChatComposer
       terminalTabId="tab-1"
+      editSession={editSession}
+      draftScopeKey={editSession?.draftScopeKey}
       paneKey="tab-1:structured"
       targetPtyId={null}
       agent="claude"
@@ -156,7 +170,6 @@ describe('/resume in the native chat composer', () => {
     expect(transport.send).not.toHaveBeenCalled()
     expect(transport.dispatchCommand).not.toHaveBeenCalled()
     expect(mocks.setDraft).toHaveBeenCalledWith('')
-    // Attachments stay for the next real prompt.
     expect(mocks.clearImageAttachments).not.toHaveBeenCalled()
 
     cleanup()
@@ -186,11 +199,116 @@ describe('/resume in the native chat composer', () => {
 
     expect(mocks.openHistory).not.toHaveBeenCalled()
     expect(transport.dispatchCommand).toHaveBeenCalledWith('/resume make it one page')
-    // Back to the bare token with the menu open: choosing Orca's own row still opens the dialog.
     mocks.draft = '/resume'
     rerender()
     act(() => mocks.keyDownArgs?.dispatchPickerCommand(RESUME))
     expect(mocks.openHistory).toHaveBeenCalledOnce()
+  })
+
+  it('reopened native slash identity permits only edit Save and cannot authorize a stale command row', () => {
+    const draft = createNativeChatQueuedEditDraft(
+      {
+        kind: 'message',
+        role: 'user',
+        blocks: [{ type: 'text', text: '/model\nintent' }],
+        skills: [{ name: 'model', path: '/selected/SKILL.md' }]
+      },
+      'bottom'
+    )
+    mocks.draft = '/model\nintent'
+    const editor: QueuedMessageInlineEditor = {
+      messageId: 'seeded',
+      draftScopeKey: draft.scopeKey,
+      text: mocks.draft,
+      change: vi.fn(),
+      acquiring: false,
+      saving: false,
+      canSave: true,
+      imagesCapable: true,
+      save: vi.fn(),
+      cancel: vi.fn()
+    }
+    const { transport } = renderStructuredChat(editor)
+    act(() => mocks.fieldProps?.onSend?.())
+    expect(editor.save).toHaveBeenCalledOnce()
+    act(() =>
+      mocks.fieldProps?.onChoosePickerItem?.({
+        ...RESUME,
+        id: 'command:model',
+        name: 'model',
+        token: '/model'
+      })
+    )
+    expect(editor.save).toHaveBeenCalledOnce()
+    expect(transport.dispatchCommand).not.toHaveBeenCalled()
+    expect(transport.send).not.toHaveBeenCalled()
+    discardNativeChatQueuedEdit(draft)
+  })
+
+  it.each(['/compact', '/goal ship it', '/resume old chat'])(
+    'saves literal %s but refuses its picked control without dispatch',
+    (text) => {
+      mocks.draft = text
+      const editor: QueuedMessageInlineEditor = {
+        messageId: 'queued',
+        draftScopeKey: 'queued-edit:test',
+        text,
+        change: vi.fn(),
+        acquiring: false,
+        saving: false,
+        canSave: true,
+        imagesCapable: true,
+        save: vi.fn(),
+        cancel: vi.fn()
+      }
+      const { transport } = renderStructuredChat(editor)
+      act(() => mocks.fieldProps?.onSend?.())
+      const name = text.slice(1).split(' ')[0]!
+      const item: CommandItem = { ...RESUME, id: `command:${name}`, name, token: `/${name}` }
+      act(() => mocks.keyDownArgs?.dispatchPickerCommand(item))
+      act(() => mocks.fieldProps?.onChoosePickerItem?.(item))
+      expect(editor.save).toHaveBeenCalledOnce()
+      expect(transport.send).not.toHaveBeenCalled()
+      expect(transport.threadGoal?.setObjective).not.toHaveBeenCalled()
+      expect(transport.dispatchCommand).not.toHaveBeenCalled()
+      expect(mocks.sendNativeChatTypedCommand).not.toHaveBeenCalled()
+      expect(mocks.openHistory).not.toHaveBeenCalled()
+      expect(mocks.setDraft).not.toHaveBeenCalledWith('')
+    }
+  )
+
+  it('saves ordinary text and a picked provider skill without any send or command RPC', () => {
+    mocks.draft = '/res'
+    const editor: QueuedMessageInlineEditor = {
+      messageId: 'queued',
+      draftScopeKey: 'queued-edit:test',
+      text: '/res',
+      change: vi.fn(),
+      acquiring: false,
+      saving: false,
+      canSave: true,
+      imagesCapable: true,
+      save: vi.fn(),
+      cancel: vi.fn()
+    }
+    const { transport, rerender } = renderStructuredChat(editor)
+    act(() =>
+      mocks.fieldProps?.onChoosePickerItem?.({
+        kind: 'skill',
+        id: 'skill:resume',
+        name: 'resume',
+        token: '/resume',
+        description: null,
+        sources: []
+      })
+    )
+    mocks.draft = '/resume write a page'
+    rerender()
+    act(() => mocks.fieldProps?.onSend?.())
+    expect(editor.save).toHaveBeenCalledOnce()
+    expect(transport.send).not.toHaveBeenCalled()
+    expect(transport.dispatchCommand).not.toHaveBeenCalled()
+    expect(mocks.openHistory).not.toHaveBeenCalled()
   })
 
   // A terminal-backed chat (every SSH chat, for one) keeps the agent's own /resume.
@@ -208,5 +326,48 @@ describe('/resume in the native chat composer', () => {
 
     expect(mocks.openHistory).not.toHaveBeenCalled()
     expect(mocks.sendNativeChatTypedCommand).toHaveBeenCalledWith('pty-1', '/resume')
+  })
+
+  it('derives inline catalog from the same action boundary before resolving namesake skills', () => {
+    mocks.draft = '/'
+    const edit: QueuedMessageInlineEditor = {
+      messageId: 'queue',
+      draftScopeKey: 'queued-edit:menu',
+      text: '/',
+      acquiring: false,
+      saving: false,
+      canSave: true,
+      imagesCapable: true,
+      save: vi.fn(),
+      cancel: vi.fn(),
+      change: vi.fn()
+    }
+    const { transport, rerender } = renderStructuredChat(edit)
+    transport.sessionCommands = [
+      { name: 'review', kind: 'command' },
+      { name: 'model', kind: 'skill', path: '/model/SKILL.md' },
+      { name: 'goal', kind: 'command' }
+    ]
+    transport.conversationCommands = ['clear', 'compact']
+    rerender()
+    expect(
+      mocks.fieldProps?.autocomplete?.items?.map(({ kind, name }) => `${kind}:${name}`)
+    ).toEqual(['command:review', 'skill:model'])
+    expect(mocks.openHistory).not.toHaveBeenCalled()
+    // Without a host goal action /goal is valid provider prompt input.
+    delete transport.threadGoal
+    rerender()
+    expect(mocks.fieldProps?.autocomplete?.items?.map(({ name }) => name)).toContain('goal')
+    mocks.draft = '/goal objective'
+    rerender()
+    act(() => mocks.fieldProps?.onSend?.())
+    expect(edit.save).toHaveBeenCalledOnce()
+    expect(transport.send).not.toHaveBeenCalled()
+    expect(transport.dispatchCommand).not.toHaveBeenCalled()
+    mocks.draft = '@src'
+    rerender()
+    expect(mocks.fieldProps?.autocomplete?.mode).toBe('mention')
+    act(() => mocks.fieldProps?.onChooseMentionFile?.('src/file.ts'))
+    expect(mocks.setDraft).toHaveBeenCalledWith(expect.stringContaining('src/file.ts'))
   })
 })

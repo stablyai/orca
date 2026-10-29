@@ -1,4 +1,4 @@
-import type { CodexAppServerNotificationMethod } from '../../codex/codex-app-server-notification-schema'
+import type { CodexAppServerNotificationMethod } from '../../codex/app-server/codex-app-server-notification-schema'
 import { CODEX_SUBAGENT_ITEM_TYPE } from '../../codex/codex-subagent-activity'
 import { isProviderRecord } from '../../provider-process/provider-json-record'
 import type { ClaudeStreamJsonFrameKind } from './claude-stream-json-frame-schema'
@@ -26,8 +26,7 @@ export const PROVIDER_FRAME_CLASSIFICATIONS = {
     'thread/closed': 'status-chrome',
     'skills/changed': 'status-chrome',
     'thread/name/updated': 'status-chrome',
-    // The goal tool call is never emitted as an item, so these two frames are the only
-    // truthful evidence a goal exists; the model's prose about goals can be wrong.
+    // Goal frames are the only authoritative evidence because goal calls are never emitted as items.
     'thread/goal/updated': 'timeline-substantive',
     'thread/goal/cleared': 'timeline-substantive',
     'thread/environment/connected': 'status-chrome',
@@ -37,7 +36,7 @@ export const PROVIDER_FRAME_CLASSIFICATIONS = {
     'turn/started': 'status-chrome',
     'hook/started': 'suppressed-benign',
     'turn/completed': 'status-chrome',
-    // A failed hook surfaces (catalog below); a refused prompt writes its own row before this.
+    // Failed hooks surface below; prompt refusal already has its own row.
     'hook/completed': 'suppressed-benign',
     'turn/diff/updated': 'suppressed-benign',
     'turn/plan/updated': 'timeline-substantive',
@@ -136,15 +135,12 @@ export const PROVIDER_FRAME_CLASSIFICATIONS = {
     'message:system:permission_denied': 'error-surface',
     'message:prompt_suggestion': 'status-chrome',
     'message:system:mirror_error': 'error-surface',
-    // Written by its own row (`claude-informational-row`): a warning, a halting one as a hook's outcome.
+    // Informational/hook warnings render through claude-informational-row.
     'message:system:informational': 'status-chrome',
     'message:conversation_reset': 'status-chrome',
-    // A `started`/`completed`/`cancelled` state for one queued command uuid and
-    // nothing else; the CLI keeps it out of its own transcript too.
+    // Command UUID lifecycle is bookkeeping absent from Claude’s own transcript.
     'message:command_lifecycle': 'status-chrome',
-    // The turn-complete signal: lifecycle, never a transcript row by kind. Whether one
-    // failed depends on its turn (a stopped turn is no failure), so the result
-    // journaling writes that row with its own verdict.
+    // Result failures depend on turn outcome; result journaling supplies that verdict.
     'message:result:success': 'status-chrome',
     'message:result:error_during_execution': 'status-chrome',
     'message:result:error_max_turns': 'status-chrome',
@@ -153,26 +149,14 @@ export const PROVIDER_FRAME_CLASSIFICATIONS = {
   }
 } as const satisfies ProviderFrameClassificationTable
 
-/** Codex thread-item types with no typed renderer, dispositioned by hand so a
- *  new item type cannot leak `codex · item:<type>` into the transcript. The
- *  notification catalog above is keyed by METHOD and never matches these. */
+/** Item-type keys bypass the method catalog, so classify them separately. */
 const CODEX_ITEM_CLASSIFICATIONS: Record<string, ProviderFrameClassification> = {
-  // The journal coalesces this canonical completion with the legacy notification.
+  // Coalesce canonical and legacy compaction completions.
   contextCompaction: 'timeline-substantive',
-  // Subagent lifecycle renders as the spawn-group roster row, so its raw items
-  // must not print a gray `codex · item:<type>` row beside it. The live
-  // notification path intercepts them before this catalog is reached;
-  // `restoreThread` replays them straight through `items.handle`, which is where
-  // the classification earns its keep.
-  //
-  // `collabAgentToolCall` is deliberately NOT suppressed with it. Codex's default
-  // multi-agent mode reports subagent work ONLY as that call, which renders as its
-  // own tool row and never reaches this catalog; were it ever to, suppressing it
-  // would leave that session's fan-out showing nothing.
+  // Restore replays lifecycle items here; the roster already renders them. Keep collabAgentToolCall
+  // visible because some Codex sessions report fan-out only through those calls.
   [CODEX_SUBAGENT_ITEM_TYPE]: 'status-chrome',
-  // `{id, durationMs}` and nothing else — Codex's own transcript renders it as
-  // nothing at all. Every other item type this build does not model keeps its
-  // journaled fallback row; a chat draws it only when the row carries a sentence.
+  // Sleep contains only ID/duration; no transcript content.
   sleep: 'status-chrome'
 }
 
@@ -193,12 +177,8 @@ const CODEX_NOTIFICATION_CLASSIFICATIONS: Readonly<Record<string, ProviderFrameC
 const CLAUDE_FRAME_CLASSIFICATIONS: Readonly<Record<string, ProviderFrameClassification>> =
   PROVIDER_FRAME_CLASSIFICATIONS.claude
 
-/** Each provider's own table, by provider id: an unlisted provider has none, so every frame it
- *  sends that no rule above claims stays a visible row.
- *
- *  A frame is a failure only because its kind is one, or because a field its kind declares as its
- *  outcome says so. Nested statuses describe other things (the MCP servers a session start lists,
- *  the tasks a roster holds), so a payload is never searched for failure-looking words. */
+/** Classify failures only from declared kinds/outcome fields; nested statuses can describe unrelated work.
+ * Unlisted frames retain visible fallback rows. */
 const PROVIDER_FRAME_CATALOGS: ReadonlyMap<
   string,
   (kind: string, payload: unknown) => ProviderFrameClassification | undefined

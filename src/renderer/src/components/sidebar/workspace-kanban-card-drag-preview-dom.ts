@@ -34,8 +34,7 @@ export function setDraggedCardsDragging(args: {
   if (!board) {
     return
   }
-  // Why: virtual lanes remount cards during scroll; query live nodes by id
-  // instead of holding HTMLElement references across unmounts.
+  // Virtual scrolling remounts cards; query live nodes by ID instead of retaining elements.
   if (!enabled) {
     board.querySelectorAll<HTMLElement>(`[${POINTER_CARD_DRAGGING_ATTR}]`).forEach((card) => {
       card.removeAttribute(POINTER_CARD_DRAGGING_ATTR)

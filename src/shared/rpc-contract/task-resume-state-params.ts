@@ -1,13 +1,7 @@
 import { z } from 'zod'
 
-/**
- * Tasks page-position state persisted through `ui.set`; mirrors `TaskResumeState`.
- *
- * This object is `.strict()` and sits behind `ui.set`'s field-level `.catch`, so a key
- * a host predates makes that host drop the ENTIRE resume state — github and jira with
- * it — and report success. Only add a field here when clients must agree on it across
- * versions; per-device view preferences belong in client-local storage instead.
- */
+/** Strict state behind ui.set’s field catch: a future key drops the whole state while reporting success.
+ * Only add cross-version state here; per-device view preferences belong in local storage. */
 export const TaskResumeState = z
   .object({
     githubMode: z.enum(['items', 'project']).optional(),

@@ -62,9 +62,7 @@ export function readWindowWorkspaceActivityFacts(
   return facts
 }
 
-// The local runtime answers for the rows it owns; a paired server publishes its own rows' facts.
-// The window keys activity by bare id, so an id a paired server also lists cannot be attributed
-// to one host and is left out; an id with no owner in the catalog is no row.
+// Attribute local activity only to unique catalog IDs; bare IDs shared with paired servers are ambiguous, while unknown IDs name no row.
 export function toLocallyOwnedRows<Value>(
   state: AppState,
   values: ReadonlyMap<string, Value>

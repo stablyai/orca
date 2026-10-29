@@ -1,7 +1,6 @@
 import type { WebContents } from 'electron'
 
-// Why: Electron's window-open details carry no user-activation flag, so main keeps its own
-// browser-process input timeline instead of trusting anything the page can synthesize.
+// Window-open details lack user activation; track browser-process input instead of page events.
 const ACTIVATING_INPUT_TYPES: ReadonlySet<string> = new Set([
   'mouseDown',
   'mouseUp',
@@ -17,7 +16,6 @@ const ACTIVATING_INPUT_TYPES: ReadonlySet<string> = new Set([
 
 export const BROWSER_GUEST_INPUT_GESTURE_WINDOW_MS = 1_000
 
-/** A click, tap or keypress the user made, as opposed to a pointer move or wheel. */
 export function isActivatingBrowserGuestInput(input: Electron.InputEvent | undefined): boolean {
   return typeof input?.type === 'string' && ACTIVATING_INPUT_TYPES.has(input.type)
 }

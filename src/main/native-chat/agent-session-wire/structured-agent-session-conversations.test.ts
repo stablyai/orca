@@ -65,14 +65,13 @@ describe('a conversation delivers what its journal commits', () => {
 
     await appendStatus(journal, 'written')
 
-    // Already delivered when the writer's await returns, as an explicit publish would have been.
     expect(deliver).toHaveBeenCalledOnce()
     expect(deliver).toHaveBeenCalledWith('session-1', journal)
   })
 
   it('binds a handle set through a plain map reference', async () => {
     const deliver = vi.fn()
-    // Collaborators hold the host's map as a plain `Map`; `set` still reaches the binding.
+    // Plain Map references must still invoke commit binding through overridden set.
     const sessions: Map<string, StructuredAgentSessionHostSession> =
       new StructuredAgentSessionConversations({
         deliver,

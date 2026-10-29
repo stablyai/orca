@@ -1,11 +1,8 @@
-// The rail itself: a column of ticks down the right edge of the transcript, one
-// per user message. Each tick previews its own message and the agent's reply
-// while hovered or focused, and jumps to the message on click.
-
 import { memo, useLayoutEffect, useRef, useState } from 'react'
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import {
   NATIVE_CHAT_RAIL_ROOMY_TICKS,
   type NativeChatRailItem
@@ -29,11 +26,9 @@ function railItemLabel(item: NativeChatRailItem): string {
 /** Where the card sits, and the reply it showed, latched on close for its exit animation. */
 type NativeChatRailPreviewTarget = { id: string; top: number; reply: string }
 
-/** From a tick's centre up to the card's top edge, so the card's first line meets
- *  the tick: the card's `p-4` plus half a `text-xs leading-snug` line. */
+/** Align the first preview line with its tick: p-4 plus half a text-xs leading-snug line. */
 const PREVIEW_FIRST_LINE_PX = 24
 
-/** How far a navigation key moves through the messages; null for any other key. */
 function railKeyStep(key: string, index: number, count: number): number | null {
   if (key === 'ArrowDown') {
     return index + 1
@@ -62,6 +57,7 @@ export const NativeChatMessageRail = memo(function NativeChatMessageRail({
   /** A tick whose older history is still paging in. */
   pendingId?: string | null
 }): React.JSX.Element | null {
+  useUiLanguageRevision()
   const [target, setTarget] = useState<NativeChatRailPreviewTarget | null>(null)
   const railRef = useRef<HTMLDivElement>(null)
   /** A message an arrow key asked to focus, whose tick may not be drawn until the next render. */
@@ -100,9 +96,7 @@ export const NativeChatMessageRail = memo(function NativeChatMessageRail({
   }
 
   return (
-    // One card for the whole rail, moved to the tick it previews: a card per tick
-    // would animate out and in again on every step between neighbours. The ticks
-    // open it; the card's own hover, blur and Escape handling closes it.
+    // Reuse one preview card so moving between ticks does not replay exit/entry animations.
     <HoverCard
       open={previewedId !== null}
       onOpenChange={(next) => !next && close()}
@@ -138,9 +132,7 @@ export const NativeChatMessageRail = memo(function NativeChatMessageRail({
               rail.onFocusItem(item.id)
             }
           }}
-          // The rail overlays the transcript without being inside it, so a wheel
-          // here would otherwise land on nothing and freeze the scroll. Deltas
-          // arrive in lines or pages on some platforms, not only in pixels.
+          // Forward wheel deltas to the overlaid transcript, converting platform line/page units to pixels.
           onWheel={(event) => {
             const element = scrollRef.current
             if (!element) {
@@ -161,8 +153,7 @@ export const NativeChatMessageRail = memo(function NativeChatMessageRail({
           className="absolute top-1/2 right-2.5 z-10 flex w-6 -translate-y-1/2 flex-col"
         >
           {ticks.map((item) => {
-            // The pointer or keyboard owns the fill while a preview is open; otherwise
-            // the fill reports the scroll position.
+            // Preview ownership overrides scroll-position highlighting.
             const lit = item.id === (previewedId ?? rail.activeId)
             return (
               <button

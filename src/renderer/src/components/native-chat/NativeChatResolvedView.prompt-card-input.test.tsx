@@ -133,8 +133,7 @@ afterEach(() => {
   useAppStore.setState({ agentStatusByPaneKey: {}, nativeChatLaunchPromptByTabId: {} })
 })
 
-// A terminal-backed send types into the PTY, so whatever card is up would take the message as its
-// answer. Every answerable card owns the input region, as structured chat's cards do.
+// Prompt cards own terminal input because composer sends would otherwise answer the agent’s active selector.
 describe('NativeChatResolvedView prompt cards own the input region', () => {
   it('shows the composer when no prompt is pending', () => {
     setStatus({ state: 'working' })

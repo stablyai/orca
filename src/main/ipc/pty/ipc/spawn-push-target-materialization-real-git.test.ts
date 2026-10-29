@@ -1,9 +1,4 @@
-// Real-binary coverage for #17828's remaining gap: the mocked-underlying-trigger suite in
-// `spawn-push-target-materialization.test.ts` proves the wiring/delegation logic, but not
-// that a `pty:spawn`-originated terminal -- the desktop GUI's own terminal path, previously
-// uncovered -- actually ends up with a configured upstream against real git. No mocks here:
-// this exercises the real `triggerTerminalSpawnPushTargetMaterialization` and real
-// `materializeWorktreePushTargetRemote`, driven only through `runPtyIpcSpawn`'s hook.
+// Exercise the real pty:spawn push-target hook and Git operations; delegation-only mocks cannot prove an upstream exists (#17828).
 import { execFile } from 'node:child_process'
 import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -41,7 +36,7 @@ async function setIdentity(cwd: string): Promise<void> {
 }
 
 beforeEach(async () => {
-  // realpath: macOS hands out /var/... temp paths while Git reports /private/var/...
+  // Canonicalize macOS /var temp paths to match Git's /private/var paths.
   scratchDir = await realpath(await mkdtemp(join(tmpdir(), 'orca-pty-spawn-push-target-')))
   repoPath = join(scratchDir, 'repo')
   forkPath = join(scratchDir, 'fork')
@@ -90,15 +85,7 @@ function depsFor(
 
 describe('triggerPtySpawnPushTargetMaterialization (real git fixture)', () => {
   it('materializes the fork remote and configures the upstream for a pty:spawn-originated terminal', async () => {
-    // Why: not just that materialization was *called* -- the coordinator's bar for closing
-    // the gap is a real, git-verified configured upstream reachable from a pty:spawn arg set.
-    // Pre-seeds the remote so materialize takes the short-circuit branch (worktree-remote.ts):
-    // real `remote add`/`fetch` against a fabricated fork is already covered against real git by
-    // worktree-push-target-refspec-real-git.test.ts; the top-level entry point this hook calls
-    // additionally validates `remoteUrl` against a GitHub URL shape, which a local fixture path
-    // can never satisfy. The short-circuit is also the common case in practice -- every pty:spawn
-    // after the worktree's first (new tab, split, reattach) -- and still drives real
-    // `ensureRemoteTracksBranchNarrowly` / narrow `fetch` / `--set-upstream-to` git calls.
+    // Preseed the local fork remote: URL validation requires GitHub-shaped URLs. This still exercises narrow fetch and upstream binding.
     await git(['remote', 'add', FORK_REMOTE, forkPath], repoPath)
     const { deps } = depsFor(forkTarget())
 
@@ -122,8 +109,7 @@ describe('triggerPtySpawnPushTargetMaterialization (real git fixture)', () => {
     const remoteUrl = (await git(['remote', 'get-url', FORK_REMOTE], repoPath)).trim()
     expect(remoteUrl).toBe(forkPath)
 
-    // The tracked branch's commit must actually be present -- confirms the narrow fetch ran,
-    // not just that the remote config was written.
+    // Verify the target commit exists locally to prove the fetch ran.
     const forkHead = (await git(['rev-parse', TRACKED_BRANCH], forkPath)).trim()
     const fetchedHead = (
       await git(['rev-parse', `${FORK_REMOTE}/${TRACKED_BRANCH}`], repoPath)
@@ -138,8 +124,7 @@ describe('triggerPtySpawnPushTargetMaterialization (real git fixture)', () => {
 
     triggerPtySpawnPushTargetMaterialization(deps, { cols: 80, rows: 24, worktreeId })
 
-    // Give the fire-and-forget chain a tick; there is nothing to wait for since a
-    // remoteCreated target must short-circuit before any git call.
+    // Let the fire-and-forget hook settle before asserting the remoteCreated no-op.
     await new Promise((resolve) => setImmediate(resolve))
     const upstream = await git(['rev-parse', '--abbrev-ref', `${mainBranch}@{u}`], repoPath).catch(
       () => ''

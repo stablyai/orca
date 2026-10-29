@@ -1,14 +1,4 @@
-/**
- * Playwright globalSetup: builds the Electron app and creates a test git repo.
- *
- * Why: _electron.launch() needs the compiled output in out/main/index.js.
- * Running electron-vite build here ensures the tests are always against
- * the current source, without requiring the user to remember a manual step.
- *
- * Why: a dedicated test repo makes the suite idempotent — tests don't
- * depend on whatever the user has open. The repo path is written to a
- * temp file so the worker fixture can pick it up at runtime.
- */
+// Build current E2E output and create an isolated fixture repo whose path is shared with workers.
 
 import { execSync } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
@@ -49,19 +39,16 @@ export default function globalSetup(): void {
   const outCli = path.join(root, 'out', 'cli', 'index.js')
   const outWeb = path.join(root, 'out', 'web', 'web-index.html')
 
-  // ── 1. Build the Electron app ──────────────────────────────────────
   if (process.env.SKIP_BUILD && existsSync(outMain)) {
     console.error('[e2e] SKIP_BUILD set and out/main/index.js exists — skipping build')
   } else {
-    // Why: --mode e2e is the build-time signal that exposes window.__store;
-    // the explicit env var keeps older local overrides working too.
+    // Use E2E mode to expose window.__store; retain the env flag for older local overrides.
     console.error('[e2e] Building Electron app with electron-vite build --mode e2e...')
     execSync('npx electron-vite build --mode e2e', {
       env: { ...process.env, VITE_EXPOSE_STORE: 'true' },
       cwd: root,
       stdio: 'inherit',
-      // Why: Windows renderer builds can exceed 120s on local/CI hosts even
-      // when healthy; global setup should not fail before specs can run.
+      // Allow healthy Windows renderer builds to outlast 120s before specs start.
       timeout: ELECTRON_E2E_BUILD_TIMEOUT_MS
     })
     console.error('[e2e] Build complete.')
@@ -103,19 +90,20 @@ export default function globalSetup(): void {
     prepareDockerSshHostImage(root)
   }
 
-  // ── 2. Create a seeded test git repo ───────────────────────────────
-  // Why: each test run gets its own git repo so the suite is fully
-  // idempotent. No test depends on whatever repos the user has open.
-  // Why: realpathSync so the seeded path matches the store's repo.path on
-  // macOS, where os.tmpdir() (/var/...) symlinks to /private/var/... and the
-  // app canonicalizes repo.path via `git rev-parse --show-toplevel` on add.
+  const testRepoDir = seedTestRepository()
+  writeFileSync(TEST_REPO_PATH_FILE, testRepoDir)
+  console.error(`[e2e] Test repo created at ${testRepoDir}`)
+}
+
+// Shared by global setup and worker fallbacks so both seed paths stay identical.
+export function seedTestRepository(): string {
+  // Resolve macOS /var symlinks like git does when registering repo.path.
   const testRepoDir = realpathSync(mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-repo-')))
 
   execSync('git init', { cwd: testRepoDir, stdio: 'pipe' })
   execSync('git config user.email "e2e@test.local"', { cwd: testRepoDir, stdio: 'pipe' })
   execSync('git config user.name "E2E Test"', { cwd: testRepoDir, stdio: 'pipe' })
 
-  // Seed test data files
   writeFileSync(
     path.join(testRepoDir, 'README.md'),
     '# Orca E2E Test Repo\n\nThis repo was created automatically for Playwright tests.\n'
@@ -131,19 +119,18 @@ export default function globalSetup(): void {
   writeFileSync(path.join(testRepoDir, 'src', 'diff-note-layout.ts'), 'export const seed = true\n')
 
   execSync('git add -A', { cwd: testRepoDir, stdio: 'pipe' })
-  execSync('git commit -m "Initial commit for E2E tests"', { cwd: testRepoDir, stdio: 'pipe' })
-
-  // Why: several tests verify worktree-switching behavior (terminal content
-  // retention, browser tab retention). They need at least 2 worktrees.
-  // Creating one here makes those tests run instead of being skipped.
-  const worktreeDir = path.join(testRepoDir, '..', `orca-e2e-worktree-${randomUUID()}`)
-  execSync(`git worktree add "${worktreeDir}" -b e2e-secondary`, {
+  // Why: per-command -c so contributor global hooks/signing can't fail the seed without persisting into repo config.
+  const isolatedGit = 'git -c core.hooksPath=/dev/null -c commit.gpgsign=false'
+  execSync(`${isolatedGit} commit -m "Initial commit for E2E tests"`, {
     cwd: testRepoDir,
     stdio: 'pipe'
   })
-  console.error(`[e2e] Secondary worktree created at ${worktreeDir}`)
 
-  // Write the test repo path so the fixture can read it
-  writeFileSync(TEST_REPO_PATH_FILE, testRepoDir)
-  console.error(`[e2e] Test repo created at ${testRepoDir}`)
+  // Seed a second worktree so retention/switching specs run; UUIDs keep concurrent workers apart.
+  const worktreeDir = path.join(testRepoDir, '..', `orca-e2e-worktree-${randomUUID()}`)
+  execSync(`${isolatedGit} worktree add "${worktreeDir}" -b e2e-secondary`, {
+    cwd: testRepoDir,
+    stdio: 'pipe'
+  })
+  return testRepoDir
 }

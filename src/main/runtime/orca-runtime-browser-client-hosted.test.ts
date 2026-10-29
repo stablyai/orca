@@ -72,8 +72,9 @@ function createHost(overrides: Partial<RuntimeBrowserCommandHost> = {}): Runtime
           ]
         }))
       } as unknown as AgentBrowserBridge)
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a partial host fake; these tests reach only the methods it defines.
   return {
-    resolveWorktreeSelector: async (selector) => ({ id: selector.replace(/^id:/, '') }),
+    resolveWorkspaceSelector: async (selector) => ({ id: selector.replace(/^id:/, '') }),
     resolveBrowserWorkspace: async (selector) => ({ id: selector.replace(/^id:/, '') }),
     getRuntimeBrowserPageRegistry: () => runtimeBrowserPages,
     getAuthoritativeWindow: vi.fn(),
@@ -185,7 +186,7 @@ describe('RuntimeBrowserCommands client-hosted routing', () => {
       browserProfileId: 'default',
       executionHostKey: JSON.stringify(['native', 'runtime-a', 7]),
       requiredCapabilities: ['automation-v1'],
-      // Carried to the client so its page inventory can name the workspace after a restart.
+      // Clients need workspace identity to restore page inventory after restart.
       workspaceId: 'wt-1'
     })
     expect(issueClientPageCommand).toHaveBeenCalledWith(
@@ -249,7 +250,6 @@ describe('RuntimeBrowserCommands client-hosted routing', () => {
       },
       { pairedDeviceId: 'device-a' }
     )
-    // Why: agent/background creates must not yank a connected client to the new tab.
     expect(markHeadlessBrowserSessionTabActive).not.toHaveBeenCalled()
   })
 
@@ -282,8 +282,7 @@ describe('RuntimeBrowserCommands client-hosted routing', () => {
       })
     )
 
-    // `active` is what browser.tabCurrent resolves for agents, so an opted-out create must not
-    // take the slot from the page the user is actually on.
+    // browser.tabCurrent uses active; background creates must preserve the user's selected page.
     await commands.browserTabCreate(
       {
         worktree: 'id:wt-1',

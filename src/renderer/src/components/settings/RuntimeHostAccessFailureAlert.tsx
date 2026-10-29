@@ -1,11 +1,12 @@
-import type { RemotePairingFailureKind } from '../../../../shared/remote-pairing-verification'
+import type {
+  RemotePairingFailure,
+  RemotePairingFailureKind
+} from '../../../../shared/remote-pairing-verification'
 import { translate } from '@/i18n/i18n'
 import { translateRemotePairingFailureDescription } from '@/lib/remote-pairing-copy'
+import { remoteServerPairingFailureMessage } from '@/lib/remote-server-pairing-error-copy'
 
-export type RuntimeHostAccessFailure = {
-  kind: RemotePairingFailureKind
-  message: string
-}
+export type RuntimeHostAccessFailure = Omit<RemotePairingFailure, 'ok'>
 
 function failureTitle(kind: RemotePairingFailureKind): string {
   switch (kind) {
@@ -61,7 +62,7 @@ export function RuntimeHostAccessFailureAlert({
       <div className="text-sm font-medium text-destructive">{failureTitle(failure.kind)}</div>
       <p className="text-xs text-muted-foreground">
         {failure.kind === 'environment-save-failed'
-          ? failure.message
+          ? remoteServerPairingFailureMessage(failure)
           : translateRemotePairingFailureDescription(failure.kind, endpoint)}
       </p>
     </div>

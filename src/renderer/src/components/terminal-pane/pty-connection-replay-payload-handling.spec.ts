@@ -16,6 +16,7 @@ import {
   configureTerminalFocusMode
 } from './pty-connection-test-dom'
 import {
+  terminalWriteText,
   createMockTransport,
   createPane,
   captureCallbackTerminalWrites,
@@ -105,7 +106,8 @@ export function registerPtyConnectionReplayPayloadHandlingTests(): void {
       const pane = createPane(1)
       pane.terminal.buffer.active.viewportY = 42
       pane.terminal.buffer.active.baseY = 100
-      pane.terminal.write.mockImplementation((data: string, callback?: () => void) => {
+      pane.terminal.write.mockImplementation((data: string | Uint8Array, callback?: () => void) => {
+        data = terminalWriteText(data)
         if (data.includes('snapshot-state')) {
           pane.terminal.buffer.active.viewportY = 0
         }
@@ -269,7 +271,7 @@ export function registerPtyConnectionReplayPayloadHandlingTests(): void {
         _core?: { refresh: typeof refresh }
       }
       terminal._core = { refresh }
-      terminal.write = vi.fn((_data: string, callback?: () => void) => {
+      terminal.write = vi.fn((_data: string | Uint8Array, callback?: () => void) => {
         callback?.()
       })
       const manager = createManager(1)
@@ -324,8 +326,7 @@ export function registerPtyConnectionReplayPayloadHandlingTests(): void {
       disposable.dispose()
     })
 
-    // Why pinned: the classifier strips CSI precisely so a styled header still matches. A future
-    // "just lastIndexOf the raw bytes" shortcut would pass every other test and silently break this.
+    // Styled headers need CSI stripping; raw-byte lastIndexOf would silently miss this case.
     it('still detects the Cursor Agent screen when CSI styling splits the header and the marker', async () => {
       const { connectPanePty } = await import('./pty-connection')
       enableActiveRuntimeEnvironment()
@@ -365,8 +366,7 @@ export function registerPtyConnectionReplayPayloadHandlingTests(): void {
       disposable.dispose()
     })
 
-    // Why pinned: the scan reads only a bounded tail, so a header buried behind megabytes of
-    // scrollback describes a finished run, not the current screen.
+    // Bound the scan to current-screen bytes; headers buried in old scrollback must not classify the live pane.
     it('ignores a Cursor Agent screen buried beyond the payload scan tail limit', async () => {
       const { connectPanePty } = await import('./pty-connection')
       enableActiveRuntimeEnvironment()
@@ -466,7 +466,7 @@ export function registerPtyConnectionReplayPayloadHandlingTests(): void {
       transportFactoryQueue.push(transport)
 
       const pane = createPane(1)
-      pane.terminal.write = vi.fn((_data: string, callback?: () => void) => {
+      pane.terminal.write = vi.fn((_data: string | Uint8Array, callback?: () => void) => {
         callback?.()
       })
       const manager = createManager(1)
@@ -503,7 +503,7 @@ export function registerPtyConnectionReplayPayloadHandlingTests(): void {
       transportFactoryQueue.push(transport)
 
       const pane = createPane(1)
-      pane.terminal.write = vi.fn((_data: string, callback?: () => void) => {
+      pane.terminal.write = vi.fn((_data: string | Uint8Array, callback?: () => void) => {
         callback?.()
       })
       const manager = createManager(1)
@@ -535,7 +535,7 @@ export function registerPtyConnectionReplayPayloadHandlingTests(): void {
 
       const pane = createPane(1)
       const pendingParses: (() => void)[] = []
-      pane.terminal.write = vi.fn((_data: string, callback?: () => void) => {
+      pane.terminal.write = vi.fn((_data: string | Uint8Array, callback?: () => void) => {
         if (callback) {
           pendingParses.push(callback)
         }

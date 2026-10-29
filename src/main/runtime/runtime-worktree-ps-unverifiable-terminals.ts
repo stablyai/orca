@@ -2,11 +2,7 @@ import type { PtyLivenessVerdict } from '../../shared/pty-liveness-verdict'
 import type { RuntimeLeafRecord, RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
 import type { RuntimeWorktreePsSummaryLookup } from './runtime-worktree-summary-paths'
 
-/**
- * Counts each terminal that was not counted live but whose host only lost contact.
- * A relay drop disconnects every one of the host's PTY records at once, so without this
- * the row read as no terminals at all (docs/reference/ssh-execution-boundary.md).
- */
+/** A dropped relay loses contact with every host PTY at once; count unverifiable terminals so rows do not falsely report none (ssh-execution-boundary.md). */
 export function applyRuntimeWorktreePsUnverifiableTerminals(args: {
   countedPtyIds: ReadonlySet<string>
   leaves: Iterable<RuntimeLeafRecord>

@@ -1,8 +1,3 @@
-/**
- * Minimal repros for serializer round-trip faults the differential fuzz found
- * (serialize-grid.differential.fuzz.test.ts): each replays a SerializeAddon
- * snapshot at the source grid and expects the same cells and cursor.
- */
 import { describe, expect, it } from 'vitest'
 import type { Terminal } from '@xterm/headless'
 import { SerializeAddon } from '@xterm/addon-serialize'

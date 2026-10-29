@@ -67,6 +67,11 @@ const {
   getMergeRequestForBranchMock: vi.fn(),
   getProjectSlugMock: vi.fn()
 }))
+const readWslDistroRunningStateMock = vi.hoisted(() => vi.fn())
+vi.mock('../wsl-background-distro-gate', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  readWslDistroRunningState: readWslDistroRunningStateMock
+}))
 
 vi.mock('electron', () => ({
   ipcMain: {
@@ -175,6 +180,40 @@ describe('GitLab IPC handlers', () => {
     ]) {
       mock.mockReset()
     }
+    readWslDistroRunningStateMock.mockReset().mockResolvedValue('running')
+  })
+
+  it('refuses a checks-panel MR poll for a stopped WSL distro, but not an explicit open', async () => {
+    setPlatform('win32')
+    readWslDistroRunningStateMock.mockResolvedValue('stopped')
+    getWorkItemDetailsMock.mockResolvedValue({ body: 'Details' })
+    registerGitLabHandlers(
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The handlers read only the four accessors storeWithRepos implements.
+      storeWithRepos(
+        [repo()],
+        [
+          {
+            id: 'project-1',
+            displayName: 'Orca',
+            badgeColor: 'blue',
+            sourceRepoIds: ['repo-local'],
+            localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' },
+            createdAt: 0,
+            updatedAt: 0
+          }
+        ]
+      ) as Store
+    )
+    const details = ipcHandlers.get('gitlab:workItemDetails')!
+    const args = { repoPath: '/local/orca', iid: 8, type: 'mr' }
+
+    await expect(details(null, { ...args, background: true })).rejects.toThrow(
+      "WSL distro 'Ubuntu' is not running"
+    )
+    expect(getWorkItemDetailsMock).not.toHaveBeenCalled()
+
+    await details(null, args)
+    expect(getWorkItemDetailsMock).toHaveBeenCalledTimes(1)
   })
 
   it('resolves repoId and source host context before listing work items', async () => {
@@ -214,32 +253,40 @@ describe('GitLab IPC handlers', () => {
   })
 
   it('forwards the typed search query into listMRs and listWorkItems', async () => {
-    listMergeRequestsMock.mockResolvedValueOnce({ items: [] })
-    listWorkItemsMock.mockResolvedValueOnce({ items: [] })
+    const result = {
+      items: [{ id: 'mr-7', type: 'mr', number: 7 }],
+      page: 3,
+      perPage: 1,
+      totalCount: 0,
+      totalPages: 4
+    }
+    listMergeRequestsMock.mockResolvedValueOnce(result)
+    listWorkItemsMock.mockResolvedValueOnce(result)
     registerGitLabHandlers(storeWithRepos([repo()]) as Store)
 
-    await ipcHandlers.get('gitlab:listMRs')?.(null, {
+    const mergeRequests = await ipcHandlers.get('gitlab:listMRs')?.(null, {
       repoPath: '/local/orca',
       state: 'opened',
-      page: 1,
-      perPage: 20,
+      page: 3,
+      perPage: 1,
       query: '  fix login  '
     })
-    await ipcHandlers.get('gitlab:listWorkItems')?.(null, {
+    const workItems = await ipcHandlers.get('gitlab:listWorkItems')?.(null, {
       repoPath: '/local/orca',
       state: 'opened',
-      page: 1,
-      perPage: 20,
+      page: 3,
+      perPage: 1,
       query: 'fix login'
     })
 
-    // Why (#6263): the trimmed query must land in the 6th positional arg —
-    // previously the slot was hardcoded to `undefined`, so search never worked.
+    expect(mergeRequests).toEqual(result)
+    expect(workItems).toEqual(result)
+    // Preserve the query's sixth argument slot; omitting it silently disables search (#6263).
     expect(listMergeRequestsMock).toHaveBeenCalledWith(
       '/local/orca',
       'opened',
+      3,
       1,
-      20,
       undefined,
       'fix login',
       null
@@ -247,8 +294,8 @@ describe('GitLab IPC handlers', () => {
     expect(listWorkItemsMock).toHaveBeenCalledWith(
       '/local/orca',
       'opened',
+      3,
       1,
-      20,
       undefined,
       'fix login',
       null
@@ -696,8 +743,7 @@ describe('GitLab IPC handlers', () => {
     )
   })
 
-  // Regression for #7732: raw CI traces routinely exceed the 1 MB runtime transport
-  // frame cap, so the Checks panel opts into a main-side excerpt.
+  // Bound raw CI traces before they exceed the runtime frame cap (#7732).
   it('bounds the job trace in main when the caller asks for a log excerpt', async () => {
     const noisyTrace = [
       'section_start:1699000000:build\r\u001b[0K$ pnpm build',

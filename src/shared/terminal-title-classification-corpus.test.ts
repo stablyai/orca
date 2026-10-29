@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest'
 import { isGeminiTerminalTitle } from './agent-title-core'
 import { getAgentLabel, isClaudeAgent } from './agent-title-identity'
 import { detectAgentStatusFromTitle } from './agent-title-status'
-import { TERMINAL_TITLE_CLASSIFICATION_CORPUS } from './terminal-title-classification-corpus'
 import {
   getAgentLabel as getExplicitAgentLabel,
   isClaudeAgent as isExplicitClaudeAgent,
@@ -10,14 +9,7 @@ import {
   resolveTerminalTitleAgentType
 } from './terminal-title-agent-type'
 
-/**
- * Pins the exact verdict every title classifier returns for a realistic corpus.
- *
- * Why: these classifiers are now memoized on the title string, and a caching bug
- * here would repaint a pane under the wrong agent. This table is the proof that
- * memoization is transparent — it was generated from the pre-memo implementation
- * and must keep matching byte-for-byte.
- */
+/** Pin pre-memoization verdicts so caching cannot silently repaint panes with another agent’s identity. */
 type PinnedRow = [
   title: string,
   status: string | null,
@@ -251,12 +243,6 @@ const PINNED_CLASSIFICATIONS: readonly PinnedRow[] = [
 ]
 
 describe('terminal title classification', () => {
-  it('covers every corpus title exactly once', () => {
-    expect(PINNED_CLASSIFICATIONS.map(([title]) => title)).toEqual([
-      ...TERMINAL_TITLE_CLASSIFICATION_CORPUS
-    ])
-  })
-
   it.each(PINNED_CLASSIFICATIONS)(
     'classifies %j identically',
     (

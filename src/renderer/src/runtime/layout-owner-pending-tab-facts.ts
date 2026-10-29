@@ -1,6 +1,4 @@
-// Content facts of a tab this window asked main to open, in a layout-owner build: its tab-bar
-// label and, for a browser tab, its page state and pages. Main holds only the tab's layout, so a
-// frame build reads these as the store's own until the frame that draws the tab is in.
+// Pending opens supply window-only labels/browser facts until main’s frame draws them; main owns layout, so frame builds temporarily treat these facts as stored content.
 
 import type { BrowserPage, BrowserWorkspace } from '../../../shared/browser-workspace-types'
 import {

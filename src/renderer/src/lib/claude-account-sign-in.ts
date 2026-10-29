@@ -6,8 +6,7 @@ import {
   isClaudeAccountCancellation
 } from '@/components/settings/accounts-pane-action-errors'
 
-/** Settings' Sign in again: a hidden `claude auth login` into the account's own folder. True once
- *  signed in; a failure says why in a toast, and a cancel says nothing. */
+/** Sign in again via hidden claude auth login in the account folder; toast failures and keep cancellation silent. */
 export async function signInToClaudeAccount(accountId: string): Promise<boolean> {
   try {
     await window.api.claudeAccounts.reauthenticate({ accountId })

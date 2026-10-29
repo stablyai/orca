@@ -57,7 +57,7 @@ export class RuntimeWorktreeBaseReconciliation {
       })
     }
     const resolvePublishRemote = async (): Promise<string> => {
-      // Why: publish remotes can differ from base remotes and may contain multiple segments.
+      // Publish remotes may differ from base remotes and contain multiple path segments.
       const tryConfig = async (key: string): Promise<string | null> => {
         try {
           const { stdout } = await gitExecFileAsync(['config', '--get', key], {
@@ -155,7 +155,7 @@ export class RuntimeWorktreeBaseReconciliation {
       console.warn(`[worktree-base-status] reconcile failed for ${args.worktreeId}:`, err)
       emit({ status: 'unknown' })
     } finally {
-      // Why: reconciliation is one-shot, so completed worktrees must not retain tokens.
+      // Completed one-shot reconciliation must release its token.
       if (this.optimisticReconcileTokens.get(args.worktreeId) === args.token) {
         this.optimisticReconcileTokens.delete(args.worktreeId)
       }

@@ -1,6 +1,4 @@
-// Why: paneKey crosses renderer reloads, PTY env, hook IPC, and retained UI
-// rows, so it must use the durable terminal-layout leaf UUID instead of the
-// renderer-local numeric PaneManager id.
+// Use durable layout-leaf UUIDs across reloads, PTY env, hook IPC and retained rows; renderer numeric pane IDs are transient.
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
 
 declare const stablePaneIdBrand: unique symbol

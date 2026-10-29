@@ -40,6 +40,7 @@ const fake = vi.hoisted(() => {
   return state
 })
 vi.mock('@/i18n/i18n', () => ({
+  getIntlLocale: () => 'en',
   i18n: { language: 'en' },
   translate: (_key: string, fallback: string, values?: Record<string, string | number>) =>
     Object.entries(values ?? {}).reduce(
@@ -156,7 +157,6 @@ it("drops a server's late account result after the page moves to another server"
 
   await act(async () => fake.pendingSelect?.(claudeRoster('acct-a', 'alpha@server-a.test', true)))
 
-  // Server A's roster must not replace server B's in the pane now scoped to B.
   expect(screen.queryByText('alpha@server-a.test')).toBeNull()
   expect(screen.getByText('beta@server-b.test')).toBeTruthy()
 })

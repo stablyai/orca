@@ -32,12 +32,7 @@ const EMPTY_PALETTE_INDEX_STATUS: PaletteIndexStatusSnapshot = Object.freeze({
   unreadAgentCompletionPanes: {}
 })
 
-/**
- * The agent-status, pane-title and unread maps as of *now*, for the palette's index, ordering,
- * filters and recent-section membership. Snapshotted rather than subscribed because the dots own
- * that churn (`PaletteLiveStatusProvider`), leaving the index free to freeze on open — membership
- * and row order then agree on one open-time reading instead of half-live, half-frozen.
- */
+/** Snapshot hot status/unread maps for index, filters and recent order together at open; PaletteLiveStatusProvider dots own live churn. */
 export function selectPaletteIndexStatusSnapshot(
   s: PaletteStatusInputsState,
   active: boolean
@@ -53,19 +48,14 @@ export function selectPaletteIndexStatusSnapshot(
   }
 }
 
-// Why: the palette stays mounted once opened, so a shared frozen bundle keeps `useShallow` stable
-// and stops the closed palette re-rendering on unrelated terminal chatter.
+// Reuse a frozen empty bundle while closed so unrelated terminal chatter cannot rerender the retained palette.
 export const EMPTY_PALETTE_STATUS_INPUTS: PaletteStatusInputs = Object.freeze({
   ptyIdsByTabId: {},
   terminalLayoutsByTabId: {},
   tabsByWorktree: {}
 })
 
-/**
- * The status maps the palette must keep live while `active` (open, or still animating closed): the
- * tab set changes underneath it and PTY liveness decides whether a workspace counts as sleeping.
- * The two hot maps are deliberately absent — see `selectPaletteIndexStatusSnapshot`.
- */
+/** Keep tab membership and PTY liveness live through close animation; hot status maps stay in the open-time snapshot. */
 export function selectPaletteStatusInputs(
   s: PaletteStatusInputsState,
   active: boolean

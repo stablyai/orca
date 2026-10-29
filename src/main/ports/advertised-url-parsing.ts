@@ -9,21 +9,21 @@ import type {
 
 const PER_PTY_BUFFER_LIMIT = 4096
 export const PENDING_PRE_BIND_LIMIT = 16 * 1024
-/** Cap on distinct never-bound PTY IDs; spawn-failure paths never bindPty, so without a bound they'd leak one entry each. */
+/** Bound failed-spawn PTYs that never reach bindPty. */
 export const MAX_PENDING_ENTRIES = 32
 export const MAX_CACHE_ENTRIES = 256
 const URL_CANDIDATE_LIMIT = 2048
 
-// ANSI/OSC strippers mirror the runtime normalizer in src/main/runtime/orca-runtime.ts, plus URL-specific cursor-move handling to avoid fusing skipped text.
+// Add cursor-move guards to runtime-style ANSI stripping so skipped cells cannot fuse URL fragments.
 const OSC_PATTERN = /\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/g
-// Why: cursor moves in differential redraws skip on-screen cells; a URL-invalid guard drops the damaged candidate.
+// Cursor moves skip existing cells; insert a URL-invalid guard rather than splice fragments.
 const CURSOR_MOVE_PATTERN = /\x1b\[[0-?]*[ -/]*[CDGHf]/g
 const CURSOR_MOVE_URL_GUARD = '['
 const CSI_PATTERN = /\x1b\[[0-?]*[ -/]*[@-~]/g
 const SINGLE_ESC_PATTERN = /\x1b[@-_]/g
 const CONTROL_PATTERN = /[\x00-\x08\x0b-\x1f\x7f]/g
 
-// Permissive matcher (real validation is `new URL()` below); stops at non-URL chars so terminal punctuation isn't absorbed.
+// URL validates candidates later; exclude terminal punctuation here.
 const URL_CANDIDATE_PATTERN = /\bhttps?:\/\/[^\s<>"'`]+/gi
 
 export type CacheKey = string
@@ -41,7 +41,7 @@ export function worktreeIdFromCacheKey(key: CacheKey, port: number): string {
 export class PtyBuffer {
   private raw = ''
 
-  /** Append a chunk; return cleaned text up to the last newline. The tail stays buffered so a URL or ANSI sequence split across chunks survives. */
+  /** Retain incomplete URL/ANSI tails across PTY chunks; finalize through the last newline. */
   ingest(chunk: string): string {
     const chunkHasLineBreak = chunk.includes('\n') || chunk.includes('\r')
     // Keep the suffix directly so oversized chunks never materialize a throwaway full concatenation.
@@ -77,7 +77,6 @@ function mayContainHttpUrl(text: string): boolean {
 }
 
 function lastLineBreak(text: string): number {
-  // Accept either \n or \r as a finalize point (\r\n is normalized later in stripTerminalControls).
   for (let i = text.length - 1; i >= 0; i--) {
     const ch = text.charCodeAt(i)
     if (ch === 0x0a || ch === 0x0d) {
@@ -105,7 +104,6 @@ export function extractUrlCandidates(cleaned: string): URL[] {
     if (candidate.length > URL_CANDIDATE_LIMIT) {
       continue
     }
-    // Strip common trailing punctuation that cannot end a real URL.
     while (candidate.length > 0 && /[.,;:!?)\]}>'"`]/.test(candidate.slice(-1))) {
       candidate = candidate.slice(0, -1)
     }
@@ -133,7 +131,7 @@ function parseUrl(candidate: string): URL | null {
 }
 
 export function classifyHost(hostname: string): HostKind {
-  // Why: strip IPv6 brackets so this public API accepts both "[::1]" (Node's form) and bare literals.
+  // Accept both Node-bracketed and bare IPv6 hostnames.
   const lower = hostname.toLowerCase().replace(/^\[|\]$/g, '')
   if (lower === 'localhost' || lower === '127.0.0.1' || lower === '::1') {
     return 'loopback'
@@ -150,7 +148,6 @@ export function classifyHost(hostname: string): HostKind {
     }
     return 'public-ip'
   }
-  // Anything else is a DNS name — that's what we prefer for dev servers.
   return 'custom'
 }
 
@@ -186,7 +183,6 @@ export function isUnspecifiedHost(hostname: string): boolean {
 }
 
 function isIpv6(value: string): boolean {
-  // url.hostname for IPv6 returns lowercase without brackets — quick sniff.
   return value.includes(':') && /^[0-9a-f:]+$/.test(value)
 }
 
@@ -200,7 +196,7 @@ function isPrivateIpv6(value: string): boolean {
 }
 
 function hostKindScore(kind: HostKind): number {
-  // Prefer custom DNS > loopback > private IP > public IP: loopback beats LAN for cert/cookie reasons on one machine.
+  // Prefer loopback over LAN for same-machine certificate/cookie behavior; custom DNS wins.
   switch (kind) {
     case 'custom':
       return 3
@@ -230,7 +226,7 @@ export function isDefaultPort(protocol: 'http' | 'https', port: number): boolean
 }
 
 export function formatHostForOrigin(url: URL): string {
-  // Why: some JS runtimes strip the IPv6 brackets Node adds; re-bracket a bare IPv6 literal.
+  // Re-bracket bare IPv6 literals from runtimes that strip Node-style brackets.
   const h = url.hostname
   if (h.startsWith('[') && h.endsWith(']')) {
     return h

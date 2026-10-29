@@ -36,7 +36,7 @@ afterEach(() => {
 })
 
 describe('AgentHookServer nested agent model fence', () => {
-  // Why: `claude` running `codex exec` fires codex hooks on the inherited pane key.
+  // Nested codex exec inherits the parent Claude pane key.
   it('keeps the parent model when a nested hook reports its own model', () => {
     const server = new AgentHookServer()
     ingest(server, 1_000, {
@@ -127,7 +127,7 @@ describe('AgentHookServer nested agent model fence', () => {
     ])
   })
 
-  // Why: readers retain sparse model labels, so the host must never publish a child's label on the parent.
+  // Readers retain sparse model labels, so a transient child label could remain on the parent.
   it('never pushes a nested codex model to the renderer from real hook bodies', async () => {
     vi.useRealTimers()
     const server = new AgentHookServer()

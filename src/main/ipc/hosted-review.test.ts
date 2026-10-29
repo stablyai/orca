@@ -17,7 +17,8 @@ const {
   getHostedReviewCreationEligibilityMock,
   getHostedReviewForBranchMock,
   resolveRegisteredWorktreePathMock,
-  listRepoWorktreeGraphMock
+  listRepoWorktreeGraphMock,
+  readWslDistroRunningStateMock
 } = vi.hoisted(() => ({
   handleMock: vi.fn(),
   createHostedReviewMock: vi.fn(),
@@ -25,7 +26,13 @@ const {
   getHostedReviewCreationEligibilityMock: vi.fn(),
   getHostedReviewForBranchMock: vi.fn(),
   resolveRegisteredWorktreePathMock: vi.fn(),
-  listRepoWorktreeGraphMock: vi.fn()
+  listRepoWorktreeGraphMock: vi.fn(),
+  readWslDistroRunningStateMock: vi.fn()
+}))
+
+vi.mock('../wsl-background-distro-gate', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  readWslDistroRunningState: readWslDistroRunningStateMock
 }))
 
 vi.mock('electron', () => ({
@@ -56,6 +63,7 @@ vi.mock('../repo-worktrees', () => ({
 }))
 
 import { registerHostedReviewHandlers } from './hosted-review'
+import { WslDistroStoppedError } from '../wsl/wsl-unc-access-gate'
 import { WorktreeCatalogUnavailableError } from '../../shared/worktree/worktree-catalog-availability'
 
 type HandlerMap = Record<string, (_event: unknown, args: unknown) => unknown>
@@ -99,6 +107,7 @@ describe('registerHostedReviewHandlers', () => {
     getHostedReviewForBranchMock.mockReset()
     resolveRegisteredWorktreePathMock.mockReset()
     listRepoWorktreeGraphMock.mockReset()
+    readWslDistroRunningStateMock.mockReset().mockResolvedValue('running')
     store.getRepo.mockReset()
     store.getRepos.mockReset()
     store.getProjects.mockReset()
@@ -176,9 +185,7 @@ describe('registerHostedReviewHandlers', () => {
     )
   })
 
-  // Why: without this the dirty preflight counts Orca's own shared symlinks as
-  // user work and Create Review tells the user to commit a link they cannot
-  // commit (issue #10451). Nothing else asserts the handler supplies them.
+  // Shared symlinks belong to Orca and must not fail the user's dirty preflight (#10451).
   it('passes the repo shared link paths through local review creation', async () => {
     const localRepo = {
       id: 'repo-local',
@@ -220,8 +227,7 @@ describe('registerHostedReviewHandlers', () => {
     )
   })
 
-  // Why: remote creation never materializes these links, and `repo.path` names a
-  // path on the remote host — resolving it locally would read a stranger's file.
+  // Remote paths must not resolve unrelated local orca.yaml files.
   it('does not resolve shared link paths for an SSH repo', async () => {
     store.getRepo.mockImplementation((repoId: string) =>
       repoId === repo.id ? { ...repo, symlinkPaths: ['node_modules'] } : null
@@ -307,6 +313,95 @@ describe('registerHostedReviewHandlers', () => {
     expect(getHostedReviewForBranchMock.mock.calls[0][0]).not.toHaveProperty('active')
   })
 
+  it('refuses a card poll for a stopped WSL distro without running gh or glab in it', async () => {
+    setPlatform('win32')
+    const localRepo = {
+      id: 'repo-local',
+      path: '/workspace/repo',
+      displayName: 'local',
+      badgeColor: '#000',
+      addedAt: 0
+    }
+    store.getRepo.mockImplementation((repoId: string) =>
+      repoId === localRepo.id ? localRepo : null
+    )
+    store.getRepos.mockReturnValue([localRepo])
+    store.getProjects.mockReturnValue([
+      {
+        id: 'project-1',
+        displayName: 'local',
+        badgeColor: '#000',
+        sourceRepoIds: [localRepo.id],
+        localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' },
+        createdAt: 0,
+        updatedAt: 0
+      }
+    ])
+    readWslDistroRunningStateMock.mockResolvedValue('stopped')
+    registerHostedReviewHandlers(store as never, stats as never)
+
+    await expect(
+      handlers['hostedReview:forBranch'](null, {
+        repoPath: localRepo.path,
+        repoId: localRepo.id,
+        branch: 'feature/wsl',
+        force: true
+      })
+    ).rejects.toBeInstanceOf(WslDistroStoppedError)
+    expect(readWslDistroRunningStateMock).toHaveBeenCalledWith('Ubuntu', expect.anything())
+    expect(getHostedReviewForBranchMock).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    [
+      "refuses the visible scheduler's interactive-priority poll",
+      { admissionTier: 'interactive' },
+      0
+    ],
+    [
+      'lets an explicit Refresh start the distro',
+      { admissionTier: 'interactive', wakeWslDistro: true },
+      1
+    ]
+  ] as const)('%s for a stopped distro', async (_case, extra, reads) => {
+    setPlatform('win32')
+    const localRepo = {
+      id: 'repo-local',
+      path: '/workspace/repo',
+      displayName: 'local',
+      badgeColor: '#000',
+      addedAt: 0
+    }
+    store.getRepo.mockImplementation((repoId: string) =>
+      repoId === localRepo.id ? localRepo : null
+    )
+    store.getRepos.mockReturnValue([localRepo])
+    store.getProjects.mockReturnValue([
+      {
+        id: 'project-1',
+        displayName: 'local',
+        badgeColor: '#000',
+        sourceRepoIds: [localRepo.id],
+        localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' },
+        createdAt: 0,
+        updatedAt: 0
+      }
+    ])
+    readWslDistroRunningStateMock.mockResolvedValue('stopped')
+    getHostedReviewForBranchMock.mockResolvedValue(null)
+    registerHostedReviewHandlers(store as never, stats as never)
+
+    const read = handlers['hostedReview:forBranch'](null, {
+      repoPath: localRepo.path,
+      repoId: localRepo.id,
+      branch: 'feature/wsl',
+      ...extra
+    })
+
+    await (reads === 0 ? expect(read).rejects.toBeInstanceOf(WslDistroStoppedError) : read)
+    expect(getHostedReviewForBranchMock).toHaveBeenCalledTimes(reads)
+  })
+
   it('carries a selected-worktree claim and explicit refresh through to the branch lookup', async () => {
     getHostedReviewForBranchMock.mockResolvedValueOnce(null)
     registerHostedReviewHandlers(store as never, stats as never)
@@ -319,8 +414,7 @@ describe('registerHostedReviewHandlers', () => {
       force: true
     })
 
-    // Why: the right sidebar renders only the selected worktree, so its lookup
-    // earns the per-minute tier instead of the card-list interval (#11532).
+    // Selected-worktree lookups use the faster active tier, unlike O(N) card polling (#11532).
     expect(getHostedReviewForBranchMock).toHaveBeenCalledWith(
       expect.objectContaining({ branch: 'feature/selected', active: true, force: true })
     )
@@ -505,8 +599,7 @@ describe('registerHostedReviewHandlers', () => {
     expect(createHostedReviewMock).not.toHaveBeenCalled()
   })
 
-  // Why: these handlers are the Electron path for every hosted-review gh call — without
-  // the binding they silently run as the ambient login while the RPC path honours it.
+  // Electron and RPC routes must both honor the repo's bound gh account.
   describe('gh account binding', () => {
     const boundRepo = { ...repo, ghAccount: { host: 'github.com', user: 'octocat' } }
 

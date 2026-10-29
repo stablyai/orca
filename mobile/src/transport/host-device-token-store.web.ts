@@ -1,5 +1,4 @@
-// Web sibling: the bridge carries RPC, so the page holds no device token and must not import
-// the pairing keychain (expo-secure-store resolves to {} on web).
+// The shell carries authenticated RPC; keep device credentials and pairing-keychain imports outside the page.
 export function readHostDeviceToken(_hostId: string): Promise<string | null> {
   return Promise.resolve(null)
 }

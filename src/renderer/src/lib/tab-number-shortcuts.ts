@@ -41,9 +41,7 @@ export function resolveTabNumberShortcutTarget(
     (tab) => tab.groupId === group.id
   )
   const tabById = new Map(groupTabs.map((tab) => [tab.id, tab]))
-  // Why: mirror TabBar's reconcile behavior. Stored group tabOrder is the
-  // visible left-to-right source, but stale/missing entries can happen during
-  // hydration and drag races, so append currently mounted group tabs.
+  // Match TabBar reconciliation: stored order is authoritative, but append mounted tabs missing during hydration/drag races.
   const orderedIds = dedupeTabOrder([
     ...group.tabOrder.filter((tabId) => tabById.has(tabId)),
     ...groupTabs.map((tab) => tab.id)

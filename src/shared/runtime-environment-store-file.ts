@@ -1,5 +1,8 @@
-import { writeSecureJsonFileWithinLimit } from './bounded-secure-json-file'
-import { JsonStringifyByteLimitError } from './node-bounded-json-stringify'
+import {
+  JsonStringifyByteLimitError,
+  stringifyJsonWithinByteLimit
+} from './node-bounded-json-stringify'
+import { writeSecureFile } from './secure-file'
 import {
   RuntimeEnvironmentStoreSchema,
   type KnownRuntimeEnvironment,
@@ -14,7 +17,10 @@ import {
   getEnvironmentStorePath,
   MAX_RUNTIME_ENVIRONMENT_STORE_FILE_BYTES,
   readEnvironmentStoreRecords,
+  backUpBlankEnvironmentStore,
+  remoteServerPairingStoreError,
   RuntimeEnvironmentStoreError,
+  type EnvironmentStoreRecordsReadOptions,
   warnUnreadableEnvironmentState
 } from './runtime-environment-store-records'
 import {
@@ -22,7 +28,7 @@ import {
   readWslHostDeployments,
   WslHostDeploymentStoreInvalidError
 } from './wsl-host-deployment-store'
-import { isWslHostsInternalGateOpen } from './wsl-host-internal-gate'
+import { isWslHostsServing } from './wsl-host-internal-gate'
 
 export {
   getEnvironmentStorePath,
@@ -31,13 +37,10 @@ export {
   type RuntimeEnvironmentStoreErrorCode
 } from './runtime-environment-store-records'
 
-/**
- * The orca-environments.json records this build can read. Unreadable ones (corrupt, or written by
- * a newer build) are left out here and carried through every write by writeEnvironmentStore.
- */
+/** Readable records only; writeEnvironmentStore preserves unreadable corrupt/newer records verbatim. */
 export function readPersistedEnvironmentStore(
   userDataPath: string,
-  options: { requireStoreFile?: boolean } = {}
+  options: EnvironmentStoreRecordsReadOptions = {}
 ): RuntimeEnvironmentStore {
   const { environments, unreadable } = readEnvironmentStoreRecords(userDataPath, options)
   if (unreadable.length > 0) {
@@ -51,15 +54,11 @@ export function readPersistedEnvironmentStore(
   }
 }
 
-/** Persisted environments with their sidecar state overlaid; stale sidecar entries are ignored. */
-/**
- * Only an open internal gate fails closed on WSL state this build cannot read (a corrupt file, a
- * newer record). Closed, that state is ignored, so it can never hide an SSH or paired server.
- */
+/** Unreadable WSL state fails closed only while WSL hosts are served; otherwise it cannot hide SSH/paired servers. */
 function readWslHostDeploymentsForRegistry(
   userDataPath: string
 ): ReturnType<typeof readWslHostDeployments> {
-  const gateOpen = isWslHostsInternalGateOpen(process.env)
+  const gateOpen = isWslHostsServing(process.env)
   try {
     const read = readWslHostDeployments(userDataPath)
     return gateOpen ? read : { deployments: read.deployments, unreadableEnvironmentIds: new Set() }
@@ -74,7 +73,7 @@ function readWslHostDeploymentsForRegistry(
 
 export function readEnvironmentStore(
   userDataPath: string,
-  options: { requireStoreFile?: boolean } = {}
+  options: EnvironmentStoreRecordsReadOptions = {}
 ): {
   version: 1
   environments: KnownRuntimeEnvironment[]
@@ -95,8 +94,7 @@ export function readEnvironmentStore(
     }
     throw error
   }
-  // Why hide rather than overlay nothing: the unreadable entry may hold this server's SSH pin or
-  // deployment ownership, and connecting or editing without it would silently drop that.
+  // Hide unreadable overlays: connecting/editing without them could silently discard SSH pins or deployment ownership.
   const isHidden = (id: string): boolean => Object.hasOwn(sidecar.unreadable, id)
   const hidden = store.environments.filter((environment) => isHidden(environment.id))
   if (hidden.length > 0) {
@@ -117,32 +115,27 @@ export function readEnvironmentStore(
   }
 }
 
-/**
- * Writes only persisted fields; sidecar state is written by the sidecar module. Records on disk
- * this build cannot read are appended verbatim, in their original order.
- */
+/** Write persisted fields only; preserve unreadable on-disk records verbatim/in order. Sidecar writes stay separate. */
 export function writeEnvironmentStore(userDataPath: string, store: RuntimeEnvironmentStore): void {
   const path = getEnvironmentStorePath(userDataPath)
   const environments = RuntimeEnvironmentStoreSchema.parse(store).environments
-  const onDisk = readEnvironmentStoreRecords(userDataPath)
+  // The new registry replaces a blank file in one atomic write, so no reader sees it emptied early.
+  const onDisk = readEnvironmentStoreRecords(userDataPath, { recoverBlankStore: true })
   const readableIds = new Set(onDisk.environments.map((environment) => environment.id))
   const unreadableIds = new Set(onDisk.unreadable.map((record) => record.id))
   // A new readable record must not shadow one a newer build owns under the same id.
   if (environments.some(({ id }) => unreadableIds.has(id) && !readableIds.has(id))) {
-    throw new RuntimeEnvironmentStoreError(
-      'invalid_argument',
-      'A server with this id already exists in a format that needs a newer version of Orca.'
-    )
+    throw remoteServerPairingStoreError('idNeedsNewerOrca')
   }
+  let serialized: string
   try {
-    writeSecureJsonFileWithinLimit(
-      path,
+    serialized = stringifyJsonWithinByteLimit(
       {
         version: 1,
         environments: [...environments, ...onDisk.unreadable.map((record) => record.raw)]
       },
       MAX_RUNTIME_ENVIRONMENT_STORE_FILE_BYTES
-    )
+    ).serialized
   } catch (error) {
     if (error instanceof JsonStringifyByteLimitError) {
       throw new RuntimeEnvironmentStoreError(
@@ -152,4 +145,10 @@ export function writeEnvironmentStore(userDataPath: string, store: RuntimeEnviro
     }
     throw error
   }
+  // Copied only once the write is certain to be attempted, so rejected saves leave no copies.
+  if (onDisk.blankFile) {
+    backUpBlankEnvironmentStore(userDataPath)
+  }
+  // Without fsync before the rename, a crash can publish the name over NUL-filled data (#18766).
+  writeSecureFile(path, serialized, { durable: true })
 }

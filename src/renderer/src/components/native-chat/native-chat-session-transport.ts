@@ -7,39 +7,34 @@ import { isRuntimeCompatBlockError } from '@/runtime/runtime-protocol-compat'
 import {
   parseRuntimeNativeChatReadSessionResult,
   parseRuntimeNativeChatTurnLifecycle,
-  RUNTIME_NATIVE_CHAT_READ_ERROR
+  runtimeNativeChatReadError
 } from './native-chat-runtime-contract'
+import { translate } from '@/i18n/i18n'
 
-/** The read/subscribe surface the live-session hook needs, decoupled from where
- *  the transcript actually lives. Same shape as `window.api.nativeChat`, so the
- *  hook and everything downstream (merge, assembler, pagination) are unchanged. */
+/** Match local IPC so session consumers can read local or runtime-owned transcripts. */
 export type NativeChatSessionTransport = Pick<NativeChatApi, 'readSession' | 'subscribe'>
 
-const RUNTIME_TOO_OLD =
-  'This remote runtime is too old to show agent chat history. Update the remote runtime to view it.'
-
-/** Backoff before re-opening a dropped runtime chat stream. Exported for tests. */
-export const RUNTIME_NATIVE_CHAT_RECONNECT_MS = 2_000
-
-/** Map a runtime read failure to the message the read-error state renders. A
- *  version block (old runtime lacking the method, or the protocol-compat gate)
- *  gets the explicit "update the remote runtime" copy (R4); anything else — a
- *  timeout or transport error — gets a generic message, so a transient failure is
- *  never mislabeled as a version problem (KTD-4, not catch-all). */
-export function toRuntimeNativeChatErrorMessage(err: unknown): string {
-  if (err instanceof RuntimeRpcCallError && err.code === 'method_not_found') {
-    return RUNTIME_TOO_OLD
-  }
-  if (isRuntimeCompatBlockError(err)) {
-    return RUNTIME_TOO_OLD
-  }
-  return RUNTIME_NATIVE_CHAT_READ_ERROR
+function runtimeTooOldMessage(): string {
+  return translate(
+    'components.native-chat.runtime.tooOld',
+    'This remote runtime is too old to show agent chat history. Update the remote runtime to view it.'
+  )
 }
 
-/** Delegates straight to the local Electron IPC bridge. On the web client
- *  `window.api.nativeChat` already bridges to the paired runtime, so web keeps
- *  using this adapter (R3). Preserves whatever `subscribe` returns (sync fn on
- *  desktop, promise on the web bridge) — the hook's teardown handles both (R6). */
+export const RUNTIME_NATIVE_CHAT_RECONNECT_MS = 2_000
+
+/** Label only method/version blocks as update requirements; transient failures need generic copy (KTD-4). */
+export function toRuntimeNativeChatErrorMessage(err: unknown): string {
+  if (err instanceof RuntimeRpcCallError && err.code === 'method_not_found') {
+    return runtimeTooOldMessage()
+  }
+  if (isRuntimeCompatBlockError(err)) {
+    return runtimeTooOldMessage()
+  }
+  return runtimeNativeChatReadError()
+}
+
+/** Web IPC already targets its paired runtime; preserve sync desktop and deferred web teardown forms. */
 const localNativeChatTransport: NativeChatSessionTransport = {
   readSession: (agent, sessionId, limit, transcriptPath) =>
     window.api.nativeChat.readSession(agent, sessionId, limit, transcriptPath),
@@ -55,7 +50,7 @@ function createRuntimeNativeChatTransport(environmentId: string): NativeChatSess
         const result = await callRuntimeRpc<unknown>(
           target,
           'nativeChat.readSession',
-          { agent, sessionId, limit, transcriptPath },
+          { agent, sessionId, limit, transcriptPath, capabilities: { transcriptSourceOrder: 1 } },
           { timeoutMs: 15_000 }
         )
         return parseRuntimeNativeChatReadSessionResult(result)
@@ -72,12 +67,7 @@ function createRuntimeNativeChatTransport(environmentId: string): NativeChatSess
       let activeAttempt = 0
       let reconnectPendingAttempt: number | null = null
 
-      // A mid-stream drop (runtime restart, network blip, relay reconnect) closes
-      // the dedicated stream socket. Re-open it after a short backoff so the live
-      // tail resumes without a manual chat toggle; the fresh drain re-emits the
-      // windowed tail, which merges by id so no turn is duplicated. An initial
-      // connect failure lands in `.catch` instead (and is surfaced through the
-      // initial error frame), so a too-old/absent runtime never spins here.
+      // Reconnect established streams after drops; merge replay by id. Initial failures surface once instead of retrying.
       const scheduleReconnect = (attempt: number): void => {
         if (attempt !== activeAttempt) {
           return
@@ -109,7 +99,7 @@ function createRuntimeNativeChatTransport(environmentId: string): NativeChatSess
                 sessionId,
                 transcriptPath,
                 limit,
-                capabilities: { transcriptPending: 1 }
+                capabilities: { transcriptPending: 1, transcriptSourceOrder: 1 }
               },
               timeoutMs: 15_000
             },
@@ -142,8 +132,7 @@ function createRuntimeNativeChatTransport(environmentId: string): NativeChatSess
                   pending?: boolean
                 }
                 const lifecycle = parseRuntimeNativeChatTurnLifecycle(frame?.lifecycle)
-                // No transcript behind this window yet — forwarded so the view can
-                // stop spinning, but it is not the settled initial read.
+                // Pending frames stop the spinner without claiming a settled initial transcript.
                 const pending = frame?.pending === true
                 if (
                   (frame?.type === 'appended' ||
@@ -189,10 +178,7 @@ function createRuntimeNativeChatTransport(environmentId: string): NativeChatSess
                     )
                   }
                 } else if (!receivedInitial) {
-                  // Why: an ok response whose payload shape we don't recognize
-                  // would otherwise never flip receivedInitial, stranding the view
-                  // on 'loading'. Settle it with an empty snapshot (carrying any
-                  // error the runtime sent) so the UI resolves.
+                  // Settle unrecognized successful payloads with an empty snapshot/error so loading cannot remain stuck.
                   receivedInitial = true
                   onFrame({
                     type: 'snapshot',
@@ -202,15 +188,13 @@ function createRuntimeNativeChatTransport(environmentId: string): NativeChatSess
                   })
                 }
               },
-              // Established-then-dropped: resume the tail. onClose also fires on our
-              // own teardown, but `cancelled` short-circuits the reconnect there.
+              // Teardown also closes the stream; cancelled prevents its reconnect.
               onError: () => scheduleReconnect(attempt),
               onClose: () => scheduleReconnect(attempt)
             }
           )
           .then((handle) => {
-            // Why: reconnect attempts may resolve out of order. A stale handle
-            // must never replace or tear down the current stream.
+            // Stale reconnect handles must never replace or tear down the current stream.
             if (cancelled || attempt !== activeAttempt || reconnectPendingAttempt === attempt) {
               handle.unsubscribe()
               return
@@ -221,8 +205,7 @@ function createRuntimeNativeChatTransport(environmentId: string): NativeChatSess
             if (cancelled || attempt !== activeAttempt) {
               return
             }
-            // Initial subscribe failed (e.g. a too-old runtime lacking the method).
-            // Surface the same compatibility-specific copy as a direct read.
+            // Initial failures use the direct-read compatibility message.
             if (!receivedInitial) {
               receivedInitial = true
               onFrame({
@@ -233,19 +216,14 @@ function createRuntimeNativeChatTransport(environmentId: string): NativeChatSess
               })
               return
             }
-            // Why: a failed reconnect is still a transient dropped-stream state;
-            // keep retrying after the backoff instead of stranding a live view.
+            // Failed reconnects remain transient; retain backoff retries for live views.
             scheduleReconnect(attempt)
           })
       }
 
       openStream()
 
-      // Teardown closes the dedicated stream socket; the runtime reaps its
-      // fs-watcher on that connection's close (registerSubscriptionCleanup →
-      // cleanupSubscriptionsForConnection), so no explicit nativeChat.unsubscribe
-      // RPC is needed — and one would ride a different connection and never match
-      // the watcher's cleanup key anyway.
+      // Socket closure reaps its watcher; an unsubscribe RPC would use the wrong connection cleanup key.
       return () => {
         cancelled = true
         if (reconnectTimer) {
@@ -260,9 +238,7 @@ function createRuntimeNativeChatTransport(environmentId: string): NativeChatSess
   }
 }
 
-/** Select the read/subscribe transport for a pane. Route to the remote runtime
- *  only for a `runtime:`-owned pane on a non-web client (KTD-2); web and
- *  local/`ssh:`-owned panes keep the local adapter. */
+/** Only desktop runtime-owned panes need this adapter; web and local/SSH panes keep the IPC bridge. */
 export function getNativeChatSessionTransport(
   runtimeEnvironmentId: string | null
 ): NativeChatSessionTransport {

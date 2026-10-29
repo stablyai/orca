@@ -24,7 +24,6 @@ type HostPeerStore = Pick<
   'getRepos' | 'getAllWorktreeMeta' | 'getAllWorktreeMetaForHost' | 'getAllWorktreeLineage'
 >
 
-/** Project a per-repo publication against persisted peers on its execution host. */
 export function projectWorktreeLineageWithHostPeers<T extends Worktree>(
   store: HostPeerStore,
   repo: Repo,

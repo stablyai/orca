@@ -18,6 +18,7 @@ function repoHostTarget(hostId: ExecutionHostId): RuntimeClientTarget {
 export type RuntimeRepoBaseRefDefault = {
   defaultBaseRef: string | null
   remoteCount: number
+  refusedWslDistro?: string
 }
 
 export async function getRuntimeRepoBaseRefDefault(
@@ -34,6 +35,98 @@ export async function getRuntimeRepoBaseRefDefault(
     { repo: repoId },
     { timeoutMs: 15_000 }
   )
+}
+
+/** How often a refused default is re-asked from a host whose running signal cannot reach us. */
+export const REFUSED_BASE_REF_REPOLL_MS = 30_000
+
+/**
+ * Loads the repo's default base ref and, while a stopped WSL distro refuses it (E9), re-asks once
+ * that distro runs: on main's running signal for this app's repos, or for a paired host (whose
+ * signal never reaches this window) on window focus and every 30 s while visible. Returns a cancel.
+ */
+export function watchRuntimeRepoBaseRefDefault(
+  hostId: ExecutionHostId,
+  repoId: string,
+  handlers: {
+    onResult: (result: RuntimeRepoBaseRefDefault) => void
+    onError: (error: unknown) => void
+  }
+): () => void {
+  let cancelled = false
+  let inFlight = false
+  let refused: string | null = null
+  // Running signals that land while main is still answering would otherwise be missed.
+  let ranDuringRead = new Set<string>()
+  let repoll: ReturnType<typeof setInterval> | null = null
+  const onDistroRunning = window.api.preflight?.onWslDistroRunning
+  const hearsHostSignal =
+    ipcOrRuntimeTargetForHostId(hostId)?.kind === 'local' && typeof onDistroRunning === 'function'
+
+  const reaskFromPairedHost = (): void => {
+    if (refused && !inFlight && document.visibilityState === 'visible') {
+      load()
+    }
+  }
+  const syncRepoll = (): void => {
+    if (refused && !hearsHostSignal && !repoll) {
+      repoll = setInterval(reaskFromPairedHost, REFUSED_BASE_REF_REPOLL_MS)
+    } else if (!refused && repoll) {
+      clearInterval(repoll)
+      repoll = null
+    }
+  }
+  function load(): void {
+    inFlight = true
+    ranDuringRead = new Set()
+    getRuntimeRepoBaseRefDefault(hostId, repoId).then(
+      (result) => {
+        inFlight = false
+        if (cancelled) {
+          return
+        }
+        handlers.onResult(result)
+        refused = result.refusedWslDistro?.toLowerCase() ?? null
+        syncRepoll()
+        if (refused && ranDuringRead.has(refused)) {
+          load()
+        }
+      },
+      (error: unknown) => {
+        inFlight = false
+        if (!cancelled) {
+          handlers.onError(error)
+        }
+      }
+    )
+  }
+
+  // Subscribed before the first read, so no running signal can fall between answer and listener.
+  const stopListening =
+    hearsHostSignal && onDistroRunning
+      ? onDistroRunning((distro) => {
+          const key = distro.toLowerCase()
+          if (inFlight) {
+            ranDuringRead.add(key)
+          } else if (key === refused) {
+            load()
+          }
+        })
+      : null
+  if (!hearsHostSignal) {
+    window.addEventListener('focus', reaskFromPairedHost)
+  }
+  load()
+  return () => {
+    cancelled = true
+    stopListening?.()
+    if (!hearsHostSignal) {
+      window.removeEventListener('focus', reaskFromPairedHost)
+    }
+    if (repoll) {
+      clearInterval(repoll)
+    }
+  }
 }
 
 export async function searchRuntimeRepoBaseRefs(

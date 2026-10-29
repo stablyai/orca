@@ -23,12 +23,7 @@ function pageKey(url: string): string {
   return normalizeBrowserNavigationUrl(url) ?? url
 }
 
-/**
- * "Switch to tab" for suggestions whose page is already open in another tab of this page's
- * worktree (the new-tab omnibox's scope and host ownership), so choosing one activates that tab
- * instead of loading a duplicate. Like Chrome, Tab moves onto the row's button and Enter there
- * switches; DOM focus stays in the input throughout.
- */
+/** Activate matching pages within this worktree/host; Tab and Enter target the row’s button while DOM focus stays in the input. */
 export function useBrowserAddressBarSwitchToTab({
   pageId,
   open,
@@ -43,7 +38,7 @@ export function useBrowserAddressBarSwitchToTab({
   onNavigate: (url: string) => void
 }): {
   hasSwitchTarget: (row: SwitchableRow) => boolean
-  /** The row whose button holds keyboard focus. */
+  /** Virtual button focus; DOM focus remains in the input. */
   focusedUrl: string | null
   /** Tab onto the selected row's button or Shift+Tab off it; true when it took the key. */
   handleTabKey: (event: KeyboardEvent<HTMLInputElement>, selectedRow?: SwitchableRow) => boolean
@@ -52,8 +47,7 @@ export function useBrowserAddressBarSwitchToTab({
 } {
   const [focusedUrl, setFocusedUrl] = useState<string | null>(null)
   const [wasOpen, setWasOpen] = useState(open)
-  // Why during render: a list closed by Escape or blur must not reopen with Enter still aimed at
-  // a button the user left.
+  // Reset closed-list button focus during render so reopening cannot leave Enter aimed at an abandoned target.
   if (wasOpen !== open) {
     setWasOpen(open)
     if (!open) {

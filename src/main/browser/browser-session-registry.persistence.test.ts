@@ -14,7 +14,7 @@ describe('BrowserSessionRegistry persistence', () => {
     vi.restoreAllMocks()
   })
 
-  it('migrates and consumes legacy pendingCookieDbPath into default partition replay', async () => {
+  it('expires a legacy pendingCookieDbPath without copying it over the live jar', async () => {
     const fsState = createFsState()
     seedMeta(fsState, {
       defaultSource: null,
@@ -32,10 +32,10 @@ describe('BrowserSessionRegistry persistence', () => {
     const written = JSON.parse(fsState.files.get(META_PATH) ?? '{}')
     expect(written.pendingCookieDbPath).toBeNull()
     expect(written.pendingCookieImports).toEqual({})
-    expect(fsState.present.has('/user-data/Partitions/orca-browser/Cookies')).toBe(true)
+    expect(fsState.present.has('/user-data/Partitions/orca-browser/Cookies')).toBe(false)
   })
 
-  it('replays pending cookies into an existing Network database', async () => {
+  it('keeps the existing Network database when expiring an unmarked legacy image', async () => {
     const stagedPath = '/staged/network-import'
     const networkPath = '/user-data/Partitions/orca-browser/Network/Cookies'
     const legacyPath = '/user-data/Partitions/orca-browser/Cookies'
@@ -56,7 +56,7 @@ describe('BrowserSessionRegistry persistence', () => {
 
     browserSessionRegistry.applyPendingCookieImport()
 
-    expect(fsState.files.get(networkPath)).toBe('imported cookies')
+    expect(fsState.files.get(networkPath)).toBe('old cookies')
     expect(fsState.present.has(legacyPath)).toBe(false)
   })
 
@@ -99,37 +99,6 @@ describe('BrowserSessionRegistry persistence', () => {
     )
   })
 
-  it('merges partition-keyed pending entries without clobbering unrelated entries', async () => {
-    const fsState = createFsState()
-    seedMeta(fsState, {
-      defaultSource: null,
-      userAgent: null,
-      userAgentByPartition: {},
-      pendingCookieDbPath: null,
-      pendingCookieImports: {},
-      profiles: []
-    })
-
-    installModuleMocks(fsState)
-    const { browserSessionRegistry } = await import('./browser-session-registry')
-
-    browserSessionRegistry.setPendingCookieImport('persist:orca-browser', '/staged/default')
-    browserSessionRegistry.setPendingCookieImport(
-      'persist:orca-browser-session-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
-      '/staged/imported'
-    )
-
-    const written = JSON.parse(fsState.files.get(META_PATH) ?? '{}')
-    expect(written.pendingCookieDbPath).toBeNull()
-    expect(written.pendingCookieImports).toEqual({
-      'persist:orca-browser': { format: 'scoped-v1', path: '/staged/default' },
-      'persist:orca-browser-session-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa': {
-        format: 'scoped-v1',
-        path: '/staged/imported'
-      }
-    })
-  })
-
   it('clears only the requested partition and unlinks its staged database files', async () => {
     const otherPartition = 'persist:orca-browser-session-bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
     const fsState = createFsState()
@@ -158,7 +127,6 @@ describe('BrowserSessionRegistry persistence', () => {
 
     const written = JSON.parse(fsState.files.get(META_PATH) ?? '{}')
     expect(written.pendingCookieImports).toEqual({ 'persist:orca-browser': '/staged/default' })
-    // Why: the default partition still has a staged replay, so the legacy pointer must survive.
     expect(written.pendingCookieDbPath).toBe('/staged/default')
     for (const suffix of ['', '-wal', '-shm']) {
       expect(fsState.present.has(`/staged/other${suffix}`)).toBe(false)
@@ -210,7 +178,6 @@ describe('BrowserSessionRegistry persistence', () => {
 
     browserSessionRegistry.clearPendingCookieImport('persist:orca-browser-session-unknown')
 
-    // Why: an absent key must not rewrite meta or touch another partition's staged file.
     expect(fsState.files.get(META_PATH)).toBe(metaBefore)
     expect(fsState.present.has('/staged/default')).toBe(true)
   })
@@ -258,8 +225,7 @@ describe('BrowserSessionRegistry persistence', () => {
         details
       )
 
-    // The user allowed this site's camera before; nothing else was answered, and the tab has no
-    // window to ask in.
+    // Only camera has a saved answer; this guest has no prompt window.
     request('fullscreen')
     request('clipboard-read')
     request('clipboard-sanitized-write')
@@ -278,10 +244,8 @@ describe('BrowserSessionRegistry persistence', () => {
       geolocation: false,
       media: true
     })
-    // Unanswered questions are not Orca's refusal, so no notice.
     expect(browserManagerNotifyPermissionDeniedMock).not.toHaveBeenCalled()
 
-    // What the user cannot decide keeps the denial notice, naming the frame that asked.
     requestHandler(guestWc, 'mediaKeySystem', permissionCallback, {
       requestingUrl: 'https://widget.example.net/embed',
       isMainFrame: false
@@ -292,7 +256,6 @@ describe('BrowserSessionRegistry persistence', () => {
       rawUrl: 'https://widget.example.net/embed'
     })
 
-    // Missing or empty frame URLs fall back to the visible top-level page.
     browserManagerNotifyPermissionDeniedMock.mockClear()
     requestHandler(guestWc, 'mediaKeySystem', permissionCallback, { isMainFrame: true })
     requestHandler(guestWc, 'mediaKeySystem', permissionCallback, {
@@ -303,7 +266,6 @@ describe('BrowserSessionRegistry persistence', () => {
       browserManagerNotifyPermissionDeniedMock.mock.calls.map(([args]) => args.rawUrl)
     ).toEqual(['https://example.com/account', 'https://example.com/account'])
 
-    // Opaque frame URLs have no site Orca can name accurately.
     browserManagerNotifyPermissionDeniedMock.mockClear()
     requestHandler(guestWc, 'mediaKeySystem', permissionCallback, {
       requestingUrl: 'about:blank',
@@ -323,22 +285,15 @@ describe('BrowserSessionRegistry persistence', () => {
     expect(checkHandler(guestWc, 'media', '', { mediaType: 'video' })).toBe(true)
     expect(checkHandler(guestWc, 'media', '', { mediaType: 'audio' })).toBe(false)
 
-    // Why: this session allows unpartitioned third-party cookies, so a cross-site frame already has
-    // the access requestStorageAccess() would grant. Denying it protected nothing and only broke
-    // sites taking the API's failure path. Red before the grant landed.
     requestHandler(guestWc, 'storage-access', permissionCallback, {})
     expect(permissionCallback).toHaveBeenLastCalledWith(true)
     expect(checkHandler(null, 'storage-access', '')).toBe(true)
 
-    // Why: requestStorageAccessFor() is a different platform decision — Chromium consults Related
-    // Website Sets and has no third-party-cookie auto-grant, and Orca has no such data source. This
-    // pins the deliberate denial so a future blanket widening of the allow-set fails loudly.
+    // Related Website Sets gate top-level storage access; Orca has no such data source.
     requestHandler(guestWc, 'top-level-storage-access', permissionCallback, {})
     expect(permissionCallback).toHaveBeenLastCalledWith(false)
     expect(checkHandler(null, 'top-level-storage-access', '')).toBe(false)
 
-    // Why: the reported symptom was a user-visible denial notice, so pin the notified list here —
-    // storage-access must no longer raise one, while the deliberate top-level denial still does.
     expect(
       browserManagerNotifyPermissionDeniedMock.mock.calls.map(([args]) => args.permission)
     ).toEqual(['mediaKeySystem', 'top-level-storage-access'])
@@ -465,7 +420,6 @@ describe('BrowserSessionRegistry persistence', () => {
       profiles: []
     })
 
-    // The user allowed the site, so only the operating system refuses.
     seedSitePermissions(fsState, { default: { 'https://example.com': { camera: 'allow' } } })
     const {
       sessionFromPartitionMock,
@@ -495,7 +449,7 @@ describe('BrowserSessionRegistry persistence', () => {
     })
   })
 
-  it('keeps failed partition replay pending and removes unrelated missing entries', async () => {
+  it('expires an old unmarked stage and removes unrelated missing entries', async () => {
     const importedPartition = 'persist:orca-browser-session-22222222-2222-4222-8222-222222222222'
     const fsState = createFsState()
     seedMeta(fsState, {
@@ -525,7 +479,7 @@ describe('BrowserSessionRegistry persistence', () => {
     browserSessionRegistry.applyPendingCookieImport()
 
     const written = JSON.parse(fsState.files.get(META_PATH) ?? '{}')
-    expect(written.pendingCookieImports).toEqual({ [importedPartition]: '/staged/imported' })
+    expect(written.pendingCookieImports).toEqual({})
     expect(written.pendingCookieDbPath).toBeNull()
   })
 

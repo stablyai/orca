@@ -9,6 +9,13 @@
     "resources/licenses/**",
     ".github/actions/cloud-sql-rollout-lease/**",
     ".anti-slop-plugin/**",
-    "src/main/runtime/__fixtures__/*.timing.json"
+    "src/main/runtime/__fixtures__/*.timing.json",
+    "resources/skills/released-digests.json",
+    "docs/schemas/plugins/**/*.schema.json",
+    "examples/plugins/*/orca-plugin.v2.schema.json",
+    "docs/reference/plugin-manifest.md",
+    "docs/reference/plugin-catalog.md",
+    "docs/reference/plugin-host-api.md",
+    "docs/reference/plugin-theme-tokens.md"
   ]
 }

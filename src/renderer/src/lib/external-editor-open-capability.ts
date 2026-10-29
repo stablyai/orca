@@ -1,4 +1,4 @@
-import { isVsCodeRemoteSshCommand } from '../../../shared/vscode-remote-ssh-launcher'
+import { isRemoteSshEditorCommand } from '../../../shared/remote-ssh-editor-launcher'
 import { toRuntimeExecutionHostId } from '../../../shared/execution-host'
 import { getWindowsPathAccess } from './windows-path-access'
 import type { WorkspaceEditorSshHost } from './workspace-editor-ssh-target'
@@ -35,14 +35,14 @@ export function getExternalEditorOpenCapability(context: {
     if (sshHost?.environmentId !== runtimeEnvironmentId) {
       return { allowed: false, reason: 'remote-runtime' }
     }
-    return isVsCodeRemoteSshCommand(context.command)
+    return isRemoteSshEditorCommand(context.command)
       ? { allowed: true, remote: true, sshTargetId: sshHost.sshTargetId }
       : { allowed: false, reason: 'local-only-editor' }
   }
   if (!context.connectionId?.trim()) {
     return { allowed: true, remote: false }
   }
-  return isVsCodeRemoteSshCommand(context.command)
+  return isRemoteSshEditorCommand(context.command)
     ? { allowed: true, remote: true }
     : { allowed: false, reason: 'local-only-editor' }
 }

@@ -39,7 +39,6 @@ function directoryWith(
 ) {
   const directory = new ShadowSeatDirectory()
   const cellIds = [...Object.keys(seats), ...noFeed]
-  // Read at 0; live cells' heartbeats run out far in the future.
   directory.setCells(cellIds, cellIds, {
     readAt: 0,
     expiresAt: new Map(
@@ -108,7 +107,6 @@ describe('classifyShadowSeat', () => {
   })
 
   it('explains a long-seated host moved by a rehome, then stops once the move is old', () => {
-    // Seated for three hours on cell-b; a rehome grants cell-a at a newer epoch.
     const directory = directoryWith({ 'cell-b': [seat(2)], 'cell-a': [] })
     const threeHours = 3 * 60 * 60 * 1_000
     const poll = (cellId: string, now: number) =>
@@ -146,7 +144,6 @@ describe('classifyShadowSeat', () => {
     expect(classifyShadowSeat(directory, IDENTITY, at('cell-a', 3), 10)).toMatchObject({
       explained: true
     })
-    // cell-b was last polled at 10; 20 s later only cell-a is fresh.
     directory.apply('cell-a', feed('cell-a', { full: undefined, changes: [] }), 20_010)
     expect(classifyShadowSeat(directory, IDENTITY, at('cell-a', 3), 20_010)).toEqual({
       class: 'cell-unpolled',
@@ -155,7 +152,6 @@ describe('classifyShadowSeat', () => {
   })
 
   it('keeps a cell without a feed out of the coverage count, on either side of the compare', () => {
-    // cell-b reported a seat, then rolled back to an image without the feed.
     const directory = directoryWith({ 'cell-b': [seat(2)], 'cell-a': [] })
     directory.markNoFeed('cell-b', 20)
     for (const answer of [at('cell-a', 3), at('cell-b', 2)]) {
@@ -270,7 +266,6 @@ describe('classifyShadowSeat', () => {
     })
 
     it('classifies before recording, so a later epoch bump is explained', () => {
-      // Seated on cell-a at epoch 2 and on cell-b at epoch 1; the database names cell-a at 2.
       const directory = directoryWith({
         'cell-a': [seat(2, 'active', HOST, firstSeen)],
         'cell-b': [seat(1, 'active', HOST, 1)]
@@ -281,7 +276,6 @@ describe('classifyShadowSeat', () => {
         class: 'superseded-unknown-age',
         explained: false
       })
-      // A re-assign to cell-b at epoch 3 supersedes cell-a's epoch-2 seat.
       now = firstSeen + 1_700
       directory.apply(
         'cell-b',
@@ -423,7 +417,6 @@ describe('ShadowDirectoryCompare', () => {
     unseen.compare('sticky-verify', IDENTITY, assignment('cell-b'))
     unseen.compare('resolve', IDENTITY, null)
     unseen.flush(0)
-    // The database says cell-a at epoch 3; the map seats the host on cell-b at a newer epoch.
     const mismatch = compareOn({ 'cell-a': [], 'cell-b': [seat(4)] })
     mismatch.compare('sticky-verify', IDENTITY, assignment('cell-a'))
     mismatch.flush(0)
@@ -435,8 +428,7 @@ describe('ShadowDirectoryCompare', () => {
     const draining = compareOn({ 'cell-a': [seat(3)], 'cell-b': [seat(2, 'drain-only')] })
     draining.compare('sticky-verify', IDENTITY, assignment('cell-a'))
     draining.flush(0)
-    // A superseded older seat: the first-ever sighting has no age, so it is its own unexplained
-    // class on both cells; seen before, it is explained and counts only on the database's cell.
+    // First sighting cannot date a superseded seat; subsequent compares explain it and count only the database cell.
     const superseded = compareOn({ 'cell-a': [seat(3)], 'cell-b': [seat(2)] })
     superseded.compare('sticky-verify', IDENTITY, assignment('cell-a'))
     superseded.compare('sticky-verify', IDENTITY, assignment('cell-a'))
@@ -466,7 +458,6 @@ describe('unexplained samples', () => {
       () => 20,
       (line) => lines.push(JSON.parse(line))
     )
-    // Map ahead of the database: unexplained, so it is sampled.
     compare.compare('sticky-verify', IDENTITY, { ...assignment('cell-a'), assignmentEpoch: 2 })
     compare.flush(20)
     const sample = lines.find((line) => line.event === 'orca_relay_shadow_compare_unexplained')

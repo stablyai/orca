@@ -1,22 +1,6 @@
-/**
- * Which page routes render an HTML artifact, and the grant the preview needs from each of them.
- *
- * Natively the preview is its own WebView and `onShouldStartLoadWithRequest` hands every request to
- * `openExternalLink`, so there is nothing to negotiate. In the page a tap inside the sealed frame
- * becomes a top-frame navigation, and only the shell around the document can cancel it and open the
- * URL. A shell built before that event drops the navigation in silence, so
- * `use-html-preview-link-grant.web.ts` asks first (`init.grants.native`) and a route that declared
- * nothing renders the artifact's links as text.
- *
- * `externalNavigation` has no call site of the shape `mobile-web-app-page-grant-call-sites.mjs`
- * parses -- nothing is requested and nothing is answered, so there is no seam function to find --
- * which is why it belongs here beside `haptics` and `screencastBinary` rather than as a row there.
- * The screencast census's shape, against the third token that is neither a verb nor a notify.
- *
- * The lane is optional, so what this census pins is different from the required-lane ones: a route
- * missing the grant is not a native screen, it is a preview with inert links. That makes the
- * declaration easy to forget, and this is the only thing that would notice.
- */
+// HTML-preview links navigate top frame; only shell can cancel/open externally, unlike native WebView interception.
+// Query optional externalNavigation grant first; older shells leave inert text instead of silently dropping taps or forcing whole route native.
+// No request/notify call exists for call-site census, so verify route closure/declaration here.
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -58,8 +42,7 @@ function linkGrantCallers(closure) {
   })
 }
 
-/** Both lanes, because the token may be declared on either and the census is about the route
- *  holding it at all. Which lane is the product call ruling 37.3 gave the desktop. */
+// Count required and optional declarations; desktop ruling 37.3 chooses lane, census only proves presence.
 function routesDeclaring(token) {
   return MOBILE_WEB_PAGE_ROUTES.filter(
     (route) => route.grants.includes(token) || (route.optionalGrants ?? []).includes(token)
@@ -77,9 +60,7 @@ describeClosure(
           asking.push(route)
         }
       }
-      // One route today, and the precondition an assertion about a derived set needs: an empty
-      // list is also what a walk that read nothing produces. The file preview route is deliberately
-      // not here -- it renders `MobileFilePreviewScreen`, which has no HTML preview in its closure.
+      // Require nonempty route census; file-preview route has no HTML-preview closure and intentionally stays absent.
       expect(asking).toEqual(['/h/[hostId]/session/[worktreeId]'])
       expect([...routesDeclaring(externalNavigationGrantToken())].sort()).toEqual(
         [...asking].sort()
@@ -95,8 +76,7 @@ describeClosure(
       }
       const token = externalNavigationGrantToken()
       expect(session.optionalGrants).toContain(token)
-      // The half that matters: on the required lane this one name would take the whole session
-      // screen native on every shell built before the cancelled-navigation event.
+      // Required grant would force entire session native on older shells; keep this optional.
       expect(session.grants).not.toContain(token)
     })
 
@@ -107,11 +87,9 @@ describeClosure(
       expect(closure.local).toContain(SEAM)
       expect(closure.local).not.toContain(NATIVE)
       expect(linkGrantCallers(closure)).toEqual(['src/components/MobileHtmlPreview.tsx'])
-      // The preview is mounted by the session's file reader rather than by a route of its own,
-      // which is why the grant has no route to be pinned against except this one.
+      // Session’s file reader mounts preview in-domain; no separate preview route owns this grant.
       expect(closure.local).toContain('src/session/MobileSessionFileReader.tsx')
-      // And the inerting pass is in the closure too: without it the hook's answer would change a
-      // sandbox token and leave the dead anchor ruling 37.2 forbids.
+      // Require inerting implementation too: sandbox-only change would leave dead anchors (ruling 37.2).
       expect(closure.local).toContain('src/components/html-preview-inert-links.ts')
     })
 

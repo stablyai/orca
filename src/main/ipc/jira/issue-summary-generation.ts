@@ -9,6 +9,7 @@ import {
   cancelJiraIssueSummaryRequest,
   generateJiraIssueSummaryRequest
 } from '../../text-generation/jira-issue-summary-requests'
+import { addFanoutListener } from '../../event-listener-fanout'
 
 export function registerJiraIssueSummaryGenerationHandlers(
   store: Pick<Store, 'getSettings'>,
@@ -18,7 +19,7 @@ export function registerJiraIssueSummaryGenerationHandlers(
     const request = GenerateIssueSummary.parse(args)
     const owner = `window:${event.sender.id}`
     const cancel = (): void => cancelJiraIssueSummaryRequest(owner, request)
-    event.sender.once('destroyed', cancel)
+    const releaseDestroyed = addFanoutListener(event.sender, 'destroyed', cancel)
     try {
       return await generateJiraIssueSummaryRequest(
         {
@@ -29,7 +30,7 @@ export function registerJiraIssueSummaryGenerationHandlers(
         request
       )
     } finally {
-      event.sender.removeListener('destroyed', cancel)
+      releaseDestroyed()
     }
   })
   ipcMain.handle('jira:cancelGenerateIssueSummary', (event, args: unknown) => {

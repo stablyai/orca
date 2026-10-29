@@ -57,8 +57,7 @@ describe('resolveNativeChatHttpLinkSourceOwner', () => {
     expect(resolveNativeChatHttpLinkSourceOwner(state, 'wt-1')).toEqual({ kind: 'local' })
   })
 
-  // An unresolved owner must not be mistaken for local: a remote link would then
-  // open against the wrong host.
+  // Unknown ownership cannot default local because remote links would route to the wrong host.
   it('reports an unresolved owner as unknown', () => {
     mocks.runtimeEnvironmentIdOrLocalUnlessTwin.mockReturnValue(null)
     mocks.getConnectionIdFromState.mockReturnValue(undefined)

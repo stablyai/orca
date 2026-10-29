@@ -9,11 +9,7 @@ import { ClaudeIcon, GeminiIcon, OpenAIIcon, OpenCodeGoIcon } from './icons'
 import { translate } from '@/i18n/i18n'
 import { getUsageOwnerHostScope, type RemoteUsageOwner } from './use-owner-usage-rate-limits'
 
-// Why: a brand-new user has no configured provider, so the bottom-left would
-// otherwise be empty but for a refresh icon with nothing to refresh. This CTA
-// names the surface and routes to AI Provider Accounts — connecting an account
-// there is what makes the usage chips (and account switching) appear here.
-// A remote owner's empty state names that host: this device's setup cannot fill it.
+// Name the empty usage surface and route setup to its owning host; client-local setup cannot fill a remote bar.
 export function StatusBarUsageEmptyCta({
   remoteOwner
 }: {
@@ -24,8 +20,7 @@ export function StatusBarUsageEmptyCta({
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
   const dismissUsageEmptyState = useAppStore((s) => s.dismissUsageEmptyState)
 
-  // Why: the accounts pane lists every provider, so we don't preselect a
-  // section ID — a brand-new user has no "Claude" or "Codex" yet.
+  // Open all providers because a new user has no provider selection yet.
   const handleOpenSettings = useCallback(() => {
     recordFeatureInteraction('usage-tracking')
     openSettingsTarget({
@@ -79,8 +74,7 @@ export function StatusBarUsageEmptyCta({
                     'Agent usage limits'
                   )}
             </div>
-            {/* Why: permanently hide the teaching CTA — styling mirrors the
-                SetupGuideSidebarEntry hover-state icon (muted → foreground). */}
+            {/* Mirror the setup-guide dismiss control so hiding this teaching CTA stays recognizable. */}
             <Tooltip>
               <TooltipTrigger asChild>
                 <button
@@ -119,8 +113,7 @@ export function StatusBarUsageEmptyCta({
                   'Connect your AI provider accounts to see their usage in real time and easily switch between accounts.'
                 )}
               </p>
-              {/* Why: name the full provider set so the feature doesn't read as
-                  support for just one agent. */}
+              {/* Name the provider set so setup does not imply support for only one agent. */}
               <div className="flex items-center gap-1.5 text-muted-foreground">
                 <span>
                   {translate(

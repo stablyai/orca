@@ -7,11 +7,12 @@ import type {
   AgentSessionSubscribeEvent,
   AgentSessionTurnCompletionEvent
 } from '../../../shared/agent-session-wire'
-import type { AgentSessionConversationOutline } from '../../../shared/agent-session-conversation-outline'
-import { AGENT_SESSION_CONVERSATION_COMMAND_TIMEOUT_MS } from '../../../shared/agent-session-conversation-command'
+import type { AgentSessionConversationOutline } from '../../../shared/agent-session/agent-session-conversation-outline'
+import { AGENT_SESSION_CONVERSATION_COMMAND_TIMEOUT_MS } from '../../../shared/agent-session/agent-session-conversation-command'
 import {
   AGENT_SESSION_ATTENTION_ACK_RUNTIME_CAPABILITY,
   AGENT_SESSION_CONVERSATION_OUTLINE_RUNTIME_CAPABILITY,
+  AGENT_SESSION_CONTINUATION_CONTEXT_RUNTIME_CAPABILITY,
   AGENT_SESSION_ITEM_DETAIL_RUNTIME_CAPABILITY,
   AGENT_SESSION_PROMPT_CANCEL_RUNTIME_CAPABILITY,
   AGENT_SESSION_QUESTION_ANSWERS_RUNTIME_CAPABILITY,
@@ -19,9 +20,13 @@ import {
   AGENT_SESSION_REPEATED_STOP_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_CLI_SOURCE_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_REGENERATE_NAME_RUNTIME_CAPABILITY,
+  STRUCTURED_AGENT_SESSION_RENAME_RUNTIME_CAPABILITY,
   type RuntimeCapability
 } from '../../../shared/protocol-version'
-import { AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY } from '../../../shared/agent-session-create-capabilities'
+import {
+  AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY,
+  AGENT_SESSION_CREATE_OPTIONS_MODE_RUNTIME_CAPABILITY
+} from '../../../shared/agent-session-create-capabilities'
 import { callRuntimeRpc, runtimeEnvironmentSupportsCapability } from './runtime-rpc-client'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import {
@@ -48,10 +53,28 @@ async function structuredAgentSessionHostSupports(
   }
 }
 
+export function supportsStructuredAgentSessionContinuationContext(
+  target: RuntimeClientTarget
+): Promise<boolean> {
+  return structuredAgentSessionHostSupports(
+    target,
+    AGENT_SESSION_CONTINUATION_CONTEXT_RUNTIME_CAPABILITY
+  )
+}
+
 export function supportsStructuredAgentSessionPromptCancel(
   target: RuntimeClientTarget
 ): Promise<boolean> {
   return structuredAgentSessionHostSupports(target, AGENT_SESSION_PROMPT_CANCEL_RUNTIME_CAPABILITY)
+}
+
+export function supportsStructuredAgentSessionCreateOptionsMode(
+  target: RuntimeClientTarget
+): Promise<boolean> {
+  return structuredAgentSessionHostSupports(
+    target,
+    AGENT_SESSION_CREATE_OPTIONS_MODE_RUNTIME_CAPABILITY
+  )
 }
 
 export function supportsStructuredAgentSessionCreateMessage(
@@ -131,10 +154,11 @@ const STRUCTURED_AGENT_SESSION_METHOD_TIMEOUT_MS: ReadonlyMap<string, number> = 
   ['agentSession.conversationCommand', AGENT_SESSION_CONVERSATION_COMMAND_TIMEOUT_MS],
   // The host may start an agent at rest before rewinding it, as it does for a command.
   ['agentSession.rewind', 195_000],
-  // A waiting catalog read lasts as long as the host's listing: Claude's is 60 s, after up to 15 s
-  // for an account switch to settle and 5 s of login-shell environment.
+  // Waiting model catalogs can take Claude’s 60s listing plus 15s account switch and 5s login environment.
   ['agentSession.modelCatalog', 90_000],
-  ['agentSession.sleepWorkspace', 120_000]
+  ['agentSession.sleepWorkspace', 120_000],
+  // All bounded-concurrency provider starts and dispatch settlements precede the reply.
+  ['agentSession.restartContinue', 600_000]
 ])
 
 export async function callStructuredAgentSession<TResult>(
@@ -142,7 +166,7 @@ export async function callStructuredAgentSession<TResult>(
   method: string,
   params?: unknown,
   /** For a caller that checked the remote host's compatibility itself, just before. */
-  options: { skipCompatibilityCheck?: true } = {}
+  options: { skipCompatibilityCheck?: true; beforeSend?: () => void } = {}
 ): Promise<TResult> {
   if (
     method === 'agentSession.rewind' &&
@@ -155,7 +179,7 @@ export async function callStructuredAgentSession<TResult>(
     throw new Error('Rewinding requires a newer Orca server. Update the server and try again.')
   }
   const timeoutMs = STRUCTURED_AGENT_SESSION_METHOD_TIMEOUT_MS.get(method)
-  return timeoutMs === undefined && !options.skipCompatibilityCheck
+  return timeoutMs === undefined && !options.skipCompatibilityCheck && !options.beforeSend
     ? callRuntimeRpc<TResult>(target, method, params)
     : callRuntimeRpc<TResult>(target, method, params, {
         ...(timeoutMs === undefined ? {} : { timeoutMs }),
@@ -219,6 +243,16 @@ export function supportsStructuredAgentSessionRegenerateName(
   return structuredAgentSessionHostSupports(
     target,
     STRUCTURED_AGENT_SESSION_REGENERATE_NAME_RUNTIME_CAPABILITY
+  )
+}
+
+/** Whether the owning host saves a chat's rename; an unproven host keeps it on the tab. */
+export function supportsStructuredAgentSessionRename(
+  target: RuntimeClientTarget
+): Promise<boolean> {
+  return structuredAgentSessionHostSupports(
+    target,
+    STRUCTURED_AGENT_SESSION_RENAME_RUNTIME_CAPABILITY
   )
 }
 

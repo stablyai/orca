@@ -30,17 +30,14 @@ export function dropHydratedIdleClaudeSubagents(
     return payload
   }
   const activeSubagents = payload.subagents.filter((subagent) => subagent.state !== 'idle')
-  // Why: an idle teammate's liveness can't be proven across a restart (its TeammateIdle confirmation is in-memory); prune so a dead pile can't resurrect — a live teammate re-earns its row via SubagentStart.
+  // Idle teammates cannot prove liveness across restart; fresh hooks must restore them.
   return {
     ...payload,
     subagents: activeSubagents.length > 0 ? activeSubagents : undefined
   }
 }
 
-/** Rows written before `mainAgent` existed persisted `claudeLeadBoundaryChildOnly: true` instead: the
- *  main agent had settled and child agents alone held the row `working`. That is `mainAgent.state === 'done'`
- *  stored as a boolean, so it only fills an absent `mainAgent`; a row carrying both keeps `mainAgent`. The
- *  flag stays readable until every user's file has been rewritten without it. */
+/** Old caches use claudeLeadBoundaryChildOnly for a settled main agent; honor it only without mainAgent. */
 function legacyChildOnlyBoundaryMainAgent(
   payload: ParsedAgentStatusPayload,
   record: Record<string, unknown>,
@@ -53,8 +50,7 @@ function legacyChildOnlyBoundaryMainAgent(
   ) {
     return undefined
   }
-  // Why: the gated working row stamps the main agent's end as `turnCompletedAt`; the row clock is the
-  // nearest fact an older row that lacks it can offer.
+  // Older rows may lack the main-agent end stamp; use their row clock as the fallback.
   return { state: 'done', stateStartedAt: payload.turnCompletedAt ?? stateStartedAt }
 }
 
@@ -73,7 +69,7 @@ export function sanitizeHydratedEntry(
   if (record.paneKey !== paneKey) {
     return null
   }
-  // Why: structured rows are never written; the host republishes the live projection on restore.
+  // Structured rows come from the journal projection, never this cache.
   if (record.structuredHost !== undefined) {
     return null
   }
@@ -81,7 +77,6 @@ export function sanitizeHydratedEntry(
   if (tabId !== undefined && (typeof tabId !== 'string' || tabId.length === 0)) {
     return null
   }
-  // Why: a stored tabId that diverges from the paneKey's tab segment is corruption; drop instead of hydrating an inconsistent row.
   if (typeof tabId === 'string' && tabId !== parsedPaneKey.tabId) {
     return null
   }
@@ -101,7 +96,6 @@ export function sanitizeHydratedEntry(
   ) {
     return null
   }
-  // Why: connectionId is null (local) or string (relay); any other shape is rejected to keep the typed surface honest.
   const connectionIdRaw = record.connectionId
   let connectionId: string | null
   if (connectionIdRaw === null || connectionIdRaw === undefined) {
@@ -126,7 +120,7 @@ export function sanitizeHydratedEntry(
   const claudeRunningNonAgentTask =
     typeof record.claudeRunningNonAgentTask === 'boolean'
       ? record.claudeRunningNonAgentTask
-      : // Why: the legacy flag was only ever written while no shell ran beside the children.
+      : // The legacy child-only flag also proved no shell work remained.
         legacyBoundaryMainAgent
         ? false
         : undefined

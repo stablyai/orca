@@ -27,16 +27,7 @@ export type LocalSshBrowserRouteDependencies = {
   getAuthority: (targetId: string) => { providerEpoch: string; connectionGeneration: number }
 }
 
-/**
- * Loopback SOCKS listener for a directly-connected SSH target, dialing through
- * the in-process SSH execution route — no pairing, no tunnel.
- *
- * The listener's port must stay stable for the lifetime of every partition
- * proxied at it, so the server outlives SSH reconnects: each dial lazily
- * re-resolves the execution route under the target's *current* authority, and
- * a dial while the target is disconnected or mid-rotation fails the SOCKS
- * request instead of ever falling back to a direct local connection.
- */
+// Keep the SOCKS port stable across SSH reconnects for sessions already proxied through it.
 export class LocalSshBrowserRoute {
   private readonly socks: RemoteBrowserSocksServer
   private executionRoute: Awaited<ReturnType<BrowserNetworkExecutionRouteResolver>> | null = null
@@ -77,15 +68,7 @@ export class LocalSshBrowserRoute {
     return openExecutionRouteSocketAsDuplex(route.connect(target))
   }
 
-  /**
-   * Classifies whether the SSH server permits TCP forwarding by dialing a
-   * loopback port that is closed on any sane host: a channel-level refusal
-   * proves forwarding is allowed, while the wire's ADMINISTRATIVELY_PROHIBITED
-   * reason (AllowTcpForwarding no / PermitOpen) proves it is not. Anything
-   * else — timeout, refused, unknown wording, non-ssh2 transports — reads as
-   * ok: the probe exists to explain failures, never to block a setup that
-   * might work, so misclassification must only ever be a missed explanation.
-   */
+  // Destination failures are inconclusive: port 9 may be closed even when forwarding is allowed.
   async probeForwarding(
     timeoutMs = 4_000
   ): Promise<'ok' | 'forwarding-blocked' | 'ssh-unavailable'> {
@@ -148,8 +131,7 @@ export class LocalSshBrowserRoute {
         providerEpoch: authority.providerEpoch,
         connectionGeneration: authority.connectionGeneration
       },
-      // Why: only the native/wsl resolvers read these; the ssh resolver fences
-      // on the authority embedded in the execution host instead.
+      // SSH uses executionHost authority; runtimeId and runtimeRevision apply only to native/WSL.
       runtimeId: 'local-ssh-browser-route',
       runtimeRevision: 0
     })
@@ -158,7 +140,6 @@ export class LocalSshBrowserRoute {
       throw new Error('browser_local_route_closed')
     }
     this.executionRoute = route
-    // Why: rotation aborts the route; dropping it here makes the next dial re-resolve.
     void route.whenInvalidated?.then(() => {
       if (this.executionRoute === route) {
         this.executionRoute = null
@@ -169,16 +150,9 @@ export class LocalSshBrowserRoute {
   }
 }
 
-/** RFC 4254 SSH_OPEN_ADMINISTRATIVELY_PROHIBITED — what sshd sends for AllowTcpForwarding no / PermitOpen. */
 const SSH_OPEN_ADMINISTRATIVELY_PROHIBITED = 1
 
-/**
- * Trusts the wire's numeric reason code first (ssh2 attaches it as `reason`;
- * every RFC 4254 server sends it, wording-independent). The exact OpenSSH
- * phrase is a fallback for errors that lost the code in transit. Broad word
- * matching ("denied", "forbidden") is deliberately absent — a firewall's
- * connect-failure text must never read as a policy block.
- */
+// Prefer numeric SSH reasons; broad text matching could mistake destination refusal for policy denial.
 function isAdministrativelyProhibited(error: Error): boolean {
   const reason = (error as Error & { reason?: unknown }).reason
   if (typeof reason === 'number') {
@@ -200,7 +174,6 @@ async function defaultDependencies(): Promise<LocalSshBrowserRouteDependencies> 
   }
 }
 
-/** One listener per SSH target for the app session; the port never moves under its partitions. */
 export async function retainLocalSshBrowserRoute(
   targetId: string,
   dependencies?: LocalSshBrowserRouteDependencies
@@ -222,7 +195,6 @@ export async function retainLocalSshBrowserRoute(
   }
 }
 
-/** Probe the retained route for a target; the route must have been retained first. */
 export async function probeLocalSshBrowserRouteForwarding(
   targetId: string
 ): Promise<'ok' | 'forwarding-blocked' | 'ssh-unavailable'> {

@@ -7,7 +7,7 @@ import {
   VALID_ED25519_HOST_KEY,
   ssh2Mock
 } from '../__tests__/ssh-connection-test-client'
-import { resetSshConnectionMocks } from './ssh-connection-test-harness'
+import { nextSshClientCreation, resetSshConnectionMocks } from './ssh-connection-test-harness'
 import { createCallbacks, createTarget } from './ssh-connection-test-fixtures'
 import { SshConnection } from './ssh-connection'
 
@@ -64,12 +64,21 @@ describe('SshConnection', () => {
     )
   })
 
-  it('enables TCP_NODELAY on the ssh2 client after ready', async () => {
+  it('enables TCP_NODELAY before SSH authentication completes', async () => {
+    ssh2Mock.connectSequence = ['silent']
     const conn = new SshConnection(createTarget(), createCallbacks())
-    await conn.connect()
+    const clientCreated = nextSshClientCreation()
+    const connected = conn.connect()
+    await clientCreated
 
-    expect(clientInstances).toHaveLength(1)
-    expect(clientInstances[0].setNoDelay).toHaveBeenCalledWith(true)
+    try {
+      expect(conn.getState().status).toBe('connecting')
+      expect(clientInstances[0].setNoDelay).toHaveBeenCalledWith(true)
+    } finally {
+      emitSshEvent('ready')
+      await connected
+      conn.disconnect()
+    }
   })
 
   it('captures the negotiated SSH server key fingerprint', async () => {
@@ -98,8 +107,7 @@ describe('SshConnection', () => {
     expect(firstVerifier).toBeTypeOf('function')
     expect(secondVerifier).toBeTypeOf('function')
 
-    // Real blobs: the verifier now identifies the key before recording a fingerprint, so a
-    // placeholder string would be refused before it could reach the generation check this covers.
+    // Use identifiable key blobs so verification reaches the generation fence.
     const newerKey = Buffer.from(
       'AAAAC3NzaC1lZDI1NTE5AAAAILu7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7',
       'base64'
@@ -125,7 +133,6 @@ describe('SshConnection', () => {
     await conn.connect()
 
     expect(eventHandlers.has('ready')).toBe(false)
-    // The remaining error listener is the steady-state disconnect handler.
     expect(eventHandlers.has('error')).toBe(true)
   })
 
@@ -158,21 +165,13 @@ describe('SshConnection', () => {
   })
 
   it('enables TCP_NODELAY on the new ssh2 client after a reconnect cycle', async () => {
-    // Why: guards the "Nagle is re-enabled because someone refactored only
-    // the initial connect path" regression class. attemptConnect bumps
-    // connectGeneration on every call, and both the initial connect and the
-    // explicit reconnect path go through doSsh2Connect → client.on('ready').
-    // The new client must also receive setNoDelay(true).
+    // Reconnect must enable TCP_NODELAY on its new client too.
     const conn = new SshConnection(createTarget(), createCallbacks())
     await conn.connect()
     expect(clientInstances).toHaveLength(1)
     expect(clientInstances[0].setNoDelay).toHaveBeenCalledWith(true)
 
-    // Simulate the reconnect path: a fresh attemptConnect run via the
-    // internal helper that scheduleReconnect uses. Easiest from the public
-    // API is to call connect() again — disposed/connected guard rejects, so
-    // we exercise the path via a private call. Use the bracket-access
-    // form to keep the test free of `any` casts.
+    // Drive the private attempt path; public connect guards would reject this simulated reconnect.
     const privateConn = conn as unknown as {
       attemptConnect: () => Promise<void>
     }
@@ -425,7 +424,6 @@ describe('SshConnection', () => {
       )
       expect(conn.hasCachedCredential()).toBe(true)
 
-      // Reconnect: the OTP prompt must be asked again (never auto-answered from a cache).
       onCredentialRequest.mockClear()
       ssh2Mock.connectSequence = ['silent']
       const privateConn = conn as unknown as { attemptConnect: () => Promise<void> }
@@ -443,9 +441,7 @@ describe('SshConnection', () => {
         finish2
       )
       await vi.waitFor(() => expect(finish2).toHaveBeenCalledWith(['654321']))
-      // Why not answered from the password cache: this round only sends the
-      // OTP prompt (no password-looking prompt), so it must reach the user
-      // as a fresh 'keyboard-interactive' request every time.
+      // OTP-only rounds must always ask; password caching cannot answer them.
       expect(onCredentialRequest).toHaveBeenCalledWith(
         'target-1',
         'keyboard-interactive',
@@ -479,8 +475,7 @@ describe('SshConnection', () => {
       await vi.waitFor(() => expect(finish).toHaveBeenCalledWith(['password-123']))
       expect(onCredentialRequest).toHaveBeenCalledTimes(1)
 
-      // The server rejected that password and opened a new round for it. Auto-answering from the
-      // cache again would replay the rejected value up to the round cap without asking the user.
+      // A fresh password round means the cached value failed; do not replay it to the prompt cap.
       onCredentialRequest.mockClear()
       const finish2 = vi.fn()
       emitSshEvent(
@@ -526,9 +521,6 @@ describe('SshConnection', () => {
       )
       await vi.waitFor(() => expect(finish).toHaveBeenCalledWith([]))
 
-      // Why no server error event: a cancelled prompt now fails the attempt
-      // immediately instead of waiting on a server round-trip that will
-      // never come from a user decision.
       await expect(connectPromise).rejects.toThrow('Keyboard-interactive authentication cancelled')
       expect(onCredentialRequest).toHaveBeenCalledTimes(1)
       expect(conn.getState().status).toBe('auth-failed')
@@ -605,11 +597,7 @@ describe('SshConnection', () => {
         finish
       )
       await vi.waitFor(() => expect(finish).toHaveBeenCalledWith(['000000']))
-      // Why the second connectSequence entry is a plain error rather than
-      // another keyboard-interactive round: an incorrect OTP is a distinct
-      // case from cancellation — the user DID answer, the server rejected
-      // it — so this must not go through the keyboardInteractiveCancelled
-      // short-circuit at all.
+      // Reject an answered OTP through auth failure, distinct from explicit prompt cancellation.
       emitSshEvent('error', new Error('All configured authentication methods failed'))
 
       await expect(connectPromise).rejects.toThrow('All configured authentication methods failed')

@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../shared/execution-host'
 import type { OrcaVmRecipe } from '../../../shared/orca-yaml-hook-types'
+import type { EphemeralVmFailure } from '../../../shared/ephemeral-vm-failure-copy'
+import { ephemeralVmErrorText } from '@/lib/ephemeral-vm-error-copy'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 
 type EphemeralVmRecipeOptionsArgs = {
   enabled: boolean
@@ -20,7 +23,8 @@ export function useEphemeralVmRecipeOptions(args: EphemeralVmRecipeOptionsArgs):
 } {
   const [recipes, setRecipes] = useState<OrcaVmRecipe[]>([])
   const [selectedRecipeId, setSelectedRecipeId] = useState<string | null>(null)
-  const [error, setError] = useState<string | null>(null)
+  // Failures stay coded until render so a language switch relocalizes them.
+  const [errors, setErrors] = useState<EphemeralVmFailure[]>([])
   const requestGeneration = useRef(0)
   const canLoad =
     args.enabled &&
@@ -36,7 +40,7 @@ export function useEphemeralVmRecipeOptions(args: EphemeralVmRecipeOptionsArgs):
       if (resetSelection) {
         setRecipes([])
         setSelectedRecipeId(null)
-        setError(null)
+        setErrors([])
       }
       if (!canLoad || !args.repoId) {
         return
@@ -61,13 +65,20 @@ export function useEphemeralVmRecipeOptions(args: EphemeralVmRecipeOptionsArgs):
           const diagnosticMessages = (result.diagnostics ?? []).map((diagnostic) => {
             const recipeLabel = `environmentRecipes[${diagnostic.index}]`
             const fieldLabel = diagnostic.field ? `.${diagnostic.field}` : ''
-            return `${recipeLabel}${fieldLabel}: ${diagnostic.message}`
+            return { error: `${recipeLabel}${fieldLabel}: ${diagnostic.message}` }
           })
-          setError(
-            [result.status === 'error' ? result.message : null, ...diagnosticMessages]
-              .filter((message): message is string => Boolean(message))
-              .join('\n') || null
-          )
+          setErrors([
+            ...(result.status === 'error' && result.message
+              ? [
+                  {
+                    error: result.message,
+                    errorCode: result.messageCode,
+                    errorParams: result.messageParams
+                  }
+                ]
+              : []),
+            ...diagnosticMessages
+          ])
         })
         .catch((cause) => {
           if (generation !== requestGeneration.current) {
@@ -75,7 +86,7 @@ export function useEphemeralVmRecipeOptions(args: EphemeralVmRecipeOptionsArgs):
           }
           setRecipes([])
           setSelectedRecipeId(null)
-          setError(cause instanceof Error ? cause.message : String(cause))
+          setErrors([{ error: cause instanceof Error ? cause.message : String(cause) }])
         })
     },
     [args.initialRecipeId, args.repoId, canLoad]
@@ -99,5 +110,7 @@ export function useEphemeralVmRecipeOptions(args: EphemeralVmRecipeOptionsArgs):
     })
   }, [load])
 
+  useUiLanguageRevision()
+  const error = errors.map(ephemeralVmErrorText).filter(Boolean).join('\n') || null
   return { recipes, selectedRecipeId, setSelectedRecipeId, error }
 }

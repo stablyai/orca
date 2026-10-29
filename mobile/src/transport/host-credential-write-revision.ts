@@ -14,7 +14,6 @@ export function clearHostCredentialWriteRevision(hostId: string): void {
   revisionByHostId.delete(hostId)
 }
 
-/** Test-only: clear session credential generations between cases. */
 export function resetHostCredentialWriteRevisionsForTests(): void {
   nextRevision = 1
   revisionByHostId.clear()

@@ -41,7 +41,7 @@ export function registerWorktreeCreateHandlers(context: WorktreeIpcContext): voi
     'worktrees:create',
     async (_event, rawArgs: CreateWorktreeArgs): Promise<CreateWorktreeResult> => {
       const args = normalizeLinkedWorkItemFields(rawArgs)
-      // Why span here: parent the child git spans for the trace tree; don't attach branch name/remote URL (user content) — repo ID is the safer correlator.
+      // Parent Git spans without recording user branch names or remote URLs.
       return withWorktreeSpan({ stage: 'create' }, async (span) => {
         const repo = store.getRepo(args.repoId)
         if (!repo) {
@@ -61,7 +61,7 @@ export function registerWorktreeCreateHandlers(context: WorktreeIpcContext): voi
         }
 
         let result: CreateWorktreeResult
-        // The handler owns the events so a failed create can still say where it died.
+        // Keep failure telemetry in the handler so rejected creates retain their stage.
         const telemetry = beginWorkspaceCreateTelemetry({
           source: args.telemetrySource,
           entryPoint: 'app',
@@ -75,17 +75,15 @@ export function registerWorktreeCreateHandlers(context: WorktreeIpcContext): voi
           keyOf: (worktreeId) => workspaceLifecycleKey(getRepoExecutionHostId(repo), worktreeId)
         })
         try {
-          // Why: wrap only the helpers; the pre-validation throws above are IPC-shape bugs, not the git/filesystem failures the funnel tracks.
+          // Track operational failures; malformed IPC rejected above is outside the creation funnel.
           if (isFolderRepo(repo)) {
-            // A folder workspace is a registration, not a filesystem create, so it is host-agnostic.
+            // Folder creation only registers metadata, so it needs no filesystem host route.
             result = createFolderWorkspace(createArgs, repo, store)
           } else {
-            // Resolve the host rather than reading the raw field: an `executionHostId: 'ssh:*'`-only
-            // row read as local here and ran `git worktree add` on the client against a remote path,
-            // while the runtime sibling on the same repo already resolved.
+            // Resolve executionHostId-only SSH ownership before any local Git operation.
             const createRoute = requireWorktreeCreateRoute(repo)
             if (createRoute.kind === 'ssh') {
-              // Tagged before the refusal so the failed-create event keeps naming its host.
+              // Record ownership before refusal so failure telemetry retains its host.
               telemetry.timing.recordExecutionHost('ssh')
               throw new SshHostNotServedError(createRoute.connectionId)
             }
@@ -111,7 +109,6 @@ export function registerWorktreeCreateHandlers(context: WorktreeIpcContext): voi
           addWorktreeCreatePhaseAttributes(span, result.timing)
         }
 
-        // Why: reaching here means create succeeded (helpers throw); skip a separate workspace_initialized (telemetry-plan.md§Deferred); never send the branch name.
         telemetry.succeeded(result.timing)
 
         if (isFolderRepo(repo)) {
@@ -125,8 +122,7 @@ export function registerWorktreeCreateHandlers(context: WorktreeIpcContext): voi
           branch: result.worktree.branch
         })
 
-        // Why stamped last: the create's own change notification bumped the generation, so this
-        // names the catalog that contains the new worktree.
+        // Stamp after the create notification bumps generation so the reply names its resulting catalog.
         return { ...result, catalogVersion: getLocalWorktreeCatalogVersion(repo.id) }
       })
     }

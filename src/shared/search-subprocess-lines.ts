@@ -4,18 +4,24 @@ const SEARCH_SUBPROCESS_INITIAL_LINE_BUFFER_BYTES = 4 * 1024
 export class SearchSubprocessLineAccumulator {
   private buffer: Buffer | null = null
   private bytes = 0
+  private discardingLine = false
 
-  constructor(private readonly maxLineBytes = SEARCH_SUBPROCESS_MAX_LINE_BYTES) {
+  constructor(
+    private readonly maxLineBytes = SEARCH_SUBPROCESS_MAX_LINE_BYTES,
+    private readonly oversizedLine: 'reject' | 'discard' = 'reject'
+  ) {
     if (!Number.isSafeInteger(maxLineBytes) || maxLineBytes < 0) {
       throw new RangeError('Search line limit must be a non-negative safe integer')
     }
   }
 
+  /** False reports an oversized line, even when discard mode continues with later lines. */
   push(rawChunk: Buffer | string, onLine: (line: string) => void): boolean {
     // Three bytes per UTF-16 code unit bounds UTF-8 size without re-encoding complete batches.
     if (
       typeof rawChunk === 'string' &&
       this.bytes === 0 &&
+      !this.discardingLine &&
       rawChunk.endsWith('\n') &&
       rawChunk.length * 3 <= this.maxLineBytes
     ) {
@@ -28,13 +34,31 @@ export class SearchSubprocessLineAccumulator {
     }
     const chunk = Buffer.isBuffer(rawChunk) ? rawChunk : Buffer.from(rawChunk, 'utf8')
     let cursor = 0
+    let overflowed = false
     while (cursor < chunk.length) {
       const newline = chunk.indexOf(0x0a, cursor)
       const end = newline === -1 ? chunk.length : newline
       const segmentBytes = end - cursor
+      if (this.discardingLine) {
+        if (newline === -1) {
+          return !overflowed
+        }
+        this.discardingLine = false
+        cursor = newline + 1
+        continue
+      }
       if (this.bytes + segmentBytes > this.maxLineBytes) {
         this.clear()
-        return false
+        if (this.oversizedLine === 'reject') {
+          return false
+        }
+        overflowed = true
+        this.discardingLine = newline === -1
+        if (newline === -1) {
+          return false
+        }
+        cursor = newline + 1
+        continue
       }
 
       if (newline !== -1 && this.bytes === 0) {
@@ -49,20 +73,24 @@ export class SearchSubprocessLineAccumulator {
       }
 
       if (newline === -1) {
-        return true
+        return !overflowed
       }
       cursor = newline + 1
     }
-    return true
+    return !overflowed
   }
 
   finish(): string | null {
+    if (this.discardingLine) {
+      this.clear()
+    }
     return this.bytes > 0 ? this.takeLine() : null
   }
 
   clear(): void {
     this.buffer = null
     this.bytes = 0
+    this.discardingLine = false
   }
 
   /** Capacity of the retained growable buffer, or null once it has been released. */

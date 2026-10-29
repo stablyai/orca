@@ -9,19 +9,15 @@ export function readLoginAuthSnapshot(authJsonPath: string): string | null | und
     if (code === 'ENOENT' || code === 'ENOTDIR') {
       return null
     }
-    // Why: codex can atomically replace auth.json while the poll runs; a later
-    // poll will observe the stable credential. An unreadable initial file must
-    // disable the shortcut rather than look like a fresh login.
+    // Unreadable snapshots cannot prove that a later credential belongs to this login.
     return undefined
   }
 }
 
-/** Whether a login has written credentials of its own since the snapshot was taken. */
 export function loginAuthChanged(
   initial: string | null | undefined,
   current: string | null | undefined
 ): boolean {
-  // Why: metadata-only touches can happen before OAuth finishes. Requiring new
-  // credential bytes prevents reauthentication from being killed prematurely.
+  // Compare credential bytes so metadata-only touches cannot prematurely end reauthentication.
   return initial !== undefined && current !== undefined && current !== null && current !== initial
 }

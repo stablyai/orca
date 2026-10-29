@@ -156,8 +156,7 @@ describe('workspace cleanup cache hydration', () => {
       expect(store.getState().workspaceCleanupProgress?.scannedWorktreeCount).toBe(2)
     })
 
-    // Dialog closes at 40% and reopens: reopening adopts the in-flight scan.
-    // The dialog joins via another scan call, which must not restart anything.
+    // Reopening at 40% joins the existing scan instead of restarting it.
     const rejoined = store.getState().scanWorkspaceCleanup()
     expect(scan).toHaveBeenCalledTimes(1)
 

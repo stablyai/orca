@@ -6,13 +6,9 @@ import {
   WINDOWS_REG_SZ
 } from './windows-native-registry'
 
-// Why this file exists: the addon behind `@orca/windows-registry` is vendored source rather
-// than a published package, so nothing upstream proves it still decodes the registry the way
-// Orca's PATH readers expect. These cases check it against `reg.exe`, which is the only
-// independent oracle available on the box.
+// Compare the native addon with reg.exe as an independent registry reader.
 const describeWindows = process.platform === 'win32' ? describe : describe.skip
 
-/** `reg query` prints `    <name>    <TYPE>    <data>` on one line; take the type and data. */
 function regQuery(key: string, name: string): { type: string; data: string } | null {
   let stdout: string
   try {
@@ -20,8 +16,7 @@ function regQuery(key: string, name: string): { type: string; data: string } | n
   } catch {
     return null
   }
-  // reg.exe echoes the name as stored, so a machine holding PATH rather than Path would
-  // otherwise miss the line and make the oracle look absent.
+  // Registry value names are case-insensitive; reg.exe preserves their stored casing.
   const wanted = name.toLowerCase()
   const line = stdout
     .split(/\r?\n/)
@@ -41,7 +36,6 @@ describeWindows('vendored windows registry addon', () => {
 
     const oracle = regQuery('HKCU\\Environment', 'Path')
     if (!oracle) {
-      // A user account may genuinely have no user-scoped PATH; then the addon must agree.
       expect(Object.keys(values ?? {}).some((name) => name.toLowerCase() === 'path')).toBe(false)
       return
     }

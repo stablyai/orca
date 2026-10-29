@@ -43,7 +43,6 @@ type PairedTunnel = {
   onSessionClose: ReturnType<typeof vi.fn>
 }
 
-// Both peers are real so a per-stream failure can be told apart from a tunnel-wide teardown.
 function createPairedTunnel(
   claimAggregateRetainedBytes?: (bytes: number) => (() => void) | null
 ): PairedTunnel {

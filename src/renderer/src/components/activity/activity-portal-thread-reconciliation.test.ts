@@ -7,7 +7,7 @@ import {
 
 const thread = (tabId: string, leafId: string): ActivityPortalThreadRef => ({
   paneKey: `${tabId}:${leafId}`,
-  worktree: { id: `wt-${tabId}` },
+  worktree: { id: tabId === 'tab-c' ? 'wt-other' : 'wt-shared' },
   tab: { id: tabId }
 })
 
@@ -57,9 +57,7 @@ function replaySwapCascade(args: {
 }
 
 describe('resolveActivityPortalSwap cascade', () => {
-  // Why this matters: the swap effect writes setActivePortalSlotId/setDisplayedPaneKey straight from a
-  // layout effect. If 'swap-staged' could resolve on two consecutive commits it would toggle the slot
-  // forever on React's sync lane. It cannot, so the effect needs no churn budget.
+  // The layout effect writes slot/displayed-pane state synchronously; consecutive swap-staged results would toggle forever, so fixed selection must settle without a churn budget.
   it('never resolves swap-staged twice in a row for a fixed selection', () => {
     for (const selectedThread of ALL_THREADS) {
       for (const displayed of [null, ...ALL_THREADS]) {
@@ -73,7 +71,6 @@ describe('resolveActivityPortalSwap cascade', () => {
           kinds.filter((kind) => kind === 'swap-staged').length,
           `${label}: ${kinds.join(',')}`
         ).toBeLessThanOrEqual(1)
-        // And the cascade settles: no write at all once displayedPaneKey caught up.
         expect(kinds.at(-1), `${label}: ${kinds.join(',')}`).toBe('settle-visible')
       }
     }

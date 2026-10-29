@@ -1,5 +1,7 @@
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import { retireAtRestCommandSettings } from '../../native-chat/agent-session-wire/at-rest-command-context'
+import { createAgentModelCatalogSettingsExpiry } from '../../native-chat/agent-model-catalog/agent-model-catalog-account-expiry'
+import { agentModelCatalogStore } from '../../native-chat/agent-model-catalog/agent-model-catalog-store'
 import type { OnboardingChecklistState } from '../../../shared/onboarding-state-types'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import { getDefaultOnboardingState } from '../../../shared/onboarding-defaults'
@@ -8,7 +10,7 @@ import {
   nativeChatUpgradeTipVariant,
   parseNativeChatUpgradeTipAudience,
   type NativeChatUpgradeTipVariant
-} from '../../../shared/native-chat-upgrade-tip-audience'
+} from '../../../shared/native-chat/native-chat-upgrade-tip-audience'
 import {
   updateSettings as updateSettingsOperation,
   type SettingsMutationOperations
@@ -103,7 +105,7 @@ export class ProfilePreferences {
         rollback: () => {
           const currentEntries = new Map(Object.entries(runtime.state.settings))
           const nextEntries = new Map(Object.entries(next))
-          const restoredUpdates = Object.fromEntries(
+          const restoredUpdates: Record<string, unknown> = Object.fromEntries(
             Object.entries(previous).filter(
               ([key]) =>
                 updateKeys.has(key) && Object.is(currentEntries.get(key), nextEntries.get(key))
@@ -116,8 +118,13 @@ export class ProfilePreferences {
               Object.is(currentEntries.get(key), nextEntries.get(key))
             ) {
               Reflect.deleteProperty(restoredSettings, key)
+              restoredUpdates[key] = undefined
             }
           }
+          createAgentModelCatalogSettingsExpiry(agentModelCatalogStore, runtime.state.settings)(
+            restoredUpdates,
+            restoredSettings
+          )
           runtime.state.settings = restoredSettings
           retireAtRestCommandSettings(updateKeys)
         }
@@ -174,7 +181,6 @@ export class ProfilePreferences {
     return this.getOnboarding()
   }
 
-  /** Fails closed: a missing or damaged record reads as no tip. */
   getNativeChatUpgradeTipVariant(): NativeChatUpgradeTipVariant {
     return nativeChatUpgradeTipVariant(
       parseNativeChatUpgradeTipAudience(
@@ -188,7 +194,7 @@ export class ProfilePreferences {
   }
 
   setGitHubCache(cache: PersistedState['githubCache']): void {
-    // Why no scheduleSave: cache is memory-only and snapshotted to a sidecar at flush; persisting here rewrote the whole state file every poll cycle.
+    // Cache polls write a sidecar at flush; scheduling a full profile save here amplifies every poll.
     this[profilePreferencesContext].runtime.state.githubCache = cache
     this[profilePreferencesContext].runtime.githubCacheDirty = true
     this[profilePreferencesContext].runtime.githubCacheGeneration += 1
@@ -197,7 +203,6 @@ export class ProfilePreferences {
     }
   }
 
-  /** Hears every PR cache save, so a reader keyed off the cache needs no re-read on its own. */
   onGitHubCacheWritten(listener: () => void): () => void {
     this[profilePreferencesContext].runtime.githubCacheWriteListeners.add(listener)
     return () => {
@@ -222,7 +227,12 @@ export function notifyUIChanged(owner: ProfilePreferences): void {
   }
   const ui = owner.getUI()
   for (const listener of owner[profilePreferencesContext].runtime.uiChangeListeners) {
-    listener(ui)
+    // State is already applied; a broadcast failure must not fail the update (e.g. the shutdown checkpoint).
+    try {
+      listener(ui)
+    } catch (error) {
+      console.error('[preferences] UI change listener failed:', error)
+    }
   }
 }
 

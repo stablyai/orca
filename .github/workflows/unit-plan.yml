@@ -1,11 +1,6 @@
 name: Unit plan
 
-# Why its own workflow: the caller's `needs` gate the whole called workflow, so while this lived
-# inside unit-tests.yml it waited on static analysis and typecheck before it could even start —
-# and the shards then waited on it. Planning needs neither (its inputs are the checkout, a git
-# diff against HEAD^1, the import graph, and the checked-in timing baseline), so hoisting it out
-# lets it overlap the gate instead of queueing behind it. Measured: a median 93s off the shard
-# matrix's start.
+# Plan independently of static/type gates so checkout/diff/import-graph/timing work overlaps them; moving it out of unit-tests advanced shards by median 93s.
 on:
   workflow_call:
     inputs:
@@ -25,7 +20,7 @@ permissions:
 
 jobs:
   plan:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     outputs:
       shards: ${{ steps.plan.outputs.shards }}
@@ -40,6 +35,8 @@ jobs:
         env:
           ORCA_UNIT_SELECTION_MODE: ${{ inputs.selection_mode }}
           ORCA_PULL_REQUEST_DRAFT: ${{ github.event.pull_request.draft }}
+          # Twelve 4-vCPU hosted shards match the old 8-vCPU wall time; the repository variable can request 2 to 16.
+          ORCA_UNIT_FULL_SHARD_COUNT: ${{ vars.ORCA_UNIT_FULL_SHARD_COUNT || '12' }}
         run: node config/scripts/ci-unit-plan.mjs
       - uses: actions/upload-artifact@v7
         continue-on-error: true

@@ -1,10 +1,5 @@
-// Why: this is the original Unix socket / named pipe transport extracted from
-// runtime-rpc.ts. It preserves the exact same behavior: newline-delimited JSON,
-// 30s idle timeout (suspended while a dispatch is in flight), 1MB max message,
-// 32 max connections, chmod 0o600 on Unix.
-// It also owns the keepalive timer and per-connection abort signal so the
-// server-side handler can cancel long-poll dispatches when the client goes
-// away. See design doc §3.1.
+// Local Unix socket/named pipe RPC: NDJSON, 1-MB frames, 32 connections, Unix mode 0600 and 30s idle timeout suspended during dispatch.
+// Own per-connection cancellation and opt-in long-poll keepalives (design §3.1).
 import { createServer, type Server, type Socket } from 'node:net'
 import { chmodSync, existsSync, rmSync } from 'node:fs'
 import type { RpcMessageContext, RpcTransport } from './transport'
@@ -17,10 +12,7 @@ const DEFAULT_KEEPALIVE_INTERVAL_MS = 10_000
 export type UnixSocketTransportOptions = {
   endpoint: string
   kind: 'unix' | 'named-pipe'
-  // Why: how often to write `{"_keepalive":true}\n` frames while a dispatch
-  // is pending. Each write resets both the server-side idle timer and, once
-  // the client honours them, the client-side idle timer. Tests override this
-  // to avoid waiting 10 s for a frame.
+  // Keepalive writes reset host and supporting-client idle timers; tests shorten the 10s interval.
   keepaliveIntervalMs?: number
 }
 
@@ -92,8 +84,7 @@ export class UnixSocketTransport implements RpcTransport {
         resolve()
       })
     })
-    // Why: server.close() stops accepting new connections but waits for
-    // existing sockets; long-poll keepalives can otherwise hold shutdown open.
+    // server.close waits for existing sockets; long-poll keepalives must not hold shutdown open.
     for (const socket of Array.from(this.activeSockets)) {
       socket.destroy()
     }
@@ -108,18 +99,9 @@ export class UnixSocketTransport implements RpcTransport {
     let buffer = ''
     let retainedBytes = 0
     let oversized = false
-    // Why: each in-flight dispatch registers its own AbortController here so
-    // `socket.on('close')` can abort them all at once. Keeping the set scoped
-    // to the connection (rather than a single shared controller) means
-    // completing one dispatch does not abort any other dispatch still running
-    // on the same socket — future-proofing for a persistent CLI socket that
-    // multiplexes sequential requests.
+    // One controller per in-flight dispatch: close aborts all, but completing one must not cancel siblings.
     const inflight = new Set<() => void>()
-    // Why: Node's idle timer counts raw byte silence, so a slow dispatch (e.g.
-    // worktree.create on a large repo) reads as a dead peer and gets reaped.
-    // Suspend the reap while dispatches are pending; quiet connections without
-    // dispatches still reap after the timeout. On a local socket the kernel
-    // delivers close for a dead peer, so nothing else relied on byte silence.
+    // Byte silence does not mean death during slow dispatch; suspend idle reap until pending work completes. Local kernel close detects dead peers.
     const rearmIdleTimer = (): void => {
       if (!socket.destroyed) {
         socket.setTimeout(inflight.size > 0 ? 0 : RUNTIME_RPC_SOCKET_IDLE_TIMEOUT_MS)
@@ -148,9 +130,7 @@ export class UnixSocketTransport implements RpcTransport {
       buffer += chunk
       // setEncoding('utf8') keeps split codepoints intact, so chunk byte lengths add exactly.
       retainedBytes += Buffer.byteLength(chunk, 'utf8')
-      // Why: the Orca runtime lives in Electron main, so it must reject
-      // oversized local RPC frames instead of letting a local client grow an
-      // unbounded buffer and stall the app.
+      // Bound oversized frames before they grow buffers and stall Electron main.
       if (retainedBytes > MAX_RUNTIME_RPC_MESSAGE_BYTES) {
         oversized = true
         this.messageHandler?.('', (response) => {
@@ -175,9 +155,7 @@ export class UnixSocketTransport implements RpcTransport {
     })
   }
 
-  // Why: the keepalive timer is opt-in per request via `startKeepalive()`.
-  // Short RPCs never call it and pay no timer overhead; only long-poll
-  // handlers (e.g. orchestration.check --wait) arm it. See §3.1.
+  // Only opted-in long polls arm keepalives; short RPCs pay no timer cost (design §3.1).
   private dispatchMessage(
     socket: Socket,
     rawMessage: string,
@@ -186,9 +164,7 @@ export class UnixSocketTransport implements RpcTransport {
   ): void {
     let replied = false
     let keepaliveTimer: NodeJS.Timeout | null = null
-    // Why: each dispatch needs its own abort signal and keepalive timer
-    // cleanup. Socket close runs every cleanup without touching sibling
-    // dispatches that already replied on the same connection.
+    // Each dispatch owns abort/timer cleanup; socket close runs all without affecting already-completed siblings.
     const abortController = new AbortController()
     let cleanedUp = false
     const cleanupDispatch = (abort: boolean): void => {
@@ -232,7 +208,7 @@ export class UnixSocketTransport implements RpcTransport {
         }
         socket.write('{"_keepalive":true}\n')
       }, this.keepaliveIntervalMs)
-      // Why: don't hold the process open solely on the keepalive interval.
+      // Keepalive alone must not hold the process open.
       if (typeof keepaliveTimer.unref === 'function') {
         keepaliveTimer.unref()
       }

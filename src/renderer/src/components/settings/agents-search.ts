@@ -1,3 +1,8 @@
+import {
+  getClaudeSubagentNavigationTitle,
+  getClaudeSubagentNavigationDescription,
+  getClaudeSubagentNavigationSearchKeywords
+} from './claude-subagent-navigation-copy'
 import { getAgentCatalog } from '@/lib/agent-catalog'
 import {
   getAgentAwakeDescription,
@@ -25,6 +30,11 @@ import {
   getCodexTerminalServerIsolationSearchKeywords,
   getCodexTerminalServerIsolationTitle
 } from './codex-terminal-server-isolation-copy'
+import {
+  getCodexHistorySharingDescription,
+  getCodexHistorySharingSearchKeywords,
+  getCodexHistorySharingTitle
+} from './codex-history-sharing-copy'
 import { translate } from '@/i18n/i18n'
 import { searchKeywords, translateSearchKeyword, uniqueKeywords } from './settings-search-keywords'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
@@ -125,10 +135,21 @@ const getAllAgentsPaneSearchEntries = createLocalizedCatalog(() => [
     keywords: getAgentStatusHooksSearchKeywords()
   },
   {
+    id: 'claude-subagent-navigation',
+    title: getClaudeSubagentNavigationTitle(),
+    description: getClaudeSubagentNavigationDescription(),
+    keywords: getClaudeSubagentNavigationSearchKeywords()
+  },
+  {
     title: getAgentWorkspaceTrustTitle(),
     id: AGENT_WORKSPACE_TRUST_SEARCH_ENTRY_ID,
     description: getAgentWorkspaceTrustDescription(),
     keywords: getAgentWorkspaceTrustSearchKeywords()
+  },
+  {
+    title: getCodexHistorySharingTitle(),
+    description: getCodexHistorySharingDescription(),
+    keywords: getCodexHistorySharingSearchKeywords()
   },
   {
     title: getCodexTerminalServerIsolationTitle(),

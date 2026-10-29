@@ -54,9 +54,7 @@ describe('abortWhenRendererGone', () => {
   })
 
   it('ignores a main-frame navigation that starts but is blocked before it commits', () => {
-    // Why: Electron emits did-start-navigation before will-navigate gets to
-    // preventDefault() an external link or a stray file drop; the renderer
-    // document survives those, so the upload must too.
+    // did-start-navigation precedes blocked external navigation; the surviving document must keep its work.
     const sender = fakeSender()
     const { signal } = abortWhenRendererGone(sender)
 
@@ -87,5 +85,20 @@ describe('abortWhenRendererGone', () => {
     expect(sender.listenerCount('destroyed')).toBe(0)
     expect(sender.listenerCount('render-process-gone')).toBe(0)
     expect(sender.listenerCount('did-navigate')).toBe(0)
+  })
+
+  it('keeps one listener per event however many lifetimes overlap on a renderer', () => {
+    const sender = fakeSender()
+    const lifetimes = Array.from({ length: 25 }, () => abortWhenRendererGone(sender))
+
+    for (const event of ['destroyed', 'render-process-gone', 'did-navigate']) {
+      expect(sender.listenerCount(event)).toBe(1)
+    }
+    lifetimes[0].dispose()
+    sender.emit('did-navigate', 'file:///app', 200, 'OK')
+
+    expect(lifetimes[0].signal.aborted).toBe(false)
+    expect(lifetimes.slice(1).every(({ signal }) => signal.aborted)).toBe(true)
+    expect(sender.eventNames()).toEqual([])
   })
 })

@@ -1,7 +1,6 @@
 import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
-/** Failures inside this window count toward giving up; older ones have aged out. */
 export const SERVE_SUPERVISOR_FAILURE_WINDOW_MS = 15 * 60_000
 /** This many failures inside the window and the supervisor gives up until a new build or --force. */
 export const SERVE_SUPERVISOR_FAILURE_LIMIT = 6
@@ -9,17 +8,12 @@ export const SERVE_SUPERVISOR_BACKOFF_BASE_MS = 1_000
 export const SERVE_SUPERVISOR_BACKOFF_MAX_MS = 30_000
 export const SERVE_SUPERVISOR_STANDBY_BASE_MS = 5_000
 export const SERVE_SUPERVISOR_STANDBY_MAX_MS = 60_000
-/** One piece of advice wherever a give-up is reported; reinstalling the service clears the brake. */
 export const SERVE_GAVE_UP_ADVICE =
   'Fix the cause, then run `orca serve service install` again (or, outside a service, `orca serve --supervise --force` once).'
 
-/**
- * Durable per profile, so the brake survives the service manager restarting the supervisor:
- * launchd has no start-limit key and would otherwise loop forever.
- */
+/** Persist across service-manager restarts; launchd has no start limit. */
 export type ServeSupervisorBrake = {
   schemaVersion: 1
-  /** Identity of the installed app build the failures were counted against. */
   build: string
   failures: number[]
   gaveUp: { at: number; reason: string } | null
@@ -37,7 +31,6 @@ export function emptyServeSupervisorBrake(build: string): ServeSupervisorBrake {
   return { schemaVersion: 1, build, failures: [], gaveUp: null }
 }
 
-/** A record for another build starts over: a new install deserves a fresh try. */
 export function brakeForBuild(
   record: ServeSupervisorBrake | null,
   build: string
@@ -45,7 +38,6 @@ export function brakeForBuild(
   return record && record.build === build ? record : emptyServeSupervisorBrake(build)
 }
 
-/** Pure: counts one unexpected exit and says how long to wait, or that it is time to stop. */
 export function recordSupervisedFailure(
   record: ServeSupervisorBrake,
   input: { now: number; reason: string; random: () => number }
@@ -87,7 +79,7 @@ export function standbyDelayMs(attempt: number, random: () => number): number {
 }
 
 function jitter(ms: number, random: () => number): number {
-  // Why ±20%: services on one machine that failed together should not retry in lockstep.
+  // Jitter prevents services that failed together from retrying in lockstep.
   return Math.round(ms * (0.8 + 0.4 * random()))
 }
 
@@ -137,7 +129,7 @@ export function writeServeSupervisorBrake(
   const target = serveSupervisorBrakePath(userDataPath)
   const temporary = `${target}.${process.pid}.tmp`
   try {
-    // Why: a service's first run can fail before the server ever created its profile.
+    // The server may fail before creating its profile.
     mkdirSync(userDataPath, { recursive: true, mode: 0o700 })
     writeFileSync(temporary, JSON.stringify(record), { mode: 0o600 })
     renameSync(temporary, target)
@@ -150,7 +142,5 @@ export function writeServeSupervisorBrake(
 export function clearServeSupervisorBrake(userDataPath: string): void {
   try {
     rmSync(serveSupervisorBrakePath(userDataPath), { force: true })
-  } catch {
-    // Nothing recorded, or a read-only profile: nothing of ours to clear.
-  }
+  } catch {}
 }

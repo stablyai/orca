@@ -7,11 +7,7 @@ import type {
 // Far above writers x sections in use; an evicted entry only lets a very old retry apply again.
 const MAX_TRACKED_WRITES = 4096
 
-/**
- * The newest seq each writer applied to each section. Across writers the last arrival wins; a
- * writer's own repeated or reordered op is a no-op, so phone A retrying a collapse that already
- * landed cannot undo phone B's later expand. In memory: a restart forgets it.
- */
+/** Reject each writer's repeated/reordered ops without undoing later arrivals from other writers. In-memory state resets on restart. */
 export class CollapseWriteOrder {
   private readonly appliedSeq = new Map<string, number>()
 
@@ -43,7 +39,6 @@ type CollapseUiState = {
   updateUIState(updates: Pick<PersistedUIState, 'collapsedGroups'>): unknown
 }
 
-/** Changes one section in the persisted collapsed set, leaving every other section as it is. */
 export function setCollapsedSection(
   ui: CollapseUiState,
   order: CollapseWriteOrder,

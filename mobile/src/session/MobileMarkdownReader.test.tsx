@@ -1,8 +1,9 @@
-import { createElement, forwardRef, useImperativeHandle } from 'react'
+import { createElement, forwardRef, useImperativeHandle, type ReactNode } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { MobileMarkdownReader } from './MobileMarkdownReader'
 import type { MarkdownDocState } from './mobile-session-route-types'
+import { findAllByHostType } from '../test-support/react-test-renderer-host-nodes'
 
 const mocks = vi.hoisted(() => ({
   dismissKeyboard: vi.fn(),
@@ -14,7 +15,7 @@ vi.mock('react-native', async () => {
   return {
     ActivityIndicator: 'ActivityIndicator',
     Platform: { OS: 'ios', select: (choices: Record<string, unknown>) => choices.ios },
-    Pressable: ({ children, ...props }: { children?: unknown }) =>
+    Pressable: ({ children, ...props }: { children?: ReactNode }) =>
       React.createElement('Pressable', props, children),
     StyleSheet: { create: (styles: unknown) => styles, hairlineWidth: 1 },
     Text: 'Text',
@@ -50,6 +51,8 @@ const readyDoc: MarkdownDocState = {
 
 describe('MobileMarkdownReader', () => {
   let renderer: ReactTestRenderer | null = null
+  const onSave = vi.fn()
+  const onDiscard = vi.fn()
 
   function render(keyboardLift: number, doc: MarkdownDocState = readyDoc): ReactTestRenderer {
     act(() => {
@@ -60,9 +63,9 @@ describe('MobileMarkdownReader', () => {
           keyboardLift,
           onRefresh: vi.fn(),
           onChange: vi.fn(),
-          onSave: vi.fn(),
+          onSave,
           onCopy: vi.fn(),
-          onDiscard: vi.fn()
+          onDiscard
         })
       )
     })
@@ -98,14 +101,26 @@ describe('MobileMarkdownReader', () => {
     const instance = render(0)
 
     expect(dismissButtons(instance)).toHaveLength(0)
-    expect(instance.root.findAllByType('Text')).toHaveLength(0)
+    expect(findAllByHostType(instance.root, 'Text')).toHaveLength(0)
   })
 
   it('keeps document actions available without offering dismissal when the keyboard is closed', () => {
-    const instance = render(0, { ...readyDoc, isDirty: true })
+    const instance = render(0, { ...readyDoc, localContent: '# Edited', isDirty: true })
 
     expect(dismissButtons(instance)).toHaveLength(0)
-    expect(instance.root.findAllByType('Text').length).toBeGreaterThan(0)
+    expect(findAllByHostType(instance.root, 'Text').map((node) => node.props.children)).toEqual([
+      'Discard',
+      'Save'
+    ])
+    const actions = findAllByHostType(instance.root, 'Pressable')
+    expect(actions).toHaveLength(2)
+    expect(actions[1]?.props.disabled).not.toBe(true)
+    act(() => actions[0]?.props.onPress())
+    expect(onDiscard).toHaveBeenCalledOnce()
+    expect(onSave).not.toHaveBeenCalled()
+    act(() => actions[1]?.props.onPress())
+    expect(onSave).toHaveBeenCalledOnce()
+    expect(onDiscard).toHaveBeenCalledOnce()
   })
 
   it('treats a WebView-reported inset as an open keyboard when native lift reports none', () => {

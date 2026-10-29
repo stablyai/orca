@@ -22,10 +22,7 @@ export type OrcaCloudSessionReadResult =
   | { status: 'found'; session: OrcaCloudSession; persistence: OrcaCloudSessionPersistence }
   | { status: 'missing'; persistence: 'none' }
   | { status: 'decrypt-failed'; persistence: 'none'; error: string }
-  /**
-   * The file is there and this process may not read it. Distinct from `decrypt-failed` because
-   * that one means "read it, it was garbage" and licenses replacing it; this one licenses nothing.
-   */
+  /** Unlike decrypt-failed, unreadable proves nothing and must not authorize replacement. */
   | { status: 'unreadable'; persistence: 'none'; error: string }
 
 type PersistedEncryptedSession = {
@@ -111,8 +108,7 @@ export function getOrcaCloudSessionPath(profileId: string, userDataPath: string)
   return join(getOrcaProfileDirectory(profileId, userDataPath), 'account-session.json.enc')
 }
 
-// Rotated sessions whose write failed. The token on disk is already spent, so each is retried
-// on the next read and at quit until it lands or the session changes.
+// Disk may hold spent tokens: retry unsaved rotations on reads/quit until saved or superseded.
 const unsavedRotations = new Map<
   string,
   { profileId: string; userDataPath: string; session: OrcaCloudSession }
@@ -148,8 +144,7 @@ function writeOrcaCloudSession(
     return 'dev-plaintext'
   }
 
-  // Why: Orca account refresh tokens must not silently fall back to plaintext
-  // in production. Memory-only keeps cloud features usable until restart.
+  // Production refresh tokens must not fall back to plaintext; retain them in memory until restart.
   rememberMemorySession(cacheKey, { session, persistence: 'memory-only' })
   return 'memory-only'
 }
@@ -166,12 +161,10 @@ export function saveOrcaCloudSession(
     unsavedRotations.delete(key)
     return persistence
   } catch (error) {
-    // A failed non-rotating write throws as before and leaves any unsaved rotation pending.
     if (!options.spentOnFailure) {
       throw error
     }
-    // Why: losing a rotated token makes the next refresh resend the spent one, which the
-    // server reads as reuse and revokes the whole family.
+    // Losing rotated tokens would replay spent disk tokens and risk revoking the family.
     unsavedRotations.set(key, { profileId, userDataPath, session })
     try {
       rmSync(getOrcaCloudSessionPath(profileId, userDataPath), { force: true })
@@ -191,7 +184,7 @@ function retryUnsavedRotation(key: string): void {
     writeOrcaCloudSession(unsaved.profileId, unsaved.userDataPath, unsaved.session)
     unsavedRotations.delete(key)
   } catch {
-    // Still unsaved; the next read or the quit flush tries again.
+    // Retry unsaved rotation on the next read or quit flush.
   }
 }
 

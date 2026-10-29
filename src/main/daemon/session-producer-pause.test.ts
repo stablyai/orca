@@ -31,7 +31,6 @@ describe('SessionProducerPause stream stall watchdog', () => {
     expect(subprocess.resume).not.toHaveBeenCalled()
 
     vi.advanceTimersByTime(1)
-    // Shed first: resuming into an unbounded queue would just rebuild the stall.
     expect(onStreamStall).toHaveBeenCalledOnce()
     expect(subprocess.resume).toHaveBeenCalledOnce()
   })
@@ -54,7 +53,7 @@ describe('SessionProducerPause stream stall watchdog', () => {
     vi.useFakeTimers()
     const { producer, onStreamStall } = createProducer()
     producer.pause('stream', true, onStreamStall)
-    // refresh() re-asserts a standing pause on every enqueue for any session sharing the client.
+    // Reproduce repeated pause assertions from a sibling sharing the client.
     for (let tick = 0; tick < 10; tick++) {
       vi.advanceTimersByTime(STREAM_BACKPRESSURE_STALL_WATCHDOG_MS / 10)
       producer.pause('stream', true, onStreamStall)
@@ -93,7 +92,6 @@ describe('SessionProducerPause stream stall watchdog', () => {
     producer.pause('stream', true, onStreamStall)
     producer.pause()
     vi.advanceTimersByTime(PRODUCER_PAUSE_FAILSAFE_MS)
-    // The client failsafe cannot resume while the stream still holds the producer.
     expect(subprocess.resume).not.toHaveBeenCalled()
     vi.advanceTimersByTime(STREAM_BACKPRESSURE_STALL_WATCHDOG_MS)
     expect(onStreamStall).toHaveBeenCalledOnce()

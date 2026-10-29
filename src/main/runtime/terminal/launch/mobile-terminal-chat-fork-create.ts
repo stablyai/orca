@@ -1,6 +1,8 @@
-import { OrcaRuntimeWithCreateMobileSessionTerminal } from './mobile-terminal-create'
+import {
+  OrcaRuntimeWithCreateMobileSessionTerminal,
+  type OwnedMobileTerminalCreateOptions
+} from './mobile-terminal-create'
 import type { MobileTerminalCreateOptions } from './mobile-terminal-renderer-create'
-import type { OwnedMobileTerminalCreateOptions } from './mobile-terminal-owned-create'
 import type { TerminalWorkspaceLaunchScope } from '../../runtime-legacy-worker-terminal-recovery-types'
 import type { RuntimeMobileSessionCreateTerminalResult } from '../../../../shared/runtime-types'
 import {

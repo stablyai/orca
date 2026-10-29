@@ -20,7 +20,6 @@ export async function resolveWorktreeCreateBase(
   if (!defaultBaseRef) {
     return (await args.isBaseUsable(repoWorktreeBaseRef)) ? repoWorktreeBaseRef : null
   }
-  // Resolving the default already proved matching persisted refs exist.
   if (repoWorktreeBaseRef === defaultBaseRef) {
     return repoWorktreeBaseRef
   }

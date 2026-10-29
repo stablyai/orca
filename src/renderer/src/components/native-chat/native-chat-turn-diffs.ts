@@ -1,4 +1,4 @@
-import type { NativeChatEditFile } from '../../../../shared/native-chat-edit-model'
+import type { NativeChatEditFile } from '../../../../shared/native-chat/tools/native-chat-edit-model'
 import type {
   NativeChatMessage,
   NativeChatToolCallBlock,
@@ -7,7 +7,7 @@ import type {
 import {
   buildDiffSummaries,
   normalizedToolEditFiles
-} from '../../../../shared/native-chat-edit-cards'
+} from '../../../../shared/native-chat/tools/native-chat-edit-cards'
 
 export type NativeChatDiffTarget = {
   messageId: string
@@ -50,7 +50,6 @@ export function nativeChatTurnDiffEditFile(
   return normalizedToolEditFiles(edit.call, edit.result)?.[edit.fileIndex]
 }
 
-/** Recorded edit totals, grouped by the transcript's already-resolved turn boundaries. */
 export function nativeChatTurnDiffs(
   messages: readonly NativeChatMessage[],
   turnKeys: readonly (string | undefined)[],

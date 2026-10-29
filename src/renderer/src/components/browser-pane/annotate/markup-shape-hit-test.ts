@@ -1,5 +1,4 @@
-// Hit testing for the markup eraser. Pure geometry over the same model helpers
-// the renderer strokes with, so "the ink you touch" matches what is drawn.
+// Use the drawing model’s geometry so erasing follows the visible ink.
 
 import {
   arrowHeadGeometry,
@@ -25,8 +24,7 @@ export type TextInkBoxMeasurer = (shape: TextShape) => NormalizedRect | null
 type StrokedShape = Exclude<MarkupShape, TextShape>
 type StrokedInk = { paths: MarkupPoint[][]; halfWidth: number }
 
-// Why a swept segment rather than a point: pointermove events are sparse, so a
-// fast drag would otherwise jump over a thin stroke.
+// Sparse pointermove events can skip thin strokes; test the swept segment between them.
 export function shapesTouchedBySweep(
   shapes: readonly MarkupShape[],
   from: MarkupPoint,
@@ -79,8 +77,7 @@ function sweepTouchesBox(from: MarkupPoint, to: MarkupPoint, box: NormalizedRect
   return inside || sweepDistanceToPath(from, to, rectOutline(box)) <= ERASER_RADIUS
 }
 
-// The polylines a shape is stroked along. Rect and ellipse are hollow, so only
-// their outline is ink.
+// Rectangles and ellipses are hollow; only their stroked outline is ink.
 function strokedInk(shape: StrokedShape): StrokedInk {
   switch (shape.kind) {
     case 'pen':

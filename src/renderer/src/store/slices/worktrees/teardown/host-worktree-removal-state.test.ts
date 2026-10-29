@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { RemoteRuntimeClientError } from '../../../../../../shared/remote-runtime-client-error'
+import { RemoteRuntimeClientError } from '../../../../../../shared/remote-runtime/remote-runtime-client-error'
 import { RuntimeRpcCallQueueOverloadError } from '../../../../../../shared/runtime-rpc-call-queue'
 import { isWorktreeRemovalReplyLost } from './host-worktree-removal-state'
 

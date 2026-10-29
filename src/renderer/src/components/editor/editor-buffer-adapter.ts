@@ -2,14 +2,15 @@ import type { AppState } from '@/store'
 import type { OpenFile } from '@/store/slices/editor'
 import { editorModelRegistry, type EditorModelRegistryBridge } from '@/lib/editor-model-registry'
 import { editorBufferSiblingViewIds } from '@/store/slices/editor/buffers/editor-buffer-views'
-import { editorTabModelUri, isCodeViewTab } from './editor-save-disk-precondition'
+import {
+  editorModelSiblingTabs,
+  editorTabModelUri,
+  isCodeViewTab
+} from './editor-save-disk-precondition'
+import { getOpenFilesForExternalFileChange, type EditorPathMutationTarget } from './editor-autosave'
 import type { FileContent } from './editor-panel-content-types'
 
-/**
- * A rich Markdown, notebook or CSV commit reaches the record's draft through the content handler;
- * this carries it into the record's models no editor shows (retained after a close, or of a hidden
- * code view) as one undoable edit. A shown model follows through its editor's content sync.
- */
+/** Apply rich/notebook/CSV commits to hidden retained models as one undo step; visible code models follow their own content sync. */
 export function applyEditorBufferText(
   state: AppState,
   file: OpenFile,
@@ -17,7 +18,7 @@ export function applyEditorBufferText(
   bridge: EditorModelRegistryBridge = editorModelRegistry
 ): void {
   const registry = bridge.get()
-  // Why: a code view's commit came from its model, which already holds the text.
+  // Code-view commits already came from the model, so do not apply them twice.
   if (!registry || file.mode !== 'edit' || isCodeViewTab(state, file)) {
     return
   }
@@ -32,18 +33,14 @@ export function applyEditorBufferText(
     if (!model || model.isDisposed() || model.isAttachedToEditor() || model.getValue() === text) {
       continue
     }
-    // Why the stops: each commit is its own undo step, not merged into the previous one.
+    // Bracket each commit as an independent undo step.
     model.pushStackElement()
     model.pushEditOperations([], [{ range: model.getFullModelRange(), text }], () => null)
     model.pushStackElement()
   }
 }
 
-/**
- * Panel content sync: a write landed `content` on disk for the record whose views were `viewIds`,
- * so every other view of it this panel has loaded now reads that disk text. Without it a view's
- * dirty check compares against older disk text and can mark the record clean over unsaved edits.
- */
+/** Advance loaded disk text for sibling views after saves so dirty comparisons cannot use stale baselines to clear unsaved edits. */
 export function withRecordDiskText(
   prev: Record<string, FileContent>,
   viewIds: readonly string[],
@@ -67,4 +64,21 @@ export function withRecordDiskText(
     next[viewId] = { ...loaded, content }
   }
   return next
+}
+
+/** Include views of the same record in other workspaces when reloading an externally changed path. */
+export function externalChangeRecordViewIds(
+  state: AppState | undefined,
+  panelFiles: readonly OpenFile[],
+  target: EditorPathMutationTarget
+): Set<string> {
+  const storeFiles = state?.openFiles ?? []
+  const matched = getOpenFilesForExternalFileChange([...panelFiles, ...storeFiles], target)
+  return new Set(
+    matched.flatMap((file) =>
+      state && storeFiles.some((tab) => tab.id === file.id)
+        ? editorModelSiblingTabs(state, file).map((tab) => tab.id)
+        : [file.id]
+    )
+  )
 }

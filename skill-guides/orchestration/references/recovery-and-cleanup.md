@@ -133,6 +133,17 @@ ORCA orchestration worker-abandon --dispatch <dispatch_id> --json
 
 `worker-stop` closes only the exact proven supervised agent terminal. It never
 deletes the worktree, setup terminal, configured tabs, or unrelated processes.
+Its receipt's `processAction` reports what it did:
+
+- `closed_agent_terminal`: Orca issued that close; do not follow it with
+  `terminal close`.
+- `none`: this call issued no close (for example, already settled or
+  unsupervised).
+- `unknown`: Orca could not attempt or confirm a close.
+
+`stop_unknown` exits 1 and can still report `closed_agent_terminal` when the
+agent's exit was not proven; inspect `worker-show` before acting further.
+
 `worker-abandon` fences orchestration while accepting that resources may remain
 live; it performs no remote, process, or filesystem action. When it settles a
 worker, it retains an owned terminal by the same rule as `worker-retain`, so Orca

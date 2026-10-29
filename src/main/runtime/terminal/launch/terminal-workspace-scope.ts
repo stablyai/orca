@@ -95,8 +95,7 @@ export abstract class OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktr
       : this.resolveEmulatorWorkspaceId(selector)
   }
 
-  // Why one resolver: host-launched floating terminals and floating chat sessions run in the same
-  // directory the panel's own terminals use — the user's floating-workspace setting.
+  // Floating terminals and chats must use the panel's configured floating directory.
   protected async resolveFloatingWorkspacePath(): Promise<string> {
     const store = this.store
     return store
@@ -157,11 +156,8 @@ export abstract class OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktr
     const worktreeSelector = parsed?.type === 'worktree' ? `id:${parsed.worktreeId}` : selector
     const worktree =
       resolveCreatedWorktreeTerminalTarget(this.store, selector, createdWorktree) ??
-      (await this.resolveWorktreeSelector(worktreeSelector))
-    // Why: `getRepo(id)` is host-blind and the same repo id can exist on local, SSH and runtime
-    // hosts. Reading `connectionId` off an arbitrary row reports "local" for a remote worktree and
-    // spawns its PTY on the client with the remote cwd (#11163). Loss of a usable answer is
-    // `unresolved`, never `local`.
+      (await this.resolveGitWorktreeSelector(worktreeSelector))
+    // Repo ids are host-blind; resolve the worktree owner or refuse as unresolved rather than spawn locally with a remote cwd (#11163).
     const resolution = resolveWorktreeLaunchHost(this.store?.getRepos() ?? [], worktree)
     if (resolution.kind === 'ambiguous') {
       throw new Error('worktree_execution_host_unresolved')
@@ -197,9 +193,7 @@ export abstract class OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktr
     for (const key of AGENT_HOOK_RUNTIME_ENV_KEYS) {
       delete cleanBaseEnv[key]
     }
-    // Pane identity (ORCA_PANE_KEY/TAB_ID/WORKTREE_ID, jcode dir) is stamped by the spawn step from the spawn's ids.
-    // Why: the window stamps ORCA_WORKSPACE_ID (its ORCA_WORKTREE_ID) for every workspace kind,
-    // and agent wrappers forward it.
+    // Spawn stamps pane ids and jcode dir; match the window's ORCA_WORKSPACE_ID for every workspace kind.
     const env = {
       ...cleanBaseEnv,
       ...agentTeamsEnv,
@@ -287,8 +281,7 @@ export abstract class OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktr
         const hostId =
           getPtyExecutionHost(ptyId) ??
           (pty && !ownerIsRuntime ? getConnectionExecutionHostId(pty.connectionId) : null)
-        // Why: returning the raw alias after a conflict lets PTY rescue adopt the foreign terminal.
-        // An unattributed remote id is only tolerable under a runtime owner, never a local/SSH one.
+        // Conflicting aliases could rescue foreign PTYs; unattributed remote ids are valid only under runtime owners.
         if (hostId && hostId !== owner.hostId && (hostId !== 'foreign' || !ownerIsRuntime)) {
           throw new Error('worktree_execution_host_unresolved')
         }

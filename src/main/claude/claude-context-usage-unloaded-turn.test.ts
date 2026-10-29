@@ -1,10 +1,15 @@
-import { agentSessionRecordFixture } from '../../shared/agent-session-record.test-fixture'
+import { agentSessionConversationView } from '../../shared/agent-session-conversation-view'
+import {
+  agentSessionLeaseFixture,
+  agentSessionRecordFixture
+} from '../../shared/agent-session-record.test-fixture'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { AgentSessionHistoryPage } from '../../shared/agent-session-wire'
 import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'
+import { MAX_RETAINED_OWN_ITEMS } from '../../shared/structured-agent-session-item-retention'
 import {
   latestStructuredAgentContextFacts,
   selectStructuredAgentContextUsage
@@ -72,7 +77,6 @@ function translate(journal: AgentSessionJournal) {
   return { translator, settle }
 }
 
-/** A turn long enough that a small tail page starts after its turn row. */
 function runTurn(
   translator: ReturnType<typeof translate>['translator'],
   turnId: string,
@@ -92,6 +96,10 @@ function readOptions(journal: AgentSessionJournal, agents: StructuredAgentRegist
     child: { fence: 1, generation: 'generation-1' },
     params: { provider: 'claude' }
   }
+  const record = {
+    ...agentSessionRecordFixture(agentSessionLeaseFixture({ sessionId: SESSION, runtimeFence: 1 })),
+    options: { model: 'opus' }
+  }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the options read touches only these members.
   const context = {
     deps: {
@@ -100,12 +108,8 @@ function readOptions(journal: AgentSessionJournal, agents: StructuredAgentRegist
       },
       agents,
       store: {
-        getRecord: () => ({
-          ...agentSessionRecordFixture(),
-          sessionId: SESSION,
-          provider: 'claude',
-          options: { model: 'opus' }
-        })
+        requireWritableRecord: () => record,
+        getConversation: () => agentSessionConversationView(record)
       }
     },
     serialize: (_sessionId: string, task: () => Promise<unknown>) => task(),
@@ -201,7 +205,7 @@ describe('context usage for a turn row outside the loaded page', () => {
 
     const options = await readOptions(journal, NO_STRUCTURED_AGENTS)
     expect(options).not.toHaveProperty('contextUsage')
-    // An older host answers the same way, so the ring reads only the loaded page, as before.
+    // Older hosts omit context facts, so clients fall back to loaded rows.
     expect(selectStructuredAgentContextUsage(attachTail(journal, 2).items)).toBeNull()
   })
 
@@ -237,21 +241,22 @@ describe('context usage for a turn row outside the loaded page', () => {
     await settle()
     const hostAnswer = async () =>
       (await readOptions(journal, claudeAndCodexAgents())).contextUsage?.current
-    // The client reads the host once per turn, and again whenever its window loses a turn row.
     let state = attachTail(journal, 200)
     let host = await hostAnswer()
     const respond = (index: number): void => {
       translator.handle(assistantFrame(`turn-b-reply-${index}`, 4_000 + index, 200_000 + index))
     }
     let index = 0
-    for (; index < 1_900; index += 1) {
+    for (; index < MAX_RETAINED_OWN_ITEMS - 20; index += 1) {
       respond(index)
+      if (index % 100 === 99) {
+        await settle()
+      }
     }
     await settle()
     state = catchUp(journal, state)
     expect(hasTurnRow(state)).toBe(true)
 
-    // Step one response at a time across the batch that trims the turn row out, and past it.
     let stepsAfterTrim = 0
     while (stepsAfterTrim < 5 && index < 3_000) {
       respond(index++)

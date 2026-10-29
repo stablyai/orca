@@ -1,13 +1,14 @@
 import { useCallback } from 'react'
 
 export function useNativeChatFileAttachmentActions(
-  attachExternalPaths: (paths: string[]) => void
+  captureExternalPaths: () => (paths: string[]) => void | Promise<void>
 ): { pickAttachments: () => void } {
   const pickAttachments = useCallback(() => {
+    const attach = captureExternalPaths()
     void (async () => {
-      attachExternalPaths(await window.api.shell.pickAttachments())
+      await attach(await window.api.shell.pickAttachments())
     })()
-  }, [attachExternalPaths])
+  }, [captureExternalPaths])
 
   return { pickAttachments }
 }

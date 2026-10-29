@@ -50,7 +50,6 @@ describe('client-hosted rows in the repo-removal and transfer paths', () => {
     expect(result.clientHostedBrowserPagesByWorktree).toEqual({
       [RETAINED_WORKTREE_ID]: [clientHostedRow(RETAINED_WORKTREE_ID)]
     })
-    // The sibling map is the control: whatever removal does to it, it must do here too.
     expect(result.activeTabTypeByWorktree).toEqual({ [RETAINED_WORKTREE_ID]: 'browser' })
   })
 
@@ -62,7 +61,6 @@ describe('client-hosted rows in the repo-removal and transfer paths', () => {
     )
 
     expect(result.activeTabTypeByWorktree).toEqual({ 'repo-3::/tmp/worktree-a': 'browser' })
-    // Not an omission: the rows name a paired device and browser profile the payload cannot carry.
     expect(result.clientHostedBrowserPagesByWorktree).toBeUndefined()
   })
 
@@ -191,8 +189,7 @@ describe('client-hosted rows in the repo-removal and transfer paths', () => {
 })
 
 describe('workspace session field disposition census', () => {
-  // Only the field under test is seeded: the owner-keyed paths care about keys, and a shared seed
-  // would hand a bespoke field a value of the wrong shape.
+  // Seed fields separately: bespoke fields may not accept the owner-keyed test shape.
   const ownerKeyedSeed = (field: keyof WorkspaceSessionState): WorkspaceSessionState => {
     const session = { ...getDefaultWorkspaceSession() } as Record<string, unknown>
     session[field] = {
@@ -244,9 +241,7 @@ describe('workspace session field disposition census', () => {
     expect(result[field]).toEqual((getDefaultWorkspaceSession() as Record<string, unknown>)[field])
   })
 
-  // Why spelled out rather than derived: every other test here iterates these lists, so a field
-  // quietly reclassified loses its pruning and its test case together and the suite stays green.
-  // Reclassifying now means editing this array, which is a reviewed change.
+  // Explicit expectations prevent a reclassified field from losing both pruning and its test.
   it('prunes exactly these fields by owner key on repo removal', () => {
     expect(SESSION_FIELDS_PRUNED_BY_OWNER_KEY).toEqual([
       'openFilesByWorktree',

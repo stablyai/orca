@@ -25,14 +25,7 @@ export type AutoAckTargetState = FloatingWorkspacePanelVisibilityState & {
   unifiedTabsByWorktree: Readonly<Record<string, readonly Tab[]>>
 }
 
-/**
- * The tab each visible group of a workspace shows: every leaf of its split layout, the focused
- * group first, or the focused group alone before any split exists.
- *
- * Why the unified tab wins: a visible chat replaces the terminal in its group, but the
- * workspace's terminal tab id keeps naming the terminal that was there before — acknowledging
- * that id would clear a hidden terminal's unread.
- */
+/** Collect visible split groups, focused first; unified selection wins because chat can replace a terminal whose legacy active ID still names hidden content. */
 function resolveWorkspaceAutoAckTargets(
   state: AutoAckTargetState,
   worktreeId: string
@@ -55,14 +48,7 @@ function resolveWorkspaceAutoAckTargets(
   return targets
 }
 
-/**
- * Surfaces whose visible content counts as "seen" right now, each paired with the worktree that
- * owns it.
- *
- * Why the floating workspace is gated on panel visibility rather than `activeView`: the panel is an
- * overlay that sits above every view and stays mounted while closed, and its active tab never
- * becomes the global `activeTabId` — so neither the view nor the tab id can stand in for "on screen".
- */
+/** Pair on-screen targets with workspaces; floating-panel visibility owns its gate because it overlays every view and never becomes global activeTabId. */
 export function resolveAutoAckTabTargets(state: AutoAckTargetState): AutoAckTabTarget[] {
   // The floating pane is on top when two worktrees claim the same tab ID.
   const targets = selectFloatingWorkspacePanelVisible(state)
@@ -79,7 +65,6 @@ export function resolveAutoAckTabTargets(state: AutoAckTargetState): AutoAckTabT
   return targets
 }
 
-/** The workspaces on screen: an open floating panel, and the active workspace in its own view. */
 export function onScreenWorkspaceIds(state: AutoAckTargetState): string[] {
   const workspaceIds = selectFloatingWorkspacePanelVisible(state)
     ? [FLOATING_TERMINAL_WORKTREE_ID]
@@ -90,7 +75,6 @@ export function onScreenWorkspaceIds(state: AutoAckTargetState): string[] {
   return workspaceIds
 }
 
-/** A workspace on screen in a visible, focused window with the user confirmed present. */
 export function isWorkspaceOnScreen(state: AutoAckTargetState, workspaceId: string): boolean {
   return (
     isOrcaWindowForegroundFocused() &&
@@ -99,10 +83,7 @@ export function isWorkspaceOnScreen(state: AutoAckTargetState, workspaceId: stri
   )
 }
 
-/**
- * Whether a tab of either kind is on screen in a visible, focused window with the user confirmed
- * present — the scan's own gate, so marking skips exactly what the scan would read right away.
- */
+/** Use the scan’s visibility/focus/presence gate so marking skips exactly the attention the scan would immediately acknowledge. */
 export function isTabOnScreen(
   state: AutoAckTargetState,
   worktreeId: string,

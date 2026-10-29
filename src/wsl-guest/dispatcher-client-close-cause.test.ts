@@ -2,14 +2,10 @@ import { describe, expect, it, vi } from 'vitest'
 import { RelayDispatcher, type SinkWriteSettlement } from './dispatcher'
 import { DISPATCHER_CONTROL_QUEUE_MAX_FRAMES } from './dispatcher-writer-admission'
 
-// A detach carries the reason the client went away, because the PTY owner grace is only safe to
-// shorten against an owner the relay watched leave. Everything here is about keeping those two
-// answers apart.
+// Detach cause distinguishes observed peer departure from relay-initiated cleanup before shortening PTY owner grace.
 describe('RelayDispatcher client close cause', () => {
   it('reports a backpressure teardown as a relay-local close, not a peer close', () => {
-    // Why this matters beyond the argument shape: "capacity exceeded" is what a client that is alive
-    // but slow to drain looks like, and a consumer that read this as a peer close would shorten that
-    // owner's grace and hand its session to someone else while it is still there.
+    // Capacity overflow proves a slow drain, not peer death; it must not shorten owner grace.
     const detachListener = vi.fn()
     const settlements: ((result: SinkWriteSettlement) => void)[] = []
     const dispatcher = new RelayDispatcher(
@@ -40,8 +36,7 @@ describe('RelayDispatcher client close cause', () => {
       dispatcher.onClientDetached(detachListener)
       const clientId = dispatcher.attachClient(() => true)
 
-      // Why the caller states it: only the socket layer sees the peer's transport end, so the
-      // evidence has to travel from there rather than be inferred here.
+      // Only the socket layer observes peer transport end; pass its evidence explicitly.
       dispatcher.detachClient(clientId, 'peer-closed')
 
       expect(detachListener).toHaveBeenCalledWith(clientId, 'peer-closed')

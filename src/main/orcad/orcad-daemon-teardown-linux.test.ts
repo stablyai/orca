@@ -204,7 +204,7 @@ describe('profile daemon cleanup after loss of contact', () => {
       'Daemon cleanup aborted: the expected daemon could not be verified'
     )
 
-  // Why: the real Windows table read never settles under the fake timers some cases install.
+  // Fake timers can prevent real Windows process-table reads from settling.
   beforeEach(() => __setDaemonProcessTableReaderForTests(async () => null))
   afterEach(() => __setDaemonProcessTableReaderForTests())
 
@@ -264,7 +264,6 @@ describe('profile daemon cleanup after loss of contact', () => {
   it('waits for a recorded daemon that deleted its pid record before exiting', async ({
     onTestFinished
   }) => {
-    // Exits only when told, so the wait is observed without racing a timer or a zombie reap.
     const retiring = spawnProcess({
       program: process.execPath,
       args: ['-e', "process.stdin.resume(); process.stdin.on('end', () => process.exit(0))"],

@@ -1,12 +1,6 @@
 import type { TerminalShellLifecycleScanner } from './terminal-shell-lifecycle-scanner'
 
-/**
- * Async ownership proof for clean alternate-screen exits: no pause, no
- * injection — a confirmed proof only marks the scanner's owner, guarded by the
- * generation captured at the candidate. Every attempt retires at the deadline
- * so a proof that never settles cannot wedge later candidates, and a retired
- * attempt's late verdict is inert.
- */
+/** Confirm clean-exit ownership without pausing output; deadline retirement makes late verdicts inert. */
 export class TerminalShellCleanExitConfirmation {
   private inFlightState = false
   private attempt = 0
@@ -47,12 +41,10 @@ export class TerminalShellCleanExitConfirmation {
     this.inFlightState = true
     const requested = generation
     const attempt = ++this.attempt
-    // Why the deadline: a proof that never settles must not wedge the in-flight
-    // flag for the session's life, silently ignoring every later candidate.
+    // Retire stalled proofs so later exit candidates can still be checked.
     const deadline = setTimeout(() => this.retire(attempt, requested), this.opts.deadlineMs())
     deadline.unref?.()
-    // Why the guard: the callback is injected; a synchronous throw must not
-    // strand the in-flight flag.
+    // Injected callbacks may throw synchronously; still retire the attempt.
     let proof: Promise<boolean>
     try {
       proof = this.opts.confirmShellForeground()
@@ -61,8 +53,7 @@ export class TerminalShellCleanExitConfirmation {
     }
     void proof
       .then((confirmed) => {
-        // A retired attempt's late verdict is inert: an unsettled proof already
-        // read as no owner, and flipping it afterwards would race fresh bytes.
+        // Ignore retired verdicts so stale process evidence cannot race newer output.
         if (
           attempt === this.attempt &&
           confirmed &&

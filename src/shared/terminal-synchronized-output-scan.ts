@@ -1,13 +1,4 @@
-/**
- * DEC mode 2026 (synchronized output) latch tracking.
- *
- * Why this module is shared: like terminal-mode-reset-profiles, the latch is a
- * terminal-protocol contract rather than a renderer concern. xterm stops
- * repainting while the latch is open and force-flushes only after a 1000ms
- * timeout, so whichever side of the PTY relay last touched a pane's bytes has
- * to know whether it left a frame open — main's drop paths included, not just
- * the renderer's foreground coalescer.
- */
+/** Track DEC 2026 across renderer coalescing and main/relay drops; an open latch freezes xterm repaint until its 1s flush. */
 export const SYNCHRONIZED_OUTPUT_START_SEQUENCE = '\x1b[?2026h'
 export const SYNCHRONIZED_OUTPUT_END_SEQUENCE = '\x1b[?2026l'
 export const SYNCHRONIZED_OUTPUT_MARKER_TAIL_CHARS = SYNCHRONIZED_OUTPUT_START_SEQUENCE.length - 1
@@ -22,9 +13,7 @@ export type SynchronizedOutputScan = {
   markerTail: string
 }
 
-// Why the carried tail: a PTY relay can split \x1b[?2026l across chunks; scanning the raw
-// chunk alone left the foreground DEC 2026 latch stuck open so every later chunk was
-// held instead of coalesced, freezing the visible pane (#8754).
+// Carry split markers or a divided ?2026l can strand foreground coalescing and freeze the pane (#8754).
 export function scanSynchronizedOutput(
   data: string,
   markerTail: string,
@@ -80,16 +69,7 @@ export const INITIAL_SYNCHRONIZED_OUTPUT_LATCH_STATE: SynchronizedOutputLatchSta
   active: false
 }
 
-/**
- * Advances the latch across bytes the renderer will never receive.
- *
- * Returns the sequence that must ride along with whatever IS delivered so the
- * pane is not left mid-frame: a drop that swallowed the closing marker would
- * otherwise leave xterm painting nothing until its 1000ms forced flush, once
- * per frame, for as long as the condition lasts. Closing a frame early only
- * costs one premature repaint; leaving it open costs a full second of blank
- * screen, so the asymmetry favours always closing.
- */
+/** Carry a closing sequence with delivered output when dropped bytes leave the frame open; one early repaint avoids repeated 1s stalls. */
 export function advanceDroppedSynchronizedOutputLatch(
   data: string,
   previous: SynchronizedOutputLatchState
@@ -101,25 +81,8 @@ export function advanceDroppedSynchronizedOutputLatch(
   }
 }
 
-/**
- * Chooses a split point that does not leave the delivered half inside an open
- * DEC 2026 frame.
- *
- * A blind byte-offset split puts `\x1b[?2026h` in one chunk and its
- * `\x1b[?2026l` in the next, so xterm stops repainting until the remainder is
- * delivered on a later flush — behind every other pane's output — or until its
- * 1000ms forced flush. It can also sever the 8-byte marker itself.
- *
- * Returns the largest length <= `limit` that ends outside an open frame, or
- * `limit` when no such point exists (a frame genuinely longer than the window;
- * the latch release still rides along via the reset profiles).
- *
- * KNOWN LIMITATION: no caller threads `markerTail`/`wasActive`, so a buffer that
- * begins INSIDE an already-open frame is scanned as if closed. That degrades to
- * the blind offset this replaced — never worse, and byte-exact either way — but
- * it means cross-chunk alignment is best-effort. Threading per-PTY latch state
- * through the split sites would close it.
- */
+/** Prefer splits outside DEC 2026 frames and avoid severing markers; reset profiles release latches when a safe split cannot fit.
+ * Current callers omit markerTail/wasActive, so buffers starting inside a frame get only best-effort alignment. */
 export function resolveSynchronizedOutputSafeSplit(
   data: string,
   limit: number,
@@ -129,8 +92,7 @@ export function resolveSynchronizedOutputSafeSplit(
   if (data.length <= limit) {
     return data.length
   }
-  // Step 1: never hand over a severed marker. If an ESC near the boundary cannot
-  // have completed by `limit`, cut before it instead.
+  // Cut before an ESC whose marker cannot finish by the limit.
   let candidate = limit
   const guardStart = Math.max(0, limit - SYNCHRONIZED_OUTPUT_MARKER_TAIL_CHARS)
   const escapeIndex = data.lastIndexOf('\x1b', limit - 1)
@@ -140,25 +102,18 @@ export function resolveSynchronizedOutputSafeSplit(
   ) {
     candidate = escapeIndex
   }
-  // Step 2: the delivered half must not end inside an open frame.
   if (!scanSynchronizedOutput(data.slice(0, candidate), markerTail, wasActive).active) {
     return candidate > 0 ? candidate : limit
   }
-  // Fall back to the last frame close that ENDS at or before the candidate.
   const lastClose = data.lastIndexOf(
     SYNCHRONIZED_OUTPUT_END_SEQUENCE,
     Math.max(0, candidate - SYNCHRONIZED_OUTPUT_END_SEQUENCE.length)
   )
   if (lastClose === -1) {
-    // One frame is longer than the window; deliver the window and let the
-    // reset profiles release the latch.
+    // An oversized frame cannot fit; reset profiles must release its latch.
     return candidate > 0 ? candidate : limit
   }
   const aligned = lastClose + SYNCHRONIZED_OUTPUT_END_SEQUENCE.length
-  // Why the floor: a caller that cannot refill the shortfall in the same round
-  // (main's flush re-queues the remainder with eligibleRound = round + 1) would
-  // lose up to half its per-PTY throughput when frames land just past the
-  // midpoint. Below the floor, prefer throughput and let the reset profiles
-  // release the latch.
+  // Below half the window, preserve throughput: main requeues the remainder for a later round, so tiny aligned chunks waste its budget. Reset profiles release the latch.
   return aligned * 2 >= limit ? aligned : candidate > 0 ? candidate : limit
 }

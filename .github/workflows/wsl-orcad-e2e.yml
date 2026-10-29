@@ -34,7 +34,11 @@ on:
       - '!**/*.test.ts'
       - '!**/*.test.tsx'
       - 'src/main/wsl/wsl-orcad-real-distro-lane.test.ts'
+      - 'src/main/persistence/moving-wsl-projects/wsl-move-real-pause.test.ts'
+      - 'src/main/wsl/wsl-orcad-real-distro-idle-release-lane.test.ts'
       - '.github/workflows/wsl-orcad-e2e.yml'
+      - 'config/ci/wsl-lifecycle/**'
+      - 'config/ci/windows-lifecycle-receipt.ps1'
   workflow_dispatch:
     inputs:
       qualification:
@@ -66,7 +70,7 @@ jobs:
   template:
     if: github.event_name != 'pull_request' || github.event.pull_request.draft != true
     name: Build the linux-x64-glibc orcad template
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     outputs:
       families: ${{ steps.scope.outcome == 'success' && steps.scope.outputs.families || '' }}
@@ -116,7 +120,7 @@ jobs:
   container-rootfs:
     if: github.event_name != 'pull_request' || github.event.pull_request.draft != true
     name: Export ${{ matrix.family }} rootfs
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     strategy:
       fail-fast: false
@@ -147,7 +151,8 @@ jobs:
     name: WSL2 distro (${{ matrix.family }})
     needs: [template, container-rootfs]
     runs-on: windows-2025
-    timeout-minutes: 45
+    # Healthy runs take 4-11 min plus the phase 3 restart baseline; a runner frozen during WSL2 setup is only reaped here (retried by wsl-orcad-e2e-frozen-runner-retry.yml).
+    timeout-minutes: 40
     strategy:
       fail-fast: false
       matrix:
@@ -237,12 +242,17 @@ jobs:
         with:
           name: wsl-orcad-rootfs-${{ matrix.family }}
           path: ${{ runner.temp }}/wsl-rootfs
+      - name: Verify WSL lifecycle receipts
+        run: ./config/ci/wsl-lifecycle/test-wsl-lifecycle-command.ps1
       # Runs beside the dependency install; the lane waits for it below.
       - name: Import the distros as WSL2
         id: import
         background: true
         timeout-minutes: 10
         run: |
+          . config/ci/wsl-lifecycle/invoke-wsl-lifecycle-command.ps1
+          New-Item -ItemType Directory -Force $env:ORCA_WSL_ORCAD_LANE_RECEIPTS | Out-Null
+          $lifecycle = Join-Path $env:ORCA_WSL_ORCAD_LANE_RECEIPTS 'import-lifecycle.json'
           $cache = Join-Path $env:RUNNER_TEMP 'wsl-rootfs'
           New-Item -ItemType Directory -Force $cache | Out-Null
           if ('${{ matrix.family != 'ubuntu-24.04' }}' -eq 'true') {
@@ -265,10 +275,9 @@ jobs:
           foreach ($d in $distros) {
             $sw = [Diagnostics.Stopwatch]::StartNew()
             # No WSL1 fallback: the lane exists to prove WSL2.
-            wsl.exe --import $d.Name (Join-Path $env:RUNNER_TEMP $d.Name) $rootfs --version 2
-            if ($LASTEXITCODE -ne 0) { throw "WSL2 import of $($d.Name) failed: $LASTEXITCODE" }
+            Invoke-WslLifecycleCommand -Receipt $lifecycle -Stage import -Distro $d.Name -Arguments @('--import', $d.Name, (Join-Path $env:RUNNER_TEMP $d.Name), $rootfs, '--version', '2')
             "$($d.Name) import_ms=$($sw.ElapsedMilliseconds)"
-            if (-not ((wsl.exe --list --verbose) -match "$($d.Name)\s+\S+\s+2\s*$")) { throw "$($d.Name) is not a WSL2 distro" }
+            if (-not ((Invoke-WslLifecycleCommand -Receipt $lifecycle -Stage verify-version -Distro $d.Name -Arguments @('--list', '--verbose')) -match "$($d.Name)\s+\S+\s+2\s*$")) { throw "$($d.Name) is not a WSL2 distro" }
             # A non-root default user, as on a real install; git for the lane's repo.
             # The env exports go to the file a login bash reads first; Fedora's skel ships .bash_profile.
             $setup = "set -e; $install; id orca >/dev/null 2>&1 || useradd -m -s /bin/bash orca; " +
@@ -276,16 +285,14 @@ jobs:
               "rc=/home/orca/.profile; for f in /home/orca/.bash_profile /home/orca/.bash_login; do " +
               "if [ -f `$f ]; then rc=`$f; break; fi; done; " +
               "printf 'export ORCA_BACKGROUND_LAUNCH=1\nexport USERPROFILE=`$HOME\nexport APPDATA=`$HOME/.config\nexport LOCALAPPDATA=`$HOME/.local/share\nexport XDG_CONFIG_HOME=`$HOME/.config\nexport XDG_DATA_HOME=`$HOME/.local/share\nexport XDG_CACHE_HOME=`$HOME/.cache\nexport XDG_STATE_HOME=`$HOME/.local/state\nexport CLAUDE_CONFIG_DIR=`$HOME/.claude\nexport CODEX_HOME=`$HOME/.codex\n' >> `$rc"
-            wsl.exe -d $d.Name -u root --exec sh -c $setup
-            if ($LASTEXITCODE -ne 0) { throw "provisioning $($d.Name) failed: $LASTEXITCODE" }
-            wsl.exe --terminate $d.Name
+            Invoke-WslLifecycleCommand -Receipt $lifecycle -Stage provision -Distro $d.Name -Arguments @('-d', $d.Name, '-u', 'root', '--exec', 'sh', '-c', $setup)
+            Invoke-WslLifecycleCommand -Receipt $lifecycle -Stage terminate -Distro $d.Name -Arguments @('--terminate', $d.Name)
             $sw.Restart()
-            wsl.exe -d $d.Name --exec sh -c 'echo "user=$(id -un) pid1=$(ps -p 1 -o comm=) kernel=$(uname -r)"'
-            if ($LASTEXITCODE -ne 0) { throw "first boot of $($d.Name) failed: $LASTEXITCODE" }
+            Invoke-WslLifecycleCommand -Receipt $lifecycle -Stage first-boot -Distro $d.Name -Arguments @('-d', $d.Name, '--exec', 'sh', '-c', 'echo "user=$(id -un) pid1=$(ps -p 1 -o comm=) kernel=$(uname -r)"')
             "$($d.Name) boot_ms=$($sw.ElapsedMilliseconds)"
-            wsl.exe --terminate $d.Name
+            Invoke-WslLifecycleCommand -Receipt $lifecycle -Stage terminate -Distro $d.Name -Arguments @('--terminate', $d.Name)
           }
-          wsl.exe --list --verbose
+          Invoke-WslLifecycleCommand -Receipt $lifecycle -Stage list -Arguments @('--list', '--verbose')
       - uses: ./.github/actions/install-node-dependencies
         with:
           native-runtime: node
@@ -316,7 +323,7 @@ jobs:
             "$name=$path" >> $env:GITHUB_ENV
           }
       - name: 'Phase 1: deploy, RPC, kill orcad, terminate distro'
-        timeout-minutes: 20
+        timeout-minutes: 10
         env:
           ORCA_RUN_WSL_ORCAD_LANE: '1'
           ORCA_WSL_ORCAD_LANE_PHASE: launch
@@ -327,7 +334,7 @@ jobs:
           if ($global:LASTEXITCODE -ne 0) { throw "launch phase failed: $global:LASTEXITCODE" }
       # A new process: the holders must have kept both distros Running since phase 1 exited.
       - name: 'Phase 2: holders survive, chat, reconnect, teardown'
-        timeout-minutes: 15
+        timeout-minutes: 8
         env:
           ORCA_RUN_WSL_ORCAD_LANE: '1'
           ORCA_WSL_ORCAD_LANE_PHASE: survive
@@ -335,6 +342,28 @@ jobs:
         run: |
           node node_modules/vitest/vitest.mjs run --config config/vitest.config.ts src/main/wsl/wsl-orcad-real-distro-lane.test.ts --reporter=verbose 2>&1 | Tee-Object (Join-Path $env:ORCA_WSL_ORCAD_LANE_RECEIPTS 'survive.log')
           if ($global:LASTEXITCODE -ne 0) { throw "survive phase failed: $global:LASTEXITCODE" }
+      # The WSL move's pause on real distro shells: Sleep ends them, the daemon proves the exit,
+      # the journal keeps each pane's folder, and a new shell opens there.
+      - name: 'WSL move: pause real distro terminals'
+        if: ${{ !cancelled() && steps.import.outcome == 'success' }}
+        timeout-minutes: 10
+        env:
+          ORCA_WSL_MOVE_REAL_PAUSE_DISTRO: ${{ env.PLAIN_DISTRO }}
+        run: |
+          New-Item -ItemType Directory -Force $env:ORCA_WSL_ORCAD_LANE_RECEIPTS | Out-Null
+          node node_modules/vitest/vitest.mjs run --config config/vitest.config.ts src/main/persistence/moving-wsl-projects/wsl-move-real-pause.test.ts --reporter=verbose 2>&1 | Tee-Object (Join-Path $env:ORCA_WSL_ORCAD_LANE_RECEIPTS 'wsl-move-real-pause.log')
+          if ($global:LASTEXITCODE -ne 0) { throw "WSL move real pause failed: $global:LASTEXITCODE" }
+          wsl.exe --terminate $env:PLAIN_DISTRO
+      # R40: with no terminal left, orcad idle-exits and the holder lets the distro stop on its own.
+      - name: 'Phase 3: idle orcad releases the distro; distro restart to first output baseline'
+        timeout-minutes: 30
+        env:
+          ORCA_RUN_WSL_ORCAD_LANE: '1'
+          ORCA_WSL_ORCAD_LANE_PHASE: idle-release
+          ORCA_ORCAD_TEMPLATE_PATH: ${{ runner.temp }}/orcad-template
+        run: |
+          node node_modules/vitest/vitest.mjs run --config config/vitest.config.ts src/main/wsl/wsl-orcad-real-distro-idle-release-lane.test.ts --reporter=verbose 2>&1 | Tee-Object (Join-Path $env:ORCA_WSL_ORCAD_LANE_RECEIPTS 'idle-release.log')
+          if ($global:LASTEXITCODE -ne 0) { throw "idle-release phase failed: $global:LASTEXITCODE" }
       - name: Real desktop agent configuration is unchanged
         if: always()
         run: |
@@ -350,9 +379,14 @@ jobs:
         if: ${{ !cancelled() && steps.import.outcome == 'success' }}
         timeout-minutes: 3
         run: |
-          $state = wsl.exe -d $env:PLAIN_DISTRO -u root --exec sh -c 'if [ -e /proc/sys/fs/binfmt_misc/WSLInterop ]; then echo present; else echo :WSLInterop:M::MZ::/init:P > /proc/sys/fs/binfmt_misc/register && echo restored; fi'
-          "WSLInterop: $state"
-          wsl.exe --terminate $env:PLAIN_DISTRO
+          . config/ci/wsl-lifecycle/invoke-wsl-lifecycle-command.ps1
+          $lifecycle = Join-Path $env:ORCA_WSL_ORCAD_LANE_RECEIPTS 'interop-lifecycle.json'
+          try {
+            $state = Invoke-WslLifecycleCommand -Receipt $lifecycle -Stage interop-check -Distro $env:PLAIN_DISTRO -Arguments @('-d', $env:PLAIN_DISTRO, '-u', 'root', '--exec', 'sh', '-c', 'if [ -e /proc/sys/fs/binfmt_misc/WSLInterop ]; then echo present; else echo :WSLInterop:M::MZ::/init:P > /proc/sys/fs/binfmt_misc/register && echo restored; fi')
+            "WSLInterop: $state"
+          } finally {
+            Invoke-WslLifecycleCommand -Receipt $lifecycle -Stage terminate -Distro $env:PLAIN_DISTRO -Arguments @('--terminate', $env:PLAIN_DISTRO)
+          }
           if ("$state".Trim() -ne 'present') { throw "WSLInterop was missing ($state)" }
       - name: Collect orcad logs
         if: failure()
@@ -369,7 +403,7 @@ jobs:
         run: |
           $dir = $env:ORCA_WSL_ORCAD_LANE_RECEIPTS
           $lines = @("### WSL orcad lane (${{ matrix.family }}) — $env:ImageOS $env:ImageVersion", '')
-          foreach ($phase in 'launch', 'survive') {
+          foreach ($phase in 'launch', 'survive', 'idle-release') {
             $file = Join-Path $dir "$phase.json"
             if (Test-Path $file) { $lines += "#### $phase", '```json', (Get-Content $file -Raw), '```' }
           }

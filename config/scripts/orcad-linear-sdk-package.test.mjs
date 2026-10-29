@@ -22,11 +22,8 @@ afterAll(() => {
   rmSync(deployment, { recursive: true, force: true })
 })
 
-it('ships the SDK as a deployment artifact', () => {
-  expect(ORCAD_ARTIFACTS.map((artifact) => artifact.filename)).toContain(ORCAD_LINEAR_SDK_ENTRY)
-})
-
 it("resolves linear-sdk.ts's lazy require from the deployed server under plain Node", () => {
+  expect(ORCAD_ARTIFACTS.map((artifact) => artifact.filename)).toContain(ORCAD_LINEAR_SDK_ENTRY)
   const server = join(deployment, ORCAD_SERVER_ENTRY_FILENAME)
   writeFileSync(
     server,

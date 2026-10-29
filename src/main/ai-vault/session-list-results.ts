@@ -4,42 +4,42 @@ import type {
   AiVaultSession
 } from '../../shared/ai-vault-types'
 import type { ExecutionHostId } from '../../shared/execution-host'
+import type { AiVaultScanIssueText } from '../../shared/ai-vault-scan-issue-copy'
 import { sessionSortTime } from './session-scanner-accumulator'
 import {
   requestedAiVaultSessionDepth,
   truncateAiVaultListResult
 } from '../../shared/ai-vault-session-depth'
 
-export function aiVaultScanIssueResult(args: {
+export function aiVaultScanIssueResult({
+  executionHostId,
+  path,
+  ...text
+}: {
   executionHostId?: ExecutionHostId
   path: string
-  message: string
-}): AiVaultListResult {
+} & AiVaultScanIssueText): AiVaultListResult {
   return {
     sessions: [],
     issues: [
       {
-        ...(args.executionHostId ? { executionHostId: args.executionHostId } : {}),
+        ...(executionHostId ? { executionHostId } : {}),
         agent: 'codex',
         kind: 'host',
-        path: args.path,
-        message: args.message
+        path,
+        ...text
       }
     ],
     scannedAt: new Date().toISOString()
   }
 }
 
-// A superseded scan has no findings to report; the flag tells the renderer to
-// keep the list it already has rather than paint this empty body.
+// Cancelled scans keep the existing list instead of repainting with this empty body.
 export function cancelledAiVaultListResult(): AiVaultListResult {
   return { sessions: [], issues: [], scannedAt: new Date().toISOString(), cancelled: true }
 }
 
-// Why: the serving-side scan is host-local and cached once for every caller
-// (desktop parent, web, mobile), so callers that address this host by a runtime
-// id get the cached result restamped on the way out instead of a per-host scan.
-// Mirrors the scanner's stamp recipe so ids stay stable across both paths.
+// Restamp the shared host-local cache for runtime callers, preserving the scanner's session-ID recipe.
 export function restampAiVaultListResult(
   result: AiVaultListResult,
   executionHostId: ExecutionHostId
@@ -80,9 +80,7 @@ export function mergeAiVaultListResults(
         (left, right) => sessionSortTime(right) - sessionSortTime(left)
       ),
       issues,
-      // Why: a merge is not a new scan. Reminting here made every all-host cache
-      // hit look fresh to the renderer, which only skipped apply when scannedAt
-      // matched. Keep the latest input stamp so identical legs stay a no-op.
+      // Reuse accepted scan times so unchanged host results cannot fabricate freshness.
       scannedAt: latestAiVaultScannedAt(results)
     },
     depth,
@@ -95,19 +93,12 @@ function latestAiVaultScannedAt(results: readonly AiVaultListResult[]): string {
   let latestMs = Number.NEGATIVE_INFINITY
   for (const result of results) {
     const stampMs = Date.parse(result.scannedAt)
-    // Remote legs carry their own clock and only `z.string()` validation. An
-    // unparsable or future stamp would pin the merged stamp above every local
-    // rescan and silently freeze the renderer's scannedAt equality guard.
-    // Compare parsed instants, not strings: `z.string()` does not pin the stamp
-    // to the exact `toISOString()` shape, and a legal variant (no milliseconds,
-    // a `+00:00` offset) orders wrongly under lexicographic compare.
+    // Reject invalid or future remote clocks; compare instants because ISO spellings can sort differently.
     if (Number.isNaN(stampMs) || stampMs > nowMs) {
       continue
     }
     latestMs = Math.max(latestMs, stampMs)
   }
-  // A merge has no single scan instant, so return the canonical form of the
-  // newest accepted one: echoing a winning leg's string made two legs at the
-  // same instant in different ISO shapes resolve by host-enumeration order.
+  // Canonicalize equal instants so host enumeration order cannot change the merged stamp.
   return new Date(latestMs === Number.NEGATIVE_INFINITY ? nowMs : latestMs).toISOString()
 }

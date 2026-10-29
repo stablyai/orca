@@ -1,9 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-// Why this file: detach drops the session-bound primary exit observer (it pinned
-// the disposed pane's xterm buffers), so the parked watcher sidecar is the sole
-// owner of a parked PTY's exit. Orchestrated sleep/shutdown exits must keep the
-// tab and the layout the wake path restores.
+// Without a detached primary observer, the sidecar alone must preserve parked sleep/shutdown tabs and wake layouts.
 
 const WORKTREE_ID = 'repo::/worktree'
 const TAB_ID = 'tab-1'

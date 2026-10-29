@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as BackgroundDistroGate from '../../../wsl-background-distro-gate'
 import {
   fakeSpawnDispatch,
   createFakeSpawnedChild
@@ -9,6 +10,12 @@ import { startCheckJobLogDownload } from './check-job-log-download'
 import { prCheckLogTailCache } from './check-job-log-tails'
 import { setDefaultWslDistroOverride } from '../../../git/runner'
 const { spawnMock, distroMock } = vi.hoisted(() => ({ spawnMock: vi.fn(), distroMock: vi.fn() }))
+// The default-distro fallback asks whether the distro runs before it may start it (E9).
+vi.mock('../../../wsl-background-distro-gate', async (importOriginal) => ({
+  ...(await importOriginal<typeof BackgroundDistroGate>()),
+  readWslDistroRunningState: vi.fn(async () => 'running')
+}))
+
 vi.mock('node:child_process', async (original) => ({ ...(await original()), spawn: spawnMock }))
 vi.mock('../../../wsl', async (original) => ({
   ...(await original<typeof WslModule>()),

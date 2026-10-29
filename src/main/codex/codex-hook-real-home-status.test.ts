@@ -38,9 +38,6 @@ import { reconcileRealHomeCodexHookEntries } from './codex-real-home-hook-instal
 import { CODEX_EVENT_LABEL } from './codex-hook-definition'
 import type { CodexHookAnswer, CodexHookHashes } from './codex-hook-trust-derivation'
 
-// Why this file: status reports on the home the next native pane gets, and
-// says why ~/.codex has no status when Orca cannot approve its entry there.
-
 let root: string
 let home: string
 let userData: string
@@ -51,7 +48,7 @@ const CODEX_HASHES: CodexHookHashes = Object.fromEntries(
 const hooksPath = (): string => join(home, '.codex', 'hooks.json')
 const tomlPath = (): string => join(home, '.codex', 'config.toml')
 
-/** Codex on PATH answers `next`; a pending answer removes it. */
+// Model pending answers by making Codex unavailable on PATH.
 async function answer(next: CodexHookAnswer): Promise<void> {
   if (next.kind === 'pending') {
     rmSync(mocks.codexPath)
@@ -77,7 +74,7 @@ async function writeOrcaEntry(hashes: CodexHookHashes | null): Promise<void> {
 const status = () => new CodexHookService().getStatus()
 
 beforeEach(() => {
-  // Why realpath: a symlinked temp dir (macOS /var) would give ~/.codex a second key spelling.
+  // Resolve macOS /var symlinks to avoid a second trust-key spelling.
   root = realpathSync.native(mkdtempSync(join(tmpdir(), 'orca-codex-real-home-status-')))
   home = join(root, 'home')
   userData = join(root, 'user-data')

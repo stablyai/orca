@@ -2,7 +2,7 @@ import ts from 'typescript-api'
 import { literalString, propertyName, unwrap } from './static-module-specifiers.mjs'
 
 const INDIRECT_NAME =
-  /^(?:readFile\w*|readdir\w*|glob(?:Sync|Stream|Iterate|SyncIterate|StreamSync)?|spawn(?:Sync)?|execFile(?:Sync)?|execSync|runProcess\w*|fork|Worker|createRequire|getBuiltinModule|eval|Function)$/
+  /^(?:readFile\w*|readdir\w*|glob(?:Sync|Stream|Iterate|SyncIterate|StreamSync)?|spawn(?:Sync)?|execFile(?:Sync)?|execSync|runProcess\w*|fork|Worker|createRequire|getBuiltinModule|create(?:Incremental|Watch|EmitAndSemanticDiagnosticsBuilder|SemanticDiagnosticsBuilder)?Program|createSolutionBuilder(?:WithWatch)?|createLanguageService|getParsedCommandLineOfConfigFile|parseJson(?:SourceFile)?ConfigFileContent|readConfigFile|resolveModuleName|resolveTypeReferenceDirective|readDirectory|eval|Function)$/
 const INDIRECT_CANDIDATE = new RegExp(
   `\\b${INDIRECT_NAME.source.slice(1, -1)}\\b|\\b(?:import|require)\\s*\\(|\\bURL\\b`
 )

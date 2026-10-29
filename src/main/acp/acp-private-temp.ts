@@ -1,18 +1,15 @@
-// A temp folder of its own for each process of an agent whose temp files collide across processes,
-// under Orca's locked data root. ACP children talk over stdio, so one left by an earlier host run
-// can never be reattached: the host's first start of the agent clears the whole root.
+// Stdio children cannot reattach after a host restart, so stale temp folders can be cleared.
 
 import { mkdir, mkdtemp, rm } from 'node:fs/promises'
 import { join } from 'node:path'
-import { AgentSessionPreSpawnError } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
+import { launchPreparationFailure } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import type { AcpStructuredConnection, ConnectAcpAgent } from './acp-structured-connection'
 import type { AcpStructuredSessionAdapterDeps } from './acp-structured-session-adapter-deps'
 import type { StructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
 
 const wipes = new Map<string, Promise<void>>()
 
-/** A new folder under `root` for one agent process. The host's first use of `root` clears it:
- *  a crash, or a handle Windows holds past the kill, can leave an earlier run's folder behind. */
+/** Clear crash leftovers on first use of a root, then isolate each process in a new folder. */
 export async function acpRunFolder(
   root: string,
   logger?: StructuredAgentSessionLogger
@@ -32,7 +29,6 @@ export async function acpRunFolder(
   return { path, remove: () => remove(path) }
 }
 
-/** `deps.connect`, giving the child a new folder as its temp and removing it once the child exits. */
 export async function acpPrivateTempConnect<
   Connection extends Pick<AcpStructuredConnection, 'onExit'> = AcpStructuredConnection
 >(
@@ -45,7 +41,7 @@ export async function acpPrivateTempConnect<
     join(deps.dataDirectory, 'acp-temp', deps.spec.agent),
     deps.logger
   ).catch((error: unknown) => {
-    throw new AgentSessionPreSpawnError(error)
+    throw launchPreparationFailure(error)
   })
   return (launch, options) => {
     try {

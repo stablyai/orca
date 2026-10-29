@@ -62,14 +62,9 @@ export function registeredModelCatalogDiscovery(
   return { probes, listingNamesConfiguredModel, listsInChatFolder }
 }
 
-/**
- * The host-deps slice for the catalog surface: hydrates the store from disk
- * once, then builds the service — or nothing, when the runtime cannot name
- * the currently selected account, in which case every catalog read answers
- * `unknown` rather than guessing a key.
- */
+/** Hydrate once and build catalog service only with a known selected account; otherwise answer unknown rather than guess its key. */
 export async function modelCatalogHostDeps(input: {
-  store: Pick<AgentSessionRecordStore, 'getRecord' | 'listRecords'>
+  store: Pick<AgentSessionRecordStore, 'getRecord' | 'getConversation' | 'listConversations'>
   agents: Pick<StructuredAgentRegistry, 'definition'>
   registrations: readonly CatalogRegistration[]
   deps: StructuredAgentModelCatalogContext['deps']
@@ -82,6 +77,7 @@ export async function modelCatalogHostDeps(input: {
   }
   const modelCatalog = createAgentModelCatalogService({
     store: agentModelCatalogStore,
+    getConversation: (id) => input.store.getConversation(id) ?? undefined,
     getRecord: (sessionId) => input.store.getRecord(sessionId) ?? undefined,
     drivesRecord: (record) => agentDrivesSession(input.agents, record),
     resolveAccountHome: deps.resolveAgentAccountHome,
@@ -91,7 +87,7 @@ export async function modelCatalogHostDeps(input: {
     agentReadsProjectModelConfig,
     workspaceMayOverrideDefaultModel,
     hasChatRecords: (agent) =>
-      input.store.listRecords().some((record) => record.provider === agent),
+      input.store.listConversations().some((record) => record.provider === agent),
     ...registeredModelCatalogDiscovery(input.registrations, {
       deps,
       environment: input.environment
@@ -103,7 +99,8 @@ export async function modelCatalogHostDeps(input: {
 /** The installed host lists what a changed account or agent setting made cold; with no host yet,
  *  its install lists everything anyway. */
 export function prewarmStructuredAgentModelCatalogs(): void {
-  void getStructuredAgentSessionHost()?.deps.modelCatalog?.prewarm()
+  const catalog = getStructuredAgentSessionHost()?.deps.modelCatalog
+  void catalog?.prewarm()
 }
 
 // Re-exported so the runtime deps type can reference the resolver shape without

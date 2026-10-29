@@ -29,7 +29,7 @@ type ReadDocument =
   | ProfileStateParsedDocument
   | ProfileStateValidatedDocument
 
-/** Undefined means explicit document storage; null means the domain is absent. */
+/** Undefined selects document storage; null means the domain is absent. */
 export function readProfileStateAutomationRunsDocument(
   db: Database.Database,
   profileRevision?: number
@@ -75,7 +75,7 @@ export function readProfileStateAutomationRunsDocument(
     )
   }
 
-  // Sort only stable keys; payloads stay outside the sorter and extra columns cannot shadow the key.
+  // Sort keys only to avoid retaining payloads or letting extra columns shadow identity.
   const references = db.prepare(
     `SELECT run_id FROM ${PROFILE_STATE_AUTOMATION_RUNS_TABLE} ORDER BY ordinal`
   )

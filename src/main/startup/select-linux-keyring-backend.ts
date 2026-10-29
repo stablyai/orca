@@ -2,12 +2,7 @@ import { app } from 'electron'
 import { resolveLinuxPasswordStore } from './linux-keyring-backend-selection'
 import { probeSecretServiceCollection } from './linux-secret-service-probe'
 
-/**
- * Name Chromium's credential backend when its own detection would give up (#21827).
- *
- * Must run before Electron builds its os_crypt config, which it does while starting
- * browser main parts — so before app ready, and before anything touches safeStorage.
- */
+/** Select Linux credentials before ready/safeStorage fixes os_crypt config; otherwise the requested backend is ignored (#21827). */
 export function selectLinuxKeyringBackend(
   log: (message: string) => void = (message) => console.log(message)
 ): void {
@@ -25,7 +20,6 @@ export function selectLinuxKeyringBackend(
     return
   }
   app.commandLine.appendSwitch('password-store', decision.store)
-  // Why logged only when it fires: the no-op cases are every ordinary Linux launch, and
-  // this line is the only record that the app changed its own credential backend.
+  // Log actual backend changes only; ordinary no-op launches would add noise.
   log(`[secrets] selected --password-store=${decision.store}: ${decision.reason}`)
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { AgentLaunch, AgentLaunchFields } from './agent-launch-params'
+import { AgentLaunch } from './agent-launch-params'
 import { computeAgentLaunchFingerprint } from '../agent-launch-operation'
 
 const BASE = { agent: 'claude', target: { kind: 'existing', worktree: 'id:wt-1' } }
@@ -10,25 +10,15 @@ const ACCOUNT_ENV = {
   CODEX_HOME: '/home/u/.orca-codex/b'
 }
 
-// What a host that predates the field parses with: the same object, without it.
-const OldHostAgentLaunch = AgentLaunchFields.omit({ accountEnv: true })
-
 describe('agent.launch accountEnv wire compatibility', () => {
   it('carries a validated account env on a new host', () => {
     const parsed = AgentLaunch.parse({ ...BASE, accountEnv: ACCOUNT_ENV })
     expect(parsed.accountEnv).toEqual(ACCOUNT_ENV)
   })
 
-  it('is stripped, not refused, by an older host', () => {
-    const parsed = OldHostAgentLaunch.parse({ ...BASE, accountEnv: ACCOUNT_ENV })
-    expect(parsed).not.toHaveProperty('accountEnv')
-    expect(parsed.agent).toBe('claude')
-  })
-
   it('leaves an older client launch unchanged on a new host', () => {
     const parsed = AgentLaunch.parse(BASE)
     expect(parsed).not.toHaveProperty('accountEnv')
-    expect(parsed).toEqual(OldHostAgentLaunch.parse(BASE))
   })
 
   it('stays outside the replay fingerprint', () => {

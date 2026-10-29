@@ -134,7 +134,6 @@ describe('Orca cloud dev auth service', () => {
     const result = await signOutCurrentOrcaProfile(userDataPath)
 
     expect(result.status).toBe('signed-out')
-    // Why: sign-out must remove what Relay use left behind.
     expect(existsSync(regionCache)).toBe(false)
     expect(revokeOrcaCloudSessionMock).not.toHaveBeenCalled()
     expect(getCurrentOrcaProfileAuthStatus(userDataPath)).toMatchObject({

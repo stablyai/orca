@@ -1,7 +1,7 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { MarkdownDocState } from './mobile-session-route-types'
+import type { MarkdownDocState, MobileSessionTab } from './mobile-session-route-types'
 import {
   useMobileSessionMarkdownActions,
   type MobileSessionMarkdownActionsScope
@@ -33,7 +33,18 @@ vi.mock('../platform/clipboard', () => ({ useClipboardWriter: () => ({ writeText
 vi.mock('../platform/haptics', () => ({ triggerSuccess: success, triggerError: error }))
 vi.mock('./mobile-session-write-operations', () => ({ markdownTabSave: {} }))
 
-function Probe({ doc }: { doc: MarkdownDocState }) {
+const tab: Extract<MobileSessionTab, { type: 'markdown' }> = {
+  type: 'markdown',
+  id: 'doc',
+  title: 'Notes',
+  relativePath: 'docs/notes.md',
+  filePath: '/remote/workspace/docs/notes.md',
+  isDirty: false,
+  isActive: true,
+  documentVersion: '1'
+}
+
+function Probe({ doc, markdownTab = tab }: { doc: MarkdownDocState; markdownTab?: typeof tab }) {
   const scope: MobileSessionMarkdownActionsScope = {
     hostId: 'ssh-host',
     worktreeId: 'folder:remote',
@@ -49,7 +60,8 @@ function Probe({ doc }: { doc: MarkdownDocState }) {
     markdownSaveSeqRef: { current: new Map() },
     markdownSaveInFlightRef: { current: new Set() },
     showToast,
-    readMarkdownTab: vi.fn()
+    readMarkdownTab: vi.fn(),
+    dictationLeaveHold: { holdsLeave: false, hold: () => false }
   }
   const actions = useMobileSessionMarkdownActions(scope)
   return createElement(MarkdownReader, {
@@ -60,6 +72,9 @@ function Probe({ doc }: { doc: MarkdownDocState }) {
     onRefresh: vi.fn(),
     onSave: vi.fn(),
     onDiscard: vi.fn(),
+    onCopyPath: () => {
+      void actions.copyMarkdownPath(markdownTab)
+    },
     onCopy: () => {
       void actions.copyMarkdownLocalContent('doc')
     }
@@ -115,5 +130,38 @@ describe('live reader copies through the existing local-content callback', () =>
     expect(showToast.mock.calls).toEqual([["Couldn't copy", 1500]])
     expect(error).toHaveBeenCalledOnce()
     expect(success).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['relative path', tab, tab.relativePath],
+    [
+      'host path fallback',
+      { ...tab, relativePath: '', filePath: 'C:\\workspace\\notes.md' },
+      'C:\\workspace\\notes.md'
+    ]
+  ])('copies the %s without a host connection', async (_name, markdownTab, expected) => {
+    act(() => renderer!.update(createElement(Probe, { doc, markdownTab })))
+    const button = renderer!.root.findByProps({ accessibilityLabel: 'Copy Markdown path' })
+    await act(async () => button.props.onPress())
+    expect(writeText.mock.calls).toEqual([[expected]])
+    expect(showToast.mock.calls).toEqual([['Path copied']])
+    expect(error).not.toHaveBeenCalled()
+  })
+
+  it('reports a refused path copy without claiming success', async () => {
+    writeText.mockRejectedValue(new Error('Clipboard denied'))
+    const button = renderer!.root.findByProps({ accessibilityLabel: 'Copy Markdown path' })
+    await act(async () => button.props.onPress())
+    expect(showToast.mock.calls).toEqual([["Couldn't copy path", 1500]])
+    expect(error).toHaveBeenCalledOnce()
+    expect(success).not.toHaveBeenCalled()
+  })
+
+  it('copies the current tab path after switching documents', async () => {
+    const nextTab = { ...tab, id: 'next-doc', relativePath: 'notes/next.md' }
+    act(() => renderer!.update(createElement(Probe, { doc, markdownTab: nextTab })))
+    const button = renderer!.root.findByProps({ accessibilityLabel: 'Copy Markdown path' })
+    await act(async () => button.props.onPress())
+    expect(writeText.mock.calls).toEqual([[nextTab.relativePath]])
   })
 })

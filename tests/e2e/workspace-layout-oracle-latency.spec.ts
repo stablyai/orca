@@ -1,17 +1,6 @@
-/**
- * Measures command → drawn update for layout commands, idle, with three panes flooding output
- * (`yes`), one of them in a hidden worktree, and with the same three panes flooding terminal titles
- * instead (a new title per line, the worst case for live pane titles), and time to first drawn
- * after relaunching a large
- * profile. Measuring only: it records each number in the oracle report and never fails on one,
- * so a later budget can gate on it. The plain run has no layout subscriber, so main is measured as
- * users run it; the subscribed run holds one `layout.subscribe` stream open in the window, as the
- * layout client will. The committed main baseline is workspace-layout-oracle-latency-baseline.json.
- *
- * Each command is timed twice. The in-app clock (helpers/layout-latency-probe.ts) stops in the
- * window at React's commit and at the next frame. The outer clock stops when the test sees the
- * drawn result over CDP, so it also holds one DevTools round trip.
- */
+// Record layout command latency idle, under three-pane output/title floods (one hidden worktree), and after large-profile relaunch; no timing gates.
+// Compare normal main operation with one window layout.subscribe stream; baseline is workspace-layout-oracle-latency-baseline.json.
+// In-app clocks stop at React commit/next frame; the outer CDP observation adds a DevTools round trip.
 
 import { mkdirSync, writeFileSync } from 'node:fs'
 import path from 'node:path'

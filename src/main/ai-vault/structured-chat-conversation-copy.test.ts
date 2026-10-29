@@ -50,7 +50,6 @@ describe('copying a chat conversation for Resume in New CLI', () => {
         copyStructuredChatConversation(fork({ agent, sessionId, filePath: `/x/${sessionId}` }))
       ).resolves.toEqual({
         useRealCodexHome: false,
-        // The copy opens with the CLI that ran the chat: `opencode` for an OpenCode 2.x row.
         forkedSession: {
           sessionId: 'copy-1',
           filePath: '/sessions/copy-1.jsonl',

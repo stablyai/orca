@@ -16,8 +16,16 @@ export function WorktreeContextMenuOverlays({ model }: { model: WorktreeContextM
           'auto.components.sidebar.WorktreeContextMenu.c39c37676a',
           'Create a group and move this project into it.'
         )}
-        initialName={model.repo ? `${model.repo.displayName} group` : ''}
-        confirmLabel="Create"
+        initialName={
+          model.repo
+            ? translate(
+                'auto.components.sidebar.ProjectGroupNameDialog.defaultGroupName',
+                '{{name}} group',
+                { name: model.repo.displayName }
+              )
+            : ''
+        }
+        confirmLabel={translate('auto.components.sidebar.ProjectGroupNameDialog.create', 'Create')}
         onOpenChange={model.handleCreateGroupDialogOpenChange}
         onSubmit={model.handleSubmitNewProjectGroup}
       />

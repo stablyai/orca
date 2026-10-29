@@ -6,11 +6,7 @@ export type AgentTransitionStep = {
   transition: AgentTransition | null
 }
 
-/**
- * The transitions, defined once. Each scenario is one pane's hook rows from a fresh start; the
- * host's detector must emit exactly `transition` for each row, and the sort stamps stamp Recent on
- * exactly the non-null ones and raise the unread flag on every one but a prompt.
- */
+/** One fresh-pane hook scenario per case: require exact detector transitions, Recent stamps on non-null transitions, and unread on all but prompts. */
 export const AGENT_TRANSITION_SCENARIOS: readonly {
   name: string
   steps: readonly AgentTransitionStep[]

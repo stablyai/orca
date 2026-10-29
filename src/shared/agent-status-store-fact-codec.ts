@@ -4,6 +4,7 @@ import type {
   AgentStatusFactRecord,
   AgentStatusFactValue
 } from './agent-status-store-contract'
+import { isBoundedString } from './agent-status-child-work-value-guards'
 import {
   deserializeAgentStatusSubject,
   parseAgentStatusSubject,
@@ -27,24 +28,6 @@ function isRevision(value: unknown): value is number {
   return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0
 }
 
-function isFactKey(value: unknown): value is string {
-  if (
-    typeof value !== 'string' ||
-    value.length === 0 ||
-    value.length > MAX_FACT_KEY_LENGTH ||
-    value !== value.trim()
-  ) {
-    return false
-  }
-  for (let index = 0; index < value.length; index += 1) {
-    const code = value.charCodeAt(index)
-    if (code <= 0x1f || code === 0x7f) {
-      return false
-    }
-  }
-  return true
-}
-
 function parseFactValue(value: unknown): AgentStatusFactValue | undefined {
   if (value === null || typeof value === 'boolean') {
     return value
@@ -61,7 +44,7 @@ export function parseAgentStatusFactInput(value: unknown): AgentStatusFactInput 
   }
   const subject = parseAgentStatusSubject(value.subject)
   const factValue = parseFactValue(value.value)
-  if (!subject || !isFactKey(value.key) || factValue === undefined) {
+  if (!subject || !isBoundedString(value.key, MAX_FACT_KEY_LENGTH) || factValue === undefined) {
     return null
   }
   return { subject, key: value.key, value: factValue }
@@ -82,7 +65,9 @@ export function parseAgentStatusFactIdentity(value: unknown): AgentStatusFactIde
     return null
   }
   const subject = parseAgentStatusSubject(value.subject)
-  return subject && isFactKey(value.key) ? { subject, key: value.key } : null
+  return subject && isBoundedString(value.key, MAX_FACT_KEY_LENGTH)
+    ? { subject, key: value.key }
+    : null
 }
 
 export function serializeAgentStatusFactKey(fact: AgentStatusFactIdentity): string {

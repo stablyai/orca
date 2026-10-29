@@ -1,4 +1,3 @@
-/** How the host census reaches a running Windows relay through its own bridge. */
 import { commandWithNodePath } from '../ssh-remote-commands'
 import type { RemoteHostPlatform } from '../ssh-remote-platform'
 import { quotePowerShellLiteral as powerShellLiteral } from '../../../shared/powershell-native-argument'

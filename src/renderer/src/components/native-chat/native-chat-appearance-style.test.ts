@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createGlobalSettingsFixture } from '../../../../shared/global-settings-test-fixture'
 import { buildFontFamily } from '@/lib/monospace-font-family'
+import { buildAppFontFamily } from '@/lib/app-font-family'
 import * as terminalThemeSelection from '../../../../shared/terminal-theme-selection'
 import { resolveConfiguredTerminalColors } from '../../../../shared/terminal-theme-selection'
 import { nativeChatAppearanceStyle, nativeChatContrastMix } from './native-chat-appearance-style'
@@ -25,6 +26,28 @@ describe('nativeChatContrastMix', () => {
 })
 
 describe('nativeChatAppearanceStyle terminal interface', () => {
+  it('uses a custom chat family while preserving code fonts and terminal matching precedence', () => {
+    const settings = makeSettings({
+      appFontFamily: 'Arial',
+      terminalFontFamily: 'Menlo',
+      nativeChatAppearance: { fontFamily: 'Georgia' }
+    })
+    const style = nativeChatAppearanceStyle(settings)
+    expect(style['--chat-font-family']).toBe(buildAppFontFamily('Georgia'))
+    expect(style['--chat-code-font-family']).toBe(buildFontFamily('Menlo'))
+    expect(
+      nativeChatAppearanceStyle({
+        ...settings,
+        nativeChatAppearance: { ...settings.nativeChatAppearance, matchTerminalInterface: true }
+      })['--chat-font-family']
+    ).toBe(buildFontFamily('Menlo'))
+    expect(
+      nativeChatAppearanceStyle({
+        ...settings,
+        nativeChatAppearance: { fontFamily: '' }
+      })['--chat-font-family']
+    ).toBeUndefined()
+  })
   it('follows the terminal code font while keeping default body font and colors', () => {
     const style = nativeChatAppearanceStyle(makeSettings({ terminalFontFamily: 'Menlo' }))
     expect(style['--chat-code-font-family']).toBe(buildFontFamily('Menlo'))

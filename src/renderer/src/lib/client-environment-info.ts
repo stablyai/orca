@@ -4,7 +4,6 @@ import {
 } from '../../../shared/client-environment-info'
 import { getRendererAppPlatform } from './renderer-app-platform'
 
-/** Resolve trusted desktop env details (or browser best-effort) for bug reports. */
 export async function resolveClientEnvironmentInfo(): Promise<ClientEnvironmentInfo> {
   const platformInfo = resolvePlatformInfo()
   const appVersion = await resolveAppVersion()

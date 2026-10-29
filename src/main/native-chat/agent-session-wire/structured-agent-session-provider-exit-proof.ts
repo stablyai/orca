@@ -1,7 +1,3 @@
-// What a cleanup or a stop proved about a provider child's exit, read from the adapter's typed
-// verdicts: a failed acquisition rethrows with the verdict its cleanup reached, and a stop answers
-// whether the provider root is gone.
-
 import { isAgentSessionWireRefusalCode } from '../../../shared/agent-session-wire-refusals'
 import {
   AgentSessionAcquisitionExitProvenError,
@@ -21,8 +17,7 @@ export async function rethrowAfterAgentSessionAcquisitionCleanup(
   try {
     released = (await adapter.releaseAcquisition?.({ sessionId })) === true
   } catch (cleanupError) {
-    // A root exit the cleanup observed first-hand keeps its classification and its
-    // provider diagnostic; the failure that triggered cleanup rides along as cause.
+    // Preserve observed-exit classification/diagnostics; attach the triggering failure as cause.
     throw cleanupError instanceof AgentSessionAcquisitionRootExitObservedError
       ? new AgentSessionAcquisitionRootExitObservedError(
           new AggregateError([cause, cleanupError], cleanupError.message)
@@ -37,8 +32,7 @@ export async function rethrowAfterAgentSessionAcquisitionCleanup(
   throw new AgentSessionAcquisitionExitUnprovenError(cause)
 }
 
-/** A failure whose child cleanup proved gone. One that already names its own verdict — a
- *  refusal, a typed exit proof, or a host store code — keeps it. */
+/** Preserve typed refusal/exit/store verdicts after cleanup proves the child gone. */
 function provenExitAcquisitionFailure(cause: unknown): unknown {
   const classified =
     cause instanceof AgentSessionAcquisitionRefusal ||
@@ -49,10 +43,7 @@ function provenExitAcquisitionFailure(cause: unknown): unknown {
   return classified ? cause : new AgentSessionAcquisitionExitProvenError(cause)
 }
 
-/** Whether a stop left the provider root gone. The lease follows the root, so a first-hand root
- *  exit or a processless child ends the session whatever its descendants did. A descendant left
- *  unconfirmed, or bookkeeping that failed after the proven exit, is only `report`ed. Any other
- *  failure throws. */
+/** Root exit or processless proof releases ownership; report descendant/bookkeeping failures after proof. */
 export async function stopAgentSessionProviderRoot(
   stop: () => Promise<boolean>,
   report?: (error: Error) => void

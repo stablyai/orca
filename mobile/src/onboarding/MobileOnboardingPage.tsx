@@ -1,10 +1,12 @@
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native'
 import { MessageSquare } from 'lucide-react-native'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { MobileOnboardingStep } from './mobile-onboarding-plan'
 import { mobileOnboardingStyles as styles } from './mobile-onboarding-styles'
 import { NotificationOnboardingPreview } from './NotificationOnboardingPreview'
 import type { MobileSessionView } from '../storage/session-view-preferences'
 import { colors } from '../theme/mobile-theme'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 
 export type NotificationOnboardingChoice = 'enable' | 'skip'
 export type MobileOnboardingBusyChoice = MobileSessionView | NotificationOnboardingChoice | null
@@ -28,6 +30,8 @@ export function MobileOnboardingPage({
   onSessionChoice,
   onNotificationChoice
 }: Props) {
+  const t = useMobileTranslation()
+  useMobileColorScheme()
   const busy = busyChoice !== null
   const isSessionView = step === 'session-view'
 
@@ -48,20 +52,33 @@ export function MobileOnboardingPage({
           <NotificationOnboardingPreview active={active} />
         )}
         <Text style={styles.title}>
-          {isSessionView ? 'How should sessions open?' : 'Don’t miss when an agent needs you'}
+          {isSessionView
+            ? t('onboarding.onboardingPage.sessionViewTitle', 'How should sessions open?')
+            : t(
+                'onboarding.onboardingPage.notificationsTitle',
+                'Don’t miss when an agent needs you'
+              )}
         </Text>
         <Text style={styles.body}>
           {isSessionView
-            ? 'Choose whether supported agent sessions open in the terminal or Chat UI on this device. Press and hold a session tab to switch its view, or change the default later in Settings.'
-            : 'Get a notification on this phone when an agent finishes or is waiting — even if you aren’t using the app.'}
+            ? t(
+                'onboarding.onboardingPage.sessionViewDescription',
+                'Choose whether supported agent sessions open in the terminal or Chat UI on this device. Press and hold a session tab to switch its view, or change the default later in Settings.'
+              )
+            : t(
+                'onboarding.onboardingPage.notificationsDescription',
+                'Get a notification on this phone when an agent finishes or is waiting — even if you aren’t using the app.'
+              )}
         </Text>
       </View>
 
       <View style={styles.footer}>
         {!isSessionView ? (
           <Text style={styles.disclosure}>
-            Delivered through Orca’s push service after your desktop has been idle for 3 minutes.
-            Change this anytime in Settings.
+            {t(
+              'onboarding.onboardingPage.notificationsDisclosure',
+              'Delivered through Orca’s push service after your desktop has been idle for 3 minutes. Change this anytime in Settings.'
+            )}
           </Text>
         ) : null}
         {error ? (
@@ -92,19 +109,23 @@ function SessionViewChoices({
   disabled: boolean
   onChoice: (view: MobileSessionView) => void
 }) {
+  const t = useMobileTranslation()
   return (
     <>
       <ChoiceButton
-        label="Use Chat UI"
-        accessibilityLabel="Open sessions in Chat UI"
+        label={t('onboarding.onboardingPage.useChatUi', 'Use Chat UI')}
+        accessibilityLabel={t('onboarding.onboardingPage.openInChatUi', 'Open sessions in Chat UI')}
         primary
         busy={busyChoice === 'chat'}
         disabled={disabled}
         onPress={() => onChoice('chat')}
       />
       <ChoiceButton
-        label="Keep terminal"
-        accessibilityLabel="Open sessions in the terminal"
+        label={t('onboarding.onboardingPage.keepTerminal', 'Keep terminal')}
+        accessibilityLabel={t(
+          'onboarding.onboardingPage.openInTerminal',
+          'Open sessions in the terminal'
+        )}
         busy={busyChoice === 'terminal'}
         disabled={disabled}
         onPress={() => onChoice('terminal')}
@@ -122,19 +143,26 @@ function NotificationChoices({
   disabled: boolean
   onChoice: (choice: NotificationOnboardingChoice) => void
 }) {
+  const t = useMobileTranslation()
   return (
     <>
       <ChoiceButton
-        label="Enable notifications"
-        accessibilityLabel="Enable agent notifications"
+        label={t('onboarding.onboardingPage.enableNotifications', 'Enable notifications')}
+        accessibilityLabel={t(
+          'onboarding.onboardingPage.enableAgentNotifications',
+          'Enable agent notifications'
+        )}
         primary
         busy={busyChoice === 'enable'}
         disabled={disabled}
         onPress={() => onChoice('enable')}
       />
       <ChoiceButton
-        label="Not now"
-        accessibilityLabel="Skip notifications for now"
+        label={t('onboarding.onboardingPage.notNow', 'Not now')}
+        accessibilityLabel={t(
+          'onboarding.onboardingPage.skipNotifications',
+          'Skip notifications for now'
+        )}
         busy={busyChoice === 'skip'}
         disabled={disabled}
         onPress={() => onChoice('skip')}
@@ -158,6 +186,7 @@ function ChoiceButton({
   disabled: boolean
   onPress: () => void
 }) {
+  useMobileColorScheme()
   return (
     <Pressable
       accessibilityRole="button"

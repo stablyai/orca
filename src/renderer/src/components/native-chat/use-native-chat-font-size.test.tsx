@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { NativeChatAppearanceSettings } from '../../../../shared/native-chat-appearance-settings'
+import type { NativeChatAppearanceSettings } from '../../../../shared/native-chat/native-chat-appearance-settings'
 import type { KeybindingOverrides } from '../../../../shared/keybindings'
 
 const mocks = vi.hoisted(() => {

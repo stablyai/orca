@@ -1,12 +1,5 @@
-/**
- * Which host a resource belongs to, as the pair the client needs to reach it: the Orca endpoint that
- * serves it (this app, or a paired server) and the place on that endpoint where it executes (the
- * endpoint's own machine, or one of its SSH targets).
- *
- * An `ExecutionHostId` alone cannot say "SSH target t behind server E": `ssh:t` reads as a target
- * this client dials itself. The pair can, and {@link authorityKey} keeps every spelling that already
- * exists so no persisted key changes.
- */
+/** Pair the serving endpoint with its execution location (endpoint-local or nested SSH). ExecutionHostId alone cannot represent SSH behind server E:
+ * ssh:t means client-dialable. authorityKey preserves existing spellings so persisted identities remain stable. */
 import {
   LOCAL_EXECUTION_HOST_ID,
   isUnresolvedOwnerHostId,
@@ -30,10 +23,7 @@ export type HostRef = { authority: HostAuthority; id: string }
 
 const NESTED_PREFIX = 'nested:'
 
-/**
- * In-memory only, never persisted. The nested spelling is deliberately not an `ExecutionHostId`:
- * every host-id parser rejects it, so a leaked key fails closed instead of collapsing to `runtime:E`.
- */
+/** In-memory only; nested keys deliberately fail ExecutionHostId parsing rather than collapsing to runtime:E if leaked. */
 export type HostAuthorityKey = ExecutionHostId | `${typeof NESTED_PREFIX}${string}`
 
 export const SELF_LOCAL_AUTHORITY: HostAuthority = {
@@ -77,11 +67,8 @@ export function parseHostAuthorityKey(key: string | null | undefined): HostAutho
   return authority === 'contradictory' ? null : authority
 }
 
-/**
- * Reads the renderer's existing `{ executionHostId, runtimeEnvironmentId }` route as an authority.
- * `runtimeEnvironmentId` is the transport; `executionHostId` is the host as the row names it.
- * Returns null when no usable owner is named, and `'contradictory'` when the two disagree.
- */
+/** Convert renderer routes: runtimeEnvironmentId selects transport, executionHostId names the row’s host.
+ * Return null without usable ownership, contradictory when the fields disagree. */
 export function hostAuthorityFromOperationRoute(route: {
   executionHostId: string | null
   runtimeEnvironmentId: string | null

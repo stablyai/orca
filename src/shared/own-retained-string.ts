@@ -25,18 +25,14 @@ function detectBufferCopier(): ((value: string) => string) | null {
 
 function resolveCopyString(): (value: string) => string {
   if (!copyString) {
-    // Buffer is absent in the renderer and on mobile; fall back to the code-unit block copier.
+    // Renderer/mobile lack Buffer; preserve code units with the block copier fallback.
     copyString =
       detectBufferCopier() ?? ((value: string) => copyUtf16SuffixToOwnedString(value, value.length))
   }
   return copyString
 }
 
-/**
- * Return a standalone copy of a string that outlives the chunk it came from.
- * Why: `bigChunk.slice(a, b)` is a V8 SlicedString that pins the whole parent,
- * so retaining a few KiB of tail can pin megabytes of already-consumed output.
- */
+/** Copy retained tails: V8 SlicedStrings can pin megabytes of already-consumed parent chunks. */
 export function ownRetainedString(value: string): string {
   if (value.length < MIN_SLICED_STRING_LENGTH) {
     return value

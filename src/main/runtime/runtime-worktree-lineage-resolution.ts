@@ -269,12 +269,7 @@ export async function resolveRuntimeWorktreeCreateLineage(
   }
 }
 
-/**
- * Create-time half of the lineage host boundary (#12757): update and hydrate refuse a parent on
- * another execution host, and the renderer drops such an edge, so create must not persist one.
- * An explicit parent fails before anything is created; an inferred one is dropped with a warning.
- * An unknown host on either side stays permissive, as in the projection.
- */
+/** Match update/hydrate/projection host boundaries (#12757): reject explicit cross-host parents before create, warn/drop inferred ones; unknown hosts stay permissive. */
 export function enforceCreateLineageHostBoundary(
   resolution: WorktreeLineageResolution,
   childHostId: ExecutionHostId | undefined

@@ -62,8 +62,7 @@ describe('hibernation PTY binding age', () => {
   })
 
   it('keeps accumulated age across a transient layout gap', () => {
-    // The planner already fails closed during the gap; dropping the binding here would
-    // hand the same PTY a fresh idle window every time the layout flickers.
+    // Keep binding age across transient layout gaps; resetting it would repeatedly grant the same PTY a fresh grace.
     observe('pty-1', 1_000)
     recordHibernationBoundaryResolved(PANE, 1_500)
     observe(null, 2_000)
@@ -77,6 +76,9 @@ describe('hibernation PTY binding age', () => {
   it('expires an unseen binding once it is older than the idle window', () => {
     observe('pty-1', 1_000)
     recordHibernationBoundaryResolved(PANE, 1_000)
+    observe(null, 1_000 + IDLE_MS)
+    expect(getHibernationPtyBindingFirstSeenAtByPaneKey()[PANE]).toBe(1_000)
+    expect(getHibernationBoundaryResolvedAtByPaneKey()[PANE]).toBe(1_000)
     observe(null, 1_000 + IDLE_MS + 1)
     expect(getHibernationPtyBindingFirstSeenAtByPaneKey()[PANE]).toBeUndefined()
     expect(getHibernationBoundaryResolvedAtByPaneKey()[PANE]).toBeUndefined()

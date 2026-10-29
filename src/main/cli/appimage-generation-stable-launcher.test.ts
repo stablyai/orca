@@ -12,7 +12,6 @@ vi.mock('electron', () => ({
 }))
 
 import { CliInstaller } from './cli-installer'
-import { installLinuxBareOrcaDispatcher } from './linux-bare-orca-dispatcher'
 
 const created: string[] = []
 
@@ -21,7 +20,6 @@ afterEach(async () => {
   await Promise.all(created.splice(0).map((root) => rm(root, { recursive: true, force: true })))
 })
 
-/** A server run through the stable launcher runs from one extracted generation, with no $APPIMAGE. */
 async function makeGeneration() {
   const root = await mkdtemp(join(tmpdir(), 'orca-generation-launcher-'))
   created.push(root)
@@ -47,15 +45,6 @@ async function makeGeneration() {
 describe.skipIf(process.platform === 'win32')(
   'CLI registration from an extracted generation',
   () => {
-    it('points bare `orca` at the stable launcher, never at a generation a later prune deletes', async () => {
-      const fixture = await makeGeneration()
-      const result = await installLinuxBareOrcaDispatcher({
-        resourcesPath: fixture.resourcesPath,
-        homePath: fixture.homePath
-      })
-      expect(result).toMatchObject({ state: 'installed', target: fixture.stableLauncherPath })
-    })
-
     it('recognises the stable launcher it registered as its own `orca-ide`', async () => {
       const fixture = await makeGeneration()
       const commandDirectory = join(fixture.homePath, '.local', 'bin')

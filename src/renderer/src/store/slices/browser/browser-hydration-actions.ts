@@ -57,8 +57,7 @@ export function createBrowserHydrationActions(
       })
 
       const state = get()
-      // Why here and not in the startup chain: the seeded handles are the only record that this
-      // desktop was hosting pages, and the runtime only hands them back once it sees an attach.
+      // Seeded handles alone prove prior desktop hosting; attach is required for runtime to hand those pages back.
       void ensureBrowserClientHostsForRestoredPages(state)
       for (const [worktreeId, browserTabs] of Object.entries(state.browserTabsByWorktree)) {
         // Switch point: main's layout load gives a tabless record its tab; its frame draws it.

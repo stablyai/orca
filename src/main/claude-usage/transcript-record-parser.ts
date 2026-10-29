@@ -77,8 +77,7 @@ function dedupeClaudeUsageTurns(
       const existingIndex = dedupeIndexByKey.get(turn.dedupeKey)
       if (existingIndex !== undefined) {
         const existing = deduped[existingIndex]
-        // Why: Claude Code streams repeated assistant rows with the same
-        // message/request IDs; later rows can contain more complete usage.
+        // Later streaming rows can contain more complete usage for the same turn.
         existing.inputTokens = Math.max(existing.inputTokens, turn.inputTokens)
         existing.outputTokens = Math.max(existing.outputTokens, turn.outputTokens)
         existing.cacheReadTokens = Math.max(existing.cacheReadTokens, turn.cacheReadTokens)
@@ -97,17 +96,7 @@ function dedupeClaudeUsageTurns(
   return deduped
 }
 
-/**
- * Necessary condition for `JSON.parse(line).type === 'assistant'`, checked before the parse.
- *
- * Sound for any transcript written by a standard JSON serializer: `JSON.stringify` (which writes
- * these files) escapes only quotes, backslashes and control characters, never ASCII letters, so
- * the decoded value can only be `assistant` if the line spells it literally. The gate over-admits
- * freely — the `parsed.type` check below stays authoritative.
- *
- * A `\u`-escape fallback was measured and rejected: it costs a second full-line scan and made
- * transcripts whose tool results contain control characters 1.43x slower overall.
- */
+// Assumes serializers spell ASCII `assistant` literally; parsed.type remains authoritative.
 function mayEncodeAssistantType(line: string): boolean {
   return line.includes('assistant')
 }
@@ -116,8 +105,7 @@ function parseClaudeUsageSourceRecord(
   line: string,
   fallbackSessionId: string | null = null
 ): ClaudeUsageParsedSourceTurn | null {
-  // Only assistant records carry usage, but transcripts interleave user/tool-result lines that
-  // routinely embed whole files. Reject those before paying for a full parse.
+  // Skip large user/tool-result payloads before parsing; only assistant records carry usage.
   if (!mayEncodeAssistantType(line)) {
     return null
   }
@@ -141,7 +129,7 @@ function parseClaudeUsageSourceRecord(
   const outputTokens = usage?.output_tokens ?? 0
   const cacheReadTokens = usage?.cache_read_input_tokens ?? 0
   const cacheWriteTokens = usage?.cache_creation_input_tokens ?? 0
-  // Why: clamp so the implied 5m remainder can never go negative on a partial row.
+  // Keep the implied 5m remainder nonnegative on partial rows.
   const cacheWrite1hTokens = Math.min(
     usage?.cache_creation?.ephemeral_1h_input_tokens ?? 0,
     cacheWriteTokens
@@ -157,9 +145,7 @@ function parseClaudeUsageSourceRecord(
     model: parsed.message?.model ?? null,
     cwd: parsed.cwd ?? null,
     gitBranch: parsed.gitBranch ?? null,
-    // Why: forks rewrite sessionId but keep message/request ids (and usually
-    // uuid). Prefer the strongest stable identity available so ownership still
-    // works when requestId is missing on older or partial rows.
+    // Forks rewrite sessionId; message IDs and UUID fallbacks preserve ownership across files.
     dedupeKey: buildClaudeUsageDedupeKey(parsed),
     inputTokens,
     outputTokens,

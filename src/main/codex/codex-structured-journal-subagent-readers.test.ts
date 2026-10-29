@@ -1,15 +1,10 @@
-// A Codex subagent's rows, through the real path a parent's surfaces read them:
-// translator → deferred sink → on-disk journal → snapshot → the shared readers.
-// Every reader here answers for the SESSION'S OWN agent, so a child's row must
-// never decide what it says; the transcript still renders every agent's rows.
-
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { AgentJournalRenderItem } from '../../shared/agent-session-journal-types'
 import type { AgentSessionTurnActivity } from '../../shared/agent-session-wire'
-import { selectStructuredAgentTurnActivity } from '../../shared/native-chat-turn-activity'
+import { selectStructuredAgentTurnActivity } from '../../shared/native-chat/transcript/native-chat-turn-activity'
 import { latestStructuredAgentSessionAssistantMessage } from '../../shared/structured-agent-session-latest-request'
 import {
   isStructuredAgentSessionThinking,
@@ -92,9 +87,7 @@ async function session() {
   return {
     on,
     item,
-    /** Every live activity the host published to the session's clients. */
     activities,
-    /** The parent's turn is open and has spawned a running child. */
     spawnChild: () => {
       on(PARENT, 'turn/started', { turn: { id: PARENT_TURN } })
       const spawn = {
@@ -112,7 +105,6 @@ async function session() {
       await deferred.drained()
       return journal.snapshot().items
     },
-    /** Closes and reopens the journal file, so reads come from what was persisted. */
     reopen: async (): Promise<readonly AgentJournalRenderItem[]> => {
       await deferred.drained()
       deferred.unbind()
@@ -145,7 +137,6 @@ describe("a Codex subagent's rows on the parent's surfaces", () => {
     const named = statusStructuredAgentSessionToolCall(rows)
     expect(JSON.stringify(named)).toContain('git status')
     expect(JSON.stringify(named)).not.toContain('pnpm test')
-    // The transcript is unscoped: the child's command is still a row.
     expect(JSON.stringify(rows)).toContain('pnpm test')
   })
 

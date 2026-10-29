@@ -9,10 +9,7 @@ type SubscriptionEvent =
 
 export const SESSION_TABS_DELTA_OUT_OF_SYNC_ERROR = 'session_tabs_delta_out_of_sync'
 
-/**
- * Restores tab-delta frames before any consumer sees them, so the window, the layout recorder and
- * every later reader receive exactly the frames a legacy host sends.
- */
+/** Decode deltas before consumers so windows and layout recording see legacy-compatible full frames. */
 export function decodeSessionTabsDeltaEvents(
   method: string,
   onEvent: (payload: SubscriptionEvent) => void
@@ -39,7 +36,7 @@ export function decodeSessionTabsDeltaEvents(
       )
       return
     }
-    // Why: an error frame ends the stream, and the window resubscribes from a full snapshot.
+    // End the stream on decode failure so the window resubscribes from a full snapshot.
     onEvent({
       type: 'response',
       response: {

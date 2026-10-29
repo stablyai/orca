@@ -31,8 +31,7 @@ export async function addSparseWorktree(
       options
     )
     created = true
-    // Why: `worktree add --no-checkout` writes no files, so these are the calls that
-    // actually materialize the deep path and need the long-path escape hatch.
+    // --no-checkout wrote no files; these materialization steps need Windows long-path support.
     const longPathArgs = windowsLongPathGitArgs(worktreePath)
     await gitExecFileAsync(
       ['sparse-checkout', 'init', '--cone'],
@@ -64,13 +63,12 @@ export async function addSparseWorktree(
       try {
         await removeWorktree(repoPath, worktreePath, true, {
           deleteBranch: !options.checkoutExistingBranch,
-          // Why: failed-creation rollback — the fresh branch has no user commits, so force-delete rather than orphan it.
+          // Roll back only the new branch, which has no user commits.
           forceBranchDelete: !options.checkoutExistingBranch,
           ...(options.wslDistro ? { wslDistro: options.wslDistro } : {})
         })
       } catch {
         wrapped.cleanupFailed = true
-        // Why: surface that manual cleanup may be needed, else a half-created worktree lingers silently on disk.
         wrapped.message = `${wrapped.message} (cleanup also failed — the partially created worktree at "${worktreePath}" may need manual removal)`
       }
     }

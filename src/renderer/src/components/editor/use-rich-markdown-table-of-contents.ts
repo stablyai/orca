@@ -15,10 +15,6 @@ export function useRichMarkdownTableOfContents(
   tableOfContentsItems: MarkdownTocItem[]
   navigateToTableOfContentsItem: (id: string) => void
 } {
-  // Why: building the table of contents runs a full-document remark parse on
-  // every content change. The result is only used while the panel is open
-  // (closed by default), so gate the parse on visibility; including
-  // showTableOfContents in deps rebuilds the outline the moment it opens.
   const tableOfContentsItems = useMemo(
     () => selectMarkdownTableOfContents(showTableOfContents, content),
     [content, showTableOfContents]

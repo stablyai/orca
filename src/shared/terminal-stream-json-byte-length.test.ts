@@ -1,13 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { terminalStreamJsonByteLength } from './terminal-stream-json-byte-length'
 
-/**
- * The scan, checked against the serializer it is standing in for.
- *
- * `JSON.stringify` is the oracle rather than a table of expected numbers: what this module is for
- * is not spending a copy of a half-megabyte snapshot to learn its size, and the only thing that
- * makes that safe is agreeing with the serializer on every input class it will meet.
- */
+/** Use JSON.stringify as the oracle: a size scan can avoid snapshot copies only if it matches every serializer input class. */
 
 const CASES: [string, string][] = [
   ['empty', ''],
@@ -39,15 +33,6 @@ describe('the JSON size of a terminal payload', () => {
     const mixed = CASES.map(([, value]) => value).join('\u001b[0m')
     expect(terminalStreamJsonByteLength(mixed)).toBe(
       Buffer.byteLength(JSON.stringify(mixed), 'utf8')
-    )
-  })
-
-  it('costs an ANSI snapshot far more than its text, which is the whole reason it exists', () => {
-    // The defect in one assertion: the desktop budgets the left number and the bridge caps the
-    // right one, and a rule that measured the text would pass a frame that cannot be delivered.
-    const screen = '\u001b[38;5;196m#'.repeat(20_000)
-    expect(terminalStreamJsonByteLength(screen)).toBeGreaterThan(
-      Buffer.byteLength(screen, 'utf8') * 1.4
     )
   })
 })

@@ -65,14 +65,21 @@ export function useTerminalPaneContextActions(controller: TerminalPaneCloseContr
     closeRenameSession()
     setRenamingPaneId(null)
     changePaneTitle(renamingPaneId, trimmed)
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
-  }, [closeRenameSession, renamingPaneId, renameValue, removePaneTitle, changePaneTitle])
+  }, [
+    closeRenameSession,
+    renamingPaneId,
+    renameValue,
+    removePaneTitle,
+    changePaneTitle,
+    paneTitlesRef,
+    renameSubmittedRef,
+    setRenamingPaneId
+  ])
   const handleRenameCancel = useCallback(() => {
     renameSubmittedRef.current = true
     closeRenameSession()
     setRenamingPaneId(null)
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
-  }, [closeRenameSession])
+  }, [closeRenameSession, renameSubmittedRef, setRenamingPaneId])
   const handleRenameBlur = useCallback(() => {
     if (renameSubmittedRef.current) {
       return
@@ -100,8 +107,16 @@ export function useTerminalPaneContextActions(controller: TerminalPaneCloseContr
       input.select()
       renameBlurCommitEnabledRef.current = true
     })
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
-  }, [handleRenameSubmit, renamingPaneId])
+  }, [
+    handleRenameSubmit,
+    renamingPaneId,
+    renameBlurCommitEnabledRef,
+    renameInputRef,
+    renameRefocusFrameRef,
+    renameSessionIdRef,
+    renameSubmittedRef,
+    renameUserRequestedBlurCommitRef
+  ])
   const handleRemoveTitle = useCallback(
     (paneId: number) => removePaneTitle(paneId),
     [removePaneTitle]
@@ -138,8 +153,16 @@ export function useTerminalPaneContextActions(controller: TerminalPaneCloseContr
       })
     })
     return () => cancelPendingRenameFrames()
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
-  }, [cancelPendingRenameFrames, renamingPaneId])
+  }, [
+    cancelPendingRenameFrames,
+    renamingPaneId,
+    renameBlurCommitEnabledRef,
+    renameEnableBlurFrameRef,
+    renameFocusFrameRef,
+    renameInputRef,
+    renameSessionIdRef,
+    renameSubmittedRef
+  ])
 
   const contextMenu = useTerminalPaneContextMenu({
     tabId,
@@ -214,8 +237,7 @@ export function useTerminalPaneContextActions(controller: TerminalPaneCloseContr
       return manager.getPanes().find((pane) => pane.id === paneId)?.leafId ?? null
     }
     return manager.getActivePane()?.leafId ?? null
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
-  }, [contextMenu.menuPaneId])
+  }, [contextMenu.menuPaneId, managerRef])
   const contextMenuLeafId = getContextMenuLeafId()
 
   return {

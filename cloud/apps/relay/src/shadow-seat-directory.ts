@@ -8,8 +8,7 @@ import {
 import type { RelayConfig } from './config.js'
 import { googleMetadataIdentityToken, reusedIdentityToken } from './google-metadata-identity-token.js'
 
-// Step 3: each director polls every cell's seat feed and keeps who is seated
-// where in memory. It decides nothing; readers only compare and report.
+// Each director mirrors cell seat feeds; callbacks reconcile booked joins and superseded seats.
 
 export const SHADOW_SEAT_POLL_MS = 1_000
 export const SHADOW_SEAT_POLL_TIMEOUT_MS = 2_000
@@ -91,8 +90,7 @@ const SeatFeedSchema = z.object({
   flagsApplied: z
     .object({ generation: z.union([z.string(), z.number()]), flags: z.record(z.string(), z.unknown()) })
     .optional(),
-  // What the cell acts on: reserve also while a flip back is still leasing its controls, or
-  // db once its dead-man has flipped it back. Absent from older images.
+  // Effective reserve persists while flip-back leases controls; raw mode reports dead-man db immediately. Older images omit both.
   admitModeEffective: z.enum(['db', 'reserve']).optional(),
   // Switch file and dead-man only, without the flip back: db the moment the cell trips.
   admitModeRaw: z.enum(['db', 'reserve']).optional(),
@@ -326,8 +324,7 @@ export class ShadowSeatDirectory {
     return cursor?.flagsApplied?.flags.admitMode === 'reserve' ? 'reserve' : 'db'
   }
 
-  // What placement treats the cell as: a tripped cell is a database cell at once, so nothing
-  // books into it or paces for it while it re-registers. Older images report no raw mode.
+  // Raw db stops bookings/pacing immediately during re-registration; older images fall back to effective mode.
   placementModeOf(cellId: string): 'db' | 'reserve' {
     const raw = this.cells.get(cellId)?.admitModeRaw
     return raw ?? this.admitModeOf(cellId)
@@ -337,7 +334,6 @@ export class ShadowSeatDirectory {
     return [...this.cells.keys()]
   }
 
-  // One cell's seats as the map holds them.
   seatsOnCell(cellId: string): Array<{ userId: string; relayHostId: string; seat: ShadowSeat }> {
     const cursor = this.cells.get(cellId)
     if (!cursor) return []
@@ -358,8 +354,7 @@ export class ShadowSeatDirectory {
     cursor.units = undefined
     cursor.ceiling = undefined
     cursor.intake = undefined
-    // A reserve switch stands until a feed says db, or the cell's process is replaced: one 404
-    // must not read a reserve cell's seated hosts as idle. Anything else is forgotten.
+    // Keep reserve stamp until feed says db or process changes; one 404 must not misclassify seated reserve hosts as idle.
     const reserve = cursor.flagsApplied?.flags.admitMode === 'reserve'
     const replaced =
       runtimeIncarnation !== undefined && runtimeIncarnation !== cursor.flagsIncarnation
@@ -378,8 +373,7 @@ export class ShadowSeatDirectory {
     cursor.lastFailure = reason
   }
 
-  // Every live cell has answered (a feed or a 404) since this director started;
-  // a dead, empty or isolated cell must not hold the measurement back.
+  // Completeness waits only for required live cells’ feed/404 answers, not dead/empty/isolated cells.
   isComplete(): boolean {
     if (this.required.size === 0) return false
     for (const cellId of this.required) {
@@ -388,8 +382,7 @@ export class ShadowSeatDirectory {
     return true
   }
 
-  // What the database's resolve would call this cell now, from a cell-list read up to
-  // 30 s old. `unknown`: its heartbeat ran out after that read, and the next read decides.
+  // Database liveness from <=30s-old cell list; expired-since-read heartbeat is unknown pending refresh.
   cellLiveness(cellId: string, now: number): 'live' | 'unlive' | 'unknown' {
     if (!this.heartbeats) return this.cells.has(cellId) ? 'live' : 'unlive'
     const expiresAt = this.heartbeats.expiresAt.get(cellId)
@@ -601,9 +594,7 @@ export class ShadowSeatDirectory {
     if (this.onOutranked && seats.size > 1) this.joinedSinceApply.add(key)
   }
 
-  // After the whole response, so a cell's first snapshot is judged by the mode it carries. Only a
-  // join triggers it, once per seat: a cell flipped to reserve later, or a lost demote, falls to
-  // the silence close or the ledger reconcile, as does a lower epoch that joined later.
+  // Judge after full response applies mode, once per join. Later reserve flips/lost demotes/later lower epochs rely on silence close or reconcile.
   private reportOutranked(): void {
     const report = this.onOutranked
     const keys = [...this.joinedSinceApply]
@@ -756,8 +747,7 @@ export function startShadowSeatPoller(
       cellsReadAt = now()
       cellListFailures = 0
     } catch (error) {
-      // Keep polling the last list; the database being down is not the cells being down.
-      // Back off so a stalled database is not asked once a second on a 3-connection pool.
+      // Keep polling last list through DB outages; back off refreshes to protect the three-connection pool.
       cellListFailures += 1
       const backoffMs = CELL_LIST_RETRY_BASE_MS * 2 ** (cellListFailures - 1)
       cellListRetryAt = now() + Math.min(CELL_LIST_RETRY_MAX_MS, backoffMs)
@@ -831,8 +821,7 @@ export function startShadowSeatPoller(
   const round = async (awaitPolls: boolean): Promise<void> => {
     if (stopped) return
     const refresh = refreshCells()
-    // Only the first list is waited for: later rounds poll the last list, so the round that starts
-    // a refresh no longer skips its polls (one round, ~1 s, per refresh) while the read is slow.
+    // Await only the first cell list; later slow refreshes must not skip a poll round.
     if (cellsReadAt === undefined) await refresh
     // A slow cell holds only its own slot; the timer never waits on it.
     const polls = cells.map((cell) => poll(cell))
@@ -860,9 +849,7 @@ export function startShadowSeatPoller(
     startedAt,
     tick: () => round(true),
     deadCellVerdict: (cellId, at) => {
-      // Peers count once they have served this director a feed. The candidate always does: the
-      // store asks only for a cell Postgres records as reserve, which only a feed image runs, and a
-      // director restarted after it died would otherwise never hear from it.
+      // Count peers with feed evidence, plus the candidate: PostgreSQL reserve implies a feed image, even if director restarted after it died.
       const feedCells = cells.filter((cell) => {
         if ((cell.capacityRequests ?? 1) <= 0) return false
         if (cell.cellId === cellId) return true

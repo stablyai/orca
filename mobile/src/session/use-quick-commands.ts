@@ -1,10 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { RpcClient } from '../transport/rpc-client'
 import { isLogicalClientCutoverError } from '../transport/stable-logical-rpc-client'
-import {
-  interpretOrThrowRefusalMessage,
-  refusedRpcMessageOrFallback
-} from '../transport/rpc-refusal-message'
+import { refusedRpcMessageOrFallback } from '../transport/rpc-refusal-message'
 import type { RpcResponse } from '../transport/types'
 import type { TerminalQuickCommand } from '../../../src/shared/terminal-quick-command-types'
 import { quickCommandsRead } from './mobile-session-read-operations'
@@ -17,8 +15,7 @@ import {
 
 type Args = {
   client: RpcClient | null
-  // Fetch only while the sheet is open — quick commands are settings data we
-  // don't need to keep hydrated for every session screen.
+  // Hydrate only while open; session screens do not otherwise need quick-command settings.
   enabled: boolean
 }
 
@@ -27,9 +24,13 @@ type QuickCommandsState = {
   loading: boolean
   ready: boolean
   error: string | null
-  // Optimistically apply against the latest local list, then serialize writes.
-  // The server re-normalizes and returns the canonical list, which we adopt.
+  // Serialize optimistic writes and adopt the host’s canonical result.
   persist: (mutation: TerminalQuickCommandMutation) => Promise<boolean>
+}
+
+type QuickCommandError = {
+  kind: 'loadFailed' | 'saveFailed'
+  message?: string
 }
 
 type PendingMutation = {
@@ -47,9 +48,7 @@ type MutationContext = {
 
 const LOAD_CUTOVER_MAX_RETRIES = 5
 
-// Why: opening the sheet right after connecting over relay races the relay→direct
-// cutover, which rejects in-flight one-shots while connState stays 'connected';
-// the read is side-effect-free, so replay it instead of stranding an empty sheet.
+// Relay-to-direct cutover can reject reads while still connected; safely replay instead of leaving the sheet empty.
 async function loadQuickCommandsWithCutoverRetry(
   client: RpcClient,
   cancelled: () => boolean
@@ -70,10 +69,11 @@ async function loadQuickCommandsWithCutoverRetry(
 }
 
 export function useQuickCommands({ client, enabled }: Args): QuickCommandsState {
+  const t = useMobileTranslation()
   const [commands, setCommands] = useState<TerminalQuickCommand[]>([])
   const [loading, setLoading] = useState(false)
   const [ready, setReady] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<QuickCommandError | null>(null)
   const commandsRef = useRef<TerminalQuickCommand[]>([])
   const operationIdRef = useRef(0)
   const mutationContextRef = useRef<MutationContext | null>(null)
@@ -85,7 +85,7 @@ export function useQuickCommands({ client, enabled }: Args): QuickCommandsState 
     }
     let mutationContext = mutationContextRef.current
     if (mutationContext?.client !== client) {
-      // A request for an old host must not delay or update mutations on a new one.
+      // Old-host requests must neither delay nor update new-host mutations.
       mutationContext = {
         client,
         confirmed: [],
@@ -106,8 +106,7 @@ export function useQuickCommands({ client, enabled }: Args): QuickCommandsState 
 
     void (async () => {
       try {
-        // A close/reopen can overlap an in-flight save. Read only after that
-        // save settles so an older snapshot cannot replace its canonical result.
+        // Wait for overlapping saves before reading so stale snapshots cannot replace their canonical result.
         await mutationContext.queue
         if (
           stale ||
@@ -134,11 +133,14 @@ export function useQuickCommands({ client, enabled }: Args): QuickCommandsState 
         try {
           next = parseNormalizedTerminalQuickCommands(quickCommandsRead.interpret(response))
         } catch (err) {
-          setError(refusedRpcMessageOrFallback(err, 'Failed to load quick commands'))
+          setError({
+            kind: 'loadFailed',
+            message: refusedRpcMessageOrFallback(err, '') || undefined
+          })
           return
         }
         if (!next) {
-          setError('Failed to load quick commands')
+          setError({ kind: 'loadFailed' })
           return
         }
         mutationContext.confirmed = next
@@ -151,7 +153,7 @@ export function useQuickCommands({ client, enabled }: Args): QuickCommandsState 
           operationId === operationIdRef.current &&
           mutationContextRef.current === mutationContext
         ) {
-          setError(err instanceof Error ? err.message : 'Failed to load quick commands')
+          setError({ kind: 'loadFailed', message: err instanceof Error ? err.message : undefined })
         }
       } finally {
         if (
@@ -171,8 +173,7 @@ export function useQuickCommands({ client, enabled }: Args): QuickCommandsState 
 
   const persist = useCallback(
     async (commandMutation: TerminalQuickCommandMutation) => {
-      // Why: the loaded list is the optimistic/rollback baseline; mutating
-      // before it arrives would make failure recovery show invented state.
+      // Wait for the rollback baseline; mutating before load would invent recovery state.
       const mutationContext = mutationContextRef.current
       if (!client || loading || !ready || mutationContext?.client !== client) {
         return false
@@ -190,26 +191,34 @@ export function useQuickCommands({ client, enabled }: Args): QuickCommandsState 
 
       const send = async (): Promise<boolean> => {
         let succeeded = false
-        let failureMessage: string | null = null
+        let failureMessage: QuickCommandError | null = null
         try {
           const response = await quickCommandsWrite.request(client, {
             mutation: commandMutation
           })
           let confirmed
-          confirmed = interpretOrThrowRefusalMessage(
-            () => parseNormalizedTerminalQuickCommands(quickCommandsWrite.interpret(response)),
-            'Failed to save quick command'
-          )
+          try {
+            confirmed = parseNormalizedTerminalQuickCommands(quickCommandsWrite.interpret(response))
+          } catch (err) {
+            failureMessage = {
+              kind: 'saveFailed',
+              message: refusedRpcMessageOrFallback(err, '') || undefined
+            }
+            return false
+          }
           if (!confirmed) {
-            // Why: treating an invalid success payload as [] would let the next
-            // full-list mutation erase commands that still exist on the host.
-            throw new Error('Failed to save quick command')
+            // An invalid payload is not an empty list: adopting it could erase host commands on the next write.
+            failureMessage = { kind: 'saveFailed' }
+            return false
           }
           mutationContext.confirmed = confirmed
           succeeded = true
           return true
         } catch (err) {
-          failureMessage = err instanceof Error ? err.message : 'Failed to save quick command'
+          failureMessage = {
+            kind: 'saveFailed',
+            message: err instanceof Error ? err.message : undefined
+          }
           return false
         } finally {
           mutationContext.pending = mutationContext.pending.filter(
@@ -241,5 +250,13 @@ export function useQuickCommands({ client, enabled }: Args): QuickCommandsState 
     [client, loading, ready]
   )
 
-  return { commands, loading, ready, error, persist }
+  const errorMessage =
+    error === null
+      ? null
+      : (error.message ??
+        (error.kind === 'loadFailed'
+          ? t('session.useQuickCommands.loadFailed', 'Failed to load quick commands')
+          : t('session.useQuickCommands.saveFailed', 'Failed to save quick command')))
+
+  return { commands, loading, ready, error: errorMessage, persist }
 }

@@ -22,7 +22,6 @@ function enoent(): Error {
   return Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
 }
 
-// Why: Capture original env values once so we can restore them after every test.
 const originalXdgConfigHome = process.env.XDG_CONFIG_HOME
 const originalAppData = process.env.APPDATA
 

@@ -36,8 +36,7 @@ export function getCodexAccountAuthWarning(args: {
   if (args.accountId !== args.activeAccountId) {
     return null
   }
-  // Why: app-server reports API-key homes as a ChatGPT-auth error because
-  // usage is unsupported; that is not a stale sign-in the user can re-auth.
+  // API-key homes report unsupported usage as ChatGPT auth errors; reauthentication cannot fix them.
   if (args.accountId === null && args.authKind === 'api-key') {
     return null
   }

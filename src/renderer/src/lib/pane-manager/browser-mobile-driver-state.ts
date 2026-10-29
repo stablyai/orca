@@ -117,8 +117,7 @@ export function hydrateBrowserDrivers(
     }
   }
 
-  // Why: browser panes can mount before IPC hydration returns after reload.
-  // Notify all known pages so a stale desktop input surface cannot stay active.
+  // Notify every known page after late hydration so mounted panes cannot retain stale desktop input ownership.
   for (const browserPageId of affectedPageIds) {
     notifyChange({ browserPageId, driver: getDriverForBrowserPage(browserPageId) })
   }

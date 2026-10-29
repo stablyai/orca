@@ -1,5 +1,6 @@
-// The provider spawn options both spawn lanes build, from facts each lane resolves its own way.
-
+import { withClaudeAgentViewPlugin } from '../../../shared/claude-agent-view-launch'
+import { resolveStartupShell } from '../../../shared/tui-agent-startup-shell'
+import { resolveLocalWindowsAgentStartupShell } from '../../../shared/windows-terminal-shell'
 import { getAppEnvironment } from '../../../shared/app-environment'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import { isTuiAgent } from '../../../shared/tui-agent-config'
@@ -40,7 +41,7 @@ export function assemblePtySpawnEnvDeletions(input: {
   codexResumeHomeSelected: boolean
   settings: GlobalSettings | undefined
 }): { env: Record<string, string> | undefined; envToDelete: string[] } {
-  // Why here: every provider (local, daemon, SSH relay, WSL) spawns from this env.
+  // Apply isolation at the common environment boundary used by every provider.
   const env = withCodexTerminalServerIsolationEnv(input.env, input.settings)
   let envToDelete =
     mergePtyEnvDeletions(
@@ -48,18 +49,17 @@ export function assemblePtySpawnEnvDeletions(input: {
       // Persistent daemons and older SSH hosts must not resurrect a parent Pi's ownership.
       PI_PROCESS_OWNER_ENV_KEYS,
       input.agentTeamsEnvToDelete,
-      // Why: disable old hosts without removing ORCA_REAL_* while their Windows shim remains on PATH.
+      // Disable legacy hooks on old hosts while preserving ORCA_REAL pointers needed by Windows shims.
       input.isDaemonHostSpawn || input.connectionId ? LEGACY_TERMINAL_SHIM_REMOTE_ENV_KEYS : [],
       input.isDaemonHostSpawn ? getInheritedAgentHookEnvKeysToDelete(env) : [],
       // The daemon must judge its own inherited value; main may have a different config.
       !input.connectionId && !input.isDaemonHostSpawn
         ? getLegacyOpenCodeEnvKeysToDelete(env, getAppEnvironment().getPath('userData'))
         : [],
-      // Why: ungated, unlike the agent-hook keys — the local provider and the relay host also spread their own process.env into every spawn.
+      // Local/relay providers also merge ambient env, so remove inherited session stamps on every path.
       getInheritedAgentSessionStampEnvKeysToDelete(env),
       input.skipCodexHomeEnv ? CODEX_HOME_ENV_KEYS : [],
-      // Why: the persistent daemon compares its own merged CODEX_HOME pair;
-      // main cannot safely decide ownership for a process it may not parent.
+      // Persistent daemons must compare their own merged Codex home markers.
       input.stripInheritedOrcaCodexHome ? ['ORCA_CODEX_HOME'] : []
     ) ?? []
   if (input.codexResumeHomeSelected) {
@@ -109,7 +109,6 @@ export type PtySpawnLaunchOptionsInput = {
   claudeAuth: TrustInput['claudeAuth']
 }
 
-/** Builds every provider field both lanes share; lane-only fields are added by the caller. */
 export async function assemblePtySpawnLaunchOptions(input: PtySpawnLaunchOptionsInput): Promise<{
   spawnOptions: PtySpawnOptions
   env: Record<string, string> | undefined
@@ -118,6 +117,14 @@ export async function assemblePtySpawnLaunchOptions(input: PtySpawnLaunchOptions
   const { args } = input
   const connectionId = args.connectionId ?? undefined
   const launchAgent = isTuiAgent(args.launchAgent) ? args.launchAgent : undefined
+  const shell = resolveStartupShell(
+    input.codexRuntime === 'wsl' ? 'linux' : process.platform,
+    resolveLocalWindowsAgentStartupShell({
+      platform: process.platform,
+      isRemote: Boolean(connectionId) || input.codexRuntime === 'wsl',
+      terminalWindowsShell: input.shellOverride ?? input.getSettings?.()?.terminalWindowsShell
+    })
+  )
   const openCodeLaunch = await prepareOpenCodePtyLaunch({
     command: input.launchCommand,
     agent: launchAgent,
@@ -126,12 +133,17 @@ export async function assemblePtySpawnLaunchOptions(input: PtySpawnLaunchOptions
     cwd: input.cwd,
     connectionId,
     isFreshLaunch: !input.preAdoptedStablePane && input.launchCommand !== undefined,
+    shell,
     ...(input.codexRuntime === 'wsl'
       ? { wsl: { distro: input.expectedWslDistro ?? undefined } }
       : {})
   })
   const env = openCodeLaunch.env
-  const launchCommand = openCodeLaunch.command
+  const pluginDir = !connectionId ? env?.ORCA_CLAUDE_AGENT_VIEW_PLUGIN_DIR : undefined
+  const launchCommand =
+    pluginDir && openCodeLaunch.command
+      ? withClaudeAgentViewPlugin(openCodeLaunch.command, pluginDir, shell)
+      : openCodeLaunch.command
   promoteAgentTeamsShimPath(env, input.requestedAgentTeamsPath)
   const spawnOptions: PtySpawnOptions = {
     cols: args.cols,
@@ -193,6 +205,7 @@ export async function assemblePtySpawnLaunchOptions(input: PtySpawnLaunchOptions
     claudeAuth: input.claudeAuth,
     wslDistro: input.expectedWslDistro,
     connectionId: connectionId ?? null,
+    codexHome: input.selectedCodexHomePath,
     spawnOptions
   })
   if (trustWrite) {
@@ -208,7 +221,7 @@ export async function assemblePtySpawnLaunchOptions(input: PtySpawnLaunchOptions
     spawnOptions.sessionId = input.sessionId
   }
   if (!connectionId) {
-    // Why: without this, the Windows daemon path ignores the user's Default Shell preference (LocalPtyProvider already honors it via getWindowsShell()).
+    // Daemon spawns must honor saved Windows shell preference too.
     if (input.shellOverride !== undefined) {
       spawnOptions.shellOverride = input.shellOverride
     }
@@ -219,7 +232,7 @@ export async function assemblePtySpawnLaunchOptions(input: PtySpawnLaunchOptions
       settings: input.getSettings?.()
     })
     if (process.platform === 'win32') {
-      // Why: the renderer models PowerShell as one shell family; thread the implementation choice so both PTY paths resolve the same executable.
+      // Preserve the PowerShell implementation choice across both provider paths.
       spawnOptions.terminalWindowsWslDistro = input.expectedWslDistro
       spawnOptions.terminalWindowsPowerShellImplementation = input.getSettings
         ? (input.getSettings()?.terminalWindowsPowerShellImplementation ?? 'auto')
@@ -229,59 +242,54 @@ export async function assemblePtySpawnLaunchOptions(input: PtySpawnLaunchOptions
   return { spawnOptions, env, launchCommand }
 }
 
-/**
- * Seeds a session's size before the provider spawns, and returns what was cached so a lost
- * reservation race can restore it.
- */
+export type PtySpawnSizeSeed = {
+  cachedBeforeAttach: { cols: number; rows: number } | undefined
+  rollback: (options?: { reattachId?: string; exitedBeforeSpawnReply?: boolean }) => void
+}
+
+/** Samples and seeds geometry only when preparation reaches this resource. */
 export function seedPtySpawnSize(input: {
   sessionId: string | undefined
   sessionAppId: string | undefined
   isFreshSessionId: boolean
-  /** TEMPORARY (C5e/C6 decide who seeds): window hidden requests are unmeasured; host requests never are. */
   requestIsUnmeasured: boolean
   cols: number
   rows: number
-}): {
-  hadSessionSizeBeforeAttach: boolean
-  sessionSizeBeforeAttach: { cols: number; rows: number } | undefined
-} {
-  const hadSessionSizeBeforeAttach =
-    input.sessionAppId !== undefined ? ptySizes.has(input.sessionAppId) : false
-  const sessionSizeBeforeAttach =
-    input.sessionAppId !== undefined ? ptySizes.get(input.sessionAppId) : undefined
+}): PtySpawnSizeSeed {
+  const key = input.sessionAppId ?? input.sessionId
+  const cachedBeforeAttach = key !== undefined ? ptySizes.get(key) : undefined
   if (
     input.sessionId !== undefined &&
     shouldSeedPreAttachPtySize({
       isFreshSessionId: input.isFreshSessionId,
-      hasCachedSize: hadSessionSizeBeforeAttach,
+      hasCachedSize: cachedBeforeAttach !== undefined,
       requestIsUnmeasured: input.requestIsUnmeasured
     })
   ) {
-    // Why: daemon PTYs can emit before spawn() resolves; set real geometry now or early bytes default to 80x24 and wrap TUIs.
-    ptySizes.set(input.sessionAppId ?? input.sessionId, { cols: input.cols, rows: input.rows })
+    // Daemon output can precede the reply; the grid must exist before byte zero.
+    ptySizes.set(key!, { cols: input.cols, rows: input.rows })
   }
-  return { hadSessionSizeBeforeAttach, sessionSizeBeforeAttach }
+  return {
+    cachedBeforeAttach,
+    rollback: (options) => {
+      if (input.sessionId === undefined || key === options?.reattachId) {
+        return
+      }
+      if (cachedBeforeAttach && !options?.exitedBeforeSpawnReply) {
+        ptySizes.set(key!, cachedBeforeAttach)
+      } else {
+        ptySizes.delete(key!)
+      }
+    }
+  }
 }
 
-/** Undoes a provisional size seed after a failed start, or a lost race that reattaches to another id. */
-export function restoreProvisionalPtySize(input: {
-  sessionId: string | undefined
-  sessionAppId: string | undefined
-  /** Set when a lost reservation race reattached; the winner may have committed this id's real size. */
-  reattachId?: string
-  hadSessionSizeBeforeAttach: boolean
-  sessionSizeBeforeAttach: { cols: number; rows: number } | undefined
-}): void {
-  if (input.sessionId === undefined) {
-    return
-  }
-  const provisionalSizeKey = input.sessionAppId ?? input.sessionId
-  if (provisionalSizeKey === input.reattachId) {
-    return
-  }
-  if (input.hadSessionSizeBeforeAttach && input.sessionSizeBeforeAttach) {
-    ptySizes.set(provisionalSizeKey, input.sessionSizeBeforeAttach)
-  } else {
-    ptySizes.delete(provisionalSizeKey)
-  }
+/** Takes the acquired seed so teardown and outer failure cannot restore it twice. */
+export function restoreProvisionalPtySize(
+  state: { provisionalPtySize: PtySpawnSizeSeed | undefined },
+  options?: Parameters<PtySpawnSizeSeed['rollback']>[0]
+): void {
+  const seed = state.provisionalPtySize
+  state.provisionalPtySize = undefined
+  seed?.rollback(options)
 }

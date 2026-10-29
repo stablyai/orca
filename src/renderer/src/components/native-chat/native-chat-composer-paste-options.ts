@@ -9,14 +9,13 @@ export type UseNativeChatComposerPasteArgs = {
   /** Re-read after awaits so a mid-paste disable guards the composer. */
   disabled: boolean
   caret: number
-  /** Resolved at paste time: a remote pane must save the clipboard image on its
-   *  host, or the attached path names a file the agent cannot read. */
+  /** Resolve at paste time so remote images save where the agent can read them. */
   resolveAttachmentOwner: () => NativeChatAttachmentOwner
   attachResolvedPaths: (paths: string[], connectionId?: string | null) => void
   /** Files a file manager copied attach through the composer's drop route. */
   attachCopiedFiles: (paths: string[], options?: { focus?: boolean }) => void
-  /** Captured at paste time: continues chips a paste reserved through that route once the
-   *  clipboard shows they are files, even if the composer unmounted meanwhile. */
+  captureExternalPaths?: () => (paths: string[]) => void | Promise<void>
+  /** Capture reserved-chip ownership before clipboard awaits so file resolution survives composer unmount. */
   captureCopiedFiles: (options?: {
     focus?: boolean
   }) => (reserved: NativeChatReservedAttachment[]) => Promise<void>

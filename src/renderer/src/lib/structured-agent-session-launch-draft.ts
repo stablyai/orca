@@ -3,8 +3,7 @@ import { structuredAgentSessionTabId } from '../../../shared/structured-agent-se
 import { useAppStore } from '@/store'
 import type { StructuredAgentLaunchOptions } from './structured-agent-session-launch-callers'
 
-/** Why not the legacy seed: its mirror cap exists because a TUI cannot clear more than forty lines,
- *  and a structured session has no TUI copy, so a gated seed here would be a lost prompt. */
+/** Structured chats have no TUI mirror; the legacy forty-line cap would drop prompts instead of protecting TUI clearing. */
 export function seedStructuredAgentLaunchDraft(
   sessionId: string,
   agent: TuiAgent,

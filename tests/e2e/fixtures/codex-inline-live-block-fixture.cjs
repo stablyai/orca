@@ -1,22 +1,12 @@
-// Codex-like INLINE-mode TUI (normal buffer, never alt-screen): history lines
-// scroll into terminal scrollback while a live block (working spinner + input
-// box + status line) repaints glued to the bottom of the screen, wrapped in
-// synchronized-output brackets. This is the write shape a real Codex CLI
-// produces mid-generation — the shape the alt-screen fixtures cannot cover.
-//
-// argv[2] = heartbeat file path (latest frame number, rewritten every tick).
-// argv[3] = history lines per second (default 4) — raise it so a hidden/parked
-//           window accumulates a field-sized backlog for the reveal to race.
-// The stream NEVER stops on its own; tests park/hide/reveal around it and
-// assert the revealed terminal converges to the live frame without a resize.
+// Model Codex normal-buffer redraws: append scrollback while repainting a synchronized live block at the bottom.
+// argv: heartbeat path, history lines/second; keep running across park/reveal so tests can require live-frame convergence.
 const fs = require('node:fs')
 
 const heartbeatPath = process.argv[2]
 const TICK_MS = 60
 const HISTORY_LINES_PER_SECOND = Math.max(0, Number(process.argv[3]) || 4)
 const BLOCK_ROWS = 6
-// argv[4]: seed scrollback size — a field Codex session carries thousands of
-// lines, which is what makes the reveal replay long enough to lose races.
+// argv[4] seeds enough scrollback to expose reveal/replay races.
 const INITIAL_HISTORY_LINES = Math.max(0, Number(process.argv[4]) || 120)
 
 let frame = 0
@@ -48,13 +38,11 @@ function liveBlock() {
     '› INPUT_BOX_READY_MARKER',
     'status: streaming · esc to interrupt'
   ]
-  // Absolute-position to the block top and clear below, like ratatui's inline
-  // viewport redraw.
+  // Match ratatui’s inline viewport redraw with absolute positioning and clear-below.
   return `\x1b[${top};1H\x1b[J${lines.join('\r\n')}`
 }
 
-// ratatui insert_before-style history: scroll one line into scrollback from
-// the bottom row, then write the new history line just above the live block.
+// Match ratatui insert_before: scroll history from the bottom, then write above the live block.
 function insertHistory(count) {
   const r = rows()
   const histTop = Math.max(1, r - BLOCK_ROWS)
@@ -88,9 +76,7 @@ function tick() {
   }
 }
 
-// Codex-shaped startup: terminal queries (answered by xterm or the daemon's
-// model responder) and mouse reporting, so the run takes the live-agent
-// classification branches instead of the plain-shell ones.
+// Emit agent-style queries/mouse modes so classification takes live-agent branches.
 process.stdout.write('\x1b[c\x1b[6n\x1b]10;?\x07\x1b]11;?\x07')
 process.stdout.write('\x1b[?1002h\x1b[?1006h')
 
@@ -104,8 +90,7 @@ process.stdout.write('\x1b[?1002h\x1b[?1006h')
 }
 
 const tickTimer = setInterval(tick, TICK_MS)
-// A real inline TUI fully repaints its live block on SIGWINCH. Keep that
-// behavior for realism, but tests must converge WITHOUT relying on it.
+// Preserve realistic resize repaint, but reveal assertions must converge without relying on it.
 process.stdout.on('resize', () => {
   process.stdout.write(`\x1b[?2026h\x1b[?25l${liveBlock()}\x1b[?25h\x1b[?2026l`)
 })
@@ -125,8 +110,7 @@ function stop() {
   if (process.stdin.isTTY) {
     process.stdin.setRawMode(false)
   }
-  // Why: the e2e sends Ctrl+C while raw mode is active, so Node receives a
-  // byte instead of SIGINT; explicitly restore modes and terminate the fixture.
+  // Raw-mode Ctrl+C arrives as a byte; restore modes and exit explicitly.
   process.stdout.write('\x1b[?1002l\x1b[?1006l\x1b[?25h\x1b[?2026l', () => process.exit(0))
 }
 

@@ -21,19 +21,12 @@ type RuntimeFileChannelHost = {
   statRuntimeFile(worktree: string, relativePath: string): Promise<unknown>
 }
 
-// Release runs from the lease registry, which only knows the runtime by id; the store itself is
-// only ever created for a file-channel host.
+// Lease cleanup knows only the runtime id; file-channel hosts create the store.
 type DownloadTransferRuntime = RuntimeFileChannelHost | { getRuntimeId(): string }
 
 const stores = new WeakMap<DownloadTransferRuntime, BrowserClientDownloadTransferStore>()
 
-/**
- * Drops every staged download a page still owns.
- *
- * Runs on the runtime side of page retirement and lease fencing, so cleanup happens even when the
- * client transport that would have sent the abort is already gone. No-op for a runtime that never
- * opened a file channel.
- */
+/** Clean staged downloads during retirement/fencing even after transport loss; no-op without a store. */
 export function releaseBrowserClientDownloadTransfersForPage(
   runtime: DownloadTransferRuntime,
   browserPageId: string,

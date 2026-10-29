@@ -14,6 +14,7 @@ import {
 import { isFolderRepo } from '../../shared/repo-kind'
 import { requireRepoLocalGitRoute } from '../repo-execution-host'
 import type { ProjectRuntimeResolutionStore } from '../local-project-runtime-resolution'
+import { reviewStartPointFailure } from '../../shared/review-start-point-failure-copy'
 
 export type RuntimeGitHubWorktreeBaseArgs = {
   repoSelector: string
@@ -37,12 +38,12 @@ export async function resolveRuntimeGitHubWorktreeBase(
   try {
     repo = await deps.resolveRepo(args.repoSelector)
   } catch {
-    return { error: 'Repo not found' }
+    return reviewStartPointFailure('repoNotFound')
   }
   if (isFolderRepo(repo)) {
-    return { error: 'Folder mode does not support creating worktrees.' }
+    return reviewStartPointFailure('folderUnsupported')
   }
-  // Why the shared gate: a row may name its SSH host only as `executionHostId`.
+  // Use shared host gating: executionHostId may be a row's only SSH marker.
   requireRepoLocalGitRoute(repo)
   const localGitExecOptions = getLocalProjectGitExecOptions(deps.store, repo)
   const localGhOptions = getLocalProjectGhExecOptions(deps.store, repo)

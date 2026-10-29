@@ -5,6 +5,7 @@ import type { ProgramStatusFacet } from './program-status/facet'
 import type { CheckStatus } from './github/pull-request-types'
 import type { AgentChildWorkView } from './agent-status-child-work-view'
 import type { AgentSubagentSnapshot } from './agent-status-subagent-snapshot'
+import type { RuntimeTerminalInteractiveWait } from './runtime-terminal-contracts'
 import type { BaseRefSearchResult, Repo } from './repo-types'
 import type { CreateWorktreeResult, RemoveWorktreeResult } from './worktree/create-types'
 import type {
@@ -15,6 +16,7 @@ import type {
 import type { RuntimeListingHostScope } from './runtime-listing-host-scope'
 import type { GitWorktreeInfo, Worktree } from './worktree/types'
 import type { WorkspaceStatusWarning } from './workspace-status-warning'
+import type { WorktreeStatus } from './worktree-status-rollup'
 
 export type RuntimeWorktreeSetResult = {
   worktree: RuntimeWorktreeRecord
@@ -35,10 +37,10 @@ export type RuntimeWorktreeAgentRow = {
   toolName: string | null
   toolInput: string | null
   interrupted: boolean
-  /** The main agent's own state, verdict and clock, sent whenever the host row has one, including
-   *  while subagents hold the row `working`. Optional on the wire: old hosts never send it, and a
-   *  reader without it falls back to `interrupted`. */
+  /** Main-agent state/verdict/clock even while subagents keep the row working; old hosts omit it, falling back to interrupted. */
   mainAgent?: AgentMainAgentStatus
+  /** Same as `terminal show`, only when requested: null is "looked, no wait"; absent is not evaluated (structured workers, old hosts). */
+  agentWait?: RuntimeTerminalInteractiveWait | null
   stateStartedAt: number
   updatedAt: number
   /** Native canonical views win over the CLI roster, including an explicit empty list. */
@@ -47,9 +49,10 @@ export type RuntimeWorktreeAgentRow = {
   /** The host's freshness verdict; child clocks cannot be compared with the phone's clock. */
   subagentObservation?: 'live' | 'unverifiable'
   restoredUnconfirmed?: boolean
-  /** The structured session host still runs this row's provider child, so it is fresh regardless
-   *  of age. Optional on the wire: old hosts never send it. */
+  /** A structured host still owns the provider child, so age alone cannot stale it. Old hosts omit this. */
   structuredHostOwned?: true
+  /** A connected PTY backs the row, so a stale row reads "No update in …" rather than idle. Old hosts omit this. */
+  hasLivePty?: true
   /** The program's own OSC 7501 report; never decides `state`. Optional: old hosts never send it. */
   programStatus?: ProgramStatusFacet
 }
@@ -62,6 +65,7 @@ export type RuntimeWorktreePsSummary = {
   terminalPlatform?: NodeJS.Platform
   repo: string
   path: string
+  priorWorktreeIds?: string[]
   branch: string
   isArchived: boolean
   isMainWorktree: boolean
@@ -84,8 +88,7 @@ export type RuntimeWorktreePsSummary = {
   createdAt?: number
   creatorProvenance?: Worktree['creatorProvenance']
   linkedIssue: number | null
-  /** The branch's PR from the host's GitHub cache (else the linked number, state `unknown`).
-   *  Title, url and checks are optional: older hosts send number and state only. */
+  /** The cached PR the desktop's PR lanes read, else a linked number with state UNCACHED_LINKED_PR_STATE. Old hosts omit title/url/checks. */
   linkedPR: {
     number: number
     state: string
@@ -103,32 +106,29 @@ export type RuntimeWorktreePsSummary = {
   unread: boolean
   liveTerminalCount: number
   hasAttachedPty: boolean
-  /**
-   * Terminals whose host lost contact; they are not in `liveTerminalCount`, and not exited either.
-   * Always sent by current hosts, 0 included; absent only from hosts that predate the field.
-   */
+  /** Lost-contact terminals are neither liveTerminalCount nor exited; current hosts send even zero, old hosts omit. */
   unverifiableTerminalCount?: number
   lastOutputAt: number | null
   preview: string
   status: RuntimeWorktreeStatus
   /** Optional discriminator for a working workspace; older clients fall back to ordinary working. */
   workingMode?: AgentWorkingMode
+  /** The desktop sidebar dot, including failed/interrupted/unconfirmed; older hosts omit it. */
+  sidebarStatus?: WorktreeStatus
   agents: RuntimeWorktreeAgentRow[]
   /** See `Worktree.removing`; sent only to clients that advertise background removal. */
   removing?: true
   /** See `GitWorktreeInfo.removalError`. */
   removalError?: string
-  /** Workspace options row facts, from the host's own predicates (workspace-kinds). Older hosts
-   *  send none. `defaultBranch` is always sent by newer hosts; absent, a reader keeps its own
-   *  guess. The others are sent only when true; absent reads "not that kind", so the row shows. */
+  /** Host-derived workspace kinds. Missing defaultBranch retains reader guesses; other missing flags show the row.
+   * Older hosts omit these facts. */
   defaultBranch?: boolean
   automationCreated?: true
   /** The automation's name when it made the row; older hosts send only `automationCreated`. */
   automationName?: string
   cliCreated?: true
   detachedHead?: true
-  /** This host calls the row another client's ("Hide other-client workspaces"); sent only to its
-   *  own phone, which applies the filter value it shares with this host. */
+  /** Other-client classification for this host’s own phone, which shares its filter setting. */
   desktopOtherClient?: true
 }
 
@@ -158,6 +158,9 @@ export type RuntimeGitCheckoutResult = {
   ok: true
   branch: string
 }
+
+/** A linked PR the host has no cached state for: it shows a badge but, like desktop, sits in the In progress lane. */
+export const UNCACHED_LINKED_PR_STATE = 'unknown'
 
 export type RuntimeWorktreeStatus = 'active' | 'working' | 'permission' | 'done' | 'inactive'
 

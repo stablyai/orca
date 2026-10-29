@@ -101,6 +101,7 @@ export default function CombinedDiffViewer({
   })
   const restore = useCombinedDiffViewRestore({
     entrySet,
+    file,
     gitStatusEntries,
     registry,
     setGeneration,
@@ -108,12 +109,12 @@ export default function CombinedDiffViewer({
     setSections,
     setSideBySide: preferences.setSideBySide,
     succession: buildCombinedDiffViewTabSuccession(file.id, viewStateScopeId),
-    viewStateKey,
-    worktreeId: file.worktreeId
+    viewStateKey
   })
   const { loadSection, loadDeferredSection } = useCombinedDiffSectionLoader({
     entrySet,
     file,
+    generation,
     registry,
     sectionCount: sections.length,
     setSectionHeights,
@@ -126,8 +127,7 @@ export default function CombinedDiffViewer({
     setSections
   })
 
-  // Why: one incremental scan of `sections` feeds the virtualizer keys, the restore signal and the
-  // toolbar collapse state, instead of three independent full passes per loaded section.
+  // Share one incremental scan across virtualizer keys, restore signals and toolbar collapse state.
   const sectionRowKeys = useCombinedDiffSectionRowKeys({ generation, sections })
   const sectionIndexByKey = useCombinedDiffSectionIndexMap({
     entrySignature: entrySet.entrySignature,
@@ -168,7 +168,13 @@ export default function CombinedDiffViewer({
 
   const toggleSection = useCallback(
     (index: number) => {
-      const shouldLoadAfterExpand = registry.sectionsRef.current[index]?.collapsed ?? false
+      const section = registry.sectionsRef.current[index]
+      const shouldLoadAfterExpand = section?.collapsed ?? false
+      const anchor = restore.scrollAnchorRef.current
+      if (section && !section.collapsed && anchor?.key === section.key) {
+        // The offset points into the body being removed; restore would land on later sections.
+        anchor.offset = 0
+      }
       setSections((prev) =>
         prev.map((s, i) => (i === index ? { ...s, collapsed: !s.collapsed } : s))
       )
@@ -176,7 +182,7 @@ export default function CombinedDiffViewer({
         registry.loadSchedulerRef.current.request(index)
       }
     },
-    [registry.loadSchedulerRef, registry.sectionsRef]
+    [registry.loadSchedulerRef, registry.sectionsRef, restore.scrollAnchorRef]
   )
 
   const treeNavigation = useCombinedDiffTreeNavigation({

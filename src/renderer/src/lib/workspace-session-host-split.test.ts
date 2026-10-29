@@ -98,9 +98,7 @@ describe('splitWorkspaceSessionByHost', () => {
   })
 
   it('never replicates a local-owned global onto a non-local slice', () => {
-    // The regression this pins: one template handed to every host put a byte-identical copy of
-    // local's browserUrlHistory in each runtime partition, undoing #18161's load-time drop on the
-    // very next full snapshot write. 66 KB per host at 200 entries, growing with host count.
+    // One global template copied local browserUrlHistory into every runtime, undoing #18161 on the next save (~66KB/host at 200 entries).
     const state: WorkspaceSessionState = {
       ...getDefaultWorkspaceSession(),
       browserUrlHistory: [
@@ -129,8 +127,7 @@ describe('splitWorkspaceSessionByHost', () => {
       expect(Object.hasOwn(slices[RUNTIME_A] ?? {}, field)).toBe(false)
       expect(Object.hasOwn(slices[RUNTIME_B] ?? {}, field)).toBe(false)
     }
-    // The read path is unaffected: local always carries them, so the merge never reaches its
-    // fallback to another slice.
+    // Local already supplies globals, so merge never falls back to remote copies.
     const merged = mergeWorkspaceSessionsFromHosts(slices)
     for (const field of HOST_PARTITION_REDUNDANT_GLOBAL_FIELDS) {
       expect(merged[field]).toEqual(state[field])
@@ -167,9 +164,7 @@ describe('splitWorkspaceSessionByHost', () => {
 
     const slices = splitWorkspaceSessionByHost(state, ownerByPrefix())
 
-    // Why the key's own host and not 'local': the recency row has to land in the same partition as
-    // the workspace it describes, or a read that adopts one without the other reports a visit for
-    // a workspace it has no tabs for (#12721).
+    // Host-qualified recency must share its workspace’s partition or adoption records visits without corresponding tabs (#12721).
     expect(slices[LOCAL_EXECUTION_HOST_ID]?.lastVisitedAtByWorktreeId).toEqual({ 'local-wt': 1 })
     expect(slices[RUNTIME_A]?.lastVisitedAtByWorktreeId).toEqual({
       'a-wt': 2,
@@ -211,8 +206,7 @@ describe('splitWorkspaceSessionByHost', () => {
   })
 
   it('routes tab-keyed rows through a caller-supplied tab index when the payload has no tab rows', () => {
-    // A debounced patch that changed only layouts (a park capture) or only PTY bindings carries
-    // no tabsByWorktree; the index stands in for the rows the payload never mentioned.
+    // Layouts/PTY-only patches omit tabsByWorktree; use the live tab index for ownership.
     const state: WorkspaceSessionState = {
       ...getDefaultWorkspaceSession(),
       terminalLayoutsByTabId: { 't-a': makeLayout() },
@@ -466,11 +460,7 @@ describe('split → merge round trip', () => {
   })
 })
 
-/**
- * The main-process load path drops a global field from a non-local partition when the local slice
- * already has it, on the strength of exactly these two rules. If either moves, that prune starts
- * discarding a value the renderer would otherwise have read.
- */
+/** Pin both local-precedence rules used by main’s nonlocal-global pruning or it could discard values renderer merge would read. */
 describe('mergeWorkspaceSessionsFromHosts global-field precedence', () => {
   const localEntry = {
     url: 'local',

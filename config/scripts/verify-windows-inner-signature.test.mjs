@@ -121,15 +121,19 @@ describe('verify-windows-inner-signature', () => {
   })
 
   it('rejects invalid status and unexpected signer subjects', () => {
-    expect(classifySignature({ ...validSignature, status: 'NotSigned' }).message).toMatch(
-      /status is NotSigned/
-    )
+    expect(classifySignature({ ...validSignature, status: 'NotSigned' })).toMatchObject({
+      ok: false,
+      message: expect.stringMatching(/status is NotSigned/)
+    })
     expect(
       classifySignature({
         ...validSignature,
         signerSubject: 'CN=SignPath Foundation Test, O=SignPath Foundation, L=Vienna, C=AT'
-      }).message
-    ).toMatch(/Unexpected Windows inner executable signer/)
+      })
+    ).toMatchObject({
+      ok: false,
+      message: expect.stringMatching(/Unexpected Windows inner executable signer/)
+    })
   })
 
   it('accepts an expected thumbprint as an alternate explicit allowlist', () => {
@@ -150,8 +154,11 @@ describe('verify-windows-inner-signature', () => {
           expectedSigners: [DEFAULT_EXPECTED_SIGNER],
           expectedThumbprints: ['001122']
         }
-      ).message
-    ).toMatch(/Unexpected Windows inner executable signer/)
+      )
+    ).toMatchObject({
+      ok: false,
+      message: expect.stringMatching(/Unexpected Windows inner executable signer/)
+    })
     expect(
       classifySignature(validSignature, {
         expectedSigners: [DEFAULT_EXPECTED_SIGNER],

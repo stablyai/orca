@@ -26,8 +26,7 @@ export function useConnectionPathStatus(hostId: string | undefined): {
   )
 }
 
-// Both inputs classifyConnection needs about a relay recovery, read from one
-// subscription so a screen cannot render half of the escalation.
+// Read relay recovery inputs from one subscription so screens cannot render half an escalation.
 export function useRelayRecoveryStatus(hostId: string | undefined): {
   pendingPath: MobileConnectionPath | null
   pairingRejected: boolean

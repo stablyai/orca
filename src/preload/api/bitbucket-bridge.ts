@@ -1,5 +1,6 @@
 import { ipcRenderer } from 'electron'
 import type { PreloadApi } from '../api-types'
+import type { BitbucketConnectResult } from '../../shared/bitbucket-credentials'
 
 export const bitbucketApi = {
   connect: (args: {
@@ -8,8 +9,7 @@ export const bitbucketApi = {
     email?: string | null
     apiToken?: string | null
     baseUrl?: string | null
-  }): Promise<{ ok: true; account: string | null } | { ok: false; error: string }> =>
-    ipcRenderer.invoke('bitbucket:connect', args),
+  }): Promise<BitbucketConnectResult> => ipcRenderer.invoke('bitbucket:connect', args),
 
   disconnect: (): Promise<void> => ipcRenderer.invoke('bitbucket:disconnect'),
 

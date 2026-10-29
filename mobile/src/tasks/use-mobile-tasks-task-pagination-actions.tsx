@@ -96,8 +96,7 @@ export function useMobileTasksTaskPaginationActions(model: TaskListLoadingModel)
         return next
       })
       try {
-        // Why: desktop retries through the shared list refresh path so source
-        // errors, rows, counts, and pagination reset from one authoritative fetch.
+        // Use authoritative refresh so retries reset rows, errors, counts and pagination together.
         await loadTasks({ silent: true })
       } finally {
         setRetryingGithubSourceRepoPaths((current) => {
@@ -110,7 +109,7 @@ export function useMobileTasksTaskPaginationActions(model: TaskListLoadingModel)
     [loadTasks]
   )
 
-  // Why: a zero count is a failed count, so it falls back like desktop's deriveAdvertisedTotalPages.
+  // Zero count uses the desktop’s failed-count fallback.
   const githubTotalPages = githubCountedTotalPages
     ? Math.max(githubPages.length, githubCountedTotalPages)
     : githubPages.length
@@ -119,8 +118,7 @@ export function useMobileTasksTaskPaginationActions(model: TaskListLoadingModel)
     PER_REPO_FETCH_LIMIT,
     CROSS_REPO_DISPLAY_LIMIT
   )
-  // Why: each repo pages on its own, so one repo that filled its share may have more; the default
-  // all-repos view skips the count, so this is its only way to reach page two.
+  // One full per-repo page may have more; all-repo mode skips counts and relies on this to reach page two.
   const githubCanLoadUncountedNextPage =
     !githubCountedTotalPages && hasRepoWithFullPage(githubPages.at(-1) ?? [], githubPerRepoLimit)
   const githubCanShowPagination =
@@ -163,15 +161,14 @@ export function useMobileTasksTaskPaginationActions(model: TaskListLoadingModel)
         setItems(githubPages[targetPage] ?? [])
         return
       }
-      // Why: as on desktop, a list reload (selection, query, provider, refresh) supersedes this
-      // page; its rows belong to the old list and must not land on the new one.
+      // Any list reload supersedes this page; its rows must not enter the new selection/query/provider.
       const generation = loadGenerationRef.current
       const isCurrent = () =>
         loadGenerationRef.current === generation && clientRef.current === client
       setGithubPaginationLoading(true)
       setGithubLoadingTargetPage(targetPage)
       try {
-        const page = await fetchGitHubItemsPage(client, selectedHostedRepos, targetPage)
+        const page = await fetchGitHubItemsPage(client, selectedHostedRepos, targetPage, isCurrent)
         if (!isCurrent() || page.items.length === 0) {
           return
         }
@@ -186,8 +183,6 @@ export function useMobileTasksTaskPaginationActions(model: TaskListLoadingModel)
           setError(err instanceof Error ? err.message : 'Failed to load more GitHub tasks')
         }
       } finally {
-        // Why: always clear — the page controls stay disabled while this runs, so no newer page
-        // fetch can own the loading state.
         setGithubPaginationLoading(false)
         setGithubLoadingTargetPage(null)
       }

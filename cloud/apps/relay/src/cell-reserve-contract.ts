@@ -1,8 +1,6 @@
 import { z } from 'zod'
 
-// Step 5 wire between directors and cells (v1). Directors book a seat on a cell before
-// answering a desktop; the cell admits or refuses each booking itself. Readers ignore
-// unknown fields, so either side may add optional ones.
+// v1 director/cell booking wire: cell decides each seat before desktop assignment; ignore unknown fields for independent upgrades.
 
 export const CELL_RESERVE_PATH = '/internal/reserve'
 export const CELL_DEMOTE_PATH = '/internal/demote'
@@ -56,3 +54,8 @@ export const DemoteRequestSchema = z.object({
   joinedAt: z.number().int().nonnegative()
 })
 export type DemoteRequest = z.infer<typeof DemoteRequestSchema>
+
+// `not-seated`: the cell holds no live session for that seat. Lenient for the same reason as
+// ReserveResponseSchema; every image since the route shipped answers `outcome`.
+export const DemoteResponseSchema = z.object({ v: z.literal(1), outcome: z.string() }).passthrough()
+export type DemoteOutcome = 'demoted' | 'already-demoted' | 'draining' | 'not-seated' | 'off'

@@ -2,13 +2,18 @@ import { createElement, useState } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { MobileSourceControlContent } from './MobileSourceControlContent'
+import type { MobileSourceControlPrimaryAction } from './mobile-source-control-primary-action'
+import type { MobileSourceControlState } from './use-mobile-source-control-state'
+
+type MobileSourceControlContentState = Omit<MobileSourceControlState, 'primaryActionArgs'> & {
+  primaryAction: MobileSourceControlPrimaryAction
+}
 import * as branchFormat from './mobile-branch-entry-format'
 import type { SectionListProps } from 'react-native'
 import type {
   MobileBranchEntryView,
   MobileGitStatusEntryView
 } from './mobile-source-control-screen-state'
-import type { MobileSourceControlState } from './use-mobile-source-control-state'
 
 vi.mock('react-native', () => ({
   ActivityIndicator: 'ActivityIndicator',
@@ -71,7 +76,7 @@ const unusedAsync = async (): Promise<never> => {
   throw new Error('unused action')
 }
 
-function initialState(): MobileSourceControlState {
+function initialState(): MobileSourceControlContentState {
   const branchEntries = Array.from({ length: 20 }, (_, index) => ({
     path: `src/file-${index}.ts`,
     status: 'modified' as const,
@@ -93,6 +98,7 @@ function initialState(): MobileSourceControlState {
     client: null,
     connState: 'connected',
     forceReconnect: null,
+    rebaseBaseRef: 'main',
     insets: { top: 0, bottom: 0, left: 0, right: 0 },
     router: {
       back: noop,
@@ -157,7 +163,6 @@ function initialState(): MobileSourceControlState {
     stagedCount: 1,
     unstagedCount: 0,
     branchLabel: 'fixture',
-    upstream: undefined,
     upstreamKnown: false,
     syncLabel: null,
     primaryAction: {
@@ -201,14 +206,15 @@ function initialState(): MobileSourceControlState {
 }
 
 let renderer: ReactTestRenderer | null = null
-const controls: { patch: ((patch: Partial<MobileSourceControlState>) => void) | null } = {
+const controls: { patch: ((patch: Partial<MobileSourceControlContentState>) => void) | null } = {
   patch: null
 }
 
-function Fixture({ initial }: { initial: MobileSourceControlState }) {
+function Fixture({ initial }: { initial: MobileSourceControlContentState }) {
   const [state, setState] = useState(initial)
   controls.patch = (patch) => setState((previous) => ({ ...previous, ...patch }))
   return createElement(MobileSourceControlContent, {
+    primaryAction: state.primaryAction,
     state: {
       ...state,
       setCommitMessage: (next) =>
@@ -225,7 +231,7 @@ function render(initial = initialState()) {
     renderer = create(createElement(Fixture, { initial }))
   })
 }
-function patch(values: Partial<MobileSourceControlState>) {
+function patch(values: Partial<MobileSourceControlContentState>) {
   act(() => {
     controls.patch?.(values)
   })
@@ -255,7 +261,7 @@ describe('committed branch files during commit-message typing', () => {
   it.each(['clean', 'dirty'])('keeps the list without revisiting rows in %s', (layout) => {
     const initial = initialState()
     if (layout === 'dirty') {
-      initial.sections = [{ area: 'staged', title: 'Staged Changes', data: [] }]
+      initial.sections = [{ id: 'staged', area: 'staged', title: 'Staged Changes', data: [] }]
     }
     const format = vi.spyOn(branchFormat, 'formatMobileBranchEntryMeta')
     render(initial)
@@ -290,7 +296,7 @@ describe('committed branch files during commit-message typing', () => {
         path: `file-${index}.ts`
       }))
       if (dirty) {
-        initial.sections = [{ area: 'staged', title: 'Staged Changes', data: [] }]
+        initial.sections = [{ id: 'staged', area: 'staged', title: 'Staged Changes', data: [] }]
       }
       render(initial)
       expect(rows().length).toBeGreaterThan(0)

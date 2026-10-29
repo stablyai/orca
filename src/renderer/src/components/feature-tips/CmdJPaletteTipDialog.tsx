@@ -4,6 +4,7 @@ import { DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/co
 import { formatShortcutLabel, useShortcutLabel } from '@/hooks/useShortcutLabel'
 import { CmdJPaletteFeatureTipVisual } from './CmdJPaletteFeatureTipVisual'
 import { FeatureTipActions } from './FeatureTipActions'
+import { getLocalizedFeatureTipCopy } from './feature-tip-localized-copy'
 import {
   FeatureTipDialogFrame,
   FeatureTipEyebrow,
@@ -28,40 +29,31 @@ export function CmdJPaletteTipDialog({
   onSkip: () => void
   onRebindClick: () => void
 }): JSX.Element {
-  // Why: read the live binding so the title chip stays correct after a rebind
-  // and on Linux/Windows (Ctrl+Shift+J) — matching the visual's key chips.
+  // Use the live binding for rebindings and platform-specific shortcuts.
   const worktreePaletteShortcutLabel = useShortcutLabel('worktree.palette')
   const displayShortcutLabel =
     worktreePaletteShortcutLabel !== 'Unassigned'
       ? worktreePaletteShortcutLabel
       : formatShortcutLabel('worktree.palette')
-  // The tip's title uses "<shortcut>" as a placeholder token; split it so we
-  // can render the live label as a styled <kbd> chip inline. Missing token
-  // degrades to the plain title.
-  const titleParts = tip.title.split('<shortcut>')
+  // Split the translated placeholder to render the shortcut as an inline key chip.
+  const copy = getLocalizedFeatureTipCopy(tip)
+  const titleParts = copy.title.split('<shortcut>')
   const titlePrefix = titleParts[0]
   const titleSuffix = titleParts.slice(1).join('<shortcut>')
 
-  // Why: match the horizontal layout (text left, visual/animation right) used by the
-  // CLI tip for a consistent "feature education" presentation; keeps the palette demo
-  // prominent on the right.
   return (
     <FeatureTipDialogFrame
       open={open}
       onOpenChange={onOpenChange}
-      // Why: Radix auto-focuses the first focusable child; without this the
-      // inline rebind link in the description gets the focus ring on open.
+      // Prevent Radix from highlighting the inline rebind link on open.
       onOpenAutoFocus={(event) => event.preventDefault()}
       visual={<CmdJPaletteFeatureTipVisual />}
     >
       <DialogHeader className="gap-4 text-left">
         <div>
-          {/* Why: uppercase eyebrow reads as a category label, not a feature launch. */}
-          <FeatureTipEyebrow label={tip.eyebrow} />
-          {/* Why: flow the shortcut chip as inline text (not a flex item) so the
-                short Mac label (⌘⇧J) stays on one line, while a wide label like
-                "Ctrl+Shift+J" wraps to the next line only when it doesn't fit —
-                instead of being pushed to the right edge on Win/Linux. */}
+          {/* Category label. */}
+          <FeatureTipEyebrow label={copy.eyebrow} />
+          {/* Keep the shortcut inline so wide Windows/Linux bindings wrap naturally. */}
           <DialogTitle className="text-2xl font-semibold leading-tight tracking-tight md:text-[1.75rem]">
             {titlePrefix.trimEnd()}
             {displayShortcutLabel ? (
@@ -75,15 +67,11 @@ export function CmdJPaletteTipDialog({
             {titleSuffix ? ` ${titleSuffix}` : null}
           </DialogTitle>
           <DialogDescription className="mt-3 max-w-2xl space-y-3 text-sm leading-relaxed">
-            <span className="block">{tip.description}</span>
+            <span className="block">{copy.description}</span>
             <FeatureTipSettingsLine
-              lead={translate(
-                'auto.components.feature.tips.CmdJPaletteTipDialog.8241897205',
-                'Rebind the shortcut anytime in'
-              )}
-              link={translate(
-                'auto.components.feature.tips.CmdJPaletteTipDialog.c0bb9f869b',
-                'Settings → Shortcuts'
+              text={translate(
+                'auto.components.feature.tips.CmdJPaletteTipDialog.rebindInSettings',
+                'Rebind the shortcut anytime in <link>Settings → Shortcuts</link>.'
               )}
               onClick={onRebindClick}
             />

@@ -1,7 +1,4 @@
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
-// Legacy import runs the existing per-agent transcript decoders and keys the
-// results by identity read off the same raw lines. Fixtures are shaped like the
-// files the providers actually write.
 
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -29,7 +26,7 @@ import {
   codexProviderHandle
 } from '../../../shared/agent-session-provider-handle-encoding'
 
-// No shipped decoder emits a subagent roster, so the roster bounds are reached by standing one in.
+// Existing decoders emit no roster; inject one to exercise import bounds.
 const decodedClaudeOverride = vi.hoisted((): { message: NativeChatMessage | null } => ({
   message: null
 }))
@@ -164,8 +161,6 @@ const CLAUDE_LINES = [
   { type: 'last-prompt', leafUuid: 'e3a5b7c9-2d13-4f88-94ce-6b0d8f2a4e31' }
 ]
 
-// Shapes taken from a real rollout file: `event_msg` records carry no id, and
-// `response_item` records do — which is exactly the split the tracker handles.
 const CODEX_LINES = [
   {
     type: 'session_meta',
@@ -255,7 +250,6 @@ describe('claude import', () => {
         uuid: 'e3a5b7c9-2d13-4f88-94ce-6b0d8f2a4e31'
       })
     ])
-    // Imported at fence 1, yet no generation's work: provenance 0, so nothing in it is current.
     expect(journal.snapshot().items.map((entry) => journal.itemFence(entry.itemId))).toEqual([
       0, 0, 0, 0
     ])
@@ -272,8 +266,7 @@ describe('claude import', () => {
       options: { filePath }
     })
     const items = journal.snapshot().items
-    // The first record is a file-history snapshot the decoder discards; if the
-    // anchors were misaligned, the first bubble would carry its identity.
+    // Discarded raw records must not shift decoder/identity alignment.
     expect(items[0]?.body).toEqual({
       kind: 'message',
       role: 'user',
@@ -316,7 +309,6 @@ describe('claude import', () => {
     const tracker = createLegacyIdentityTracker({
       transcriptAgent: 'claude',
       agent: 'claude',
-      // The fork's own session id, which is NOT what the copied records carry.
       sessionId: '7b1e5d33-0f28-42ac-8d59-9a4c6e2b1f70'
     })
     const copied = JSON.stringify(CLAUDE_LINES[1])
@@ -340,8 +332,6 @@ describe('codex import', () => {
       options: { filePath }
     })
 
-    // A rollout record with its own id keeps it; an `event_msg` has none, so it
-    // falls back to its line position — deterministic for a given file.
     expect(journal.snapshot().items.map((entry) => entry.itemId)).toEqual([
       legacyKey('#2'),
       legacyKey('rs_06235749b04250a3016a7404b3a25c8199b882f2f8288fefd0'),
@@ -365,7 +355,6 @@ describe('codex import', () => {
       sessionId: CODEX_SESSION
     })
     const original = tracker.identify(JSON.stringify(CODEX_LINES[3]), 4)
-    // Same record replayed at a different position in a resumed file.
     const replayed = tracker.identify(JSON.stringify(CODEX_LINES[3]), 11)
     expect(replayed).toEqual(original)
     expect(original).toMatchObject({
@@ -455,7 +444,6 @@ describe('payload bounds on import', () => {
   })
 
   it('bounds an imported subagent roster by entry count, label and id', async () => {
-    // The import reads an untrusted file: nothing upstream bounded either string.
     const oversized = 'z'.repeat(20 * 1024)
     const journal = await importDecodedRoster(
       Array.from({ length: 80 }, (_, index) => ({
@@ -477,8 +465,7 @@ describe('payload bounds on import', () => {
   })
 
   it('bounds a roster id in the shared format, keeping a shared prefix distinct', async () => {
-    // The id is the roster key: it takes the same bounded-id format the wires
-    // use, so a later wire bound is a no-op instead of a second, merging clip.
+    // Digest-based IDs preserve distinctions and remain unchanged by later wire bounding.
     const head = 'y'.repeat(512)
     const journal = await importDecodedRoster([
       { id: `${head}-one`, label: 'Audit', state: 'working' as const },
@@ -627,8 +614,6 @@ describe('import failures', () => {
     expect(journal.epoch).toBe(before)
   })
 
-  // A transcript with no decodable messages recovers nothing. Publishing an
-  // empty replacement would roll the epoch and drop whatever the journal held.
   it('leaves the epoch untouched when the transcript decodes to no messages', async () => {
     const journal = await open('codex', CODEX_SESSION)
     await journal.appendItem(
@@ -672,15 +657,11 @@ describe('import failures', () => {
   })
 })
 
-// A tool call is only the SOLE block of its message when the provider wrote it
-// that way. Claude interleaves it with narration, Grok hangs `tool_calls` off a
-// row that also has text, and omp's execution cells always pair the invocation
-// with its output — so the multi-block path carries untrusted tool input too.
+// Providers can mix tool calls with narration/output; every block must receive import bounds.
 describe('multi-block legacy messages', () => {
   const limits = { ...LEGACY_IMPORT_BLOCK_LIMITS, inlineHeadBytes: 64 }
   const oversized = 'x'.repeat(10_000)
 
-  /** The tool-call block of the first imported multi-block message. */
   function importedToolCallBlock(journal: AgentSessionJournal): unknown {
     for (const entry of journal.snapshot().items) {
       if (entry.body.kind !== 'message') {

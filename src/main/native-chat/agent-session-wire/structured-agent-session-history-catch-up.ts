@@ -1,6 +1,4 @@
-// Catching a chat up on turns its agent saved outside it, for any agent: the open-time envelope
-// that never gates the open, the bounded staged batch, and its one checked commit. Each agent adds
-// only how it reads its own history and what the chat already holds.
+// Stage bounded external-history catch-up without blocking provider open; agents supply only history/view logic.
 
 import { createHash } from 'node:crypto'
 import { setImmediate } from 'node:timers/promises'
@@ -17,11 +15,9 @@ import type {
 import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
 import type { StructuredAgentSessionTransitionJournal } from './structured-agent-session-transition'
 
-/** One catch-up writes at most this much, the same budget a whole restored history has. */
 export const HISTORY_CATCH_UP_MAX_OPERATIONS = 1_024
 export const HISTORY_CATCH_UP_MAX_BYTES = 16 * 1024 * 1024
 
-/** The one divider before an imported batch, keyed by the first imported turn or entry. */
 export function continuedOutsideRecordId(anchor: string): string {
   return `continued-outside:${anchor}`
 }
@@ -33,7 +29,7 @@ export function continuedOutsideNotice(rewound: boolean): AgentJournalItemBody {
 export type ExpectedHistoryItem = {
   key: string
   canonicalItemId: string
-  /** Saved read precondition; the journal assigns the written revision. */
+  /** Read precondition only; the journal assigns the written revision. */
   revision: number
 }
 
@@ -45,7 +41,7 @@ export type HistoryCatchUpPlan = {
   expectedItems?: readonly ExpectedHistoryItem[]
 }
 
-/** Rows staged in memory against the batch budget; nothing reaches the sink until the plan is whole. */
+/** Stage the whole bounded plan before any sink admission. */
 export function createHistoryCatchUpBatch() {
   const mutations: JournalLifecycleIdentityMutationInput[] = []
   const keys: string[] = []
@@ -95,13 +91,13 @@ export function createHistoryCatchUpBatch() {
       admit(JSON.stringify(item))
       expectedItems.push(item)
     },
-    /** `digestOf` names what was imported, so the same import settles under one id. */
+    /** Digest imported identity so retries share one settlement ID. */
     finish(settlementPrefix: string, digestOf: unknown): HistoryCatchUpPlan {
       const expectations = expectedItems.length ? { expectedItems: [...expectedItems] } : {}
       const content = expectedItems.length ? [digestOf, expectedItems, mutations] : digestOf
       const digest = createHash('sha256').update(JSON.stringify(content)).digest('hex')
       const settlementId = `${settlementPrefix}:${digest}`
-      // Match the existing batch envelope charge, plus the transition's one publication byte.
+      // Include batch-envelope cost and the transition’s publication byte.
       const reservedBytes =
         Buffer.byteLength(JSON.stringify({ settlementId, mutations, ...expectations }), 'utf8') +
         512
@@ -114,16 +110,14 @@ export function createHistoryCatchUpBatch() {
 }
 
 export type HistoryCatchUpContext<View> = {
-  /** What the chat already holds, read once on first use: an agent that reads its own history first
-   *  touches the journal only when there is something to add. */
+  /** Read journal lazily so empty provider history needs no journal scan. */
   view: () => View
   history: StructuredAgentSessionHistoryJournal
   journal: StructuredAgentSessionTransitionJournal
   signal: AbortSignal
   deadline: number
-  /** Throws once the open is cancelled, the deadline passed, or the caller is no longer current. */
+  /** Enforce cancellation, deadline and current invocation before effects. */
   check: () => void
-  /** Hands the event loop back between pieces of a long read. */
   yieldTurn: () => Promise<void>
   warn: (reason: string, error?: unknown) => void
 }
@@ -133,7 +127,6 @@ export type HistoryCatchUpOutcome = 'committed' | 'checked' | 'nothing' | 'skipp
 
 /** Optional reconciliation never gates provider open; an abandoned invocation cannot later write. */
 export async function runHistoryCatchUp<View>(input: {
-  /** Names the agent in the log line. */
   agentName: string
   scope: string
   sessionId: string
@@ -142,11 +135,9 @@ export async function runHistoryCatchUp<View>(input: {
   assertCurrent?: () => void
   timeoutMs: number
   logger?: StructuredAgentSessionLogger
-  /** What the chat already holds, read from saved journal facts. */
   readView: (history: StructuredAgentSessionHistoryJournal) => View
-  /** Planning and commit must see the same saved facts. */
+  /** Reject commits if saved facts changed since planning. */
   sameView: (planned: View, current: View) => boolean
-  /** Reads the agent's history and stages what to add; null adds nothing. */
   prepare: (context: HistoryCatchUpContext<View>) => Promise<HistoryCatchUpPlan | null>
 }): Promise<HistoryCatchUpOutcome> {
   const controller = new AbortController()
@@ -237,7 +228,7 @@ export async function runHistoryCatchUp<View>(input: {
               }
               verified.add(expected.key)
             }
-            // Canonical keys can also collide with one another through an existing submission alias.
+            // Submission aliases can make otherwise distinct canonical keys collide.
             const seen = new Set<string>()
             for (const mutation of plan.mutations) {
               const key = agentJournalItemKey(mutation.identity)
@@ -257,7 +248,7 @@ export async function runHistoryCatchUp<View>(input: {
       warn(admission.reason)
       return 'skipped'
     }
-    // The deadline bounds the commit too: a stalled barrier must not hold the provider's open.
+    // Bound commit barriers too; hung sinks cannot block provider open.
     const committed = await waitForPromiseWithSignal(
       sink.written?.() ?? Promise.resolve<StructuredAgentSessionSinkBarrier>({ ok: true }),
       controller.signal

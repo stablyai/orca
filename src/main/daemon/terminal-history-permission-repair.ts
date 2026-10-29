@@ -1,9 +1,4 @@
-// History trees written before owner-only modes were pinned landed at whatever umask applied, which on
-// a default umask leaves every checkpoint.json world-readable. This is the backlog repair: one bounded
-// sweep of the base dir, marker-guarded so every later launch costs one existsSync rather than a walk
-// over 10k session trees. Live trees are tightened per-session in terminal-history-session-files.
-//
-// The marker is a regular file, so `history-reader`'s directory-only session scan already skips it.
+// Repair older umask-derived permissions once per tree; live writers tighten their own session files.
 
 import { existsSync, type Dirent } from 'node:fs'
 import { chmod, readdir, writeFile } from 'node:fs/promises'
@@ -16,26 +11,21 @@ import {
 import { isTerminalHistorySessionDirRecoveryProtected } from './terminal-history-recovery-quarantine'
 
 const REPAIR_MARKER_NAME = '.permissions-repaired-v1'
-// Bounds the one-time walk: retention keeps 10k session trees, each a handful of files.
+// Bound repair work across the retained session backlog.
 const MAX_REPAIR_ENTRIES = 200_000
-// base → session/quarantine owner → quarantined generation → files.
+// Reach quarantined generation files without walking arbitrary depth.
 const MAX_REPAIR_DEPTH = 3
-// Same 10s the sibling history GC waits before walking this very tree, and for the same reason:
-// stay off startup-critical I/O (see scheduleHistoryGc in src/main/terminal-history-gc.ts).
+// Defer disk work beyond startup, like history GC.
 const REPAIR_START_DELAY_MS = 10_000
 const MAX_SCHEDULED_BASE_PATHS = 512
 
-// Per-process, keyed by base path: getDaemonHistoryDir() is the accessor every history producer
-// goes through, and a single startup calls it more than once. It is bounded so
-// unusual base-path churn cannot retain every historical path.
+// Deduplicate repeated history-directory access while bounding retained base paths.
 const scheduledBasePaths = new Set<string>()
 
 async function chmodQuietly(path: string, mode: number): Promise<void> {
   try {
     await chmod(path, mode)
-  } catch {
-    // A path that cannot be tightened must not abort the rest of the sweep.
-  }
+  } catch {}
 }
 
 async function tightenTree(root: string): Promise<void> {
@@ -46,9 +36,7 @@ async function tightenTree(root: string): Promise<void> {
     if (!current) {
       return
     }
-    // Why skip: chmod moves the mode/ctime that the recovery fingerprint hashes, so sweeping a tree
-    // mid-freeze fails the re-check and silently stops that pane persisting for the rest of the run.
-    // Nothing is left loose — the session's own writer tightens its tree when it attaches.
+    // chmod changes recovery fingerprints; frozen trees are tightened by their own writers after recovery.
     if (current.depth > 0 && isTerminalHistorySessionDirRecoveryProtected(current.dir)) {
       continue
     }
@@ -64,14 +52,14 @@ async function tightenTree(root: string): Promise<void> {
       if (budget <= 0) {
         return
       }
-      // Dirent types come from lstat, so symlinks match neither branch and are never chased.
+      // Dirent type checks skip symlinks rather than traversing their targets.
       const child = join(current.dir, entry.name)
       if (entry.isDirectory()) {
         if (current.depth < MAX_REPAIR_DEPTH) {
           queue.push({ dir: child, depth: current.depth + 1 })
         }
       } else if (entry.isFile()) {
-        // Re-checked per file: a freeze can open while this directory is being walked.
+        // A freeze may begin after this directory was queued.
         if (current.depth > 0 && isTerminalHistorySessionDirRecoveryProtected(current.dir)) {
           break
         }
@@ -81,8 +69,7 @@ async function tightenTree(root: string): Promise<void> {
   }
 }
 
-/** Resolves `true` when the sweep ran. The marker is written even if some paths resisted chmod, so a
- *  permanently unfixable file cannot make every launch re-walk the tree. */
+/** Mark even partial sweeps complete so permanently unfixable paths cannot force a walk every launch. */
 export async function repairTerminalHistoryPermissions(basePath: string): Promise<boolean> {
   if (!supportsPosixFileModes() || !existsSync(basePath)) {
     return false
@@ -95,14 +82,12 @@ export async function repairTerminalHistoryPermissions(basePath: string): Promis
   try {
     await writeFile(markerPath, '', { mode: PRIVATE_FILE_MODE })
   } catch {
-    // Marker write failed: the next launch repeats a bounded, idempotent sweep.
+    // A failed marker write allows a later launch to retry.
   }
   return true
 }
 
-/** Deferred and once per base path per process, so daemon init neither waits on permission hardening
- *  nor runs two sweeps over one tree. Resolves with the sweep's outcome, or `null` when already
- *  scheduled; callers on the startup path ignore it. */
+/** Defer startup I/O and deduplicate recently scheduled paths; null means already scheduled. */
 export function scheduleTerminalHistoryPermissionRepair(basePath: string): Promise<boolean> | null {
   const key = resolve(basePath)
   if (scheduledBasePaths.has(key)) {
@@ -123,7 +108,7 @@ export function scheduleTerminalHistoryPermissionRepair(basePath: string): Promi
   const timer = setTimeout(() => {
     repairTerminalHistoryPermissions(key).then(settle, () => settle(false))
   }, REPAIR_START_DELAY_MS)
-  // Why: a pending sweep must never be the reason the process (or a test worker) stays alive.
+  // Permission repair must not keep the process alive.
   timer.unref()
   return promise
 }

@@ -46,7 +46,7 @@ function row(worktreeId: string, extra: Record<string, unknown> = {}) {
   }
 }
 
-function fakeHosts(servers: { id: string; live: boolean }[]) {
+function fakeHosts(servers: { id: string; live: boolean; wsl?: true }[]) {
   const state = { servers, pairingRevision: 1 }
   const statusListeners = new Set<() => void>()
   const retiredListeners = new Set<(environmentId: string) => void>()
@@ -69,11 +69,12 @@ function fakeHosts(servers: { id: string; live: boolean }[]) {
   }))
   const hosts: MobileDesktopRelayHosts = {
     list: () => ({
-      environments: state.servers.map(({ id }) => ({
+      environments: state.servers.map(({ id, wsl }) => ({
         id,
         name: id,
         pairingRevision: state.pairingRevision,
-        runtimeId: 'runtime-a'
+        runtimeId: 'runtime-a',
+        ...(wsl ? { orcadDeployment: { kind: 'wsl' as const } } : {})
       })),
       statusByEnvironmentId: new Map(
         state.servers.map(({ id, live }) => [
@@ -149,6 +150,36 @@ describe('PairedServerRowsProducer', () => {
   })
   afterEach(() => {
     vi.useRealTimers()
+  })
+
+  it("feeds the desktop's own WSL host's rows like any server's, and only while it runs", async () => {
+    const { hosts, call, state, watches, publishStatus } = fakeHosts([
+      { id: 'wsl:ubuntu', live: true, wsl: true }
+    ])
+    call.mockResolvedValue(psReply([row('repo::/home/me/a')]))
+    const producer = new PairedServerRowsProducer({
+      hasDemand: () => true,
+      hostLabelOverrides: () => new Map()
+    })
+    producer.attach(hosts)
+    watches.get('wsl:ubuntu')?.onChange()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(rowsOf(producer, 'runtime:wsl%3Aubuntu')).toMatchObject({
+      freshness: 'live',
+      rows: [{ key: 'runtime:wsl%3Aubuntu|repo::/home/me/a' }]
+    })
+
+    // Stopped: its rows stay, unverifiable, and nothing more is asked of it.
+    state.servers = [{ id: 'wsl:ubuntu', live: false, wsl: true }]
+    publishStatus()
+    expect(watches.get('wsl:ubuntu')?.closed).toBe(true)
+    expect(rowsOf(producer, 'runtime:wsl%3Aubuntu')).toMatchObject({
+      freshness: 'unverifiable',
+      rows: [{ key: 'runtime:wsl%3Aubuntu|repo::/home/me/a' }]
+    })
+    call.mockClear()
+    await vi.advanceTimersByTimeAsync(FALLBACK_REFRESH_MS)
+    expect(call).not.toHaveBeenCalled()
   })
 
   it('populates from a server in contact once its change stream is ready', async () => {

@@ -20,8 +20,7 @@ function quoteWindowsArg(value) {
   return `"${value.replace(/"/g, '""')}"`
 }
 
-// Why: under a Git Bash setup runner, Orca exports ORCA_WORKTREE_PATH in MSYS form (/c/...), which
-// cmd.exe cannot resolve. This is the migration pattern for any setup script feeding a native exe.
+// Normalize Git Bash ORCA_WORKTREE_PATH (/c/...) before feeding cmd.exe/native executable.
 function posixShellPathToNativeWindowsPath(value) {
   const driveMatch = value.match(/^\/([A-Za-z])\/(.*)$/)
   if (driveMatch) {
@@ -67,8 +66,7 @@ export function runInternalDevSetup({
     return 0
   }
 
-  // Why: this hook is an optional local accelerator; failures should not block
-  // creating a worktree or running the normal dependency install.
+  // Optional local accelerator must not block workspace creation or normal dependency install.
   spawnOptionalSetup(spawn, setupPath, env.ORCA_WORKTREE_PATH || cwd, platform, env)
 
   return 0

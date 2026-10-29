@@ -6,12 +6,16 @@ import {
   type UseNativeChatComposerPasteArgs
 } from './use-native-chat-composer-paste'
 import { useNativeChatTypedInsertion } from './use-native-chat-typed-insertion'
+import { useNativeChatPastedTextFile } from './use-native-chat-pasted-text-file'
+import type { NativeChatComposerInput } from './native-chat-composer-input'
 
 type UseNativeChatComposerHandleArgs = Parameters<typeof useNativeChatTypedInsertion>[0] &
-  Omit<UseNativeChatComposerPasteArgs, 'insertTypedText'>
+  Omit<UseNativeChatComposerPasteArgs, 'insertTypedText'> & {
+    /** A structured chat's editor while it shows this scope, where a long paste saved as a file lands. */
+    pastedTextEditor: (() => NativeChatComposerInput | null) | null
+  }
 
-/** Typed and pasted insertion for the composer, exposed on the handle the chat
- *  root uses to route keystrokes and pastes into it. Returns the paste handler. */
+/** Expose typed/pasted insertion to pane routing and return the paste handler. */
 export function useNativeChatComposerHandle(
   ref: ForwardedRef<NativeChatComposerHandle>,
   args: UseNativeChatComposerHandleArgs
@@ -26,16 +30,26 @@ export function useNativeChatComposerHandle(
       setActiveSuggestion
     })
 
+  const insertPastedTextOrFile = useNativeChatPastedTextFile({
+    scopeKey: args.attachmentScopeKey ?? '',
+    // Without a draft scope there is no draft for a pending paste to settle in.
+    scopeEditor: args.attachmentScopeKey ? args.pastedTextEditor : null,
+    resolveAttachmentOwner: args.resolveAttachmentOwner,
+    insertTypedText: insertPastedText,
+    setNotice: args.setNotice
+  })
   const { handlePaste: handlePasteEvent, pasteFromClipboard } = useNativeChatComposerPaste({
     ...pasteArgs,
-    insertTypedText: insertPastedText
+    insertTypedText: insertPastedTextOrFile
   })
 
   useImperativeHandle(
     ref,
     () => ({
+      isComposing,
       focus,
       insertTypedText,
+      insertPastedText: insertPastedTextOrFile,
       acceptsText,
       appendText,
       handlePasteEvent,
@@ -43,8 +57,10 @@ export function useNativeChatComposerHandle(
       contains
     }),
     [
+      isComposing,
       focus,
       insertTypedText,
+      insertPastedTextOrFile,
       acceptsText,
       appendText,
       handlePasteEvent,

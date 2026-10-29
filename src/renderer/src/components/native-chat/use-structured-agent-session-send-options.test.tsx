@@ -43,7 +43,7 @@ function sendOptionsFor(
       { kind: 'new', seedOptions, heldOptions: {} },
       {
         optionStateRef,
-        pendingOptionsRef: { current: pending },
+        optionPicks: { current: { pending, generation: 0 } },
         optionView: structuredAgentSessionOptionView,
         takesSendOptions
       }
@@ -64,7 +64,6 @@ describe('what each composer send carries', () => {
       model: 'opus[1m]',
       effort: 'low'
     })
-    // A model the list lacks runs as picked.
     expect(sendOptionsFor(true, { model: 'claude-retired' })()).toMatchObject({
       model: 'claude-retired'
     })

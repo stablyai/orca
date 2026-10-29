@@ -62,7 +62,7 @@ export const getTerminalMacOptionSearchEntries = createLocalizedCatalog(() => [
         'international'
       ),
       ...translateSearchKeyword('auto.components.settings.terminal.search.fae142a354', 'readline'),
-      // Why: product name stays untranslated so search matches "Ghostty".
+      // Keep product names searchable without translation.
       'Ghostty',
       'ghostty'
     ]
@@ -101,7 +101,7 @@ export const getTerminalGhosttyImportSearchEntries = createLocalizedCatalog(() =
       'One-time import of supported Ghostty terminal settings.'
     ),
     keywords: [
-      // Why: product name stays untranslated so search matches "Ghostty".
+      // Keep product names searchable without translation.
       'Ghostty',
       'ghostty',
       ...translateSearchKeyword('auto.components.settings.terminal.search.fd752b3cac', 'import'),

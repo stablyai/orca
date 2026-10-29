@@ -73,14 +73,12 @@ describe('managedRuntimeInstallView', () => {
       null,
       null
     ])
-    // A failed install says only why, beside Try again.
     expect(shown({ operation: op({ phase: 'failed', error: 'No space left.' }) })).toEqual([
       null,
       'Try again',
       'No space left.',
       null
     ])
-    // An installed copy's line says only that; Reinstall or Update and Remove sit in its menu.
     expect(shown(installed)).toEqual(['Installed', null, null, null])
     expect(viewOf({ ...installed, canRemove: true })).toMatchObject({
       removable: true,
@@ -111,13 +109,11 @@ describe('managedRuntimeInstallView', () => {
       removable: false,
       removing: true
     })
-    // A refused removal keeps the files, so Remove stays offered beside the host's reason.
     expect(removal({ phase: 'failed', error: 'Fake could not be stopped.' })).toMatchObject({
       status: 'Installed',
       error: 'Fake could not be stopped.',
       removable: true
     })
-    // A damaged copy is removable too, so a broken install never leaves Settings without an exit.
     const damaged = { kind: 'known' as const, state: { ...idle, damaged: true, canRemove: true } }
     expect(managedRuntimeInstallView(damaged, 'Fake').removable).toBe(true)
     expect(shown({ available: false, version: null })).toEqual([

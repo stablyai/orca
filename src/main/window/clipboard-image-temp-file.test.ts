@@ -1,4 +1,4 @@
-import { dirname, join } from 'node:path'
+import { basename, dirname, join } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { writeFileMock, mkdirMock, getPathMock } = vi.hoisted(() => ({
@@ -28,7 +28,7 @@ describe('saveClipboardImageBufferAsTempFile', () => {
     expect(getPathMock).toHaveBeenCalledWith('temp')
     expect(getPathMock).not.toHaveBeenCalledWith('userData')
     expect(mkdirMock).not.toHaveBeenCalled()
-    expect(dirname(savedPath)).toBe('/os/temp')
+    expect(dirname(savedPath)).toBe(join('/os/temp'))
     expect(writeFileMock).toHaveBeenCalledWith(savedPath, Buffer.from([1, 2, 3]))
   })
 
@@ -45,5 +45,17 @@ describe('saveClipboardImageBufferAsTempFile', () => {
       join('/Users/me/Library/Application Support/orca', 'native-chat-pastes')
     )
     expect(writeFileMock).toHaveBeenCalledWith(savedPath, Buffer.from([1, 2, 3]))
+  })
+
+  it('saves a phone-picked file under its shell-inert leaf name in a folder of its own', async () => {
+    const savedPath = await saveClipboardImageBufferAsTempFile(Buffer.from('hello'), {
+      fileName: '../dir/柴静-看见 $(id).txt'
+    })
+
+    expect(mkdirMock).toHaveBeenCalledWith(dirname(savedPath), { recursive: true })
+    expect(dirname(dirname(savedPath))).toBe(join('/os/temp'))
+    expect(basename(dirname(savedPath))).toBe('orca-paste-uuid-1')
+    expect(basename(savedPath)).toBe('柴静-看见 __id_.txt')
+    expect(writeFileMock).toHaveBeenCalledWith(savedPath, Buffer.from('hello'))
   })
 })

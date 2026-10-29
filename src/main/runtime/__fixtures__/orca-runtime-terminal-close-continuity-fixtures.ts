@@ -4,6 +4,7 @@ import { makePaneKey } from '../../../shared/stable-pane-id'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 import type { RuntimeTerminalListResult } from '../../../shared/runtime-types'
 import { OrcaRuntimeService } from '../orca-runtime'
+import { withMainLayout } from './main-layout-close-fixture'
 import {
   CANARY_INCARNATION_ID,
   CANARY_LEAF_ID,
@@ -114,6 +115,7 @@ function createHarness(
       }
     })
   })
+  withMainLayout(store, { get: () => session, set: (next) => (session = next) })
   const acknowledged = makeDeferred()
   let closeTerminalTabError: Error | null = null
   let closeTerminalTabAction: (() => void | Promise<void>) | null = null
@@ -298,6 +300,7 @@ async function createStaleTabCloseHarness(
   return { ...harness, terminal }
 }
 
+export { expectDesktopDropsPane } from './main-layout-close-fixture'
 export {
   makeDeferred,
   createHarness,

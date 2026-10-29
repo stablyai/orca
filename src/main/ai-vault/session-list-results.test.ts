@@ -92,14 +92,11 @@ describe('mergeAiVaultListResults', () => {
     ).toBe('2026-08-02T00:00:10.000Z')
   })
 
-  // `scannedAt` is only `z.string()` on the wire, so a leg may legally send an
-  // ISO variant that sorts against the local stamp differently than it reads.
-  // Both cases below invert under a lexicographic compare.
   it('orders remote stamps by instant, not by string', () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-08-02T00:00:10.000Z'))
 
-    // '...:05Z' sorts after '...:05.500Z' ('Z' > '.') but is half a second older.
+    // Z sorts after the fractional dot even though this instant is earlier.
     expect(
       mergeAiVaultListResults(
         [
@@ -110,9 +107,7 @@ describe('mergeAiVaultListResults', () => {
       ).scannedAt
     ).toBe('2026-08-02T00:00:05.500Z')
 
-    // A -05:00 offset makes this five hours in the future, but it sorts below
-    // the local stamp ('-' < '.'), so a string compare would accept it and pin
-    // the merged stamp above every later local rescan.
+    // This future offset sorts before the local stamp; string ordering would accept it.
     expect(
       mergeAiVaultListResults(
         [
@@ -124,8 +119,6 @@ describe('mergeAiVaultListResults', () => {
     ).toBe('2026-08-02T00:00:04.000Z')
   })
 
-  // Leg order is host-enumeration order (local, then SSH, then runtime), so it
-  // must not decide the merged stamp.
   it('resolves an equal-instant tie the same way in either leg order', () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-08-02T00:00:10.000Z'))
@@ -152,10 +145,6 @@ describe('mergeAiVaultListResults', () => {
     ).toBe('2026-08-02T00:00:05.000Z')
   })
 
-  // `new Date(ms).toISOString()` throws RangeError outside +/-8.64e15. It cannot
-  // be reached because Date.parse applies TimeClip, so a non-NaN parse is always
-  // in range — pin both sides of that boundary so widening the accept guard
-  // turns a would-be crash on a hostile leg stamp into a test failure.
   it('accepts the oldest representable stamp and rejects one millisecond beyond it', () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-08-02T00:00:10.000Z'))
@@ -211,7 +200,6 @@ describe('mergeAiVaultListResults', () => {
     )
 
     expect(merged.issues).toEqual([SCOPE_TRUNCATION, hostDown])
-    // Kinded issues render as their own banner rows, never as skipped transcripts.
     expect(merged.issues.filter((issue) => !issue.kind)).toEqual([])
   })
 })

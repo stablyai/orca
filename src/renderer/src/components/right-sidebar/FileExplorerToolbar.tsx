@@ -35,7 +35,16 @@ type FileExplorerToolbarProps = {
   onToggleDotfiles: () => void
 }
 
-/** Shares repository actions across explorer views. */
+function formatOpenInAppLabel(appName: string): string {
+  return translate(
+    'auto.components.right.sidebar.FileExplorerToolbar.openInApp',
+    'Open in {{app}}',
+    {
+      app: appName
+    }
+  )
+}
+
 export function FileExplorerToolbar({
   repoName,
   worktreePath,
@@ -76,7 +85,7 @@ export function FileExplorerToolbar({
               'Collapse All'
             )}
             aria-disabled={!canCollapseAll}
-            // Why: native disabled buttons suppress Radix tooltip triggers in Chromium.
+            // Native disabled buttons suppress Radix tooltip triggers in Chromium.
             onClick={(event) => {
               if (!canCollapseAll) {
                 event.preventDefault()
@@ -183,7 +192,7 @@ export function FileExplorerToolbar({
             runtimeEnvironmentId={runtimeEnvironmentId}
             ownerUnresolved={ownerUnresolved}
             workspace={workspaceId ? { workspaceId } : null}
-            labelPrefix="Open in "
+            formatLabel={formatOpenInAppLabel}
           />
         </DropdownMenuContent>
       </DropdownMenu>

@@ -65,7 +65,7 @@ describe('AutomationRunDetailsPage', () => {
     }
   })
 
-  it('shows the open action when it can open something', () => {
+  it('enables the open action when the supplied view state allows it', () => {
     renderPage({
       availability: 'terminal',
       actionLabel: 'View run',
@@ -75,7 +75,7 @@ describe('AutomationRunDetailsPage', () => {
     expect(screen.getByRole('button', { name: 'View run' })).toBeEnabled()
   })
 
-  it('hides the open action when there is nothing to open', () => {
+  it('hides the open action when the supplied view state disallows it', () => {
     renderPage({
       availability: 'metadata',
       actionLabel: 'View run',

@@ -1,0 +1,8 @@
+# Memoized components (<file>#<component>) in files that call translate() but that do not
+# subscribe to UI language changes. Each entry needs a note saying why it renders no
+# translated text. Prune after a fix: pnpm check:memo-translate-subscription-ratchet --prune
+
+# Renders only the memoized FileExplorerFiles, which subscribes itself.
+src/renderer/src/components/right-sidebar/FileExplorer.tsx#FileExplorer
+# Draws an aria-hidden SVG path with no text.
+src/renderer/src/components/status-bar/resource-usage-metrics.tsx#SparklineImpl

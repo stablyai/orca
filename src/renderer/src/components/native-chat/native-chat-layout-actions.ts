@@ -1,9 +1,12 @@
+import { toast } from 'sonner'
+import { translate } from '@/i18n/i18n'
+import { getAgentLabel } from '@/lib/agent-catalog'
 import type { AppState } from '@/store/types'
 import { useAppStore } from '@/store'
-import {
-  canMoveTabToNewPaneColumnFromState,
-  moveTabToNewPaneColumn
-} from '@/components/tab-bar/tab-move-to-pane-column'
+import { isTuiAgent } from '../../../../shared/tui-agent-config'
+import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
+import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
+import { captureNativeChatComposerFocusIntent } from '@/components/native-chat/use-native-chat-composer-reveal-focus'
 import { requestActiveTerminalPaneSplit } from '@/components/tab-bar/request-active-terminal-pane-split'
 import type { NativeChatSplitDirection } from './native-chat-split-shortcut'
 
@@ -39,10 +42,26 @@ export function canRunNativeChatSplitTarget(
   if (!target) {
     return false
   }
-  return (
-    target.kind === 'terminal-pane' ||
-    canMoveTabToNewPaneColumnFromState(state, target.unifiedTabId, target.groupId)
-  )
+  return target.kind === 'terminal-pane' || findSplitSource(state, target) !== null
+}
+
+function findSplitSource(
+  state: Pick<AppState, 'groupsByWorktree' | 'unifiedTabsByWorktree'>,
+  target: Extract<NativeChatSplitTarget, { kind: 'workspace-tab' }>
+) {
+  for (const [worktreeId, tabs] of Object.entries(state.unifiedTabsByWorktree)) {
+    const tab = tabs.find(
+      (candidate) => candidate.id === target.unifiedTabId && candidate.groupId === target.groupId
+    )
+    if (
+      tab?.contentType === 'agent-session' &&
+      isTuiAgent(tab.agentSessionAgent) &&
+      state.groupsByWorktree[worktreeId]?.some((group) => group.id === target.groupId)
+    ) {
+      return { tab, worktreeId, agent: tab.agentSessionAgent }
+    }
+  }
+  return null
 }
 
 export function runNativeChatSplitTarget(
@@ -56,11 +75,44 @@ export function runNativeChatSplitTarget(
     })
     return true
   }
-  return moveTabToNewPaneColumn({
-    unifiedTabId: target.unifiedTabId,
-    groupId: target.groupId,
-    direction
+  // Captured first so focus follows this action into the new chat's composer.
+  const focusIntent = captureNativeChatComposerFocusIntent()
+  const state = useAppStore.getState()
+  const source = findSplitSource(state, target)
+  const groupId = source
+    ? state.createEmptySplitGroup(source.worktreeId, target.groupId, direction)
+    : null
+  if (!source || !groupId) {
+    focusIntent.cancel()
+    return false
+  }
+  const closePane = (): void => {
+    useAppStore.getState().closeEmptyGroup(source.worktreeId, groupId)
+  }
+  // Same launch as New Chat, so the fresh chat opens at once in the new pane.
+  const result = launchAgentInNewTab({
+    requestId: newAgentLaunchRequestId(),
+    focusIntent,
+    requestedSurface: 'chat',
+    selectedExecutionHostId: source.tab.executionHostId,
+    agent: source.agent,
+    worktreeId: source.worktreeId,
+    groupId
   })
+  if (!result) {
+    closePane()
+    toast.error(
+      translate(
+        'auto.components.tab.bar.QuickLaunchButton.465e432ef1',
+        'Could not build launch command for {{value0}}.',
+        { value0: getAgentLabel(source.agent) }
+      )
+    )
+    return true
+  }
+  // Settlement cleanup preserves any pane that currently contains a tab.
+  void result.structuredSettlement?.then(closePane, closePane)
+  return true
 }
 
 export function runActiveNativeChatSplit(

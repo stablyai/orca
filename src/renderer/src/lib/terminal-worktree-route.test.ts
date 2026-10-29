@@ -33,8 +33,7 @@ describe('resolveTerminalWorktreeRoute', () => {
   })
 
   it('routes an ephemeral setup terminal locally when no runtime is active', () => {
-    // Regression: previously returned null (unroutable), producing the
-    // "Workspace identity is ambiguous across hosts" error transport (#9994 fallout).
+    // Null previously produced the ambiguous-workspace error transport (#9994).
     expect(resolveTerminalWorktreeRoute(localState(), EPHEMERAL_ID)).toEqual({
       runtimeEnvironmentId: null
     })
@@ -119,11 +118,7 @@ describe('resolveTerminalWorktreeRoute', () => {
     expect(resolveTerminalWorktreeRoute(localState(), folderWorkspaceKey('abc-123'))).not.toBeNull()
   })
 
-  // #16733: the store a reporter actually has — a real local repo/worktree whose legacy rows were
-  // persisted before owner projection, plus one saved runtime environment. resolveTerminalWorktreeRoute
-  // is the sole gate in front of terminal-request-ipc-bridge.ts's "Terminal creation is unavailable
-  // because the worktree owner could not be resolved" reply, so a non-null route here is exactly
-  // "that toast cannot fire".
+  // Legacy local rows plus one saved runtime reproduced #16733. This resolver alone gates the terminal-creation owner error, so a nonnull route proves that toast cannot fire.
   describe('unstamped local worktrees with a saved runtime (#16733)', () => {
     /** The single saved runtime is the hazard: it arms the legacy hydration gates while owning nothing here. */
     const unstampedState = (): AppState =>
@@ -146,8 +141,7 @@ describe('resolveTerminalWorktreeRoute', () => {
   })
 })
 
-// STA-2639: teardown must follow the PTY's real host while spawn stays free to prefer a focused
-// runtime. Both purposes are asserted per shape so they cannot silently drift into agreement.
+// Spawn can prefer focused runtime; teardown must follow actual PTY ownership. Assert both purposes to prevent accidental convergence (STA-2639).
 describe('resolveTerminalHostOwnership teardown', () => {
   const focusedState = (overrides: Partial<AppState> = {}): AppState =>
     localState({

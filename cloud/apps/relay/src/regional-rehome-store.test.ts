@@ -37,8 +37,7 @@ const target = {
   connectionHardCap: 1_000 as const,
   connectionUnobservedBound: 60
 }
-// A third general cell in the source region: never a source or target here,
-// but it is in the fleet whose safety the gate reads.
+// Bystander participates only in fleet safety.
 const bystander = { ...source, id: 'us-c2', url: 'https://us-c2.relay.example.test' }
 const sourceIncarnation = '11111111-1111-4111-8111-111111111111'
 const targetIncarnation = '22222222-2222-4222-8222-222222222222'
@@ -264,40 +263,14 @@ describe('regional rehome assignment state', () => {
     ).toEqual([{ completed_at: context.now(), aborted_at: null }])
     expect(
       await context.database.query(
-        `SELECT completed_at, aborted_at FROM relay_region_rehome_attempts`
+        `SELECT drain_receipt_at, completed_at, aborted_at FROM relay_region_rehome_attempts`
       )
-    ).toEqual([{ completed_at: context.now(), aborted_at: null }])
+    ).toEqual([{ drain_receipt_at: context.now(), completed_at: context.now(), aborted_at: null }])
     expect(targetControl).toMatch(/^control:/)
     await context.database.close()
   })
 
-  it('completes from durable activity with the source-owned receipt', async () => {
-    const context = await setup()
-    const identity = { userId: 'user-1', relayHostId: 'abcdefghijklmnop' }
-    const sourceControl = await activatePreferredSource(context, identity)
-    const attempt = await context.store.tryIdleRehome()
-    await context.store.activateControl(identity, {
-      cellId: target.id,
-      assignmentEpoch: attempt!.assignmentEpoch,
-      generation: 1
-    })
-    await context.store.markMigrationTargetRegistered(identity, {
-      cellId: target.id,
-      assignmentEpoch: attempt!.assignmentEpoch
-    })
-    await context.store.releaseActivity(identity, sourceControl)
-
-    expect(await context.store.completeReadyRegionalRehomes()).toBe(1)
-    expect(
-      await context.database.query(
-        `SELECT drain_receipt_at, completed_at, aborted_at
-       FROM relay_region_rehome_attempts`
-      )
-    ).toEqual([{ drain_receipt_at: context.now(), completed_at: context.now(), aborted_at: null }])
-    await context.database.close()
-  })
-
-  it('requires a fresh preference and an advertised source capability', async () => {
+  it('requires an advertised source capability', async () => {
     const context = await setup({ sourceProtocol: 0 })
     await activatePreferredSource(context, {
       userId: 'user-1',
@@ -347,8 +320,6 @@ describe('regional rehome assignment state', () => {
   })
 
   it('counts only drainable cells as the rehome fleet, in every region', async () => {
-    // The fleet whose health gates a rehome is exactly the cells that can be a
-    // source or a target, and both roles require the drain protocol.
     const context = await setup({ targetProtocol: 0 })
 
     expect(await context.store.regionalRehomeFleetSafety()).toMatchObject({
@@ -456,7 +427,6 @@ describe('regional rehome assignment state', () => {
 
     const warnings = collectDisableWarnings()
     try {
-      // Per-cell, so it excludes this target rather than stopping the poll.
       expect(await context.store.commitIdleRegionalRehome(candidate!, safety)).toEqual({
         outcome: 'deferred',
         reason: 'candidate-ineligible'
@@ -464,8 +434,7 @@ describe('regional rehome assignment state', () => {
     } finally {
       warnings.restore()
     }
-    // A pool bar crossed between the scan and the commit skips the cell; it must
-    // not turn the durable switch off, or the worker never comes back.
+    // A scan-to-commit pool breach must skip without permanently disabling the worker.
     expect(await context.store.inspectRegionalRehomeControl()).toMatchObject({
       generation: 1,
       enabled: true
@@ -485,8 +454,7 @@ describe('regional rehome assignment state', () => {
   })
 
   it('keeps selecting candidates while an unrelated cell is over the pool bar', async () => {
-    // Production case: the fleet snapshot is a Math.max, so one cell with a
-    // narrow client pool used to empty every page.
+    // Fleet Math.max once let one narrow client pool empty every page.
     const context = await setup()
     await activatePreferredSource(context, {
       userId: 'user-1',
@@ -572,8 +540,7 @@ describe('regional rehome assignment state', () => {
       userId: 'user-1',
       relayHostId: 'abcdefghijklmnop'
     })
-    // A disabled cell is not a target, and the scan must say so: leaving it to
-    // the claim would burn a slot of the candidate batch on a certain skip.
+    // Exclude certain skips during selection or they consume candidate-page slots.
     await context.database.query(`UPDATE relay_cells SET enabled = 0 WHERE cell_id = ?`, [
       target.id
     ])
@@ -622,10 +589,8 @@ describe('regional rehome assignment state', () => {
     const context = await setup({ hostCooldownMs: 3 * 24 * 60 * 60_000 })
     const identity = { userId: 'user-1', relayHostId: 'abcdefghijklmnop' }
     const targetControl = await completeRehomeToTarget(context, identity)
-    // Past the dispatch interval the earlier claim charged, so the next tick
-    // really does scan and the cooldown is the only thing holding this host.
+    // Pass dispatch interval so only cooldown prevents another claim.
     context.advance(10_000)
-    // The desktop's region probe now says us-central1 again.
     await activateReversePreferredSource(context, identity)
 
     const warnings = collectEventWarnings('orca_relay_regional_rehome_candidates_skipped')
@@ -691,9 +656,7 @@ describe('regional rehome assignment state', () => {
   })
 
   it('does not scan a candidate whose preferred region has no drainable cell', async () => {
-    // A cell without the drain protocol cannot be a target: the host would land
-    // where no later rehome could move it out again. The candidate query drops
-    // it, so the tick stays idle instead of paying for an inventory scan.
+    // Without drain protocol the target could never rehome hosts back out; exclude before inventory scans.
     const context = await setup({ targetProtocol: 0 })
     await activatePreferredSource(context, {
       userId: 'user-1',
@@ -724,8 +687,7 @@ describe('regional rehome assignment state', () => {
       userId: 'user-2',
       relayHostId: 'ponmlkjihgfedcba'
     })
-    // Above the per-cell cleanliness bar but below the fleet storm bar: the
-    // candidate is skipped this tick while the worker stays enabled.
+    // Per-cell bar can skip a candidate while fleet safety keeps the worker enabled.
     await context.database.query(
       `UPDATE relay_cell_rehome_safety SET sql_failures = ${REGIONAL_REHOME_SQL_FAILURES_PER_CELL_LIMIT + 1} WHERE cell_id = ?`,
       [target.id]
@@ -737,7 +699,6 @@ describe('regional rehome assignment state', () => {
       enabled: true
     })
 
-    // Read-only selection does not spend the commit rate budget.
     expect(
       await context.database.query(`SELECT next_dispatch_at FROM relay_region_rehome_worker_state`)
     ).toEqual([{ next_dispatch_at: 0 }])
@@ -947,59 +908,7 @@ describe('regional rehome assignment state', () => {
     await context.database.close()
   })
 
-  // Why: the redrain lane reaches the inventory through the fleet-safety read
-  // rather than through candidate selection, so it needs its own coverage.
-  // Why: one contended candidate must cost its own tick, not the whole page. The
-  // sweeps are explicitly per-candidate isolated for exactly this reason.
-  it('completes the candidates behind a contended one', async () => {
-    const probe = new CellInventoryLockProbe()
-    const context = await setup({ wrap: (database) => probe.wrap(database) })
-    const identities = [
-      { userId: 'user-1', relayHostId: 'abcdefghijklmnop' },
-      { userId: 'user-2', relayHostId: 'ponmlkjihgfedcba' }
-    ]
-    for (const identity of identities) {
-      // Dispatch is rate limited, so each claim needs its own interval.
-      context.advance(60_000)
-      await freshHeartbeats(context)
-      const sourceControl = await activatePreferredSource(context, identity)
-      const attempt = await context.store.tryIdleRehome()
-      await context.store.activateControl(identity, {
-        cellId: target.id,
-        assignmentEpoch: 2,
-        generation: 1
-      })
-      await context.store.markMigrationTargetRegistered(identity, {
-        cellId: target.id,
-        assignmentEpoch: 2
-      })
-      await context.store.releaseActivity(identity, sourceControl)
-    }
-    probe.reset()
-    probe.failNoWaitTimes = 1
-    const busy = collectEventWarnings('orca_relay_sweep_cell_inventory_busy')
-
-    let completed: number
-    try {
-      completed = await context.store.completeReadyRegionalRehomes()
-    } finally {
-      busy.restore()
-    }
-
-    expect(completed).toBe(1)
-    expect(busy.entries).toEqual([
-      {
-        event: 'orca_relay_sweep_cell_inventory_busy',
-        sweep: 'complete-ready-regional-rehomes',
-        skipped: 1
-      }
-    ])
-    await context.database.close()
-  })
-
-  // Why: with `continue` replaced by `break` a single contended candidate drops
-  // the rest of the page. Two in a row prove the sweep resumes, not just that it
-  // survived one, and that the summary counts both.
+  // Two contended candidates expose an erroneous break; the redrain lane reaches inventory through its separate fleet-safety read.
   it('completes a candidate behind two contended ones', async () => {
     const probe = new CellInventoryLockProbe()
     const context = await setup({ wrap: (database) => probe.wrap(database) })
@@ -1047,8 +956,7 @@ describe('regional rehome assignment state', () => {
     await context.database.close()
   })
 
-  // Why: only inventory contention is ordinary. Every other failure must keep its
-  // existing propagation and its dispatch-failure accounting.
+  // Only inventory contention is ordinary; other failures must propagate and count against dispatch.
   it('propagates a claim failure that is not inventory contention', async () => {
     const probe = new CellInventoryLockProbe()
     const context = await setup({ wrap: (database) => probe.wrap(database) })
@@ -1067,8 +975,7 @@ describe('regional rehome assignment state', () => {
     await context.database.close()
   })
 
-  // Why: the transaction dies at the first contended candidate, so every
-  // candidate behind it is abandoned too. Reporting one would understate the tick.
+  // One inventory failure abandons the transaction’s whole candidate page, so count all candidates skipped.
 
   it('skips a completion tick on a contended cell inventory without quarantining it', async () => {
     const probe = new CellInventoryLockProbe()
@@ -1116,9 +1023,7 @@ describe('regional rehome assignment state', () => {
     await context.database.close()
   })
 
-  // Why: a contended inventory is another director settling the same row, not a
-  // poisoned candidate. Quarantining on it would exclude a healthy attempt from
-  // the sweep's LIMIT pages for 15 minutes.
+  // Inventory contention is temporary; quarantining it would hide healthy attempts from LIMIT pages for 15min.
   it('skips an abort tick on a contended cell inventory without quarantining it', async () => {
     const probe = new CellInventoryLockProbe()
     const context = await setup({ wrap: (database) => probe.wrap(database) })
@@ -1186,7 +1091,6 @@ describe('regional rehome assignment state', () => {
     context.advance(1)
     await freshHeartbeats(context)
     expect(await context.store.abortUnarrivedRegionalRehomes()).toBe(1)
-    // Where the host was, so its next reconnect lands on the source it left.
     expect(await context.store.resolve(identity)).toMatchObject({
       cellId: source.id,
       assignmentEpoch: 3
@@ -1219,7 +1123,6 @@ describe('regional rehome assignment state', () => {
       'SELECT abort_reason FROM relay_region_rehome_attempts'
     )
     expect(attempt!.abort_reason).toBe('host_not_arrived')
-    // What the rollout tracker reads to see a leak before it fills the budget.
     const preview = await context.store.previewRegionalRehomeEligibility()
     expect(preview.abortedLast24Hours).toEqual({ host_not_arrived: 1 })
     expect(
@@ -1233,8 +1136,7 @@ describe('regional rehome assignment state', () => {
     const identity = { userId: 'user-1', relayHostId: 'abcdefghijklmnop' }
     const sourceControl = await activatePreferredSource(context, identity)
     expect(await context.store.tryIdleRehome()).not.toBeNull()
-    // Past the window, but present at the target: the sweep reads live
-    // ownership, not the attempt's age alone.
+    // Age alone cannot abort an attempt whose target already owns the host.
     context.advance(REGIONAL_REHOME_ARRIVAL_WINDOW_MS)
     await freshHeartbeats(context)
     await context.store.activateControl(identity, {
@@ -1290,8 +1192,11 @@ describe('regional rehome assignment state', () => {
     })
     await context.store.releaseActivity(identity, sourceControl)
     await context.store.releaseActivity(identity, targetControl)
-    context.advance(24 * 60 * 60_000)
-    await heartbeat(context.store, source, sourceIncarnation, 3, 2)
+    context.advance(24 * 60 * 60_000 - 1)
+    await freshHeartbeats(context)
+    expect(await context.store.abortExpiredRegionalRehomes()).toBe(0)
+    context.advance(1)
+    await heartbeat(context.store, source, sourceIncarnation, 3, context.now())
     expect(await context.store.abortExpiredRegionalRehomes()).toBe(1)
     expect(await context.store.resolve(identity)).toMatchObject({
       cellId: source.id,
@@ -1381,14 +1286,11 @@ describe('regional rehome assignment state', () => {
         expect(await context.store.completeReadyRegionalRehomes()).toBe(0)
       }
       expect(warnings.entries).toHaveLength(REGIONAL_REHOME_QUARANTINE_FAILURES)
-      // Quarantined: the poisoned row leaves the candidate page entirely.
       expect(await context.store.completeReadyRegionalRehomes()).toBe(0)
       expect(warnings.entries).toHaveLength(REGIONAL_REHOME_QUARANTINE_FAILURES)
-      // After the quarantine window it is retried (and fails) once more.
       context.advance(REGIONAL_REHOME_QUARANTINE_MS + 1)
       await context.store.completeReadyRegionalRehomes()
       expect(warnings.entries).toHaveLength(REGIONAL_REHOME_QUARANTINE_FAILURES + 1)
-      // A free-form error (never a slug) reaches the log only as 'redacted'.
       expect(
         warnings.entries.every((entry) => entry.reason === 'regional_rehome_assignment_mismatch')
       ).toBe(true)
@@ -1689,8 +1591,7 @@ describe('regional rehome assignment state', () => {
       assignmentEpoch: attempt!.assignmentEpoch
     })
     await context.store.releaseActivity(identity, sourceControl)
-    // A vanished migration lease is repairable arithmetic on the first assert
-    // but still wrong on the re-assert: no repaired event may leak out.
+    // A vanished migration lease repairs on first assert but fails re-assert; no repaired event may escape rollback.
     await context.database.query(
       `DELETE FROM relay_assignment_activity_leases
        WHERE user_id = ? AND relay_host_id = ? AND activity_kind = 'migration'`,
@@ -1962,8 +1863,7 @@ async function activatePreferredSource(
   return control
 }
 
-// Runs a hook inside the claim transaction, right after the candidate scan, so
-// a scan-versus-claim race is deterministic instead of timing-dependent.
+// Hook after scan inside the claim transaction makes scan/claim races deterministic.
 function hookAfterCandidateScan(
   database: RelayDatabase,
   hook: (transaction: RelayDatabase) => Promise<void>

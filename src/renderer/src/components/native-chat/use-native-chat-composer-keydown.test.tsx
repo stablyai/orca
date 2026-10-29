@@ -7,7 +7,7 @@ import {
   applyPickerSuggestion,
   deriveComposerAutocomplete,
   type ComposerAutocomplete
-} from './native-chat-composer-state'
+} from '../../../../shared/native-chat-composer-autocomplete'
 import { getNativeChatAgentProfile } from '../../../../shared/native-chat-agent-profiles'
 import { useNativeChatRecallPosition } from './use-native-chat-composer-recall'
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
@@ -261,7 +261,6 @@ describe('useNativeChatComposerKeyDown', () => {
       const field = render(<Composer {...props} />).container.querySelector('textarea')!
       return {
         field,
-        // The draft after the press, and whether the handler claimed the key.
         press: (key: string, init: KeyboardEventInit = {}) => {
           const claimed = !fireEvent.keyDown(field, { key, ...init })
           return { draft: field.value, claimed }

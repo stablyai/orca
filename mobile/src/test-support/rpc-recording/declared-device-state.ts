@@ -1,14 +1,7 @@
 import { nativeStoreModule, partialNativeModule } from './native-module-traps'
 
-/**
- * What a recording declares about the device it runs on.
- *
- * Undeclared is unchanged: async storage stays the throwing store and expo-notifications stays an
- * unlisted package. Declaring one swaps in a backing that answers only from the declaration, so
- * every byte a read can return is visible in the scenario file. Writes never feed back into reads —
- * a read that could return a byte nothing declared would put the device back inside the recording.
- * They are recorded as effects instead, which is where an unobserved write becomes observable.
- */
+// Only declarations back device reads; writes become effects and never feed undeclared bytes into later reads.
+// Undeclared storage still throws and notifications remain unlisted.
 type DeclaredNotification = {
   readonly request: {
     readonly identifier: string
@@ -22,11 +15,7 @@ export type DeclaredDeviceState = {
 }
 type DeviceEffect = (name: string, value: unknown) => void
 
-/**
- * The substitutes a scenario's declarations back, and the sink its writes are recorded through.
- * The sink is bound at mount because the effect recorder belongs to one run, while the loader that
- * holds the substitutes is built before it; an unbound write is a bug rather than a silent drop.
- */
+// Bind writes at mount because the loader precedes the run’s effect recorder; an unbound write must fail.
 export function declaredDeviceSubstitutes(declared: DeclaredDeviceState): {
   substitutes: ReadonlyMap<string, unknown>
   bind: (effect: DeviceEffect) => void
@@ -77,11 +66,9 @@ function declaredNotificationTray(
   effect: DeviceEffect
 ): unknown {
   return partialNativeModule('expo-notifications', {
-    // Namespace-imported by every consumer, so the marker keeps reads going through the trap; see
-    // the `__esModule` paragraph in `native-module-traps.ts`.
+    // Preserve namespace-import traps with __esModule; see native-module-traps.ts.
     __esModule: true,
-    // Cloned per read, so a screen that mutates a notification cannot change what the next read of
-    // the declaration returns.
+    // Clone each read so consumers cannot mutate the scenario’s declaration.
     getPresentedNotificationsAsync: () => Promise.resolve(structuredClone(tray)),
     dismissNotificationAsync: (identifier: string) => {
       effect('notification-tray.dismiss', { identifier })

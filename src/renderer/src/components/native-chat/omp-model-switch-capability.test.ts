@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { clearNativeChatSessionOptionCacheForTests } from './native-chat-session-option-cache'
-import { createNativeChatPtySessionOptions } from './native-chat-pty-session-options'
+import { createNativeChatPtySessionOptions } from '../../../../shared/native-chat-pty-session-options'
 import {
   normalizeAgentStatusPayload,
   pickParsedAgentStatusPayload
@@ -17,6 +17,7 @@ describe('OMP model command capability', () => {
         agent: 'omp',
         scopeKey: 'omp-model-test',
         mode: 'live',
+        modelLabel: 'Model',
         canSwitchOmpModel,
         initialModels: [
           { id: 'openai/a', label: 'A', options: [] },

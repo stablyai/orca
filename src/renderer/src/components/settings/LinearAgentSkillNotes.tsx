@@ -1,7 +1,6 @@
 import { getLinearGuideNotes } from './linear-agent-skill-guide-content'
 import { translate } from '@/i18n/i18n'
 
-// Keep setup and examples primary, with reminders at the bottom.
 export function LinearAgentSkillNotes(): React.JSX.Element {
   const notes = getLinearGuideNotes()
 

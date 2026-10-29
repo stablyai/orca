@@ -1,4 +1,3 @@
-import { formatResetCountdown } from '../../../src/shared/rate-limit-reset-format'
 import {
   buildCodexResetCreditExpectedScope,
   type CodexResetCreditExpectedScope
@@ -10,6 +9,7 @@ import {
 } from './codex-reset-credit-consume-operations'
 import { CodexResetCreditExpectedScopeSchema } from './codex-reset-credit-reply-schema'
 import { randomV4Uuid } from '../platform/random-v4-uuid'
+import { translate } from '../i18n/mobile-i18n'
 import {
   decodeAccountsSnapshot,
   type AccountsSnapshot,
@@ -52,6 +52,74 @@ export type CodexResetCreditSummary = {
 
 const RESET_RPC_TIMEOUT_MS = 90_000
 
+function resetCreditExpiryLabel(ms: number, count: number): string {
+  if (ms <= 0) {
+    return count === 1
+      ? translate('components.codexResetCredit.expiryNowSingle', 'Expires now')
+      : translate('components.codexResetCredit.expiryNowMultiple', 'Next expires now')
+  }
+  const totalMinutes = Math.floor(ms / 60_000)
+  if (totalMinutes < 60) {
+    return count === 1
+      ? translate('components.codexResetCredit.expiryMinutesSingle', 'Expires in {{minutes}}m', {
+          minutes: totalMinutes
+        })
+      : translate(
+          'components.codexResetCredit.expiryMinutesMultiple',
+          'Next expires in {{minutes}}m',
+          { minutes: totalMinutes }
+        )
+  }
+  const totalHours = Math.floor(totalMinutes / 60)
+  const minutes = totalMinutes % 60
+  if (totalHours < 24) {
+    const options = { hours: totalHours, minutes }
+    if (minutes > 0) {
+      return count === 1
+        ? translate(
+            'components.codexResetCredit.expiryHoursMinutesSingle',
+            'Expires in {{hours}}h {{minutes}}m',
+            options
+          )
+        : translate(
+            'components.codexResetCredit.expiryHoursMinutesMultiple',
+            'Next expires in {{hours}}h {{minutes}}m',
+            options
+          )
+    }
+    return count === 1
+      ? translate('components.codexResetCredit.expiryHoursSingle', 'Expires in {{hours}}h', options)
+      : translate(
+          'components.codexResetCredit.expiryHoursMultiple',
+          'Next expires in {{hours}}h',
+          options
+        )
+  }
+  const days = Math.floor(totalHours / 24)
+  const hours = totalHours % 24
+  const options = { days, hours }
+  if (hours > 0) {
+    return count === 1
+      ? translate(
+          'components.codexResetCredit.expiryDaysHoursSingle',
+          'Expires in {{days}}d {{hours}}h',
+          options
+        )
+      : translate(
+          'components.codexResetCredit.expiryDaysHoursMultiple',
+          'Next expires in {{days}}d {{hours}}h',
+          options
+        )
+  }
+  return count === 1
+    ? translate('components.codexResetCredit.expiryDaysSingle', 'Expires in {{days}}d', options)
+    : translate(
+        'components.codexResetCredit.expiryDaysMultiple',
+        'Next expires in {{days}}d',
+        options
+      )
+}
+
 export function getCodexResetCreditSummary(
   limits: ProviderRateLimits | null,
   now: number
@@ -64,14 +132,18 @@ export function getCodexResetCreditSummary(
   const expiry = credits?.nextExpiresAt
   const expiryLabel =
     typeof expiry === 'number' && Number.isFinite(expiry)
-      ? formatResetCountdown(expiry - now).replace(
-          /^Resets/,
-          count === 1 ? 'Expires' : 'Next expires'
-        )
+      ? resetCreditExpiryLabel(expiry - now, count)
       : null
   return {
     availableCount: count,
-    availabilityLabel: `${count} ${count === 1 ? 'reset' : 'resets'} available`,
+    availabilityLabel:
+      count === 1
+        ? translate('components.codexResetCredit.available_one', '{{count}} reset available', {
+            count
+          })
+        : translate('components.codexResetCredit.available_other', '{{count}} resets available', {
+            count
+          }),
     expiryLabel
   }
 }
@@ -82,18 +154,29 @@ export function getCodexResetCreditOutcomeCopy(outcome: CodexResetCreditOutcome)
 } {
   switch (outcome) {
     case 'reset':
-      return { title: 'Rate limits reset', message: 'Codex usage has been refreshed.' }
     case 'alreadyRedeemed':
-      return { title: 'Reset already applied', message: 'Codex usage has been refreshed.' }
+      return {
+        title:
+          outcome === 'reset'
+            ? translate('components.codexResetCredit.resetTitle', 'Rate limits reset')
+            : translate('components.codexResetCredit.alreadyAppliedTitle', 'Reset already applied'),
+        message: translate('components.codexResetCredit.refresh', 'Codex usage has been refreshed.')
+      }
     case 'nothingToReset':
       return {
-        title: 'Nothing to reset',
-        message: 'No eligible Codex rate-limit window is exhausted.'
+        title: translate('components.codexResetCredit.nothingToResetTitle', 'Nothing to reset'),
+        message: translate(
+          'components.codexResetCredit.nothingToResetMessage',
+          'No eligible Codex rate-limit window is exhausted.'
+        )
       }
     case 'noCredit':
       return {
-        title: 'No reset available',
-        message: 'This account has no earned reset credits available.'
+        title: translate('components.codexResetCredit.noResetTitle', 'No reset available'),
+        message: translate(
+          'components.codexResetCredit.noResetMessage',
+          'This account has no earned reset credits available.'
+        )
       }
   }
 }
@@ -132,10 +215,7 @@ export function getCodexResetCreditScope(
   return parsed.success ? parsed.data : null
 }
 
-/**
- * Whether a reply's scope is the account this attempt was for. Not the offer: the host answers a
- * retry with the account's unresolved attempt, which names the offer it was made against.
- */
+// Match account scope, not offer: host may return unresolved retry attempt against earlier offer.
 function sameAccountScope(
   left: CodexResetCreditExpectedScope,
   right: CodexResetCreditExpectedScope
@@ -148,17 +228,23 @@ function sameAccountScope(
   )
 }
 
+function invalidResetResponse(): Error {
+  return new Error(
+    translate('components.codexResetCredit.invalidResponse', 'Invalid reset response from host')
+  )
+}
+
 function decodeResetResult(
   value: unknown,
   expectedScope: CodexResetCreditExpectedScope
 ): CodexResetCreditRpcResult {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
-    throw new Error('Invalid reset response from host')
+    throw invalidResetResponse()
   }
   const result = value as Record<string, unknown>
   const scope = CodexResetCreditExpectedScopeSchema.safeParse(result.scope)
   if (!scope.success || !sameAccountScope(scope.data, expectedScope)) {
-    throw new Error('Invalid reset response from host')
+    throw invalidResetResponse()
   }
   const snapshot = decodeAccountsSnapshot(result.snapshot)
   if (result.status === 'rejectedBeforeProvider') {
@@ -173,7 +259,7 @@ function decodeResetResult(
         reason !== 'offerUnavailable' &&
         reason !== 'offerChanged')
     ) {
-      throw new Error('Invalid reset response from host')
+      throw invalidResetResponse()
     }
     return {
       status: 'rejectedBeforeProvider',
@@ -192,7 +278,7 @@ function decodeResetResult(
       outcome !== 'noCredit' &&
       outcome !== 'alreadyRedeemed')
   ) {
-    throw new Error('Invalid reset response from host')
+    throw invalidResetResponse()
   }
   const snapshotAccount = snapshot.codex.accounts.find(
     (account) => account.id === scope.data.accountId
@@ -203,7 +289,7 @@ function decodeResetResult(
     getActiveCodexAccountIdForRateLimitTarget(snapshot) !== scope.data.accountId ||
     snapshotAccount?.updatedAt !== scope.data.accountRevision
   ) {
-    throw new Error('Invalid reset response from host')
+    throw invalidResetResponse()
   }
   return {
     outcome,
@@ -212,11 +298,7 @@ function decodeResetResult(
   }
 }
 
-/**
- * One redeem, the way the desktop does it: a fresh key per attempt, nothing kept on the phone. The
- * host's ledger answers a retry of the same offer, or of an account whose outcome is unknown, with
- * the attempt it already recorded, so a lost reply never spends a second credit.
- */
+// Use fresh key per attempt without phone journal; host ledger resumes same-offer/unknown-account attempts so lost replies cannot spend twice.
 export async function requestCodexResetCredit(
   client: MobileCodexResetCreditRpcSender,
   expectedScope: CodexResetCreditExpectedScope

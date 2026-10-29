@@ -64,10 +64,10 @@ export function usePullRequestDetails(args: {
 
   // Why: hold optimistically-added comments so they merge into the fetch result instead of being overwritten.
   const optimisticCommentsRef = useRef<PRComment[]>([])
-  // Why: track last fetched item to distinguish reopen from switch — reopen must preserve optimistic comments since gh's 60s cache omits the just-posted one.
+  // Reopen must retain optimistic comments absent from gh’s 60s cache; item switches clear them.
   const prevItemIdRef = useRef<string | null>(null)
 
-  // Why: subscribe to the module cache so reopening a cached item paints synchronously; writes replace entry identity (delete+set), so Map.get is a stable snapshot.
+  // Subscribe for synchronous cache paints; replaced entry identity keeps Map.get a stable snapshot.
   const cachedEntry = useSyncExternalStore(
     subscribeWorkItemDetailsCache,
     useCallback(
@@ -76,15 +76,15 @@ export function usePullRequestDetails(args: {
     )
   )
 
-  // Why: bumped on cold open (no cached details) so the details memo re-runs and surfaces the optimistic comment via the loading shell; cache-notify handles the warm case.
+  // Cold opens need a local tick to reveal optimistic comments; warm cache writes notify subscribers.
   const [optimisticTick, setOptimisticTick] = useState(0)
 
-  // Why: merge optimistic comments into cached details; keyed off stable cachedEntry identity (not the per-render ref array) to avoid needless recompute.
+  // Merge optimistic comments only when stable cached-entry identity or explicit cold-open state changes.
   const details = useMemo<GitHubWorkItemDetails | null>(() => {
     const cachedDetails = cachedEntry?.details ?? null
     const opt = optimisticCommentsRef.current
     if (!cachedDetails) {
-      // Why: on a cold open details may still be loading; surface optimistic comments via a minimal shell so a just-posted comment isn't held invisibly in the ref.
+      // Build a minimal shell while cold-loading so just-posted comments are visible immediately.
       if (opt.length > 0 && workItem) {
         return { item: workItem, body: '', comments: [...opt] }
       }
@@ -110,7 +110,7 @@ export function usePullRequestDetails(args: {
   const error = cachedEntry?.error && !cachedEntry?.details ? cachedEntry.error : null
   const detailsLoaded = Boolean(cachedEntry?.details)
 
-  // Why: if a cross-window mutation invalidates the open drawer's entry (cachedEntry undefined, fetch deps unchanged), bump a tick so it refetches.
+  // Cross-window invalidation can drop an open entry without changing fetch dependencies; trigger refetch explicitly.
   const [refetchTick, setRefetchTick] = useState(0)
   useEffect(() => {
     if (workItem && detailsCacheKey && !cachedEntry) {
@@ -122,7 +122,7 @@ export function usePullRequestDetails(args: {
     if (!workItem || !effectiveRepoId || !detailsCacheKey || !canUseDetailsRepoContext) {
       return
     }
-    // Why: only clear optimistic comments on a genuine item switch; on reopen gh's 60s cache omits the just-posted comment, so preserve the ref for re-merge.
+    // Preserve optimistic comments on reopen while gh’s 60s cache still omits them; clear on actual item switches.
     if (workItem.id !== prevItemIdRef.current) {
       optimisticCommentsRef.current = []
     }
@@ -136,7 +136,7 @@ export function usePullRequestDetails(args: {
       return
     }
 
-    // Why: dedupe concurrent opens on the same key so a rapid close→reopen shares one in-flight promise instead of racing two `gh` subprocesses.
+    // Share the pending promise across rapid reopen so gh subprocesses cannot race.
     const inflight: Promise<GitHubWorkItemDetails | null> =
       cached?.pending ??
       lookupGitHubWorkItemDetailsForSource({
@@ -195,7 +195,7 @@ export function usePullRequestDetails(args: {
         if (invalidatedMidFlight && prev?.pending !== inflight) {
           return
         }
-        // Why: stale-on-error — keep cached data, drop the pending promise so next open retries; surface the error only when nothing is cached.
+        // Keep cached details on error; drop pending state for retry and show errors only without retained data.
         touchWorkItemDetailsCache(detailsCacheKey, {
           details: prev?.details ?? null,
           fetchedAt: prev?.fetchedAt ?? 0,
@@ -216,7 +216,7 @@ export function usePullRequestDetails(args: {
     (comment: PRComment) => {
       // Why: skip refreshDetails() — gh api --cache 60s returns stale data that would overwrite the optimistic comment.
       optimisticCommentsRef.current.push(comment)
-      // Why: write through the shared cache so subscribers re-render; fetchedAt=0 forces a background refresh next open for server-side fields.
+      // Notify through cache writes and expire fetchedAt so reopening refreshes server-side fields.
       if (detailsCacheKey) {
         const prev = workItemDetailsCache.get(detailsCacheKey)
         if (prev?.details) {
@@ -234,7 +234,7 @@ export function usePullRequestDetails(args: {
           }
         }
       }
-      // Why: cache empty (still loading) so no write/notify above; bump local state so the memo re-runs and surfaces the optimistic comment.
+      // Cold-loading cache has no details to patch/notify; tick the optimistic shell instead.
       setOptimisticTick((n) => n + 1)
     },
     [detailsCacheKey]

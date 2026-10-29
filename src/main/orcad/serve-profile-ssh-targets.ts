@@ -6,13 +6,9 @@ import { getActiveProfileStateLocation } from '../persistence/profile-state/prof
 import { readProfileStateDomain } from '../persistence/profile-state/profile-state-domain-reader'
 import { classifyProfileStateStorage } from '../persistence/profile-state/profile-state-storage-classification'
 
-/**
- * Whether the profile `orca serve` would load has saved SSH targets. Read-only: never creates,
- * migrates or locks the profile, because the serve host that starts next owns it. Throws when it
- * cannot tell, including for an older schema the serve host would still migrate.
- */
+/** Inspect SSH targets without creating, locking or migrating state owned by the next serve host. */
 export function serveProfileHasSshTargets(userDataPath: string): boolean {
-  // A profile index predates any profile-state import, so no index means the legacy root files.
+  // Before profile indexes existed, state lived at the legacy root paths.
   const location = getActiveProfileStateLocation(userDataPath) ?? {
     dataFile: join(userDataPath, 'orca-data.json'),
     databaseFile: join(userDataPath, PROFILE_STATE_DATABASE_FILE_NAME),

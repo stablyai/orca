@@ -1,5 +1,4 @@
-// Which saved editor-family tabs a restore brings back. One rule for the window's hydration and
-// main's layout load, so both drop the same tabs and neither holds a tab the other cannot draw.
+// Share startup restore filtering between window hydration and main load so neither retains editor tabs the other cannot draw.
 
 import type { Tab, TabContentType } from '../tab-types'
 
@@ -10,12 +9,7 @@ export function isTransientEditorContentType(contentType: TabContentType): boole
   )
 }
 
-/**
- * Whether a saved non-terminal tab comes back. An old html preview's tab names a document no restore
- * produces (a preview is a browser tab now, and re-deriving its document from the id is guesswork).
- * A transient tab's document is never saved, so it comes back only for a saved edit file of its
- * entity, or while its view is still held (`keepsView`); else its group would point at nothing.
- */
+/** Old HTML previews have no restorable document. Transient tabs return only with a saved edit file or retained view; otherwise their group would point at nothing. */
 export function restoresSavedContentTab(
   tab: Pick<Tab, 'contentType' | 'entityId'>,
   savedEditFilePaths: ReadonlySet<string>,

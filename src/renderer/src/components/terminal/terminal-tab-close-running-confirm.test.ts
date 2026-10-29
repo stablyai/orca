@@ -1,7 +1,4 @@
-/**
- * Which `closeTerminalTab` callers reach the running-process confirmation (#10142).
- * Kept out of terminal-tab-actions.test.ts, which is already at its max-lines budget.
- */
+/** Verify which closeTerminalTab callers reach running-process confirmation (#10142). */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
@@ -97,8 +94,7 @@ function visibleRequest() {
   return useRunningTerminalCloseConfirmStore.getState().runningTerminalCloseConfirm
 }
 
-// Drains pending microtasks. The probe resolves through several await points (per-pty inspect,
-// the batch join, the deadline race), so this flushes generously rather than counting ticks.
+// Flush generously across inspect, batch-join, and deadline await boundaries.
 async function settleProbe(): Promise<void> {
   for (let tick = 0; tick < 12; tick += 1) {
     await Promise.resolve()
@@ -205,8 +201,7 @@ describe('closeTerminalTab running-process confirmation', () => {
     expect(closeTab).toHaveBeenCalledWith('tab-busy')
   })
 
-  // Why: the pin prompt supersedes this one only when it actually appears. With the pin
-  // confirmation off it says nothing, and the running command must still be announced.
+  // Only an actual pin prompt supersedes process confirmation; disabling pin confirmation still requires the busy-command prompt.
   it('still asks about a running command on a pinned tab when pin confirmation is off', async () => {
     const state = busyTabState({
       settings: { activeRuntimeEnvironmentId: null, confirmClosePinnedTab: false },

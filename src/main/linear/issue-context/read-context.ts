@@ -96,8 +96,7 @@ export function collectInlineMedia(
   const media = [
     ...extractLinearInlineMedia(result.issue.description, 'description'),
     ...(result.comments ?? []).flatMap(
-      // Prefer media pre-extracted from the full (untruncated) comment body;
-      // fall back to the stored body for callers that did not pre-extract.
+      // Pre-extracted media includes images beyond truncation; retain fallback for callers without it.
       (comment) =>
         comment.inlineMedia ?? extractLinearInlineMedia(comment.body, 'comment', comment.id)
     ),

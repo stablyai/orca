@@ -4,8 +4,6 @@ import type { ResolvedBrowserCommandTarget } from './agent-browser-bridge-types'
 import { AgentBrowserBridgeState } from './agent-browser-bridge-state'
 
 export abstract class AgentBrowserBridgeTabs extends AgentBrowserBridgeState {
-  // ── Tab tracking ──
-
   setActiveTab(webContentsId: number, worktreeId?: string): void {
     this.activeWebContentsId = webContentsId
     if (worktreeId) {
@@ -76,9 +74,7 @@ export abstract class AgentBrowserBridgeTabs extends AgentBrowserBridgeState {
     return filtered
   }
 
-  // ── Tab management ──
-
-  /** The workspace of every registered tab; the raw tab list carries none. */
+  /** Tab list results omit workspace ownership. */
   tabWorktreeIds(): (string | undefined)[] {
     return [...this.getRegisteredTabs(undefined)].map(([tabId]) =>
       this.browserManager.getWorktreeIdForTab(tabId)
@@ -87,7 +83,7 @@ export abstract class AgentBrowserBridgeTabs extends AgentBrowserBridgeState {
 
   tabList(worktreeId?: string): BrowserTabListResult {
     const tabs = this.getRegisteredTabs(worktreeId)
-    // Why: use the per-worktree active tab so listing matches command routing, but read-only — discovery must not mutate active-tab state.
+    // Match command routing without changing active-tab selection during discovery.
     let activeWcId =
       (worktreeId && this.activeWebContentsPerWorktree.get(worktreeId)) ?? this.activeWebContentsId
     const result: BrowserTabInfo[] = []
@@ -106,8 +102,9 @@ export abstract class AgentBrowserBridgeTabs extends AgentBrowserBridgeState {
       const certificateFailure = this.browserManager.getBrowserPageCertificateFailure(tabId)
       result.push({
         browserPageId: tabId,
+        profileId: this.browserManager.getSessionProfileIdForTab(tabId) ?? 'default',
         index: index++,
-        // Why: failed WebContents report chrome-error://, not the address the user asked to load.
+        // Failed pages report chrome-error:// instead of the requested URL.
         url: loadError?.validatedUrl ?? wc.getURL() ?? '',
         title: wc.getTitle() ?? '',
         active: wcId === activeWcId,
@@ -115,7 +112,7 @@ export abstract class AgentBrowserBridgeTabs extends AgentBrowserBridgeState {
         certificateFailure
       })
     }
-    // Why: with no active tab yet, show the first live tab as active without mutating state — keeps `tab list` side-effect free.
+    // Infer an active tab for display without changing command routing.
     if (activeWcId == null && firstLiveWcId !== null) {
       activeWcId = firstLiveWcId
       if (result.length > 0) {
@@ -171,7 +168,6 @@ export abstract class AgentBrowserBridgeTabs extends AgentBrowserBridgeState {
       throw new BrowserError('browser_no_tab', 'No browser tab open in this worktree')
     }
 
-    // Why: prefer per-worktree active tab to avoid cross-worktree interference; fall back to global for callers without worktreeId.
     const preferredWcId =
       (worktreeId && this.activeWebContentsPerWorktree.get(worktreeId)) ?? this.activeWebContentsId
 
@@ -192,7 +188,7 @@ export abstract class AgentBrowserBridgeTabs extends AgentBrowserBridgeState {
       }
     }
 
-    // Why: persisted state can leave ghost tabs (dead webContents); skip them and activate the first live tab for consistency.
+    // Persisted registrations can outlive their WebContents.
     for (const [tabId, wcId] of tabs) {
       if (this.getWebContents(wcId)) {
         this.activeWebContentsId = wcId
@@ -210,7 +206,7 @@ export abstract class AgentBrowserBridgeTabs extends AgentBrowserBridgeState {
     )
   }
 
-  // Why: don't fall back to the global tab for text mutation — it could inject into another worktree's foreground webview and steal focus.
+  // Unscoped text mutations must not reach another worktree or steal focus.
   protected resolveScopedActiveTab(worktreeId?: string): ResolvedBrowserCommandTarget {
     if (worktreeId) {
       return this.resolveActiveTab(worktreeId)

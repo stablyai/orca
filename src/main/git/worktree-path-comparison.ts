@@ -4,22 +4,7 @@ import { foldWslUncPathCaseInsensitiveParts } from '../../shared/wsl-paths'
 import type { GitWorktreeExecOptions } from './worktree-operation-options'
 import { translateWslOutputPaths } from './runner'
 
-/**
- * Normalize a worktree path for cross-platform comparison/keying: resolved, and case-folded on
- * Windows syntax.
- *
- * Why the path's own syntax outranks `platform`: whose filesystem a path names is a property of the
- * path, not of the desktop reading it, and folding a case-sensitive filesystem merges two real
- * checkouts into one row — enough for `removeWorktree` to pick the twin and delete its branch.
- *
- * Two syntaxes name a case-sensitive filesystem. A POSIX-absolute path is one. The other is the WSL
- * UNC alias, which is the shape that actually reaches removal: `listWorktreesStrict` runs every
- * listed path through `translateWorktreePath`, so git-in-the-distro's `/home/alice/Feature` arrives
- * as `\\wsl.localhost\Ubuntu\home\alice\Feature` and a plain `toLowerCase` folded the ext4 tail.
- * `foldWslUncPathCaseInsensitiveParts` already draws that line — Windows folds the share, the distro
- * and a drvfs `/mnt/<letter>` tail, and nothing else — and `git-fetch-head-lock` already relies on
- * it.
- */
+/** Path syntax determines case folding: preserve POSIX and WSL ext4 tails even on Windows to avoid merging checkouts. */
 export function canonicalWorktreePath(pathValue: string, platform = process.platform): string {
   if (looksLikePosixAbsolutePath(pathValue)) {
     return canonicalPosixPath(pathValue, platform)
@@ -33,7 +18,7 @@ export function canonicalWorktreePath(pathValue: string, platform = process.plat
     : canonicalPosixPath(pathValue, platform)
 }
 
-// Why: macOS git reports a `/tmp` checkout as `/private/tmp`, the same directory.
+// macOS Git reports /tmp checkouts as /private/tmp.
 function canonicalPosixPath(pathValue: string, platform: NodeJS.Platform): string {
   const normalized = posix.normalize(posix.resolve(pathValue))
   if (platform !== 'darwin') {
@@ -45,19 +30,12 @@ function canonicalPosixPath(pathValue: string, platform: NodeJS.Platform): strin
   return normalized.startsWith('/private/tmp/') ? normalized.slice('/private'.length) : normalized
 }
 
-/**
- * The comparison key for a WSL UNC path, or null when it is not one.
- *
- * Normalized through `win32` first so `..`/`.` segments and slash style collapse, then folded only
- * where Windows really folds. The fold is unconditional on platform: a `\\wsl.localhost\...` string
- * names the same distro filesystem whichever desktop is reading it.
- */
+/** Normalize WSL UNC paths on every host, folding only the Windows-insensitive parts. */
 function wslUncComparisonKey(pathValue: string): string | null {
   const folded = foldWslUncPathCaseInsensitiveParts(pathValue)
   if (!folded) {
     return null
   }
-  // A trailing separator names the same directory, as `resolve` already treats it elsewhere.
   return (foldWslUncPathCaseInsensitiveParts(win32.normalize(pathValue)) ?? folded).replace(
     /\/+$/,
     ''
@@ -71,8 +49,7 @@ export function areWorktreePathsEqual(
 ): boolean {
   const leftIsPosix = looksLikePosixAbsolutePath(leftPath)
   if (leftIsPosix || looksLikePosixAbsolutePath(rightPath)) {
-    // Why not fall through: `win32.resolve` gives a POSIX path a drive root, manufacturing an
-    // equality with a Windows path that names a different filesystem.
+    // win32.resolve would attach a drive to POSIX paths and manufacture cross-filesystem equality.
     return (
       leftIsPosix &&
       looksLikePosixAbsolutePath(rightPath) &&
@@ -93,8 +70,7 @@ export function dedupeWorktreesByPath<T extends { path: string }>(
   worktrees: readonly T[],
   platform = process.platform
 ): T[] {
-  // Why: large Git/relay listings key each absolute path once, keeping the first row under
-  // `areWorktreePathsEqual`; only relative rows, whose flavor depends on the peer, compare pairwise.
+  // Key absolute paths once; only host-dependent relative paths require pairwise comparison.
   const unique: T[] = []
   const posixKeys = new Set<string>()
   const windowsKeys = new Set<string>()

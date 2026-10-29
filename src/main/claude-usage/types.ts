@@ -18,7 +18,7 @@ export type ClaudeUsageLocationBreakdown = {
   cacheReadTokens: number
   cacheWriteTokens: number
   cacheWrite1hTokens: number
-  /** Subset of the totals from requests over the model's long-context threshold; see ClaudeBillableTokens. */
+  /** Subset from requests over the model's long-context threshold. */
   longContext?: ClaudeUsageTokenTotals
 }
 
@@ -54,7 +54,7 @@ export type ClaudeUsageDailyAggregate = {
   cacheReadTokens: number
   cacheWriteTokens: number
   cacheWrite1hTokens: number
-  /** Subset of the totals from requests over the model's long-context threshold; see ClaudeBillableTokens. */
+  /** Subset from requests over the model's long-context threshold. */
   longContext?: ClaudeUsageTokenTotals
 }
 
@@ -76,16 +76,12 @@ export type ClaudeUsagePersistedState = {
 export type ClaudeUsagePersistedFile = ClaudeUsageProcessedFile & {
   sessions: ClaudeUsageSession[]
   dailyAggregates: ClaudeUsageDailyAggregate[]
-  /** Dedupe keys (message.id:requestId) this file counted. Forked/resumed
-   *  sessions copy earlier turns into new files; ownership keeps each turn
-   *  counted by exactly one cached file across incremental scans. */
+  /** Exclusive turn ownership across files, using message/request IDs or message-ID/UUID fallbacks. */
   ownedDedupeKeys: string[]
-  /** True when this file saw turns already claimed by another file. When that
-   *  owner disappears, only deferred files need reparse to reclaim — not the
-   *  entire transcript corpus. */
+  /** Contains turns claimed by another file; reparse if that owner disappears. */
   hasDeferredClaims: boolean
   parseResumeState?: ClaudeUsageParseResumeState | null
-  /** CLAUDE_USAGE_PROJECTION_VERSION that built `sessions` and `dailyAggregates`; any other value reparses the file. */
+  /** Reparse if this differs from CLAUDE_USAGE_PROJECTION_VERSION. */
   projectionVersion?: number
 }
 

@@ -16,8 +16,7 @@ export function WorktreeCardDetailSectionContent({
   ...props
 }: WorktreeCardDetailSectionContentProps): React.JSX.Element {
   return (
-    // Why: section titles stay at hovercard level 0; only each section's body
-    // is inset so stacked metadata remains visually scannable.
+    // Inset section bodies only; titles stay flush with the hovercard hierarchy.
     <div className={cn('border-l border-border/70 pl-3', className)} {...props} />
   )
 }

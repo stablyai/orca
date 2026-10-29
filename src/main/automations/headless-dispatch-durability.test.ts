@@ -108,7 +108,6 @@ describe('headless automation observation during persistence', () => {
   it('stamps dispatch before the agent is prompted, so a turn ending inside the launch counts', async () => {
     vi.useFakeTimers({ now: 1_000 })
     const context = fixture(terminal)
-    // The launch's post-prompt work takes two seconds; the agent's turn may end inside them.
     context.dispatcher.mockImplementationOnce(async () => {
       vi.setSystemTime(3_000)
       return terminal

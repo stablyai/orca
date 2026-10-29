@@ -80,7 +80,7 @@ export function registerProjectGroupHandlers(mainWindow: BrowserWindow, store: S
       assertWslMoveProjectWritable(store, { repoId: args.projectId })
       return null
     }
-    // Why the target's host: a WSL move fences the local twin only, never its SSH sibling.
+    // Fence the selected host only; a WSL move must not block its SSH sibling.
     assertWslMoveRepoWritable(store, target)
     const moved = store.moveProjectToGroup(target, args.groupId, args.order)
     if (moved) {

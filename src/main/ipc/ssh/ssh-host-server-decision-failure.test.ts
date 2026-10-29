@@ -27,6 +27,7 @@ const { decideHostServer, publishHostServerDecisionFailure } =
 const { broadcastSshState } = await import('./ssh-renderer-broadcast')
 const { getSshHostServerStatus, setSshHostServerStatus } =
   await import('../../ssh/ssh-host-server-status')
+const { markSshSessionStartFailure } = await import('../../ssh/ssh-session-start-failure')
 
 const target: SshTarget = { id: 'ssh-1', label: 'Box', host: 'box', port: 22, username: 'me' }
 const fenced: SshTarget = {
@@ -52,5 +53,15 @@ describe('a managed-server decision that fails', () => {
       status: 'error',
       error: 'listen EADDRINUSE'
     })
+  })
+
+  it('leads a failed SSH session with what to do about it', () => {
+    publishHostServerDecisionFailure(
+      'ssh-1',
+      markSshSessionStartFailure(new Error('connect ECONNREFUSED 10.0.0.1:22'))
+    )
+    expect(vi.mocked(broadcastSshState).mock.calls.at(-1)?.[2].error).toMatch(
+      /^Nothing accepted the SSH connection at this address\..*\(connect ECONNREFUSED 10\.0\.0\.1:22\)$/
+    )
   })
 })

@@ -1,8 +1,11 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
+import { structuredAgentSessionPaneKey } from '../../../../shared/structured-agent-session-projection'
+import type { Tab } from '../../../../shared/tab-types'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
+import { toRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { useWorktreeActivityStatus } from './use-worktree-activity-status'
 
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
@@ -20,12 +23,18 @@ type MockState = {
   runtimeAgentOrchestrationByPaneKey: Record<string, NonNullable<AgentStatusEntry['orchestration']>>
   migrationUnsupportedByPtyId: Record<string, never>
   retainedAgentsByPaneKey: Record<string, unknown>
+  unifiedTabsByWorktree: Record<string, Tab[]>
+  structuredChatSleptAtByPaneKey: Record<string, number | null>
+  wslHostStatuses?: Record<string, { state: string; distro: string }>
 }
 
 let mockState: MockState
 
 vi.mock('@/store', () => ({
   useAppStore: (selector: (state: MockState) => unknown) => selector(mockState)
+}))
+vi.mock('../terminal-pane/remote-server-outage', () => ({
+  selectWorkspaceRuntimeEnvironmentId: () => 'wsl:ubuntu'
 }))
 
 function makeTab(id: string, worktreeId: string): TerminalTab {
@@ -113,12 +122,76 @@ describe('useWorktreeActivityStatus', () => {
       agentStatusByPaneKey: {},
       runtimeAgentOrchestrationByPaneKey: {},
       migrationUnsupportedByPtyId: {},
-      retainedAgentsByPaneKey: {}
+      retainedAgentsByPaneKey: {},
+      unifiedTabsByWorktree: {},
+      structuredChatSleptAtByPaneKey: {}
     }
+  })
+
+  it('shows a chat-only workspace as active before its first message, until the chat sleeps', () => {
+    const worktreeId = 'repo1::/path/wt1'
+    const chatTab: Tab = {
+      id: 'chat-tab',
+      entityId: 'session-1',
+      groupId: 'group-1',
+      worktreeId,
+      contentType: 'agent-session',
+      agentSessionAgent: 'codex',
+      label: 'Codex',
+      customLabel: null,
+      color: null,
+      sortOrder: 0,
+      createdAt: 0
+    }
+    mockState = { ...mockState, unifiedTabsByWorktree: { [worktreeId]: [chatTab] } }
+    expect(renderToStaticMarkup(<StatusProbe worktreeId={worktreeId} />)).toBe(
+      '<span>active</span>'
+    )
+
+    mockState = {
+      ...mockState,
+      structuredChatSleptAtByPaneKey: {
+        [structuredAgentSessionPaneKey(chatTab.id, chatTab.entityId)]: 1_000
+      }
+    }
+    expect(renderToStaticMarkup(<StatusProbe worktreeId={worktreeId} />)).toBe(
+      '<span>inactive</span>'
+    )
   })
 
   afterEach(() => {
     vi.restoreAllMocks()
+  })
+
+  // verify-7: a terminal on a terminated distro kept the workspace's green dot.
+  it('shows a workspace on a stopped WSL host as inactive, though its panes keep their bindings', () => {
+    const worktreeId = 'repo1::/home/u/app'
+    mockState = {
+      ...mockState,
+      tabsByWorktree: { [worktreeId]: [makeTab('tab-1', worktreeId)] },
+      ptyIdsByTabId: { 'tab-1': ['pty-1'] },
+      wslHostStatuses: { 'wsl:debian': { state: 'distro-stopped', distro: 'Debian' } }
+    }
+    // Another distro's stop is not this workspace's.
+    expect(renderToStaticMarkup(<StatusProbe worktreeId={worktreeId} />)).toBe(
+      '<span>active</span>'
+    )
+    mockState = {
+      ...mockState,
+      wslHostStatuses: { 'wsl:ubuntu': { state: 'distro-stopped', distro: 'Ubuntu' } }
+    }
+    expect(renderToStaticMarkup(<StatusProbe worktreeId={worktreeId} />)).toBe(
+      '<span>inactive</span>'
+    )
+
+    // e9-reviewer: a pane bound to another, running server is the card's exception too.
+    mockState = {
+      ...mockState,
+      ptyIdsByTabId: { 'tab-1': [toRemoteRuntimePtyId('h1', 'ssh:desk')] }
+    }
+    expect(renderToStaticMarkup(<StatusProbe worktreeId={worktreeId} />)).toBe(
+      '<span>active</span>'
+    )
   })
 
   it('keeps a restored offscreen working agent yellow from the hook snapshot', () => {

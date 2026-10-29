@@ -1,3 +1,5 @@
+import { SIMULATOR_DEFAULT_TAB_LABEL } from '@/lib/simulator-tab-label'
+
 export type SimulatorDeviceRow = {
   name: string
   udid: string
@@ -25,10 +27,10 @@ export function deviceLabel(
   device: SimulatorDeviceRow | EmulatorStreamInfo | string | undefined
 ): string {
   if (!device) {
-    return 'Mobile Emulator'
+    return SIMULATOR_DEFAULT_TAB_LABEL
   }
   if (typeof device === 'string') {
-    return device.length > 20 && device.includes('-') ? 'Mobile Emulator' : device
+    return device.length > 20 && device.includes('-') ? SIMULATOR_DEFAULT_TAB_LABEL : device
   }
   if ('displayName' in device && device.displayName) {
     return device.displayName
@@ -39,10 +41,9 @@ export function deviceLabel(
   if ('device' in device && device.device && !device.device.includes('-')) {
     return device.device
   }
-  return 'Mobile Emulator'
+  return SIMULATOR_DEFAULT_TAB_LABEL
 }
 
-/** Resolve the MJPEG endpoint serve-sim exposes for the live phone preview. */
 export function simulatorPreviewStreamUrl(info?: EmulatorStreamInfo): string | undefined {
   if (!info) {
     return undefined

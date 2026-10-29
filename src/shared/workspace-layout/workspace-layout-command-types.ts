@@ -1,8 +1,4 @@
-// Commands a client sends to change the layout (design 2.1). The pure module applies only their
-// layout effect. Refusals that need facts it does not hold stay with the runtime: an unknown
-// workspace or unresolved folder home (catalog), `shell_override_refused` and
-// `startup_agent_conflict` (host support), `file_outside_workspace` (paths) and
-// `terminal_liveness_unavailable` (PTY host).
+// Pure commands change layout only; runtime owns catalog/path/host-support/liveness refusals requiring external facts.
 
 import type { LiveTerminalAdoption } from './workspace-layout-terminal-adoption'
 import type { SleepingAgentSessionRecord } from '../agent-session-resume'
@@ -22,10 +18,7 @@ import type { LayoutEditorFile, LayoutTerminalCreation } from './workspace-layou
 
 type On = { workspace: string }
 
-/**
- * The desktop's drag-out rules: the terminal the window's pane shows outranks a stale binding
- * here, and a tab's last pane moves too (the window holds siblings this copy lacks).
- */
+/** Desktop drag-out trusts the displayed PTY over stale bindings and permits moving the last known pane because the window may hold unseen siblings. */
 export type WindowPaneDetach = {
   ptyId: string | null
   /** The new tab's id, the same in every partition holding the pane; minted when absent. */
@@ -69,10 +62,7 @@ export type LayoutCommand =
       type: 'closePane'
       tabId: string
       leafId: string
-      /**
-       * A user's close of one pane of a split, as the desktop's pane close: the tab's last pane is
-       * refused (closing it is a tab close).
-       */
+      /** A user split-pane close refuses the last pane; that requires tab-close intent. */
       userPaneClose?: true
     })
   | (On & {
@@ -83,10 +73,7 @@ export type LayoutCommand =
       refusePinned?: boolean
       /** Editor tabs whose view reported an unsaved draft (rule 10). */
       dirtyTabIds?: string[]
-      /**
-       * Records each terminal tab closed, or not listed, as closed for this reason, so a start
-       * that commits later is refused. Main sets it on a window's close.
-       */
+      /** Record closed or missing terminal tabs so a later in-flight start cannot commit after a window close. */
       recordClose?: 'user' | 'cleanup'
     })
   | (On & {
@@ -144,8 +131,7 @@ export type LayoutCommand =
       type: 'openEditorTab'
       /** The window's id for a tab it drew first; minted when absent. */
       tabId?: string
-      /** The editor's file id: the tab's entity. Absent (main's own opens only; the wire still
-       *  requires it): main picks it for `file`. */
+      /** Main-only opens may derive file ID; wire commands must still provide it. */
       fileId?: string
       contentType: Exclude<TabContentType, 'terminal' | 'browser' | 'agent-session' | 'simulator'>
       /** Present for edit-mode files, which are restored after restart. */
@@ -179,8 +165,7 @@ export type LayoutCommand =
       type: 'moveTabToWorkspace'
       /** The workspace that owns the tabs' file, as the window resolved it; same partition. */
       toWorkspace: string
-      /** In the order they join the group's end; ids change when they name the old owner. A
-       *  non-plain tab's view names its file under the new owner. */
+      /** Rekey tabs that name the old owner and retarget nonplain views to the new file owner, preserving join order. */
       tabs: { tabId: string; newTabId: string; newEntityId: string; view?: LayoutEditorView }[]
       groupId: string
       /** The moved edit-mode file's record in its new workspace. */
@@ -252,10 +237,7 @@ export type LayoutCommand =
   /** A workspace's default terminal tabs, in order, and the mark: nothing once it is marked. */
   | (On & { type: 'applyDefaultTabs'; tabs: DefaultTerminalTab[] })
 
-/**
- * Why a workspace's first surface is asked for: `restore` at relaunch, `activation` when a user
- * opens the workspace. Either is a no-op once the workspace has a tab.
- */
+/** Restore/activation may request the first surface; both become no-ops once any tab exists. */
 export type InitialSurfaceReason = 'restore' | 'activation'
 
 /** The ids are the window's: it keys its spawn inputs by them before main answers. */
@@ -280,12 +262,8 @@ export type EditorFileRename = {
 
 export type GroupSide = 'left' | 'right' | 'up' | 'down'
 
-/**
- * An open into a new group, named by the command's `groupId`, split off `besideGroupId`: the
- * group and its first tab are made in one step, so no empty group is ever stored. With
- * `besideLastGroupId`, the split is off the branch from `besideGroupId` to it (its first and last
- * groups), as when a group the window kept empty sits beside a branch split since.
- */
+/** Create a split group and its first tab atomically, never storing an empty group.
+ * An optional last-group ID expands the target to a branch, supporting window-retained empty groups beside later splits. */
 export type NewGroupSplit = {
   besideGroupId: string
   besideLastGroupId?: string
@@ -294,7 +272,12 @@ export type NewGroupSplit = {
 
 export type TabTitle =
   /** A generated title replaces the tab's existing one only with `replaceExisting`: first wins. */
-  | { kind: 'custom' | 'generated'; title: string | null; replaceExisting?: true }
+  | {
+      kind: 'custom' | 'generated'
+      title: string | null
+      replaceExisting?: true
+      expected?: { entityId: string; executionHostId: string; customTitle: string }
+    }
   | { kind: 'aiVault'; title: AiVaultSessionTitle | null }
 
 /** One tab's agent-generated title in a `renameTabs` batch. */
@@ -305,10 +288,7 @@ export type GeneratedTabTitle = {
   replaceExisting?: true
 }
 
-/**
- * A window's agent-generated titles for many tabs, of any workspaces, in one `layout.apply`: main
- * renames them in one write, so one frame shows them all. Each rename is a `renameTab`.
- */
+/** Batch cross-workspace generated titles in one write/frame; each entry follows renameTab semantics. */
 export type RenameTabsCommand = {
   type: 'renameTabs'
   kind: 'generated'
@@ -375,13 +355,8 @@ export type LayoutApplyOutcome =
   | { ok: true; result: LayoutCommandResult }
   | { ok: false; code: LayoutRefusalCode }
 
-/**
- * `layout.apply`'s reply. `host_not_owned`: a paired server owns that workspace's layout.
- * `other_partition`: a move's two workspaces are in different host partitions.
- * `wsl_move_in_progress`: a WSL move has paused the workspace (older windows log it as refused).
- * `frameSeq`: the layout stream position whose frames hold the command's effect (absent from
- * older hosts).
- */
+/** Refuse foreign ownership/partition moves and paused WSL moves; older windows log pauses as refusals.
+ * Optional frameSeq identifies the stream position holding the effect; older hosts omit it. */
 export type LayoutApplyReply = (
   | LayoutApplyOutcome
   | { ok: false; code: 'host_not_owned' | 'other_partition' | 'wsl_move_in_progress' }
@@ -394,14 +369,16 @@ export type LayoutContext = {
   now: () => number
   /** True while a start of this pane is in flight; such a pane is not started again. */
   isStarting?: (leafId: string) => boolean
-  /**
-   * Whether the pane's bound terminal is live, as the runtime knows it; a binding with a start
-   * status, or to a terminal that ended, names what the pane restores from. Absent: live.
-   */
+  /** Why panes this commit drops are closed: only a live edit's drops run the dropped-leaf step.
+   *  Absent (load, restore, peer merge, moves) records nothing. */
+  droppedLeafReason?: DroppedLeafReason
+  /** Missing callback means live; dead/start-status bindings instead identify what a pane restores from. */
   isBindingLive?: (paneKey: string, ptyId: string) => boolean
   /** Whether the live bound terminal is an empty shell a hibernated agent left: startPane replaces it. */
   retiresBinding?: (paneKey: string, ptyId: string) => boolean
 }
+
+export type DroppedLeafReason = 'live-edit'
 
 export type LayoutApplyResult<Model> =
   | {

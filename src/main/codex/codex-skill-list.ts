@@ -1,9 +1,6 @@
-// What Codex itself reports as its skills for one folder, mapped to the `/` surface Orca publishes.
-// Shared by a running chat's report and the at-rest probe, so both list exactly what Codex loaded.
-
 import type { AgentSessionSlashCommand } from '../../shared/agent-session-wire'
 import { structuredSlashCommands } from '../../shared/structured-agent-session-composer'
-import type { CodexAppServerConnection } from './codex-app-server-connection'
+import type { CodexAppServerConnection } from './app-server/codex-app-server-connection-types'
 import type { CodexAppServerRpc } from './codex-app-server-session'
 import {
   CodexAppServerUnsupportedError,
@@ -13,8 +10,7 @@ import { isRecord } from '../../shared/agent-status-child-work-value-guards'
 
 export const CODEX_SKILLS_LIST_METHOD = 'skills/list'
 
-/** A Codex that predates the method refuses it as unknown; it never will answer, so the client's
- *  folder scan stays the list. */
+/** Older Codex versions retain the client folder scan when skills/list is unsupported. */
 export function isCodexSkillsListUnsupported(error: unknown): boolean {
   return (
     isCodexMethodNotFoundError(error) ||
@@ -25,12 +21,9 @@ export function isCodexSkillsListUnsupported(error: unknown): boolean {
   )
 }
 
-// Why a constant: the Codex adapter implements both, and a published report replaces the menu's
-// own command rows on every client, old ones included.
 const CODEX_CONVERSATION_COMMANDS = ['clear', 'compact'] as const
 
-/** The command rows a Codex report carries, so a client that replaces its menu with the report
- *  keeps `/model`, `/effort`, `/clear`, `/compact` and `/goal`. */
+/** Reports replace client menus, so include the built-in commands. */
 export function codexReportCommandRows(): AgentSessionSlashCommand[] {
   return structuredSlashCommands(CODEX_CONVERSATION_COMMANDS, 'codex').map((command) => ({
     name: command.name,
@@ -50,10 +43,24 @@ function arrayField(value: unknown, key: string): unknown[] {
   return Array.isArray(field) ? field : []
 }
 
-/** Codex's enabled skills for `cwd`, under the names and paths Codex selects them by. */
 export function codexSkillRows(answer: unknown, cwd: string): AgentSessionSlashCommand[] {
   const entries = arrayField(answer, 'data')
-  const entry = entries.find((candidate) => stringField(candidate, 'cwd') === cwd) ?? entries[0]
+  return entrySkillRows(
+    entries.find((candidate) => stringField(candidate, 'cwd') === cwd) ?? entries[0]
+  )
+}
+
+export function codexFolderSkillReport(
+  answer: unknown,
+  cwd: string
+): AgentSessionSlashCommand[] | undefined {
+  const entry = arrayField(answer, 'data').find(
+    (candidate) => stringField(candidate, 'cwd') === cwd
+  )
+  return entry === undefined ? undefined : [...codexReportCommandRows(), ...entrySkillRows(entry)]
+}
+
+function entrySkillRows(entry: unknown): AgentSessionSlashCommand[] {
   return arrayField(entry, 'skills').flatMap((skill): AgentSessionSlashCommand[] => {
     const name = stringField(skill, 'name')
     const path = stringField(skill, 'path')
@@ -69,7 +76,6 @@ export function codexSkillRows(answer: unknown, cwd: string): AgentSessionSlashC
   })
 }
 
-/** One `skills/list` for `cwd`; `forceReload` after Codex said its skills changed. */
 export async function requestCodexSkillReport(
   connection: Pick<CodexAppServerConnection, 'request'> | CodexAppServerRpc,
   cwd: string,

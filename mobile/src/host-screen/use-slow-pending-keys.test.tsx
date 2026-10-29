@@ -1,7 +1,23 @@
 import { createElement } from 'react'
-import { act, create, type ReactTestRenderer } from 'react-test-renderer'
+import { act, create as createRenderer, type ReactTestRenderer } from 'react-test-renderer'
+
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useSlowPendingKeys } from './use-slow-pending-keys'
+
+const renderers = new Set<ReturnType<typeof createRenderer>>()
+function create(...args: Parameters<typeof createRenderer>): ReturnType<typeof createRenderer> {
+  const renderer = createRenderer(...args)
+  renderers.add(renderer)
+  return renderer
+}
+function unmountRenderers(): void {
+  act(() => {
+    for (const renderer of renderers) {
+      renderer.unmount()
+    }
+  })
+  renderers.clear()
+}
 
 let latest: ReadonlySet<string> = new Set()
 function Probe({ pending }: { pending: ReadonlySet<string> }) {
@@ -35,6 +51,7 @@ describe('useSlowPendingKeys', () => {
     vi.useFakeTimers()
   })
   afterEach(() => {
+    unmountRenderers()
     vi.useRealTimers()
   })
 

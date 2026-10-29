@@ -10,21 +10,27 @@ import type { GitAdmissionTier } from './git-exec-options'
 import { acquireGitAdmission } from './git-subprocess-admission'
 import { classifyGitCommand } from '../../../shared/git-command-classification'
 import { buildNetworkSshPolicyEnv } from './git-ssh-policy-env'
+import {
+  admitWslGit,
+  isLocalGitRuntimeRouterInstalled,
+  noteWslGitFailure,
+  routeLocalGitOptions
+} from './local-git-runtime-route'
+import { gitRunsIn } from './git-runs-in'
 
-/**
- * Spawn a git child process. Drop-in replacement for
- * `spawn('git', args, { cwd, stdio, ... })`.
- */
 export type GitSpawnOptions = SpawnOptions & {
   cwd: string
   wslDistro?: string
+  /** Runs the host's Git even in a WSL-runtime project (local-git-runtime-route.ts); say why. */
+  hostGit?: true
   admissionTier?: GitAdmissionTier
 }
 
 export async function gitSpawnAfterWindowsEnvironmentReady(
   args: string[],
-  options: GitSpawnOptions
+  callerOptions: GitSpawnOptions
 ): Promise<ChildProcess> {
+  const options = routeLocalGitOptions(callerOptions)
   if (options.signal?.aborted) {
     throw createAbortError()
   }
@@ -54,9 +60,15 @@ export async function gitSpawnAfterWindowsEnvironmentReady(
 
 export async function withGitAdmission(
   args: string[],
-  options: GitSpawnOptions,
-  spawnChild: () => ChildProcess = () => gitSpawn(args, options)
+  callerOptions: GitSpawnOptions,
+  spawnChild?: () => ChildProcess
 ): Promise<ChildProcess> {
+  const options = routeLocalGitOptions(callerOptions)
+  const spawnRouted = spawnChild ?? (() => gitSpawn(args, options))
+  const admission = admitWslGit(options)
+  if (admission) {
+    await admission
+  }
   const span = startGitSpan({ args, cwd: options.cwd })
   let grant: Awaited<ReturnType<typeof acquireGitAdmission>> | null = null
   try {
@@ -68,19 +80,46 @@ export async function withGitAdmission(
       signal: options.signal
     })
     span.setAttribute('git.queue_wait_ms', grant.queueWaitMs)
+    // The same resolution gitSpawn makes, for the span only; only the router can change its answer.
+    if (isLocalGitRuntimeRouterInstalled()) {
+      span.setAttribute(
+        'git.runs_in',
+        gitRunsIn(
+          resolveGitCommand(args, {
+            cwd: options.cwd,
+            ...(options.wslDistro ? { wslDistro: options.wslDistro } : {})
+          })
+        )
+      )
+    }
     if (options.signal?.aborted) {
       grant.release()
       span.fail(createAbortError())
       throw createAbortError()
     }
-    const child = spawnChild()
+    const child = spawnRouted()
     let finalized = false
     let liveError: Error | null = null
+    // wsl.exe says a distro is missing on stderr; keep a tail so the failure can name it.
+    let stderrTail = ''
+    const keepStderr = (chunk: Buffer | string): void => {
+      stderrTail = `${stderrTail}${String(chunk)}`.slice(-2_048)
+    }
+    if (options.wslDistro && isLocalGitRuntimeRouterInstalled()) {
+      child.stderr?.on('data', keepStderr)
+    }
     const finalize = (error?: Error): void => {
       if (finalized) {
         return
       }
       finalized = true
+      child.stderr?.off('data', keepStderr)
+      if (error) {
+        noteWslGitFailure(
+          options,
+          stderrTail ? new Error(`${error.message}\n${stderrTail}`) : error
+        )
+      }
       child.off('error', handleError)
       child.off('close', handleClose)
       grant?.release()
@@ -111,12 +150,14 @@ export async function withGitAdmission(
   } catch (error) {
     grant?.release()
     span.fail(error instanceof Error ? error : new Error(String(error)))
+    noteWslGitFailure(options, error)
     throw error
   }
 }
 
-export function gitSpawn(args: string[], options: GitSpawnOptions): ChildProcess {
-  const { wslDistro, admissionTier: _admissionTier, ...spawnOptions } = options
+export function gitSpawn(args: string[], callerOptions: GitSpawnOptions): ChildProcess {
+  const options = routeLocalGitOptions(callerOptions)
+  const { wslDistro, admissionTier: _admissionTier, hostGit: _hostGit, ...spawnOptions } = options
   const resolved = resolveGitCommand(args, {
     cwd: options.cwd,
     ...(wslDistro ? { wslDistro } : {}),

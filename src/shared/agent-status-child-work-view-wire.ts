@@ -1,9 +1,4 @@
-// How a child-work view crosses a client/host boundary.
-//
-// Views reach clients from hosts of any version, so they are read permissively: unknown keys are
-// ignored and an unknown enum arm degrades to one every reader already handles, never rejecting the
-// row (docs/reference/remote-wire-compatibility.md, Rules 1 and 4). The record codec stays
-// host-internal; nothing here loads it. Type-only references keep this loadable in the renderer.
+// Decode foreign views permissively: ignore unknown keys and degrade unknown arms (remote-wire-compatibility.md, Rules 1/4). Never load the strict host record codec; type-only references keep renderer loading safe.
 
 import type {
   AgentChildWorkKind,
@@ -119,8 +114,7 @@ function decodeView(value: unknown): AgentChildWorkView | null {
   }
 }
 
-/** A host's published views, or undefined when it published none (an older host). A malformed
- *  entry is dropped; one carrying an arm this build does not know is kept, degraded. */
+/** Older hosts omit views. Drop malformed entries individually; retain unknown arms with degraded behavior. */
 export function decodeAgentChildWorkViews(value: unknown): AgentChildWorkView[] | undefined {
   if (!Array.isArray(value)) {
     return undefined
@@ -172,8 +166,7 @@ function viewsEqual(a: AgentChildWorkView, b: AgentChildWorkView, clockTolerance
   )
 }
 
-/** Field equality for view lists. `clockToleranceMs` lets a reader that does not need per-tick
- *  freshness treat an evidence clock that only advanced by less than that as unchanged. */
+/** Allow evidence-clock advances below clockToleranceMs to compare equal for readers without per-tick freshness needs. */
 export function agentChildWorkViewsEqual(
   a: readonly AgentChildWorkView[] | undefined,
   b: readonly AgentChildWorkView[] | undefined,

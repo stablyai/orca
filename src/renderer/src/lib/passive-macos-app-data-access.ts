@@ -50,7 +50,6 @@ export function shouldPollActiveGitStatus(args: ActiveGitStatusPollingArgs): boo
   if (hasInteractiveActiveGitStatusConsumer(args)) {
     return true
   }
-  // Why: macOS app-container paths can trigger the "data from other apps"
-  // prompt. Keep terminal-only workspace switching from passively probing them.
+  // macOS app-container probes can request other-app data access; terminal-only switches must not trigger them passively.
   return !isMacAppDataPath(args.worktreePath, args.userAgent)
 }

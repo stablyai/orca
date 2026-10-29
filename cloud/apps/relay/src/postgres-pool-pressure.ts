@@ -9,9 +9,7 @@ export type PostgresPoolPressureCounts = {
   databasePoolWaitMsMax: number
 }
 
-// A pool that cannot hand out a client throws a bare Error with no SQLSTATE, so
-// the message is all node-postgres gives us. Both of these come only from
-// pg-pool's connect path, so neither can be a statement that already ran.
+// pg-pool connect timeouts have no SQLSTATE; these messages prove acquisition failed before a statement ran.
 const POOL_CONNECT_TIMEOUT_MESSAGES = [
   // No pooled client came free within connectionTimeoutMillis.
   'timeout exceeded when trying to connect',
@@ -87,9 +85,7 @@ export class PostgresPoolPressure {
   private waitersMax = 0
   private waitMsMax = 0
   private lastConsumed = emptyCounts()
-  // General work queues here, not in pg-pool, so pg-pool's own queue holds only
-  // priority callers. Holding a connection back instead would cost general
-  // throughput: one of 16 is the margin an asia-east2 drain release runs on.
+  // Queue general work here so pg-pool queues only priority; reserving an idle connection would lose Asia drain throughput.
   private readonly generalCapacity: number
   private generalInUse = 0
   private readonly generalQueue: GeneralLaneWaiter[] = []
@@ -232,14 +228,7 @@ async function markedAcquire(
   return guardCheckedOutClient(client, onRelease)
 }
 
-// pg-pool strips its own `error` listener when it hands a client out
-// (pg-pool@3.14.0 index.js:344) and only reattaches it in `_release`
-// (index.js:385), so a checked-out client has no `error` listener at all. A
-// backend that terminates that session mid-statement therefore emits `error`
-// with nothing listening, which is an unhandled 'error' event and kills the
-// process. `pool.on('error')` cannot cover this: pg-pool routes there only from
-// the idle listener. Every relay checkout awaits this function, so it is the
-// one seam that sees them all.
+// pg-pool removes error listeners on checkout and restores them on release; pool.on(error) covers only idle clients. Guard every checkout or terminated in-flight sessions crash the process.
 function guardCheckedOutClient(client: pg.PoolClient, onRelease: () => void): pg.PoolClient {
   let failure: Error | undefined
   const onError = (error: Error) => {

@@ -37,7 +37,7 @@ vi.mock('@/store', () => ({
 
 import { useSourceControlDiscardConfirmation } from './use-discard-confirmation'
 import { useSourceControlEntryMutations } from './use-entry-mutations'
-import type { SourceControlEntryGroups } from '../listing/section-order'
+import type { SourceControlEntryGroups } from '../../../../../../shared/source-control-section-order'
 
 const EMPTY_GROUPS: SourceControlEntryGroups = { unstaged: [], staged: [], untracked: [] }
 
@@ -119,14 +119,12 @@ describe('source-control entry mutation failures', () => {
 
     expect(mocks.stagePath).toHaveBeenCalledTimes(2)
     expect(mocks.stagePath.mock.calls[1]?.[1]).toBe('src/app.ts')
-    // Why: the retry succeeded, so no second failure toast — and the first one is cleared.
     expect(mocks.toastError).toHaveBeenCalledTimes(1)
     expect(mocks.toastDismiss).toHaveBeenCalledWith('source-control-entry-mutation')
   })
 
   it('re-raises the failure toast when the retry fails again', async () => {
-    // Why: sonner removes an action-clicked toast by id ~200ms later, so a fast re-failure could be
-    // swallowed; the toast must survive the retry and show the second error.
+    // Preserve fast retry failures against Sonner's ~200ms delayed action-click removal.
     mocks.stagePath.mockRejectedValueOnce(new Error('index.lock exists'))
     mocks.stagePath.mockRejectedValueOnce(new Error('still locked'))
     const { result } = renderMutations()

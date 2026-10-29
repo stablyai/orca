@@ -1,6 +1,4 @@
-// Layout-owner build: a client's startPane and wake start the pane through main's one starter
-// after the command is written. The reply never carries the effects, a wake keeps the pane's
-// resume record in the pane-owned form, and a failed start shows on the pane and keeps the record.
+// Main starts panes after layout commit; replies contain no effects and failed starts retain resume records.
 import { describe, expect, it, vi } from 'vitest'
 import {
   isPaneSleepRecord,
@@ -12,7 +10,7 @@ import type { RestoredPaneTrigger } from './terminal/recovery/restored-pane-star
 
 vi.mock('../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
 
-// Fragments stay side-effect ordered: mocks, then lifecycle, then fixtures.
+// Preserve side-effect order: mocks, lifecycle, fixtures.
 const { OrcaRuntimeService, electronMocks } = await import('./orca-runtime-test-mocks.spec')
 await import('./orca-runtime-test-lifecycle.spec')
 const {
@@ -28,7 +26,6 @@ const PANE_KEY = `host-tab:${HEADLESS_LEAF_ID}`
 const PANE = { worktreeId: TEST_WORKTREE_ID, tabId: 'host-tab', leafId: HEADLESS_LEAF_ID }
 
 class StatusRuntime extends OrcaRuntimeService {
-  /** The start's terminal is gone once its create returns, as one that exits before main can bind it. */
   startsNoTerminal = false
   protected override materializePendingMobileSessionTerminal(
     worktreeId: string,
@@ -59,7 +56,6 @@ class StatusRuntime extends OrcaRuntimeService {
   }
 }
 
-// A running agent's workspace sleep, which the window's wake relaunched before C1c.
 const RECORD: SleepingRecord = {
   paneKey: PANE_KEY,
   tabId: 'host-tab',
@@ -77,7 +73,6 @@ async function desktopRuntime(
   opts: {
     slept?: boolean
     session?: ReturnType<typeof makeWorkspaceSessionWithHeadlessTerminal>
-    /** False: the window's graph has not listed the workspace's tabs yet, as at a relaunch. */
     activate?: boolean
   } = {}
 ) {
@@ -86,11 +81,9 @@ async function desktopRuntime(
     makeWorkspaceSessionWithHeadlessTerminal(
       opts.slept ? { sleepingAgentSessionsByPaneKey: { [PANE_KEY]: RECORD } } : {}
     )
-  // The tab was launched as the agent its record resumes.
   session.tabsByWorktree[TEST_WORKTREE_ID]![0]!.launchAgent = 'claude'
   const fixture = makeRuntimeStoreWithWorkspaceSession(session)
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixture store implements the runtime store methods these tests reach.
-  const runtime = new StatusRuntime(fixture.runtimeStore as never, undefined, {
+  const runtime = new StatusRuntime(fixture.runtimeStore, undefined, {
     getDesktopWindowStatus: () => 'openable'
   })
   const started = deferred<{ id: string }>()
@@ -104,11 +97,9 @@ async function desktopRuntime(
     listProcesses: async () => []
   })
   runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
-  // The desktop window is open: before C1c it started this pane itself.
   runtime.attachWindow(TEST_WINDOW_ID)
   runtime.markGraphReady(TEST_WINDOW_ID)
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the runtime reads only isDestroyed from the window mock.
-  electronMocks.BrowserWindow.fromId.mockReturnValue({ isDestroyed: () => false } as never)
+  electronMocks.BrowserWindow.fromId.mockReturnValue({ isDestroyed: () => false })
   if (opts.activate !== false) {
     await runtime.activateManagedWorktree(`id:${TEST_WORKTREE_ID}`, {
       notifyClients: false,
@@ -134,7 +125,6 @@ describe('a client’s startPane in the layout-owner build', () => {
     runtime.setStartStatus(PANE_KEY, 'sleeping')
 
     const reply = await runtime.applyLayoutCommand({ ...startPane, paneKey: PANE_KEY })
-    // The command's start is under way before any other trigger; a CLI send joins it.
     await vi.waitFor(() => expect(spawn).toHaveBeenCalled())
     const cliSend = runtime.ensureRestoredPaneStarted(PANE)
     started.resolve({ id: 'persisted-pty' })
@@ -142,7 +132,6 @@ describe('a client’s startPane in the layout-owner build', () => {
     await expect(cliSend).resolves.toMatchObject({ id: 'persisted-pty' })
     expect(spawn).toHaveBeenCalledOnce()
     expect(spawn).toHaveBeenCalledWith(expect.objectContaining({ sessionId: 'persisted-pty' }))
-    // The wire reply is the command's outcome and stream position, byte for byte.
     expect(JSON.stringify(reply)).toBe(
       JSON.stringify({ ok: true, result: {}, frameSeq: reply.frameSeq })
     )
@@ -167,7 +156,6 @@ describe('a client’s startPane in the layout-owner build', () => {
     await vi.waitFor(() => expect(runtime.isRestoredPaneBoundTo(PANE, 'persisted-pty')).toBe(true))
     await vi.waitFor(() => expect(runtime.startStatusOf(PANE_KEY)).toBeNull())
 
-    // Lost contact is never evidence the terminal ended.
     runtime.loseContactWith('persisted-pty')
     await runtime.applyLayoutCommand({ ...startPane, paneKey: PANE_KEY })
     await new Promise((resolve) => setTimeout(resolve, 20))
@@ -192,7 +180,6 @@ describe('a client’s startPane in the layout-owner build', () => {
     started.resolve({ id: 'persisted-pty' })
     await vi.waitFor(() => expect(runtime.isRestoredPaneBoundTo(PANE, 'persisted-pty')).toBe(true))
     await vi.waitFor(() => expect(runtime.startStatusOf(PANE_KEY)).toBeNull())
-    // The agent hibernated: its record says done, and its shell has printed nothing since.
     setSession({
       ...getSession(),
       sleepingAgentSessionsByPaneKey: { [PANE_KEY]: { ...RECORD, state: 'done' } }
@@ -237,7 +224,6 @@ describe('a client’s startPane in the layout-owner build', () => {
       session: makeWorkspaceSessionWithHeadlessTerminal({
         sleepingAgentSessionsByPaneKey: {
           [legacyKey]: { ...RECORD, paneKey: legacyKey },
-          // A second alias of the same conversation is the same record, not another pane's.
           'host-tab:3': { ...RECORD, paneKey: 'host-tab:3', capturedAt: 2 }
         }
       })
@@ -269,7 +255,6 @@ describe('a client’s startPane in the layout-owner build', () => {
       expect(runtime.startStatusOf(PANE_KEY)).toMatchObject({ status: 'failed' })
     )
   })
-  // The window shows this reason through its wait for main's start.
   it('shows terminal_not_started when the terminal ends before main can bind it', async () => {
     const { runtime, started } = await desktopRuntime()
     runtime.setStartStatus(PANE_KEY, 'sleeping')
@@ -304,7 +289,6 @@ describe('a client’s wake of a slept pane in the layout-owner build', () => {
       restoreOnTabOpenOnly: true
     })
 
-    // The host crashes: its terminal is gone, and a new runtime loads the same profile.
     const crashed = getSession()
     const restarted = await desktopRuntime({ session: crashed })
     restarted.runtime.setStartStatus(PANE_KEY, 'sleeping')
@@ -323,7 +307,7 @@ describe('a client’s wake of a slept pane in the layout-owner build', () => {
       expect(getSession().sleepingAgentSessionsByPaneKey?.[PANE_KEY]?.origin).toBe('live')
     )
     const record = getSession().sleepingAgentSessionsByPaneKey![PANE_KEY]!
-    // Not a sleep record, so main's layout holds it as the pane's resume record (L254).
+    // L254: resumed pane records must no longer masquerade as sleep records.
     expect(isPaneSleepRecord(record)).toBe(false)
     expect(record.providerSession).toEqual(RECORD.providerSession)
     expect(runtime.startStatusOf(PANE_KEY)).toBeNull()

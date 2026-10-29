@@ -1,14 +1,5 @@
-// What a host does with a provider child's route once its exit has ended the child's record: the
-// sink it wrote through and the adapter's index of it. Settling its work and handing the lease back
-// are the exit handler's (`structured-agent-session-child-exit`); these come after.
-//
-// Teardown is a DATA list, not a method body, for the reason this file exists at all: the host
-// tracked which sessions were live in a map, and tore them down at three unrelated call sites
-// (app quit, handoff to a TUI, and error cleanup). Closing a chat was never wired to any of them,
-// so a provider child outlived the chat that owned it for the whole app session.
-//
-// FAILURE. Each step is bookkeeping for a process already gone, so a step that fails is reported
-// and the rest still run: none of them may keep a dead child on record or gate the next send.
+// After proven exit, release sink/adapter routes while retaining the conversation journal.
+// Attempt every cleanup step despite failures; bookkeeping cannot gate later sends.
 
 import type { DeferredStructuredAgentSessionEventSink } from './structured-agent-session-event-sink'
 import { withTimeout } from '../../../shared/promise-timeout-fallback'
@@ -18,14 +9,12 @@ export type StructuredAgentSessionEvictionContext = {
   sessionId: string
   eventSink: Pick<DeferredStructuredAgentSessionEventSink, 'drained' | 'unbind' | 'close'>
   logger: StructuredAgentSessionLogger
-  /** Tells the adapter the released lease is done with, so it drops this child's route and index.
-   *  The conversation stays: stopping the agent never closes its journal. */
+  /** Drop adapter routing after lease release, retaining the conversation journal. */
   acknowledgeRelease: () => Promise<void> | void
-  /** Drops the cached sink so a later attach mints a fresh one. */
   discardSink: () => void
 }
 
-/** The resume offer is advisory; a stalled sink must not hold the child's stop behind it. */
+/** Advisory resume snapshots must not block child shutdown. */
 export const SNAPSHOT_DRAIN_TIMEOUT_MS = 1_000
 
 export type StructuredAgentSessionEvictionStep = {
@@ -33,8 +22,7 @@ export type StructuredAgentSessionEvictionStep = {
   run: (context: StructuredAgentSessionEvictionContext) => Promise<void> | void
 }
 
-/** Quit's resume offer: what the sidebar shows, read while the child is still running. Events the
- *  provider already delivered are part of what it showed at the stop. A throw is logged. */
+/** Capture already-delivered output before shutdown; snapshot failures are log-only. */
 export async function snapshotBeforeStructuredAgentSessionStop(
   context: Pick<StructuredAgentSessionEvictionContext, 'sessionId' | 'eventSink' | 'logger'>,
   snapshot: () => void
@@ -54,10 +42,7 @@ export const STRUCTURED_AGENT_SESSION_EVICTION_STEPS: readonly StructuredAgentSe
   [
     { name: 'stop-publishing', run: (context) => context.eventSink.unbind() },
     { name: 'close-sink', run: (context) => context.eventSink.close() },
-    // Why: the runtime caches one sink per session id and hands the SAME instance to the next
-    // attach. Closing without discarding leaves a reopened chat bound to a closed sink, which
-    // accepts every provider event and publishes none. Attach's own failure path already pairs
-    // these two; eviction has to as well.
+    // Discard closed cached sinks or reopened chats would inherit a permanently closed writer.
     { name: 'discard-sink', run: (context) => context.discardSink() },
     { name: 'acknowledge-release', run: (context) => context.acknowledgeRelease() }
   ]
@@ -73,8 +58,7 @@ export class StructuredAgentSessionEvictionError extends Error {
   }
 }
 
-/** Runs every wind-down step in order. A failure is reported with the step that failed, and the
- *  rest still run. */
+/** Report each failed step and continue cleanup. */
 export async function evictStructuredAgentSession(
   context: StructuredAgentSessionEvictionContext,
   steps: readonly StructuredAgentSessionEvictionStep[] = STRUCTURED_AGENT_SESSION_EVICTION_STEPS

@@ -1,15 +1,13 @@
-// Mock state for the RuntimeFileCommands suites. Kept free of imports from the
-// module under test so `vi.mock` factories can load it without re-entering `fs`.
+// Avoid tested-module imports: vi.mock factories must not re-enter fs.
 import { vi } from 'vitest'
 import type { Mock } from 'vitest'
 import type * as Fs from 'node:fs'
 import type * as FsPromises from 'node:fs/promises'
-import type * as FilesystemAuth from '../ipc/filesystem-auth'
+import type * as FilesystemAuth from '../ipc/filesystem/filesystem-auth'
 import type * as GitRunner from '../git/runner'
 import type * as BundledRipgrepPath from '../ripgrep/bundled-ripgrep-path'
 
-// Mock signatures stay loose on payloads: suites assert call arguments and stub
-// resolved values, so real fs/git result types would only fight the fixtures.
+// Loose mock payloads allow partial fixtures while suites assert the exact call arguments.
 type WatchCallback = (...args: unknown[]) => void
 
 export const lstatMock: Mock<(path: string) => Promise<unknown>> = vi.fn()
@@ -77,7 +75,7 @@ export const fileWatcherHostMock = {
 }
 
 export async function filesystemAuthModuleMock() {
-  const actual = await vi.importActual<typeof FilesystemAuth>('../ipc/filesystem-auth')
+  const actual = await vi.importActual<typeof FilesystemAuth>('../ipc/filesystem/filesystem-auth')
   return {
     ...actual,
     resolveAuthorizedPath: resolveAuthorizedPathMock

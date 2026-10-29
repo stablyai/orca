@@ -53,8 +53,7 @@ export function BrowserLoadProgress({
         return
       }
       animations.forEach((animation) => animation.cancel())
-      // Why fill forwards: a slow page holds at its last frame, and a finished animation costs
-      // nothing per frame, even in a hidden tab.
+      // Hold slow loads at the final frame without ongoing per-frame work, including hidden tabs.
       bar.animate(reducedMotion ? STILL_KEYFRAMES : TRICKLE_KEYFRAMES, {
         id,
         duration: reducedMotion ? 150 : TRICKLE_MS,

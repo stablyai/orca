@@ -7,19 +7,7 @@ import type {
   StableAutomationCatalogSelector
 } from './automation-owner-ref'
 
-/**
- * The one canonical encoder for automation ownership keys.
- *
- * Every component is `encodeURIComponent`-escaped before joining, so the
- * separator can never appear inside a component and a hostile target ID cannot
- * forge another host's key. Display labels, bare IDs, and `JSON.stringify` are
- * never keys: labels change, bare IDs collide across authorities, and object
- * key order is not part of the language contract.
- *
- * Stable and owner keys live in separate namespaces (`host:` / `owner:`) so a
- * desktop+self stable key can never be mistaken for a desktop+self owner key if
- * the two ever share a map.
- */
+/** URI-escape every component to prevent separator/host-key forgery. Labels change, bare IDs collide and JSON key order is not identity. Separate host:/owner: namespaces so stable refs never alias incarnation-pinned refs. */
 
 const SEPARATOR = ':'
 const HOST_STABLE_NAMESPACE = 'host'

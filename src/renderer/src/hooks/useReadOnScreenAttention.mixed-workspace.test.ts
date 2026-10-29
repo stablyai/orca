@@ -23,11 +23,7 @@ const CHAT_SUBJECT = structuredAgentSessionPaneKey(CHAT_TAB, SESSION)
 
 type TestStore = ReturnType<typeof createTestStore>
 
-/**
- * One workspace holding a terminal pane and a structured chat in the same layout group, with the
- * caller choosing which of the two the group is showing. `activeTabId` stays on the terminal in
- * both cases because it is terminal-only state that a chat activation never moves.
- */
+/** Choose terminal/chat visibility within one group while legacy activeTabId still names the terminal in either case. */
 function seedMixedWorkspace(seed: {
   visible: 'terminal' | 'chat'
   unreadSubjectKeys: readonly string[]
@@ -79,7 +75,6 @@ function seedMixedWorkspace(seed: {
   return { store }
 }
 
-/** The hook's scan: acknowledge each target on screen, then read their markers. */
 function runAutoAckScan(store: TestStore): void {
   const targets = resolveAutoAckTabTargets(store.getState())
   for (const target of targets) {
@@ -90,7 +85,6 @@ function runAutoAckScan(store: TestStore): void {
     .readOnScreenAttention({ workspaceIds: [WORKSPACE], targets }, { screenArrived: true })
 }
 
-/** Whether the workspace flag survives the scan's settle. */
 const workspaceStillHeld = (store: TestStore): boolean =>
   workspaceHasLiveMarker(store.getState(), WORKSPACE)
 

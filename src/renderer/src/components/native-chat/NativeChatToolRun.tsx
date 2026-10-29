@@ -13,21 +13,12 @@ import {
   type NativeChatSubagentGroupBlock,
   type NativeChatToolCallBlock
 } from '../../../../shared/native-chat-types'
-import { isRenderableSubagentGroup } from '../../../../shared/native-chat-subagent-summary'
+import { isRenderableSubagentGroup } from '../../../../shared/native-chat/transcript/native-chat-subagent-summary'
 import type { NativeChatDiffReveal } from './native-chat-turn-diffs'
-import { countToolCalls } from './native-chat-tool-summary'
 import { nativeChatToolRunSentence } from './native-chat-tool-run-label'
-import {
-  describeLatestToolCall,
-  NATIVE_CHAT_TOOL_ACTIVITY_COPY,
-  selectActiveToolCall
-} from '../../../../shared/native-chat-tool-activity'
-import { nativeChatToolRunIconName } from '../../../../shared/native-chat-tool-icon'
-import { nativeChatToolRunOutcome } from '../../../../shared/native-chat-tool-run-outcome'
-import {
-  nativeChatAskRunBlocks,
-  nativeChatAskRunSubject
-} from '../../../../shared/native-chat-ask-row'
+import { NATIVE_CHAT_TOOL_ACTIVITY_COPY } from '../../../../shared/native-chat/tools/native-chat-tool-activity'
+import { nativeChatToolRunHeader } from '../../../../shared/native-chat/tools/native-chat-tool-run-header'
+import { nativeChatAskRunSubject } from '../../../../shared/native-chat/input/native-chat-ask-row'
 import { NativeChatAwaitingInputRow } from './NativeChatAwaitingInputRow'
 import { NativeChatBackgroundTaskRun } from './NativeChatBackgroundTaskRun'
 import { NativeChatSubagentRun } from './NativeChatSubagentRun'
@@ -39,9 +30,9 @@ import { NativeChatToolRunIcon } from './NativeChatToolIcon'
 import { NativeChatToolRunCallCounts } from './NativeChatToolRunCallCounts'
 import { NativeChatToolRunMembers, revealNativeChatToolRunMember } from './NativeChatToolRunMembers'
 import { NativeChatToolRunMemberList } from './NativeChatToolRunMemberList'
+import { NativeChatBrowserRunPageButton } from './NativeChatBrowserPageButton'
 
-/** Rows drawn among an open run's lines, each keyed: before the block they are keyed by, or
- *  after the last. */
+/** Insert keyed asides before their block or after the final block. */
 export type NativeChatToolRunAsides = {
   before: ReadonlyMap<NativeChatBlock, readonly React.JSX.Element[]>
   after: readonly React.JSX.Element[]
@@ -51,7 +42,6 @@ export type NativeChatToolRunAsides = {
 const NO_SUBAGENT_GROUPS: NativeChatSubagentGroupBlock[] = []
 const NO_BACKGROUND_TASKS: NativeChatBackgroundTaskBlock[] = []
 
-/** A run of tool calls/results with a summary that expands to the individual tool lines. */
 export function NativeChatToolRun({
   blocks,
   previousTodoWrite,
@@ -88,12 +78,9 @@ export function NativeChatToolRun({
   expandSignal: boolean
   /** Structured lifecycle state, when available, keeps orphaned running calls from spinning. */
   activeTurnIsWorking?: boolean
-  /** Whether this run is the working turn's last. Only that run is live: a run
-   *  the agent has already moved past reads as settled even mid-call. Left
-   *  unset, a working turn's run is taken to be its last. */
+  /** Only a working turn’s trailing run stays live; omitted means trailing for compatibility. */
   trailing?: boolean
-  /** Message this run belongs to. Windowing unmounts rows, so a run the reader
-   *  opened has to be remembered somewhere that outlives the row. */
+  /** Remember disclosure by message id outside the windowed row’s lifetime. */
   disclosureId?: string
   onLinkClick?: CommentMarkdownLinkClickHandler
   asides?: NativeChatToolRunAsides
@@ -110,19 +97,14 @@ export function NativeChatToolRun({
         : 0,
     [asides]
   )
-  // A reader's deviation belongs to the controlling disclosure state, so returning
-  // to that state restores the same choice without writing to the store mid-render.
+  // Key reader overrides by controlling disclosure state so returning restores them without mid-render store writes.
   const runKey =
     disclosureId === undefined
       ? undefined
       : `run:${disclosureId}:${expandSignal}:${revealedDiff?.requestId ?? '-'}`
   const { open, setOpen } = useNativeChatDisclosure(runKey, revealedDiff ? true : expandSignal)
 
-  // Childless groups are dropped so `subagentRows.length` stays an honest test of
-  // "something will draw": the roster-only branch below returns a margin-bearing
-  // wrapper on the strength of it, and a group with no children renders null.
-  // Same predicate `subagentGroupBlocks` applies, so this row and the caller
-  // deciding the row is worth mounting cannot disagree about what draws.
+  // Share the renderability predicate with slot selection so childless groups cannot create empty margin wrappers.
   const subagentRows = subagentGroups
     .filter(isRenderableSubagentGroup)
     .map((group) => (
@@ -139,45 +121,32 @@ export function NativeChatToolRun({
         onSetSectionOpen={subagentDisclosure?.setSectionOpen}
       />
     ))
-  // Neither a roster nor a background task is tool activity, so both take every
-  // escape below that the tool header does not: a task row outlives the turn
-  // that started it and is the only durable report of how it ended.
+  // Roster/task rows bypass tool-header hiding because they carry durable state beyond the originating turn.
   const standaloneRows = [
     ...subagentRows,
     ...backgroundTasks.map((task) => <NativeChatBackgroundTaskRun key={task.taskId} block={task} />)
   ]
   const {
     asks,
-    unansweredAsks,
-    work: headerBlocks
-  } = useMemo(() => nativeChatAskRunBlocks(blocks), [blocks])
-  const hasAskCall = asks.length > 0
-  const askSubject = hasAskCall ? nativeChatAskRunSubject(asks) : null
-  const callCount = countToolCalls(headerBlocks)
-  const showsHeader = !hasAskCall || callCount > 0
-  const askIsActive = selectActiveToolCall(unansweredAsks, { activeTurnIsWorking }) !== null
-  // Live is the turn's state, not a call's. Deriving it from "some call is
-  // running" flipped the header to settled and back around every call, and a
-  // call that finished inside a frame still bought the whole flip. The turn's
-  // trailing run stays live from its first call until the agent moves on; a
-  // caller with no turn state, or a turn blocked on the reader's answer, falls
-  // back to the calls themselves.
-  const live =
-    activeTurnIsWorking === true && !askIsActive
-      ? trailing !== false
-      : selectActiveToolCall(headerBlocks, { activeTurnIsWorking }) !== null
-  // One sentence for the whole run, or the command itself when the run is one
-  // call — the reader recognizes `git push` faster than "Ran 1 command".
-  const runSentence = nativeChatToolRunSentence(headerBlocks, { live })
-  // What the run is doing now, beside the sentence: the latest call, running or
-  // not, so a call that finished in a frame still leaves its name until the next.
-  const latestCall = live ? headerBlocks.findLast(isToolCallBlock) : undefined
-  const latestCallLabel = latestCall ? describeLatestToolCall(latestCall) : null
-  const {
+    work: headerBlocks,
+    askIsActive,
+    live,
+    callCount,
+    fallbackLabel: fallbackKey,
+    latestCallLabel,
+    iconName: settledHeaderIcon,
     succeeded: runSucceeded,
     failedCallCount,
     interruptedCallCount
-  } = nativeChatToolRunOutcome(headerBlocks, { activeTurnIsWorking })
+  } = useMemo(
+    () => nativeChatToolRunHeader(blocks, { activeTurnIsWorking, trailing }),
+    [activeTurnIsWorking, blocks, trailing]
+  )
+  const hasAskCall = asks.length > 0
+  const askSubject = hasAskCall ? nativeChatAskRunSubject(asks) : null
+  const showsHeader = !hasAskCall || callCount > 0
+  // A single command is more recognizable than its category summary.
+  const runSentence = nativeChatToolRunSentence(headerBlocks, { live })
   // The card sits inside the run's own scroll box, so that box has to move too.
   const revealDiff = useMemo(
     () =>
@@ -186,24 +155,15 @@ export function NativeChatToolRun({
         : undefined,
     [onRevealDiff]
   )
-  // Only the settled header reads this. It stands over a sentence that speaks
-  // for every call in the run, so a glyph taken from one of them would assert a
-  // category the text beside it doesn't describe. A run that spans categories
-  // therefore heads with the generic tool glyph. The glyph is fixed once
-  // settled, so state rides on the trailing mark — a leading glyph that flipped
-  // to a check would read as a change of identity.
-  const settledHeaderIcon = nativeChatToolRunIconName(headerBlocks.filter(isToolCallBlock))
   const fallbackLabel =
-    callCount === 0
-      ? translate('components.native-chat.tool.result', 'Result')
-      : callCount === 1
-        ? translate('components.native-chat.tool.countOne', NATIVE_CHAT_TOOL_ACTIVITY_COPY.countOne)
-        : translate('components.native-chat.tool.countN', NATIVE_CHAT_TOOL_ACTIVITY_COPY.countN, {
-            value0: callCount
-          })
+    fallbackKey === 'result'
+      ? translate('components.native-chat.tool.result', NATIVE_CHAT_TOOL_ACTIVITY_COPY.result)
+      : translate('components.native-chat.tool.callCount', '{{count}} tool calls', {
+          count: callCount,
+          defaultValue_one: '{{count}} tool call'
+        })
 
-  // A roster with no tool calls beside it is the whole run: rendering the tool
-  // header too would announce "1 tool call" for activity that has none.
+  // Standalone rosters/tasks have no tool calls for a header to summarize.
   if (blocks.length === 0) {
     return standaloneRows.length > 0 ? <div className={spacing}>{standaloneRows}</div> : null
   }
@@ -221,58 +181,55 @@ export function NativeChatToolRun({
         />
       ) : null}
       {!showsHeader ? null : (
-        // One element for the run's whole life. Live and settled are states of
-        // this button, not two buttons: a header that remounted as a call started
-        // and again as it ended lost its hover, its mark, and its count each time.
-        // It carries the summary's type so each `h-[1lh]` slot is one summary line
-        // tall: marks sit on line 1 and a wrapped line 2 starts under the text.
-        <button
-          type="button"
-          onClick={() => setOpen(!open)}
-          className="group/tool-run flex min-h-6 w-full items-start gap-1.5 rounded-md py-0.5 text-left text-sm leading-relaxed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
-          aria-expanded={open}
-          aria-live="polite"
-          data-native-chat-tool-run-state={live ? 'live' : 'settled'}
-        >
-          {settledHeaderIcon ? (
-            <span className="flex h-[1lh] shrink-0 items-center">
-              <NativeChatToolRunIcon
-                iconName={settledHeaderIcon}
-                className="text-chat-foreground-faint"
-              />
-            </span>
-          ) : null}
-          {/* Keep the collapsed header bounded; the tool detail carries the full command. */}
-          <span
-            className={cn(
-              'min-w-0 line-clamp-2 whitespace-normal break-words text-sm leading-relaxed transition-colors',
-              live
-                ? 'max-w-[72%] shrink-0 animate-pulse text-chat-foreground motion-reduce:animate-none'
-                : 'min-w-0 text-chat-foreground-faint group-hover/tool-run:text-chat-foreground'
-            )}
+        <div className="flex items-start gap-1">
+          {/* Keep one header across live/settled states; summary line-height aligns marks and wrapped text. */}
+          <button
+            type="button"
+            onClick={() => setOpen(!open)}
+            className="group/tool-run flex min-h-6 min-w-0 flex-1 items-start gap-1.5 rounded-md py-0.5 text-left text-sm leading-relaxed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+            aria-expanded={open}
+            aria-live="polite"
+            data-native-chat-tool-run-state={live ? 'live' : 'settled'}
           >
-            {runSentence ?? fallbackLabel}
-          </span>
-          <NativeChatToolRunCallCounts
-            failed={failedCallCount}
-            interrupted={interruptedCallCount}
-          />
-          {/* Only a stated success is marked done — see nativeChatToolRunOutcome —
-              and never while live: between two calls nothing is running, and a
-              mark that appeared then would flash on every call. */}
-          {!live && runSucceeded ? (
-            <span className="flex h-[1lh] shrink-0 items-center">
-              <Check aria-hidden className="size-3 shrink-0 text-chat-foreground-faint" />
-            </span>
-          ) : null}
-          {latestCallLabel ? (
-            <span className="flex h-[1lh] min-w-0 items-center">
-              <span className="min-w-0 truncate font-sans text-xs text-chat-foreground-faint">
-                {latestCallLabel}
+            {settledHeaderIcon ? (
+              <span className="flex h-[1lh] shrink-0 items-center">
+                <NativeChatToolRunIcon
+                  iconName={settledHeaderIcon}
+                  className="text-chat-foreground-faint"
+                />
               </span>
+            ) : null}
+            {/* Keep the collapsed header bounded; the tool detail carries the full command. */}
+            <span
+              className={cn(
+                'min-w-0 line-clamp-2 whitespace-normal break-words text-sm leading-relaxed transition-colors',
+                live
+                  ? 'max-w-[72%] shrink-0 animate-pulse text-chat-foreground motion-reduce:animate-none'
+                  : 'min-w-0 text-chat-foreground-faint group-hover/tool-run:text-chat-foreground'
+              )}
+            >
+              {runSentence ?? fallbackLabel}
             </span>
-          ) : null}
-        </button>
+            <NativeChatToolRunCallCounts
+              failed={failedCallCount}
+              interrupted={interruptedCallCount}
+            />
+            {/* Mark only stated success after settlement; idle gaps between live calls are not completion. */}
+            {!live && runSucceeded ? (
+              <span className="flex h-[1lh] shrink-0 items-center">
+                <Check aria-hidden className="size-3 shrink-0 text-chat-foreground-faint" />
+              </span>
+            ) : null}
+            {latestCallLabel ? (
+              <span className="flex h-[1lh] min-w-0 items-center">
+                <span className="min-w-0 truncate font-sans text-xs text-chat-foreground-faint">
+                  {latestCallLabel}
+                </span>
+              </span>
+            ) : null}
+          </button>
+          <NativeChatBrowserRunPageButton calls={headerBlocks.filter(isToolCallBlock)} />
+        </div>
       )}
       <NativeChatExpandable open={open && showsHeader}>
         <NativeChatToolRunMembers

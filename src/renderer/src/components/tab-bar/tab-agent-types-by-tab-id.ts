@@ -95,23 +95,7 @@ function projectNativeChatTabWideFallbackUnsafeTabsById(
   return unsafeTabs
 }
 
-/**
- * Project `agentStatusByPaneKey` down to the stable `{ terminalTabId: agentType }`
- * the tab strip actually reads (to gate the native-chat view-mode toggle).
- *
- * Why: agent-status pane keys are `${terminalTab.id}:${leafId}` and the tab strip
- * only needs each tab's agent *identity* — which is fixed for the life of the
- * agent. The full `agentStatusByPaneKey` map, however, gets a new top-level
- * identity on every working↔idle status transition app-wide, so subscribing to it
- * whole re-rendered every mounted tab strip on unrelated status churn. Selecting
- * this projection under `useShallow` keeps the result referentially equal across
- * those transitions, so the strip re-renders only when a tab actually gains, loses,
- * or changes its agent.
- *
- * The active layout leaf wins when available because that is where a tab-level
- * chat action opens. Before layout hydration, the first matching pane preserves
- * the legacy lookup behavior (tab ids are colon-free by construction).
- */
+/** Project stable agent identity to avoid status-driven strip rerenders; active leaves win, with first-pane fallback before layout hydration. */
 export function selectTabAgentTypesByTabId(
   agentStatusByPaneKey: Record<string, AgentStatusEntry>,
   terminalLayoutsByTabId: Record<string, TerminalLayoutSnapshot> = {}

@@ -19,12 +19,13 @@ import type { ProviderProcessLaunch } from '../provider-process/provider-process
 import { JsonlRpcResponseError } from '../jsonl-rpc/peer'
 import { PiRpcTurns } from './rpc-turns'
 import { PiRpcDialogCallbacks } from './rpc-dialog-callbacks'
-import { readPiRpcSessionOptions } from './rpc-options'
-import { withLiveCatalogListing } from '../native-chat/agent-model-catalog/agent-model-catalog-entry'
+import { PiRpcOptionObservations, type PiRpcOptionWrite } from './rpc-options'
+import type { AgentSessionOptionsResult } from '../../shared/agent-session-wire'
 import type { PiRpcResolvedLaunch } from './rpc-launch-resolution'
 import type { StructuredAgentSessionProviderOpenResult } from '../native-chat/agent-session-wire/structured-agent-session-provider-open-contract'
 import type { AgentSessionProviderHandleLink } from '../../shared/agent-session-provider-handle'
 import { PiRpcSessionStartup } from './rpc-session-startup'
+import { PiHistoryCapture, type PiHistoryCaptureDeps } from './rpc-history-capture'
 
 export type PiRpcConnection = Pick<
   JsonlRpcAgentConnection,
@@ -40,7 +41,7 @@ export type PiRpcConnection = Pick<
   | 'lastCloseResult'
   | 'onExit'
 >
-export type PiRpcSessionDeps = {
+export type PiRpcSessionDeps = PiHistoryCaptureDeps & {
   openConnection?: (
     launch: ProviderProcessLaunch,
     handlers: JsonlRpcAgentConnectionOptions
@@ -55,18 +56,24 @@ export type PiRpcSessionDeps = {
   logger: StructuredAgentSessionLogger
 }
 
-/** One child owns its transport, dialect, dialogs and timeline, including shutdown retries. */
 export class PiRpcSession {
   readonly connection: PiRpcConnection
   readonly lane: JsonlRpcTimelineLane
   readonly turns: PiRpcTurns
   readonly dialogs: PiRpcDialogCallbacks
   readonly selected = new Map<string, string>()
-  /** The sends this child holds: each from its handover until its settlement. */
+  /** Hold sends from handover through settlement. */
   readonly heldSends = new Set<string>()
-  readonly optionProof = { current: new Map<string, string>(), writes: new Map<string, symbol>() }
+  readonly optionProof = {
+    current: new Map<string, string>(),
+    writes: new Map<string, PiRpcOptionWrite>()
+  }
+  private optionObservations = new PiRpcOptionObservations(
+    this.optionProof,
+    () => !this.requestedClose && !this.failedCause && !this.connection.closed
+  )
   readonly startup: PiRpcSessionStartup
-  initialOptions: Readonly<Record<string, string>> = {}
+  readonly history = PiHistoryCapture.forSession(this, () => this.deps)
   openedLink: AgentSessionProviderHandleLink | null = null
   requestedClose = false
   private publishedExit = false
@@ -107,8 +114,13 @@ export class PiRpcSession {
       generation,
       send: (frame) => this.connection.send(frame),
       request: (command, params, options) => this.connection.request(command, params, options),
+      prepareStateObservation: () =>
+        this.optionObservations.prepareState((current) =>
+          this.startup.reportOptions(generation, current)
+        ),
       settled: (id, outcome) => this.settle(id, outcome),
       idle: () => this.dialogs.cancelAll(),
+      turnEnded: () => this.history.turnEnded(),
       failed: (error) => this.fail(error),
       diagnostic: (error) =>
         deps.logger.warn('Pi context usage could not be read', {
@@ -129,6 +141,7 @@ export class PiRpcSession {
         frame.type === 'extension_ui_request'
           ? this.dialogs.receive(frame)
           : this.turns.receive(frame),
+      onOversizedEvent: (type, prefix) => this.turns.skipped(type, prefix),
       onClose: (error) => this.fail(error),
       onDiagnostic: (message) =>
         deps.logger.warn(message, { scope: 'pi-rpc', sessionId: input.identity.sessionId }),
@@ -151,8 +164,10 @@ export class PiRpcSession {
       resolvesConfig,
       (state) => {
         this.lane.apply(this.turns.context.setModel(state.model ?? undefined, Date.now()))
+        this.optionObservations.seed(state)
       },
-      () => this.failedCause
+      () => this.failedCause,
+      () => this.optionObservations.prepare()
     )
   }
 
@@ -164,7 +179,6 @@ export class PiRpcSession {
       outcome = await this.turns.submit(...args)
       return outcome
     } finally {
-      // Admitted, it stays held until its settlement; anything else was answered here.
       if (outcome?.state !== 'admitted') {
         this.heldSends.delete(clientMessageId)
       }
@@ -173,27 +187,15 @@ export class PiRpcSession {
 
   async open(signal: AbortSignal): Promise<StructuredAgentSessionProviderOpenResult> {
     const result = await this.startup.run(this.resolvedLaunch, signal)
-    this.initialOptions = {
-      ...(result.reportedOptions.model ? { model: result.reportedOptions.model } : {}),
-      ...(result.reportedOptions.effort ? { effort: result.reportedOptions.effort } : {})
-    }
     this.openedLink = result.link ?? null
-    this.optionProof.current = new Map(Object.entries(this.initialOptions))
-    void this.startup
-      .readAfterOpen(this.generation, result.reportedOptions)
-      .catch((error: unknown) =>
-        this.deps.logger.warn('Pi startup reports failed', {
-          scope: 'pi-startup-reports',
-          sessionId: this.input.identity.sessionId,
-          error
-        })
-      )
+    this.history.start(this.startup.historyAnchor)
+    this.startup.reportAfterOpen(this.generation, result.reportedOptions)
     return result
   }
 
-  /** What the child reports now; only the start says what its config resolved. */
-  async readOptions() {
-    return withLiveCatalogListing(await readPiRpcSessionOptions(this.connection))
+  /** A read projects this child's held observations and successful controls. */
+  async readOptions(): Promise<AgentSessionOptionsResult> {
+    return this.optionObservations.read()
   }
 
   async close(requested = true): ReturnType<PiRpcConnection['close']> {

@@ -1,5 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as WorktreeMetaPersistModule from '../worktrees/metadata/worktree-meta-persist'
+import { structuredAgentSessionPaneKey } from '../../../../../shared/structured-agent-session-projection'
+import {
+  registerAgentSubjectReadCapture,
+  subscribeAgentSubjectReads,
+  type AgentSubjectRead,
+  type AgentSubjectReadIntent,
+  type StructuredSubjectRead
+} from '@/attention/agent-subject-read-actions'
 import { makeWorktree } from '../worktrees-slice-test-fixtures'
 import {
   completeAgentTurn,
@@ -286,6 +294,40 @@ describe('the flag follows its markers', () => {
       ]
     `)
     expect(dismissedPaneKeys()).toEqual([[first.paneKey, second.paneKey]])
+  })
+
+  it('Mark as read emits an explicit read for each cleared chat', () => {
+    const { store } = createAttentionStore()
+    const chat = store
+      .getState()
+      .createUnifiedTab(WS_A, 'agent-session', { id: 'chat-a1', entityId: 'session-1' })
+    const paneKey = structuredAgentSessionPaneKey(chat.id, chat.entityId)
+    store.getState().markAgentAttentionUnread({
+      workspaceId: WS_A,
+      subjectKey: paneKey,
+      groupId: null,
+      reason: 'agent-completion'
+    })
+    const structured: StructuredSubjectRead = {
+      sessionId: 'session-1',
+      target: { kind: 'local' },
+      observedCursor: { epoch: 'epoch-1', sequence: 10 },
+      observationKey: 'edge:epoch-1:10'
+    }
+    const intents: AgentSubjectReadIntent[] = []
+    const emitted: AgentSubjectRead[] = []
+    const stopCapture = registerAgentSubjectReadCapture(paneKey, (intent) => {
+      intents.push(intent)
+      return structured
+    })
+    const stopReads = subscribeAgentSubjectReads((reads) => emitted.push(...reads))
+
+    toggleUnreadByUser(store, store.getState().worktreesByRepo.repo1[0]!)
+    stopReads()
+    stopCapture()
+
+    expect(intents).toEqual(['explicit'])
+    expect(emitted).toEqual([{ subjectKey: paneKey, structured }])
   })
 
   it('closing an unmarked tab keeps a manual unread; closing a marked one dismisses its panes', () => {

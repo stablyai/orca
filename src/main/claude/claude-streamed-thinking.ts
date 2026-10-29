@@ -24,7 +24,6 @@ import {
 } from './claude-structured-item-translation'
 import type { ClaudeSubagentLinkageSource } from './claude-subagent-linkage'
 
-/** The stream a frame belongs to, which a new message in it starts over. */
 function streamScope(frame: Record<string, unknown>): string | null {
   const event = claudeRecord(frame.event)
   const sessionId = claudeText(frame.session_id)
@@ -36,15 +35,13 @@ function streamScope(frame: Record<string, unknown>): string | null {
 
 export type ClaudeStreamedThinking = ReturnType<typeof createClaudeStreamedThinking>
 
-/** A thinking block's closing row, and when the block began if it was seen streaming. */
 export type ClaudeReasoningFinal = {
   identity: AgentJournalItemIdentity
   body: AgentJournalMessageItem
   startedAt?: number
 }
 
-/** Thinking blocks streamed under --include-partial-messages, written to the same row their
- *  final assistant frame later lands on, and open until that frame or the turn's end. */
+/** Keep thinking deltas and their final frame on one row until finalization or turn end. */
 export function createClaudeStreamedThinking(deps: {
   sink: StructuredAgentSessionEventSink
   producer: ClaudeSubagentLinkageSource
@@ -53,7 +50,6 @@ export function createClaudeStreamedThinking(deps: {
   schedule?: AgentSessionDeltaCoalescerDeps['schedule']
 }) {
   const blocks = createClaudeStreamedBlockRegistry('thinking')
-  /** Each open block's stream, and when it began. */
   const open = new Map<string, { scope: string; startedAt: number }>()
   const checkpoints = createClaudeStreamedTextCheckpoints({
     ...(deps.coalesceMs === undefined ? {} : { coalesceMs: deps.coalesceMs }),
@@ -69,9 +65,9 @@ export function createClaudeStreamedThinking(deps: {
         deps.sink.appendItem(identity, body, {
           ...options,
           turnScope: deps.turnScope(),
-          // The row starts with its block, not with its first text or a queued write.
+          // Preserve block start time despite delayed text or writes.
           ...(startedAt === undefined ? {} : { observedAt: startedAt }),
-          // An end the sink sheds under pressure would leave the row open with nothing to close it.
+          // Preserve terminal writes under pressure so reasoning cannot remain open.
           ...(ended ? { lifecycle: true } : {})
         })
         deps.sink.publish()
@@ -91,9 +87,8 @@ export function createClaudeStreamedThinking(deps: {
   }
 
   return {
-    /** True when the frame carried thinking text. */
     observe: (frame: Record<string, unknown>, observedAt: number): boolean => {
-      // A new message in a stream means the previous one's unfinished blocks are never finishing.
+      // A new message abandons unfinished blocks in the same stream.
       const restarted = streamScope(frame)
       if (restarted !== null) {
         finish({ completedAt: observedAt }, restarted)
@@ -112,8 +107,7 @@ export function createClaudeStreamedThinking(deps: {
       checkpoints.append(identity, delta.text, delta.parentToolUseId)
       return true
     },
-    /** The row a final frame's thinking lands on — its streamed block's, else its own — closed.
-     *  Only a block seen streaming has an observed end. */
+    /** Close the streamed row if present; only streaming gives us an observed end time. */
     finalize: (
       envelope: ClaudeMessageEnvelope,
       observedAt: number
@@ -125,7 +119,7 @@ export function createClaudeStreamedThinking(deps: {
       const identity =
         streamed?.identity ?? claudeThinkingIdentity(envelope.sessionId, envelope.uuid)
       const key = agentJournalItemKey(identity)
-      // A final frame with no text of its own still ends the row its stream wrote.
+      // A textless final frame still closes its streamed row.
       const text = claudeThinkingText(envelope) ?? checkpoints.latest(key) ?? ''
       checkpoints.forget(key)
       open.delete(key)
@@ -137,7 +131,6 @@ export function createClaudeStreamedThinking(deps: {
         ? { identity, body, ...(streamed ? { startedAt: streamed.startedAt } : {}) }
         : null
     },
-    /** End every block still open, for a turn that is ending. */
     finishOpen: (completedAt: number): void => {
       finish({ completedAt })
       blocks.clear()

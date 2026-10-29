@@ -14,14 +14,13 @@ import {
   type OpenCodeCredentialBackend
 } from '../opencode/opencode-credential-backend'
 
-/** OpenCode's provider/integration id for the Go subscription. */
 const OPENCODE_GO_INTEGRATION_ID = 'opencode-go'
-/** models.dev declares this env var for both `opencode` and `opencode-go`. */
+// models.dev shares this variable between OpenCode and Go.
 const OPENCODE_API_KEY_ENV = 'OPENCODE_API_KEY'
 const AUTH_FILE_NAME = 'auth.json'
 const MAX_AUTH_FILE_BYTES = 1_000_000
 
-/** Where the key came from. Safe to log — never carries the key itself. */
+/** Nonsecret source label, safe to log. */
 export type OpenCodeGoApiKeyTier =
   | 'settings'
   | 'environment'
@@ -51,7 +50,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
-/** Reads `{ type: <kind>, key: "…" }` from an already-narrowed record. */
 function keyFromCredentialRecord(value: unknown, kind: string): string | null {
   if (!isRecord(value) || value.type !== kind) {
     return null
@@ -88,13 +86,7 @@ function readOpenCodeInlineGoKey(environment: NodeJS.ProcessEnv): {
   return { configured: false, key: null }
 }
 
-/**
- * Read the `opencode-go` API key OpenCode 1.x writes on `/connect`.
- *
- * Shape (opencode `packages/opencode/src/auth/index.ts`, `Api` schema):
- * `{ "opencode-go": { "type": "api", "key": "…" } }`.
- * @returns The key, or null when the file, the entry, or the key is absent.
- */
+/** OpenCode 1.x /connect stores opencode-go as an api record with a key in auth.json. */
 export function readOpenCodeAuthFileGoKey(
   environment: NodeJS.ProcessEnv = process.env,
   homeDirectory?: string
@@ -130,8 +122,7 @@ function selectCredentialKey(database: Database.Database): string | null {
   if (!tableExists(database, 'credential')) {
     return null
   }
-  // OpenCode marks the chosen credential per integration with `active = 1`;
-  // newest wins among the rest (packages/core/src/credential.ts).
+  // Prefer active credentials, then newest entries (packages/core/src/credential.ts).
   const rows: unknown[] = database
     .prepare(
       'SELECT value FROM credential WHERE integration_id = ? ' +
@@ -154,17 +145,9 @@ function selectCredentialKey(database: Database.Database): string | null {
   return null
 }
 
-/**
- * Read the `opencode-go` key from OpenCode's `credential` table.
- *
- * OpenCode 2 imports `auth.json` into SQLite once (migration
- * `20260805200742_import_legacy_credentials`) and every later `/connect` writes
- * only there, so a fresh OpenCode 2 install has no `auth.json` entry at all.
- * V1 also creates this table and can populate it through integration routes;
- * only a caller with V2 execution authority should use it for Go credentials.
- * @returns The key; `missing` when no database, table, or row carries one;
- * `unreadable` when discovery, opening, or querying failed without a key.
- */
+/** OpenCode 2 imports auth.json once, then /connect writes SQLite; fresh installs can have no legacy entry.
+ * V1 can also populate the table, so only V2 execution authority may select it.
+ * Distinguish absent keys from database discovery/open/query failures. */
 export async function readOpenCodeCredentialDatabaseGoKey(
   environment: NodeJS.ProcessEnv = process.env
 ): Promise<OpenCodeCredentialDatabaseGoKeyRead> {
@@ -174,7 +157,7 @@ export async function readOpenCodeCredentialDatabaseGoKey(
     const listed = await listOpenCodeDatabases(
       undefined,
       (path, error) => {
-        // A UNC location is never opened here (below), so failing to list it is no evidence either.
+        // UNC databases are never opened here, so their listing failure supplies no read evidence.
         if (!isWslUncPath(path) && !isMissingPathError(error)) {
           sawUnreadable = true
         }
@@ -187,8 +170,7 @@ export async function readOpenCodeCredentialDatabaseGoKey(
     return { status: 'missing' }
   }
   for (const path of paths) {
-    // A synchronous open against a 9p/UNC share can hang the main process, and
-    // the status bar is never worth that; the other tiers still apply.
+    // Synchronous UNC database opens can hang main; leave other credential tiers available.
     if (isWslUncPath(path)) {
       continue
     }
@@ -201,8 +183,7 @@ export async function readOpenCodeCredentialDatabaseGoKey(
         return { status: 'found', key }
       }
     } catch {
-      // A locked, WAL-index-less, or foreign-schema database may still hold the
-      // key; a later database can still supply one.
+      // An unreadable/foreign/locked DB may hold a key; continue looking before declaring absence.
       sawUnreadable = true
       continue
     } finally {
@@ -212,18 +193,8 @@ export async function readOpenCodeCredentialDatabaseGoKey(
   return { status: sawUnreadable ? 'unreadable' : 'missing' }
 }
 
-/**
- * Resolve the OpenCode Go API key in the documented precedence order.
- *
- * Settings wins before backend discovery. V1 uses inline auth or auth.json;
- * V2 gives its credential table precedence over the legacy file. Stored keys
- * outrank the shared OPENCODE_API_KEY environment variable in both backends.
- * An unknown backend can still use the shared environment key, but no store.
- * An unreadable V2 database withholds the env key, which may belong to Zen.
- * @param input.settingsOverride - The key a user saved in Orca's settings.
- * @param input.environment - Process environment to read; injectable for tests.
- * @returns The key and its tier, `missing`, or `credential-database-unreadable`.
- */
+/** Settings wins; V1 uses inline/file auth, V2 prefers SQLite, and stored keys outrank the shared env key.
+ * Unknown backends may use only env; unreadable V2 databases withhold env because it may belong to Zen. */
 export async function resolveOpenCodeGoApiKey(input: {
   settingsOverride?: string
   environment?: NodeJS.ProcessEnv

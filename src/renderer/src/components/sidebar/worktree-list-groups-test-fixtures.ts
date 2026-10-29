@@ -1,3 +1,5 @@
+import type { GroupHeaderRow } from '../../../../shared/sidebar-list/row-types'
+import type { SidebarHostOption } from './sidebar-host-options'
 import { getExecutionHostLabel } from '../../../../shared/execution-host'
 import type { Project, ProjectHostSetup } from '../../../../shared/project-types'
 import type { Repo } from '../../../../shared/repo-types'
@@ -99,4 +101,40 @@ export function makeDetectedWorktree(overrides: Partial<DetectedWorktree> = {}):
     ownership: 'external',
     ...overrides
   }
+}
+
+export function collapsedSameNameProjectHeaders() {
+  const local = { ...repo, displayName: 'app' }
+  const paired: Repo = { ...local, id: 'home-app', executionHostId: 'runtime:home' }
+  const hosts: SidebarHostOption[] = [
+    {
+      id: 'local',
+      label: 'Local Mac',
+      detail: 'This computer',
+      kind: 'local',
+      health: 'local',
+      presence: 'local'
+    },
+    {
+      id: 'runtime:home',
+      label: 'Home',
+      detail: 'home.example',
+      kind: 'runtime',
+      health: 'disconnected',
+      presence: 'configured'
+    }
+  ]
+  function header(value: Repo): GroupHeaderRow {
+    return {
+      type: 'header',
+      key: `repo:${value.id}`,
+      label: value.displayName,
+      count: 1,
+      icon: { kind: 'project' },
+      repo: value
+    }
+  }
+  const repoMap = new Map([local, paired].map((value) => [value.id, value]))
+  const rows = [header(local), header(paired)]
+  return { local, paired, hosts, header, repoMap, rows }
 }

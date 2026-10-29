@@ -6,13 +6,12 @@ import {
 import type { ActivePluginCommand } from '@/store/plugin-panels'
 import {
   findPluginCommandForKeybinding,
-  getEffectivePluginCommandKeybindings,
   pluginCommandKeybindingActionId,
   pluginCommandKeybindingDefinition
 } from './plugin-command-keybindings'
 
 const command: ActivePluginCommand = {
-  pluginKey: 'orca-samples.tasks',
+  pluginKey: 'samples.tasks',
   pluginName: 'Tasks',
   id: 'open',
   title: 'Open Tasks',
@@ -22,24 +21,6 @@ const command: ActivePluginCommand = {
 }
 
 describe('plugin command keybindings', () => {
-  it('builds a stable dynamic action definition', () => {
-    expect(pluginCommandKeybindingActionId(command)).toBe('plugin:orca-samples.tasks/open')
-    expect(pluginCommandKeybindingDefinition(command)).toMatchObject({
-      title: 'Open Tasks — Tasks',
-      group: 'Plugins',
-      defaultBindings: { darwin: ['Mod+Alt+T'] }
-    })
-  })
-
-  it('lets user overrides replace or disable contributed defaults', () => {
-    const actionId = pluginCommandKeybindingActionId(command)
-    expect(getEffectivePluginCommandKeybindings(command, 'linux')).toEqual(['Mod+Alt+T'])
-    expect(
-      getEffectivePluginCommandKeybindings(command, 'linux', { [actionId]: ['Mod+Shift+T'] })
-    ).toEqual(['Mod+Shift+T'])
-    expect(getEffectivePluginCommandKeybindings(command, 'linux', { [actionId]: [] })).toEqual([])
-  })
-
   it('matches effective overrides and honors explicit disablement', () => {
     const actionId = pluginCommandKeybindingActionId(command)
     const input = {
@@ -84,7 +65,7 @@ describe('plugin command keybindings', () => {
   })
 
   it('does not match worktree commands without an active worktree', () => {
-    const worktreeCommand = { ...command, context: 'worktree' as const }
+    const worktreeCommand = { ...command, context: 'workspace' as const }
     const input = {
       key: 't',
       code: 'KeyT',

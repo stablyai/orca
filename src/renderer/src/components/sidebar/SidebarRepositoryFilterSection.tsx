@@ -8,6 +8,7 @@ import {
 import { SidebarProjectFilterPanel } from './SidebarProjectFilterPanel'
 import type { Repo } from '../../../../shared/repo-types'
 import { translate } from '@/i18n/i18n'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 
 function getProjectFilterVisibilityLabel({
   selectedCount,
@@ -34,8 +35,7 @@ function getProjectFilterVisibilityLabel({
 
 type SidebarRepositoryFilterSectionProps = {
   preserveWorkspaceBoardOpen?: boolean
-  // Why: the Agents view reuses this section with its own persisted filter;
-  // absent props fall back to the workspace-nav filter state.
+  // Agents inject their own persisted filter; workspace navigation supplies the defaults.
   filterRepoIds?: readonly string[]
   setFilterRepoIds?: (ids: string[]) => void
 }
@@ -45,6 +45,7 @@ const SidebarRepositoryFilterSection = React.memo(function SidebarRepositoryFilt
   filterRepoIds: filterRepoIdsProp,
   setFilterRepoIds: setFilterRepoIdsProp
 }: SidebarRepositoryFilterSectionProps) {
+  useUiLanguageRevision()
   const workspaceFilterRepoIds = useAppStore((s) => s.filterRepoIds)
   const setWorkspaceFilterRepoIds = useAppStore((s) => s.setFilterRepoIds)
   const repos = useAppStore((s) => s.repos)
@@ -52,8 +53,7 @@ const SidebarRepositoryFilterSection = React.memo(function SidebarRepositoryFilt
   const setFilterRepoIds = setFilterRepoIdsProp ?? setWorkspaceFilterRepoIds
 
   const canFilterRepos = repos.length > 1
-  // Why: derive from current repos so stale ids (e.g. lingering after a repo
-  // is removed) don't inflate counts or falsely signal an applied filter.
+  // Ignore removed repo IDs so counts cannot imply a stale active filter.
   const selectedRepoIdSet = useMemo(() => {
     const set = new Set<string>()
     for (const repo of repos) {
@@ -81,8 +81,6 @@ const SidebarRepositoryFilterSection = React.memo(function SidebarRepositoryFilt
     return null
   }
 
-  // Why: same Sort-by-style single row as Hosts — label left, current value
-  // right; search/selection lives in the nested panel only.
   return (
     <DropdownMenuSub>
       <DropdownMenuSubTrigger>

@@ -9,27 +9,13 @@ import { decodeBridgeScreencastFrame, type BridgeBinaryEvent } from './bridge-sc
 
 type BridgeEventMessage = Extract<BridgeHostMessage, { type: 'event' }>
 
-/** Derived from the envelope's closed list, the same way the shell's ledger derives it: a reason
- *  added there is a compile error here rather than one this side silently never sees. */
 export type BridgeStreamEndReason = Extract<BridgeHostMessage, { type: 'end' }>['reason']
 
-/**
- * How far behind the page lets itself fall before it acks.
- *
- * The shell ends a stream at 256 unacked frames or 4 MiB. A quarter of each leaves room for the
- * frames already in flight when an ack is posted, so a page that is keeping up never walks the
- * shell's window down to the point where it ends a stream. `bridge-rpc-client-frames.test.ts` pins
- * the ratio against the shell's own numbers.
- */
+// Acknowledge at one quarter of the shell’s 256-frame/4 MiB windows, leaving room for in-flight frames while the ack crosses.
 export const BRIDGE_ACK_INTERVAL_FRAMES = 64
 export const BRIDGE_ACK_INTERVAL_BYTES = 1024 * 1024
 
-/**
- * What a listener is handed when its stream dies under it, in the shape the native client's
- * `emitError` uses. Consumers read `type` and act on it — `host-worktree-refresh.ts` clears the flag
- * that says the event stream is live — so a stream that merely stops delivering leaves them waiting
- * on a replay that is never coming.
- */
+// Emit the native client’s error shape on termination so consumers stop waiting for a replay; silent streams look merely quiet.
 export type BridgeStreamErrorResult = { type: 'error'; message: string; error?: unknown }
 
 export function bridgeStreamError(message: string, error?: unknown): BridgeStreamErrorResult {
@@ -45,13 +31,10 @@ type OpenStream = {
 }
 
 type SubscriptionsOptions = {
-  /** False when the frame never left the page. */
   send: (frame: BridgeClientMessage) => boolean
-  /** A binary frame with no listener or no decodable image. Neither is recoverable in place. */
   onDroppedBinaryFrame: () => void
 }
 
-/** Every stream the page opened, and the ack it owes the shell for each one. */
 export class BridgeClientSubscriptions {
   private streams = new Map<string, OpenStream>()
 
@@ -65,9 +48,7 @@ export class BridgeClientSubscriptions {
     return this.streams.has(id)
   }
 
-  /** False when the `subscribe` never left the page. The shell has not heard of the stream, so
-   *  nothing will ever end it: the slot goes back here and the listener is told, which is what the
-   *  native client does with a subscribe it could not send. */
+  // If subscribe never posts, release its local slot and notify the listener; the shell cannot end a stream it never heard of.
   open(
     id: string,
     method: string,
@@ -83,8 +64,7 @@ export class BridgeClientSubscriptions {
       id,
       method,
       params,
-      // Asked for only when there is something to hand the frames to, so a shell that pays to
-      // encode binary is one a listener is waiting on.
+      // Request binary only with a listener so native encoding is never spent on frames the page drops.
       ...(onBinaryFrame === undefined ? {} : { wantsBinary: true }),
       ...(envelope === undefined ? {} : { envelope })
     })
@@ -96,7 +76,6 @@ export class BridgeClientSubscriptions {
     return false
   }
 
-  /** `bytes` is the raw frame as the shell measured it, so both sides' windows agree exactly. */
   deliver(message: BridgeEventMessage, bytes: number): void {
     const stream = this.streams.get(message.id)
     if (stream === undefined) {
@@ -105,8 +84,7 @@ export class BridgeClientSubscriptions {
     stream.lastSeq = message.seq
     stream.unackedFrames += 1
     stream.unackedBytes += bytes
-    // Acked before the listener runs: the frame was received and read either way, and a listener
-    // that throws must not also wedge the stream by stranding the ack behind it.
+    // Ack before listeners run; a listener throw must not wedge the window after a successfully read frame.
     this.ackIfDue(message.id, stream)
     if ('binary' in message) {
       this.deliverBinary(stream, message.binary)
@@ -115,9 +93,7 @@ export class BridgeClientSubscriptions {
     stream.onData(message.payload)
   }
 
-  /** The shell already retired this stream, so nothing is posted back for it. The listener is told
-   *  before the record goes: frames that merely stop arriving are indistinguishable from a quiet
-   *  stream, and a consumer waiting on a replay would wait for the life of the document. */
+  // Shell already retired this stream; notify the listener without a redundant cancel.
   end(id: string, message: string, error?: unknown): void {
     const stream = this.streams.get(id)
     if (stream === undefined) {
@@ -127,14 +103,7 @@ export class BridgeClientSubscriptions {
     stream.onData(bridgeStreamError(message, error))
   }
 
-  /**
-   * A stream the page is giving up on that the shell has not retired.
-   *
-   * Both halves are needed and neither implies the other. The listener is told, the way `end` tells
-   * it, and the shell is asked to stop, because it is still serving a stream nothing else will
-   * release: its own backstop counts unacked frames, and a stream that has gone quiet never reaches
-   * it. Without the cancel the slot is held until the document goes.
-   */
+  // On local abandonment, notify the listener and cancel at the shell; a quiet stream never fills the shell’s backstop and would otherwise hold its slot forever.
   abandon(id: string, message: string, error?: unknown): void {
     const stream = this.streams.get(id)
     if (stream === undefined) {
@@ -144,7 +113,6 @@ export class BridgeClientSubscriptions {
     stream.onData(bridgeStreamError(message, error))
   }
 
-  /** The page is done with the stream. Idempotent: a second dispose posts nothing. */
   cancel(id: string): void {
     if (!this.streams.delete(id)) {
       return
@@ -157,17 +125,13 @@ export class BridgeClientSubscriptions {
     })
   }
 
-  /** For `close`, which is the shell's authority to tear down both sides: a cancel per stream
-   *  ahead of it would say the same thing twice. Silent, because the page asked for this one. */
+  // Close authorizes shell teardown of all streams, so omit per-stream cancels and keep user-requested cleanup silent.
   closeAll(): void {
     this.streams.clear()
   }
 
-  /** For a shell replaced under the page: every stream it was serving died with it, and the
-   *  listeners are the only ones in a position to do anything about that. */
   failAll(message: string): void {
-    // Out of the ledger before any listener runs: one that resubscribes on the way down is opening
-    // a stream against the shell that is arriving, and this loop must not take that one with it.
+    // Remove old records before callbacks; a listener resubscribing into the replacement must survive this teardown loop.
     const ended = this.streams
     this.streams = new Map()
     for (const stream of ended.values()) {

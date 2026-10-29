@@ -1,4 +1,3 @@
-/** Why a managed server kept its version on a connect: every state but host-newer may be behind. */
 import type { SshManagedServerUpdateNote } from '../../../shared/ssh-types'
 import { translate } from '@/i18n/i18n'
 import type { SshHostServerStatusLine } from './ssh-host-server-status-copy'

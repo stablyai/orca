@@ -11,8 +11,7 @@ export type TestWindow = {
   webContents: { send: ReturnType<typeof vi.fn> }
 }
 
-// Why: the `vi.mock` factories must live in each test file, so files build this
-// shape inside `vi.hoisted` and hand it back for the shared reset.
+// Each test owns vi.mock factories, so pass hoisted mocks into the shared reset.
 export type StarNagMocks = {
   appMock: { getVersion: Mock }
   browserWindowMock: { getAllWindows: Mock<() => TestWindow[]> }

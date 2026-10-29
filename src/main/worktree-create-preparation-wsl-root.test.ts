@@ -3,9 +3,7 @@ import type * as WslModule from './wsl'
 import type { Store } from './persistence'
 import type { Repo } from '../shared/repo-types'
 
-// Why this file exists separately from worktree-create-preparation.test.ts: that suite mocks
-// ./ipc/worktree-logic wholesale, so it can never catch the prepare (async resolver) / consume
-// (sync resolver) key disagreement that would silently discard every prepared checkout.
+// Keep root resolvers real to catch preparation/consume key mismatches hidden by worktree-logic mocks.
 const mocks = vi.hoisted(() => ({
   mkdir: vi.fn(),
   listWorktreeGraph: vi.fn(),
@@ -61,7 +59,6 @@ const settings = { workspaceDir: 'C:\\workspaces', nestWorkspaces: false }
 const store = { getSettings: () => settings } as unknown as Store
 const originalPlatform = process.platform
 
-/** The consume side exactly as createLocalWorktree builds it (worktree-remote.ts). */
 function consumeSideRoots(target: Repo): { workspaceRoot: string; worktreePath: string } {
   const pathSettings = getWorktreePathSettings(
     target,
@@ -75,8 +72,7 @@ function consumeSideRoots(target: Repo): { workspaceRoot: string; worktreePath: 
 }
 
 beforeEach(() => {
-  // parseWslPath only recognises UNC repo paths on win32, so pin the platform rather than
-  // skipping the case everywhere else.
+  // Exercise UNC parsing on every test host by pinning the Windows platform.
   Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
   mocks.mkdir.mockReset().mockResolvedValue(undefined)
   mocks.listWorktreeGraph.mockReset().mockResolvedValue([])
@@ -108,7 +104,6 @@ describe('worktree create preparation with the real WSL workspace-root resolver'
     expect(mocks.prepareCheckout).toHaveBeenCalledTimes(1)
     expect(mocks.prepareCheckout.mock.calls[0]?.[1]).toContain(MIRRORED_ROOT)
 
-    // createLocalWorktree still resolves the root synchronously, off the cache the probe warmed.
     mocks.getWslHome.mockReturnValue(WSL_HOME)
     const result = await consumePreparedWorktreeCreate({
       repoPath: repo.path,
@@ -146,8 +141,6 @@ describe('worktree create preparation with the real WSL workspace-root resolver'
 
     await prepareWorktreeCreateForRepo(store, repo, 'origin/main')
 
-    // No mirror home -> the configured desktop root, matching what the sync resolver returns
-    // for the same failed probe.
     expect(mocks.prepareCheckout.mock.calls[0]?.[1]).toContain('C:\\workspaces')
   })
 })

@@ -49,6 +49,10 @@ it.each([false, true])(
           executionHostId: 'runtime:host-a',
           notifyHostRuntime: false
         })
+        // A CLI or agent switch is not the user's: it must not let a remount start a stopped distro.
+        expect(vi.mocked(activateAndRevealWorktree).mock.calls[0]?.[1]).not.toHaveProperty(
+          'navigationIntent'
+        )
       } else {
         expect(activateAndRevealWorktree).not.toHaveBeenCalled()
       }

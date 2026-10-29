@@ -1,6 +1,6 @@
 import { translate } from '@/i18n/i18n'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
-import { ORCA_LINEAR_SKILL_NAME } from './agent-feature-install-commands'
+import { ORCA_LINEAR_SKILL_NAME } from './agent-feature-skill-names'
 import type { SkillUsageExample } from './skill-usage-example'
 
 const LINEAR_SLASH_COMMAND = `/${ORCA_LINEAR_SKILL_NAME}`

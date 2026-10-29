@@ -77,7 +77,6 @@ describe('SshTargetForm', () => {
     expect(content.className).toContain('flex-col')
     expect(header.className).toContain('shrink-0')
     expect(footer.className).toContain('shrink-0')
-    // Why: only the field region scrolls; header/footer stay put when Advanced expands.
     const scrollBody = content.querySelector('.overflow-y-auto')
     expect(scrollBody).not.toBeNull()
     expect(scrollBody?.contains(header)).toBe(false)
@@ -169,8 +168,7 @@ describe('SshTargetForm', () => {
     const root = await renderForm({ open: false, onOpenChange })
     await renderForm({ open: true, editingId: 'target-1', form: editTarget, onOpenChange }, root)
 
-    // Why: the session effect rewrites the baseline without forcing a re-render,
-    // so a render-captured isDirty would wrongly block this dismissal.
+    // Session effects update baseline without rerender; dismissal must read current refs.
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 0))
     })

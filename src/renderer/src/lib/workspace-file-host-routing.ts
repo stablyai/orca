@@ -22,11 +22,7 @@ export function buildWorkspaceFileContext(
   }
 }
 
-/**
- * Same, for a surface that already resolved ownership per file rather than per workspace. A folder
- * workspace can span repos on different hosts, so its workspace-scoped answer is `undefined` where
- * the file's own answer is a concrete host — and `undefined` reads downstream as "local".
- */
+/** Honor per-file ownership: folder workspaces may span hosts, making workspace owner undefined (downstream local) even when the file has a concrete remote owner. */
 export function buildWorkspaceFileContextForFile(
   worktreeId: string,
   worktreePath: string,
@@ -39,11 +35,7 @@ export function buildWorkspaceFileContextForFile(
   }
 }
 
-/**
- * Whether the client's OS can launch the workspace's paths at all. False for anything an SSH
- * connection or a runtime environment owns — those have to be downloaded before the OS has a file
- * to open. Decided by owner, not path: a server path outside its workspace is still the server's.
- */
+/** Allow OS launches only for this client’s files; SSH/runtime files need downloading first. Ownership wins over path containment, including server files outside workspaces. */
 export function canClientOsOpenWorkspaceFile(fileContext: RuntimeFileOperationArgs): boolean {
   return !fileContext.connectionId && !hasRemoteRuntimeOwner(fileContext)
 }

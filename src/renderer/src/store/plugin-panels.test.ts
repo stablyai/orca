@@ -14,7 +14,7 @@ function plugin(pluginKey: string): PluginHostListEntry {
     consentFingerprint: 'sha256-test',
     name: pluginKey,
     version: '1.0.0',
-    publisher: 'orca-samples',
+    publisher: 'samples',
     status: 'idle',
     needsReconsent: false,
     isDev: false,
@@ -38,7 +38,7 @@ afterEach(() => {
 describe('plugin panel list loading', () => {
   it('collects commands only from enabled plugin states', () => {
     const enabled = {
-      ...plugin('orca-samples.enabled'),
+      ...plugin('samples.enabled'),
       commands: [
         {
           id: 'tasks',
@@ -49,7 +49,7 @@ describe('plugin panel list loading', () => {
         }
       ]
     }
-    const pending = { ...enabled, pluginKey: 'orca-samples.pending', status: 'pending' as const }
+    const pending = { ...enabled, pluginKey: 'samples.pending', status: 'pending' as const }
 
     expect(collectActivePluginCommands([enabled, pending])).toEqual([
       expect.objectContaining({
@@ -69,27 +69,25 @@ describe('plugin panel list loading', () => {
 
   it('bounds watchdog errors to installed panels and clears them on recovery', () => {
     const installed = {
-      ...plugin('orca-samples.current'),
+      ...plugin('samples.current'),
       panels: [
         {
           id: 'dashboard',
           title: 'Dashboard',
-          tabKey: 'plugin:orca-samples.current/dashboard' as const
+          tabKey: 'plugin:samples.current/dashboard' as const
         }
       ]
     }
     usePluginPanelsStore.getState().setPlugins([installed])
-    usePluginPanelsStore.getState().setPanelHealth('plugin:orca-samples.current/dashboard', 'error')
+    usePluginPanelsStore.getState().setPanelHealth('plugin:samples.current/dashboard', 'error')
     expect(usePluginPanelsStore.getState().panelErrors).toEqual({
-      'plugin:orca-samples.current/dashboard': true
+      'plugin:samples.current/dashboard': true
     })
 
-    usePluginPanelsStore
-      .getState()
-      .setPanelHealth('plugin:orca-samples.current/dashboard', 'healthy')
+    usePluginPanelsStore.getState().setPanelHealth('plugin:samples.current/dashboard', 'healthy')
     expect(usePluginPanelsStore.getState().panelErrors).toEqual({})
 
-    usePluginPanelsStore.getState().setPanelHealth('plugin:orca-samples.current/dashboard', 'error')
+    usePluginPanelsStore.getState().setPanelHealth('plugin:samples.current/dashboard', 'error')
     usePluginPanelsStore.getState().setPlugins([])
     expect(usePluginPanelsStore.getState().panelErrors).toEqual({})
   })
@@ -105,19 +103,19 @@ describe('plugin panel list loading', () => {
 
     const first = usePluginPanelsStore.getState().fetchPlugins()
     const second = usePluginPanelsStore.getState().fetchPlugins()
-    resolveSecond([plugin('orca-samples.current')])
+    resolveSecond([plugin('samples.current')])
     await second
-    resolveFirst([plugin('orca-samples.stale')])
+    resolveFirst([plugin('samples.stale')])
     await first
 
     expect(usePluginPanelsStore.getState().plugins.map((entry) => entry.pluginKey)).toEqual([
-      'orca-samples.current'
+      'samples.current'
     ])
   })
 
   it('clears stale executable panels when the current list refresh fails', async () => {
     usePluginPanelsStore.setState({
-      plugins: [plugin('orca-samples.stale')],
+      plugins: [plugin('samples.stale')],
       fetchStatus: 'ready'
     })
     vi.stubGlobal('window', {
@@ -137,7 +135,7 @@ describe('plugin panel list loading', () => {
     const list = vi
       .fn()
       .mockRejectedValueOnce(new Error('transport starting'))
-      .mockResolvedValueOnce([plugin('orca-samples.recovered')])
+      .mockResolvedValueOnce([plugin('samples.recovered')])
     vi.stubGlobal('window', { api: { plugins: { list } } })
 
     await usePluginPanelsStore.getState().fetchPlugins()
@@ -148,7 +146,7 @@ describe('plugin panel list loading', () => {
     expect(list).toHaveBeenCalledTimes(2)
     expect(usePluginPanelsStore.getState()).toMatchObject({
       fetchStatus: 'ready',
-      plugins: [expect.objectContaining({ pluginKey: 'orca-samples.recovered' })]
+      plugins: [expect.objectContaining({ pluginKey: 'samples.recovered' })]
     })
   })
 })

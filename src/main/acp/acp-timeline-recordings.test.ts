@@ -107,7 +107,6 @@ describe('recorded ACP traffic through the journal', () => {
     expect(await fixture.rig.turns()).toHaveLength(2)
   })
 
-  // OpenCode 2.0.29: three turns, then a restart whose `session/load` replays them before a follow-up.
   it("keeps an OpenCode 2 chat's history once across a reopen, and adds the follow-up turn", async () => {
     const fixture = await openAcpFixtureRig(OPENCODE_ACP_DIALECT)
     const frames = await readAcpFixture('opencode-v2-reopen')

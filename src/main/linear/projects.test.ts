@@ -203,6 +203,36 @@ describe('Linear project queries', () => {
     await expect(listProjects(undefined, 20, 'workspace-1', true)).rejects.toThrow(error.message)
   })
 
+  it('maps project detail reads and preserves missing/error outcomes at the request seam', async () => {
+    const project = {
+      ...rawProject('project-detail'),
+      content: 'Project plan',
+      projectMilestones: { nodes: [{ id: 'milestone-1', name: 'Launch' }] },
+      externalLinks: {
+        nodes: [{ id: 'link-1', url: 'https://example.invalid/plan', label: 'Plan' }]
+      }
+    }
+    const failure = new Error('fetch failed')
+    rawRequest
+      .mockResolvedValueOnce({ data: { project } })
+      .mockResolvedValueOnce({ data: { project: null } })
+      .mockRejectedValueOnce(failure)
+    const { getProject } = await import('./projects')
+
+    await expect(getProject('project-detail', 'workspace-1')).resolves.toMatchObject({
+      id: 'project-detail',
+      workspaceId: 'workspace-1',
+      content: 'Project plan',
+      milestones: [{ id: 'milestone-1', name: 'Launch' }],
+      resources: [
+        { id: 'link-1', title: 'Plan', url: 'https://example.invalid/plan', type: 'link' }
+      ]
+    })
+    expect(rawRequest.mock.calls[0]?.[1]).toEqual({ id: 'project-detail' })
+    await expect(getProject('missing', 'workspace-1')).resolves.toBeNull()
+    await expect(getProject('failed', 'workspace-1')).rejects.toBe(failure)
+  })
+
   it('lets manual project issue refresh bypass older in-flight reads', async () => {
     const staleRequest = deferred<ReturnType<typeof projectIssuesResponse>>()
     const refreshRequest = deferred<ReturnType<typeof projectIssuesResponse>>()

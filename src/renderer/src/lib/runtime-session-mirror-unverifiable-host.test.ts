@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import type { RuntimeHostStatusSnapshot } from '../../../shared/runtime-host-status'
+import {
+  runtimeEnvironmentStatusFromSnapshot,
+  type RuntimeHostStatusSnapshot
+} from '../../../shared/runtime-host-status'
 import type { RuntimeStatus } from '../../../shared/runtime-types'
 import {
   isDisconnectedRuntimeHostState,
@@ -41,10 +44,8 @@ function makeSnapshot(
 /** The entry shape `applyRuntimeHostStatusSnapshot` writes for a given snapshot. */
 function entryForSnapshot(snapshot: RuntimeHostStatusSnapshot) {
   return {
-    snapshot,
-    checkedAt: snapshot.checkedAt,
-    connectionGeneration: 4,
-    status: snapshot.verification === 'verified' && !snapshot.retired ? snapshot.status : null
+    ...runtimeEnvironmentStatusFromSnapshot(snapshot),
+    connectionGeneration: 4
   }
 }
 
@@ -57,10 +58,7 @@ function mirrorTargets(entry: ReturnType<typeof entryForSnapshot>) {
 }
 
 describe('mirror targets and host connection state agree on one host', () => {
-  // Regression: an unverifiable status probe over a still-ready transport read as
-  // "connected" on the host surfaces and as "gone" to the mirror, so the session-tab
-  // mirror was torn down and cold-rebuilt while the host's flows were still delivering.
-  // docs/reference/ssh-execution-boundary.md: loss of contact is never evidence of exit.
+  // Null unverifiable probes on ready transport once cold-rebuilt mirrors while host flows still delivered; loss of contact never proves exit (ssh-execution-boundary.md).
   it('holds the mirror target when a ready transport returns an unverifiable probe', () => {
     const entry = entryForSnapshot(makeSnapshot({ verification: 'unavailable' }))
 
@@ -77,8 +75,7 @@ describe('mirror targets and host connection state agree on one host', () => {
   })
 
   it('holds the mirror target while the transport is reconnecting', () => {
-    // A dropped transport is unverifiable, not an exit verdict, so it must not be
-    // the trigger for destroying a mirror whose host may still be running the work.
+    // Dropped transport is unverifiable; it cannot authorize destroying a potentially live mirror.
     const entry = entryForSnapshot(
       makeSnapshot({ verification: 'unavailable', transport: 'disconnected' })
     )
@@ -87,7 +84,7 @@ describe('mirror targets and host connection state agree on one host', () => {
     expect(mirrorTargets(entry)).toHaveLength(1)
   })
 
-  it('keeps the same target across verified -> unverifiable -> verified', () => {
+  it('keeps the same target across verified and unverifiable snapshots', () => {
     const verified = mirrorTargets(entryForSnapshot(makeSnapshot({ verification: 'verified' })))
     const unverifiable = mirrorTargets(
       entryForSnapshot(makeSnapshot({ verification: 'unavailable', sequence: 2 }))

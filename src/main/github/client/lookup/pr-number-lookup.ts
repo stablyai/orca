@@ -16,15 +16,19 @@ import {
 } from './pull-request-lookup-data'
 import { hydratePullRequestLookupData } from './pull-request-lookup-hydration'
 import { isGitObjectId, isUsableRestStackMetadata } from './rest-stack-metadata-validation'
+import { revalidateGitHubRestJson } from '../../github-rest-revalidation'
+import { noteRepositoryRateLimitSpend } from '../../rate-limit'
+import { readPullRequestSidebarQuery } from './pull-request-sidebar-query'
 export async function getRestPRByNumber(
   ownerRepo: GitHubApiRepository,
   number: number,
   ghOptions: ReturnType<typeof ghRepoExecOptions>,
   options: { requireUsableStackMetadata?: boolean } = {}
 ): Promise<PullRequestLookupData> {
-  const { stdout } = await ghExecFileAsync(
-    ['api', `repos/${ownerRepo.owner}/${ownerRepo.repo}/pulls/${number}`],
-    { ...ghOptions, ...githubHostExecOptions(ownerRepo) }
+  const stdout = await revalidateGitHubRestJson(
+    ownerRepo,
+    `repos/${ownerRepo.owner}/${ownerRepo.repo}/pulls/${number}`,
+    ghOptions
   )
   const parsed = JSON.parse(stdout) as unknown
   if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
@@ -37,7 +41,7 @@ export async function getRestPRByNumber(
     restData.stack !== undefined &&
     restData.stack !== null
   ) {
-    // Why: GitHub omits stack for ordinary PRs; only unusable non-null metadata is unsafe.
+    // Absent stack metadata is valid; malformed non-null metadata is unsafe.
     if (!isUsableRestStackMetadata(restData.stack) || !mapped.stack) {
       throw new Error('malformed stack')
     }
@@ -53,9 +57,28 @@ export async function getPRByNumber(
   number: number,
   ghOptions: ReturnType<typeof ghRepoExecOptions>,
   executionScope: string,
-  knownPullRequestData?: PullRequestLookupData | null
+  knownPullRequestData?: PullRequestLookupData | null,
+  options: { includeStackSummary?: boolean } = {}
 ): Promise<PullRequestLookupData | null> {
   try {
+    const sidebarData =
+      options.includeStackSummary && knownPullRequestData === undefined
+        ? await readPullRequestSidebarQuery(ownerRepo, number, ghOptions)
+        : undefined
+    if (sidebarData === null) {
+      return null
+    }
+    if (sidebarData) {
+      const { stack, ...prData } = sidebarData
+      const hydrated = await hydratePullRequestLookupData(
+        ownerRepo,
+        prData,
+        ghOptions,
+        executionScope
+      )
+      return { ...hydrated, ...(stack ? { stack } : {}) }
+    }
+    noteRepositoryRateLimitSpend(ownerRepo, 'graphql', 1, ghOptions)
     const { stdout } = await ghExecFileAsync(
       [
         'pr',
@@ -80,7 +103,7 @@ export async function getPRByNumber(
       executionScope
     )
   } catch (err) {
-    // Why: deleted/edited linked PR metadata falls back to branch discovery; quota/auth/network failures get one cheaper REST exact lookup.
+    // Missing links return to branch discovery; other failures get one cheaper REST recovery lookup.
     if (isNotFoundGhError(err)) {
       return null
     }
@@ -120,7 +143,9 @@ export async function lookupPRByNumber(args: {
         candidate,
         args.number,
         args.ghOptions,
-        args.executionScope
+        args.executionScope,
+        undefined,
+        { includeStackSummary: true }
       )
       if (!linkedData || (args.policy && !(await args.policy.accepts(linkedData, candidate)))) {
         continue
@@ -139,6 +164,7 @@ export async function lookupPRByNumber(args: {
   }
 
   try {
+    noteRepositoryRateLimitSpend(null, 'graphql', 1, args.ghOptions)
     const { stdout } = await ghExecFileAsync(
       ['pr', 'view', String(args.number), '--json', PR_LOOKUP_JSON_FIELDS],
       args.ghOptions
@@ -152,7 +178,7 @@ export async function lookupPRByNumber(args: {
       : { data: null, dataRepo: null }
   } catch (err) {
     if (isNoPullRequestError(err)) {
-      // Why: stale cached fallback numbers shouldn't error every poll when the PR was deleted or belongs to another repo.
+      // Stale fallback numbers can refer to deleted PRs or another repository.
       return { data: null, dataRepo: null }
     }
     throw err

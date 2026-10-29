@@ -34,8 +34,7 @@ import {
   noteWslDistrosRunning
 } from './wsl-background-distro-gate'
 
-// Captured before any fake clock replaces the global: refilling the removal queue reads the
-// tombstone directory for real, and only a turn of the actual event loop can land that read.
+// Real filesystem reads need the actual event loop, even while timers are faked.
 const realSetImmediate = setImmediate
 
 async function settleTombstoneDirectoryReads(): Promise<void> {
@@ -44,8 +43,6 @@ async function settleTombstoneDirectoryReads(): Promise<void> {
   }
 }
 
-/** A tombstone whose rm fails once used to sit on disk for the rest of the session — only the next
- *  process start re-queued it. Prove the failure re-arms in-process, and that it stays bounded. */
 describe('tombstoned history removal retries', () => {
   beforeEach(() => {
     userDataDir = mkdtempSync(join(tmpdir(), 'orca-history-retry-'))
@@ -86,7 +83,6 @@ describe('tombstoned history removal retries', () => {
       expect(removeHostTreeMock).toHaveBeenCalledTimes(index + 2)
     }
 
-    // Bounded: a permanently wedged tree stops burning timers and waits for the next startup drain.
     await vi.advanceTimersByTimeAsync(60 * 60_000)
     expect(removeHostTreeMock).toHaveBeenCalledTimes(
       HISTORY_TREE_REMOVAL_RETRY_DELAYS_MS.length + 1
@@ -153,9 +149,7 @@ describe('tombstoned history removal retries', () => {
   it('caps persistent failures and leaves excess tombstones for a later disk batch', async () => {
     const distroRoot = join(userDataDir, 'terminal-history-wsl', 'Ubuntu')
     mkdirSync(distroRoot, { recursive: true })
-    // Why removeHostTree and not the fish cleanup: a failing fish cleanup no
-    // longer blocks tree removal (most distros have no fish), so the tree
-    // removal itself has to be the thing that fails to exercise the cap.
+    // Fish cleanup failures are tolerated; fail tree removal itself to exercise the cap.
     removeHostTreeMock.mockRejectedValue(new Error('EBUSY'))
     for (let index = 0; index < 1_000; index++) {
       const worktreeId = `repo-1::/path/fail-${index}`
@@ -192,10 +186,7 @@ describe('tombstoned history removal retries', () => {
   })
 
   it('still removes the history tree when WSL fish cleanup fails', async () => {
-    // Why this matters: `injectWslFishHistoryEnv` records a fishSession for EVERY
-    // WSL terminal, and cleanup shells out to `wsl.exe --exec fish`. On a distro
-    // with no fish that always fails — which used to chain into removeHostTree and
-    // leak the bash/zsh history tree for those users permanently.
+    // WSL terminals can record fish sessions even in distros without fish.
     const distroRoot = join(userDataDir, 'terminal-history-wsl', 'Ubuntu')
     mkdirSync(distroRoot, { recursive: true })
     deleteWslFishHistoryFileMock.mockRejectedValue(new Error('fish: command not found'))
@@ -237,7 +228,6 @@ describe('tombstoned history removal retries', () => {
     expect(removeHostTreeMock).not.toHaveBeenCalled()
     expect(readdirSync(join(distroRoot, '.pending-delete'))).toHaveLength(1)
 
-    // A rescan must not re-probe a tombstone that already waits for its distro.
     await schedulePendingHistoryTreeRemovals(distroRoot)
     await settleTombstoneDirectoryReads()
     expect(deleteWslFishHistoryFileMock).toHaveBeenCalledTimes(1)

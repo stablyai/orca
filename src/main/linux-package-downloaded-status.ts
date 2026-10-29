@@ -6,22 +6,14 @@ import {
 } from './linux-package-update-recovery'
 import { getLinuxPackageType } from './linux-update-package-type'
 import type { LinuxPackageArtifact } from './linux-package-update-recovery'
-
-export const LINUX_PACKAGE_MARKER_UNUSABLE_MESSAGE =
-  'Orca could not verify the installed Linux package format, so it will not install this update automatically. Download the update from the official release page and install it manually.'
-export const LINUX_PACKAGE_EXTERNALLY_MANAGED_MESSAGE =
-  'This copy of Orca is managed by your system package manager, so Orca cannot install updates itself. Update Orca through your distribution instead.'
-export const LINUX_PACKAGE_MANUAL_INSTALL_MESSAGE =
-  'Quit Orca before running the system package install command.'
-const PACKAGE_METADATA_UNUSABLE_MESSAGE =
-  'The downloaded package metadata could not be verified. Quit Orca before downloading and installing the update from the official release page.'
+import { updaterCodedMessage } from '../shared/updater-failure-copy'
 
 export function createLinuxPackageManualInstallStatus(
   artifact: Pick<LinuxPackageArtifact, 'packageType' | 'version'>
 ): UpdateStatus {
   return {
     state: 'error',
-    message: LINUX_PACKAGE_MANUAL_INSTALL_MESSAGE,
+    ...updaterCodedMessage('linuxPackageManualInstall'),
     recovery: {
       kind: 'linux-package-install',
       packageType: artifact.packageType,
@@ -70,7 +62,7 @@ export function resolveLinuxPackageDownloadedStatus(info: {
     clearTrackedLinuxPackageArtifact()
     return {
       state: 'error',
-      message: LINUX_PACKAGE_MARKER_UNUSABLE_MESSAGE,
+      ...updaterCodedMessage('linuxPackageMarkerUnusable'),
       version: info.version,
       retryable: false
     }
@@ -79,7 +71,7 @@ export function resolveLinuxPackageDownloadedStatus(info: {
   if (!artifact) {
     return {
       state: 'error',
-      message: PACKAGE_METADATA_UNUSABLE_MESSAGE,
+      ...updaterCodedMessage('linuxPackageMetadataUnusable'),
       version: info.version,
       retryable: false
     }

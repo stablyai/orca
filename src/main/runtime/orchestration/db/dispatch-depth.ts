@@ -15,14 +15,7 @@ import {
   REMOTE_DISPATCH_ATTACHMENT_COLUMN_LIST
 } from './row-column-lists'
 
-/**
- * Who is creating a dispatch row, for nesting-depth purposes.
- *
- * `system` is Orca's own in-process coordinator loop, which is host-local code
- * rather than a CLI caller and is a root by construction. It is an internal
- * discriminated branch on purpose — never a caller-supplied value, or a worker
- * could claim to be the loop.
- */
+/** The system root is internal host-local coordinator code; never let callers select it to bypass depth. */
 export type DispatchCreator =
   | { kind: 'system' }
   | {
@@ -60,26 +53,15 @@ export function recordedCreatorIdentity(creator: DispatchCreator): {
   }
 }
 
-/**
- * A row whose creator is its own assignee: a coordinator recording context against its own
- * terminal. Nothing was delegated, so it is not a nesting parent. Rows written before v37 record
- * no creator and keep counting, which is the pre-v37 answer and fails closed.
- */
-function isSelfCreatedDispatch(row: DispatchContextRow): boolean {
+/** Self-dispatch is bookkeeping; pre-v37 rows lack creator identity and conservatively count as parents. */
+export function isSelfCreatedDispatch(row: DispatchContextRow): boolean {
   if (row.creator_pane_key && row.assignee_pane_key) {
     return isEquivalentPaneKey(row.creator_pane_key, row.assignee_pane_key)
   }
   return row.creator_handle != null && row.creator_handle === row.assignee_handle
 }
 
-/**
- * Attachment states in which the worker may still be running.
- *
- * `start_unknown` means prompt delivery may have succeeded; `stopping` and
- * `stop_unknown` do not establish that the process exited. Loss of contact is
- * never evidence of process death — see docs/reference/ssh-execution-boundary.md.
- * An `unverifiable` worker must still count as a nesting parent.
- */
+/** Unknown start/stop outcomes cannot prove exit; count them as parents (docs/reference/ssh-execution-boundary.md). */
 export class AmbiguousDispatchParentError extends Error {
   constructor(message: string) {
     super(message)
@@ -87,14 +69,7 @@ export class AmbiguousDispatchParentError extends Error {
   }
 }
 
-/**
- * Depth of the deepest live role this caller currently holds.
- *
- * Why the maximum rather than the first match: one terminal process can hold a
- * local dispatch and a remote attachment at the same time, and the command
- * cannot say which role motivated it. Taking the maximum cannot undercount, so
- * it cannot let a deep worker pass as a shallow one.
- */
+/** Use the deepest live role: concurrent local and remote assignments must never undercount caller depth. */
 export function resolveCreatorDepth(this: OrchestrationDb, creator: DispatchCreator): number {
   if (creator.kind === 'system') {
     return ROOT_DISPATCH_DEPTH
@@ -102,9 +77,7 @@ export function resolveCreatorDepth(this: OrchestrationDb, creator: DispatchCrea
 
   const depths: number[] = []
 
-  // Local rows match on handle/pane as they always have. process_incarnation is
-  // nullable here and context-only dispatch stores null deliberately, so
-  // requiring it would drop real parents.
+  // Local context-only rows may lack incarnation; handle/pane identity must still count the parent.
   const local = findActiveDispatchForCreator.call(this, creator)
   if (local && !isSelfCreatedDispatch(local)) {
     depths.push(local.depth)
@@ -119,10 +92,7 @@ export function resolveCreatorDepth(this: OrchestrationDb, creator: DispatchCrea
   return depths.length > 0 ? Math.max(...depths) : ROOT_DISPATCH_DEPTH
 }
 
-/**
- * Proven creator Attempt identity; null when system-owned, absent, or ambiguous.
- * Throws when multiple live remote attachments match the same terminal identity.
- */
+/** Proven creator Attempt or null; multiple live matching remote attachments throw. */
 export function resolveCreatorDispatchId(
   this: OrchestrationDb,
   creator: DispatchCreator
@@ -131,7 +101,7 @@ export function resolveCreatorDispatchId(
     return null
   }
   const own = findActiveDispatchForCreator.call(this, creator)
-  // Why: a self-dispatch is not a parent Attempt, so it must not be stamped as the child's creator.
+  // Self-dispatch is bookkeeping, not a parent Attempt.
   const local = own && !isSelfCreatedDispatch(own) ? own : undefined
   const remote =
     creator.kind === 'terminal' ? findPotentiallyLiveAttachmentsForCreator.call(this, creator) : []
@@ -160,14 +130,7 @@ function findActiveDispatchForCreator(
   return row as DispatchContextRow | undefined
 }
 
-/**
- * Remote attachments matching this caller's pane AND exact process incarnation.
- *
- * Handle is deliberately not compared: identity survives handle remint and
- * nothing updates `remote_dispatch_attachments.terminal_handle` when it happens,
- * so a stored-handle predicate would reject a live federated parent. Pane
- * equivalence plus exact incarnation is what remote authority already uses.
- */
+/** Match pane and exact incarnation; stored remote handles can lag a remint. */
 function findPotentiallyLiveAttachmentsForCreator(
   this: OrchestrationDb,
   creator: Extract<DispatchCreator, { kind: 'terminal' }>
@@ -189,8 +152,7 @@ function findPotentiallyLiveAttachmentsForCreator(
     (row) => row.pane_key !== null && isEquivalentPaneKey(row.pane_key, creator.paneKey as string)
   )
 
-  // Two live attachments for one identity is an anomaly, not a depth question.
-  // Surface it rather than silently picking one.
+  // Multiple live attachments for one identity are ambiguous; never pick one silently.
   if (matches.length > 1) {
     throw new AmbiguousDispatchParentError(
       `Terminal ${creator.handle} matches ${matches.length} live remote attachments; cannot establish nesting depth.`
@@ -199,12 +161,7 @@ function findPotentiallyLiveAttachmentsForCreator(
   return matches
 }
 
-/**
- * Depth to stamp on a row this creator is about to make, rejecting over-cap.
- *
- * Every path that mints a live worker goes through here, so the cap cannot be
- * skipped by adding a new spawn verb.
- */
+/** Every live-worker insertion must enforce this depth cap before stamping the row. */
 export function resolveChildDispatchDepth(
   this: OrchestrationDb,
   creator: DispatchCreator,

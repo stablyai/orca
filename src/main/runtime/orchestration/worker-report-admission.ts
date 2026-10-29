@@ -1,8 +1,7 @@
 import { OrchestrationError } from './orchestration-error'
 import type { WorkerDispatchState } from './types'
 
-// Why: an unknown start or stop is unverifiable, not exited (docs/reference/ssh-execution-boundary.md),
-// so the worker's own report outranks it, locally and on a connected server.
+// Unknown start/stop cannot prove exit; the worker's report outranks uncertainty (docs/reference/ssh-execution-boundary.md).
 export const UNPROVEN_WORKER_STATES = [
   'start_unknown',
   'stop_unknown'

@@ -17,6 +17,9 @@ import { join } from 'node:path'
 import SyncDatabase from '../sqlite/sync-database'
 import * as secureFile from '../../shared/secure-file'
 import { ManagedDataAccountService } from './service'
+import { buildOpenCodeSqliteCandidatePath } from '../../shared/opencode-sqlite-session-path'
+import { managedDataAccountResumeEnv } from '../../shared/managed-data-account-resume'
+import { managedAccountLaunchEnvironment } from './launch-environment'
 
 vi.mock('node:fs', async (importOriginal) => ({
   ...(await importOriginal<typeof fileSystem>())
@@ -70,6 +73,32 @@ describe('managed data accounts', () => {
     await service.remove('opencode', first)
     expect(() => service.environmentForAccount('opencode', first)).toThrow(
       'Managed account not found.'
+    )
+  })
+
+  it('resumes a history row under the account whose store holds it', async () => {
+    openCodeSource()
+    service = new ManagedDataAccountService(join(root, 'managed-data-accounts'))
+    const first = (await service.add('opencode', source, 'First')).activeAccountId
+    const second = (await service.add('opencode', source, 'Second')).activeAccountId
+    if (!first || !second) {
+      throw new Error('Expected two profiles')
+    }
+    const firstEnvironment = service.environmentForAccount('opencode', first)
+    const row = {
+      agent: 'opencode2',
+      filePath: buildOpenCodeSqliteCandidatePath(
+        join(firstEnvironment.XDG_DATA_HOME, 'opencode', 'opencode.db'),
+        'ses_1'
+      )
+    }
+    const requested = Object.values(managedDataAccountResumeEnv(row))[0]
+    expect(managedAccountLaunchEnvironment(service, 'opencode', requested)).toEqual(
+      firstEnvironment
+    )
+    await service.remove('opencode', first)
+    expect(managedAccountLaunchEnvironment(service, 'opencode', requested)).toEqual(
+      service.environmentForAccount('opencode', second)
     )
   })
 
@@ -481,7 +510,7 @@ describe('managed data accounts', () => {
     openCodeSource('session_v2')
     const databasePath = join(source, 'opencode', 'opencode.db')
     const db = new SyncDatabase(databasePath)
-    // Synthetic orphans exercise damaged/FK-off files, not normal CLI writes.
+    // Model damaged/FK-disabled stores; ordinary CLI writes would not create these orphans.
     db.exec(`CREATE TABLE ${table} (data TEXT)`)
     db.prepare(`INSERT INTO ${table} VALUES (?)`).run('private-conversation-content')
     db.close()

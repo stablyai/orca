@@ -9,7 +9,7 @@ import { useState } from 'react'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
 import { Button } from '../ui/button'
 import { SettingsRow, SettingsSegmentedControl } from './SettingsFormControls'
-import type { ProjectRuntimeSessionSummary } from './repository-runtime-session-summary'
+import type { ProjectRuntimeSessionSummary } from './repository/execution/repository-runtime-session-summary'
 import { translate } from '@/i18n/i18n'
 import { projectRuntimeRepairSentence } from '../../../../shared/project-runtime-repair-message'
 
@@ -76,9 +76,7 @@ export function ProjectWindowsRuntimeSetting({
       })
       return
     }
-    void updateProject(project.id, {
-      localWindowsRuntimePreference: { kind: 'wsl', distro: nextPreference.distro }
-    })
+    void updateProject(project.id, { localWindowsRuntimePreference: nextPreference })
   }
   const requestRuntimePreference = (nextPreference: LocalWindowsRuntimePreference): void => {
     if (sameRuntimePreference(nextPreference, preference)) {
@@ -105,7 +103,12 @@ export function ProjectWindowsRuntimeSetting({
     }
   }
   const handleDistroChange = (distro: string): void => {
-    requestRuntimePreference({ kind: 'wsl', distro })
+    // A project already on Git for Windows keeps it; only the terminals' distro changes.
+    requestRuntimePreference(
+      preference.kind === 'wsl' && preference.git
+        ? { kind: 'wsl', distro, git: preference.git }
+        : { kind: 'wsl', distro }
+    )
   }
 
   return (

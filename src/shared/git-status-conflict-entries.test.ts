@@ -1,8 +1,4 @@
-/**
- * Asymmetric `u` records used to cost one `fs.access` each — a 9p/network round trip per conflict on
- * a WSL or remote worktree. Porcelain v2 already carries the answer in the worktree mode (`mW`), so
- * the probe must not come back.
- */
+/** Porcelain v2 mW already proves asymmetric conflict-path presence; avoid reintroducing one 9P/network fs.access trip per row. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as NodeFsPromisesModule from 'node:fs/promises'
 
@@ -39,7 +35,6 @@ describe('parseUnmergedEntry', () => {
       expect(present?.status, xy).toBe('modified')
     }
 
-    // The regression this replaces: one probe per asymmetric row, serialised across the status poll.
     expect(accessMock).not.toHaveBeenCalled()
   })
 

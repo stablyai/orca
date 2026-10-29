@@ -1,3 +1,5 @@
+import { readdirSync, readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
 import type { WslHostDistro } from '../../../../shared/wsl-host-types'
@@ -14,6 +16,14 @@ const ubuntu: WslHostDistro = { name: 'Ubuntu', state: 'running', version: 2, en
 const debian: WslHostDistro = { name: 'Debian', state: 'stopped', version: 2, environmentId: null }
 const legacy: WslHostDistro = { name: 'Legacy', state: 'running', version: 1, environmentId: null }
 const added: WslHostDistro = { ...ubuntu, name: 'Arch', environmentId: 'wsl:arch' }
+
+const LOCALES_DIR = fileURLToPath(new URL('../../i18n/locales/', import.meta.url))
+const LOCALE_FILES = readdirSync(LOCALES_DIR).filter((file) => file.endsWith('.json'))
+
+function readLocaleDescription(file: string): string {
+  const catalog = JSON.parse(readFileSync(`${LOCALES_DIR}${file}`, 'utf8'))
+  return String(catalog.auto.components.sidebar.AddWslHostFormPanel.description)
+}
 
 function render(props: Partial<Parameters<typeof AddWslHostFormPanel>[0]> = {}): string {
   return renderToStaticMarkup(
@@ -43,22 +53,48 @@ describe('AddWslHostFormPanel', () => {
     expect([ubuntu, debian, legacy, added].map(canAddWslDistro)).toEqual([true, true, false, false])
   })
 
-  it('makes starting a stopped distro an explicit action', () => {
-    const html = render({ selectedDistro: 'Debian' })
-    expect(html).toContain('Debian is stopped. Adding it starts it.')
-    expect(html).toContain('Start and add')
-    expect(render({ selectedDistro: 'Ubuntu' })).toContain('Add host')
+  it('says bridge projects move to the host on their own, and how to bring one back', () => {
+    // Verify bug 9: "keep working as they are" and "until you move them" both contradicted the
+    // automatic mover, which moves them once their terminals are idle.
+    const html = render()
+    expect(html).not.toContain('Use it for new projects')
+    expect(html).not.toContain('until you move them')
+    expect(html).toContain('move to this host automatically once their terminals are idle')
+    // Only this distro's projects move; Windows-drive ones never do (move scope refuses /mnt).
+    expect(html).toContain('Projects in this distro that you opened through')
+    expect(html).toContain('projects on a Windows drive (/mnt/…) stay on this computer')
+    expect(html).toContain('bring a moved project back from the sidebar')
   })
 
-  it('shows a refusal inline and the setup progress while adding', () => {
-    expect(render({ error: 'Already runs the Orca server for “dev”.' })).toContain('role="alert"')
-    const adding = render({ selectedDistro: 'Ubuntu', adding: true })
-    expect(adding).toContain('Setting up…')
-    expect(adding).toContain('The first time can take a minute.')
+  it('carries the same promise in every locale, none still saying projects stay put', () => {
+    const stale = [
+      'new projects',
+      'neue Projekte',
+      'novos projetos',
+      'новых проектов',
+      'Yeni projeler',
+      '新專案',
+      // Each locale's old "until you move them", as the catalog carried it before verify bug 9.
+      'until you move',
+      'hasta que los muevas',
+      "jusqu'à ce que vous les déplaciez",
+      '移動するまで',
+      '옮기기 전까지',
+      '直到你将它们移到'
+    ]
+    for (const file of LOCALE_FILES) {
+      const description = readLocaleDescription(file)
+      expect(description).toContain('wsl.localhost')
+      expect(description).toContain('/mnt/…')
+      for (const phrase of stale) {
+        expect(description).not.toContain(phrase)
+      }
+    }
   })
 
-  it('explains an empty list', () => {
-    expect(render({ distros: [] })).toContain('wsl --install')
+  it('spells out the WSL 2 conversion for a WSL 1 distro the list cannot offer', () => {
+    expect(render()).toContain('wsl --set-version Legacy 2')
+    expect(render({ distros: [ubuntu] })).not.toContain('wsl --set-version')
   })
 
   it('says this build cannot run WSL hosts and offers nothing to add', () => {
@@ -67,10 +103,5 @@ describe('AddWslHostFormPanel', () => {
     expect(html).toContain('role="alert"')
     expect(html).not.toContain('wsl --install')
     expect(html).toMatch(/<button[^>]*disabled=""[^>]*>Add host<\/button>/)
-  })
-
-  it('offers an explicit refresh, and none when nothing could be added', () => {
-    expect(render()).toContain('Refresh')
-    expect(render({ serverFilesMissing: true })).not.toContain('Refresh')
   })
 })

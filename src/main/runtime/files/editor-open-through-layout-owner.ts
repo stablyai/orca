@@ -1,6 +1,4 @@
-// A file open main makes itself in a layout-owner build (CLI, phone, a host with no window): main
-// writes the editor tab, opening it in the group the window last reported, and a window, if one is
-// attached, only shows it. A paired server's workspace keeps today's window open.
+// Main-owned layouts persist opens even without a window; remote-owned workspaces keep window routing.
 
 import { randomUUID } from 'node:crypto'
 import { detectLanguage } from '../../../shared/editor-language/editor-language-detect'
@@ -19,11 +17,8 @@ export type EditorFileOpen = RuntimeEditorFileOpen
 
 export type EditorOpenHost = {
   applyLayoutCommand: (command: WindowLayoutCommand) => Promise<LayoutApplyReply>
-  /** The group the window last reported for the workspace, else its saved view's. */
   groupFor: (worktreeId: string) => string | undefined
-  /** Shows main's tab in an attached window; absent with no window. */
   revealEditorTab?: (reveal: RuntimeEditorTabReveal) => void
-  /** Today's open, through the window: a paired server owns the workspace's layout. */
   openInWindow: (open: EditorFileOpen) => void
   publishHeadlessTabs?: (worktreeId: string) => void
 }
@@ -78,7 +73,7 @@ export async function openEditorFileThroughLayoutOwner(
   }
   const groupId = host.groupFor(open.worktreeId)
   let reply = await host.applyLayoutCommand(groupId ? { ...command, groupId } : command)
-  // A group closed since the window reported it: open where main's own rule places it.
+  // The reported group may have closed; retry with main's fallback placement.
   if (!reply.ok && reply.code === 'group_not_found' && groupId) {
     reply = await host.applyLayoutCommand(command)
   }
@@ -95,7 +90,6 @@ export async function openEditorFileThroughLayoutOwner(
   }
 }
 
-/** Today's open: the window draws the tab. */
 export function openEditorFileInWindow(
   notifier: Pick<RuntimeNotifier, 'openFile'> | null | undefined,
   open: EditorFileOpen

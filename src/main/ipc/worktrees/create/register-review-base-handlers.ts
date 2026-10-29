@@ -18,6 +18,7 @@ import {
 import { resolveGitHubPrStartPoint } from '../../../github/pr-start-point'
 import { resolveGitHubReviewHeadRemote } from '../../../github/review-head-remote'
 import type { WorktreeIpcContext } from '../worktree-ipc-context'
+import { reviewStartPointFailure } from '../../../../shared/review-start-point-failure-copy'
 
 export function registerReviewBaseHandlers(context: WorktreeIpcContext): void {
   const { store, runtime } = context
@@ -36,12 +37,12 @@ export function registerReviewBaseHandlers(context: WorktreeIpcContext): void {
     ): Promise<GitHubPrStartPoint | { error: string }> => {
       const repo = store.getRepo(args.repoId)
       if (!repo) {
-        return { error: 'Repo not found' }
+        return reviewStartPointFailure('repoNotFound')
       }
       if (isFolderRepo(repo)) {
-        return { error: 'Folder mode does not support creating worktrees.' }
+        return reviewStartPointFailure('folderUnsupported')
       }
-      // Why the resolver: a row may name its SSH host only as `executionHostId: 'ssh:<target>'`.
+      // SSH ownership may exist only in executionHostId.
       const connectionId = getRepoRoutingConnectionId(repo)
       const gitExec = async (args: string[]): Promise<{ stdout: string; stderr: string }> => {
         if (!connectionId) {
@@ -75,8 +76,7 @@ export function registerReviewBaseHandlers(context: WorktreeIpcContext): void {
         gitExec,
         fetchRemoteTrackingRef,
         fetchPullRequestHeadRef,
-        // Why: one resolver keeps source preference and hosting identity aligned
-        // across local, WSL, and SSH worktree creation.
+        // Share source preference and hosting identity across local, WSL and SSH creation.
         resolveRemote: () =>
           resolveGitHubReviewHeadRemote({
             repoPath: repo.path,

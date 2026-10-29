@@ -98,8 +98,7 @@ export function updateLatestWorktreeStatusDropTarget(
       : null
 }
 
-// Why matchPointerY: pointer-driven updates must repaint when only the pointer moved; native-drag
-// updates deliberately keep the previous state identity in that case.
+// Pointer updates repaint on Y-only movement; native drag preserves the previous state identity.
 export function clearWorktreeDropPreview(
   previous: WorktreeRowDragState,
   args: { pointerY: number | null; matchPointerY?: boolean; preserveOffsets?: boolean }

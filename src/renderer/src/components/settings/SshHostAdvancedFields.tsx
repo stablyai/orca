@@ -8,27 +8,30 @@ import { SettingsSwitch } from './SettingsFormControls'
 import type { EditingTarget } from './ssh-target-draft'
 import { translate } from '@/i18n/i18n'
 
-// Why: mirror the composer's "Advanced" disclosure (ghost button + rotating chevron) so the
-// add-host dialog reads the same, while reusing the exact field labels/help text from the
-// Settings SSH form (proxy, jump host, connection reuse, terminal persistence).
+// Match composer disclosure styling while reusing the Settings SSH labels and help.
 export function SshHostAdvancedFields({
   open,
   onOpenChange,
   form,
   disabled,
-  onFormChange
+  onFormChange,
+  offerProxyConnectionReuse = false,
+  offerReconnectOnLaunch = false
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   form: EditingTarget
   disabled: boolean
   onFormChange: (updater: (prev: EditingTarget) => EditingTarget) => void
+  /** Only for hosts this Windows desktop dials itself; a paired server runs its own ssh. */
+  offerProxyConnectionReuse?: boolean
+  /** Only for hosts this desktop restores at launch; a paired server keeps its own hosts. */
+  offerReconnectOnLaunch?: boolean
 }): React.JSX.Element {
   return (
     <Collapsible open={open} onOpenChange={onOpenChange} className="col-span-2 sm:col-span-2">
       <CollapsibleTrigger asChild>
-        {/* Why: no negative margin — the button's highlight would overhang and get clipped by the
-            dialog/settings containers. A small left padding keeps it flush without overflow. */}
+        {/* Avoid negative margins that clip button highlights in dialog/Settings containers. */}
         <Button type="button" variant="ghost" size="sm" className="px-2 text-xs">
           {translate('auto.components.sidebar.AddRemoteHostDialog.advanced', 'Advanced')}
           <ChevronDown className={cn('size-4 transition-transform', open && 'rotate-180')} />
@@ -108,6 +111,67 @@ export function SshHostAdvancedFields({
               )}
             />
           </div>
+          {offerProxyConnectionReuse && navigator.userAgent.includes('Windows') ? (
+            <div className="flex items-start justify-between gap-4 py-1 text-xs">
+              <div className="min-w-0 flex-1 space-y-0.5">
+                <Label className="text-xs font-medium">
+                  {translate(
+                    'auto.components.settings.SshTargetForm.proxyConnectionReuse',
+                    'Reuse one proxy connection'
+                  )}
+                </Label>
+                <p className="text-muted-foreground">
+                  {translate(
+                    'auto.components.settings.SshTargetForm.proxyConnectionReuseHelp',
+                    "Faster connects through slow ProxyCommand or ProxyJump hosts. Only enable if your ssh_config doesn't rely on host-specific Match or %h rules."
+                  )}
+                </p>
+              </div>
+              <SettingsSwitch
+                checked={form.systemSshProxyConnectionReuse}
+                disabled={disabled || !form.systemSshConnectionReuse}
+                onChange={() =>
+                  onFormChange((f) => ({
+                    ...f,
+                    systemSshProxyConnectionReuse: !f.systemSshProxyConnectionReuse
+                  }))
+                }
+                ariaLabel={translate(
+                  'auto.components.settings.SshTargetForm.proxyConnectionReuse',
+                  'Reuse one proxy connection'
+                )}
+              />
+            </div>
+          ) : null}
+          {offerReconnectOnLaunch ? (
+            <div className="flex items-start justify-between gap-4 py-1 text-xs">
+              <div className="min-w-0 flex-1 space-y-0.5">
+                <Label className="text-xs font-medium">
+                  {translate(
+                    'auto.components.settings.SshTargetForm.reconnectOnLaunch',
+                    'Reconnect on launch'
+                  )}
+                </Label>
+                <p className="text-muted-foreground">
+                  {translate(
+                    'auto.components.settings.SshTargetForm.reconnectOnLaunchHelp',
+                    'When off, Orca leaves this host, and any Orca server reached through it, disconnected at launch until you connect it.'
+                  )}
+                </p>
+              </div>
+              <SettingsSwitch
+                checked={form.reconnectOnLaunch}
+                disabled={disabled}
+                onChange={() =>
+                  onFormChange((f) => ({ ...f, reconnectOnLaunch: !f.reconnectOnLaunch }))
+                }
+                ariaLabel={translate(
+                  'auto.components.settings.SshTargetForm.reconnectOnLaunch',
+                  'Reconnect on launch'
+                )}
+              />
+            </div>
+          ) : null}
           <div className="flex items-start justify-between gap-4 py-1 text-xs">
             <div className="min-w-0 flex-1 space-y-0.5">
               <Label className="text-xs font-medium">

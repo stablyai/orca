@@ -1,14 +1,5 @@
-/**
- * Latest-wins single-flight coalescer for exclusive host terminal focus navigation.
- *
- * Scope: concurrent `terminal.focus` / host-nav storms (CLI switch fan-out, bulk open).
- * Not a substitute for cheaper activation or reconnect-scan bounding.
- *
- * Why: only one host terminal can be focused. Intermediate navigations are waste;
- * running them in parallel freezes large remote fleets. Pending jobs collapse to
- * the newest; in-flight work re-checks a generation so obsolete runs do not claim
- * a successful host navigation after a newer focus arrived.
- */
+/** Only one host terminal can own focus; serialize navigation and collapse pending jobs to newest to avoid freezing large remote fleets.
+ * In-flight jobs recheck generation before claiming navigation; activation and reconnect bounds remain separate. */
 
 export type TerminalFocusNavigationContext = {
   /** True while this job is still the newest focus request. */
@@ -18,16 +9,9 @@ export type TerminalFocusNavigationContext = {
 export type TerminalFocusNavigationJob<TResult> = {
   /** Stable key for diagnostics (usually terminal handle). */
   key: string
-  /**
-   * Full navigation work (reveal/focus host UI).
-   * Must consult `ctx.isCurrent()` before/after expensive host work and avoid
-   * claiming navigation when false.
-   */
+  /** Recheck ctx.isCurrent around expensive host work; obsolete jobs must not claim navigation. */
   run: (ctx: TerminalFocusNavigationContext) => Promise<TResult>
-  /**
-   * Result when this job is dropped (pending superseded) or becomes obsolete
-   * mid-flight. Must not perform host navigation. Should set navigated: false.
-   */
+  /** Superseded results must not navigate and should report navigated: false. */
   resolveSuperseded: (completed?: TResult) => TResult
 }
 

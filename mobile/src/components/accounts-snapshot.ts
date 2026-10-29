@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { translate } from '../i18n/mobile-i18n'
 
 const TimestampSchema = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER)
 const AccountIdSchema = z.string().min(1)
@@ -175,8 +176,7 @@ export const AccountsSnapshotSchema = z
       .object({
         claude: ProviderRateLimitsSchema.nullable(),
         codex: ProviderRateLimitsSchema.nullable(),
-        // Why: protocol-compatible hosts from before runtime targeting omit
-        // these fields; their account selection semantics were host-only.
+        // Older compatible hosts omit runtime target fields and retain host-only selection semantics.
         claudeTarget: RateLimitRuntimeTargetSchema.default(HostRateLimitRuntimeTarget),
         codexTarget: RateLimitRuntimeTargetSchema.default(HostRateLimitRuntimeTarget),
         inactiveClaudeAccounts: z.array(InactiveAccountUsageSchema),
@@ -228,10 +228,22 @@ export type ClaudeAccountSummary = z.infer<typeof ClaudeAccountSummarySchema>
 export type CodexAccountSummary = z.infer<typeof CodexAccountSummarySchema>
 export type AccountsSnapshot = z.infer<typeof AccountsSnapshotSchema>
 
+export class AccountsSnapshotError extends Error {
+  constructor() {
+    super(
+      translate(
+        'components.accountsSnapshot.invalidSnapshot',
+        'Invalid accounts snapshot from host'
+      )
+    )
+    this.name = 'AccountsSnapshotError'
+  }
+}
+
 export function decodeAccountsSnapshot(value: unknown): AccountsSnapshot {
   const result = AccountsSnapshotSchema.safeParse(value)
   if (!result.success) {
-    throw new Error('Invalid accounts snapshot from host')
+    throw new AccountsSnapshotError()
   }
   return result.data
 }

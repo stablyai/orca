@@ -1,0 +1,55 @@
+{
+  "$schema": "../node_modules/oxlint/configuration_schema.json",
+  "plugins": [],
+  "categories": {
+    "correctness": "off",
+    "suspicious": "off",
+    "pedantic": "off",
+    "perf": "off",
+    "style": "off",
+    "restriction": "off",
+    "nursery": "off"
+  },
+  "jsPlugins": [
+    {
+      "name": "app-store-performance",
+      "specifier": "./oxlint-plugins/app-store-performance.mjs"
+    },
+    {
+      "name": "quadratic-buffer-concat",
+      "specifier": "./oxlint-plugins/quadratic-buffer-concat.mjs"
+    },
+    {
+      "name": "renderer-scrollbar-style",
+      "specifier": "./oxlint-plugins/renderer-scrollbar-style.mjs"
+    },
+    {
+      "name": "ime-enter-guard",
+      "specifier": "./oxlint-plugins/ime-enter-guard.mjs"
+    }
+  ],
+  "rules": {
+    "app-store-performance/require-selector": "error",
+    "app-store-performance/no-identity-selector": "error",
+    "app-store-performance/no-fresh-selector-result": "error",
+    "quadratic-buffer-concat/no-loop-carried-concat": "error"
+  },
+  "overrides": [
+    {
+      "files": ["**/src/renderer/src/**/*.{ts,tsx}"],
+      "rules": {
+        "renderer-scrollbar-style/require-styled-vertical-scrollbar": "error",
+        "ime-enter-guard/require-ime-guard": "error"
+      }
+    },
+    {
+      "files": ["**/*.test.*", "**/*.spec.*", "**/*-benchmark.*"],
+      "rules": {
+        "quadratic-buffer-concat/no-loop-carried-concat": "off",
+        "renderer-scrollbar-style/require-styled-vertical-scrollbar": "off",
+        "ime-enter-guard/require-ime-guard": "off"
+      }
+    }
+  ],
+  "ignorePatterns": ["**/node_modules", "**/dist", "**/out"]
+}

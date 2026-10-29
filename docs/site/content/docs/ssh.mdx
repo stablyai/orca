@@ -21,6 +21,8 @@ Orca can drive agents on remote machines over SSH — useful for long-running bu
 
 Dirty add/edit forms ignore outside clicks so an accidental click away does not discard your fields; use Escape, Cancel, or × to discard.
 
+Orca won't add a second target for a machine already in Orca. When it imports `~/.ssh/config` (on launch, from **Add all**, or from Settings), it asks OpenSSH (`ssh -G`) where each new alias connects: host, port, user, and jump host or proxy command. It skips an alias that resolves to the same place as a saved target, and the picker shows that alias as **In Orca**. A different port, user, `ProxyJump`, or `ProxyCommand` stays a separate target. Hostnames are compared case-insensitively; SSH usernames keep their case. An alias without `HostName` connects to its own name, so it matches an IP target only if you set `HostName` to that IP. Orca doesn't look names up in DNS. If `ssh -G` isn't available, aliases are matched by name only.
+
 ## Host key verification
 
 Orca checks built-in SSH connections against your effective OpenSSH `known_hosts` files and keys it previously saved. Existing matches connect silently. With the default policy, Orca accepts and remembers a host on first contact and shows its fingerprint; `StrictHostKeyChecking yes` rejects unknown hosts, while `no` / `off` accepts without saving a trust record.
@@ -40,6 +42,8 @@ On the first connect, Orca installs itself on the host over your own SSH connect
 ## Advanced connection options
 
 Open **Settings → SSH**, edit a target, and expand **Advanced Connection** when the host needs a proxy, jump host, or SSH multiplexing override. Orca enables **Reuse SSH connection for faster setup** by default, which uses OpenSSH connection reuse on macOS and Linux so setup commands do not each pay a fresh SSH handshake. Turn it off only for hosts whose SSH policy rejects multiplexed sessions.
+
+**Reconnect on launch** is on by default: hosts that were connected when you quit reconnect when Orca starts. Turn it off for a host you only want on demand, such as a machine that is often asleep or off the network. Orca then leaves it, and any Orca server reached through it, disconnected at launch, and its workspaces show **Connect** until you connect it. Scheduled automations on that host are skipped until then.
 
 ## Passphrases
 
@@ -64,15 +68,17 @@ Orca uses the same SSH transfer path as the connection. Folder download appears 
 
 This is a desktop-only action — the web client doesn't expose Download because it relies on Electron's save dialog.
 
-## Open a remote workspace in VS Code
+## Open a remote workspace in VS Code, Cursor, or Zed
 
-For SSH worktrees, the worktree menu's **Open in** list can hand the remote path to VS Code Remote-SSH when your configured app is VS Code or VS Code Insiders (`code` / `code-insiders`, or a direct path to those launchers).
+For SSH worktrees, the worktree menu's **Open in** list can hand the remote path to an editor that opens SSH hosts itself, when your configured app is VS Code, VS Code Insiders, Cursor, or Zed (`code` / `code-insiders` / `cursor` / `zed`, or a direct path to those launchers).
 
-1. Configure **Settings → General → Open in menu** so VS Code is listed (preset or custom command).
-1. Right-click the SSH worktree (or use the worktree overflow menu) → **Open in** → **VS Code**.
-1. Orca launches VS Code with Remote-SSH against that host and the worktree path (`--remote ssh-remote+<host> <path>`). The menu entry may show a **Remote SSH** badge.
+1. Configure **Settings → General → Open in menu** so the editor is listed (preset or custom command).
+1. Right-click the SSH worktree (or use the worktree overflow menu) → **Open in** → the editor.
+1. Orca launches the editor against that host and the worktree path. The menu entry may show a **Remote SSH** badge.
+   - VS Code and Cursor use Remote-SSH: `--remote ssh-remote+<host> <path>`. A host on a port other than 22 needs an alias in your local SSH config.
+   - Zed uses its SSH URL: `zed ssh://[user@]host[:port]/<path>`, so custom ports work without an alias. A manual host with an identity file, jump host, or proxy command still needs an alias, because the URL can't carry those.
 
-**Not supported for this remote path:** Cursor, Zed, compound shell commands, or opening via a **Remote Orca Server** active runtime (those stay **Local only**). Use the Finder/Explorer item only for local paths.
+**Not supported for this remote path:** other editors, compound shell commands, or opening via a **Remote Orca Server** active runtime (those stay **Local only**). Use the Finder/Explorer item only for local paths.
 
 ## Kerberos / GSSAPI
 

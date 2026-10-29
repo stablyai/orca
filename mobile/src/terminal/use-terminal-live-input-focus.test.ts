@@ -116,7 +116,7 @@ describe('terminal live input focus hook', () => {
     harness.unmount()
   })
 
-  it('reacquires focus for mouse-aware and non-mouse terminal tap notifications', () => {
+  it('reacquires focus after successive terminal tap notifications', () => {
     vi.useFakeTimers()
     const input = createFocusTarget()
     const harness = createHarness(connectedProps({ current: input }))

@@ -7,8 +7,6 @@ import { getLocalWorktreeCatalogVersion } from '../../../local-worktree-scan-gen
 import { getExplicitWorktreeIdSelector } from '../../runtime-worktree-selection'
 import { splitWorktreeId } from '../../../../shared/worktree/id'
 import { buildCliWorkspaceProvenance } from '../../../../shared/cli-workspace-provenance'
-import { displayNameUpdatePinsLabel } from '../../../../shared/worktree/display-name-provenance'
-import { getWorkspaceStatusWarning } from '../../../../shared/workspace-status-warning'
 import { createWorktreeWithStartupAgent } from '../../../agent-launch/startup-agent-worktree-create'
 import { defineMethod } from '../core'
 import { buildManagedWorktreeCreateArgs, worktreeCreateRepoSelector } from './worktree-create-args'
@@ -26,15 +24,15 @@ import {
   WorktreeResolveMrBase,
   WorktreeResolvePrBase,
   WorktreeSelector,
-  WorktreeSet,
   WorktreeSortOrder,
   WorktreeTeardownMissingTerminalsParams
 } from '../../../../shared/rpc-contract/worktree-params'
 import { WORKTREE_CATALOG_METHODS } from './worktree-catalog-methods'
 import { WORKTREE_PROVISIONED_ROOT_METHOD } from './worktree-provisioned-root-method'
-import { readsWorktreeRemovalMarker } from '../worktree-removal-marker-projection'
+import { waitsForWorktreeRemoval } from '../worktree-removal-marker-projection'
 import { queueWorkspaceDelete } from '../../workspaces/workspace-lifecycle-commands'
 import { WORKTREE_SLEEP_METHOD } from './worktree-sleep-method'
+import { WORKTREE_SET_METHOD } from './worktree-set-method'
 
 export const WORKTREE_METHODS = [
   ...WORKTREE_CATALOG_METHODS,
@@ -72,8 +70,7 @@ export const WORKTREE_METHODS = [
     permission: 'workspace',
     params: WorktreeActivate,
     handler: async (params, { runtime, clientKind }) =>
-      // Why: clientKind ('mobile'|'runtime') scopes the host-renderer slept-agent
-      // wake to phones so web/desktop activation behavior is unchanged.
+      // Only mobile activation wakes host-renderer slept agents; preserve web/desktop behavior.
       runtime.activateManagedWorktree(params.worktree, {
         notifyClients: params.notifyClients !== false,
         clientKind,
@@ -90,9 +87,7 @@ export const WORKTREE_METHODS = [
     permission: 'workspace',
     params: WorktreeCreate,
     handler: async (params, context) =>
-      // Why: a mobile create interrupted by a connection migration is retried with
-      // the same clientMutationId; dedupe so the host returns the in-flight/created
-      // worktree instead of spawning a duplicate. No key (desktop/CLI) runs plainly.
+      // Mobile retries after migration share clientMutationId; return the same pending/created worktree. Desktop/CLI without keys run plainly.
       context.runtime.dedupeWorktreeCreate(params, params.clientMutationId, async () => {
         const { runtime } = context
         const repo = await runtime.showRepo(worktreeCreateRepoSelector(params))
@@ -102,8 +97,7 @@ export const WORKTREE_METHODS = [
           repo,
           request: params.automationProvenanceRequest
         })
-        // Why: provenance tokens are reserved before creation so retries can recover,
-        // but failed create attempts must release the reservation for a safe retry.
+        // Reserve provenance before create for recovery, but release failed reservations so retry is safe.
         try {
           const result = await createWorktreeWithStartupAgent(
             runtime,
@@ -121,11 +115,9 @@ export const WORKTREE_METHODS = [
             )
           )
           finishAutomationWorkspaceProvenanceRequest(params.automationProvenanceRequest)
-          // Why stamped here: the create's change notification has bumped the generation, so this
-          // names the catalog that contains the new worktree.
+          // Create notification already bumped generation; stamp the catalog containing the new worktree.
           const stamped = { ...result, catalogVersion: getLocalWorktreeCatalogVersion(repo.id) }
-          // Why: agent callers need a stable dispatch target without traversing
-          // terminal-list layout duplicates after creating the worktree.
+          // Agent callers need a stable target without duplicate terminal-list layout entries.
           return params.startupAgent && result.startupTerminal?.handle
             ? { ...stamped, agentTerminalHandle: result.startupTerminal.handle }
             : stamped
@@ -148,67 +140,7 @@ export const WORKTREE_METHODS = [
       return null
     }
   }),
-  defineMethod({
-    name: 'worktree.set',
-    permission: 'workspace',
-    params: WorktreeSet,
-    handler: async (params, { runtime }) => {
-      const worktree = await runtime.updateManagedWorktreeMeta(params.worktree, {
-        displayName: params.displayName,
-        ...(params.displayName !== undefined
-          ? { displayNameIsPinned: displayNameUpdatePinsLabel(params.displayName) }
-          : {}),
-        linkedIssue: params.linkedIssue,
-        linkedPR: params.linkedPR,
-        suppressedGitHubPR: params.suppressedGitHubPR,
-        linkedLinearIssue: params.linkedLinearIssue,
-        linkedLinearIssueWorkspaceId: params.linkedLinearIssueWorkspaceId,
-        linkedLinearIssueOrganizationUrlKey: params.linkedLinearIssueOrganizationUrlKey,
-        linkedGitLabMR: params.linkedGitLabMR,
-        linkedGitLabIssue: params.linkedGitLabIssue,
-        linkedBitbucketPR: params.linkedBitbucketPR,
-        linkedAzureDevOpsPR: params.linkedAzureDevOpsPR,
-        linkedGiteaPR: params.linkedGiteaPR,
-        linkedWorkItem: params.linkedWorkItem,
-        linkedItems: params.linkedItems,
-        ...(params.linkedItemsBase !== undefined
-          ? { linkedItemsBase: params.linkedItemsBase }
-          : {}),
-        ...(params.linkedItemsSelectionChanged !== undefined
-          ? { linkedItemsSelectionChanged: params.linkedItemsSelectionChanged }
-          : {}),
-        linkedTaskSourceContext: params.linkedTaskSourceContext,
-        comment: params.comment,
-        isArchived: params.isArchived,
-        isUnread: params.isUnread,
-        isPinned: params.isPinned,
-        sortOrder: params.sortOrder,
-        manualOrder: params.manualOrder,
-        lastActivityAt: params.lastActivityAt,
-        createdAt: params.createdAt,
-        sparseDirectories: params.sparseDirectories,
-        sparseBaseRef: params.sparseBaseRef,
-        sparsePresetId: params.sparsePresetId,
-        baseRef: params.baseRef,
-        workspaceStatus: params.workspaceStatus,
-        pushTarget: params.pushTarget,
-        diffComments: params.diffComments,
-        mobileDiffReview: params.mobileDiffReview,
-        lineage:
-          params.parentWorktree || params.noParent === true
-            ? {
-                parentWorktree: params.parentWorktree,
-                noParent: params.noParent === true
-              }
-            : undefined
-      })
-      const warning = getWorkspaceStatusWarning(
-        params.workspaceStatus,
-        () => runtime.getUIState().workspaceStatuses
-      )
-      return { worktree, ...(warning ? { warnings: [warning] } : {}) }
-    }
-  }),
+  WORKTREE_SET_METHOD,
   defineMethod({
     name: 'worktree.persistSortOrder',
     permission: 'workspace',
@@ -254,9 +186,7 @@ export const WORKTREE_METHODS = [
         params.worktree,
         params.hostId
       )
-      // Older mobile clients omit hostId, so resolve through the ambiguity gate
-      // before pinning removal. An ambiguous selector still fails closed: two
-      // hosts own the id and an unqualified client cannot say which it meant.
+      // Older mobile omits hostId; resolve ambiguity before pinning removal and refuse ids shared by two hosts.
       if (!resolvedHostId) {
         try {
           resolvedHostId = (await runtime.showManagedWorktree(params.worktree)).hostId
@@ -264,17 +194,13 @@ export const WORKTREE_METHODS = [
             throw new Error('worktree.rm could not resolve the workspace host')
           }
         } catch (error) {
-          // 'selector_not_found' is not a failure to attribute — Git simply no
-          // longer lists the path. A delete legitimately arrives in that state and
-          // `removeManagedWorktree` handles it, so a stale workspace stays
-          // deletable by a client that sends no host. Anything else propagates.
+          // Git may omit a stale path: selector_not_found must reach removeManagedWorktree; propagate other resolution failures.
           if (!(error instanceof Error) || error.message !== 'selector_not_found') {
             throw error
           }
         }
       }
-      // Why parsed, not resolved: an `id:` selector (what clients send) names its repo, and a second
-      // resolution costs a scan and throws for an id two hosts share. Other selectors stay unstamped.
+      // Parse id: selectors for repo stamping; resolving again scans and rejects ids shared by hosts. Leave other selectors unstamped.
       const explicitWorktreeId = getExplicitWorktreeIdSelector(params.worktree)
       const repoId = explicitWorktreeId ? splitWorktreeId(explicitWorktreeId)?.repoId : undefined
       const result = await queueWorkspaceDelete(
@@ -285,13 +211,11 @@ export const WORKTREE_METHODS = [
         (removal) =>
           runtime.removeManagedWorktree(params.worktree, {
             ...removal,
-            // Why: only a client that shows the `removing` marker can wait out Git's delete; older
-            // clients get the acceptance and never see the row again.
-            ...(readsWorktreeRemovalMarker(context) ? { waitForBackgroundRemoval: true } : {})
+            waitForBackgroundRemoval: waitsForWorktreeRemoval(context, params)
           })
       )
       return {
-        removed: true,
+        removed: result.removing !== true,
         ...result,
         ...(repoId ? { catalogVersion: getLocalWorktreeCatalogVersion(repoId) } : {})
       }

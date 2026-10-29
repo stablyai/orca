@@ -132,7 +132,7 @@ describe('automation run output snapshot buffer', () => {
     })
   })
 
-  it('owns the exact UTF-16 tail of one oversized chunk', () => {
+  it('retains the exact UTF-16 tail of one oversized chunk', () => {
     const buffer = createAutomationRunOutputSnapshotBuffer()
     const retained = `\ude00${'A'.repeat(256 * 1024 - 2)}\ud83d`
 

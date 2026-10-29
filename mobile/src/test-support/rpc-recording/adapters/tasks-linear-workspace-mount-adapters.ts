@@ -5,16 +5,7 @@ import type { operationModuleLoader } from '../operation-module-loader'
 import type { MountAdapter } from '../recording-scenario'
 import type { ConnectionPresentationModel } from '../../../tasks/use-mobile-tasks-connection-presentation'
 
-/**
- * Switching the Linear workspace from the tasks filter sheet.
- *
- * `renderMobileTasksLinearWorkspacePicker` is a render helper the surface calls as a function, not
- * a component, so the element it returns is the whole of its output and `onSelect` on that element
- * is the same closure the picker would invoke on a press. It is read off the element rather than
- * off a mounted tree because the picker draws inside `BottomDrawer`, whose reanimated timing driver
- * and gesture builder the recorder would have to impersonate to make a row exist — and the workspace
- * a press carries comes from the scenario either way.
- */
+// Invoke the render helper’s actual onSelect without mounting BottomDrawer’s native gesture/timing drivers; the scenario declares its workspace.
 export function tasksLinearWorkspaceMountAdapters(
   modules: ReturnType<typeof operationModuleLoader>
 ): Record<string, MountAdapter> {

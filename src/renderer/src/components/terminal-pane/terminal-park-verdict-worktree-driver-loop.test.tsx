@@ -1,22 +1,5 @@
 /** @vitest-environment happy-dom */
-/**
- * Park-verdict oscillation driven by an input the cold-park selector never sees.
- *
- * Why this shape (issue #15136): Terminal.tsx vetoes a WORKTREE park with
- * worktreeTabsAreWatcherCovered → canWatcherCoverParkedTerminalTab, which a
- * mounted pane grants and a parked pane withdraws. That verdict arrives here as
- * the coldParkTerminalPanes prop, which short-circuits the cold-park branch of
- * the rendered verdict — so withholdUnparkableTerminalTabs, which only filters
- * the cold-park candidate list, can never damp it.
- *
- * The single tab is deliberate: selectIdsBeyondHotRetain spares the lone
- * most-recently-hidden candidate, so the cold-park set stays empty and
- * coldParkTerminalPanes is provably the only driver of the rendered verdict.
- *
- * Field signature this reproduces: one tab, `trigger: burst` crumbs recurring
- * 60 008 / 60 020 / 60 012 ms apart (the pin window), i.e. flips continuing at
- * commit cadence underneath a live pin instead of stopping.
- */
+// Model worktree-level watcher coverage oscillating with mount state (#15136). A lone last-active tab has no cold candidates, proving only rendered-verdict pinning can stop this driver.
 import { act, useEffect, useState } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -82,11 +65,7 @@ function TerminalPaneStandIn(): null {
   return null
 }
 
-/**
- * Terminal.tsx's worktree-level verdict, modelled: a mounted pane grants the
- * byte-watcher coverage the worktree park requires, and a parked pane withdraws
- * it. Runs in a passive effect, so each turn of the loop costs one commit.
- */
+// Model worktree park coverage gained on mount and lost on unmount, one passive-effect commit per flip.
 function WorktreeParkVerdict({
   parked,
   onVerdict
@@ -180,16 +159,10 @@ describe('park-verdict damping reaches the worktree-level driver', () => {
     const thrown = renderOverlayHost(root)
 
     expect(thrown).toBeNull()
-    // Without damping on the rendered verdict this runs to RENDER_HARD_STOP:
-    // the burst pin only subtracts from the cold-park candidate set, which is
-    // empty here, so it silences its breadcrumb and damps nothing.
+    // Cold-only damping sees an empty set here and merely mutes telemetry while rendered churn continues.
     expect(parkVerdictFlipCount).toBeLessThanOrEqual(SETTLED_FLIP_BUDGET)
-    // Settles on the safe side: the pane stays mounted, so bells/titles/
-    // completions never go silent behind a wedged verdict.
+    // Settle mounted so watcher-dependent bells/titles/completions remain live.
     expect(lastParkVerdict).toBe(false)
-    // Measured: 4 flips / 3 mounts / 6 renders with damping, against
-    // 400 flips / 200 mounts before it — the pre-fix run only stops because
-    // RENDER_HARD_STOP stops it.
     expect(paneMountCount).toBeGreaterThan(0)
     expect(paneMountCount).toBeLessThanOrEqual(SETTLED_FLIP_BUDGET)
     expect(hostRenderCount).toBeLessThan(RENDER_HARD_STOP)

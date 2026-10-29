@@ -20,14 +20,16 @@ import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import {
   canQueueWorkspaceCleanupCandidate,
   type WorkspaceCleanupCandidate
 } from '../../../../shared/workspace-cleanup'
 import {
-  getWorkspaceCleanupGitLabel,
+  getWorkspaceCleanupGitState,
   type WorkspaceCleanupReviewInfo
 } from './workspace-cleanup-presentation'
+import { getWorkspaceCleanupGitChipLabel } from './workspace-cleanup-candidate-labels'
 import { CandidateRowDetails } from './workspace-cleanup-candidate-row-details'
 import {
   formatBranchSafetyDetails,
@@ -82,11 +84,7 @@ type CandidateRowProps = {
   onView: (candidate: WorkspaceCleanupCandidate) => void
 }
 
-// Why: the cleanup list re-renders on every checkbox/expand/search keystroke;
-// memo keeps each unchanged row from re-rendering. Effective only while the
-// parent passes stable (useCallback) handlers — see WorkspaceCleanupDialog.
-// Scan stream-in still re-renders rows (candidates change, so the reviewInfo
-// prop identity changes); virtualization, not memo, bounds that cost.
+// Memoize unchanged rows with stable parent handlers; streaming candidate changes still render, so virtualization bounds that cost.
 export const CandidateRow = React.memo(function CandidateRow({
   candidate,
   identity,
@@ -109,9 +107,9 @@ export const CandidateRow = React.memo(function CandidateRow({
   onToggleSelected,
   onView
 }: CandidateRowProps): React.JSX.Element {
+  useUiLanguageRevision()
   const deleting = deletionPhase !== undefined
-  // Why: derive from `deleting` too, so the row never offers a checkbox or
-  // Remove button while it is queuing/deleting, even if `removing` was omitted.
+  // Queued/deleting state must disable row actions even when removing was omitted.
   const selectable = canQueueWorkspaceCleanupCandidate(candidate) && !removing && !deleting
   const ignored = candidate.blockers.includes('dismissed')
   const blockers = getWorkspaceCleanupBlockerLabels(candidate)
@@ -119,7 +117,7 @@ export const CandidateRow = React.memo(function CandidateRow({
   const branchSafetyDetails = formatBranchSafetyDetails(candidate)
   const factStatuses = getCandidateFactStatuses(candidate)
   const dirtyLabel = getDirtyGitLabel(candidate)
-  const gitLabel = getWorkspaceCleanupGitLabel(candidate)
+  const gitState = getWorkspaceCleanupGitState(candidate)
   const showGitMetadataChip = shouldShowGitMetadataChip(candidate)
   const contextCount = getContextCount(candidate)
   const candidateAccessibleName = getWorkspaceCleanupCandidateAccessibleName(candidate)
@@ -245,8 +243,8 @@ export const CandidateRow = React.memo(function CandidateRow({
               <WorkspaceCleanupMetadataChip
                 icon={GitBranch}
                 label={formatGitStatus(candidate)}
-                value={gitLabel}
-                tone={gitLabel === 'Clean' ? 'ready' : 'review'}
+                value={getWorkspaceCleanupGitChipLabel(gitState)}
+                tone={gitState === 'clean' ? 'ready' : 'review'}
               />
             ) : null}
             {contextDetails ? (

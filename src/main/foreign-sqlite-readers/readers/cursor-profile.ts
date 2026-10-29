@@ -24,10 +24,7 @@ function valueAsString(value: unknown): string | null {
   return null
 }
 
-/**
- * Reads the Cursor IDE's stored session. Opens read-only in place; state.vscdb can be multi-GB
- * and its -wal can be too, so this runs only on the foreign SQLite reader worker.
- */
+/** Open only in a worker: the database and its WAL can each be multiple gigabytes. */
 export function readCursorProfile(dbPath: string): CursorDesktopProfileReadResult {
   if (!existsSync(dbPath)) {
     return { status: 'missing' }

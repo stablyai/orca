@@ -14,8 +14,15 @@ describe('getExternalEditorOpenCapability', () => {
     ).toEqual({ allowed: true, remote: true })
   })
 
-  it('rejects non-VS Code and compound commands for SSH paths', () => {
-    expect(getExternalEditorOpenCapability({ connectionId: 'ssh-1', command: 'cursor' })).toEqual({
+  it.each(['cursor', 'zed'])('allows %s for SSH paths', (command) => {
+    expect(getExternalEditorOpenCapability({ connectionId: 'ssh-1', command })).toEqual({
+      allowed: true,
+      remote: true
+    })
+  })
+
+  it('rejects other and compound commands for SSH paths', () => {
+    expect(getExternalEditorOpenCapability({ connectionId: 'ssh-1', command: 'subl' })).toEqual({
       allowed: false,
       reason: 'local-only-editor'
     })
@@ -54,7 +61,7 @@ describe('getExternalEditorOpenCapability', () => {
     ).toEqual({ allowed: true, remote: true, sshTargetId: 'box' })
     expect(
       getExternalEditorOpenCapability({
-        command: 'zed',
+        command: 'subl',
         runtimeEnvironmentId: 'managed',
         runtimeSshHost
       })

@@ -1,24 +1,15 @@
 import { describeError } from './unstopped-pty-verification'
 
-// Why: an abandoned sweep is one whose provider ignored the deadline it was already given,
-// so this is a second chance, not a second budget — long enough for a shutdown() that is
-// mid-kill to finish releasing handles, short enough that Force Delete still feels forced.
+// Give timed-out shutdowns a brief handle-release grace without granting Force Delete a second full budget.
 export const ABANDONED_SWEEP_GRACE_MS = 2_000
 
 export type WorktreeSweepTracker = {
-  /** Wraps a sweep body so the promise stays observable after its deadline abandons it. */
   track: <T>(run: () => Promise<T>) => () => Promise<T>
-  /** Resolves when every tracked sweep settled, or the grace expired; true if one is still running. */
+  /** True if any sweep remains running after the grace. */
   awaitAbandonedSweeps: (graceMs?: number) => Promise<boolean>
 }
 
-/**
- * Keeps the real sweep promises reachable after `settleBeforeDeadline` stops waiting on them.
- *
- * Why: that helper rejects on its timer without cancelling `run()`, so by construction the
- * deadline error can only fire while work is still in flight — and forced removal deletes
- * the worktree directory the moment teardown returns.
- */
+/** Deadlines abandon rather than cancel sweeps; retain the real promises before forced file deletion. */
 export function createWorktreeSweepTracker(): WorktreeSweepTracker {
   const running = new Set<Promise<unknown>>()
   return {
@@ -27,8 +18,7 @@ export function createWorktreeSweepTracker(): WorktreeSweepTracker {
       () => {
         const sweep = run()
         running.add(sweep)
-        // Why: the tracked copy is observed here too, so a rejection this call abandons
-        // never surfaces as an unhandled rejection in whatever ran next.
+        // Observe late rejection after callers abandon the sweep.
         void sweep.catch(() => undefined).finally(() => running.delete(sweep))
         return sweep
       },
@@ -64,14 +54,7 @@ export type ForcedSweepSettlement = {
   incomplete: boolean
 }
 
-/**
- * Reconciles the three sweeps for a removal carrying the Force Delete waiver (#11960).
- *
- * Force goes on to delete files, so every sweep must finish releasing handles first —
- * `Promise.all` would abandon the siblings of the first rejection while they were still
- * inside shutdown(). Waiting on the tracked promises rather than only on their deadline
- * wrappers is what makes that true for the timeout case as well.
- */
+/** #11960: await all real sweeps, including timed-out ones, so first rejection cannot abandon sibling handle release. */
 export async function settleSweepsForForcedRemoval(
   worktreeId: string,
   sweeps: WorktreeSweepPromises,
@@ -80,7 +63,6 @@ export async function settleSweepsForForcedRemoval(
 ): Promise<ForcedSweepSettlement> {
   const settled = await Promise.allSettled([sweeps.runtime, sweeps.provider, sweeps.registry])
   const [runtimeSettled, providerSettled, registrySettled] = settled
-  // Report what the surviving sweeps actually stopped rather than a flat zero.
   const stopped = {
     runtimeStopped: runtimeSettled.status === 'fulfilled' ? runtimeSettled.value.stopped : 0,
     providerStopped: providerSettled.status === 'fulfilled' ? providerSettled.value : 0,
@@ -93,20 +75,14 @@ export async function settleSweepsForForcedRemoval(
   if (reasons.length === 0 && !stillRunning) {
     return { stopped, incomplete: false }
   }
-  // Why (#11960): a sweep that cannot even complete — unresponsive daemon, dropped SSH
-  // channel — fails before the unproven-stop gate could offer its escape hatch, so an
-  // explicit Force Delete has to survive it. Report every reason, specific ones first: the
-  // shared deadline sentinel only says that *something* timed out, so leading with it would
-  // bury the provider error that actually explains the failure. This warning is the only
-  // trace of a removal that deleted files without proving a single stop.
+  // #11960: explicit Force Delete survives incomplete sweeps; log specific causes before generic timeout.
+  // This is the only trace when files are deleted without proving any stop.
   const detail = [
     ...reasons.filter((candidate) => candidate !== deadlineError),
     ...reasons.filter((candidate) => candidate === deadlineError)
   ].map(describeError)
   if (stillRunning) {
-    // Force must never wedge, so the wait is bounded — but "we stopped waiting" is not
-    // "handles released", and on Windows/WSL that is the difference between a clean
-    // removal and a half-deleted directory. Say so instead of implying the sweep finished.
+    // Bound the grace, but report surviving handles: Windows/WSL deletion may remain incomplete.
     detail.push(
       `a sweep was still running after the ${ABANDONED_SWEEP_GRACE_MS}ms grace, so its PTY handles may outlive the delete`
     )
@@ -114,9 +90,6 @@ export async function settleSweepsForForcedRemoval(
   console.warn(
     `[worktree-teardown] forcing removal after an incomplete PTY sweep for ${worktreeId} — ${detail.join('; ')}`
   )
-  // Reporting `incomplete` does skip the per-PTY verdict, which could still have named live
-  // PTYs when only one sweep failed — accepted for now because this path is behind an
-  // explicit Force Delete, deletes either way, and clears no registry rows, so the cost is
-  // diagnosability rather than safety.
+  // Force deletes regardless and clears no registry rows; skipping remaining PTY verdicts costs diagnosability.
   return { stopped, incomplete: reasons.length > 0 }
 }

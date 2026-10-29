@@ -63,7 +63,7 @@ vi.mock('../ssh/remote-exec/remote-exec-command', () => ({
 vi.mock('../managed-server/install/orcad-remote-runtime-control', () => ({
   execOrcadRemote: async (_slot: unknown, command: string) => {
     host.commands.push(command)
-    // A bare kill -0 sees any process with the PID, whatever it now is.
+    // kill -0 proves only PID presence, never process incarnation.
     const kill = /kill -0 (\d+)/.exec(command)
     if (kill) {
       return host.alive.has(Number(kill[1])) ? 'LIVE\n' : 'DEAD\n'
@@ -194,7 +194,6 @@ describe('adopting an orcad the activation record does not name', () => {
     host.lock = lockFor(500, OLD)
     host.alive.add(500)
     host.stopTarget = stopTargetFor(500, OLD)
-    // The failed Remove left nothing active in the record.
     const result = await adopt(record({ previous: OLD }))
     expect(result).toMatchObject({ outcome: 'adopted', version: OLD, pid: 500 })
     expect(host.writes).toEqual([
@@ -249,6 +248,26 @@ describe('adopting an orcad the activation record does not name', () => {
     expect(host.writes).toEqual([])
   })
 
+  it("takes the connect snapshot's holder identity only for the pid the lock names", async () => {
+    const guest = { distroInstance: `${BOOT_ID}:1`, orcad: null }
+    // The snapshot saw that pid gone: no identity exec, and nothing to adopt.
+    const gone = { state: 'present' as const, raw: lockFor(540, OLD), holder: { pid: 540, guest } }
+    host.lock = lockFor(540, OLD)
+    host.alive.add(540)
+    await expect(adoptUnrecordedWslOrcad(slot, record(), () => NOW, gone)).resolves.toEqual({
+      outcome: 'none'
+    })
+    expect(host.commands.some((command) => command.includes('/proc/'))).toBe(false)
+    // An identity read for another pid is ignored; the guest is asked about this one.
+    const other = { ...gone, holder: { pid: 541, guest } }
+    host.stopTarget = stopTargetFor(540, OLD)
+    await expect(adoptUnrecordedWslOrcad(slot, record(), () => NOW, other)).resolves.toMatchObject({
+      outcome: 'adopted',
+      pid: 540
+    })
+    expect(host.commands.some((command) => command.includes('/proc/540/stat'))).toBe(true)
+  })
+
   it('matches a lock that recorded its boot id in upper case', async () => {
     host.lock = JSON.stringify({ ...JSON.parse(lockFor(530, OLD)), bootId: BOOT_ID.toUpperCase() })
     host.alive.add(530)
@@ -257,7 +276,7 @@ describe('adopting an orcad the activation record does not name', () => {
   })
 
   it('does not adopt a lock whose PID a distro restart gave to another process', async () => {
-    // The stale lock and readiness both still name pid 500, so only process identity can tell.
+    // Stale lock/readiness reuse PID 500; only incarnation evidence distinguishes it.
     host.lock = lockFor(500, OLD)
     host.alive.add(500)
     host.ticks.set(500, '977')
@@ -273,7 +292,7 @@ describe('adopting an orcad the activation record does not name', () => {
     host.guestAnswers = false
     await expect(adopt(record({ active: NEW }))).resolves.toEqual({ outcome: 'none' })
     host.guestAnswers = true
-    // A writer that predates the kernel incarnation leaves only a drifting wall-clock start.
+    // Legacy writers lack kernel incarnation and provide only drifting wall-clock start time.
     const { linuxStartTicks: _ticks, bootId: _boot, ...legacy } = JSON.parse(lockFor(510, OLD))
     host.lock = JSON.stringify(legacy)
     await expect(adopt(record({ active: NEW }))).resolves.toEqual({ outcome: 'none' })

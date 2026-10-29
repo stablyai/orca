@@ -29,14 +29,18 @@ import {
 } from 'lucide-react'
 import type { ActivePluginPanel } from '@/store/plugin-panels'
 import type { ActivityBarItem } from './activity-bar-buttons'
+import {
+  canonicalPluginPanelIcon,
+  type PluginPanelIconName
+} from '../../../../shared/plugins/contributions/plugin-panel-contribution'
 
 type PluginPanelIcon = ActivityBarItem['icon']
 
 // Why: importing lucide's full `icons` map would bundle every icon and defeat
-// tree-shaking, so plugin manifests pick from this curated set (fallback: Plug).
-const PLUGIN_PANEL_ICONS: Record<string, PluginPanelIcon> = {
+// tree-shaking, so plugin manifests pick from this closed set (fallback: Plug).
+const PLUGIN_PANEL_ICON_COMPONENTS: Record<PluginPanelIconName, PluginPanelIcon> = {
   activity: Activity,
-  barchart3: BarChart3,
+  'bar-chart-3': BarChart3,
   bell: Bell,
   blocks: Blocks,
   book: Book,
@@ -46,7 +50,7 @@ const PLUGIN_PANEL_ICONS: Record<string, PluginPanelIcon> = {
   cloud: Cloud,
   code: Code,
   database: Database,
-  filetext: FileText,
+  'file-text': FileText,
   flag: Flag,
   folder: Folder,
   gauge: Gauge,
@@ -68,16 +72,11 @@ export function resolvePluginPanelIcon(iconName: string | undefined): PluginPane
   if (!iconName) {
     return Plug
   }
-  // Accept both lucide naming styles ('file-text' and 'FileText').
-  const normalized = iconName.replaceAll('-', '').toLowerCase()
-  // Own-key only: a manifest icon named `constructor` must not resolve to an
-  // inherited member and crash the sidebar with a non-component "icon".
-  return Object.hasOwn(PLUGIN_PANEL_ICONS, normalized)
-    ? (PLUGIN_PANEL_ICONS[normalized] ?? Plug)
-    : Plug
+  // Why canonicalize: hosts from before the closed list still send `FileText`-style names.
+  const known = canonicalPluginPanelIcon(iconName)
+  return known ? PLUGIN_PANEL_ICON_COMPONENTS[known] : Plug
 }
 
-/** Maps active plugin panel contributions onto right-sidebar activity items. */
 export function getPluginPanelActivityItems(
   panels: ActivePluginPanel[],
   panelErrors: Readonly<Record<string, true>> = {}
@@ -85,8 +84,7 @@ export function getPluginPanelActivityItems(
   return panels.map((panel) => ({
     id: panel.tabKey,
     icon: resolvePluginPanelIcon(panel.icon),
-    // Why: panel titles come from plugin manifests, not the app catalog, so
-    // they render untranslated by design.
+    // Manifest titles are plugin-owned and render without app-catalog translation.
     title: panel.title,
     shortcut: '',
     ...(panelErrors[panel.tabKey] ? { statusIndicator: 'failure' as const } : {})

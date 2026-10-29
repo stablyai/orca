@@ -15,7 +15,6 @@ const alive = (pid: number): boolean => {
   }
 }
 
-/** Run a hook past its deadline and report which of its real processes survived. */
 async function survivorsAfterDeadline(
   script: string
 ): Promise<{ shell: boolean; child: boolean; output: string; pids: number[] }> {
@@ -32,8 +31,7 @@ async function survivorsAfterDeadline(
     expect(result.success).toBe(false)
     expect(existsSync(pidFile)).toBe(true)
     pids = readFileSync(pidFile, 'utf8').trim().split(/\s+/).map(Number)
-    // Without this, a script that recorded only the shell leaves `pids[1]` undefined, `alive`
-    // throws, and the missing descendant reads as dead — a test that passes on nothing.
+    // Require both PIDs so a missing descendant cannot make the liveness assertion pass vacuously.
     expect(pids).toHaveLength(2)
     expect(pids.every((pid) => Number.isSafeInteger(pid) && pid > 0)).toBe(true)
     // SIGTERM lands at the deadline; resistant descendants need the real SIGKILL grace.
@@ -43,25 +41,19 @@ async function survivorsAfterDeadline(
     for (const pid of pids) {
       try {
         process.kill(pid, 'SIGKILL')
-      } catch {
-        /* already gone */
-      }
+      } catch {}
     }
     rmSync(dir, { recursive: true, force: true })
   }
 }
 
-// NO `process.kill` mock, deliberately. The defect this file exists for — `exec` silently ignoring
-// `detached`, so the shell was never a group leader and the group signal reached nothing — is
-// invisible to a mocked `process.kill`, because the mock makes the signal-0 probe succeed whether
-// or not a real group exists. That is the precise condition the bug turns on.
+// Mocked kill probes cannot prove a process group exists; exercise real signals here.
 describe.skipIf(process.platform === 'win32')('hook termination against real processes', () => {
   it('kills the shell and its child when the deadline expires', async () => {
     const { shell, child, output } = await survivorsAfterDeadline(
       'echo "archive step 3 of 7"\nsleep 120 &\necho "$$ $!" > "$PWD/pids"\nwait'
     )
     expect({ shell, child }).toEqual({ shell: false, child: false })
-    // The gate reports this run as `unverifiable`; what the hook printed is the only clue why.
     expect(output).toContain('archive step 3 of 7')
   }, 30_000)
 

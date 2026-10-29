@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { MAX_CONTEXT_CATEGORIES, MAX_CONTEXT_MODEL_ID_CHARS } from './agent-session-context-usage'
+import {
+  MAX_CONTEXT_CATEGORIES,
+  MAX_CONTEXT_CATEGORY_NAME_CHARS,
+  MAX_CONTEXT_MODEL_ID_CHARS
+} from './agent-session-context-usage'
 import {
   AgentSessionContextUsageSchema,
   isAdmissibleAgentSessionContextUsage
@@ -32,8 +36,18 @@ describe('context usage admission', () => {
         capturedAt: 1
       }
     },
-    { used: report, future: { retained: true } }
-  ])('accepts canonical facts and leaves additive fields untouched (%j)', (value) => {
+    { used: report, future: { retained: true } },
+    {
+      used: {
+        ...report,
+        model: 'x'.repeat(MAX_CONTEXT_MODEL_ID_CHARS),
+        categories: Array.from({ length: MAX_CONTEXT_CATEGORIES }, () => ({
+          name: 'x'.repeat(MAX_CONTEXT_CATEGORY_NAME_CHARS),
+          tokens: 0
+        }))
+      }
+    }
+  ])('accepts canonical facts and leaves inputs untouched (%j)', (value) => {
     const original = structuredClone(value)
     expect(isAdmissibleAgentSessionContextUsage(value)).toBe(true)
     expect(AgentSessionContextUsageSchema.safeParse(value).success).toBe(true)
@@ -50,6 +64,12 @@ describe('context usage admission', () => {
     { used: { ...report, model: 'x'.repeat(MAX_CONTEXT_MODEL_ID_CHARS + 1) } },
     {
       used: { ...report, categories: Array(MAX_CONTEXT_CATEGORIES + 1).fill(report.categories[0]) }
+    },
+    {
+      used: {
+        ...report,
+        categories: [{ name: 'x'.repeat(MAX_CONTEXT_CATEGORY_NAME_CHARS + 1), tokens: 0 }]
+      }
     },
     { used: { ...report, categories: [{ name: 'messages', tokens: null }] } }
   ])('rejects malformed facts and bounds just like parsing (%j)', (value) => {

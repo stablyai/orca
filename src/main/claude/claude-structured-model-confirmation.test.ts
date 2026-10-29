@@ -1,6 +1,6 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { setClaudeStructuredOption } from './claude-structured-options'
-import type { ClaudeSession } from './claude-structured-session-state'
+import type { ClaudeSession } from './structured/claude-structured-session-state'
 import {
   PROVIDER_SESSION_ID,
   USER_MESSAGE,
@@ -33,8 +33,7 @@ const CATALOG = [
 ]
 
 function initFrame(model: string): Record<string, unknown> {
-  // Keys mirror the real per-turn system/init frame: it carries `model` as the
-  // resolved id, and no effort of any kind.
+  // Real system/init reports a resolved model ID and omits effort.
   return {
     type: 'system',
     subtype: 'init',
@@ -57,8 +56,6 @@ describe('Claude model confirmation', () => {
       current: { model: 'claude-sonnet-5' }
     })
 
-    // The CLI's own report of what it is running — the only channel that carries
-    // it, since set_model answers success for a model it never resolves.
     claude.connections[0]!.handlers.onMessage?.(initFrame('claude-haiku-4-5-20251001'))
 
     await expect(adapter.readOptions({ sessionId: 'session-1', fence: 7 })).resolves.toMatchObject({
@@ -75,8 +72,6 @@ describe('Claude model confirmation', () => {
 
     await adapter.setOption({ sessionId: 'session-1', key: 'model', value: 'haiku', fence: 7 })
 
-    // No turn has run, so the acquisition-time report is older than the write and
-    // must not flip the pill back to the model the session started on.
     await expect(adapter.readOptions({ sessionId: 'session-1', fence: 7 })).resolves.toMatchObject({
       current: { model: 'haiku' }
     })
@@ -103,7 +98,7 @@ describe('Claude model confirmation', () => {
       routes: { list_models: () => CATALOG }
     })
     const adapter = await acquired(claude)
-    // The model is confirmed by a cycle's init frame, so start one.
+    // Start a cycle to obtain the model-confirming init frame.
     await adapter.dispatch({
       sessionId: 'session-1',
       clientMessageId: 'seed-cycle',
@@ -112,13 +107,14 @@ describe('Claude model confirmation', () => {
     })
 
     await adapter.setOption({ sessionId: 'session-1', key: 'effort', value: 'high', fence: 7 })
-    await expect(adapter.readOptions({ sessionId: 'session-1', fence: 7 })).resolves.toMatchObject({
-      current: { model: 'claude-sonnet-5', effort: 'high', confirmed: ['model', 'effort'] }
+    await vi.waitFor(async () => {
+      expect(await adapter.readOptions({ sessionId: 'session-1', fence: 7 })).toMatchObject({
+        current: { model: 'claude-sonnet-5', effort: 'high', confirmed: ['model', 'effort'] }
+      })
     })
 
     await adapter.setOption({ sessionId: 'session-1', key: 'model', value: 'haiku', fence: 7 })
 
-    // The readback was taken under sonnet; nothing has reported haiku holding it.
     const options = await adapter.readOptions({ sessionId: 'session-1', fence: 7 })
     expect(options.current.effort).toBe('high')
     expect(options.current.confirmed).toBeUndefined()
@@ -162,9 +158,7 @@ describe('Claude effort the settings readback cannot report', () => {
   }
 
   it('records a session-scoped effort the persisted settings never carry', async () => {
-    // `max` applies for the session and is deliberately excluded from the
-    // persisted effortLevel, so the readback reporting `high` is an absence of
-    // evidence, not a refusal — and the CLI offers `max` in its own catalog.
+    // Max is session-only, so persisted settings cannot confirm it.
     const { session, calls } = sessionWith('high')
 
     await expect(

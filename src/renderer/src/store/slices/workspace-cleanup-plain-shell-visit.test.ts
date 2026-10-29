@@ -7,8 +7,7 @@ vi.mock('../../../../shared/sidebar-inputs-switch', () => ({ ORCA_SIDEBAR_INPUTS
 
 const DAY_MS = 24 * 60 * 60 * 1000
 
-// A remote workspace used only through plain shells: no agent ran, so no host stamp moved its
-// Recent time, and with the switch on its terminals' start and exit write none either.
+// Plain-shell-only remote visits lack agent activity; host-owned start/exit stamps do not update Recent either.
 function plainShellWorkspace(visitedDaysAgo: number) {
   const candidate = makeCandidate({
     executionHostId: 'ssh:box',

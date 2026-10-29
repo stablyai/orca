@@ -1,20 +1,12 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { Pressable, Text, View } from 'react-native'
 import { X } from 'lucide-react-native'
 import { colors, spacing } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 
-/**
- * One dismissible line above the list, in two tones.
- *
- * `notice` is the default and stays monochrome: the host is healthy and the user's target simply
- * went away. `failure` is for an action that did not happen, which the list has to say without
- * taking the screen: color is for state, so it is one red rule and nothing else.
- *
- * Both are inserted into a screen that is already on screen, so a reader who has moved past the top
- * of the list never arrives at one. The tone decides how loudly it is carried to them: a refusal
- * interrupts, and a bounced route waits its turn, because interrupting for the second would train
- * people to ignore the first. `alert` only for the refusal, and no role for the other — React
- * Native has no `status` role, so the polite region is the whole of that answer.
- */
+// Monochrome notice reports vanished target; failure uses one red rule for action refusal without taking screen.
+// Announce inserted banners: failure uses alert/assertive, notice uses polite live region (RN has no status role).
 export function HostRouteNoticeBanner({
   message,
   tone = 'notice',
@@ -24,6 +16,8 @@ export function HostRouteNoticeBanner({
   tone?: 'notice' | 'failure'
   onDismiss: () => void
 }) {
+  useMobileColorScheme()
+  const t = useMobileTranslation()
   return (
     <View
       style={[styles.banner, tone === 'failure' && styles.failure]}
@@ -34,7 +28,7 @@ export function HostRouteNoticeBanner({
       <Pressable
         onPress={onDismiss}
         accessibilityRole="button"
-        accessibilityLabel="Dismiss notice"
+        accessibilityLabel={t('components.hostRouteNoticeBanner.dismissNotice', 'Dismiss notice')}
         hitSlop={spacing.sm}
         style={styles.dismiss}
       >
@@ -44,7 +38,7 @@ export function HostRouteNoticeBanner({
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   banner: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -58,4 +52,4 @@ const styles = StyleSheet.create({
   failure: { borderBottomColor: colors.statusRed },
   text: { flex: 1, color: colors.textSecondary, fontSize: 13 },
   dismiss: { padding: spacing.xs }
-})
+}))

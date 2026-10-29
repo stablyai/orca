@@ -4,14 +4,13 @@ import {
   setOrcadMigrationJournalChangeListener
 } from './orcad-migration-cutover-journal'
 
-/** Keeps the store's scrollback retention in step with the journal, from startup on. */
 export function installOrcadMigrationScrollbackRetention(
   userDataPath: string,
   store: Pick<Store, 'syncOrcadMigrationScrollbackRetention'>
 ): void {
   const sync = (path: string): void => {
     try {
-      // Held until the destination has the bytes; committed or abandoned migrations release them.
+      // Retain bytes until durable commit/abort; closed tabs must still upload on retry.
       const pending = listOrcadMigrationSourceCutovers(path).filter(
         (cutover) => cutover.phase === 'source-fenced' || cutover.phase === 'destination-staged'
       )

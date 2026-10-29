@@ -22,8 +22,7 @@ describe('buildWorktreeByIdIndex', () => {
     repoC: []
   }
 
-  // Why: the index replaces a per-iteration flatten+find, so the contract that
-  // matters is that it resolves exactly what that find resolved.
+  // Indexed lookup must match the replaced flatten-and-find result for every ID.
   it('resolves every id identically to flatten-and-find', () => {
     for (const id of ['wt-1', 'wt-2', 'wt-3', 'missing', '']) {
       expect(buildWorktreeByIdIndex(worktreesByRepo).get(id) ?? null).toEqual(
@@ -44,8 +43,7 @@ describe('buildWorktreeByIdIndex', () => {
     expect(buildWorktreeByIdIndex(worktreesByRepo).size).toBe(3)
   })
 
-  // Why first-wins: Array.prototype.find returns the first match, and repo order is
-  // Object.values order. A duplicate id across repos must resolve the same way.
+  // Duplicate IDs must retain first match in Object.values repo order, matching Array.find.
   it('keeps the first entry when an id appears in two repos', () => {
     const duplicated = {
       repoA: [worktree('shared', 'repoA')],

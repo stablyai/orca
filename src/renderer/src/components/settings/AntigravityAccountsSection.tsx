@@ -32,16 +32,7 @@ export function AntigravityAccountsSection({
   label: string
 }): React.JSX.Element {
   const [state, setState] = useState<AntigravityAccountState | null>(null)
-  const [usageSnapshot, setUsageSnapshot] = useState<{
-    subject: string
-    authMethod: string
-    limits: ProviderRateLimits | null
-  } | null>(null)
-  const current = state?.currentAccount
-  const usage =
-    current?.subject === usageSnapshot?.subject && current?.authMethod === usageSnapshot?.authMethod
-      ? usageSnapshot?.limits
-      : null
+  const [usage, setUsage] = useState<ProviderRateLimits | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const pending = useRef(false)
@@ -95,9 +86,9 @@ export function AntigravityAccountsSection({
     pending.current = true
     setBusy(true)
     setError(null)
+    setUsage(null)
     try {
       if (action === 'Usage') {
-        setUsageSnapshot(null)
         const before = await callAntigravityAccounts(owner, target, 'List')
         const snapshot = await callRuntimeRpc<{ rateLimits: RateLimitState }>(
           owner,
@@ -108,24 +99,20 @@ export function AntigravityAccountsSection({
         if (mounted.current) {
           setState(after)
         }
+        const account = before.currentAccount
+        // Native credentials may expose no subject, making two unidentified logins indistinguishable.
         if (
-          !before.currentAccount?.subject ||
-          before.currentAccount.subject !== after.currentAccount?.subject ||
-          before.currentAccount.authMethod !== after.currentAccount.authMethod
+          !account ||
+          !after.currentAccount ||
+          account.subject !== after.currentAccount.subject ||
+          account.authMethod !== after.currentAccount.authMethod
         ) {
           throw new Error('The native account changed while reading usage. Refresh usage again.')
         }
         if (mounted.current) {
-          setUsageSnapshot({
-            subject: before.currentAccount.subject,
-            authMethod: before.currentAccount.authMethod,
-            limits: snapshot.rateLimits.antigravity
-          })
+          setUsage(snapshot.rateLimits.antigravity)
         }
       } else {
-        if (action === 'Select') {
-          setUsageSnapshot(null)
-        }
         const next = await callAntigravityAccounts(owner, target, action, accountId)
         if (mounted.current) {
           setState(next)
@@ -211,7 +198,7 @@ export function AntigravityAccountsSection({
           <div className="flex flex-wrap items-center gap-2">
             <Button
               size="sm"
-              disabled={busy || !state.currentAccount?.identityKnown}
+              disabled={busy || !state.currentAccount}
               onClick={() => void run('AddCurrent')}
             >
               {translate('accounts.antigravity.save', 'Save current account')}

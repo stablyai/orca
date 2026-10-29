@@ -40,6 +40,7 @@ import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import type { GitPushTarget } from '../../../../shared/worktree/types'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
+import { reviewStartPointErrorText } from '@/lib/code-host-error-copy'
 
 export function useGitLabProviderSelection(input: GitLabProviderSelectionInput) {
   const {
@@ -69,7 +70,7 @@ export function useGitLabProviderSelection(input: GitLabProviderSelectionInput) 
     smartSourceSelectionRef
   } = input
 
-  // Why: GitLab parallel of handleSmartGitHubItemSelect — resolves MR base via worktrees:resolveMrBase (refs/merge-requests/<iid>/head); issues short-circuit.
+  // Resolve MR bases through refs/merge-requests/<iid>/head; issues need no base lookup.
   const handleSmartGitLabItemSelect = useCallback(
     (item: GitLabWorkItem): void => {
       smartSourceSelectionRef.current = null
@@ -149,11 +150,11 @@ export function useGitLabProviderSelection(input: GitLabProviderSelectionInput) 
             return
           }
           if ('error' in result) {
-            // Why: an unsurfaced failure silently falls back to the repo default branch, so clear stale base state and toast — mirrors the GitHub PR path.
+            // Surface base lookup failures and clear stale state instead of silently using repo default.
             setBaseBranch(undefined)
             setCompareBaseRef(undefined)
             setPushTarget(undefined)
-            toast.error(result.error)
+            toast.error(reviewStartPointErrorText(result))
             return
           }
           handleBaseBranchMrSelect(

@@ -2,9 +2,19 @@ import {
   terminalOscColorQueryReplies,
   type TerminalOscColorQueryReplyColors
 } from './terminal-osc-color-reply'
+import { normalizeColorQueryReplyColors } from './pty-owner-color-query-colors'
+import {
+  validateTerminalViewAttributes,
+  type TerminalViewAttributes
+} from './terminal-view-attributes'
 
 export type PtyStartupIngressIntent = {
   colors: TerminalOscColorQueryReplyColors
+  /** The theme of the remote client that launched this PTY. Its owner then answers every theme query with it,
+   *  over the host-wide theme; older owners drop it. */
+  launcherColors?: TerminalOscColorQueryReplyColors
+  /** That client's palette and cursor for OSC 4/12; absent from older clients, which leaves those queries silent. */
+  launcherAttributes?: TerminalViewAttributes
   kittyKeyboardProtocol?: boolean
   deadlineMs: number
 }
@@ -32,6 +42,14 @@ export function parsePtyStartupIngressIntent(value: unknown): PtyStartupIngressI
       ? { background: colors.background }
       : {})
   }
+  const launcherColors = normalizeColorQueryReplyColors(
+    'launcherColors' in value ? value.launcherColors : undefined
+  )
+  const launcherAttributes = launcherColors
+    ? validateTerminalViewAttributes(
+        'launcherAttributes' in value ? value.launcherAttributes : undefined
+      )
+    : null
   const deadlineMs = 'deadlineMs' in value ? value.deadlineMs : undefined
   if (
     (!kittyKeyboardProtocol && !terminalOscColorQueryReplies(normalizedColors, [10, 11])) ||
@@ -44,6 +62,8 @@ export function parsePtyStartupIngressIntent(value: unknown): PtyStartupIngressI
   }
   return {
     colors: normalizedColors,
+    ...(launcherColors ? { launcherColors } : {}),
+    ...(launcherAttributes ? { launcherAttributes } : {}),
     ...(kittyKeyboardProtocol ? { kittyKeyboardProtocol: true } : {}),
     deadlineMs
   }

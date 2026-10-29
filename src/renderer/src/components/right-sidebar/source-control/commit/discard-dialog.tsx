@@ -11,7 +11,7 @@ import {
   DialogTitle
 } from '@/components/ui/dialog'
 import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
-import type { DiscardAllArea } from './discard-all-sequence'
+import type { DiscardAllArea } from '../../../../../../shared/source-control-discard-all-sequence'
 import {
   getDiscardAreaConfirmationCopy,
   getDiscardEntryConfirmationCopy
@@ -29,7 +29,7 @@ export function focusDiscardDialogConfirmButton(
   if (!confirmButton) {
     return
   }
-  // Why: Radix otherwise focuses Cancel first, making Enter dismiss this destructive confirm.
+  // Override Radix's initial Cancel focus so Enter confirms this destructive action.
   event.preventDefault()
   confirmButton.focus()
 }
@@ -53,7 +53,7 @@ export function SourceControlDiscardDialog({
     }
     return getDiscardAreaConfirmationCopy(pendingDiscard.area, pendingDiscard.paths.length)
   }, [pendingDiscard])
-  const PendingDiscardIcon = pendingDiscardCopy?.confirmLabel.startsWith('Delete') ? Trash : Undo2
+  const PendingDiscardIcon = pendingDiscardCopy?.deleteAction ? Trash : Undo2
 
   return (
     <Dialog
@@ -88,16 +88,11 @@ export function SourceControlDiscardDialog({
         </DialogHeader>
         {pendingDiscard?.kind === 'area' ? (
           <div className="rounded-md border border-border/70 bg-muted/35 px-3 py-2 text-xs text-muted-foreground">
-            {pendingDiscard.paths.length}{' '}
-            {pendingDiscard.paths.length === 1
-              ? translate(
-                  'auto.components.right.sidebar.source.control.discard.dialog.e7611dca35',
-                  'file'
-                )
-              : translate(
-                  'auto.components.right.sidebar.source.control.discard.dialog.42f89dd030',
-                  'files'
-                )}
+            {translate(
+              'auto.components.right.sidebar.source.control.discard.dialog.fileCount',
+              '{{count}} files',
+              { count: pendingDiscard.paths.length, defaultValue_one: '{{count}} file' }
+            )}
           </div>
         ) : pendingDiscard?.kind === 'entry' ? (
           <div className="rounded-md border border-border/70 bg-muted/35 px-3 py-2 text-xs">

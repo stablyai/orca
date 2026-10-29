@@ -28,7 +28,7 @@ import {
 
 function ignoreCursorLine(): void {}
 
-// Why: binds a freshly created Monaco instance to the app; reads everything through refs so the callback identity stays stable across renders.
+// Read changing inputs through refs so retained Monaco listeners do not require remounts.
 export function useMonacoEditorMount(params: MonacoEditorMountParams): OnMount {
   const {
     fileId,
@@ -56,8 +56,7 @@ export function useMonacoEditorMount(params: MonacoEditorMountParams): OnMount {
       contentRef,
       lastSyncedContentRef,
       contentSyncModeRef,
-      isApplyingProgrammaticContentRef,
-      isApplyingLargePasteRef
+      isApplyingProgrammaticContentRef
     },
     decorations: {
       markdownDocLinkDecorationsRef,
@@ -70,7 +69,7 @@ export function useMonacoEditorMount(params: MonacoEditorMountParams): OnMount {
       setCommentPopover,
       setSelectionAnnotationTarget
     },
-    gutterMenu: { setGutterMenuOpen, setGutterMenuPoint, setGutterMenuLine }
+    gutterMenu: { setGutterMenuOpen, setGutterMenuPoint, setGutterMenuLine, setGutterMenuSelection }
   } = params
   // Why: retained listeners must follow committed ownership, never an abandoned render.
   const fileIdRef = useRef(fileId)
@@ -113,13 +112,14 @@ export function useMonacoEditorMount(params: MonacoEditorMountParams): OnMount {
       ensureMarkdownDocCompletionProvider(monaco)
       updateMarkdownCompletionDocuments()
 
-      // Why: see contentRef — reconcile the retained model to the current prop before user interaction (surfaces edits made while unmounted).
+      // Reconcile retained models before interaction so edits made while unmounted become visible.
       const modelKey = toEditorModelUri(filePath, modelOwnerKey)
       const staleCache = isStaleCachedEditorText(fileIdRef.current, contentRef.current)
       if (!staleCache) {
         settleStaleCacheReload(fileIdRef.current)
       }
-      const liveTextDiffers = editorInstance.getModel()?.getValue() !== contentRef.current
+      const currentContentSnapshot = editorInstance.getModel()?.getValue()
+      const liveTextDiffers = currentContentSnapshot !== contentRef.current
       if (
         (staleCache && liveTextDiffers) ||
         (liveTextDiffers && !mayPushTabTextIntoModel(fileIdRef.current))
@@ -133,7 +133,14 @@ export function useMonacoEditorMount(params: MonacoEditorMountParams): OnMount {
         beginProgrammaticContentSync(modelKey)
         isApplyingProgrammaticContentRef.current = true
         try {
-          if (syncContentOnMount(editorInstance, contentRef.current, contentSyncModeRef.current)) {
+          if (
+            syncContentOnMount(
+              editorInstance,
+              contentRef.current,
+              contentSyncModeRef.current,
+              currentContentSnapshot
+            )
+          ) {
             lastSyncedContentRef.current = contentRef.current
           }
         } finally {
@@ -163,8 +170,6 @@ export function useMonacoEditorMount(params: MonacoEditorMountParams): OnMount {
         editorContainerRef,
         propsRef,
         readOnlyRef,
-        lastSyncedContentRef,
-        isApplyingLargePasteRef,
         commentPopoverRef,
         shouldShowMarkdownAnnotationsRef,
         setCommentPopover,
@@ -179,7 +184,6 @@ export function useMonacoEditorMount(params: MonacoEditorMountParams): OnMount {
         setEditorCursorLine: passiveMirror ? ignoreCursorLine : setEditorCursorLine
       })
 
-      // Why: custom Radix gutter menu instead of Monaco's built-in right-click menu (VSCode approach).
       const gutterMouseDownSub = editorInstance.onMouseDown((e) => {
         if (
           e.event.rightButton &&
@@ -188,6 +192,7 @@ export function useMonacoEditorMount(params: MonacoEditorMountParams): OnMount {
           e.event.preventDefault()
           e.event.stopPropagation()
           const line = e.target.position?.lineNumber ?? 1
+          setGutterMenuSelection(editorInstance.getSelection())
           editorInstance.setPosition({ lineNumber: line, column: 1 })
           setGutterMenuLine(line)
           setGutterMenuPoint({ x: e.event.posx, y: e.event.posy })
@@ -213,7 +218,6 @@ export function useMonacoEditorMount(params: MonacoEditorMountParams): OnMount {
         setCommentPopover(null)
       })
 
-      // If there's a pending reveal at mount time, execute it now
       const reveal = passiveMirror ? null : useAppStore.getState().pendingEditorReveal
       // Why: scope reveal consumption to the destination file, or the previously mounted editor clears it before openFile switches tabs.
       const revealMatchesEditor = reveal?.fileId
@@ -253,8 +257,7 @@ export function useMonacoEditorMount(params: MonacoEditorMountParams): OnMount {
         )
       }
 
-      // Why: every mount path above focuses, so an explicit open handoff is already satisfied here.
-      // Retiring it stops a later rich-mode remount of this same pane from stealing focus back.
+      // Retire satisfied open handoffs so later rich-mode remounts cannot steal focus back.
       const focusRequest = useAppStore.getState().pendingEditorFocusRequest
       if (
         focusRequest &&
@@ -290,7 +293,6 @@ export function useMonacoEditorMount(params: MonacoEditorMountParams): OnMount {
       lastSyncedContentRef,
       contentSyncModeRef,
       isApplyingProgrammaticContentRef,
-      isApplyingLargePasteRef,
       markdownDocLinkDecorationsRef,
       conflictDecorationsRef,
       commentPopoverRef,
@@ -299,7 +301,8 @@ export function useMonacoEditorMount(params: MonacoEditorMountParams): OnMount {
       setSelectionAnnotationTarget,
       setGutterMenuOpen,
       setGutterMenuPoint,
-      setGutterMenuLine
+      setGutterMenuLine,
+      setGutterMenuSelection
     ]
   )
 }

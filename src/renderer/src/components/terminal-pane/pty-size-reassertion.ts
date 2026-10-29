@@ -54,8 +54,7 @@ export function createPtySizeReassertion(options: PtySizeReassertionOptions): Pt
       return
     }
     if (options.isRemotePtyId(ptyId)) {
-      // Remote hosts have no applied-size readback, but a visibility resume still
-      // needs one forced resize when the local grid did not change.
+      // Without host readback, visible resume still owes a forced resize even if the local grid is unchanged.
       options.forwardResize(target.cols, target.rows)
       return
     }
@@ -70,10 +69,7 @@ export function createPtySizeReassertion(options: PtySizeReassertionOptions): Pt
       if (pending) {
         return
       }
-      // Why: a reveal fit or snapshot-restore resize can change xterm while the
-      // applied-size read is in flight without queuing a request; forwarding the
-      // captured target would resize the PTY back to the pre-reveal grid, so
-      // re-run against the fresh grid instead.
+      // Refit can change xterm during readback without a queued request; remeasure rather than restoring the captured old grid.
       if (!dimensionsMatch(options.getTerminalDimensions(), target)) {
         pending = true
         return
@@ -86,8 +82,7 @@ export function createPtySizeReassertion(options: PtySizeReassertionOptions): Pt
 
     void options
       .getAppliedSize(ptyId)
-      // Why: when readback is unavailable, one guarded resize is safer than
-      // silently leaving the visible desktop pane at an unverified PTY size.
+      // Guarded resize on unavailable readback is safer than leaving a visible pane at an unverified host grid.
       .then(forwardIfDrifted, () => forwardIfDrifted(null))
       .finally(() => {
         inFlight = false

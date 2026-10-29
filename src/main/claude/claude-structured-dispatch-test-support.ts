@@ -1,12 +1,12 @@
 import { vi, type Mock } from 'vitest'
 import type { AgentJournalMessageItem } from '../../shared/agent-session-journal-types'
 import { retireClaudeDispatchWaiters } from './claude-structured-dispatch'
-import type { ClaudeSession } from './claude-structured-session-state'
+import type { ClaudeSession } from './structured/claude-structured-session-state'
 import { ClaudeBackgroundTaskTracker } from './claude-background-task-tracker'
 import { ClaudeChildWorkDecoder } from './claude-child-work-decoder'
 import { ClaudeSlashCommandCatalog } from './claude-slash-command-catalog'
-import { createClaudeInitProof } from './claude-structured-init-proof'
-import { claudeProviderHandleLink } from './claude-structured-owner-identity'
+import { createClaudeInitProof } from './structured/claude-structured-init-proof'
+import { claudeProviderHandleLink } from './structured/claude-structured-owner-identity'
 
 export function sessionFor(send: Mock = vi.fn().mockResolvedValue(undefined)): ClaudeSession {
   return {
@@ -30,7 +30,6 @@ export function sessionFor(send: Mock = vi.fn().mockResolvedValue(undefined)): C
     reportedModelMutation: 0,
     confirmedOptions: new Set(),
     appliedInputOptions: new Map(),
-    launchedModel: null,
     fastModeAtStart: false,
     capabilities: [],
     events: undefined,
@@ -46,6 +45,9 @@ export function sessionFor(send: Mock = vi.fn().mockResolvedValue(undefined)): C
       proof: createClaudeInitProof(),
       account: undefined,
       resumesTranscript: false,
+      claudeConfigDir: '/claude-home',
+      cwd: '/work',
+      history: { leafUuid: null, covered: true, contextActivity: 0 },
       onLateRefusal: () => {}
     }
   }
@@ -55,7 +57,6 @@ export function userMessage(blocks: AgentJournalMessageItem['blocks']): AgentJou
   return { kind: 'message', role: 'user', blocks }
 }
 
-/** The child died. Nothing else retires a live waiter now that no deadline does. */
 export function childExited(session: ClaudeSession): void {
   retireClaudeDispatchWaiters(session)
 }

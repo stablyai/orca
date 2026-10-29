@@ -18,8 +18,7 @@ import {
 } from './session-search-indexer-test-fixture'
 
 const INTERVAL_MS = 20_000
-// chmod cannot deny root, and Windows ignores the mode bits entirely, so the
-// two refusal tests would assert on an unreached branch there.
+// chmod cannot deny reads to root or reliably enforce mode bits on Windows.
 const CAN_DENY_READ = process.platform !== 'win32' && process.getuid?.() !== 0
 const SESSION_ID = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee'
 const OTHER_SESSION_ID = 'bbbbbbbb-cccc-4ddd-8eee-ffffffffffff'
@@ -61,7 +60,6 @@ function newIndexer(
   return indexer
 }
 
-/** What the index holds, counted the way `status()` counts it. */
 function indexedMessageCount(): number {
   const row = harness.read((db: SyncDatabase) =>
     db.prepare('SELECT count(*) AS n FROM messages').get()
@@ -69,7 +67,6 @@ function indexedMessageCount(): number {
   return row && typeof row === 'object' && 'n' in row && typeof row.n === 'number' ? row.n : -1
 }
 
-/** Sessions a published-view read returns for one term, the only legal shape. */
 function sessionsMatching(term: string): string[] {
   return harness.read((db: SyncDatabase) =>
     (
@@ -92,7 +89,6 @@ function indexedSessionCount(): number {
   )
 }
 
-/** The row the store holds for a path, which is the indexer's whole memory of it. */
 function rowFor(path: string) {
   return harness.read((db: SyncDatabase) =>
     db.prepare('SELECT state, fail_count AS failCount FROM files WHERE path = ?').get(path)
@@ -103,7 +99,6 @@ function fileState(path: string): string | undefined {
   return rowFor(path)?.state
 }
 
-/** The byte offset the index recorded; PR 2 stores -1 for a half-written file. */
 function indexedByteOffset(path: string): number | undefined {
   return harness.read(
     (db: SyncDatabase) =>
@@ -115,7 +110,6 @@ function indexedByteOffset(path: string): number | undefined {
   )
 }
 
-/** What a chunk of a read that never finished leaves on the file row. */
 function plantPartialCursor(path: string): void {
   harness.write((db: SyncDatabase) =>
     db.prepare('UPDATE files SET byte_offset = -1 WHERE path = ?').run(path)
@@ -135,34 +129,24 @@ function transcriptPath(name = SESSION_ID): string {
   return join(harness.claudeProjectDir, `${name}.jsonl`)
 }
 
-/**
- * Starts the indexer over a root that already holds one indexed transcript, so
- * the opening sweep is behind us and `reconcile()` runs a cycle. It is dated
- * ahead of everything the caller writes afterwards, so it stays inside any
- * recency window and is skipped rather than read.
- */
+/** Pre-index a future-dated transcript so later cycles skip it but keep it in the recency window. */
 async function startAfterASweep(
   overrides: Partial<ConstructorParameters<typeof SessionSearchIndexer>[0]> = {}
 ): Promise<void> {
   const settled = transcriptPath(SETTLED_SESSION_ID)
   await writeClaudeTranscript(settled, ['a conversation from before'], SETTLED_SESSION_ID)
-  // Wall time, not the fake clock: recency is decided by real file mtimes.
+  // Recency uses real file mtimes rather than the fake retention clock.
   const ahead = new Date(Date.now() + 3_600_000)
   await utimes(settled, ahead, ahead)
   await newIndexer(overrides).start()
 }
 
-/**
- * Makes every pass stop after `files` reads: the pass consults the clock once
- * per file it is about to read, and each reading costs a quarter of the
- * deadline it is measured against.
- */
+/** Spend one fake second per clock check to limit each pass to the requested number of reads. */
 function readsPerPass(files: number): { passDeadlineMs: number } {
   clock.costPerNowMs = 1_000
   return { passDeadlineMs: files * 1_000 }
 }
 
-/** Advances one reconcile interval and waits for the cycle it fires. */
 async function nextCycle(): Promise<void> {
   clock.advance(INTERVAL_MS)
   await indexer?.settled()
@@ -193,7 +177,6 @@ it('reflects a rename-replaced transcript within one reconcile interval', async 
   const original = await stat(path)
 
   await renameReplaceTranscript(path, ['swapped content bbbbb'], SESSION_ID)
-  // Same length, different inode: only the identity check can tell them apart.
   expect((await stat(path)).size).toBe(original.size)
   await nextCycle()
 
@@ -229,8 +212,6 @@ it.skipIf(!CAN_DENY_READ)(
     await newIndexer().start()
     await nextCycle()
 
-    // The tree is gone from discovery's point of view, but the transcript itself
-    // was never proven absent: an unreadable parent is not a deleted file.
     await chmod(harness.claudeProjectDir, 0o000)
     try {
       await nextCycle()
@@ -254,17 +235,13 @@ it('resumes after close and reopen without re-reading what it already indexed', 
   )
   indexer?.close()
 
-  // A restart is a cold parse cache over a warm index; only the `files` table
-  // can say what has already been read.
   resetSessionParseCacheForTests()
   resetTranscriptConsumersForTests()
   const reopened = newIndexer()
   await reopened.start()
 
-  // `filesIndexed` is the count of rows the index holds at their current stat,
-  // so it stays 2. That nothing was opened again is the read loop's own test.
+  // Read-loop tests separately verify that unchanged files are not reopened.
   expect(reopened.status()).toMatchObject({ filesIndexed: 2, filesDue: 0 })
-  // The same number the pane shows as "messages searchable", read from the rows rather than counted as they land.
   expect(indexedMessageCount()).toBeGreaterThan(0)
   expect(reopened.status().messagesIndexed).toBe(indexedMessageCount())
   expect(
@@ -273,9 +250,6 @@ it('resumes after close and reopen without re-reading what it already indexed', 
   expect(sessionsMatching('indexed')).toEqual([SESSION_ID, OTHER_SESSION_ID].sort())
 })
 
-// F12, as the immutable design states it: the history window is a construction
-// argument, so widening it is a new instance whose opening sweep admits the
-// older files, and narrowing it is the purge that opens every full sweep.
 it('widens history by constructing a new instance and narrows by purging on its first sweep', async () => {
   const fresh = transcriptPath()
   const old = transcriptPath(OTHER_SESSION_ID)
@@ -284,13 +258,11 @@ it('widens history by constructing a new instance and narrows by purging on its 
   const longAgo = new Date(clock.now() - 120 * 86_400_000)
   await utimes(old, longAgo, longAgo)
 
-  // Newest-one per root, so the widened-in transcript is outside the recency
-  // window a cycle re-stats: only a full sweep can reach it.
+  // Keep the older transcript outside the recent cycle window so only a sweep can admit it.
   await newIndexer({ historyDays: 30, recentPerAgent: 1 }).start()
   expect(sessionsMatching('recent')).toEqual([SESSION_ID])
   expect(sessionsMatching('ancient')).toEqual([])
 
-  // Widening cannot be served from the index: those files were never read.
   indexer?.close()
   await newIndexer({ historyDays: null, recentPerAgent: 1 }).start()
   expect(sessionsMatching('ancient')).toEqual([OTHER_SESSION_ID])
@@ -316,7 +288,6 @@ it.skipIf(!CAN_DENY_READ)(
         harness.roots.codexSessionsDir
       )
       expect(status?.degradedRoots[0]?.reason).toBeTruthy()
-      // A degraded root is not a degraded index: everything else still lands.
       expect(sessionsMatching('readable')).toEqual([SESSION_ID])
     } finally {
       await chmod(harness.roots.codexSessionsDir ?? '', 0o755)
@@ -324,12 +295,7 @@ it.skipIf(!CAN_DENY_READ)(
   }
 )
 
-// The one bound on a pass. What it does not reach is owed on the next pass for
-// the same reason it was owed on this one -- its row says so, or it has no row
-// -- so nothing is written down and nothing can be lost.
 it('reads what one pass has time for and finishes the rest on the next', async () => {
-  // The sweep is behind us, so this is the reconciler fitting four new files
-  // into a deadline that stops it after two.
   await startAfterASweep(readsPerPass(2))
   for (let index = 0; index < 4; index++) {
     const session = `0000000${index}-bbbb-4ccc-8ddd-eeeeeeeeeeee`
@@ -340,30 +306,22 @@ it('reads what one pass has time for and finishes the rest on the next', async (
     )
   }
   await indexer?.reconcile()
-  // Two of the four went unread, and neither has a row, so the count it hands
-  // back is the only thing that can say the index is not done.
+  // Unread candidates have no rows yet, so only filesDue exposes this backlog.
   expect(indexer?.status()).toMatchObject({ filesIndexed: 3, filesDue: 2, phase: 'indexing' })
 
   await indexer?.reconcile()
   expect(sessionsMatching('deadlined')).toHaveLength(4)
   expect(indexer?.status().filesIndexed).toBe(5)
 
-  // Settled, and it stays settled: nothing changed, so the cycle after this
-  // one opens none of them.
   clock.costPerNowMs = 0
   await nextCycle()
   expect(indexer?.status()).toMatchObject({ filesIndexed: 5, phase: 'current' })
 })
 
-// First enablement inside a running app is the normal case, not an edge: the
-// session list has been scanning since launch, so every transcript already has
-// a cursor sitting at its current stat and the index has nothing at all.
 it('fills an empty index over a warm session-list cache on the first reconcile', async () => {
   await startAfterASweep()
   const path = transcriptPath()
   await writeClaudeTranscript(path, ['scanned before the index existed'], SESSION_ID)
-  // An ordinary parse now reuses its cached fold and opens no file, so no
-  // consumer is asked and there is nothing for a decline to record.
   await parseTranscript(path)
 
   await indexer?.reconcile()
@@ -381,10 +339,6 @@ it('fills an empty index over a warm session-list cache on the first sweep', asy
   expect(sessionsMatching('scanned')).toEqual([SESSION_ID])
 })
 
-// Finding 1: a sweep cut short used to be abandoned part way through. A pass
-// that hands reads back is not an unfinished sweep -- its discovery and its
-// retirement both completed -- so it must not re-arm one, and the queue is what
-// carries the reads it did not reach until the whole machine is covered.
 it('covers the whole machine over the passes that follow a truncated sweep', async () => {
   const sessions = Array.from(
     { length: 20 },
@@ -394,7 +348,6 @@ it('covers the whole machine over the passes that follow a truncated sweep', asy
     await writeClaudeTranscript(transcriptPath(session), [`sweepwide session ${session}`], session)
   }
 
-  // One transcript a pass, so the opening sweep reaches a twentieth of them.
   await newIndexer(readsPerPass(1)).start()
   expect(indexedSessionCount()).toBeGreaterThan(0)
   expect(indexedSessionCount()).toBeLessThan(sessions.length)
@@ -407,12 +360,9 @@ it('covers the whole machine over the passes that follow a truncated sweep', asy
   expect(indexer?.status().phase).toBe('current')
 })
 
-// Finding 2: the store's cutoff was set once at construction while purges used
-// a fresh one, so a sweep deleted the row and the accept check re-indexed it.
 it('moves the retention window with the clock instead of freezing it at construction', async () => {
   const path = transcriptPath()
   await writeClaudeTranscript(path, ['an entry that ages out'], SESSION_ID)
-  // Dated on the same clock the retention window is measured against.
   const now = new Date(clock.now())
   await utimes(path, now, now)
   await newIndexer({ historyDays: 1 }).start()
@@ -426,12 +376,6 @@ it('moves the retention window with the clock instead of freezing it at construc
   expect(sessionsMatching('ages')).toEqual([])
 })
 
-// Round 10, H1. A cycle proves a deletion by comparing what the previous pass
-// watched against what it discovers. A sweep used to watch only what it could
-// not settle, which is nothing on a healthy machine, so the cycle after a sweep
-// had no candidates at all and the cycle after that no longer remembered the
-// file: a transcript deleted in that interval survived until the next sweep,
-// up to `fullSweepEveryCycles` later.
 it('retires a transcript deleted between a sweep and the cycle after it', async () => {
   const going = transcriptPath()
   const staying = transcriptPath(OTHER_SESSION_ID)
@@ -440,7 +384,6 @@ it('retires a transcript deleted between a sweep and the cycle after it', async 
   await newIndexer().start()
   expect(sessionsMatching('deleted')).toEqual([SESSION_ID])
 
-  // No cycle in between: the sweep is the only pass that has seen this file.
   await rm(going)
   await nextCycle()
 
@@ -448,10 +391,6 @@ it('retires a transcript deleted between a sweep and the cycle after it', async 
   expect(sessionsMatching('surviving')).toEqual([OTHER_SESSION_ID])
 })
 
-// Round 10, M2. A sweep that throws part way learned nothing, and the flag that
-// says one is owed was taken on entry. Losing it there leaves nothing armed to
-// try again, so the machine outside the recency window goes unread until
-// something else happens to ask for a sweep.
 it('keeps a sweep due when the one that was running threw', async () => {
   const older = transcriptPath(OTHER_SESSION_ID)
   await writeClaudeTranscript(older, ['an older conversation'], OTHER_SESSION_ID)
@@ -459,8 +398,7 @@ it('keeps a sweep due when the one that was running threw', async () => {
   await utimes(older, yesterday, yesterday)
   await writeClaudeTranscript(transcriptPath(), ['the newest conversation'], SESSION_ID)
 
-  // Newest-one per root, so only a sweep can reach the older file. The clock is
-  // read inside the pass, which is where a failure part way through lands.
+  // Only a sweep reaches the older file; the clock hook injects failure during the read loop.
   newIndexer({ recentPerAgent: 1 })
   let thrown = false
   clock.onNow = () => {
@@ -477,15 +415,10 @@ it('keeps a sweep due when the one that was running threw', async () => {
   expect(errors.map((error) => (error as Error).message)).toEqual(['the sweep fell over'])
   expect(sessionsMatching('older')).toEqual([])
 
-  // The pass after it is a sweep, not a cycle: a cycle reads one file per root.
   await nextCycle()
   expect(sessionsMatching('older')).toEqual([OTHER_SESSION_ID])
 })
 
-// Round 10, M1. A transcript the reader cannot open is recorded stale by the
-// consumer on every attempt, so it was re-read every cycle for ever: pending
-// stuck at one, a failure count climbing without bound, and a phase that never
-// left `indexing`. One file with the wrong mode bits read as a real backlog.
 it.skipIf(!CAN_DENY_READ)('stops re-reading a transcript it cannot read', async () => {
   const path = transcriptPath()
   await writeClaudeTranscript(path, ['a session behind the wrong mode bits'], SESSION_ID)
@@ -496,14 +429,10 @@ it.skipIf(!CAN_DENY_READ)('stops re-reading a transcript it cannot read', async 
       await nextCycle()
     }
 
-    // Held out by its own row: three failures at one unchanged stat, counted on
-    // the row itself, and a phase that says the index knows it is not covering
-    // something rather than one that describes work it will never do.
     expect(indexer?.status()).toMatchObject({ filesDue: 0, filesFailed: 1, phase: 'degraded' })
     expect(rowFor(path)?.failCount).toBeGreaterThanOrEqual(3)
 
-    // And the hold is released by the only thing that can mean the file
-    // changed: its stat.
+    // A changed stat releases the failed-read hold; chmod alone does not change the freshness key.
     await chmod(path, 0o644)
     const later = new Date(Date.now() + 60_000)
     await utimes(path, later, later)
@@ -516,8 +445,6 @@ it.skipIf(!CAN_DENY_READ)('stops re-reading a transcript it cannot read', async 
   }
 })
 
-// Round 10, M2. `close()` mid-pass left the pass reading a shut handle: three
-// `database is not open` errors reached the owner, for a close they asked for.
 it('reports nothing to its owner when it is closed part way through a pass', async () => {
   await writeClaudeTranscript(transcriptPath(), ['one'], SESSION_ID)
   const other = transcriptPath(OTHER_SESSION_ID)
@@ -526,8 +453,7 @@ it('reports nothing to its owner when it is closed part way through a pass', asy
   await utimes(other, later, later)
   newIndexer()
 
-  // Between two files: the pass reads the clock once per file it is about to
-  // read, and closing there is what a quit during a sweep looks like.
+  // Close between files, after the first read has committed.
   let closed = false
   clock.onNow = () => {
     if (closed || indexedSessionCount() === 0) {
@@ -543,8 +469,6 @@ it('reports nothing to its owner when it is closed part way through a pass', asy
   expect(errors).toEqual([])
 })
 
-// Round 10, M2, the other half: `status()` on a closed indexer opened a shut
-// database, reported the failure, and answered zero files.
 it('reports what it last knew after it is closed, without reading the database', async () => {
   await writeClaudeTranscript(transcriptPath(), ['indexed before the close'], SESSION_ID)
   await newIndexer().start()
@@ -556,16 +480,8 @@ it('reports what it last knew after it is closed, without reading the database',
   expect(errors).toEqual([])
 })
 
-// Round 10, L1. Two indexers on one database both register with the reader, so
-// every transcript is read and written twice and the second write is fenced by
-// the first at random. The recipe for every configuration change is
-// close-then-construct, so the ordering that causes this is the one the recipe
-// rules out; this is what says so rather than letting it corrupt quietly.
-// Round 12, F2. The claim was staked before the store opened, so an open that
-// threw left the path owned by an object that does not exist and every later
-// construction was refused -- including the one that fixes whatever broke it.
 it('releases the database path when the open itself throws', () => {
-  // A directory where the database file goes: the open fails, nothing is owned.
+  // A directory at the database path makes opening fail without leaving an ownership claim.
   mkdirSync(harness.databasePath, { recursive: true })
   expect(() => newIndexer()).toThrow()
 
@@ -578,10 +494,6 @@ it('refuses a second indexer on a database one already owns', () => {
   expect(() => newIndexer()).toThrow(/already has a live indexer/)
 })
 
-// PR 2 records a cursor no append continues for a file a chunked read left half
-// written, and reports it as a null offset. The mtime and size on that row are
-// the whole file's, so a freshness check comparing only those calls a prefix
-// current and leaves it in the index for good.
 it('re-reads a file a chunked read left half written, and settles it in one pass', async () => {
   const path = transcriptPath()
   await writeClaudeTranscript(path, ['the committed half'], SESSION_ID)
@@ -593,16 +505,12 @@ it('re-reads a file a chunked read left half written, and settles it in one pass
   plantPartialCursor(path)
   await newIndexer().start()
 
-  // Nothing about the file changed, and it was read anyway: the whole of it,
-  // because there is no cursor to continue from.
   expect(indexedByteOffset(path)).toBe(whole)
   expect(fileState(path)).toBe('current')
   expect(indexer?.status().phase).toBe('current')
   indexer?.close()
 
-  // A half-written file that also grew is repaired by one pass rather than two.
-  // The session list's resume point would have the reader offer an append here,
-  // and an append onto a partial cursor is a read the consumer declines.
+  // Growing a partially indexed file must force a whole read rather than offer a declined append.
   plantPartialCursor(path)
   await appendFile(path, `${claudeLines(['the lost half'], SESSION_ID, 10).join('\n')}\n`)
   await newIndexer().start()
@@ -619,11 +527,7 @@ it('reports closed once it is closed, whatever it was doing before', async () =>
   expect(indexer?.status().phase).toBe('closed')
 })
 
-// Finding 6: a queued entry carries the stat it was recorded with. Reading at
-// that stat writes a cursor describing a file that no longer looks like this,
-// so the next cycle distrusts it and re-reads it, forever.
 it('reads a deferred file at its current stat, not the one the pass first saw', async () => {
-  // One file a pass, so the older one is left for the pass after this.
   await startAfterASweep(readsPerPass(1))
   const older = transcriptPath(OTHER_SESSION_ID)
   await writeClaudeTranscript(older, ['the deferred conversation'], OTHER_SESSION_ID)
@@ -632,7 +536,6 @@ it('reads a deferred file at its current stat, not the one the pass first saw', 
   await utimes(transcriptPath(), ahead, ahead)
 
   await indexer?.reconcile()
-  // No row for it at all, which is exactly why the next pass reads it.
   expect(rowFor(older)).toBeUndefined()
 
   await appendFile(
@@ -642,36 +545,25 @@ it('reads a deferred file at its current stat, not the one the pass first saw', 
   await indexer?.reconcile()
 
   expect(sessionsMatching('appended')).toEqual([OTHER_SESSION_ID])
-  // The cursor has to describe the file as it is now; recorded against the
-  // stat the earlier pass saw it would be re-read on every cycle from here on.
   const cursor = indexedCursor(older)
   const current = await stat(older)
   expect(cursor).toEqual({ mtime_ms: current.mtimeMs, size_bytes: current.size })
 })
 
-// A declined read records the stat it was declined at. By the time the store
-// hands it back the file has usually moved on again, and reading at the
-// recorded stat writes a cursor the next cycle immediately distrusts.
 it('reads a declined file at its current stat, not the one it was recorded with', async () => {
   const path = transcriptPath()
   await writeClaudeTranscript(path, ['the recorded conversation'], SESSION_ID)
   await newIndexer().start()
 
-  // A warm session-list cache over an empty index: the reader offers an append
-  // continuing an offset this index has never seen, so the consumer declines it
-  // and records the stat it declined at.
+  // Retain the session-list cursor while deleting the index to force an append the consumer must decline.
   indexer?.close()
   removeSessionSearchDatabase(harness.databasePath)
   newIndexer()
   await appendFile(path, `${claudeLines(['declined turn'], SESSION_ID, 10).join('\n')}\n`)
   await parseTranscript(path)
-  // The index holds nothing for it, which is the record: a path the file table
-  // does not name is read from the start by the next pass.
   expect(indexer?.status().filesIndexed).toBe(0)
 
   await appendFile(path, `${claudeLines(['later turn'], SESSION_ID, 20).join('\n')}\n`)
-  // The sweep is declined too -- the list's cursor is still ahead of the index
-  // -- so it is the pass after it that reads the file whole.
   await indexer?.start()
   await nextCycle()
 
@@ -680,8 +572,6 @@ it('reads a declined file at its current stat, not the one it was recorded with'
   expect(indexedCursor(path)).toEqual({ mtime_ms: current.mtimeMs, size_bytes: current.size })
 })
 
-// Round 2, item 1: the sweep kept the rows and a cycle twenty seconds later
-// deleted them, because the degraded-root fence was on the sweep path only.
 it.skipIf(!CAN_DENY_READ)(
   'keeps an unlistable root through the cycles that follow the sweep',
   async () => {
@@ -703,8 +593,6 @@ it.skipIf(!CAN_DENY_READ)(
   }
 )
 
-// A root that cannot be listed is never believed to be empty, however many
-// times it is asked: an error is not a listing, and only a listing is proof.
 it.skipIf(!CAN_DENY_READ)('keeps an unlistable root degraded across repeated sweeps', async () => {
   await writeClaudeTranscript(transcriptPath(), ['a session on a removable volume'], SESSION_ID)
   await newIndexer().start()
@@ -721,8 +609,6 @@ it.skipIf(!CAN_DENY_READ)('keeps an unlistable root degraded across repeated swe
   }
 })
 
-// The first sweep of every process is exactly when a volume is most likely to
-// be detached, and it is the pass with nothing behind it to compare against.
 it('keeps a root that is gone at the first sweep after a restart', async () => {
   await writeClaudeTranscript(transcriptPath(), ['a session on a removable volume'], SESSION_ID)
   await newIndexer().start()
@@ -730,7 +616,6 @@ it('keeps a root that is gone at the first sweep after a restart', async () => {
   resetTranscriptConsumersForTests()
   resetSessionParseCacheForTests()
 
-  // The volume is not there when the process comes back.
   await rm(harness.roots.claudeProjectsDir ?? '', { recursive: true, force: true })
   await newIndexer().start()
 
@@ -739,24 +624,16 @@ it('keeps a root that is gone at the first sweep after a restart', async () => {
   expect(status?.degradedRoots.map((root) => root.root)).toContain(harness.roots.claudeProjectsDir)
   expect(sessionsMatching('removable')).toEqual([SESSION_ID])
 
-  // And it clears once the volume is back.
   await writeClaudeTranscript(transcriptPath(), ['a session on a removable volume'], SESSION_ID)
   await indexer?.reconcile({ full: true })
   expect(indexer?.status()).toMatchObject({ phase: 'current', degradedRoots: [] })
 })
 
-// Round 7: what the stateless walk costs, stated rather than hidden. A volume
-// mounted at EXACTLY a configured root, unmounted so the mountpoint stays
-// present and lists empty, is indistinguishable from a root the user emptied:
-// there is no directory left whose absence could stop the walk. Inside one
-// process the transition buys a pass of grace; across a restart there is no
-// transition to see and the rows retire. The unmounts that actually happen are
-// above the root, and the next test is the one that covers them.
+// An unmounted root that remains readable and empty is indistinguishable from intentional deletion.
 it('retires an emptied configured root, one pass after it emptied', async () => {
   await writeClaudeTranscript(transcriptPath(), ['a session on the mounted volume'], SESSION_ID)
   await newIndexer().start()
 
-  // The transcripts go; the root itself stays there and stays readable.
   await rm(harness.claudeProjectDir, { recursive: true, force: true })
   await indexer?.reconcile({ full: true })
   expect(sessionsMatching('mounted')).toEqual([SESSION_ID])
@@ -767,8 +644,6 @@ it('retires an emptied configured root, one pass after it emptied', async () => 
   expect(indexer?.status()).toMatchObject({ phase: 'current', degradedRoots: [] })
 })
 
-// The same root, with no previous pass to compare against: nothing carries the
-// transition across a restart, and the empty listing is proof on its own.
 it('retires an emptied configured root at once on the first pass of a process', async () => {
   await writeClaudeTranscript(transcriptPath(), ['a session on the mounted volume'], SESSION_ID)
   await newIndexer().start()
@@ -782,10 +657,7 @@ it('retires an emptied configured root at once on the first pass of a process', 
   expect(sessionsMatching('mounted')).toEqual([])
 })
 
-// The shape a real unmount takes: on Linux, WSL and sshfs the mountpoint is
-// above the agent's root, so the root itself is missing. The walk stops at the
-// root boundary and never asks the empty parent anything, which is what makes
-// this hold with no memory on the first pass of a process.
+// A missing configured root prevents retirement even when its parent is readable and empty.
 it('proves nothing from an empty directory above the configured root', async () => {
   for (let index = 0; index < 3; index++) {
     const session = `0000000${index}-bbbb-4ccc-8ddd-eeeeeeeeeeee`
@@ -797,8 +669,6 @@ it('proves nothing from an empty directory above the configured root', async () 
   resetTranscriptConsumersForTests()
   resetSessionParseCacheForTests()
 
-  // The volume that carried the agent's root is gone; what it was mounted
-  // under is still there, still listable, and empty of it.
   await rm(harness.roots.claudeProjectsDir ?? '', { recursive: true, force: true })
   await newIndexer().start()
 
@@ -808,12 +678,7 @@ it('proves nothing from an empty directory above the configured root', async () 
   expect(sessionsMatching('mounted')).toHaveLength(3)
 })
 
-// A cycle only reads the newest N per agent, so a remounted volume would give
-// up its newest transcript and keep the rest unreachable. Nothing watches for a
-// recovery any more: the sweep cadence is what reaches it.
 it('reads a root that came back on the next periodic sweep', async () => {
-  // Detached before anything was ever indexed, so the sweep correctly finds
-  // nothing and reports no alarm.
   await newIndexer({ recentPerAgent: 1, fullSweepEveryCycles: 2 }).start()
   expect(indexer?.status()).toMatchObject({ degradedRoots: [], filesIndexed: 0 })
 
@@ -822,8 +687,6 @@ it('reads a root that came back on the next periodic sweep', async () => {
     await writeClaudeTranscript(transcriptPath(session), [`remounted session ${index}`], session)
   }
 
-  // Two cycles reach the newest one each; the sweep they are counting down to
-  // reads the rest.
   await nextCycle()
   await nextCycle()
   expect(sessionsMatching('remounted')).toHaveLength(1)
@@ -832,9 +695,6 @@ it('reads a root that came back on the next periodic sweep', async () => {
   expect(sessionsMatching('remounted')).toHaveLength(3)
 })
 
-// Round 4, item 3: rows under no configured root. The walk judges each row on
-// its own directory and proves nothing about one it cannot reach, so a profile
-// that moved keeps its history rather than losing it.
 it('keeps rows under no configured root, and retires them only when gone', async () => {
   const moved = transcriptPath()
   await writeClaudeTranscript(moved, ['a session in the old profile'], SESSION_ID)
@@ -843,12 +703,9 @@ it('keeps rows under no configured root, and retires them only when gone', async
   resetTranscriptConsumersForTests()
   resetSessionParseCacheForTests()
 
-  // The profile moves: same index, a root that no longer covers those rows.
   const elsewhere = join(harness.root, 'moved-profile')
   newIndexer({ roots: { ...harness.roots, claudeProjectsDir: elsewhere } })
   await indexer?.start()
-  // Still on disk, so the rows stay: this is a configuration problem, not a
-  // licence to delete a user's history.
   expect(sessionsMatching('profile')).toEqual([SESSION_ID])
 
   await rm(moved)
@@ -856,16 +713,11 @@ it('keeps rows under no configured root, and retires them only when gone', async
   expect(sessionsMatching('profile')).toEqual([])
 })
 
-// Round 7 replaced "only a census may conclude" with "whoever can prove it".
-// A cycle walks the same directories and reaches the same verdict, so a project
-// directory the user deleted does not wait for the next sweep.
 it('lets a cycle retire a project directory the user deleted', async () => {
   await writeClaudeTranscript(transcriptPath(), ['a session about to vanish'], SESSION_ID)
   await newIndexer().start()
 
   await rm(harness.claudeProjectDir, { recursive: true, force: true })
-  // The pass that sees the root go from holding transcripts to holding none
-  // gives it one pass of grace, whether it is a sweep or a cycle.
   await indexer?.reconcile({ full: true })
   expect(sessionsMatching('vanish')).toEqual([SESSION_ID])
 
@@ -874,9 +726,6 @@ it('lets a cycle retire a project directory the user deleted', async () => {
   expect(indexer?.status()).toMatchObject({ phase: 'current', degradedRoots: [] })
 })
 
-// C1: `close()` disarmed the timer and aborted the task in flight, but left the
-// queue running, so a task queued a moment earlier still reopened a store and
-// registered a consumer behind an indexer whose caller had finished with it.
 it('stops everything on close, including work already queued', async () => {
   await writeClaudeTranscript(transcriptPath(), ['indexed before the close'], SESSION_ID)
   await newIndexer().start()
@@ -885,16 +734,12 @@ it('stops everything on close, including work already queued', async () => {
   indexer?.close()
   await queued
 
-  // The queued pass never ran: had it run, it would have reached for a store
-  // this close had already shut, and reported the failure.
   expect(errors).toEqual([])
-  // And the timer is gone with it, so no later tick can queue another.
   expect(clock.pendingTimers).toBe(0)
   clock.advance(5 * INTERVAL_MS)
   await indexer?.settled()
   expect(errors).toEqual([])
 
-  // No store and no consumer: a scan after the close writes nothing.
   const after = transcriptPath(OTHER_SESSION_ID)
   await writeClaudeTranscript(after, ['written after the close'], OTHER_SESSION_ID)
   await parseTranscript(after)
@@ -902,9 +747,6 @@ it('stops everything on close, including work already queued', async () => {
   expect(sessionsMatching('indexed')).toEqual([SESSION_ID])
 })
 
-// What replaced `clear()`, exactly as the PR body documents it. The recipe is
-// three statements because the indexer owns one store for one lifetime; the
-// method it replaces owned a second one and had to keep the two in step.
 it('throws the index away and rebuilds it by constructing a new instance', async () => {
   await writeClaudeTranscript(transcriptPath(), ['indexed before the clear'], SESSION_ID)
   await newIndexer().start()
@@ -914,8 +756,6 @@ it('throws the index away and rebuilds it by constructing a new instance', async
   removeSessionSearchDatabase(harness.databasePath)
   expect(existsSync(harness.databasePath)).toBe(false)
 
-  // The session list's cache is warm, which is what a clear inside a running
-  // app leaves behind; the sweep reads whole rather than trusting it.
   await newIndexer().start()
   expect(sessionsMatching('indexed')).toEqual([SESSION_ID])
 })
@@ -930,18 +770,12 @@ it('refuses a reconcile before it is started and after it is closed', async () =
   expect(() => indexer?.reconcile()).toThrow(/closed/)
 })
 
-// I7: the sweep reads transcript bytes, so it stops at the same deadline every
-// other pass does. It plans the whole machine and hands back what it had no
-// time for; the passes that follow drain the plan without re-discovering.
 it('stops the opening sweep at its deadline and drains the rest over the passes that follow', async () => {
   for (let index = 0; index < 5; index++) {
     const session = `0000000${index}-bbbb-4ccc-8ddd-eeeeeeeeeeee`
     await writeClaudeTranscript(transcriptPath(session), [`backlogged session ${index}`], session)
   }
   await newIndexer(readsPerPass(2)).start()
-  // A sweep that ran out of time did not sweep the machine: it says so rather
-  // than stamping itself complete and reporting the three it never opened as
-  // nothing at all.
   expect(indexer?.status()).toMatchObject({
     filesIndexed: 2,
     filesDue: 3,
@@ -959,9 +793,6 @@ it('stops the opening sweep at its deadline and drains the rest over the passes 
   expect(indexer?.status().lastSweepCompletedAt).not.toBeNull()
 })
 
-// The sweep cadence, with nobody asking for it: a file outside the recency
-// window that appears after the opening sweep is unreachable until the next
-// periodic one, and the count of cycles is the whole rule.
 it('sweeps on its cadence without anyone asking', async () => {
   await writeClaudeTranscript(transcriptPath(), ['the newest conversation'], SESSION_ID)
   await newIndexer({ recentPerAgent: 1, fullSweepEveryCycles: 2 }).start()
@@ -979,25 +810,14 @@ it('sweeps on its cadence without anyone asking', async () => {
   expect(sessionsMatching('older')).toEqual([OTHER_SESSION_ID])
 })
 
-// A cycle lists the newest N per agent, so every older row it holds is
-// undiscovered and would be walked every twenty seconds. It proves the newest
-// slice of them instead, capped: a transcript recent enough for the window is
-// recent enough to be in the slice, and the rest are the next sweep's to reach.
-// Round 12, F1. A directory that cannot be listed answers `unverifiable` for
-// every row under it, on every pass, for as long as the permission stays wrong.
-// With the walk capped at rows rather than at directories, five hundred such
-// rows spent the whole budget on one readdir's worth of verdicts and a row for
-// a file the user really deleted, sorted behind them, was never reached: six
-// full sweeps and it was still held.
 it.skipIf(!CAN_DENY_READ)('retires a deleted file behind a block of unreadable rows', async () => {
-  // A healthy project directory, so the root never looks emptied.
+  // Keep the root nonempty so empty-root grace cannot mask retirement behavior.
   await writeClaudeTranscript(transcriptPath(), ['a live conversation'], SESSION_ID)
   const locked = join(harness.roots.claudeProjectsDir ?? '', 'locked')
   await mkdir(locked, { recursive: true })
   newIndexer()
 
-  // What an unreadable tree leaves behind: rows the walk can never settle,
-  // planted ahead of the deleted one in the order the table returns them.
+  // Put 520 unreadable rows ahead of the deleted row to catch limits counted by rows instead of directories.
   harness.write((db: SyncDatabase) => {
     const insert = db.prepare(
       `INSERT INTO files(path, byte_offset, mtime_ms, size_bytes, state)
@@ -1016,8 +836,6 @@ it.skipIf(!CAN_DENY_READ)('retires a deleted file behind a block of unreadable r
     await indexer?.start()
 
     expect(holdsDeleted()).toBe(false)
-    // And the block itself is neither retired nor forgotten: unreadable is not
-    // deleted, and the root is named as degraded rather than emptied.
     expect(indexer?.status().filesIndexed).toBe(521)
     expect(indexer?.status().phase).toBe('degraded')
   } finally {
@@ -1035,9 +853,7 @@ it('proves deletions for the newest rows it holds, and leaves the tail to a swee
   )
   const longAgo = new Date(Date.now() - total * 60_000)
   await utimes(oldest, longAgo, longAgo)
-  // Indexed on its own first, so it is the earliest row in the table as well as
-  // the oldest file. A slice that trusted the table's own order rather than the
-  // mtime would take it, and take it first.
+  // Insert the oldest file first so table order cannot accidentally satisfy the mtime-order check.
   await newIndexer().start()
 
   for (let index = 1; index < total; index++) {
@@ -1050,8 +866,7 @@ it('proves deletions for the newest rows it holds, and leaves the tail to a swee
   await indexer?.reconcile({ full: true })
   expect(indexedSessionCount()).toBe(total)
 
-  // Older than the cap reaches: 530 rows, twelve of them rediscovered by the
-  // cycle, leaves 518 undiscovered against a cap of 512.
+  // 530 rows minus 12 rediscovered leaves 518 retirement candidates, exceeding the 512-row cycle cap.
   await rm(oldest)
   await nextCycle()
   expect(indexedSessionCount()).toBe(total)
@@ -1060,10 +875,6 @@ it('proves deletions for the newest rows it holds, and leaves the tail to a swee
   expect(indexedSessionCount()).toBe(total - 1)
 })
 
-// F1: `fullSweepDue` stayed set across the sweep's await and was cleared on the
-// way out, so a request raised while a sweep was running was erased by the
-// sweep it arrived during. The pass takes the flag on entry now, and an
-// unfinished sweep is what puts it back.
 it('runs another sweep when one is asked for during a sweep', async () => {
   for (let index = 0; index < 20; index++) {
     const session = `0000${String(index).padStart(4, '0')}-bbbb-4ccc-8ddd-eeeeeeeeeeee`
@@ -1071,13 +882,10 @@ it('runs another sweep when one is asked for during a sweep', async () => {
   }
   const late = transcriptPath(OTHER_SESSION_ID)
 
-  // Newest-one per root, so nothing but a second sweep can reach a file that
-  // appears after this sweep's discovery has already run. The clock is the one
-  // synchronous seam into a pass: it is read between files.
+  // Restrict recent cycles to one file so the late, backdated transcript requires another sweep.
   newIndexer({ recentPerAgent: 1 })
   let armed = false
-  // Once a row has landed the pass is provably inside its read loop, which is
-  // after it took the sweep flag and before it hands its verdicts back.
+  // Wait for a committed row to inject the request after the pass has consumed its sweep flag.
   clock.onNow = () => {
     if (armed || indexedSessionCount() === 0) {
       return
@@ -1095,9 +903,6 @@ it('runs another sweep when one is asked for during a sweep', async () => {
   expect(sessionsMatching('late')).toEqual([OTHER_SESSION_ID])
 })
 
-// The duty cycle, as a test: a pass reads for at most its deadline and hands
-// the rest back, and the timer only re-arms once the pass has settled, so the
-// share of the wall clock the index takes is bounded by construction.
 it('hands the rest of a pass back when it runs out of wall time', async () => {
   for (let index = 0; index < 20; index++) {
     const session = `0000${String(index).padStart(4, '0')}-bbbb-4ccc-8ddd-eeeeeeeeeeee`
@@ -1107,7 +912,6 @@ it('hands the rest of a pass back when it runs out of wall time', async () => {
 
   expect(indexer?.status().filesIndexed).toBe(16)
 
-  // And the pass after it picks up exactly the four it did not reach.
   await nextCycle()
   expect(indexer?.status()).toMatchObject({ filesIndexed: 20, filesDue: 0 })
 })

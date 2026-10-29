@@ -49,8 +49,7 @@ export function registerJournalDispatchReasonBoundTests(): void {
     })
     await journal.resolveDispatch({
       clientMessageId: 'msg-1',
-      // A rejection's reason comes only from `agentSessionFailureWords`; an unknown's is still free
-      // text (an adapter's error), so it is what reaches the bound.
+      // Unknown reasons retain arbitrary adapter text, unlike typed rejection wording.
       state: 'unknown',
       reason,
       fence: 1
@@ -85,12 +84,9 @@ export function registerJournalDispatchReasonBoundTests(): void {
       expect(stored).toBe(`${DISPATCH_REJECTED_WRITE_FAILED}: broken pipe`)
     })
 
-    // Head-first, not hash-replacing: the classifier prefix-matches, so a bound that kept
-    // the tail would render raw provider text to the user as an ordinary rejection notice.
     it('keeps a clipped transport failure classifiable', async () => {
       const stored = await settle(`${DISPATCH_REJECTED_WRITE_FAILED}: ${HUGE}`)
       expect(stored).not.toBe(`${DISPATCH_REJECTED_WRITE_FAILED}: ${HUGE}`)
-      // Read as an older host wrote it: by the reason alone.
       expect(isWriteFailureSubmission({ reason: stored })).toBe(true)
       expect(classifyDispatchRejection({ reason: stored })).toMatchObject({ kind: 'writeFailed' })
     })

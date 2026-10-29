@@ -421,8 +421,13 @@ describe('useEditorPanelExternalContentEvents', () => {
 
   it("moves the record's other loaded views to the saved text when the saving tab closed mid-save", () => {
     const other = makeFile('other')
+    const preview = makeFile('preview', {
+      mode: 'markdown-preview',
+      markdownPreviewSourceFileId: 'other'
+    })
     const loaded: Record<string, FileContent> = {
       other: { content: 'old disk', isBinary: false },
+      preview: { content: 'old disk', isBinary: false },
       unrelated: { content: 'old disk', isBinary: false }
     }
     const contents = { current: loaded }
@@ -432,7 +437,7 @@ describe('useEditorPanelExternalContentEvents', () => {
           activeFileId={other.id}
           calls={makeCalls()}
           isVisible
-          openFiles={[other]}
+          openFiles={[other, preview]}
           contents={contents}
         />
       )
@@ -449,6 +454,7 @@ describe('useEditorPanelExternalContentEvents', () => {
       )
     })
     expect(contents.current.other?.content).toBe('saved')
+    expect(contents.current.preview?.content).toBe('saved')
     expect(contents.current.unrelated?.content).toBe('old disk')
   })
 })

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { PLUGIN_PANEL_FRAME_NAME_PREFIX } from '../../shared/plugins/plugin-panel-bridge'
-import { NATIVE_CHAT_VISUAL_FRAME_NAME_PREFIX } from '../../shared/native-chat-visual-shell'
+import { PLUGIN_PANEL_FRAME_NAME_PREFIX } from '../../shared/plugins/frames/plugin-frame-bridge'
+import { NATIVE_CHAT_VISUAL_FRAME_NAME_PREFIX } from '../../shared/native-chat/native-chat-visual-shell'
 import { HostFrameNavigationRegistry, hostFrameKindForName } from './host-frame-navigation-guard'
 
 function frame(input: { id: number; name?: string; url?: string }) {
@@ -28,7 +28,7 @@ describe('HostFrameNavigationRegistry', () => {
     expect(registry.shouldBlock(notebook, notebook, 'https://example.com')).toBe(false)
   })
 
-  it('keeps pre-parse identity after name mutation and prunes destroyed frames', () => {
+  it('keeps pre-parse identity after name mutation and ignores destroyed frames', () => {
     const registry = new HostFrameNavigationRegistry()
     const plugin = frame({ id: 1, name: `${PLUGIN_PANEL_FRAME_NAME_PREFIX}demo` })
     registry.register(plugin)
@@ -54,5 +54,27 @@ describe('HostFrameNavigationRegistry', () => {
     expect(registry.shouldBlock(visual, null, 'https://example.com')).toBe(true)
     const child = frame({ id: 4 })
     expect(registry.shouldBlock(child, visual, 'https://example.com')).toBe(true)
+  })
+
+  it('does not inspect unrelated guarded frames during registration or navigation', () => {
+    const registry = new HostFrameNavigationRegistry()
+    let livenessChecks = 0
+    const panels = Array.from({ length: 100 }, (_, id) => ({
+      ...frame({ id, name: `${PLUGIN_PANEL_FRAME_NAME_PREFIX}${id}` }),
+      isDestroyed: () => {
+        livenessChecks++
+        return false
+      }
+    }))
+    for (const panel of panels) {
+      registry.register(panel)
+    }
+    const ordinary = frame({ id: 101 })
+    registry.register(ordinary)
+    expect(registry.shouldBlock(ordinary, null, 'https://example.com')).toBe(false)
+    expect(registry.shouldBlock(panels[0], null, 'about:srcdoc')).toBe(false)
+    expect(registry.shouldBlock(panels[0], panels[0], 'https://example.com')).toBe(true)
+    expect(registry.shouldBlock(ordinary, panels[1], 'https://example.com')).toBe(true)
+    expect(livenessChecks).toBeLessThanOrEqual(4)
   })
 })

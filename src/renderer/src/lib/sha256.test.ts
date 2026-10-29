@@ -18,8 +18,7 @@ describe('sha256', () => {
     expect(hex(sha256(new TextEncoder().encode(input)))).toBe(expected)
   })
 
-  // The whole point of the fallback: it must be byte-identical to crypto.subtle,
-  // so a hook hashed on Electron/HTTPS compares equal when re-hashed over HTTP.
+  // Fallback must match crypto.subtle byte-for-byte so Electron/HTTPS hook trust survives plain HTTP.
   it('matches crypto.subtle SHA-256 across crossing block boundaries', async () => {
     for (const length of [0, 1, 55, 56, 63, 64, 65, 119, 120, 200]) {
       const bytes = new Uint8Array(length)

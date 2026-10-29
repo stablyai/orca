@@ -13,9 +13,7 @@ import {
   readShellCsp
 } from './preview/mobile-web-app-render-harness.mjs'
 
-// The page lays out edge-to-edge under the shell's system bars and pads through its own
-// SafeAreaViews, and its root for the sides, by the insets `init` carries. Measured in a real browser because what is under
-// test is which providers and navigators expo-router actually mounts above a screen.
+// Measure real Expo providers/navigators: screens/root must pad edge-to-edge page exactly once from shell init insets.
 const HOST_ROUTE = '/h/render-check-host'
 const HOST = {
   id: 'render-check-host',
@@ -24,8 +22,7 @@ const HOST = {
   lastConnected: 1
 }
 const INSETS = { top: 40, right: 0, bottom: 30, left: 0 }
-/** What the browser's own `env(safe-area-inset-*)` reads, which is what DefaultNavigator pads by.
- *  Different from INSETS so a padding taken from it cannot pass for the shell's. */
+// Use browser env insets different from shell INSETS so wrong provider cannot pass.
 const ENV_INSETS = { top: 17, right: 0, bottom: 11, left: 0 }
 
 const bundles = mobileWebAppDependenciesPresent()
@@ -61,7 +58,6 @@ afterAll(async () => {
   }
 })
 
-/** The host route's header text top and its bottom control's bottom, as the page laid them out. */
 async function openHostRoute(safeAreaInsets, envInsets = ENV_INSETS) {
   const page = await browser.newPage({ viewport: { width: 390, height: 844 } })
   const errors = []
@@ -135,16 +131,13 @@ describeRender('the page pads for the system bars once, by the shell insets', ()
     await noEnv.page.close()
     expect([...bare.errors, ...inset.errors, ...noEnv.errors]).toEqual([])
     expect(zero.titleTop).not.toBeNull()
-    // The override is live, so a padding read from the browser would show up below.
     expect([zero.envTop, envless.envTop]).toEqual([`${ENV_INSETS.top}px`, '0px'])
-    // Nothing above the screens pads by the browser's own measurement.
     expect(zero.titleTop).toBe(envless.titleTop)
-    // One pad, the shell's: DefaultNavigator would add ENV_INSETS.top on top of it, and a screen
-    // reading the web provider's own measurement would pad by ENV_INSETS.top instead.
+    // Require shell pad exactly once: DefaultNavigator adds browser env pad, while wrong web provider substitutes it.
     expect(padded.titleTop - zero.titleTop).toBe(INSETS.top)
   }, 90_000)
 
-  // Landscape puts the iPhone sensor housing on a side. Unequal sides, so a swapped edge fails.
+  // Unequal landscape side insets catch swapped sensor-housing edge.
   it('keeps the screens clear of the side insets, padding them once', async () => {
     const upright = await openHostRoute(INSETS)
     const base = await readEdges(upright.page)

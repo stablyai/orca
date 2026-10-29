@@ -150,6 +150,17 @@ describe('Windows server prebuild cache workflow', () => {
     expect(actionSteps.some((step) => step.uses === 'actions/cache/save@v5')).toBe(false)
     expect(build.if).toBeUndefined()
     expect(build['continue-on-error']).toBeUndefined()
+    for (const command of [
+      'pnpm build:orcad',
+      'pnpm test:node-server --artifact ${{ runner.os',
+      'node out/orcad/orcad.js --orcad-smoke-load-check'
+    ]) {
+      const gate = steps.find((step) => {
+        const firstLine = step.run?.split('\n')[0]
+        return firstLine === command || firstLine?.startsWith(`${command} `)
+      })
+      expect(gate, command).toBeDefined()
+    }
     for (const gate of steps.filter((step) =>
       /require-slots|--smoke|pnpm build:orcad$|test:node-server|--orcad-smoke-load-check/.test(
         step.run ?? ''

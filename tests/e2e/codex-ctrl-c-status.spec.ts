@@ -62,7 +62,7 @@ process.stdout.write('ORCA_CODEX_INPUT_READY\\n')
 `
       )
       const terminalWindowsShell = await orcaPage.evaluate(
-        () => window.__store?.getState().settings.terminalWindowsShell
+        () => window.__store?.getState().settings?.terminalWindowsShell
       )
       const shell = resolveStartupShell(
         process.platform,

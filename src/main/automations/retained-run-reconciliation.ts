@@ -1,29 +1,17 @@
 import type { AutomationRun } from '../../shared/automations-types'
 
-/** Cadence for re-checking a retained run whose pane has not remounted yet. */
 const RETRY_INTERVAL_MS = 2_000
-/** Grace after the terminal surface reports ready before an unresolvable run is
- *  called lost. Covers restored-pane remount and SSH/WSL reattach, and matches
- *  the run observer's agent-start deadline. */
+/** Allow restored panes and SSH/WSL PTYs to reattach after surface readiness. */
 const SURFACE_SETTLE_MS = 2 * 60 * 1000
 
 export type RetainedRunReconcilerDeps = {
-  /** Attaches a watcher; false while the terminal surface cannot answer yet. */
+  /** Return false until a watcher can attach. */
   attach: (run: AutomationRun) => boolean
-  /** False once the run reached a terminal status by some other path. */
   stillRetained: (run: AutomationRun) => boolean
   strand: (run: AutomationRun) => void
 }
 
-/**
- * Startup reconciliation of retained non-terminal runs.
- *
- * Why staged rather than one synchronous pass: at authority startup no window
- * graph has published yet, so "this pane has no terminal" means "not known yet",
- * never "the terminal is gone" — the same positive-evidence rule the design doc
- * applies to ownership. Only a surface that has reported ready and still cannot
- * resolve the pane after a grace window is evidence of a lost run.
- */
+/** Pane lookup failures prove loss only after the surface is ready and its grace expires. */
 export class RetainedRunReconciler {
   private readonly deps: RetainedRunReconcilerDeps
   private readonly pending = new Map<string, AutomationRun>()
@@ -47,7 +35,6 @@ export class RetainedRunReconciler {
     this.sweep()
   }
 
-  /** The authority's terminal surface can now answer pane lookups. */
   markSurfaceReady(): void {
     if (this.disposed) {
       return
@@ -64,8 +51,6 @@ export class RetainedRunReconciler {
 
   private sweep(): void {
     const strandAt = this.surfaceReadyAt === null ? null : this.surfaceReadyAt + SURFACE_SETTLE_MS
-    // Deleting the current entry mid-iteration is defined for Map; nothing here
-    // re-enters the reconciler, so no snapshot is needed.
     for (const [runId, run] of this.pending) {
       if (!this.deps.stillRetained(run) || this.deps.attach(run)) {
         this.pending.delete(runId)
@@ -88,7 +73,6 @@ export class RetainedRunReconciler {
       return
     }
     const timer = setInterval(() => this.sweep(), RETRY_INTERVAL_MS)
-    // Why: a pending retry must never be the reason a process stays alive.
     ;(timer as { unref?: () => void }).unref?.()
     this.timer = timer
   }

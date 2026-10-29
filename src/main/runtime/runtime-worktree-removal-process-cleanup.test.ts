@@ -1,7 +1,4 @@
-/**
- * The runtime's removal (CLI `worktree rm`, paired clients, headless) drops the same per-id process
- * state and persisted scan snapshots as the desktop IPC removal.
- */
+/** Runtime removals must clear the same per-id process state and persisted scan snapshots as desktop IPC removals. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({

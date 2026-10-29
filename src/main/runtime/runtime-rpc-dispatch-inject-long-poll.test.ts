@@ -8,9 +8,7 @@ import { classifyRuntimeLongPoll } from './runtime-rpc/runtime-rpc-long-poll'
 import { OrcaRuntimeRpcServer } from './runtime-rpc'
 import { openFramedSession, sleep } from './runtime-rpc-test-harness'
 
-// `dispatch --inject` into a chat waits for its agent to accept the turn, which can outlast the
-// socket's idle timer; keepalives hold the connection open as they do for worker-start. A terminal
-// inject doesn't wait, so it stays a short RPC.
+// Chat inject waits for agent acceptance beyond idle timeout and needs keepalives; terminal inject returns immediately as a short RPC.
 describe('orchestration.dispatch --inject as a long poll', () => {
   it('is a keepalive-backed wait only when it injects into a chat', () => {
     const dispatch = (params: Record<string, unknown>) =>

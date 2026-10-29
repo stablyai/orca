@@ -49,7 +49,11 @@ export const ProjectHostSetupExistingFolderIpcArgs = z.object({
 const LocalWindowsRuntimePreferenceIpcArgs = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('inherit-global') }),
   z.object({ kind: z.literal('windows-host') }),
-  z.object({ kind: z.literal('wsl'), distro: z.string().min(1) })
+  z.object({
+    kind: z.literal('wsl'),
+    distro: z.string().min(1),
+    git: z.literal('windows-host').optional()
+  })
 ])
 
 export const ProjectUpdateIpcArgs = z.object({
@@ -71,7 +75,7 @@ const IpcExecutionHostId = z
     return hostId
   })
 
-// Why optional: the row's host; without it the first row with the id moves, as before.
+// Omitted host retains legacy behavior: move the first matching project ID.
 export const ProjectGroupMoveProjectArgs = z.object({
   projectId: z.string().min(1),
   groupId: z.string().nullable(),

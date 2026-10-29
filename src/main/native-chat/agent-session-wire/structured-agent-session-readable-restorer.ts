@@ -19,7 +19,7 @@ export class StructuredAgentSessionReadableRestorer {
       ? new Map(sessionIds.map((sessionId, index) => [sessionId, index]))
       : null
     const records = this.input.openDeps.store
-      .listRecords()
+      .listConversations()
       .filter((record) => !targetOrder || targetOrder.has(record.sessionId))
     if (targetOrder) {
       records.sort(

@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { createNativeChatMerger, replaceList } from '../../../src/shared/native-chat-merge'
+import {
+  createNativeChatMerger,
+  replaceList
+} from '../../../src/shared/native-chat/native-chat-merge'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
-import { applyMobileNativeChatStreamFrame } from './mobile-native-chat-stream-frame'
+import { applyMobileNativeChatStreamFrame } from './native-chat/mobile-native-chat-stream-frame'
 
 function row(id: string, role: NativeChatMessage['role'] = 'assistant'): NativeChatMessage {
   return { id, role, source: 'transcript', timestamp: 1, blocks: [{ type: 'text', text: id }] }
@@ -34,6 +37,14 @@ describe('mobile complete-pair stream windows', () => {
       })
       expect(result).toEqual({ kind: 'messages', messages: [...base, row('latest')] })
       expect(merger.indexById.get('opencode:oldest:reasoning')).toBe(0)
+      const updated = { ...row('latest'), blocks: [{ type: 'text' as const, text: 'updated' }] }
+      applyMobileNativeChatStreamFrame({
+        merger,
+        frame: { type: 'appended', messages: [updated] },
+        limit: 40,
+        replaceSnapshot: false
+      })
+      expect(merger.list).toEqual([...base, updated])
     }
   )
 

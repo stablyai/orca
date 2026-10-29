@@ -42,8 +42,7 @@ export function SshTargetDestructiveActions({
   const [pendingBulk, setPendingBulk] = useState<SshBulkRemoveRequest | null>(null)
   const [bulkProgress, setBulkProgress] = useState<number | null>(null)
   const mountedRef = useMountedRef()
-  // Why: a confirmed removal keeps running after the dialog click, so this
-  // state blocks an overlapping removal of the same target.
+  // Hold per-target ownership through confirmed removal to block overlapping destructive actions.
   const targetActionsInFlightRef = useRef(new Map<string, SshTargetBusyAction>())
   const [targetActionsInFlight, setTargetActionsInFlight] = useState<
     Map<string, SshTargetBusyAction>
@@ -101,7 +100,7 @@ export function SshTargetDestructiveActions({
     if (!pendingBulk || bulkProgress !== null) {
       return
     }
-    // Why sequential: each removal tears down the host's PTYs and rewrites the same store file.
+    // Remove serially because each operation rewrites the same store and tears down host PTYs.
     const claimed = pendingBulk.targets.filter((target) => beginTargetAction(target.id, 'remove'))
     const result: SshBulkRemoveResult = { removed: [], failed: [] }
     const remove = removeQuietly ?? onRemove

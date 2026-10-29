@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { act, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, renderHook, screen, waitFor, within } from '@testing-library/react'
 import { expect, it, vi } from 'vitest'
 import { toast } from 'sonner'
 import { setSourceControlActionDefault } from '../../../../shared/source-control-ai-actions'
@@ -18,7 +18,7 @@ import {
   persist,
   settingsModel,
   type SettingsPersistenceModel
-} from './settings-persistence-test-fixture'
+} from './__fixtures__/settings-persistence-test-fixture'
 import { ActiveSettingsSectionProvider } from './SettingsSection'
 import { TooltipProvider } from '../ui/tooltip'
 
@@ -31,7 +31,7 @@ function ChatPersistenceHarness({ model }: { model: SettingsPersistenceModel }) 
     throw new Error('Settings fixture is missing')
   }
   const context = {
-    model: { ...model, settings },
+    model: { ...model, settings, fontSuggestions: [] },
     interactions: controller,
     navigation: { getSectionSearchEntries: () => [getChatNamingSearchEntry()] },
     view: { isSectionMounted: () => true }
@@ -58,8 +58,13 @@ it('keeps the Chat draft and guard after actual persistence fails, then saves it
   const savedRecipe = model.settings?.sourceControlAi?.actions?.conversationName
   persist.mockRejectedValueOnce(new Error('Settings disk is unavailable'))
   render(<ChatPersistenceHarness model={model} />)
+  const naming = document.getElementById('chat-names')
+  if (!naming) {
+    throw new Error('Chat naming section is missing')
+  }
+  fireEvent.click(within(naming).getByRole('button', { name: 'Advanced' }))
   const template = screen.getByText('Command template').nextElementSibling
-  const args = screen.getByText('CLI arguments').nextElementSibling
+  const args = screen.getByText('Arguments').nextElementSibling
   if (!(template instanceof HTMLTextAreaElement) || !(args instanceof HTMLInputElement)) {
     throw new Error('Chat recipe controls are missing')
   }
@@ -136,6 +141,11 @@ it('retains the legacy Git failure contract and composes later queued naming wri
 it('configures the offered Chat custom command without enabling Git or writing on each keystroke', async () => {
   const model = settingsModel()
   render(<ChatPersistenceHarness model={model} />)
+  const naming = document.getElementById('chat-names')
+  if (!naming) {
+    throw new Error('Chat naming section is missing')
+  }
+  fireEvent.click(within(naming).getByRole('button', { name: 'Advanced' }))
   fireEvent.click(screen.getByRole('combobox'))
   fireEvent.click(screen.getByRole('option', { name: 'Custom command' }))
   const command = await screen.findByRole('textbox', { name: 'Custom command' })
@@ -203,6 +213,11 @@ it.each(['original-command', 'later-command'])(
         })
     )
     render(<ChatPersistenceHarness model={model} />)
+    const naming = document.getElementById('chat-names')
+    if (!naming) {
+      throw new Error('Chat naming section is missing')
+    }
+    fireEvent.click(within(naming).getByRole('button', { name: 'Advanced' }))
     const command = screen.getByRole('textbox', { name: 'Custom command' })
     fireEvent.change(command, { target: { value: 'submitted-command' } })
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
@@ -226,6 +241,11 @@ it.each(['original-command', 'later-command'])(
 it('preserves a shared command changed elsewhere while a Chat recipe is being edited', async () => {
   const model = settingsModel()
   render(<ChatPersistenceHarness model={model} />)
+  const naming = document.getElementById('chat-names')
+  if (!naming) {
+    throw new Error('Chat naming section is missing')
+  }
+  fireEvent.click(within(naming).getByRole('button', { name: 'Advanced' }))
   const template = screen.getByText('Command template').nextElementSibling
   if (!(template instanceof HTMLTextAreaElement)) {
     throw new Error('Chat recipe controls are missing')

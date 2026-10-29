@@ -1,5 +1,6 @@
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { describe, expect, it, vi } from 'vitest'
+import { committingSpawn, registerBoundPty } from '../bind-first-pane.test-fixture'
 import {
   MOCK_GIT_WORKTREES,
   OrcaRuntimeService,
@@ -18,6 +19,15 @@ import {
   store
 } from '../orca-runtime-test-fixtures.spec'
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
+import {
+  SPLIT_LEFT,
+  SPLIT_RIGHT,
+  TRAILING,
+  LEFT_LEAF,
+  RIGHT_LEAF,
+  TRAILING_LEAF,
+  splitPlacementStore
+} from './split-placement-session.test-fixture'
 
 describe('OrcaRuntimeService', () => {
   it('keeps client selection when a renderer session-tab close cannot commit', async () => {
@@ -93,7 +103,8 @@ describe('OrcaRuntimeService', () => {
       if (withOffscreen) {
         runtime.setOffscreenBrowserBackend({
           createTab: vi.fn(),
-          closeTab: closeOffscreenTab
+          closeTab: closeOffscreenTab,
+          ownsTab: () => true
         })
       }
       runtime.syncWindowGraph(0, {
@@ -139,7 +150,7 @@ describe('OrcaRuntimeService', () => {
       ])
       await expect(
         runtime.closeMobileSessionTab(`id:${TEST_WORKTREE_ID}`, 'client-page-1')
-      ).resolves.toEqual({ closed: true })
+      ).resolves.toEqual({ closed: true, retirementConfirmed: true })
 
       expect(closeClientPage).toHaveBeenCalledWith({
         worktree: `id:${TEST_WORKTREE_ID}`,
@@ -158,7 +169,8 @@ describe('OrcaRuntimeService', () => {
     const runtime = new OrcaRuntimeService(store)
     runtime.setOffscreenBrowserBackend({
       createTab: vi.fn(),
-      closeTab: closeOffscreenTab
+      closeTab: closeOffscreenTab,
+      ownsTab: () => true
     })
     runtime.setNotifier({
       worktreesChanged: vi.fn(),
@@ -171,7 +183,6 @@ describe('OrcaRuntimeService', () => {
       focusTerminal: vi.fn(),
       closeTerminal: vi.fn(),
       closeSessionTab,
-      sleepWorktree: vi.fn(),
       terminalFitOverrideChanged: vi.fn(),
       terminalDriverChanged: vi.fn()
     })
@@ -242,7 +253,7 @@ describe('OrcaRuntimeService', () => {
       ]
     })
     closeProof.resolve()
-    await expect(closing).resolves.toEqual({ closed: true })
+    await expect(closing).resolves.toEqual({ closed: true, retirementConfirmed: true })
 
     expect(closeSessionTab).not.toHaveBeenCalled()
     expect((await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)).tabs).toEqual([
@@ -285,7 +296,6 @@ describe('OrcaRuntimeService', () => {
       viewMode: 'chat',
       isActive: true
     })
-    // Written with the pane before spawn, so a serve restart keeps the initial mode.
     expect(
       getSession().tabsByWorktree[TEST_WORKTREE_ID]?.find(
         (tab) => tab.id === result.tab.parentTabId
@@ -302,31 +312,27 @@ describe('OrcaRuntimeService', () => {
     ])
   })
 
-  it.each([
+  const placementCases = [
     {
       label: 'after the split parent for a capable client',
       supportsSplitGroupPlacement: true,
-      expectedOrder: (createdId: string) => [
-        'split::left',
-        'split::right',
-        createdId,
-        'trailing::leaf'
-      ]
+      expectedOrder: (createdId: string) => [SPLIT_LEFT, SPLIT_RIGHT, createdId, TRAILING]
     },
     {
       label: 'at the end for an older client',
       supportsSplitGroupPlacement: false,
-      expectedOrder: (createdId: string) => [
-        'split::left',
-        'split::right',
-        'trailing::leaf',
-        createdId
-      ]
+      expectedOrder: (createdId: string) => [SPLIT_LEFT, SPLIT_RIGHT, TRAILING, createdId]
     }
-  ])('places a runtime-owned terminal $label', async (testCase) => {
-    const runtime = new OrcaRuntimeService(store)
+  ]
+  it.each(placementCases)('places a runtime-owned terminal $label', placesRuntimeOwnedTerminal)
+
+  async function placesRuntimeOwnedTerminal(testCase: (typeof placementCases)[number]) {
+    // Main-owned splits/tabs live in persisted layout; legacy headless hosts learn them from snapshots.
+    const runtime = new OrcaRuntimeService(
+      ORCA_LAYOUT_OWNER_IS_MAIN ? splitPlacementStore() : store
+    )
     runtime.setPtyController({
-      spawn: vi.fn().mockResolvedValue({ id: 'pty-created-after-split' }),
+      spawn: vi.fn(committingSpawn(runtime, async () => ({ id: 'pty-created-after-split' }))),
       write: () => true,
       kill: () => true,
       getForegroundProcess: async () => null
@@ -340,30 +346,30 @@ describe('OrcaRuntimeService', () => {
           publicationEpoch: 'headless:split-placement',
           snapshotVersion: 1,
           activeGroupId: 'group-1',
-          activeTabId: 'split::left',
+          activeTabId: SPLIT_LEFT,
           activeTabType: 'terminal',
           tabs: [
             {
               type: 'terminal',
-              id: 'split::left',
+              id: SPLIT_LEFT,
               parentTabId: 'split',
-              leafId: 'left',
+              leafId: LEFT_LEAF,
               title: 'Split',
               isActive: true
             },
             {
               type: 'terminal',
-              id: 'split::right',
+              id: SPLIT_RIGHT,
               parentTabId: 'split',
-              leafId: 'right',
+              leafId: RIGHT_LEAF,
               title: 'Split',
               isActive: false
             },
             {
               type: 'terminal',
-              id: 'trailing::leaf',
+              id: TRAILING,
               parentTabId: 'trailing',
-              leafId: 'leaf',
+              leafId: TRAILING_LEAF,
               title: 'Trailing',
               isActive: false
             }
@@ -373,7 +379,7 @@ describe('OrcaRuntimeService', () => {
     })
 
     const created = await runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`, {
-      afterTabId: 'split::left',
+      afterTabId: SPLIT_LEFT,
       clientNavigationId: 'mobile-client',
       supportsSplitGroupPlacement: testCase.supportsSplitGroupPlacement
     })
@@ -381,7 +387,7 @@ describe('OrcaRuntimeService', () => {
     expect(
       (await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)).tabs.map((tab) => tab.id)
     ).toEqual(testCase.expectedOrder(created.tab.id))
-  })
+  }
 
   it('asks a headed host to append for an older client', async () => {
     const runtime = new OrcaRuntimeService(store)
@@ -495,7 +501,7 @@ describe('OrcaRuntimeService', () => {
     }
     webContents.send.mockImplementation((_channel: string, payload: { requestId: string }) => {
       expect(setBackgroundThrottling).toHaveBeenCalledWith(false)
-      runtime.registerPty('pty-paired-headed', TEST_WORKTREE_ID, null, {
+      registerBoundPty(runtime, 'pty-paired-headed', TEST_WORKTREE_ID, null, {
         tabId: 'tab-paired-headed',
         leafId
       })
@@ -565,7 +571,7 @@ describe('OrcaRuntimeService', () => {
       expect.objectContaining({ source: 'runtime-session', viewMode: 'chat' })
     )
     expect(spawn).not.toHaveBeenCalled()
-    // The final release restores throttling on the next task, after any native destruction.
+    // Release restores throttling next task, after native destruction.
     await vi.waitFor(() => expect(setBackgroundThrottling.mock.calls).toEqual([[false], [true]]))
     expect(result.tab).toMatchObject({
       type: 'terminal',
@@ -650,9 +656,7 @@ describe('OrcaRuntimeService', () => {
         runtime.markGraphUnavailable(1)
       }
       if (ORCA_LAYOUT_OWNER_IS_MAIN && graphStatus === 'unavailable') {
-        // Layout-owner build: the window closed, so main takes the graph back and starts the
-        // terminal itself; nothing reaches the closed window. (The fixture store has no
-        // agent-session API, so only where the start runs is under test.)
+        // Closed windows transfer graph ownership to main; fixture lacks agent-session APIs, so assert only start location.
         electronMocks.BrowserWindow.fromId.mockReturnValue(null)
         await runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`, {}).catch(() => null)
         expect(runtime.getStatus().graphStatus).toBe('ready')
@@ -763,7 +767,7 @@ describe('OrcaRuntimeService', () => {
     let spawnIndex = 0
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({
-      spawn: vi.fn(async () => ({ id: `pty-headless-${++spawnIndex}` })),
+      spawn: vi.fn(committingSpawn(runtime, async () => ({ id: `pty-headless-${++spawnIndex}` }))),
       write: () => true,
       kill: () => true,
       getForegroundProcess: async () => null
@@ -791,7 +795,7 @@ describe('OrcaRuntimeService', () => {
     let spawnIndex = 0
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({
-      spawn: vi.fn(async () => ({ id: `pty-headless-${++spawnIndex}` })),
+      spawn: vi.fn(committingSpawn(runtime, async () => ({ id: `pty-headless-${++spawnIndex}` }))),
       write: () => true,
       kill: () => true,
       getForegroundProcess: async () => null

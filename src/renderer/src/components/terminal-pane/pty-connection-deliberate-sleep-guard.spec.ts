@@ -52,8 +52,7 @@ export function registerPtyConnectionDeliberateSleepGuardTests(): void {
       await restoreTerminalTestGlobals()
     })
 
-    // Why: manual sleep keeps tab.ptyId as a wake hint, so a remount would take the
-    // REATTACH arm and the daemon would respawn a shell for the dead id (#10205).
+    // Manual sleep retains tab.ptyId as a wake hint; unguarded remount would reattach and respawn its dead shell (#10205).
     it('does not reattach a slept pane through its retained session id', async () => {
       const { connectPanePty } = await import('./pty-connection')
       const { markWorktreeSleepIntent } = await import('@/lib/worktree-sleep-intent')
@@ -214,31 +213,43 @@ export function registerPtyConnectionDeliberateSleepGuardTests(): void {
     })
 
     it('drops the wake listener when a waiting pane is disposed', async () => {
-      const { connectPanePty } = await import('./pty-connection')
-      const { clearWorktreeSleepIntent, markWorktreeSleepIntent } =
-        await import('@/lib/worktree-sleep-intent')
-      const transport = createMockTransport()
-      transportFactoryQueue.push(transport)
-      markWorktreeSleepIntent('wt-1')
-      const deps = createDeps({ tabId: 'tab-disposed', isVisibleRef: { current: false } })
+      const sleepIntent = await import('@/lib/worktree-sleep-intent')
+      const subscribe = sleepIntent.onWorktreeSleepIntentCleared
+      const paneWakeListener = vi.fn()
+      const subscribeSpy = vi
+        .spyOn(sleepIntent, 'onWorktreeSleepIntentCleared')
+        .mockImplementation((worktreeId, listener) =>
+          subscribe(worktreeId, () => {
+            paneWakeListener()
+            listener()
+          })
+        )
+      try {
+        const { connectPanePty } = await import('./pty-connection')
+        const transport = createMockTransport()
+        transportFactoryQueue.push(transport)
+        sleepIntent.markWorktreeSleepIntent('wt-1')
+        const deps = createDeps({ tabId: 'tab-disposed', isVisibleRef: { current: false } })
 
-      const binding = connectPanePty(
-        createPane(1) as never,
-        createManager(1) as never,
-        deps as never
-      )
-      await flushAsyncTicks()
-      binding.dispose()
-      // Why: the connect body already refuses a disposed session, so prove the
-      // listener itself is gone: a wake after dispose reaches no subscriber.
-      const wakeCalls: number[] = []
-      const { onWorktreeSleepIntentCleared } = await import('@/lib/worktree-sleep-intent')
-      onWorktreeSleepIntentCleared('wt-1', () => wakeCalls.push(1))
-      clearWorktreeSleepIntent('wt-1')
-      await flushAsyncTicks()
+        const binding = connectPanePty(
+          createPane(1) as never,
+          createManager(1) as never,
+          deps as never
+        )
+        await flushAsyncTicks()
+        expect(subscribeSpy).toHaveBeenCalledTimes(1)
+        binding.dispose()
+        const wakeCalls: number[] = []
+        subscribe('wt-1', () => wakeCalls.push(1))
+        sleepIntent.clearWorktreeSleepIntent('wt-1')
+        await flushAsyncTicks()
 
-      expect(transport.connect).not.toHaveBeenCalled()
-      expect(wakeCalls).toHaveLength(1)
+        expect(transport.connect).not.toHaveBeenCalled()
+        expect(wakeCalls).toHaveLength(1)
+        expect(paneWakeListener).not.toHaveBeenCalled()
+      } finally {
+        subscribeSpy.mockRestore()
+      }
     })
 
     it('still connects a slept pane that carries a queued startup', async () => {

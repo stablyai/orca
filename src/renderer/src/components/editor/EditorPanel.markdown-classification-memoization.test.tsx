@@ -53,9 +53,7 @@ vi.mock('./EditorPanelShell', () => ({
   EditorPanelShell: (props: ShellProps) => {
     probe.shellRender()
     probe.lastShellProps = props
-    // Why: `richModeUnsupportedMessage` is exactly what EditorMarkdownFileSurface
-    // renders as the rich-mode fallback banner, so rendering it here asserts on
-    // the banner text without mounting the whole editor surface.
+    // Echo the real surface’s fallback prop to verify localized banner text without mounting the editor.
     return (
       <div data-editor-panel-shell="true">
         <span data-rich-fallback-banner="true">
@@ -81,8 +79,7 @@ import { resetMarkdownRichModeEligibilityCache } from './markdown-rich-mode-elig
 const WORKTREE_ID = 'wt-memo'
 const FILE_PATH = '/repo/notes.md'
 
-// Why: HTML in the body is the branch that reaches the TipTap round trip, and
-// staying under 50 KB keeps the round trip eligible rather than size-blocked.
+// HTML triggers the TipTap round trip; stay below 50 KB so size limits cannot bypass it.
 const MARKDOWN_WITH_HTML = [
   '---',
   'title: Notes',
@@ -98,8 +95,7 @@ const MARKDOWN_WITH_HTML = [
   ''
 ].join('\n')
 
-// Why: reference-style links are the cheapest branch that produces a fallback
-// banner without paying for a TipTap round trip.
+// Reference links produce a fallback without a TipTap round trip.
 const MARKDOWN_WITH_REFERENCE_LINKS = [
   '# Notes',
   '',
@@ -171,8 +167,7 @@ describe('EditorPanel markdown classification memoization', () => {
 
     const rendersAfterMount = probe.shellRender.mock.calls.length
 
-    // An idle git-status poll: same data, fresh array identity, exactly what the
-    // worktree poller writes on every tick.
+    // Idle git-status polls replace arrays even when their values match.
     for (let tick = 0; tick < 20; tick += 1) {
       await act(async () => {
         useAppStore.setState({ gitStatusByWorktree: { [WORKTREE_ID]: [] } })
@@ -218,15 +213,12 @@ describe('EditorPanel markdown classification memoization', () => {
     await change(`${MARKDOWN_WITH_HTML}a`)
     expect(isDirty()).toBe(true)
 
-    // Undo back to the loaded content.
     await change(MARKDOWN_WITH_HTML)
     expect(isDirty()).toBe(false)
 
-    // Markdown ignores trailing whitespace, exactly as before.
     await change(`${MARKDOWN_WITH_HTML}\n\n`)
     expect(isDirty()).toBe(false)
 
-    // A same-length edit is still detected.
     await change(`${MARKDOWN_WITH_HTML.slice(0, -1)}X`)
     expect(isDirty()).toBe(true)
 
@@ -253,7 +245,6 @@ describe('EditorPanel markdown classification memoization', () => {
       await i18n.changeLanguage('ja')
     })
     try {
-      // An ordinary idle re-render, the same shape as a git-status poll tick.
       await act(async () => {
         useAppStore.setState({ gitStatusByWorktree: { [WORKTREE_ID]: [] } })
       })
@@ -261,7 +252,6 @@ describe('EditorPanel markdown classification memoization', () => {
       expect(banner()).toBe(
         'このファイルには参照形式のリンクが含まれているため、コードモードでのみ編集できます。'
       )
-      // The decision is still cached — only the string was re-resolved.
       expect(probe.eligibility).toHaveBeenCalledTimes(1)
     } finally {
       await act(async () => {
@@ -285,7 +275,6 @@ describe('EditorPanel markdown classification memoization', () => {
     const initialCallback = probe.lastShellProps?.onContentChangeForFile
     expect(initialCallback).toBeTypeOf('function')
 
-    // A background file read replaces the loaded-content maps.
     contentState.fileContents = {
       [FILE_PATH]: { content: `${MARKDOWN_WITH_HTML}\nReloaded.\n`, isBinary: false }
     }
@@ -295,8 +284,7 @@ describe('EditorPanel markdown classification memoization', () => {
 
     expect(probe.lastShellProps?.onContentChangeForFile).toBe(initialCallback)
 
-    // …and the stable callback compares against the newly committed baseline,
-    // not the one captured when it was created.
+    // The stable callback must compare against the newly committed baseline rather than its creation-time content.
     const file = useAppStore.getState().openFiles[0]
     await act(async () =>
       probe.lastShellProps?.onContentChangeForFile(file, `${MARKDOWN_WITH_HTML}\nReloaded.\n`)

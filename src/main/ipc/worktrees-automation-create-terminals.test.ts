@@ -141,7 +141,6 @@ describe('automation creates: main provisions setup and default tabs', () => {
     )
   })
 
-  // Same pick the window made: the runner's path decides, a bare path falls back to posix.
   it.each([
     { runnerScriptPath: 'C:\\repo\\.git\\orca\\setup-runner.cmd', platform: 'windows' },
     { runnerScriptPath: '/home/me/repo/.git/orca/setup-runner.sh', platform: 'posix' }

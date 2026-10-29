@@ -1,6 +1,3 @@
-// The context every client mutation of a session runs with, and the one path each takes: admit the
-// envelope against the lease, then run its plan inside the session's serialize.
-
 import type { AgentChildWorkEvidence } from '../../../shared/agent-status-child-work-evidence'
 import type {
   AgentSessionMutationEnvelope,
@@ -31,45 +28,39 @@ export type StructuredAgentSessionMutationContext = {
   deps: StructuredAgentSessionHostDeps
   sessions: Map<string, StructuredAgentSessionHostSession>
   publish: (sessionId: string, journal: StructuredAgentSessionHostSession['journal']) => void
-  /** The host's accessor, for a caller outside the session's serialize. */
+  publishConversationName?: (sessionId: string) => void
+  /** For callers outside session serialization. */
   conversation: (sessionId: string) => Promise<StructuredAgentSessionHostSession>
-  /** The session's child records, as the strip reads them; what command admission decides on. */
+  /** Display-admitted child records used by command admission. */
   readChildWork: (sessionId: string) => AgentChildWorkView[] | undefined
   publishChildWork: (sessionId: string, evidence: AgentChildWorkEvidence[]) => void
-  /** What the live child holds changed with no row (`publishGenerationEnded`). */
+  /** Republish held-work changes without journal rows. */
   publishWorkChanged: (sessionId: string) => void
   captureChildWorkStops: (sessionId: string, handleIds: readonly string[]) => CapturedChildWorkStops
-  /** Some of the session's running child work has no record. */
+  /** Includes running child work without records. */
   childWorkOpen: (sessionId: string) => boolean
   childWorkIncomplete: (sessionId: string) => boolean
   serialize: <T>(sessionId: string, task: () => Promise<T>) => Promise<T>
-  /** The session's conversation, opened when closed; inside the caller's serialize. */
+  /** Open within the caller’s existing serialization. */
   openConversation: (sessionId: string) => Promise<StructuredAgentSessionHostSession | null>
-  /** Claims a provider start on the caller's lane; its outcome is awaited outside. */
+  /** Claim inside serialization; await the result outside. */
   claimAgent: (sessionId: string) => StructuredAgentSessionStartClaim
   startFlights: Pick<StructuredAgentSessionStartFlights, 'get'>
   startupAttempts: Pick<StructuredAgentSessionStartupAttempts, 'readiness'>
   deliveryOrder: StructuredAgentSessionDeliveryOrder
-  /** Joins a close a stop began on the session's child, for an operation that starts no child;
-   *  inside the caller's serialize. */
+  /** Join without starting a child, inside existing serialization. */
   joinChildClose: (sessionId: string) => Promise<AgentSessionMutationSessionPreparation>
-  /** A message was accepted: the session's delivery loop hands it over. */
   wakeDelivery: (sessionId: string) => void
-  /** Stops the session's provider child, keeping its conversation; inside the caller's serialize.
-   *  Each caller names why (`ending`). */
+  /** Stop the provider child inside serialization, retaining the conversation. */
   stopAgent: (sessionId: string, ending: StructuredAgentSessionStopEnding) => Promise<void>
-  /** Only for gate inputs living in the RECORD store, which can settle with no
-   *  journal commit (a conversation command). Draft-table changes need no call:
-   *  the draft store notifies through the journal's own commit listener. */
+  /** Wake for row-free record-store gates; draft writes already notify through journal commits. */
   wakeQueuedDrain?: (sessionId: string) => void
-  /** The provider wait each session's serialize is on (a start, an option write), which a caller
-   *  outside that serialize aborts. */
+  /** Abort provider waits from outside the serialization they block. */
   acquireAborts: Pick<StructuredAgentSessionAcquireAborts, 'abort' | 'begin' | 'captureOperations'>
-  /** Moved by every pick a running child takes, so a report it read before is never persisted. */
+  /** Advance on accepted child picks so earlier reports cannot persist stale values. */
   now: () => number
 }
 
-/** Admits the envelope and runs the plan inside the session's serialize. */
 export function mutateStructuredAgentSession<TValue>(
   context: StructuredAgentSessionMutationContext,
   caller: StructuredAgentSessionCaller,
@@ -82,7 +73,7 @@ export function mutateStructuredAgentSession<TValue>(
   )
 }
 
-/** Admission for a caller already inside the session's queue. */
+/** Caller already holds session serialization. */
 export function runStructuredAgentSessionMutation<TValue>(
   context: StructuredAgentSessionMutationContext,
   caller: StructuredAgentSessionCaller,

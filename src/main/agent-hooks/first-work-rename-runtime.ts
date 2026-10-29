@@ -64,7 +64,7 @@ export function firstWorkRenameDeps(
     },
     canRenameOrcaCreatedBranch: (worktreeId) => {
       const meta = store.getWorktreeMeta(worktreeId)
-      // Why: a user branch could coincidentally match a creature name; only Orca-stamped worktrees are safe to auto-rename.
+      // A creature-like name alone cannot prove Orca owns the branch.
       return !!meta?.orcaCreationSource && meta.preserveBranchOnDelete !== true
     },
     setDisplayName: (worktreeId, displayName) => {
@@ -85,11 +85,9 @@ export function firstWorkRenameDeps(
       }
       store.setWorktreeMeta(target, {
         displayName,
-        // The first-agent title is an intentional user-facing label; keep it stable after the
-        // generated branch is renamed and across subsequent catalog refreshes.
+        // Pin the generated title across branch renames and catalog refreshes.
         displayNameIsPinned: true,
         pendingFirstAgentMessageRename: false,
-        // Success clears the failure badge (redundant with the explicit setRenameError(null)).
         firstAgentMessageRenameError: null
       })
     },
@@ -107,9 +105,8 @@ export function firstWorkRenameDeps(
           })
       : undefined,
     setRenameError: (worktreeId, error, failureOutput) => {
-      // Refresh the full-output capture before the dedupe below — a repeat error string is still a fresh run.
+      // Refresh diagnostics before deduping; repeated text can come from a new run.
       rememberBranchRenameFailureOutput(worktreeId, error === null ? null : failureOutput)
-      // Skip the write + push when unchanged — most settled worktrees never had an error to clear.
       const scope = parseWorkspaceKey(worktreeId)
       if (scope?.type === 'folder') {
         const current = store.getFolderWorkspace!(
@@ -133,7 +130,6 @@ export function firstWorkRenameDeps(
         return
       }
       store.setWorktreeMeta(target, { firstAgentMessageRenameError: error })
-      // Why: the hook only knows the worktreeId, so derive the repoId notifyBranchRenamed expects.
       runtime.notifyBranchRenamed(getRepoIdFromWorktreeId(worktreeId))
     },
     resolveWorktreeIdForTab: (tabId) => store.getWorktreeIdForTab!(tabId),
