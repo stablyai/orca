@@ -60,13 +60,14 @@ describe('structured agent launch persistence', () => {
     })
   })
 
-  it("keeps a registered agent's launch across a reload and drops a record naming no agent", () => {
+  it('keeps external ACP IDs across a reload and rejects an empty agent ID', () => {
     localStorage.setItem(
       'orca:structuredAgentLaunches:v1',
       JSON.stringify(
         [
           ['grok_session', 'grok'],
-          ['bogus_session', 'not-an-agent']
+          ['team-agent_session', 'team-agent'],
+          ['bogus_session', '']
         ].map(([sessionId, agent]) => ({
           sessionId,
           agent,
@@ -80,6 +81,11 @@ describe('structured agent launch persistence', () => {
     )
 
     expect(readStructuredAgentLaunchRecord('grok_session')?.agent).toBe('grok')
+    expect(readStructuredAgentLaunchRecord('team-agent_session')).toMatchObject({
+      agent: 'team-agent',
+      lifecycle: 'visibility-unknown',
+      executionHostId: 'local'
+    })
     expect(readStructuredAgentLaunchRecord('grok_session')?.surfaceAddress).toBeUndefined()
     expect(readStructuredAgentLaunchRecord('bogus_session')).toBeUndefined()
   })

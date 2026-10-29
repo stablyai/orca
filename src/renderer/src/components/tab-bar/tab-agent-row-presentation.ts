@@ -1,3 +1,5 @@
+import type { TuiAgent } from '../../../../shared/tui-agent'
+import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import { translate } from '@/i18n/i18n'
 import { getAgentCatalog } from '@/lib/agent-catalog'
 import type { ChatUnavailableReason, NewTabAgentMenuRow } from '@/lib/new-tab-agent-menu-rows'
@@ -59,4 +61,18 @@ export function rowLabel(row: NewTabAgentMenuRow): string {
 
 export function rowId(row: NewTabAgentMenuRow): string {
   return `${row.kind === 'chat-unavailable' ? 'chat' : row.kind}:${row.agent}`
+}
+
+/** The same agent on the other surface: a chat's detected CLI, or a CLI-set agent's chat. */
+export function otherSurfaceRow(
+  row: Exclude<NewTabAgentMenuRow, { kind: 'chat-unavailable' }>,
+  detectedIds: readonly TuiAgent[] | null
+): NewTabAgentMenuRow | null {
+  const { agent, executionHostId } = row
+  if (row.kind === 'chat') {
+    return isTuiAgent(agent) && detectedIds?.includes(agent)
+      ? { kind: 'cli', agent, executionHostId }
+      : null
+  }
+  return row.kind === 'cli' && row.chat ? { kind: 'chat', agent, executionHostId } : null
 }

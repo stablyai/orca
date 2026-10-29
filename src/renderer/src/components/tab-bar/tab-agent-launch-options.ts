@@ -1,3 +1,4 @@
+import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import { rowLabel, rowId, chatUnavailableLabel } from './tab-agent-row-presentation'
 import { getAgentCatalog } from '@/lib/agent-catalog'
 import { filterEnabledTuiAgents } from '../../../../shared/tui-agent-selection'
@@ -6,7 +7,7 @@ import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { NewTabAgentMenuRow } from '@/lib/new-tab-agent-menu-rows'
 
 export type TabAgentLaunchOption = {
-  agent: TuiAgent
+  agent: string
   aliases: readonly string[]
   label: string
   disabled?: boolean
@@ -77,7 +78,9 @@ export function buildTabAgentLaunchOptionsFromRows(
   commandOverrides: Partial<Record<TuiAgent, string>> = {}
 ): TabAgentLaunchOption[] {
   return rows.map((row) => {
-    const base = buildTabAgentLaunchOptions([row.agent], commandOverrides)[0]
+    const base = isTuiAgent(row.agent)
+      ? buildTabAgentLaunchOptions([row.agent], commandOverrides)[0]
+      : { aliases: [normalizeAgentAlias(row.agent), compactAgentAlias(row.agent)] }
     return {
       ...base,
       agent: row.agent,

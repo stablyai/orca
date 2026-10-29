@@ -35,7 +35,7 @@ export type StructuredNativeChatSupport =
   | { supported: false; blocker: StructuredNativeChatBlocker }
 
 export type StructuredNativeChatSupportInput = {
-  agent: TuiAgent
+  agent: string
   executionHostId: string
   /** Owning host’s capabilities, including paired servers; null means unestablished. */
   hostCapabilities: readonly string[] | null

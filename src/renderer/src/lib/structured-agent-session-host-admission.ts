@@ -1,4 +1,3 @@
-import type { TuiAgent } from '../../../shared/tui-agent'
 import { isDefinitiveAgentSessionCreateRefusal } from '../../../shared/agent-session-definitive-refusal'
 import { parseStructuredLaunchSeedOptions } from '../../../shared/native-chat/input/native-chat-session-option-defaults'
 import { hasRuntimeRpcErrorCode } from '../../../shared/runtime-rpc-error-code'
@@ -48,7 +47,7 @@ export type HostCreateSupport =
 export async function askHostCreateSupport(
   target: RuntimeClientTarget,
   worktree: string,
-  agent: TuiAgent
+  agent: string
 ): Promise<HostCreateSupport> {
   for (let attempt = 0; ; attempt += 1) {
     try {
@@ -94,7 +93,7 @@ export const LOCAL_ADMISSION_WAIT_MS = 3_000
 export async function admitStructuredLaunchOnHost(
   target: RuntimeClientTarget,
   worktree: string,
-  agent: TuiAgent
+  agent: string
 ): Promise<StructuredLaunchAdmission> {
   const asked = askHostCreateSupport(target, worktree, agent).then(
     (support): StructuredLaunchAdmission =>

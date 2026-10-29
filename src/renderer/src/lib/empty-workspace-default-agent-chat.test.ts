@@ -69,6 +69,22 @@ describe('openDefaultAgentChatInEmptyWorkspace', () => {
     expect(mocks.seedShell).toHaveBeenCalledOnce()
   })
 
+  it('waits for an asynchronous fallback and exposes the host settlement', async () => {
+    seedSettings({})
+    const shell = Promise.withResolvers<boolean>()
+    const settlement = Promise.resolve({ kind: 'terminal' as const })
+    mocks.launchAgentInNewTab.mockReturnValueOnce({
+      surface: { kind: 'host-published' },
+      structuredSettlement: settlement
+    })
+    const opened = openDefaultAgentChatInEmptyWorkspace('wt-1', () => shell.promise)
+    const onDeclined = mocks.launchAgentInNewTab.mock.calls[0]?.[0]?.onStructuredHostDeclined
+    const fallback = onDeclined()
+    expect(opened?.structuredSettlement).toBe(settlement)
+    shell.resolve(false)
+    await expect(fallback).resolves.toEqual({ opened: false })
+  })
+
   it('reads the agents detected on the workspace SSH host', () => {
     seedSettings({})
     mocks.detectionTargetKey.mockReturnValue('ssh:conn-1')

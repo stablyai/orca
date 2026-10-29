@@ -1,5 +1,6 @@
 import type { AcpHistoryTurnIdentity } from './acp-history-replay'
 import { join } from 'node:path'
+import { homedir } from 'node:os'
 import type { AcpDialect } from './acp-dialects/acp-dialect'
 import { GROK_ACP_DIALECT } from './acp-dialects/grok-dialect'
 import { OMP_ACP_DIALECT } from './acp-dialects/omp-dialect'
@@ -8,7 +9,7 @@ import { ANTIGRAVITY_ACP_DIALECT } from './acp-dialects/antigravity-dialect'
 import { directoryAccountBinding, type AcpAccountBinding } from './acp-account-binding'
 import { openCodeAcpAccountBinding } from '../opencode/opencode-structured-account-home'
 import { scrubOpenCodeAcpEnvironment } from '../opencode/opencode-acp-environment'
-import type { TuiAgent } from '../../shared/tui-agent'
+import { readExternalAcpLaunchSpecs } from './external-acp-launch-specs'
 import type { AgentSessionModelOption } from '../../shared/agent-session-wire'
 import type { AgentChatPermissionMode } from '../../shared/agent-chat-permission-mode'
 import type { InitializeResponse } from './generated/acp-protocol.generated'
@@ -93,7 +94,7 @@ export function acpListingNeedsChatFolder(discovery: AcpModelDiscovery): boolean
 }
 
 export type AcpLaunchSpec = {
-  agent: TuiAgent
+  agent: string
   command: string
   /** The terminal agent's Command setting may name a different program than this chat server. */
   ignoreAgentCommandSetting?: true
@@ -294,12 +295,25 @@ export const ANTIGRAVITY_LAUNCH_SPEC = {
   launchGate: ANTIGRAVITY_LAUNCH_GATE
 } satisfies AcpLaunchSpec
 
-export const ACP_LAUNCH_SPECS: readonly AcpLaunchSpec[] = [
+const BUILTIN_ACP_LAUNCH_SPECS: readonly AcpLaunchSpec[] = [
   GROK_LAUNCH_SPEC,
   OPENCODE_LAUNCH_SPEC,
   OPENCODE2_LAUNCH_SPEC,
   OMP_LAUNCH_SPEC,
   ANTIGRAVITY_LAUNCH_SPEC
+]
+
+const external = readExternalAcpLaunchSpecs(
+  process.env.ORCA_EXTERNAL_ACP_CONFIG,
+  ['pi', 'claude', 'codex', ...BUILTIN_ACP_LAUNCH_SPECS.map((spec) => spec.agent)],
+  join(homedir(), '.config', 'orca', 'external-acp.json')
+)
+if (!external.ok) {
+  console.warn('[acp] External registration rejected; built-in agents remain available.')
+}
+export const ACP_LAUNCH_SPECS: readonly AcpLaunchSpec[] = [
+  ...BUILTIN_ACP_LAUNCH_SPECS,
+  ...(external.ok ? external.specs : [])
 ]
 
 export function acpLaunchSpecFor(agent: string): AcpLaunchSpec | null {

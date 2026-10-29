@@ -50,5 +50,5 @@ export type LaunchAgentInNewTabArgs = LaunchAgentInNewTabRequest & {
     surface: { kind: 'local-terminal' } | { kind: 'host-published' }
   ) => boolean | void
   /** Opens instead of this agent's terminal when the host declines its structured chat. */
-  onStructuredHostDeclined?: () => StructuredLaunchTerminal
+  onStructuredHostDeclined?: () => StructuredLaunchTerminal | Promise<StructuredLaunchTerminal>
 }

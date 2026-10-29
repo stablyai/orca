@@ -312,6 +312,40 @@ describe('agent launch caller routing', () => {
     expect(mockBeginHostAdmittedStructuredLaunch).not.toHaveBeenCalled()
   })
 
+  it('waits for the caller shell result through real host admission before settling', async () => {
+    store.settings = { ...store.settings, ...CHAT_DEFAULT_SETTINGS }
+    mockIsWebRuntimeSessionActive.mockReturnValue(true)
+    mockExecutionHostId.mockReturnValue('runtime:web-runtime')
+    serverReports([
+      STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
+      STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY
+    ])
+    await useActualAdmission()
+    mockCreateSupport.mockResolvedValue({ supported: false, reason: 'agent' })
+    const shell = Promise.withResolvers<{ opened: boolean }>()
+    const onStructuredHostDeclined = vi.fn(() => shell.promise)
+    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
+    const result = launchAgentInNewTab({
+      requestId: 'request-async-default-shell',
+      agent: 'codex',
+      worktreeId: 'wt-1',
+      onStructuredHostDeclined
+    })
+    let settled = false
+    void result?.structuredSettlement?.then(() => {
+      settled = true
+    })
+    await vi.waitFor(() => expect(onStructuredHostDeclined).toHaveBeenCalledOnce())
+    expect(settled).toBe(false)
+    shell.resolve({ opened: false })
+    await expect(result?.structuredSettlement).resolves.toEqual({
+      kind: 'cancelled',
+      sessionId: null
+    })
+    expect(mockLaunchAgentInWebHostTab).not.toHaveBeenCalled()
+    expect(store.createTab).not.toHaveBeenCalled()
+  })
+
   it('aborts a terminal open when beforeSurfaceOpen refuses', async () => {
     const beforeSurfaceOpen = vi.fn(() => false)
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')

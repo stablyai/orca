@@ -231,12 +231,12 @@ export function useAgentMenuObservation(
           localCatalogPending)))
   // Workspace preparation is shared by answers, while agent and published verdict stay per question.
   let answerContext = launchCwd ? undefined : input
-  const answerFor = (agent: TuiAgent): HostChatAnswer => {
+  const answerFor = (agent: string): HostChatAnswer => {
     if (unresolvedTarget) {
       return 'not-yet-known'
     }
     answerContext ??= buildAgentLaunchRouteInput(state, {
-      agent,
+      agent: isTuiAgent(agent) ? agent : 'claude',
       workspace,
       ...(launchCwd ? { tuiCustomization: { cwd: launchCwd } } : {})
     })
@@ -257,6 +257,7 @@ export function useAgentMenuObservation(
     settings,
     detectedOnHost: detection.detectedIds,
     chatAgents,
+    externalChatAgents: (hostCatalog ?? []).filter((agent) => !isTuiAgent(agent)),
     chatProgram: (agent) =>
       unresolvedTarget ? 'unlearned' : readChatProgram(state, agent, input, detection.detectedIds),
     hostChatAnswer: answerFor

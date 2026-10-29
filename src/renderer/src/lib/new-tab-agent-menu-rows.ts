@@ -25,7 +25,9 @@ export type HostChatAnswer =
   | 'not-on-host'
   | 'no-chats'
 
-export function hostChatAnswer(input: AgentLaunchRoutingInput): HostChatAnswer {
+export function hostChatAnswer(
+  input: Omit<AgentLaunchRoutingInput, 'agent'> & { agent: string }
+): HostChatAnswer {
   const support = structuredAgentLaunchSupport(input)
   if (support.supported) {
     return 'yes'
@@ -60,8 +62,8 @@ export type ChatUnavailableReason =
   | 'not-on-host'
 
 export type NewTabAgentMenuRow = (
-  | { kind: 'chat'; agent: TuiAgent }
-  | { kind: 'chat-unavailable'; agent: TuiAgent; reason: ChatUnavailableReason }
+  | { kind: 'chat'; agent: string }
+  | { kind: 'chat-unavailable'; agent: string; reason: ChatUnavailableReason }
   /** `chat`: set to open as a CLI, though it can open as a chat here too. */
   | { kind: 'cli'; agent: TuiAgent; chat?: true }
   | { kind: 'terminal'; agent: TuiAgent }
@@ -73,8 +75,9 @@ export type NewTabAgentMenuSettings = NativeChatDefaultSettings &
 export function buildNewTabAgentMenuRows(args: {
   settings: NewTabAgentMenuSettings | null | undefined
   detectedOnHost: readonly TuiAgent[] | null
+  externalChatAgents?: readonly string[]
   chatAgents: readonly TuiAgent[]
-  hostChatAnswer: (agent: TuiAgent) => HostChatAnswer
+  hostChatAnswer: (agent: string) => HostChatAnswer
   /** Whether the chat's own program runs there, which for some agents is not their CLI. */
   chatProgram: (agent: TuiAgent) => ChatProgramObservation
 }): NewTabAgentMenuRow[] {
@@ -125,7 +128,25 @@ export function buildNewTabAgentMenuRows(args: {
       )
     }
   }
+  const externalRows: NewTabAgentMenuRow[] = [...new Set(args.externalChatAgents ?? [])].map(
+    (agent) => {
+      const answer = args.hostChatAnswer(agent)
+      return answer === 'yes'
+        ? { kind: 'chat', agent }
+        : {
+            kind: 'chat-unavailable',
+            agent,
+            reason:
+              answer === 'not-yet-known'
+                ? 'check-failed'
+                : answer === 'no-chats'
+                  ? 'not-on-host'
+                  : answer
+          }
+    }
+  )
   return [
+    ...externalRows,
     ...orderAgents(defaultAgent, runnable).map((agent) => ({ kind: 'chat' as const, agent })),
     ...orderAgents(defaultAgent, [...unavailable.keys()]).map((agent) => ({
       kind: 'chat-unavailable' as const,

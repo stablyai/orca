@@ -44,7 +44,9 @@ export function structuredAgentLaunchSupported(
   return structuredAgentLaunchSupport(input).supported
 }
 
-export function structuredAgentLaunchSupport(input: Omit<AgentLaunchRoutingInput, 'launchText'>) {
+export function structuredAgentLaunchSupport(
+  input: Omit<AgentLaunchRoutingInput, 'launchText' | 'agent'> & { agent: string }
+) {
   return resolveStructuredNativeChatSupport({
     agent: input.agent,
     executionHostId: input.executionHostId,

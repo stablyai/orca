@@ -1,4 +1,3 @@
-import type { TuiAgent } from '../../../shared/tui-agent'
 import { structuredAgentSessionTabId } from '../../../shared/structured-agent-session-projection'
 import { useAppStore } from '@/store'
 import type { StructuredAgentLaunchOptions } from './structured-agent-session-launch-callers'
@@ -6,7 +5,7 @@ import type { StructuredAgentLaunchOptions } from './structured-agent-session-la
 /** Structured chats have no TUI mirror; the legacy forty-line cap would drop prompts instead of protecting TUI clearing. */
 export function seedStructuredAgentLaunchDraft(
   sessionId: string,
-  agent: TuiAgent,
+  agent: string,
   options: StructuredAgentLaunchOptions
 ): void {
   if (options.promptDelivery !== 'draft' || !options.prompt) {
