@@ -453,6 +453,11 @@ describe('Gitea client', () => {
     await expect(lenient).resolves.toBeNull()
     // The strict lookup still surfaces the failure itself.
     await expect(strict).rejects.toThrow(/Gitea request failed/)
+    // The lenient lookup joined the gated in-flight probe instead of re-issuing
+    // it after release: exactly one head= request for both callers.
+    expect(
+      fetchMock.mock.calls.filter(([url]) => new URL(String(url)).searchParams.has('head'))
+    ).toHaveLength(1)
   })
 
   it('treats a 404 on the linked PR as "no PR" rather than a lookup failure', async () => {
