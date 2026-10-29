@@ -167,6 +167,10 @@ it.each(['claude', 'omp'] as const)(
               expectIdle([sessionId])
               if (index < legacy) {
                 legacyStops.push(await host.subscribe({ id: `legacy-${index}`, sessionId, emit }))
+                if (index < 2) {
+                  // Filesystem preparation can reorder probes; pin which contexts hold the permits.
+                  await vi.waitFor(() => expect(starts).toBe(index + 1), { interval: 0 })
+                }
               }
             }
             stops.push(
