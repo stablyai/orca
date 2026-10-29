@@ -2250,7 +2250,8 @@
       "cleared": "Terminal cleared"
     },
     "useSessionTerminalSendActions": {
-      "inputTooLarge": "Input too large (max 256 KiB)"
+      "inputTooLarge": "Input too large (max 256 KiB)",
+      "liveInputInterrupted": "Live input interrupted. Field cleared; check the terminal before continuing."
     },
     "useTerminalPaste": {
       "clipboardReadFailed": "Couldn't read the clipboard",

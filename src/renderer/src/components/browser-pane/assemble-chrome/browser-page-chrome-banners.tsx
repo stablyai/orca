@@ -9,7 +9,10 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
-import { BrowserAnnotationSendMenuContent } from '../annotate/BrowserAnnotationSendMenuContent'
+import {
+  BrowserAnnotationSendMenuContent,
+  browserAnnotationCopyTooltip
+} from '../annotate/BrowserAnnotationSendMenuContent'
 import { browserAnnotationLimitMessage } from '../annotate/browser-annotation-limit-message'
 import {
   isBrowserAnnotationPageFull,
@@ -31,6 +34,8 @@ export function BrowserPageChromeBanners({
   worktreeId,
   activeGroupId,
   browserAnnotationsPrompt,
+  includePageDetails,
+  handleIncludePageDetailsChange,
   handleBrowserAnnotationsSentToAgent,
   handleBrowserAnnotationsHandedOff,
   handleCopyBrowserAnnotations,
@@ -49,6 +54,8 @@ export function BrowserPageChromeBanners({
   worktreeId: string
   activeGroupId: string | undefined
   browserAnnotationsPrompt: string
+  includePageDetails: boolean
+  handleIncludePageDetailsChange: (include: boolean) => void
   handleBrowserAnnotationsSentToAgent: () => void
   handleBrowserAnnotationsHandedOff: (delivered: Promise<unknown>) => void
   handleCopyBrowserAnnotations: () => void
@@ -167,26 +174,38 @@ export function BrowserPageChromeBanners({
                     worktreeId={worktreeId}
                     groupId={activeGroupId ?? worktreeId}
                     prompt={browserAnnotationsPrompt}
+                    includePageDetails={includePageDetails}
+                    onIncludePageDetailsChange={handleIncludePageDetailsChange}
                     onPromptDelivered={handleBrowserAnnotationsSentToAgent}
                     onPromptHandedOff={handleBrowserAnnotationsHandedOff}
                   />
                 </DropdownMenuContent>
               </DropdownMenu>
-              <Button
-                size="xs"
-                variant="outline"
-                className="h-6 gap-1.5"
-                onClick={handleCopyBrowserAnnotations}
-              >
-                {browserAnnotationsCopied ? (
-                  <CircleCheck className="size-3" />
-                ) : (
-                  <Copy className="size-3" />
-                )}
-                {browserAnnotationsCopied
-                  ? translate('auto.components.browser.pane.BrowserPane.6f4ab3592b', 'Copied')
-                  : translate('auto.components.browser.pane.BrowserPane.499b31b84e', 'Copy All')}
-              </Button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    size="xs"
+                    variant="outline"
+                    className="h-6 gap-1.5"
+                    onClick={handleCopyBrowserAnnotations}
+                  >
+                    {browserAnnotationsCopied ? (
+                      <CircleCheck className="size-3" />
+                    ) : (
+                      <Copy className="size-3" />
+                    )}
+                    {browserAnnotationsCopied
+                      ? translate('auto.components.browser.pane.BrowserPane.6f4ab3592b', 'Copied')
+                      : translate(
+                          'auto.components.browser.pane.BrowserPane.499b31b84e',
+                          'Copy All'
+                        )}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" sideOffset={6}>
+                  {browserAnnotationCopyTooltip(includePageDetails)}
+                </TooltipContent>
+              </Tooltip>
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button

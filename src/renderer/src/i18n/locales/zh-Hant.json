@@ -16743,7 +16743,10 @@
                     "024467ceac": "取消",
                     "449d2c2629": "註解意圖",
                     "38d320108c": "摺疊註解",
-                    "9f209891a7": "展開註解"
+                    "9f209891a7": "展開註解",
+                    "includePageDetails": "包含頁面詳細資料",
+                    "copyFeedback": "複製回饋",
+                    "copyFeedbackWithPageDetails": "複製回饋及頁面詳細資料"
                   }
                 }
               }

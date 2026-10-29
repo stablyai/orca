@@ -2594,7 +2594,8 @@
       "saveFailed": "Error al guardar el comando rápido"
     },
     "useSessionTerminalSendActions": {
-      "inputTooLarge": "Entrada demasiado grande (máx. 256 KiB)"
+      "inputTooLarge": "Entrada demasiado grande (máx. 256 KiB)",
+      "liveInputInterrupted": "Se interrumpió la entrada en vivo. Se vació el campo; revisa la terminal antes de continuar."
     },
     "useStartup": {
       "wakeAgents": "Abre Orca en el host para reanudar los agentes en reposo."

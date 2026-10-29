@@ -17404,7 +17404,10 @@
                     "024467ceac": "Cancel",
                     "449d2c2629": "Annotation intent",
                     "38d320108c": "Collapse annotations",
-                    "9f209891a7": "Expand annotations"
+                    "9f209891a7": "Expand annotations",
+                    "includePageDetails": "Include page details",
+                    "copyFeedback": "Copy feedback",
+                    "copyFeedbackWithPageDetails": "Copy feedback with page details"
                   }
                 }
               }

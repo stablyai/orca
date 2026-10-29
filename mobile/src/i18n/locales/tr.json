@@ -2518,7 +2518,8 @@
       "saveFailed": "Hızlı komut kaydedilemedi"
     },
     "useSessionTerminalSendActions": {
-      "inputTooLarge": "Girdi çok büyük (en fazla 256 KiB)"
+      "inputTooLarge": "Girdi çok büyük (en fazla 256 KiB)",
+      "liveInputInterrupted": "Canlı giriş kesildi. Alan temizlendi; devam etmeden önce terminali kontrol edin."
     },
     "useStartup": {
       "wakeAgents": "Uykudaki ajanları uyandırmak için sunucuda Orca'yı açın."

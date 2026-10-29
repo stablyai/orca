@@ -69,6 +69,8 @@ export function BrowserGuestAnnotateOverlays({
     handleAnnotationTraySendOpenChange,
     activeGroupId,
     browserAnnotationsPrompt,
+    includePageDetails,
+    handleIncludePageDetailsChange,
     handleBrowserAnnotationsSentToAgent,
     handleBrowserAnnotationsHandedOff,
     handleCopyBrowserAnnotations,
@@ -119,6 +121,8 @@ export function BrowserGuestAnnotateOverlays({
           worktreeId={worktreeId}
           activeGroupId={activeGroupId}
           browserAnnotationsPrompt={browserAnnotationsPrompt}
+          includePageDetails={includePageDetails}
+          handleIncludePageDetailsChange={handleIncludePageDetailsChange}
           handleBrowserAnnotationsSentToAgent={handleBrowserAnnotationsSentToAgent}
           handleBrowserAnnotationsHandedOff={handleBrowserAnnotationsHandedOff}
           handleCopyBrowserAnnotations={handleCopyBrowserAnnotations}

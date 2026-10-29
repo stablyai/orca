@@ -16957,7 +16957,10 @@
                     "024467ceac": "İptal",
                     "449d2c2629": "Ek açıklama amacı",
                     "38d320108c": "Ek açıklamaları daralt",
-                    "9f209891a7": "Ek açıklamaları genişlet"
+                    "9f209891a7": "Ek açıklamaları genişlet",
+                    "includePageDetails": "Sayfa ayrıntılarını ekle",
+                    "copyFeedback": "Geri bildirimi kopyala",
+                    "copyFeedbackWithPageDetails": "Geri bildirimi sayfa ayrıntılarıyla kopyala"
                   }
                 }
               }

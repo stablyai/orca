@@ -86,6 +86,8 @@ function renderTray(currentUrl?: string): {
         worktreeId="wt-1"
         activeGroupId={undefined}
         browserAnnotationsPrompt="prompt"
+        includePageDetails={false}
+        handleIncludePageDetailsChange={vi.fn()}
         handleBrowserAnnotationsSentToAgent={vi.fn()}
         handleBrowserAnnotationsHandedOff={vi.fn()}
         handleCopyBrowserAnnotations={vi.fn()}

@@ -17034,7 +17034,10 @@
                     "024467ceac": "Cancelar",
                     "449d2c2629": "Intenção da anotação",
                     "38d320108c": "Recolher anotações",
-                    "9f209891a7": "Expandir anotações"
+                    "9f209891a7": "Expandir anotações",
+                    "includePageDetails": "Incluir detalhes da página",
+                    "copyFeedback": "Copiar feedback",
+                    "copyFeedbackWithPageDetails": "Copiar feedback com detalhes da página"
                   }
                 }
               }

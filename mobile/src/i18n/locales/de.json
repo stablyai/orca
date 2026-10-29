@@ -2518,7 +2518,8 @@
       "saveFailed": "Schnellbefehl konnte nicht gespeichert werden"
     },
     "useSessionTerminalSendActions": {
-      "inputTooLarge": "Eingabe zu groß (max. 256 KiB)"
+      "inputTooLarge": "Eingabe zu groß (max. 256 KiB)",
+      "liveInputInterrupted": "Live-Eingabe unterbrochen. Eingabefeld geleert; prüfe das Terminal, bevor du fortfährst."
     },
     "useStartup": {
       "wakeAgents": "Orca auf dem Host öffnen, um schlafende Agenten zu wecken."

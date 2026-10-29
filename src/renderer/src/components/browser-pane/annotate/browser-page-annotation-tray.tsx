@@ -27,11 +27,15 @@ import {
   type BrowserPageAnnotation
 } from '../../../../../shared/browser-grab-types'
 import { BROWSER_ANNOTATION_INTENT_OPTIONS } from '../describe-page/browser-annotation-geometry'
-import { BrowserAnnotationSendMenuContent } from './BrowserAnnotationSendMenuContent'
+import {
+  BrowserAnnotationSendMenuContent,
+  browserAnnotationCopyTooltip
+} from './BrowserAnnotationSendMenuContent'
 import { preventAgentSendTargetOutsideDismiss } from './prevent-agent-send-target-outside-dismiss'
 import { browserAnnotationMatchesPageUrl } from './browser-annotation-page-url'
 import { useBrowserAnnotationImages } from './use-browser-annotation-images'
 import { BrowserAnnotationImageStrip } from './browser-annotation-image-strip'
+import type { BrowserPageAnnotationTrayProps } from '../describe-page/browser-page-types'
 
 export function BrowserPageAnnotationTray({
   browserAnnotations,
@@ -41,6 +45,8 @@ export function BrowserPageAnnotationTray({
   worktreeId,
   activeGroupId,
   browserAnnotationsPrompt,
+  includePageDetails,
+  handleIncludePageDetailsChange,
   handleBrowserAnnotationsSentToAgent,
   handleBrowserAnnotationsHandedOff,
   handleCopyBrowserAnnotations,
@@ -48,27 +54,7 @@ export function BrowserPageAnnotationTray({
   handleClearBrowserAnnotations,
   handleDeleteBrowserAnnotation,
   handleUpdateBrowserAnnotation
-}: {
-  browserAnnotations: BrowserPageAnnotation[]
-  currentUrl?: string
-  annotationTraySendOpen: boolean
-  handleAnnotationTraySendOpenChange: (open: boolean) => void
-  worktreeId: string
-  activeGroupId: string | undefined
-  browserAnnotationsPrompt: string
-  handleBrowserAnnotationsSentToAgent: () => void
-  handleBrowserAnnotationsHandedOff: (delivered: Promise<unknown>) => void
-  handleCopyBrowserAnnotations: () => void
-  browserAnnotationsCopied: boolean
-  handleClearBrowserAnnotations: () => void
-  handleDeleteBrowserAnnotation: (annotationId: string) => void
-  handleUpdateBrowserAnnotation: (
-    annotationId: string,
-    comment: string,
-    intent: BrowserAnnotationIntent,
-    imagePaths: string[]
-  ) => void
-}): React.JSX.Element {
+}: BrowserPageAnnotationTrayProps): React.JSX.Element {
   const [editingAnnotationId, setEditingAnnotationId] = useState<string | null>(null)
   const [editComment, setEditComment] = useState('')
   const [editIntent, setEditIntent] = useState<BrowserAnnotationIntent>('change')
@@ -188,26 +174,35 @@ export function BrowserPageAnnotationTray({
                 worktreeId={worktreeId}
                 groupId={activeGroupId ?? worktreeId}
                 prompt={browserAnnotationsPrompt}
+                includePageDetails={includePageDetails}
+                onIncludePageDetailsChange={handleIncludePageDetailsChange}
                 onPromptDelivered={handleBrowserAnnotationsSentToAgent}
                 onPromptHandedOff={handleBrowserAnnotationsHandedOff}
               />
             </DropdownMenuContent>
           </DropdownMenu>
-          <Button
-            size="xs"
-            variant="outline"
-            className="gap-1.5"
-            onClick={handleCopyBrowserAnnotations}
-          >
-            {browserAnnotationsCopied ? (
-              <CircleCheck className="size-3" />
-            ) : (
-              <Copy className="size-3" />
-            )}
-            {browserAnnotationsCopied
-              ? translate('auto.components.browser.pane.BrowserPane.6f4ab3592b', 'Copied')
-              : translate('auto.components.browser.pane.BrowserPane.d51ef37351', 'Copy')}
-          </Button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                size="xs"
+                variant="outline"
+                className="gap-1.5"
+                onClick={handleCopyBrowserAnnotations}
+              >
+                {browserAnnotationsCopied ? (
+                  <CircleCheck className="size-3" />
+                ) : (
+                  <Copy className="size-3" />
+                )}
+                {browserAnnotationsCopied
+                  ? translate('auto.components.browser.pane.BrowserPane.6f4ab3592b', 'Copied')
+                  : translate('auto.components.browser.pane.BrowserPane.d51ef37351', 'Copy')}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" sideOffset={6}>
+              {browserAnnotationCopyTooltip(includePageDetails)}
+            </TooltipContent>
+          </Tooltip>
           <Tooltip>
             <TooltipTrigger asChild>
               <Button

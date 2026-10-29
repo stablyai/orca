@@ -16588,7 +16588,10 @@
                     "024467ceac": "取消",
                     "449d2c2629": "注释意图",
                     "38d320108c": "折叠注释",
-                    "9f209891a7": "展开注释"
+                    "9f209891a7": "展开注释",
+                    "includePageDetails": "包含页面详情",
+                    "copyFeedback": "复制反馈",
+                    "copyFeedbackWithPageDetails": "复制反馈及页面详情"
                   }
                 }
               }

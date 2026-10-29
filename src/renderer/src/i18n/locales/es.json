@@ -16992,7 +16992,10 @@
                     "09a7c1df70": "Editar anotación {{value0}}",
                     "449d2c2629": "Intención de la anotación",
                     "38d320108c": "Contraer anotaciones",
-                    "9f209891a7": "Expandir anotaciones"
+                    "9f209891a7": "Expandir anotaciones",
+                    "includePageDetails": "Incluir detalles de la página",
+                    "copyFeedback": "Copiar comentarios",
+                    "copyFeedbackWithPageDetails": "Copiar comentarios con detalles de la página"
                   }
                 }
               }
