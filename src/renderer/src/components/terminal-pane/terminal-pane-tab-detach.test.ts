@@ -346,6 +346,38 @@ describe('detachTerminalPaneToTab', () => {
     })
   })
 
+  itSwitchOff('names the new tab as the client that already drew it did', async () => {
+    const moveLeafToNewTab = vi.fn(() => Promise.resolve({ status: 'moved', ptyId: 'pty-left' }))
+    vi.stubGlobal('window', { api: { pty: { moveLeafToNewTab } } })
+    const store = createStore()
+    const manager = {
+      getPanes: vi.fn(() => [{ id: 1 }, { id: 2 }]),
+      getLeafId: vi.fn((paneId: number) => (paneId === 1 ? LEAF_1 : LEAF_2)),
+      detachPaneForExternalMove: vi.fn(() => true)
+    }
+
+    await detachTerminalPaneToTab({
+      getStore: () => store,
+      manager,
+      persistLayoutSnapshot: vi.fn(),
+      sourcePaneId: 1,
+      sourceTabId: SOURCE_TAB_ID,
+      targetGroupId: TARGET_GROUP_ID,
+      targetTabId: 'client-drawn-tab',
+      worktreeId: WORKTREE_ID
+    })
+
+    expect(moveLeafToNewTab).toHaveBeenCalledWith(
+      expect.objectContaining({ targetTabId: 'client-drawn-tab', leafId: LEAF_1 })
+    )
+    expect(store.createTab).toHaveBeenCalledWith(
+      WORKTREE_ID,
+      TARGET_GROUP_ID,
+      'powershell.exe',
+      expect.objectContaining({ id: 'client-drawn-tab' })
+    )
+  })
+
   itSwitchOff('moves the detached tab into the requested group slot', async () => {
     const store = createStore(splitLayout(), [EXISTING_TAB_1, EXISTING_TAB_2])
     const manager = {

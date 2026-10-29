@@ -12,6 +12,7 @@ export function useTerminalPaneLifecycleStage(controller: TerminalPaneCloseContr
     cwd,
     dispatchNotification,
     effectiveMacOptionAsAlt,
+    detachPaneToNewTab,
     handleExternalPaneDrop,
     initialLayoutRef,
     isActive,
@@ -135,6 +136,7 @@ export function useTerminalPaneLifecycleStage(controller: TerminalPaneCloseContr
     setPaneCount,
     setPaneLayoutRevision,
     resolveExternalPaneDropTarget,
-    onExternalPaneDrop: handleExternalPaneDrop
+    onExternalPaneDrop: handleExternalPaneDrop,
+    detachPaneToNewTab
   })
 }

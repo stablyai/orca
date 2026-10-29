@@ -54,6 +54,14 @@ export type DetachedTerminalPaneTab = {
   ptyId: string | null
 }
 
+/** Where a pane's new tab goes; `targetTabId` names a tab another client already drew. */
+export type TerminalPaneNewTabTarget = { groupId: string; index?: number; targetTabId?: string }
+
+export type DetachTerminalPaneToNewTab = (
+  sourcePaneId: number,
+  target: TerminalPaneNewTabTarget
+) => Promise<DetachedTerminalPaneTab | null>
+
 function moveCreatedTabToIndex(args: {
   groupId: string
   store: TerminalPaneTabDetachStore
@@ -99,6 +107,8 @@ type DetachTerminalPaneToTabArgs = {
   sourceTabId: string
   targetGroupId: string
   targetIndex?: number
+  /** The new tab's id when another client already drew the tab; else one is minted. */
+  targetTabId?: string
   worktreeId: string
 }
 
@@ -155,7 +165,7 @@ async function moveLeafToNewTab(
     // Why: a mirrored host tab's local id derives from the host id, so the next snapshot finds this tab.
     targetTabId: paneMoveHost
       ? toWebTerminalSurfaceTabId(createBrowserUuid())
-      : createBrowserUuid(),
+      : (args.targetTabId ?? createBrowserUuid()),
     leafId,
     ptyId: livePtyId
   }
