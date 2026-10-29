@@ -6,7 +6,6 @@ import { DEVICE_REGISTRY_FILENAME } from './mobile-pairing-files'
 import { mintDeviceCredential } from './device-credential'
 import { planDeviceKeyFork } from './device-key-fork'
 import { planIdleEphemeralPrune, withoutEphemeralRows } from './ephemeral-device-rows'
-import { quarantineCorruptRegistry } from './device-registry-corruption'
 import { readDeviceRegistryFile } from './device-registry-file-read'
 import { DeviceRegistryWriter } from './device-registry-disk-merge'
 import type { RelayDeviceBinding } from './mobile-cloud-relay/relay-revoke-outbox'
@@ -339,7 +338,7 @@ export class DeviceRegistry {
       )
     }
     if (this.corruptFilePending) {
-      quarantineCorruptRegistry(this.registryPath)
+      this.writer.quarantineCorrupt()
       this.corruptFilePending = false
     }
   }
