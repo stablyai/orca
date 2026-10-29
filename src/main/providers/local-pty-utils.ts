@@ -6,6 +6,7 @@ import {
   usesNodePtySpawnHelper
 } from '../../shared/node-pty-spawn-helper'
 import { TERMINAL_SPAWN_ISSUE_REQUEST } from '../../shared/terminal-spawn-error-copy'
+import { resetLinuxPtyChildPriority } from '../pty/linux-pty-child-priority'
 import {
   hostReportsChildExitStatus,
   wrapShellSpawnForMacosTccAttribution
@@ -162,6 +163,7 @@ function spawnWindowsFallbackChain(
         env,
         ...windowsConptyDllOptions()
       })
+      resetLinuxPtyChildPriority(proc.pid)
       console.warn(
         `[pty] Primary shell "${params.shellPath}" failed (${primaryError}), fell back to "${attempt.shellPath}"`
       )
@@ -185,7 +187,7 @@ export type PtyExecutableSpawnParams = Pick<
 /** One executable with an argv array, no shell and no fallback; throws when it can't start. */
 export function spawnPtyExecutable(params: PtyExecutableSpawnParams): pty.IPty {
   const { file, args, termName = 'xterm-256color', cols, rows, cwd, env, ptySpawn } = params
-  return ptySpawn(file, args, {
+  const proc = ptySpawn(file, args, {
     name: termName,
     cols,
     rows,
@@ -193,6 +195,8 @@ export function spawnPtyExecutable(params: PtyExecutableSpawnParams): pty.IPty {
     env,
     ...windowsConptyDllOptions()
   })
+  resetLinuxPtyChildPriority(proc.pid)
+  return proc
 }
 
 export function spawnShellWithFallback(params: ShellSpawnParams): ShellSpawnResult {
@@ -217,17 +221,18 @@ export function spawnShellWithFallback(params: ShellSpawnParams): ShellSpawnResu
   if (!primaryError) {
     try {
       const wrapped = wrapShellSpawnForMacosTccAttribution(shellPath, shellArgs, env)
+      const proc = spawnPtyExecutable({
+        file: wrapped.file,
+        args: wrapped.args,
+        termName,
+        cols,
+        rows,
+        cwd,
+        env,
+        ptySpawn
+      })
       return {
-        process: spawnPtyExecutable({
-          file: wrapped.file,
-          args: wrapped.args,
-          termName,
-          cols,
-          rows,
-          cwd,
-          env,
-          ptySpawn
-        }),
+        process: proc,
         shellPath,
         reportsChildExitStatus: hostReportsChildExitStatus(wrapped.file)
       }
@@ -277,6 +282,7 @@ export function spawnShellWithFallback(params: ShellSpawnParams): ShellSpawnResu
           cwd,
           env
         })
+        resetLinuxPtyChildPriority(proc.pid)
         console.warn(
           `[pty] Primary shell "${shellPath}" failed (${primaryError ?? 'unknown error'}), fell back to "${fallback}"`
         )
