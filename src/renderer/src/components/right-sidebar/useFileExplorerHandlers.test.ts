@@ -68,7 +68,8 @@ describe('activateFileExplorerNode', () => {
     expect(loadDir).toHaveBeenCalledTimes(1)
     expect(loadDir).toHaveBeenCalledWith('/repo/linked-docs', 0, {
       force: true,
-      failOnError: true
+      failOnError: true,
+      wakeWslDistro: true
     })
     expect(markPathAsDirectory).toHaveBeenCalledWith('/repo/linked-docs')
     expect(toggleDir).toHaveBeenCalledWith('wt-1', '/repo/linked-docs')
@@ -168,40 +169,43 @@ describe('activateFileExplorerNode', () => {
     )
   })
 
-  it('opens local files without runtime fallback when no runtime owner is set', async () => {
-    const fileNode: TreeNode = {
-      name: 'README.md',
-      path: '/repo/README.md',
-      relativePath: 'README.md',
-      isDirectory: false,
-      depth: 0,
-      operationOwner: { kind: 'local' }
-    }
-    const openFile = vi.fn()
-    useAppStore.setState({
-      worktreesByRepo: {
-        'repo-1': [{ id: 'wt-1', repoId: 'repo-1', path: '/repo', hostId: 'local' } as never]
+  it.each(['README.md', 'report.html', 'REPORT.HTM'])(
+    'opens %s in the editor without runtime fallback when no runtime owner is set',
+    async (name) => {
+      const fileNode: TreeNode = {
+        name,
+        path: `/repo/${name}`,
+        relativePath: name,
+        isDirectory: false,
+        depth: 0,
+        operationOwner: { kind: 'local' }
       }
-    })
+      const openFile = vi.fn()
+      useAppStore.setState({
+        worktreesByRepo: {
+          'repo-1': [{ id: 'wt-1', repoId: 'repo-1', path: '/repo', hostId: 'local' } as never]
+        }
+      })
 
-    await activateFileExplorerNode({
-      node: fileNode,
-      activeWorktreeId: 'wt-1',
-      runtimeEnvironmentId: null,
-      openFile,
-      toggleDir: vi.fn(),
-      loadDir: vi.fn(),
-      statPath: vi.fn(),
-      markPathAsDirectory: vi.fn(),
-      setSelectedPath: vi.fn()
-    })
+      await activateFileExplorerNode({
+        node: fileNode,
+        activeWorktreeId: 'wt-1',
+        runtimeEnvironmentId: null,
+        openFile,
+        toggleDir: vi.fn(),
+        loadDir: vi.fn(),
+        statPath: vi.fn(),
+        markPathAsDirectory: vi.fn(),
+        setSelectedPath: vi.fn()
+      })
 
-    expect(openFile).toHaveBeenCalledWith(
-      expect.objectContaining({
-        filePath: '/repo/README.md',
-        runtimeEnvironmentId: undefined
-      }),
-      { preview: true, focusEditor: true, suppressActiveRuntimeFallback: true }
-    )
-  })
+      expect(openFile).toHaveBeenCalledWith(
+        expect.objectContaining({
+          filePath: `/repo/${name}`,
+          runtimeEnvironmentId: undefined
+        }),
+        { preview: true, focusEditor: true, suppressActiveRuntimeFallback: true }
+      )
+    }
+  )
 })

@@ -159,10 +159,15 @@ describe('git history graph model', () => {
       trackedItem(`commit-${index}`, index + 1 < count ? [`commit-${index + 1}`] : [], reads)
     )
 
-    buildGitHistoryViewModels(historyItems)
+    const rows = buildGitHistoryViewModels(historyItems)
 
     // A linear graph reads each item while projecting; an eager index would add one read per row.
     expect(reads.count).toBeLessThanOrEqual(count * 5)
+    expect(rows).toHaveLength(64)
+    expect(rows[0]!.historyItem.id).toBe('commit-0')
+    expect(rows[0]!.outputSwimlanes.map((lane) => lane.id)).toEqual(['commit-1'])
+    expect(rows.at(-1)!.historyItem.id).toBe('commit-63')
+    expect(rows.at(-1)!.outputSwimlanes).toEqual([])
   })
 
   it('indexes merge parents once instead of rescanning a large history', () => {
@@ -177,10 +182,15 @@ describe('git history graph model', () => {
     }
     historyItems.push(trackedItem(targetId, [], reads))
 
-    buildGitHistoryViewModels(historyItems)
+    const rows = buildGitHistoryViewModels(historyItems)
 
     // Repeated Array#find scans grow with rows; one index build stays within a linear read budget.
     expect(reads.count).toBeLessThan(historyItems.length * 8)
+    expect(rows).toHaveLength(129)
+    expect(rows[0]!.historyItem.id).toBe('merge-0')
+    expect(rows[0]!.outputSwimlanes.map((lane) => lane.id)).toEqual(['missing-0', 'target-64'])
+    expect(rows.at(-1)!.historyItem.id).toBe('target-64')
+    expect(rows.at(-1)!.outputSwimlanes.map((lane) => lane.id)).not.toContain('target-64')
   })
 
   it('inserts incoming and outgoing boundary rows at the merge base', () => {

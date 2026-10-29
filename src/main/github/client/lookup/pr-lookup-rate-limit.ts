@@ -7,21 +7,10 @@ import {
   type RateLimitBucketKind
 } from '../../rate-limit'
 import type { GhExecOptions } from './../github-exec-scope'
-// Why: a branch lookup prefers REST but can fall back to `gh pr list` and
-// `gh pr view`, so both buckets are guarded and charged. Mirrors the PR refresh
-// coordinator's own estimate.
+// REST branch lookup can fall back to GraphQL-backed gh commands; guard and debit both buckets.
 export const PR_BRANCH_LOOKUP_BUCKETS = ['core', 'graphql'] as const
 
-/**
- * Rate-limit floor for GitHub PR lookups that do not run through the PR refresh
- * coordinator's queue (#11532).
- *
- * The coordinator guards and paces its own background refreshes, but
- * `hostedReview:forBranch` polls the same lookup straight from the renderer.
- * Ungated, the two paths together could spend the user's entire hourly quota —
- * which is per user and shared with their own `gh` and CLI agents.
- * Returns the reset time when the caller must not spend, else `null`.
- */
+/** Guard direct renderer lookups as well as coordinator work; return the latest blocked reset or null. */
 export async function getGitHubPRLookupRateLimitBlock(
   repoPath: string,
   connectionId?: string | null,
@@ -30,8 +19,7 @@ export async function getGitHubPRLookupRateLimitBlock(
   const executionOptions = ghRepoExecOptions(
     githubRepoContext(repoPath, connectionId, localGitOptions)
   )
-  // Why: identity resolution runs local git, which can fail for reasons that
-  // have nothing to do with the budget; let the lookup itself classify those.
+  // Identity-probe failures belong to lookup classification, not budget gating.
   const repository = await getOriginGitHubApiRepository(
     repoPath,
     connectionId,
@@ -41,12 +29,10 @@ export async function getGitHubPRLookupRateLimitBlock(
     return null
   }
   if (spendsSharedGitHubComQuota(repository, executionOptions)) {
-    // Why: the probe only warms the snapshot and is exempt from limits, so a
-    // failure must fail open rather than block the lookup (#7553).
+    // Exempt budget-probe failures must not block otherwise usable lookups.
     await getRateLimit().catch(() => undefined)
   }
-  // Why: retrying at the earlier reset would fail again on the bucket that has
-  // not reset yet, so the latest blocked reset is the only honest retry time.
+  // Retrying before every blocked bucket resets would immediately fail again.
   const resets = PR_BRANCH_LOOKUP_BUCKETS.map((bucket) =>
     repositoryRateLimitGuard(repository, bucket, executionOptions)
   ).flatMap((guard) => (guard.blocked ? [guard.resetAt] : []))

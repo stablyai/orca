@@ -1,5 +1,3 @@
-// Computer-use types (see docs/computer-use/plan.md §4 and §12.6).
-
 export const COMPUTER_ERROR_CODES = {
   app_not_found: 'app_not_found',
   app_blocked: 'app_blocked',

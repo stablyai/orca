@@ -110,6 +110,12 @@ export function buildMobileTerminalSurfaceTabs(
       ...(tabWideFallbackSafe && terminal.quickCommandLabel?.trim()
         ? { quickCommandLabel: terminal.quickCommandLabel.trim() }
         : {}),
+      ...(tabWideFallbackSafe && terminal.aiVaultTitle?.title.trim()
+        ? { aiVaultTitle: terminal.aiVaultTitle }
+        : {}),
+      ...(tabWideFallbackSafe && inputs.generatedTitlesEnabled && terminal.generatedTitle?.trim()
+        ? { generatedTitle: terminal.generatedTitle.trim() }
+        : {}),
       parentTabId: terminal.id,
       leafId,
       ptyId,

@@ -4,6 +4,18 @@ import { createEditorTabsStore } from './editor-slice-test-harness'
 import type { AppState } from '../types'
 import { createGlobalSettingsFixture } from '../../../../shared/global-settings-test-fixture'
 import { getReplaceablePreviewFileId } from './editor/tabs/workspace-editor-item'
+import { drawTabsFromMain } from './tabs-drawn-from-main.test-fixture'
+
+vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeRpcClientWithLayoutApply(await importOriginal())
+)
+vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeLayoutClientWithTestFrames(await importOriginal())
+)
 
 const { toastErrorMock } = vi.hoisted(() => ({
   toastErrorMock: vi.fn()
@@ -34,6 +46,9 @@ function openPreview(store: StoreApi<AppState>, relativePath: string): void {
   )
 }
 
+const previewTabs = (store: StoreApi<AppState>) =>
+  (store.getState().unifiedTabsByWorktree['wt-1'] ?? []).filter((tab) => tab.isPreview)
+
 function storeWithPreviewTabs(enabled: boolean): StoreApi<AppState> {
   const store = createEditorTabsStore()
   store.setState({ settings: createGlobalSettingsFixture({ editorPreviewTabsEnabled: enabled }) })
@@ -41,11 +56,18 @@ function storeWithPreviewTabs(enabled: boolean): StoreApi<AppState> {
 }
 
 describe('editor preview tab setting', () => {
-  it('replaces the open preview when preview tabs are enabled', () => {
+  it('replaces the open preview when preview tabs are enabled', async () => {
     const store = storeWithPreviewTabs(true)
+    const main = await drawTabsFromMain(store)
 
     openPreview(store, 'src/a.ts')
+    // A layout-owner build draws a's preview tab with its frame; b's open then replaces it.
+    await main.settle()
     openPreview(store, 'src/b.ts')
+    await main.settle()
+    main.close()
+
+    expect(previewTabs(store)).toEqual([expect.objectContaining({ entityId: '/repo/src/b.ts' })])
 
     expect(store.getState().openFiles.map((file) => file.relativePath)).toEqual(['src/b.ts'])
     expect(store.getState().openFiles[0].isPreview).toBe(true)
@@ -67,11 +89,18 @@ describe('editor preview tab setting', () => {
     ).toBe(true)
   })
 
-  it('treats an unset setting as enabled so existing profiles keep preview tabs', () => {
+  it('treats an unset setting as enabled so existing profiles keep preview tabs', async () => {
     const store = createEditorTabsStore()
+    const main = await drawTabsFromMain(store)
 
     openPreview(store, 'src/a.ts')
+    // A layout-owner build draws a's preview tab with its frame; b's open then replaces it.
+    await main.settle()
     openPreview(store, 'src/b.ts')
+    await main.settle()
+    main.close()
+
+    expect(previewTabs(store)).toEqual([expect.objectContaining({ entityId: '/repo/src/b.ts' })])
 
     expect(store.getState().openFiles.map((file) => file.relativePath)).toEqual(['src/b.ts'])
   })

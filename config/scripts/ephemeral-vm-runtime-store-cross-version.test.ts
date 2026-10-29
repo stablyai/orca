@@ -135,8 +135,11 @@ test.skipIf(!targetRoot || !operation)(`STA-4274 ${operation ?? 'disabled'}`, as
         '})'
       ].join('\n')
     )
+    const servicePath = resolve(targetRoot, 'src/main/ephemeral-vm/runtime-service.ts')
     const serviceUrl = pathToFileURL(
-      resolve(targetRoot, 'src/main/ephemeral-vm-runtime-service.ts')
+      existsSync(servicePath)
+        ? servicePath
+        : resolve(targetRoot, 'src/main/ephemeral-vm-runtime-service.ts')
     ).href
     const service = await import(/* @vite-ignore */ serviceUrl)
     const result = await service.cleanupEphemeralVmRuntime({

@@ -2,7 +2,6 @@ import { vi, type Mock } from 'vitest'
 import { browserManager } from './browser-manager'
 
 export const rendererWebContentsId = 5001
-// Base (non-Firefox) UA a guest reports off the Google auth hosts.
 export const guestBaseUserAgent = 'Mozilla/5.0 (Test) Chrome/140.0.0.0'
 
 export type GuestUserAgentMethods = {
@@ -17,8 +16,7 @@ export const guestUaMethods = (): GuestUserAgentMethods => ({
   session: { getUserAgent: vi.fn(() => guestBaseUserAgent) }
 })
 
-// Why: vi.mock factories are hoisted per file, so every browser-manager test file declares its own
-// vi.hoisted bundle; this is the shape they all produce.
+// Each file needs vi.hoisted mocks because vi.mock factories are hoisted.
 export type BrowserManagerMocks = {
   appGetPathMock: Mock
   shellOpenExternalMock: Mock

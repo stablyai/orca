@@ -36,6 +36,8 @@ function noPublishedProjectSectionCatalog(): MobileProjectSectionCatalog | null 
   return null
 }
 
+const NO_PUBLISHED_ACTIVE_GROUPS: Readonly<Record<string, string>> = {}
+
 export const graphState = {
   syncScheduled: false,
   syncInFlight: false,
@@ -63,7 +65,9 @@ export const graphState = {
   /** Last group grid sizes main accepted, so a refit republishes only when one changed. */
   publishedTerminalGroupGridSizesKey: '',
   /** Last sidebar Project catalog main accepted, so the graph carries it only when it changed. */
-  publishedProjectSectionCatalog: noPublishedProjectSectionCatalog()
+  publishedProjectSectionCatalog: noPublishedProjectSectionCatalog(),
+  /** Each workspace's active group as main last accepted it (layout-owner builds). */
+  publishedActiveGroups: NO_PUBLISHED_ACTIVE_GROUPS
 }
 
 /** IDs occurring more than once cannot address the legacy tab-keyed runtime maps safely. */

@@ -174,8 +174,7 @@ export async function checkRunMailbox(args: {
   const waitResult = await runtime.waitForMessage(address, {
     typeFilter: typeFilter as string[] | undefined,
     timeoutMs: params.timeoutMs ?? undefined,
-    signal,
-    exclusive: true
+    signal
   })
   try {
     revalidateConsumer()
@@ -193,15 +192,6 @@ export async function checkRunMailbox(args: {
     throw new OrchestrationError(
       'consumer_fenced',
       'This mailbox consumer was replaced while waiting.'
-    )
-  }
-  if (waitResult === 'waiter_exists') {
-    if (acknowledged) {
-      return interruptedAcknowledgedCheck(run.id, acknowledged, 'waiter_exists')
-    }
-    throw new OrchestrationError(
-      'waiter_exists',
-      `Run ${run.id} already has an active actionable waiter.`
     )
   }
   if (waitResult === 'timed_out') {

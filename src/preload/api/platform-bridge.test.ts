@@ -30,21 +30,14 @@ describe('platformApi.get', () => {
     mutableProcess.getSystemVersion = getSystemVersion
 
     const first = platformApi.get()
-    for (let index = 0; index < 100; index += 1) {
-      expect(platformApi.get()).toBe(first)
-    }
+    expect(platformApi.get()).toBe(first)
+    expect(Object.isFrozen(first)).toBe(true)
 
     expect(getSystemVersion).toHaveBeenCalledTimes(1)
     expect(mocks.getLinuxDisplayServer).toHaveBeenCalledTimes(1)
     expect(first.platform).toBe(process.platform)
     expect(first.arch).toBe(process.arch)
     expect(first.osRelease).toBe('25.3.0')
-  })
-
-  it('freezes the payload so no consumer can corrupt the shared instance', async () => {
-    const platformApi = await loadPlatformApi()
-
-    expect(Object.isFrozen(platformApi.get())).toBe(true)
   })
 
   it('resolves nothing before the first get, keeping preload startup free', async () => {

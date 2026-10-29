@@ -1,14 +1,9 @@
 import { useCallback, useRef, useState } from 'react'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import { resolveAgentPermissionModeSummary } from '../../../../shared/tui-agent-permissions'
 
 function savedYoloPermissions(settings: GlobalSettings | null | undefined): boolean {
-  return (
-    resolveAgentPermissionModeSummary({
-      agentDefaultArgs: settings?.agentDefaultArgs,
-      agentDefaultEnv: settings?.agentDefaultEnv
-    }) !== 'manual'
-  )
+  const choice = settings?.agentPermissionDefault ?? 'full-access'
+  return choice === 'full-access' || choice === 'auto'
 }
 
 /** Onboarding's Yolo switch: follows saved settings as they hydrate, until the person flips it. */

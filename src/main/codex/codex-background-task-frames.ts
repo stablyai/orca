@@ -8,13 +8,12 @@ import { readCodexTurnId } from './codex-structured-thread-facts'
 export type CodexAnnouncedChild = {
   agentThreadId: string
   label: string | null
-  /** The reporting thread, for a spawn: the agent that spawned the child. */
+  /** Set only by spawn announcements, whose reporting thread is the spawner. */
   spawnerThreadId: string | undefined
 }
 
 export type CodexBackgroundTaskFrame =
   | {
-      /** An item naming children, several for a call on more than one helper. */
       kind: 'subagents'
       children: CodexAnnouncedChild[]
     }
@@ -25,7 +24,7 @@ export type CodexBackgroundTaskFrame =
       state: NativeChatSubagentState
     }
   | {
-      /** A child thread that closed: it ran its last turn, and Codex never said how it went. */
+      /** Thread closure without a final turn outcome. */
       kind: 'thread-closed'
       threadId: string
     }
@@ -36,12 +35,7 @@ export type CodexBackgroundTaskEvent = {
   params: unknown
 }
 
-/**
- * The one way Codex ends a child's turn without `turn/completed`: a closed thread ran its last
- * turn and Codex never said how it went. A turn-ending `error` is not one — Codex follows it with
- * a failed `turn/completed` for the same turn, which is that turn's end and carries the duration
- * and receipt time the error does not.
- */
+// Only thread closure substitutes for turn/completed; errors await that frame's outcome and timing.
 function readCodexChildThreadClosed(
   event: CodexBackgroundTaskEvent
 ): CodexBackgroundTaskFrame | null {
@@ -89,8 +83,7 @@ export function readCodexBackgroundTaskFrame(
   return children.length > 0 ? { kind: 'subagents', children } : null
 }
 
-/** What one frame says about the child executions. Repeating it changes nothing, so the journal
- *  reads it before it writes the frame's rows and the background tasks read it again after. */
+/** Idempotent: the journal observes before writing rows, then background tasks observe again. */
 export function observeCodexExecutionFrame(
   executions: CodexSubagentExecutions,
   frame: CodexBackgroundTaskFrame | null,

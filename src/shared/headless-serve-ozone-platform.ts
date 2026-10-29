@@ -1,10 +1,5 @@
-/**
- * Headless serve renders browser panes in hidden windows on an X display (often its own Xvfb), so
- * it must run Chromium on X11. Chromium picks its platform before Orca's main code runs, from
- * XDG_SESSION_TYPE / WAYLAND_DISPLAY / ELECTRON_OZONE_PLATFORM_HINT, and `app.commandLine` changes
- * cannot move it afterwards. An inherited `XDG_SESSION_TYPE=wayland` with no Wayland compositor
- * makes it exit in platform init (#25400), so the switch must be on the launch argv.
- */
+/** Headless serve needs X11 for hidden windows/Xvfb. Chromium selects its platform before main, so app.commandLine is too late.
+ * Put X11 on launch argv: inherited Wayland variables without a compositor otherwise crash platform initialization (#25400). */
 export const HEADLESS_SERVE_OZONE_PLATFORM_SWITCH = '--ozone-platform=x11'
 
 /** True when argv already names a platform; a `--ozone-platform-hint` is only a preference. */

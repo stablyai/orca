@@ -65,8 +65,6 @@ function anotherSession(params: AgentSessionAttachParams): AgentSessionAttachPar
 
 it('imports adoption at rest and resumes its original provider identity after its source disappears', async () => {
   const params = await adoptedParams()
-  const history = vi.fn(async () => null)
-  rig.host.deps.adapter.providerHistoryWindow = history
   expect(await rig.host.create(CALLER, params)).toMatchObject({
     ok: true,
     value: {
@@ -83,7 +81,6 @@ it('imports adoption at rest and resumes its original provider identity after it
     { origin: 'adopted', mintedAtFence: 1, handle: { nativeId: THREAD } }
   ])
   expect(rig.adapter.acquire).not.toHaveBeenCalled()
-  expect(history).not.toHaveBeenCalled()
   await rm(join(rig.root, 'rollout.jsonl'))
   expect(
     await rig.host.create(CALLER, {
@@ -100,10 +97,6 @@ it('imports adoption at rest and resumes its original provider identity after it
         providerHandle: expect.objectContaining({ nativeId: THREAD })
       })
     })
-  )
-  expect(history).toHaveBeenCalledOnce()
-  expect(history.mock.invocationCallOrder[0]).toBeLessThan(
-    rig.adapter.acquire.mock.invocationCallOrder[0]
   )
   expect(rig.store.getRecord(SESSION)?.accountHome).toEqual(params.accountHome)
 })

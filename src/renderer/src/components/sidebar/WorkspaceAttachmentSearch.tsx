@@ -258,7 +258,10 @@ export function WorkspaceAttachmentSearch({
       {query.trim() ? (
         <div className="mt-2 flex max-h-60 min-h-0 shrink flex-col overflow-hidden">
           <SmartWorkspaceSourceResultList
-            model={controller}
+            // Jira URL status owns its message; a Linear read of that URL cannot diagnose it.
+            model={
+              taskUrlProvider === 'jira' ? { ...controller, linearReadError: null } : controller
+            }
             onSelect={selectRow}
             isLinked={linked}
             isRowDisabled={() => props.disabled || controller.isQueryStale}

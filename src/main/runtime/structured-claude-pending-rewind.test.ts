@@ -1,6 +1,4 @@
-// Claude rewind is reported unsupported until it returns through a fork. These pin that a rewind
-// RPC leaves nothing behind, and that a pending rewind persisted by an older build never strands
-// the chat: the next attach resumes by session id and settles the rewind as refused.
+// Interrupted rewinds must launch their saved fork; legacy records without one refuse the rewind and resume by session id.
 
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -9,11 +7,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
 import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session-mutation-envelope'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
-import { claudeSessionIdForOrcaSession } from '../claude/claude-structured-launch-resolution'
+import type { AgentSessionRewindFork } from '../../shared/agent-session-rewind'
+import { claudeSessionIdForOrcaSession } from '../claude/structured/claude-structured-session-id'
 import { fakeClaude } from '../claude/claude-structured-session-test-support'
 import { claudeAndCodexAgents } from '../native-chat/agent-session-wire/structured-agent-session-adapter-router-test-support'
 import { StructuredAgentSessionAdapterRouter } from '../native-chat/agent-session-wire/structured-agent-session-adapter-router'
-import { CLAUDE_STRUCTURED_AGENT } from '../claude/claude-structured-agent-definition'
 import { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-host'
 import {
   HOST_TEST_NOW,
@@ -72,7 +70,10 @@ function rewindParams(fence: number) {
 const fence = (): number => store.getRecord(HOST_TEST_SESSION)!.lease.runtimeFence
 
 /** What an older build left behind: an admitted rewind whose outcome was never recorded. */
-async function seedPendingRewind(phase: 'prepared' | 'provider-succeeded') {
+async function seedPendingRewind(
+  phase: 'prepared' | 'provider-succeeded',
+  providerFork?: AgentSessionRewindFork
+) {
   const request = rewindParams(fence())
   // A rewind had a turn to target, so Claude had written the transcript a resume continues.
   const projects = join(directory, 'claude-home', 'projects', 'workspace')
@@ -98,7 +99,7 @@ async function seedPendingRewind(phase: 'prepared' | 'provider-succeeded') {
       providerItemId: TARGET,
       expectedEpoch: request.expectedEpoch,
       phase,
-      retained: []
+      ...(providerFork ? { providerFork } : { retained: [] })
     }
   }))
   return request
@@ -151,18 +152,23 @@ afterEach(async () => {
   await rm(directory, { recursive: true, force: true })
 })
 
-describe('Claude rewind is unsupported', () => {
-  it('keeps ordinary unsupported refusal ahead of stale epoch without writing a rewind record', async () => {
-    expect(CLAUDE_STRUCTURED_AGENT.capabilities.rewind).toBe(false)
-    const request = rewindParams(fence())
-    expect((await host.journalSnapshot(HOST_TEST_SESSION)).cursor.epoch).not.toBe(
-      request.expectedEpoch
-    )
-    expect(await host.rewind(caller, request)).toMatchObject({
-      ok: false,
-      refusal: { rewindReason: 'unsupported' }
+describe('a pending Claude rewind', () => {
+  it('launches the fork a rewind saved, even when it was cut short before finishing', async () => {
+    const fork: AgentSessionRewindFork = {
+      sessionId: '33333333-3333-4333-8333-333333333333',
+      sourceSessionId: PROVIDER_SESSION_ID,
+      throughEntryId: 'answer-1',
+      replacesSessionId: PROVIDER_SESSION_ID
+    }
+    await seedPendingRewind('prepared', fork)
+    await host.close(HOST_TEST_SESSION, 'evict')
+    await host.attach(caller, attachParams(fence()))
+    expect(claude.connections.at(-1)?.launch.options).toMatchObject({
+      sessionId: fork.sessionId,
+      resume: PROVIDER_SESSION_ID,
+      resumeSessionAt: 'answer-1',
+      forkSession: true
     })
-    expect(store.getRecord(HOST_TEST_SESSION)?.rewind).toBeUndefined()
   })
 
   it.each(['prepared', 'provider-succeeded'] as const)(

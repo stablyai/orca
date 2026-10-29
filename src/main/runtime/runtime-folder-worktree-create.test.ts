@@ -3,6 +3,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../shared/repo-types'
 import { createRuntimeFolderWorktree } from './runtime-folder-worktree-create'
+import type { HostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
 
 type CreateArgs = Parameters<typeof createRuntimeFolderWorktree>[0]
 
@@ -20,7 +21,7 @@ function createDeps() {
     .mockResolvedValue({ handle: 'term-1', worktreeId: 'folder-1', title: null })
   const store = {
     getSettings: () => ({ workspaceDir: '/ws', nestWorkspaces: false }),
-    setWorktreeMeta: (_id: string, meta: Record<string, unknown>) => meta,
+    setWorktreeMeta: (_target: HostWorktreeTarget, meta: Record<string, unknown>) => meta,
     getProjectHostSetups: () => []
   }
   const deps: CreateArgs['deps'] = {

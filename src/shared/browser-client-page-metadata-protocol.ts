@@ -23,13 +23,7 @@ export type BrowserClientPageMetadataParams = z.infer<typeof BrowserClientPageMe
 export const BrowserClientPageMetadataAck = z.object({ accepted: z.boolean() })
 export type BrowserClientPageMetadataAck = z.infer<typeof BrowserClientPageMetadataAck>
 
-/**
- * What the publishing renderer learns about its publish.
- *
- * `accepted: false` is not a failure — the runtime already holds a newer revision — but it is the
- * signal that separates "the runtime has this page's URL" from "the runtime is still showing the
- * URL the page was born with", so it is reported rather than discarded.
- */
+/** accepted:false means the runtime already has a newer revision, not failure; report it so the renderer can distinguish acknowledged URL state from the creation URL. */
 export type BrowserClientPageMetadataPublishOutcome =
   | { status: 'published'; accepted: boolean }
   /** Main declined to forward it at all: untrusted sender or malformed params. */

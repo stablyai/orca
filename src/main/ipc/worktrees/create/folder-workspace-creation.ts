@@ -6,6 +6,7 @@ import type { Store } from '../../../persistence/loading-store/store'
 import type { CreateWorktreeArgsWithSystemProvenance } from '../ipc-context-schemas'
 import { getFolderWorkspaceInstanceId, mergeFolderWorkspace } from '../folder-workspace-model'
 import { resolveWorktreeCreateDisplayNameRequest } from '../../worktree-display-name'
+import { hostWorktreeTargetForRepo } from '../../../persistence/host-qualified-worktree-meta'
 
 export function createFolderWorkspace(
   args: CreateWorktreeArgsWithSystemProvenance,
@@ -22,7 +23,7 @@ export function createFolderWorkspace(
     args.cliProvenance?.kind === 'created-by-cli',
     args.nameWasGenerated === true
   )
-  const meta = store.setWorktreeMeta(worktreeId, {
+  const meta = store.setWorktreeMeta(hostWorktreeTargetForRepo(worktreeId, repo), {
     instanceId,
     ...(store.getProjectHostSetups
       ? getProjectHostSetupWorktreeMeta(store.getProjectHostSetups(), repo)

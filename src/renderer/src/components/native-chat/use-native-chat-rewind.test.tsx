@@ -55,6 +55,7 @@ const item = (
 function input(): Input & { send: ReturnType<typeof vi.fn> } {
   return {
     sessionId: 'session',
+    capturePresentation: () => () => true,
     composerScopeKey: 'pane',
     state: {
       ...EMPTY_STRUCTURED_AGENT_SESSION,
@@ -208,6 +209,30 @@ describe('structured chat rewind', () => {
     expect(view.result.current.disabledReason).toBeNull()
   })
 
+  it.each([done, notDone(unknownRefusal)])(
+    'returns captured content after closure for $kind',
+    async (outcome) => {
+      const props = input(),
+        answer = deferred<typeof outcome>()
+      props.send.mockReturnValue(answer.promise)
+      const onMessageReturned = vi.fn(),
+        view = render({ ...props, onMessageReturned })
+      let request!: Promise<void>
+      await act(async () => {
+        request = view.result.current.request('user', async () => true)
+      })
+      view.unmount()
+      writeNativeChatDraftCache('pane', 'new writing')
+      await act(async () => {
+        answer.resolve(outcome)
+        await request
+      })
+      expect(readNativeChatDraftCache('pane')).toBe('new writing\n\ntext of user')
+      expect(onMessageReturned).not.toHaveBeenCalled()
+      expect(toastError).not.toHaveBeenCalled()
+    }
+  )
+
   it('does not execute a confirmation after its pane unmounts', async () => {
     const props = input(),
       confirmation = deferred<boolean>()
@@ -262,7 +287,7 @@ describe('structured chat rewind', () => {
 
   it('still offers the action when the options read answered while the host was in doubt', () => {
     const view = render({ ...input(), support: { supported: false, reason: 'outcome-unknown' } })
-    expect(view.result.current.surface).toEqual({
+    expect(view.result.current.surface).toMatchObject({
       disabledReason: null,
       request: view.result.current.request
     })
@@ -347,15 +372,23 @@ describe('structured chat rewind', () => {
     }
   })
 
-  it.each(['hidden throughout', 'hidden part way'] as const)(
-    'lets go silently when the pane was %s, since a hidden pane reads nothing',
+  it.each(['hidden throughout', 'hidden part way', 'presentation replaced'] as const)(
+    'lets go silently when the pane was %s',
     async (mode) => {
       vi.useFakeTimers()
       try {
-        const props: Input = { ...input(), isVisible: mode !== 'hidden throughout' }
+        let current = true
+        const props: Input = {
+          ...input(),
+          isVisible: mode !== 'hidden throughout',
+          capturePresentation: () => () => current
+        }
         const view = render(props)
         await act(() => view.result.current.request('user', async () => true))
         expect(view.result.current.blockedRef.current).toBe(true)
+        if (mode === 'presentation replaced') {
+          current = false
+        }
         if (mode === 'hidden part way') {
           await act(() => vi.advanceTimersByTimeAsync(1_000))
           view.rerender({ ...props, isVisible: false })
@@ -377,7 +410,7 @@ describe('structured chat rewind', () => {
       const props = input()
       props.send.mockResolvedValue(
         notDone(
-          // Parsed as a reply is, so a reason this build does not know is dropped.
+          // Parse like a wire reply so unknown future reasons are dropped.
           parseAgentSessionWriteFailure({
             kind: 'refused',
             code: 'agent_session_operation_invalid',

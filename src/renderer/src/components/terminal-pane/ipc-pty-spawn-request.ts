@@ -10,9 +10,7 @@ import { toRuntimeTerminalWorktreeSelector } from '../../runtime/runtime-worktre
 type PtyConnectOptions = Parameters<PtyTransport['connect']>[0]
 const modelLaunchOperations = new WeakMap<IpcPtyTransportOptions, AgentSessionCreateOperation>()
 
-/** `incarnationId` names which lifetime of the returned id this spawn owns; absent when the
- *  execution host predates the field. It is deliberately NOT on `PtyConnectResult` — only the
- *  connect handshake needs it, to fence buffered state left by an earlier owner of the same id. */
+/** Fence buffered state by PTY lifetime during connect; older hosts omit incarnationId, and later PtyConnectResult consumers do not need it. */
 export type IpcPtySpawnResponse = PtyConnectResult & {
   isReattach?: boolean
   incarnationId?: string
@@ -71,13 +69,13 @@ export async function spawnIpcPty(
   }
   const {
     cwd,
-    cwdFallback,
     env,
     envToDelete,
     command,
     commandDelivery,
     launchConfig,
     resumeProviderSession,
+    resumeOrigin,
     launchToken,
     launchAgent,
     startupCommandDelivery,
@@ -93,8 +91,6 @@ export async function spawnIpcPty(
     telemetry,
     agentLaunch
   } = transportOptions
-  const shouldSendLocalCwdFallback =
-    cwdFallback === 'worktree' && !connectionId && !admittedSessionId
   const resumesAgent = Boolean(connectOptions.resumeProviderSession ?? resumeProviderSession)
   const spawnIntent =
     resumesAgent && !admittedSessionId ? connectOptions.resumeSpawnIntent : undefined
@@ -104,7 +100,6 @@ export async function spawnIpcPty(
     cols: connectOptions.cols ?? 80,
     rows: connectOptions.rows ?? 24,
     cwd,
-    ...(shouldSendLocalCwdFallback ? { cwdFallback } : {}),
     env: connectOptions.env ?? env,
     ...((connectOptions.envToDelete ?? envToDelete)
       ? { envToDelete: connectOptions.envToDelete ?? envToDelete }
@@ -118,6 +113,9 @@ export async function spawnIpcPty(
       : {}),
     ...((connectOptions.resumeProviderSession ?? resumeProviderSession)
       ? { resumeProviderSession: connectOptions.resumeProviderSession ?? resumeProviderSession }
+      : {}),
+    ...(resumesAgent && (connectOptions.resumeOrigin ?? resumeOrigin)
+      ? { resumeOrigin: connectOptions.resumeOrigin ?? resumeOrigin }
       : {}),
     ...((connectOptions.launchToken ?? launchToken)
       ? { launchToken: connectOptions.launchToken ?? launchToken }
@@ -133,6 +131,7 @@ export async function spawnIpcPty(
     ...(connectionId ? { connectionId } : {}),
     ...(admittedSessionId ? { sessionId: admittedSessionId } : {}),
     ...(connectOptions.initiallyHidden ? { initiallyHidden: true } : {}),
+    ...(connectOptions.attachOnlyView ? { attachOnlyView: true } : {}),
     worktreeId,
     ...(tabId ? { tabId } : {}),
     ...(leafId ? { leafId } : {}),

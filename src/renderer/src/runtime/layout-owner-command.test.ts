@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { LOCAL_LAYOUT_APPLY_ORIGIN } from './server-layout-apply-routes'
 import { endLayoutFramePositions, noteLayoutFramePosition } from './layout-frame-position'
 import { sendLayoutCommandToOwner } from './layout-owner-command'
 import {
@@ -59,7 +60,9 @@ describe('sendLayoutCommandToOwner', () => {
       command: { ...SPLIT, workspace: 'worktree-1' }
     })
     expect(on.apply).not.toHaveBeenCalled()
-    await vi.waitFor(() => expect(on.apply).toHaveBeenCalledWith({ leafId: 'leaf-minted' }))
+    await vi.waitFor(() =>
+      expect(on.apply).toHaveBeenCalledWith({ leafId: 'leaf-minted' }, LOCAL_LAYOUT_APPLY_ORIGIN)
+    )
     expect(on.asToday).not.toHaveBeenCalled()
   })
 
@@ -78,7 +81,7 @@ describe('sendLayoutCommandToOwner', () => {
     expect(on.apply).not.toHaveBeenCalled()
 
     noteLayoutFramePosition(5)
-    expect(on.apply).toHaveBeenCalledWith({ leafId: 'leaf-minted' })
+    expect(on.apply).toHaveBeenCalledWith({ leafId: 'leaf-minted' }, LOCAL_LAYOUT_APPLY_ORIGIN)
   })
 
   it('changes nothing itself after a refusal', async () => {

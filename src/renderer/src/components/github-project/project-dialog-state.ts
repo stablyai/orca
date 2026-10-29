@@ -1,5 +1,9 @@
+import type { Repo } from '../../../../shared/repo-types'
+import { getWorkItemRepo, type WorkItemRepoRef } from '@/lib/work-item-repo-row'
+
 type RepoBackedProjectDialogState = {
   repoId: string
+  workItem: WorkItemRepoRef
 }
 
 type SlugProjectDialogState = {
@@ -35,15 +39,18 @@ function shouldCloseFallbackDialog(args: {
   return selectedMatchCount > 0 || unselectedMatchCount > 0
 }
 
+/** The open dialog and the repo row its item came from, or neither once that row is gone. */
 export function resolveRepoBackedProjectDialogState<T extends RepoBackedProjectDialogState>(
   dialog: T | null,
-  liveRepoIds: ReadonlySet<string>,
+  repos: readonly Repo[],
   selectedRepoIds: ReadonlySet<string>
-): T | null {
-  if (dialog && (!liveRepoIds.has(dialog.repoId) || !selectedRepoIds.has(dialog.repoId))) {
-    return null
+): { dialog: T | null; repo: Repo | null } {
+  if (!dialog || !selectedRepoIds.has(dialog.repoId)) {
+    return { dialog: null, repo: null }
   }
-  return dialog
+  // Why: by id alone a twin resolves to the other host's row, and the dialog would act there.
+  const repo = getWorkItemRepo(repos, dialog.workItem) ?? null
+  return repo ? { dialog, repo } : { dialog: null, repo: null }
 }
 
 export function resolveMissingRepoProjectDialogState<

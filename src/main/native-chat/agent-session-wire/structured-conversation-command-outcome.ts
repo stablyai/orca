@@ -1,5 +1,3 @@
-// How a conversation command the provider ran ended, read the same way for every provider.
-
 import {
   agentSessionFailureFact,
   type AgentSessionFailureFact,
@@ -8,24 +6,18 @@ import {
 
 export type StructuredConversationCommandOutcome = {
   outcome: 'success' | 'failure' | 'cancellation'
-  /** On a failure: what its row reports. */
   failure?: AgentSessionFailureFact
 }
 
-/** What the provider showed of one compaction while it ran. */
 export type StructuredCompactionEvidence = {
-  /** The provider reported the conversation compacted: Claude's boundary, Codex's item. */
+  /** Claude boundary or Codex compaction item. */
   compacted: boolean
-  /** Orca asked the provider to stop the command. */
   interruptRequested: boolean
-  /** The provider said the compaction failed, with its words for a person when it gave any. */
   failed?: { detail?: ProviderDiagnostic } | null
 }
 
-/** Only a compaction the provider reported doing is a success: Claude answers a stopped `/compact`
- *  with the same success result as a finished one, so the result's own verdict cannot decide. With
- *  none, one Orca asked to stop is the user's cancellation; anything else failed — reported as the
- *  provider's failure when it said so, and otherwise as a compaction it never confirmed. */
+/** Claude reports stopped /compact as success; require compaction evidence before accepting that verdict.
+ * Otherwise classify requested Stop as cancellation, or report provider/unconfirmed failure. */
 export function structuredCompactionOutcome(
   evidence: StructuredCompactionEvidence
 ): StructuredConversationCommandOutcome {

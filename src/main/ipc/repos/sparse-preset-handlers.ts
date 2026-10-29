@@ -7,9 +7,6 @@ import { normalizeSparseDirectories } from '../sparse-checkout-directories'
 import { assertWslMoveProjectWritable } from '../../persistence/moving-wsl-projects/wsl-move-scope-guard'
 
 export function registerSparsePresetHandlers(mainWindow: BrowserWindow, store: Store): void {
-  // ── Sparse presets ─────────────────────────────────────────────
-  // Why: repo-scoped reusable directory lists for the new-workspace composer; broadcast on change so open composers refresh.
-
   ipcMain.handle('sparsePresets:list', (_event, args: { repoId: string }) => {
     return store.getSparsePresets(args.repoId)
   })

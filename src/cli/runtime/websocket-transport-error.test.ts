@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import { RemoteRuntimeClientError } from '../../shared/remote-runtime-client-error'
+import { RemoteRuntimeClientError } from '../../shared/remote-runtime/remote-runtime-client-error'
+import type { PairedRuntimeConnection } from '../../shared/paired-runtime-connection'
 import { orchestrationMutationRecoveryError } from '../orchestration-mutation-recovery'
 
 const { sendRemoteRuntimeRequest, sendRemoteRuntimeRequestWithStatusPreflight } = vi.hoisted(
@@ -9,8 +10,7 @@ const { sendRemoteRuntimeRequest, sendRemoteRuntimeRequestWithStatusPreflight } 
   })
 )
 
-vi.mock('../../shared/remote-runtime-client', () => ({
-  RemoteRuntimeClientError,
+vi.mock('../../shared/remote-runtime/remote-runtime-client', () => ({
   sendRemoteRuntimeRequest,
   sendRemoteRuntimeRequestWithStatusPreflight
 }))
@@ -21,11 +21,10 @@ import {
 } from './websocket-transport'
 
 const pairing = {
-  v: 2,
   endpoint: 'ws://127.0.0.1:1',
-  deviceToken: 'token',
-  publicKeyB64: 'key'
-} as never
+  hostPublicKeyB64: Buffer.from(new Uint8Array(32).fill(1)).toString('base64'),
+  credential: { kind: 'token', deviceToken: 'token' }
+} satisfies PairedRuntimeConnection
 
 describe('CLI WebSocket transport error identity', () => {
   it('preserves recovery data from one-shot transport errors', async () => {

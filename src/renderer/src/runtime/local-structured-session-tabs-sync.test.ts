@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
 import type { Tab } from '../../../shared/tab-types'
@@ -22,7 +23,7 @@ import {
 
 const mocks = vi.hoisted(() => ({ recheckUnconfirmedLaunches: vi.fn() }))
 
-vi.mock('../lib/structured-agent-session-launch-unconfirmed-recheck', () => ({
+vi.mock('../lib/agent-session/launch/structured-agent-session-launch-unconfirmed-recheck', () => ({
   recheckUnconfirmedStructuredAgentLaunches: mocks.recheckUnconfirmedLaunches
 }))
 
@@ -112,6 +113,7 @@ function createSnapshot(): WebSessionTabsSyncState {
       }
     },
     openFiles: [],
+    editorBuffers: {},
     ptyIdsByTabId: { [TERMINAL_ID]: ['pty-1'] },
     remoteBrowserPageHandlesByPageId: {},
     tabBarOrderByWorktree: { [WORKTREE_ID]: [TERMINAL_ID, STRUCTURED_ID] },
@@ -391,6 +393,27 @@ describe('local structured session tab projection', () => {
         expect.arrayContaining([expect.objectContaining({ contentType: 'agent-session' })])
       )
     }
+  })
+
+  it('mirrors floating-panel chats from this machine but never from a paired host', () => {
+    const floating = {
+      ...structuredInventory('epoch-1', 5, 'floating-1'),
+      worktree: FLOATING_TERMINAL_WORKTREE_ID
+    }
+    const paired = applyWebSessionTabsSnapshot(createSnapshot(), floating, 'server-1')
+    expect(paired.unifiedTabsByWorktree?.[FLOATING_TERMINAL_WORKTREE_ID]).toBeUndefined()
+
+    const published = applyLocalStructuredSessionTabSnapshots(createSnapshot(), [floating])
+    expect(published.unifiedTabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID]).toEqual([
+      expect.objectContaining({ contentType: 'agent-session', entityId: 'floating-1' })
+    ])
+
+    // The panel's last chat closing must keep its cursor, or a late older frame brings it back.
+    const closed = applyLocalStructuredSessionTabSnapshots(published, [
+      { ...floating, snapshotVersion: 6, tabs: [], tabGroups: [] }
+    ])
+    const late = applyLocalStructuredSessionTabSnapshots(closed, [floating])
+    expect(late.unifiedTabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID]).toBeUndefined()
   })
 
   it('forgets publisher versions when a worktree is removed', () => {

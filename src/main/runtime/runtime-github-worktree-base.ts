@@ -11,9 +11,10 @@ import {
   getLocalProjectGitExecOptions,
   getLocalProjectGhExecOptions
 } from '../project-runtime-git-options'
-import { SshHostNotServedError } from '../providers/ssh-host-not-served-error'
 import { isFolderRepo } from '../../shared/repo-kind'
+import { requireRepoLocalGitRoute } from '../repo-execution-host'
 import type { ProjectRuntimeResolutionStore } from '../local-project-runtime-resolution'
+import { reviewStartPointFailure } from '../../shared/review-start-point-failure-copy'
 
 export type RuntimeGitHubWorktreeBaseArgs = {
   repoSelector: string
@@ -37,14 +38,13 @@ export async function resolveRuntimeGitHubWorktreeBase(
   try {
     repo = await deps.resolveRepo(args.repoSelector)
   } catch {
-    return { error: 'Repo not found' }
+    return reviewStartPointFailure('repoNotFound')
   }
   if (isFolderRepo(repo)) {
-    return { error: 'Folder mode does not support creating worktrees.' }
+    return reviewStartPointFailure('folderUnsupported')
   }
-  if (repo.connectionId) {
-    throw new SshHostNotServedError(repo.connectionId)
-  }
+  // Use shared host gating: executionHostId may be a row's only SSH marker.
+  requireRepoLocalGitRoute(repo)
   const localGitExecOptions = getLocalProjectGitExecOptions(deps.store, repo)
   const localGhOptions = getLocalProjectGhExecOptions(deps.store, repo)
   const gitExec = (gitArgs: string[]) => gitExecFileAsync(gitArgs, localGitExecOptions)

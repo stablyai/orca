@@ -1,6 +1,6 @@
 import { useCallback, useMemo } from 'react'
 import { detectLanguage } from '@/lib/language-detect'
-import { joinPath } from '@/lib/path'
+import { openUncommittedEntry } from './open-uncommitted-entry'
 import { useAppStore } from '@/store'
 import type {
   GitBranchChangeEntry,
@@ -35,10 +35,9 @@ export function useSourceControlRowOpening({
   const openConflictFile = useAppStore((s) => s.openConflictFile)
   const openDiff = useAppStore((s) => s.openDiff)
   const openFile = useAppStore((s) => s.openFile)
-  const setEditorViewMode = useAppStore((s) => s.setEditorViewMode)
   const openBranchDiff = useAppStore((s) => s.openBranchDiff)
 
-  // Why: modifier-click keeps the current pane intact by opening the file in a fresh split to the right.
+  // Modifier-click opens a right split to preserve the current pane.
   const resolveSplitTargetGroupId = useCallback(
     (event?: SourceControlRowOpenEvent): string | undefined => {
       if (!event || !activeWorktreeId || !isSourceControlSplitOpenModifier(event, isMac)) {
@@ -54,7 +53,7 @@ export function useSourceControlRowOpening({
     [activeGroupIdByWorktree, activeWorktreeId, createEmptySplitGroup, groupsByWorktree, isMac]
   )
 
-  // Why: a stable string signature keeps this selector referentially stable so the panel re-renders only when the active editor file changes; null when the tab isn't an editor.
+  // Use a primitive signature so unrelated store writes do not rerender; return null for non-editor tabs.
   const activeOpenFileSignature = useAppStore((s) => {
     if (!activeWorktreeId || s.activeTabTypeByWorktree?.[activeWorktreeId] !== 'editor') {
       return null
@@ -89,37 +88,13 @@ export function useSourceControlRowOpening({
       }
       const targetGroupId = resolveSplitTargetGroupId(event)
       const openAsPreview = shouldOpenSourceControlRowAsPreview(event, targetGroupId)
-      if (entry.conflictKind && entry.conflictStatus) {
-        if (entry.conflictStatus === 'unresolved') {
-          trackConflictPath(activeWorktreeId, entry.path, entry.conflictKind)
-        }
-        openConflictFile(activeWorktreeId, worktreePath, entry, detectLanguage(entry.path), {
-          targetGroupId,
-          preview: openAsPreview
-        })
-        return
-      }
-      const language = detectLanguage(entry.path)
-      const filePath = joinPath(worktreePath, entry.path)
-      // Why: unstaged markdown diffs open as an edit tab in Changes view (one tab per file); staged diffs still get a separate diff tab since that isn't what the editor edits.
-      if (language === 'markdown' && entry.area === 'unstaged') {
-        openFile(
-          {
-            filePath,
-            relativePath: entry.path,
-            worktreeId: activeWorktreeId,
-            language,
-            mode: 'edit'
-          },
-          { targetGroupId, preview: openAsPreview }
-        )
-        setEditorViewMode(filePath, 'changes')
-        return
-      }
-      openDiff(activeWorktreeId, filePath, entry.path, language, entry.area === 'staged', {
-        targetGroupId,
-        preview: openAsPreview
-      })
+      openUncommittedEntry(
+        { trackConflictPath, openConflictFile, openFile, openDiff },
+        activeWorktreeId,
+        worktreePath,
+        entry,
+        { targetGroupId, preview: openAsPreview }
+      )
     },
     [
       activeWorktreeId,
@@ -128,8 +103,7 @@ export function useSourceControlRowOpening({
       trackConflictPath,
       openConflictFile,
       openDiff,
-      openFile,
-      setEditorViewMode
+      openFile
     ]
   )
 

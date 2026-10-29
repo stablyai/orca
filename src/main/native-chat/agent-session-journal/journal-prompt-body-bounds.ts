@@ -7,16 +7,14 @@ import type {
   AgentJournalFreeTextInput
 } from '../../../shared/agent-session-journal-types'
 import { isPlanApprovalSubject } from '../../../shared/agent-session-approval-subject'
-import {
-  boundInlineText,
-  boundPayload,
-  DEFAULT_JOURNAL_PAYLOAD_LIMITS
-} from './journal-payload-bounds'
+import { boundInlineText, boundPayload } from './journal-payload-bounds'
 
 export const MAX_JOURNAL_PROMPT_OPTIONS = 64
 export const MAX_JOURNAL_GROUPED_PROMPT_QUESTIONS = 4
 
 const JOURNAL_PROMPT_OPTION_LIMITS = { inlineHeadBytes: 1024 }
+// Agent prompt content permits larger bounds than client replies but must still fit settlement batches.
+const JOURNAL_PROMPT_TEXT_LIMITS = { inlineHeadBytes: 128 * 1024 }
 const JOURNAL_PROMPT_ID_MAX_BYTES = 1024
 
 export function cancelledJournalPromptBody(
@@ -66,8 +64,7 @@ export function boundJournalPromptBody(
                 : { ruleContent: boundPromptText(body.matchedAskRule.ruleContent) })
             }
           }),
-      // A newer Orca's subject is carried as it was: rebuilt as a plan, it would be a different
-      // request, and its fields are not this build's to bound.
+      // Preserve unknown subjects verbatim; rebuilding them as plans would change the requested approval.
       ...(body.subject === undefined
         ? {}
         : {
@@ -141,8 +138,10 @@ function boundPromptOptions(
 }
 
 function boundPromptText(value: string): string {
-  return boundInlineText(value, DEFAULT_JOURNAL_PAYLOAD_LIMITS).text
+  return boundInlineText(value, JOURNAL_PROMPT_TEXT_LIMITS).text
 }
+
+export const boundJournalPromptText = boundPromptText
 
 function boundPromptIdentifier(value: string): string {
   if (Buffer.byteLength(value, 'utf8') <= JOURNAL_PROMPT_ID_MAX_BYTES) {

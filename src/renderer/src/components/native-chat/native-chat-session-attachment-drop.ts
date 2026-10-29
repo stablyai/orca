@@ -15,7 +15,6 @@ export type NativeChatPendingAttachmentOptions = NativeChatAttachmentFocusOption
   insertReferences?: ((paths: string[]) => void) | null
 }
 
-/** The composer's pending-chip controls, as an upload drives them. */
 export type NativeChatPendingAttachmentChips = {
   begin: (previewUrl?: string, pendingName?: string) => string | null
   resolve: (
@@ -26,15 +25,13 @@ export type NativeChatPendingAttachmentChips = {
   ) => boolean
   /** Removes the chip; false when the user already removed it, so its file must not attach. */
   drop: (id: string) => boolean
-  /** Adds stored files as `@path` references to the scope's draft, which keeps them through an
-   *  input-method composition or a remount. */
+  /** Persist @path references in the draft through IME composition and remounts. */
   attachReferences: (
     references: { id: string; path: string }[],
     options?: NativeChatPendingAttachmentOptions
   ) => boolean
 }
 
-/** A file and the pending chip reserved for it, which alone may settle its result. */
 export type NativeChatReservedAttachment = { path: string; chipId: string }
 
 /** One named pending chip per file; a path without one was refused and the composer said why. */
@@ -48,18 +45,12 @@ export function reserveNativeChatAttachmentChips(
   })
 }
 
-/**
- * Drop or pick files into a structured chat on a paired server: upload them into the chat's store
- * there, then attach the stored paths. Each file shows as a pending chip with its name at once, and
- * Send waits for pending chips, so a message never leaves without a file the user attached. A chip
- * the user removes meanwhile attaches nothing.
- */
+/** Upload paired-server files behind pending chips; Send waits, and removed chips must never attach. */
 export async function attachNativeChatSessionAttachmentPaths(args: {
   pending: NativeChatReservedAttachment[]
   owner: NativeChatRuntimeSessionAttachmentOwner
   chips: NativeChatPendingAttachmentChips
   options?: NativeChatAttachmentFocusOptions
-  /** The composer was disabled or torn down meanwhile. */
   isAbandoned: () => boolean
   ownerStillCurrent: () => boolean
   setNotice: (notice: string | null) => void
@@ -95,7 +86,6 @@ export async function attachNativeChatSessionAttachmentPaths(args: {
       ...result.failed.map(({ sourcePath, reason }): [string, string] => [sourcePath, reason])
     ])
   } catch (error) {
-    // Every file failed for the same cause.
     stored = new Map()
     const cause = extractIpcErrorMessage(error, '')
     reasons = new Map(pending.map(({ path }) => [path, cause]))
@@ -123,15 +113,13 @@ export async function attachNativeChatSessionAttachmentPaths(args: {
       args.chips.resolve(chipId, storedPath, null, args.options)
       continue
     }
-    // Other files become `@path` references, as every attach does, unless their chip was removed.
     references.push({ id: chipId, path: storedPath })
   }
-  // Inserting at the caret clears the notice, so what failed is said after.
+  // Insertions clear notices, so report failures afterward.
   if (references.length > 0) {
     args.chips.attachReferences(references, args.options)
   }
   if (notAttached.length > 0) {
-    // A cause every file shares is said once, after their names.
     const [first] = notAttached
     const shared = notAttached.every(({ reason }) => reason === first?.reason) ? first?.reason : ''
     args.setNotice(

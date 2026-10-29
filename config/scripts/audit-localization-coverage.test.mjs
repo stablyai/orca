@@ -31,6 +31,23 @@ describe('localization coverage candidates', () => {
     expect(reports.map((report) => report.text)).toEqual(['Retry the sync'])
   })
 
+  it('ignores CSS and script bodies but still sees copy beside them', () => {
+    const reports = candidates(
+      'Sample.tsx',
+      `export function Sample() {
+        return (
+          <div>
+            <style>{'.card { color: red; } .card::after { content: "Loading styles" }'}</style>
+            <script>{'window.started = "Started the demo"'}</script>
+            <p>Choose a workspace</p>
+          </div>
+        )
+      }`
+    )
+
+    expect(reports.map((report) => report.text)).toEqual(['Choose a workspace'])
+  })
+
   it('ignores literals used as comparison operands', () => {
     const reports = candidates(
       'Sample.tsx',

@@ -45,7 +45,7 @@ export function AddServerSshHostDialog({
           listTargets: () => listRuntimeEditableSshTargets(environmentId),
           addTarget: ({ target }) => addRuntimeSshTarget(environmentId, target)
         },
-        // Why: re-adopted projects live on the server, which announces its own repo change.
+        // The owning server announces re-adopted repositories itself.
         recordSshRepoReadoptions: () => {},
         setSshTargetsMetadata: () => {
           void refreshRuntimeEnvironmentSshTargetMetadata(environmentId).catch(() => {})

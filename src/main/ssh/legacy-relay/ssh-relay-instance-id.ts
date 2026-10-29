@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 
-export function hashRelayInstanceId(relayInstanceId: string): string {
+function hashRelayInstanceId(relayInstanceId: string): string {
   return createHash('sha256').update(relayInstanceId).digest('hex').slice(0, 16)
 }
 

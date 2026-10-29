@@ -1,5 +1,5 @@
-import type { TaskPageComposerActionsModel } from '../../use-task-page-composer-actions'
-import { translate } from '@/i18n/i18n'
+import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
+import { getIntlLocale, translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { Button } from '@/components/ui/button'
@@ -39,7 +39,7 @@ export function TaskPageGitLabItemList({
           </div>
         ) : null}
         {gitlabLoading && gitlabItems.length === 0 ? (
-          // Why: shimmer rows fill the viewport so the card never flashes empty and the table doesn't jump when real rows land.
+          // Fill the viewport with shimmer rows to prevent a loading height jump.
           <div className="divide-y divide-border/50">
             {Array.from({
               length: 12
@@ -71,7 +71,7 @@ export function TaskPageGitLabItemList({
             <div
               role="button"
               tabIndex={0}
-              key={`${item.repoId}:${item.id}`}
+              key={`${item.repoId}:${item.repoHostId ?? ''}:${item.id}`}
               onClick={() => {
                 useAppStore.getState().recordFeatureInteraction('gitlab-tasks')
                 openGitLabDetailPage(item)
@@ -101,7 +101,7 @@ export function TaskPageGitLabItemList({
                 · {item.state}
               </span>
               <span className="text-xs text-muted-foreground">
-                {item.updatedAt ? new Date(item.updatedAt).toLocaleDateString() : ''}
+                {item.updatedAt ? new Date(item.updatedAt).toLocaleDateString(getIntlLocale()) : ''}
               </span>
               <div className="flex items-center justify-end gap-1">
                 <Tooltip>
@@ -114,14 +114,19 @@ export function TaskPageGitLabItemList({
                         event.stopPropagation()
                         handleUseGitLabItem(item)
                       }}
-                      aria-label={translate(
-                        'auto.components.TaskPage.5e8061b088',
-                        'Start workspace from {{value0}} {{value1}}',
-                        {
-                          value0: item.type === 'mr' ? 'MR' : 'issue',
-                          value1: item.number
-                        }
-                      )}
+                      aria-label={
+                        item.type === 'mr'
+                          ? translate(
+                              'auto.components.TaskPage.startWorkspaceFromMr',
+                              'Start workspace from MR {{number}}',
+                              { number: item.number }
+                            )
+                          : translate(
+                              'auto.components.TaskPage.startWorkspaceFromIssue',
+                              'Start workspace from issue {{number}}',
+                              { number: item.number }
+                            )
+                      }
                     >
                       <ArrowRight className="size-3.5" />
                     </Button>

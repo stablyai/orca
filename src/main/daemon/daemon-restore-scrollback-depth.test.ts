@@ -234,7 +234,7 @@ describe('STA-4091 previously recoverable restore depth', () => {
         },
         terminalOwner: 'shell'
       }
-      // Why no owner: the live recovery barrier already revoked it when the TUI started.
+      // Model the live recovery barrier revoking shell ownership when the TUI starts.
       const { terminalOwner: _persistedOwner, ...liveState } = restoreInfo
       const liveSnapshot: TerminalSnapshot = {
         ...liveState,
@@ -530,7 +530,6 @@ describe('STA-4091 previously recoverable restore depth', () => {
       )
     })
 
-    // Assert durable depth, not the sequence that merely enables it.
     it('preserves durable depth when an empty incremental take precedes a warm reattach', async () => {
       const { id } = await adapter.spawn({
         cols: 80,
@@ -549,7 +548,7 @@ describe('STA-4091 previously recoverable restore depth', () => {
       })
       expect(snapshotText(beforeReattach ?? {})).toContain(OLDEST_WRITTEN_LINE)
 
-      // The trigger: a dirty mark with no new PTY records (the mock swallows the write, nothing echoes back).
+      // The mock write marks history dirty without echoing any new PTY records.
       adapter.write(id, 'noop')
       await oldInternals.checkpointDirtySessions()
 
@@ -564,7 +563,7 @@ describe('STA-4091 previously recoverable restore depth', () => {
       expect(reattach.snapshot).toContain(FRESH_AFTER_CHECKPOINT)
       expect(reattach.snapshot).toContain(OLDEST_WRITTEN_LINE)
 
-      // First post-reattach compact runs the continuity proof; it must not flatten the deep checkpoint.
+      // The first reattach compaction must prove continuity without flattening the deep checkpoint.
       const newInternals = adapter as unknown as {
         checkpointDirtySessions: () => Promise<void>
       }

@@ -1,7 +1,11 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import { createTabsSliceMockApi } from './tabs-slice-test-harness'
-import { createTestStore } from './store-test-helpers'
+import { createTestStore, makeOpenFile } from './store-test-helpers'
+import { drawTabsFromMain } from './tabs-drawn-from-main.test-fixture'
+import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
+import { withLayoutOwnerTabProps } from '@/components/tab-bar/tab-bar-layout-owner-props'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
 
@@ -13,11 +17,18 @@ vi.mock('@/lib/agent-status', async (importOriginal) => {
   }
 })
 
+vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeRpcClientWithLayoutApply(await importOriginal())
+)
+vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeLayoutClientWithTestFrames(await importOriginal())
+)
+
 {
-  // Mock sonner (imported by repos.ts)
-
-  // Mock agent-status (imported by terminal-helpers)
-
   createTabsSliceMockApi()
   const mockWindow = globalThis.window
 
@@ -33,8 +44,6 @@ vi.mock('@/lib/agent-status', async (importOriginal) => {
     beforeEach(() => {
       store = createTestStore()
     })
-
-    // ─── setTabLabel / setTabCustomLabel / setUnifiedTabColor ─────────
 
     describe('tab property setters', () => {
       it('setTabLabel updates the label', () => {
@@ -73,21 +82,50 @@ vi.mock('@/lib/agent-status', async (importOriginal) => {
       })
     })
 
-    // ─── pinTab / unpinTab ────────────────────────────────────────────
-
     describe('pinTab / unpinTab', () => {
-      it('pins a tab and promotes preview to permanent', () => {
+      it('pins a tab and promotes preview to permanent', async () => {
+        store.setState({
+          openFiles: [makeOpenFile({ id: 'f.ts', worktreeId: WT, isPreview: true })]
+        })
         const tab = store.getState().createUnifiedTab(WT, 'editor', {
           id: 'f.ts',
           label: 'f.ts',
           isPreview: true
         })
+        const main = await drawTabsFromMain(store)
+        try {
+          const pin = (): void => store.getState().pinTab(tab.id)
+          // A layout-owner build pins through main first, as the tab bar does; then main promotes.
+          if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+            withLayoutOwnerTabProps(
+              {
+                togglePinned: pin,
+                makePreviewFilePermanent: (fileId, tabId) =>
+                  store.getState().makePreviewFilePermanent(fileId, tabId)
+              },
+              () => WT
+            ).togglePinned({
+              unifiedTabId: tab.id,
+              isPinned: false,
+              type: 'editor',
+              data: { id: 'f.ts' }
+            })
+          } else {
+            pin()
+          }
+          await main.settle()
 
-        store.getState().pinTab(tab.id)
-
-        const updated = store.getState().unifiedTabsByWorktree[WT][0]
-        expect(updated.isPinned).toBe(true)
-        expect(updated.isPreview).toBe(false)
+          const updated = store.getState().unifiedTabsByWorktree[WT][0]
+          expect(updated.isPinned).toBe(true)
+          expect(updated.isPreview).toBe(ORCA_LAYOUT_OWNER_IS_MAIN ? undefined : false)
+          if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+            expect(layoutApplyTestTransport.sentOfType('promotePreviewTab')).toEqual([
+              { type: 'promotePreviewTab', workspace: WT, tabId: tab.id }
+            ])
+          }
+        } finally {
+          main.close()
+        }
       })
 
       it('moves pinned tabs before unpinned siblings', () => {
@@ -123,8 +161,8 @@ vi.mock('@/lib/agent-status', async (importOriginal) => {
         expect(store.getState().groupsByWorktree[WT][0].tabOrder).toEqual([t3.id, t2.id, t1.id])
       })
 
-      it('syncs isPinned to the TerminalTab in tabsByWorktree (reconcile echo guard)', () => {
-        // Why: reconcile derives pin from tabsByWorktree[*].isPinned; without syncing, a host snapshot re-computes isPinned:false and un-pins during the echo window.
+      it('syncs isPinned to the TerminalTab in tabsByWorktree (reconcile echo guard)', async () => {
+        // Sync legacy isPinned too or reconciliation unpins the tab during host-snapshot echo.
         const tab = store.getState().createUnifiedTab(WT, 'terminal')
         store.setState((state) => ({
           tabsByWorktree: {
@@ -144,11 +182,27 @@ vi.mock('@/lib/agent-status', async (importOriginal) => {
           }
         }))
 
-        store.getState().pinTab(tab.id)
-        expect(store.getState().tabsByWorktree[WT][0].isPinned).toBe(true)
-
-        store.getState().unpinTab(tab.id)
-        expect(store.getState().tabsByWorktree[WT][0].isPinned).toBe(false)
+        // A layout-owner build draws the color from main's frame.
+        const main = await drawTabsFromMain(store)
+        try {
+          const interaction = vi.fn()
+          store.setState({ recordFeatureInteraction: interaction })
+          store.getState().pinTab(tab.id, { recordInteraction: false })
+          expect(store.getState().tabsByWorktree[WT][0].isPinned).toBe(true)
+          store.getState().unpinTab(tab.id, { recordInteraction: false })
+          expect(store.getState().tabsByWorktree[WT][0].isPinned).toBe(false)
+          store.getState().setTabColor(tab.entityId, '#ff0000', { recordInteraction: false })
+          await main.settle()
+          expect(store.getState().tabsByWorktree[WT][0].color).toBe('#ff0000')
+          expect(interaction).not.toHaveBeenCalled()
+          store.getState().pinTab(tab.id)
+          store.getState().unpinTab(tab.id)
+          store.getState().setTabColor(tab.entityId, null)
+          await main.settle()
+          expect(interaction).toHaveBeenCalledTimes(3)
+        } finally {
+          main.close()
+        }
       })
     })
   })

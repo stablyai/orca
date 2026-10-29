@@ -66,8 +66,7 @@ function clickHandlerBound(): boolean {
   return notificationOnMock.mock.calls.some((call: unknown[]) => call[0] === 'click')
 }
 
-// A terminal pane in a workspace with no repo (floating or folder) is revealed by focusTerminal
-// alone; its notification click used to be dropped because no repo id could be extracted.
+// Repo-less folder/floating panes still need notification clicks routed to their workspace.
 describe('terminal notification clicks in repo-less workspaces', () => {
   beforeEach(() => {
     vi.useFakeTimers()

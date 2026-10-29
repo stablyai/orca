@@ -4,7 +4,13 @@ import type { AgentCatalogEntry } from '@/lib/agent-catalog'
 import { AgentIcon } from '@/lib/agent-catalog'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
-import { SettingsSubsectionHeader } from './SettingsFormControls'
+import { SettingsSegmentedControl, SettingsSubsectionHeader } from './SettingsFormControls'
+
+export type DefaultAgentOpensAs = {
+  agentLabel: string
+  value: 'chat' | 'cli'
+  onChange: (value: 'chat' | 'cli') => void
+}
 
 function DefaultAgentPill({
   active,
@@ -41,13 +47,19 @@ export function AgentDefaultSetting({
   enabledDetectedAgents,
   catalog,
   description,
-  onSetDefault
+  opensAs,
+  onSetDefault,
+  defaultOpensAsChat = false
 }: {
   defaultAgent: TuiAgent | 'blank' | null
   detectedIds: Set<string> | null
+  /** The saved default opens as a chat on this host without its CLI. */
+  defaultOpensAsChat?: boolean
   enabledDetectedAgents: AgentCatalogEntry[]
   catalog: AgentCatalogEntry[]
   description: string
+  /** Present only when the default agent can open as a chat on this computer. */
+  opensAs?: DefaultAgentOpensAs
   onSetDefault: (agent: TuiAgent | 'blank' | null) => void
 }): React.JSX.Element {
   const storedDefaultAgent =
@@ -75,7 +87,8 @@ export function AgentDefaultSetting({
         </DefaultAgentPill>
         {defaultAgentPills.map((agent) => {
           const isActive = defaultAgent === agent.id
-          const isUndetected = detectedIds !== null && !detectedIds.has(agent.id)
+          const isUndetected =
+            detectedIds !== null && !detectedIds.has(agent.id) && !(isActive && defaultOpensAsChat)
           return (
             <DefaultAgentPill
               key={agent.id}
@@ -97,6 +110,29 @@ export function AgentDefaultSetting({
           )
         })}
       </div>
+      {opensAs ? (
+        <div className="flex flex-wrap items-center gap-3">
+          <SettingsSegmentedControl<'chat' | 'cli'>
+            value={opensAs.value}
+            onChange={opensAs.onChange}
+            ariaLabel={translate('settings.agents.defaultOpensAs', 'Open {{value0}} as', {
+              value0: opensAs.agentLabel
+            })}
+            size="sm"
+            options={[
+              { value: 'chat', label: translate('settings.agents.defaultOpensAsChat', 'Chat') },
+              { value: 'cli', label: translate('settings.agents.defaultOpensAsCli', 'CLI') }
+            ]}
+          />
+          <p className="text-xs text-muted-foreground">
+            {translate(
+              'settings.agents.defaultOpensAsScope',
+              'Applies to new {{value0}} sessions launched from this computer, including on paired hosts. Matches its Providers switch.',
+              { value0: opensAs.agentLabel }
+            )}
+          </p>
+        </div>
+      ) : null}
     </section>
   )
 }

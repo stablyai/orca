@@ -1,5 +1,6 @@
 import { emitNativeChatToggled } from '@/lib/native-chat-telemetry'
 import type { TuiAgent } from '../../../../../shared/tui-agent'
+import type { AppState } from '../../types'
 import type { TabsSlice, TabsSliceGet, TabsSliceSet } from './tabs-slice-contract'
 import { findTabAndWorktree, patchTab, updateGroup } from '../tab-group-state'
 import {
@@ -16,6 +17,7 @@ import {
 import { sendTabChangeToLayoutOwner } from '../../terminals/tab-change-through-layout-owner'
 import { recordTabOrderInLayoutOwner } from './tab-order-layout-owner'
 import { withPreviewEnded } from './tab-preview-flag'
+import { endsPreviewHere, promotePreviewTabsThroughLayoutOwner } from './preview-tab-promotion'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
 
 function oppositeViewMode(mode: 'terminal' | 'chat'): 'terminal' | 'chat' {
@@ -45,13 +47,19 @@ export function createTabsLabelActions(
       }
       return {
         ...tabPatch,
-        // Why the row too: viewMode is declared on both types and host-sync
-        // already writes it to the row. Only these local toggles skipped it, so
-        // readers had to OR the two indices to find out who owns the surface.
+        // Recovery reads terminal rows; mirror viewMode there to match host sync.
         ...rowPatch
       }
     })
     mirrorTabViewModeToHost(get(), tabId, mode)
+  }
+
+  // Why: launchAgent lives on the legacy terminal tab (keyed by entityId); toggle telemetry attributes by it.
+  function launchAgentOf(state: AppState, worktreeId: string, entityId: string): TuiAgent | null {
+    return (
+      (state.tabsByWorktree[worktreeId] ?? []).find((terminal) => terminal.id === entityId)
+        ?.launchAgent ?? null
+    )
   }
 
   /** `to`: the mode main switched to, which a frame may already show. */
@@ -73,11 +81,7 @@ export function createTabsLabelActions(
           ? 'chat'
           : 'terminal'
       const nextMode = oppositeViewMode(fromMode)
-      // Why: launchAgent lives on the legacy terminal tab (keyed by entityId); resolve it here so toggle telemetry can attribute by agent.
-      const agent =
-        (state.tabsByWorktree[found.worktreeId] ?? []).find(
-          (terminal) => terminal.id === found.tab.entityId
-        )?.launchAgent ?? null
+      const agent = launchAgentOf(state, found.worktreeId, found.tab.entityId)
       toggled = { from: fromMode, to: nextMode, agent }
       return {
         ...patchTab(state.unifiedTabsByWorktree, tabId, { viewMode: nextMode }),
@@ -99,7 +103,13 @@ export function createTabsLabelActions(
   /** Tab-bar id → the mode last sent to main and not yet answered: a toggle flips from that. */
   const viewModeSent = new Map<string, { mode: 'terminal' | 'chat' }>()
 
-  function sendViewMode(tabId: string, mode: 'terminal' | 'chat', local: () => void): boolean {
+  /** `shown`: the switch's own effects once main's frame draws it. */
+  function sendViewMode(
+    tabId: string,
+    mode: 'terminal' | 'chat',
+    local: () => void,
+    shown?: () => void
+  ): boolean {
     const state = get()
     // Why an object: only this send's answer clears its entry, not an earlier send's of the same mode.
     const entry = { mode }
@@ -116,7 +126,13 @@ export function createTabsLabelActions(
         settle()
         local()
       },
-      settle
+      {
+        shown: () => {
+          settle()
+          shown?.()
+        },
+        refused: settle
+      }
     )
     if (sent) {
       viewModeSent.set(tabId, entry)
@@ -125,11 +141,21 @@ export function createTabsLabelActions(
   }
 
   function sendViewModeToggle(tabId: string): boolean {
-    const shown = findTabAndWorktree(get().unifiedTabsByWorktree, tabId)?.tab.viewMode
-    const to = oppositeViewMode(
-      viewModeSent.get(tabId)?.mode ?? (shown === 'chat' ? 'chat' : 'terminal')
+    const found = findTabAndWorktree(get().unifiedTabsByWorktree, tabId)
+    const shown = found?.tab.viewMode
+    const from = viewModeSent.get(tabId)?.mode ?? (shown === 'chat' ? 'chat' : 'terminal')
+    const to = oppositeViewMode(from)
+    return sendViewMode(
+      tabId,
+      to,
+      () => toggleTabViewModeHere(tabId, to),
+      () =>
+        emitNativeChatToggled({
+          from,
+          to,
+          agent: found ? launchAgentOf(get(), found.worktreeId, found.tab.entityId) : null
+        })
     )
-    return sendViewMode(tabId, to, () => toggleTabViewModeHere(tabId, to))
   }
 
   return {
@@ -206,24 +232,30 @@ export function createTabsLabelActions(
       }
     },
 
-    setUnifiedTabColor: (tabId, color) => {
+    setUnifiedTabColor: (tabId, color, opts) => {
       const exists = get().getTab(tabId) !== null
       set((state) => patchTab(state.unifiedTabsByWorktree, tabId, { color }) ?? state)
-      if (exists) {
+      if (exists && opts?.recordInteraction !== false) {
         get().recordFeatureInteraction?.('terminal-tabs')
       }
     },
 
-    pinTab: (tabId) => {
+    pinTab: (tabId, opts) => {
       const exists = get().getTab(tabId) !== null
+      const before = findTabAndWorktree(get().unifiedTabsByWorktree, tabId)?.tab
       set((state) => {
         const found = findTabAndWorktree(state.unifiedTabsByWorktree, tabId)
         if (!found) {
           return state
         }
         const { tab, worktreeId } = found
+        // Switch point: main makes a pinned preview permanent; its frame clears the flag.
         const tabs = (state.unifiedTabsByWorktree[worktreeId] ?? []).map((candidate) =>
-          candidate.id === tabId ? withPreviewEnded({ ...candidate, isPinned: true }) : candidate
+          candidate.id !== tabId
+            ? candidate
+            : endsPreviewHere(state, worktreeId)
+              ? withPreviewEnded({ ...candidate, isPinned: true })
+              : { ...candidate, isPinned: true }
         )
         const groups = state.groupsByWorktree[worktreeId] ?? []
         const group = groups.find((candidate) => candidate.id === tab.groupId)
@@ -238,7 +270,7 @@ export function createTabsLabelActions(
             ...state.unifiedTabsByWorktree,
             [worktreeId]: applyTabOrderSortValues(tabs, tabOrder)
           },
-          // Why: reconcile derives pin from the TerminalTab, so mirror it there too or a host snapshot recomputes isPinned:false and un-pins during the echo window.
+          // Reconciliation derives pin from terminal rows; mirror it there or host echoes unpin during the round trip.
           ...patchTerminalTabRow(state.tabsByWorktree, tabId, { isPinned: true }),
           groupsByWorktree: {
             ...state.groupsByWorktree,
@@ -247,12 +279,15 @@ export function createTabsLabelActions(
         }
       })
       mirrorTabPinnedToHost(get(), tabId, true)
-      if (exists) {
+      if (ORCA_LAYOUT_OWNER_IS_MAIN && before?.isPreview) {
+        promotePreviewTabsThroughLayoutOwner(get(), set, [before])
+      }
+      if (exists && opts?.recordInteraction !== false) {
         get().recordFeatureInteraction?.('terminal-tabs')
       }
     },
 
-    unpinTab: (tabId) => {
+    unpinTab: (tabId, opts) => {
       const exists = get().getTab(tabId) !== null
       set((state) => {
         const found = findTabAndWorktree(state.unifiedTabsByWorktree, tabId)
@@ -284,7 +319,7 @@ export function createTabsLabelActions(
         }
       })
       mirrorTabPinnedToHost(get(), tabId, false)
-      if (exists) {
+      if (exists && opts?.recordInteraction !== false) {
         get().recordFeatureInteraction?.('terminal-tabs')
       }
     }

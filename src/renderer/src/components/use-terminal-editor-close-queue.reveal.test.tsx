@@ -14,9 +14,10 @@ const revealFloatingWorkspacePanel = vi.hoisted(() => vi.fn())
 
 vi.mock('../store', () => ({
   useAppStore: {
-    // "Don't Save" closes through the store, beside the controller's own projection.
     getState: () => ({
       ...store,
+      editorBufferIdOf: {},
+      editorBufferViews: {},
       setActiveWorktree,
       markFileDirty: vi.fn(),
       clearEditorDraft: vi.fn(),
@@ -35,7 +36,7 @@ vi.mock('@/lib/shutdown-checkpoint-failure-toast', () => ({
 }))
 vi.mock('./editor/editor-autosave', async (importActual) => ({
   ...(await importActual<typeof EditorAutosaveModule>()),
-  requestEditorSaveQuiesce: vi.fn(async () => {})
+  requestEditorSaveQuiesce: vi.fn(async () => () => {})
 }))
 
 const { useTerminalEditorCloseFoundation } = await import('./use-terminal-editor-close-foundation')
@@ -75,8 +76,7 @@ function dirtyFile(id: string, worktreeId: string): FakeOpenFile {
   return { id, worktreeId, isDirty: true, relativePath: `${id}.md` }
 }
 
-// The unsaved-changes prompt shows the file where it lives. The floating panel sits beside the main
-// window and is never its active worktree, so revealing a floating note must not take it over.
+// Reveal unsaved floating notes in their own panel without taking over the main window’s workspace.
 describe('unsaved-changes prompt for a closing file', () => {
   beforeEach(() => {
     vi.clearAllMocks()

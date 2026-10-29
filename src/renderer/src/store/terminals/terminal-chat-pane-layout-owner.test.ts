@@ -9,6 +9,7 @@ import {
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { LayoutApplyParams } from '../../../../shared/rpc-contract/workspace-layout-params'
 import { applyLayoutCommand } from '../../../../shared/workspace-layout/workspace-layout-commands'
+import { layoutCommandsOf } from '@/runtime/layout-apply-test-double'
 import type {
   LayoutTerminalTab,
   WorkspaceLayoutModel
@@ -64,8 +65,8 @@ beforeEach(() => {
 
 /** Applies what the window sent to main's copy, as `layout.apply` does; any refusal fails. */
 function applySent() {
-  const commands = mocks.callRuntimeRpc.mock.calls.map(
-    ([, , params]) => LayoutApplyParams.parse(params).command
+  const commands = mocks.callRuntimeRpc.mock.calls.flatMap(([, , params]) =>
+    layoutCommandsOf(LayoutApplyParams.parse(params).command)
   )
   mocks.callRuntimeRpc.mockClear()
   let id = 0

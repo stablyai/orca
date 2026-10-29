@@ -10,18 +10,10 @@ import { isTerminalLeafId } from '../../../../shared/stable-pane-id'
 import type { ManagedPaneInternal } from './pane-manager-types'
 import { disposePane } from './pane-lifecycle'
 import { toPublicPane } from './pane-public-view'
-import {
-  cancelPendingTerminalViewportPresents,
-  presentPaneViewport,
-  presentPaneViewportPreservingSynchronizedOutput
-} from './pane-viewport-present'
-import {
-  forceFullViewportPresent,
-  requestFullViewportPresent
-} from './terminal-render-pause-release'
+import { cancelPendingTerminalViewportPresents, presentPaneViewport } from './pane-viewport-present'
+import { requestFullViewportPresent } from './terminal-render-pause-release'
 
 vi.mock('./terminal-render-pause-release', () => ({
-  forceFullViewportPresent: vi.fn(() => false),
   requestFullViewportPresent: vi.fn(() => false)
 }))
 
@@ -103,25 +95,23 @@ describe('pane viewport retry lifetime', () => {
     vi.clearAllMocks()
   })
 
-  for (const present of [presentPaneViewport, presentPaneViewportPreservingSynchronizedOutput]) {
-    for (const elapsed of [0, 3]) {
-      it(`cancels every public-wrapper retry after ${elapsed} ticks`, () => {
-        const pane = createPane()
-        present(toPublicPane(pane))
-        present(toPublicPane(pane))
-        for (let tick = 0; tick < elapsed; tick++) {
-          flushFrame()
-        }
-        expect(frames.size).toBe(2)
-        const lateCallbacks = [...frames.values()]
-        disposePane(pane, new Map([[pane.id, pane]]))
-        expect(frames.size).toBe(0)
-        for (const callback of lateCallbacks) {
-          callback(16)
-        }
-        expect(frames.size).toBe(0)
-      })
-    }
+  for (const elapsed of [0, 3]) {
+    it(`cancels every public-wrapper retry after ${elapsed} ticks`, () => {
+      const pane = createPane()
+      presentPaneViewport(toPublicPane(pane))
+      presentPaneViewport(toPublicPane(pane))
+      for (let tick = 0; tick < elapsed; tick++) {
+        flushFrame()
+      }
+      expect(frames.size).toBe(2)
+      const lateCallbacks = [...frames.values()]
+      disposePane(pane, new Map([[pane.id, pane]]))
+      expect(frames.size).toBe(0)
+      for (const callback of lateCallbacks) {
+        callback(16)
+      }
+      expect(frames.size).toBe(0)
+    })
   }
 
   it('releases real disposed xterm buffers before paused frames resume', async () => {
@@ -131,7 +121,7 @@ describe('pane viewport retry lifetime', () => {
         pane.terminal.write('retained history\r\n'.repeat(500), resolve)
       )
       presentPaneViewport(toPublicPane(pane))
-      presentPaneViewportPreservingSynchronizedOutput(toPublicPane(pane))
+      presentPaneViewport(toPublicPane(pane))
       flushFrame()
       disposePane(pane, new Map([[pane.id, pane]]))
       pane.container.remove()
@@ -153,25 +143,24 @@ describe('pane viewport retry lifetime', () => {
     const retired = createPane()
     const live = createPane()
     presentPaneViewport(toPublicPane(retired))
-    presentPaneViewportPreservingSynchronizedOutput(toPublicPane(live))
+    presentPaneViewport(toPublicPane(live))
     disposePane(retired, new Map([[retired.id, retired]]))
     expect(frames.size).toBe(1)
     live.container.style.display = 'block'
     flushFrame()
+    expect(requestFullViewportPresent).toHaveBeenCalledOnce()
     expect(requestFullViewportPresent).toHaveBeenCalledWith(live.terminal)
-    expect(forceFullViewportPresent).not.toHaveBeenCalled()
   })
 
-  it('deduplicates the same wrapper and upgrades its force mode', () => {
+  it('deduplicates retries for the same wrapper', () => {
     const pane = createPane()
     const view = toPublicPane(pane)
-    presentPaneViewportPreservingSynchronizedOutput(view)
+    presentPaneViewport(view)
     presentPaneViewport(view)
     expect(frames.size).toBe(1)
     pane.container.style.display = 'block'
     flushFrame()
-    expect(forceFullViewportPresent).toHaveBeenCalledOnce()
-    expect(requestFullViewportPresent).not.toHaveBeenCalled()
+    expect(requestFullViewportPresent).toHaveBeenCalledOnce()
   })
 
   it('preserves the sixteen-frame budget for a live collapsed pane', () => {
@@ -185,13 +174,13 @@ describe('pane viewport retry lifetime', () => {
     expect(frames.size).toBe(0)
     pane.container.style.display = 'block'
     presentPaneViewport(toPublicPane(pane))
-    expect(forceFullViewportPresent).toHaveBeenCalledOnce()
+    expect(requestFullViewportPresent).toHaveBeenCalledOnce()
   })
 
   it('keeps immediate displayed presentation and the no-frame fallback', () => {
     const pane = createPane()
     pane.container.style.display = 'block'
-    presentPaneViewportPreservingSynchronizedOutput(toPublicPane(pane))
+    presentPaneViewport(toPublicPane(pane))
     expect(requestFullViewportPresent).toHaveBeenCalledOnce()
     expect(frames.size).toBe(0)
     pane.container.style.display = 'none'

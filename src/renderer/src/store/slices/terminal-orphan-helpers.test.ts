@@ -3,17 +3,9 @@ import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import { getOrphanTerminalIds } from './terminal-orphan-helpers'
 import { buildTerminalTabRetirementPlan } from './terminal-tab-retirement'
 
-// Regression coverage for #9911 ("Terminal window auto-closing. Unable to
-// recover."). After hydration / SSH-relay disconnect the tab row's ptyId and
-// ptyIdsByTabId are cleared, but the still-live session survives in one of the
-// reconnect maps (pendingReconnectPtyIdByTabId / lastKnownRelayPtyIdByTabId /
-// deferredSshSessionIdsByTabId). buildTerminalTabRetirementPlan treats those as
-// live ownership; the orphan sweep must agree, or it hard-deletes a live tab
-// (and its scrollback) before reconnect can rebind it.
+// Reconnect-map sessions count as retirement ownership and must also prevent orphan deletion before rebind (#9911).
 
-// Why: superset state that satisfies both getOrphanTerminalIds (orphan sweep)
-// and buildTerminalTabRetirementPlan (retirement authority) so one fixture can
-// prove the two agree on liveness.
+// Use one state fixture to prove retirement and orphan sweep agree on liveness.
 type TestState = Parameters<typeof buildTerminalTabRetirementPlan>[0] &
   Parameters<typeof getOrphanTerminalIds>[0]
 
@@ -54,10 +46,7 @@ describe('getOrphanTerminalIds reconnect-map liveness', () => {
       pendingReconnectPtyIdByTabId: { T1: 'session-live' }
     })
 
-    // The retirement authority already treats the reconnecting session as a
-    // live PTY it must tear down on close…
     expect(buildTerminalTabRetirementPlan(state, 'T1').ptyIds).toContain('session-live')
-    // …so the orphan sweep must not classify the same tab as dead.
     expect(getOrphanTerminalIds(state, 'wt-1')).not.toContain('T1')
   })
 
@@ -104,10 +93,7 @@ describe('getOrphanTerminalIds reconnect-map liveness', () => {
     expect(getOrphanTerminalIds(state, 'wt-1')).not.toContain('host-lost')
   })
 
-  // A persisted layout leaf binding is NOT a liveness signal: SSH-target removal
-  // nulls ptyId/ptyIdsByTabId/reconnect maps but intentionally leaves the layout
-  // leaf ptyIds pointing at a relay that is gone. Such a tab must still be swept,
-  // or it lingers forever bound to a dead relay it can never reattach.
+  // SSH removal leaves persisted layout bindings behind; these cannot prove liveness or dead relay tabs stay forever.
   it('still orphans a tab whose only reference is a stale layout leaf binding', () => {
     const state = makeState({
       tabsByWorktree: { 'wt-1': [makeTab({ id: 'stale-layout', ptyId: null })] },

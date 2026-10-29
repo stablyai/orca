@@ -12,11 +12,7 @@ import { getLargeDiffRenderLimit } from '../../../../../../shared/large-diff-ren
 import type { DiffSection } from '../../diff-section-types'
 import type { CombinedDiffEntrySet } from '../resolve-changes/use-combined-diff-entry-set'
 import { useCombinedDiffViewRestore } from '../remember-view/use-combined-diff-view-restore'
-import {
-  combinedDiffScrollAnchorCache,
-  combinedDiffScrollTopCache,
-  combinedDiffViewStateCache
-} from '../remember-view/combined-diff-view-memory'
+import { clearCombinedDiffViewMemory } from '../remember-view/combined-diff-view-cache'
 import { useCombinedDiffSectionLoadRegistry } from './combined-diff-section-load-registry'
 import { useCombinedDiffSectionRetry } from './use-combined-diff-section-retry'
 import { withDiffSectionLoadTimeout } from './combined-diff-section-load-timeout'
@@ -75,11 +71,12 @@ function replacementViewer(viewStateKey: string): Viewer {
 function useViewer(props: Viewer) {
   const [sections, setSections] = useState<DiffSection[]>([])
   const [sectionHeights, setSectionHeights] = useState<Record<number, number>>({})
-  const [, setGeneration] = useState(0)
+  const [generation, setGeneration] = useState(0)
   const [, setSideBySide] = useState(false)
   const registry = useCombinedDiffSectionLoadRegistry(sections)
   const restore = useCombinedDiffViewRestore({
     entrySet: props.entrySet,
+    file: props.file,
     gitStatusEntries: [],
     registry,
     setGeneration,
@@ -91,6 +88,7 @@ function useViewer(props: Viewer) {
   const loader = useCombinedDiffSectionLoader({
     entrySet: props.entrySet,
     file: props.file,
+    generation,
     registry,
     sectionCount: sections.length,
     setSectionHeights,
@@ -201,9 +199,7 @@ afterEach(() => {
   vi.restoreAllMocks()
   vi.useRealTimers()
   mocks.fetch.mockReset()
-  combinedDiffViewStateCache.clear()
-  combinedDiffScrollAnchorCache.clear()
-  combinedDiffScrollTopCache.clear()
+  clearCombinedDiffViewMemory()
 })
 
 describe('combined diff discarded-result analysis budget', () => {
@@ -311,7 +307,7 @@ describe('combined diff discarded-result analysis budget', () => {
       })
       await flushLoads()
     }
-    // Every fetch superseded by the next invalidation would leave the first load on screen.
+    // Discarding every superseded fetch would permanently retain the first displayed result.
     const shown = Number(hook.result.current.sections[0]?.modifiedContent.slice(1))
     expect(shown).toBeGreaterThanOrEqual(3)
   })
@@ -498,11 +494,12 @@ describe('combined diff live result compatibility', () => {
       hook.result.current.setSectionHeights({ 0: 640, 1: 80 })
     })
     const heights = hook.result.current.sectionHeights
+    hook.result.current.registry.renderedIndicesRef.current.add(0)
     hook.result.current.registry.loadedIndicesRef.current.delete(0)
     hook.result.current.loader.loadSection(0)
     await flushLoads()
     await settle(unchanged, structuredClone(legacy))
-    expect(hook.result.current.sections).toBe(current)
+    expect(hook.result.current.sections[0]).toBe(current[0])
     expect(hook.result.current.sectionHeights).toBe(heights)
     hook.result.current.registry.loadedIndicesRef.current.delete(0)
     hook.result.current.loader.loadSection(0)

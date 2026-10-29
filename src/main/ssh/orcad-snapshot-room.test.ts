@@ -23,7 +23,7 @@ vi.mock('../managed-server/install/remote-versioned-install', async (importOrigi
 }))
 vi.mock('../managed-server/install/orcad-remote-install', () => ({ installOrcadBundle: vi.fn() }))
 vi.mock('../managed-server/install/orcad-remote-preflight', () => ({
-  preflightInstalledOrcad: vi.fn()
+  preflightInstalledOrcad: vi.fn(async () => ({}))
 }))
 vi.mock('./orcad-local-build-hash', () => ({
   computeLocalOrcadBuildHash: () => 'abc123def4567890'
@@ -49,7 +49,6 @@ import {
 
 let host = FakeOrcadHost.deployedOld()
 
-/** The host's answer to the room check: KB the state needs, KB a prune frees, and `df`'s line. */
 function answerRoom(neededKb: number, reclaimKb: number, availableKb: number): void {
   vi.mocked(execCommand).mockImplementation(async (_conn, command) =>
     command.includes('SNAPSHOT_SPACE')
@@ -58,6 +57,7 @@ function answerRoom(neededKb: number, reclaimKb: number, availableKb: number): v
   )
 }
 
+const IDLE = { liveSessions: 0, startedSinceActivation: 0, daemonProtocolVersion: 3 }
 const deploy = (extra: Partial<Parameters<typeof deployOrcad>[0]> = {}) =>
   deployOrcad({
     conn: Object.create(null),
@@ -72,7 +72,9 @@ const deploy = (extra: Partial<Parameters<typeof deployOrcad>[0]> = {}) =>
     now: () => new Date('2026-02-02T00:00:00.000Z'),
     localOrcadDir: '/local/out/orcad',
     target: 'linux-x64-glibc217',
-    census: { liveSessions: 0, startedSinceActivation: 0, daemonProtocolVersion: 3 },
+    census: IDLE,
+    recountCensus: async () => extra.census ?? IDLE,
+    releaseIncumbentAdmission: async () => {},
     ...extra
   })
 

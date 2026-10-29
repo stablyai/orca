@@ -15,6 +15,11 @@ import {
 import { buildRuntimeClientEventEnvironmentKey } from './runtime-environment-subscription-selection'
 import { useAppStore } from '../../store'
 import {
+  captureWorkspaceSelection,
+  isWorkspaceSelected,
+  restoreWorkspaceSelection
+} from '@/lib/active-workspace-host'
+import {
   invalidateRemoteWorktreeLineage,
   isRemoteWorktreeLineageFresh
 } from '../../store/slices/worktrees/metadata/worktree-lineage-readiness'
@@ -22,6 +27,10 @@ import {
   createWorktreeChangeRefreshQueue,
   type WorktreeChangeRefreshQueue
 } from '../worktree-change-refresh-queue'
+import {
+  selectDetectedWorktreesByRepo,
+  selectWorktreesByRepo
+} from '@/store/workspace-record-selectors'
 
 const WORKTREE_RENAME_PURGE_GRACE_MS = 20_000
 
@@ -32,13 +41,13 @@ function runtimeSortOrderFence(environmentId: string): string {
 const recentlyRenamedWorktreeIdExpiry = new Map<string, number>()
 
 function getAuthoritativeDetectedWorktreeIds(state: AppState, repoId: string): Set<string> | null {
-  const detected = state.detectedWorktreesByRepo[repoId]
+  const detected = selectDetectedWorktreesByRepo(state)[repoId]
   return detected?.authoritative === true
     ? new Set(detected.worktrees.map((worktree) => worktree.id))
     : null
 }
 function getVisibleWorktreeIdsForRepo(state: AppState, repoId: string): Set<string> {
-  return new Set((state.worktreesByRepo[repoId] ?? []).map((worktree) => worktree.id))
+  return new Set((selectWorktreesByRepo(state)[repoId] ?? []).map((worktree) => worktree.id))
 }
 
 type WorktreeEventActivationOptions = {
@@ -97,9 +106,10 @@ export function createWorktreeEventRuntime(
     }
     const localRefreshStartedWithRuntime =
       options?.forceLocalOwner === true && isRuntimeEnvironmentActive()
-    // Why: capture active-ness before migration moves the pointer; re-key maps before the diff so a rename isn't a deletion.
+    // Capture activation before migration, then rekey maps before deletion diff so renames retain state.
     const renamedWasActive =
       renamed != null && useAppStore.getState().activeWorktreeId === renamed.oldWorktreeId
+    const selectionBeforeRename = captureWorkspaceSelection(useAppStore.getState())
     if (renamed) {
       // Shield both ids from the deletion diff across the rename's event burst — the worktree list lags the on-disk move.
       const expiry = Date.now() + WORKTREE_RENAME_PURGE_GRACE_MS
@@ -107,7 +117,7 @@ export function createWorktreeEventRuntime(
       recentlyRenamedWorktreeIdExpiry.set(renamed.newWorktreeId, expiry)
       useAppStore.getState().migrateWorktreeIdentity(renamed.oldWorktreeId, renamed.newWorktreeId)
     }
-    // Why: diff before/after fetch to catch out-of-band deletions and purge worktree state, else zombie ptyId entries leak (design §2c, §4.4).
+    // Diff around refetch to purge externally deleted worktree state and prevent zombie PTY entries.
     const state = useAppStore.getState()
     const before =
       getAuthoritativeDetectedWorktreeIds(state, repoId) ??
@@ -141,22 +151,22 @@ export function createWorktreeEventRuntime(
               : undefined
         )
     }
-    // Why: an id change unmounts the active pane; re-activate so the tab reconciles, else it vanishes until re-select.
+    // ID changes unmount active panes; reactivate so tab reconciliation restores them immediately.
     if (renamedWasActive && renamed) {
-      useAppStore.getState().setActiveWorktree(renamed.newWorktreeId)
+      const renamedSelection = { ...selectionBeforeRename, worktreeId: renamed.newWorktreeId }
+      // Why only if unchanged: a workspace or twin copy picked during the refresh is the user's.
+      if (isWorkspaceSelected(useAppStore.getState(), renamedSelection)) {
+        restoreWorkspaceSelection(useAppStore.getState(), renamedSelection)
+      }
     }
-    // Sweep expired rename-grace entries before any early return, else forced-local
-    // (or non-authoritative) events let the map grow for the session.
+    // Prune rename grace before early returns so local/non-authoritative events cannot leak entries indefinitely.
     const now = Date.now()
     for (const [id, expiry] of recentlyRenamedWorktreeIdExpiry) {
       if (expiry <= now) {
         recentlyRenamedWorktreeIdExpiry.delete(id)
       }
     }
-    // Why: the deletion diff below is repo-wide, but a forced-local scan overlapping
-    // a runtime cannot prove remote absence (legacy runtime rows may lack hostId).
-    // fetchWorktrees still purges removed local rows host-scoped; accepted gap: the
-    // workspace-space entry survives until the next local-only rescan.
+    // Forced-local scans cannot prove runtime absence; fetch still purges local host rows, while space entries await local-only rescan.
     if (
       options?.forceLocalOwner &&
       (localRefreshStartedWithRuntime || isRuntimeEnvironmentActive())
@@ -234,7 +244,7 @@ export function createWorktreeEventRuntime(
       return
     }
     if (!options.allowRuntimeEnvironment && isRuntimeEnvironmentActive()) {
-      // Why: local CLI worktree events carry local ids; runtime activation comes via the remote stream, allowed separately.
+      // Local CLI IDs activate locally; remote stream activation follows its separate host route.
       return
     }
     const existedBeforeFetch = Boolean(
@@ -251,14 +261,14 @@ export function createWorktreeEventRuntime(
     const existsAfterFetch = Boolean(
       useAppStore.getState().getKnownWorktreeById(worktreeId, options.executionHostId)
     )
-    // Why: use the canonical activation path so the CLI switch records a back/forward visit, or the nav buttons ignore it.
+    // Canonical activation records CLI switches in back/forward history.
     activateAndRevealWorktree(worktreeId, {
       ...(setup ? { setup } : {}),
       ...(startup ? { startup } : {}),
       ...(defaultTabs ? { defaultTabs } : {}),
       ...(providesInitialSurface ? { providesInitialSurface } : {}),
       ...(!existedBeforeFetch && existsAfterFetch ? { sidebarRevealBehavior: 'auto' } : {}),
-      // Why: this activation came from the host runtime stream; echoing it back can create a selection loop.
+      // Do not echo runtime-stream activation back to its host or selection can loop.
       notifyHostRuntime: false,
       ...(options.executionHostId ? { executionHostId: options.executionHostId } : {})
     })

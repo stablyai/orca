@@ -1,5 +1,3 @@
-// Why: the interference knobs and the observable result surface of a real apply-script run,
-// kept beside the harness so neither module carries both the contract and the machinery.
 export type DrainApplyInterference = {
   crossFilesystemBridge?: boolean
   deleteSource?: boolean

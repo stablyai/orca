@@ -3,7 +3,6 @@ import { scanFileRegionsBackward } from './reverse-file-region-scan'
 
 export const TRANSCRIPT_CHUNK_BYTES = 64 * 1024
 export const TRANSCRIPT_MAX_SCAN_BYTES = 4 * 1024 * 1024
-export const EMPTY_TRANSCRIPT_REGION = Buffer.alloc(0)
 export function readLastAssistantFromTranscriptOnce(transcriptPath: string): string | undefined {
   return readLastTextFromTranscriptOnce(transcriptPath, extractAssistantTextFromLine)
 }

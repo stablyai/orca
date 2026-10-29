@@ -101,6 +101,26 @@ describe('which stopped messages the agent is owed', () => {
         { clearSequence: 5, bodies: { mail, slash: message('/review foo') } }
       )
     ).toEqual(['a', 'b'])
+
+    const stopped = [sent('a', 7, STOPPED), sent('b', 8, STOPPED)]
+    const carried = { carrier: ['a'] }
+    expect(
+      owed(
+        [
+          ...stopped,
+          sent('carrier', 9, {
+            dispatchState: 'accepted',
+            providerItemId: 'provider-carrier',
+            resolvedAt: 9
+          })
+        ],
+        { carried }
+      )
+    ).toEqual(['b'])
+    expect(owed([...stopped, sent('carrier', 9, rejected('writeFailed'))], { carried })).toEqual([
+      'a',
+      'b'
+    ])
   })
 })
 

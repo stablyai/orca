@@ -10,50 +10,32 @@ import type {
   MobileWebShellUpdateFailureFacts
 } from './mobile-web-shell-update-failure'
 
-/**
- * Whether the host can be asked anything right now.
- *
- * Three values, not a boolean: a connection still being made is not an offline host, and opening a
- * cached generation with no compat check for the second or two before a socket completes would
- * flash a workspace this host may already have replaced. `connecting` waits; only a settled
- * non-connection opens the cache unchecked.
- */
+// Wait for connecting so cache cannot flash before the host’s compatibility check; only settled unreachability opens it unchecked.
 export type MobileWebShellReachability = 'connected' | 'connecting' | 'unreachable'
 
-/** Everything the gates say that decides a step here, as one value so a transition is a pure
- *  function of it rather than of four separately-arriving props. */
 export type MobileWebShellGates = {
   readonly statusPending: boolean
-  /** False for a status nobody answered *and* for one this client could not decode. Both leave the
-   *  capability list empty, which would otherwise read as `bundle-unavailable` and wall a host that
-   *  simply did not reply. */
+  // Unreadable includes absent/undecodable replies; their empty capabilities must not masquerade as bundle-unavailable.
   readonly statusReadable: boolean
   readonly reachability: MobileWebShellReachability
   readonly hostCapabilities: readonly string[]
   readonly hostStatus: MobileWebBundleHostStatus
 }
 
-/** The manifest fields a transition reads: the wall's three, plus what names and sizes the
- *  generation the cache is compared against. */
 export type MobileWebShellManifestFacts = MobileWebBundleCompatManifest & {
   readonly buildId: string
   readonly totalBytes: number
   readonly totalAssets: number
-  /** Undefined for a desktop older than the field, which serves no route. */
+  // Older desktops omit routes and serve none.
   readonly routes: readonly MobileWebPageRoute[] | undefined
 }
 
-/** What `readActiveGeneration` found, reduced to what a transition reads. */
 export type CachedGeneration = {
   readonly buildId: string
   readonly directory: string
   readonly totalBytes: number
-  /** The routes the cached bundle declared, which is what an unreachable host is judged by. */
   readonly routes: readonly MobileWebPageRoute[] | undefined
-  /** What these bytes declare, read off the manifest stored beside them, so a generation served
-   *  while the host is reachable can be judged against it. Never absent: `readActiveGeneration`
-   *  answers null for a generation whose manifest did not parse, and the schema requires all
-   *  three. */
+  // Use the persisted bytes’ required compat fields when a reachable host judges cache; invalid manifests never become CachedGeneration.
   readonly compat: MobileWebBundleCompatManifest
 }
 
@@ -61,29 +43,17 @@ export type MobileWebShellBlockedVerdict =
   | Extract<MobileWebBundleCompatVerdict, { kind: 'blocked' }>
   | PageRouteRefusalVerdict
 
-/** The shell's own failures plus the one the view cannot report: a download or a cache write that
- *  never produced a generation to hand it. */
+export type MobileWebShellReportedFailure = MobileWebShellFailureReason | 'host-profile-unreadable'
+
 export type MobileWebShellFailureCause =
-  | MobileWebShellFailureReason
+  | MobileWebShellReportedFailure
   | 'download-failed'
   | 'status-unreadable'
 
-/**
- * Why the workspace on screen is not the one this host serves now.
- *
- * Set when the shell asked a reachable host for an update and refused the answer — a manifest it
- * could not read, or assets that did not arrive whole — and opened the last generation it had
- * accepted instead. A notice beside `ready`, never a state in front of it: the page is running and
- * nothing about it is blocked.
- *
- * Named rather than a flag, and one name rather than two, because one name is all that is verified
- * from here: both refusals arrive as the same event, and neither proves a newer generation exists.
- * Nothing about it is persisted, so the next flow asks again.
- */
+// Show a transient notice beside a running fallback after manifest/asset refusal; neither failure proves newer bytes exist. Reentering the flow asks again.
 export type MobileWebShellUpdateNotice = 'update-failed'
 
 export type MobileWebShellSessionState =
-  /** Gates unsettled, cache being read, or a manifest in flight. Nothing is on screen yet. */
   | { readonly kind: 'checking' }
   | {
       readonly kind: 'fetching'
@@ -92,9 +62,7 @@ export type MobileWebShellSessionState =
       readonly receivedBytes: number
       readonly totalBytes: number
     }
-  /** Bytes are in; the store is staging and committing, or a cache hit is being opened. */
-  /** `download` is a generation this flow fetched and is committing; `cache` is one already on
-   *  disk. Only a download's activation is an update that landed. */
+  // Only download activation counts as a landed update; opening cache does not.
   | { readonly kind: 'activating'; readonly source: 'download' | 'cache' }
   | {
       readonly kind: 'ready'
@@ -104,8 +72,7 @@ export type MobileWebShellSessionState =
       readonly totalBytes: number
       readonly elapsedMs: number
     }
-  /** The page does not serve this screen and neither app can be named as the one to update: a
-   *  pathname this app has no screen for, or a manifest pattern this shell cannot read. */
+  // Neither app can be blamed when the path is unknown locally or its manifest pattern is unreadable.
   | { readonly kind: 'route-unavailable' }
   | { readonly kind: 'wall'; readonly verdict: MobileWebShellBlockedVerdict }
   | {
@@ -116,13 +83,10 @@ export type MobileWebShellSessionState =
   | { readonly kind: 'offline' }
 
 export type MobileWebShellSessionEffect =
-  /** Sweep every host's staging tree, then read this host's activation. Lazy on purpose: with the
-   *  flag off nothing in the app reaches this, so nothing sweeps at launch. */
+  // Sweep all hosts before opening this cache; remain lazy so disabling the feature cannot sweep at app launch.
   | { readonly kind: 'open-cache' }
   | { readonly kind: 'read-manifest' }
-  /** Fetch, stage, commit. The runner reports progress, then `download-staged`, then `activated`. */
   | { readonly kind: 'download' }
-  /** A cache hit: nothing to download, so this only mints a session id and reports the activation. */
   | {
       readonly kind: 'open-generation'
       readonly directory: string
@@ -130,32 +94,16 @@ export type MobileWebShellSessionEffect =
       readonly totalBytes: number
     }
   | { readonly kind: 'delete-cache' }
-  /** Mint a new session id for the generation already on screen, which is what remounts the view. */
   | { readonly kind: 'remount' }
-  /** Start the clock on the page's first word. Expiry arrives as `page-ready-deadline` for the flow
-   *  it was armed in, and nothing cancels it: a `ready` that lands first makes the expiry a no-op,
-   *  so the runner owns a timer and none of the decision. */
+  // Stamp expiry with its flow; the reducer ignores it once ready arrives, so the runner owns timing without deciding recovery.
   | { readonly kind: 'await-page-ready' }
-  /** Start the clock on the view finishing a document. Expiry arrives as `document-load-deadline`;
-   *  a load the native view refuses or never commits reports nothing, so only a clock ends it. */
+  // A refused/uncommitted local load may report nothing; only the deadline can end it.
   | { readonly kind: 'await-document-load' }
-  /** Write down why an update read failed, on the device, for Troubleshoot to show: a release
-   *  build forwards no console output, so without it the banner is the only evidence. */
+  // Persist on-device evidence for Troubleshoot because release builds forward no console output.
   | { readonly kind: 'record-update-failure'; readonly failure: MobileWebShellUpdateFailureFacts }
-  /** Clear this host's recorded failures: a newer generation committed, so "last update failed"
-   *  would no longer be true. */
   | { readonly kind: 'forget-update-failures' }
 
-/**
- * Events, in two kinds.
- *
- * The seven that carry a `flow` are results reported out of an effect, and the number is the flow
- * the step that asked for them was in. Anything a superseded flow reports is dropped: a manifest
- * read that was in flight when the socket dropped still rejects afterwards, and applying that
- * rejection would replace a workspace already on screen with a download failure. The other three
- * come from outside the flow: the gates and the retry button always apply, and the view's failure
- * applies only while its generation is the one on screen, which is the only state that mounted it.
- */
+// Drop effect results from superseded flows so late failures cannot replace a running workspace. View events apply only to the mounted generation; gates/retry arrive outside the flow.
 export type MobileWebShellSessionEvent =
   | { readonly type: 'gates-changed'; readonly gates: MobileWebShellGates }
   | {
@@ -192,84 +140,52 @@ export type MobileWebShellSessionEvent =
       readonly flow: number
       readonly cause: MobileWebShellUpdateFailureCause
     }
-  | { readonly type: 'shell-failed'; readonly reason: MobileWebShellFailureReason }
+  | { readonly type: 'shell-failed'; readonly reason: MobileWebShellReportedFailure }
   | { readonly type: 'retry-pressed' }
-  /** The native view began a document. Unstamped, like the view's failure and for the same
-   *  reason: the view exists only under the generation on screen. */
   | { readonly type: 'document-started' }
-  /** The native view finished a document. Unstamped, like the view's failure and for the same
-   *  reason: the view exists only under the generation on screen. */
   | { readonly type: 'document-loaded' }
-  /** The page said `ready` over the bridge, which is the only proof its code ran at all. */
+  // Ready proves page code ran, not that a tree painted.
   | { readonly type: 'page-ready' }
-  /** The page has a frame on screen. */
   | { readonly type: 'page-painted' }
-  /** The page is holding the device Back key, or has let it go. The host sends false on its own
-   *  for every way a document ends, so this never has to be inferred from silence. */
+  // Document resets explicitly clear Back claims; never infer relinquishment from silence.
   | { readonly type: 'page-back-claim'; readonly claimed: boolean }
   | { readonly type: 'page-ready-deadline'; readonly flow: number }
   | { readonly type: 'document-load-deadline'; readonly flow: number }
-  /** The window crossed the wide-layout threshold. */
   | { readonly type: 'layout-changed'; readonly wide: boolean }
 
-/** Latches live beside the state because both outlive the state they were set in: `retriedOnce`
- *  spans the delete-and-refetch that puts the state back to `checking`, and `remountedOnce` spans a
- *  `ready` that is replaced by a `ready` under a new session id. */
+// Keep retry/remount latches outside state because they must survive checking/ready replacements.
 export type MobileWebShellSession = {
-  /** The concrete route this session was opened for, matched against what the bundle lists. */
   readonly routePathname: string
-  /** False for the catch-all's pathnames: with no screen of its own here, an unserved one is not
-   *  evidence of an older desktop. */
+  // Unknown catch-all routes cannot prove the desktop is outdated.
   readonly appNamesRoute: boolean
-  /** A wide layout: served only under `canOwnHostArea`; the host route gets every route's grants. */
+  // Wide serving requires canOwnHostArea; the owning host route combines served routes’ grants.
   readonly wide: boolean
-  /** The route list the view below was built from, so a layout-class change can rebuild it. */
   readonly routes: readonly MobileWebPageRoute[] | undefined
-  /** This session owns the wide host area: the page draws the sidebar. */
   readonly ownsHostArea: boolean
-  /** Every route pattern this shell would render from the page, as the bundle in hand declares
-   *  them. The page is told, so it keeps a navigation into one of them instead of handing it back. */
   readonly pageRoutes: readonly string[]
-  /** The same routes with what each declared, which is what lets the page tell a hop it may keep
-   *  from one that would run under the wrong grants. */
+  // Carry each route’s declared grants so local hops can be checked against the current session’s authority.
   readonly pageRouteGrants: readonly { pathname: string; grants: readonly string[] }[]
-  /** What the route this mount stands for declared, narrowed to what this shell implements. It is
-   *  what `init` grants, so a route that asked for less is served less. */
+  // Init uses this route’s effective grants, or the combined grants when it owns the host area.
   readonly routeGrants: readonly string[]
   readonly state: MobileWebShellSessionState
   readonly retriedOnce: boolean
   readonly remountedOnce: boolean
-  /** Whether the document on screen has spoken over the bridge. Cleared by every new document,
-   *  because each one has to prove itself: the last one's word says nothing about this one. */
+  // Reset document facts on every new document; the previous page’s ready cannot prove this one ran.
   readonly pageReady: boolean
-  /** Whether this document has reported a frame on screen. Cleared with `pageReady`. */
   readonly pagePainted: boolean
-  /** Whether the view finished this document. Cleared with `pageReady`. */
   readonly documentLoaded: boolean
-  /**
-   * Whether the document on screen is holding the device Back key.
-   *
-   * Cleared with the rest of what a document says about itself, and that is the load-bearing half:
-   * a claim that outlived its sheet would have the shell hand Back to a page with nothing to do
-   * with it, which is a key that does nothing at all.
-   */
+  // Clear with document state so stale sheets cannot retain Back claims.
   readonly pageBackClaimed: boolean
-  /** The gates the current step was taken on; null until the first one arrives. */
   readonly gates: MobileWebShellGates | null
   readonly cached: CachedGeneration | null
-  /** Null unless the generation on screen is a fallback from an update this shell refused. Cleared
-   *  by every entry into the flow, so it never outlives the screen it explains. */
+  // Clear on flow entry so the notice cannot outlive the fallback it explains.
   readonly updateNotice: MobileWebShellUpdateNotice | null
-  /** The generation this flow asked the host for, so a failed read can name it. Cleared by every
-   *  entry into the flow. */
   readonly requestedBuildId: string | null
-  /** Which run of the flow the session is on. Bumped by every restart, stamped on the effects that
-   *  run belongs to, and echoed back on their results. */
+  // Stamp effects/results with the incremented flow to reject superseded work.
   readonly flow: number
 }
 
-/** A transition: the session it produced and the effects it owes. Every effect belongs to
- *  `session.flow`, which is what the runner echoes back on the result. */
+// Stamp every effect with the resulting session.flow so its completion can be matched.
 export type MobileWebShellStep = {
   readonly session: MobileWebShellSession
   readonly effects: readonly MobileWebShellSessionEffect[]

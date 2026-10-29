@@ -30,7 +30,6 @@ function mrListStateFlags(state: MRListState): string[] {
   }
 }
 
-/** List merge requests for a project via glab CLI, which handles self-hosted auth and project selection. */
 export async function listMergeRequests(
   repoPath: string,
   state: MRListState = 'opened',
@@ -42,7 +41,7 @@ export async function listMergeRequests(
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<ListMergeRequestsResult> {
   const knownHosts = await getGlabKnownHosts(connectionId, localGitOptions)
-  // Why: MRs live on the user's fork (origin); route through the preference resolver so fork workflows share plumbing.
+  // Resolve the same preference-selected project as issue listings.
   const { source: projectRef } = await resolveIssueSource(
     repoPath,
     preference,
@@ -52,7 +51,7 @@ export async function listMergeRequests(
   )
   if (!projectRef) {
     if (connectionId) {
-      // Why: SSH-backed repos have no local cwd; a cwd-less glab could resolve an unrelated project.
+      // Without local cwd, an unresolved SSH project could become an unrelated glab repository.
       return {
         items: [],
         page,
@@ -65,9 +64,8 @@ export async function listMergeRequests(
         }
       }
     }
-    // Why: fallback — let glab infer the project from cwd when the host isn't in getGlabKnownHosts.
+    // Local compatibility can infer a project omitted from authenticated known hosts.
     const stateFlag = mrListStateFlags(state)
-    // Why: apply the same search as the API path, else queries are silently ignored on cwd-inferred repos (#6263).
     const searchFlag = query?.trim() ? ['--search', query.trim()] : []
     await acquire()
     try {
@@ -95,7 +93,7 @@ export async function listMergeRequests(
         items: data.map((d) => mapMRToWorkItem(d, 'unknown')),
         page,
         perPage,
-        // Why: the CLI omits x-total headers, so totals are approximate.
+        // CLI listings omit total headers; infer whether another page may exist.
         totalCount: data.length,
         totalPages: data.length < perPage ? page : page + 1
       }
@@ -112,7 +110,6 @@ export async function listMergeRequests(
       release()
     }
   }
-  // Why: GitLab's API uses an absent state param to mean "any"; drop it for 'all'.
   const stateParam = state === 'all' ? '' : `&state=${state}`
   const searchParam = query?.trim() ? `&search=${encodeURIComponent(query.trim())}` : ''
   const path =
@@ -127,15 +124,19 @@ export async function listMergeRequests(
       glabRepoExecOptions(repoPath, connectionId, localGitOptions)
     )
     const data = parseGlabJsonList<Parameters<typeof mapMRToWorkItem>[0]>(body)
+    const headerTotalCount = parseGlabPaginationHeader(headers['x-total'], 0)
+    // GitLab omits both totals past 10,000 rows and proxies can strip them; a full page advertises one more probe.
+    const probedTotalPages = data.length < perPage ? page : page + 1
     return {
       items: data.map((d) => mapMRToWorkItem(d, repoId, projectRef)),
       page,
       perPage,
-      totalCount: parseGlabPaginationHeader(headers['x-total'], 0) ?? 0,
-      // Why: GitLab may omit x-total-pages for 'all' or large per_page; fall back to ceil(total/perPage).
+      totalCount: headerTotalCount ?? 0,
       totalPages:
         parseGlabPaginationHeader(headers['x-total-pages'], 1) ??
-        Math.max(1, Math.ceil((parseGlabPaginationHeader(headers['x-total'], 0) ?? 0) / perPage))
+        (headerTotalCount === undefined
+          ? probedTotalPages
+          : Math.max(1, Math.ceil(headerTotalCount / perPage)))
     }
   } catch (err) {
     return {
@@ -150,8 +151,3 @@ export async function listMergeRequests(
     release()
   }
 }
-
-/**
- * Fetch a work item (MR or issue) by explicit project ref + iid + type.
- * Used by the paste-URL flow, where the URL determines the project directly.
- */

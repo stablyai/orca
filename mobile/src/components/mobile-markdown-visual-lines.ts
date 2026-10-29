@@ -3,7 +3,7 @@ import {
   NATIVE_CHAT_VISUAL_MAX_PER_MESSAGE,
   parseNativeChatVisualDirectiveLine,
   type NativeChatVisualDirective
-} from '../../../src/shared/native-chat-visual-directive'
+} from '../../../src/shared/native-chat/native-chat-visual-directive'
 import { mobileMarkdownCodeLines } from './mobile-markdown-tree'
 // Private-use delimiters, as the preview normalizer's own code placeholders use.
 const PLACEHOLDER_PREFIX = '\uE000ORCA_VISUAL_'
@@ -19,12 +19,7 @@ function placeholderFor(index: number): string {
   return `${PLACEHOLDER_PREFIX}${index}\uE000`
 }
 
-/**
- * Lifts native-chat visual directive lines out of assistant prose before it is parsed, which
- * decodes entities and reads tags and would otherwise rewrite a title. Only lines outside code
- * count, as the parser reads it; quotes and list items never start with the marker. Past the
- * per-message cap a directive stays literal text.
- */
+// Extract assistant visual directives before parser decodes entities/tags and rewrites titles; only non-code top-level marker lines count. Past cap, keep literal text.
 export function protectMobileMarkdownVisualLines(content: string): MobileMarkdownVisualLines {
   // Text that already spells a placeholder would alias a real one; it renders no visuals at all.
   if (

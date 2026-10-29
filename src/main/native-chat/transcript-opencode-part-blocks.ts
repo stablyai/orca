@@ -7,8 +7,7 @@ import type {
 } from '../../shared/native-chat-types'
 import { agentSessionHostStatusBody } from '../../shared/agent-session-host-status-rows'
 import { asRecord, extractString, parseJsonObject } from '../ai-vault/session-scanner-values'
-// query module so each stays under the repo's file-size cap. Electron-free:
-// runs on the OpenCode SQLite worker thread (#8864).
+// Electron-free: imported by the OpenCode SQLite worker.
 
 export type OpenCodePartRow = {
   message_id: string
@@ -110,7 +109,6 @@ function opencodeMessageContent(partRows: OpenCodePartRow[]): {
         break
       }
       default:
-        // step-start / snapshot / unknown bookkeeping parts render nothing.
         break
     }
   }
@@ -135,7 +133,6 @@ function opencodeFileBlock(part: Record<string, unknown>): NativeChatImageRefBlo
     try {
       return { type: 'image-ref', path: fileURLToPath(url), ...withAlt }
     } catch {
-      // A malformed file URL still renders as an opaque ref.
       return { type: 'image-ref', url, ...withAlt }
     }
   }
@@ -163,7 +160,6 @@ function opencodeToolBlocks(part: Record<string, unknown>): NativeChatBlock[] {
   const output = state.output
   const error = state.error
   if (typeof output !== 'string' && error == null) {
-    // pending / running: the result has not been captured yet.
     return blocks
   }
   blocks.push({

@@ -7,12 +7,15 @@ import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { chromium, type Browser, type Page } from 'playwright'
-import { afterAll, afterEach, beforeAll, beforeEach, expect, vi } from 'vitest'
+import { afterAll, afterEach, beforeAll, expect, vi } from 'vitest'
 import { build as buildVite } from 'vite'
 import { waitForBrowserCdpEndpoint } from './browser-session-ua-cdp-collector'
 import { popupFixtureHtml } from './browser-popup-compatibility-page-fixture'
 import { resolveElectronProbeLaunch } from './electron-probe-display-launch'
-import { startHiddenRendererFrameCapture } from './hidden-renderer-frame-capture-fixture'
+import {
+  HIDDEN_RENDERER_FIRST_FRAME_TIMEOUT_MS,
+  startHiddenRendererFrameCapture
+} from './hidden-renderer-frame-capture-fixture'
 
 // Hidden renderer startup and CDP events can exceed the default one-second poll on CI.
 vi.setConfig({ expect: { poll: { timeout: 10_000 } } })
@@ -104,8 +107,8 @@ async function reservePort(): Promise<number> {
   return address.port
 }
 
-async function waitForFixture(predicate: () => boolean): Promise<void> {
-  const deadline = Date.now() + 20_000
+async function waitForFixture(predicate: () => boolean, timeoutMs = 20_000): Promise<void> {
+  const deadline = Date.now() + timeoutMs
   while (!predicate()) {
     if (Date.now() > deadline) {
       throw new Error(`Popup fixture did not become ready: ${stderr}`)
@@ -121,7 +124,7 @@ beforeAll(async () => {
     throw new Error('Missing mock origin')
   }
   origin = `http://127.0.0.1:${address.port}`
-  // Build current source, including the hidden BaseWindow policy, before any Electron launch.
+  // Rebuild the hidden-window launch policy before launching Electron.
   await buildVite({
     configFile: false,
     logLevel: 'silent',
@@ -209,19 +212,17 @@ beforeAll(async () => {
       throw new Error('Missing guest page')
     }
     pages.set(name, page)
-  }
-}, 60_000)
-
-beforeEach(async () => {
-  for (const page of pages.values()) {
-    if (!stopFrameCaptures.has(page)) {
-      stopFrameCaptures.set(
-        page,
-        await startHiddenRendererFrameCapture(page, (hasFrame) => expect.poll(hasFrame).toBe(true))
+    // Wait for the first compositor frame during startup; fresh CI GPU initialization can be slow.
+    stopFrameCaptures.set(
+      page,
+      await startHiddenRendererFrameCapture(page, (hasFrame) =>
+        waitForFixture(hasFrame, HIDDEN_RENDERER_FIRST_FRAME_TIMEOUT_MS).catch((error: unknown) => {
+          throw new Error(`No first frame for ${name}`, { cause: error })
+        })
       )
-    }
+    )
   }
-})
+}, 90_000)
 
 afterEach(async () => {
   const route = pages.get('route')

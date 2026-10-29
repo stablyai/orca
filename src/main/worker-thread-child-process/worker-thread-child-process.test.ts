@@ -1,11 +1,9 @@
 import { EventEmitter } from 'node:events'
+import { createHash } from 'node:crypto'
 import { existsSync } from 'node:fs'
-import { mkdtemp, rm } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { MessageChannel, Worker, type MessagePort } from 'node:worker_threads'
 import { runProcess } from '@orca/process-host'
-import { build } from 'esbuild'
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import {
   IDLE_TEARDOWN_MS,
@@ -13,9 +11,9 @@ import {
   type WorkerThreadChildProcess
 } from './worker-thread-child-process'
 import { serveWorkerThreadChildProcesses } from './worker-thread-child-process-server'
+import { createWorkerThreadChildProcessTestEntry } from './worker-thread-child-process-worker.test-fixtures'
 
-// Both halves joined by a real MessageChannel, so every event crosses structured
-// clone exactly as it does between the main thread and the worker.
+// Use a real MessageChannel so protocol tests include structured-clone behavior.
 const openPorts: MessagePort[] = []
 const terminations: number[] = []
 
@@ -50,8 +48,7 @@ function waitForSpawn(child: WorkerThreadChildProcess): Promise<number> {
   )
 }
 
-// Why the zombie check: libuv reaps a child only through its own loop's handle, so
-// once the worker's loop is gone an exited POSIX child stays a zombie until Orca exits.
+// After worker-loop death libuv can no longer reap POSIX children; zombies persist until Orca exits.
 async function isRunning(pid: number): Promise<boolean> {
   try {
     process.kill(pid, 0)
@@ -93,6 +90,43 @@ afterEach(() => {
 })
 
 describe('WorkerThreadChildProcessHost over a message channel', () => {
+  it('delivers large stdout and stderr exactly across backpressure and buffer transfer', async () => {
+    const blocks = 64
+    const bytes = Buffer.alloc(64 * 1024, 0x61)
+    const script = `
+      const bytes = Buffer.alloc(64 * 1024, 0x61);
+      (async () => {
+        for (let i = 0; i < ${blocks}; i++) {
+          for (const pipe of [process.stdout, process.stderr]) {
+            await new Promise((resolve, reject) =>
+              pipe.write(bytes, error => error ? reject(error) : resolve()));
+          }
+        }
+      })().catch(() => process.exitCode = 1);
+    `
+    const child = makeConnectedHost().spawn({ program: process.execPath, args: ['-e', script] })
+    const expected = createHash('sha256')
+    const stdout = createHash('sha256')
+    const stderr = createHash('sha256')
+    let received = 0
+    child.stdout.on('data', (chunk: Buffer) => {
+      stdout.update(chunk)
+      received += chunk.length
+    })
+    child.stderr.on('data', (chunk: Buffer) => {
+      stderr.update(chunk)
+      received += chunk.length
+    })
+    for (let i = 0; i < blocks; i++) {
+      expected.update(bytes)
+    }
+    expect(await waitForClose(child)).toEqual([0, null])
+    const digest = expected.digest('hex')
+    expect(stdout.digest('hex')).toBe(digest)
+    expect(stderr.digest('hex')).toBe(digest)
+    expect(received).toBe(blocks * bytes.length * 2)
+  })
+
   it('runs a real piped child across the message boundary', async () => {
     const child = makeConnectedHost().spawn({
       program: process.execPath,
@@ -100,7 +134,7 @@ describe('WorkerThreadChildProcessHost over a message channel', () => {
     })
     const stdout: string[] = []
     const stderr: string[] = []
-    // Data must arrive as a Buffer: the RPC reader calls chunk.toString().
+    // Convert cloned bytes back to Buffer for RPC readers using toString.
     child.stdout.on('data', (chunk: Buffer) => stdout.push(chunk.toString()))
     child.stderr.on('data', (chunk: Buffer) => stderr.push(chunk.toString()))
     const closed = waitForClose(child)
@@ -231,27 +265,18 @@ describe('WorkerThreadChildProcessHost over a message channel', () => {
   }, 20_000)
 })
 
-// Why a real worker: only a real thread's death closes the child's pipes, which is
-// the graceful stop an abandoned probe relies on instead of a pid-addressed kill.
+// Real thread death closes child pipes; abandoned probes depend on that graceful stop instead of PID-addressed killing.
 describe('WorkerThreadChildProcessHost on a real worker thread', () => {
   let directory = ''
   let entryPath = ''
+  let dispose: (() => Promise<void>) | undefined
 
   beforeAll(async () => {
-    directory = await mkdtemp(join(tmpdir(), 'orca-worker-child-'))
-    entryPath = join(directory, 'worker-thread-child-process-entry.cjs')
-    await build({
-      entryPoints: [join(__dirname, 'worker-thread-child-process-entry.ts')],
-      outfile: entryPath,
-      bundle: true,
-      platform: 'node',
-      format: 'cjs',
-      logLevel: 'silent'
-    })
+    ;({ directory, entryPath, dispose } = await createWorkerThreadChildProcessTestEntry())
   }, 60_000)
 
   afterAll(async () => {
-    await rm(directory, { recursive: true, force: true })
+    await dispose?.()
   })
 
   it.each([

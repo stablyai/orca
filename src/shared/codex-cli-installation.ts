@@ -1,13 +1,8 @@
-import { compareAppVersions, isValidAppVersion, parseCliVersion } from './app-version'
+import { isValidAppVersion, parseCliVersion } from './app-version'
 
 export const CODEX_MINIMUM_SUPPORTED_VERSION = '0.136.0'
 
-export type CodexCliInstallation = {
-  status: 'missing' | 'unsupported' | 'ready' | 'unknown'
-  version: string | null
-  minimumVersion: string
-}
-
+/** Codex's binary problem in the shape builds before `agentInstallation` send and save. */
 export type CodexInstallationProblem = {
   installedVersion: string | null
   minimumVersion: string
@@ -24,24 +19,6 @@ export function parseCodexCliVersion(output: string | null | undefined): string 
   return versions.length && versions.every((version) => version !== null && version === versions[0])
     ? versions[0]
     : null
-}
-
-export function codexCliInstallation(
-  installed: boolean,
-  output: string | null
-): CodexCliInstallation {
-  const version = parseCodexCliVersion(output)
-  return {
-    status: !installed
-      ? 'missing'
-      : version === null
-        ? 'unknown'
-        : compareAppVersions(version, CODEX_MINIMUM_SUPPORTED_VERSION) < 0
-          ? 'unsupported'
-          : 'ready',
-    version,
-    minimumVersion: CODEX_MINIMUM_SUPPORTED_VERSION
-  }
 }
 
 export function readCodexInstallationProblem(value: unknown): CodexInstallationProblem | undefined {

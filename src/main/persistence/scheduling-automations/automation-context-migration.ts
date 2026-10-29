@@ -129,8 +129,7 @@ export function getAutomationContextsForRepo(
   const projection = projectHostSetupProjectionFromRepos([repo])
   const projectedProject = projection.projects[0]
   const projectedSetup = projection.setups[0]
-  // Why the host filter first: a repo id can be shared across hosts, and the
-  // contexts must describe the copy this record resolved to, not a sibling's.
+  // Shared repo IDs require host-scoped context lookup.
   const repoHostId = getRepoExecutionHostId(repo)
   const setup =
     projectHostSetups.find(
@@ -185,7 +184,11 @@ export function backfillLegacyAutomationContexts(
 } {
   let changed = false
   const contextsByAutomationId = new Map<string, Pick<Automation, 'runContext' | 'sourceContext'>>()
-  const reposById = new Map((state.repos ?? []).map((repo) => [repo.id, repo]))
+  // Ambiguous same-ID repos remain unresolved so dispatch can refuse safely.
+  const reposById = new Map<string, Repo | undefined>()
+  for (const repo of state.repos ?? []) {
+    reposById.set(repo.id, reposById.has(repo.id) ? undefined : repo)
+  }
   const automations = (state.automations ?? []).map((automation) => {
     const contexts = getAutomationContextsForRepo(
       reposById.get(getAutomationLegacyRepoId(automation)),
@@ -193,7 +196,7 @@ export function backfillLegacyAutomationContexts(
     )
     const next: Automation = { ...automation }
     if (!Object.hasOwn(next, 'runContext')) {
-      // Why: pre-host-context automations only stored a repo id; backfill the run target once so dispatch/precheck stop inferring it.
+      // Backfill legacy repo-only targets once so dispatch/precheck no longer infer ownership.
       next.runContext = contexts.runContext
       changed = true
     }

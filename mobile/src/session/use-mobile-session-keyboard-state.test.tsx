@@ -4,7 +4,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SoftKeyboardState } from '../platform/keyboard-occlusion'
 import type { RouteHandoff } from '../navigation/route-handoff'
-import type { CustomKey } from '../components/CustomKeyModal'
+import type { CustomKey } from '../terminal/terminal-custom-keys'
 
 const harness = vi.hoisted(() => {
   const keyboard: SoftKeyboardState = { height: 0, visible: false }
@@ -25,21 +25,19 @@ const harness = vi.hoisted(() => {
 vi.mock('../platform/keyboard-occlusion', () => ({
   useSoftKeyboard: (): SoftKeyboardState => harness.keyboard
 }))
-// The refit hook reaches the RPC client and the terminal handles; what this file measures is what
-// the screen tells it about the keyboard, which is the two notifications above it.
 vi.mock('../terminal/terminal-viewport-refit', () => ({
   useTerminalViewportRefit: () => ({
     notifyKeyboardVisibility: harness.notifyKeyboardVisibility,
     notifyTerminalFrameHeight: harness.notifyTerminalFrameHeight
   })
 }))
-vi.mock('../components/CustomKeyModal', () => ({ removeCustomKey: harness.removeCustomKey }))
-vi.mock('../worktree/last-visited-worktree-repo', () => ({ writeLastVisitedWorktree: () => {} }))
+vi.mock('../terminal/terminal-custom-keys', () => ({ removeCustomKey: harness.removeCustomKey }))
+vi.mock('../worktree/last-visited-worktree-by-host', () => ({
+  writeLastVisitedWorktree: async () => {}
+}))
 
 import { useMobileSessionKeyboardState } from './use-mobile-session-keyboard-state'
 
-/** Every member the type carries, because this file is typechecked; only `push` is reached here,
- *  from the shortcuts sheet's "Manage shortcuts". */
 const router: RouteHandoff = {
   back: () => {},
   canDismiss: () => false,
@@ -72,12 +70,11 @@ function Harness(): null {
     setCustomKeys: harness.setCustomKeys,
     setShowCustomKeyModal: () => {},
     setKeyboardHeight: harness.setKeyboardHeight,
-    // Read only by the viewport refit, which is mocked above; present because the scope names them.
     activeHandleRef: { current: null },
     clientRef: { current: null },
     deviceTokenRef: { current: null },
     showNativeChatRef: { current: false },
-    subscribeToTerminal: () => {},
+    subscribeToTerminal: () => true,
     terminalFrameRef: { current: null },
     terminalRefs: { current: new Map() },
     unsubscribeTerminal: () => {},
@@ -127,9 +124,7 @@ describe('what the session screen hears about the keyboard', () => {
   })
 
   it('holds the refit off for a keyboard that is open and covers nothing', async () => {
-    // A floating keyboard reports no occlusion, so the dock needs no lift. Refitting on that height
-    // change would reflow the desktop PTY on every keyboard open, which is the reflow the
-    // visibility flag exists to defer.
+    // Floating keyboards occlude nothing; height-only refits would reflow the desktop PTY on every open.
     const tree = await mount()
     harness.keyboard = { height: 0, visible: true }
     await rerender(tree)

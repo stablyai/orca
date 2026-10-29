@@ -28,7 +28,6 @@ function startedSession(
   return {
     child: { generation: GENERATION, fence: 7, phase: 'ready' },
     appendLifecycleBatch,
-    // Nothing ran: the start failed before any response or acknowledged prompt.
     journal: exitJournalDouble({
       items: () => [],
       appendLifecycleBatch,
@@ -79,20 +78,20 @@ const ended = {
 
 describe('a provider that ends before it finished starting', () => {
   it('tells the user why, even with no response in progress', async () => {
-    const session = startedSession()
+    const session = {
+      ...startedSession(),
+      child: { generation: GENERATION, fence: 7, phase: 'starting' as const }
+    }
 
     await settleStructuredAgentSessionChildExit(contextFor(session), {
       ...ended,
-      // The adapter typed the start's own failure; the host keeps it rather than reword it.
-      failure: { kind: 'notSignedIn' },
-      startupUnproven: true
+      failure: { kind: 'notSignedIn' }
     })
 
     expect(session.appendLifecycleBatch).toHaveBeenCalledWith(
       expect.objectContaining({
         mutations: [
           expect.objectContaining({
-            // The same row the delivery loop writes for a failed start: an error, keyed by it.
             identity: { provider: 'orca', clientMessageId: `start-failure:${GENERATION}` },
             body: {
               kind: 'status',
@@ -115,7 +114,7 @@ describe('a provider that ends before it finished starting', () => {
     expect(session.appendLifecycleBatch).not.toHaveBeenCalled()
   })
 
-  it("reads a start that failed off the host's own phase when the provider omits the flag", async () => {
+  it("reads a start that failed off the host's own phase", async () => {
     const session = {
       ...startedSession(),
       child: { generation: GENERATION, fence: 7, phase: 'starting' as const }
@@ -130,9 +129,8 @@ describe('a provider that ends before it finished starting', () => {
       expect.objectContaining({
         mutations: [
           expect.objectContaining({
-            // The same row the delivery loop writes for a failed start: an error, keyed by it.
             identity: { provider: 'orca', clientMessageId: `start-failure:${GENERATION}` },
-            // The exit's stderr stays out of the sentence, as a log detail beside it.
+            // Keep stderr in logs, outside the failure sentence.
             body: {
               kind: 'status',
               text: STARTUP_TEXT,
@@ -168,7 +166,6 @@ describe('a provider that ends before it finished starting', () => {
             clientMessageId: 'compact-1',
             state: 'rejected',
             reason: text,
-            // At the exited child's own fence, before its release moves it.
             fence: 7,
             recovered: true
           })

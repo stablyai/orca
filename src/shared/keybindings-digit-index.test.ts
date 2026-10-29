@@ -1,4 +1,3 @@
-// Digit-index ranges for tab and workspace selection chords.
 import { describe, expect, it } from 'vitest'
 import {
   findKeybindingConflicts,
@@ -189,7 +188,6 @@ describe('digit-index shortcuts', () => {
         swapped
       )
     ).toBe(4)
-    // A disabled (empty) override never fires.
     expect(
       matchKeybindingDigitIndex('tab.selectByIndex', digitInput('5', { control: true }), 'darwin', {
         'tab.selectByIndex': []
@@ -239,7 +237,6 @@ describe('digit-index shortcuts', () => {
         'darwin'
       )
     ).toEqual({ ok: true, value: 'Ctrl+1' })
-    // A non-number chord is rejected with guidance.
     expect(
       keybindingFromInputForAction(
         'tab.selectByIndex',
@@ -282,8 +279,7 @@ describe('digit-index shortcuts', () => {
   })
 
   it('lets the two ranges swap modifiers without a false conflict', () => {
-    // The headline use case: tab → Cmd, workspace → Ctrl. They live in
-    // different scopes, so neither edit is blocked as a conflict.
+    // Tab/workspace ranges can swap modifiers because their scopes differ.
     expect(
       findKeybindingConflicts('darwin', {
         'tab.selectByIndex': ['Mod+1'],

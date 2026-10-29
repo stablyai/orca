@@ -5,11 +5,19 @@ const mocks = vi.hoisted(
   (): {
     callRuntimeRpc: ReturnType<typeof vi.fn>
     ownerEnvironmentId: string | null
-  } => ({ callRuntimeRpc: vi.fn(), ownerEnvironmentId: null })
+    recordFeatureInteraction: ReturnType<typeof vi.fn>
+  } => ({ callRuntimeRpc: vi.fn(), ownerEnvironmentId: null, recordFeatureInteraction: vi.fn() })
 )
 
 vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: mocks.callRuntimeRpc }))
-vi.mock('@/store', () => ({ useAppStore: { getState: () => ({}) } }))
+vi.mock('@/store', () => ({
+  useAppStore: {
+    getState: () => ({
+      unifiedTabsByWorktree: {},
+      recordFeatureInteraction: mocks.recordFeatureInteraction
+    })
+  }
+}))
 vi.mock('@/lib/resolve-owner', () => ({
   runtimeEnvironmentIdUnlessTwin: () => mocks.ownerEnvironmentId
 }))
@@ -17,7 +25,10 @@ vi.mock('@/lib/resolve-owner', () => ({
 const pinnedItem = { unifiedTabId: 'tab-editor', isPinned: true }
 
 function windowActions() {
-  return { togglePinned: vi.fn<(item: typeof pinnedItem) => void>() }
+  return {
+    togglePinned: vi.fn<(item: typeof pinnedItem) => void>(),
+    makePreviewFilePermanent: vi.fn<(fileId: string, tabId?: string) => void>()
+  }
 }
 
 function wrap(today: ReturnType<typeof windowActions>) {
@@ -28,10 +39,11 @@ describe('withLayoutOwnerTabProps', () => {
   beforeEach(() => {
     mocks.callRuntimeRpc.mockReset()
     mocks.ownerEnvironmentId = null
+    mocks.recordFeatureInteraction.mockReset()
     vi.spyOn(console, 'warn').mockImplementation(() => {})
   })
 
-  it('sends the pin to main by tab-bar id, then the window shows the same change', async () => {
+  it('sends the pin to main by tab-bar id and leaves drawing it to main’s frame', async () => {
     mocks.callRuntimeRpc.mockResolvedValue({ ok: true, result: {} })
     const today = windowActions()
 
@@ -40,8 +52,10 @@ describe('withLayoutOwnerTabProps', () => {
     expect(mocks.callRuntimeRpc.mock.calls.map((call) => call[2])).toEqual([
       { command: { type: 'setTabProps', tabId: 'tab-editor', isPinned: false, workspace: 'wt-1' } }
     ])
+    await vi.waitFor(() =>
+      expect(mocks.recordFeatureInteraction).toHaveBeenCalledWith('terminal-tabs')
+    )
     expect(today.togglePinned).not.toHaveBeenCalled()
-    await vi.waitFor(() => expect(today.togglePinned).toHaveBeenCalledWith(pinnedItem))
   })
 
   it('leaves the window as it is when main refuses', async () => {

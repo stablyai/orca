@@ -74,7 +74,6 @@ describe('verticalGroupByFields capability fallback', () => {
     vi.mocked(runGraphql).mockResolvedValueOnce(unknownFieldFailure()).mockResolvedValue(okPage())
     await fetchProjectViewsPage(args)
     await fetchProjectViewsPage(args)
-    // Third call overall = first call of the second fetch: no failed probe repeated.
     expect(vi.mocked(runGraphql).mock.calls[2]?.[0]).not.toContain('verticalGroupByFields')
     await fetchProjectViewsPage({ ...args, host: 'github.com' })
     expect(vi.mocked(runGraphql).mock.calls[3]?.[0]).toContain('verticalGroupByFields')
@@ -119,8 +118,7 @@ describe('verticalGroupByFields capability fallback', () => {
   })
 
   it('does not treat the field name inside partial-error DATA as incapability', async () => {
-    // Why: partial errors echo the whole body, where the field name appears as
-    // a plain data key on healthy schemas — that must not degrade the host.
+    // Partial-error data can echo a healthy field name; only schema errors prove it unsupported.
     vi.mocked(runGraphql).mockResolvedValueOnce({
       ok: false,
       error: { type: 'schema_drift', message: 'Could not read this project view.' },

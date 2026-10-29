@@ -25,7 +25,8 @@ import {
   getRouteForLocalPathOpenOwner,
   isRevealOrEditorOpenBlocked
 } from '@/lib/local-path-open-guard'
-import { runtimeEnvironmentIdWithLegacyFallbackUnlessTwin } from '@/lib/worktree-runtime-owner'
+import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
+import { formatClipboardFilePath } from '@/lib/clipboard-file-path'
 import { NO_OPEN_IN_APPLICATIONS } from '@/lib/open-in-application-selection'
 import {
   getOpenInEntryAvailability,
@@ -60,10 +61,9 @@ export function SourceControlEntryContextMenu({
   const openInApplications = useAppStore(
     (s) => s.settings?.openInApplications ?? NO_OPEN_IN_APPLICATIONS
   )
-  // Why: a repo can belong to a runtime other than the focused one, and the OS reveal
-  // cannot tell that host's path from a local one of the same name.
+  // Resolve the repo owner; OS reveal cannot distinguish another host's path from an identically named local path.
   const runtimeEnvironmentId = useAppStore((s) =>
-    runtimeEnvironmentIdWithLegacyFallbackUnlessTwin(s, currentWorktreeId)
+    runtimeEnvironmentIdOrLocalUnlessTwin(s, currentWorktreeId)
   )
   const revealOwner = useAppStore((s) =>
     getWorkspaceFileRevealOwner(s, currentWorktreeId, { connectionId, runtimeEnvironmentId })
@@ -78,8 +78,8 @@ export function SourceControlEntryContextMenu({
     if (!absolutePath) {
       return
     }
-    void window.api.ui.writeClipboardText(absolutePath)
-  }, [absolutePath])
+    void window.api.ui.writeClipboardText(formatClipboardFilePath(absolutePath, revealOwner))
+  }, [absolutePath, revealOwner])
 
   const handleCopyRelativePath = useCallback(() => {
     if (!relativePath) {

@@ -186,8 +186,7 @@ describe('automation target availability', () => {
   })
 
   it('still blocks when the setup repoId drifts even though the live repo still matches', () => {
-    // Live repo matches runContext.repoId (repoMatchesContext passes), so this
-    // isolates the setup-side repoId clause that survives the projectId removal.
+    // Keep the live repo matching so this isolates setup-side repoId checks after dropping derived projectId.
     expect(
       getAutomationTargetAvailability({
         automation: makeAutomation({

@@ -15,22 +15,10 @@ import {
   type PressAndHoldRecord
 } from './macos-press-and-hold-default'
 
-/**
- * Runs against the real `/usr/bin/defaults` on a throwaway Orca-owned domain.
- *
- * The whole design rests on one claim the mocks cannot make: a domain that has never been written
- * is distinguishable from one explicitly set to `false`. Electron's `systemPreferences` cannot tell
- * them apart, so if `defaults` could not either, "only write when unset" would be unimplementable.
- *
- * Every domain used here is a throwaway UUID under Orca's own prefix, deleted along with its plist
- * in `afterEach`; the real `com.stablyai.orca` domain is never read or written.
- */
+// Verify real defaults distinguishes absence from false using disposable Orca-prefixed domains.
 
-// Why a real Orca-owned domain shape: the ownership guard rejects anything else, so a fake prefix
-// would exercise a different branch than production.
 const domains: string[] = []
 
-/** Pinned against the real binary below, then reused by the platform-agnostic unit tests. */
 const DEFAULTS_MISSING_EXIT_CODE = 1
 
 function throwawayDomain(): string {
@@ -71,11 +59,8 @@ describe.skipIf(process.platform !== 'darwin')(
       for (const domain of domains.splice(0)) {
         try {
           execFileSync('/usr/bin/defaults', ['delete', domain], { stdio: 'ignore' })
-        } catch {
-          // The domain may never have been created; nothing to clean up.
-        }
-        // Why the file too: `defaults delete` empties the domain but leaves its plist behind, so
-        // without this every run litters the developer's ~/Library/Preferences.
+        } catch {}
+        // defaults delete empties the domain but leaves its plist behind.
         rmSync(join(homedir(), 'Library', 'Preferences', `${domain}.plist`), { force: true })
       }
     })
@@ -116,8 +101,6 @@ describe.skipIf(process.platform !== 'darwin')(
     })
 
     it('refuses to call a failed probe "unset"', () => {
-      // Real runs, not hand-built results: a binary that is not there must come back 'unknown'
-      // through the same path production takes, not be mistaken for "the key does not exist".
       const spawnFailure = (): ReturnType<typeof runProcessSync> =>
         runProcessSync({
           program: '/usr/bin/defaults-does-not-exist',
@@ -132,16 +115,13 @@ describe.skipIf(process.platform !== 'darwin')(
         args: ['read', throwawayDomain(), PRESS_AND_HOLD_KEY],
         stdio: ['ignore', 'ignore', 'ignore']
       })
-      // The one exit code the whole design reads as unset; every other outcome is 'unknown'.
       expect(missingKey.code).toBe(DEFAULTS_MISSING_EXIT_CODE)
       expect(missingKey.timedOut).toBe(false)
       expect(interpretDefaultsRead(() => missingKey)).toBe('unset')
     })
 
-    // Skipped as root, where the read-only directory below would still be writable.
+    // Root could still write the read-only fixture directory.
     it.skipIf(process.getuid?.() === 0)('reports a write the binary refused', () => {
-      // Why a real refusal: `defaults write` exits non-zero instead of throwing, so a caller that
-      // only caught exceptions would record 'applied' for a value that never reached the plist.
       const readOnly = join(mkdtempSync(join(tmpdir(), 'orca-press-hold-ro-')), 'locked')
       mkdirSync(readOnly)
       chmodSync(readOnly, 0o500)
@@ -159,7 +139,6 @@ describe.skipIf(process.platform !== 'darwin')(
       execFileSync('/usr/bin/defaults', ['delete', domain, PRESS_AND_HOLD_KEY], { stdio: 'ignore' })
 
       expect(readDomainPressAndHoldPreference(domain)).toBe('unset')
-      // A launch that already decided must not rewrite it, which is what makes the delete stick.
       const decided: PressAndHoldRecord = {
         version: 1,
         decision: 'applied',

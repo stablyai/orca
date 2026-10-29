@@ -1,8 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useRunningTerminalCloseConfirmStore } from './running-terminal-close-confirm'
 
-// The store rejects a second action within 350 ms of revealing a queued request, so these
-// tests drive a clock rather than letting wall time decide whether an action lands.
+// Drive clock for the 350ms queued-prompt guard; wall time must not decide actions.
 let clock = 1_000
 
 function advancePastGuard(): void {
@@ -29,8 +28,7 @@ function request(terminalTabId: string, onConfirm: () => void = vi.fn(), onCance
 
 describe('running terminal close confirmation store', () => {
   beforeEach(() => {
-    // Monotonic across tests: the store is a singleton, so winding the clock back would
-    // leave a previous test's guard deadline in the future and block every action.
+    // Keep singleton clock monotonic or prior guard deadlines block later cases.
     clock += 10_000
     vi.spyOn(Date, 'now').mockImplementation(() => clock)
   })
@@ -170,9 +168,7 @@ describe('running terminal close confirmation store', () => {
     expect(reentrant).toHaveBeenCalledTimes(1)
   })
 
-  // Why: a queued request replaces the visible one in place. Without this window, the second
-  // click of a double-click aimed at one tab lands on the next tab's prompt and kills a
-  // running process the user never saw asked about — the bug class this PR exists to close.
+  // Queued prompts reuse the dialog; guard double-clicks from accepting the next unseen tab’s process close.
   it('ignores a second action that lands on the freshly revealed request', () => {
     const store = useRunningTerminalCloseConfirmStore.getState()
     const first = vi.fn()

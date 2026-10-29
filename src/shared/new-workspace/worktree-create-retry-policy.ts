@@ -6,8 +6,7 @@ import {
 
 export const CLIENT_WORKTREE_CREATE_MAX_ATTEMPTS = 25
 
-// Why: mixed-version runtimes can still return these legacy conflicts instead
-// of performing their own suffix retry, so every client needs one policy.
+// Older runtimes return conflicts instead of suffix-retrying internally; share the client fallback policy.
 const RETRYABLE_WORKTREE_CREATE_CONFLICT_PATTERNS = [
   /already exists locally/i,
   /already exists on a remote/i,

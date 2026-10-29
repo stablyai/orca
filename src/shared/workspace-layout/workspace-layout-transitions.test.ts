@@ -13,7 +13,6 @@ import type { WorkspaceLayoutModel } from './workspace-layout-model'
 import { checkWorkspaceLayoutModelRules } from './workspace-layout-model-rules'
 import { applyLayoutTransition, type LayoutTransition } from './workspace-layout-transitions'
 
-/** One terminal tab split in two, the first pane running `pty-1`. */
 function setup() {
   const context = testContext()
   const created = build(context, [{ type: 'createTerminalTab', workspace: WS }])
@@ -42,7 +41,6 @@ function setup() {
   }
 }
 
-/** Each pane of the tab and the terminal it shows. */
 const leavesOf = (model: WorkspaceLayoutModel, tabId: string) => {
   if (!model.workspaces[WS]!.tabs.some((tab) => tab.id === tabId)) {
     return 'closed'
@@ -191,7 +189,6 @@ describe('workspace removal', () => {
   })
 })
 
-/** Two clients' commands for the same tab or pane: both arrival orders end in a valid layout. */
 describe('concurrent commands, both orders', () => {
   type Step = { command: LayoutCommand } | { transition: LayoutTransition }
   type Run = { model: WorkspaceLayoutModel; codes: string[] }

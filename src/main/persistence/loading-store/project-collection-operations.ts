@@ -12,6 +12,7 @@ import type {
   ProjectUpdateArgs
 } from '../../../shared/project-types'
 import type { Repo } from '../../../shared/repo-types'
+import type { RepoHostTarget } from '../../../shared/repo-host-identity'
 import { ProjectGroupPersistenceOperations } from '../tracking-repos/project-group-operations'
 import { FolderWorkspacePersistenceOperations } from '../restoring-sessions/folder-workspace-operations'
 import { ProjectHostPersistenceOperations } from '../tracking-repos/project-host-operations'
@@ -31,6 +32,10 @@ import { removeWorkspaceLineageForFolderParent } from './metadata-lineage-operat
 import { bumpLocalWorktreeScanGeneration } from '../../local-worktree-scan-generation'
 import { dropOrcadTerminalRestoreHintsForWorktrees } from '../migrating-orcad-catalog/orcad-terminal-restore-hint-store'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
+import {
+  applyWslMoveRetainedMarks,
+  type WslMoveRetainedMark
+} from '../moving-wsl-projects/wsl-move-retained-marks'
 
 type ProjectCollectionOperationsRuntime = Pick<
   StoreRuntimeState,
@@ -164,8 +169,18 @@ export class ProjectCollectionOperations {
     return removed
   }
 
-  moveProjectToGroup(repoId: string, groupId: string | null, order?: number): Repo | null {
-    return getFolderWorkspaceOperations(this).moveProjectToGroup(repoId, groupId, order)
+  moveProjectToGroup(target: RepoHostTarget, groupId: string | null, order?: number): Repo | null {
+    return getFolderWorkspaceOperations(this).moveProjectToGroup(target, groupId, order)
+  }
+
+  /** The WSL mover's retention pass only; returns how many rows changed. */
+  setWslMoveRetainedMarks(marks: readonly WslMoveRetainedMark[]): number {
+    const { runtime, scheduling } = this[projectCollectionOperationsContext]
+    const changed = applyWslMoveRetainedMarks(runtime.state, marks)
+    if (changed > 0) {
+      scheduleSave(scheduling)
+    }
+    return changed
   }
 }
 
@@ -191,8 +206,8 @@ export function getProjectHostOperations(
           setup,
           updates
         ),
-      removeProjectForHost: (id, hostId) =>
-        owner[projectCollectionOperationsContext].repos.removeProjectForHost(id, hostId),
+      removeProjectForHost: (target) =>
+        owner[projectCollectionOperationsContext].repos.removeProjectForHost(target),
       scheduleSave: () => scheduleSave(owner[projectCollectionOperationsContext].scheduling)
     })
   return owner[projectCollectionOperationsContext].runtime.projectHostOperations

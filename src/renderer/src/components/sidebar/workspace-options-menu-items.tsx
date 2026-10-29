@@ -10,10 +10,8 @@ import {
   DropdownMenuSubTrigger
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import {
-  countActiveWorkspaceFilters,
-  formatActiveFilterLabel
-} from '../../../../shared/workspace-view/workspace-row-filters'
+import { countActiveWorkspaceFilters } from '../../../../shared/workspace-view/workspace-row-filters'
+import { activeFilterCountLabel } from './active-filter-count-label'
 import { useShallow } from 'zustand/react/shallow'
 import { selectSidebarFilterState, sidebarWorkspaceRowFilters } from './sidebar-filter-actions'
 import SidebarRepositoryFilterSection from './SidebarRepositoryFilterSection'
@@ -57,7 +55,7 @@ export function useWorkspaceOptionsFilterBadge(): {
   return {
     hasAnyFilter: activeFilterCount > 0,
     activeFilterCount,
-    activeFilterLabel: formatActiveFilterLabel(activeFilterCount)
+    activeFilterLabel: activeFilterCountLabel(activeFilterCount)
   }
 }
 
@@ -127,8 +125,7 @@ function SortByOptionItem({ preserveWorkspaceBoardOpen }: OptionItemProps): JSX.
               <DropdownMenuRadioItem
                 key={opt.id}
                 value={opt.id}
-                // Keep the menu open so people can compare sort modes and
-                // toggle card properties without reopening the same panel.
+                // Keep the menu open for comparing modes and toggling properties.
                 onSelect={(e) => e.preventDefault()}
               >
                 {opt.label}

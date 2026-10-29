@@ -1,7 +1,6 @@
 import { notifyInstalledAgentSkillsRefreshed } from '@/hooks/useInstalledAgentSkills'
 import { refreshSkillFreshness } from '@/hooks/useSkillFreshness'
 
-/** Publishes a completed re-check to presence and optional local-freshness surfaces. */
 export function syncSurfacesAfterAgentSkillRecheck(freshnessSkillName?: string): void {
   notifyInstalledAgentSkillsRefreshed()
   if (freshnessSkillName) {
@@ -9,7 +8,7 @@ export function syncSurfacesAfterAgentSkillRecheck(freshnessSkillName?: string):
   }
 }
 
-export function recheckSurfacesAfterAgentSkillTerminal(
+export function recheckSurfacesAfterAgentSkillInstall(
   onRecheck: () => void | Promise<unknown>,
   freshnessSkillName?: string
 ): void {

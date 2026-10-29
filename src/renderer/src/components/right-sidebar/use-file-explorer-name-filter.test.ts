@@ -28,22 +28,6 @@ describe('useFileExplorerNameFilter', () => {
     cleanup()
   })
 
-  it('passes the active filename query to the runtime path search', () => {
-    const { result } = renderHook(() =>
-      useFileExplorerNameFilter({ isFilesViewActive: true, activeWorktreeId: 'worktree-1' })
-    )
-
-    act(() => result.current.setNameFilterQuery('AppDelegate.swift'))
-
-    expect(useRuntimeFileListForWorktreeMock).toHaveBeenLastCalledWith({
-      enabled: true,
-      worktreeId: 'worktree-1',
-      query: 'AppDelegate.swift',
-      hostFilterWhenCapped: true
-    })
-    expect(result.current.nameFilterSource?.query).toBe('AppDelegate.swift')
-  })
-
   it('reports an unsettled source while the listing loads', () => {
     useRuntimeFileListForWorktreeMock.mockReturnValue({
       files: [],

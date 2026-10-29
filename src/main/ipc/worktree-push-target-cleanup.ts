@@ -1,9 +1,4 @@
-// Why: fork-PR worktrees can add a contributor's fork as a git remote. When such
-// a worktree is deleted we prune that remote, but only when it's truly unused.
-// This module holds that decision logic behind an injectable `execGit` boundary so
-// the multi-fork cleanup matrix is unit-testable without a real repo. The same
-// predicates back the periodic sweep in `worktree-push-target-reconciliation.ts`,
-// which inverts them over every `pr-*` remote instead of one removed worktree.
+// Prune unused fork remotes after removal; reconciliation reuses these ownership and usage predicates.
 
 import type { Store } from '../persistence'
 import type { WorktreeMeta } from '../../shared/worktree/meta-types'
@@ -16,11 +11,8 @@ export type GitRemoteExec = (
   args: string[],
   cwd: string
 ) => Promise<{ stdout: string; stderr?: string }>
-// Why: `setWorktreeMeta` is optional so existing narrow test stubs (only
-// `getAllWorktreeMeta`) keep compiling; callers that want materialize-time
-// provenance persistence (worktree-remote.ts) pass a store that has it.
 export type WorktreePushTargetStore = Pick<Store, 'getAllWorktreeMeta'> &
-  Partial<Pick<Store, 'setWorktreeMeta'>>
+  Partial<Pick<Store, 'setWorktreeMeta' | 'getRepos' | 'getAllWorktreeMetaForHost'>>
 
 export function sameGitHubRemoteUrl(left: string, right: string): boolean {
   if (left === right) {
@@ -36,11 +28,8 @@ export function sameGitHubRemoteUrl(left: string, right: string): boolean {
   )
 }
 
-/** A worktree metadata entry, in the same repo as `target`, whose pushTarget references it. */
 export type WorktreeMetaReferencingRemote = { worktreeId: string; meta: WorktreeMeta }
 
-// Exported so the reconciliation sweep can inspect *which* worktrees reference a remote
-// (to check liveness/provenance) instead of only the single-target yes/no this file needs.
 export function findWorktreeMetaReferencingRemote(
   store: WorktreePushTargetStore,
   repoId: string,
@@ -48,8 +37,7 @@ export function findWorktreeMetaReferencingRemote(
 ): WorktreeMetaReferencingRemote[] {
   return Object.entries(store.getAllWorktreeMeta())
     .filter(([worktreeId, meta]) => {
-      // Why: git remotes are repo-local; matching metadata from another repo
-      // must not pin this repo's fork remote forever.
+      // Remotes are repo-local; another repo's metadata must not retain this fork remote.
       if (getRepoIdFromWorktreeId(worktreeId) !== repoId || !meta.pushTarget) {
         return false
       }
@@ -78,8 +66,6 @@ function isPushTargetUsedByAnotherWorktree(
 
 export type BranchConfigMatch = { branchName: string }
 
-// Exported for the sweep, which additionally verifies each matched branch still exists
-// before treating it as a reason to keep the remote (`requireExistingBranch`).
 export async function hasBranchConfigUsingRemote(
   execGit: GitRemoteExec,
   repoPath: string,
@@ -96,7 +82,7 @@ export async function hasBranchConfigUsingRemote(
     return false
   }
   const matches: BranchConfigMatch[] = []
-  // Why: git config output can be large; avoid materializing line/split arrays here.
+  // Avoid line-array allocation for potentially large Git config output.
   for (const line of iterateProcessOutputLines(stdout)) {
     const parsed = parseBranchRemoteConfigLine(line)
     if (parsed && (parsed.value === target.remoteName || parsed.value === target.remoteUrl)) {
@@ -162,8 +148,7 @@ function parseBranchRemoteConfigLine(line: string): { branchName: string; value:
   return branchName ? { branchName, value: line.slice(valueStart, valueEnd) } : null
 }
 
-// `branch.<name>.remote` / `branch.<name>.pushRemote`; `<name>` may itself contain dots
-// (e.g. `release/1.2.3`), so only the known trailing suffix is stripped.
+// Branch names can contain dots; strip only the known remote/pushRemote suffix.
 function extractBranchNameFromConfigKey(key: string): string | null {
   const prefix = 'branch.'
   if (!key.startsWith(prefix)) {
@@ -185,10 +170,7 @@ function isBranchConfigSeparator(code: number): boolean {
   return code === 32 || (code >= 9 && code <= 13)
 }
 
-// Why: on-demand materialization (push/pull/fetch/fast-forward, #17828) never
-// updates the store's `pushTarget.remoteCreated` flag, so ownership must also be
-// readable from the repo-local `remote.<name>.orca-created` config Orca writes
-// when it creates the remote (see `worktree-push-target-setup.ts`).
+// Deferred materialization may omit store flags; read the repo-local Orca-created marker too.
 async function remoteHasOrcaProvenance(
   execGit: GitRemoteExec,
   repoPath: string,
@@ -205,8 +187,6 @@ async function remoteHasOrcaProvenance(
   }
 }
 
-// Exported for unit tests: the `execGit` seam lets tests drive the multi-fork
-// cleanup matrix without touching a real repo.
 export async function cleanupUnusedWorktreePushTargetRemoteWithExec(
   repoPath: string,
   removedWorktreeId: string,

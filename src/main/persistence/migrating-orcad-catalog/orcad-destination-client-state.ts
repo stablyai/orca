@@ -1,5 +1,4 @@
 import type { PersistedState } from '../../../shared/persisted-state-types'
-import { hostStableKey, parseHostStableKey } from '../../../shared/automation-owner-key'
 import type {
   OrcadMigrationClientStatePayload,
   OrcadMigrationUiRoutingState
@@ -22,10 +21,7 @@ export function prepareOrcadMigrationClientState(
     incoming?.mobileClientTabSelectionsByDeviceId,
     state
   )
-  const uiRouting = incoming?.uiRouting ? normalizeUiRouting(incoming.uiRouting) : undefined
-  if (uiRouting) {
-    assertUiRoutingCompatible(uiRouting, state)
-  }
+  const uiRouting = incoming?.uiRouting ? structuredClone(incoming.uiRouting) : undefined
   return {
     incoming,
     mobileSelections,
@@ -38,7 +34,6 @@ export function applyPreparedOrcadMigrationClientState(
   state: PersistedState
 ): void {
   if (Object.keys(prepared.mobileSelections).length > 0) {
-    // Per workspace: a device's selections outside this import stay as they are.
     state.mobileClientTabSelectionsByDeviceId = { ...state.mobileClientTabSelectionsByDeviceId }
     for (const [deviceId, selections] of Object.entries(prepared.mobileSelections)) {
       state.mobileClientTabSelectionsByDeviceId[deviceId] = {
@@ -49,24 +44,6 @@ export function applyPreparedOrcadMigrationClientState(
   }
   if (prepared.uiRouting) {
     applyUiRouting(prepared.uiRouting, state)
-  }
-}
-
-function normalizeUiRouting(route: OrcadMigrationUiRoutingState): OrcadMigrationUiRoutingState {
-  const filter = route.automationHostFilter
-  if (filter?.kind !== 'host') {
-    return structuredClone(route)
-  }
-  const parsed = parseHostStableKey(filter.hostKey)
-  if (parsed?.authority.kind !== 'runtime' || parsed.selector.kind !== 'self') {
-    return structuredClone(route)
-  }
-  return {
-    ...structuredClone(route),
-    automationHostFilter: {
-      kind: 'host',
-      hostKey: hostStableKey({ authority: { kind: 'desktop' }, selector: { kind: 'self' } })
-    }
   }
 }
 
@@ -94,88 +71,71 @@ function prepareMobileSelections(
   return result
 }
 
-// What each routed field reads in this profile, and what it holds when never set.
-const UI_ROUTING_FIELDS: readonly {
-  key: keyof OrcadMigrationUiRoutingState
-  read: (ui: PersistedState['ui']) => unknown
-  empty: unknown
-}[] = [
-  { key: 'lastActiveRepoId', read: (ui) => ui.lastActiveRepoId, empty: null },
-  { key: 'lastActiveWorktreeId', read: (ui) => ui.lastActiveWorktreeId, empty: null },
-  { key: 'filterRepoIds', read: (ui) => ui.filterRepoIds, empty: [] },
-  { key: 'showDotfilesByWorktree', read: (ui) => ui.showDotfilesByWorktree ?? {}, empty: {} },
-  {
-    key: 'setupScriptPromptDismissedRepoIds',
-    read: (ui) => ui.setupScriptPromptDismissedRepoIds ?? [],
-    empty: []
-  },
-  { key: 'manualRepoOrder', read: (ui) => ui.manualRepoOrder ?? [], empty: [] },
-  { key: 'workspaceHostScope', read: (ui) => ui.workspaceHostScope, empty: undefined },
-  { key: 'visibleWorkspaceHostIds', read: (ui) => ui.visibleWorkspaceHostIds, empty: null },
-  { key: 'workspaceHostOrder', read: (ui) => ui.workspaceHostOrder ?? [], empty: [] },
-  { key: 'automationHostFilter', read: (ui) => ui.automationHostFilter, empty: undefined },
-  {
-    key: 'acknowledgedAgentsByPaneKey',
-    read: (ui) => ui.acknowledgedAgentsByPaneKey ?? {},
-    empty: {}
-  }
-]
+type UiRoutingKey = keyof OrcadMigrationUiRoutingState
+type UiRoutingFieldMerge<K extends UiRoutingKey> =
+  /** Per-window filters stay on the desktop. */
+  | 'desktop-only'
+  /** Preserve the server's existing value. */
+  | ((ui: PersistedState['ui'], value: NonNullable<OrcadMigrationUiRoutingState[K]>) => void)
 
-function assertUiRoutingCompatible(
-  route: OrcadMigrationUiRoutingState,
-  state: PersistedState
-): void {
-  for (const { key, read, empty } of UI_ROUTING_FIELDS) {
-    const current = serializeOrcadMigrationValue(read(state.ui))
-    if (
-      route[key] !== undefined &&
-      current !== serializeOrcadMigrationValue(route[key]) &&
-      current !== serializeOrcadMigrationValue(empty)
-    ) {
-      throw new Error(`orcad_migration_client_state_conflict:ui:${key}`)
+// View state cannot block a move: preserve server values and merge acknowledgements by latest time.
+export const ORCAD_MIGRATION_UI_ROUTING_MERGE: {
+  readonly [K in UiRoutingKey]: UiRoutingFieldMerge<K>
+} = {
+  lastActiveRepoId: (ui, value) => {
+    ui.lastActiveRepoId ??= value
+  },
+  lastActiveWorktreeId: (ui, value) => {
+    ui.lastActiveWorktreeId ??= value
+  },
+  manualRepoOrder: (ui, value) => {
+    if (!ui.manualRepoOrder?.length) {
+      ui.manualRepoOrder = structuredClone(value)
     }
-  }
+  },
+  showDotfilesByWorktree: (ui, value) => {
+    ui.showDotfilesByWorktree = { ...structuredClone(value), ...ui.showDotfilesByWorktree }
+  },
+  acknowledgedAgentsByPaneKey: (ui, value) => {
+    // A retry must not revive an already-acknowledged unread mark.
+    const merged = { ...ui.acknowledgedAgentsByPaneKey }
+    for (const [paneKey, at] of Object.entries(value)) {
+      merged[paneKey] = Math.max(merged[paneKey] ?? 0, at)
+    }
+    ui.acknowledgedAgentsByPaneKey = merged
+  },
+  setupScriptPromptDismissedRepoIds: (ui, value) => {
+    ui.setupScriptPromptDismissedRepoIds = [
+      ...new Set([...(ui.setupScriptPromptDismissedRepoIds ?? []), ...value])
+    ]
+  },
+  filterRepoIds: 'desktop-only',
+  workspaceHostScope: 'desktop-only',
+  visibleWorkspaceHostIds: 'desktop-only',
+  workspaceHostOrder: 'desktop-only',
+  automationHostFilter: 'desktop-only'
+}
+
+const UI_ROUTING_KEYS = Object.keys(ORCAD_MIGRATION_UI_ROUTING_MERGE).filter(isUiRoutingKey)
+
+function isUiRoutingKey(key: string): key is UiRoutingKey {
+  return Object.hasOwn(ORCAD_MIGRATION_UI_ROUTING_MERGE, key)
 }
 
 function applyUiRouting(route: OrcadMigrationUiRoutingState, state: PersistedState): void {
-  const ui = state.ui
-  if (route.lastActiveRepoId !== undefined) {
-    ui.lastActiveRepoId = route.lastActiveRepoId
+  for (const key of UI_ROUTING_KEYS) {
+    mergeUiRoutingField(key, route, state.ui)
   }
-  if (route.lastActiveWorktreeId !== undefined) {
-    ui.lastActiveWorktreeId = route.lastActiveWorktreeId
-  }
-  if (route.filterRepoIds !== undefined) {
-    ui.filterRepoIds = structuredClone(route.filterRepoIds)
-  }
-  if (route.showDotfilesByWorktree !== undefined) {
-    ui.showDotfilesByWorktree = {
-      ...ui.showDotfilesByWorktree,
-      ...structuredClone(route.showDotfilesByWorktree)
-    }
-  }
-  if (route.setupScriptPromptDismissedRepoIds !== undefined) {
-    ui.setupScriptPromptDismissedRepoIds = structuredClone(route.setupScriptPromptDismissedRepoIds)
-  }
-  if (route.manualRepoOrder !== undefined) {
-    ui.manualRepoOrder = structuredClone(route.manualRepoOrder)
-  }
-  if (route.workspaceHostScope !== undefined) {
-    ui.workspaceHostScope = route.workspaceHostScope
-  }
-  if (route.visibleWorkspaceHostIds !== undefined) {
-    ui.visibleWorkspaceHostIds = structuredClone(route.visibleWorkspaceHostIds)
-  }
-  if (route.workspaceHostOrder !== undefined) {
-    ui.workspaceHostOrder = structuredClone(route.workspaceHostOrder)
-  }
-  if (route.automationHostFilter !== undefined) {
-    ui.automationHostFilter = structuredClone(route.automationHostFilter)
-  }
-  if (route.acknowledgedAgentsByPaneKey !== undefined) {
-    ui.acknowledgedAgentsByPaneKey = {
-      ...ui.acknowledgedAgentsByPaneKey,
-      ...structuredClone(route.acknowledgedAgentsByPaneKey)
-    }
+}
+
+function mergeUiRoutingField<K extends UiRoutingKey>(
+  key: K,
+  route: OrcadMigrationUiRoutingState,
+  ui: PersistedState['ui']
+): void {
+  const merge = ORCAD_MIGRATION_UI_ROUTING_MERGE[key]
+  const value = route[key]
+  if (merge !== 'desktop-only' && value !== undefined && value !== null) {
+    merge(ui, value)
   }
 }

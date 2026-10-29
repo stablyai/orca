@@ -8,8 +8,7 @@ const RECOVERABLE_CHILD_PROCESS_TYPES = new Set(['gpu'])
 const RECOVERABLE_UTILITY_SERVICE_NAMES = new Set([
   'audio.mojom.AudioService',
   'network.mojom.NetworkService',
-  // Why: Windows media/screen capture can churn this Chromium utility without
-  // taking down Orca; prompting users for those child exits is noise.
+  // Screen-capture service exits are recoverable Chromium churn.
   'video_capture.mojom.VideoCaptureService'
 ])
 const RECOVERABLE_CHILD_PROCESS_REASONS = new Set(['abnormal-exit', 'crashed', 'killed'])
@@ -67,19 +66,14 @@ export function shouldRecordProcessGoneCrash({
   exitCode: number | null
   expectedTeardown: ExpectedTeardownScope
 }): boolean {
-  // Why: GPU, Network Service, and Audio Service exits are recoverable Chromium
-  // child-process churn; treating them as app crashes creates noisy user prompts.
   if (isRecoverableChromiumChildProcess({ source, processType, serviceName, reason })) {
     return false
   }
-  // Why: Electron reports intentional reload/update/quit teardown as `killed`.
-  // Real renderer OOMs and Chromium crashes should still reach crash reporting.
+  // Intentional teardown uses killed; explicit crash and OOM reasons remain reportable.
   if (reason !== 'killed') {
     return true
   }
-  // Why: Electron reports expected Chromium teardown during reload/update as
-  // `killed` + SIGTERM or Windows control termination statuses. Treat real
-  // crash reasons as reportable, but skip these normal termination shapes.
+  // Ignore normal termination signals even when no teardown scope was recorded.
   if (
     exitCode === 15 ||
     isWindowsControlTerminationExitCode(exitCode) ||
@@ -103,9 +97,7 @@ export function shouldRecoverRendererAfterProcessGone({
   if (expectedTeardown === 'app-shutdown') {
     return false
   }
-  // Why: an integrity failure means Chromium cannot trust the renderer, so a
-  // reload cannot safely recover it. Launch failures can be transient and are
-  // bounded by the caller's renderer-recovery circuit breaker.
+  // Integrity failures cannot safely reload; callers bound retries for transient launch failures.
   if (NON_RECOVERABLE_RENDERER_REASONS.has(reason)) {
     return false
   }

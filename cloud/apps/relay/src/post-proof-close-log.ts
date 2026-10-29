@@ -1,4 +1,4 @@
-import { AssignmentRejectionLogWindow } from './assignment-rejection-log-window.js'
+import { AssignmentRejectionLogWindow } from './assignment/assignment-rejection-log-window.js'
 import { printableCloseReason } from './control-close-reason-text.js'
 import { relayHostLogDigest } from './relay-host-log-digest.js'
 import type { RelayRuntimeObserver } from './relay-observability.js'

@@ -10,15 +10,16 @@ import {
   SSH_GIT_RECONNECT_MESSAGE,
   SshHostNotServedError
 } from '../providers/ssh-host-not-served-error'
+import { getRepoRoutingConnectionId } from '../../shared/execution-host'
+import type { Repo } from '../../shared/repo-types'
 
 type LocalGitExecOptions = {
   cwd: string
   wslDistro?: string
 }
 
-// Why: mirrors fetchGitHubPullRequestHeadRef so both forges pin the durable head ref the same way.
 export async function fetchGitLabMergeRequestHeadRef(
-  repo: { path: string; connectionId?: string | null },
+  repo: { path: string } & Pick<Repo, 'connectionId' | 'executionHostId'>,
   remote: string,
   mrIid: number,
   options: { localGitExecOptions?: LocalGitExecOptions } = {}
@@ -29,12 +30,13 @@ export async function fetchGitLabMergeRequestHeadRef(
   if (!isSafeReviewHeadFetchRemote(remote)) {
     throw new Error('Merge request fetch remote must not start with "-".')
   }
-  if (repo.connectionId) {
-    throw new SshHostNotServedError(repo.connectionId, SSH_GIT_RECONNECT_MESSAGE)
+  const sshTargetId = getRepoRoutingConnectionId(repo)
+  if (sshTargetId) {
+    throw new SshHostNotServedError(sshTargetId, SSH_GIT_RECONNECT_MESSAGE)
   }
   const localGitExecOptions = options.localGitExecOptions ?? { cwd: repo.path }
   const remoteComponent = await getReviewHeadRemoteComponent(remote, localGitExecOptions)
-  // Why: return the same path the fetch wrote so callers don't re-resolve identity.
+  // Return the written ref so callers do not recompute its identity.
   const localRef = gitlabMergeRequestHeadLocalRef(remoteComponent, mrIid)
   await gitExecFileAsync(
     ['fetch', '--no-tags', remote, `+refs/merge-requests/${mrIid}/head:${localRef}`],

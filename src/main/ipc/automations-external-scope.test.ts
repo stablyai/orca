@@ -22,12 +22,12 @@ vi.mock('electron', () => ({
   }
 }))
 
-// This computer's `which` lookup is the one process a scoped probe starts, so it counts probes.
+// Each scoped probe performs one local which lookup.
 const probeCommand = vi.hoisted(() => vi.fn())
 const fileExists = vi.hoisted(() => vi.fn(() => false))
 const readRegistrations = vi.fn(() => state.targets)
 vi.mock('@orca/process-host', () => ({ runProcess: probeCommand }))
-// Why: keep the local job read off the developer's real ~/.openclaw and ~/.openclaw.
+// Isolate external job reads from the developer's real home.
 vi.mock('node:fs', async (importOriginal) => ({
   ...(await importOriginal<typeof Fs>()),
   existsSync: fileExists
@@ -148,7 +148,7 @@ describe('scoped external-manager IPC', () => {
       target: { type: 'local' }
     })
 
-    // Why: an SSH owner is never served here, and a payload target must not reroute it locally.
+    // An SSH owner cannot be rerouted locally by a payload target.
     expect(entry).toMatchObject({ manager: null, error: SSH_HOST_NOT_SERVED_MESSAGE })
     expect(probeCommand).not.toHaveBeenCalled()
   })
@@ -249,8 +249,7 @@ describe('probe scope retention', () => {
 
 describe('Orca automation traffic priority', () => {
   it('parks queued probes while Orca automation work holds the installed lease', async () => {
-    // Orca CRUD and dispatch arrive through the runtime methods, which take the
-    // lease through the hook this registration installed on the service.
+    // Runtime CRUD/dispatch takes the lease installed on the service by registration.
     const lease = state.service.externalProbePriority
     expect(lease).not.toBeNull()
     let finish: () => void = () => undefined
@@ -266,8 +265,7 @@ describe('Orca automation traffic priority', () => {
       provider: 'openclaw'
     })
     await Promise.resolve()
-    // Why: the probe is queued, not started — this is the only thing keeping
-    // external discovery from competing with the work the user is waiting on.
+    // Queued probes must not compete with pending user-facing work.
     expect(probeCommand).not.toHaveBeenCalled()
 
     finish()

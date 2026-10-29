@@ -1,11 +1,4 @@
-/**
- * Visits every line of `content` as `[lineStart, lineEnd)` offsets, excluding a
- * trailing `\r`. Return `false` from `visit` to stop early.
- *
- * Why offsets instead of substrings: these scans run over whole editor
- * documents on every content change, and a 600 KB markdown file has ~43k lines
- * — one substring per line was the bulk of their allocation cost.
- */
+/** Visit [start, end) lines without trailing CR or per-line substring allocation; false stops the whole-document scan. */
 export function forEachLine(
   content: string,
   visit: (lineStart: number, lineEnd: number, lineNumber: number) => boolean | void

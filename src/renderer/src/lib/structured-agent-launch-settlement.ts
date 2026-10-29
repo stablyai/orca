@@ -27,9 +27,9 @@ export type StructuredAgentLaunchSettlement =
   | { kind: 'terminal' }
 
 export type StructuredAgentLaunchHooks = {
+  activate?: boolean
   onStructuredReady?: (sessionId: string) => void
-  /** Abort the moment the caller abandons the launch. The loop cancels on the event, not only by
-   *  polling after awaits, so a staged prompt is discarded before it can reach the provider. */
+  // Abort on the caller’s event, not only after awaits, so abandoned staged prompts never reach providers.
   signal?: AbortSignal
   beforeCreate?: () => boolean
 }
@@ -38,7 +38,6 @@ export type StructuredAgentLaunchHandle = {
   /** An existing launch retains publication and any draft it already owns. */
   joined?: boolean
   sessionId: string
-  /** The host the chat is created on. */
   executionHostId: ExecutionHostId
   settlement: Promise<StructuredAgentLaunchSettlement>
   promptDeliveryResult?: Promise<StructuredPromptDeliveryResult>
@@ -61,7 +60,7 @@ async function settleStartedStructuredAgentLaunch(
     cancelStructuredAgentLaunch(worktreeId, launch.sessionId)
   }
   signal?.addEventListener('abort', cancelLaunch, { once: true })
-  // Why: the caller may have been abandoned between its own check and this subscription.
+  // The caller can retire between its initial check and this subscription.
   if (isCancelled()) {
     cancelLaunch()
   }
@@ -91,7 +90,7 @@ async function settleStartedStructuredAgentLaunch(
       return { kind: 'failed', error }
     }
     if (launch.isVisibilityUnknown()) {
-      // Why: the state stays pending for the unknown badge and retry, but this caller is done.
+      // Unknown state retains badge/retry even though this caller is finished.
       launch.releaseCallerAfterUnknownOutcome()
       return { kind: 'visibility-unknown', sessionId: launch.sessionId }
     }
@@ -110,6 +109,7 @@ export function beginStructuredAgentLaunchSettlement(
 ): StructuredAgentLaunchHandle {
   const launch = startStructuredAgentLaunch(worktreeId, agent, {
     ...options,
+    ...(hooks.activate !== undefined ? { activate: hooks.activate } : {}),
     ...(hooks.beforeCreate ? { beforeCreate: hooks.beforeCreate } : {})
   })
   // Joining transfers no source ownership to the already independent destination.

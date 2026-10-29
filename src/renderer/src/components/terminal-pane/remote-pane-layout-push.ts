@@ -1,5 +1,4 @@
 import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-types'
-import type { PaneLayoutEditIntent } from '../../../../shared/rpc-contract/session-tabs-schemas-params'
 import { terminalLayoutEqual } from '../../../../shared/terminal-layout-equality'
 import { updateWebRuntimePaneLayout } from '@/runtime/web-runtime-terminal-actions'
 import {
@@ -9,19 +8,10 @@ import {
 import { collectLeafIdsInOrder } from './terminal-layout-leaf-ids'
 
 export type RemotePaneLayoutPusher = {
-  push: (input: {
-    worktreeId: string
-    tabId: string
-    layout: TerminalLayoutSnapshot
-    intent?: PaneLayoutEditIntent
-  }) => void
+  push: (input: { worktreeId: string; tabId: string; layout: TerminalLayoutSnapshot }) => void
 }
 
-/**
- * Pane geometry is host-authoritative for remote tabs, so persists must push it — but
- * persists also fire on pane-title churn, which leaves the host-visible layout untouched.
- * Dedupe against the last push so unchanged layouts cost no remote round trip.
- */
+/** Push host-owned geometry only when changed; title-driven persists must not spend redundant remote round trips. */
 export function createRemotePaneLayoutPusher(): RemotePaneLayoutPusher {
   let lastAttempt: {
     id: number
@@ -31,9 +21,8 @@ export function createRemotePaneLayoutPusher(): RemotePaneLayoutPusher {
   } | null = null
   let nextAttemptId = 0
   return {
-    push: ({ worktreeId, tabId, layout, intent }) => {
-      // Why: a resent full title map is not a rename; only these panes were renamed here.
-      // A rename is always sent, even back to a title the last push carried.
+    push: ({ worktreeId, tabId, layout }) => {
+      // Send explicit local renames even back to the last-pushed title; resending the full map is not rename intent.
       const renamedLeafIds = takeUnsentPaneTitleRenames(collectLeafIdsInOrder(layout.root))
       if (
         renamedLeafIds.length === 0 &&
@@ -52,8 +41,7 @@ export function createRemotePaneLayoutPusher(): RemotePaneLayoutPusher {
         expandedLeafId: layout.expandedLeafId,
         chatLeafId: layout.chatLeafId ?? null,
         ...(layout.titlesByLeafId ? { titlesByLeafId: layout.titlesByLeafId } : {}),
-        ...(renamedLeafIds.length > 0 ? { renamedLeafIds } : {}),
-        ...(intent ? { intent } : {})
+        ...(renamedLeafIds.length > 0 ? { renamedLeafIds } : {})
       }).then((updated) => {
         if (!updated) {
           requeuePendingPaneTitleRenames(renamedLeafIds)

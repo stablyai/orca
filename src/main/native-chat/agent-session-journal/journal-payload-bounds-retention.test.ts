@@ -1,12 +1,19 @@
 import { createHash } from 'node:crypto'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { AgentJournalBoundedPayload } from '../../../shared/agent-session-journal-types'
+import {
+  AGENT_JOURNAL_THREAD_SCOPE,
+  type AgentJournalBoundedPayload,
+  type AgentJournalItemBody,
+  type AgentJournalToolCallState
+} from '../../../shared/agent-session-journal-types'
 import { codexItemBody } from '../../codex/codex-structured-item-translation'
 import {
-  boundInlineText,
-  boundPayload,
-  DEFAULT_JOURNAL_PAYLOAD_LIMITS
-} from './journal-payload-bounds'
+  AGENT_SESSION_WIRE_PAYLOAD_HEAD_BYTES,
+  agentJournalItemForWire
+} from '../agent-session-wire/agent-session-item-wire-form'
+import { boundInlineText, boundPayload, journalPayload } from './journal-payload-bounds'
+import { createJournalReducerState } from './journal-reducer'
+import { buildJournalItemRow, journalLifecycleBatchRowBuilder } from './journal-row-builders'
 
 function previousBoundPayload(
   payload: string,
@@ -44,11 +51,8 @@ function expectPreviousBounds(payload: string, inlineHeadBytes: number): void {
 afterEach(() => vi.restoreAllMocks())
 
 describe('journal payload allocation bounds', () => {
-  it('bounds a large completed Codex command without encoding its full output into a Buffer', () => {
+  it('saves a large Codex command whole and sends a client only its head, encoding only that', () => {
     const payload = 'x'.repeat(50 * 1024 * 1024)
-    const digest = createHash('sha256').update(payload, 'utf8').digest('hex')
-    const from = vi.spyOn(Buffer, 'from')
-    const allocUnsafe = vi.spyOn(Buffer, 'allocUnsafe')
     const body = codexItemBody({
       type: 'commandExecution',
       id: 'command',
@@ -58,6 +62,24 @@ describe('journal payload allocation bounds', () => {
       aggregatedOutput: payload,
       exitCode: 0
     })
+    if (body?.kind !== 'tool-call') {
+      throw new Error('Completed command did not produce a tool-call journal body')
+    }
+    expect(body.output).toMatchObject({
+      head: payload,
+      byteLength: payload.length,
+      truncated: false
+    })
+
+    const from = vi.spyOn(Buffer, 'from')
+    const allocUnsafe = vi.spyOn(Buffer, 'allocUnsafe')
+    const sent = agentJournalItemForWire({
+      itemId: 'command',
+      revision: 1,
+      body,
+      sequence: 1,
+      observedAt: 1
+    }).item
     const encodedStringBytes = from.mock.calls.reduce(
       (largest, [value]) =>
         typeof value === 'string' ? Math.max(largest, Buffer.byteLength(value, 'utf8')) : largest,
@@ -69,23 +91,58 @@ describe('journal payload allocation bounds', () => {
     )
     vi.restoreAllMocks()
 
-    if (body?.kind !== 'tool-call') {
-      throw new Error('Completed command did not produce a tool-call journal body')
-    }
-    expect(body.state).toBe('completed')
-    expect(body.input).toMatchObject({ command: 'cat large.log', cwd: '/workspace' })
-    expect(body.output).toEqual({
-      head: 'x'.repeat(DEFAULT_JOURNAL_PAYLOAD_LIMITS.inlineHeadBytes),
-      byteLength: payload.length,
-      digest,
-      truncated: true
+    expect(sent.shortened).toBe(true)
+    expect(sent.body).toMatchObject({
+      kind: 'tool-call',
+      input: { command: 'cat large.log', cwd: '/workspace' },
+      output: {
+        head: 'x'.repeat(AGENT_SESSION_WIRE_PAYLOAD_HEAD_BYTES),
+        byteLength: payload.length,
+        truncated: true
+      }
     })
-    expect(encodedStringBytes).toBeLessThanOrEqual(DEFAULT_JOURNAL_PAYLOAD_LIMITS.inlineHeadBytes)
-    expect(largestAllocation).toBeLessThanOrEqual(DEFAULT_JOURNAL_PAYLOAD_LIMITS.inlineHeadBytes)
+    expect(encodedStringBytes).toBeLessThanOrEqual(AGENT_SESSION_WIRE_PAYLOAD_HEAD_BYTES)
+    expect(largestAllocation).toBeLessThanOrEqual(AGENT_SESSION_WIRE_PAYLOAD_HEAD_BYTES)
+  })
+
+  it('journals running tool output as a preview and the closing revision whole', () => {
+    const output = journalPayload('x'.repeat(64 * 1024))
+    const preview = { ...output, head: 'x'.repeat(16 * 1024), truncated: true }
+    const call = (state: AgentJournalToolCallState): AgentJournalItemBody => ({
+      kind: 'tool-call',
+      name: 'shell',
+      callId: 'call',
+      input: null,
+      state,
+      output
+    })
+    const journal = createJournalReducerState('session-1', 'epoch-1')
+    const itemRow = (body: AgentJournalItemBody) =>
+      buildJournalItemRow({
+        state: journal,
+        itemId: 'call',
+        body,
+        seq: 1,
+        fence: 1,
+        ts: 1,
+        turnScope: AGENT_JOURNAL_THREAD_SCOPE
+      }).body
+    const batchRow = (body: AgentJournalItemBody) =>
+      journalLifecycleBatchRowBuilder(
+        () => journal,
+        'settle',
+        [{ kind: 'item', itemId: 'call', body, turnScope: AGENT_JOURNAL_THREAD_SCOPE }],
+        { fence: 1 }
+      )(1, 1).mutations[0]
+
+    expect(itemRow(call('running'))).toMatchObject({ output: preview })
+    expect(batchRow(call('running'))).toMatchObject({ body: { output: preview } })
+    expect(itemRow(call('completed'))).toMatchObject({ output })
+    expect(batchRow(call('failed'))).toMatchObject({ body: { output } })
   })
 
   it('preserves UTF-8 clipping, replacement characters, metadata and exotic byte limits', () => {
-    const cap = DEFAULT_JOURNAL_PAYLOAD_LIMITS.inlineHeadBytes
+    const cap = AGENT_SESSION_WIRE_PAYLOAD_HEAD_BYTES
     const payloads = [
       '',
       'ascii\n\0text',

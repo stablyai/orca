@@ -2,6 +2,7 @@ import type { Repo } from '../../../../shared/repo-types'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { WorktreeLineage } from '../../../../shared/worktree/lineage-types'
 import type { Worktree } from '../../../../shared/worktree/types'
+import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
 import type { ExecutionHostId, ExecutionHostScope } from '../../../../shared/execution-host'
 import { getIndexedAllWorktrees } from '@/store/worktree-repo-index'
 import { selectVisibleSidebarWorktrees } from '../../../../shared/sidebar-list/visible-worktrees'
@@ -9,8 +10,7 @@ import { buildDesktopWorkspaceRowFactReader } from './desktop-workspace-row-fact
 import { sidebarWorkspaceRowFilters } from './sidebar-filter-actions'
 import { getLineageAncestorIndex, getSortedWorktreeRankIndex } from './visible-worktree-indexes'
 
-// Why its own module: the store's attention slice asks it without an import cycle. The filter
-// rules live in the shared builder; this binds them to the window's store index and activity facts.
+// Separate store binding avoids attention-slice import cycles; shared builders retain the filter rules.
 
 export type VisibleWorktreeOptions = {
   filterRepoIds: readonly string[]
@@ -35,19 +35,25 @@ export type VisibleWorktreeOptions = {
   injectLineageAncestors?: boolean
   preserveLineageParentOrder?: boolean
   forcedVisibleWorktreeIds?: readonly string[]
+  /** The sorted keys are host identities (the stamp sort's), not bare ids, so a same-id pair keeps two ranks. */
+  sortedByHostIdentity?: boolean
   /** Exempt from the sleeping sweep only; unlike forcedVisibleWorktreeIds, every other filter still applies. */
   sleepingSweepExemptWorktreeIds?: ReadonlySet<string>
 }
 
 export function computeVisibleWorktrees(
   worktreesByRepo: Record<string, Worktree[]>,
-  sortedIds: string[],
+  sortedKeys: readonly string[],
   opts: VisibleWorktreeOptions
 ): Worktree[] {
+  const rankByKey = getSortedWorktreeRankIndex(sortedKeys)
+  const keyOf = opts.sortedByHostIdentity
+    ? getWorktreeHostIdentity
+    : (worktree: Worktree) => worktree.id
   return selectVisibleSidebarWorktrees({
     rows: getIndexedAllWorktrees(worktreesByRepo),
-    ancestorById: getLineageAncestorIndex(worktreesByRepo),
-    rankById: getSortedWorktreeRankIndex(sortedIds),
+    ancestorByIdentity: getLineageAncestorIndex(worktreesByRepo),
+    rankOf: (worktree) => rankByKey.get(keyOf(worktree)),
     filters: sidebarWorkspaceRowFilters(opts),
     facts: buildDesktopWorkspaceRowFactReader(opts),
     worktreeLineageById: opts.worktreeLineageById,
@@ -60,8 +66,8 @@ export function computeVisibleWorktrees(
 
 export function computeVisibleWorktreeIds(
   worktreesByRepo: Record<string, Worktree[]>,
-  sortedIds: string[],
+  sortedKeys: readonly string[],
   opts: VisibleWorktreeOptions
 ): string[] {
-  return computeVisibleWorktrees(worktreesByRepo, sortedIds, opts).map((worktree) => worktree.id)
+  return computeVisibleWorktrees(worktreesByRepo, sortedKeys, opts).map((worktree) => worktree.id)
 }

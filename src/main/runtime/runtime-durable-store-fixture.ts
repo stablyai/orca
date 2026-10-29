@@ -52,7 +52,8 @@ export function withDurableRuntimeStore<
     /** The Store's binding-only retirement, over the fake's own session accessors. */
     retirePtyBinding(
       binding: { worktreeId: string; tabId: string; leafId: string; ptyId: string },
-      hostId?: string | null
+      hostId?: string | null,
+      fence?: { incarnationId: string | undefined }
     ): Promise<boolean> {
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: fakes that reach retirement are Store-shaped sessions; the accessors are optional and checked before use.
       const sessions = store as {
@@ -69,6 +70,9 @@ export function withDurableRuntimeStore<
         }
         if (
           bound !== binding.ptyId ||
+          (fence &&
+            session.terminalPtyIncarnationsByPaneKey?.[`${binding.tabId}:${binding.leafId}`] !==
+              fence.incarnationId) ||
           !session.tabsByWorktree?.[binding.worktreeId]?.some((tab) => tab.id === binding.tabId)
         ) {
           return { value: false, persist: false }

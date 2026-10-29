@@ -105,7 +105,6 @@ describe('dispatcher → transport → onTitleChange for Pi spinner', () => {
 
     expect(dispatcherCallback).not.toBeNull()
 
-    // Simulate main firing pty:data IPC — dispatcher routes to ptyDataHandlers.get('pty-pi'), the same path a real Pi session uses.
     dispatcherCallback?.({ id: 'pty-pi', data: idleTitle() })
     dispatcherCallback?.({ id: 'pty-pi', data: workingFrame('⠋') })
     dispatcherCallback?.({ id: 'pty-pi', data: workingFrame('⠙') })
@@ -181,7 +180,7 @@ describe('dispatcher → transport → onTitleChange for Pi spinner', () => {
     transport.disconnect()
   })
 
-  // Why: regression for cursor's "solid after 500ms" bug — cursor re-emits its bare native title mid-turn; it must not overwrite the synthesized spinner frame.
+  // Cursor’s bare native redraw must not overwrite the synthesized working spinner mid-turn.
   it('drops cursor-agent native "Cursor Agent" title so it cannot overwrite the synthesized spinner', async () => {
     const { createIpcPtyTransport } = await import('./pty-transport')
     const onTitleChange = vi.fn()
@@ -189,7 +188,6 @@ describe('dispatcher → transport → onTitleChange for Pi spinner', () => {
     const transport = createIpcPtyTransport({ onTitleChange })
     await transport.connect({ url: '', callbacks: {} })
 
-    // Realistic interleave: synthesized working frame, cursor's bare native title, next spinner frame, etc.
     dispatcherCallback?.({ id: 'pty-pi', data: `${ESC}]0;⠋ Cursor Agent${BEL}` })
     dispatcherCallback?.({ id: 'pty-pi', data: `${ESC}]0;Cursor Agent${BEL}` })
     dispatcherCallback?.({ id: 'pty-pi', data: `${ESC}]0;⠙ Cursor Agent${BEL}` })

@@ -3,23 +3,31 @@ import { View, Text, Pressable, ActivityIndicator } from 'react-native'
 import { Package } from 'lucide-react-native'
 import { loadHosts } from '../transport/host-store'
 import { colors } from '../theme/mobile-theme'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { troubleshootScreenStyles as styles } from './troubleshoot-screen-styles'
 import {
   useMobileWebBundleProbe,
   type MobileWebBundleProbeState
 } from './use-mobile-web-bundle-probe'
 import type { HostProfile } from '../transport/types'
+import type { Translate } from '../i18n/mobile-i18n'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 
-/** Dialling the host is part of the tap, so the label says which half is still running. */
-function buttonLabel(state: MobileWebBundleProbeState, awaitingHost: boolean): string {
+function buttonLabel(
+  state: MobileWebBundleProbeState,
+  awaitingHost: boolean,
+  t: Translate
+): string {
   if (state.status !== 'running') {
-    return 'Fetch mobile web bundle'
+    return t('diagnostics.mobileWebBundleProbeRow.fetchBundle', 'Fetch mobile web bundle')
   }
-  return awaitingHost ? 'Connecting…' : 'Fetching bundle…'
+  return awaitingHost
+    ? t('diagnostics.mobileWebBundleProbeRow.connecting', 'Connecting…')
+    : t('diagnostics.mobileWebBundleProbeRow.fetching', 'Fetching bundle…')
 }
 
-/** One `label — detail` line in the same row shape the diagnostic checks use. */
 function ProbeLine({ label, detail, failed }: { label: string; detail: string; failed?: boolean }) {
+  useMobileColorScheme()
   return (
     <View style={styles.checkRow}>
       <Text style={styles.checkLabel}>{label}</Text>
@@ -29,43 +37,56 @@ function ProbeLine({ label, detail, failed }: { label: string; detail: string; f
 }
 
 function ProbeResult({ state, hostName }: { state: MobileWebBundleProbeState; hostName: string }) {
+  useMobileColorScheme()
+  const t = useMobileTranslation()
   if (state.status === 'idle' || state.status === 'running') {
     return null
   }
   if (state.status === 'failed') {
     return (
       <View style={styles.section}>
-        <ProbeLine label="Bundle" detail={state.detail} failed />
+        <ProbeLine
+          label={t('diagnostics.mobileWebBundleProbeRow.bundle', 'Bundle')}
+          detail={state.detail}
+          failed
+        />
       </View>
     )
   }
   return (
     <View style={styles.section}>
-      <ProbeLine label="Host" detail={hostName} />
+      <ProbeLine label={t('diagnostics.mobileWebBundleProbeRow.host', 'Host')} detail={hostName} />
       <View style={styles.separator} />
-      <ProbeLine label="Build" detail={state.buildId.slice(0, 12)} />
+      <ProbeLine
+        label={t('diagnostics.mobileWebBundleProbeRow.build', 'Build')}
+        detail={state.buildId.slice(0, 12)}
+      />
       <View style={styles.separator} />
-      <ProbeLine label="Assets" detail={`${state.assetCount}`} />
+      <ProbeLine
+        label={t('diagnostics.mobileWebBundleProbeRow.assets', 'Assets')}
+        detail={`${state.assetCount}`}
+      />
       <View style={styles.separator} />
-      <ProbeLine label="Bytes" detail={`${state.totalBytes}`} />
+      <ProbeLine
+        label={t('diagnostics.mobileWebBundleProbeRow.bytes', 'Bytes')}
+        detail={`${state.totalBytes}`}
+      />
       <View style={styles.separator} />
-      <ProbeLine label="Elapsed" detail={`${state.elapsedMs} ms`} />
+      <ProbeLine
+        label={t('diagnostics.mobileWebBundleProbeRow.elapsed', 'Elapsed')}
+        detail={t('diagnostics.mobileWebBundleProbeRow.elapsedMilliseconds', '{{elapsedMs}} ms', {
+          elapsedMs: state.elapsedMs
+        })}
+      />
     </View>
   )
 }
 
-/**
- * Development-only: fetches the whole mobile web bundle from a paired desktop and reports what came
- * back. Phase A ships no production path that renders a bundle, and this row is the only thing that
- * exercises the operations end to end on a device.
- *
- * `app/troubleshoot.tsx` mounts it behind `__DEV__`, so a shipped build never runs the host lookup.
- *
- * The screen carries no host parameter and troubleshoots every paired host, one reachability check
- * each, so there is no host it is "on". The probe takes the first paired host and names it in the
- * result rather than implying it speaks for all of them.
- */
+// Dev-only end-to-end bundle fetch; troubleshoot.tsx gates this behind __DEV__. It neither caches nor renders the bundle.
+// Troubleshoot has no selected host, so probe the first paired host and name it explicitly.
 export function MobileWebBundleProbeRow() {
+  useMobileColorScheme()
+  const t = useMobileTranslation()
   const [hosts, setHosts] = useState<readonly HostProfile[]>([])
   useEffect(() => {
     let stale = false
@@ -98,9 +119,14 @@ export function MobileWebBundleProbeRow() {
         ) : (
           <Package size={16} color={colors.textPrimary} />
         )}
-        <Text style={styles.diagnosticButtonLabel}>{buttonLabel(state, awaitingHost)}</Text>
+        <Text style={styles.diagnosticButtonLabel}>{buttonLabel(state, awaitingHost, t)}</Text>
       </Pressable>
-      <ProbeResult state={state} hostName={host?.name ?? 'unknown host'} />
+      <ProbeResult
+        state={state}
+        hostName={
+          host?.name ?? t('diagnostics.mobileWebBundleProbeRow.unknownHost', 'unknown host')
+        }
+      />
     </View>
   )
 }

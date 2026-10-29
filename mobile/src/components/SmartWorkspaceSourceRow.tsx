@@ -1,7 +1,11 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { Pressable, Text, View } from 'react-native'
 import { CaseSensitive, GitBranch, Sparkles } from 'lucide-react-native'
 import type { SmartWorkspaceSourceRow as SourceRow } from '../../../src/shared/new-workspace/smart-workspace-source-results'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import type { Translate } from '../i18n/mobile-i18n'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { TaskProviderLogo } from './TaskProviderLogo'
 
 type Props = {
@@ -16,32 +20,50 @@ type RowContent = {
   status?: string
 }
 
-function resolveRowContent(row: SourceRow): RowContent {
+function resolveRowContent(row: SourceRow, t: Translate): RowContent {
   switch (row.kind) {
     case 'use-name':
       return {
         icon: <Sparkles size={16} color={colors.textSecondary} />,
-        title: `Use "${row.name}"`,
-        subtitle: 'Name this workspace'
+        title: t('components.smartWorkspaceSourceRow.useName', 'Use "{{name}}"', {
+          name: row.name
+        }),
+        subtitle: t('components.smartWorkspaceSourceRow.nameWorkspace', 'Name this workspace')
       }
     case 'create-branch':
       return {
         icon: <GitBranch size={16} color={colors.accentBlue} />,
-        title: `Create branch "${row.name}"`,
-        subtitle: 'New branch'
+        title: t('components.smartWorkspaceSourceRow.createBranch', 'Create branch "{{name}}"', {
+          name: row.name
+        }),
+        subtitle: t('components.smartWorkspaceSourceRow.newBranch', 'New branch')
       }
     case 'github':
       return {
         icon: <TaskProviderLogo provider="github" size={16} color={colors.textSecondary} />,
         title: row.item.title,
-        subtitle: `${row.item.type === 'pr' ? 'PR #' : 'Issue #'}${row.item.number}`,
+        subtitle:
+          row.item.type === 'pr'
+            ? t('components.smartWorkspaceSourceRow.pullRequest', 'PR #{{number}}', {
+                number: row.item.number
+              })
+            : t('components.smartWorkspaceSourceRow.issue', 'Issue #{{number}}', {
+                number: row.item.number
+              }),
         status: row.item.state
       }
     case 'gitlab':
       return {
         icon: <TaskProviderLogo provider="gitlab" size={16} color={colors.textSecondary} />,
         title: row.item.title,
-        subtitle: `${row.item.type === 'mr' ? 'MR !' : 'Issue #'}${row.item.number}`,
+        subtitle:
+          row.item.type === 'mr'
+            ? t('components.smartWorkspaceSourceRow.mergeRequest', 'MR !{{number}}', {
+                number: row.item.number
+              })
+            : t('components.smartWorkspaceSourceRow.issue', 'Issue #{{number}}', {
+                number: row.item.number
+              }),
         status: row.item.state
       }
     case 'branch':
@@ -70,7 +92,9 @@ function resolveRowContent(row: SourceRow): RowContent {
 }
 
 export function SmartWorkspaceSourceRow({ row, onPress }: Props) {
-  const content = resolveRowContent(row)
+  useMobileColorScheme()
+  const t = useMobileTranslation()
+  const content = resolveRowContent(row, t)
   return (
     <Pressable
       style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
@@ -98,7 +122,7 @@ export function SmartWorkspaceSourceRow({ row, onPress }: Props) {
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -138,4 +162,4 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     textTransform: 'capitalize'
   }
-})
+}))

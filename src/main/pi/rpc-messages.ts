@@ -1,9 +1,11 @@
 import { z } from 'zod'
+import { BoundedMap } from '../../shared/bounded-map'
+import { MAX_PROVIDER_TIMELINE_OPEN_ENTRIES } from '../native-chat/agent-session-timeline/provider-timeline-budget'
 import type { AgentJournalToolCallItem } from '../../shared/agent-session-journal-types'
 import {
-  boundPayload,
   boundToolInput,
-  DEFAULT_JOURNAL_PAYLOAD_LIMITS
+  JOURNAL_RUNNING_PREVIEW_LIMITS,
+  journalToolPayload
 } from '../native-chat/agent-session-journal/journal-payload-bounds'
 import type { ProviderTimelineEvent } from '../native-chat/agent-session-timeline/provider-timeline-event'
 import { piRpcMessageEventSchema, piRpcToolEventSchema } from './rpc-protocol'
@@ -13,12 +15,51 @@ const resultSchema = z.object({
   content: z.array(z.object({ type: z.string(), text: z.string().optional() }))
 })
 
+/** One row per turn: a second close of the same item is dropped. */
+export function piRpcSkippedEventNotice(turn: string): ProviderTimelineEvent {
+  return {
+    type: 'item.close',
+    item: `oversized:${turn}`,
+    body: {
+      kind: 'status',
+      tone: 'warning',
+      text: 'Pi sent an update too large to show, so part of this turn is missing here.'
+    }
+  }
+}
+
+const PI_TEXT_CHANNELS: Partial<Record<string, 'assistant' | 'reasoning'>> = {
+  text_delta: 'assistant',
+  text_end: 'assistant',
+  thinking_delta: 'reasoning',
+  thinking_end: 'reasoning'
+}
+
 /** Pi does not name assistant messages; ordinals are local to this exact child. */
 export class PiRpcMessages {
   private ordinal = 0
   private active?: number
-  private readonly text = new Map<string, { index: number; channel: 'assistant' | 'reasoning' }>()
+  private readonly text = new Set<string>()
+  /** Highest block index streamed in this message; Pi already closed those not still open. */
+  private streamed = -1
   private readonly tools = new Map<string, AgentJournalToolCallItem>()
+  // Closing events take these latest full fields; running journal rows retain only previews.
+  private readonly whole = new BoundedMap<
+    string,
+    {
+      input?: unknown
+      output?: string
+      inputBytes: number
+      outputBytes: number
+    }
+  >({
+    maxEntries: MAX_PROVIDER_TIMELINE_OPEN_ENTRIES,
+    sizeOf: (value, key) => value.inputBytes + value.outputBytes + Buffer.byteLength(key) + 64
+  })
+
+  get retainedToolBytes(): number {
+    return this.whole.retainedBytes
+  }
 
   constructor(
     private readonly generation: string,
@@ -28,7 +69,9 @@ export class PiRpcMessages {
   reset(): void {
     this.active = undefined
     this.text.clear()
+    this.streamed = -1
     this.tools.clear()
+    this.whole.clear()
   }
 
   message(value: unknown, at: number): ProviderTimelineEvent[] {
@@ -44,24 +87,33 @@ export class PiRpcMessages {
     if (event.type === 'message_start') {
       this.active = ++this.ordinal
       this.text.clear()
+      this.streamed = -1
       return []
     }
     const events = this.context.live(event.usage ?? message?.usage, at)
     this.active ??= ++this.ordinal
     const update = event.assistantMessageEvent
-    if (
-      event.type === 'message_update' &&
-      update?.delta !== undefined &&
-      ['text_delta', 'thinking_delta'].includes(update.type)
-    ) {
-      const channel = update.type === 'text_delta' ? 'assistant' : 'reasoning'
+    const channel = update && PI_TEXT_CHANNELS[update.type]
+    if (event.type === 'message_update' && update && channel) {
       const index = update.contentIndex ?? 0
       const item = this.key(index, channel)
-      if (this.text.size >= 128 && !this.text.has(item)) {
-        throw new Error('Pi message stream capacity exceeded')
+      this.streamed = Math.max(this.streamed, index)
+      if (update.type.endsWith('_end')) {
+        // Pi ends each block before its message ends, so only concurrent blocks stay open.
+        events.push(
+          ...this.close(
+            item,
+            channel,
+            typeof update.content === 'string' ? update.content : undefined
+          )
+        )
+      } else if (update.delta !== undefined) {
+        if (this.text.size >= 128 && !this.text.has(item)) {
+          throw new Error('Pi message stream capacity exceeded')
+        }
+        this.text.add(item)
+        events.push({ type: 'text.delta', item: { id: item }, channel, text: update.delta })
       }
-      this.text.set(item, { index, channel })
-      events.push({ type: 'text.delta', item: { id: item }, channel, text: update.delta })
     }
     if (event.type === 'message_end' && message) {
       const content =
@@ -75,20 +127,19 @@ export class PiRpcMessages {
           return
         }
         const item = this.key(index, channel)
+        if (index <= this.streamed && !this.text.has(item)) {
+          return
+        }
         const text = channel === 'assistant' ? block.text : block.thinking
         if (text !== undefined) {
-          // A snapshot without deltas still opens the same message row.
-          if (!this.text.has(item) && text) {
-            events.push({ type: 'text.delta', item: { id: item }, channel, text })
-          }
-          events.push({ type: 'text.close', item: { id: item }, text })
-          this.text.delete(item)
+          events.push(...this.close(item, channel, text))
         }
       })
-      for (const item of this.text.keys()) {
+      for (const item of this.text) {
         events.push({ type: 'text.close', item: { id: item } })
       }
       this.text.clear()
+      this.streamed = -1
       this.active = undefined
     }
     return events
@@ -101,11 +152,12 @@ export class PiRpcMessages {
     }
     const event = parsed.data
     const previous = this.tools.get(event.toolCallId)
+    const held = this.whole.get(event.toolCallId)
     const result = event.result ?? event.partialResult
     const content = resultSchema.safeParse(result)
     const output =
       result === undefined
-        ? undefined
+        ? held?.output
         : content.success
           ? content.data.content
               .flatMap((block) => (block.text === undefined ? [] : [block.text]))
@@ -113,21 +165,29 @@ export class PiRpcMessages {
           : JSON.stringify(result)
     const state =
       event.type === 'tool_execution_end' ? (event.isError ? 'failed' : 'completed') : 'running'
+    const input = event.args === undefined ? held?.input : event.args
     const body: AgentJournalToolCallItem = {
       kind: 'tool-call',
       name: event.toolName,
       callId: event.toolCallId,
       input:
-        event.args === undefined
+        input === undefined
           ? (previous?.input ?? null)
-          : boundToolInput(event.args, DEFAULT_JOURNAL_PAYLOAD_LIMITS),
+          : state === 'running'
+            ? event.args === undefined && previous
+              ? previous.input
+              : boundToolInput(input, JOURNAL_RUNNING_PREVIEW_LIMITS)
+            : input,
       state,
       ...(output === undefined
         ? previous?.output
           ? { output: previous.output }
           : {}
         : {
-            output: boundPayload(output, DEFAULT_JOURNAL_PAYLOAD_LIMITS)
+            output:
+              state === 'running' && result === undefined && previous?.output
+                ? previous.output
+                : journalToolPayload(output, state === 'running')
           })
     }
     if (state === 'running') {
@@ -135,6 +195,25 @@ export class PiRpcMessages {
         throw new Error('Pi tool stream capacity exceeded')
       }
       this.tools.set(event.toolCallId, body)
+      if (!held && this.whole.size >= MAX_PROVIDER_TIMELINE_OPEN_ENTRIES) {
+        throw new Error('Pi tool stream capacity exceeded')
+      }
+      if (
+        !this.whole.set(event.toolCallId, {
+          input,
+          output,
+          inputBytes:
+            event.args === undefined
+              ? (held?.inputBytes ?? 0)
+              : Buffer.byteLength(JSON.stringify(input) ?? ''),
+          outputBytes:
+            result === undefined
+              ? (held?.outputBytes ?? 0)
+              : Buffer.byteLength(JSON.stringify(output) ?? '')
+        })
+      ) {
+        throw new Error('Pi tool snapshot could not be retained')
+      }
       if (
         [...this.tools.values()].reduce(
           (bytes, tool) => bytes + Buffer.byteLength(JSON.stringify(tool)),
@@ -146,6 +225,7 @@ export class PiRpcMessages {
       }
     } else {
       this.tools.delete(event.toolCallId)
+      this.whole.delete(event.toolCallId)
     }
     return [
       {
@@ -154,6 +234,21 @@ export class PiRpcMessages {
         body
       }
     ]
+  }
+
+  private close(
+    item: string,
+    channel: 'assistant' | 'reasoning',
+    text: string | undefined
+  ): ProviderTimelineEvent[] {
+    const events: ProviderTimelineEvent[] = []
+    // A snapshot without deltas still opens the same message row.
+    if (!this.text.has(item) && text) {
+      events.push({ type: 'text.delta', item: { id: item }, channel, text })
+    }
+    events.push({ type: 'text.close', item: { id: item }, text })
+    this.text.delete(item)
+    return events
   }
 
   private key(index: number, channel: string): string {

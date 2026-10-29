@@ -4,9 +4,7 @@ import type { EventProps } from '../../shared/telemetry-events'
 import type { DaemonAuditObservation } from './daemon-audit-classifier'
 import { PROTOCOL_VERSION } from './daemon-protocol-version'
 
-// Why: a steady daemon repeats a byte-identical observation on every listProcesses call, so
-// repeats are re-sent only as an occasional heartbeat — the shared per-session telemetry
-// ceiling is 1,000 events for the whole app and audit data must not crowd it out.
+// Rate-limit identical observations so audit heartbeats cannot consume the shared telemetry budget.
 const REPEATED_OBSERVATION_INTERVAL_MS = 5 * 60_000
 const INCARNATION_CORRELATION_DOMAIN = 'orca:daemon-audit-eligibility:incarnation:v1'
 type AuditEligibilityCommonProperties = Omit<
@@ -23,16 +21,14 @@ export function trackDaemonAuditEligibility(observation: DaemonAuditObservation)
 }
 
 export function createDaemonAuditEligibilityTracker(
-  // Why: the window must be measured on a monotonic clock — a backward wall-clock jump (NTP
-  // correction, VM resume) would otherwise park the next heartbeat in the future.
+  // Use monotonic time so clock corrections cannot postpone heartbeats.
   monotonicNowMs: () => number = () => performance.now()
 ): (observation: DaemonAuditObservation) => void {
   let lastProperties: string | null = null
   let lastTrackedAtMs = 0
   const correlateLaunchNonce = createLaunchNonceCorrelationCache()
   return (observation) => {
-    // Why: the rate-limit bookkeeping runs inside the daemon's inventory path, so it is guarded
-    // together with the emit — audit telemetry cannot affect daemon availability.
+    // Guard bookkeeping too: inventory must remain available if telemetry processing fails.
     try {
       const eventProperties = auditEligibilityProperties(observation, correlateLaunchNonce)
       const properties = JSON.stringify(eventProperties)

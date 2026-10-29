@@ -75,7 +75,6 @@ describe('agent-status programStatus ingest', () => {
           agentType: 'claude',
           state: 'working',
           stateStartedAt: 1_699_999_000_000,
-          // A renderer-local write newer than main's row.
           updatedAt: 1_700_000_009_000
         }
       }

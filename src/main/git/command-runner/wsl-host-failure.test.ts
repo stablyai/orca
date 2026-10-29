@@ -71,7 +71,6 @@ describe('wsl.exe host failure classification', () => {
       stderr: 'fatal: not a git repository\n'
     })
     expect(readWslHostFailureDiagnostic(guestFailure, WSL_COMMAND)).toBeNull()
-    // Same exit code, but wsl.exe was never involved.
     expect(
       readWslHostFailureDiagnostic(hostFailure(WSL_DIAGNOSTIC), {
         binary: 'git',
@@ -93,7 +92,6 @@ describe('wsl.exe host failure classification', () => {
     expect(error.message).toContain('kali-linux')
     expect(error.wslHostFailure).toBe(true)
     expect(error.wslDistro).toBe('kali-linux')
-    // The original failure detail must survive for callers that classify on it.
     expect(error.code).toBe(4294967295)
     expect(error.message).toContain('Command failed: wsl.exe')
   })

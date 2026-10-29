@@ -7,6 +7,8 @@ import type { AiVaultSession } from '../../../../shared/ai-vault-types'
 import type { AiVaultSearchHit } from '../../../../shared/ai-vault-search-types'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { Tab } from '../../../../shared/tab-types'
+import { AGENT_SESSION_WORKSPACE_SLEEP_MARK_RUNTIME_CAPABILITY } from '../../../../shared/agent-session/agent-session-workspace-sleep'
+import { AGENT_SESSION_STATUS_FEED_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
 
 const mocks = vi.hoisted(() => ({ subscribe: vi.fn(), supports: vi.fn() }))
 vi.mock('@/runtime/structured-agent-session-client', () => ({
@@ -209,22 +211,12 @@ describe('native chat names in Vault rows', () => {
   )
 
   it.each(['opencode', 'opencode2', 'grok', 'omp', 'pi'] as const)(
-    'keeps the CLI title on a %s chat row, as its terminal conversations do',
+    'shows a %s chat row its CLI title until the chat is named, then the chat name',
     async (agent) => {
-      useAppStore.setState({
-        unifiedTabsByWorktree: {
-          'folder-workspace': [
-            {
-              ...tab('Manual name'),
-              agentSessionAgent: agent === 'opencode2' ? 'opencode' : agent
-            }
-          ]
-        }
-      })
       await renderRow({ ...row('local', 'Fix the parser'), agent })
-      publish('local', 'Explain the parser')
       expect(screen.getByText('Fix the parser')).toBeTruthy()
-      expect(screen.queryByText('Manual name')).toBeNull()
+      publish('local', 'Explain the parser')
+      expect(screen.getByText('Explain the parser')).toBeTruthy()
     }
   )
 
@@ -279,7 +271,10 @@ describe('native chat names in Vault rows', () => {
       await vi.advanceTimersByTimeAsync(60_000)
     })
     expect(screen.getByText('Saved by older host')).toBeTruthy()
-    expect(mocks.supports).toHaveBeenCalledTimes(1)
+    expect(mocks.supports.mock.calls).toEqual([
+      ['older', AGENT_SESSION_STATUS_FEED_RUNTIME_CAPABILITY],
+      ['older', AGENT_SESSION_WORKSPACE_SLEEP_MARK_RUNTIME_CAPABILITY]
+    ])
     expect(mocks.subscribe).not.toHaveBeenCalled()
   })
 })

@@ -60,7 +60,6 @@ export function readOpenCodeTranscriptSignal(
     if (!sessionExists(db, sessionId)) {
       return null
     }
-    // Aggregates without GROUP BY always yield exactly one row, so [0] is it.
     const visibility = zcodeVisibleMessageFilter(agent ?? 'opencode', 'data')
     const [messageRow] = rowsOf<{
       message_count: number
@@ -125,7 +124,7 @@ export function readOpenCodeTranscriptPage(args: {
       return null
     }
     const limit = openCodeTranscriptPageLimit(args.limit)
-    // Rank only inside the query; wire cursors retain the stable storage row identity.
+    // Keep stable storage IDs on the wire; ranks exist only inside this query.
     const ranked = args.agent === 'zcode'
     const orderColumn = ranked ? 'ordered.transcript_order' : 'm.rowid'
     if (
@@ -144,9 +143,7 @@ export function readOpenCodeTranscriptPage(args: {
       ) AS transcript_order FROM message m WHERE session_id = ?
     )`
       : ''
-    // The upper bound is always bound: batching advances the cursor mid-page,
-    // so the statement cannot vary with `beforeMessageRowId`'s presence.
-    // MAX_SAFE_INTEGER is the "from the newest row" sentinel.
+    // Always bind an upper bound: batching advances it mid-page; MAX_SAFE_INTEGER starts at newest.
     const select = db.prepare(
       `${ordered} SELECT m.rowid AS message_rowid, ${orderColumn} AS transcript_order, m.id, m.time_created, m.time_updated, CASE WHEN length(CAST(m.data AS BLOB)) <= ${OPENCODE_TRANSCRIPT_MAX_ROW_BYTES} THEN m.data ELSE NULL END AS data
          FROM message m ${ranked ? 'JOIN ordered ON ordered.storage_rowid = m.rowid' : ''}
@@ -176,7 +173,6 @@ export function readOpenCodeTranscriptPage(args: {
       if (rows.length === 0) {
         break
       }
-      // The (limit+1)th row is only a hasMore probe — never decoded.
       hasMore = rows.length > limit
       const selected = hasMore ? rows.slice(0, limit) : rows
       cursor = selected.at(-1)!.message_rowid
@@ -191,7 +187,7 @@ export function readOpenCodeTranscriptPage(args: {
       }
     }
     let retained = Math.min(limit, collected.length)
-    // A raw-row cursor cannot resume inside a reasoning/answer pair.
+    // Raw-row cursors cannot resume inside a reasoning/answer pair.
     while (
       retained < collected.length &&
       collected[retained].rowid === collected[retained - 1].rowid

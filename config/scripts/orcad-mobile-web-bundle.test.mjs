@@ -65,8 +65,13 @@ it('ships the page the qualification lanes tested in the release template', () =
     readFileSync(new URL('../../.github/workflows/node-server-tests.yml', import.meta.url), 'utf8')
   )
   const template = workflow.jobs.desktop_template
-  expect(template.needs).toContain('mobile_web_bundle')
-  expect(template.if).toContain("needs.mobile_web_bundle.result == 'success'")
+  const wait = template.steps.findIndex(
+    (step) => step.name === 'Wait for every template qualification lane'
+  )
+  expect(template.steps[wait].with.script).toContain('mobile_web_bundle: 1')
+  expect(wait).toBeLessThan(
+    template.steps.findIndex((step) => step.with?.name === 'orcad-mobile-web-bundle')
+  )
   expect(template.steps.some((step) => step.with?.name === 'orcad-mobile-web-bundle')).toBe(true)
   expect(template.steps.some((step) => step.uses?.includes('build-mobile-web-bundle'))).toBe(false)
 })

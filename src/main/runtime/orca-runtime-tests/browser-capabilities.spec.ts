@@ -31,8 +31,32 @@ import {
   resetBrowserIdentityModeStoreForTests
 } from '../../browser/browser-identity-mode-store'
 import { runtimeAdvertisesBrowserClientHosting } from '../../../shared/browser-client-hosting-eligibility'
+import { hostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 
 describe('OrcaRuntimeService', () => {
+  it('advertises Google clear only for a live supporting executor, independently of client hosting', async () => {
+    for (const supported of [undefined, false, true]) {
+      let available = true
+      setRuntimeBrowserCommandsFactory((host) => new RuntimeBrowserCommands(host), {
+        headless: true,
+        clientHostingWithoutEngine: true,
+        isAvailable: () => available,
+        supportsGoogleCookieClear: supported === undefined ? undefined : () => supported
+      })
+      const runtime = createRuntime()
+      const capabilities = runtime.getStatus().capabilities ?? []
+      expect(capabilities.includes('browser.google-cookie-clear.v1')).toBe(supported === true)
+      available = false
+      expect(runtime.getStatus().capabilities).not.toContain('browser.google-cookie-clear.v1')
+      expect(runtimeAdvertisesBrowserClientHosting(runtime.getStatus().capabilities)).toBe(true)
+    }
+    const { installElectronBrowserCommands } = await import('../../host/electron-browser-commands')
+    installElectronBrowserCommands()
+    expect(createRuntime().getStatus().capabilities).toContain('browser.google-cookie-clear.v1')
+    setRuntimeBrowserCommandsFactory(null)
+    expect(createRuntime().getStatus().capabilities).not.toContain('browser.google-cookie-clear.v1')
+  })
+
   it('advertises client hosting when its factory implements client page creation', () => {
     const capabilities = createRuntime().getStatus().capabilities
     expect(runtimeAdvertisesBrowserClientHosting(capabilities)).toBe(true)
@@ -62,8 +86,7 @@ describe('OrcaRuntimeService', () => {
     available = false
     expect(runtimeAdvertisesBrowserClientHosting(runtime.getStatus().capabilities)).toBe(false)
   })
-  // The mixed-version guarantee: a host that never initialized the identity store must not
-  // advertise a method that can only throw there.
+  // Uninitialized stores cannot serve identity methods; never advertise them to mixed-version clients.
   it('advertises the browser identity capability only where an identity store exists', () => {
     resetBrowserIdentityModeStoreForTests()
     expect(createRuntime().getStatus().capabilities).not.toContain('browser.identity.v1')
@@ -78,12 +101,14 @@ describe('OrcaRuntimeService', () => {
 
   it('advertises headless browser capability when an offscreen backend backs a windowless host', () => {
     const runtime = createRuntime()
-    runtime.setOffscreenBrowserBackend({ createTab: vi.fn(), closeTab: vi.fn() })
+    runtime.setOffscreenBrowserBackend({
+      createTab: vi.fn(),
+      closeTab: vi.fn(),
+      ownsTab: () => true
+    })
 
     const capabilities = runtime.getStatus().capabilities
-    // Headless serve can still create/stream pages, so screencast is supported...
     expect(capabilities).toContain('browser.screencast.v1')
-    // ...and the headless marker tells clients not to fall back to a local tab.
     expect(capabilities).toContain('browser.headless.v1')
     expect(capabilities).toContain('browser.certificate-trust.v1')
   })
@@ -107,7 +132,7 @@ describe('OrcaRuntimeService', () => {
     available = false
     const degraded = createRuntime().getStatus()
     expect(degraded.capabilities).not.toContain('browser.headless.v1')
-    // A provider that resolved and then died is a health failure, never a config mistake.
+    // Previously resolved provider death is health failure, not misconfiguration.
     expect(degraded.degradations).toEqual([
       {
         code: 'browser_unavailable',
@@ -119,7 +144,11 @@ describe('OrcaRuntimeService', () => {
   })
   it('surfaces live offscreen load failures in headless browser snapshots', () => {
     const runtime = createRuntime()
-    runtime.setOffscreenBrowserBackend({ createTab: vi.fn(), closeTab: vi.fn() })
+    runtime.setOffscreenBrowserBackend({
+      createTab: vi.fn(),
+      closeTab: vi.fn(),
+      ownsTab: () => true
+    })
     runtime.setAgentBrowserBridge({
       tabList: vi.fn(() => ({
         tabs: [
@@ -363,12 +392,11 @@ describe('OrcaRuntimeService', () => {
     const unchanged = (a: unknown[], b: unknown[]): boolean =>
       headlessBrowserTabsUnchanged(a as never, b as never)
 
-    // Absent vs explicit null loadError are equivalent (the JSON.stringify trap).
+    // Missing/null loadError are equivalent despite differing JSON representations.
     expect(unchanged([{ ...base }], [{ ...base, loadError: null }])).toBe(true)
     expect(unchanged([{ ...base, loadError: err }], [{ ...base, loadError: { ...err } }])).toBe(
       true
     )
-    // A load-error-only change (identical ids/order) must not be missed.
     expect(unchanged([{ ...base }], [{ ...base, loadError: err }])).toBe(false)
     expect(
       unchanged([{ ...base, loadError: err }], [{ ...base, loadError: { ...err, code: -200 } }])
@@ -386,7 +414,6 @@ describe('OrcaRuntimeService', () => {
         [{ ...base, certificateFailure: { ...certificateFailure, challengeId: 'challenge-2' } }]
       )
     ).toBe(false)
-    // Scalar and length changes are detected.
     expect(unchanged([{ ...base }], [{ ...base, title: 'Changed' }])).toBe(false)
     expect(unchanged([{ ...base }], [{ ...base, isActive: false }])).toBe(false)
     expect(unchanged([{ ...base }], [{ ...base }, { ...base, id: 'page-2' }])).toBe(false)
@@ -396,10 +423,14 @@ describe('OrcaRuntimeService', () => {
     const runtime = createRuntime()
     electronMocks.BrowserWindow.fromId.mockReturnValue({ isDestroyed: () => false } as never)
     runtime.attachWindow(TEST_WINDOW_ID)
-    runtime.setOffscreenBrowserBackend({ createTab: vi.fn(), closeTab: vi.fn() })
+    runtime.setOffscreenBrowserBackend({
+      createTab: vi.fn(),
+      closeTab: vi.fn(),
+      ownsTab: () => true
+    })
 
     expect(runtime.getStatus().capabilities).not.toContain('browser.headless.v1')
-    // Desktop webviews still host certificate trust, so the proceed capability stays advertised for remote clients controlling those pages.
+    // Remote certificate proceed also applies to desktop webviews.
     expect(runtime.getStatus().capabilities).toContain('browser.certificate-trust.v1')
   })
 
@@ -449,7 +480,6 @@ describe('OrcaRuntimeService', () => {
       message:
         'ORCA_BROWSER_EXECUTABLE is set, but the bundled agent-browser driver is missing or not executable on this host, so Chromium cannot be driven.'
     })
-    // The whole point: never send someone to set a variable they already set.
     expect(degradation?.message).not.toMatch(/set ORCA_BROWSER_EXECUTABLE/)
   })
 
@@ -487,8 +517,7 @@ describe('OrcaRuntimeService', () => {
 
     const [degradation] = createRuntime().getStatus().degradations ?? []
 
-    // Old clients read only these three: the closed code must not move and the human
-    // sentence must stand alone without the optional fields.
+    // Older clients require stable code/capability and a self-contained sentence without optional fields.
     expect(degradation?.code).toBe('browser_unavailable')
     expect(degradation?.capability).toBe('browser.headless.v1')
     expect(degradation?.message).toBe(
@@ -497,8 +526,7 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('reports a host that cannot load node-pty, instead of that host never answering', () => {
-    // The alternative to reporting it is the process dying inside the dynamic loader,
-    // which reaches a client as a dropped connection with no cause attached.
+    // Loader crashes otherwise reach clients as unexplained dropped connections.
     setRuntimeTerminalUnavailableCause({
       reason: 'libc_floor',
       detail: 'the binary requires GLIBC_2.34'
@@ -527,8 +555,7 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('says nothing about terminals when no precondition proved them broken', () => {
-    // Silence must mean "nothing proved it broken", never "proved working" — a host that
-    // never ran the precondition has no verdict to publish.
+    // Unprobed hosts cannot claim proven health or failure; silence means no verdict.
     const degradations = createRuntime().getStatus().degradations ?? []
     expect(degradations.map((entry) => entry.code)).not.toContain('terminal_unavailable')
   })
@@ -536,7 +563,7 @@ describe('OrcaRuntimeService', () => {
   it('closes a worktree’s offscreen browser pages when its metadata is removed (leak fix)', () => {
     const runtime = createRuntime()
     const closeTab = vi.fn().mockResolvedValue(undefined)
-    runtime.setOffscreenBrowserBackend({ createTab: vi.fn(), closeTab })
+    runtime.setOffscreenBrowserBackend({ createTab: vi.fn(), closeTab, ownsTab: () => true })
     runtime.setAgentBrowserBridge({
       tabList: vi.fn((worktreeId: string) =>
         worktreeId === TEST_WORKTREE_ID
@@ -611,7 +638,6 @@ describe('OrcaRuntimeService', () => {
 
     runtime['removeWorktreeMetadataAndHistory'](store as never, TEST_WORKTREE_ID)
 
-    // The store's surviving metadata stands in for a recreate at the same path: the ID resolves again.
     expect(runtime['buildHeadlessMobileSessionBrowserTabs'](TEST_WORKTREE_ID)).toEqual([])
     expect((await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)).tabs).toEqual([])
   })
@@ -620,7 +646,6 @@ describe('OrcaRuntimeService', () => {
     const runtime = createRuntime()
     const host = attachClientBrowserHost(runtime)
     await publishClientHostedPage(runtime, host, 'page-removed', TEST_WORKTREE_ID)
-    // The client's command transport is gone but its lease has not fenced yet.
     host.detachDelivery()
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
@@ -628,7 +653,6 @@ describe('OrcaRuntimeService', () => {
 
     expect(getRuntimeBrowserPageRegistry(runtime).getPage('page-removed')).toBeUndefined()
     expect(runtime['buildHeadlessMobileSessionBrowserTabs'](TEST_WORKTREE_ID)).toEqual([])
-    // The close really did fail, and its rejection was reported rather than left unhandled.
     await vi.waitFor(() =>
       expect(warn).toHaveBeenCalledWith(
         expect.stringContaining('could not close its client page'),
@@ -688,7 +712,9 @@ describe('OrcaRuntimeService', () => {
       'runtime:env-b'
     )
 
-    expect(removeWorktreeMeta).toHaveBeenCalledWith(TEST_WORKTREE_ID, 'runtime:env-b')
+    expect(removeWorktreeMeta).toHaveBeenCalledWith(
+      hostWorktreeTarget({ id: TEST_WORKTREE_ID, hostId: 'runtime:env-b' })
+    )
     expect(internals.mobileSessionTabsByWorktree.get(TEST_WORKTREE_ID)).toBe(localSession)
   })
 
@@ -721,7 +747,9 @@ describe('OrcaRuntimeService', () => {
       'ssh:ssh-1'
     )
 
-    expect(removeWorktreeMeta).toHaveBeenCalledWith(TEST_WORKTREE_ID, 'ssh:ssh-1')
+    expect(removeWorktreeMeta).toHaveBeenCalledWith(
+      hostWorktreeTarget({ id: TEST_WORKTREE_ID, hostId: 'ssh:ssh-1' })
+    )
     expect(internals.mobileSessionTabsByWorktree.get(TEST_WORKTREE_ID)).toBe(survivingSession)
     expect(deleteWorktreeHistoryDirMock).not.toHaveBeenCalled()
   })

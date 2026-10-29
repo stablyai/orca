@@ -1,5 +1,5 @@
 import type { LinearClient } from '@linear/sdk'
-import { loadLinearSdk } from './linear-sdk'
+import { createLinearClient } from './linear-sdk'
 import type {
   LinearIssueRelationship,
   LinearIssueRelationWriteResult
@@ -8,13 +8,13 @@ import { LINEAR_ISSUE_API_PAGE_SIZE_MAX } from '../../shared/linear/issue-read-l
 import { acquire, release } from './linear-request-concurrency'
 import { clearToken } from './linear-token-store'
 import { getClients, isAuthError } from './client'
-import { linearError } from './issue-context-errors'
+import { linearError } from './issue-context/errors'
 import {
   INVERSE_RELATIONS_QUERY,
   RELATIONS_QUERY,
   type RawRelationNode,
   type RawRelationsResponse
-} from './issue-context-raw'
+} from './issue-context/raw'
 import { createLinearIssueRelation, deleteLinearIssueRelation } from './issue-relation-mutation'
 import { LinearWriteFailure } from './linear-issue-write-support'
 
@@ -37,7 +37,7 @@ export async function writeIssueRelation(params: {
   await acquire()
   try {
     const client = params.signal
-      ? new (loadLinearSdk().LinearClient)({ apiKey: entry.apiKey, signal: params.signal })
+      ? createLinearClient({ apiKey: entry.apiKey, signal: params.signal })
       : entry.client
     const existing = await findExistingRelation(client, params)
     if (params.operation === 'add' && existing) {

@@ -6,6 +6,7 @@ import type {
   HostedReviewInfo
 } from '../../../../shared/hosted-review'
 import type { Repo } from '../../../../shared/repo-types'
+import type { PRInfo } from '../../../../shared/github/pull-request-types'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { ipcOrRuntimeTargetForHostId } from '@/runtime/runtime-client-target'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
@@ -33,6 +34,8 @@ export type HostedReviewFetchOptions = {
    */
   active?: boolean
   repoOwnerExecutionHostId?: string
+  /** An explicit Refresh: may start a stopped WSL distro. Local IPC only. */
+  wakeWslDistro?: boolean
 }
 export type CreateHostedReviewStoreInput = CreateHostedReviewInput & { repoId?: string | null }
 export type CreateStackedHostedReviewStoreInput = CreateStackedHostedReviewInput & {
@@ -41,11 +44,7 @@ export type CreateStackedHostedReviewStoreInput = CreateStackedHostedReviewInput
 
 const CACHE_TTL_MS = 60_000
 const HOSTED_REVIEW_CACHE_MAX = 500
-// Why: the runtime path is bounded by callRuntimeRpc's own timeout; the local
-// Electron path had none, so a hung git/gh subprocess (e.g. a stalled Windows
-// credential probe) could leave the Create PR header stuck in its "Checking…"
-// loading state forever. Mirror the runtime bound so a never-settling probe
-// rejects and the UI can fall back to an actionable/retryable state.
+// Bound native Electron lookups like runtime RPC; hung git/gh credentials must not leave Create PR Checking forever.
 const CREATION_ELIGIBILITY_TIMEOUT_MS = 30_000
 
 export class HostedReviewCreationEligibilityTimeoutError extends Error {
@@ -117,10 +116,15 @@ export function findHostedReviewRepoForFetch(
 
 export function hostedReviewOwnerIpcArgs(options: HostedReviewFetchOptions | undefined): {
   repoOwnerExecutionHostId?: string
+  wakeWslDistro?: true
 } {
-  return options?.repoOwnerExecutionHostId
-    ? { repoOwnerExecutionHostId: options.repoOwnerExecutionHostId }
-    : {}
+  return {
+    ...(options?.repoOwnerExecutionHostId
+      ? { repoOwnerExecutionHostId: options.repoOwnerExecutionHostId }
+      : {}),
+    // Not admissionTier: the visible scheduler sends 'interactive' for the selected card on a timer.
+    ...(options?.wakeWslDistro ? { wakeWslDistro: true as const } : {})
+  }
 }
 
 export function shouldRefetchForLinkedHint(
@@ -138,8 +142,7 @@ export function shouldRefetchGitHubScopedResultForNoHint(
   cached: HostedReviewCacheEntry<HostedReviewInfo> | undefined,
   hintKey: string
 ): boolean {
-  // Why: a GitHub-scoped result does not prove the branch's publishing remote
-  // has no GitLab/other review for neutral lookup.
+  // GitHub-only misses cannot rule out GitLab/other reviews on the publishing remote.
   return (
     cached !== undefined &&
     hintKey === '' &&
@@ -148,20 +151,19 @@ export function shouldRefetchGitHubScopedResultForNoHint(
 }
 
 export function isStaleMergedGitHubReviewForHead(
-  cached: HostedReviewCacheEntry<HostedReviewInfo> | undefined,
+  cached: { data: HostedReviewInfo | PRInfo | null } | undefined,
   currentHeadOid: string | null | undefined
 ): boolean {
-  // Why: a merged GitHub PR is only shown when the worktree sits on its head
-  // or on a commit confirmed to be part of the PR. The cache key is
-  // branch-scoped, so a worktree that advanced off the merged line of work
-  // must not reuse (or, on failure, preserve) the now-stale merged review.
+  // Branch cache may outlive merged work: reuse/preserve merged GitHub reviews only at their head or confirmed-contained commits.
   const head = typeof currentHeadOid === 'string' ? currentHeadOid.trim() : ''
   if (head.length === 0) {
     return false
   }
   const data = cached?.data
   return (
-    data?.provider === 'github' &&
+    data !== null &&
+    data !== undefined &&
+    (!('provider' in data) || data.provider === 'github') &&
     data.state === 'merged' &&
     typeof data.headSha === 'string' &&
     data.headSha.length > 0 &&
@@ -176,8 +178,7 @@ export function hasNewerHostedReviewCacheEntry(
   requestStartedAt: number,
   requestStartedEntry: HostedReviewCacheEntry<HostedReviewInfo> | undefined
 ): boolean {
-  // Why: GitHub refresh events can update this shared cache while a branch
-  // lookup is in flight; older lookups must not resurrect stale results.
+  // Refresh broadcasts can update shared cache mid-lookup; stale results must not resurrect older reviews.
   const entry = cache[cacheKey]
   return (
     entry !== undefined &&
@@ -210,10 +211,7 @@ export function withHostedReviewCacheEntry(
   return pruned
 }
 
-/**
- * Transport for a review on a known repo: a server's repo goes to that server; local and SSH repos
- * run on this app's IPC. An unknown repo also stays on this app; focus never names an owner.
- */
+/** Known runtime repos use owner server; local/SSH/unknown repos use app IPC. Focus cannot infer ownership. */
 export function hostedReviewRepoOwnerTarget(
   repo: Pick<Repo, 'connectionId' | 'executionHostId'> | undefined
 ): RuntimeClientTarget {

@@ -89,9 +89,7 @@ describe('groupWorkspaceKanbanWorktrees', () => {
         manualOrder: 100
       })
     ]
-    // Repro for crash 99657ab1: a worktree reached the sidebar with an
-    // undefined displayName, so `a.displayName.localeCompare(...)` threw
-    // `Cannot read properties of undefined (reading 'localeCompare')`.
+    // Persisted rows can lack displayName; sorting must not crash on localeCompare.
     expect(() =>
       groupWorkspaceKanbanWorktrees({
         worktrees,

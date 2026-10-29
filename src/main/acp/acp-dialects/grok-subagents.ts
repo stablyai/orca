@@ -1,6 +1,4 @@
-// Grok's subagents, read as roster updates. Recorded from Grok 1.0.46 (s7 fixtures): a spawn is
-// `spawn_subagent`, and Grok reports the child on the parent session as `subagent_spawned`,
-// `subagent_progress` and `subagent_finished`. The subagent id is also the child's own session id.
+// Grok's subagent IDs also name their child sessions (1.0.46 recordings).
 
 import { z } from 'zod'
 import type { AgentJournalToolCallItem } from '../../../shared/agent-session-journal-types'
@@ -44,13 +42,11 @@ const killInputSchema = z.object({
   task_id: idSchema.optional(),
   task_ids: z.array(idSchema).optional()
 })
-/** The id line of the reply a background spawn returns at once. */
 const SPAWN_ACK_ID = /^subagent_id:\s*(\S+)\s*$/m
-/** Machine blocks Grok appends to a subagent's reply for the parent model. */
 const MACHINE_BLOCKS = /<subagent_(meta|result)>[\s\S]*?<\/subagent_\1>/g
 const MAX_PROMPT_LABEL_CHARS = 80
 
-/** Grok's statuses in the roster's words; a Map so `__proto__` resolves to nothing. */
+// Map lookups avoid treating __proto__ as a recognized state.
 const SUBAGENT_STATES: ReadonlyMap<string, NativeChatSubagentState> = new Map([
   ['completed', 'completed'],
   ['success', 'completed'],
@@ -78,7 +74,6 @@ function promptLabel(prompt: string | undefined): string | undefined {
     : line || undefined
 }
 
-/** A `subagent_*` session update; undefined for any other update. */
 export function grokSubagentNotification(update: unknown): AcpSubagentUpdate | undefined {
   const spawned = spawnedSchema.safeParse(update)
   if (spawned.success) {
@@ -102,7 +97,7 @@ export function grokSubagentNotification(update: unknown): AcpSubagentUpdate | u
   }
   const state = subagentState(finished.data.status)
   const result = state === 'completed' ? replyText(finished.data.output) : undefined
-  // A cancelled subagent reports 0 tokens; the count it reported running stands.
+  // Preserve running token totals when cancelled subagents report zero.
   const tokens = finished.data.tokens_used
   return {
     id: finished.data.subagent_id,
@@ -133,8 +128,7 @@ function spawnUpdates(update: ToolCallUpdate, tool: AgentJournalToolCallItem): A
   return id ? [{ id, state: 'working', ...named }] : []
 }
 
-/** What a finished tool call says about subagents: its spawn's end or start, an output read, or a
- *  kill. Reads and kills name tasks of any kind, so they settle only subagents already known. */
+/** Output reads and kill calls can name other task types; apply only to known subagents. */
 export function grokToolSubagents(
   update: ToolCallUpdate,
   tool: AgentJournalToolCallItem
@@ -167,7 +161,7 @@ export function grokToolSubagents(
   if (tool.name !== 'kill_command_or_subagent' || !kill.success) {
     return []
   }
-  // Inference, as for background tasks: a successful kill ends the tasks it named.
+  // Infer stopped state from a successful kill call.
   return [
     ...new Set([...(kill.data.task_ids ?? []), ...(kill.data.task_id ? [kill.data.task_id] : [])])
   ].map((id) => ({ id, state: 'stopped', knownOnly: true }))

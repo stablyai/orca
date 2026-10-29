@@ -10,13 +10,7 @@ import { useGrabMode } from '@/components/browser-pane/annotate/useGrabMode'
 import type { BrowserOverlayViewport } from '@/components/browser-pane/describe-page/browser-annotation-geometry'
 import type { BrowserChromeElementTools } from '@/components/browser-pane/assemble-chrome/browser-chrome-toolbar'
 
-/**
- * The preview's half of the browser tool cluster: the in-guest element picker, the annotation
- * store and the markup canvas, wired exactly as the browsing pane wires them — including the id,
- * which is the browser page for both the stored annotations and the tool target. A re-mint
- * replaces the guest under that page rather than renaming the surface, so nothing here has to
- * track which grant is currently on screen.
- */
+/** Use the stable browser page ID for annotations and tools so replacing the guest grant preserves both. */
 export function useDocPreviewGuestTools({
   previewId,
   worktreeId,
@@ -41,8 +35,7 @@ export function useDocPreviewGuestTools({
   resetBrowserOverlayViewport: () => void
   elementTools: BrowserChromeElementTools
 } {
-  // Why still empty before the first grant: the page is only a tool target once a document is on
-  // screen, and useGrabMode needs a stable identity every render rather than one to guess with.
+  // No tool target exists before the first grant commits; do not queue requests for a page without a document.
   const toolTargetId = grantId === null ? '' : previewId
   const annotationViewportBridgeTokenRef = useRef<string>(undefined!)
   annotationViewportBridgeTokenRef.current ??= createBrowserUuid().replaceAll('-', '')

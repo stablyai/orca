@@ -2,8 +2,9 @@ import { describe, expect, it } from 'vitest'
 import {
   MAX_ORCAD_MIGRATION_BLOB_TOTAL_BYTES,
   ORCAD_MIGRATION_BLOB_KIND_CONTRACTS,
-  OrcadMigrationBlobChunkRequestSchema,
   advertisedOrcadMigrationBlobCapabilities,
+  OrcadMigrationBlobChunkRequestSchema,
+  OrcadMigrationBlobDescriptorSchema,
   assertOrcadMigrationBlobSet,
   findUnsupportedMigrationBlobKind,
   orcadMigrationBlobKindUnsupportedBlocker,
@@ -119,12 +120,16 @@ describe('orcad migration blob contract', () => {
     )
   })
 
-  it('advertises the channel and only the kinds that have an installer', () => {
-    expect(advertisedOrcadMigrationBlobCapabilities()).toEqual([
-      ORCAD_MIGRATION_BLOB_CHANNEL_RUNTIME_CAPABILITY,
-      'orcad.migration-blob.terminal-restore-hints.v1',
-      'orcad.migration-blob.shell-history.v1'
-    ])
+  // Drafts stay on each desktop; a chunk from a build that once shed them is refused, not stored.
+  it('refuses the retired editor-drafts kind', () => {
+    expect(
+      OrcadMigrationBlobDescriptorSchema.safeParse({
+        blobKind: 'editor-drafts',
+        key: 'drafts',
+        sha256: 'b'.repeat(64),
+        byteLength: 4
+      }).success
+    ).toBe(false)
   })
 
   it('keeps unknown request fields out and checks the acknowledged length', () => {
@@ -188,5 +193,21 @@ describe('orcad migration catalog state with blob uploads', () => {
         manifest
       )
     ).toThrow('orcad_migration_blob_key_invalid')
+  })
+})
+
+describe('advertised migration blob kinds', () => {
+  it('advertises only the kinds this host installs, terminal history only on a WSL host', () => {
+    expect(advertisedOrcadMigrationBlobCapabilities({ wslHost: false })).toEqual([
+      ORCAD_MIGRATION_BLOB_CHANNEL_RUNTIME_CAPABILITY,
+      'orcad.migration-blob.terminal-restore-hints.v1',
+      'orcad.migration-blob.shell-history.v1'
+    ])
+    expect(advertisedOrcadMigrationBlobCapabilities({ wslHost: true })).toEqual([
+      ORCAD_MIGRATION_BLOB_CHANNEL_RUNTIME_CAPABILITY,
+      'orcad.migration-blob.terminal-restore-hints.v1',
+      'orcad.migration-blob.shell-history.v1',
+      'orcad.migration-blob.terminal-history.v1'
+    ])
   })
 })

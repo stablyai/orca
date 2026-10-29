@@ -33,8 +33,7 @@ describe('classifyParkRevealSnapshot', () => {
     })
   })
 
-  // A remote host's fallback serializer answers `data: ''` with no `unavailable` reason before
-  // its pane has hydrated. applyMainBufferSnapshot already refuses to paint that; so must the reveal.
+  // Pre-hydration remote serializers can return imageless success; reveal must not erase local output by treating that as empty.
   it('reads a remote imageless success as unverifiable, charged to the host budget', () => {
     expect(
       classifyParkRevealSnapshot(
@@ -69,8 +68,7 @@ describe('classifyParkRevealSnapshot', () => {
     })
   })
 
-  // Retention is never inferred from image content: this arm is reachable only from an
-  // explicit host answer, and it carries which one so a caller need not re-derive it.
+  // Only explicit host answers prove permanent unavailability; image content cannot imply retention.
   it.each(['permanently-unavailable', 'unavailable'] as const)(
     'reads %s as no host image, carrying the answer that closed the door',
     (kind) => {
@@ -93,6 +91,7 @@ function buildSession(overrides: Record<string, unknown> = {}): ConnectPanePtySe
     hiddenOutputRestoreRemoteOutcomeAttempts: 0,
     hiddenOutputRestoreLocalGateAttempts: 0,
     markHiddenOutputRestoreNeeded: vi.fn(),
+    requestRemoteProgramRedraw: vi.fn(),
     ...overrides
   } as unknown as ConnectPanePtySession
   bindParkRevealSnapshotVerdictActions(session)
@@ -115,6 +114,10 @@ describe('warnParkRevealNoHostImage', () => {
       { foreground: true, beforeWrite: session.beforeTerminalOutputWrite }
     )
     expect(writeTerminalOutput.mock.calls[0]?.[1]).not.toContain('\x18')
+    // Why: without an image an idle TUI keeps its old frame until it repaints (#26887).
+    expect(session.requestRemoteProgramRedraw).toHaveBeenCalledExactlyOnceWith(
+      'park-reveal-no-host-image'
+    )
   })
 
   it('stays silent for a local pane, whose layout copy is never released', () => {

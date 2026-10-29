@@ -7,6 +7,7 @@ import { translate } from '@/i18n/i18n'
 import ProjectPicker from './ProjectPicker'
 import type { ProjectViewTableState } from './useProjectViewTable'
 import { githubProjectHost } from '../../../../shared/github/project-identity'
+import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
 
 export function ProjectViewToolbar({ tableState }: { tableState: ProjectViewTableState }) {
   const {
@@ -173,8 +174,8 @@ function ProjectSearchInput({
       input.focus()
       input.select()
     }
-    window.addEventListener('keydown', onKeyDown, { capture: true })
-    return () => window.removeEventListener('keydown', onKeyDown, { capture: true })
+    addAppKeyListener('keydown', onKeyDown)
+    return () => removeAppKeyListener('keydown', onKeyDown)
   }, [])
 
   return (

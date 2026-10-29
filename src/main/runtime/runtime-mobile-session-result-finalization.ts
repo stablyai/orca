@@ -1,5 +1,6 @@
 import type { RuntimeMobileSessionTabsResult } from '../../shared/runtime-types'
 import { dropRetirementProofsForLiveSurfaces } from '../../shared/terminal-retirement-proof-ledger'
+import { orderMobileSessionTabsByGroups } from './mobile-session-tab-merge'
 import type {
   RuntimeMobileSessionProjectionHost,
   RuntimeMobileSessionProjectionInput
@@ -48,6 +49,9 @@ export function finalizeRuntimeMobileSessionTabsResult(
           )
         }
       : {}),
-    tabs: normalizedTabs
+    // Follow group order: merged runtime-kept chat tabs otherwise append to clients' visible strip.
+    tabs: tabGroups
+      ? orderMobileSessionTabsByGroups(normalizedTabs, tabGroups, tabGroupLayout)
+      : normalizedTabs
   }
 }

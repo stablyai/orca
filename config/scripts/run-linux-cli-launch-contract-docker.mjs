@@ -125,8 +125,7 @@ function runContract() {
       continue
     }
     const status = Number(statusMatch[1])
-    // Why: the harness echoes `RESULT status=N case=<name>`, so a case whose name contains the
-    // expected substring would assert against the harness's own line instead of the CLI's output.
+    // Avoid asserting harness’s RESULT case-name echo: expected substring must come from CLI output.
     const commandOutput = output
       .split('\n')
       .filter((line) => !/^(?:RESULT|CRASHED|PRECONDITION_FAILED) /.test(line))

@@ -80,14 +80,11 @@ it('indexes only the requested selectors, not every discovered skill', () => {
     }
   }))
   expect(selectDiscoveredSkills(skills, ['id-900'])).toEqual([skills[900]])
-  // One membership probe per discovered skill, plus reads for the single match's
-  // own bucket and the trailing collision check. Indexing every name would need
-  // three reads apiece.
+  // Bound name reads to requested selectors; indexing every discovered name would cost three reads each.
   expect(nameReads).toBeLessThanOrEqual(1_100)
 })
 
-// `matchingIds` is what the CLI prints so the user can disambiguate, so the
-// index must report every match in discovery order, exactly like the old filter.
+// CLI ambiguity output must retain every match in discovery order.
 it('reports every ambiguous match in discovery order', () => {
   let thrown: unknown
   try {

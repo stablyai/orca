@@ -1,0 +1,57 @@
+name: Setup verified pnpm
+description: Install the pinned pnpm, with a signed npm fallback when version metadata is unavailable.
+
+inputs:
+  package-json-file:
+    description: Repository-relative manifest declaring the pinned packageManager.
+    required: false
+    default: package.json
+
+runs:
+  using: composite
+  steps:
+    - name: Setup pnpm
+      id: primary
+      continue-on-error: true
+      uses: pnpm/setup@v2
+      with:
+        package-json-file: ${{ inputs.package-json-file }}
+        install: false
+
+    - name: Setup Node.js for the npm fallback
+      if: steps.primary.outcome == 'failure'
+      uses: actions/setup-node@v6
+      with:
+        node-version: '24'
+        package-manager-cache: false
+
+    # npm resolves full packuments; pnpm/setup's version endpoint can stall independently.
+    - name: Bootstrap and verify pnpm through npm
+      if: steps.primary.outcome == 'failure'
+      shell: bash
+      env:
+        PNPM_MANIFEST: ${{ inputs.package-json-file }}
+      run: |
+        set -euo pipefail
+        bootstrap_dir="$(mktemp -d "$RUNNER_TEMP/orca-pnpm.XXXXXX")"
+        pnpm_version="$(node -p 'const p = require(require("node:path").resolve(process.env.GITHUB_WORKSPACE, process.env.PNPM_MANIFEST)); const match = /^pnpm@(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)(?:\+sha\d+\.[0-9a-f]+)?$/.exec(p.packageManager); if (!match) throw new Error("packageManager must pin an exact pnpm version"); match[1]')"
+        npm install --prefix "$bootstrap_dir" --ignore-scripts --no-audit --no-fund --save-exact --package-lock=true --registry=https://registry.npmjs.org "pnpm@$pnpm_version"
+        npm audit signatures --prefix "$bootstrap_dir" --registry=https://registry.npmjs.org
+        PNPM_BOOTSTRAP_DIR="$bootstrap_dir" node <<'NODE'
+        const { readFileSync } = require('node:fs')
+        const { join, resolve } = require('node:path')
+        const manifest = JSON.parse(readFileSync(resolve(process.env.GITHUB_WORKSPACE, process.env.PNPM_MANIFEST), 'utf8'))
+        const [pin, checksum] = manifest.packageManager.split('+')
+        if (checksum) {
+          const [algorithm, expected] = checksum.split('.')
+          const lock = JSON.parse(readFileSync(join(process.env.PNPM_BOOTSTRAP_DIR, 'package-lock.json'), 'utf8'))
+          const version = pin.slice('pnpm@'.length)
+          const entry = Object.values(lock.packages).find((entry) => entry.version === version && entry.resolved === `https://registry.npmjs.org/pnpm/-/pnpm-${version}.tgz`)
+          const actual = `${algorithm}-${Buffer.from(expected, 'hex').toString('base64')}`
+          if (!entry || entry.integrity !== actual) throw new Error('Installed pnpm does not match packageManager integrity')
+        }
+        NODE
+        npm rebuild --prefix "$bootstrap_dir" pnpm
+        actual_version="$("$bootstrap_dir/node_modules/.bin/pnpm" --version)"
+        test "$actual_version" = "$pnpm_version"
+        printf '%s\n' "$bootstrap_dir/node_modules/.bin" >> "$GITHUB_PATH"

@@ -345,7 +345,6 @@ it('materializes legacy Codex into the system home and pins a verified selected 
   ).rejects.toThrow('EACCES selected account')
 })
 
-// A 2.x terminal started as `opencode` reports `opencode`; either OpenCode chat opens its conversation.
 it.each([
   ['opencode', true],
   ['opencode2', true],

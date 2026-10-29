@@ -7,10 +7,7 @@ import {
 } from '@/components/github/review-state-presentation'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 
-/**
- * Whether a closed ISSUE reads as failure or as neutral completion. PR state tone
- * never varies — only surfaces disagree on what a closed issue means.
- */
+/** Surfaces may treat closed issues as destructive or neutral; PR state tones stay fixed. */
 export type ClosedIssueTone = 'destructive' | 'neutral'
 
 export function getWorkItemStateTone(item: GitHubWorkItem, closedIssue: ClosedIssueTone): string {

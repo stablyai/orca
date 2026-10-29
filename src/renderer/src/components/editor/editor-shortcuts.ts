@@ -64,8 +64,7 @@ export function installMonacoDiffChangeNavigationShortcut(
     if (!direction) {
       return
     }
-    // Why: capture-phase preventDefault/stopPropagation beats Monaco's built-in
-    // F7 accessible-review pane, like the find shortcut does for Cmd+F.
+    // Capture before Monaco opens its built-in F7 accessible-review pane.
     event.preventDefault()
     event.stopPropagation()
     // Consume matched repeats but navigate once per press (matches find shortcut).
@@ -87,14 +86,11 @@ export function installEditorAddReviewNoteShortcut(
     if (!editorShortcutMatches('editor.addReviewNote', event)) {
       return
     }
-    // Why: ignore OS key-repeat so a held chord cannot thrash open/remount.
-    // Open drafts are consumed by installOpenDraftAddReviewNoteGuard instead.
+    // Ignore held chords; mounted drafts consume repeats through installOpenDraftAddReviewNoteGuard.
     if (event.repeat) {
       return
     }
-    // Why: only consume the chord when a composer actually opens; on files
-    // where review notes can never apply the key must stay available to
-    // whatever else the user bound it to.
+    // Leave the chord available to other bindings when this surface cannot open a composer.
     if (onAddReviewNote()) {
       event.preventDefault()
       event.stopPropagation()
@@ -105,15 +101,7 @@ export function installEditorAddReviewNoteShortcut(
   return () => target.removeEventListener('keydown', handleKeyDown, true)
 }
 
-/**
- * While a review-note/diff-comment draft composer is mounted, consume the
- * bindable add-review-note chord (including OS key-repeat) so a second press
- * cannot remount the composer or leak into other handlers (product B).
- *
- * Scoped to the composer's own subtree (which contains the focused textarea)
- * rather than `window` so a draft open in one editor pane never swallows the
- * chord typed into a different pane or surface.
- */
+/** Consume the chord and repeats within the composer subtree to prevent remounts without swallowing another pane’s shortcuts. */
 export function installOpenDraftAddReviewNoteGuard(target: HTMLElement): () => void {
   const handleKeyDown = (event: KeyboardEvent): void => {
     if (!editorShortcutMatches('editor.addReviewNote', event)) {

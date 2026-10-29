@@ -1,4 +1,5 @@
 import { isFolderRepo } from '../../../../shared/repo-kind'
+import { translate } from '@/i18n/i18n'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 
@@ -22,70 +23,126 @@ export function countFolderWorkspaceDeletes(
   return worktrees.filter((item) => isFolderWorkspaceDelete(repoMap, item)).length
 }
 
+type DeleteRemovalScope = 'folder' | 'mixed' | 'git'
+
+function getDeleteRemovalScope(deleteCount: number, folderDeleteCount: number): DeleteRemovalScope {
+  if (deleteCount > 0 && folderDeleteCount === deleteCount) {
+    return 'folder'
+  }
+  return folderDeleteCount > 0 && folderDeleteCount < deleteCount ? 'mixed' : 'git'
+}
+
+// Templates use <target/> (filled with the workspace name) or <target>…</target> and <descendants>…</descendants>.
+function getBatchDeleteDescription(count: number, scope: DeleteRemovalScope): string {
+  if (scope === 'folder') {
+    return translate(
+      'auto.components.sidebar.DeleteWorktreeDialog.removeBatchFolder',
+      'Remove <target>{{count}} workspaces</target> from Orca. Project folders on disk will not be deleted.',
+      {
+        count,
+        defaultValue_one:
+          'Remove <target>{{count}} workspace</target> from Orca. Project folders on disk will not be deleted.'
+      }
+    )
+  }
+  if (scope === 'mixed') {
+    return translate(
+      'auto.components.sidebar.DeleteWorktreeDialog.removeBatchMixed',
+      'Remove <target>{{count}} workspaces</target> from Orca. Git worktrees will also be removed from git and disk; folder workspaces will only remove the Orca workspace entry.',
+      {
+        count,
+        defaultValue_one:
+          'Remove <target>{{count}} workspace</target> from Orca. Git worktrees will also be removed from git and disk; folder workspaces will only remove the Orca workspace entry.'
+      }
+    )
+  }
+  return translate(
+    'auto.components.sidebar.DeleteWorktreeDialog.removeBatchGit',
+    'Remove <target>{{count}} workspaces</target> from git and delete their workspace folders.',
+    {
+      count,
+      defaultValue_one:
+        'Remove <target>{{count}} workspace</target> from git and delete its workspace folder.'
+    }
+  )
+}
+
 export function getDeleteWorktreeDialogCopy(args: {
   isBatchDelete: boolean
-  worktree: Pick<Worktree, 'displayName'> | null
   worktreeCount: number
   folderWorkspaceDeleteCount: number
   isFolderWorkspaceDelete: boolean
 }): {
-  targetLabel: string | undefined
   targetClassName: string
-  descriptionSuffix: string
+  description: string
   mainWorktreeBlocker: string
 } {
-  const allFolderWorkspaceDeletes =
-    args.isBatchDelete &&
-    args.worktreeCount > 0 &&
-    args.folderWorkspaceDeleteCount === args.worktreeCount
-  const mixedFolderWorkspaceDeletes =
-    args.isBatchDelete &&
-    args.folderWorkspaceDeleteCount > 0 &&
-    args.folderWorkspaceDeleteCount < args.worktreeCount
   return {
-    targetLabel: args.isBatchDelete
-      ? `${args.worktreeCount} workspaces`
-      : args.worktree?.displayName,
     targetClassName: args.isBatchDelete
       ? 'font-medium text-foreground'
       : 'break-all font-medium text-foreground',
-    descriptionSuffix: args.isBatchDelete
-      ? allFolderWorkspaceDeletes
-        ? 'from Orca. Project folders on disk will not be deleted.'
-        : mixedFolderWorkspaceDeletes
-          ? 'from Orca. Git worktrees will also be removed from git and disk; folder workspaces will only remove the Orca workspace entry.'
-          : 'from git and delete their workspace folders.'
+    description: args.isBatchDelete
+      ? getBatchDeleteDescription(
+          args.worktreeCount,
+          getDeleteRemovalScope(args.worktreeCount, args.folderWorkspaceDeleteCount)
+        )
       : args.isFolderWorkspaceDelete
-        ? 'from Orca. The project folder on disk will not be deleted.'
-        : 'from git and delete its workspace folder.',
+        ? translate(
+            'auto.components.sidebar.DeleteWorktreeDialog.removeSingleFolder',
+            'Remove <target/> from Orca. The project folder on disk will not be deleted.'
+          )
+        : translate(
+            'auto.components.sidebar.DeleteWorktreeDialog.removeSingleGit',
+            'Remove <target/> from git and delete its workspace folder.'
+          ),
     mainWorktreeBlocker: args.isFolderWorkspaceDelete
-      ? 'Remove the folder project instead of deleting this workspace.'
-      : 'Git does not allow removing the main worktree.'
+      ? translate(
+          'auto.components.sidebar.DeleteWorktreeDialog.removeFolderProjectInstead',
+          'Remove the folder project instead of deleting this workspace.'
+        )
+      : translate(
+          'auto.components.sidebar.DeleteWorktreeDialog.gitBlocksMainWorktree',
+          'Git does not allow removing the main worktree.'
+        )
   }
 }
 
-export function getDeleteWorktreeLineageDialogCopy(args: {
+export function getDeleteWorktreeLineageDialogDescription(args: {
   childWorkspaceCount: number
   deleteTargetCount: number
   folderWorkspaceDeleteCount: number
-}): {
-  childTargetLabel: string
-  descriptionSuffix: string
-} {
-  const allFolderWorkspaceDeletes =
-    args.deleteTargetCount > 0 && args.folderWorkspaceDeleteCount === args.deleteTargetCount
-  const mixedFolderWorkspaceDeletes =
-    args.folderWorkspaceDeleteCount > 0 && args.folderWorkspaceDeleteCount < args.deleteTargetCount
-
-  return {
-    childTargetLabel:
-      args.childWorkspaceCount === 1
-        ? '1 child workspace'
-        : `${args.childWorkspaceCount} child workspaces`,
-    descriptionSuffix: allFolderWorkspaceDeletes
-      ? 'from Orca. Project folders on disk will not be deleted.'
-      : mixedFolderWorkspaceDeletes
-        ? 'from Orca. Git worktrees will also be removed from git and disk; folder workspaces will only remove the Orca workspace entry.'
-        : 'from git and delete their workspace folders.'
+}): string {
+  const count = args.childWorkspaceCount
+  const scope = getDeleteRemovalScope(args.deleteTargetCount, args.folderWorkspaceDeleteCount)
+  if (scope === 'folder') {
+    return translate(
+      'auto.components.sidebar.DeleteWorktreeDialog.removeWithChildrenFolder',
+      'Remove <target/> and <descendants>{{count}} child workspaces</descendants> from Orca. Project folders on disk will not be deleted.',
+      {
+        count,
+        defaultValue_one:
+          'Remove <target/> and <descendants>{{count}} child workspace</descendants> from Orca. Project folders on disk will not be deleted.'
+      }
+    )
   }
+  if (scope === 'mixed') {
+    return translate(
+      'auto.components.sidebar.DeleteWorktreeDialog.removeWithChildrenMixed',
+      'Remove <target/> and <descendants>{{count}} child workspaces</descendants> from Orca. Git worktrees will also be removed from git and disk; folder workspaces will only remove the Orca workspace entry.',
+      {
+        count,
+        defaultValue_one:
+          'Remove <target/> and <descendants>{{count}} child workspace</descendants> from Orca. Git worktrees will also be removed from git and disk; folder workspaces will only remove the Orca workspace entry.'
+      }
+    )
+  }
+  return translate(
+    'auto.components.sidebar.DeleteWorktreeDialog.removeWithChildrenGit',
+    'Remove <target/> and <descendants>{{count}} child workspaces</descendants> from git and delete their workspace folders.',
+    {
+      count,
+      defaultValue_one:
+        'Remove <target/> and <descendants>{{count}} child workspace</descendants> from git and delete their workspace folders.'
+    }
+  )
 }

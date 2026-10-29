@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { mapIssue, pickSearchIssue } from './issue-context-raw'
+import { mapIssue, pickSearchIssue } from './issue-context/raw'
 
 describe('Linear search issue summaries', () => {
   it('carries priorityLabel from the numeric priority through pickSearchIssue', () => {

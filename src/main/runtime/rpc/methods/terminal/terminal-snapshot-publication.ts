@@ -20,10 +20,8 @@ import type { SerializedSnapshot, SnapshotFrameOptions } from './terminal-stream
 
 const REQUESTED_SNAPSHOT_BYTE_BUDGET = 2 * 1024 * 1024
 
-/** E2E-only: reproduce a host that retains nothing for a pty — the state a client cannot tell
- *  apart from a host that is merely slow, and the one a parked pane must survive. Mirrors
- *  ORCA_E2E_FORCE_REMOTE_TERMINAL_INITIAL_SNAPSHOT_TRUNCATED. */
-function isTerminalSnapshotForcedUnavailable(): boolean {
+/** E2E-only: simulate unavailable retained state, which a parked client cannot distinguish from slow hydration. */
+export function isTerminalSnapshotForcedUnavailable(): boolean {
   return process.env.ORCA_E2E_FORCE_REMOTE_TERMINAL_SNAPSHOT_UNAVAILABLE === '1'
 }
 
@@ -89,7 +87,6 @@ export function sendSnapshotFrames(
   return { bytes, chunks, published }
 }
 
-/** The publication fields a snapshot itself decides, which the budget reads off it. */
 type SnapshotVariableMeta = Pick<
   NonNullable<SerializedSnapshot>,
   | 'cwd'
@@ -102,22 +99,12 @@ type SnapshotVariableMeta = Pick<
   | 'terminalOwner'
 >
 
-/** Narrowed to the one method this reads, so a caller can hand it a buffer source and nothing else. */
 type TerminalBufferSource = Pick<OrcaRuntimeService, 'serializeTerminalBuffer'>
 
-/**
- * What a subscriber with a frame cap told this host it can carry, and what it will publish with.
- *
- * The publication fields travel with the budget because the payload is measured by building it,
- * and it cannot be built from the snapshot alone: `displayMode`, `reason` and `requestId` are the
- * caller's, and a measure that left them out is exactly the sum that shipped a frame over the cap.
- */
+/** Carry publication fields with the cap: measuring snapshot text alone omits caller-owned metadata. */
 export type MobileSnapshotByteBudget = {
-  /** The bytes one payload may occupy on this subscriber's transport. */
   bytes: number
-  /** The stream this will be published on, which the client writes into the payload. */
   streamId: number
-  /** The publication's own fields, as the caller will pass them to `sendSnapshotFrames`. */
   frame: Omit<
     SnapshotFrameOptions,
     | 'data'
@@ -139,33 +126,15 @@ const WIDEST_BOOLEAN = false
 
 type MobileDisplayMode = ReturnType<OrcaRuntimeService['getMobileDisplayMode']>
 
-/** Every mode the runtime can answer; the type below is what keeps this list complete. */
 const DISPLAY_MODES = ['auto', 'desktop'] as const satisfies readonly MobileDisplayMode[]
 
-/** Empty only while every mode is listed above, which is what makes the constant compile. */
 type UnlistedDisplayMode = Exclude<MobileDisplayMode, (typeof DISPLAY_MODES)[number]>
 
-/**
- * The longest mode rather than the one the caller handed over.
- *
- * The subscribe flow re-reads the mode from the runtime between serializing the snapshot and
- * sending the frame, so no caller can tell the budget which one the publication will carry. Taken
- * at its widest for the same reason `seq` and `requestId` are: a mode measured at `auto` and
- * published as `desktop` is three bytes the approving number never counted. Resolving to `never`
- * when a mode is added is the point — a new one has to be weighed here, not discovered on a phone.
- */
+/** Mode is re-read before publication, so budget its widest value; the never guard forces new modes into this list. */
 const WIDEST_DISPLAY_MODE: [UnlistedDisplayMode] extends [never] ? string : never =
   DISPLAY_MODES.reduce((widest, mode) => (mode.length > widest.length ? mode : widest))
 
-/**
- * The publication this snapshot would produce, at its widest where the answer is not yet known.
- *
- * A bound rather than a prediction, and the direction matters: `truncated` is decided after this
- * runs and `seq` and `requestId` may be, so each is taken at the widest `JSON.stringify` can write
- * rather than left out. Leaving one out is what under-measures, because an absent field costs
- * nothing here and its real value costs bytes at publish — and forcing `seq` to a number also opens
- * the three conditional fields it gates, which are counted for the same reason.
- */
+/** Unknown publication fields need their widest JSON values; numeric seq also enables conditional metadata that must be counted. */
 function budgetedPublication(
   data: string,
   serialized: SnapshotVariableMeta & { cols: number; rows: number },
@@ -192,15 +161,7 @@ function budgetedPublication(
   }
 }
 
-/**
- * Whether this snapshot is over whichever budget the subscriber is owed.
- *
- * Two budgets, not one scaled: a subscriber with a frame cap sends one and is measured on the
- * payload it will receive, built rather than summed, and everyone else keeps the raw-text budget
- * this host has always applied. Reading the payload size for a socket subscriber would shrink a
- * screen that was never at risk, and reading the raw size for a bridged one is the defect this
- * parameter exists for.
- */
+/** Capped clients need whole-payload JSON measurement; uncapped older/socket clients retain the raw-text budget. */
 function overMobileSnapshotBudget(
   data: string,
   serialized: SnapshotVariableMeta & { cols: number; rows: number },
@@ -214,15 +175,8 @@ function overMobileSnapshotBudget(
       ) > budget.bytes
 }
 
-/**
- * The candidate a trimming loop publishes once it has nothing left to trim.
- *
- * Zero scrollback still carries the live rows, so the last candidate can be over a small cap. A
- * budgeted subscriber gets that frame with its text emptied rather than one byte over (ruling 15):
- * an open stream repaints on the next output, an `overflow` close does not reopen. A subscriber on
- * the raw rule keeps the screen it has always been sent. Below the metadata alone there is nothing
- * further to give up, and the frame goes out empty and still over.
- */
+/** If zero scrollback still exceeds a supplied cap, empty text so later output can repaint; metadata may still exceed the cap.
+ * Unbudgeted clients retain the oversized screen fallback. */
 function publishedCandidate<T extends SnapshotVariableMeta & { cols: number; rows: number }>(
   serialized: T,
   data: string,
@@ -241,13 +195,23 @@ function publishedCandidate<T extends SnapshotVariableMeta & { cols: number; row
 export async function serializeBudgetedMobileSnapshot(
   runtime: TerminalBufferSource,
   ptyId: string,
-  snapshotByteBudget?: MobileSnapshotByteBudget
+  snapshotByteBudget?: MobileSnapshotByteBudget,
+  /** Rows to try first; only a WSL-moved pane asks for more than the default. */
+  firstRows = MOBILE_SUBSCRIBE_SCROLLBACK_ROWS
 ): Promise<SerializedSnapshot> {
   if (isTerminalSnapshotForcedUnavailable()) {
     return null
   }
-  // Why desktop shares the ladder: a screen-only image left a remounted or reconnected pane with no history (#20158).
-  const candidates = [MOBILE_SUBSCRIBE_SCROLLBACK_ROWS, 500, 250, 100, 25, 0]
+  // Include history for desktop too; screen-only snapshots lost it on remount/reconnect (#20158).
+  const candidates = [
+    ...(firstRows > MOBILE_SUBSCRIBE_SCROLLBACK_ROWS ? [firstRows, 2000] : []),
+    MOBILE_SUBSCRIBE_SCROLLBACK_ROWS,
+    500,
+    250,
+    100,
+    25,
+    0
+  ]
   for (const rows of candidates) {
     const serialized = await runtime.serializeTerminalBuffer(ptyId, { scrollbackRows: rows })
     if (!serialized) {
@@ -262,7 +226,6 @@ export async function serializeBudgetedMobileSnapshot(
   return null
 }
 
-/** Narrowed to what the retry loop reads, so a stable-snapshot case needs no whole runtime. */
 type RendererBufferSource = Pick<
   OrcaRuntimeService,
   'getPtyOutputSequence' | 'serializeRendererTerminalBuffer'
@@ -276,7 +239,7 @@ export async function serializeStableMobileRendererSnapshot(
   const candidates = [MOBILE_SUBSCRIBE_SCROLLBACK_ROWS, 500, 250, 100, 25, 0]
   let candidateIndex = 0
   for (let attempt = 0; attempt < candidates.length; attempt += 1) {
-    // Why: advance toward zero scrollback each retry so the final attempt always has a bounded payload.
+    // Advance toward zero scrollback even on retries so the final attempt reaches the smallest candidate.
     candidateIndex = Math.max(candidateIndex, attempt)
     const rows = candidates[candidateIndex]
     const outputSequenceBefore = runtime.getPtyOutputSequence(ptyId)
@@ -305,7 +268,7 @@ export async function serializeStableMobileRendererSnapshot(
   return null
 }
 
-// Why: mobile xterm can't rewrap the HARD newlines baked into a restored snapshot, so a real reflow re-serializes and replays the FULL buffer at the new cols.
+// Restored hard newlines cannot rewrap in mobile xterm; reserialize the full buffer at the new columns.
 export async function sendMobileResizeRestream(
   runtime: OrcaRuntimeService,
   ptyId: string,
@@ -314,7 +277,7 @@ export async function sendMobileResizeRestream(
   shouldSend?: () => boolean,
   snapshotByteBudget?: MobileSnapshotByteBudget
 ): Promise<boolean> {
-  // Why: only a true geometry reflow rewraps scrollback; a dimensionless mode-change would re-send the whole buffer for nothing.
+  // Only geometry reflow rewraps history; mode-only changes need no replay.
   if (event.reason !== 'apply-layout' || runtime.isTerminalAlternateScreen(ptyId)) {
     return false
   }
@@ -342,19 +305,8 @@ export async function sendMobileResizeRestream(
   return true
 }
 
-/**
- * The budget a subscription hands the serializer, or nothing when the subscriber named none.
- *
- * Built at each publication site rather than once per subscription, because the fields it carries
- * are that publication's: an initial scrollback and a resize re-stream write different `kind`s and
- * `reason`s, and a budget measured against the wrong one is the sum this replaced.
- *
- * The rule the callers follow, because writing the fields out twice is how they drifted the first
- * time: the `frame` handed here is the same object the publication spreads, never a second literal
- * that agrees with it today. Anything the caller cannot know yet stays out of it and is taken at
- * its widest by the measure — `seq`, `requestId`, both truncation flags, and `displayMode`, which
- * the subscribe flow re-reads after the snapshot is serialized.
- */
+/** Pass the same frame object to budget and publication at each send site to prevent kind/reason drift.
+ * Unknown seq, requestId, truncation flags and re-read displayMode are budgeted at their widest values. */
 export function mobileSnapshotByteBudget(
   bytes: number | undefined,
   streamId: number,

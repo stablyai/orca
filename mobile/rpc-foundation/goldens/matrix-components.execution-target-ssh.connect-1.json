@@ -107,6 +107,18 @@
       "ordinal": 6,
       "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"ssh.connect\",\"params\":{\"targetId\":\"ssh-1\"}}"
     },
+    "1212a28487d8": {
+      "detected": ["codex"],
+      "gate": {
+        "connectInProgress": false,
+        "error": {
+          "$rpc": "null"
+        },
+        "needsDesktopServerRecovery": false,
+        "requiresConnection": false,
+        "status": "connected"
+      }
+    },
     "1a1c006a53b2": {
       "name": "ssh.connect#1",
       "ordinal": 5,
@@ -141,35 +153,38 @@
         }
       }
     },
-    "2d47b46a5872": {
-      "detected": {
-        "$rpc": "null"
-      },
-      "gate": {
-        "connectInProgress": false,
-        "error": "Unknown method",
-        "requiresConnection": true,
-        "status": "error"
-      }
-    },
-    "3828494e64df": {
+    "2736bf269de9": {
       "detected": {
         "$rpc": "null"
       },
       "gate": {
         "connectInProgress": false,
         "error": "",
+        "needsDesktopServerRecovery": false,
         "requiresConnection": true,
         "status": "error"
       }
     },
-    "467f1a0954f0": {
+    "31cf96607dc7": {
       "detected": {
         "$rpc": "null"
       },
       "gate": {
         "connectInProgress": false,
         "error": "transport failure",
+        "needsDesktopServerRecovery": false,
+        "requiresConnection": true,
+        "status": "error"
+      }
+    },
+    "362b036cb4aa": {
+      "detected": {
+        "$rpc": "null"
+      },
+      "gate": {
+        "connectInProgress": false,
+        "error": "Unknown method",
+        "needsDesktopServerRecovery": false,
         "requiresConnection": true,
         "status": "error"
       }
@@ -214,15 +229,16 @@
       "ordinal": 8,
       "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"preflight.detectRemoteAgents\",\"params\":{\"connectionId\":\"ssh-1\"}}"
     },
-    "4e2e9a890ced": {
-      "detected": ["codex"],
+    "53cfc4ee0cf6": {
+      "detected": {
+        "$rpc": "null"
+      },
       "gate": {
         "connectInProgress": false,
-        "error": {
-          "$rpc": "null"
-        },
-        "requiresConnection": false,
-        "status": "connected"
+        "error": "outer refused",
+        "needsDesktopServerRecovery": false,
+        "requiresConnection": true,
+        "status": "error"
       }
     },
     "5bab1ad3009a": {
@@ -331,17 +347,6 @@
       "name": "preflight.detectRemoteAgents#1",
       "ordinal": 4,
       "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"preflight.detectRemoteAgents\",\"params\":{\"connectionId\":\"ssh-1\"}}"
-    },
-    "990a404630b4": {
-      "detected": {
-        "$rpc": "null"
-      },
-      "gate": {
-        "connectInProgress": false,
-        "error": "outer refused",
-        "requiresConnection": true,
-        "status": "error"
-      }
     },
     "9eb936085325": {
       "name": "ssh.connect#1",
@@ -550,28 +555,14 @@
         }
       }
     },
-    "d23b91bd7660": {
-      "detected": {
-        "$rpc": "null"
-      },
-      "gate": {
-        "connectInProgress": false,
-        "error": {
-          "$rpc": "null"
-        },
-        "requiresConnection": true,
-        "status": {
-          "$rpc": "null"
-        }
-      }
-    },
-    "eaf7ed4ebea4": {
+    "c2a9e7754a2e": {
       "detected": {
         "$rpc": "null"
       },
       "gate": {
         "connectInProgress": false,
         "error": "The host sent a reply this app could not read (ssh.connect)",
+        "needsDesktopServerRecovery": false,
         "requiresConnection": true,
         "status": "error"
       }
@@ -618,6 +609,22 @@
           }
         }
       }
+    },
+    "fe6c500525e6": {
+      "detected": {
+        "$rpc": "null"
+      },
+      "gate": {
+        "connectInProgress": false,
+        "error": {
+          "$rpc": "null"
+        },
+        "needsDesktopServerRecovery": false,
+        "requiresConnection": true,
+        "status": {
+          "$rpc": "null"
+        }
+      }
     }
   },
   "recording": {
@@ -631,7 +638,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "d23b91bd7660",
+          "state": "fe6c500525e6",
           "effects": []
         }
       },
@@ -644,7 +651,7 @@
             "mount": "eb79a9b3682a",
             "connect": "eb79a9b3682a"
           },
-          "state": "4e2e9a890ced",
+          "state": "1212a28487d8",
           "effects": []
         }
       },
@@ -657,7 +664,7 @@
             "mount": "eb79a9b3682a",
             "connect": "eb79a9b3682a"
           },
-          "state": "eaf7ed4ebea4",
+          "state": "c2a9e7754a2e",
           "effects": []
         }
       },
@@ -670,7 +677,7 @@
             "mount": "eb79a9b3682a",
             "connect": "eb79a9b3682a"
           },
-          "state": "eaf7ed4ebea4",
+          "state": "c2a9e7754a2e",
           "effects": []
         }
       },
@@ -683,7 +690,7 @@
             "mount": "eb79a9b3682a",
             "connect": "eb79a9b3682a"
           },
-          "state": "4e2e9a890ced",
+          "state": "1212a28487d8",
           "effects": []
         }
       },
@@ -696,7 +703,7 @@
             "mount": "eb79a9b3682a",
             "connect": "eb79a9b3682a"
           },
-          "state": "4e2e9a890ced",
+          "state": "1212a28487d8",
           "effects": []
         }
       },
@@ -709,7 +716,7 @@
             "mount": "eb79a9b3682a",
             "connect": "eb79a9b3682a"
           },
-          "state": "4e2e9a890ced",
+          "state": "1212a28487d8",
           "effects": []
         }
       },
@@ -722,7 +729,7 @@
             "mount": "eb79a9b3682a",
             "connect": "eb79a9b3682a"
           },
-          "state": "990a404630b4",
+          "state": "53cfc4ee0cf6",
           "effects": []
         }
       },
@@ -735,7 +742,7 @@
             "mount": "eb79a9b3682a",
             "connect": "eb79a9b3682a"
           },
-          "state": "3828494e64df",
+          "state": "2736bf269de9",
           "effects": []
         }
       },
@@ -748,7 +755,7 @@
             "mount": "eb79a9b3682a",
             "connect": "eb79a9b3682a"
           },
-          "state": "2d47b46a5872",
+          "state": "362b036cb4aa",
           "effects": []
         }
       },
@@ -761,7 +768,7 @@
             "mount": "eb79a9b3682a",
             "connect": "eb79a9b3682a"
           },
-          "state": "467f1a0954f0",
+          "state": "31cf96607dc7",
           "effects": []
         }
       },
@@ -774,7 +781,7 @@
             "mount": "eb79a9b3682a",
             "connect": "eb79a9b3682a"
           },
-          "state": "3828494e64df",
+          "state": "2736bf269de9",
           "effects": []
         }
       }

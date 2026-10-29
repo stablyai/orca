@@ -1,4 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
+import { committingSpawn } from '../bind-first-pane.test-fixture'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import {
   OrcaRuntimeService,
   appendBrowserTabOrder,
@@ -94,7 +96,7 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('keeps a headless tab-group split alive when a new tab is created', async () => {
-    // Regression: drag-to-split-group was client-only and the headless host rejected it, coalescing groups on new-tab; the host must model + persist the split.
+    // Persist headless group splits so later creates cannot collapse client-only grouping.
     let ptyCounter = 0
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({
@@ -123,18 +125,15 @@ describe('OrcaRuntimeService', () => {
     expect(afterSplit.tabGroups).toHaveLength(2)
     expect(afterSplit.tabGroupLayout).toMatchObject({ type: 'split', direction: 'horizontal' })
 
-    // The actual bug: creating a new tab must NOT collapse the split.
     await runtime.createTerminal(`id:${TEST_WORKTREE_ID}`, { activate: true })
 
     const afterNewTab = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
     expect(afterNewTab.tabGroups).toHaveLength(2)
     expect(afterNewTab.tabGroupLayout).toMatchObject({ type: 'split' })
-    // The split-off group keeps exactly its one tab; the new tab joins the other.
     const splitOffGroup = afterNewTab.tabGroups!.find((group) => group.id !== sourceGroupId)!
     expect(splitOffGroup.tabOrder).toEqual([secondHostTabId])
     expect(first.tabId).toBeTruthy()
 
-    // Regression (#2): reordering one group must not delete the other group.
     await runtime.moveMobileSessionTab(`id:${TEST_WORKTREE_ID}`, {
       kind: 'reorder',
       tabId: secondHostTabId,
@@ -146,7 +145,7 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('restores a persisted multi-group split on a cold headless rehydrate', async () => {
-    // Regression: hydrate must read back session.tabGroups/tabGroupLayouts, or a server restart coalesces the split into one group.
+    // Cold hydration must restore persisted tabGroups/layouts or restart collapses splits.
     const session = makeWorkspaceSessionWithHeadlessTerminal({
       tabsByWorktree: {
         [TEST_WORKTREE_ID]: [
@@ -208,7 +207,6 @@ describe('OrcaRuntimeService', () => {
     const rehydrated = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
     expect(rehydrated.tabGroups).toHaveLength(2)
     expect(rehydrated.tabGroupLayout).toMatchObject({ type: 'split', direction: 'horizontal' })
-    // Each persisted group keeps its own tab — no coalescing.
     const left = rehydrated.tabGroups!.find((g) => g.id === 'group-left')!
     const right = rehydrated.tabGroups!.find((g) => g.id === 'group-right')!
     expect(left.tabOrder).toEqual(['host-tab'])
@@ -225,7 +223,6 @@ describe('OrcaRuntimeService', () => {
       kill: () => true,
       getForegroundProcess: async () => null
     })
-    // Bind a live pty to the persisted 'host-tab' so rename resolves by handle.
     const created = await runtime.createTerminal(`id:${TEST_WORKTREE_ID}`, {
       tabId: 'host-tab',
       leafId: HEADLESS_LEAF_ID,
@@ -236,13 +233,11 @@ describe('OrcaRuntimeService', () => {
       title: 'My Title'
     })
 
-    // customTitle must be persisted to the workspace session (not just live pty).
     const persistedTab = getSession().tabsByWorktree[TEST_WORKTREE_ID]!.find(
       (tab) => tab.id === 'host-tab'
     )!
     expect(persistedTab.customTitle).toBe('My Title')
 
-    // A cold rehydrate keeps the renamed title.
     runtime['mobileSessionTabsByWorktree'].delete(TEST_WORKTREE_ID)
     runtime['hydrateHeadlessMobileSessionTabsFromWorkspaceSession'](TEST_WORKTREE_ID)
     const rehydrated = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
@@ -273,7 +268,6 @@ describe('OrcaRuntimeService', () => {
     const persisted = getSession().terminalLayoutsByTabId['host-tab']!
     expect(persisted.root).toMatchObject({ type: 'split', direction: 'vertical', ratio: 0.7 })
     expect(persisted.titlesByLeafId).toMatchObject({ [HEADLESS_LEAF_ID]: 'Pane A' })
-    // Host-owned pty bindings must be preserved through the structural update.
     expect(persisted.ptyIdsByLeafId).toMatchObject({ [HEADLESS_LEAF_ID]: 'persisted-pty' })
 
     runtime['mobileSessionTabsByWorktree'].delete(TEST_WORKTREE_ID)
@@ -345,7 +339,11 @@ describe('OrcaRuntimeService', () => {
     })
     const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(session)
     const runtime = new OrcaRuntimeService(runtimeStore as never)
-    runtime.setOffscreenBrowserBackend({ createTab: vi.fn(), closeTab: vi.fn() })
+    runtime.setOffscreenBrowserBackend({
+      createTab: vi.fn(),
+      closeTab: vi.fn(),
+      ownsTab: () => true
+    })
     runtime.setAgentBrowserBridge({
       tabList: vi.fn(() => ({
         tabs: [
@@ -435,7 +433,7 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('still persists tab props in serve mode after syncWindowGraph(0) (gate does not fire)', async () => {
-    // Why: serve's syncWindowGraph(0,...) sets authoritativeWindowId=0, but BrowserWindow.fromId(0) is null, so the renderer-authoritative gate must not fire.
+    // serve publishes window id 0 without BrowserWindow; renderer-authority gating must not fire.
     const session = makeWorkspaceSessionWithHeadlessTerminal()
     const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(session)
     const runtime = new OrcaRuntimeService(runtimeStore as never)
@@ -466,7 +464,6 @@ describe('OrcaRuntimeService', () => {
     const sourceGroupId = before.tabGroups![0]!.id
     const secondHostTabId = second.tabId!
 
-    // Split into 2 groups, then move the tab back into the source group.
     await runtime.moveMobileSessionTab(`id:${TEST_WORKTREE_ID}`, {
       kind: 'split',
       tabId: secondHostTabId,
@@ -485,29 +482,29 @@ describe('OrcaRuntimeService', () => {
     ).resolves.toEqual({ moved: true })
 
     const merged = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
-    // Moving the only tab back collapses the split to a single group.
     expect(merged.tabGroups).toHaveLength(1)
     expect(merged.tabGroups![0]!.tabOrder).toContain(secondHostTabId)
   })
 
   it('creates a new headless terminal in the targeted split group, not the active one', async () => {
-    // Regression: a per-group "+" passes targetGroupId, but the headless create ignored it and funneled every new tab into the active group.
+    // Per-group + must honor targetGroupId instead of funneling creates into the active group.
     let ptyCounter = 0
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({
-      spawn: vi.fn(async () => ({ id: `target-group-pty-${++ptyCounter}` })),
+      spawn: vi.fn(
+        committingSpawn(runtime, async () => ({ id: `target-group-pty-${++ptyCounter}` }))
+      ),
       write: () => true,
       kill: () => true,
       getForegroundProcess: async () => null
     })
-    // Why: createMobileSessionTerminal asserts the graph is ready; serve marks it ready via syncWindowGraph(0,...) (windowId 0 ≠ a real renderer).
+    // Mobile create requires graph readiness; serve marks it via window id 0 without a renderer.
     runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
     await runtime.createTerminal(`id:${TEST_WORKTREE_ID}`, { activate: true })
     const second = await runtime.createTerminal(`id:${TEST_WORKTREE_ID}`, { activate: true })
     const before = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
     const leftGroupId = before.tabGroups![0]!.id
 
-    // Split the 2nd tab into a new right group; the new group becomes active.
     await runtime.moveMobileSessionTab(`id:${TEST_WORKTREE_ID}`, {
       kind: 'split',
       tabId: second.tabId!,
@@ -518,7 +515,6 @@ describe('OrcaRuntimeService', () => {
     expect(split.tabGroups).toHaveLength(2)
     const rightGroupId = split.tabGroups!.find((g) => g.id !== leftGroupId)!.id
 
-    // Create a terminal targeting the LEFT (now non-active) group.
     await runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`, {
       targetGroupId: leftGroupId,
       activate: true
@@ -527,8 +523,8 @@ describe('OrcaRuntimeService', () => {
     const after = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
     const left = after.tabGroups!.find((g) => g.id === leftGroupId)!
     const right = after.tabGroups!.find((g) => g.id === rightGroupId)!
-    expect(left.tabOrder).toHaveLength(2) // original + the targeted create
-    expect(right.tabOrder).toHaveLength(1) // unchanged
+    expect(left.tabOrder).toHaveLength(2)
+    expect(right.tabOrder).toHaveLength(1)
   })
 
   it('appendBrowserTabOrder keeps a browser in its group across rebuilds (durability)', () => {
@@ -537,7 +533,6 @@ describe('OrcaRuntimeService', () => {
       { id: 'right', activeTabId: 'web-terminal-b', tabOrder: ['web-terminal-b'] }
     ]
 
-    // First create: a new browser targeted at the RIGHT group lands there.
     const afterCreate = appendBrowserTabOrder(groups, ['browser-1'], {
       tabId: 'browser-1',
       groupId: 'right'
@@ -545,7 +540,7 @@ describe('OrcaRuntimeService', () => {
     expect(afterCreate.find((g) => g.id === 'right')!.tabOrder).toContain('browser-1')
     expect(afterCreate.find((g) => g.id === 'left')!.tabOrder).not.toContain('browser-1')
 
-    // Rebuild: the terminal distributor drops the browser id, so appendBrowserTabOrder must restore it to its prior group, not group[0].
+    // Terminal-only rebuild drops browser ids; restore each to its prior group.
     const rebuiltGroups = [
       { id: 'left', activeTabId: 'web-terminal-a', tabOrder: ['web-terminal-a'] },
       { id: 'right', activeTabId: 'web-terminal-b', tabOrder: ['web-terminal-b'] }
@@ -653,7 +648,8 @@ describe('OrcaRuntimeService', () => {
       }))
     })
 
-    expect(getWorkspaceSession).toHaveBeenCalledTimes(1)
+    // Main-owned panes add graph/fence reads without write-notice caching; count per sync, never per workspace.
+    expect(getWorkspaceSession).toHaveBeenCalledTimes(ORCA_LAYOUT_OWNER_IS_MAIN ? 3 : 1)
     expect(runtime.getStatus().graphStatus).toBe('ready')
   })
 
@@ -674,7 +670,8 @@ describe('OrcaRuntimeService', () => {
 
     runtime.syncWindowGraph(1, { tabs: [], leaves: [], mobileSessionTabs: [] })
 
-    expect(getWorkspaceSession).toHaveBeenCalledTimes(1)
+    // Main-owned panes add graph/fence reads without write-notice caching; count per sync, never per workspace.
+    expect(getWorkspaceSession).toHaveBeenCalledTimes(ORCA_LAYOUT_OWNER_IS_MAIN ? 3 : 1)
     expect(runtime.getStatus().graphStatus).toBe('ready')
   })
 })

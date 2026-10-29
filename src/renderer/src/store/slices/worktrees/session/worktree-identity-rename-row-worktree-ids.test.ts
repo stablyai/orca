@@ -1,20 +1,4 @@
-/**
- * Rename has to re-point the maps that name their worktree in the VALUE, not the key.
- *
- * `WORKTREE_ID_KEYED_MAP_KEYS` covers the `*ByWorktree` maps, and the rename path deliberately
- * skips tab- and file-keyed ones because those ids survive a rename. Two of the skipped maps carry
- * the worktree id inside each row, and a stale one there is not residue — it is a suppression that
- * silently stops matching:
- *
- *  - `closedTerminalTabTombstonesByTabId`: the remote merge only suppresses a host tab when the
- *    tombstone's worktree equals the tab's, so a tombstone left on the old id re-admits a terminal
- *    tab the user closed, and never gets acknowledged because no snapshot covers the old id.
- *  - `clientHostedBrowserCloseIntentsByEnvironment`: the replay targets `intent.worktreeId`, and an
- *    unresolvable selector answers `selector_not_found` — a code the replay reads as "definitively
- *    gone" and uses to DROP the intent, leaving the page the user closed open forever.
- *
- * Main-process counterpart: worktree-identity-migration-field-coverage.test.ts.
- */
+/** Rename must update worktree IDs inside tab-keyed close tombstones and environment-keyed browser intents or host snapshots resurrect closed surfaces. Main coverage: worktree-identity-migration-field-coverage.test.ts. */
 import { describe, expect, it } from 'vitest'
 import type { AppState } from '../../../types'
 import { createTestStore } from '../../worktrees-slice-test-harness'
@@ -24,12 +8,7 @@ const OLD = 'repo1::/ws/old'
 const NEW = 'repo1::/ws/new'
 const OTHER = 'repo1::/ws/other'
 
-/**
- * The real worktree slice, so every map the rename walks past the two under test is the shape it
- * actually is. The two under test are hand-supplied: they live in the terminals and browser slices,
- * which this harness does not mount, so a missing override reads as `undefined` and exercises the
- * `?? {}` path rather than masking a regression.
- */
+/** Real worktree slice with explicit terminal/browser maps; omitted overrides exercise nullish fallback instead of masking regressions. */
 function appState(overrides: Partial<AppState>): AppState {
   const store = createTestStore()
   store.setState(overrides)
@@ -77,6 +56,27 @@ describe('buildWorktreeRenameState value-owned worktree rows', () => {
     })
   })
 
+  it('re-points a paired-host tab close intent onto the new worktree id', () => {
+    const next = buildWorktreeRenameState(
+      appState({
+        pairedTerminalTabCloseIntentsByEnvironment: {
+          'env-1': [
+            { hostTabIds: ['host-1'], worktreeId: OLD, closedAt: 3, pairingRevision: 1 },
+            { hostTabIds: ['host-2'], worktreeId: OTHER, closedAt: 4 }
+          ]
+        }
+      }),
+      OLD,
+      NEW
+    )
+    expect(next.pairedTerminalTabCloseIntentsByEnvironment).toEqual({
+      'env-1': [
+        { hostTabIds: ['host-1'], worktreeId: NEW, closedAt: 3, pairingRevision: 1 },
+        { hostTabIds: ['host-2'], worktreeId: OTHER, closedAt: 4 }
+      ]
+    })
+  })
+
   it('emits neither map when no row names the renamed worktree', () => {
     const next = buildWorktreeRenameState(
       appState({
@@ -90,5 +90,6 @@ describe('buildWorktreeRenameState value-owned worktree rows', () => {
     )
     expect(Object.hasOwn(next, 'closedTerminalTabTombstonesByTabId')).toBe(false)
     expect(Object.hasOwn(next, 'clientHostedBrowserCloseIntentsByEnvironment')).toBe(false)
+    expect(Object.hasOwn(next, 'pairedTerminalTabCloseIntentsByEnvironment')).toBe(false)
   })
 })

@@ -12,8 +12,7 @@ import type { RemoteRuntimeMultiplexedTerminal } from './remote-runtime-terminal
 import { replaceRuntimeEnvironmentRevisions } from './runtime-environment-revision'
 import { stubRuntimeEnvironmentBridge } from './runtime-environment-bridge-fixture'
 
-// Why: sendFrame gates on socket readiness alone, so a dropped stream handle reported success
-// while the host discarded the frames for an unknown stream id.
+// Socket readiness alone once reported sends successful after stream disposal while host discarded their unknown stream IDs.
 
 type SubscribeCallbacks = {
   onResponse: (response: unknown) => void

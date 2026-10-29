@@ -1,3 +1,7 @@
+import {
+  isFloatingWorkspaceId,
+  floatingWorkspaceToWorktree
+} from '../../../shared/floating-workspace-worktree'
 import { useAppStore } from '@/store'
 import type { Tab } from '../../../shared/tab-types'
 import type { ExecutionHostId } from '../../../shared/execution-host'
@@ -21,7 +25,12 @@ export function getActivatableBrowserWorkspaceTab(params: BrowserWorkspaceTabTar
   if (!params.executionHostId && ambiguousWorktreeIds.has(params.worktreeId)) {
     return null
   }
-  const worktree = state.getKnownWorktreeById(params.worktreeId, params.executionHostId)
+  const worktree =
+    state.getKnownWorktreeById(params.worktreeId, params.executionHostId) ??
+    (isFloatingWorkspaceId(params.worktreeId) &&
+    (!params.executionHostId || params.executionHostId === 'local')
+      ? floatingWorkspaceToWorktree('')
+      : null)
   if (!worktree) {
     return null
   }

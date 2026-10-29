@@ -63,8 +63,7 @@ describe('hasMaterializedWebRuntimeBrowserPage', () => {
   })
 
   it('does not accept this client’s own staged handle as materialization', () => {
-    // Why: the optimistic tab is minted before the host has published anything, so counting it
-    // would let the create confirm itself and never notice a create that silently failed.
+    // Optimistic rows cannot prove materialization or a silently failed create confirms itself.
     expect(
       hasMaterializedWebRuntimeBrowserPage(
         state({

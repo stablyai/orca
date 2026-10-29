@@ -1,14 +1,10 @@
-import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
-import type {
-  WorkspaceStatus,
-  WorkspaceStatusDefinition,
-  Worktree
-} from '../../../../shared/worktree/types'
+import type { WorkspaceStatus, WorkspaceStatusDefinition } from '../../../../shared/worktree/types'
 import {
   parseWorkspaceLaneFullIds,
   resolveFullLaneDropIndex
 } from './workspace-kanban-filtered-drop-index'
 import { getWorkspaceStatus } from './workspace-status'
+import { collectDropWrites, type DropWriteRows } from './worktree-list/drag/dragged-worktree-copies'
 import {
   buildManualOrderUpdatesForGroupDrop,
   shouldWriteManualOrderForGroupDrop,
@@ -60,17 +56,7 @@ function getCardWorktreeId(card: HTMLElement): string | undefined {
   return card.dataset.workspaceBoardWorktreeId ?? card.dataset.workspaceBoardCardId
 }
 
-/**
- * `viewIds` is the lane in the index space `getCardDropTarget` reports, and
- * `fullLaneIds` is the lane's whole membership. Board search hides non-matching
- * cards, so lanes publish their full membership for exactly this reader.
- *
- * Why the virtual layout first: lanes virtualize, so the mounted cards are a
- * window rather than the lane view, and `getCardDropTarget` indexes the same
- * virtual layout. The DOM scan is only the fallback for a lane the virtualizer
- * never claimed — there the unfiltered card list is the full lane, since a card
- * the browser is not laying out is still a member for manual-order purposes.
- */
+/** Prefer the virtualizer’s complete view over mounted cards; fullLaneIds also retains search-hidden members. */
 function toLaneDropIds(lane: HTMLElement): { fullLaneIds: string[]; viewIds: string[] } {
   const publishedFullLaneIds = parseWorkspaceLaneFullIds(lane.dataset.workspaceLaneFullIds)
   const laneScroll = lane.querySelector<HTMLElement>(LANE_SCROLL_SELECTOR)
@@ -158,13 +144,7 @@ export function getWorkspaceKanbanSidebarDropTarget(
   return getCardDropTarget(board, x, y)
 }
 
-/**
- * Translates a tracked drop index — which counts the lane's *view* items,
- * matching the drop indicator — onto the full lane that
- * `getWorkspaceKanbanSidebarDropGroups` reports. Call this once, at the commit
- * boundary: a tracked target can be committed after the pointer has left the
- * lane, so translating earlier would miss that path.
- */
+/** Translate view to full-lane indexes once at commit, including tracked drops committed after leaving the lane. */
 export function resolveWorkspaceKanbanSidebarFullLaneDropIndex(
   status: WorkspaceStatus,
   viewDropIndex: number
@@ -215,7 +195,8 @@ export function buildWorkspaceKanbanSidebarDropUpdates(args: {
   status: WorkspaceStatus
   dropIndex: number
   groups: readonly WorktreeDragGroup[]
-  worktreeById: ReadonlyMap<string, Worktree>
+  /** The rows each id may write; a twin's id names another host's copy too. */
+  rowsFor: DropWriteRows
   allWorktreeIds: readonly string[]
   rankByWorktreeId: ReadonlyMap<string, number>
   workspaceStatuses: readonly WorkspaceStatusDefinition[]
@@ -225,10 +206,9 @@ export function buildWorkspaceKanbanSidebarDropUpdates(args: {
   updates: WorktreeMetaBatchUpdate[]
   shouldSwitchToManual: boolean
 } {
-  const sourceGroupKeys = args.worktreeIds.flatMap((worktreeId) => {
-    const worktree = args.worktreeById.get(worktreeId)
-    return worktree ? [getWorkspaceStatus(worktree, args.workspaceStatuses)] : []
-  })
+  const sourceGroupKeys = args.worktreeIds.flatMap((worktreeId) =>
+    args.rowsFor.status(worktreeId).map((row) => getWorkspaceStatus(row, args.workspaceStatuses))
+  )
   const writeManualOrder = shouldWriteManualOrderForGroupDrop({
     sortBy: args.sortBy,
     sourceGroupKeys,
@@ -246,41 +226,14 @@ export function buildWorkspaceKanbanSidebarDropUpdates(args: {
       })
     : { changed: false, updates: new Map<string, { manualOrder: number }>() }
 
-  const updates: WorktreeMetaBatchUpdate[] = []
-  for (const worktreeId of args.worktreeIds) {
-    const current = args.worktreeById.get(worktreeId)
-    if (!current) {
-      continue
-    }
-    const next: Partial<WorktreeMeta> = {}
-    if (getWorkspaceStatus(current, args.workspaceStatuses) !== args.status) {
-      next.workspaceStatus = args.status
-    }
-    updates.push({
-      worktreeId,
-      updates: next,
-      executionHostId: current.hostId ?? 'local'
-    })
-  }
-
-  if (writeManualOrder) {
-    for (const [worktreeId, manualOrder] of order.updates) {
-      const current = args.worktreeById.get(worktreeId)
-      const entry = updates.find((candidate) => candidate.worktreeId === worktreeId)
-      if (entry) {
-        entry.updates = { ...entry.updates, ...manualOrder }
-      } else if (current) {
-        updates.push({
-          worktreeId,
-          updates: manualOrder,
-          executionHostId: current.hostId ?? 'local'
-        })
-      }
-    }
-  }
-
   return {
-    updates: updates.filter((entry) => Object.keys(entry.updates).length > 0),
+    updates: collectDropWrites({
+      rowsFor: args.rowsFor,
+      statusIds: args.worktreeIds,
+      status: args.status,
+      workspaceStatuses: args.workspaceStatuses,
+      orderUpdates: order.updates
+    }),
     shouldSwitchToManual: writeManualOrder && order.changed
   }
 }

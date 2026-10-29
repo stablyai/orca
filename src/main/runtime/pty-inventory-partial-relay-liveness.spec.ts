@@ -3,12 +3,10 @@ import { describe, expect, it } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
 import { makePaneKey } from '../../shared/stable-pane-id'
 import { OrcaRuntimeService } from './orca-runtime'
+import type { HostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
 
 export function registerPtyInventoryPartialRelayLivenessTests(): void {
-  // STA-517: the worktree.ps liveness refresh is the only thing that retires an exited PTY, and
-  // mobile renders "active" straight off the summary it produces. It must reach the providers
-  // under its own budget, and a pane the controller still vouches for must survive a listing
-  // that did not mention it.
+  // Budget liveness refresh so mobile observes exits; omitted PTYs with controller proof must survive (STA-517).
   const REPO_ID = 'repo-1'
   const REPO_PATH = '/tmp/relay-liveness'
   const WORKSPACE = `${REPO_ID}::${REPO_PATH}`
@@ -58,7 +56,7 @@ export function registerPtyInventoryPartialRelayLivenessTests(): void {
       getRepo: (id: string) => (id === REPO_ID ? REPO : undefined),
       getAllWorktreeMeta: () => meta,
       getWorktreeMeta: (worktreeId: string) => meta[worktreeId],
-      setWorktreeMeta: (worktreeId: string, patch: Record<string, unknown>) => {
+      setWorktreeMeta: ({ id: worktreeId }: HostWorktreeTarget, patch: Record<string, unknown>) => {
         meta[worktreeId] = { ...meta[worktreeId], ...patch }
         return meta[worktreeId]
       },
@@ -95,8 +93,7 @@ export function registerPtyInventoryPartialRelayLivenessTests(): void {
 
       expect(calls).toHaveLength(1)
       const { deadlineMs } = calls[0]!
-      // Unbounded, an SSH list runs to the mux's 30s default and the whole refresh expires, so
-      // no inventory ever arrives and nothing is retired.
+      // A default 30s SSH list exceeds the refresh budget, preventing any inventory retirement.
       expect(deadlineMs).toBeDefined()
       expect(deadlineMs!).toBeGreaterThan(before)
       expect(deadlineMs!).toBeLessThan(before + LIST_BUDGET_MS)
@@ -135,8 +132,7 @@ export function registerPtyInventoryPartialRelayLivenessTests(): void {
         internals.buildResolvedWorktreeFromId(WORKSPACE)
       ])
 
-      // A listing that omits a still-addressable pane is silence, not proof of exit: the
-      // authority sweep has to read the rescued live set, not the raw listing.
+      // Use the rescued live set to retain authority; a raw listing omission cannot prove exit.
       expect(internals.restoredOrchestrationAuthorityByPtyId.has(RETAINED_PTY)).toBe(true)
       expect(internals.ptysById.get(RETAINED_PTY)?.connected).toBe(true)
     })
@@ -161,8 +157,7 @@ export function registerPtyInventoryPartialRelayLivenessTests(): void {
         internals.buildResolvedWorktreeFromId(WORKSPACE)
       ])
 
-      // The other half of the contract: an answered inventory that omits an unvouched pane is
-      // what lets the workspace stop reporting itself active on mobile.
+      // Answered inventory without controller proof can clear mobile activity and restored authority.
       expect(internals.ptysById.get(RETAINED_PTY)?.connected).toBe(false)
       expect(internals.restoredOrchestrationAuthorityByPtyId.has(RETAINED_PTY)).toBe(false)
     })

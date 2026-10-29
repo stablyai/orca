@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest'
 import {
   classifyWslOrcadLiveness,
   nextWslLivenessProbe,
-  terminalVerdictOf,
   type WslLivenessEvidence
 } from './wsl-orcad-liveness-verdict'
 
@@ -25,7 +24,6 @@ describe('classifyWslOrcadLiveness', () => {
         evidence({ trigger: { source: 'bridge', code }, running: { status: 'unavailable' } })
       )
       expect(verdict).toEqual({ kind: 'unverifiable', reason: 'running-list-unavailable' })
-      expect(terminalVerdictOf(verdict)).toBe('unverifiable')
     }
   })
 
@@ -34,7 +32,6 @@ describe('classifyWslOrcadLiveness', () => {
       evidence({ running: { status: 'confirmed', running: false } })
     )
     expect(verdict).toEqual({ kind: 'distro-stopped', corroborated: true })
-    expect(terminalVerdictOf(verdict)).toBe('exited')
   })
 
   it('needs no exit code to prove a stop, but only a failed exit corroborates it', () => {
@@ -61,7 +58,6 @@ describe('classifyWslOrcadLiveness', () => {
       evidence({ identity: { distroInstance: 'boot-a:900', orcad: null } })
     )
     expect(verdict).toEqual({ kind: 'distro-restarted' })
-    expect(terminalVerdictOf(verdict)).toBe('exited')
   })
 
   it('reads a gone or reused orcad pid in the same incarnation as orcad exited', () => {
@@ -73,8 +69,6 @@ describe('classifyWslOrcadLiveness', () => {
         })
       )
       expect(verdict).toEqual({ kind: 'orcad-exited' })
-      // The census decides about terminals after the relaunch, not the crash.
-      expect(terminalVerdictOf(verdict)).toBeNull()
     }
   })
 

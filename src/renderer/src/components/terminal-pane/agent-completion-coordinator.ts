@@ -10,6 +10,7 @@ import {
   getAgentCompletionCoordinatorIdentityCountForTest,
   resetAgentCompletionCoordinatorIdentitiesForTest
 } from './agent-completion-identity-store'
+import { createTitleCompletionClaim } from './agent-completion-title-claim'
 import { createAgentCompletionProcessMonitor } from './agent-completion-process-monitor'
 import { createPendingTitleController } from './agent-completion-pending-title'
 import {
@@ -60,6 +61,14 @@ export function createAgentCompletionCoordinator(
     lastForegroundAgent: null as RecognizedAgentProcess | null,
     processSession: 0
   }
+  const titleClaim = createTitleCompletionClaim({
+    options,
+    state: completionState,
+    processState,
+    identityScope,
+    titleAgentIdentity: (title) => titleObserver.titleCompletionAgentIdentity(title),
+    dispatchTitle: (title) => titleObserver.dispatchTitle(title)
+  })
   let processMonitor!: ReturnType<typeof createAgentCompletionProcessMonitor>
   let pendingTitle!: ReturnType<typeof createPendingTitleController>
   let notification!: ReturnType<typeof createAgentCompletionNotificationController>
@@ -181,7 +190,7 @@ export function createAgentCompletionCoordinator(
     holdTitleCompletionPending,
     hasPendingTitle: () => pendingTitle.get() !== null,
     dropPendingTitle,
-    markTitleCompletionNotified,
+    claimTitleCompletion: (title) => titleClaim.claim(title),
     dispatchTitleCompletion: (title) =>
       dispatchCompletion('title', title, {
         completionIdentity: {
@@ -194,6 +203,7 @@ export function createAgentCompletionCoordinator(
 
   function dropPendingTitle(): void {
     pendingTitle.drop()
+    titleClaim.cancelOwnedIdle()
   }
 
   function dispatchPendingTitleIfEligible(): void {
@@ -208,14 +218,7 @@ export function createAgentCompletionCoordinator(
     }
     const title = currentPendingTitle.title
     dropPendingTitle()
-    markTitleCompletionNotified(title)
-    dispatchCompletion('title', title, {
-      completionIdentity: {
-        source: 'title',
-        identity: title,
-        agentIdentity: titleObserver.titleCompletionAgentIdentity(title)
-      }
-    })
+    titleObserver.dispatchTitle(title)
   }
 
   function holdTitleCompletionPending(title: string): void {
@@ -230,7 +233,7 @@ export function createAgentCompletionCoordinator(
     recordPaneActivity()
   }
 
-  function recordTitleWorking(): boolean {
+  function recordTitleWorking(title: string | null): boolean {
     // Why: hooks can report `done` before title tracking notices the next milestone, so the working title must cancel that provisional done.
     clearPendingHookDone()
     if (
@@ -241,7 +244,8 @@ export function createAgentCompletionCoordinator(
     }
     completionState.workingStatusObserved = true
     completionState.requiresFreshWorking = false
-    if (!hasUnconsumedStampedTail()) {
+    // Why: the turn is tracked even on a hook-owned pane, in case its end turns out ambiguous.
+    if (!titleClaim.keepsHookReceipt(title) && !hasUnconsumedStampedTail()) {
       identityScope.deleteLast()
     }
     completionState.currentTurn += 1
@@ -250,15 +254,7 @@ export function createAgentCompletionCoordinator(
   }
 
   function observeTitleWorking(): void {
-    recordTitleWorking()
-  }
-
-  function markTitleCompletionNotified(title: string): void {
-    completionState.lastCompletionIdentity = {
-      source: 'title',
-      identity: title,
-      agentIdentity: titleObserver.titleCompletionAgentIdentity(title)
-    }
+    recordTitleWorking(null)
   }
 
   hookObserver = createAgentCompletionHookObserver({
@@ -319,6 +315,7 @@ export function createAgentCompletionCoordinator(
     startProcessTracking: () => processMonitor.start(),
     observeForegroundAgentProcess: processMonitor.observeRecognizedProcess,
     hasPendingHookDoneCompletion: lifecycle.hasPendingHookDoneCompletion,
+    canAnnounceCompletion: notification.canAnnounceCompletion,
     resetCompletionState: lifecycle.resetCompletionState,
     dispose: lifecycle.dispose
   }

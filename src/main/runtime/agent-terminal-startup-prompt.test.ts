@@ -1,14 +1,11 @@
-/**
- * The launch command a terminal create builds when the launch hands it a prompt.
- *
- * This is the argv half of terminal prompt delivery, and the reason it is worth pinning is that
- * its failure mode is silent: `buildAgentStartupPlan` answers a prompt it cannot fold by returning
- * a bare command plus a `followupPrompt`, and this resolver returns options, not a live PTY, so a
- * dropped `followupPrompt` would spawn the agent with no prompt and no error anywhere.
- */
+/** The resolver has no PTY: dropping followupPrompt would silently launch without the user's text. */
 
 import { describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
+import {
+  CODEX_REMOTE_VIEWER_SSH_CONNECTION,
+  PI_CLIPBOARD_OSC52_ENV
+} from '../ipc/pty/host-env/remote-viewer-clipboard-env'
 
 vi.mock('electron', () => ({
   BrowserWindow: { fromId: vi.fn(() => null) },
@@ -17,7 +14,7 @@ vi.mock('electron', () => ({
   app: { getPath: vi.fn(() => '/tmp') }
 }))
 
-// The shell the host names for a local line; bash takes no multi-line line, zsh does.
+// bash cannot fold multiline prompts into its launch line; zsh can.
 function runtimeWithAgentLaunch(
   options: {
     terminalDefaultShell?: string
@@ -57,7 +54,6 @@ function runtimeWithAgentLaunch(
   return { runtime, spawn }
 }
 
-/** The command the PTY was actually spawned with, or '' when nothing was spawned. */
 function spawnedCommand(spawn: ReturnType<typeof vi.fn>): string {
   const command = spawn.mock.calls[0]?.[0]?.command
   return typeof command === 'string' ? command : ''
@@ -79,6 +75,30 @@ describe('a terminal create that is handed a launch prompt', () => {
       expect(spawn.mock.calls[0]?.[0]?.env.CLAUDE_CODE_FORCE_TERMINAL_IMAGES).toBe(flag)
       expect(spawn.mock.calls[0]?.[0]?.launchAgent).toBe('claude')
       expect(spawnedCommand(spawn)).toContain('claude')
+    } finally {
+      vi.unstubAllEnvs()
+    }
+  })
+
+  // #10861: a paired client's Codex on a desktop host copied to the host's clipboard, not the viewer's.
+  it.each([
+    { supported: undefined, marker: undefined },
+    { supported: true, marker: CODEX_REMOTE_VIEWER_SSH_CONNECTION },
+    { supported: false, marker: CODEX_REMOTE_VIEWER_SSH_CONNECTION }
+  ])('routes Codex and pi copy to a remote launcher (%s)', async ({ supported, marker }) => {
+    vi.stubEnv('SSH_CONNECTION', undefined)
+    vi.stubEnv('SSH_TTY', undefined)
+    vi.stubEnv(PI_CLIPBOARD_OSC52_ENV, undefined)
+    try {
+      const { runtime, spawn } = runtimeWithAgentLaunch()
+      await runtime.createTerminal('id:wt-1', {
+        startupAgent: 'codex',
+        terminalImageViewerSupported: supported
+      })
+      expect(spawn.mock.calls[0]?.[0]?.launchAgent).toBe('codex')
+      expect(spawn.mock.calls[0]?.[0]?.env.SSH_CONNECTION).toBe(marker)
+      // #33937: pi copies only reach a remote viewer through its own OSC 52 opt-in.
+      expect(spawn.mock.calls[0]?.[0]?.env[PI_CLIPBOARD_OSC52_ENV]).toBe(marker ? '1' : undefined)
     } finally {
       vi.unstubAllEnvs()
     }
@@ -125,7 +145,6 @@ describe('a terminal create that is handed a launch prompt', () => {
       onStartupPromptCarry
     })
 
-    // Typed into a shell, each newline would be Enter; the caller pastes it once the agent is up.
     expect(spawnedCommand(spawn)).toContain('claude')
     expect(spawnedCommand(spawn)).not.toContain('summarize')
     expect(onStartupPromptCarry).toHaveBeenCalledWith(false)
@@ -188,8 +207,7 @@ describe('a terminal create that is handed a launch prompt', () => {
   it('refuses a prompt the launch command cannot carry instead of dropping it', async () => {
     const { runtime, spawn } = runtimeWithAgentLaunch()
 
-    // `aider` takes its prompt after start, so there is no argument to fold it into and this
-    // resolver has no PTY to write to. Spawning anyway would lose the text with no error.
+    // aider requires post-start delivery; this resolver has no PTY, so spawning would silently lose the prompt.
     await expect(
       runtime.createTerminal('id:wt-1', {
         startupAgent: 'aider',

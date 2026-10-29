@@ -21,6 +21,7 @@ import {
   refuseUnclassified
 } from '../../../shared/agent-session-wire-refusals'
 import { readAgentSessionErrorRefusal } from '../../../shared/agent-session-write-failure'
+import { WslHostWindowsDriveRefusalError } from '../../../shared/wsl-host-windows-drive-refusal'
 
 class LineageError extends Error {
   code = 'LINEAGE_PARENT_NOT_FOUND'
@@ -30,6 +31,18 @@ class LineageError extends Error {
 }
 
 describe('mapRuntimeError', () => {
+  it('keeps runtime_error and a readable message for a WSL host Windows drive refusal', () => {
+    const error = new WslHostWindowsDriveRefusalError('C:\\src\\app')
+    expect(mapRuntimeError('req_1', { runtimeId: 'runtime-1' }, error)).toMatchObject({
+      ok: false,
+      error: {
+        code: 'runtime_error',
+        message: expect.stringContaining('This folder is on a Windows drive (C:\\src\\app).'),
+        data: { kind: 'wsl_host_windows_drive_path', windowsPath: 'C:\\src\\app' }
+      }
+    })
+  })
+
   it('names a deferred fork with its own code and reason', () => {
     expect(
       mapRuntimeError(
@@ -265,8 +278,7 @@ describe('artifact sharing denial', () => {
   })
 })
 
-// Why: the renderer decides between "reload the host", "re-adopt", and "stop offering
-// the action" from this code; flattened to runtime_error it can only guess.
+// Clients need distinct owner-conflict codes to choose reload, re-adopt or stop offering the action.
 describe('automation owner conflicts', () => {
   it.each(Object.values(AUTOMATION_OWNER_CONFLICT_CODES))(
     'passes %s through structured',
@@ -327,8 +339,7 @@ describe('structured worker dispatch preamble errors', () => {
 describe('thrown agent-session refusals', () => {
   const meta = { runtimeId: 'runtime-1' }
 
-  // Released clients classify a thrown refusal by its wire code and message; both must read
-  // exactly as the bare `Error(code)` this replaced.
+  // Released clients match both wire code and message; preserve the prior bare Error(code) contract.
   it.each([
     [
       'agent_session_ownership_unknown',
@@ -377,7 +388,6 @@ describe('thrown agent-session refusals', () => {
     })
   })
 
-  // The shape every client test of a thrown refusal feeds in, pinned to what this produces.
   it("sends a journal refusal's reason where a client reads it", () => {
     const response = mapRuntimeError(
       'req_1',

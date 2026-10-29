@@ -3,6 +3,7 @@ import type { AgentType } from '../../../../shared/agent-status-types'
 import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-types'
 import { resolveWindowsShiftEnterEncodingForPane } from './terminal-windows-shift-enter'
 import type { PaneForegroundAgentEntry } from '@/store/slices/pane-foreground-agent'
+import type { AppState } from '@/store/types'
 
 export type StoreState = {
   activeWorktreeId: string | null
@@ -20,6 +21,10 @@ export type StoreState = {
   >
   ptyIdsByTabId?: Record<string, string[]>
   terminalLayoutsByTabId?: Record<string, TerminalLayoutSnapshot>
+  terminalPaneStartsByPaneKey?: AppState['terminalPaneStartsByPaneKey']
+  terminalPaneResumeOutcomesByPaneKey?: AppState['terminalPaneResumeOutcomesByPaneKey']
+  /** Pty id → the agent its pane restarts as once the account change lands. */
+  pendingPaneAccountRestarts?: AppState['pendingPaneAccountRestarts']
   unreadTerminalTabs?: Record<string, true>
   deleteStateByWorktreeId?: Record<string, { isDeleting?: boolean; phase?: string }>
   worktreesByRepo: Record<
@@ -97,6 +102,7 @@ export type StoreState = {
   removeDeferredSshSessionId: ReturnType<typeof vi.fn>
   consumePendingColdRestore: ReturnType<typeof vi.fn>
   consumePendingSnapshot: ReturnType<typeof vi.fn>
+  consumeTabStartupCommand?: ReturnType<typeof vi.fn>
   runtimePaneTitlesByTabId: Record<string, Record<number, string>>
   agentStatusByPaneKey: Record<string, unknown>
   retainedAgentsByPaneKey: Record<string, { agentType: AgentType }>

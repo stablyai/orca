@@ -19,6 +19,24 @@ export type ColdRestoreInfo = {
   terminalOwner?: TerminalOwner
 }
 
+export type ColdRestoreDetection =
+  | { status: 'none' }
+  | {
+      status: 'restored'
+      sessionId: string
+      restoreInfo: ColdRestoreInfo
+      hasUnreadableRecovery: boolean
+      /** No snapshot recorded a folder, so `restoreInfo.cwd` is where the session started. */
+      cwdFromSpawn?: true
+    }
+  | { status: 'unreadable'; sessionId: string }
+
+export type IncrementalLogRestore = {
+  restoreInfo: ColdRestoreInfo | null
+  readFailed: boolean
+  cwdFromSpawn?: true
+}
+
 type RestoredSnapshot = {
   snapshotAnsi: string
   scrollbackAnsi: string
@@ -39,7 +57,7 @@ export function coldRestoreInfoFromSnapshot(
   cwd: string | null,
   meta: SessionMeta
 ): ColdRestoreInfo {
-  // Why: legacy normal snapshots stored their buffer only in snapshotAnsi.
+  // Older normal-buffer snapshots stored scrollback only in snapshotAnsi.
   const scrollbackAnsi =
     snapshot.scrollbackAnsi || (snapshot.modes?.alternateScreen ? '' : snapshot.snapshotAnsi)
   return {

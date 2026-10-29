@@ -3,6 +3,9 @@ name: Linux Wayland GPU Sandbox
 on:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   verify:
     name: wayland terminal input
@@ -22,6 +25,7 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version-file: package.json
+          check-latest: true
 
       - name: Setup pnpm
         uses: pnpm/setup@v2

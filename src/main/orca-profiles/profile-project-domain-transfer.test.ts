@@ -25,7 +25,9 @@ import {
   persistProfileProjectMoveIntent,
   recoverPendingProfileProjectMoves
 } from './profile-project-move-intent'
-import { normalizeProfileProjectState } from './profile-project-state-file'
+import { normalizeProfileProjectState, readProfileState } from './profile-project-state-file'
+import { Store } from '../persistence/loading-store/store'
+import { ProfileStateSqliteAuthority } from '../persistence/profile-state/profile-state-sqlite-authority'
 import { removeSourceRepo } from './profile-project-source-removal'
 import {
   applyPayloadToTarget,
@@ -242,6 +244,80 @@ afterEach(() => {
 })
 
 describe('profile domain transfers', () => {
+  it.each([undefined, false, 'true', true])(
+    'preserves raw Portuguese marker %j in both inactive move participants',
+    async (marker) => {
+      const plugin = 'plugin:stablyai.orca-portuguese/pt-BR'
+      for (const id of ['source', 'target']) {
+        withDatabase(id, (db) =>
+          importProfileStateJson(
+            db,
+            JSON.stringify({
+              ...getDefaultPersistedState(root),
+              repos: id === 'source' ? [repo] : [],
+              settings: {
+                uiLanguage: plugin,
+                uiLanguagePortugueseMigrationApplied: marker,
+                futureSetting: { retained: true }
+              }
+            })
+          )
+        )
+      }
+      expect(transfer().status).toBe('transferred')
+      for (const id of ['source', 'target']) {
+        const settings = JSON.parse(raw(id).json).settings
+        expect(settings.uiLanguage).toBe(plugin)
+        expect(settings.uiLanguagePortugueseMigrationApplied).toBe(marker)
+        expect(Object.hasOwn(settings, 'uiLanguagePortugueseMigrationApplied')).toBe(
+          marker !== undefined
+        )
+        expect(settings.futureSetting).toEqual({ retained: true })
+        vi.useFakeTimers()
+        const loaded = new Store({
+          dataFile: join(root, 'profiles', id, 'orca-data.json'),
+          profileStateAuthority: new ProfileStateSqliteAuthority(dbPath(id), id)
+        })
+        try {
+          vi.advanceTimersByTime(5000)
+          await loaded.waitForPendingWrite()
+          expect(JSON.parse(raw(id).json).settings).toMatchObject({
+            uiLanguage: marker === true ? plugin : 'pt',
+            uiLanguagePortugueseMigrationApplied: true
+          })
+        } finally {
+          await loaded.freezeWritesAsync()
+          vi.useRealTimers()
+        }
+        const reopened = new Store({
+          dataFile: join(root, 'profiles', id, 'orca-data.json'),
+          profileStateAuthority: new ProfileStateSqliteAuthority(dbPath(id), id)
+        })
+        try {
+          expect(reopened.getSettings()).toMatchObject({
+            uiLanguage: marker === true ? plugin : 'pt',
+            uiLanguagePortugueseMigrationApplied: true
+          })
+        } finally {
+          await reopened.freezeWritesAsync()
+        }
+      }
+    }
+  )
+
+  it.each([undefined, null, 42])('does not stamp existing transfer settings %j', (settings) => {
+    expect(
+      normalizeProfileProjectState(JSON.parse(JSON.stringify({ settings }))).settings
+    ).not.toHaveProperty('uiLanguagePortugueseMigrationApplied')
+  })
+
+  it('keeps separate no-storage transfer defaults stamped', () => {
+    expect(
+      readProfileState('never-stored', root).settings.uiLanguagePortugueseMigrationApplied
+    ).toBe(true)
+    expect(getDefaultPersistedState(root).settings.uiLanguagePortugueseMigrationApplied).toBe(true)
+  })
+
   it.each(['copy', 'move'] as const)(
     '%s preserves the full normalized projection and unchanged physical rows',
     (mode) => {

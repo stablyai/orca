@@ -1,4 +1,8 @@
 import path from 'node:path'
+import { realpath } from 'node:fs/promises'
+import { withTimeout } from '../../shared/promise-timeout-fallback'
+import { PrioritySemaphore } from '../../shared/priority-semaphore'
+import { mapWithConcurrency } from '../../shared/map-with-concurrency'
 import type {
   WorkspacePort,
   WorkspacePortOwner,
@@ -10,6 +14,45 @@ import type {
   NormalizedWorkspacePortProbe,
   RawListeningPort
 } from './local-workspace-port-scan-state'
+
+const REALPATH_TIMEOUT_MS = 1_000
+const realpathSlots = new PrioritySemaphore(2)
+let aliasStart = 0
+const pendingRealpaths = new Map<string, Promise<string | null | undefined>>()
+
+function observeRealpath(root: string, deadline: number): Promise<string | null | undefined> {
+  const pending = pendingRealpaths.get(root)
+  if (pending) {
+    return pending
+  }
+  const controller = new AbortController()
+  const lookup = realpathSlots
+    .acquire(0, controller.signal)
+    .then((release) => {
+      if (controller.signal.aborted || Date.now() >= deadline) {
+        release()
+        return undefined
+      }
+      return realpath(root).then(normalizeComparablePath).finally(release)
+    })
+    .catch((error: unknown) =>
+      error instanceof Error &&
+      'code' in error &&
+      (error.code === 'ENOENT' || error.code === 'ENOTDIR')
+        ? null
+        : undefined
+    )
+    .finally(() => {
+      if (pendingRealpaths.get(root) === operation) {
+        pendingRealpaths.delete(root)
+      }
+    })
+  const operation = withTimeout(lookup, Math.max(0, deadline - Date.now()), undefined).finally(() =>
+    controller.abort()
+  )
+  pendingRealpaths.set(root, operation)
+  return operation
+}
 
 const HTTP_PORTS: Record<number, true> = {
   80: true,
@@ -39,6 +82,44 @@ export function normalizeWorkspacePortProbes(
     worktree,
     normalizedPath: normalizeComparablePath(worktree.path)
   }))
+}
+
+export async function resolveWorkspacePortProbes(
+  worktrees: readonly WorkspacePortProbe[],
+  requireFresh = false
+): Promise<{ probes: NormalizedWorkspacePortProbe[]; complete: boolean }> {
+  const probes = normalizeWorkspacePortProbes(worktrees)
+  const paths = [...new Set(worktrees.map((worktree) => worktree.path))]
+  paths.push(...paths.splice(0, aliasStart++ % (paths.length || 1)))
+  const older = paths.map((workspacePath) => pendingRealpaths.get(workspacePath))
+  if (requireFresh) {
+    // An older observation may release native work, but its alias cannot authorize this request.
+    await Promise.all(older.filter((operation) => operation !== undefined))
+  }
+  const deadline = Date.now() + REALPATH_TIMEOUT_MS
+  const resolvedPaths = new Map<string, string | null | undefined>()
+  await withTimeout(
+    mapWithConcurrency(paths, 2, async (workspacePath, index) => {
+      const old = older[index]
+      const blocked = requireFresh && old && pendingRealpaths.get(workspacePath) === old
+      if (blocked || Date.now() >= deadline) {
+        return
+      }
+      resolvedPaths.set(workspacePath, await observeRealpath(workspacePath, deadline))
+    }),
+    Math.max(0, deadline - Date.now()),
+    []
+  )
+  const aliases = probes.flatMap((probe) => {
+    const normalizedPath = resolvedPaths.get(probe.worktree.path)
+    return normalizedPath && normalizedPath !== probe.normalizedPath
+      ? [{ ...probe, normalizedPath }]
+      : []
+  })
+  return {
+    probes: [...probes, ...aliases],
+    complete: paths.every((workspacePath) => resolvedPaths.get(workspacePath) !== undefined)
+  }
 }
 
 function attributePortToNormalizedWorkspaces(
@@ -83,9 +164,7 @@ export function enrichPort(
   }
 
   if (owner) {
-    // Why: only enrich workspace-attributed ports. Container and external
-    // ports may have URLs printed in unrelated terminals — the worktree
-    // scoping is the primary false-positive filter.
+    // Limit URL enrichment to workspace-owned ports so unrelated terminals cannot label external/container ports.
     const advertised = urlWatcher.lookup(owner.worktreeId, port.port, port.pid)
     return {
       ...base,
@@ -118,8 +197,7 @@ export function reconcileAdvertisedUrls(
     observationsByWorktree.get(owner.worktreeId)?.push({ port: port.port, pid: port.pid })
   }
   for (const [worktreeId, observations] of observationsByWorktree) {
-    // Why: the scanner sees port disappearance and PID changes before a lazy
-    // lookup would otherwise pin a stale banner to a new listener.
+    // Invalidate disappeared/changed listeners before lazy lookup can pin a stale banner.
     urlWatcher.reconcileScan([worktreeId], observations)
   }
 }
@@ -197,8 +275,7 @@ function includesPathBoundary(commandLine: string, normalizedPath: string): bool
 
 function normalizeComparablePath(input: string): string {
   if (input.startsWith('/')) {
-    // Why: command-line evidence for SSH/WSL/POSIX workspaces can be evaluated
-    // on a Windows host; path.resolve would reinterpret "/repo" as "G:/repo".
+    // Windows may evaluate remote POSIX paths; native resolve would reinterpret /repo as G:/repo.
     return normalizeComparableText(path.posix.resolve(input))
   }
   return normalizeComparableText(path.resolve(input))

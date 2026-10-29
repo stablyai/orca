@@ -1,13 +1,14 @@
 import {
   isLinearAuthError,
   getLinearIssueCommentThreadRoot,
-  LinearWriteFailure,
-  LinearAgentAccessError,
-  classifyLinearError,
-  linearError,
-  linearMessage,
-  sanitizeLinearErrorMessage
+  LinearWriteFailure
 } from './runtime-linear-command-dependencies'
+import {
+  LinearAgentAccessError,
+  linearError,
+  sanitizeLinearErrorMessage,
+  toLinearAccessError
+} from '../linear/issue-context/errors'
 import { RuntimeLinearWriteResultCommands } from './runtime-linear-write-result-commands'
 
 export class RuntimeLinearCommentLookupCommands extends RuntimeLinearWriteResultCommands {
@@ -99,6 +100,6 @@ export class RuntimeLinearCommentLookupCommands extends RuntimeLinearWriteResult
         nextSteps: ['Reconnect Linear from Orca settings.']
       })
     }
-    return linearError(classifyLinearError(error), linearMessage(error))
+    return toLinearAccessError(error)
   }
 }

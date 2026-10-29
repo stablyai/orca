@@ -1,4 +1,5 @@
 import { isDeepStrictEqual } from 'node:util'
+import { isTerminalLeafId } from '../../../shared/stable-pane-id'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 import { rollbackWorkspaceSessionAfterFailedAsyncWrite } from '../restoring-sessions/workspace-session-write-rollback'
 
@@ -31,6 +32,22 @@ export function rollbackFailedPtyBinding(
 ): WorkspaceSessionState {
   const tab = (session: WorkspaceSessionState) =>
     session.tabsByWorktree[worktreeId]?.find((candidate) => candidate.id === tabId)
+  const ownerState = (session: WorkspaceSessionState) => {
+    const ownerTab = tab(session)
+    return {
+      createdAt: ownerTab?.createdAt,
+      generation: ownerTab?.generation,
+      worktreeId: ownerTab?.worktreeId,
+      ptyId: isTerminalLeafId(leafId)
+        ? session.terminalLayoutsByTabId[tabId]?.ptyIdsByLeafId?.[leafId]
+        : ownerTab?.ptyId,
+      incarnation: session.terminalPtyIncarnationsByPaneKey?.[`${tabId}:${leafId}`]
+    }
+  }
+  // Presentation edits do not replace the binding that must be rolled back.
+  if (!isDeepStrictEqual(ownerState(current), ownerState(staged))) {
+    return current
+  }
   const stagedTab = tab(staged)
   const originalLayout = original.terminalLayoutsByTabId[tabId]
   const stagedLayout = staged.terminalLayoutsByTabId[tabId]

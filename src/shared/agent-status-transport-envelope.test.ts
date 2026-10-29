@@ -22,7 +22,7 @@ describe('agent status transport envelope', () => {
     const first = authority.applyMutation({ parent: { subject: parent, firstObservedAt: 10 } })
     expect(first).not.toBeNull()
 
-    const replica = createAgentStatusStore({ epoch: 'replica-placeholder', mode: 'replica' })
+    const replica = createAgentStatusStore({ epoch: 'epoch-a', mode: 'replica' })
     expect(replica.applyTransportEnvelope(first)).toBe(false)
     expect(
       replica.applyTransportEnvelope({ type: 'snapshot', snapshot: authority.getSnapshot() })

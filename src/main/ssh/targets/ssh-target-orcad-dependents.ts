@@ -1,10 +1,9 @@
-/**
- * Client state that still references an SSH target. An empty-host claim refuses any of it, since
- * hiding the target would strand it; a migration blocks only on what its manifest can't carry.
- */
+/** Empty-host claims refuse all referencing state; migrations block only state their manifest cannot carry. */
 import type { Store } from '../../persistence'
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
-import { toSshExecutionHostId } from '../../../shared/execution-host'
+import { toSshExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
+import { getRepoRegistrationHostIds } from '../../../shared/repo-host-identity'
+import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
 import { GLOBAL_WORKSPACE_SESSION_FIELDS } from '../../../shared/workspace-session-host-field-ownership'
 import {
   ORCAD_MIGRATION_DEPENDENCY_KINDS,
@@ -17,6 +16,8 @@ import type { OrcadMigrationManifest } from '../../../shared/orcad-migration/orc
 export type DependentStateStore = Pick<
   Store,
   | 'getAllWorktreeMetaForHost'
+  | 'getProjects'
+  | 'getRepos'
   | 'getSshRemotePtyLeases'
   | 'getWorkspaceSession'
   | 'getWorkspaceSessionHostIds'
@@ -40,7 +41,7 @@ export function collectDependentStateBlockers(
           .filter((a) => a.executionTargetType === 'ssh' && a.executionTargetId === targetId)
           .map((a) => a.name)
     ],
-    ['worktree-metadata', () => Object.keys(store.getAllWorktreeMetaForHost(hostId))],
+    ['worktree-metadata', () => hostWorktreeMetadataNames(store, hostId)],
     // Why every status: a terminated lease is still a saved record pointing at this host.
     [
       'terminal-lease',
@@ -84,10 +85,7 @@ const CENSUS_DEPENDENCY_KINDS = ORCAD_MIGRATION_DEPENDENCY_KINDS.filter(
   (kind) => kind !== 'saved-port-forward' && kind !== 'terminal-lease'
 )
 
-/**
- * The export-aware census: only state that references the target and that this manifest cannot
- * carry blocks. A census the store could not take is unverifiable, never an empty one.
- */
+/** Block only untransferred dependencies; an unavailable census is unverifiable, never empty. */
 export function collectUntransferredDependentBlockers(
   store: Pick<Store, 'inspectOrcadMigrationUntransferredDependencies'>,
   manifest: OrcadMigrationManifest
@@ -115,7 +113,22 @@ export function collectUntransferredDependentBlockers(
     : []
 }
 
-/** Non-default host-owned fields of the host's partition, plus a local session pointed at the host. */
+/** Legacy unstamped metadata projects to every host: count registered repos or cross-host projects, but exclude unmanageable orphan repos (#31498). */
+function hostWorktreeMetadataNames(store: DependentStateStore, hostId: ExecutionHostId): string[] {
+  const repos = store.getRepos()
+  const projectIds = new Set(store.getProjects().map((project) => project.id))
+  return Object.entries(store.getAllWorktreeMetaForHost(hostId))
+    .filter(([worktreeId, meta]) => {
+      if (meta.hostId) {
+        return meta.hostId === hostId
+      }
+      const ownerId = getRepoIdFromWorktreeId(worktreeId)
+      return getRepoRegistrationHostIds(repos, ownerId).has(hostId) || projectIds.has(ownerId)
+    })
+    .map(([worktreeId]) => worktreeId)
+}
+
+/** Ignore client-global fields copied into host partitions; include local sessions referencing this host. */
 function workspaceSessionReferences(store: DependentStateStore, hostId: string): string[] {
   const references: string[] = []
   if (store.getWorkspaceSession().activeWorkspaceExecutionHostId === hostId) {
@@ -148,12 +161,18 @@ function isEmptyValue(value: unknown): boolean {
   return typeof value === 'object' && Object.keys(value).length === 0
 }
 
+export function dependentStateSummary(dependencies: OrcadMigrationDependency[]): string {
+  return dependencies
+    .map(
+      ({ kind, count, names }) =>
+        `${kind} ×${count}${names?.length ? ` (${names.join(', ')})` : ''}`
+    )
+    .join('; ')
+}
+
 export function dependentStateMessage(dependencies: OrcadMigrationDependency[]): string {
-  const parts = dependencies.map(
-    ({ kind, count, names }) => `${kind} ×${count}${names?.length ? ` (${names.join(', ')})` : ''}`
-  )
   return (
-    'This SSH target is still referenced by saved Orca state that a managed server cannot take ' +
-    `over yet: ${parts.join('; ')}. Remove it, or keep this host in direct SSH mode.`
+    'This SSH target is still referenced by saved Orca state that this host’s Orca server cannot take ' +
+    `over yet: ${dependentStateSummary(dependencies)}. Remove it, or keep this host in direct SSH mode.`
   )
 }

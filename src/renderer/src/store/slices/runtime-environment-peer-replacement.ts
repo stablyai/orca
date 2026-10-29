@@ -33,6 +33,10 @@ function sameRegistration(
   before: CatalogEnvironment | undefined,
   after: CatalogEnvironment | undefined
 ): boolean {
+  // Hand-paired replacement requires both saved keys; without them identity cannot be proven.
+  if (before && after && !before.orcadDeployment && !after.orcadDeployment) {
+    return Boolean(before.hostKeyFingerprint && after.hostKeyFingerprint)
+  }
   // Why SSH only: a WSL deployment takes the stricter re-pair path until its host identity lands.
   const left = before && getOrcadSshDeployment(before)
   const right = after && getOrcadSshDeployment(after)
@@ -49,21 +53,18 @@ function pairingRevisionOf(environment: CatalogEnvironment | undefined): number 
 }
 
 export type SameHostPairingRotation = { id: string; fromRevision: number; toRevision: number }
+export type PendingPairingRotation = { id: string; fromRevision: number }
 
-/**
- * `retired`: ids that now name a different machine, whose workspaces and tabs are retired. A managed
- * server re-pairs on every update and is the same machine while the host's key digest, which its
- * pairing handshake proves, is unchanged under the same SSH target registration. A registration
- * alone is no proof (a reinstall or a target that resolves elsewhere keeps it), so a re-pair whose
- * key is not known yet is decided later, once a catalog carries it, rather than purged on a guess.
- * `sameHost`: re-pairs proven to be the same machine, with the pairing they continue. Re-pairs in
- * neither list are still unresolved.
- */
+/** Retire changed machines; continue managed SSH re-pairs only with matching proven host keys and registration. Defer unknown keys: registration alone survives reinstalls/retargeting. sameHost/pending carry the prior pairing. */
 export function classifyPeerReplacements(
   previous: readonly CatalogEnvironment[],
   next: readonly CatalogEnvironment[],
   replacedIds: readonly string[]
-): { retired: string[]; sameHost: SameHostPairingRotation[] } {
+): {
+  retired: string[]
+  sameHost: SameHostPairingRotation[]
+  pending: PendingPairingRotation[]
+} {
   const nextById = new Map(next.map((environment) => [environment.id, environment]))
   const retired: string[] = []
   const sameHost: SameHostPairingRotation[] = []
@@ -115,5 +116,11 @@ export function classifyPeerReplacements(
       recordSameHost(id, deferred.revision)
     }
   }
-  return { retired, sameHost }
+  // Why a known prior key only: without one the re-pair can never be proven, so nothing waits on it.
+  const pending = [...deferredHostKeyById].flatMap(([id, deferred]) =>
+    deferred.hostKey !== null && deferred.revision !== null
+      ? [{ id, fromRevision: deferred.revision }]
+      : []
+  )
+  return { retired, sameHost, pending }
 }

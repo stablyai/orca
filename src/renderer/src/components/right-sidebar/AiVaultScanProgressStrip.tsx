@@ -1,5 +1,7 @@
 import { useState } from 'react'
-import { Check, ChevronDown, LoaderCircle } from 'lucide-react'
+import { Check, ChevronDown } from 'lucide-react'
+import { LoadingSpinner } from '@/components/LoadingSpinner'
+import { Progress } from '@/components/ui/progress'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { useNow } from '@/hooks/use-now'
 import { getIntlLocale, translate } from '@/i18n/i18n'
@@ -22,32 +24,20 @@ function formatCount(value: number): string {
 
 function fileCountLabel(count: number): string {
   const value0 = formatCount(count)
-  return count === 1
-    ? translate(
-        'auto.components.right.sidebar.AiVaultScanProgressStrip.fileCount_one',
-        '{{value0}} file',
-        { value0 }
-      )
-    : translate(
-        'auto.components.right.sidebar.AiVaultScanProgressStrip.fileCount_other',
-        '{{value0}} files',
-        { value0 }
-      )
+  return translate(
+    'auto.components.right.sidebar.AiVaultScanProgressStrip.fileCount',
+    '{{value0}} files',
+    { value0, count, defaultValue_one: '{{value0}} file' }
+  )
 }
 
 function databaseCountLabel(count: number): string {
   const value0 = formatCount(count)
-  return count === 1
-    ? translate(
-        'auto.components.right.sidebar.AiVaultScanProgressStrip.databaseCount_one',
-        '{{value0}} database',
-        { value0 }
-      )
-    : translate(
-        'auto.components.right.sidebar.AiVaultScanProgressStrip.databaseCount_other',
-        '{{value0}} databases',
-        { value0 }
-      )
+  return translate(
+    'auto.components.right.sidebar.AiVaultScanProgressStrip.databaseCount',
+    '{{value0}} databases',
+    { value0, count, defaultValue_one: '{{value0}} database' }
+  )
 }
 
 function stripSentence(progress: AiVaultScanProgress): string {
@@ -61,8 +51,8 @@ function stripSentence(progress: AiVaultScanProgress): string {
       )
     case 'reading':
       return translate(
-        'auto.components.right.sidebar.AiVaultScanProgressStrip.reading',
-        'Reading {{value0}} files',
+        'auto.components.right.sidebar.AiVaultScanProgressStrip.checking',
+        'Checking {{value0}}',
         { value0 }
       )
     case 'finished':
@@ -81,7 +71,7 @@ function foundCount(agent: AiVaultScanAgentProgress): number {
 function StripText({ progress, active }: StripActivity): React.JSX.Element {
   const emphasis =
     active && progress.stage === 'reading'
-      ? `${formatCount(progress.read.done)} / ${formatCount(progress.read.total)}`
+      ? `${formatCount(progress.read.done + (progress.read.skipped ?? 0))} / ${formatCount(progress.read.total)}`
       : fileCountLabel(progress.agents.reduce((sum, agent) => sum + foundCount(agent), 0))
   const sentence =
     active || progress.stage === 'finished' ? stripSentence(progress) : EMPHASIS_TOKEN
@@ -103,7 +93,7 @@ function formatElapsed(ms: number): string {
 // The strip stays muted; status colour lives only in the per-agent rows.
 function StripMark({ progress, active }: StripActivity): React.JSX.Element | null {
   if (active) {
-    return <LoaderCircle className="size-3 shrink-0 animate-spin" />
+    return <LoadingSpinner className="size-3 shrink-0" />
   }
   return progress.stage === 'finished' ? <Check className="size-3 shrink-0" /> : null
 }
@@ -118,24 +108,61 @@ function agentDetail(agent: AiVaultScanAgentProgress): string {
 
 function AgentRow({
   agent,
-  observed
+  current,
+  progress,
+  active
 }: {
   agent: AiVaultScanAgentProgress
-  observed: boolean
-}): React.JSX.Element {
+  current: boolean
+} & StripActivity): React.JSX.Element {
+  const read = current && progress.stage !== 'finding' ? agent.read : undefined
+  const settled = read ? read.done + (read.skipped ?? 0) : 0
+  const hasWork = read !== undefined && read.total > 0
+  const showBar = hasWork && (active || progress.stage === 'finished')
+  const complete = showBar && settled === read.total
+  const label = agentLabel(agent.agent)
+  const checked = hasWork
+    ? translate(
+        'auto.components.right.sidebar.AiVaultScanProgressStrip.agentCheckedCount',
+        '{{agent}}: {{settled}} of {{total}} history candidates checked',
+        {
+          agent: label,
+          settled: formatCount(settled),
+          total: formatCount(read.total),
+          count: read.total,
+          defaultValue_one: '{{agent}}: {{settled}} of {{total}} history candidate checked'
+        }
+      )
+    : undefined
   return (
-    <div className="flex h-7 items-center gap-2 px-3 text-xs">
-      {observed &&
-        (!agent.walking ? (
-          <Check className="size-3.5 shrink-0 text-status-success" />
-        ) : (
-          <LoaderCircle className="size-3.5 shrink-0 animate-spin text-muted-foreground" />
-        ))}
-      <AgentIcon agent={agent.agent} size={14} />
-      <span className="min-w-0 truncate text-foreground">{agentLabel(agent.agent)}</span>
-      <span className="ml-auto shrink-0 text-[11px] text-muted-foreground tabular-nums">
-        {agentDetail(agent)}
-      </span>
+    <div role="listitem" className="px-3 py-1.5 text-xs">
+      <div className="flex h-5 items-center gap-2">
+        <AgentIcon agent={agent.agent} size={14} />
+        <span className="min-w-0 truncate text-foreground">{label}</span>
+        <span
+          className="ml-auto shrink-0 text-2xs text-muted-foreground tabular-nums"
+          aria-label={checked}
+        >
+          {hasWork ? `${formatCount(settled)} / ${formatCount(read.total)}` : agentDetail(agent)}
+        </span>
+        <span className="flex size-3.5 shrink-0 items-center justify-center">
+          {complete ? (
+            <Check className="size-3.5 text-status-success" />
+          ) : current && active ? (
+            <LoadingSpinner className="size-3.5 text-muted-foreground" />
+          ) : null}
+        </span>
+      </div>
+      <div className="mt-1 h-1 pl-5.5">
+        {showBar && (
+          <Progress
+            value={(settled / read.total) * 100}
+            aria-label={checked}
+            aria-valuetext={checked}
+            className="h-1"
+          />
+        )}
+      </div>
     </div>
   )
 }
@@ -166,7 +193,7 @@ export function AiVaultScanProgressStrip({
         <CollapsibleTrigger asChild>
           <button
             type="button"
-            className="flex h-8 w-full cursor-pointer items-center gap-1.5 pl-3 pr-2 text-left text-[11px] text-muted-foreground tabular-nums outline-none hover:bg-sidebar-accent/50 focus-visible:ring-[2px] focus-visible:ring-sidebar-ring/30"
+            className="flex h-8 w-full cursor-pointer items-center gap-1.5 pl-3 pr-2 text-left text-2xs text-muted-foreground tabular-nums outline-none hover:bg-sidebar-accent/50 focus-visible:ring-[2px] focus-visible:ring-sidebar-ring/30"
           >
             <StripMark progress={progress} active={active} />
             <StripText progress={progress} active={active} />
@@ -177,14 +204,14 @@ export function AiVaultScanProgressStrip({
           </button>
         </CollapsibleTrigger>
         <CollapsibleContent>
-          <div className="py-1">
+          <div role="list" className="py-1">
             {agents.map((agent) => (
               <AgentRow
                 key={agent.agent}
                 agent={agent}
-                observed={
-                  (active || (finished && !agent.walking)) && progress.agents.includes(agent)
-                }
+                current={progress.agents.includes(agent)}
+                progress={progress}
+                active={active}
               />
             ))}
           </div>

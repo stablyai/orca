@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
 import {
   LEAF_ID,
   PTY_ID,
@@ -7,16 +8,14 @@ import {
   TAB_ID,
   WORKTREE_ID,
   createHarness,
+  expectDesktopDropsPane,
   type CloseContinuityHarness
 } from './__fixtures__/orca-runtime-terminal-close-continuity-fixtures'
 import { retireTerminalSurfaceFromPersistence } from './mobile-session-terminal-persistence-retirement'
 
 const emptyLayout = { root: null, activeLeafId: null, expandedLeafId: null }
 
-/**
- * Every explicit close of one pane, from every entry point, under every condition that has ever
- * widened one into a whole-tab close: the live sibling survives and no tab-level close goes out.
- */
+/** All explicit pane-close paths must retain live siblings and send no tab-level close. */
 
 type Entry = 'renderer' | 'cli-graph' | 'cli-pty' | 'phone-desktop' | 'phone-headless'
 type Condition =
@@ -30,8 +29,8 @@ type Condition =
   | 'no-live-pty'
   | 'kill-fails'
   | 'nothing-published'
+  | 'pane-unlisted'
 
-/** The desktop renderer's split tab as it publishes it, with the given PTY bindings. */
 function syncRendererSplit(
   harness: CloseContinuityHarness,
   ptyIdsByLeafId: Record<string, string>,
@@ -55,6 +54,12 @@ function syncRendererSplit(
     paneRuntimeId: 7 + index,
     ptyId: livePtyIdsByLeafId[leafId] ?? null
   }))
+  if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+    harness.editSession((session) => ({
+      ...session,
+      terminalLayoutsByTabId: { ...session.terminalLayoutsByTabId, [TAB_ID]: parentLayout }
+    }))
+  }
   harness.runtime.syncWindowGraph(1, {
     tabs: [
       {
@@ -93,13 +98,12 @@ function arrange(entry: Entry, condition: Condition): CloseContinuityHarness {
   const usesPtyRecord = entry !== 'cli-graph' && entry !== 'renderer' && condition !== 'no-live-pty'
   const harness = createHarness({ publishMobileSurface: true, registerPtyBacked: usesPtyRecord })
   if (condition === 'unbound-sibling') {
-    // A pane the renderer just split: no PTY bound yet, so main's saved layout lacks it.
+    // Renderer split exists before PTY binding/persistence.
     syncRendererSplit(harness, { [LEAF_ID]: PTY_ID })
   } else {
     harness.syncSplitFixtureGraph()
   }
   if (condition === 'no-live-pty') {
-    // The closed pane's process already exited, so main holds no record of its PTY.
     syncRendererSplit(
       harness,
       { [LEAF_ID]: 'pty-exited', [SIBLING_LEAF_ID]: SIBLING_PTY_ID },
@@ -107,11 +111,10 @@ function arrange(entry: Entry, condition: Condition): CloseContinuityHarness {
     )
   }
   if (entry === 'cli-pty') {
-    // Graph without the leaf: the handle resolves through the PTY, as for a runtime-owned pane.
+    // Graphless leaf resolves through the PTY, matching runtime-owned panes.
     harness.syncFixtureTabWithoutLeaf()
   }
   if (condition === 'nothing-published') {
-    // The renderer lists the tab before its panes register and before it publishes any row.
     harness.runtime.syncWindowGraph(1, {
       tabs: [
         {
@@ -132,6 +135,42 @@ function arrange(entry: Entry, condition: Condition): CloseContinuityHarness {
           activeTabId: null,
           activeTabType: null,
           tabs: []
+        }
+      ]
+    })
+  }
+  if (condition === 'pane-unlisted') {
+    // Renderer lags main: sibling has no layout, closed pane has no row.
+    harness.runtime.syncWindowGraph(1, {
+      tabs: [
+        {
+          tabId: TAB_ID,
+          worktreeId: WORKTREE_ID,
+          title: 'Fixture shell',
+          activeLeafId: SIBLING_LEAF_ID,
+          layout: { type: 'leaf' as const, leafId: SIBLING_LEAF_ID }
+        }
+      ],
+      leaves: [],
+      mobileSessionTabs: [
+        {
+          worktree: WORKTREE_ID,
+          publicationEpoch: 'renderer:pane-unlisted',
+          snapshotVersion: 4,
+          activeGroupId: null,
+          activeTabId: `${TAB_ID}::${SIBLING_LEAF_ID}`,
+          activeTabType: 'terminal' as const,
+          tabs: [
+            {
+              type: 'terminal' as const,
+              id: `${TAB_ID}::${SIBLING_LEAF_ID}`,
+              parentTabId: TAB_ID,
+              leafId: SIBLING_LEAF_ID,
+              ptyId: SIBLING_PTY_ID,
+              title: 'Fixture shell',
+              isActive: true
+            }
+          ]
         }
       ]
     })
@@ -168,7 +207,7 @@ function arrange(entry: Entry, condition: Condition): CloseContinuityHarness {
   } else if (condition === 'no-saved-layout') {
     harness.editSession((session) => ({ ...session, terminalLayoutsByTabId: {} }))
   }
-  // A renderer that honours a whole-tab close, so a widened close shows as the lost sibling.
+  // Honor erroneous tab-close requests so widening actually destroys the sibling.
   harness.setCloseTerminalTabAction(() => harness.retirePersistedTab())
   return harness
 }
@@ -205,7 +244,7 @@ async function closePane(entry: Entry, harness: CloseContinuityHarness): Promise
 }
 
 const rows: [Entry, Condition][] = [
-  // e.g. the exited-pane overlay's Close after main's exit handling retired that pane (fc5cac5c32).
+  // Exited-pane overlay can close after main already retired the leaf (fc5cac5c32).
   ['renderer', 'leaf-already-retired'],
   ['renderer', 'unbound-sibling'],
   ['renderer', 'pinned'],
@@ -215,20 +254,19 @@ const rows: [Entry, Condition][] = [
   ['cli-graph', 'leaf-already-retired'],
   ['cli-graph', 'unbound-sibling'],
   ['cli-pty', 'normal'],
-  // An unconfirmed stop once chose the tab close (bc8bbd7abf).
+  // Unverified stops previously widened to tab close (bc8bbd7abf).
   ['cli-pty', 'stop-unconfirmed'],
   ['cli-pty', 'stop-throws'],
   ['cli-pty', 'unbound-sibling'],
-  // An owner copy with no panes once read as "one pane", so the close took the whole tab.
+  // Missing owner panes previously read as one pane and widened close.
   ['cli-pty', 'nothing-published'],
+  ['cli-pty', 'pane-unlisted'],
   ['phone-desktop', 'normal'],
   ['phone-desktop', 'pinned'],
   ['phone-desktop', 'unbound-sibling'],
   ['phone-desktop', 'no-saved-layout'],
-  // A pane with no live process record once sent a tab-level close notice.
   ['phone-desktop', 'no-live-pty'],
   ['phone-desktop', 'kill-fails'],
-  // A host with no desktop window once closed the whole tab for one pane.
   ['phone-headless', 'normal'],
   ['phone-headless', 'kill-fails'],
   ['phone-headless', 'leaf-already-retired'],
@@ -236,38 +274,59 @@ const rows: [Entry, Condition][] = [
   ['phone-headless', 'no-saved-layout']
 ]
 
+// L255: expected main-owned headless phone-close widening until its fix lands.
+const awaitsL255 = (entry: string) => ORCA_LAYOUT_OWNER_IS_MAIN && entry === 'phone-headless'
+
 describe('an explicit close of one pane never widens into its tab', () => {
-  it.each(rows)('%s close, %s', async (entry, condition) => {
-    const harness = arrange(entry, condition)
-    const siblingWasPersisted = Boolean(
-      harness.getSession().terminalLayoutsByTabId[TAB_ID]?.ptyIdsByLeafId?.[SIBLING_LEAF_ID]
-    )
-
-    await closePane(entry, harness)
-
-    const session = harness.getSession()
-    expect(session.tabsByWorktree[WORKTREE_ID]).toEqual([expect.objectContaining({ id: TAB_ID })])
-    if (siblingWasPersisted) {
-      expect(session.terminalLayoutsByTabId[TAB_ID]?.root).toEqual({
-        type: 'leaf',
-        leafId: SIBLING_LEAF_ID
-      })
-    }
-    expect(harness.closeTerminalTab).not.toHaveBeenCalled()
-    expect(harness.closeTerminal).not.toHaveBeenCalled()
-    expect(harness.kill).not.toHaveBeenCalledWith(SIBLING_PTY_ID)
-    if (entry === 'renderer') {
-      return
-    }
-    if (entry === 'phone-headless') {
-      const snapshot = await harness.runtime.listMobileSessionTabs(`id:${WORKTREE_ID}`)
-      expect(snapshot.tabs.map((tab) => tab.id)).toEqual([`${TAB_ID}::${SIBLING_LEAF_ID}`])
-      expect(harness.kill).toHaveBeenCalledWith(PTY_ID)
-      return
-    }
-    expect(harness.closeTerminalPane).toHaveBeenCalledExactlyOnceWith(TAB_ID, LEAF_ID)
-  })
+  it.each(rows.filter(([entry]) => !awaitsL255(entry)))('%s close, %s', closesOnlyThatPane)
+  it.fails.each(rows.filter(([entry]) => awaitsL255(entry)))('%s close, %s', closesOnlyThatPane)
 })
+
+async function closesOnlyThatPane(
+  entry: (typeof rows)[number][0],
+  condition: (typeof rows)[number][1]
+): Promise<void> {
+  const harness = arrange(entry, condition)
+  const siblingWasPersisted = Boolean(
+    harness.getSession().terminalLayoutsByTabId[TAB_ID]?.ptyIdsByLeafId?.[SIBLING_LEAF_ID]
+  )
+
+  await closePane(entry, harness)
+
+  const session = harness.getSession()
+  expect(session.tabsByWorktree[WORKTREE_ID]).toEqual([expect.objectContaining({ id: TAB_ID })])
+  if (siblingWasPersisted) {
+    expect(session.terminalLayoutsByTabId[TAB_ID]?.root).toEqual({
+      type: 'leaf',
+      leafId: SIBLING_LEAF_ID
+    })
+  }
+  expect(harness.closeTerminalTab).not.toHaveBeenCalled()
+  expect(harness.closeTerminal).not.toHaveBeenCalled()
+  expect(harness.kill).not.toHaveBeenCalledWith(SIBLING_PTY_ID)
+  if (entry === 'renderer') {
+    return
+  }
+  if (entry === 'phone-headless') {
+    const snapshot = await harness.runtime.listMobileSessionTabs(`id:${WORKTREE_ID}`)
+    expect(snapshot.tabs.map((tab) => tab.id)).toEqual([`${TAB_ID}::${SIBLING_LEAF_ID}`])
+    expect(harness.kill).toHaveBeenCalledWith(PTY_ID)
+    return
+  }
+  expectDesktopDropsPane(harness, TAB_ID, LEAF_ID)
+}
+
+/** Last-pane tab close uses legacy renderer acknowledgement or main-owned layout without renderer notice. */
+function expectDesktopClosesTab(harness: CloseContinuityHarness): void {
+  expect(harness.closeTerminalPane).not.toHaveBeenCalled()
+  if (!ORCA_LAYOUT_OWNER_IS_MAIN) {
+    expect(harness.closeTerminalTab.mock.calls.map((call) => call[0])).toEqual([TAB_ID])
+    return
+  }
+  expect(harness.closeTerminalTab).not.toHaveBeenCalled()
+  expect(harness.getSession().tabsByWorktree[WORKTREE_ID]).toEqual([])
+  expect(harness.getSession().terminalLayoutsByTabId[TAB_ID]).toBeUndefined()
+}
 
 describe("a close of a tab's last pane still closes the tab", () => {
   it('on a host with no desktop window, closes the whole tab in main and for paired clients', async () => {
@@ -284,7 +343,8 @@ describe("a close of a tab's last pane still closes the tab", () => {
     expect(harness.kill).toHaveBeenCalledWith(PTY_ID)
   })
 
-  it.each([
+  // Main-owned bind-before-register makes live tabs without saved panes impossible; covered by main tab-close cases.
+  it.skipIf(ORCA_LAYOUT_OWNER_IS_MAIN).each([
     ['no saved layout', () => ({})],
     ['a layout saved before its pane mounted', () => ({ [TAB_ID]: emptyLayout })]
   ] as const)(
@@ -312,8 +372,7 @@ describe("a close of a tab's last pane still closes the tab", () => {
 
     await closePane('cli-pty', harness)
 
-    expect(harness.closeTerminalTab.mock.calls.map((call) => call[0])).toEqual([TAB_ID])
-    expect(harness.closeTerminalPane).not.toHaveBeenCalled()
+    expectDesktopClosesTab(harness)
   })
 
   it.each(['phone-desktop', 'cli-graph'] as const)(
@@ -328,8 +387,7 @@ describe("a close of a tab's last pane still closes the tab", () => {
 
       await closePane(entry, harness)
 
-      expect(harness.closeTerminalTab.mock.calls.map((call) => call[0])).toEqual([TAB_ID])
-      expect(harness.closeTerminalPane).not.toHaveBeenCalled()
+      expectDesktopClosesTab(harness)
     }
   )
 })

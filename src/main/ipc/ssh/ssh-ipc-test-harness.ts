@@ -1,10 +1,12 @@
 import { vi } from 'vitest'
 import type { Mock } from 'vitest'
 import { registerSshHandlers, resetSshHandlerStateForTests } from './ssh'
-import type { SshIpcMocks } from './ssh-ipc-module-mocks'
-import type { SshConnectionManagerMock, SshPortForwardManagerMock } from './ssh-ipc-mock-shapes'
+import type {
+  SshConnectionManagerMock,
+  SshIpcMocks,
+  SshPortForwardManagerMock
+} from './ssh-ipc-mock-shapes'
 
-/** Lease slice of the app store the SSH handlers write through. */
 export type SshLeaseStoreMock = {
   getRepos: () => unknown[]
   getSshRemotePtyLeases: Mock
@@ -25,8 +27,6 @@ export type SshIpcHarness = {
   reset: () => Promise<void>
 }
 
-// Shared fixtures + per-test reset for the SSH IPC handler suites. `reset` is the
-// suite `beforeEach`: it rewinds every mocked module and re-registers the handlers.
 export function createSshIpcHarness(mocks: SshIpcMocks): SshIpcHarness {
   const {
     handleMock,
@@ -73,6 +73,7 @@ export function createSshIpcHarness(mocks: SshIpcMocks): SshIpcHarness {
     removeForward: vi.fn(),
     listForwards: vi.fn().mockReturnValue([]),
     removeAllForwards: vi.fn(),
+    closeStaleForwards: vi.fn(),
     closeAll: vi.fn(),
     dispose: vi.fn(),
     setCallbacks: vi.fn(),
@@ -125,6 +126,7 @@ export function createSshIpcHarness(mocks: SshIpcMocks): SshIpcHarness {
     mockPortForwardManager.removeForwardAndWait.mockReset()
     mockPortForwardManager.listForwards.mockReset().mockReturnValue([])
     mockPortForwardManager.removeAllForwards.mockReset()
+    mockPortForwardManager.closeStaleForwards.mockReset().mockResolvedValue(undefined)
     mockPortForwardManager.closeAll.mockReset().mockResolvedValue(undefined)
     mockPortForwardManager.dispose.mockReset()
     mockPortForwardManager.setCallbacks.mockReset()

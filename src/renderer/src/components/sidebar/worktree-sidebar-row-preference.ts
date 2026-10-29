@@ -12,8 +12,7 @@ export function getPreferredWorktreeRows(
   rows: readonly WorktreeRow[],
   pinnedDisplayPolicy: PinnedWorktreeDisplayPolicy
 ): WorktreeRow[] {
-  // Why: duplicated pinned rows represent one workspace to navigation and selection.
-  // Prefer its natural-group copy, falling back to Pinned when that copy is hidden.
+  // Navigation/selection treat pinned duplicates as one workspace, preferring a visible natural-group occurrence.
   if (pinnedDisplayPolicy === 'single-location') {
     const seen = new Set<string>()
     return rows.filter((row) => {

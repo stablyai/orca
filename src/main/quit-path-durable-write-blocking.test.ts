@@ -7,11 +7,7 @@ import type * as NodeFsPromises from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 
-// Why these tests exist: will-quit used to run stats.flush() and store.flush() synchronously,
-// before preventDefault(). On a stalled network profile mount those fsync/rename syscalls park
-// the Electron main thread uninterruptibly — the app stops repainting and Force Quit stops
-// working. The teardown deadline cannot rescue that, because its own timer needs the thread it
-// would have to bound. The fix is to make the quit path awaitable, not to bound it.
+// Sync fsync/rename on stalled mounts blocks the quit deadline's own event loop.
 
 const testState = { dir: '' }
 
@@ -20,7 +16,6 @@ const fsCalls = vi.hoisted(() => {
     recording: false,
     dirPrefix: '',
     syncCalls: [] as string[],
-    /** Set to park every in-scope async fs call — a stalled mount, without stalling the thread. */
     holdAsync: null as Promise<void> | null,
     waitAsync: null as ((fn: string, target: string) => Promise<void> | null) | null,
     reset(): void {
@@ -167,7 +162,7 @@ function stallCommit(dir: string) {
 async function createStatsCollector(dir: string): Promise<TestStatsCollector> {
   testState.dir = dir
   const { StatsCollector, initStatsPath } = await import('./stats/collector')
-  initStatsPath()
+  initStatsPath(testState.dir)
   const stats = new StatsCollector()
   statsCollectors.push(stats)
   return stats
@@ -177,7 +172,6 @@ const dataFile = (dir: string): string => join(dir, 'orca-data.json')
 const statsFile = (dir: string): string => join(dir, 'orca-stats.json')
 const activeViewFile = (dir: string): string => join(dir, 'active-view.json')
 
-/** Resolves once the macrotask queue turns over — false if the main thread is parked. */
 function eventLoopTurned(): Promise<boolean> {
   return new Promise((resolve) => setTimeout(() => resolve(true), 0))
 }
@@ -348,9 +342,7 @@ describe('quit-path durable writes never park the main thread', () => {
   })
 
   it('stats.flushAsync() closes out live agents before it returns, not when its write lands', async () => {
-    // will-quit calls this before killAllPty(), which skips runtime.onPtyExit(). If the
-    // closeout moved behind the await, every agent still running at quit would lose its
-    // session time — the whole reason the flush is ordered ahead of the kill.
+    // killAllPty skips onPtyExit, so agent time must be closed out before awaiting the write.
     const dir = makeDir()
     const stats = await createStatsCollector(dir)
     stats.onAgentStart('pty-1', Date.now() - 4_000)
@@ -373,8 +365,6 @@ describe('quit-path durable writes never park the main thread', () => {
     const pending = store.flushAsync()
     await gate.started
 
-    // The whole point: timers still fire, so the app still repaints and the quit
-    // deadline below can still be reached. A sync flush would have blocked here.
     await expect(eventLoopTurned()).resolves.toBe(true)
     void pending
   })
@@ -486,15 +476,13 @@ describe('quit-path durable writes never park the main thread', () => {
     await stats.flushAsync()
     await inflight
 
-    // Serialized writes plus the generation guard: the flush's fuller state survives.
     const persisted = JSON.parse(readFileSync(statsFile(dir), 'utf-8'))
     expect(persisted.aggregates.totalAgentsSpawned).toBe(2)
     expect(persisted.aggregates.totalAgentTimeMs).toBeGreaterThan(0)
   })
 
   it('the quit flush is the last write — later mutations do not schedule another', async () => {
-    // A teardown step that touches the store would otherwise arm a debounced write with
-    // nothing awaiting it, leaving a rename to race the process exit.
+    // A later debounced write would race process exit.
     const dir = makeDir()
     const store = await createStore(dir)
     vi.useFakeTimers()
@@ -548,7 +536,6 @@ describe('quit-path durable writes never park the main thread', () => {
       new Error('profile mount rejected write')
     )
 
-    // It joins the teardown barrier; a rejection there is noise that must not cancel the quit.
     await expect(store.flushAsync()).resolves.toBeUndefined()
   })
 })

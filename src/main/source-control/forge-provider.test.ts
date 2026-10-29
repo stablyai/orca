@@ -36,8 +36,7 @@ const {
 vi.mock('../gitlab/client', () => ({
   getProjectSlug: getProjectSlugMock,
   getMergeRequestForBranch: getMergeRequestForBranchMock,
-  // Why: forge-provider resolves branch reviews via the OrThrow variant so
-  // lookup failures surface as unavailable instead of "no MR found".
+  // Lookup failures must remain unavailable, never false absence.
   getMergeRequestForBranchOrThrow: getMergeRequestForBranchMock,
   getMergeRequest: vi.fn()
 }))
@@ -96,8 +95,7 @@ import {
 
 import { _resetOriginGitHubApiRepositoryCache } from '../github/github-api-repository'
 
-// The origin-repository cache is module-level state; reset it so slugs
-// resolved by one test cannot leak into the next.
+// Isolate module-level origin repository identities between tests.
 beforeEach(() => {
   _resetOriginGitHubApiRepositoryCache()
 })
@@ -137,12 +135,8 @@ describe('forge provider interface', () => {
   })
 
   it('detects a GitHub Enterprise Server remote as the GitHub provider, not Gitea', async () => {
-    // Regression for #8312: a GHES host is not github.com, so github.com-only
-    // slug parsing returns null. Detection must claim it via the enterprise
-    // resolver instead of falling through to Gitea's demand for ORCA_GITEA_TOKEN.
+    // #8312: authenticated GHES belongs to GitHub; never fall through to Gitea token requirements.
     getProjectSlugMock.mockResolvedValue(null)
-    // Why: getRepoSlug resolves hosted identities itself now — a GHES remote
-    // comes back host-qualified instead of null + separate enterprise fallback.
     getRepoSlugMock.mockResolvedValue({
       owner: 'team',
       repo: 'orca',
@@ -157,15 +151,13 @@ describe('forge provider interface', () => {
     ).resolves.toMatchObject({
       id: 'github'
     })
-    // Gitea must never be consulted once GitHub claims the enterprise host.
     expect(getGiteaRepoSlugMock).not.toHaveBeenCalled()
   })
 
   it('leaves a genuinely non-GitHub remote for later providers when gh is not authenticated', async () => {
     getProjectSlugMock.mockResolvedValue(null)
     getRepoSlugMock.mockResolvedValue(null)
-    // gh is not logged in to this host, so the enterprise resolver declines and
-    // the Gitea provider is free to claim its own self-hosted remote.
+    // Without host authentication, enterprise detection declines so Gitea may claim its own server.
     getEnterpriseGitHubRepoSlugMock.mockResolvedValue(null)
     getBitbucketRepoSlugMock.mockResolvedValue(null)
     getAzureDevOpsRepoSlugMock.mockResolvedValue(null)
@@ -192,9 +184,7 @@ describe('forge provider interface', () => {
       ['azure-devops', true],
       ['gitea', true]
     ])
-    // Why: the shared list is what the Create blocker and the renderer read.
-    // When it drifted from this one, Bitbucket had a working createReview but
-    // still reported "provider does not support creating a pull request".
+    // Keep renderer/Create capability declarations aligned with provider implementations.
     for (const provider of FORGE_PROVIDERS) {
       expect(supportsHostedReviewCreation(provider.id)).toBe(provider.supportsReviewCreation)
     }
@@ -451,7 +441,6 @@ describe('forge provider interface', () => {
         executionHostId: 'local',
         branch: 'feature/x'
       })
-      // Throwing (not null) keeps a low budget from reading as "no pull request".
     ).rejects.toThrow(/rate_limited/)
     expect(getPRForBranchOutcomeMock).not.toHaveBeenCalled()
   })

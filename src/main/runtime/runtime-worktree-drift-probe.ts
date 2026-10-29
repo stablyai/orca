@@ -1,3 +1,4 @@
+import { getRepoRoutingConnectionId } from '../../shared/execution-host'
 import type { Repo } from '../../shared/repo-types'
 import { getBaseRefDefault, getRecentDriftSubjects, getRemoteDrift } from '../git/repo'
 import {
@@ -26,7 +27,7 @@ export async function probeRuntimeWorktreeDrift(args: {
     return null
   }
   const repo = args.store.getRepos().find((candidate: Repo) => candidate.id === worktree.repoId)
-  if (!repo || repo.connectionId) {
+  if (!repo || getRepoRoutingConnectionId(repo)) {
     return null
   }
   const gitExecOptions = getLocalProjectGitExecOptions(args.store, repo)

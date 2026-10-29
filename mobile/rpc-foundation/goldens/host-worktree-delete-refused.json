@@ -45,6 +45,19 @@
       "ordinal": 4,
       "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.rm\",\"params\":{\"worktree\":\"id:wt-1\",\"force\":true}}"
     },
+    "1991d3406586": {
+      "confirmRemoveHost": false,
+      "lastKnownWorktrees": [],
+      "optimisticActiveWorktreeIdentity": {
+        "$rpc": "null"
+      },
+      "pinnedIds": [],
+      "serverWorkspaces": {
+        "hosts": [],
+        "worktrees": []
+      },
+      "worktrees": []
+    },
     "4da755eea670": {
       "name": "worktree.rm#1",
       "ordinal": 3,
@@ -94,21 +107,7 @@
         }
       ]
     },
-    "6b0066cfa6bd": {
-      "confirmRemoveHost": false,
-      "lastKnownWorktrees": [],
-      "optimisticActiveWorktreeIdentity": {
-        "$rpc": "null"
-      },
-      "pinnedIds": [],
-      "routeActionState": {},
-      "serverWorkspaces": {
-        "hosts": [],
-        "worktrees": []
-      },
-      "worktrees": []
-    },
-    "6e7f22e079bb": {
+    "55adbae71b7b": {
       "confirmRemoveHost": false,
       "lastKnownWorktrees": [
         {
@@ -132,7 +131,6 @@
         "$rpc": "null"
       },
       "pinnedIds": [],
-      "routeActionState": {},
       "serverWorkspaces": {
         "hosts": [],
         "worktrees": []
@@ -213,7 +211,7 @@
             "mount": "eb79a9b3682a",
             "delete": "9270aeb7d9c6"
           },
-          "state": "6b0066cfa6bd",
+          "state": "1991d3406586",
           "effects": ["8f27c443230b", "7a68c6ea2c44"]
         }
       },
@@ -226,7 +224,7 @@
             "mount": "eb79a9b3682a",
             "delete": "eb79a9b3682a"
           },
-          "state": "6e7f22e079bb",
+          "state": "55adbae71b7b",
           "effects": ["8f27c443230b", "7a68c6ea2c44", "50378a292ce7", "753a3ae9bdd7"]
         }
       }

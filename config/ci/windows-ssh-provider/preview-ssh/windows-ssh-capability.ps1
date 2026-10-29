@@ -1,3 +1,5 @@
+. (Join-Path $PSScriptRoot '../../windows-lifecycle-receipt.ps1')
+
 function Assert-IsolatedWindowsSshCi([ValidateSet('arm64','x64')][string]$Arch) {
   $os=@{arm64='Arm64';x64='X64'}[$Arch]
   if($env:GITHUB_ACTIONS -ne 'true' -or $env:ORCA_ISOLATED_SSH_CI -ne '1' -or [Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString() -ne $os){throw "Requires isolated native $Arch GitHub runner"}
@@ -21,14 +23,8 @@ function Assert-WindowsSshStockShell {
 function Write-WindowsSshReceiptStage([hashtable]$Report,[string]$Receipt,[string]$Stage) {
   $timestamp=[DateTime]::UtcNow.ToString('o')
   $Report.stages+=@{stage=$Stage;utc=$timestamp}
-  try {
-    $bytes=[Text.UTF8Encoding]::new($false).GetBytes(($Report | ConvertTo-Json -Depth 6))
-    $temporary="$Receipt.pending"
-    $stream=[IO.FileStream]::new($temporary,[IO.FileMode]::Create,[IO.FileAccess]::Write,[IO.FileShare]::Read)
-    try {$stream.Write($bytes,0,$bytes.Length);$stream.Flush($true)} finally {$stream.Dispose()}
-    [IO.File]::Move($temporary,$Receipt,$true)
-    $written=$true
-  } catch {$written=$false;Write-Warning 'Progress receipt could not be updated; cleanup must still run'}
+  $written=Write-WindowsLifecycleReceipt $Report $Receipt
+  if(-not $written){Write-Warning 'Progress receipt could not be updated; cleanup must still run'}
   Write-Host "Native SSH stage: $Stage ($timestamp)"
   return $written
 }

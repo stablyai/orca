@@ -98,8 +98,7 @@ export function formatMessageBanner(
   return lines.join('\n')
 }
 
-// Why: grouping multiple banners under a single wrapper line lets agents detect
-// the message block boundary and parse each banner individually.
+// One wrapper marks the message block boundary while leaving each banner independently parseable.
 export function formatMessagesForInjection(messages: MessageRow[]): string {
   if (messages.length === 0) {
     return ''
@@ -112,11 +111,15 @@ export function formatMessagesForInjection(messages: MessageRow[]): string {
 export function formatMessagePointer(
   count: number,
   mailboxHandle?: string,
-  cliCommand: OrchestrationCliCommand = 'orca'
+  cliCommand: OrchestrationCliCommand = 'orca',
+  heldDeliveryId?: string
 ): string {
   const noun = count === 1 ? 'message' : 'messages'
   const runFlag = mailboxHandle?.startsWith('run:')
     ? ` --run ${mailboxHandle.slice('run:'.length)}`
     : ''
+  if (heldDeliveryId) {
+    return `\nYou have ${count} new orchestration ${noun} after delivery ${heldDeliveryId}, which you have not acknowledged. If you no longer have it, run \`${cliCommand} orchestration check${runFlag}\` to see it again; once it is handled, run \`${cliCommand} orchestration check${runFlag} --ack ${heldDeliveryId}\`.\n`
+  }
   return `\nYou have ${count} orchestration ${noun}. Run \`${cliCommand} orchestration check${runFlag}\`.\n`
 }

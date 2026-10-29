@@ -10,6 +10,7 @@ import { cn } from '../../lib/utils'
 import { Badge } from '../ui/badge'
 import { Button } from '../ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
+import { TruncatedSidebarLabel } from '../sidebar/truncated-sidebar-label'
 import { SearchableSetting } from './SearchableSetting'
 import { ShortcutBindingSubRow } from './ShortcutBindingSubRow'
 import { ShortcutRecorderButton } from './ShortcutRecorderButton'
@@ -26,11 +27,9 @@ type ShortcutCommandBlockProps = {
   error?: string
   warnings: readonly string[]
   terminalStatus?: ShortcutTerminalStatus
-  // The bindings this action had right before it was disabled, so it can be
-  // re-enabled with one click. Empty when there's nothing to restore.
+  // Retain pre-disable bindings for one-click Enable; empty means nothing to restore.
   previousBindings: readonly string[]
-  // Non-null only when this action is recording; the binding index being
-  // recorded. Equal to effective.length when capturing a brand-new binding.
+  // Index being recorded, or effective.length for append; null means idle.
   recordingBindingIndex: number | null
   onStartRecordingAt: (actionId: KeybindingActionId, index: number) => void
   onAppendBinding: (actionId: KeybindingActionId) => void
@@ -73,13 +72,12 @@ export function ShortcutCommandBlock({
   const isDigitIndex = isDigitIndexActionId(item.id)
   const canEnable = isDisabled && previousBindings.length > 0
 
-  const doubleTapHint = platform === 'darwin' ? '⇧⇧' : 'Shift Shift'
+  const doubleTapHint = platform === 'darwin' ? '⇧⇧' : '⇧ ⇧'
   const recordingMessage = translate(
     'auto.components.settings.ShortcutCommandBlock.eb72c52c28',
     'Press a shortcut, or double-tap a modifier (e.g. {{value0}}). Esc cancels.',
     { value0: doubleTapHint }
   )
-  // Errors win, then the live recording hint, then a standing conflict warning.
   const helperMessage = error
     ? error
     : isRecording
@@ -106,8 +104,7 @@ export function ShortcutCommandBlock({
     />
   )
 
-  // Why: ShortcutsPane already filters rows against the global query;
-  // forceVisible skips the re-match here that would hide rows it kept.
+  // Parent filtering already chose these rows; skip a second match that could hide them.
   return (
     <SearchableSetting
       title={item.title}
@@ -122,14 +119,12 @@ export function ShortcutCommandBlock({
     >
       <div className="flex min-h-9 items-center gap-3 rounded-md px-2 py-1 transition-colors hover:bg-accent/40 focus-within:bg-accent/40">
         <div className="flex min-w-0 flex-1 items-center gap-2">
-          <span
-            className={cn(
-              'truncate text-sm',
-              isDisabled ? 'text-muted-foreground' : 'text-foreground'
-            )}
-          >
-            {item.title}
-          </span>
+          <TruncatedSidebarLabel
+            text={item.title}
+            className={cn('text-sm', isDisabled ? 'text-muted-foreground' : 'text-foreground')}
+            tooltipSide="top"
+            tooltipSideOffset={4}
+          />
           {modified ? (
             <Badge variant="outline" className="shrink-0 text-[11px]">
               {translate('auto.components.settings.ShortcutCommandBlock.287e07ddde', 'Modified')}
@@ -159,9 +154,7 @@ export function ShortcutCommandBlock({
         </div>
 
         <div className="flex shrink-0 items-center gap-1">
-          {/* Action controls reveal on hover/focus to keep the list calm. Reset
-              is gated on `modified` (not on having a binding) so it's reachable
-              even when the action is disabled. */}
+          {/* Show Reset for every modified action, including disabled actions; reveal controls on hover/focus. */}
           <div className="can-hover:opacity-0 flex items-center gap-0.5 transition-opacity group-hover/shortcut:opacity-100 group-focus-within/shortcut:opacity-100">
             {hasBinding && !showAppendSlot ? (
               <Tooltip>
@@ -241,8 +234,6 @@ export function ShortcutCommandBlock({
                 </TooltipContent>
               </Tooltip>
             ) : null}
-            {/* Remove just the first binding (only meaningful when others
-                remain; a single binding is turned off with Disable instead). */}
             {isMulti ? (
               <ShortcutRemoveButton
                 actionId={item.id}
@@ -253,9 +244,7 @@ export function ShortcutCommandBlock({
             ) : null}
           </div>
 
-          {/* No binding: the primary affordance stays visible (the row would
-              otherwise read as empty). Enable restores the pre-disable chord;
-              otherwise Add records a fresh one. */}
+          {/* Keep Enable/Add visible for unbound actions so rows cannot appear empty; Enable restores remembered chords. */}
           {!hasBinding && !showAppendSlot ? (
             canEnable ? (
               <Button
@@ -300,8 +289,6 @@ export function ShortcutCommandBlock({
             )
           ) : null}
 
-          {/* The first binding lives inline on the command row; extras stack
-              below. A single-binding action is therefore one line. */}
           {hasBinding ? recorderFor(effective[0], 0) : null}
         </div>
       </div>
@@ -318,14 +305,12 @@ export function ShortcutCommandBlock({
         </span>
       ) : null}
 
-      {/* Bindings beyond the first stack as their own rows under the command. */}
       {isMulti
         ? effective.slice(1).map((binding, offset) => {
             const index = offset + 1
             return (
               <ShortcutBindingSubRow
-                // Key by slot index, not the chord: editing a binding in place
-                // keeps the same recorder element so focus survives the capture.
+                // Key by slot so editing a chord preserves recorder focus.
                 key={index}
                 actionId={item.id}
                 title={item.title}

@@ -1,12 +1,20 @@
 import { useCallback, useEffect, useState } from 'react'
-import { ActivityIndicator, Pressable, StyleSheet, Switch, Text, View } from 'react-native'
+import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 import { Check, Download } from 'lucide-react-native'
 import { BottomDrawer } from './BottomDrawer'
+import { MobileSwitch } from './MobileSwitch'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import type { Translate } from '../i18n/mobile-i18n'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
+import { getUiIntlLocale } from '../i18n/ui-intl-locale'
 import type { RpcClient } from '../transport/rpc-client'
 import { triggerError, triggerSuccess } from '../platform/haptics'
 import { useDictationSetupPoller } from '../dictation/use-dictation-setup-poller'
 import {
+  cloudModelNeedsKey,
+  dictationModelRowAction,
   downloadDictationModel,
   fetchDictationSetup,
   isModelInFlight,
@@ -25,18 +33,52 @@ type Props = {
   onReady?: () => void
 }
 
-function formatSize(bytes: number | null | undefined): string {
+type SetupError = { message: string } | { kind: 'load' | 'download' | 'select' | 'update' }
+
+function setupErrorMessage(error: SetupError, t: Translate): string {
+  if ('message' in error) {
+    return error.message
+  }
+  switch (error.kind) {
+    case 'load':
+      return t('components.dictationSetupSheet.loadFailed', 'Failed to load')
+    case 'download':
+      return t('components.dictationSetupSheet.downloadFailed', 'Download failed')
+    case 'select':
+      return t('components.dictationSetupSheet.selectFailed', 'Could not select model')
+    case 'update':
+      return t('components.dictationSetupSheet.updateFailed', 'Could not update')
+  }
+}
+
+function formatSize(bytes: number | null | undefined, t: Translate): string {
   if (!bytes) {
     return ''
   }
-  return `${Math.round(bytes / 1_000_000)} MB`
+  return t('components.dictationSetupSheet.modelSize', '{{size}} MB', {
+    size: Math.round(bytes / 1_000_000).toLocaleString(getUiIntlLocale())
+  })
 }
 
-// Lets the user enable dictation and download a speech model on the paired
-// desktop, from the phone. Polls while a download is in flight.
+function modelMetadata(model: MobileSpeechModel, t: Translate): string {
+  const details = model.provider === 'openai' ? 'OpenAI API' : formatSize(model.sizeBytes, t)
+  if (isModelInFlight(model) && model.progress != null) {
+    return t('components.dictationSetupSheet.modelProgress', '{{details}} · {{progress}}%', {
+      details,
+      progress: Math.round(model.progress * 100).toLocaleString(getUiIntlLocale())
+    })
+  }
+  return model.status === 'extracting'
+    ? t('components.dictationSetupSheet.modelExtracting', '{{details}} · extracting…', { details })
+    : details
+}
+
+// Configure paired computer’s dictation/model from phone; poll while download is in flight.
 export function MobileDictationSetupSheet({ visible, client, onClose, onReady }: Props) {
+  useMobileColorScheme()
+  const t = useMobileTranslation()
   const [setup, setSetup] = useState<MobileSpeechSetup | null>(null)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<SetupError | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
   const refresh = useCallback(async (): Promise<boolean | undefined> => {
     if (!client) {
@@ -48,7 +90,7 @@ export function MobileDictationSetupSheet({ visible, client, onClose, onReady }:
       setError(null)
       return next.models.some(isModelInFlight)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load')
+      setError(err instanceof Error ? { message: err.message } : { kind: 'load' })
       return undefined
     }
   }, [client])
@@ -79,7 +121,7 @@ export function MobileDictationSetupSheet({ visible, client, onClose, onReady }:
         await refreshSetup()
       } catch (err) {
         triggerError()
-        setError(err instanceof Error ? err.message : 'Download failed')
+        setError(err instanceof Error ? { message: err.message } : { kind: 'download' })
       } finally {
         setBusy(null)
       }
@@ -101,7 +143,7 @@ export function MobileDictationSetupSheet({ visible, client, onClose, onReady }:
         onReady?.()
       } catch (err) {
         triggerError()
-        setError(err instanceof Error ? err.message : 'Could not select model')
+        setError(err instanceof Error ? { message: err.message } : { kind: 'select' })
       } finally {
         setBusy(null)
       }
@@ -118,7 +160,7 @@ export function MobileDictationSetupSheet({ visible, client, onClose, onReady }:
       try {
         setSetup(await setDictationConfig(client, { enabled }))
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Could not update')
+        setError(err instanceof Error ? { message: err.message } : { kind: 'update' })
       }
     },
     [client]
@@ -126,12 +168,16 @@ export function MobileDictationSetupSheet({ visible, client, onClose, onReady }:
 
   return (
     <BottomDrawer visible={visible} onClose={onClose}>
-      {/* Why: BottomDrawer already scrolls its children in a keyboard-aware container;
-          a nested capped ScrollView cut off the lower controls. */}
+      {/* BottomDrawer already scrolls above keyboard; nested capped ScrollView clipped lower controls. */}
       <View>
-        <Text style={styles.heading}>Set up voice dictation</Text>
+        <Text style={styles.heading}>
+          {t('components.dictationSetupSheet.title', 'Set up voice dictation')}
+        </Text>
         <Text style={styles.subtitle}>
-          Download a model and enable dictation on your desktop — all from here.
+          {t(
+            'components.dictationSetupSheet.description',
+            'Download or pick a model and enable dictation on the paired computer — all from here.'
+          )}
         </Text>
 
         {setup === null ? (
@@ -141,13 +187,21 @@ export function MobileDictationSetupSheet({ visible, client, onClose, onReady }:
         ) : (
           <>
             <View style={styles.enableRow}>
-              <Text style={styles.enableLabel}>Dictation enabled</Text>
-              <Switch value={setup.enabled} onValueChange={(v) => void handleToggleEnabled(v)} />
+              <Text style={styles.enableLabel}>
+                {t('components.dictationSetupSheet.enabled', 'Dictation enabled')}
+              </Text>
+              <MobileSwitch
+                accessibilityLabel={t(
+                  'components.dictationSetupSheet.enabled',
+                  'Dictation enabled'
+                )}
+                value={setup.enabled === true}
+                onValueChange={(v) => void handleToggleEnabled(v)}
+              />
             </View>
 
             {setup.models.map((model) => {
-              const isSelected = model.id === setup.selectedModelId
-              const inFlight = isModelInFlight(model)
+              const action = dictationModelRowAction(model, setup.selectedModelId)
               const rowBusy = busy === model.id
               return (
                 <View key={model.id} style={styles.modelRow}>
@@ -155,41 +209,43 @@ export function MobileDictationSetupSheet({ visible, client, onClose, onReady }:
                     <View style={styles.modelTitleRow}>
                       <Text style={styles.modelLabel}>{model.label}</Text>
                       {model.recommended ? (
-                        <Text style={styles.recommended}>Recommended</Text>
+                        <Text style={styles.recommended}>
+                          {t('components.dictationSetupSheet.recommended', 'Recommended')}
+                        </Text>
                       ) : null}
                     </View>
-                    <Text style={styles.modelMeta}>
-                      {model.provider === 'openai' ? 'OpenAI API' : formatSize(model.sizeBytes)}
-                      {inFlight && model.progress != null
-                        ? ` · ${Math.round(model.progress * 100)}%`
-                        : model.status === 'extracting'
-                          ? ' · extracting…'
-                          : ''}
-                    </Text>
+                    <Text style={styles.modelMeta}>{modelMetadata(model, t)}</Text>
                   </View>
-                  {model.provider === 'openai' ? (
-                    <Text style={styles.modelStateText}>
-                      {model.status === 'ready' ? 'API key set' : 'Set up on desktop'}
-                    </Text>
-                  ) : model.status === 'ready' ? (
-                    isSelected ? (
-                      <View style={styles.selectedTag}>
-                        <Check size={14} color={colors.statusGreen} strokeWidth={2.4} />
-                        <Text style={styles.selectedText}>In use</Text>
-                      </View>
-                    ) : (
-                      <Pressable
-                        style={({ pressed }) => [
-                          styles.actionButton,
-                          pressed && styles.actionPressed
-                        ]}
-                        disabled={rowBusy}
-                        onPress={() => void handleUseModel(model)}
-                      >
-                        <Text style={styles.actionText}>Use</Text>
-                      </Pressable>
-                    )
-                  ) : inFlight ? (
+                  {action === 'needs-api-key' ? (
+                    <Text style={styles.modelStateText}>{cloudModelNeedsKey()}</Text>
+                  ) : action === 'in-use' ? (
+                    <View style={styles.selectedTag}>
+                      <Check size={14} color={colors.statusGreen} strokeWidth={2.4} />
+                      <Text style={styles.selectedText}>
+                        {t('components.dictationSetupSheet.inUse', 'In use')}
+                      </Text>
+                    </View>
+                  ) : action === 'use' ? (
+                    <Pressable
+                      style={({ pressed }) => [
+                        styles.actionButton,
+                        pressed && styles.actionPressed
+                      ]}
+                      disabled={rowBusy}
+                      accessibilityRole="button"
+                      accessibilityLabel={t(
+                        'components.dictationSetupSheet.useModel',
+                        'Use {{model}}',
+                        { model: model.label }
+                      )}
+                      accessibilityState={{ disabled: rowBusy }}
+                      onPress={() => void handleUseModel(model)}
+                    >
+                      <Text style={styles.actionText}>
+                        {t('components.dictationSetupSheet.use', 'Use')}
+                      </Text>
+                    </Pressable>
+                  ) : action === 'downloading' ? (
                     <ActivityIndicator size="small" color={colors.textSecondary} />
                   ) : (
                     <Pressable
@@ -198,6 +254,13 @@ export function MobileDictationSetupSheet({ visible, client, onClose, onReady }:
                         pressed && styles.actionPressed
                       ]}
                       disabled={rowBusy}
+                      accessibilityRole="button"
+                      accessibilityLabel={t(
+                        'components.dictationSetupSheet.downloadModel',
+                        'Download {{model}}',
+                        { model: model.label }
+                      )}
+                      accessibilityState={{ disabled: rowBusy }}
                       onPress={() => void handleDownload(model)}
                     >
                       {rowBusy ? (
@@ -205,7 +268,9 @@ export function MobileDictationSetupSheet({ visible, client, onClose, onReady }:
                       ) : (
                         <>
                           <Download size={13} color={colors.textSecondary} strokeWidth={2.2} />
-                          <Text style={styles.actionText}>Download</Text>
+                          <Text style={styles.actionText}>
+                            {t('components.dictationSetupSheet.download', 'Download')}
+                          </Text>
                         </>
                       )}
                     </Pressable>
@@ -215,13 +280,13 @@ export function MobileDictationSetupSheet({ visible, client, onClose, onReady }:
             })}
           </>
         )}
-        {error ? <Text style={styles.error}>{error}</Text> : null}
+        {error ? <Text style={styles.error}>{setupErrorMessage(error, t)}</Text> : null}
       </View>
     </BottomDrawer>
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   heading: {
     color: colors.textPrimary,
     fontSize: typography.bodySize,
@@ -260,7 +325,7 @@ const styles = StyleSheet.create({
     fontWeight: '700'
   },
   modelMeta: { color: colors.textMuted, fontSize: typography.metaSize, marginTop: 2 },
-  modelStateText: { color: colors.textMuted, fontSize: typography.metaSize },
+  modelStateText: { color: colors.textMuted, fontSize: typography.metaSize, flexShrink: 1 },
   actionButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -275,4 +340,4 @@ const styles = StyleSheet.create({
   selectedTag: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   selectedText: { color: colors.statusGreen, fontSize: typography.metaSize, fontWeight: '600' },
   error: { color: colors.statusRed, fontSize: typography.metaSize, marginTop: spacing.md }
-})
+}))

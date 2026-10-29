@@ -1,6 +1,4 @@
-// The draft queue as a bounded-frame subscriber receives it: whole, or when the list outgrows the
-// rows' share of a frame, the cards it sends first, whole; the rest show once those leave. A card is
-// never shortened: a reader that edits one replaces the draft with what it holds.
+// Never shorten editable cards: send the longest whole prefix that fits so saving cannot lose hidden text.
 
 import { BOUNDED_FRAME_CONTENT_BUDGET_BYTES } from './agent-session-history-page-bounds'
 import { jsonBytes } from './json-string-shortening'
@@ -11,7 +9,6 @@ export function boundedQueuePublication(publication: QueuePublication): QueuePub
   if (jsonBytes(cards) <= BOUNDED_FRAME_CONTENT_BUDGET_BYTES) {
     return publication
   }
-  // The longest run from the front that fits.
   let fits = 0
   let fitsNot = cards.length
   while (fitsNot - fits > 1) {

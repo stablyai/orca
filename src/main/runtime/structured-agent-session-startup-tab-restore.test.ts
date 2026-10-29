@@ -1,7 +1,4 @@
-// With native chat on, the renderer's startup also awaits the chat tab restore (`session.tabs.listAll`),
-// which reads every chat whose tab was open at quit. That read must not wait on record-store
-// bookkeeping: with a saved tab index it writes nothing, and a store that cannot be written costs
-// a bounded number of failed writes, not one per chat.
+// Startup chat-tab restore must write nothing with an existing index and bound failed writes per step rather than per chat.
 
 import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -115,9 +112,7 @@ function chatRecord(
   return { ...record, ...codex, ...clear }
 }
 
-/** The chat records the last run left; `visible` is their saved tab index, absent on a legacy
- *  profile. `newer` leaves them in a database a newer Orca wrote. Then each chat's history as the
- *  last run left it: one prompt, accepted, so nothing is left to send. */
+/** Seed released records and one accepted prompt each; visible is absent for legacy profiles, newer stamps a later database version. */
 async function seedProfile(
   records: AgentSessionRecord[],
   options: { newer?: boolean; visible?: string[]; history?: AgentSessionRecord[] } = {}
@@ -306,7 +301,6 @@ describe('restoring the chat tabs open at quit', () => {
     }
   )
 
-  // Each failed write stands for one refused commit.
   it.each([1, 4, 8])('fails one write per startup step with %i chats open', async (count) => {
     const chats = Array.from({ length: count }, (_, index) => `chat-${index}-000${index}`)
     const records = chats.map((sessionId) => chatRecord(sessionId))
@@ -339,7 +333,7 @@ describe('restoring the chat tabs open at quit', () => {
       const tabWrites = spyOnTabWrites()
       const { runtime, published } = startupRuntime({ profileChats: [CHAT_A, CHAT_B] })
       await runtime.prepareStructuredAgentSessionStartupRestoration()
-      // One more write, then failing: a seed written chat by chat would stop part way.
+      // Allow one write; a per-chat seed would publish an incomplete index.
       writes.grants = 1
 
       await runtime.restoreStructuredAgentSessionTabs()

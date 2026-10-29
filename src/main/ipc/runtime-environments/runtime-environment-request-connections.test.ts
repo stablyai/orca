@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   closeSharedControlTestServers,
   createSharedControlTestServer
-} from '../../../shared/remote-runtime-shared-control-test-server'
+} from '../../../shared/remote-runtime/control/remote-runtime-shared-control-test-server'
 import {
   applyRuntimeEnvironmentCapabilityVerdict,
   captureRuntimeEnvironmentCapabilityEvidence,
@@ -16,6 +16,7 @@ import {
   closeRemoteRuntimeRequestConnection,
   ensureRemoteRuntimeSharedControlConnection,
   getRemoteRuntimeSharedControlDiagnostics,
+  isRemoteRuntimeConnectionReady,
   pauseRemoteRuntimeSharedControlRetry,
   reconnectRemoteRuntimeSharedControlConnection,
   sendRemoteRuntimeSharedControlRequest,
@@ -39,7 +40,16 @@ describe('runtime environment shared-control connection cache', () => {
     ensureRemoteRuntimeSharedControlConnection(ENVIRONMENT_ID, server.pairing)
     ensureRemoteRuntimeSharedControlConnection(ENVIRONMENT_ID, server.pairing)
     reconnectRemoteRuntimeSharedControlConnection(ENVIRONMENT_ID)
-    await waitFor(() => server.connectionCount() === 1)
+    await waitFor(() => isRemoteRuntimeConnectionReady(ENVIRONMENT_ID, server.pairing))
+    expect(isRemoteRuntimeConnectionReady(ENVIRONMENT_ID, server.pairing)).toBe(true)
+    expect(
+      isRemoteRuntimeConnectionReady(ENVIRONMENT_ID, {
+        ...server.pairing,
+        endpoint: 'ws://127.0.0.1:1'
+      })
+    ).toBe(false)
+    expect(server.connectionCount()).toBe(1)
+    expect(server.requests).toHaveLength(0)
 
     server.closeClients()
     await waitFor(

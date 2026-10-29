@@ -28,6 +28,9 @@ export function structuredAgentSessionStatusBlock(
     ...(body.tone !== undefined ? { tone: body.tone } : {}),
     ...(body.providerFrame ? { providerFrame: body.providerFrame } : {}),
     ...(failure ? { failure } : {}),
+    ...(failure?.kind === 'usageLimitReached' && turnScope?.kind === 'turn'
+      ? { usageLimitTurnItemId: turnScope.turnItemId }
+      : {}),
     ...(orcaStop
       ? {
           orcaStop: {

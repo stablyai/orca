@@ -1,30 +1,43 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { GRAB_BUDGET } from '../../../../shared/browser-grab-types'
-import { createBrowserMockApi, createTestStore } from './browser-slice-test-harness'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
+import { createBrowserMockApi } from './browser-slice-test-harness'
+import { createTestStoreDrawnFromMain } from './browser-slice-drawn-from-main.test-fixture'
 import { makeAnnotation } from './browser-annotation-test-fixture'
 
+vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeRpcClientWithLayoutApply(await importOriginal())
+)
+vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeLayoutClientWithTestFrames(await importOriginal())
+)
 vi.mock('@/runtime/web-runtime-browser-creation', () => ({
   createWebRuntimeSessionBrowserTab: vi.fn()
 }))
 
-function createAnnotatedPage() {
+async function createAnnotatedPage() {
   vi.stubGlobal('window', { api: createBrowserMockApi(vi.fn()) })
-  const store = createTestStore()
-  store.setState({ repos: [], folderWorkspaces: [] })
+  const { store, main } = await createTestStoreDrawnFromMain({ repos: [], folderWorkspaces: [] })
   const workspace = store.getState().createBrowserTab('wt-1', 'https://example.com')
+  await main.settle()
   const pageId = workspace.activePageId
   if (!pageId) {
     throw new Error('Expected browser page')
   }
   store.getState().addBrowserPageAnnotation(makeAnnotation(pageId))
-  return { store, workspace, pageId }
+  return { store, main, workspace, pageId }
 }
 
 afterEach(() => vi.unstubAllGlobals())
 
 describe('saved browser note lifetime and marker eligibility', () => {
-  it('retires same-URL geometry without changing the saved array or object references', () => {
-    const { store, pageId } = createAnnotatedPage()
+  it('retires same-URL geometry without changing the saved array or object references', async () => {
+    const { store, pageId } = await createAnnotatedPage()
     const saved = store.getState().browserAnnotationsByPageId[pageId]
     const note = saved[0]
     expect(store.getState().browserAnnotationMarkerIdsByPageId[pageId]).toEqual([note.id])
@@ -47,11 +60,12 @@ describe('saved browser note lifetime and marker eligibility', () => {
     expect(store.getState().browserAnnotationMarkerIdsByPageId[pageId]).toEqual(['fresh'])
   })
 
-  it('shares the 20-note budget across URLs and bounds marker IDs to retained notes', () => {
-    const { store, pageId } = createAnnotatedPage()
+  it('shares the 20-note budget across URLs and bounds marker IDs to retained notes', async () => {
+    const { store, pageId } = await createAnnotatedPage()
     for (let index = 0; index < GRAB_BUDGET.annotationsMaxPerPage + 3; index++) {
       const url = `https://example.com/page-${index % 2}`
       store.getState().setBrowserPageUrl(pageId, url)
+      store.getState().invalidateBrowserPageAnnotationGeometry(pageId)
       const note = makeAnnotation(pageId, `note-${index}`)
       note.payload.page.sanitizedUrl = url
       store.getState().addBrowserPageAnnotation(note)
@@ -70,8 +84,8 @@ describe('saved browser note lifetime and marker eligibility', () => {
     expect(store.getState().browserAnnotationsByPageId[pageId]).toBeUndefined()
   })
 
-  it('prunes eligible IDs when the oldest current-document notes are evicted', () => {
-    const { store, pageId } = createAnnotatedPage()
+  it('prunes eligible IDs when the oldest current-document notes are evicted', async () => {
+    const { store, pageId } = await createAnnotatedPage()
     for (let index = 0; index < 22; index++) {
       store.getState().addBrowserPageAnnotation(makeAnnotation(pageId, `note-${index}`))
     }
@@ -82,7 +96,7 @@ describe('saved browser note lifetime and marker eligibility', () => {
   })
 
   it('removes an accepted delivery snapshot after navigation while preserving later edits and additions', async () => {
-    const { store, pageId } = createAnnotatedPage()
+    const { store, pageId } = await createAnnotatedPage()
     store.getState().addBrowserPageAnnotation(makeAnnotation(pageId, 'edited'))
     const delivered = store.getState().browserAnnotationsByPageId[pageId]
     let accept!: () => void
@@ -110,37 +124,44 @@ describe('saved browser note lifetime and marker eligibility', () => {
     expect(store.getState().browserAnnotationMarkerIdsByPageId[pageId]).toBeUndefined()
   })
 
-  it.each(['page', 'workspace', 'conversion', 'hydration'] as const)(
-    'cleans up note and marker authority on %s teardown',
-    (mode) => {
-      const { store, workspace, pageId } = createAnnotatedPage()
-      if (mode === 'page') {
-        store.getState().closeBrowserPage(pageId)
-      }
-      if (mode === 'workspace') {
-        store.getState().closeBrowserTab(workspace.id)
-      }
-      if (mode === 'conversion') {
-        store.getState().convertBrowserPage(pageId, {
-          kind: 'workspace-doc',
-          docLocation: {
-            kind: 'workspace-doc',
-            worktreeId: 'wt-1',
-            filePath: '/workspace/index.html'
-          }
-        })
-      }
-      if (mode === 'hydration') {
-        store.getState().hydrateBrowserSession({
-          activeRepoId: null,
-          activeWorktreeId: null,
-          activeTabId: null,
-          tabsByWorktree: {},
-          terminalLayoutsByTabId: {}
-        })
-      }
-      expect(store.getState().browserAnnotationsByPageId[pageId]).toBeUndefined()
-      expect(store.getState().browserAnnotationMarkerIdsByPageId[pageId]).toBeUndefined()
+  it.each([
+    ['page', 'closeBrowserPage'],
+    ['workspace', 'closeTabs'],
+    ['conversion', 'replaceBrowserPage'],
+    ['hydration', null]
+  ] as const)('cleans up note and marker authority on %s teardown', async (mode, mainCommand) => {
+    const { store, main, workspace, pageId } = await createAnnotatedPage()
+    if (mode === 'page') {
+      store.getState().closeBrowserPage(pageId)
     }
-  )
+    if (mode === 'workspace') {
+      store.getState().closeBrowserTab(workspace.id)
+    }
+    if (mode === 'conversion') {
+      store.getState().convertBrowserPage(pageId, {
+        kind: 'workspace-doc',
+        docLocation: {
+          kind: 'workspace-doc',
+          worktreeId: 'wt-1',
+          filePath: '/workspace/index.html'
+        }
+      })
+    }
+    if (mode === 'hydration') {
+      store.getState().hydrateBrowserSession({
+        activeRepoId: null,
+        activeWorktreeId: null,
+        activeTabId: null,
+        tabsByWorktree: {},
+        terminalLayoutsByTabId: {}
+      })
+    }
+    await main.settle()
+    // A layout-owner build's teardown is main's, drawn from its frame.
+    expect(layoutApplyTestTransport.sent.map((command) => command.type)).toEqual(
+      ORCA_LAYOUT_OWNER_IS_MAIN ? ['openBrowserTab', ...(mainCommand ? [mainCommand] : [])] : []
+    )
+    expect(store.getState().browserAnnotationsByPageId[pageId]).toBeUndefined()
+    expect(store.getState().browserAnnotationMarkerIdsByPageId[pageId]).toBeUndefined()
+  })
 })

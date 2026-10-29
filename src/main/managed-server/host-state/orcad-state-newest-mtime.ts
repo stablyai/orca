@@ -1,16 +1,9 @@
-/** When the shared profile state was last written, which tells a rollback whether to restore. */
 import { quotePosixShell } from '../../../shared/shell-argument-quoting'
 import { isWindowsRemoteHost, type RemoteHostPlatform } from '../../ssh/ssh-remote-platform'
 import { orcadWindowsHostOpCommand } from '../install/orcad-remote-windows-node'
 import { ORCAD_SNAPSHOT_MEMBERS } from './orcad-state-snapshot-members'
 
-/**
- * Has the shared store been written since `activatedAt`?
- *
- * Prints the newest mtime (epoch seconds) across the snapshot members, or `UNKNOWN`. The
- * caller compares; an `UNKNOWN` becomes `null`, which `assessOrcadRollback` treats as "yes,
- * assume writes".
- */
+/** Print newest snapshot-member mtime or UNKNOWN; rollback treats unknown state as potentially modified. */
 export function newestStateMtimeCommand(
   host: RemoteHostPlatform,
   userDataDir: string,

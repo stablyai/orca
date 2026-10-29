@@ -21,6 +21,11 @@ export function chatUnavailableLabel(reason: ChatUnavailableReason): string {
       )
     case 'wsl':
       return translate('auto.components.tab.bar.QuickLaunchButton.chatNotInWsl', 'No chat in WSL')
+    case 'subfolder':
+      return translate(
+        'auto.components.tab.bar.QuickLaunchButton.chatNotInSubfolder',
+        'No chat in a subfolder'
+      )
     case 'not-on-host':
       return translate(
         'auto.components.tab.bar.QuickLaunchButton.chatNotOnHost',

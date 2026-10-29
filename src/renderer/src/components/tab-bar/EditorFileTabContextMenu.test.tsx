@@ -95,8 +95,7 @@ vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, fallback: string) => fallback
 }))
 
-// Why: the menu reads live shortcut bindings; stub them to fixed labels so
-// the test asserts each assigned action surfaces its own shortcut chip.
+// Fix live shortcut labels so each action’s assigned shortcut remains independently observable.
 vi.mock('@/hooks/useShortcutLabel', () => ({
   useOptionalShortcutLabel: shortcutLabelMock
 }))
@@ -212,9 +211,16 @@ async function renderMenu(
     externalSshTargetId?: string
     mode?: 'edit' | 'check-details'
     unifiedTabId?: string
+    filePath?: string
   } = {}
 ): Promise<unknown> {
-  const { runtimeEnvironmentId, externalSshTargetId, mode = 'edit', ...props } = overrides
+  const {
+    runtimeEnvironmentId,
+    externalSshTargetId,
+    mode = 'edit',
+    filePath = '/repo/foo.ts',
+    ...props
+  } = overrides
   const module = await import('./EditorFileTabContextMenu')
   return module.EditorFileTabContextMenu({
     open: true,
@@ -222,7 +228,7 @@ async function renderMenu(
     file: {
       id: 'file-1',
       tabId: 'tab-1',
-      filePath: '/repo/foo.ts',
+      filePath,
       relativePath: 'foo.ts',
       worktreeId: 'wt-1',
       language: 'typescript',
@@ -360,15 +366,15 @@ describe('EditorFileTabContextMenu close-all shortcut', () => {
     expect(findElementsByType(tree, 'DropdownMenuShortcut')).toHaveLength(3)
   })
 
-  it('renders Close Others and both directional close items', async () => {
+  it('keeps Close Others without directional close items', async () => {
     const tree = expandNode(await renderMenu())
     const labels = findElementsByType(tree, 'DropdownMenuItem').map((item) =>
       extractText(item.props.children)
     )
 
     expect(labels).toContain('Close Others')
-    expect(labels.some((label) => label.includes('Close All Tabs To The Right'))).toBe(true)
-    expect(labels.some((label) => label.includes('Close All Tabs To The Left'))).toBe(true)
+    expect(labels.some((label) => label.includes('Close All Tabs To The Right'))).toBe(false)
+    expect(labels.some((label) => label.includes('Close All Tabs To The Left'))).toBe(false)
   })
 
   it('hides the shortcut chip when close-all is unassigned', async () => {
@@ -427,6 +433,26 @@ describe('EditorFileTabContextMenu reveal in file manager', () => {
 
     expect(reveal.props.disabled).toBe(true)
     expect(extractText(reveal.props.children)).toContain('Local only')
+  })
+
+  it('copies a local Windows path with native separators', async () => {
+    const writeClipboardText = vi.fn().mockResolvedValue(undefined)
+    vi.stubGlobal('window', {
+      api: {
+        ui: { writeClipboardText },
+        platform: { get: () => ({ platform: 'win32' }) }
+      }
+    })
+    const tree = expandNode(await renderMenu({ filePath: 'C:/repo/foo.ts' }))
+    const copyPath = findElementsByType(tree, 'DropdownMenuItem').find(
+      (item) => extractText(item.props.children) === 'Copy Path'
+    )
+    const onSelect = copyPath?.props.onSelect
+    if (typeof onSelect !== 'function') {
+      throw new Error('Missing Copy Path action')
+    }
+    onSelect()
+    expect(writeClipboardText).toHaveBeenCalledExactlyOnceWith('C:\\repo\\foo.ts')
   })
 
   it.each(['check-details'] as const)(

@@ -20,8 +20,7 @@ function makeRequest(method: string, params?: unknown): RpcRequest {
   return { id: 'req-1', authToken: 'tok', method, params }
 }
 
-// worktree.create routes through the runtime's clientMutationId idempotency
-// wrapper; these unit mocks run the create straight through (no dedupe).
+// Mocks bypass runtime clientMutationId deduplication.
 const passthroughDedupe = <T>(_repo: string, _id: string | undefined, run: () => Promise<T>) =>
   run()
 
@@ -61,8 +60,7 @@ describe('worktree RPC methods', () => {
     } as unknown as OrcaRuntimeService
     const dispatcher = new RpcDispatcher({ runtime, methods: WORKTREE_METHODS })
 
-    // The mobile WebSocket path always uses dispatchStreaming, which threads the
-    // authenticated device scope as clientKind even for non-streaming methods.
+    // Mobile always uses dispatchStreaming, which supplies authenticated device scope even for non-streaming methods.
     const replies: string[] = []
     await dispatcher.dispatchStreaming(
       makeRequest('worktree.activate', { worktree: 'id:wt-1', notifyClients: false }),
@@ -857,21 +855,5 @@ describe('worktree RPC methods', () => {
     expect(runtime.listWorktreeLineage).toHaveBeenCalled()
     expect(runtime.listWorkspaceLineage).toHaveBeenCalled()
     expect(response).toMatchObject({ ok: true, result: { lineage, workspaceLineage: {} } })
-  })
-
-  it('persists smart sort order on the runtime server', async () => {
-    const runtime = {
-      getRuntimeId: () => 'test-runtime',
-      dedupeWorktreeCreate: passthroughDedupe,
-      persistManagedWorktreeSortOrder: vi.fn().mockReturnValue({ updated: 2 })
-    } as unknown as OrcaRuntimeService
-    const dispatcher = new RpcDispatcher({ runtime, methods: WORKTREE_METHODS })
-
-    const response = await dispatcher.dispatch(
-      makeRequest('worktree.persistSortOrder', { orderedIds: ['wt-1', 'wt-2'] })
-    )
-
-    expect(runtime.persistManagedWorktreeSortOrder).toHaveBeenCalledWith(['wt-1', 'wt-2'])
-    expect(response).toMatchObject({ ok: true, result: { updated: 2 } })
   })
 })

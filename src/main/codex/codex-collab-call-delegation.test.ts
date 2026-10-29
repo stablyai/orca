@@ -1,7 +1,3 @@
-// A running chat holds a subagent's section open while the parent's newest row delegates to it.
-// In Codex's default multi-agent mode that row is the collab call the host writes as a tool row,
-// so the rows the real adapter publishes must read as a delegation to the helper they name.
-
 import { describe, expect, it } from 'vitest'
 import { codexCollabRowAgentIds } from '../../shared/codex-collab-agent-tools'
 import { projectNativeChatTranscript } from '../../shared/native-chat-transcript-projection'
@@ -25,7 +21,6 @@ import {
 } from './codex-collab-call-frames-fixture'
 import { THREAD_ID } from './codex-structured-session-adapter-fixture'
 
-/** The delegation the parent's newest tool run reads as, the row a running chat's frontier judges. */
 async function newestRunDelegation(frames: Frame[]): Promise<NativeChatSubagentDelegation | null> {
   const { conversation } = projectNativeChatTranscript(
     projectStructuredAgentSessionMessages(await publishedRows(frames), [], [])
@@ -88,7 +83,7 @@ describe("a Codex default-mode collab call row as the parent's delegation", () =
     ).toBeNull()
   })
 
-  it('keeps naming the helper when its prompt is past the journal limit', async () => {
+  it('keeps naming the helper and saves a long prompt whole', async () => {
     const prompt = `Review lane a. ${'x'.repeat(20_000)}`
     const longSpawn = [
       turn('turn/started', THREAD_ID, PARENT_TURN),
@@ -106,7 +101,7 @@ describe("a Codex default-mode collab call row as the parent's delegation", () =
     const input = row?.kind === 'tool-call' ? row.input : undefined
     expect(input).toMatchObject({
       description: expect.stringMatching(/^Review lane a\. x+…$/),
-      prompt: expect.stringContaining('[Orca: output truncated')
+      prompt
     })
     expect(codexCollabRowAgentIds(input)).toEqual([HELPER])
     expect(await newestRunDelegation(longSpawn)).toEqual({ kind: 'call', agentId: HELPER })

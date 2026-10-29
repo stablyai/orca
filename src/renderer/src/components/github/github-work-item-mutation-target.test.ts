@@ -3,7 +3,11 @@ import { describe, expect, it, vi } from 'vitest'
 const store = vi.hoisted(() => ({
   state: {
     settings: { activeRuntimeEnvironmentId: 'focused-runtime' },
-    repos: [{ id: 'tracked', connectionId: null, executionHostId: 'runtime:owner-runtime' }]
+    repos: [
+      { id: 'tracked', connectionId: null, executionHostId: 'runtime:owner-runtime' },
+      { id: 'twin', connectionId: null, executionHostId: 'runtime:focused-runtime' },
+      { id: 'twin', connectionId: null, executionHostId: 'runtime:other-runtime' }
+    ]
   }
 }))
 
@@ -31,6 +35,14 @@ describe('getGitHubMutationTarget', () => {
 
   it('sends an untracked Project row to the host that loaded it, not the focused server', () => {
     expect(getGitHubMutationTarget('untracked', projectOrigin)).toEqual({
+      kind: 'environment',
+      environmentId: 'board-runtime'
+    })
+  })
+
+  it('refuses a twin rather than taking the focused copy or this computer', () => {
+    expect(() => getGitHubMutationTarget('twin', undefined)).toThrow('No single host owns project')
+    expect(getGitHubMutationTarget('twin', projectOrigin)).toEqual({
       kind: 'environment',
       environmentId: 'board-runtime'
     })

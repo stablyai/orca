@@ -1,15 +1,12 @@
 import type { RuntimeTerminalWaitBlockedReason } from '../../shared/runtime-types'
 
-// Why rows, from each dialog's first `·` on: codex.json's provisional_startup takes a `·` after the
-// startup header for the live chat's footer, so each dialog must be matched by the time that `·`
-// lands. Why not headings: Codex 0.157+ paints them by cell diff over its startup screen, so the
-// text copy can lose letters and spaces (`updat available`); these rows are fixed literals.
-// Update: `Update available · 0.157.1 → 0.158.0`, then `enter continue · esc skip`.
-const CODEX_UPDATE_ROW_RE = /available\s*·\s*\d+\.\d+|enter\s*continue\s*·\s*esc\s*skip/g
+// Match rows by their first ·, before provisional startup mistakes it for a chat footer.
+// Codex 0.157+ cell-diff painting corrupts heading text; fixed key/update rows survive.
+const CODEX_UPDATE_ROW_RE = /available\s*\u00B7\s*\d+\.\d+|enter\s*continue\s*\u00B7\s*esc\s*skip/g
 // Why not `esc back`: Codex's mid-session pickers end `enter confirm · esc back`.
-const CODEX_HOOKS_REVIEW_KEY_ROW_RE = /enter\s*confirm\s*·(?!\s*esc\s*back)/g
+const CODEX_HOOKS_REVIEW_KEY_ROW_RE = /enter\s*confirm\s*\u00B7(?!\s*esc\s*back)/g
 // Why both verbs: the retired-model notice says `continue`, the new-model announcement `confirm`.
-const CODEX_MODEL_MIGRATION_KEY_ROW_RE = /enter\/esc\s*(?:continue|confirm)\s*·/g
+const CODEX_MODEL_MIGRATION_KEY_ROW_RE = /enter\/esc\s*(?:continue|confirm)\s*\u00B7/g
 
 function lastMatchIndex(text: string, row: RegExp): number {
   let index = -1
@@ -19,8 +16,7 @@ function lastMatchIndex(text: string, row: RegExp): number {
   return index
 }
 
-// Why the last match, and the legacy wording too: an answered dialog stays in the text copy, and
-// builds before 0.157 wrote `Press enter to continue/confirm`.
+// Use the last match because answered dialogs persist in text; include pre-0.157 Press enter wording.
 function findDialogIndex(
   normalized: string,
   legacyHeading: string,
@@ -34,8 +30,7 @@ function findDialogIndex(
   return Math.max(rowIndex, legacyIndex)
 }
 
-// Why together: each startup dialog owns Enter before the chat exists, so a brief typed into one
-// answers it (Codex's update dialog defaults to `Update now`).
+// Startup dialogs own Enter before chat exists; submitting a brief could accept Update now instead.
 export function findStartupDialogBlockedSignals(
   normalized: string
 ): { reason: RuntimeTerminalWaitBlockedReason; index: number }[] {
@@ -69,7 +64,7 @@ export function findStartupDialogBlockedSignals(
     CODEX_HOOKS_REVIEW_KEY_ROW_RE
   )
   if (hooksIndex !== -1) {
-    // Why neutral: this matcher never inspects the agent -- 'hooks need review' is not Codex-only wording.
+    // Hooks-review wording is agent-neutral; this matcher never establishes agent identity.
     candidates.push({ reason: 'agent-hooks-review-prompt', index: hooksIndex })
   }
   return candidates

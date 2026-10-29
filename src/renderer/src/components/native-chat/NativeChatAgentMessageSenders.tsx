@@ -8,15 +8,13 @@ import {
   agentMessageSendersShown,
   type AgentMessageSender,
   type AgentMessageSource
-} from '../../../../shared/agent-session-message-source'
+} from '../../../../shared/agent-session/agent-session-message-source'
 import {
   unnamedSenderLabel,
   useAgentMessageSenderLabel
 } from './native-chat-agent-message-sender-label'
 
-/** "Message from <name>" over another agent's message, or "From <name>" on its queued card; each
- *  name opens that agent. Plain text where the transcript has no chat to resolve the sender
- *  against, and for a sender that runs on another host. */
+/** Open resolvable local senders; use plain names when chat context is absent or the sender belongs to another host. */
 export function NativeChatAgentMessageSenders({
   from,
   chatWorktreeId,
@@ -38,7 +36,6 @@ export function NativeChatAgentMessageSenders({
       </span>
       {shown.length === 0 ? <span className="px-2">{unnamedSenderLabel()}</span> : null}
       {shown.map((sender, index) => (
-        // Fragment keys: one sender's name and the separator after it.
         <Fragment key={sender.party.address}>
           <SenderName
             from={from}

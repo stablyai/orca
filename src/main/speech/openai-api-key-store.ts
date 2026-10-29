@@ -47,12 +47,24 @@ function readLegacyJsonStoredOpenAiKey(): StoredOpenAiKey | null {
 }
 
 export function hasOpenAiSpeechApiKey(): boolean {
-  // Why: Settings and model-state refresh call this on startup; checking file
-  // existence avoids a decrypt that triggers macOS keychain prompts.
+  // Existence checks avoid macOS keychain prompts during startup/settings refresh.
   return existsSync(getOpenAiKeyPath())
 }
 
-/** How the stored speech key sits on disk, or null when none is stored. */
+/** Check host decryption: orcad may not open a desktop safeStorage key even when its file exists. */
+export function canReadOpenAiSpeechApiKey(): boolean {
+  if (!hasOpenAiSpeechApiKey()) {
+    return false
+  }
+  try {
+    readOpenAiSpeechApiKey()
+    return true
+  } catch {
+    return false
+  }
+}
+
+/** Stored protection, or null when no key exists. */
 export function getOpenAiSpeechApiKeyProtection(): SecretAtRestProtection | null {
   // The legacy JSON wrapper only ever held base64 ciphertext, so it is sealed by shape.
   if (readLegacyJsonStoredOpenAiKey()) {
@@ -98,14 +110,22 @@ export function readOpenAiSpeechApiKey(): string {
     }
     cachedOpenAiSpeechApiKey = getSecretStore().isEncryptionAvailable()
       ? decryptOrLegacyPlaintext(raw)
-      : raw.toString('utf8')
+      : plaintextOnly(raw)
     return cachedOpenAiSpeechApiKey
   } catch {
     throw new Error('OpenAI API key could not be decrypted')
   }
 }
 
-// Why: a key saved before sealing became available stays plaintext until it is migrated or re-saved.
+// Without sealing, another store's ciphertext cannot be a usable key.
+function plaintextOnly(raw: Buffer): string {
+  if (classifyUnenvelopedCredential(raw) !== 'plaintext') {
+    throw new Error('sealed by another secret store')
+  }
+  return raw.toString('utf8')
+}
+
+// Keys saved before sealing remain plaintext until migration or re-save.
 function decryptOrLegacyPlaintext(raw: Buffer): string {
   try {
     return getSecretStore().decryptString(raw)

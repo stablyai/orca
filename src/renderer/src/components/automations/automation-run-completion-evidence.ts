@@ -1,6 +1,6 @@
 import type { AutomationRun } from '../../../../shared/automations-types'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
-import type { RetainedAgentEntry } from '@/store/slices/agent-status'
+import type { RetainedAgentEntry } from '@/store/slices/agent-status/agent-status-contract'
 import { automationRunMatchesPaneKey } from './automation-run-open-target'
 
 function isCompletionAfterDispatch(entry: AgentStatusEntry, dispatchedAt: number): boolean {

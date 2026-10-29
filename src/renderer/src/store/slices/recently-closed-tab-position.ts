@@ -1,5 +1,6 @@
 import { recordLayoutApply } from '@/runtime/layout-apply-send'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { tabOrderAnchor } from '../../../../shared/workspace-layout/tab-order'
 import type { AppState } from '../types'
 
 export type RecentlyClosedTabPosition = {
@@ -8,9 +9,7 @@ export type RecentlyClosedTabPosition = {
   groupIndex?: number
 }
 
-/** Reusable position lookup for one worktree. Bulk closes resolve a position per
- *  closed tab; without a shared index every lookup rescans tab order and group
- *  membership, which makes close-all cubic in the tab count. */
+/** Share worktree position index across bulk closes; per-tab order/group rescans make close-all cubic. */
 export type RecentlyClosedTabPositionIndex = {
   positionFor: (entityId: string) => RecentlyClosedTabPosition | undefined
 }
@@ -207,7 +206,8 @@ function recordReopenedTabPosition(
       type: 'moveTab',
       tabId: tab.id,
       toGroupId: group.id,
-      index
+      index,
+      afterTabId: tabOrderAnchor(group.tabOrder, index)
     })
   }
 }

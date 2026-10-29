@@ -140,8 +140,7 @@ describe('SshConnection', () => {
       await conn.connect()
 
       expect(clientInstances).toHaveLength(2)
-      // The agent-first attempt defers ~/.ssh/id_ed25519, so its ladder ends at the agent:
-      // answering the host's password challenge there would preempt the key that authenticates.
+      // The deferred default key must precede the password challenge after agent failure.
       expect(
         walkInitialAuthLadder(clientInstances[0].lastConnectConfig, [
           'publickey',
@@ -199,7 +198,7 @@ describe('SshConnection', () => {
       emitSshEvent('error', new Error('All configured authentication methods failed'))
       await keyRetryCreated
       await settle()
-      // Wrapped: an async function returning the promise itself would wait for the whole connect.
+      // Wrap the promise so this async fixture does not await connection completion.
       return { connected }
     }
 

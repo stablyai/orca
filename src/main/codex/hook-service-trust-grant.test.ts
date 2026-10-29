@@ -20,7 +20,7 @@ import {
   upsertHookTrustEntries,
   type CodexTrustEntry
 } from './config-toml-trust'
-import { codexAppServerCapabilityCache } from './codex-app-server-capability-cache'
+import { codexAppServerCapabilityCache } from './app-server/codex-app-server-capability-cache'
 import { _internals as trustGrantInternals } from './codex-hook-trust-grant'
 import {
   readCodexTrustGrantLedgerHome,
@@ -86,7 +86,6 @@ afterEach(() => {
   vi.clearAllMocks()
 })
 
-// Why: the opt-out only strips files; a grant session here would mean it asked Codex to trust something.
 function forbidGrantSessions(): ReturnType<typeof vi.fn> {
   const runner = vi.fn(async () => {
     throw new Error('opt-out must not run a Codex trust-grant session')
@@ -138,7 +137,7 @@ describe('CodexHookService opt-out of the real-home entry', () => {
     expect(readCodexTrustGrantLedgerHome(systemHome)).toBeNull()
   })
 
-  // Why: ordinary Windows CI tokens cannot create file symlinks without Developer Mode.
+  // Windows CI requires Developer Mode for file symlinks.
   it.skipIf(process.platform === 'win32')(
     'keeps a real-home symlink and moves later user trust during an explicit opt-out',
     async () => {

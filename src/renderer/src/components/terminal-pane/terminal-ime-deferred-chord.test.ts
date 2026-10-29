@@ -1,7 +1,5 @@
 // @vitest-environment happy-dom
-// STA-4476: the composing-chord deferral waits on the composition, not a deadline (#12871), so it
-// is the sender that has to guarantee an exit — otherwise the wait and its listeners outlive the
-// pane and a later composition flushes a stale chord.
+// Composition waits need sender-owned blur/teardown exits or a later session can flush a stale chord (#12871, STA-4476).
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   createTerminalImeDeferredChordSender,
@@ -22,7 +20,7 @@ describe('createTerminalImeDeferredChordSender', () => {
     const send = vi.fn()
     const sender = createTerminalImeDeferredChordSender()
 
-    sender.defer(el, send)
+    sender.defer({ code: 'ArrowLeft', timeStamp: 1 }, el, send)
     expect(send).not.toHaveBeenCalled()
 
     el.dispatchEvent(new Event('compositionend'))
@@ -37,8 +35,8 @@ describe('createTerminalImeDeferredChordSender', () => {
     const second = vi.fn()
     const sender = createTerminalImeDeferredChordSender()
 
-    sender.defer(el, first)
-    sender.defer(el, second)
+    sender.defer({ code: 'ArrowLeft', timeStamp: 1 }, el, first)
+    sender.defer({ code: 'ArrowLeft', timeStamp: 1 }, el, second)
     sender.cancelPending()
 
     expect(removeEventListener).toHaveBeenCalledTimes(4)
@@ -55,7 +53,7 @@ describe('createTerminalImeDeferredChordSender', () => {
     const send = vi.fn()
     const sender = createTerminalImeDeferredChordSender()
 
-    sender.defer(el, send)
+    sender.defer({ code: 'ArrowLeft', timeStamp: 1 }, el, send)
     vi.advanceTimersByTime(TERMINAL_IME_DEFERRED_CHORD_ABANDON_MS - 1)
     expect(send).not.toHaveBeenCalled()
 
@@ -70,7 +68,7 @@ describe('createTerminalImeDeferredChordSender', () => {
     const send = vi.fn()
     const sender = createTerminalImeDeferredChordSender()
 
-    sender.defer(el, send)
+    sender.defer({ code: 'ArrowLeft', timeStamp: 1 }, el, send)
     el.dispatchEvent(new Event('compositionend'))
     vi.advanceTimersByTime(0)
     sender.cancelPending()

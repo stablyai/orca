@@ -198,7 +198,7 @@ it.each(['continued', 'refused', 'unconfirmed'] as const)(
       expect(finished).toBe(false)
       expect(summaries.map((summary) => summary.restartResume?.phase)).toContain('queued')
       expect(summaries.map((summary) => summary.restartResume?.phase)).toContain('starting')
-      // Reopening takes a snapshot of the same live action, without needing its earlier frames.
+      // Reopened subscribers need a current action snapshot without prior frames.
       const snapshots: AgentSessionStatusSummary[] = []
       const closeSnapshot = host.subscribeStatus({
         id: 'reopen',

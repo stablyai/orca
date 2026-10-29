@@ -1,0 +1,97 @@
+import type { JiraAdfMediaAttrs } from '../adf-markdown'
+import { MAX_IMAGES, parseImageAttachmentMetas } from './meta'
+
+/** Thumbnail and content paths share numeric attachment IDs; retain document order. */
+export function extractAttachmentContentIdsFromHtml(html: string | undefined | null): string[] {
+  if (!html) {
+    return []
+  }
+  const ids: string[] = []
+  const seen = new Set<string>()
+  const pattern =
+    /\/(?:rest\/api\/\d+\/attachment\/(?:content|thumbnail)|secure\/(?:attachment|thumbnail))\/(\d+)(?:\/|\b|"|'|\?)/gi
+  let match: RegExpExecArray | null
+  while ((match = pattern.exec(html)) !== null) {
+    const id = match[1]
+    if (!id || seen.has(id)) {
+      continue
+    }
+    seen.add(id)
+    ids.push(id)
+  }
+  return ids
+}
+
+/** Prefer attachment-needing media (no external https URL) for discovery fallback. */
+export function selectPreferredAttachmentIds(args: {
+  renderedHtmlIds: string[]
+  attachmentField: unknown
+  mediaAttrs: readonly JiraAdfMediaAttrs[]
+  maxBytes?: number
+  maxImages?: number
+}): { preferredIds: string[]; fallbackRan: boolean; needCount: number } {
+  const needing = args.mediaAttrs.filter((attrs) => !(attrs.url && /^https?:\/\//i.test(attrs.url)))
+  const needCount = needing.length
+  if (needCount === 0) {
+    // HTML-only images must not trigger downloads.
+    return { preferredIds: [], fallbackRan: false, needCount: 0 }
+  }
+
+  const preferredIds = [...args.renderedHtmlIds]
+  const taken = new Set(preferredIds)
+  let fallbackRan = false
+
+  if (needCount > preferredIds.length) {
+    const metas = parseImageAttachmentMetas(args.attachmentField, args.maxBytes)
+    // Screenshots often share image.png; assign each the next unused attachment.
+    for (const node of needing) {
+      if (preferredIds.length >= (args.maxImages ?? MAX_IMAGES)) {
+        break
+      }
+      const alt = (node.alt ?? '').trim()
+      if (!alt) {
+        continue
+      }
+      const altKey = alt.toLowerCase()
+      const meta = metas.find(
+        (candidate) => candidate.filename.toLowerCase() === altKey && !taken.has(candidate.id)
+      )
+      if (!meta) {
+        continue
+      }
+      taken.add(meta.id)
+      preferredIds.push(meta.id)
+      fallbackRan = true
+    }
+  }
+
+  return {
+    preferredIds: preferredIds.slice(0, args.maxImages ?? MAX_IMAGES),
+    fallbackRan,
+    needCount
+  }
+}
+
+export function warnIfMediaResolutionIncomplete(args: {
+  siteId: string
+  issueKey: string
+  needCount: number
+  preferredIdCount: number
+  resolvedCount: number
+  fallbackRan: boolean
+}): void {
+  if (args.needCount <= 0) {
+    return
+  }
+  if (args.resolvedCount >= args.needCount) {
+    return
+  }
+  console.warn('[jira] inline image resolution incomplete', {
+    siteId: args.siteId,
+    issueKey: args.issueKey,
+    needCount: args.needCount,
+    preferredIdCount: args.preferredIdCount,
+    resolvedCount: args.resolvedCount,
+    fallbackRan: args.fallbackRan
+  })
+}

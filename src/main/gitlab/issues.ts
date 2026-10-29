@@ -5,9 +5,9 @@ import { mapGitLabIssueInfo } from './mappers'
 // prettier-ignore
 import { glabApiWithHeaders, glabExecFileAsync, acquire, release, getIssueProjectRef, resolveIssueSource, classifyGlabError, classifyListFetchError, getGlabKnownHosts, glabRepoExecOptions, glabHostnameArgs, parseGlabJsonList, parseGlabPaginationHeader, type LocalGitExecOptions, type ProjectRef } from './gl-utils'
 import { encodedProject } from './project-path-encoding'
+import { codeHostFailure, classifiedFailure } from '../../shared/code-host-failure-copy'
 
-// Why: parallel to GitHub's IssueListResult — distinguishes a successful-
-// empty listing from a failed fetch.
+// Distinguish a confirmed empty list from fetch failure.
 export type IssueListResult = {
   items: GitLabIssueInfo[]
   /** 0 when the listing failed — the caller keeps its current pager instead of collapsing it. */
@@ -15,15 +15,7 @@ export type IssueListResult = {
   error?: ClassifiedError
 }
 
-/**
- * Get a single issue by number.
- *
- * Why this path doesn't take a preference — mirrors the GitHub issues.ts
- * commentary: linked-issue lookups persist a number to a worktree at
- * creation time. Routing detail lookups through the live per-repo
- * preference would silently flip an existing link to a different project
- * after the user toggled the selector.
- */
+/** Keep heuristic source resolution for durable issue-number links when live list preferences change. */
 export async function getIssue(
   repoPath: string,
   issueNumber: number,
@@ -32,11 +24,7 @@ export async function getIssue(
 ): Promise<GitLabIssueInfo | null> {
   const knownHosts = await getGlabKnownHosts(connectionId, localGitOptions)
   const projectRef = await getIssueProjectRef(repoPath, knownHosts, connectionId, localGitOptions)
-  // Why: don't fall back to a cwd-inferred `glab issue view` when the project
-  // can't be resolved — on an SSH connection cwd is not the repo dir, so glab
-  // hits a non-repo dir and fails with `git: exit status 128`. Return null
-  // (the caller already treats a missing project as "no issue") instead of
-  // spawning a doomed cwd-dependent call.
+  // Unresolved SSH projects have no usable local cwd; do not attempt glab repository inference.
   if (!projectRef) {
     return null
   }
@@ -59,14 +47,7 @@ export async function getIssue(
   }
 }
 
-/**
- * List issues for a project.
- *
- * Mirrors github/listIssues — returns a structured IssueListResult so
- * permission errors surface in the UI instead of collapsing to "No issues".
- */
-// Why: GitLab issues only have 'opened' / 'closed' lifecycle states.
-// 'all' maps to no state param so the API returns both.
+// GitLab issues have no merged state; all omits the API state parameter.
 export type IssueListState = 'opened' | 'closed' | 'all'
 
 export async function listIssues(
@@ -89,13 +70,7 @@ export async function listIssues(
     connectionId,
     localGitOptions
   )
-  // Why: when the project can't be resolved we must NOT fall back to an
-  // unscoped `glab issue list` that infers the project from cwd. For a repo
-  // on an SSH connection there is no local cwd matching the repo, so glab
-  // runs git resolution in a non-repo dir and fails with `git: exit status
-  // 128`. In an "All projects" aggregate one such failure must not sink the
-  // whole panel — return a structured, isolated result so the resolvable
-  // projects still load.
+  // Isolate unresolved projects instead of letting cwd inference fail the cross-project aggregate.
   if (!projectRef) {
     return {
       items: [],
@@ -119,12 +94,8 @@ export async function listIssues(
     )
     const data = parseGlabJsonList<Record<string, unknown>>(body)
     const headerTotalCount = parseGlabPaginationHeader(headers['x-total'], 0)
-    // Why: a proxy can strip both headers, so a full page advertises one more to probe (#13357);
-    // TaskPage retreats if that probe comes back empty.
+    // Missing pagination headers may be proxy-stripped; a full page advertises one more probe.
     const probedTotalPages = data.length < perPage ? currentPage : currentPage + 1
-    // Why: GitLab's project issues endpoint returns true issues only
-    // (MRs are a separate endpoint), so no equivalent of GitHub's
-    // pull_request filter is needed here.
     return {
       items: data.map((d) => mapGitLabIssueInfo(d as Parameters<typeof mapGitLabIssueInfo>[0])),
       totalPages:
@@ -144,10 +115,7 @@ export async function listIssues(
   }
 }
 
-/**
- * Create a new GitLab issue. Uses `glab api` with explicit project path so
- * the call doesn't depend on cwd matching the project the user picked.
- */
+/** Explicit project paths retain the selected source independently of cwd remotes. */
 export async function createIssue(
   repoPath: string,
   title: string,
@@ -158,7 +126,7 @@ export async function createIssue(
 ): Promise<{ ok: true; number: number; url: string } | { ok: false; error: string }> {
   const trimmedTitle = title.trim()
   if (!trimmedTitle) {
-    return { ok: false, error: 'Title is required' }
+    return codeHostFailure('titleRequired')
   }
   const knownHosts = await getGlabKnownHosts(connectionId, localGitOptions)
   const { source: projectRef } = await resolveIssueSource(
@@ -169,10 +137,7 @@ export async function createIssue(
     localGitOptions
   )
   if (!projectRef) {
-    return {
-      ok: false,
-      error: 'Could not resolve GitLab project for this repository'
-    }
+    return codeHostFailure('gitlab.projectUnresolved')
   }
   await acquire()
   try {
@@ -186,14 +151,13 @@ export async function createIssue(
         '-f',
         `title=${trimmedTitle}`,
         '-f',
-        // Why: GitLab uses `description` (not `body`) for issue text.
         `description=${body}`
       ],
       glabRepoExecOptions(repoPath, connectionId, localGitOptions)
     )
     const data = JSON.parse(stdout) as { iid?: number; web_url?: string; url?: string }
     if (typeof data.iid !== 'number') {
-      return { ok: false, error: 'Unexpected response from GitLab' }
+      return codeHostFailure('gitlab.unexpectedResponse')
     }
     return {
       ok: true,
@@ -208,10 +172,6 @@ export async function createIssue(
   }
 }
 
-/**
- * Add a comment (note) to an existing GitLab issue. Mirrors
- * github/addIssueComment.
- */
 export async function addIssueComment(
   repoPath: string,
   issueNumber: number,
@@ -233,10 +193,7 @@ export async function addIssueComment(
       )
     ).source
   if (!projectRef) {
-    return {
-      ok: false,
-      error: 'Could not resolve GitLab project for this repository'
-    }
+    return codeHostFailure('gitlab.projectUnresolved')
   }
   await acquire()
   try {
@@ -273,7 +230,7 @@ export async function addIssueComment(
     return { ok: true, comment }
   } catch (err) {
     const stderr = err instanceof Error ? err.message : String(err)
-    return { ok: false, error: classifyGlabError(stderr).message }
+    return classifiedFailure(classifyGlabError(stderr))
   } finally {
     release()
   }

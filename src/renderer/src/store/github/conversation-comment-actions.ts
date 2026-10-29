@@ -7,6 +7,7 @@ import { callRuntimeRpc } from '../../runtime/runtime-rpc-client'
 import { prCommentsCacheSuffix, sourceScopedRepoCacheKey } from './cache-identity'
 import { withBoundedCacheEntry } from './cache-policy'
 import { hasUsableCommentPayload, mergePRCommentIntoList } from './pr-comment-cache'
+import { inflightCommentsRequests } from './request-coordination'
 import {
   getGitHubRepoSourceSettings,
   getGitHubSourceTarget,
@@ -89,6 +90,7 @@ export const createConversationCommentActions = (
         })
       }
     })
+    inflightCommentsRequests.get(cacheKey)?.postedComments.push(result.comment)
     return result
   }
 })

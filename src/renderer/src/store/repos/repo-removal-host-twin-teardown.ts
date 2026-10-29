@@ -1,6 +1,7 @@
 import type { AppState } from '../types'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
-import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
+import type { EditorBufferKeepRequest } from '../slices/editor/buffers/editor-buffer-kept'
+import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { buildTerminalTabRetirementPlans } from '../slices/terminal-tab-retirement'
 import { cancelStructuredLaunchesForWorktrees } from '../slices/worktrees/teardown/purged-structured-launch-retirement'
 import { collectHostTwinPurgeScopes } from '../slices/worktrees/teardown/host-twin-worktree-purge'
@@ -46,16 +47,13 @@ export function collectRemovedHostTwins(
   }
 }
 
-/**
- * Closes the surfaces attributed to the removed copy through their close actions, so chats,
- * previews and shells retire as on any close. Anything unattributed (mixed tabs, reopen history,
- * tabless sleeping records) stays: a stale entry, never the survivor's data lost.
- */
+/** Close attributed surfaces through normal actions; retain unknown/mixed state rather than lose survivor data. File closes keepEditorBuffer so dirty records survive tab removal. */
 export function closeRemovedHostTwinState(
   get: () => AppState,
   set: (patch: (state: AppState) => Partial<AppState>) => void,
   twins: RemovedHostTwins,
-  preCall: RemovedHostTwins
+  preCall: RemovedHostTwins,
+  keepEditorBuffer?: EditorBufferKeepRequest
 ): void {
   const state = get()
   const presentTabIds = new Set([
@@ -95,8 +93,7 @@ export function closeRemovedHostTwinState(
       ]) {
         retiredPtyIds.add(ptyId)
       }
-      // Why killed here: the shared id resolves to no single host, so the planner marks this
-      // host's PTYs unroutable; attribution already proved they are the removed host's.
+      // Planner cannot route shared raw IDs; attribution already proves these unroutable PTYs belong to the removed host.
       const candidates = remoteCloseOwnedByHost
         ? []
         : [...plan.localOrSshPtyIds, ...plan.unroutablePtyIds, ...plan.cleanupOnlyPtyIds]
@@ -140,7 +137,7 @@ export function closeRemovedHostTwinState(
     for (const fileId of removed?.fileIds ?? []) {
       // Why: a file a listing refresh already dropped would make closeFile reset the focused surface.
       if (get().openFiles.some((file) => file.id === fileId)) {
-        get().closeFile(fileId, { captureRecentlyClosed: false })
+        get().closeFile(fileId, { captureRecentlyClosed: false, keepEditorBuffer })
       }
     }
     for (const browserTabId of removed?.browserTabIds ?? []) {

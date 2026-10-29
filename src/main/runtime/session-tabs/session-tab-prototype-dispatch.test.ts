@@ -249,7 +249,7 @@ class SessionRuntime extends OrcaRuntimeService {
   restoreRequests = 0
   restoreResult = Promise.resolve()
 
-  override async resolveWorktreeSelector(): Promise<ResolvedWorktree> {
+  override async resolveGitWorktreeSelector(): Promise<ResolvedWorktree> {
     const git = {
       path: 'workspace',
       head: '',

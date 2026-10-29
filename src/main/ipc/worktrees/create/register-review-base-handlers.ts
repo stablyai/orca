@@ -1,6 +1,7 @@
 import { ipcMain } from 'electron'
 import type { GitHubPrStartPoint, GitPushTarget } from '../../../../shared/worktree/types'
 import { isFolderRepo } from '../../../../shared/repo-kind'
+import { getRepoRoutingConnectionId } from '../../../../shared/execution-host'
 import { gitExecFileAsync } from '../../../git/runner'
 import {
   getLocalProjectGitExecOptions,
@@ -17,6 +18,7 @@ import {
 import { resolveGitHubPrStartPoint } from '../../../github/pr-start-point'
 import { resolveGitHubReviewHeadRemote } from '../../../github/review-head-remote'
 import type { WorktreeIpcContext } from '../worktree-ipc-context'
+import { reviewStartPointFailure } from '../../../../shared/review-start-point-failure-copy'
 
 export function registerReviewBaseHandlers(context: WorktreeIpcContext): void {
   const { store, runtime } = context
@@ -35,18 +37,20 @@ export function registerReviewBaseHandlers(context: WorktreeIpcContext): void {
     ): Promise<GitHubPrStartPoint | { error: string }> => {
       const repo = store.getRepo(args.repoId)
       if (!repo) {
-        return { error: 'Repo not found' }
+        return reviewStartPointFailure('repoNotFound')
       }
       if (isFolderRepo(repo)) {
-        return { error: 'Folder mode does not support creating worktrees.' }
+        return reviewStartPointFailure('folderUnsupported')
       }
+      // SSH ownership may exist only in executionHostId.
+      const connectionId = getRepoRoutingConnectionId(repo)
       const gitExec = async (args: string[]): Promise<{ stdout: string; stderr: string }> => {
-        if (!repo.connectionId) {
+        if (!connectionId) {
           return gitExecFileAsync(args, getLocalProjectGitExecOptions(store, repo))
         }
-        throw new SshHostNotServedError(repo.connectionId, SSH_GIT_RECONNECT_MESSAGE)
+        throw new SshHostNotServedError(connectionId, SSH_GIT_RECONNECT_MESSAGE)
       }
-      const localGhOptions = repo.connectionId
+      const localGhOptions = connectionId
         ? repo.ghAccount
           ? { ghAccount: repo.ghAccount }
           : undefined
@@ -67,18 +71,17 @@ export function registerReviewBaseHandlers(context: WorktreeIpcContext): void {
         baseRefName: args.baseRefName,
         isCrossRepository: args.isCrossRepository,
         issueSourcePreference: repo.issueSourcePreference,
-        connectionId: repo.connectionId ?? null,
+        connectionId,
         localGitOptions: localGhOptions,
         gitExec,
         fetchRemoteTrackingRef,
         fetchPullRequestHeadRef,
-        // Why: one resolver keeps source preference and hosting identity aligned
-        // across local, WSL, and SSH worktree creation.
+        // Share source preference and hosting identity across local, WSL and SSH creation.
         resolveRemote: () =>
           resolveGitHubReviewHeadRemote({
             repoPath: repo.path,
             issueSourcePreference: repo.issueSourcePreference,
-            connectionId: repo.connectionId ?? null,
+            connectionId,
             localGitOptions: localGhOptions,
             gitExec
           })

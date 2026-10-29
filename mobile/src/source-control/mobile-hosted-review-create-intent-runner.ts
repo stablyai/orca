@@ -17,6 +17,7 @@ type RunInput = {
   title: string
   status: MobileGitStatusResult | null
   commitMessage?: string
+  readCommitMessage?: () => string
   onProgress?: (progress: MobileHostedReviewCreateIntentProgress) => void
 }
 

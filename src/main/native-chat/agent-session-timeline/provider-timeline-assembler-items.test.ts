@@ -56,7 +56,7 @@ describe('provider timeline items', () => {
       item: 'call-a',
       body: { ...runningTool('read'), state: 'completed' }
     })
-    // The tool call ended the anonymous stream, so this text is a new message.
+    // Tool calls split anonymous text streams.
     rig.assembler.apply({
       type: 'text.delta',
       item: { stream: 'reply' },
@@ -196,7 +196,6 @@ describe('provider timeline items', () => {
     })
     expect(await backgroundTaskState(rig, 'bg-1')).toBe('working')
 
-    // It settles on its own update later, still in the turn that started it.
     rig.assembler.apply({ type: 'item.close', item: 'bg-1', body: backgroundTask('bg-1', 'done') })
     expect(await backgroundTaskState(rig, 'bg-1')).toBe('done')
     expect((await rig.row(providerItemId('item', 'bg-1')))?.turnScope).toEqual({
@@ -246,7 +245,6 @@ describe('provider timeline text streams', () => {
     runs.splice(0).forEach((run) => run())
     const [reply, single] = (await rig.rows()).filter((row) => row.body.kind === 'message')
     expect(messageText(reply?.body)).toBe('abc')
-    // Three deltas cost the writes one delta does.
     expect(reply?.revision).toBe(single?.revision)
   })
 

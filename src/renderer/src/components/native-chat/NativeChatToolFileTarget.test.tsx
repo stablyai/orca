@@ -4,8 +4,8 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { NativeChatToolLine } from './NativeChatToolLine'
 import { NativeChatDiffCard } from './NativeChatDiffCard'
-import { createNativeChatFileHref } from '../../../../shared/native-chat-href-routing'
-import type { NativeChatEditFile } from '../../../../shared/native-chat-edit-model'
+import { createNativeChatFileHref } from '../../../../shared/native-chat/native-chat-href-routing'
+import type { NativeChatEditFile } from '../../../../shared/native-chat/tools/native-chat-edit-model'
 
 afterEach(cleanup)
 

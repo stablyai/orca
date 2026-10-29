@@ -16,21 +16,17 @@ export type PendingViewOutcome = 'settled' | 'refused' | 'unavailable' | 'waitin
 
 export type PendingViewStatus = {
   pending: readonly PendingViewChange[]
-  /** Some change has waited past PENDING_VIEW_CHANGE_STALE_MS. */
   stale: boolean
 }
 
-/** Stable for one client, so callers' callbacks never change with what is pending. */
 export type PendingViewControls = {
   sendView: (patch: MobileViewPatch, payload: WorkspaceViewSettings) => Promise<PendingViewOutcome>
   /** `unavailable`: the host has no ui.setCollapsed. */
   sendCollapse: (key: string, collapsed: boolean) => Promise<PendingViewOutcome>
-  /** The last change sent; a read sent after it judges every change up to it. */
   lastOpId: () => number
-  /** The changes still waiting once the desktop's values are read; after a reconnect each is resent. */
   reconcile: (
     ui: WorkspaceViewSettings,
-    options: { reconnected: boolean; sentByOpId: number }
+    options: { resend: boolean; sentByOpId: number }
   ) => PendingViewChange[]
 }
 
@@ -40,12 +36,10 @@ type OwnedChanges = { client: RpcClient | null; pending: readonly PendingViewCha
 
 const NO_CHANGES: readonly PendingViewChange[] = []
 
-/** The phone's own option changes until the desktop answers each, for the client that sent them. */
 function useHostPendingViewChanges(client: RpcClient | null): HostPendingViewChanges {
   const [owned, setOwned] = useState<OwnedChanges>({ client, pending: NO_CHANGES })
   const ownedRef = useRef(owned)
   const seqRef = useRef(0)
-  // A fresh writer per screen: its seq restarts at zero.
   const [writer] = useState(
     () => `phone-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`
   )
@@ -121,12 +115,12 @@ function useHostPendingViewChanges(client: RpcClient | null): HostPendingViewCha
   )
   const lastOpId = useCallback(() => seqRef.current, [])
   const reconcile = useCallback(
-    (ui: WorkspaceViewSettings, options: { reconnected: boolean; sentByOpId: number }) => {
+    (ui: WorkspaceViewSettings, options: { resend: boolean; sentByOpId: number }) => {
       const waiting = reconcilePendingViewChanges(current(), ui, options.sentByOpId)
       if (waiting.length !== current().length) {
         write(waiting)
       }
-      if (options.reconnected) {
+      if (options.resend) {
         // Each sets a desired value, so sending one again is safe.
         waiting.forEach((change) => void send(change))
       }
@@ -158,7 +152,6 @@ function useHostPendingViewChanges(client: RpcClient | null): HostPendingViewCha
   return { status, controls }
 }
 
-/** Switch point: a page built without the feed sends its changes best-effort, with no pending state. */
 export const useSwitchedHostPendingViewChanges: (
   client: RpcClient | null
 ) => HostPendingViewChanges | null = ORCA_SIDEBAR_INPUTS_IS_MAIN

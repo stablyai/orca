@@ -3,8 +3,6 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { openRelayDatabase, type RelayDatabase } from './database.js'
 import { reconcileReserveLedger, ReserveLedgerWriter } from './reserve-ledger-writer.js'
 
-// The ledger's statements on real PostgreSQL: the guarded upsert, its counter reset on a
-// move, and the batched row read.
 
 const databaseUrl = process.env.ORCA_RELAY_TEST_POSTGRES_URL
 const describePostgres = databaseUrl ? describe : describe.skip

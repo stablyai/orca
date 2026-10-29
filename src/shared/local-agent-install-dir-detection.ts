@@ -5,16 +5,17 @@ import { resolveCliCommands } from './node-cli-command-resolution'
 export function detectCommandsInInstallDirs(
   commands: readonly string[],
   /** The PATH detection searched; defaults to this process's own. */
-  pathEnv?: string
+  pathEnv?: string,
+  options?: { skipPathSearch?: boolean }
 ): Set<string> {
   if (commands.length === 0) {
     return new Set()
   }
   try {
-    const resolvedCommands =
-      pathEnv === undefined
-        ? resolveCliCommands(commands)
-        : resolveCliCommands(commands, { pathEnv })
+    const resolvedCommands = resolveCliCommands(commands, {
+      ...(pathEnv === undefined ? {} : { pathEnv }),
+      ...(options?.skipPathSearch ? { skipPathSearch: true } : {})
+    })
     return new Set(
       commands.filter((command) => path.isAbsolute(resolvedCommands.get(command) ?? command))
     )

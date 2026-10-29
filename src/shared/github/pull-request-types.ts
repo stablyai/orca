@@ -13,8 +13,7 @@ export type PRConflictSummary = {
   localMergeState?: 'clean'
 }
 
-// Why: host must survive renderer/RPC boundaries so Enterprise review actions
-// cannot silently fall back to a same-named repository on github.com.
+// Keep GHES host identity across renderer/RPC boundaries to prevent actions targeting same-named github.com repos.
 export type GitHubRepositoryIdentity = { owner: string; repo: string; host?: string }
 
 export type GitHubPRMergeMethod = 'merge' | 'squash' | 'rebase'
@@ -64,25 +63,16 @@ export type PRInfo = {
   mergeStateStatus?: string | null
   /** GitHub-registered stack metadata. Absent for ordinary dependent PR chains. */
   stack?: GitHubPRStack
-  // Why: check-runs are keyed by the PR head commit, not the mutable branch name.
-  // Keeping the head SHA in cached PR metadata lets the checks panel poll the
-  // correct commit without re-querying GitHub or guessing from local branch refs.
+  // Checks key by head commit; cache the SHA to poll without GitHub re-queries or mutable-branch guesses.
   headSha?: string
-  // Why: a merged branch-matched PR stays visible when the worktree head is one
-  // of the PR's own commits (behind update-branch/web commits). Cache staleness
-  // checks must honor that confirmation without re-querying GitHub.
+  // Keep merged PRs visible for contained worktree heads, including behind update/web commits; cache validation honors this proof.
   confirmedContainedHeadOid?: string
-  // Why: the worktree HEAD OID this merged linked PR was confirmed to have
-  // diverged from (a definite not-contained probe). Head-scoped, not a bare
-  // boolean, so a PR-number-coalesced refresh broadcast cannot clear a sibling
-  // worktree whose own head is still on the PR's line of work. Clearing a
-  // durable linked PR requires this positive signal for that exact head, never
-  // the mere absence of a containment confirmation after a rate-limit/error.
+  // Positive divergence proof applies only to this worktree HEAD. PR-coalesced broadcasts must not clear siblings still on the PR’s history.
+  // Clear durable links only with exact-head proof; missing containment after rate limits/errors proves nothing.
   headDivergedFromMergedPRAtOid?: string
   /** Target branch name for PR-created worktree compare-base repair. */
   baseRefName?: string
-  /** PR head branch name. Lets linked-PR consumers detect that the worktree
-   *  has switched to a different branch and the durable link is stale. */
+  /** PR branch name detects worktrees switching branches and stale durable links. */
   headRefName?: string
   prRepo?: GitHubRepositoryIdentity
   headRepo?: GitHubRepositoryIdentity
@@ -150,8 +140,5 @@ export type GitHubPRFileContents = {
   modifiedTooLarge?: boolean
 }
 
-// Why: declared here as a shared shape so IPC return envelopes and renderer
-// slices can reference the same structural type without importing from main.
-// Aliased as `OwnerRepo` in `src/main/github/gh-utils.ts` so main call sites
-// can continue using the short local name.
+// Share the identity shape across IPC/renderer without main imports; main’s gh-utils.ts retains the OwnerRepo alias.
 export type GitHubOwnerRepo = GitHubRepositoryIdentity

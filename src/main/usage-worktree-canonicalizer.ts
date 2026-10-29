@@ -13,8 +13,6 @@ export async function canonicalizeUsageWorktreePaths<T extends { path: string }>
     return []
   }
 
-  // Why: usage scans can see many stale remembered worktrees. Bound realpath
-  // fanout so opening the usage pane does not stampede the filesystem.
   const workerCount = Math.min(worktrees.length, Math.max(1, Math.floor(concurrency)))
   const canonicalized = Array.from<CanonicalizedUsageWorktree<T>>({ length: worktrees.length })
   let nextIndex = 0

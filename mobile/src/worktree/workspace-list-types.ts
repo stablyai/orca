@@ -17,11 +17,11 @@ export type Worktree = {
   repoId: string
   hostId?: ExecutionHostId
   terminalPlatform?: NodeJS.Platform
-  /** Display-only; set when the list spans hosts, so rows say which host they run on. */
+  // Show execution-host context when the list spans hosts.
   hostContextLabel?: string
   /** Resolved host for the display label; present when legacy rows omit hostId. */
   hostContextHostId?: ExecutionHostId
-  /** Display-only; the host's health word beside its label, absent while the host is healthy. */
+  // Omit health labels for healthy hosts.
   hostContextHealthLabel?: string
   repo: string
   branch: string
@@ -35,9 +35,10 @@ export type Worktree = {
   /** The host sorts by its own stamps; see src/shared/sidebar-list/stamp-order.ts. */
   sortedByStamps?: true
   createdAt?: number
-  // Why: on-disk worktree directory path. Needed by NewWorktreeModal so the
-  // marine-creature fallback dedupes against filesystem basenames.
+  // Use filesystem basenames to dedupe fallback workspace names.
   path: string
+  /** Older paths of a renamed or moved workspace; older hosts omit it. */
+  priorWorktreeIds?: string[]
   isArchived?: boolean
   isMainWorktree?: boolean
   hasHostSidebarActivity?: boolean
@@ -55,6 +56,10 @@ export type Worktree = {
   parentWorktreeId?: string | null
   childWorktreeIds?: string[]
   lineageDepth?: number
+  // Match the desktop’s project-group row depth.
+  projectGroupDepth?: number
+  /** Its project group came from a folder scan, whose rows the desktop steps more compactly. */
+  inFolderScanGroup?: boolean
   lineageChildCount?: number
   lineageCollapsed?: boolean
   /** The collapse key the shared builder gave this row's children; set only on a feed-built list. */
@@ -75,6 +80,8 @@ export type Worktree = {
   linkedItems?: RuntimeWorktreePsSummary['linkedItems']
   comment?: string
   status?: 'working' | 'active' | 'permission' | 'done' | 'inactive'
+  /** Unchecked wire data: a newer host may send a state this build does not know. */
+  sidebarStatus?: string
   workingMode?: AgentWorkingMode
   agents?: RuntimeWorktreeAgentRow[]
 }
@@ -82,22 +89,27 @@ export type Worktree = {
 /** The desktop's Workspace options filters, one shared value. */
 export type FilterState = WorkspaceRowFilters
 
-/** A repo as Project sections read it: the desktop's catalog record, or one a row stands in for. */
+// Catalog repo or fallback from a workspace row.
 // repoIcon stays unread wire data until drawn (readMobileRepoIcon).
-export type SectionRepo = ProjectSectionRepo & { badgeColor?: string; repoIcon?: unknown }
+export type SectionRepo = ProjectSectionRepo & {
+  badgeColor?: string
+  repoIcon?: unknown
+  projectGroupId?: string | null
+  projectGroupOrder?: number
+}
 
-/** A workspace the host is still creating; the feed names only its project, null under its own header. */
+// Pending creations name only their project; null belongs under the list’s own header.
 export type SectionPendingCreation = { key: string; repoName: string | null }
 
 export type Section = {
   key: string
   title: string
   icon?: 'pin'
-  /** Under Project grouping, the repo whose colour and icon the header shows, as on the desktop. */
   repo?: SectionRepo
+  isProjectGroup?: boolean
+  projectGroupDepth?: number
   /** The header's own count from a feed-built list, which a collapsed section still shows. */
   count?: number
-  /** Drawn under the header, above its rows, as the desktop places them. */
   pendingCreations?: SectionPendingCreation[]
   data: Worktree[]
 }

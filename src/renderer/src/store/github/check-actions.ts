@@ -12,6 +12,7 @@ import {
   isGitHubCheckDetailsTimeout
 } from '../../../../shared/github/check-details-deadline'
 import { syncPRChecksStatus } from '../slices/github-checks'
+import { isWslDistroNotRunningRefusal } from '../../../../shared/wsl-distro-not-running-refusal'
 import {
   getPRChecksCacheTtl,
   prChecksCacheSuffix,
@@ -100,7 +101,10 @@ export const createCheckActions = (
       if (options?.throwOnError) {
         throw err
       }
-      console.error('Failed to fetch PR checks:', err)
+      // A poll refused for a stopped WSL distro is expected; the cached checks below stand.
+      if (!isWslDistroNotRunningRefusal(err)) {
+        console.error('Failed to fetch PR checks:', err)
+      }
       const latestCached = get().checksCache[cacheKey] ?? get().checksCache[legacyCacheKey]
       return latestCached?.data && (!headSha || latestCached.headSha === headSha)
         ? latestCached.data
@@ -114,11 +118,13 @@ export const createCheckActions = (
         break
       }
       const weakerThanRequested =
-        (options?.force && !inflightRequest.force) || (options?.noCache && !inflightRequest.noCache)
+        (options?.force && !inflightRequest.force) ||
+        (options?.noCache && !inflightRequest.noCache) ||
+        (options?.wakeWslDistro && !inflightRequest.wakeWslDistro)
       if (!weakerThanRequested) {
         return inflightRequest.promise.catch(recoverChecks)
       }
-      // Why: wait out one weaker request so peers can share the upgrade, but never twice — a steady stream of weaker callers would otherwise starve this one forever.
+      // Wait once for weaker requests so upgrades coalesce without starvation from repeated weak callers.
       if (waitedForUpgrade) {
         break
       }
@@ -156,11 +162,10 @@ export const createCheckActions = (
               headSha,
               prRepo: prRepo ?? null,
               noCache: Boolean(options?.force || options?.noCache),
-              sourceContext: options?.sourceContext
+              sourceContext: options?.sourceContext,
+              ...(options?.wakeWslDistro ? { wakeWslDistro: true } : {})
             })
-      // Why: the bounded upgrade wait can leave us running beside a stronger request for this
-      // key. Both bypass gh's cache here, but the later-started one holds the newer run state —
-      // let only the key's current owner write checksCache and the PR status it derives.
+      // Bounded waits can overlap stronger requests; only the current key owner may write caches/derived PR state, preserving newer run evidence.
       if (!ownsInflightRequest(inflightChecksRequests, inflightKey, requestId)) {
         return checks
       }
@@ -203,7 +208,8 @@ export const createCheckActions = (
       promise: request,
       requestId,
       force: Boolean(options?.force),
-      noCache: Boolean(options?.force || options?.noCache)
+      noCache: Boolean(options?.force || options?.noCache),
+      wakeWslDistro: Boolean(options?.wakeWslDistro)
     })
     return request.catch(recoverChecks)
   },

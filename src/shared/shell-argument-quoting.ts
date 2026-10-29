@@ -1,6 +1,5 @@
-// One home for shell-argument quoting. Each spelling below is a separate contract: callers embed,
-// compare or parse back these exact bytes, so variants stay separate functions, never flags.
-// PowerShell quoting lives in powershell-native-argument.ts; CommandLineToArgvW in @orca/process-host.
+// Quoting spellings are byte contracts consumed by parsers/comparisons; keep variants separate.
+// PowerShell lives in powershell-native-argument.ts; CommandLineToArgvW in @orca/process-host.
 
 /** POSIX sh single-quoting: each `'` closes the quote, is escaped, and reopens it (`'\''`). */
 export function quotePosixShell(value: string): string {
@@ -17,10 +16,7 @@ export function quotePosixShellUnlessPlainNoAt(value: string): string {
   return /^[A-Za-z0-9_./:-]+$/.test(value) ? value : quotePosixShell(value)
 }
 
-/**
- * POSIX sh single-quoting that spells each `'` as `'"'"'`. Installed CLI wrappers are read back
- * in this spelling (legacy-appimage-cli-wrapper.ts, wsl-cli-scripts.ts), so it must not change.
- */
+/** Keep this POSIX apostrophe spelling: installed CLI wrapper readers in legacy-appimage-cli-wrapper.ts/wsl-cli-scripts.ts require it. */
 export function quotePosixShellDoubleQuotedApostrophe(value: string): string {
   return `'${value.replaceAll("'", `'"'"'`)}'`
 }

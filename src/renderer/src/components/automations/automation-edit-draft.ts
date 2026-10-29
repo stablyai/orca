@@ -1,4 +1,5 @@
 import type { Automation } from '../../../../shared/automations-types'
+import { translate } from '@/i18n/i18n'
 import { getAutomationRunRepoId } from '../../../../shared/automation-run-identity'
 import {
   isRunnableAutomationSchedule,
@@ -36,6 +37,9 @@ export function buildAutomationEditDraft(automation: Automation): AutomationDraf
     scheduleWarning:
       schedule || hasCustomSchedule
         ? null
-        : 'This automation has an unsupported saved schedule. Pick a supported schedule before saving changes.'
+        : translate(
+            'auto.components.automations.editDraft.unsupportedSchedule',
+            'This automation has an unsupported saved schedule. Pick a supported schedule before saving changes.'
+          )
   }
 }

@@ -1,3 +1,4 @@
+import { runInNewContext } from 'node:vm'
 import { describe, expect, it } from 'vitest'
 import { buildImageDataUri, validateRasterImageDataUri } from './image-data-uri'
 
@@ -45,8 +46,7 @@ describe('buildImageDataUri', () => {
   })
 
   it('still renders bytes whose header we cannot measure', () => {
-    // Failing to read a header means we could not measure the image, not that it is oversized.
-    // The decoder handles encodings this parser does not, so suppressing here blanks valid images.
+    // Unreadable headers do not prove oversize; decoder-supported formats beyond this parser must remain visible.
     expect(buildImageDataUri('image/png', 'bmV3')).toBe('data:image/png;base64,bmV3')
   })
 
@@ -58,6 +58,28 @@ describe('buildImageDataUri', () => {
 })
 
 describe('validateRasterImageDataUri', () => {
+  it('preserves malformed parameter lists without exponential backtracking', () => {
+    const input = `data:image/png;${';'.repeat(32_768)}`
+    const result = runInNewContext(
+      'validate(input)',
+      { validate: validateRasterImageDataUri, input },
+      {
+        timeout: 250
+      }
+    )
+    expect(result).toBe(input)
+  })
+
+  it('finds base64 among multiple parameters and preserves payload commas', () => {
+    const content = pngBase64()
+    expect(validateRasterImageDataUri(`data:image/png;charset=utf-8;;BASE64;,${content}`)).toBe(
+      `data:image/png;base64,${content}`
+    )
+    expect(validateRasterImageDataUri('data:text/plain;charset=utf-8,one,two')).toBe(
+      'data:text/plain;charset=utf-8,one,two'
+    )
+  })
+
   it('accepts a safe inline raster and rejects an oversized one', () => {
     const safe = `data:image/png;base64,${pngBase64()}`
     expect(validateRasterImageDataUri(safe)).toBe(safe)

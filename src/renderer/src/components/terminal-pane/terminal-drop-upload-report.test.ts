@@ -32,8 +32,10 @@ describe('reportTerminalDropUploadSkipsAndFailures', () => {
     reportTerminalDropUploadSkipsAndFailures([{ reason: 'symlink' }, { reason: 'too_large' }], [])
     const mixedSkipKey = mocks.translate.mock.calls[0]?.[0]
 
-    expect(symlinkOnlyKey).toBe('auto.components.terminal.pane.terminal.drop.handler.53f015fd85')
-    expect(mixedSkipKey).toBe('auto.components.terminal.pane.terminal.drop.handler.b4cf68e889')
+    expect(symlinkOnlyKey).toBe(
+      'auto.components.terminal.pane.terminal.drop.handler.skippedSymlinks'
+    )
+    expect(mixedSkipKey).toBe('auto.components.terminal.pane.terminal.drop.handler.skippedItems')
     expect(symlinkOnlyKey).not.toBe(mixedSkipKey)
     expect(toast.message).toHaveBeenCalledTimes(2)
   })
@@ -42,12 +44,13 @@ describe('reportTerminalDropUploadSkipsAndFailures', () => {
     reportTerminalDropUploadSkipsAndFailures([], [{ reason: '/secret/project/file.txt' }])
 
     expect(mocks.translate).toHaveBeenCalledWith(
-      'auto.components.terminal.pane.terminal.drop.handler.1e072f611e',
-      'Failed to upload {{value0}} {{value1}}.',
-      { value0: 1, value1: 'file' }
+      'auto.components.terminal.pane.terminal.drop.handler.failedUploads',
+      'Failed to upload {{count}} files.',
+      { count: 1, defaultValue_one: 'Failed to upload {{count}} file.' }
     )
     expect(toast.error).toHaveBeenCalledWith(
-      expect.not.stringContaining('/secret/project/file.txt')
+      expect.not.stringContaining('/secret/project/file.txt'),
+      { description: expect.not.stringContaining('/secret/project/file.txt') }
     )
   })
 
@@ -58,7 +61,7 @@ describe('reportTerminalDropUploadSkipsAndFailures', () => {
     )
 
     expect(toast.message).toHaveBeenCalledWith(
-      'auto.components.terminal.pane.terminal.drop.handler.b4cf68e889:Skipped {{value0}} {{value1}}.',
+      'auto.components.terminal.pane.terminal.drop.handler.skippedItems:Skipped {{count}} items.',
       { description: 'auto.lib.dropSkipReason.permissionDenied:Permission denied.' }
     )
   })
@@ -79,9 +82,46 @@ describe('reportTerminalDropUploadSkipsAndFailures', () => {
     reportTerminalDropUploadSkipsAndFailures([], [{ reason: 'a' }, { reason: 'b' }])
 
     expect(mocks.translate).toHaveBeenCalledWith(
-      'auto.components.terminal.pane.terminal.drop.handler.1e072f611e',
-      'Failed to upload {{value0}} {{value1}}.',
-      { value0: 2, value1: 'files' }
+      'auto.components.terminal.pane.terminal.drop.handler.failedUploads',
+      'Failed to upload {{count}} files.',
+      { count: 2, defaultValue_one: 'Failed to upload {{count}} file.' }
     )
+  })
+
+  it('names a shared failure category, never the host text', () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    reportTerminalDropUploadSkipsAndFailures(
+      [],
+      [{ reason: "Error invoking remote method 'fs:x': Error: ENOSPC: no space left on device" }]
+    )
+    reportTerminalDropUploadSkipsAndFailures(
+      [],
+      [{ reason: 'EACCES: permission denied, open \'/home/John Doe/Client "Acme"/shot.png\'' }]
+    )
+    reportTerminalDropUploadSkipsAndFailures(
+      [],
+      [{ reason: 'C:\\Users\\John Doe\\Application Support\\shot.png: unexpected' }]
+    )
+    reportTerminalDropUploadSkipsAndFailures(
+      [],
+      [{ reason: "File changed since it was staged: 'disconnect-notes.txt'" }]
+    )
+    reportTerminalDropUploadSkipsAndFailures(
+      [],
+      [{ reason: 'Runtime environment is manually disconnected.' }]
+    )
+    reportTerminalDropUploadSkipsAndFailures([], [{ reason: 'a' }, { reason: 'b' }])
+
+    expect(vi.mocked(toast.error).mock.calls.map((call) => call[1])).toEqual([
+      { description: 'auto.lib.dropFailureReason.noSpace:The host is out of disk space.' },
+      { description: 'auto.lib.dropSkipReason.permissionDenied:Permission denied.' },
+      { description: "auto.lib.dropFailureReason.unknownOne:Couldn't upload this file." },
+      {
+        description:
+          'auto.lib.dropFailureReason.changed:The file changed while it was uploading. Try again.'
+      },
+      { description: 'auto.lib.dropFailureReason.disconnected:The host is disconnected.' },
+      { description: undefined }
+    ])
   })
 })

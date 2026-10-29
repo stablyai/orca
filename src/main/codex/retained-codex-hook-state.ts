@@ -7,15 +7,7 @@ type RetainedCodexHookService = {
   ) => AgentHookInstallStatus | Promise<AgentHookInstallStatus>
 }
 
-/**
- * Repairs the hook state of Codex homes that retained shells still point at.
- *
- * Why not on the startup critical path (#16441): each home can run a codex
- * app-server trust-grant session, so N retained homes used to mean N sequential
- * multi-second blocks before the first window could paint. Callers start this
- * and move on — the repair only matters before a retained shell's next Codex
- * invocation, which cannot happen until the daemon provider is already serving.
- */
+/** Reconcile retained homes outside the startup critical path; each may run a slow trust grant. */
 export async function reconcileRetainedCodexHookHomes(args: {
   hookService: RetainedCodexHookService
   hooksEnabled: boolean
@@ -30,7 +22,7 @@ export async function reconcileRetainedCodexHookHomes(args: {
         console.warn('[codex-hook-service] failed to reconcile retained Codex home', status.detail)
       }
     } catch (error) {
-      // Why: a retained home repair is best-effort; daemon availability must not depend on a writable Codex config.
+      // A failed home repair must not prevent daemon availability.
       console.warn('[codex-hook-service] failed to reconcile retained Codex home', error)
     }
   }

@@ -10,7 +10,11 @@ import {
   resolveProjectGroupOwnerHostId,
   runtimeTargetForProjectGroupOwner
 } from '../slices/project-group-owner-routing'
-import { findRepoForHost, repoMatchesHostIdentity } from '../slices/repo-host-identity'
+import {
+  findRepoForHost,
+  isSameRepoRow,
+  repoMatchesHostIdentity
+} from '../slices/repo-host-identity'
 import { callRuntimeRpc } from '../../runtime/runtime-rpc-client'
 import { ipcOrRuntimeTargetForHostId } from '../../runtime/runtime-client-target'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
@@ -200,8 +204,7 @@ export function createProjectGroupMutationActions(
 
       const removedProjectIds: string[] = []
       const failedProjectRemovals: ProjectRemovalFailure[] = []
-      // Why: members were captured before the cascade cleared membership; a same-id row on another
-      // host outside the group must survive, so each member row is removed on its own host.
+      // Cascade captured members by host; same-ID rows outside this group on other hosts must survive.
       const membersById = new Map<string, Repo[]>()
       for (const member of targets.projects) {
         const row = findRepoForHost(get().repos, member.id, { hostId: member.hostId })
@@ -219,7 +222,10 @@ export function createProjectGroupMutationActions(
         const removableHostIds = removable.map((row) => getRepoExecutionHostId(row))
         for (const hostId of removableHostIds) {
           try {
-            await get().removeProject(projectId, { hostId })
+            await get().removeProject(projectId, {
+              hostId,
+              confirmedDiscards: options.confirmedDiscards
+            })
           } catch (err) {
             console.error('Failed to remove contained project:', err)
           }
@@ -249,11 +255,12 @@ export function createProjectGroupMutationActions(
       }
     },
 
-    moveProjectToGroup: async (projectId, groupId, order, hostId) => {
+    moveProjectToGroup: async (project, groupId, order) => {
       try {
-        const repo = findRepoForHost(get().repos, projectId, { settings: get().settings, hostId })
-        const target = repo ? ipcOrRuntimeTargetForHostId(getRepoExecutionHostId(repo)) : null
-        if (!target) {
+        const repo = get().repos.find((candidate) => isSameRepoRow(candidate, project))
+        const repoHostId = repo ? getRepoExecutionHostId(repo) : null
+        const target = repoHostId ? ipcOrRuntimeTargetForHostId(repoHostId) : null
+        if (!repo || !repoHostId || !target) {
           return false
         }
         if (groupId && !isProjectGroupJoinableFromCatalog(get().projectGroups, groupId, target)) {
@@ -263,15 +270,17 @@ export function createProjectGroupMutationActions(
         const moved =
           target.kind === 'local'
             ? await window.api.projectGroups.moveProject({
-                projectId,
+                projectId: repo.id,
                 groupId,
-                order
+                order,
+                hostId: repoHostId
               })
             : (
                 await callRuntimeRpc<{ repo: Repo | null }>(
                   target,
                   'projectGroup.moveProject',
-                  { repo: projectId, groupId, order },
+                  // Why connectionId: the server's own twins differ only by their SSH target there.
+                  { repo: repo.id, groupId, order, connectionId: repo.connectionId ?? null },
                   { timeoutMs: 15_000 }
                 )
               ).repo
@@ -281,8 +290,8 @@ export function createProjectGroupMutationActions(
         const ownedMoved = adoptFromEndpoint(target, { kind: 'repo', row: moved })
         const movedHostId = getRepoExecutionHostId(ownedMoved)
         set((s) => {
-          const nextRepos = s.repos.map((repo) =>
-            repoMatchesHostIdentity(repo, projectId, movedHostId) ? ownedMoved : repo
+          const nextRepos = s.repos.map((candidate) =>
+            isSameRepoRow(candidate, repo) ? ownedMoved : candidate
           )
           return {
             repos: nextRepos,

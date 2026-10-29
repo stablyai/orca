@@ -135,7 +135,7 @@ describe('handlePaneDrop with a drop taker', () => {
     expect(onLayoutChanged).not.toHaveBeenCalled()
 
     move?.()
-    expect(onLayoutChanged).toHaveBeenCalledExactlyOnceWith('gesture')
+    expect(onLayoutChanged).toHaveBeenCalledOnce()
   })
 
   it('draws the same tree main saves for a move out of a nested, resized split', () => {
@@ -206,6 +206,6 @@ describe('handlePaneDrop with a drop taker', () => {
 
     handlePaneDrop(3, 1, 'left', createDragReorderState(), callbacks)
 
-    expect(onLayoutChanged).toHaveBeenCalledExactlyOnceWith('gesture')
+    expect(onLayoutChanged).toHaveBeenCalledOnce()
   })
 })

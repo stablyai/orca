@@ -15,16 +15,18 @@ import {
   floatingWorkspaceToWorktree,
   isFloatingWorkspaceId
 } from '../../../../../../shared/floating-workspace-worktree'
-import {
-  findIndexedDetectedWorktrees,
-  findIndexedWorktreeOwnerForHost
-} from '@/lib/worktree-runtime-owner-index'
+import { findIndexedDetectedWorktrees } from '@/lib/worktree-runtime-owner-index'
 import { findWorktreeById, withoutErasedRequiredWorktreeFields } from '../../worktree-helpers'
 import { worktreeMatchesHost } from './worktree-host-ownership'
+import { hostWorktreeTarget } from '../../../../../../shared/worktree/host-qualified-identity'
+import {
+  selectFolderWorkspaces,
+  selectWorkspaceByHostTarget,
+  selectWorktreesByRepo
+} from '../../../workspace-record-selectors'
 
 const folderWorkspaceWorktreeCache = new WeakMap<FolderWorkspace, Worktree>()
-// Why a one-slot cache: the floating workspace is a singleton; retained selectors only need the
-// row's identity to hold while the resolved directory is unchanged.
+// Singleton floating workspace needs one cached row while resolved cwd stays equal, preserving selector identity.
 let floatingWorkspaceWorktreeCache: { path: string; worktree: Worktree } | null = null
 
 import { worktreeRowMatchesMetaHost } from './worktree-meta-host-match'
@@ -106,7 +108,7 @@ export function findKnownWorktreeById(
   }
   const workspaceScope = parseWorkspaceKey(worktreeId)
   if (workspaceScope?.type === 'folder') {
-    const folderWorkspace = state.folderWorkspaces.find(
+    const folderWorkspace = selectFolderWorkspaces(state).find(
       (workspace) =>
         workspace.id === workspaceScope.folderWorkspaceId &&
         (!executionHostId || folderWorkspaceMatchesHost(workspace, executionHostId))
@@ -114,19 +116,15 @@ export function findKnownWorktreeById(
     return folderWorkspace ? getFolderWorkspaceWorktree(folderWorkspace) : undefined
   }
   const visible = executionHostId
-    ? (findIndexedWorktreeOwnerForHost(
-        state.worktreesByRepo,
-        worktreeId,
-        executionHostId
-      ) as Worktree | null)
-    : findWorktreeById(state.worktreesByRepo, worktreeId)
+    ? selectWorkspaceByHostTarget(
+        state,
+        hostWorktreeTarget({ id: worktreeId, hostId: executionHostId })
+      )
+    : findWorktreeById(selectWorktreesByRepo(state), worktreeId)
   if (visible) {
     return visible
   }
-  // Why the index: this miss path runs per activity row for exactly the worktrees the
-  // feature targets (retained agents on deleted worktrees); the cached index replaces a
-  // full scan of every repo's detected worktrees. The index holds the same row objects,
-  // so the cast restores the listing's row type.
+  // Cached index avoids fleet scans per deleted-worktree activity row; same row objects justify restoring the listing row type.
   const detectedCandidates = findIndexedDetectedWorktrees(
     state.detectedWorktreesByRepo,
     worktreeId

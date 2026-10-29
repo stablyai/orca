@@ -1,17 +1,6 @@
-/**
- * The bundled `orca` CLI against a real Windows OpenSSH host running managed orcad, one cell per
- * test (config/ci/windows-ssh-provider/invoke-windows-host-cells.ps1 greps by tag):
- *
- * - `@orcad-cli-managed`: an empty host deploys; `host list`/`environment list|show` name it; a CLI
- *   terminal survives disconnect/reconnect; `environment rm` refuses a managed server, the stop
- *   decommissions it and cleans the host, and the next connect redeploys; last, a hard orcad restart
- *   reads unverifiable then live, never retired.
- * - `@orcad-cli-convert`: a seeded relay-era profile converts, keeps its source retained, and the
- *   CLI reaches the converted server's projects.
- *
- * Host: `ORCA_E2E_ORCAD_CONVERT_HOST`, a Windows host-cell descriptor. Template:
- * `ORCA_E2E_ORCAD_CONVERT_TEMPLATE`, built for that host's target.
- */
+// Run bundled CLI against real Windows OpenSSH host cells; invoke-windows-host-cells.ps1 selects @orcad-cli-managed/@orcad-cli-convert.
+// Managed covers deploy/list, terminal reconnect, decommission/redeploy and unverifiable→live restart; convert preserves relay-era source and reaches migrated projects.
+// ORCA_E2E_ORCAD_CONVERT_HOST names the descriptor; ORCA_E2E_ORCAD_CONVERT_TEMPLATE must match its target.
 import { mkdirSync, rmSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -176,9 +165,7 @@ async function sendLine(
 }
 
 /** Host Node is hidden on the lane, so the listener is Windows PowerShell's own TcpListener. */
-// Why no `$`: the managed terminal's shell may be PowerShell, which would expand it before the child sees it.
-// Why the trailing comment: Windows exposes no process cwd, so the scanner attributes by the
-// worktree path in the listener's command line, as it does for `node <repo>\...\vite.js`.
+// Avoid $ expansion by the outer PowerShell; append the worktree path for Windows scanners, which cannot read process cwd.
 const DETECTED_PORT = 4317
 
 async function expectWorkspacePortDetected(
@@ -309,7 +296,6 @@ test('@orcad-cli-managed an empty Windows host deploys, serves CLI terminals thr
     const userData = session.userDataDir
     await waitForSessionReady(page)
 
-    // (a) Empty host: the first connect deploys managed orcad.
     const targetId = await page.evaluate(
       async (input) => (await window.api.ssh.addTarget({ target: input })).target.id,
       host.input
@@ -375,10 +361,8 @@ test('@orcad-cli-managed an empty Windows host deploys, serves CLI terminals thr
     await sendLine(userData, environmentId, handle, `echo ${before}`)
     await waitForEchoedLine(userData, environmentId, handle, before)
 
-    // Port detection: a listener started in a workspace terminal is reported as that workspace's port.
     await expectWorkspacePortDetected(page, userData, environmentId, added.repo.id, worktree!)
 
-    // Disconnect and reconnect: the server, and the terminal it runs, outlive the SSH session.
     expect(await reconnect(page, targetId)).toContain('"managed"')
     expect(await waitForManaged(page, targetId)).toBe(environmentId)
     const relisted = await orcaCliResult<RuntimeTerminalListResult>(userData, [
@@ -393,7 +377,6 @@ test('@orcad-cli-managed an empty Windows host deploys, serves CLI terminals thr
     await sendLine(userData, environmentId, handle, `echo ${after}`)
     await waitForEchoedLine(userData, environmentId, handle, after)
 
-    // (e) `environment rm` refuses a server Orca manages over SSH; the stop decommissions it.
     const refused = await runCompiledOrcaCli(userData, [
       'environment',
       'rm',
@@ -402,7 +385,9 @@ test('@orcad-cli-managed an empty Windows host deploys, serves CLI terminals thr
       '--json'
     ])
     expect(refused.code, refused.stdout).not.toBe(0)
-    expect(`${refused.stdout}${refused.stderr}`).toContain('managed by Orca over SSH')
+    expect(`${refused.stdout}${refused.stderr}`).toContain(
+      'Orca runs this server on an SSH host for you'
+    )
     expect(`${refused.stdout}${refused.stderr}`).toContain('orca environment stop')
     const unconfirmed = await runCompiledOrcaCli(userData, [
       'environment',
@@ -446,8 +431,7 @@ test('@orcad-cli-managed an empty Windows host deploys, serves CLI terminals thr
     expect(await environmentIds(userData)).toContain(redeployed)
     expect(await listHostOrcadProcesses(descriptor.home)).not.toHaveLength(0)
 
-    // A terminal on the redeployed server, so the restart below shows what happens to it.
-    // Why unchecked: the decommissioned server's catalog may or may not have kept the repo.
+    // Create a terminal before restart; do not assume the decommissioned server retained its repo catalog.
     await runCompiledOrcaCli(userData, [
       'repo',
       'add',

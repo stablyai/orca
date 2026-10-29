@@ -52,7 +52,8 @@ export async function moduleCachePolicyHash(root = ROOT) {
   return digestInputs(root, [
     ...configInputs,
     ...workspacePackageManifests(root),
-    ...globSync(['config/patches/**', '**/tsconfig*.json'], {
+    // tsconfig and package.json (type/imports) steer transforms but are not in Vitest's per-module key.
+    ...globSync(['config/patches/**', '**/tsconfig*.json', '**/package.json'], {
       cwd: root,
       exclude: ['**/node_modules/**', '**/.git/**', '**/dist/**', '**/out/**', 'mobile/vendor/**']
     }).filter((file) => statSync(join(root, file)).isFile()),
@@ -62,6 +63,7 @@ export async function moduleCachePolicyHash(root = ROOT) {
     '.npmrc',
     'config/pnpmfile.cjs',
     'config/.bun-version',
+    'config/dark-build-switches.cjs',
     'config/scripts/ci-unit-module-cache.mjs',
     'config/scripts/ci-unit-module-cache-contents.mjs',
     'config/scripts/ci-unit-module-cache-trailer.mjs'
@@ -109,7 +111,7 @@ export function moduleCacheIdentity({
   const digest = createHash('sha256').update(JSON.stringify(identity)).digest('hex')
   return {
     ...identity,
-    key: `unit-module-v1-${platform}-${arch}-n${versions.node}-b${versions.bun}-v${versions.vitest}-s${shard.index}of${shard.count}-${digest}`,
+    key: `unit-module-v2-${platform}-${arch}-n${versions.node}-b${versions.bun}-v${versions.vitest}-s${shard.index}of${shard.count}-${digest}`,
     path: join(resolve(cacheRoot), 'orca-vitest-module-cache')
   }
 }

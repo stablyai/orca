@@ -30,13 +30,7 @@ describe('registerGitHubHandlers', () => {
   beforeEach(harness.reset)
 
   it('drops the error field from listIssues envelope at the IPC boundary', async () => {
-    // Why: src/main/ipc/github.ts intentionally unwraps the { items, error? }
-    // envelope to just `items` to preserve the pre-feature-1
-    // `Promise<IssueInfo[]>` contract for `gh:listIssues`. Feature 1's UI
-    // consumes the richer envelope through `gh:listWorkItems` instead. This
-    // test locks in that intentional drop so a future change that starts
-    // propagating the error through this channel (or that throws when an
-    // error is present) is caught.
+    // Preserve legacy gh:listIssues arrays; only gh:listWorkItems exposes the richer items/error envelope.
     listIssuesMock.mockResolvedValue({
       items: [],
       error: {
@@ -58,10 +52,7 @@ describe('registerGitHubHandlers', () => {
   })
 
   it('threads issueSourcePreference through gh:listIssues', async () => {
-    // Why: repo.issueSourcePreference must reach listIssues so the upstream
-    // repo is queried when configured. A regression that drops the arg would
-    // pass the default-fixture tests (which assert `undefined`) silently, so
-    // this test pins the non-undefined preference-threading contract.
+    // Use a nondefault preference so missing argument forwarding cannot pass silently.
     harness.repos[0].issueSourcePreference = 'upstream'
     listIssuesMock.mockResolvedValue({ items: [] })
 
@@ -76,8 +67,6 @@ describe('registerGitHubHandlers', () => {
   })
 
   it('threads issueSourcePreference through gh:listWorkItems', async () => {
-    // Why: gh:listWorkItems must also forward repo.issueSourcePreference
-    // (5th arg) so the work-items view honors the per-repo source selector.
     harness.repos[0].issueSourcePreference = 'origin'
     listWorkItemsMock.mockResolvedValue({ items: [] })
 
@@ -102,8 +91,7 @@ describe('registerGitHubHandlers', () => {
     )
   })
 
-  // Why: open-by-number must pin the same source the list uses, else a fork and
-  // its upstream sharing PR #42 open different PRs from the same click.
+  // Open-by-number must use the listed source when origin/upstream share an item number.
   it('pins the repo origin source preference on work item and details IPC', async () => {
     harness.repos = [
       {

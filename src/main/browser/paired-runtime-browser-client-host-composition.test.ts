@@ -27,10 +27,12 @@ const replacementAuthority: BrowserClientHostLeaseAuthority = {
 
 const initialInput = {
   authorityConnectionIdentity: 'authority-record-a',
+  pairingAuthorityConnectionIdentity: 'pairing-authority-record-a',
   legacyAuthorityConnectionIdentity: 'legacy-authority-record-a'
 }
 const replacementInput = {
   authorityConnectionIdentity: 'authority-record-b',
+  pairingAuthorityConnectionIdentity: 'pairing-authority-record-b',
   legacyAuthorityConnectionIdentity: 'legacy-authority-record-b'
 }
 
@@ -293,7 +295,6 @@ describe('PairedRuntimeBrowserClientHostComposition', () => {
 
       rig.hostOptions.onError?.(authorityReplacedError())
 
-      // The guests are alive and still ours; the replacement runtime is on its way to reclaim them.
       expect(rig.authorityReplacementWait.armed).toBe(true)
       expect(rig.onError).not.toHaveBeenCalled()
       expect(rig.order).toEqual(['activate-routes'])
@@ -332,8 +333,6 @@ describe('PairedRuntimeBrowserClientHostComposition', () => {
 
       await composition.replaceAuthority(replacementInput)
 
-      // Released at the transition, not merely ignored when it fires: a deadline left running holds
-      // a timer for the whole grace and fires against a composition that has already moved on.
       expect(rig.authorityReplacementWait.armed).toBe(false)
       vi.advanceTimersByTime(10_000)
       expect(rig.onError).not.toHaveBeenCalled()
@@ -354,7 +353,6 @@ describe('PairedRuntimeBrowserClientHostComposition', () => {
 
       expect(rig.authorityReplacementWait.armed).toBe(false)
       vi.advanceTimersByTime(10_000)
-      // A grace that fired after close would report a second, bogus failure for a dead composition.
       expect(rig.onError).not.toHaveBeenCalled()
     } finally {
       vi.useRealTimers()

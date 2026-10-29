@@ -33,15 +33,10 @@ export function applyDiffEditorLineNumberOptions(
     }
   }
 
-  // Why: Monaco 0.55 exposes only shared diff options for line numbers, so we
-  // update the inner editors directly to collapse the duplicate gutter inline.
+  // Monaco 0.55 shares diff line-number options; override inner editors to remove the duplicate inline gutter.
   reapplyIfNeeded()
 
-  // Why: @monaco-editor/react re-applies the parent options object on every
-  // component re-render, which clobbers our per-pane lineNumbers override
-  // (the parent options carry lineNumbers: 'on'). Subscribe to each inner
-  // editor's onDidChangeConfiguration so we can re-assert the policy on
-  // every option update without racing against Monaco's internal handling.
+  // The React wrapper reapplies parent options on render; reassert per-pane policy after configuration changes overwrite it.
   const originalOptionsSub = originalEditor.onDidChangeConfiguration(reapplyIfNeeded)
   const modifiedOptionsSub = modifiedEditor.onDidChangeConfiguration(reapplyIfNeeded)
 

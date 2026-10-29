@@ -7,7 +7,7 @@ import {
   completedStructuredAgentTurnSeconds,
   selectStructuredAgentTurnTimings
 } from '../../../shared/structured-agent-session-turn-timing'
-import { withNativeChatCutTurnNotices } from '../../../shared/native-chat-cut-turn-notice'
+import { withNativeChatCutTurnNotices } from '../../../shared/native-chat/transcript/native-chat-cut-turn-notice'
 import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
 import {
   closeTestJournalHostDatabases,
@@ -88,7 +88,6 @@ async function streamBeforeCrash(
   expect(rig.store.getRecord(SESSION)?.lease.lastRenewedAt).toBe(HOST_TEST_NOW)
 }
 
-/** Drops the old host without an exit callback or graceful turn settlement. */
 async function restartAfterCrash(): Promise<void> {
   const old = rig.host
   old.stopDelivery()
@@ -165,7 +164,6 @@ describe('a provider stream cut short before its next lease renewal', () => {
       await restartAfterCrash()
       await rig.host.restoreReadableSessions()
       await expectSettledStream()
-      // A reopen can mark its queue, but never revises the settled turn again.
       expect((await rig.host.journalSnapshot(SESSION)).items).toEqual(settled.items)
     }
   )
@@ -195,7 +193,7 @@ describe('a provider stream cut short before its next lease renewal', () => {
     expect(rig.adapter.closeSession).toHaveBeenCalledOnce()
   })
 
-  // A new server replacing the owner's runtime ends it anyway (structured-agent-session-replaced-server-turn).
+  // A different runtime’s replacement is stronger evidence than same-runtime reopening.
   it('leaves the end unverifiable when its own runtime reopens and cannot prove owner death', async () => {
     await streamBeforeCrash()
     await restartAfterCrash()

@@ -98,11 +98,7 @@ afterEach(() => {
 })
 
 describe('regaining contact is its own mirror-recovery trigger', () => {
-  // The mirror subscriptions are (re)installed by the effects in
-  // web-session-tabs-sync/use-web-session-tabs-sync.ts. Holding the target through the outage
-  // strands them unless regaining contact triggers a reinstall, but the connection generation
-  // cannot be that trigger: it is the mirror's cache key, and moving it rebuilds the mirror
-  // (#19647). The two live on separate values, and this suite pins each to its own edge.
+  // Regained contact reinstalls mirror streams via contact epoch; advancing connection generation would rebuild the cached mirror (#19647).
   it('advances the contact epoch, not the connection generation, when a host answers again', () => {
     const store = createSliceStore()
     seedEnvironment(store)
@@ -139,8 +135,7 @@ describe('regaining contact is its own mirror-recovery trigger', () => {
   })
 
   it('leaves a first publication with no prior entry on its original generation', () => {
-    // Regression (#19241): a first contact is not a reconnect, or the generation fence
-    // retires worktree scans already in flight against that same connection.
+    // First contact must not fence out startup scans on the same connection (#19241).
     const store = createSliceStore()
     seedEnvironment(store)
     const before = getRuntimeEnvironmentConnectionGeneration(ENVIRONMENT_ID)

@@ -9,7 +9,9 @@ describe('getPRGroupKeyForState', () => {
     ['open', 'in-review'],
     ['OPEN', 'in-review'],
     ['merged', 'done'],
-    ['closed', 'closed']
+    ['MERGED', 'done'],
+    ['closed', 'closed'],
+    ['CLOSED', 'closed']
   ] as const)('puts a %s PR in the %s lane', (state, lane) => {
     expect(getPRGroupKeyForState(state)).toBe(lane)
   })

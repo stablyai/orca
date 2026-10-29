@@ -72,7 +72,6 @@ describe('ACP joins through the assembler', () => {
       providerItemId('request', request, { generation: GENERATION }),
       providerItemId('request', request, { generation: 'gen-2' })
     ])
-    // The sweep cancelled the dead child's pending request; the new child's waits.
     expect(
       approvals.map((row) => row.body.kind === 'approval' && row.body.resolution.state)
     ).toEqual(['cancelled', 'pending'])

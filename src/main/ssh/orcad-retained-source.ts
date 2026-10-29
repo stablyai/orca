@@ -1,18 +1,15 @@
-/**
- * A converted host's source rows: hidden from this build's lists, which show the managed server
- * instead, and kept for a downgraded build that still reads them. Nothing here ever deletes them;
- * only stopping the server, removing the host or uninstalling does.
- *
- * On every start the rows are compared with what the migration committed. If an older build
- * changed them, the host is marked `sourceChangedAt`: its rows show again, it stays on the relay,
- * and it needs a new move. A second manifest is never merged into the server automatically.
- */
+/** Hide migrated rows while managed, retaining them for downgraded clients. Only newly added projects/folders mark sourceChangedAt and require explicit delta migration; edits/removals/groups never overwrite server state or trigger automatic merging. */
 import { createHash } from 'node:crypto'
 import { getAppEnvironment } from '../../shared/app-environment'
-import { parseExecutionHostId } from '../../shared/execution-host'
+import { getRepoExecutionHostId, parseExecutionHostId } from '../../shared/execution-host'
 import type { FolderWorkspace } from '../../shared/folder-workspace-types'
 import type { ProjectGroup } from '../../shared/project-group-types'
+import type { ProjectHostSetup } from '../../shared/project-types'
 import type { OrcadMigrationCatalogPayload } from '../../shared/orcad-migration/orcad-migration-manifest'
+import {
+  MAX_ORCAD_MIGRATION_FOLDER_WORKSPACES,
+  MAX_ORCAD_MIGRATION_REPOSITORIES
+} from '../../shared/orcad-migration/orcad-migration-manifest-validation'
 import {
   isRetainedOrcadMigrationSourceCutover,
   type OrcadMigrationSourceCutover
@@ -28,23 +25,24 @@ import {
   projectGroupBelongsToOrcadSource,
   repoBelongsToOrcadSource
 } from '../persistence/migrating-orcad-catalog/orcad-source-ownership'
-import { findOrcadMigrationSourceCutoverForTarget } from './orcad-migration-cutover-journal'
+import {
+  findOrcadMigrationSourceCutoverForTarget,
+  listOrcadMigrationCutoverChainForTarget,
+  writeOrcadMigrationSourceCutover
+} from './orcad-migration-cutover-journal'
+import { orcadMigrationCatalogIds } from './orcad-migration-manifest-export'
 import {
   withoutWslMovedFolderWorkspaces,
   withoutWslMovedRepos
 } from '../persistence/moving-wsl-projects/wsl-move-scope-guard'
 
-const appUserDataPath = (): string => getAppEnvironment().getPath('userData')
+export const appUserDataPath = (): string => getAppEnvironment().getPath('userData')
 
 type CatalogStore = Pick<Store, 'getFolderWorkspaces' | 'getProjectGroups' | 'getRepos'>
 type TargetStore = Pick<Store, 'getSshTargets' | 'updateSshTarget'>
 
-/**
- * Whether this build hides the host's source rows: committed to its server and not changed by an
- * older build since. Mid-migration the rows stay shown, since the source is still authoritative,
- * and so does a fence no journal explains (an empty host's deploy): no move owns those rows.
- */
-export function isHiddenRetainedSourceTarget(
+/** Hide only retained committed source without later additions; in-flight or unjournaled fences leave source rows visible. */
+function isHiddenRetainedSourceTarget(
   userDataPath: string,
   target: Pick<SshTarget, 'id' | 'orcadFence'>
 ): boolean {
@@ -65,7 +63,7 @@ export function isHiddenRetainedSourceTarget(
   )
 }
 
-/** `getUserDataPath` is read only once a host is fenced, so unfenced lists never touch the journal. */
+/** Delay journal reads until a host is fenced. */
 export function hiddenRetainedSourceTargetIds(
   getUserDataPath: () => string,
   targets: readonly SshTarget[]
@@ -77,10 +75,7 @@ export function hiddenRetainedSourceTargetIds(
     .map((target) => target.id)
 }
 
-/**
- * A fenced host's `ssh:` session partition is migration source from the fence on: a renderer save
- * would change it mid-conversion, and strip the rows this build hides once it commits.
- */
+/** Freeze fenced ssh: partitions: renderer saves could mutate in-flight source or strip retained rows after commit. */
 export function isFrozenOrcadSourceSessionPartition(
   store: Pick<Store, 'getSshTarget'>,
   hostId: string | null | undefined
@@ -94,17 +89,23 @@ export function visibleRepos(
   store: CatalogStore & Pick<Store, 'getSshTargets'>,
   getUserDataPath = appUserDataPath
 ): Repo[] {
-  const hidden = hiddenRetainedSourceTargetIds(getUserDataPath, store.getSshTargets())
-  const repos = withoutWslMovedRepos(store.getRepos())
-  if (hidden.length === 0) {
-    return repos
-  }
-  return repos.filter(
-    (repo) => !hidden.some((targetId) => repoBelongsToOrcadSource(repo, targetId))
+  return reposShownWith(
+    store.getRepos(),
+    hiddenRetainedSourceTargetIds(getUserDataPath, store.getSshTargets())
   )
 }
 
-/** Hides only groups the host owns; a local group holding one of its projects stays. */
+function reposShownWith(allRepos: Repo[], hiddenTargets: readonly string[]): Repo[] {
+  const repos = withoutWslMovedRepos(allRepos)
+  if (hiddenTargets.length === 0) {
+    return repos
+  }
+  return repos.filter(
+    (repo) => !hiddenTargets.some((targetId) => repoBelongsToOrcadSource(repo, targetId))
+  )
+}
+
+/** Keep local groups that merely contain host-owned projects. */
 export function visibleProjectGroups(
   store: Pick<Store, 'getProjectGroups' | 'getSshTargets'>,
   getUserDataPath = appUserDataPath
@@ -139,10 +140,39 @@ export function visibleFolderWorkspaces(
   return folderWorkspaces.filter((workspace) => !hiddenIds.has(workspace.id))
 }
 
-/**
- * Identity only, hashed to fit the journal: an older build adding, removing or moving a project is
- * a change, a touched timestamp is not.
- */
+/** Hide setups with their source repo rows so managed server listings do not duplicate same-id setups (#30859). */
+export function visibleProjectHostSetups(
+  store: CatalogStore & Pick<Store, 'getProjectHostSetups' | 'getSshTargets'>,
+  getUserDataPath = appUserDataPath
+): ProjectHostSetup[] {
+  const setups = store.getProjectHostSetups()
+  if (setups.length === 0) {
+    return setups
+  }
+  const hiddenTargets = hiddenRetainedSourceTargetIds(getUserDataPath, store.getSshTargets())
+  const allRepos = store.getRepos()
+  const shownRepos = reposShownWith(allRepos, hiddenTargets)
+  if (hiddenTargets.length === 0 && shownRepos.length === allRepos.length) {
+    return setups
+  }
+  const rowKey = (hostId: string, repoId: string): string => `${hostId}\0${repoId}`
+  const shownKeys = new Set(shownRepos.map((repo) => rowKey(getRepoExecutionHostId(repo), repo.id)))
+  const hiddenKeys = new Set(
+    allRepos
+      .map((repo) => rowKey(getRepoExecutionHostId(repo), repo.id))
+      .filter((key) => !shownKeys.has(key))
+  )
+  return setups.filter((setup) => {
+    if (setup.repoId && hiddenKeys.has(rowKey(setup.hostId, setup.repoId))) {
+      return false
+    }
+    // Repo-less placeholders have no row to follow, so the hidden host decides for them.
+    const host = parseExecutionHostId(setup.hostId)
+    return !(host?.kind === 'ssh' && hiddenTargets.includes(host.targetId))
+  })
+}
+
+/** Keep the identity-only fingerprint format stable for older builds; timestamps must not create source changes. */
 export function orcadCatalogFingerprint(catalog: OrcadMigrationCatalogPayload): string {
   return createHash('sha256')
     .update(
@@ -162,28 +192,80 @@ export function currentOrcadSourceFingerprint(
   return orcadCatalogFingerprint(collectOrcadMigrationSourceCatalog(store, target))
 }
 
-/** What the retained source must still look like for this build to keep serving it from orcad. */
-export function retainedOrcadSourceBaseline(head: OrcadMigrationSourceCutover): string {
+type UnmovedOrcadSourceRows = { repositoryIds: string[]; folderWorkspaceIds: string[] }
+
+/** Delta candidates exclude moved/linked/explicitly kept projects and folders. Group organization alone never represents new server work. */
+export function unmovedOrcadSourceRows(
+  current: OrcadMigrationCatalogPayload,
+  chain: readonly OrcadMigrationSourceCutover[]
+): UnmovedOrcadSourceRows {
+  const moved = orcadMigrationCatalogIds(chain.map((cutover) => cutover.manifest.payload))
+  const repositories = new Set([
+    ...moved.repositoryIds,
+    ...chain.flatMap((cutover) => [
+      ...(cutover.linkedRepositoryIds ?? []),
+      ...(cutover.keptRepositoryIds ?? [])
+    ])
+  ])
+  const folders = new Set([
+    ...moved.folderWorkspaceIds,
+    ...chain.flatMap((cutover) => [
+      ...(cutover.linkedFolderWorkspaceIds ?? []),
+      ...(cutover.keptFolderWorkspaceIds ?? [])
+    ])
+  ])
+  return {
+    repositoryIds: current.repositories.map((row) => row.id).filter((id) => !repositories.has(id)),
+    folderWorkspaceIds: current.folderWorkspaces
+      .map((row) => row.id)
+      .filter((id) => !folders.has(id))
+  }
+}
+
+function retainedOrcadSourceBaseline(head: OrcadMigrationSourceCutover): string {
   return head.sourceBaselineFingerprint ?? orcadCatalogFingerprint(head.manifest.payload)
 }
 
-type RetainedSourceVerdict = 'unchanged' | 'changed'
-
-/** Identity only: an older build's edits inside moved projects stay in the retained rows. */
-function compareRetainedOrcadSource(
-  store: CatalogStore,
-  target: Pick<SshTarget, 'id'>,
-  head: OrcadMigrationSourceCutover
-): RetainedSourceVerdict {
-  return currentOrcadSourceFingerprint(store, target) === retainedOrcadSourceBaseline(head)
-    ? 'unchanged'
-    : 'changed'
+export function withKeptOrcadSourceRows(
+  head: OrcadMigrationSourceCutover,
+  unmoved: UnmovedOrcadSourceRows
+): OrcadMigrationSourceCutover {
+  const keptRepositoryIds = [...(head.keptRepositoryIds ?? []), ...unmoved.repositoryIds]
+  const keptFolderWorkspaceIds = [
+    ...(head.keptFolderWorkspaceIds ?? []),
+    ...unmoved.folderWorkspaceIds
+  ]
+  // Beyond kept-row bounds, the baseline fingerprint still records explicit reconciliation.
+  return keptRepositoryIds.length <= MAX_ORCAD_MIGRATION_REPOSITORIES &&
+    keptFolderWorkspaceIds.length <= MAX_ORCAD_MIGRATION_FOLDER_WORKSPACES
+    ? { ...head, keptRepositoryIds, keptFolderWorkspaceIds }
+    : head
 }
 
-/**
- * Startup pass: restore a fence the profile lost from the registered managed server, and mark a
- * retained host whose rows an older build changed. Never throws; a failed pass changes nothing.
- */
+type RetainedSourceReview = {
+  verdict: 'unchanged' | 'changed'
+  unrecordedKeptRows: UnmovedOrcadSourceRows | null
+}
+
+/** New rows mark changed only when baseline differs; older explicit-keeps lack row lists and rely on that baseline. */
+function reviewRetainedOrcadSource(
+  store: CatalogStore,
+  target: Pick<SshTarget, 'id'>,
+  chain: readonly OrcadMigrationSourceCutover[],
+  head: OrcadMigrationSourceCutover
+): RetainedSourceReview {
+  const current = collectOrcadMigrationSourceCatalog(store, target)
+  const unmoved = unmovedOrcadSourceRows(current, chain)
+  if (unmoved.repositoryIds.length === 0 && unmoved.folderWorkspaceIds.length === 0) {
+    return { verdict: 'unchanged', unrecordedKeptRows: null }
+  }
+  if (orcadCatalogFingerprint(current) !== retainedOrcadSourceBaseline(head)) {
+    return { verdict: 'changed', unrecordedKeptRows: null }
+  }
+  return { verdict: 'unchanged', unrecordedKeptRows: unmoved }
+}
+
+/** At startup, restore generation-matched managed fences and detect retained-source additions. Failed reconciliation leaves state unchanged. */
 export function reconcileManagedOrcadSshTargets(
   userDataPath: string,
   store: CatalogStore & TargetStore,
@@ -202,7 +284,7 @@ function restoreFencesFromManagedServers(userDataPath: string, store: TargetStor
   for (const environment of listEnvironments(userDataPath)) {
     const deployment = getOrcadSshDeployment(environment)
     const target = deployment ? targets.get(deployment.sshTargetId) : undefined
-    // Why generation-bound: a host re-created under the same id is a different registration.
+    // Recreated ids identify new registrations; restore fences only for matching generation.
     if (target && !target.orcadFence && target.generation === deployment?.sshTargetGeneration) {
       store.updateSshTarget(target.id, { orcadFence: { environmentId: environment.id } })
     }
@@ -216,24 +298,35 @@ function markChangedRetainedSources(
 ): void {
   for (const target of store.getSshTargets()) {
     const fence = target.orcadFence
-    const head = fence ? findOrcadMigrationSourceCutoverForTarget(userDataPath, target.id) : null
-    if (
-      !fence ||
-      !head ||
-      fence.environmentId !== head.destinationEnvironmentId ||
-      fence.sourceChangedAt
-    ) {
+    const chain = fence ? listOrcadMigrationCutoverChainForTarget(userDataPath, target.id) : []
+    const head = chain.at(-1)
+    if (!fence || !head || fence.environmentId !== head.destinationEnvironmentId) {
       continue
     }
-    // A delta move a crash interrupted lost its mark with it; the mark leads back to resuming it.
+    // Restore an interrupted delta's changed mark so reconnect resumes its journal.
     const interruptedDelta =
       head.supersedesMigrationId !== undefined &&
       (head.phase === 'source-fenced' || head.phase === 'destination-staged')
-    if (
-      interruptedDelta ||
-      (isRetainedOrcadMigrationSourceCutover(head) &&
-        compareRetainedOrcadSource(store, target, head) === 'changed')
-    ) {
+    const review =
+      !interruptedDelta && isRetainedOrcadMigrationSourceCutover(head)
+        ? reviewRetainedOrcadSource(store, target, chain, head)
+        : null
+    const kept = review?.unrecordedKeptRows
+      ? withKeptOrcadSourceRows(head, review.unrecordedKeptRows)
+      : head
+    if (kept !== head) {
+      // Record kept rows once so later group edits cannot turn them into new additions.
+      writeOrcadMigrationSourceCutover(userDataPath, kept)
+    }
+    if (fence.sourceChangedAt) {
+      // Clear older builds' marks for removals/group edits that delta migration cannot carry (#31523).
+      if (review?.verdict === 'unchanged') {
+        const { sourceChangedAt: _lifted, ...unmarked } = fence
+        store.updateSshTarget(target.id, { orcadFence: unmarked })
+      }
+      continue
+    }
+    if (interruptedDelta || review?.verdict === 'changed') {
       store.updateSshTarget(target.id, {
         orcadFence: { ...fence, sourceChangedAt: now().toISOString() }
       })

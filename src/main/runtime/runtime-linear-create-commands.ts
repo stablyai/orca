@@ -2,9 +2,9 @@ import {
   randomUUID,
   LINEAR_WRITE_BODY_CAP,
   createLinearIssueForAgent,
-  LinearWriteFailure,
-  linearError
+  LinearWriteFailure
 } from './runtime-linear-command-dependencies'
+import { linearError } from '../linear/issue-context/errors'
 import type {
   LinearCurrentIssueContextHints,
   LinearCreateResult

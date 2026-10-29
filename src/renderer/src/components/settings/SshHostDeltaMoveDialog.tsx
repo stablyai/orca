@@ -35,7 +35,7 @@ export function SshHostDeltaMoveDialog({
   const [preview, setPreview] = useState<OrcadDeltaMovePreview | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [running, setRunning] = useState(false)
-  // Why the id: callers pass a fresh target object on every reload, which must not reset a run.
+  // Key by target ID so reloads with fresh target objects cannot reset a running move.
   const targetId = target?.id ?? null
 
   useEffect(() => {
@@ -95,7 +95,7 @@ export function SshHostDeltaMoveDialog({
           <DialogDescription>
             {translate(
               'auto.components.settings.deltaMove.description',
-              'An older version of Orca changed this host after it moved to its managed server. This adds what it created to the server; it never merges over what the server already has.'
+              'An older version of Orca changed this host after its projects moved to Orca on the host. This adds what it created to the server; it never merges over what the server already has.'
             )}
           </DialogDescription>
         </DialogHeader>

@@ -221,7 +221,6 @@ describe('workspace space analysis snapshot', () => {
     })
     expect(snapshotWriteSpy).toHaveBeenCalledTimes(1)
 
-    // Unknown ids are a no-op.
     snapshotWriteSpy.mockClear()
     await pruneWorkspaceSpaceAnalysisSnapshot(userDataDirHolder.dir, 'repo-1::/never-existed')
     await expect(readWorkspaceSpaceAnalysisSnapshot(userDataDirHolder.dir)).resolves.toEqual(cached)

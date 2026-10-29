@@ -1,8 +1,35 @@
 import { OrcaRuntimeWithPickMostRecentActor } from './terminal-layout-queue'
 import type { ApplyLayoutResult, PtyLayoutState, PtyLayoutTarget } from '../../orca-runtime-core'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import type { LayoutApplyReply } from '../../../../shared/workspace-layout/workspace-layout-command-types'
+import type { WindowLayoutCommand } from '../../runtime-layout-apply'
+import { PaneGridRecorder } from './pane-grid-recording'
 
 export abstract class OrcaRuntimeWithApplyLayout extends OrcaRuntimeWithPickMostRecentActor {
   protected abstract suppressResizesForMs(ms: number): void
+  abstract applyLayoutCommand(command: WindowLayoutCommand): Promise<LayoutApplyReply>
+  private paneGrids: PaneGridRecorder | null = null
+
+  /** Layout-owner build: remembers a resized terminal's grid on the pane showing it. */
+  protected notePaneGrid(ptyId: string, cols: number, rows: number): void {
+    if (!ORCA_LAYOUT_OWNER_IS_MAIN) {
+      return
+    }
+    this.paneGrids ??= new PaneGridRecorder({
+      sessions: () =>
+        (this.store?.getWorkspaceSessionHostIds?.() ?? []).flatMap((hostId) => {
+          const session = this.store?.getWorkspaceSession?.(hostId)
+          return session ? [session] : []
+        }),
+      apply: (command) => this.applyLayoutCommand(command)
+    })
+    this.paneGrids.record(ptyId, { cols, rows })
+  }
+
+  /** Layout-owner build: writes each grid still waiting out its burst; null when none waits. */
+  flushPaneGrids(): Promise<void> | null {
+    return this.paneGrids?.flush() ?? null
+  }
   protected abstract notifyTerminalResize(
     ptyId: string,
     event: { cols: number; rows: number; displayMode: string; reason: string; seq?: number }
@@ -23,14 +50,12 @@ export abstract class OrcaRuntimeWithApplyLayout extends OrcaRuntimeWithPickMost
     const dimsChanged = currentSize?.cols !== target.cols || currentSize?.rows !== target.rows
     const modeChanged = (prev?.kind ?? 'desktop') !== target.kind
 
-    // Snapshot for rollback.
     const prevFitOverride = this.terminalFitOverrides.get(ptyId) ?? null
 
     // Tentative writes — the resize is the point of no return.
     this.layouts.set(ptyId, next)
     if (target.kind === 'phone') {
-      // Why: pull baseline cols+rows atomically from the same subscriber so
-      // they can't desync.
+      // Take cols and rows from one subscriber baseline atomically.
       const baseline = (() => {
         const inner = this.mobileSubscribers.get(ptyId)
         if (!inner) {
@@ -76,22 +101,13 @@ export abstract class OrcaRuntimeWithApplyLayout extends OrcaRuntimeWithPickMost
         return { ok: false, reason: 'resize-failed' }
       }
       this.resizeHeadlessTerminal(ptyId, target.cols, target.rows)
+      this.notePaneGrid(ptyId, target.cols, target.rows)
     }
 
-    // Why: remote desktop ownership is a fit hold for the host and passive
-    // peer viewers. Emit every remote layout so owner changes at equal geometry
-    // still park/release the correct clients without relying on resize deltas.
-    // Defense-in-depth (#7588): also emit when the override's presence
-    // changed even without a kind flip. applyLayout is the sole writer and
-    // keeps override presence in lockstep with layout kind, so overrideChanged
-    // ≡ modeChanged in every reachable state today; the extra clause fires
-    // only if that invariant is ever violated, repairing the renderer instead
-    // of stranding the held modal.
+    // Publish remote-desktop ownership even at equal geometry; also notify on override changes to repair inconsistent held banners (#7588).
     const overrideChanged = (prevFitOverride != null) !== (target.kind === 'phone')
     if (target.kind === 'remote-desktop' || modeChanged || overrideChanged) {
-      // Why: phone→desktop arms the renderer-cascade suppress window
-      // before the collateral safeFit IPCs arrive. See "Renderer cascade
-      // suppression".
+      // Arm cascade suppression before desktop-fit notifications can provoke collateral renderer resizes.
       if (target.kind === 'desktop') {
         this.lastRendererSizes.delete(ptyId)
         this.suppressResizesForMs(500)
@@ -131,8 +147,6 @@ export abstract class OrcaRuntimeWithApplyLayout extends OrcaRuntimeWithPickMost
     return { ok: true, state: next }
   }
 
-  // ─── Server-Authoritative Mobile Display Mode ─────────────────────
-
   setMobileDisplayMode(ptyId: string, mode: 'auto' | 'desktop'): void {
     if (mode === 'auto') {
       this.mobileDisplayModes.delete(ptyId)
@@ -150,12 +164,7 @@ export abstract class OrcaRuntimeWithApplyLayout extends OrcaRuntimeWithPickMost
     return inner !== undefined && inner.size > 0
   }
 
-  // Why: late-bind viewport on an existing subscriber record. Subscribers
-  // that registered before the mobile side measured (e.g. terminal first
-  // mounted while the WebView was still loading) have null viewport, and
-  // applyMobileDisplayMode's auto branch needs a viewport to phone-fit.
-  // The setDisplayMode RPC carries the latest viewport so we can patch it
-  // here just before applyMobileDisplayMode runs.
+  // Late-bind a measured viewport before applying mode; initial WebView subscriptions can arrive unmeasured.
   updateMobileSubscriberViewport(
     ptyId: string,
     clientId: string,

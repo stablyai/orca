@@ -18,13 +18,13 @@ describe('OMP Source Control AI', () => {
       })
     }
   )
-  it('delivers large diffs on stdin and keeps generation isolated from tools and extensions', () => {
+  it('plans file delivery with tools and extensions disabled', () => {
     const spec = getCommitMessageAgentSpec('omp')
-    expect(spec?.promptDelivery).toBe('stdin')
+    expect(spec?.promptDelivery).toBe('file')
     if (!spec) {
       throw new Error('Missing OMP spec')
     }
-    const args = spec.buildArgs({ prompt: 'large diff', model: 'default' })
+    const args = spec.buildArgs({ prompt: '@{prompt-file}', model: 'default' })
     expect(args).toEqual([
       '--print',
       '--no-session',
@@ -33,11 +33,23 @@ describe('OMP Source Control AI', () => {
       '--no-skills',
       '--no-rules',
       '--mode',
-      'text'
+      'text',
+      '@{prompt-file}'
     ])
     expect(
-      spec?.buildArgs({ prompt: '', model: 'provider/exact-model', thinkingLevel: 'low' })
-    ).toEqual([...args, '--model', 'provider/exact-model', '--thinking', 'low'])
+      spec?.buildArgs({
+        prompt: '@{prompt-file}',
+        model: 'provider/exact-model',
+        thinkingLevel: 'low'
+      })
+    ).toEqual([
+      ...args.slice(0, -1),
+      '--model',
+      'provider/exact-model',
+      '--thinking',
+      'low',
+      '@{prompt-file}'
+    ])
   })
   it('discovers provider-qualified models through the existing OMP JSON parser', () => {
     const discovery = getCommitMessageAgentSpec('omp')?.modelDiscovery
@@ -58,8 +70,10 @@ describe('OMP Source Control AI', () => {
         {
           agentId: 'omp',
           model: 'provider/model',
+          thinkingLevel: 'medium',
           backslash,
-          agentArgs: '--model provider/override'
+          agentCommandOverride: 'OMP_ENV=value omp --model provider/prefix --thinking high',
+          agentArgs: '--model provider/override --thinking low --verbose --'
         },
         prompt
       )
@@ -67,7 +81,16 @@ describe('OMP Source Control AI', () => {
       if (!result.ok) {
         throw new Error(result.error)
       }
-      expect(result.plan.stdinPayload).toBe(prompt)
+      expect(result.plan.stdinPayload).toBeNull()
+      expect(result.plan.promptFile).toEqual({
+        content: prompt,
+        argIndex: result.plan.args.indexOf('@{prompt-file}')
+      })
+      expect(result.plan.env).toEqual({ OMP_ENV: 'value' })
+      expect(result.plan.args.slice(-3)).toEqual(['@{prompt-file}', '--verbose', '--'])
+      expect(result.plan.args.filter((arg) => arg === '--thinking')).toHaveLength(1)
+      expect(result.plan.args).toContain('low')
+      expect(result.plan.args).not.toContain('high')
       expect(result.plan.args).not.toContain(prompt)
       expect(result.plan.args.filter((arg) => arg === '--model')).toHaveLength(1)
       expect(result.plan.args).toContain('provider/override')

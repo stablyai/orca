@@ -1,11 +1,7 @@
-/**
- * A run that executed on a paired server (#21213) names the server's tab, pane and PTY. This client
- * shows that pane as a mirrored tab keyed by the server's terminal handle, so matching the server's
- * PTY id against local state always failed and the run read "Run terminal is unavailable.".
- */
+/** Paired runs use server PTY IDs while local mirrors use terminal handles; comparing those IDs falsely made available run terminals appear missing (#21213). */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AutomationRun } from '../../../../shared/automations-types'
-import { toRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
+import { toRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { toWebTerminalSurfaceTabId } from '../../../../shared/terminal-surface-id'
 
 const mocks = vi.hoisted(() => {
@@ -95,13 +91,13 @@ function storeState(mirrored: boolean): Record<string, unknown> {
   }
 }
 
-function openRun(): void {
+function openRun(target: AutomationRun = run): void {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the action reads only these members.
   const context = {
     store: { repoForRow: () => undefined, worktreeForRow: () => worktree },
     list: { selectedRow: { key: 'row' } }
   } as unknown as AutomationsPageActionContext
-  createAutomationRunWorkspaceAction(context)(run)
+  createAutomationRunWorkspaceAction(context)(target)
 }
 
 describe('opening a paired-server automation run', () => {
@@ -141,5 +137,18 @@ describe('opening a paired-server automation run', () => {
     await vi.waitFor(() =>
       expect(mocks.toastError).toHaveBeenCalledWith('Run terminal is unavailable.')
     )
+  })
+
+  it('asks the server to open a run whose pane it slept, PTY id dropped', async () => {
+    mocks.state = storeState(false)
+
+    openRun({ ...run, terminalPtyId: null })
+    await vi.waitFor(() => expect(mocks.activateWebRuntimeSessionTab).toHaveBeenCalled())
+
+    expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith(WT)
+    expect(mocks.activateWebRuntimeSessionTab).toHaveBeenCalledWith(
+      expect.objectContaining({ worktreeId: WT, tabId: HOST_TAB, environmentId: ENV, leafId: LEAF })
+    )
+    expect(mocks.toastMessage).not.toHaveBeenCalled()
   })
 })

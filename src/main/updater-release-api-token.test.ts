@@ -43,8 +43,6 @@ describe('resolveReleaseApiToken', () => {
     expect(ghExecMock).toHaveBeenCalledTimes(2)
   })
 
-  // Why: gh missing or logged out is the unauthenticated path the picker always
-  // had; it must not fail the list, and it must not spawn gh on every click.
   it('returns null when gh is missing or logged out and does not re-spawn within the TTL', async () => {
     ghExecMock.mockRejectedValueOnce(new Error('gh: not found'))
 
@@ -97,8 +95,6 @@ describe('resolveReleaseApiToken', () => {
     expect(ghExecMock).toHaveBeenCalledTimes(1)
   })
 
-  // Why: a token GitHub rejected would otherwise be re-read from the keyring
-  // and re-sent on every load — one gh spawn and one wasted request each time.
   it('goes unauthenticated for a TTL after the token is rejected', async () => {
     ghExecMock.mockResolvedValue({ stdout: 'gho_stale', stderr: '' })
     await expect(resolveReleaseApiToken(T0)).resolves.toEqual({
@@ -117,9 +113,7 @@ describe('resolveReleaseApiToken', () => {
     expect(ghExecMock).toHaveBeenCalledTimes(2)
   })
 
-  // Why: the cache can expire mid-fetch, so a second load starts a fresh read while
-  // the first is still waiting on the 401 that rejects the token. Without the
-  // generation guard that read writes the rejected token back over the rejection.
+  // Cache expiry can start a new read before the first request rejects the token.
   it('keeps the rejection when a read that started before it resolves', async () => {
     let finish: (value: { stdout: string; stderr: string }) => void = () => {}
     ghExecMock.mockReturnValue(

@@ -5,7 +5,10 @@ import type {
   LinearSliceSet,
   LinearFetchOptions
 } from './linear-slice-contract'
-import { isIntegrationCredentialDecryptionError } from '../../../../../shared/integration-credential-errors'
+import {
+  credentialDecryptionMessage,
+  isIntegrationCredentialDecryptionError
+} from '../../../../../shared/integration-credential-errors'
 import { linearGetIssue } from '@/runtime/runtime-linear-issue-mutations'
 import {
   clearLinearIssueCollectionRequestMaps,
@@ -45,6 +48,9 @@ export function createLinearIssueDetailActions(
       if (isFresh(cached)) {
         return cached.data
       }
+      // Only composer URL lookups expose credential failures; cards/subissues treat unreadable issues as missing.
+      const settle = (request: Promise<LinearIssue | null>): Promise<LinearIssue | null> =>
+        options?.rejectCredentialError ? request : request.catch(() => null)
 
       const inflight = inflightIssueRequests.get(issueCacheKey)
       if (
@@ -52,7 +58,7 @@ export function createLinearIssueDetailActions(
         inflight.contextKey === contextKey &&
         inflight.mutationGeneration === getLinearMutationGeneration()
       ) {
-        return inflight.promise
+        return settle(inflight.promise)
       }
 
       let entry: InflightLinearIssueRequest
@@ -94,6 +100,9 @@ export function createLinearIssueDetailActions(
           ) {
             void get().checkLinearConnection(true)
           }
+          if (isIntegrationCredentialDecryptionError(error)) {
+            throw new Error(credentialDecryptionMessage('Linear'))
+          }
           return null
         })
         .finally(() => {
@@ -121,7 +130,7 @@ export function createLinearIssueDetailActions(
         mutationGeneration: requestMutationGeneration
       }
       inflightIssueRequests.set(issueCacheKey, entry)
-      return promise
+      return settle(promise)
     },
 
     refreshLinearIssue: async (

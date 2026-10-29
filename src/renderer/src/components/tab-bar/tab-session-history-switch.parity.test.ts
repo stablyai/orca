@@ -16,8 +16,7 @@ import {
   type TabSessionHistorySubject
 } from './tab-session-history-switch'
 
-// Only the host's answers are staged (its capabilities arrive over IPC at boot, and the chat
-// route's own feasibility is pinned elsewhere); the composition both surfaces share runs for real.
+// Stage host IPC capabilities only; run the shared panel/tab composition for real.
 vi.mock('@/runtime/local-runtime-capabilities', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   readLocalRuntimeCapabilitiesOrUnknown: () => [
@@ -104,7 +103,7 @@ beforeEach(() => {
 })
 
 describe('the tab menu offers exactly what the Session History row offers', () => {
-  it('Resume in New Native Chat for a CLI conversation', () => {
+  it('Switch to Chat for a CLI conversation', () => {
     const state = useAppStore.getState()
     const session = row()
     const subject: TabSessionHistorySubject = {
@@ -140,7 +139,7 @@ describe('the tab menu offers exactly what the Session History row offers', () =
     ).toBeNull()
   })
 
-  it("Resume in New Native Chat in the conversation's own worktree when that differs", () => {
+  it("Switch to Chat in the conversation's own worktree when that differs", () => {
     const state = useAppStore.getState()
     const session = row({ cwd: '/repo/sibling' })
     const panel = panelTargets(state, session)
@@ -157,7 +156,7 @@ describe('the tab menu offers exactly what the Session History row offers', () =
     ).toEqual({ action: 'resume-in-new-chat', worktreeId: SIBLING_ID })
   })
 
-  it('Resume in New CLI for a native chat, and nothing once it has no saved turns', () => {
+  it('Switch to Terminal for a native chat, and nothing once it has no saved turns', () => {
     const state = useAppStore.getState()
     const subject: TabSessionHistorySubject = {
       kind: 'chat',
@@ -181,7 +180,7 @@ describe('the tab menu offers exactly what the Session History row offers', () =
     expect(resolveTabSessionSwitch(state, emptyChat, subject)).toBeNull()
   })
 
-  it("Resume in New Native Chat in the conversation's own folder workspace", () => {
+  it("Switch to Chat in the conversation's own folder workspace", () => {
     useAppStore.setState({
       folderWorkspaces: [
         {

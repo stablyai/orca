@@ -86,8 +86,8 @@ function setup(input: {
     ticketEnforce: () => false,
     dryRunEnabled: () => false,
     databaseShedding: () => input.databaseShedding ?? false,
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: beginProof calls only take() on the reserve book.
-    book: { take } as unknown as CellReserveBook,
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The fixture books controls with take() and drains them with clear().
+    book: { take, clear: vi.fn() } as unknown as CellReserveBook,
     verifyLease: vi.fn(async () => 'absent' as const)
   }
   let answerDatabase: (valid: boolean) => void = () => {}
@@ -187,20 +187,27 @@ describe('host pre-auth latency', () => {
   afterEach(() => vi.useRealTimers())
 
   it('records a booked hello on the reserve path, from accept to a verified proof', async () => {
+    vi.useFakeTimers()
     const h = setup({ admitMode: 'reserve', databaseSays: false })
-    const { keyPair, identity } = hostKey()
-    const socket = new FakeSocket()
-    h.registry.acceptControl(socket.asWebSocket(), identity)
-    h.advance(30)
-    sendHello(socket, keyPair, identity.relayHostId)
-    await vi.waitFor(() => expect(socket.send).toHaveBeenCalledTimes(1))
-    expect(h.recordHostPreAuth).not.toHaveBeenCalled()
-    h.advance(45)
-    answerChallenge(socket, keyPair)
+    try {
+      const { keyPair, identity } = hostKey()
+      const socket = new FakeSocket()
+      h.registry.acceptControl(socket.asWebSocket(), identity)
+      h.advance(30)
+      sendHello(socket, keyPair, identity.relayHostId)
+      await vi.waitFor(() => expect(socket.send).toHaveBeenCalledTimes(1))
+      expect(h.recordHostPreAuth).not.toHaveBeenCalled()
+      h.advance(45)
+      answerChallenge(socket, keyPair)
+      await vi.advanceTimersByTimeAsync(0)
 
-    expect(h.take).toHaveBeenCalledOnce()
-    expect(h.verifyCellAssignment).not.toHaveBeenCalled()
-    expect(h.recordHostPreAuth).toHaveBeenCalledExactlyOnceWith('reserve', 'admitted', 75)
+      expect(h.take).toHaveBeenCalledOnce()
+      expect(h.verifyCellAssignment).not.toHaveBeenCalled()
+      expect(h.recordHostPreAuth).toHaveBeenCalledExactlyOnceWith('reserve', 'admitted', 75)
+    } finally {
+      h.registry.drain(0)
+      await vi.advanceTimersByTimeAsync(0)
+    }
   })
 
   it('records a hello the database refuses on the db path', async () => {

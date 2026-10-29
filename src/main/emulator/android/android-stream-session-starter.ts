@@ -24,9 +24,6 @@ function toArrayBuffer(buffer: Buffer): ArrayBuffer {
   return arrayBuffer
 }
 
-// Starts a scrcpy session for a booted device and pipes its meta + H.264 frames
-// into the video registry (which the renderer subscribes to via IPC). Returns
-// the session info (streamCodec h264) and a handle that tears everything down.
 export const startAndroidStreamSession: StartAndroidStream = async ({
   runner,
   sdk,
@@ -35,8 +32,7 @@ export const startAndroidStreamSession: StartAndroidStream = async ({
   maxSize
 }) => {
   let session: ScrcpyStreamSession | null = null
-  // ScrcpyStreamSession.start waits for video meta, and that same startup path
-  // may emit config/keyframes. Register first so those events seed replay cache.
+  // Register before startup so early config/keyframes enter the replay cache.
   scrcpyVideoRegistry.register(serial, () => session?.close())
   try {
     session = await ScrcpyStreamSession.start(

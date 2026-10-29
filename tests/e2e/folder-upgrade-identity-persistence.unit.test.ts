@@ -1,3 +1,4 @@
+import { hostWorktreeTarget } from '../../src/shared/worktree/host-qualified-identity'
 import { getDefaultWorkspaceSession } from '../../src/shared/constants'
 import type { AppState } from '../../src/renderer/src/store/types'
 import { getRemovedWorktreeIdsAfterAuthoritativeScan } from '../../src/renderer/src/store/slices/worktrees/listing/worktree-host-ownership'
@@ -10,9 +11,9 @@ import { join } from 'node:path'
 import {
   createStore,
   makeRepo,
-  makeTerminalTab,
   testState
-} from '../../src/main/persistence-test-harness'
+} from '../../src/main/persistence/persistence-test-harness'
+import { makeTerminalTab } from '../../src/main/persistence/persistence-session-fixtures'
 import { buildDetectedGitWorktrees } from '../../src/main/ipc/worktrees/listing/ssh-worktree-fallback'
 import { resolveRepoWorktreeRows } from '../../src/main/runtime/repo-worktree-row-resolution'
 
@@ -28,8 +29,12 @@ it('retains the folder instance and metadata through upgrade, listing, and Store
   const owner = makeRepo({ id: 'folder', path: 'C:\\projects\\draft', kind: 'folder' })
   store.addRepo(owner)
   const id = `folder::${owner.path}`
-  const before = store.setWorktreeMetaForHost(id, 'local', { comment: 'ongoing OMP work' })
-  store.setWorktreeMetaForHost(id, 'ssh:builder', { comment: 'other host' })
+  const before = store.setWorktreeMeta(hostWorktreeTarget({ id, hostId: 'local' }), {
+    comment: 'ongoing OMP work'
+  })
+  store.setWorktreeMeta(hostWorktreeTarget({ id, hostId: 'ssh:builder' }), {
+    comment: 'other host'
+  })
   store.setWorkspaceSession({
     ...getDefaultWorkspaceSession(),
     activeRepoId: owner.id,

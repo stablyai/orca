@@ -1,8 +1,4 @@
-/**
- * A first deploy onto a host whose orcad another Orca version already runs. Its terminal count
- * needs a paired connection, so the update would always wait; instead this client pairs with the
- * running build as it is, and the linked update check decides whether it may replace it.
- */
+/** Pair with an already-running foreign build before considering update; an unpaired first deploy cannot census its terminals. */
 import type { ServeReadiness } from '../server/serve-readiness'
 import type { OrcadManagedDeferral } from '../../shared/orcad-managed-runtime'
 import { orcadActivationFenceRefusal } from '../managed-server/activation/orcad-activation-fence-hold'
@@ -19,11 +15,7 @@ export type OrcadRunningAdoption = {
   reprobe: () => Promise<ServeReadiness>
 }
 
-/**
- * Null when no other version is activated, so the caller deploys its own as usual. A deferral
- * when another run holds the host's fence: its own deploy could never count terminals over that
- * version, so it would only defer on the census once the fence cleared (#28833).
- */
+/** No foreign activation returns null for normal deploy. A held peer fence defers: deploying without pairing would only fail census (#28833). */
 export async function adoptRunningOrcadVersion(
   slot: OrcadSlotOptions,
   record: OrcadActivationRecord,
@@ -33,7 +25,7 @@ export async function adoptRunningOrcadVersion(
   if (!record.active || record.active === localVersion) {
     return null
   }
-  // Starts it only on proven exit: an idle stop leaves its daemon's terminals running.
+  // Wake only on proven server exit; idle stops leave daemon terminals alive.
   const wake = await wakeStoppedManagedOrcad(slot)
   switch (wake.outcome) {
     // Another desktop stopped it meanwhile; the deploy's own gates decide.
@@ -59,7 +51,7 @@ export async function adoptRunningOrcadVersion(
     case 'started':
       break
   }
-  // Re-read: the wake follows whatever the record names now, which another desktop may change.
+  // Re-read activation because wake follows peer changes to the current record.
   const active = (await readOrcadActivationRecord(slot)).active
   if (!active || active === localVersion) {
     return null

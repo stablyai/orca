@@ -1,15 +1,15 @@
 import { subscribeToPtyData } from '../terminal-pane/pty-data-sidecar-subscriptions'
-import { isRemoteRuntimePtyId, sendRuntimePtyInput } from '@/runtime/runtime-terminal-inspection'
+import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
+import { sendRuntimePtyInput } from '@/runtime/runtime-terminal-inspection'
 import { subscribeToRuntimeTerminalData } from '@/runtime/runtime-terminal-stream'
-import { NATIVE_CHAT_SUBMIT } from './native-chat-send'
+import { NATIVE_CHAT_SUBMIT } from '../../../../shared/native-chat-paste-bytes'
 import { stripScrollbackAnsi } from './native-chat-scrape-fallback'
+import type { ClaudeModelSwitchOutcome } from '../../../../shared/native-chat-session-option-dispatch'
 
 const DETECTION_TIMEOUT_MS = 5_000
 const MAX_OBSERVED_BYTES = 64 * 1024
 
 type SubscribeToData = (watcher: (data: string) => void) => Promise<() => void> | (() => void)
-
-export type ClaudeModelSwitchOutcome = 'applied' | 'rejected' | 'unknown'
 
 export type ClaudeModelSwitchConfirmationObserver = {
   ready: Promise<void>
@@ -27,8 +27,7 @@ export function hasClaudeModelSwitchConfirmation(buffer: string): boolean {
 }
 
 function compactTerminalText(buffer: string): string {
-  // Why: Claude positions TUI words with cursor-column escapes instead of
-  // emitting literal spaces, so matching must not depend on rendered gaps.
+  // Cursor-column escapes replace literal TUI spaces, so match independently of rendered gaps.
   return stripScrollbackAnsi(buffer).replace(/\s+/g, '').toLowerCase()
 }
 
@@ -38,8 +37,7 @@ function hasClaudeModelSwitchSuccess(buffer: string, modelLabel: string): boolea
   if (text.includes(marker)) {
     return true
   }
-  // Why: resolved echoes insert a version ("Opus 5 (1M context)"); retaining
-  // every picker token prevents one context variant from confirming another.
+  // Match every picker token so a versioned echo cannot confirm the wrong context variant.
   const labelTokens = modelLabel.toLowerCase().match(/[a-z]+|\d+[a-z]*/g) ?? []
   const successStart = text.lastIndexOf('setmodelto')
   if (successStart === -1 || labelTokens.length === 0) {
@@ -139,8 +137,7 @@ export function createClaudeModelSwitchConfirmationObserver(args: {
     if (!confirmationSubmitted && hasClaudeModelSwitchConfirmation(observed)) {
       confirmationSubmitted = true
       try {
-        // Why: the picker selection already expresses consent to switch; this
-        // exact Claude warning defaults to “Yes” and needs only one Enter.
+        // The picker already authorizes switching; this exact warning defaults to Yes and needs one Enter.
         const accepted = args.submitConfirmation
           ? args.submitConfirmation() !== false
           : sendRuntimePtyInput(args.ptyId, NATIVE_CHAT_SUBMIT, 'driving')
@@ -186,10 +183,7 @@ export function createClaudeModelSwitchConfirmationObserver(args: {
       armed = true
     },
     startDetection: () => {
-      // Why: measure the detection window from when the command is actually
-      // delivered, not from arm(). On SSH/remote the body+Enter round-trips can
-      // otherwise burn the timeout before the agent has even responded, turning
-      // a successful switch into a false "could not verify the model change".
+      // Start timeout at command delivery; SSH body/Enter latency must not consume the response window.
       if (settled) {
         return
       }

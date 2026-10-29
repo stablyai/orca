@@ -10,23 +10,26 @@ import type { RuntimeClientTarget } from '../../../../shared/runtime-client-targ
 import { getGitHubRepoLookupIndex } from '../slices/github-repo-lookup-index'
 import {
   LOCAL_EXECUTION_HOST_ID,
-  getRepoExecutionHostId,
-  getSettingsFocusedExecutionHostId,
   normalizeExecutionHostId,
-  parseExecutionHostId
+  parseExecutionHostId,
+  toRuntimeExecutionHostId
 } from '../../../../shared/execution-host'
 
 /** The server-side repo for a request already routed to `target`; `null` when it runs here. */
 export function getRuntimeRepoTarget(
   state: AppState,
-  repoPath: string,
+  repo: { repoId: string | undefined; repoPath: string },
   target: RuntimeClientTarget
 ): { target: { kind: 'environment'; environmentId: string }; repo: Repo } | null {
   if (target.kind !== 'environment') {
     return null
   }
-  const repo = getGitHubRepoLookupIndex(state.repos).findByPath(repoPath)
-  return repo ? { target, repo } : null
+  const lookup = getGitHubRepoLookupIndex(state.repos)
+  // Why: one path can have a row per host (SSH and a paired server); the server only knows its own row's id.
+  const row =
+    lookup.findOnHost(toRuntimeExecutionHostId(target.environmentId), repo.repoId, repo.repoPath) ??
+    lookup.findByIdOrPath(repo.repoId, repo.repoPath)
+  return row ? { target, repo: row } : null
 }
 
 export function getPRRefreshOwnerRuntimeEnvironmentId(
@@ -52,7 +55,7 @@ export function getPRRefreshRuntimeRepoTarget(
   // Why: PR refreshes must follow the repo owner host, not the Active Server dropdown (a runtime-owned worktree can show while Local is focused).
   return getRuntimeRepoTarget(
     state,
-    candidate.repoPath,
+    { repoId: candidate.repoId || undefined, repoPath: candidate.repoPath },
     runtimeTargetForOwnerEnvironment(ownerRuntimeEnvironmentId)
   )
 }
@@ -103,14 +106,4 @@ export function findRepoForGitHubOwner(
   return state.repos
     ? getGitHubRepoLookupIndex(state.repos).findByIdOrPath(repoId, repoPath)
     : undefined
-}
-
-export function getGitHubFocusedRepoOwnerHostId(
-  settings: AppState['settings'],
-  repo: Pick<Repo, 'connectionId' | 'executionHostId'> | undefined
-): string {
-  if (repo?.executionHostId || repo?.connectionId) {
-    return getRepoExecutionHostId(repo)
-  }
-  return getSettingsFocusedExecutionHostId(settings)
 }

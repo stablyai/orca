@@ -1,7 +1,8 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { RelayAssignmentStore } from './assignment-store.js'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { RelayAssignmentStore, type RelayAssignment } from './assignment-store.js'
 import type { RelayCellConfig } from './config.js'
 import { openInMemoryRelayDatabase, type RelayDatabase } from './database.js'
+import { ReservePaceError } from './reserve-assignment.js'
 
 const CELLS: RelayCellConfig[] = [
   {
@@ -104,16 +105,20 @@ describe('Relay regional placement', () => {
         observedRequests: 0
       })
     }
+    await expect(store.regionCatalog()).resolves.toEqual([
+      { region: 'us-central1', probeOrigins: ['https://us-c1.relay.example.com'] },
+      {
+        region: 'asia-east2',
+        probeOrigins: ['https://asia-c1.relay.example.com', 'https://asia-c2.relay.example.com']
+      }
+    ])
     await store.configureCell(CELLS[2]!, 'migration-only')
 
     await expect(store.regionCatalog()).resolves.toEqual([
       { region: 'us-central1', probeOrigins: ['https://us-c1.relay.example.com'] },
       {
         region: 'asia-east2',
-        probeOrigins: [
-          'https://asia-c1.relay.example.com',
-          'https://asia-c3.relay.example.com'
-        ]
+        probeOrigins: ['https://asia-c1.relay.example.com', 'https://asia-c3.relay.example.com']
       }
     ])
 
@@ -179,10 +184,72 @@ describe('Relay regional placement', () => {
     ).resolves.toBeUndefined()
   })
 
+  describe('with a reserve cell in the region', () => {
+    const identity = { userId: 'spill-user', relayHostId: 'spillhost0000001' }
+    const onReserve: RelayAssignment = {
+      ...identity,
+      cellId: 'asia-reserve',
+      cellUrl: 'https://asia-reserve.relay.example.com',
+      assignmentEpoch: 1,
+      leaseExpiresAt: 1_000_000,
+      region: 'asia-east2'
+    }
+    const assignAsia = async (regionReserve?: () => Promise<RelayAssignment | null>) =>
+      await store.assign(identity, 'asia-east2', 'asia-east2', undefined, {
+        placeFresh: async () => null,
+        regionReserve
+      })
+    const fillAsia = async () => {
+      for (const cell of CELLS.slice(1)) await store.configureCell(cell, 'migration-only')
+    }
+
+    it('books the reserve cell rather than spill out of a full region', async () => {
+      await fillAsia()
+      const place = vi.fn(async () => onReserve)
+      await expect(assignAsia(place)).resolves.toEqual({ ...onReserve, placed: true })
+      expect(place).toHaveBeenCalledOnce()
+      expect(await database.query(`SELECT cell_id FROM relay_assignments`)).toEqual([])
+    })
+
+    it('answers a throttled reserve cell with its pace, not a cell abroad', async () => {
+      await fillAsia()
+      await expect(
+        assignAsia(async () => {
+          throw new ReservePaceError(4)
+        })
+      ).rejects.toBeInstanceOf(ReservePaceError)
+      expect(await database.query(`SELECT cell_id FROM relay_assignments`)).toEqual([])
+    })
+
+    it('spills as before when the reserve cell has no room either', async () => {
+      await fillAsia()
+      const place = vi.fn(async () => null)
+      await expect(assignAsia(place)).resolves.toMatchObject({
+        cellId: 'us-c1',
+        region: 'us-central1'
+      })
+      expect(place).toHaveBeenCalledOnce()
+      await expect(
+        store.assign({ ...identity, relayHostId: 'spillhost0000002' }, 'asia-east2', 'asia-east2')
+      ).resolves.toMatchObject({ cellId: 'us-c1' })
+    })
+
+    it('leaves a region with database room to the database lane', async () => {
+      const place = vi.fn(async () => onReserve)
+      await expect(assignAsia(place)).resolves.toMatchObject({
+        cellId: 'asia-c1',
+        region: 'asia-east2'
+      })
+      expect(place).not.toHaveBeenCalled()
+    })
+  })
+
   it('expires identity-linked region preferences after 30 days', async () => {
     const identity = { userId: 'expiry-user', relayHostId: 'expiryhost000001' }
     await store.assign(identity, 'asia-east2')
-    now += 30 * 24 * 60 * 60_000 + 1
+    now += 30 * 24 * 60 * 60_000
+    await expect(store.releaseExpiredRegionPreferences()).resolves.toBe(0)
+    now += 1
 
     await expect(store.releaseExpiredRegionPreferences()).resolves.toBe(1)
     await expect(

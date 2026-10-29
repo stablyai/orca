@@ -106,6 +106,49 @@ describe('useChecksPanelPolling live behavior', () => {
     expect(poller.getDelayMs?.()).toBe(120_000)
   })
 
+  it('lets the read that opens the panel start a stopped WSL distro, but not later polls (E9)', async () => {
+    const model = createModel()
+    const hook = renderHook(({ input }) => useChecksPanelPolling(input), {
+      initialProps: { input: model }
+    })
+    const wakes = (): unknown[] =>
+      vi.mocked(model.fetchPRChecks).mock.calls.map((call) => call[5]?.wakeWslDistro)
+
+    await act(async () => poller.run?.())
+    vi.setSystemTime(Date.now() + 60_000)
+    await act(async () => poller.run?.())
+    expect(wakes()).toEqual([true, undefined])
+
+    hook.rerender({ input: { ...model, isPanelVisible: false } })
+    hook.rerender({ input: model })
+    vi.setSystemTime(Date.now() + 15 * 60_000)
+    await act(async () => poller.run?.())
+    expect(wakes()).toEqual([true, undefined, true])
+  })
+
+  it('polls GitLab MR details in the background after the opening read (E9)', async () => {
+    const model = createModel({
+      activeGitLabReview: {
+        provider: 'gitlab',
+        number: 17,
+        headSha: 'gitlab-head',
+        title: 'MR',
+        state: 'open',
+        url: '',
+        status: 'pending',
+        updatedAt: '',
+        mergeable: 'UNKNOWN'
+      }
+    })
+    renderHook(() => useChecksPanelPolling(model))
+
+    await act(async () => poller.run?.())
+    vi.setSystemTime(Date.now() + 60_000)
+    await act(async () => poller.run?.())
+
+    expect(gitlab.fetchDetails.mock.calls.map((call) => call[0].background)).toEqual([false, true])
+  })
+
   it('selects the GitLab adapter without calling the GitHub checks provider', async () => {
     const model = createModel({
       activeGitLabReview: {
@@ -187,7 +230,7 @@ describe('useChecksPanelPolling live behavior', () => {
     const message = 'Could not load from this computer: glab: not logged in'
     expect(model.setChecksError).toHaveBeenCalledWith(message)
     expect(model.setCommentsError).toHaveBeenCalledWith(message)
-    // Why: a later reset would clear the error; only the scope reset may precede it.
+    // Later resets would clear the error; only the scope reset may precede it.
     const setChecks = vi.mocked(model.setChecks).mock
     const setChecksError = vi.mocked(model.setChecksError).mock
     expect(Math.max(0, ...setChecks.invocationCallOrder)).toBeLessThan(

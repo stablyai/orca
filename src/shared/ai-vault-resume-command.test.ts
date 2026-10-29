@@ -55,9 +55,7 @@ describe('buildAiVaultResumeCommand', () => {
   })
 
   it('emits no CODEX_HOME stamp for real-home canonical sessions', () => {
-    // Backfilled sessions dedupe to the real-home row (codexHome null); their
-    // resume must run against the user's own ~/.codex, never the frozen
-    // managed home whose auth.json stops refreshing after the flip.
+    // Backfills dedupe to real-home rows: resume from ~/.codex, never a frozen managed home whose auth stops refreshing.
     const command = buildAiVaultResumeCommand({
       agent: 'codex',
       sessionId: 'session-1',
@@ -212,8 +210,7 @@ describe('buildAiVaultResumeShellCommand env removal', () => {
     )
   })
 
-  // Why: `env -u` strips what the assignment just set, so an unfiltered list
-  // would silently resume against the real home instead of the pinned one.
+  // Filter assigned variables from env -u or the pinned home silently becomes real-home resume.
   it('keeps a pinned CODEX_HOME authoritative instead of stripping it', () => {
     const command = buildAiVaultResumeShellCommand({
       ...base,
@@ -240,8 +237,7 @@ describe('buildAiVaultResumeShellCommand env removal', () => {
     )
   })
 
-  // Why: the shell decides the grammar, not the host. Keying placement on the
-  // platform emitted POSIX `env -u` into a PowerShell line.
+  // Shell grammar wins over host platform; platform routing emitted POSIX env -u into PowerShell.
   it('uses PowerShell grammar for a PowerShell shell on a non-Windows host', () => {
     const command = buildAiVaultResumeShellCommand({
       ...base,

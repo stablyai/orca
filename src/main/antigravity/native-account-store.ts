@@ -78,9 +78,10 @@ export function createEncryptedAntigravityAccountStore(path: string): Antigravit
         }
         for (const account of value.accounts) {
           const credential = parseAntigravityNativeCredential(account.credentials)
+          // agy refreshes drop the id_token, so a saved account may hold a credential without one.
           if (
             credential.authMethod !== account.authMethod ||
-            credential.identity?.subject !== account.subject
+            (credential.identity !== null && credential.identity.subject !== account.subject)
           ) {
             throw new Error('inconsistent identity')
           }

@@ -1,6 +1,7 @@
+import { agentVerdictDisplayMark } from '../../../../shared/agent-main-agent-verdict'
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status-types'
 import {
-  dashboardCardDisplayState,
+  dashboardCardBaseDisplayState,
   type DashboardCard,
   type DashboardCardSubagent,
   type DashboardSnapshot
@@ -28,12 +29,11 @@ function patchedSubagents(
   }))
 }
 
-/** Applies an already bounded hook event inside the pop-out renderer. */
 export function patchDashboardSnapshotFromAgentStatus(
   snapshot: DashboardSnapshot,
   event: AgentStatusIpcPayload
 ): DashboardAgentStatusPatchResult {
-  if (event.providerSessionOnly) {
+  if (event.providerSessionOnly || event.programStatusOnly) {
     return { matched: true, snapshot }
   }
   const index = snapshot.cards.findIndex((card) => card.paneKey === event.paneKey)
@@ -55,7 +55,7 @@ export function patchDashboardSnapshotFromAgentStatus(
   const workingMode =
     event.state === 'working' && event.workingMode === 'monitoring' ? event.workingMode : undefined
   const bucket = dashboardBucketForDotState(
-    dashboardCardDisplayState({ dotState, workingMode, unseen })
+    dashboardCardBaseDisplayState({ dotState, workingMode, unseen })
   )
   const nextCard: DashboardCard = {
     ...card,
@@ -69,6 +69,7 @@ export function patchDashboardSnapshotFromAgentStatus(
       : {}),
     bucket,
     dotState,
+    verdict: agentVerdictDisplayMark(event) ?? undefined,
     workingMode,
     unseen,
     stateChangedAt: stateChanged ? event.stateStartedAt : card.stateChangedAt,

@@ -1,10 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { buildExcludePathPrefixes, shouldExcludeQuickOpenRelPath } from './quick-open-filter'
 
-// Mirrors Vite's `__vite-browser-external` stub, which is what `node:path` resolves to in the
-// renderer: reading any member throws. #15158 pulled this module into the renderer graph while it
-// still used named imports, which resolve at module evaluation — the app white-screened before
-// React mounted. Anything the renderer can reach must therefore not touch `node:path` members.
+// Model Vite’s throwing node:path browser stub: named member imports once white-screened renderer startup (#15158).
 vi.mock('node:path', () => {
   return new Proxy(
     {},

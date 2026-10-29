@@ -15,16 +15,16 @@ import {
 import { useReusedArrayIdentity } from './use-reused-array-identity'
 import { useSidebarListSession } from '@/lib/sidebar-list-session'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../../../shared/sidebar-inputs-switch'
+import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
+import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 
-// ── Stable sort order ──────────────────────────────────────────
-// Why sortEpoch (not selection): selection side-effects (clearing isUnread, PR-cache refresh) must not reorder the sidebar under the user.
-// Why useMemo not useEffect: order must be computed synchronously before the worktrees memo reads it.
+// Compute settled order synchronously; selection side effects must not reorder rows under the user.
 function useSettledSidebarWorktreeSortOrder(args: {
   repoMap: Map<string, Repo>
   sortBy: SortBy
 }): string[] {
   const { repoMap, sortBy } = args
-  // Why settled (not live): the store coalesces bump bursts so rows don't jump (store/settled-sort-epoch.ts).
+  // Coalesce sort bumps so bursts cannot make rows jump.
   const settledSortEpoch = useAppStore((s) => s.settledSortEpoch)
   const sortOrderEpoch = useAppStore((s) => s.sortOrderEpoch)
 
@@ -82,16 +82,13 @@ function useSettledSidebarWorktreeSortOrder(args: {
   return sortedIds
 }
 
-/**
- * Switch on: the order is a pure read of the owning hosts' stamps on the rows, so a re-list is
- * what re-sorts. No settle window, latch, saved Smart order or create grace.
- */
+/** Rank by host-owned stamps without clocks, settle windows or latches; same-ID host copies retain separate ranks. */
 function useStampSidebarWorktreeSortOrder(args: {
   repoMap: Map<string, Repo>
   sortBy: SortBy
 }): string[] {
   const { repoMap, sortBy } = args
-  const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
+  const worktreesByRepo = useAppStore((s) => selectWorktreesByRepo(s))
   const ranked = useMemo(
     () =>
       rankWorktreesForSort({
@@ -104,7 +101,7 @@ function useStampSidebarWorktreeSortOrder(args: {
         // Stamps read no clock and no live sources.
         now: 0,
         sources: NO_LIVE_SMART_SORT_SOURCES
-      }).sorted.map((worktree) => worktree.id),
+      }).sorted.map(getWorktreeHostIdentity),
     [worktreesByRepo, repoMap, sortBy]
   )
   const sortedIds = useReusedArrayIdentity(ranked)

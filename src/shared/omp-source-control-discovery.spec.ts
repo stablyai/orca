@@ -64,7 +64,11 @@ for (const hostKey of ['local', 'ssh:omp-host']) {
           expect(resolved.value.params.model).toBe(selectedModel ?? 'default')
           const args = spec.buildArgs({ prompt: '', model: resolved.value.params.model })
           if (selectedModel === 'provider/exact-model') {
-            expect(args.slice(-2)).toEqual(['--model', 'provider/exact-model'])
+            const modelIndex = args.indexOf('--model')
+            expect(args.slice(modelIndex, modelIndex + 2)).toEqual([
+              '--model',
+              'provider/exact-model'
+            ])
           } else {
             expect(args).not.toContain('--model')
           }

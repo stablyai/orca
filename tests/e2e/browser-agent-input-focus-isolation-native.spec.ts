@@ -1,10 +1,5 @@
-/**
- * The focus-isolation scenarios in a visible window that owns OS focus (#20595). After the agent's
- * input, a real OS keystroke (xdotool) must reach the user's terminal, not the page.
- * Measured: webContents.getFocusedWebContents() reports the guest whenever a <webview> exists, so
- * only a real keystroke shows where the user's typing goes.
- * Visible-window spec: run it on an isolated display (CI's Xvfb lane), never on a desktop in use.
- */
+// Prove browser-agent input preserves the user’s OS keyboard focus with a real keystroke (#20595).
+// Run only on an isolated visible-window display; guest focus APIs alone cannot establish keyboard routing.
 
 import { execFileSync } from 'node:child_process'
 import type { ElectronApplication, Page } from '@stablyai/playwright-test'

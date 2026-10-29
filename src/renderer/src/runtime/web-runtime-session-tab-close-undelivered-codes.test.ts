@@ -5,6 +5,8 @@ import {
   resetWebSessionCloseReplaysForTests,
   takeDueWebSessionCloseReplays
 } from './web-session-close-replay'
+import { appPairedTerminalTabCloseIntentStore as INTENTS } from './paired-terminal-tab-close-intent-store'
+import { createPairedTerminalTabCloseIntentTestStore } from '../store/terminals/paired-terminal-tab-close-intent.test-fixture'
 import { resetWebSessionFocusIntentForTests } from './web-session-focus-intent'
 import {
   isWebSessionCloseIntentPending,
@@ -56,7 +58,6 @@ vi.mock('./web-session-tabs-sync/tracking-decisions', async (importOriginal) => 
 vi.mock('./web-session-tabs-sync/store-patch', () => ({
   applyWebSessionTabsStorePatch: (buildPatch: (state: unknown) => unknown) => {
     mocks.setState(buildPatch)
-    // The production caller invokes the returned settle receipt.
     return () => {}
   }
 }))
@@ -107,7 +108,12 @@ async function closeAfter(failure: unknown, rejects = false): Promise<boolean> {
     Date.now() + 60_000
   )
   const replayQueued =
-    takeDueWebSessionCloseReplays(OWNER, WORKTREE_ID, new Set(['host-browser-unified'])).length > 0
+    takeDueWebSessionCloseReplays(
+      INTENTS,
+      ENVIRONMENT_ID,
+      WORKTREE_ID,
+      new Set(['host-browser-unified'])
+    ).length > 0
   expect(replayQueued).toBe(held)
   return held
 }
@@ -120,7 +126,8 @@ function envelope(code: string): unknown {
 describe('user close: which failures keep the intent', () => {
   beforeEach(() => {
     vi.stubGlobal('__ORCA_WEB_CLIENT__', true)
-    mocks.getState.mockReturnValue({
+    const intents = createPairedTerminalTabCloseIntentTestStore()
+    mocks.getState.mockImplementation(() => ({
       settings: {
         activeRuntimeEnvironmentId: ENVIRONMENT_ID
       },
@@ -128,8 +135,9 @@ describe('user close: which failures keep the intent', () => {
       terminalLayoutsByTabId: {},
       activeTabIdByWorktree: {},
       activeGroupIdByWorktree: {},
-      setActiveWorktree: mocks.setActiveWorktree
-    })
+      setActiveWorktree: mocks.setActiveWorktree,
+      ...intents.getState()
+    }))
     mocks.resolveHostSessionTabIdForWebSessionTab.mockImplementation(
       (_state, args: { tabId: string }) =>
         args.tabId === 'local-browser-unified' ? 'host-browser-unified' : null

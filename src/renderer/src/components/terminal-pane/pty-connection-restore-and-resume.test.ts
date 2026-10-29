@@ -1,4 +1,4 @@
-import { describe } from 'vitest'
+import { describe, vi } from 'vitest'
 import { registerPtyConnectionAgentSessionResumeTests } from './pty-connection-agent-session-resume.spec'
 import { registerPtyConnectionColdRestoreAgentResumeTests } from './pty-connection-cold-restore-agent-resume.spec'
 import { registerPtyConnectionColdRestoreRepaintTests } from './pty-connection-cold-restore-repaint.spec'
@@ -8,6 +8,13 @@ import { registerPtyConnectionHiddenSleepingResumeTests } from './pty-connection
 import { registerPtyConnectionRestartReplacementTests } from './pty-connection-restart-replacement.spec'
 import { registerPtyConnectionSessionLivenessTests } from './pty-connection-session-liveness.spec'
 import { registerPtyConnectionSleepingResumeBannerTests } from './pty-connection-sleeping-resume-banner.spec'
+
+// Main's answer to the window's layout commands, as a switch-on build sends them.
+vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeRpcClientWithLayoutApply(await importOriginal())
+)
 
 describe('pty-connection-agent-session-resume', registerPtyConnectionAgentSessionResumeTests)
 describe(

@@ -10,13 +10,9 @@ import type {
   WorkerThreadChildSpec
 } from './worker-thread-child-process-protocol'
 
-// Why (#27362): libuv creates processes inline on the calling loop, and on
-// Windows CreateProcessW can spend seconds in code integrity hashing a large,
-// uncached binary. Spawning from a worker thread keeps that off the UI loop.
-// Like the port-scan worker (#11161) this fails closed rather than spawning
-// in-process when no worker can be started.
+// #27362: Windows code-integrity hashing can block CreateProcessW for seconds on the calling loop. Spawn in a worker and fail closed if unavailable (#11161).
 
-// Starting a worker costs a few ms; a few minutes covers back-to-back probes.
+// Amortize worker startup across nearby probes.
 export const IDLE_TEARDOWN_MS = 2 * 60_000
 
 const WORKER_ENTRY_FILENAME = 'worker-thread-child-process-entry.js'
@@ -85,10 +81,14 @@ export class WorkerThreadChildProcess extends EventEmitter {
         return
       case 'stdout':
       case 'stderr':
-        this[event.type].emit(
-          'data',
-          Buffer.from(event.chunk.buffer, event.chunk.byteOffset, event.chunk.byteLength)
-        )
+        try {
+          this[event.type].emit(
+            'data',
+            Buffer.from(event.chunk.buffer, event.chunk.byteOffset, event.chunk.byteLength)
+          )
+        } finally {
+          this.send({ type: 'output-consumed', id: this.id, bytes: event.chunk.byteLength })
+        }
         return
       case 'error':
         this.emitErrorIfObserved(event.error)
@@ -108,8 +108,7 @@ export class WorkerThreadChildProcess extends EventEmitter {
     }
   }
 
-  // Why: a late error after the caller detached would otherwise throw inside the
-  // worker message handler and surface as an uncaught main-process exception.
+  // Ignore unobserved late errors after caller detach or EventEmitter would throw fatally into main.
   private emitErrorIfObserved(payload: WorkerThreadChildErrorPayload): void {
     if (this.listenerCount('error') > 0) {
       this.emit('error', toError(payload))
@@ -190,9 +189,7 @@ export class WorkerThreadChildProcessHost {
     }
   }
 
-  // Why no 'close': the worker's death closes each child's stdin, which is its
-  // graceful stop, but nothing here can observe the exit, so callers' drain
-  // windows (and the Codex home lock they hold) still run their course.
+  // Worker death closes stdin for graceful stop but proves no child exit; omit close so drain windows/home locks still expire normally.
   private abandonAll(message: string): void {
     const abandoned = [...this.children.values()]
     this.children.clear()
@@ -208,7 +205,7 @@ function defaultWorkerFactory(): Worker {
     currentWorkerEntryLayout(__dirname),
     WORKER_ENTRY_FILENAME
   )
-  // Why: throw synchronously so spawn() fails closed instead of waiting on a worker that never loads.
+  // Reject missing worker synchronously so spawning fails closed instead of awaiting impossible readiness.
   if (!existsSync(workerPath)) {
     throw new Error(`Child process worker entry not found: ${workerPath}`)
   }
@@ -217,7 +214,6 @@ function defaultWorkerFactory(): Worker {
 
 let sharedHost: WorkerThreadChildProcessHost | null = null
 
-/** Spawns a piped child from the shared worker thread so process creation never blocks the main loop. */
 export function spawnProcessOnWorkerThread(spec: WorkerThreadChildSpec): WorkerThreadChildProcess {
   sharedHost ??= new WorkerThreadChildProcessHost(defaultWorkerFactory)
   return sharedHost.spawn(spec)

@@ -4,7 +4,9 @@ import { MobileSyntaxSegments } from '../components/MobileSyntaxSegments'
 import { formatPreviewByteLength } from './mobile-file-preview-request'
 import { scrollOffsetForPreviewLine } from './mobile-file-preview-line-column'
 import { buildMobileFilePreviewSyntax } from './mobile-file-preview-syntax'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { filePreviewStyles as styles } from './mobile-file-preview-styles'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 
 export function MobileFilePreviewSourceText({
   relativePath,
@@ -19,6 +21,8 @@ export function MobileFilePreviewSourceText({
   byteLength?: number
   initialLine?: number
 }) {
+  useMobileColorScheme()
+  const t = useMobileTranslation()
   const scrollRef = useRef<ScrollView>(null)
   const revealedRef = useRef(false)
   const syntax = useMemo(
@@ -51,7 +55,11 @@ export function MobileFilePreviewSourceText({
       {truncated ? (
         <MobileFilePreviewTruncatedNote byteLength={byteLength ?? content.length} />
       ) : null}
-      <Text selectable style={styles.textPreview} accessibilityLabel="File preview">
+      <Text
+        selectable
+        style={styles.textPreview}
+        accessibilityLabel={t('files.filePreviewSourceText.previewLabel', 'File preview')}
+      >
         <MobileSyntaxSegments segments={syntax.segments} />
       </Text>
     </ScrollView>
@@ -59,9 +67,13 @@ export function MobileFilePreviewSourceText({
 }
 
 export function MobileFilePreviewTruncatedNote({ byteLength }: { byteLength: number }) {
+  useMobileColorScheme()
+  const t = useMobileTranslation()
   return (
     <Text style={styles.truncatedNote}>
-      Preview truncated. File size: {formatPreviewByteLength(byteLength)}.
+      {t('files.filePreviewSourceText.truncatedNote', 'Preview truncated. File size: {{size}}.', {
+        size: formatPreviewByteLength(byteLength)
+      })}
     </Text>
   )
 }

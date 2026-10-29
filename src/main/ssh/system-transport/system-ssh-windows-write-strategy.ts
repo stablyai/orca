@@ -27,19 +27,10 @@ import {
 /** No Windows stdin write should ever outlive this; a wedged PowerShell never closes on its own. */
 export const WINDOWS_STDIN_WRITE_TIMEOUT_MS = 60_000
 
-/**
- * Bound on one stdin write for the last-resort Windows PowerShell 5.1 path.
- *
- * Measured on Windows 11 26200 / OpenSSH 10.0p2: a 32KB write still hangs 15 times in 120 under
- * load, and no smaller value removes the risk. The defect is per blocking read, not per byte, so
- * shrinking the chunk trades one risky read for more execs that each carry their own. This is a
- * damage bound on a path known to be unreliable, not a safe size.
- */
+/** Damage bound only: 32KiB still hung 15/120 under load on Windows 11/OpenSSH 10.0p2. The defect is per read; smaller chunks add risky execs rather than guarantee safety. */
 export const WINDOWS_STDIN_WRITE_CHUNK_BYTES = 32 * 1024
 
-export type WindowsWriteOptions = Parameters<
-  typeof getSystemSshBuildArgsFromOperationOptions
->[0] & {
+type WindowsWriteOptions = Parameters<typeof getSystemSshBuildArgsFromOperationOptions>[0] & {
   signal?: AbortSignal
   append?: boolean
   exclusive?: boolean
@@ -56,19 +47,7 @@ function publishMode(options: WindowsWriteOptions): WindowsPublishMode {
   return options.append ? 'append' : options.exclusive === true ? 'exclusive' : 'create'
 }
 
-/**
- * Writes one file to a Windows host, preferring transports that do not push bytes through a remote
- * PowerShell's stdin.
- *
- * Order, and why: sftp carries the whole payload in one transfer and never has a remote process
- * read a pipe. Measured on Windows 11 / OpenSSH 10.0p2: 1.9MB in a median 315ms over sftp against
- * 0 of 6 completions on the chunked path, whose best case was ~62 execs at ~350ms each. PowerShell
- * 7 reads a redirected stdin correctly but is not installed by default. Windows PowerShell 5.1 is
- * always present and is the defective reader, so it is last and it is bounded.
- *
- * Every transport stages under a unique name and publishes by rename, so no partial write is ever
- * visible under the real name and no retry inherits a predecessor's lock.
- */
+/** Prefer SFTP (no remote stdin), then PowerShell 7, then bounded unreliable 5.1. On Windows 11/OpenSSH 10.0p2, SFTP sent 1.9MB in median 315ms while chunked 5.1 completed 0/6. Stage uniquely before publish so retries avoid predecessor locks. */
 export async function writeWindowsRemoteFile(
   target: SshTarget,
   remotePath: string,
@@ -85,14 +64,7 @@ export async function writeWindowsRemoteFile(
   )
 }
 
-/**
- * Stages under a name nothing else can own, publishes it, and sweeps the staging file if either
- * step fails.
- *
- * Shared by both transports so the cleanup contract cannot drift between them: a failed publish —
- * an exclusive conflict is the ordinary case — leaves bytes on the host that no longer have a
- * purpose, and the sweep is what stops them accumulating.
- */
+/** All transports share unique staging and best-effort cleanup of unused uploads after failed publish. */
 async function stageThenPublish(
   target: SshTarget,
   remotePath: string,
@@ -105,8 +77,7 @@ async function stageThenPublish(
     await stage(stagingPath)
     await publishStagedWrite(target, stagingPath, remotePath, options)
   } catch (error) {
-    // A transport that declined before it moved any bytes has nothing to sweep, and sweeping
-    // anyway would spend a round trip on every write to a host that has no sftp subsystem.
+    // No bytes moved on refusal; avoid a pointless cleanup round trip.
     if (!nothingStaged(error)) {
       await discardStagedWrite(target, stagingPath, options)
     }
@@ -114,13 +85,7 @@ async function stageThenPublish(
   }
 }
 
-/**
- * A path sftp cannot address falls back for this write alone, without touching the host verdict.
- *
- * The distinction matters because the capability cache is keyed by host and holds for half an hour:
- * routing one UNC destination, or one local filename containing a newline, into
- * `rememberUnsupported` would send every later write to that host down the defective path too.
- */
+/** Path refusal falls back for this write only; a host-wide cache verdict would degrade unrelated later paths. */
 async function writeViaSftp(
   target: SshTarget,
   remotePath: string,
@@ -183,10 +148,7 @@ function writeViaRemoteStdin(
   )
 }
 
-/**
- * PowerShell 7 takes the whole payload in one exec — measured at 2MB — so only the 5.1 path pays
- * for chunking, and only because a bounded write is the most that path can be trusted with.
- */
+/** PowerShell 7 accepts the whole payload; chunk only unreliable 5.1 to bound damage, never as a safety guarantee. */
 async function writeStdinChunks(
   target: SshTarget,
   stagingPath: string,
@@ -250,12 +212,7 @@ async function writeOneStdinChunk(
   await closePromise
 }
 
-/**
- * Names the cause on the one path that can hang, so the failure is not just "timed out".
- *
- * A user seeing this needs to know it is a host limitation with a host-side remedy, not a network
- * fault they should retry into.
- */
+/** Expose the host-side cause/remedy so users do not retry a network that cannot fix 5.1 stdin. */
 export function explainWindowsPowerShellStdinFailure(error: unknown): unknown {
   const message = error instanceof Error ? error.message : String(error)
   if (!/timed out/i.test(message)) {
@@ -334,8 +291,7 @@ async function discardStagedWrite(
       { ...options, signal: undefined }
     )
   } catch {
-    // Housekeeping only. The staging name is unique, so a leftover blocks nothing, and a failure
-    // here says nothing about whether the abandoned writer is still alive.
+    // Unique names make cleanup failure harmless; it proves nothing about abandoned-writer liveness.
   }
 }
 

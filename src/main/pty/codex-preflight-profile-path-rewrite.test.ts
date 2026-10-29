@@ -15,10 +15,7 @@ import { getBundledLauncherPath } from '../cli/bundled-cli-launcher-path'
 import { getDaemonBashShellReadyRcfileContent } from '../daemon/daemon-bash-shell-ready-rcfile'
 import { resolveCodexShellLaunchPreflightCommand } from './codex-shell-launch-preflight'
 
-// Why (STA-4270): the generated rcfile sources /etc/profile and the user's profile
-// *before* it defines the codex() wrapper, so a profile PATH prepend decides what an
-// unqualified preflight command resolves to. This drives the real generated rcfile
-// through a real bash and uses filesystem markers — not scraped output — as the oracle.
+// STA-4270: real rcfile execution and file markers prove profile PATH changes cannot hijack preflight.
 
 const roots: string[] = []
 const bashAvailable = process.platform !== 'win32' && existsSync('/bin/bash')
@@ -54,20 +51,18 @@ function buildFixture(options: { aliasCodex?: boolean } = {}): Fixture {
   mkdirSync(codexDir, { recursive: true })
   mkdirSync(homePath, { recursive: true })
 
-  // The CLI Orca ships, at the absolute path Orca controls; only WSL panes run it.
   const launcherPath = getBundledLauncherPath('win32', resourcesPath)
   if (!launcherPath) {
     throw new Error('Windows has a bundled launcher path')
   }
   writeStub(launcherPath, intendedMarker)
-  // The impostor a user's own bin directory could hold under every CLI name Orca uses.
+  // Model hostile binaries under every Orca CLI spelling.
   for (const name of ['orca', 'orca-ide', 'orca-dev']) {
     writeStub(join(hijackDir, name), hijackMarker)
   }
   writeStub(join(codexDir, 'codex'), codexMarker)
 
-  // Why: /etc/profile runs first and macOS path_helper rebuilds PATH from /etc/paths,
-  // so the profile must re-prepend both dirs to model a real user's dotfile winning.
+  // /etc/profile and macOS path_helper run first; the user profile must re-prepend fixture paths.
   const aliasLine = options.aliasCodex
     ? `alias codex='GIT_AUTHOR_NAME=Codex codex --alias-flag'\n`
     : ''
@@ -89,21 +84,17 @@ function buildFixture(options: { aliasCodex?: boolean } = {}): Fixture {
 function launchCodexThroughRcfile(fixture: Fixture, preflightValue: string): void {
   const rcfilePath = join(fixture.root, 'rcfile')
   writeFileSync(rcfilePath, getDaemonBashShellReadyRcfileContent(), 'utf8')
-  // Why the second command: the rcfile defines __orca_osc133_preexec *below* the
-  // codex wrapper, so its presence proves bash parsed past the snippet.
-  // Why the trailing `:` — the markers are this file's oracle, so a failed probe
-  // must surface as a missing marker, not an opaque non-zero exit from bash.
+  // The later OSC hook proves parsing passed the wrapper; trailing : leaves marker absence as the failure.
   const command = `codex --version; declare -F __orca_osc133_preexec >/dev/null && printf ran > ${JSON.stringify(fixture.postSnippetMarker)}; :`
   execFileSync('/bin/bash', ['--rcfile', rcfilePath, '-i', '-c', command], {
     stdio: 'ignore',
     env: {
       HOME: fixture.homePath,
-      // Why: the hijack dir is deliberately absent here — only the profile adds it.
+      // Only the user profile introduces the hostile PATH entry.
       PATH: ['/usr/bin', '/bin', '/usr/sbin', '/sbin'].join(delimiter),
       TERM: 'dumb',
       SHELL: '/bin/bash',
-      // Why no ORCA_SHELL_FEATURES: absent means no features, so the rcfile
-      // emits neither the identity nor the readiness marker into stdout.
+      // No features means no identity/readiness markers in captured stdout.
       ORCA_CODEX_HOME: join(fixture.root, 'codex-home'),
       ORCA_CODEX_LAUNCH_PREFLIGHT: preflightValue
     }
@@ -141,13 +132,11 @@ describe.skipIf(!bashAvailable)('Codex preflight under a profile-rewritten PATH'
 
     expect(existsSync(fixture.intendedMarker)).toBe(true)
     expect(existsSync(fixture.hijackMarker)).toBe(false)
-    // Guard against a vacuous pass: the wrapper must still have reached `command codex`.
+    // Prove the wrapper reached the real Codex binary.
     expect(existsSync(fixture.codexMarker)).toBe(true)
   })
 
-  // Why: a user alias named codex used to expand into the wrapper's own `codex()`
-  // header, and bash abandons the rest of the rcfile at that syntax error — taking
-  // the OSC 133 hooks and the shell-ready marker defined below it with it.
+  // A codex alias can expand into the function header and prevent all later rcfile hooks from parsing.
   it('finishes the rcfile and preserves the alias when the user aliased the name codex', () => {
     const fixture = buildFixture({ aliasCodex: true })
     const preflightCommand = resolveCodexShellLaunchPreflightCommand({
@@ -164,11 +153,9 @@ describe.skipIf(!bashAvailable)('Codex preflight under a profile-rewritten PATH'
     expect(existsSync(fixture.postSnippetMarker)).toBe(true)
     expect(existsSync(fixture.intendedMarker)).toBe(true)
     expect(existsSync(fixture.hijackMarker)).toBe(false)
-    // The user's own alias must survive and still reach the binary.
     expect(readFileSync(fixture.codexMarker, 'utf-8').trim()).toBe('--alias-flag --version')
   })
 
-  // Why: an unqualified preflight is rejected so profile PATH entries cannot hijack it.
   it('skips an unqualified preflight value while still launching codex', () => {
     const fixture = buildFixture()
 

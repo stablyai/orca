@@ -1,5 +1,5 @@
 import type { MarkdownLexerConfiguration, MarkdownToken, MarkdownTokenizer } from '@tiptap/core'
-import TaskList from '@tiptap/extension-task-list'
+import { TaskList } from '@tiptap/extension-list'
 
 const baseTokenizer = TaskList.config.markdownTokenizer as MarkdownTokenizer
 

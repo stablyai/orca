@@ -1,9 +1,6 @@
 import type { ResumeCandidate, ResumeFailure } from './native-chat-resume-on-restart-grouping'
 import type { ResumeRun, ResumeRunHostStatus } from './native-chat-resume-run'
 
-/** Only current host failures create attention obligations after a run. */
-
-/** Where one chat of the run stands, as the leading icon shows it in place of the checkbox. */
 export type ResumeRunRowStatus =
   | { kind: 'in-flight'; startedAt: number; phase: 'starting' | 'ready' | null }
   | { kind: 'resumed' }
@@ -30,8 +27,35 @@ export type ResumeRunView = {
   }>
 }
 
-// What needs the user first, then what is still moving, then what is done.
 const ORDER: Record<Category, number> = { attention: 0, 'in-progress': 1, resumed: 2, other: 3 }
+
+/** A host observation cannot settle this action’s unresolved delivery. */
+export function resumeRunFailures(run: ResumeRun | null, failed: readonly ResumeFailure[]) {
+  const unknown = new Set(
+    run?.inFlight
+      ? []
+      : run?.continued
+          ?.filter((entry) => entry.outcome === 'unknown' || entry.outcome === 'pending')
+          .map((entry) => entry.sessionId)
+  )
+  return new Map<string, ResumeFailure>([
+    ...failed.map((failure) => [failure.sessionId, failure] as const),
+    ...(run?.entries ?? [])
+      .filter((entry) => unknown.has(entry.candidate.sessionId))
+      .map(
+        ({ candidate }) =>
+          [
+            candidate.sessionId,
+            {
+              ...candidate,
+              failedAt: run?.startedAt ?? 0,
+              outcome: 'unconfirmed' as const,
+              reason: 'agent_session_restart_request_failed'
+            }
+          ] as const
+      )
+  ])
+}
 
 export function resumeRunView(
   run: ResumeRun,
@@ -77,6 +101,12 @@ export function resumeRunView(
       statusBySession.set(sessionId, { kind: phase })
       placed.push({ row, category: 'attention', index: placed.length })
     } else if (failure) {
+      placed.push({ row, category: 'attention', index: placed.length })
+    } else if (
+      !run.inFlight &&
+      ['unknown', 'pending'].includes(continuedBySession.get(sessionId) ?? '')
+    ) {
+      statusBySession.set(sessionId, { kind: 'unconfirmed' })
       placed.push({ row, category: 'attention', index: placed.length })
     } else if (listedById.has(sessionId)) {
       placed.push({ row, category: 'other', index: placed.length })

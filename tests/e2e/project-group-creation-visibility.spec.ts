@@ -126,7 +126,11 @@ for (const delayCreateResponse of [false, true]) {
       async ({ repoIds, groupId }) => {
         const store = window.__store!
         for (const repoId of repoIds.slice(0, 2)) {
-          await store.getState().moveProjectToGroup(repoId, groupId)
+          const repo = store.getState().repos.find((candidate) => candidate.id === repoId)
+          if (!repo) {
+            throw new Error(`Missing repo ${repoId}`)
+          }
+          await store.getState().moveProjectToGroup(repo, groupId)
         }
         const collapsedGroups = store
           .getState()

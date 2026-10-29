@@ -2,10 +2,11 @@ import { describe, expect, it } from 'vitest'
 import { RuntimeClientSettingsController } from './runtime-client-settings'
 import { createGlobalSettingsFixture } from '../../shared/global-settings-test-fixture'
 import type { GlobalSettings } from '../../shared/global-settings-types'
+import { SourceControlAiSettings } from '../../shared/rpc-contract/git-params'
+import { liftActionPermissionArgs } from '../../shared/source-control-action-permission-lift'
 import { getDefaultSourceControlAiSettings } from '../../shared/source-control-ai'
 
-// Why: `settings.get` is an explicit allowlist. A paired client's AI buttons resolve their agent
-// from the saved per-action recipe, and a recipe missing here reads as "none saved" on the client.
+// settings.get is an allowlist: omitted per-action agent recipes look unsaved to paired AI buttons.
 function projectionOf(settings: Partial<GlobalSettings>) {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: get() reads nothing but store.getSettings(); every other RuntimeStore member is unreachable from that path.
   return new RuntimeClientSettingsController({ getSettings: () => settings } as never).get()
@@ -17,15 +18,28 @@ function hostSettings(sourceControlAi: GlobalSettings['sourceControlAi']): Parti
 
 describe('RuntimeClientSettingsController source control launch recipes', () => {
   it('publishes the recipe saved for a launch action', () => {
-    const projected = projectionOf(
-      hostSettings({
-        ...getDefaultSourceControlAiSettings(),
-        actions: { fixChecks: { agentId: 'codex', agentArgs: '--fast' } }
-      })
+    const recipe = liftActionPermissionArgs({
+      agentId: 'codex' as const,
+      agentArgs: '-c model=o3 --fast',
+      launchPreferences: {
+        agentId: 'claude',
+        permissionMode: 'ask',
+        modelSelection: {
+          base: 'inherit',
+          options: { effort: { agentId: 'codex', value: null } }
+        }
+      }
+    })
+    const source = { ...getDefaultSourceControlAiSettings(), actions: { fixChecks: recipe } }
+    expect(SourceControlAiSettings.parse(source).actions?.fixChecks).toEqual(recipe)
+    const projected = projectionOf(hostSettings(source))
+    expect(projected.sourceControlAi.actions.fixChecks?.launchPreferences).toEqual(
+      recipe.launchPreferences
     )
     expect(projected.sourceControlAi.actions.fixChecks).toMatchObject({
       agentId: 'codex',
-      agentArgs: '--fast'
+      agentArgs: '--fast',
+      argumentChoices: { syntaxAgent: 'codex', nodes: [{ at: 0, text: '-c model=o3' }] }
     })
   })
 
@@ -49,5 +63,29 @@ describe('RuntimeClientSettingsController source control launch recipes', () => 
       'resolveComments',
       'resolveConflicts'
     ])
+  })
+})
+
+describe('RuntimeClientSettingsController source control list order', () => {
+  it('publishes the group order so paired clients list changes the same way', () => {
+    expect(projectionOf({ sourceControlGroupOrder: 'staged-first' }).sourceControlGroupOrder).toBe(
+      'staged-first'
+    )
+    expect(projectionOf({}).sourceControlGroupOrder).toBe('changes-first')
+  })
+
+  it('publishes the compare base and whitespace choices desktop diffs use', () => {
+    const projected = projectionOf({
+      sourceControlCompareAgainstUpstream: true,
+      diffShowWhitespace: true
+    })
+    expect(projected).toMatchObject({
+      sourceControlCompareAgainstUpstream: true,
+      diffShowWhitespace: true
+    })
+    expect(projectionOf({})).toMatchObject({
+      sourceControlCompareAgainstUpstream: false,
+      diffShowWhitespace: false
+    })
   })
 })

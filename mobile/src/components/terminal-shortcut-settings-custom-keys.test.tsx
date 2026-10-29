@@ -1,7 +1,7 @@
 import { createElement, useEffect, type ReactNode } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { CustomKey } from './CustomKeyModal'
+import type { CustomKey } from '../terminal/terminal-custom-keys'
 
 const CUSTOM_KEYS = 'orca:custom-accessory-keys'
 

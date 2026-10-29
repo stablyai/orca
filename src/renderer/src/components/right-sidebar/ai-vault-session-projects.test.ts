@@ -502,7 +502,6 @@ describe('buildAiVaultSessionProjectById', () => {
 
     const standalone = buildAiVaultSessionProjectById(shared)
 
-    // The active repo/worktree must never leak into attribution.
     for (const [activeRepo, activeWorktree] of [
       [repoA, worktreeA],
       [repoB, worktreeB],
@@ -515,7 +514,6 @@ describe('buildAiVaultSessionProjectById', () => {
   })
 
   it('attributes non-ASCII cwds across unicode normalization forms', () => {
-    // NFC worktree path vs NFD session cwd — both spell /Users/ada/café.
     const repo = makeRepo({ id: 'repo-1', displayName: 'Café', path: '/Users/ada/caf\u00e9' })
     const worktree = makeWorktree({ id: 'wt-1', repoId: repo.id, path: '/Users/ada/caf\u00e9' })
 
@@ -527,6 +525,53 @@ describe('buildAiVaultSessionProjectById', () => {
     })
 
     expect(map.get('claude:nfd')).toMatchObject({ kind: 'repo', key: 'repo:repo-1' })
+  })
+  it('attributes a real-path session to the symlinked workspace its host alias names', () => {
+    const parent = makeRepo({ id: 'parent', displayName: 'Work', path: '/Users/ada/work' })
+    const child = makeRepo({ id: 'child', displayName: 'Api', path: '/Users/ada/work/api' })
+    const map = buildAiVaultSessionProjectById({
+      repos: [parent, child],
+      worktrees: [
+        makeWorktree({ id: 'wt-parent', repoId: parent.id, path: parent.path }),
+        makeWorktree({ id: 'wt-child', repoId: child.id, path: child.path })
+      ],
+      projectHostSetupProjection: makeProjection({}),
+      sessions: [
+        makeSession({
+          id: 'claude:linked',
+          cwd: '/data/src/api/pkg',
+          cwdAliases: ['/Users/ada/work/api/pkg']
+        })
+      ]
+    })
+
+    expect(map.get('claude:linked')).toMatchObject({ kind: 'repo', key: 'repo:child' })
+  })
+
+  it('keeps a nested project over a longer-spelled parent link that reaches it through an alias', () => {
+    const parent = makeRepo({
+      id: 'parent',
+      displayName: 'Parent',
+      path: '/a-very-long-parent-link'
+    })
+    const child = makeRepo({ id: 'child', displayName: 'Child', path: '/real/child' })
+    const map = buildAiVaultSessionProjectById({
+      repos: [parent, child],
+      worktrees: [
+        makeWorktree({ id: 'wt-parent', repoId: parent.id, path: parent.path }),
+        makeWorktree({ id: 'wt-child', repoId: child.id, path: child.path })
+      ],
+      projectHostSetupProjection: makeProjection({}),
+      sessions: [
+        makeSession({
+          id: 'claude:nested',
+          cwd: '/real/child/pkg',
+          cwdAliases: ['/a-very-long-parent-link/child/pkg']
+        })
+      ]
+    })
+
+    expect(map.get('claude:nested')).toMatchObject({ kind: 'repo', key: 'repo:child' })
   })
 })
 
@@ -652,8 +697,6 @@ describe('AI vault session project attribution reuse', () => {
   })
 
   it('gives sessions on one host distinct attribution per cwd', () => {
-    // Guards the cwd half of the cache key: a host-only key would hand every
-    // session the first session's project.
     const repos = [
       makeRepo({ id: 'repo-a', path: '/repo-a' }),
       makeRepo({ id: 'repo-b', path: '/repo-b' })
@@ -677,8 +720,7 @@ describe('AI vault session project attribution reuse', () => {
   })
 
   it('keys on the raw cwd so equivalent spellings still resolve correctly', () => {
-    // The key is deliberately NOT canonicalized: two spellings of one folder miss
-    // each other's entry and are recomputed, which is correct but unshared.
+    // Raw spellings intentionally miss one another's cache entries; recomputation remains correct.
     const repos = [makeRepo({ id: 'repo-win', path: 'C:\\Users\\Ada\\repo' })]
     const result = buildAiVaultSessionProjectById({
       repos,

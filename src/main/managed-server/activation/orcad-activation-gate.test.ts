@@ -86,7 +86,7 @@ describe('evaluateOrcadActivation', () => {
       EXPECTED
     )
     expect(verdict).toMatchObject({ decision: 'reject', code: 'orcad_activation_daemon_absent' })
-    // A cold daemon start is transient: the host must stay eligible for the next connect's deploy.
+    // Cold daemon startup is transient; later connects must remain eligible to deploy.
     expect(classifyOrcadHostUnavailable({ code: 'orcad_activation_daemon_absent' })).toBeNull()
   })
 

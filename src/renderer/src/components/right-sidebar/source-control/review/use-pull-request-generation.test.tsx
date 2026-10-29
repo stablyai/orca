@@ -115,7 +115,7 @@ describe('useSourceControlPullRequestGeneration outcome', () => {
       undefined,
       { autoSubmit: true }
     )
-    // Stop, then a Generate click whose run finishes before the stopped one winds down.
+    // Finish a new Generate run before the stopped run winds down.
     const stopped = useAppStore.getState().pullRequestGenerationRecords[generationKey]
     expect(stopped?.status).toBe('running')
     setPullRequestGenerationRecord(generationKey, {
@@ -138,7 +138,7 @@ describe('useSourceControlPullRequestGeneration outcome', () => {
           answer = resolve
         })
     )
-    // The cancel never reaches the host, so the stopped request stays pending.
+    // Model cancellation never reaching the host so the stopped request remains pending.
     runtime.cancel.mockReturnValue(new Promise(() => {}))
     const subscribe = useAppStore.subscribe
     const released = vi.fn()
@@ -187,7 +187,6 @@ describe('useSourceControlPullRequestGeneration outcome', () => {
     expect(runtime.cancel).toHaveBeenCalledTimes(1)
     const stillPending = new Promise((resolve) => setTimeout(() => resolve('still pending'), 50))
     await expect(Promise.race([outcome, stillPending])).resolves.toEqual({ result: null })
-    // The run's store listener is gone once its outcome settles.
     expect(subscribed).toHaveBeenCalledTimes(1)
     expect(released).toHaveBeenCalledTimes(1)
     subscribed.mockRestore()

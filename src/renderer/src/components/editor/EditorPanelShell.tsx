@@ -12,6 +12,7 @@ import { shouldShowEditorPanelHeader } from './editor-header'
 import { getUntitledFileRoot } from './untitled-file-rename-path'
 import { translate } from '@/i18n/i18n'
 import type { ArtifactWriteRequest } from '../../../../shared/artifacts'
+import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 
 type EditorPanelRenderModel = ReturnType<typeof getEditorPanelRenderModel>
 
@@ -105,6 +106,7 @@ export function EditorPanelShell({
           isMarkdown={model.isMarkdown}
           isCsv={model.isCsv}
           isNotebook={model.isNotebook}
+          customEditorTitles={model.customEditorTitles}
           hasEditorToggle={model.hasEditorToggle}
           availableEditorToggleModes={model.availableEditorToggleModes}
           effectiveToggleValue={model.effectiveToggleValue}
@@ -145,6 +147,7 @@ export function EditorPanelShell({
           isMermaid={model.isMermaid}
           isCsv={model.isCsv}
           isNotebook={model.isNotebook}
+          customEditor={model.activeCustomEditor}
           mdViewMode={model.mdViewMode}
           inlineMarkdownRenderState={model.inlineMarkdownRenderState}
           isChangesMode={model.isDiffSurface && !model.isSingleDiff}
@@ -170,7 +173,7 @@ export function EditorPanelShell({
             ? getUntitledFileRoot(
                 renameDialogFile,
                 findWorktreeById(
-                  useAppStore.getState().worktreesByRepo,
+                  selectWorktreesByRepo(useAppStore.getState()),
                   renameDialogFile.worktreeId
                 )?.path
               )

@@ -46,7 +46,7 @@ export function useSourceControlNoteOpening({
   const pendingCommentEditorRevealFrameIdsRef = useRef<number[]>([])
   const setSourceControlRoot = useCallback(
     (node: HTMLDivElement | null) => {
-      // Why: markdown-note reveal frames target this surface; cancel them on unmount rather than via a passive Effect.
+      // Cancel surface-owned reveal frames on ref detach instead of waiting for passive effect cleanup.
       if (node === null) {
         cancelSourceControlEditorRevealFrames(pendingCommentEditorRevealFrameIdsRef)
       }
@@ -55,7 +55,7 @@ export function useSourceControlNoteOpening({
     [sourceControlRef]
   )
 
-  // Why: route the note by relative filePath to whichever diff surface owns it — unstaged, then branch compare, else a plain editor tab.
+  // Choose the owning diff by relative path: unstaged, then branch, then editor fallback.
   const handleOpenComment = useCallback(
     (comment: DiffComment) => {
       if (!activeWorktreeId || !worktreePath) {
@@ -112,7 +112,7 @@ export function useSourceControlNoteOpening({
         }
         return
       }
-      // Why: neither diff surface has the file (e.g. change committed+merged), so open a plain editor tab in 'changes' mode where DiffViewer picks up the scroll request.
+      // If both diffs lost the file, open changes-mode editor fallback so DiffViewer can consume the reveal request.
       const absPath = joinPath(worktreePath, filePath)
       const language = detectLanguage(filePath)
       openFile({

@@ -71,8 +71,7 @@ describe('useBrowserGuestPaintRetention', () => {
     ).toBe(true)
   })
 
-  // Why: a paired desktop/web/CLI client never takes the presence lock, so the driver term above
-  // cannot cover it and its stream would go dark behind a hidden ancestor.
+  // Paired viewers take no presence lock; retain their stream independently of the mobile driver.
   it('retains a hidden container for a page a paired client is watching', () => {
     hydrateBrowserRemoteViewerPages(['page-b'])
     expect(
@@ -126,8 +125,7 @@ describe('onBrowserGuestPaintRetentionChange', () => {
     hydrateBrowserRemoteViewerPages([])
   })
 
-  // Why every channel: the eviction budget caches its decision until something invalidates it, so a
-  // term that never notifies leaves a streamed guest queued for destruction until an unrelated bump.
+  // Notify for every retention term; a missed invalidation leaves cached eviction queued against a live stream.
   it('fires for automation, driver and remote-viewer changes alike', () => {
     const listener = vi.fn()
     const unsubscribe = onBrowserGuestPaintRetentionChange(listener)

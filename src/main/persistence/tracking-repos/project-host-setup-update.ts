@@ -61,7 +61,10 @@ export class ProjectHostSetupPersistenceOperations {
       return null
     }
     return {
-      setup: this.state.projectHostSetups.find((entry) => entry.id === setup.id) ?? setup,
+      setup:
+        this.state.projectHostSetups.find(
+          (entry) => entry.id === setup.id && entry.hostId === setup.hostId
+        ) ?? setup,
       repo: updatedRepo
     }
   }

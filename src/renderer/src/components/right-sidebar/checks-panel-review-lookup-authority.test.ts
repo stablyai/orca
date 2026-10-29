@@ -32,7 +32,6 @@ describe('resolveChecksPanelReviewLookup', () => {
   })
 
   it('classifies a github hosted-review card with no PR cache as positive_unresolved', () => {
-    // Replaces the old hasAmbiguousGitHubHostedReview boolean.
     expect(
       resolveChecksPanelReviewLookup({
         ...EMPTY,

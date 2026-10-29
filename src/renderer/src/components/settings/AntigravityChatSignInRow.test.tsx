@@ -9,6 +9,7 @@ import type {
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { callAntigravityChatSignIn } from '@/runtime/runtime-antigravity-accounts-client'
 import { AntigravityChatSignInRow } from './AntigravityChatSignInRow'
+import { AntigravityProviderSignInArea } from './AntigravityProviderSignInArea'
 import { TooltipProvider } from '../ui/tooltip'
 
 const url = 'https://accounts.google.com/o/oauth2/v2/auth?state=s'
@@ -86,7 +87,6 @@ async function showRow(owner: RuntimeClientTarget) {
       />
     </TooltipProvider>
   )
-  // Sign in stays disabled until the host's snapshot lands.
   await act(async () => undefined)
   return view
 }
@@ -102,7 +102,6 @@ it('opens the link once across status answers and shows signed in', async () => 
   await act(async () => publish(owner, { flowId: 'f', phase: 'waiting', url }))
   await screen.findByText('Finish signing in in your browser.')
   await act(async () => publish(owner, { flowId: 'f', phase: 'waiting', url }))
-  // The browser's sign-in is checked with a session before it counts.
   await act(async () => publish(owner, { flowId: 'f', phase: 'verifying' }))
   await screen.findByText('Finishing sign-in…')
   await act(async () => publish(owner, { flowId: 'f', phase: 'signedIn' }, 'signedIn'))
@@ -134,7 +133,7 @@ it("shows another client's sign-in without letting this one act on it", async ()
   publish(owner, { flowId: 'done', phase: 'cancelled' })
   await showRow(owner)
   await screen.findByText('Sign-in cancelled.')
-  // Once the host answers, its sign-in replaces the settled flow's outcome.
+  // Authoritative host auth replaces settled flow outcomes.
   await act(async () => publish(owner, { flowId: 'done', phase: 'cancelled' }, 'signedOut'))
   await screen.findByText('Not signed in on this computer.')
   await act(async () => publish(owner, { flowId: null, phase: 'waiting' }))
@@ -156,4 +155,41 @@ it('sends the address pasted from a browser on another computer to the host', as
     flowId: 'remote',
     callbackUrl: pasted
   })
+})
+
+// A host learns its sign-in only when a chat starts, so after launch it has no answer to show.
+it("names the account and why it's needed before the host knows its sign-in", async () => {
+  const owner = { kind: 'environment', environmentId: 'provider-unanswered' } as const
+  render(
+    <AntigravityProviderSignInArea
+      owner={owner}
+      label="this computer"
+      install={{
+        kind: 'active',
+        subject: { target: owner, runtimeId: null, agent: 'antigravity' },
+        removable: true,
+        snapshot: {
+          kind: 'known',
+          state: {
+            agent: 'antigravity',
+            revision: 1,
+            available: true,
+            version: '1.0.0',
+            installedVersion: '1.0.0',
+            installedCurrent: true,
+            source: 'managed',
+            operation: null
+          }
+        }
+      }}
+    />
+  )
+  await act(async () => undefined)
+  expect(screen.getByText('Account')).toBeTruthy()
+  expect(screen.getByRole('status').textContent).toBe(
+    'Chats need an Antigravity sign-in, separate from your agy terminal account.'
+  )
+  expect(screen.getByRole('button', { name: 'Sign in' }).hasAttribute('disabled')).toBe(false)
+  await act(async () => publish(owner, null, 'signedOut'))
+  expect(screen.getByRole('status').textContent).toMatch(/^Not signed in\./)
 })

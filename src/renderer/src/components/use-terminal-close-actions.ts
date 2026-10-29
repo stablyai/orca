@@ -24,13 +24,12 @@ export function useTerminalCloseActions(controller: TerminalCreateController) {
       if (consumeSuppressedPtyExit(ptyId)) {
         return
       }
-      // A negative code is the host-loss sentinel, not proof that the remote
-      // process exited. Keep the mounted tab for reconnect/reveal to recover.
+      // Negative exit codes mean host loss, not process exit; retain the tab for reconnect/reveal recovery.
       if (exitCode !== undefined && !isProvenProcessExit(exitCode)) {
         useAppStore.getState().markUnverifiedPtyLoss(tabId)
         return
       }
-      // Why: a parked multi-leaf tab has no PaneManager to promote split siblings, so closing here would kill them; reveal-remount handles dead PTYs per leaf.
+      // Parked splits have no PaneManager to promote siblings; defer dead-leaf handling to reveal/remount instead of killing them.
       if (shouldDeferParkedPtyExitTabClose(tabId, ptyId)) {
         return
       }

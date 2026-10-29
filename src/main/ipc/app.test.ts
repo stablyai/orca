@@ -1,6 +1,7 @@
 import { EventEmitter } from 'node:events'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as AppRelaunch from '../app-relaunch'
+import { detectUiLanguage } from '../../shared/ui-locale'
 
 const {
   handlers,
@@ -9,6 +10,10 @@ const {
   appRelaunchMock,
   spawnMock,
   destroySystemTrayMock,
+  rebuildSystemTrayMenuMock,
+  rebuildAppMenuMock,
+  getSystemLanguageDetectionMock,
+  setMainUiLanguageMock,
   relaunchAppMock,
   showOpenDialogMock,
   trustFloatingWorkspaceDirectoryMock,
@@ -22,6 +27,10 @@ const {
   appRelaunchMock: vi.fn(),
   spawnMock: vi.fn(),
   destroySystemTrayMock: vi.fn(),
+  rebuildSystemTrayMenuMock: vi.fn(),
+  rebuildAppMenuMock: vi.fn(),
+  getSystemLanguageDetectionMock: vi.fn(),
+  setMainUiLanguageMock: vi.fn(),
   relaunchAppMock: vi.fn(),
   showOpenDialogMock: vi.fn(),
   trustFloatingWorkspaceDirectoryMock: vi.fn(),
@@ -34,8 +43,7 @@ vi.mock('node:child_process', () => ({
   spawn: spawnMock
 }))
 
-// Fakes the detached `spawn` child: a stdout EventEmitter plus close/error
-// events, so tests drive the async command lifecycle readCommandStdout expects.
+// Fake detached child lets tests drive readCommandStdout's stdout and close/error lifecycle.
 function createFakeSpawnChild(options: {
   stdout?: string
   code?: number
@@ -92,13 +100,16 @@ vi.mock('electron', () => ({
   }
 }))
 
-vi.mock('@electron-toolkit/utils', () => ({
-  is: { dev: true }
+vi.mock('../tray/system-tray', () => ({
+  destroySystemTray: destroySystemTrayMock,
+  rebuildSystemTrayMenu: rebuildSystemTrayMenuMock
 }))
 
-vi.mock('../tray/system-tray', () => ({
-  destroySystemTray: destroySystemTrayMock
+vi.mock('../menu/register-app-menu', () => ({ rebuildAppMenu: rebuildAppMenuMock }))
+vi.mock('../i18n/system-language', () => ({
+  getSystemLanguageDetection: getSystemLanguageDetectionMock
 }))
+vi.mock('../i18n/main-i18n', () => ({ setMainUiLanguage: setMainUiLanguageMock }))
 
 vi.mock('../app-relaunch', async (importOriginal) => ({
   ...(await importOriginal<typeof AppRelaunch>()),
@@ -146,8 +157,7 @@ import { registerAppHandlers } from './app'
 
 describe('registerAppHandlers', () => {
   const originalPlatform = process.platform
-  // Why: readCommandStdout process-group-kills on timeout; stub the real signal
-  // so a fake child pid can never target a live process group during tests.
+  // Fake child PIDs must never target a live process group on timeout.
   let processKillSpy: ReturnType<typeof vi.spyOn>
 
   beforeEach(() => {
@@ -158,6 +168,10 @@ describe('registerAppHandlers', () => {
     appRelaunchMock.mockReset()
     spawnMock.mockReset()
     destroySystemTrayMock.mockReset()
+    rebuildSystemTrayMenuMock.mockReset()
+    rebuildAppMenuMock.mockReset()
+    getSystemLanguageDetectionMock.mockReset()
+    setMainUiLanguageMock.mockReset()
     relaunchAppMock.mockReset()
     relaunchAppMock.mockImplementation(() => appRelaunchMock())
     prepareWindowsAdministratorRestartMock.mockReset()
@@ -183,8 +197,69 @@ describe('registerAppHandlers', () => {
 
     registerAppHandlers(store as never)
 
-    expect(registerRendererShutdownCheckpointHandlerMock).toHaveBeenCalledWith(store, undefined)
+    expect(registerRendererShutdownCheckpointHandlerMock).toHaveBeenCalledWith(
+      store,
+      undefined,
+      undefined
+    )
     expect(registerMacKeyboardLayoutChangeNotificationsMock).toHaveBeenCalledOnce()
+  })
+
+  it('returns fallback detection before catalog loading and then refreshes native menus', async () => {
+    const detection = detectUiLanguage(['fr-FR'], 'browser-fallback')
+    getSystemLanguageDetectionMock.mockReturnValueOnce(null).mockReturnValue(detection)
+    let finishLoad: (locale: string) => void = () => {}
+    setMainUiLanguageMock.mockReturnValue(
+      new Promise<string>((resolve) => {
+        finishLoad = resolve
+      })
+    )
+    const store = { getSettings: () => ({ uiLanguage: 'system' }) }
+    // SAFETY: the language handler only reads the uiLanguage setting.
+    registerAppHandlers(store as never)
+
+    expect(await handlers.get('app:getSystemLanguageDetection')?.(null, ['fr-FR'])).toBe(detection)
+    expect(getSystemLanguageDetectionMock).toHaveBeenLastCalledWith(['fr-FR'])
+    expect(rebuildAppMenuMock).not.toHaveBeenCalled()
+    expect(rebuildSystemTrayMenuMock).not.toHaveBeenCalled()
+    finishLoad('fr')
+    await vi.advanceTimersByTimeAsync(0)
+    expect(rebuildAppMenuMock).toHaveBeenCalledOnce()
+    expect(rebuildSystemTrayMenuMock).toHaveBeenCalledOnce()
+  })
+
+  it('keeps an explicit language while accepting browser fallback detection', () => {
+    const detection = detectUiLanguage(['fr-FR'], 'browser-fallback')
+    getSystemLanguageDetectionMock.mockReturnValueOnce(null).mockReturnValue(detection)
+    const store = { getSettings: () => ({ uiLanguage: 'en' }) }
+    // SAFETY: the language handler only reads the uiLanguage setting.
+    registerAppHandlers(store as never)
+
+    expect(handlers.get('app:getSystemLanguageDetection')?.(null, ['fr-FR'])).toBe(detection)
+    expect(setMainUiLanguageMock).not.toHaveBeenCalled()
+  })
+
+  it('preserves detection if the asynchronous native menu refresh fails', async () => {
+    const detection = detectUiLanguage(['fr-FR'], 'browser-fallback')
+    getSystemLanguageDetectionMock.mockReturnValueOnce(null).mockReturnValue(detection)
+    const failure = new Error('Catalog unavailable')
+    setMainUiLanguageMock.mockRejectedValue(failure)
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const store = { getSettings: () => ({ uiLanguage: 'system' }) }
+    // SAFETY: the language handler only reads the uiLanguage setting.
+    registerAppHandlers(store as never)
+
+    try {
+      expect(await handlers.get('app:getSystemLanguageDetection')?.(null, ['fr-FR'])).toBe(
+        detection
+      )
+      await vi.advanceTimersByTimeAsync(0)
+      expect(warn).toHaveBeenCalledWith('[app] failed to refresh system language menus:', failure)
+      expect(rebuildAppMenuMock).not.toHaveBeenCalled()
+      expect(rebuildSystemTrayMenuMock).not.toHaveBeenCalled()
+    } finally {
+      warn.mockRestore()
+    }
   })
 
   it('checkpoints before scheduling the native administrator restart and quits normally', async () => {
@@ -378,11 +453,7 @@ describe('registerAppHandlers', () => {
         'com.apple.inputmethod.SCIM.ITABC'
       )
       expect(spawnMock).toHaveBeenCalledTimes(1)
-      // Why: macOS 15's `plutil -extract <key> json` aborts on the input-source
-      // array, so the probe reads live cfprefsd via `defaults export` and dodges
-      // the bug with an xml1 extract before converting the clean subtree to JSON.
-      // Pin the exact pipeline (absolute paths, stdin markers) so dropping any
-      // stage silently regressing CJK detection to the fallback fails the test.
+      // macOS 15 plutil crashes extracting the array as JSON; pin defaults export, xml1 extraction and final JSON conversion.
       expect(spawnMock).toHaveBeenCalledWith(
         '/bin/sh',
         [
@@ -494,8 +565,7 @@ describe('registerAppHandlers', () => {
     expect(trustFloatingWorkspaceDirectoryMock).toHaveBeenCalledWith(store, '/Users/kaylee/notes')
   })
 
-  // Why: the renderer reads these on every Windows capability refresh; the sync probes
-  // execFileSync wsl.exe/pwsh.exe and would stall the main event loop for up to 5s each.
+  // Renderer capability refreshes must not block the main loop on synchronous wsl.exe/pwsh.exe probes.
   it('answers the Windows shell capability channels without a blocking spawn', async () => {
     registerAppHandlers({} as never)
 

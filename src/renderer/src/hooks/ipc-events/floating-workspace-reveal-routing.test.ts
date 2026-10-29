@@ -4,6 +4,7 @@ import { TOGGLE_FLOATING_TERMINAL_EVENT } from '@/lib/floating-terminal'
 import { createTestStore, makeWorktree, seedStore } from '../../store/slices/store-test-helpers'
 import { createStoreSessionMockApi } from '../../store/slices/store-session-test-harness'
 import type * as MountedTerminalTabRegistry from '@/runtime/mounted-terminal-tab-registry'
+import { drawTabsFromMain } from '../../store/slices/tabs-drawn-from-main.test-fixture'
 
 const mocks = vi.hoisted(() => {
   const store: { current: ReturnType<typeof createTestStore> | null } = { current: null }
@@ -21,6 +22,16 @@ function testStore(): ReturnType<typeof createTestStore> {
   return mocks.store.current
 }
 
+vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeRpcClientWithLayoutApply(await importOriginal())
+)
+vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeLayoutClientWithTestFrames(await importOriginal())
+)
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
 vi.mock('../../store', () => ({
   useAppStore: {
@@ -48,7 +59,6 @@ const MAIN = 'repo1::/repo1/main'
 const FLOATING = FLOATING_TERMINAL_WORKTREE_ID
 
 type Listener = (payload: never) => void
-/** The fields a test sends; each named bridge listener declares the full shape. */
 type BridgeEventPayload = Record<string, unknown>
 
 function setup(): {
@@ -204,8 +214,9 @@ describe('taking the user to a floating workspace terminal', () => {
     expect(testStore().getState().activeTabIdByWorktree[FLOATING]).toBe(floatingTabId)
   })
 
-  it('focusing a floating editor tab opens the panel on it', () => {
+  it('focusing a floating editor tab opens the panel on it', async () => {
     const { emit, dispatchEvent } = setup()
+    const main = await drawTabsFromMain(testStore())
     testStore().getState().openFile(
       {
         filePath: '/tmp/floating/a.md',
@@ -217,12 +228,15 @@ describe('taking the user to a floating workspace terminal', () => {
       },
       { selection: 'background' }
     )
+    await main.settle()
+    main.close()
     const file = testStore()
       .getState()
       .openFiles.find((f) => f.worktreeId === FLOATING)
     const unifiedTab = (testStore().getState().unifiedTabsByWorktree[FLOATING] ?? []).find(
       (tab) => tab.entityId === file?.id
     )
+    expect(unifiedTab).toBeDefined()
     testStore().getState().setActiveTabType('terminal', FLOATING)
     const before = mainWindow()
 

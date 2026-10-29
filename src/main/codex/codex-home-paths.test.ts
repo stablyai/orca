@@ -5,6 +5,7 @@ import {
   mkdtempSync,
   mkdirSync,
   readFileSync,
+  readdirSync,
   readlinkSync,
   rmSync,
   symlinkSync,
@@ -13,7 +14,7 @@ import {
 import { tmpdir } from 'node:os'
 import type * as NodeFs from 'node:fs'
 import type * as NodeOs from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 
 const { getPathMock, homedirMock } = vi.hoisted(() => ({
   getPathMock: vi.fn<(name: string) => string>(),
@@ -193,9 +194,7 @@ describe('syncSystemCodexResourcesIntoManagedHome', () => {
     const perAccountSkillsPath = join(perAccountHome, 'skills')
     expect(readFileSync(join(perAccountSkillsPath, 'review', 'SKILL.md'), 'utf-8')).toBe('skill\n')
     expectSymbolicLinkTargetIfLinked(perAccountSkillsPath, join(getSystemCodexHomePath(), 'skills'))
-    // The shared runtime mirror is untouched by an explicit per-account sync.
     expect(existsSync(join(getRuntimeCodexHomePath(), 'skills'))).toBe(false)
-    // ~/.codex gains nothing — resources are only read from it, never written back.
     expect(existsSync(join(getSystemCodexHomePath(), 'codex-accounts'))).toBe(false)
   })
 
@@ -240,6 +239,53 @@ describe('syncSystemCodexResourcesIntoManagedHome', () => {
     expect(lstatSync(runtimePluginsPath).isSymbolicLink()).toBe(true)
     expectSymbolicLinkTargetIfLinked(runtimePluginsPath, externalPluginsPath)
     expect(readFileSync(join(runtimePluginsPath, 'runtime.md'), 'utf-8')).toBe('runtime\n')
+  })
+
+  it('imports global rules beside account approvals and drops deleted ones (#24431)', () => {
+    const systemRulesPath = join(getSystemCodexHomePath(), 'rules')
+    const perAccountRulesPath = join(userDataDir, 'codex-accounts', 'account-1', 'home', 'rules')
+    mkdirSync(systemRulesPath, { recursive: true })
+    mkdirSync(perAccountRulesPath, { recursive: true })
+    writeFileSync(join(systemRulesPath, 'default.rules'), 'global\n')
+    writeFileSync(join(perAccountRulesPath, 'default.rules'), 'account approval\n')
+
+    syncSystemCodexResourcesIntoManagedHome(dirname(perAccountRulesPath))
+
+    // Codex loads sorted paths and later network/host_executable rules win, so account files must sort last.
+    expect(readdirSync(perAccountRulesPath).sort()).toEqual([
+      '_orca-global-default.rules',
+      'default.rules'
+    ])
+    expect(readFileSync(join(perAccountRulesPath, 'default.rules'), 'utf-8')).toBe(
+      'account approval\n'
+    )
+    expect(readFileSync(join(perAccountRulesPath, '_orca-global-default.rules'), 'utf-8')).toBe(
+      'global\n'
+    )
+
+    rmSync(join(systemRulesPath, 'default.rules'))
+    syncSystemCodexResourcesIntoManagedHome(dirname(perAccountRulesPath))
+
+    expect(existsSync(join(perAccountRulesPath, '_orca-global-default.rules'))).toBe(false)
+    expect(readFileSync(join(perAccountRulesPath, 'default.rules'), 'utf-8')).toBe(
+      'account approval\n'
+    )
+  })
+
+  it('never writes rule copies through a managed rules link into ~/.codex', () => {
+    const systemRulesPath = join(getSystemCodexHomePath(), 'rules')
+    mkdirSync(systemRulesPath, { recursive: true })
+    mkdirSync(getRuntimeCodexHomePath(), { recursive: true })
+    writeFileSync(join(systemRulesPath, 'default.rules'), 'global\n')
+    symlinkSync(
+      systemRulesPath,
+      join(getRuntimeCodexHomePath(), 'rules'),
+      process.platform === 'win32' ? 'junction' : undefined
+    )
+
+    syncSystemCodexResourcesIntoManagedHome()
+
+    expect(existsSync(join(systemRulesPath, '_orca-global-default.rules'))).toBe(false)
   })
 
   it('refreshes owned fallback copies when symlinks are unavailable', () => {
@@ -306,15 +352,12 @@ describe('syncSystemCodexResourcesIntoManagedHome', () => {
 
     const runtimeAgentsPath = join(managedHomePath, 'AGENTS.md')
     expect(readFileSync(runtimeAgentsPath, 'utf-8')).toBe('# WSL instructions\n')
-    // Why: WSL homes are \\wsl.localhost UNC paths, so a host-side symlink would
-    // store a target the distro cannot resolve; global instructions must be a
-    // real copy even when symlinks are available.
+    // WSL cannot resolve host-side symlink targets, even when the host permits symlinks.
     expect(lstatSync(runtimeAgentsPath).isSymbolicLink()).toBe(false)
     expect(existsSync(join(managedHomePath, 'skills'))).toBe(false)
   })
 
-  // Why: creating file symlinks on Windows requires developer mode; the
-  // runtime-home integration test still enforces real-copy behavior there.
+  // Windows file symlinks require developer mode; the integration test still checks real copies.
   it.skipIf(process.platform === 'win32')(
     'materializes symlinked global instructions as a real file for WSL',
     () => {

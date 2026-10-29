@@ -21,8 +21,7 @@ export function getCachedUnifiedTerminalTabForWorktree(
 
   let lookup = terminalTabLookupByUnifiedTabs.get(unifiedTabs)
   if (!lookup) {
-    // Why: every retained TerminalPane reads this tab on every store update.
-    // Share one immutable-array index instead of repeating linear scans.
+    // Share one immutable-array index across retained panes reading unified tabs on every write.
     lookup = new Map()
     for (const tab of unifiedTabs) {
       if (tab.contentType === 'terminal') {
@@ -46,12 +45,7 @@ export function getCachedTerminalGroupIdForWorktree(
   )
 }
 
-/**
- * The unified-tab fields TerminalPane reads.
- *
- * Why bundled: they used to be five `useAppStore` calls, so one publication paid
- * the lookup five times and held five listener slots for every mounted tab.
- */
+/** Bundle formerly separate pane reads to avoid repeated lookups and listener slots per tab. */
 export function selectUnifiedTerminalTabFields(
   unifiedTabsByWorktree: Record<string, Tab[]>,
   worktreeId: string,

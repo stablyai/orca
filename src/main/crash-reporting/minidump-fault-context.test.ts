@@ -8,7 +8,7 @@ const VER_PLATFORM_WIN32_NT = 2
 const CRASHPAD_PLATFORM_MACOS = 0x8101
 const STREAM_TYPE_EXCEPTION = 6
 const CONTEXT_SIZE = 0x4d0
-// Bytes Electron 43.7.8 x64 ships at electron.exe+0x23d3f88: movb %dil, 0x88(%r12) twice.
+// Electron 43.7.8 x64 bytes at electron.exe+0x23d3f88 for comparison with dump capture.
 const CODE = Buffer.from('4188bc24880000004188bc2490000000', 'hex')
 
 type FaultDump = {
@@ -22,7 +22,6 @@ type FaultDump = {
   platformId?: number
 }
 
-/** Exception stream, x64 CONTEXT, MemoryList and ModuleList laid out as Crashpad writes them. */
 function buildFaultDump(options: FaultDump): Buffer {
   const streamCount =
     1 +

@@ -1,7 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { create, type StoreApi, type UseBoundStore } from 'zustand'
 import { withReactCommitCascadeWriteProbe } from './react-commit-cascade-write-probe'
+import { withEditorBufferRecords } from './editor-buffer-record-lifecycle'
+import type { EditorBufferRecords } from './slices/editor/buffers/editor-buffer-record'
+import type { OpenFile } from './slices/editor/types/open-file'
 import type { ReactCommitCascadeWriteBoundary } from '@/lib/react-commit-cascade-store-write-samples'
+import {
+  EMPTY_EDITOR_BUFFER_VIEW_INDEX,
+  type EditorBufferViewIndex
+} from './slices/editor/buffers/editor-buffer-views'
 
 const { probe, noteWrite } = vi.hoisted(() => ({
   probe: { armed: false },
@@ -27,8 +34,7 @@ beforeEach(() => {
 })
 
 describe('withReactCommitCascadeWriteProbe', () => {
-  // Why this matters most: this wraps every write the app makes. A diagnostic
-  // that throws here would drop the write and take app state with it.
+  // Diagnostics wrap every write; throwing would drop app state.
   it('lands the write even when the sampler throws', () => {
     noteWrite.mockImplementation(() => {
       throw new Error('sampler exploded')
@@ -40,8 +46,7 @@ describe('withReactCommitCascadeWriteProbe', () => {
     expect(useProbedStore.getState().ticks).toBe(3)
   })
 
-  // Why asserted: create() copies api.setState onto the hook AFTER the creator
-  // runs, so a middleware that forgets this line leaves store.setState unprobed.
+  // create copies api.setState onto the hook after creator runs; require the middleware to cover that path too.
   it('routes the api setState through the probe', () => {
     const useProbedStore = createProbedStore()
     probe.armed = true
@@ -70,5 +75,34 @@ describe('withReactCommitCascadeWriteProbe', () => {
 
     expect(noteWrite).not.toHaveBeenCalled()
     expect(useProbedStore.getState().ticks).toBe(4)
+  })
+
+  // Buffer middleware must preserve caller partials/write frames or cascade reports lose distinct write sites/keys.
+  it('sees each original partial and caller under the editor buffer middleware', () => {
+    type BufferedState = EditorBufferViewIndex & {
+      ticks: number
+      openFiles: OpenFile[]
+      editorBuffers: EditorBufferRecords
+      tick: () => void
+    }
+    const useBufferedStore = create<BufferedState>()(
+      withEditorBufferRecords(
+        withReactCommitCascadeWriteProbe<BufferedState>((set) => ({
+          ticks: 0,
+          openFiles: [],
+          editorBuffers: {},
+          ...EMPTY_EDITOR_BUFFER_VIEW_INDEX,
+          tick: () => set({ ticks: 1 })
+        }))
+      )
+    )
+    probe.armed = true
+
+    useBufferedStore.getState().tick()
+    useBufferedStore.setState({ ticks: 2 })
+
+    expect(noteWrite.mock.calls.map(([, partial]) => partial)).toEqual([{ ticks: 1 }, { ticks: 2 }])
+    expect(noteWrite.mock.calls[1]?.[0]).toBe(useBufferedStore.setState)
+    expect(useBufferedStore.getState().ticks).toBe(2)
   })
 })

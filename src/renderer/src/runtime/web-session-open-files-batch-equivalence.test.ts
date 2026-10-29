@@ -60,6 +60,7 @@ function baseState(overrides: Partial<WebSessionTabsSyncState>): WebSessionTabsS
     groupsByWorktree: {},
     layoutByWorktree: {},
     openFiles: [],
+    editorBuffers: {},
     ptyIdsByTabId: {},
     remoteBrowserPageHandlesByPageId: {},
     tabBarOrderByWorktree: {},

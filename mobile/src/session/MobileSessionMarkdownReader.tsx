@@ -5,6 +5,8 @@ import { MobileRichMarkdownEditor } from '../components/MobileRichMarkdownEditor
 import { resolveMarkdownFloatingActionsBottom } from './markdown-floating-actions-layout'
 import { markdownReaderStatusText } from './mobile-markdown-reader-status'
 import { colors, spacing } from '../theme/mobile-theme'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { styles } from './mobile-session-styles'
 import type { MarkdownDocState } from './mobile-session-route-types'
 import { MobileLoadErrorState } from '../components/MobileLoadErrorState'
@@ -16,6 +18,7 @@ export function MarkdownReader({
   onChange,
   onSave,
   onCopy,
+  onCopyPath,
   onDiscard,
   keyboardLift
 }: {
@@ -25,9 +28,12 @@ export function MarkdownReader({
   onChange: (content: string) => void
   onSave: () => void
   onCopy: () => void
+  onCopyPath: () => void
   onDiscard: () => void
   keyboardLift: number
 }) {
+  useMobileColorScheme()
+  const t = useMobileTranslation()
   // Native Keyboard events under-report the WebView editor's covered area, so prefer the larger WebView-measured inset.
   const [webviewKeyboardInset, setWebviewKeyboardInset] = useState(0)
   const effectiveKeyboardLift = Math.max(keyboardLift, webviewKeyboardInset)
@@ -79,26 +85,44 @@ export function MarkdownReader({
         ) : null}
         <View style={styles.markdownFloatingActions}>
           <Pressable
-            style={styles.markdownFloatingButton}
+            style={[styles.markdownFloatingButton, styles.markdownCopyButton]}
             onPress={onCopy}
             accessibilityRole="button"
             accessibilityLabel={
-              doc.truncated ? 'Copy loaded Markdown source' : 'Copy Markdown source'
+              doc.truncated
+                ? t('session.markdownReader.copyLoadedSource', 'Copy loaded Markdown source')
+                : t('session.markdownReader.copySource', 'Copy Markdown source')
             }
           >
             <Text style={styles.markdownFloatingButtonText}>
-              {doc.truncated ? 'Copy loaded' : 'Copy'}
+              {doc.truncated
+                ? t('session.markdownReader.copyLoaded', 'Copy loaded')
+                : t('common.copy', 'Copy')}
+            </Text>
+          </Pressable>
+          <Pressable
+            style={[styles.markdownFloatingButton, styles.markdownCopyButton]}
+            onPress={onCopyPath}
+            accessibilityRole="button"
+            accessibilityLabel={t('session.markdownReader.copyPathLabel', 'Copy Markdown path')}
+          >
+            <Text style={styles.markdownFloatingButtonText}>
+              {t('session.markdownReader.copyPath', 'Copy path')}
             </Text>
           </Pressable>
           {showRefresh ? (
             <Pressable style={styles.markdownFloatingButton} onPress={onRefresh}>
               <RefreshCw size={13} color={colors.textPrimary} />
-              <Text style={styles.markdownFloatingButtonText}>Refresh</Text>
+              <Text style={styles.markdownFloatingButtonText}>
+                {t('common.refresh', 'Refresh')}
+              </Text>
             </Pressable>
           ) : null}
           {doc.isDirty ? (
             <Pressable style={styles.markdownFloatingButton} onPress={onDiscard}>
-              <Text style={styles.markdownFloatingButtonText}>Discard</Text>
+              <Text style={styles.markdownFloatingButtonText}>
+                {t('session.markdownReader.discard', 'Discard')}
+              </Text>
             </Pressable>
           ) : null}
           {showSave ? (
@@ -114,7 +138,7 @@ export function MarkdownReader({
               {doc.saving ? (
                 <ActivityIndicator size="small" color={colors.textPrimary} />
               ) : (
-                <Text style={styles.markdownFloatingButtonText}>Save</Text>
+                <Text style={styles.markdownFloatingButtonText}>{t('common.save', 'Save')}</Text>
               )}
             </Pressable>
           ) : null}

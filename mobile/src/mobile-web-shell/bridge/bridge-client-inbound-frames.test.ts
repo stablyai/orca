@@ -1,16 +1,28 @@
-/** What the page does with a frame its own reader will not take: which exchange it settles,
- *  which stream it releases at the shell, and what it reports for a frame naming no exchange. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { isRpcDeliveryUnknown } from '../../transport/rpc-delivery-ambiguity'
 import { BRIDGE_MAX_MESSAGE_BYTES } from './bridge-caps'
 import { BRIDGE_PROTOCOL_VERSION } from './bridge-envelope'
-import { createPageClient, idOf, readError } from './bridge-page-client-test-harness'
+import { createPageClient as createPage, idOf, readError } from './bridge-page-client-test-harness'
+
+const resources = new Set<ReturnType<typeof createPage>>()
+function createPageClient(...args: Parameters<typeof createPage>): ReturnType<typeof createPage> {
+  const resource = createPage(...args)
+  resources.add(resource)
+  return resource
+}
+function closeResources(): void {
+  for (const resource of resources) {
+    resource.client.close()
+  }
+  resources.clear()
+}
 
 beforeEach(() => {
   vi.useFakeTimers()
 })
 
 afterEach(() => {
+  closeResources()
   vi.useRealTimers()
 })
 
@@ -40,11 +52,10 @@ describe('bridge client refusals and send failures', () => {
       id: idOf(page, 0),
       payload: { id: 'frame-1', ok: true }
     })
-    // No timer is advanced: a caller that has to wait for one has already rendered without it.
+    // Settle immediately; waiting for a timer lets consumers render without their answer.
     const error = await answer.catch((thrown: unknown) => thrown)
     expect(readError(error).name).toBe('BridgeReplyRefusedError')
     expect(readError(error).message).toContain('unrecognised-message')
-    // The shell answered, so the desktop ran the request; a definite failure would invite a retry.
     expect(isRpcDeliveryUnknown(error)).toBe(true)
     expect(page.diagnostics).toContainEqual({
       kind: 'refused',
@@ -65,9 +76,7 @@ describe('bridge client refusals and send failures', () => {
       'stream-failed'
     ])
     expect(ended).toHaveLength(1)
-    // The shell did not retire this stream — it is still sending on it — so nothing but the page's
-    // own `cancel` releases the slot it holds there. Its overflow backstop counts unacked frames,
-    // which a stream that has gone quiet never reaches.
+    // Cancel at the shell too: its unacked-frame backstop never releases a stream that has gone quiet.
     expect(page.frames().at(-1)).toEqual({
       v: BRIDGE_PROTOCOL_VERSION,
       type: 'cancel',
@@ -76,15 +85,33 @@ describe('bridge client refusals and send failures', () => {
     })
   })
 
-  it('cancels nothing for a stream the shell has already retired', () => {
+  it('settles distinct retired streams without posting cancel', () => {
     const page = createPageClient()
     page.start()
-    page.client.subscribe('terminal.stream', { terminal: 't1' }, () => undefined)
-    const id = idOf(page, 0)
-    const posted = page.frames().length
-    page.deliver({ v: BRIDGE_PROTOCOL_VERSION, type: 'end', id, reason: 'closed' })
-    page.deliver({ v: BRIDGE_PROTOCOL_VERSION, type: 'error', id, error: { message: 'gone' } })
-    expect(page.frames()).toHaveLength(posted)
+    const ended: unknown[] = []
+    const failed: unknown[] = []
+    page.client.subscribe('terminal.stream', { terminal: 't1' }, (value) => ended.push(value))
+    page.client.subscribe('terminal.stream', { terminal: 't2' }, (value) => failed.push(value))
+    const end = { v: BRIDGE_PROTOCOL_VERSION, type: 'end', id: idOf(page, 0), reason: 'closed' }
+    const error = {
+      v: BRIDGE_PROTOCOL_VERSION,
+      type: 'error',
+      id: idOf(page, 1),
+      error: { category: 'Error', message: 'gone', isRpcDeliveryUnknown: false }
+    }
+    const before = page.frames().length
+    page.deliver(end)
+    page.deliver(error)
+    expect(ended).toEqual([
+      expect.objectContaining({ type: 'error', message: expect.stringContaining('closed') })
+    ])
+    expect(failed).toEqual([expect.objectContaining({ type: 'error', message: 'gone' })])
+    page.deliver(end)
+    page.deliver(error)
+    expect(ended).toHaveLength(1)
+    expect(failed).toHaveLength(1)
+    expect(page.frames()).toHaveLength(before)
+    expect(page.diagnostics.filter((entry) => entry.kind === 'refused')).toEqual([])
   })
 
   it('cannot settle a reply whose frame it never parsed, and nothing on the page can', async () => {
@@ -100,11 +127,7 @@ describe('bridge client refusals and send failures', () => {
         settled = true
       }
     )
-    // The two refusals that come before the id does. `oversized` is decided on the raw string and
-    // `malformed-json` on a parse that failed, so neither frame ever yields an id to settle: what
-    // the page holds for it is released by `close` or by a shell replacement and by nothing else.
-    // Neither arises from a host that is behaving: it chunks at the frame cap, refuses a body over
-    // `BRIDGE_MAX_REPLY_BYTES` on its own side, and answers that with an `error` frame instead.
+    // Oversized/malformed JSON yields no salvageable id; only close/replacement can release its exchange. A conforming host instead chunks or sends an error within caps.
     page.deliverRaw(`{"v":1,"type":"reply","id":"${idOf(page, 0)}",`)
     page.deliverRaw(`"${'z'.repeat(BRIDGE_MAX_MESSAGE_BYTES)}"`)
     await Promise.resolve()

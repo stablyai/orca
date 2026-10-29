@@ -1,7 +1,7 @@
 import { ensureElectronProxyFromEnvironment } from '../network/proxy-settings'
 import { getMainHttpClient } from '../network/http-client'
 import { withSpan } from '../observability/tracer'
-import type { JiraAuthType, JiraSite } from '../../shared/jira-types'
+import type { JiraAuthType, JiraSite } from '../../shared/jira/jira-types'
 import { isJiraGatewayBaseUrl } from './gateway-base-url'
 import { JiraApiError, toJiraApiError } from './jira-api-error'
 
@@ -11,11 +11,7 @@ import {
   readFetchResponseJsonWithinLimit
 } from '../../shared/fetch-response-body'
 
-// Why: Atlassian's XSRF filter rejects POST/PUT REST calls that carry a browser
-// User-Agent, failing them with "XSRF check failed" even under API-token auth.
-// Electron's net.fetch sends a Chrome UA, so issue search/create/update/comment
-// all 403'd while GET calls (connect, /myself) passed. A non-browser UA is the
-// reliable fix; X-Atlassian-Token: no-check is not honored for this case.
+// Electron's Chrome UA triggers Atlassian XSRF rejection on token-authenticated writes; no-check does not bypass it.
 const JIRA_API_USER_AGENT = 'Orca'
 
 export type JiraClientForSite = {
@@ -23,9 +19,7 @@ export type JiraClientForSite = {
   authorization: string
 }
 
-// Self-hosted Jira Server/Data Center only exposes REST v2; Cloud endpoints
-// in this codebase are written against v3. Callers build paths with this
-// prefix so one code path serves both deployments.
+// Server/DC needs REST v2; Cloud uses v3.
 export function apiBasePath(site: JiraSite): string {
   return site.authType === 'server' ? '/rest/api/2' : '/rest/api/3'
 }
@@ -41,10 +35,7 @@ export function apiBaseUrl(site: JiraSite): string {
 }
 
 export function authHeader(email: string, apiToken: string, _authType?: JiraAuthType): string {
-  // Self-hosted with no username = a personal access token (Bearer); Basic auth
-  // with a PAT in the password slot is what produces the 401s users report.
-  // Self-hosted WITH a username is classic username+password Basic auth, which
-  // older Server/DC instances require. Email-free Cloud tokens use the gateway.
+  // Server/DC uses Bearer for username-free PATs, Basic for username/password pairs.
   if (!email) {
     return `Bearer ${apiToken}`
   }
@@ -79,9 +70,7 @@ export async function jiraFetch(url: string, init: RequestInit): Promise<Respons
         })
       })
       try {
-        // Why the port: on the desktop this is Electron's net.fetch, which follows
-        // Chromium proxy/session state and avoids undici's stale keep-alive sockets
-        // after VPN path changes. A host without Chromium gets Node's fetch instead.
+        // Desktop Chromium follows proxy/session state and VPN changes; headless hosts supply Node fetch.
         return await httpClient.fetch(url, init)
       } catch (error) {
         span.setAttribute(
@@ -190,26 +179,34 @@ export async function jiraRequestBinary(
 ): Promise<{ data: ArrayBuffer; contentType: string }> {
   const requestUrl = resolveBinaryRequestUrl(client.site, pathOrUrl)
   const headers = new Headers()
-  // Why: attachment content is binary; forcing JSON Accept/Content-Type can
-  // break downloads and confuses some Atlassian edge responses.
+  // Binary attachments must not inherit JSON content negotiation.
   headers.set('Accept', '*/*')
   headers.set('User-Agent', JIRA_API_USER_AGENT)
   headers.set('Authorization', client.authorization)
-  const response = await jiraFetch(requestUrl.toString(), {
-    headers,
-    signal: options.signal,
-    ...(isJiraGatewayBaseUrl(apiBaseUrl(client.site)) ? { redirect: 'error' as const } : {})
-  })
-  if (!response.ok) {
-    throw await toJiraApiError(response, requestUrl.toString())
-  }
-  const contentType = response.headers.get('content-type') || 'application/octet-stream'
-  const bytes = await readFetchResponseBytesWithinLimit(
-    response,
-    options.maxBytes ?? 2 * 1024 * 1024
-  )
-  return {
-    data: Uint8Array.from(bytes).buffer,
-    contentType
+  const controller = new AbortController()
+  const signal = options.signal
+    ? AbortSignal.any([options.signal, controller.signal])
+    : controller.signal
+  try {
+    const response = await jiraFetch(requestUrl.toString(), {
+      headers,
+      signal,
+      ...(isJiraGatewayBaseUrl(apiBaseUrl(client.site)) ? { redirect: 'error' as const } : {})
+    })
+    if (!response.ok) {
+      throw await toJiraApiError(response, requestUrl.toString())
+    }
+    const contentType = response.headers.get('content-type') || 'application/octet-stream'
+    const bytes = await readFetchResponseBytesWithinLimit(
+      response,
+      options.maxBytes ?? 2 * 1024 * 1024
+    )
+    return {
+      data: Uint8Array.from(bytes).buffer,
+      contentType
+    }
+  } finally {
+    // Cancelling the web body alone can leave Chromium's native request unfinished.
+    controller.abort()
   }
 }

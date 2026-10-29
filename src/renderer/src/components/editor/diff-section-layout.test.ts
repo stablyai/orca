@@ -50,8 +50,7 @@ describe('diff section layout', () => {
     ).toBe(188)
   })
 
-  // Why: every viewer's virtualizer must estimate the same height DiffSectionItem
-  // renders for these rows, or each large row drifts ~100px per measure pass.
+  // Match actual fallback height in every viewer or repeated measurement drifts virtualized rows.
   it('estimates deferred and in-flight large rows at the rendered fallback height', () => {
     expect(getDiffSectionRowEstimatedHeight(largeTextSection, undefined)).toBe(188)
     expect(getDiffSectionRowEstimatedHeight(largeTextSection, 3_800_000)).toBe(188)

@@ -1,18 +1,20 @@
 import { useCallback, useState } from 'react'
-import { Alert, StyleSheet } from 'react-native'
+import { Alert } from 'react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useOpenMobileAccounts } from '../accounts/use-open-mobile-accounts'
 import { getProvenCachedWorktrees } from '../cache/worktree-cache'
 import { ActionSheetModal } from '../components/ActionSheetModal'
 import { ConfirmModal } from '../components/ConfirmModal'
 import { getHostListActionSheetActions } from '../host-list-action-sheet-actions'
-import { hostNewWorktreeRoute } from '../host-route-action-state'
 import { hostRouteWithNotice } from '../host-route-notice'
 import { useResponsiveLayout } from '../layout/responsive-layout'
 import { triggerMediumImpact } from '../platform/haptics'
 import { useOpenMobileSession } from '../session/use-open-mobile-session'
 import { useOpenMobileTasks } from '../tasks/use-open-mobile-tasks'
 import { colors } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import {
   useDisconnectHostClient,
   useForceReconnect,
@@ -31,8 +33,11 @@ import { MobileHomeHostList } from './MobileHomeHostList'
 import { MobileHomeListFooter } from './MobileHomeListFooter'
 import { MobileHomeTopBar } from './MobileHomeTopBar'
 import { useMobileHomeData } from './use-mobile-home-data'
+import { newWorkspaceOverlayHref } from '../new-workspace/new-workspace-overlay-route'
 
 export function MobileHomeScreen() {
+  const t = useMobileTranslation()
+  useMobileColorScheme()
   const data = useMobileHomeData()
   const insets = useSafeAreaInsets()
   const { isWideLayout, contentMaxWidth } = useResponsiveLayout()
@@ -72,7 +77,12 @@ export function MobileHomeScreen() {
     } else if (host.credentialStatus === 'temporarily-unavailable') {
       void loadHostCatalog()
         .then(data.setHostCatalog)
-        .catch(() => Alert.alert('Could not check pairing', 'Please try again.'))
+        .catch(() =>
+          Alert.alert(
+            t('home.screen.pairingCheckFailed', 'Could not check pairing'),
+            t('home.screen.tryAgain', 'Please try again.')
+          )
+        )
     } else {
       data.router.push(`/h/${host.id}`)
     }
@@ -97,7 +107,10 @@ export function MobileHomeScreen() {
       data.setHostCatalog(await loadHostCatalog())
     } catch {
       setConfirmRemove(host)
-      Alert.alert('Could not remove host', 'Please try again.')
+      Alert.alert(
+        t('home.screen.removeHostFailed', 'Could not remove host'),
+        t('home.screen.tryAgain', 'Please try again.')
+      )
     }
   }
 
@@ -122,7 +135,11 @@ export function MobileHomeScreen() {
               connectedHosts={data.connectedHosts}
               resumeCard={data.resumeCard}
               taskProvidersByHost={data.taskProvidersByHost}
-              onCreateWorkspace={(hostId) => data.router.push(hostNewWorktreeRoute(hostId))}
+              onCreateWorkspace={() =>
+                data.router.push(
+                  newWorkspaceOverlayHref(data.connectedHosts.map((host) => host.id))
+                )
+              }
               onOpenAccounts={openMobileAccounts}
               onOpenResume={openResume}
               onOpenTasks={openMobileTasks}
@@ -173,9 +190,11 @@ export function MobileHomeScreen() {
       />
       <ConfirmModal
         visible={confirmRemove != null}
-        title="Remove Host"
-        message={`Remove "${confirmRemove?.name}"? You can re-pair later.`}
-        confirmLabel="Remove"
+        title={t('home.screen.removeHostTitle', 'Remove Host')}
+        message={t('home.screen.removeHostMessage', 'Remove "{{name}}"? You can re-pair later.', {
+          name: confirmRemove?.name
+        })}
+        confirmLabel={t('common.remove', 'Remove')}
         destructive
         onConfirm={() => void handleRemove()}
         onCancel={() => setConfirmRemove(null)}
@@ -184,6 +203,6 @@ export function MobileHomeScreen() {
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   container: { flex: 1, backgroundColor: colors.bgBase }
-})
+}))

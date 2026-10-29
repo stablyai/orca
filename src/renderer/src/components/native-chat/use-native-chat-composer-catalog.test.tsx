@@ -1,19 +1,24 @@
 // @vitest-environment happy-dom
-import { renderHook } from '@testing-library/react'
+import { useState } from 'react'
+import { render, fireEvent, renderHook } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import {
   buildNativeChatPickerItems,
   classifyPickerCommands
-} from '../../../../shared/native-chat-picker-items'
+} from '../../../../shared/native-chat/input/native-chat-picker-items'
 import { useNativeChatComposerKeyDown } from './use-native-chat-composer-keydown'
 import { useNativeChatComposerCatalog } from './use-native-chat-composer-catalog'
 import type { NativeChatStructuredComposerTransport } from './native-chat-composer-types'
 import { getVerifiedNativeChatCommands } from '../../../../shared/native-chat-agent-profiles'
-import { sessionSlashCommandSuggestions } from '../../../../shared/native-chat-slash-commands'
 import {
+  dispatchStructuredAgentSessionComposerCommand,
   isStructuredAgentSessionComposerCommand,
+  STRUCTURED_AGENT_SESSION_SLASH_COMMANDS,
   structuredSlashCommands
 } from '../../../../shared/structured-agent-session-composer'
+import capture from '../../../../shared/__fixtures__/omp-native-commands.json'
+import { useNativeChatPickerState } from './use-native-chat-picker-state'
+import { dispatchNativeChatStructuredComposerText } from './native-chat-structured-composer-dispatch'
 import type { DiscoveredSkill } from '../../../../shared/skills'
 import { withNativeChatResumeCommand } from './use-native-chat-resume-command'
 
@@ -59,8 +64,7 @@ describe('composer catalog authority', () => {
       'resume'
     ])
   })
-  // Codex reports no catalog, so the hook's fallback is its entire `/` menu; the
-  // agent has to reach structuredSlashCommands or `/goal` is invisible there.
+  // Codex relies on fallback commands; include structured commands so /goal remains discoverable.
   it('offers Codex the commands its model runs from message text', () => {
     const { result } = renderHook(() => useNativeChatComposerCatalog('codex', transport()))
     expect(result.current.agentCommands).toEqual(
@@ -68,12 +72,15 @@ describe('composer catalog authority', () => {
     )
     expect(result.current.agentCommands.map(({ name }) => name)).toContain('goal')
   })
-  it('leaves the Claude route on its own commands, reported or not', () => {
+  it("puts the host's commands ahead of what Claude reports, reported or not", () => {
     const reported = [{ name: 'init', kind: 'command' as const }]
     const withReport = renderHook(() => useNativeChatComposerCatalog('claude', transport(reported)))
-    expect(withReport.result.current.agentCommands).toEqual(
-      withNativeChatResumeCommand(sessionSlashCommandSuggestions('claude', reported))
-    )
+    expect(withReport.result.current.agentCommands.map(({ name }) => name)).toEqual([
+      'model',
+      'effort',
+      'init',
+      'resume'
+    ])
     const withoutReport = renderHook(() => useNativeChatComposerCatalog('claude', transport()))
     expect(withoutReport.result.current.agentCommands.map(({ name }) => name)).toEqual([
       'model',
@@ -91,16 +98,18 @@ describe('composer catalog authority', () => {
       }
     )
     expect(result.current).toEqual({
-      agentCommands: withNativeChatResumeCommand([]),
+      agentCommands: withNativeChatResumeCommand(structuredSlashCommands()),
       sessionSkills: []
     })
     rerender({ reported: [{ name: 'custom-command', kind: 'command' }] })
     expect(result.current).toEqual({
-      agentCommands: withNativeChatResumeCommand([{ name: 'custom-command' }]),
+      agentCommands: withNativeChatResumeCommand([
+        ...structuredSlashCommands(),
+        { name: 'custom-command' }
+      ]),
       sessionSkills: []
     })
   })
-  // Orca's /resume takes an agent command's place, but a skill of that name stays the agent's.
   it("puts Orca's /resume in place of an agent command and beside a namesake skill", () => {
     const reported = [
       { name: 'review', kind: 'command' as const },
@@ -112,6 +121,8 @@ describe('composer catalog authority', () => {
     const rows = (query: string) =>
       buildNativeChatPickerItems(catalog.agentCommands, [], query, '/', catalog.sessionSkills)
     expect(rows('').map(({ kind, name }) => `${kind}:${name}`)).toEqual([
+      'command:model',
+      'command:effort',
       'command:review',
       'command:resume',
       'skill:resume'
@@ -184,8 +195,7 @@ it('Enter completes a known pre-init skill while still dispatching a built-in co
         setCaret: vi.fn()
       })
     },
-    // Commands lead: clear, then Orca's /resume, then the skill.
-    { initialProps: { activeSuggestion: 2 } }
+    { initialProps: { activeSuggestion: 4 } }
   )
   const enter = { key: 'Enter', nativeEvent: {}, preventDefault: vi.fn() } as unknown as Parameters<
     typeof result.current
@@ -195,7 +205,7 @@ it('Enter completes a known pre-init skill while still dispatching a built-in co
     expect.objectContaining({ name: 'project-skill', kind: 'skill' })
   )
   expect(dispatch).not.toHaveBeenCalled()
-  rerender({ activeSuggestion: 0 })
+  rerender({ activeSuggestion: 2 })
   result.current(enter)
   expect(dispatch).toHaveBeenCalledWith(expect.objectContaining({ name: 'clear', kind: 'command' }))
 })
@@ -217,7 +227,6 @@ describe('OpenCode chat skills', () => {
     }
   }
   const scanned = [skill('release-notes', 'Write release notes')]
-  // What the composer's picker builds: the reported catalog, classified against the scan.
   function items(
     agent: 'opencode' | 'opencode2' | 'claude',
     reported: { name: string; description?: string; kindUnspecified?: true }[],
@@ -229,26 +238,24 @@ describe('OpenCode chat skills', () => {
       reportMayListSkills: agent !== 'claude',
       isSendCommand: (name) => isStructuredAgentSessionComposerCommand(`/${name}`, agent)
     })
-    // Orca's own /resume row sits in every structured catalog; these cases are about the agent's.
+    const hostRows = new Set(STRUCTURED_AGENT_SESSION_SLASH_COMMANDS.map(({ name }) => name))
     return buildNativeChatPickerItems(
       commands,
       skills,
       '',
       '/',
       result.current.sessionSkills
-    ).filter((item) => !(item.kind === 'command' && item.orcaOwned))
+    ).filter((item) => !(item.kind === 'command' && (item.orcaOwned || hostRows.has(item.name))))
   }
   const rows = (...args: Parameters<typeof items>) =>
     items(...args).map((item) => `${item.kind}:${item.name}`)
 
-  // 2.x reports only these commands, so its running chats listed no skills at all.
   it('keeps the scanned skills once an OpenCode 2.x chat reports its commands', () => {
     expect(rows('opencode2', [{ name: 'init' }, { name: 'review' }])).toContain(
       'skill:release-notes'
     )
   })
 
-  // 1.x reports each skill as a command too, under the skill's own description.
   it('shows a skill OpenCode 1.x also reports as a command once, as the skill', () => {
     expect(
       rows('opencode', [
@@ -258,7 +265,6 @@ describe('OpenCode chat skills', () => {
     ).toEqual(['skill:release-notes'])
   })
 
-  // OpenCode runs its own command before a skill of the same name, on either line.
   it.each(['opencode', 'opencode2'] as const)(
     'keeps %s’s own command when a skill shares its name, and marks the collision',
     (agent) => {
@@ -284,3 +290,110 @@ describe('OpenCode chat skills', () => {
     expect(isStructuredAgentSessionComposerCommand(picked[0]!.token, agent)).toBe(true)
   })
 })
+
+vi.mock('./use-native-chat-skills', () => ({
+  useNativeChatSkills: () => ({ status: 'idle', skills: [], retry: vi.fn() })
+}))
+vi.mock('@/lib/native-chat-telemetry', () => ({
+  emitNativeChatPickerItemAccepted: vi.fn(),
+  emitNativeChatPickerOpened: vi.fn()
+}))
+
+it.each([
+  ['skill:plan', 'command', []],
+  ['skill:team/plan', 'command', undefined],
+  ['skill:plan', 'skill', []]
+] as const)(
+  'inserts %s on Enter then sends its exact text after the catalog retires',
+  async (name, kind, retired) => {
+    const send = vi.fn(() => true)
+    const dispatch = vi.fn()
+    const row = capture.enabled.availableCommands.find((row) => row.name === 'skill:plan')!
+    const reported = [{ name, description: row.description, kind }]
+    function Composer({
+      catalog,
+      agent = 'omp'
+    }: {
+      catalog?: NativeChatStructuredComposerTransport['sessionCommands']
+      agent?: 'omp' | 'grok'
+    }) {
+      const [draft, setDraft] = useState('/skill:')
+      const [caret, setCaret] = useState(draft.length)
+      const nativeTransport = {
+        ...transport(catalog),
+        send,
+        dispatchCommand: (text: string) =>
+          dispatchStructuredAgentSessionComposerCommand(text, {
+            agent,
+            snapshot: [],
+            invokeAction: async () => false,
+            setOption: async () => false
+          })
+      }
+      const catalogState = useNativeChatComposerCatalog(agent, nativeTransport)
+      const picker = useNativeChatPickerState({
+        agent,
+        terminalTabId: 'omp',
+        draftScopeKey: 'omp',
+        draft,
+        caret,
+        ...catalogState,
+        recalledFromHistory: false,
+        disabled: false,
+        isComposing: () => false,
+        textareaRef: { current: null },
+        setDraft,
+        setCaret,
+        setActiveSuggestion: vi.fn()
+      })
+      const keyDown = useNativeChatComposerKeyDown({
+        autocomplete: picker.autocomplete,
+        mentionFiles: { files: [], loading: false, failed: false },
+        completeMention: vi.fn(),
+        activeSuggestion: 0,
+        draft,
+        isComposing: () => false,
+        completePickerItem: picker.completeItem,
+        dispatchPickerCommand: dispatch,
+        dismissPicker: vi.fn(),
+        interrupt: vi.fn(),
+        send: () => void dispatchNativeChatStructuredComposerText(nativeTransport, draft),
+        setActiveSuggestion: vi.fn(),
+        setDraft,
+        setCaret
+      })
+      return (
+        <input
+          aria-label="draft"
+          value={draft}
+          onKeyDown={keyDown}
+          onChange={(event) => {
+            setDraft(event.target.value)
+            setCaret(event.target.value.length)
+          }}
+        />
+      )
+    }
+    const view = render(<Composer catalog={reported} />)
+    const input = view.getByLabelText('draft')
+    fireEvent.keyDown(input, { key: 'Enter' })
+    expect(input).toHaveProperty('value', `/${name} `)
+    expect(dispatch).not.toHaveBeenCalled()
+    expect(send).not.toHaveBeenCalled()
+    view.rerender(<Composer catalog={retired} />)
+    fireEvent.change(input, { target: { value: `/${name} args` } })
+    fireEvent.keyDown(input, { key: 'Enter' })
+    await vi.waitFor(() => expect(send).toHaveBeenCalledWith(`/${name} args`, []))
+    fireEvent.change(input, { target: { value: `Please /${name.slice(0, -1)}` } })
+    view.rerender(<Composer catalog={reported} />)
+    fireEvent.keyDown(input, { key: 'Enter' })
+    expect(input).toHaveProperty('value', `Please /${name} `)
+    if (kind === 'command') {
+      view.rerender(<Composer catalog={reported} agent="grok" />)
+      fireEvent.change(input, { target: { value: '/skill:' } })
+      fireEvent.keyDown(input, { key: 'Enter' })
+      expect(dispatch).toHaveBeenCalledWith(expect.objectContaining({ kind: 'command', name }))
+    }
+    view.unmount()
+  }
+)

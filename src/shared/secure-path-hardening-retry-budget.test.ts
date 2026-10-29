@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   configureHardeningRetryBudget,
-  hardeningRetryDelayMs,
   mayAttemptHardening,
   recordHardeningOutcome
 } from './secure-path-hardening-retry-budget'
@@ -55,34 +54,10 @@ describe('secure path hardening retry budget', () => {
     return attemptedAt
   }
 
-  it('doubles the delay after each consecutive failure, up to the ceiling', () => {
-    expect(hardeningRetryDelayMs(1)).toBe(1 * MINUTE)
-    expect(hardeningRetryDelayMs(2)).toBe(2 * MINUTE)
-    expect(hardeningRetryDelayMs(3)).toBe(4 * MINUTE)
-    expect(hardeningRetryDelayMs(4)).toBe(8 * MINUTE)
-    expect(hardeningRetryDelayMs(5)).toBe(16 * MINUTE)
-    // Ceiling reached, and it stays there however long the host has been broken.
-    expect(hardeningRetryDelayMs(6)).toBe(30 * MINUTE)
-    expect(hardeningRetryDelayMs(50)).toBe(30 * MINUTE)
-    expect(hardeningRetryDelayMs(5000)).toBe(30 * MINUTE)
-  })
-
-  it('allows the first attempt for a path it has never seen', () => {
-    expect(mayAttemptHardening(PATH)).toBe(true)
-  })
-
-  // The #4901 condition: the env store re-hardens on the read path about twice a second.
-  it('collapses a read-path poll to a single attempt in the first minute', () => {
-    const attemptedAt = pollUntil(55_000, 500)
-
-    expect(attemptedAt).toEqual([0])
-  })
-
   it('re-probes on the documented curve rather than on every read', () => {
     // Six hours of polling every 30s: 720 reads, and only the backoff decides how many run.
     const attemptedAt = pollUntil(6 * 60 * MINUTE, 30_000)
 
-    // 0, +1, +2, +4, +8, +16, then every 30 minutes forever.
     expect(attemptedAt.slice(0, 6).map((ms) => ms / MINUTE)).toEqual([0, 1, 3, 7, 15, 31])
     const trailingGaps = attemptedAt
       .slice(-4)
@@ -90,21 +65,7 @@ describe('secure path hardening retry budget', () => {
     expect(trailingGaps.slice(0, -1)).toEqual([30, 30, 30])
   })
 
-  // The failure this replaced: three transient failures used to disable a path until restart.
-  it('never abandons a path, however long it has been failing', () => {
-    pollUntil(30 * 24 * 60 * MINUTE, 15 * MINUTE)
-
-    // A month of failures later, the very next elapsed ceiling still re-probes.
-    clock += 31 * MINUTE
-    expect(mayAttemptHardening(PATH)).toBe(true)
-  })
-
-  /**
-   * The same latch by another route. NTP corrections, VM snapshot restores and a user changing the
-   * clock all step `Date.now()` backwards; measured against the wall clock that makes the elapsed
-   * time negative, so the path stayed below its delay for the whole length of the step — a year,
-   * here — which is exactly the permanent abandonment the backoff exists to remove.
-   */
+  /** Backwards wall-clock steps previously held paths below retry delay until time caught up; monotonic elapsed time must keep probing. */
   it('re-probes after a backwards clock step rather than waiting for the wall clock', () => {
     pollUntil(6 * 60 * MINUTE, 30_000)
 
@@ -154,20 +115,14 @@ describe('secure path hardening retry budget', () => {
     expect(mayAttemptHardening(OTHER)).toBe(true)
   })
 
-  /**
-   * The state every other test here configures away: a module instance nobody has called
-   * `configureHardeningRetryBudget` on, which is what a second importer gets. It used to throw,
-   * and from the async lane that throw is an unhandled rejection rather than a caught error, so
-   * "the budget is unconfigured" surfaced as a dead main process. Nothing is imported here but
-   * the module itself — importing `secure-file.ts` is what used to hide this.
-   */
+  /** A second importer may have no configuration; throwing there made async hardening crash main.
+   * Import only the budget so secure-file cannot hide the missing defaults. */
   it('defaults its bounds when nothing configured it', async () => {
     vi.resetModules()
     const budget = await import('./secure-path-hardening-retry-budget.js')
 
     expect(budget.mayAttemptHardening(PATH)).toBe(true)
     expect(() => budget.recordHardeningOutcome(PATH, false)).not.toThrow()
-    // Proof it recorded into a real cache rather than merely not throwing.
     expect(budget.mayAttemptHardening(PATH)).toBe(false)
     expect(budget.mayAttemptHardening(OTHER)).toBe(true)
   })

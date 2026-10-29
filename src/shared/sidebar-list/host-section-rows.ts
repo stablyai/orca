@@ -23,8 +23,7 @@ export type HostHeaderRow = {
   label: string
   detail: string
   health: ExecutionHostHealth
-  // Why: blocked-host guidance in the header menu needs the verdict reason so
-  // it can deep-link an "Update server/client required" row per skew direction.
+  // Keep skew direction to deep-link the appropriate client/server update guidance.
   compatibility?: RuntimeCompatVerdict
   // Why: a revoked pairing needs "Re-pair", not the update guidance a version block gets.
   blockedReason?: RuntimeHostBlockedReason
@@ -50,8 +49,7 @@ function getRepoHostId(
   repo: Pick<Repo, 'connectionId' | 'executionHostId'> | undefined,
   defaultHostId: ExecutionHostId
 ): ExecutionHostId {
-  // Why: explicit executionHostId must win over the focused/default host, or
-  // runtime-owned repos group under whichever host happens to be focused.
+  // Explicit execution ownership outranks focus/default host or runtime repos group under the focused machine.
   if (repo?.connectionId || repo?.executionHostId) {
     return getRepoExecutionHostId(repo)
   }
@@ -85,9 +83,7 @@ function getFallbackHost(hostId: ExecutionHostId, localHostLabel: string): HostS
 }
 
 function countWorkspaceRows(rows: readonly Row[]): number {
-  // Why: a collapsed repo group contributes a header row but no item rows;
-  // fall back to the header's own count so the host badge doesn't read 0
-  // while a visibly populated project sits right under it.
+  // Collapsed groups have no item rows; count headers so populated projects do not show a zero host badge.
   let count = 0
   const seenWorktreeIds = new Set<string>()
   let pendingHeader: Extract<Row, { type: 'header' }> | null = null
@@ -157,13 +153,15 @@ function localizePendingRowsForHost(
   return localized
 }
 
-function getPendingRowsKey(rows: readonly Extract<Row, { type: 'header' }>[]): string {
-  return rows
-    .map(
-      (pendingRow) =>
-        `${pendingRow.key}:${pendingRow.count}:${pendingRow.worktreeIds?.join(',') ?? ''}`
-    )
-    .join('\0')
+function getPendingRowKey(row: Extract<Row, { type: 'header' }>): string {
+  return `${row.key}:${row.count}:${row.worktreeIds?.join(',') ?? ''}`
+}
+
+/** A project group's header (it names no host itself): its nesting depth, else null. */
+function getProjectGroupHeaderDepth(row: Row): number | null {
+  return row.type === 'header' && row.projectGroup && !row.repo
+    ? (row.projectGroupDepth ?? 0)
+    : null
 }
 
 export function addHostSectionRows(args: {
@@ -174,13 +172,10 @@ export function addHostSectionRows(args: {
   defaultHostId: ExecutionHostId
   /** The listed host's own name for itself; a phone reader must not derive it from its own platform. */
   localHostLabel: string
-  // Why: host sections reuse the sidebar's persisted collapsed-group keys
-  // (`host:<hostId>`) so collapse state survives restarts like other groups.
+  // Reuse persisted host:<hostId> collapsed-group keys across restarts.
   collapsedHostKeys?: ReadonlySet<string>
   forceCollapseHosts?: boolean
-  // Why: in the default Projects view, project is the user's primary object
-  // and host is context inside it. Explicit host filters still keep host
-  // headers as an operational/troubleshooting view.
+  // Projects remain primary in the default view; explicit host filters retain operational host headers.
   preferProjectGrouping?: boolean
 }): HostSectionRow[] {
   const visibleHostIds =
@@ -200,19 +195,22 @@ export function addHostSectionRows(args: {
   const hostOptionsById = new Map(args.hostOptions.map((host) => [host.id, host]))
   const rowsByHostId = new Map<ExecutionHostId, Row[]>()
   const globalRows: Row[] = []
+  // The headers above the next host-owned row: one lane header, or a project group's path.
   let pendingRows: Extract<Row, { type: 'header' }>[] = []
-  let pendingRowsWereUsed = false
-  const pendingRowsKeyByHostId = new Map<ExecutionHostId, string>()
-  const flushUnusedPendingRows = (): void => {
-    if (pendingRows.length === 0 || pendingRowsWereUsed) {
+  const usedPendingRows = new Set<Row>()
+  // Each host's last emitted header path, so a sibling group repeats only what differs.
+  const emittedPathByHostId = new Map<ExecutionHostId, string[]>()
+  const flushUnusedPendingRows = (rows: readonly Extract<Row, { type: 'header' }>[]): void => {
+    const unused = rows.filter((row) => !usedPendingRows.has(row))
+    if (unused.length === 0) {
       return
     }
-    const hostScopedRow = pendingRows.some((row) => row.hostWorktreeCounts)
+    const hostScopedRow = unused.some((row) => row.hostWorktreeCounts)
     if (!hostScopedRow) {
-      globalRows.push(...pendingRows)
+      globalRows.push(...unused)
       return
     }
-    for (const row of pendingRows) {
+    for (const row of unused) {
       for (const [hostId, count] of row.hostWorktreeCounts ?? []) {
         if (count <= 0) {
           continue
@@ -234,34 +232,40 @@ export function addHostSectionRows(args: {
     const rowHostId = getRowHostId(row, args.defaultHostId)
     if (rowHostId) {
       const hostRows = rowsByHostId.get(rowHostId) ?? []
-      if (pendingRows.length > 0) {
-        const localizedPendingRows = localizePendingRowsForHost(pendingRows, rowHostId)
-        const pendingRowsKey = getPendingRowsKey(localizedPendingRows)
-        if (
-          localizedPendingRows.length > 0 &&
-          pendingRowsKeyByHostId.get(rowHostId) !== pendingRowsKey
-        ) {
-          hostRows.push(...localizedPendingRows)
-          pendingRowsKeyByHostId.set(rowHostId, pendingRowsKey)
-        }
-        pendingRowsWereUsed = pendingRowsWereUsed || localizedPendingRows.length > 0
+      const localizedPendingRows = localizePendingRowsForHost(pendingRows, rowHostId)
+      const path = localizedPendingRows.map(getPendingRowKey)
+      const emitted = emittedPathByHostId.get(rowHostId) ?? []
+      let shared = 0
+      while (shared < path.length && path[shared] === emitted[shared]) {
+        shared += 1
+      }
+      if (shared < path.length || path.length !== emitted.length) {
+        hostRows.push(...localizedPendingRows.slice(shared))
+        emittedPathByHostId.set(rowHostId, path)
+      }
+      if (localizedPendingRows.length > 0) {
+        pendingRows.forEach((pendingRow) => usedPendingRows.add(pendingRow))
       }
       hostRows.push(row)
       rowsByHostId.set(rowHostId, hostRows)
       continue
     }
-    // Why: status/"All" headers describe the rows that follow. Buffer them
-    // for every host-owned run so host remains above the existing grouping.
+    // Buffer grouping headers for each host run so host headers enclose existing grouping.
     if (row.type === 'header') {
-      flushUnusedPendingRows()
-      pendingRows = [row]
-      pendingRowsWereUsed = false
+      const depth = getProjectGroupHeaderDepth(row)
+      // A nested group keeps its ancestors pending, so each host section gets the whole path.
+      const kept =
+        depth !== null && depth > 0
+          ? pendingRows.filter((pending) => (getProjectGroupHeaderDepth(pending) ?? depth) < depth)
+          : []
+      flushUnusedPendingRows(pendingRows.filter((pending) => !kept.includes(pending)))
+      pendingRows = [...kept, row]
     } else {
       globalRows.push(row)
     }
   }
 
-  flushUnusedPendingRows()
+  flushUnusedPendingRows(pendingRows)
 
   const hostOrder: ExecutionHostId[] = []
   for (const host of args.hostOptions) {
@@ -275,9 +279,7 @@ export function addHostSectionRows(args: {
     }
   }
 
-  // Why: a lone host section is pure noise — the grouping only earns its keep
-  // when there are at least two host sections to tell apart. Registered-but-
-  // empty hosts stay visible in the scope picker, not as headers.
+  // Show host headers only for mixed hosts; registered empty hosts remain in the scope picker.
   if (rowsByHostId.size <= 1) {
     return [...args.rows]
   }
@@ -306,7 +308,14 @@ export function addHostSectionRows(args: {
       count: countWorkspaceRows(hostRows)
     })
     if (!collapsed) {
-      result.push(...hostRows)
+      // The enclosing host header already names the owner of cards and notices.
+      result.push(
+        ...hostRows.map((row) =>
+          'hostContextLabel' in row && row.hostContextLabel
+            ? { ...row, hostContextLabel: undefined }
+            : row
+        )
+      )
     }
   }
 

@@ -11,14 +11,14 @@ const ids = (state: ReturnType<typeof wslMoveFenceFromCutovers>) => ({
 describe('WSL move fence', () => {
   it.each([
     ['prepared', { fenced: [], hidden: [], sessionFrozen: [] }],
-    // The quiesce's own Sleep still writes the session here.
+    // Quiesce must still write Sleep state here.
     ['source-fenced', { fenced: ['repo-1', 'notes'], hidden: [], sessionFrozen: [] }],
     ['quiesced', { fenced: ['repo-1', 'notes'], hidden: [], sessionFrozen: ['repo-1', 'notes'] }],
     [
       'blobs-transferred',
       { fenced: ['repo-1', 'notes'], hidden: [], sessionFrozen: ['repo-1', 'notes'] }
     ],
-    // Through commit: the retained local session is what a downgrade restores.
+    // Preserve the quiesced source session for downgrade.
     [
       'destination-committed',
       { fenced: [], hidden: ['repo-1', 'notes'], sessionFrozen: ['repo-1', 'notes'] }

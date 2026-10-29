@@ -80,13 +80,14 @@ describe('useOwnerUsageRateLimits', () => {
     expect(mocks.watchers).toHaveLength(0)
     expect(result.current.rateLimits).toBe(local)
     expect(result.current.refreshRemote).toBeNull()
+    expect(result.current.remoteOwner).toBeNull()
   })
 
   it("reads usage from the remote owner's accounts stream", () => {
     mocks.owner = { kind: 'environment', environmentId: 'mini' }
     const { result } = renderHook(() => useOwnerUsageRateLimits(local))
     expect(mocks.watchers[0].target).toEqual({ kind: 'environment', environmentId: 'mini' })
-    expect(result.current.remoteOwned).toBe(true)
+    expect(result.current.remoteOwner).toEqual({ environmentId: 'mini', label: 'Mac Mini' })
     expect(result.current.rateLimits.claude?.session).toBeNull()
 
     act(() =>

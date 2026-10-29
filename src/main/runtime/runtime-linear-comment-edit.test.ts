@@ -19,8 +19,8 @@ vi.mock('../linear/client', async (importOriginal) => ({
   getStatus: mocks.getStatus
 }))
 
-vi.mock('../linear/linear-sdk', () => ({
-  loadLinearSdk: () => ({
+vi.mock('../linear/linear-sdk', () => {
+  const sdk = {
     // Why: writes build a fresh SDK client per call so the deadline signal can abort it.
     LinearClient: class {
       client = {
@@ -31,13 +31,14 @@ vi.mock('../linear/linear-sdk', () => ({
       deleteComment = mocks.deleteComment
     },
     AuthenticationLinearError: class extends Error {}
-  })
-}))
+  }
+  return { loadLinearSdk: () => sdk, createLinearClient: () => new sdk.LinearClient() }
+})
 
 import { RuntimeLinearReadCommands } from './runtime-linear-read-commands'
 import { acquire, release } from '../linear/linear-request-concurrency'
 import { addIssueCommentForAgent } from '../linear/linear-issue-comments'
-import { linearError } from '../linear/issue-context-errors'
+import { linearError } from '../linear/issue-context/errors'
 
 function rawComment(body: string): unknown {
   return {
@@ -89,7 +90,7 @@ function createCommands(emitClientEvent = vi.fn()): RuntimeLinearReadCommands {
     showTerminal: async () => {
       throw new Error('unused')
     },
-    resolveWorktreeSelector: async () => {
+    resolveWorkspaceSelector: async () => {
       throw new Error('unused')
     },
     listResolvedWorktrees: async () => [worktree],

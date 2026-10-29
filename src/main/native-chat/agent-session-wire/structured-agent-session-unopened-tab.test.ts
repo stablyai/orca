@@ -1,6 +1,3 @@
-// A restored chat whose open fails keeps its tab, so a phone on a headless host still lists it and
-// its read says why, instead of the chat disappearing: damaged, or saved by a newer Orca.
-
 import { cp, rm } from 'node:fs/promises'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
@@ -41,7 +38,6 @@ afterEach(async () => {
   )
 })
 
-/** A restarted process over the chat's files, its epoch row rewritten by `edit`. */
 async function relaunchWith(
   edit: (db: Database.Database) => void
 ): Promise<StructuredAgentSessionHost> {
@@ -51,7 +47,7 @@ async function relaunchWith(
   await before.store.renewLeases([])
   const relaunched = `${before.root}-relaunched`
   relaunchedRoots.push(relaunched)
-  // A dead process holds no lock.
+  // Simulate process death without copying its live lock.
   await cp(before.root, relaunched, {
     recursive: true,
     filter: (source) => !source.includes('.lock')
@@ -95,7 +91,6 @@ it.each([
     expect(host.listSessionTabs()).toEqual([
       { sessionId: SESSION, workspaceId, agent: expect.any(String) }
     ])
-    // Every read is refused with why, and the host logs it once for the chat.
     for (let read = 0; read < 3; read += 1) {
       await expect(host.history({ sessionId: SESSION, direction: 'tail' })).rejects.toMatchObject({
         refusal

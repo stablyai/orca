@@ -1,4 +1,4 @@
-import { applyClaudeTerminalImageViewerEnv } from '../terminal-image-viewer-env'
+import { applyRemoteViewerLaunchEnv } from '../remote-viewer-launch-env'
 import type { RuntimeManagedWorktreeCreateArgs } from '../runtime-managed-worktree-create-types'
 import { isTuiAgentEnabled } from '../../../shared/tui-agent-selection'
 import type { TuiAgent } from '../../../shared/tui-agent'
@@ -46,7 +46,7 @@ export async function resolveManagedWorktreeCreateStartup(
       : null
   const resolvedStartup = args.startup ?? agentStartup?.startup ?? draftStartup?.startup
   const effectiveStartup = resolvedStartup
-    ? applyClaudeTerminalImageViewerEnv(
+    ? applyRemoteViewerLaunchEnv(
         resolvedStartup,
         args.terminalImageViewerSupported,
         resolvedStartup.launchAgent ??

@@ -9,14 +9,15 @@ import { translate } from '@/i18n/i18n'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { getAttachedWorktreesForFolderWorkspace } from './folder-workspace-attached-worktrees'
 import { useState } from 'react'
+import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 
 export default function FolderWorkspaceWorktreesPanel(): React.JSX.Element {
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
   const activeWorkspaceKey = useAppStore((s) => s.activeWorkspaceKey)
-  const folderWorkspaces = useAppStore((s) => s.folderWorkspaces)
+  const folderWorkspaces = useAppStore((s) => selectFolderWorkspaces(s))
   const workspaceLineageByChildKey = useAppStore((s) => s.workspaceLineageByChildKey)
   const worktreeLineageById = useAppStore((s) => s.worktreeLineageById)
-  const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
+  const worktreesByRepo = useAppStore((s) => selectWorktreesByRepo(s))
   const repos = useAppStore((s) => s.repos)
   const [collapsedLineageWorktreeIds, setCollapsedLineageWorktreeIds] = useState<
     ReadonlySet<string>
@@ -116,16 +117,11 @@ export default function FolderWorkspaceWorktreesPanel(): React.JSX.Element {
       <div className="border-b border-border px-4 py-3">
         <div className="truncate text-sm font-medium text-foreground">{folderWorkspace.name}</div>
         <div className="mt-1 text-xs text-muted-foreground">
-          {childWorktrees.length === 1
-            ? translate(
-                'auto.components.rightSidebar.FolderWorkspaceWorktreesPanel.countOne',
-                '1 attached worktree'
-              )
-            : translate(
-                'auto.components.rightSidebar.FolderWorkspaceWorktreesPanel.countMany',
-                '{{value0}} attached worktrees',
-                { value0: childWorktrees.length }
-              )}
+          {translate(
+            'auto.components.rightSidebar.FolderWorkspaceWorktreesPanel.attachedCount',
+            '{{count}} attached worktrees',
+            { count: childWorktrees.length, defaultValue_one: '{{count}} attached worktree' }
+          )}
         </div>
       </div>
 

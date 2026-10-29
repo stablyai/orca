@@ -1,16 +1,12 @@
 import { isMissingRemoteSessionPathError } from './remote-session-file-stat'
 import { BinarySessionTranscriptError } from './remote-session-content-lines'
 import { readStreamedSessionDocument } from './session-document-stream'
-import { wslGatedReadFile } from '../native-chat/wsl-transcript-fs-access'
+import { openTranscriptReadStream } from '../native-chat/wsl-transcript-fs-access'
 import { WslTranscriptFsError } from '../native-chat/wsl-transcript-fs-gate'
 import type { AiVaultSession } from '../../shared/ai-vault-types'
 import type { ExecutionHostId } from '../../shared/execution-host'
-import {
-  addPreviewContent,
-  createAccumulator,
-  finalizeSession,
-  updateTimeline
-} from './session-scanner-accumulator'
+import { createAccumulator, finalizeSession, updateTimeline } from './session-scanner-accumulator'
+import { addSessionContent } from './session-scanner-messages'
 import type { FileWithMtime, SessionAccumulator } from './session-scanner-types'
 import type { TranscriptMessageSink } from './session-transcript-consumers'
 import {
@@ -40,35 +36,20 @@ export function clineMessagesPathForMetadata(filePath: string): string {
 export async function parseClineSessionFile(
   file: FileWithMtime,
   platform: NodeJS.Platform = process.platform,
-  messageSink?: TranscriptMessageSink
+  messageSink?: TranscriptMessageSink,
+  signal?: AbortSignal
 ): Promise<AiVaultSession | null> {
-  const metadataContent = await wslGatedReadFile(file.path, 'utf-8', 'scan')
-  let messagesContent: string | null = null
-  try {
-    messagesContent = await wslGatedReadFile(
-      clineMessagesPathForMetadata(file.path),
-      'utf-8',
-      'scan'
-    )
-  } catch (error) {
-    // The manifest is written before the first turn; a missing messages file is
-    // a valid metadata-only session, while a WSL gate refusal must stay visible.
-    if (error instanceof WslTranscriptFsError || !isMissingSessionPathError(error)) {
-      throw error
-    }
-  }
-  return parseClineSessionContent(file, metadataContent, messagesContent, platform, {}, messageSink)
+  return parseClineSessionDocuments(
+    file,
+    openTranscriptReadStream(file.path, {}, 'scan'),
+    () => openTranscriptReadStream(clineMessagesPathForMetadata(file.path), {}, 'scan'),
+    platform,
+    {},
+    signal,
+    messageSink
+  )
 }
 
-function isMissingSessionPathError(error: unknown): boolean {
-  const code =
-    error && typeof error === 'object' && 'code' in error && typeof error.code === 'string'
-      ? error.code
-      : null
-  return code === 'ENOENT' || code === 'ENOTDIR'
-}
-
-/** The session's cwd from its manifest alone; null when the manifest lists no session. */
 export function clineManifestCwd(metadataContent: string): string | null {
   const metadata = parseJsonRecord(metadataContent)
   return metadata ? clineMetadataCwd(metadata) : null
@@ -137,7 +118,7 @@ function consumeClineSessionMessage(accumulator: SessionAccumulator, value: unkn
   if (role === 'assistant' && !accumulator.model) {
     accumulator.model = extractString(asRecord(message.modelInfo)?.id)
   }
-  addPreviewContent(accumulator, role, content, message.ts)
+  addSessionContent(accumulator, role, content, message.ts)
 }
 
 export async function parseClineSessionDocuments(
@@ -146,7 +127,8 @@ export async function parseClineSessionDocuments(
   readMessages: () => AsyncIterable<Buffer>,
   platform: NodeJS.Platform,
   options: ParserSessionOptions,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  messages?: TranscriptMessageSink
 ): Promise<AiVaultSession | null> {
   let metadata: Record<string, unknown>
   try {
@@ -169,11 +151,13 @@ export async function parseClineSessionDocuments(
     throw error
   }
   const create = (): SessionAccumulator => {
+    messages?.reset?.()
     const pathSegments = file.path.replace(/\\/g, '/').split('/').filter(Boolean)
     const accumulator = createAccumulator({
       agent: 'cline',
       file,
-      sessionId: extractString(metadata.session_id) ?? pathSegments.at(-2) ?? ''
+      sessionId: extractString(metadata.session_id) ?? pathSegments.at(-2) ?? '',
+      messages
     })
     accumulator.cwd = extractString(metadata.cwd) ?? extractString(metadata.workspace_root)
     accumulator.model = extractString(metadata.model)
@@ -196,12 +180,14 @@ export async function parseClineSessionDocuments(
     }
   } catch (error) {
     if (
-      !(error instanceof SyntaxError) &&
-      !(error instanceof BinarySessionTranscriptError) &&
-      !isMissingRemoteSessionPathError(error)
+      error instanceof WslTranscriptFsError ||
+      (!(error instanceof SyntaxError) &&
+        !(error instanceof BinarySessionTranscriptError) &&
+        !isMissingRemoteSessionPathError(error))
     ) {
       throw error
     }
+    messages?.reset?.()
   }
   accumulator.fallbackTitle ??= normalizeTitleText(extractString(metadata.prompt) ?? '')
   return finalizeSession(accumulator, platform, options)

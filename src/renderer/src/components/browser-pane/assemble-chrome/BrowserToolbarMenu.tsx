@@ -1,10 +1,16 @@
-import { useLayoutEffect, useState } from 'react'
+import { useEffect, useLayoutEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { emitBrowserCookieImportToast } from '@/lib/browser-cookie-import-toast'
 import { useAppStore } from '@/store'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { shouldShowBrowserImportHint } from './browser-import-hint-visibility'
 import type { BrowserViewportPresetId } from '../../../../../shared/browser-workspace-types'
+import type {
+  BrowserPageSiteDisplay,
+  BrowserSiteColorScheme
+} from '../../../../../shared/browser-site-display'
+import type { BrowserPageZoomDirection } from '../../../../../shared/browser-page-zoom'
+import { addBrowserPageZoomEventListener } from '../host-guest/browser-page-zoom'
 import {
   browserViewportPresetToOverride,
   getBrowserViewportPreset
@@ -50,8 +56,7 @@ export function BrowserToolbarMenu({
   )
   const browserImportHintHidden = useAppStore((s) => s.browserImportHintHidden)
   const persistedUIReady = useAppStore((s) => s.persistedUIReady)
-  // The tour prefers the always-visible Import button; only force this overflow
-  // menu open to expose Import Cookies once that hint button is dismissed.
+  // Force overflow open for the tour only when the always-visible Import hint has been dismissed.
   const importHintVisible = shouldShowBrowserImportHint({
     persistedUIReady,
     browserImportHintHidden
@@ -72,17 +77,49 @@ export function BrowserToolbarMenu({
     undefined
   )
   const [menuOpen, setMenuOpen] = useState(false)
+  const [siteDisplay, setSiteDisplay] = useState<BrowserPageSiteDisplay | null>(null)
   const mountedRef = useMountedRef()
 
+  const showSiteDisplay = (request: Promise<BrowserPageSiteDisplay | null>): void => {
+    void request.then((display) => {
+      if (mountedRef.current) {
+        setSiteDisplay(display)
+      }
+    })
+  }
+  const zoomPage = (direction: BrowserPageZoomDirection): void =>
+    showSiteDisplay(window.api.browser.zoomPage({ browserPageId, direction }))
+  const setSiteColorScheme = (colorScheme: BrowserSiteColorScheme | null): void =>
+    showSiteDisplay(window.api.browser.setPageSiteColorScheme({ browserPageId, colorScheme }))
+
+  useEffect(() => {
+    if (!menuOpen) {
+      return
+    }
+    // Main handles invokes in order, so reading after the pane’s zoom command sees the new display.
+    return addBrowserPageZoomEventListener((command) => {
+      if (command.browserPageId === browserPageId) {
+        void window.api.browser.getPageSiteDisplay({ browserPageId }).then((display) => {
+          if (mountedRef.current) {
+            setSiteDisplay(display)
+          }
+        })
+      }
+    })
+  }, [browserPageId, menuOpen, mountedRef])
+
   useLayoutEffect(() => {
-    // Why: step 3 falls back to the Import Cookies row inside this menu, so open
-    // it only when the tour reaches that step and the hint button is hidden.
+    // Only expose the hidden Import Cookies row when the tour reaches its fallback step.
     setMenuOpen(shouldForceMenuOpen)
   }, [shouldForceMenuOpen])
 
   const handleMenuOpenChange = (open: boolean): void => {
     if (shouldForceMenuOpen && !open) {
       return
+    }
+    if (open) {
+      // Why on open: the site changes with every navigation and keyboard zoom, so a cached value goes stale.
+      showSiteDisplay(window.api.browser.getPageSiteDisplay({ browserPageId }))
     }
     setMenuOpen(open)
   }
@@ -97,8 +134,6 @@ export function BrowserToolbarMenu({
   const effectiveProfileId = currentProfileId ?? 'default'
 
   const defaultProfile = browserSessionProfiles.find((p) => p.id === 'default')
-  // Why: Default profile always appears first in the list and cannot be deleted.
-  // Non-default profiles follow in their natural order.
   const allProfiles = defaultProfile
     ? [defaultProfile, ...browserSessionProfiles.filter((p) => p.id !== 'default')]
     : browserSessionProfiles
@@ -117,12 +152,9 @@ export function BrowserToolbarMenu({
     }
     const targetId = pendingSwitchProfileId ?? 'default'
     const profile = browserSessionProfiles.find((p) => p.id === targetId)
-    // Why: Must destroy before store update. The webviewRegistry is keyed by
-    // workspace ID (stable across switches). Without explicit destroy, the mount
-    // effect would reclaim the old webview with the stale partition.
+    // Destroy before updating the store; otherwise the stable registry key would reclaim the old partition.
     onDestroyWebview()
-    // Why: persist the resolved partition alongside the profile so the tab stays
-    // isolated even if the renderer profile mirror is later stale (issue #6923).
+    // Persist the partition with the profile so stale renderer mirrors cannot weaken tab isolation.
     switchBrowserTabProfile(workspaceId, pendingSwitchProfileId, profile?.partition ?? null)
     toast.success(
       translate(
@@ -232,6 +264,7 @@ export function BrowserToolbarMenu({
   return (
     <>
       <BrowserToolbarMenuDropdown
+        browserPageId={browserPageId}
         menuOpen={menuOpen}
         onMenuOpenChange={handleMenuOpenChange}
         allProfiles={allProfiles}
@@ -247,6 +280,9 @@ export function BrowserToolbarMenu({
         onImportFromFile={() => void handleImportFromFile()}
         viewportPresetId={viewportPresetId}
         onApplyViewportPreset={applyViewportPreset}
+        siteDisplay={siteDisplay}
+        onZoomPage={zoomPage}
+        onSetSiteColorScheme={setSiteColorScheme}
         onOpenSourceFile={onOpenSourceFile}
         overflow={overflow}
       />

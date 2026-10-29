@@ -1,14 +1,5 @@
 import { NOTE_TARGETS } from './review-animated-visual-shared'
 
-// Why: terminal-phase logic for the Notes panel lives here so the imperative
-// loop in ReviewNotesAnimatedVisual stays under the per-file lint cap. The
-// caller passes the live DOM nodes plus a `wait` + `cancelled` getter so
-// these helpers can interleave with the rest of the loop's beats.
-//
-// Mirrors docs/feature-wall-review-tile-mock.html: the panel auto-starts a
-// Claude Code session (no `$ claude` command, no typed prompt), shows
-// "Loaded N review notes from Orca", lists each ack with its line number,
-// and ends on "Fixing both issues..." with a spinner.
 export type TerminalPhaseContext = {
   term: HTMLDivElement
   diffScroll: HTMLDivElement

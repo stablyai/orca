@@ -1,5 +1,4 @@
-// An open editor tab and its file on disk are the same destination, so the
-// switch row wins and the omnibox never offers to reopen what is already open.
+// Prefer switching to an open editor over reopening its on-disk file.
 
 import { normalizeRelativePath } from '@/lib/path'
 import { isCaseInsensitiveRuntimeRoot } from '../../../../shared/cross-platform-path'
@@ -23,8 +22,7 @@ export function dropFileEntriesCoveredByTabResults(
   const foldCase = worktreePath !== null && isCaseInsensitiveRuntimeRoot(worktreePath)
   const openPaths = new Set<string>()
   for (const result of tabResults) {
-    // Only an open editor is the same destination as the file row; terminal,
-    // diff, review, browser and simulator rows must never suppress it.
+    // Only editable file tabs replace file destinations; other path-bearing tab kinds remain separate.
     if (result.source === 'workspace' && result.contentType === 'editor' && result.relativePath) {
       openPaths.add(comparisonKey(result.relativePath, foldCase))
     }
@@ -39,8 +37,7 @@ export function dropFileEntriesCoveredByTabResults(
   )
 }
 
-// A page already open in a browser tab is the same destination as its history
-// row, and switching beats navigating; the same trade the file rows above make.
+// Prefer switching to an existing browser page over navigating its history URL again.
 export function dropHistoryRowsCoveredByBrowserPages(
   rows: readonly BrowserHistoryOmniboxRow[],
   tabResults: readonly OpenTabSearchResult[]
@@ -61,8 +58,7 @@ export function dropHistoryRowsCoveredByBrowserPages(
   return retained.length === rows.length ? rows : retained
 }
 
-// The history row carries a real page title, so it beats the bare typed-URL row
-// it duplicates — mirroring the address bar's synthetic-row fold.
+// Prefer titled history rows over equivalent bare typed-URL entries.
 export function dropUrlEntriesCoveredByHistoryRows<Option extends TabEntryOption>(
   options: readonly Option[],
   rows: readonly BrowserHistoryOmniboxRow[]

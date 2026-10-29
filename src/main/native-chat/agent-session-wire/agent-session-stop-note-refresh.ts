@@ -1,7 +1,7 @@
 import type { AgentJournalRenderItem } from '../../../shared/agent-session-journal-types'
 import { AGENT_SESSION_HISTORY_MAX_LIMIT } from '../../../shared/agent-session-wire'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
-import { oversizedHistoryItem } from './agent-session-history-page-bounds'
+import { measureHistoryItem, oversizedHistoryItem } from './agent-session-history-page-bounds'
 import { emptyAgentSessionBatch } from './agent-session-empty-batch'
 import { subscriberHistoryReader } from './agent-session-bounded-frames'
 import {
@@ -12,9 +12,7 @@ import type { SubscriberDeliveryPort } from './agent-session-subscriber-catch-up
 import type { Subscriber } from './structured-agent-session-subscribers'
 import { isStructuredAgentSessionStopNote } from './structured-agent-session-command-turn'
 
-/** A stale in-flight history page can land after its note's live correction was out of window.
- *  `work`: the host's current work, which a frame carrying rows restates, as every such frame does
- *  (a client reads a rows frame without it as an older host's). */
+/** Correct notes after stale in-flight pages; restate current work so rows retain modern-host semantics. */
 export function refreshDerivedStopNotes(
   port: Pick<SubscriberDeliveryPort, 'emit' | 'isActive'>,
   subscriber: Subscriber,
@@ -69,16 +67,16 @@ export function refreshDerivedStopNotes(
       continue
     }
     const formed = form(item)
-    const projectedBytes = Buffer.byteLength(JSON.stringify(formed), 'utf8')
-    const bounded = projectedBytes > budgetBytes ? oversizedHistoryItem(formed) : formed
-    const itemBytes = Buffer.byteLength(JSON.stringify(bounded), 'utf8') + 1
+    const bounded =
+      formed.bytes > budgetBytes ? measureHistoryItem(oversizedHistoryItem(formed.item)) : formed
+    const itemBytes = bounded.bytes + 1
     if (
       pending.length > 0 &&
       (pending.length === AGENT_SESSION_HISTORY_MAX_LIMIT || bytes + itemBytes > budgetBytes)
     ) {
       emit()
     }
-    pending.push(bounded)
+    pending.push(bounded.item)
     bytes += itemBytes
   }
   if (pending.length > 0 && port.isActive(subscriber)) {

@@ -155,7 +155,6 @@ describe('ensureManagedOrcadServing', () => {
     const onDropped = ensureManagedOrcadServing(input(async () => false))
     await vi.waitFor(() => expect(wakeStoppedManagedOrcad).toHaveBeenCalledOnce())
 
-    // The SSH session drops mid-start and the client reconnects, as at app launch.
     generation += 1
     const onReconnected = ensureManagedOrcadServing(input(async () => false))
     dropFirst(new Error('SSH connection lost'))
@@ -171,7 +170,6 @@ describe('ensureManagedOrcadServing', () => {
     generation += 1
     await ensureManagedOrcadServing(input(probe), () => 1)
     expect(probe).toHaveBeenCalledTimes(2)
-    // A rebind to the port a restarted server bound is a different server address.
     await ensureManagedOrcadServing({ ...input(probe), remotePort: 40_001 }, () => 2)
     expect(probe).toHaveBeenCalledTimes(3)
   })
@@ -194,7 +192,6 @@ describe('ensureManagedOrcadServing', () => {
   it('shares one probe between concurrent calls once the last answer is stale', async () => {
     let answer!: (value: boolean) => void
     const probe = vi.fn(() => new Promise<boolean>((resolve) => (answer = resolve)))
-    // Last heard before a suspend: too old to prove anything.
     const stale = { ...input(probe), answeredAt: () => 0 }
     const calls = [1, 2, 3].map(() => ensureManagedOrcadServing(stale, () => 60_000))
     answer(true)
@@ -214,7 +211,6 @@ describe('ensureManagedOrcadServing', () => {
     expect(await ensureManagedOrcadServing(watched, () => 0)).toEqual({ state: 'serving' })
     expect(probe).not.toHaveBeenCalled()
 
-    // Another desktop stopped the server: its socket closed, so there is no live answer.
     answeredAt.mockReturnValue(null)
     probe.mockResolvedValue(false)
     expect(await ensureManagedOrcadServing(watched, () => 1_000)).toEqual({

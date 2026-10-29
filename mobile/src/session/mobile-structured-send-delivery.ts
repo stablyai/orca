@@ -1,7 +1,8 @@
 import type { AgentSessionSendResult } from '../../../src/shared/agent-session-wire'
 import { agentSessionRefusalOperationState } from '../../../src/shared/agent-session-refusal-retry'
-import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
+import type { MobileNativeChatSendOutcome } from './native-chat/mobile-native-chat-send'
 import type { StructuredAgentSessionMutationCallResult } from './mobile-structured-agent-session-rpc'
+import { translate } from '../i18n/mobile-i18n'
 
 export type MobileStructuredSendDelivery = {
   outcome: MobileNativeChatSendOutcome
@@ -24,7 +25,10 @@ export function mobileStructuredSendDelivery(
   }
   if ('queued' in result.value && result.value.queued) {
     return result.value.queued.state === 'withdrawn'
-      ? { outcome: 'rejected', error: 'Message not sent' }
+      ? {
+          outcome: 'rejected',
+          error: translate('session.structuredSendDelivery.messageNotSent', 'Message not sent')
+        }
       : { outcome: 'queued', error: null }
   }
   const submission = 'submission' in result.value ? result.value.submission : undefined
@@ -34,8 +38,7 @@ export function mobileStructuredSendDelivery(
   if (submission.queuedMessageId === result.value.clientMessageId) {
     return { outcome: 'unknown', error: null }
   }
-  // Recorded, so the host's row holds it, as on desktop: a rejection draws in place, never back in
-  // the composer. One kept as a card is that card.
+  // Recorded rejections stay in history rather than returning to the composer; requeued submissions belong to their cards.
   if (submission.dispatchState === 'rejected' && submission.keptAsQueuedMessageId !== undefined) {
     return { outcome: 'queued', error: null }
   }

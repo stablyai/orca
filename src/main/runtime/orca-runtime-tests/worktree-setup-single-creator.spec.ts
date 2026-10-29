@@ -2,7 +2,6 @@ import { describe, expect, it, vi } from 'vitest'
 import type { RuntimeClientEvent } from '../../../shared/runtime-client-events'
 import type { WorktreeStartupLaunch } from '../../../shared/worktree/launch-types'
 import {
-  OrcaRuntimeService,
   computeWorktreePathMock,
   createSetupRunnerScript,
   ensurePathWithinWorkspaceMock,
@@ -11,12 +10,16 @@ import {
   setRuntimeDesktopSurface,
   shouldRunSetupForCreate
 } from '../orca-runtime-test-mocks.spec'
-import { store } from '../orca-runtime-test-fixtures.spec'
+import { makeRuntimeStoreWithWorkspaceSession, store } from '../orca-runtime-test-fixtures.spec'
+import { getDefaultWorkspaceSession } from '../../../shared/constants'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
+import { collectLeafIds } from '../../../shared/terminal-pane-layout-tree'
+import { ProvisioningRuntime } from '../orca-runtime-layout-owner-start-fixture'
 
 const WORKTREE_PATH = '/tmp/workspaces/runtime-setup-all'
 const RUNNER = '/tmp/repo/.git/orca/setup-runner.sh'
 
-/** An activated create with a live window, navigating the window and paired clients. */
 async function createActivated(options: {
   startup?: WorktreeStartupLaunch
   failAgentSpawn?: boolean
@@ -24,8 +27,13 @@ async function createActivated(options: {
   activateWorktree: ReturnType<typeof vi.fn>
   events: RuntimeClientEvent[]
   spawnedCommands: (string | undefined)[]
+  runtime: ProvisioningRuntime
+  session: () => WorkspaceSessionState
 }> {
-  const runtime = new OrcaRuntimeService(store)
+  const mainLayout = makeRuntimeStoreWithWorkspaceSession(getDefaultWorkspaceSession())
+  const runtime = new ProvisioningRuntime(
+    ORCA_LAYOUT_OWNER_IS_MAIN ? mainLayout.runtimeStore : store
+  )
   const activateWorktree = vi.fn()
   let spawned = 0
   const spawn = vi.fn(async (args: { command?: string }) => {
@@ -50,11 +58,10 @@ async function createActivated(options: {
     renameTerminal: vi.fn(),
     focusTerminal: vi.fn(),
     closeTerminal: vi.fn(),
-    sleepWorktree: vi.fn(),
     terminalFitOverrideChanged: vi.fn(),
     terminalDriverChanged: vi.fn()
   })
-  // A live window, so main hands work to it instead of provisioning in the background.
+  // Keep a live window to exercise foreground provisioning.
   const liveWindow = { isDestroyed: () => false, webContents: { isDestroyed: () => false } }
   setRuntimeDesktopSurface({
     showNotification: () => false,
@@ -102,7 +109,9 @@ async function createActivated(options: {
   return {
     activateWorktree,
     events,
-    spawnedCommands: spawn.mock.calls.map(([args]) => args.command)
+    spawnedCommands: spawn.mock.calls.map(([args]) => args.command),
+    runtime,
+    session: mainLayout.getSession
   }
 }
 
@@ -123,12 +132,27 @@ describe('OrcaRuntimeService setup creator', () => {
 
   it('hands the host window the whole create when the agent fails to start', async () => {
     const startup = { command: 'claude' }
-    const { activateWorktree, events, spawnedCommands } = await createActivated({
+    const { activateWorktree, events, spawnedCommands, runtime, session } = await createActivated({
       startup,
       failAgentSpawn: true
     })
 
-    // Main provisions nothing, so the window seeds the agent's tab and lays setup out around it.
+    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+      expect(spawnedCommands).toEqual(['claude', expect.stringContaining(RUNNER)])
+      expect(activateWorktree.mock.calls).toEqual([
+        ['repo-1', expect.any(String), undefined, undefined, undefined]
+      ])
+      const [agentRow] = Object.values(session().tabsByWorktree).flat()
+      const [agentLeafId] = collectLeafIds(session().terminalLayoutsByTabId[agentRow!.id]?.root)
+      expect(runtime.startStatusOf(`${agentRow!.id}:${agentLeafId}`)).toEqual({
+        status: 'failed',
+        reason: 'agent_session_exited_during_start'
+      })
+      expect(
+        events.filter((event) => event.type === 'activateWorktree' && event.setup !== undefined)
+      ).toEqual([])
+      return
+    }
     expect(spawnedCommands).toEqual(['claude'])
     expect(activateWorktree).toHaveBeenCalledOnce()
     expect(activateWorktree).toHaveBeenCalledWith(

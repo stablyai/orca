@@ -15,6 +15,13 @@ import {
 } from '@/lib/worktree-activation-created-agent.test-fixture'
 import { waitForWorktreeAgentActivationGateForTests } from './worktree-agent-activation-gate'
 
+// Main's answer to the window's layout commands, as a switch-on build sends them.
+vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeRpcClientWithLayoutApply(await importOriginal())
+)
+
 const initialAppStoreState = useAppStore.getState()
 
 afterEach(() => {
@@ -179,8 +186,7 @@ describe('activating a workspace whose last terminal was closed', () => {
     expect(useAppStore.getState().tabsByWorktree[worktree.id]).toHaveLength(1)
   })
 
-  // Why: hydration restores an emptied workspace as active, so the user is already looking at the
-  // blank pane when they click its row. Suppressing the re-seed there strands them on the bug.
+  // Hydration can restore an emptied workspace active; clicking that row must reseed instead of preserving the blank surface.
   it('re-seeds when the restored active workspace is reopened on the same host', () => {
     const worktree = makeWorktree()
     seedEmptyActivatableWorktree(worktree)
@@ -199,9 +205,7 @@ describe('activating a workspace whose last terminal was closed', () => {
     expect(useAppStore.getState().tabsByWorktree[worktree.id]).toHaveLength(1)
   })
 
-  // Why: entry points disagree about whether to pass a host for the same local workspace — the
-  // sidebar derives 'local', the Cmd+J palette passes nothing. Re-seeding no longer reads the
-  // host at all; this guards against reintroducing a host-sensitive carve-out.
+  // Sidebar passes local while Cmd+J omits host; reseeding must remain independent of that difference.
   it('re-seeds identically whether or not the caller passes an execution host', () => {
     for (const opts of [{}, { executionHostId: 'local' as const }]) {
       const worktree = makeWorktree()
@@ -219,9 +223,7 @@ describe('activating a workspace whose last terminal was closed', () => {
     }
   })
 
-  // Why: terminal file links and check annotations activate only to route history before they
-  // open an editor tab. Seeding there hands the user a shell they never asked for and erases the
-  // tombstone permanently. See terminal-file-open-routing.ts and check-annotation-open.ts.
+  // File links/check annotations provide editors; shell seeding would add an unrequested terminal and erase the empty tombstone.
   it('leaves the row empty when the caller opens its own surface', () => {
     const worktree = makeWorktree()
     seedEmptyActivatableWorktree(worktree)
@@ -248,8 +250,7 @@ describe('activating a workspace whose last terminal was closed', () => {
     expect(useAppStore.getState().tabsByWorktree[worktree.id]).toEqual([])
   })
 
-  // Why: this passes ahead of the tombstone check — a renderable browser tab short-circuits
-  // `shouldAutoCreateInitialTerminal` — so it guards `renderableTabCount`, not the re-seed flag.
+  // Renderable browser tabs short-circuit initial-terminal creation; this covers renderableTabCount, not reseed flags.
   it('does not add a terminal to a workspace that still renders a browser tab', () => {
     const worktree = makeWorktree()
     seedEmptyActivatableWorktree(worktree)
@@ -454,8 +455,7 @@ describe('activating a folder workspace whose last terminal was closed', () => {
     expect(useAppStore.getState().tabsByWorktree[FOLDER_KEY]).toHaveLength(1)
   })
 
-  // Why: the opt-out must mean the same thing on both workspace shapes, or routing a
-  // file link through a folder workspace would silently regress to seeding a shell.
+  // Own-surface opt-out must also cover folders or file-link routing there reseeds shells.
   it('leaves the row empty when the caller opens its own surface', async () => {
     seedEmptiedFolderWorkspaceOnTwoHosts()
     useAppStore.setState({

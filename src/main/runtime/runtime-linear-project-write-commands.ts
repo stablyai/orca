@@ -1,13 +1,13 @@
 import {
   LINEAR_SEARCH_MAX_LIMIT,
   isLinearUuid,
-  linearError,
   getLinearProject,
   listLinearProjectsByExactName,
   listLinearProjectTeams,
   listLinearProjects,
   getLinearViewerForWorkspaceOrThrow
 } from './runtime-linear-command-dependencies'
+import { linearError } from '../linear/issue-context/errors'
 import type { LinearProjectSummary } from './runtime-linear-command-dependencies'
 import { RuntimeLinearTeamWriteCommands } from './runtime-linear-team-write-commands'
 
@@ -121,7 +121,7 @@ export class RuntimeLinearProjectWriteCommands extends RuntimeLinearTeamWriteCom
     }
     let teams: NonNullable<LinearProjectSummary['teams']> = []
     try {
-      // Why: summary reads cap project teams, so large cross-team projects need a paged membership check before rejecting a valid create.
+      // Summary team lists are capped; page membership before refusing cross-team creates.
       teams = await listLinearProjectTeams(project.id, workspaceId, true)
     } catch (error) {
       throw this.mapLinearReadFailure(error)

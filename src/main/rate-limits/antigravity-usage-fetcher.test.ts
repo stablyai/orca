@@ -6,6 +6,14 @@ import {
 import { ANTIGRAVITY_USAGE_ARGS, ANTIGRAVITY_VERSION_ARGS } from './antigravity-usage-command'
 import type { ProcessResult } from '@orca/process-host/process-spec'
 
+const { hostShellEnvironmentMock } = vi.hoisted(() => ({
+  hostShellEnvironmentMock: vi.fn(async () => ({ PATH: '/usr/bin' }))
+}))
+
+vi.mock('../runtime/structured-agent-shell-environment', () => ({
+  hostShellEnvironment: hostShellEnvironmentMock
+}))
+
 const USAGE_ENVELOPE = JSON.stringify({
   conversation_id: '',
   status: 'SUCCESS',
@@ -44,9 +52,7 @@ function harness(
     env?: NodeJS.ProcessEnv
   } = {}
 ) {
-  // Why the per-call split: the fetcher probes `--version` before the quota read, and a fixture
-  // that answers both alike either fakes a version line into `/usage` or a usage envelope into the
-  // version probe.
+  // Version and usage probes need distinct payloads.
   const runCommand =
     options.runCommand ??
     vi
@@ -56,7 +62,7 @@ function harness(
           ? (options.versionResult ?? processResult({ stdout: 'agy version 1.2.11\n' }))
           : (options.result ?? processResult())
       )
-  // Why the `in` check and not `??`: an explicit `program: null` is the absent-CLI case.
+  // Explicit program: null models an absent CLI.
   const resolveCommand = vi
     .fn()
     .mockResolvedValue('program' in options ? options.program : '/Users/x/.local/bin/agy')
@@ -94,6 +100,8 @@ describe('fetchAntigravityRateLimits', () => {
     expect(result.buckets).toEqual([
       {
         name: 'Gemini Models',
+        group: 'Gemini Models',
+        windowName: 'Weekly Limit Remaining',
         usedPercent: 60,
         windowMinutes: 10_080,
         resetsAt: new Date('2026-10-07T08:08:35Z').getTime(),
@@ -119,8 +127,7 @@ describe('fetchAntigravityRateLimits', () => {
     const h = harness({ result: processResult({ stdout: USAGE_ENVELOPE }), env: loginShellEnv })
     await h.fetch()
 
-    // Why the login-shell PATH: agy installs to ~/.local/bin, which Electron's inherited PATH omits.
-    // Why auto-update off: a due check spawns agy's updater, whose child flashes a Windows console.
+    // Login PATH finds ~/.local/bin; disabling updates prevents Windows console flashes.
     const probeEnv = { PATH: '/Users/x/.local/bin:/usr/bin', AGY_CLI_DISABLE_AUTO_UPDATE: 'true' }
     expect(h.runCommand).toHaveBeenCalledTimes(2)
     const [versionSpec, usageSpec] = h.runCommand.mock.calls.map(([spec]) => spec)
@@ -135,6 +142,19 @@ describe('fetchAntigravityRateLimits', () => {
     expect(loginShellEnv).toEqual({ PATH: '/Users/x/.local/bin:/usr/bin' })
   })
 
+  it('looks agy up in the env agent launches use, so a Git Bash login PATH cannot hide it', async () => {
+    // Why: Git Bash's login PATH is /c/...:/usr/bin, which win32 lookup cannot read (#31459).
+    const launchEnv = { PATH: '/c/Users/x/bin:/usr/bin;C:\\Users\\x\\AppData\\Local\\agy\\bin' }
+    hostShellEnvironmentMock.mockResolvedValueOnce(launchEnv)
+    const resolveCommand = vi.fn().mockResolvedValue(null)
+    await fetchAntigravityRateLimits({ resolveCommand, platform: 'win32' })
+
+    expect(resolveCommand).toHaveBeenCalledWith('agy', {
+      platform: 'win32',
+      env: { ...launchEnv, AGY_CLI_DISABLE_AUTO_UPDATE: 'true' }
+    })
+  })
+
   it('reports an absent CLI as unavailable and never spawns', async () => {
     const h = harness({ program: null })
     const result = await h.fetch()
@@ -147,7 +167,7 @@ describe('fetchAntigravityRateLimits', () => {
 
   it('reports a signed-out account as unavailable, not as a failed refresh', async () => {
     const result = await harness({
-      // agy exits 0 and prints this rather than an envelope.
+      // agy may exit zero for signed-out diagnostics.
       result: processResult({ stderr: 'You are not logged into Antigravity.' })
     }).fetch()
 
@@ -157,8 +177,7 @@ describe('fetchAntigravityRateLimits', () => {
   })
 
   it('reports an auth failure on stderr as sign-in guidance, not as a broken read', async () => {
-    // Why pinned: the other shape of "signed out" — a non-zero exit with an auth diagnostic — used
-    // to land in the parse-failure branch as a generic refresh error.
+    // Nonzero auth failures still need sign-in guidance.
     const result = await harness({
       result: processResult({ code: 1, stderr: 'Not authenticated. Run agy login.' })
     }).fetch()
@@ -178,9 +197,21 @@ describe('fetchAntigravityRateLimits', () => {
     expect(result.error).toContain('Sign in with `agy`')
   })
 
+  it('reports a login with no quota groups as unavailable, not a failed refresh', async () => {
+    const stdout = JSON.stringify({
+      status: 'SUCCESS',
+      num_turns: 0,
+      command: { name: 'usage', data: { groups: [] } }
+    })
+    const result = await harness({ result: processResult({ stdout }) }).fetch()
+
+    expect(result.status).toBe('unavailable')
+    expect(result.usageMetadata?.failureKind).toBe('usage-unavailable')
+    expect(result.error).toContain('no quota for this account')
+  })
+
   it('does not classify non-auth stderr as signed-out on non-zero exit', async () => {
-    // Why pinned: stderr containing unrelated words like "oauth" or "author" must not be misclassified
-    // as missing-credentials.
+    // Incidental auth-like words must not trigger credential guidance.
     const result = await harness({
       result: processResult({
         code: 1,
@@ -199,6 +230,45 @@ describe('fetchAntigravityRateLimits', () => {
     expect(result.status).toBe('error')
     expect(result.usageMetadata?.failureKind).toBe('usage-unavailable')
     expect(result.error).toContain('did not answer in time')
+  })
+
+  it('holds automated reads after agy\u2019s browser sign-in', async () => {
+    // Why pinned: agy 1.4.2 opens this OAuth page and waits 60 s, so Orca's 30 s kill lands first (#26484).
+    const result = await harness({
+      result: processResult({
+        timedOut: true,
+        stderr:
+          'Authentication required. Please visit the URL to log in:\n  https://accounts.google.com/o/oauth2/auth?...\n\nWaiting for authentication (timeout 60s)...\n'
+      })
+    }).fetch()
+
+    expect(result.status).toBe('unavailable')
+    expect(result.usageMetadata?.failureKind).toBe('missing-credentials')
+    expect(result.usageMetadata?.retryAtMs).toBe(Number.MAX_SAFE_INTEGER)
+  })
+
+  it('keeps the reading when the browser sign-in completes within the read', async () => {
+    const result = await harness({
+      result: processResult({
+        stdout: USAGE_ENVELOPE,
+        stderr: 'Authentication required. Please visit the URL to log in:\n'
+      })
+    }).fetch()
+
+    expect(result.status).toBe('ok')
+    expect(result.usageMetadata?.retryAtMs).toBeUndefined()
+  })
+
+  it('does not cool down a signed-out read that fails fast without a browser', async () => {
+    const result = await harness({
+      result: processResult({
+        code: 1,
+        stderr: "Error: authentication required. Run 'agy' to log in, then retry.\n"
+      })
+    }).fetch()
+
+    expect(result.usageMetadata?.failureKind).toBe('missing-credentials')
+    expect(result.usageMetadata?.retryAtMs).toBeUndefined()
   })
 
   it('reports an unreadable payload as a parse failure carrying the exit code', async () => {
@@ -230,18 +300,13 @@ describe('fetchAntigravityRateLimits', () => {
   it('never reports quota from a successful read as stale session data', async () => {
     const result = await harness({ result: processResult({ stdout: USAGE_ENVELOPE }) }).fetch()
 
-    // Why: this tier meters no 5h pool. The Gemini mirror it replaces filled `session` from a
-    // 60-minute per-model window and left `weekly` null — exactly backwards (#22511).
+    // This tier meters weekly pools, not the Gemini mirror's 60-minute per-model window (#22511).
     expect(result.session).toBeNull()
     expect(result.weekly).not.toBeNull()
   })
 })
 
-/**
- * Captured when agy treated `/usage` as a prompt instead of a command: a conversation was started,
- * a turn was spent, and the account answered RESOURCE_EXHAUSTED. This is the exact shape the
- * unsupported latch has to recognise.
- */
+/** Captured billed-turn response when /usage was treated as a prompt; must latch future probes off. */
 const MODEL_TURN_ENVELOPE = JSON.stringify({
   conversation_id: '28a5ca91-301f-4050-8efc-9c82c4e64df3',
   status: 'ERROR',
@@ -270,8 +335,7 @@ describe('agy versions that answer /usage as a prompt', () => {
     await h.fetch()
     expect(h.runCommand).toHaveBeenCalledTimes(2)
 
-    // Why: the evidence costs a turn of the user's quota, so rediscovering it on a 15-minute
-    // cadence would keep paying for the same answer.
+    // Retrying unsupported /usage would spend another model turn on every poll.
     await h.fetch()
     await h.fetch()
     expect(h.runCommand).toHaveBeenCalledTimes(2)
@@ -294,7 +358,6 @@ describe('agy versions that answer /usage as a prompt', () => {
     const first = await h.fetch()
     const second = await h.fetch()
 
-    // Why: a transient failure is not evidence that the command is unsupported.
     expect(first.status).toBe('error')
     expect(second.status).toBe('error')
     expect(h.runCommand).toHaveBeenCalledTimes(4)
@@ -316,14 +379,13 @@ describe('the agy version gate', () => {
     expect(result.status).toBe('unavailable')
     expect(result.usageMetadata?.failureKind).toBe('usage-unavailable')
     expect(result.error).toContain('needs agy 1.1.11 or newer (found 1.1.10)')
-    // Why the assertion: below the floor `/usage` is a billed model turn, so it must not run at all.
+    // Below the version floor /usage spends a model turn; never run it.
     expect(h.runCommand).toHaveBeenCalledTimes(1)
     expect(h.runCommand.mock.calls[0]![0].args).toEqual(ANTIGRAVITY_VERSION_ARGS)
   })
 
   it('holds a prerelease below the floor', async () => {
-    // Why pinned: `1.1.11-rc.1` sorts below stable `1.1.11`; reading the core alone would let a
-    // release candidate spawn the billable read early.
+    // Release candidates below the stable floor must not reach a billable read.
     const h = harness({ versionResult: processResult({ stdout: 'agy version 1.1.11-rc.1\n' }) })
     const result = await h.fetch()
 
@@ -421,5 +483,55 @@ describe('quota read safety and diagnostic precedence', () => {
     expect((await h.fetch()).status).toBe('unavailable')
     expect((await h.fetch()).status).toBe('ok')
     expect(runCommand).toHaveBeenCalledTimes(3)
+  })
+})
+
+describe("agy's own error envelope", () => {
+  beforeEach(() => resetAntigravityUsageSupportForTests())
+
+  const errorEnvelope = (error: string): string =>
+    `${JSON.stringify({ conversation_id: '', status: 'ERROR', response: '', error, num_turns: 0 })}\n`
+  const LOCATION_ERROR =
+    'Eligibility check failed: Your current account is not eligible for Antigravity, because it is not currently available in your location.'
+
+  it('shows agy’s text instead of the generic parse failure', async () => {
+    const result = await harness({
+      result: processResult({
+        code: 1,
+        stdout: errorEnvelope(LOCATION_ERROR),
+        stderr: `error: ${LOCATION_ERROR}\n`
+      })
+    }).fetch()
+
+    expect(result.status).toBe('error')
+    expect(result.usageMetadata?.failureKind).toBe('parse')
+    expect(result.error).toBe(`Antigravity usage is not available. agy reported: ${LOCATION_ERROR}`)
+  })
+
+  it('redacts identities and bounds agy’s text to one line', async () => {
+    const token = 'ya29.a0AfB_byC1234567890abcdefghijklmnopqrstuvwxyz'
+    const result = await harness({
+      result: processResult({
+        code: 1,
+        stdout: errorEnvelope(
+          `\u001b[31mDenied\u001b[0m for person@example.com\nAGY_SESSION=shortsecret\nwith ${token} ${'x '.repeat(200)}`
+        )
+      })
+    }).fetch()
+
+    const shown = result.error?.replace('Antigravity usage is not available. agy reported: ', '')
+    expect(shown).toMatch(/^Denied for \[email\] AGY_SESSION=\S+ with ya29\.\[redacted\] x x/)
+    expect(shown).not.toContain('shortsecret')
+    expect(Array.from(shown ?? '').length).toBeLessThanOrEqual(160)
+    expect(shown?.endsWith('…')).toBe(true)
+  })
+
+  it('keeps sign-in guidance ahead of agy’s text', async () => {
+    const result = await harness({
+      result: processResult({ code: 1, stdout: errorEnvelope('Not authenticated. Run agy login.') })
+    }).fetch()
+
+    expect(result.usageMetadata?.failureKind).toBe('missing-credentials')
+    expect(result.error).toContain('Sign in with `agy`')
   })
 })

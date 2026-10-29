@@ -7,10 +7,10 @@ import type {
 import { startGitCommonPolling } from './worktree-git-common-polling'
 import { createSingleFlight } from './single-flight-promise'
 
-// The native stream is still the fast path. A scheduled 15-tick reconciliation
-// bounds silent watcher loss at the existing 30-second backstop without joining
-// the per-repo 2-second timer fleet.
+// Reconcile silent native losses on the shared 15-tick backstop without per-repo two-second timers.
 const NARROW_WATCH_RECONCILIATION_TICKS = 15
+// Gate each reconciliation by directory/in-place signatures; sweep every leaf about every five minutes.
+const RECONCILIATION_FULL_SCAN_EVERY_TICKS = 10
 
 type GitCommonWatchReconciliationOptions = {
   commonDirPath: string
@@ -65,11 +65,7 @@ export function createGitCommonWatchReconciliation({
             const rootWasReplaced =
               events.some((event) => event.type === 'delete' && event.path === worktreesDir) &&
               events.some((event) => event.type === 'create' && event.path === worktreesDir)
-            // Why: this backstop lags the native stream by up to 15 ticks, so it
-            // routinely reports entry creates the stream already delivered. Only
-            // treat them as a replacement when the root itself was also recreated
-            // — otherwise every ordinary `git worktree add` would tear down a
-            // healthy stream and open a deaf window while it resubscribes.
+            // Delayed reconciliation repeats native creates; only recreated roots justify replacing the healthy stream.
             const rootRecreated = events.some(
               (event) => event.type === 'create' && event.path === worktreesDir
             )
@@ -99,7 +95,7 @@ export function createGitCommonWatchReconciliation({
           undefined,
           false,
           () => [],
-          { forceFullScanEveryTick: true }
+          { reconciliationFullScanEveryTicks: RECONCILIATION_FULL_SCAN_EVERY_TICKS }
         )
         if (startGeneration !== generation || !shouldKeep()) {
           await reconciliation.unsubscribe()

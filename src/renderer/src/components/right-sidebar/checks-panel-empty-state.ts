@@ -29,18 +29,13 @@ export type {
   ChecksPanelReviewStateInput
 } from './checks-panel-review-state-model'
 
-/**
- * One exhaustive selector for the Checks-panel empty state. Copy, composer mode,
- * workflow action, and recovery actions are decided together — never in separate
- * branches — so an error, pause, skip, or unknown state can never be rendered as
- * "No {reviewLabel} found." See docs/design/pr-panel-refresh-guidance.md.
- */
+/** Decide copy/actions/composer together so uncertainty never reads as no review; see docs/design/pr-panel-refresh-guidance.md. */
 export function getChecksPanelReviewState(
   input: ChecksPanelReviewStateInput
 ): ChecksPanelReviewState {
   const { reviewLabel, reviewShortLabel, providerName } = input
 
-  // 0. Operation in progress — never overridden by refresh copy.
+  // Active operations outrank refresh copy.
   if (input.operationLabel) {
     return {
       renderReview: false,
@@ -60,7 +55,6 @@ export function getChecksPanelReviewState(
     }
   }
 
-  // 1. Renderable review wins over every empty state.
   if (input.reviewLookup === 'found') {
     return {
       renderReview: true,
@@ -74,7 +68,7 @@ export function getChecksPanelReviewState(
 
   const blockedReason = input.eligibilityBlockedReason
 
-  // 1.5 Keep active positive-review lookups self-updating without hiding stronger safety guidance.
+  // Keep positive-review lookups updating without hiding stronger safety guidance.
   const reviewFetchInFlight =
     input.refresh?.status === 'queued' || input.refresh?.status === 'in-flight'
   const hasPendingReviewEvidence =
@@ -100,13 +94,12 @@ export function getChecksPanelReviewState(
     }
   }
 
-  // 2. Eligibility safety states own their guidance (existing_review is a hard
-  //    create block in the positive-evidence family).
+  // Safety blockers own their guidance; existing_review always blocks create.
   if (blockedReason && ELIGIBILITY_SAFETY_BLOCKERS.has(blockedReason)) {
     return safetyBlockerState(input, blockedReason)
   }
 
-  // 3. Positive unresolved review evidence: never offer Create / Push & Create.
+  // Known but unrenderable review evidence must block create actions.
   if (input.reviewLookup === 'positive_unresolved' && !isBranchBlocker(blockedReason)) {
     return {
       renderReview: false,
@@ -127,25 +120,22 @@ export function getChecksPanelReviewState(
     }
   }
 
-  // 4. Actionable creation blockers (publish / sync / auth / needs_push).
   if (isBranchBlocker(blockedReason)) {
     return branchBlockerState(
       input,
       blockedReason as NonNullable<HostedReviewCreationBlockedReason>
     )
   }
-  // A ready Git status reporting no upstream is a publish state even before
-  // eligibility resolves. `hasUpstream === undefined` is unknown, never false.
+  // Ready status without upstream means publish; undefined remains unknown.
   if (input.gitStatusPhase === 'ready' && input.hasUpstream === false && input.hasCurrentBranch) {
     return branchBlockerState(input, 'no_upstream')
   }
 
-  // 5. Hard refresh error with no blocker above → hide composer until cleared.
+  // Keep the composer hidden until hard refresh errors clear.
   if (isHardRefreshError(input.refresh)) {
     return hardRefreshErrorState(input)
   }
 
-  // 6. Accepted no-review for the exact context.
   if (input.reviewLookup === 'not_found') {
     const detail = isTransientRefreshFailure(input.refresh)
       ? concurrentLookupDetail(input)
@@ -171,13 +161,11 @@ export function getChecksPanelReviewState(
     }
   }
 
-  // 7. Transient classified error / rate-limit pause with no accepted result.
   if (isTransientRefreshFailure(input.refresh)) {
     const mode = confirmedComposerMode(input)
     return transientRefreshState(input, mode, workflowActionForComposer(mode))
   }
 
-  // 8. Active refresh (queued / in-flight) with no accepted result.
   if (input.refresh?.status === 'queued' || input.refresh?.status === 'in-flight') {
     const mode = confirmedComposerMode(input)
     return {
@@ -198,7 +186,6 @@ export function getChecksPanelReviewState(
     }
   }
 
-  // 9. Git status loading / failure when upstream is still unknown.
   if (input.gitStatusPhase === 'loading' && input.hasUpstream === undefined) {
     return {
       renderReview: false,
@@ -233,7 +220,6 @@ export function getChecksPanelReviewState(
     }
   }
 
-  // 10. Skipped structural reasons and missing / unknown — status unavailable.
   if (input.refresh?.status === 'skipped' && input.refresh.skippedReason) {
     if (input.refresh.skippedReason === 'rate-limit') {
       const mode = confirmedComposerMode(input)
@@ -262,9 +248,6 @@ export function getChecksPanelReviewState(
   }
 }
 
-/**
- * Separates local-only branch guidance from hosted-review refresh uncertainty.
- */
 export function shouldShowChecksPanelPublishBranchAction(input: {
   hostedReviewBlockedReason: HostedReviewCreationBlockedReason | undefined
   hasUpstream: boolean | undefined

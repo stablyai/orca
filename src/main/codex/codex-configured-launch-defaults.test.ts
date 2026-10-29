@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { CodexAppServerConnection } from './codex-app-server-connection'
+import type { CodexAppServerConnection } from './app-server/codex-app-server-connection-types'
 import { fetchCodexModelCatalogListing } from './codex-structured-model-catalog'
 
 function modelRow(id: string, isDefault = false): Record<string, unknown> {
@@ -17,7 +17,6 @@ function modelRow(id: string, isDefault = false): Record<string, unknown> {
   }
 }
 
-// Codex marks its recommended model; the user's config names another.
 function connection(
   configRead: { answer: unknown } | { error: Error }
 ): Pick<CodexAppServerConnection, 'request'> & { request: ReturnType<typeof vi.fn> } {

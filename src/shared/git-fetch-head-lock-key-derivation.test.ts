@@ -26,11 +26,8 @@ function lockKeys(): string[] {
   return mocks.runWithGitOperationLock.mock.calls.map(([key]) => key as string)
 }
 
-/**
- * An on-disk layout keyed by forward-slash spelling: a `gitdir:` payload or `commondir` body for
- * every file that exists, and `null` for a `.git` directory. Anything absent throws, so a key
- * derived from a path that exists nowhere cannot silently read a sibling's metadata.
- */
+/** Mock forward-slash metadata: strings are gitdir/commondir contents, null means .git directory.
+ * Absent files throw so nonexistent paths cannot silently borrow sibling metadata. */
 function mockLayout(entries: Record<string, string | null>): void {
   const spell = (target: unknown): string => String(target).replaceAll('\\', '/')
   mocks.stat.mockImplementation(async (target: string) => {
@@ -139,8 +136,7 @@ describe('FETCH_HEAD lock key derivation', () => {
     await runWithGitFetchHeadLock(String.raw`C:\workspace\wt-a`, undefined, async () => 0)
     await runWithGitFetchHeadLock(String.raw`C:\workspace\wt-b`, undefined, async () => 0)
 
-    // The drvfs prefix must be gone: `C:\mnt\c\repo` exists nowhere, so it dead-ends the walk and
-    // strands each worktree away from the main checkout it shares FETCH_HEAD with.
+    // C:\mnt\c does not exist; strip drvfs prefixes or linked worktrees split from the main FETCH_HEAD lane.
     expect(lockKeys()).toEqual(Array(3).fill(String.raw`C:\repo\.git\FETCH_HEAD`))
   })
 
@@ -152,8 +148,7 @@ describe('FETCH_HEAD lock key derivation', () => {
       '//wsl$/ubuntu/mnt/c/repo/.git/worktrees/wt/commondir': '../..\n'
     })
 
-    // A main worktree's `.git` is a directory, so no pointer is translated and its key stays on the
-    // UNC spelling. Translating the linked worktree's pointer to `C:\...` would split the repo.
+    // Main .git directories retain UNC keys; translating linked pointers alone to drive paths would split one repo.
     await runWithGitFetchHeadLock(
       String.raw`\\wsl.localhost\Ubuntu\mnt\c\repo`,
       undefined,
@@ -185,8 +180,7 @@ describe('FETCH_HEAD lock key derivation', () => {
 
     await runWithGitFetchHeadLock(String.raw`C:\notes\inbox`, undefined, async () => 0)
 
-    // Nothing up the tree is a repo, so the walk must terminate at the drive root the way Windows
-    // spells it - not at a POSIX `.` that would put every folder workspace on one lane.
+    // Terminate at the Windows drive root; a POSIX . fallback would combine unrelated folder workspaces.
     expect(lockKeys()[0]).toBe(String.raw`C:\.git\FETCH_HEAD`)
   })
 
@@ -212,8 +206,7 @@ describe('FETCH_HEAD lock key derivation', () => {
 
     await runWithGitFetchHeadLock(String.raw`C:\workspace\wt`, undefined, async () => 0)
 
-    // Unchanged from main: no distro is known, so the pointer stays on the current drive rather
-    // than becoming a new rootless `\home\...` lane.
+    // Without a distro, retain the current drive instead of creating a rootless \home lane.
     expect(lockKeys()[0]).toBe(String.raw`C:\home\me\repo\.git\worktrees\wt\FETCH_HEAD`)
   })
 

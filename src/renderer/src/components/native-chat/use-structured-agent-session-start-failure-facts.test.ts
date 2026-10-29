@@ -23,7 +23,6 @@ function startFailureRow(startKey: string, fact: AgentSessionFailureFact): Agent
   }
 }
 
-// A streaming turn hands over a new item list on every delta; the facts must not follow it.
 it('holds the same facts while the start rows state nothing new', () => {
   const row = startFailureRow('gen-1', { kind: 'providerStartFailed' })
   const { result, rerender } = renderHook(

@@ -142,6 +142,7 @@ describe('callOrchestrationMutation runtime_unavailable retry', () => {
 
   it('gives up after about two minutes and prints the recovery command with the same id', async () => {
     vi.useFakeTimers()
+    const startedAt = Date.now()
     const { client, requestIds } = fakeClient((_attempt, options) => {
       throw unavailable(options)
     })
@@ -153,10 +154,20 @@ describe('callOrchestrationMutation runtime_unavailable retry', () => {
       undefined,
       RETRY_MS
     )
-    const settled = call.catch((error: unknown) => error)
-    await vi.advanceTimersByTimeAsync(RETRY_MS + 30_000)
+    let finishedAt: number | undefined
+    const settled = call.catch((error: unknown) => {
+      finishedAt = Date.now()
+      return error
+    })
+    await vi.advanceTimersByTimeAsync(RETRY_MS)
+    if (finishedAt === undefined) {
+      throw new Error('mutation kept retrying beyond its two-minute budget')
+    }
+    expect(finishedAt - startedAt).toBeGreaterThanOrEqual(RETRY_MS - 15_000)
+    const attempts = requestIds.length
+    await vi.advanceTimersByTimeAsync(30_000)
+    expect(requestIds).toHaveLength(attempts)
     const error = await settled
-    expect(requestIds.length).toBeGreaterThan(5)
     expect(new Set(requestIds).size).toBe(1)
     expect(error).toMatchObject({
       code: 'runtime_unavailable',
@@ -176,7 +187,7 @@ describe('callOrchestrationMutation runtime_unavailable retry', () => {
     })
   })
 
-  // Why: the fake runtime listens on a Unix socket path, which Windows does not accept.
+  // Windows cannot use this temporary Unix socket path.
   it.skipIf(process.platform === 'win32')(
     'reaches a runtime that comes back after the first attempt found it down',
     async () => {
@@ -191,7 +202,7 @@ describe('callOrchestrationMutation runtime_unavailable retry', () => {
           if (request.method === 'orchestration.send') {
             sendRequestIds.push(String(request.orchestrationRequestId))
             if (sendRequestIds.length === 1) {
-              // A runtime that drops the connection mid-request leaves the outcome unknown.
+              // Dropping the connection mid-request leaves the mutation outcome unknown.
               socket.destroy()
               return
             }
@@ -219,7 +230,7 @@ describe('callOrchestrationMutation runtime_unavailable retry', () => {
         undefined,
         RETRY_MS
       )
-      // The runtime is down for the first attempt: no metadata, so even the contract probe fails.
+      // Initial attempts have no metadata, so the contract probe fails until this runtime starts.
       await new Promise<void>((resolve) => server.listen(endpoint, resolve))
       writeFileSync(
         join(userDataPath, 'orca-runtime.json'),

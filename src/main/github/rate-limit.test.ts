@@ -63,8 +63,7 @@ describe('getRateLimit', () => {
         fetchedAt: 1_000
       }
     })
-    // The runner injects --hostname at spawn from the `host` option, so the
-    // probe passes bare argv and pins the host to github.com through options.
+    // The real runner adds --hostname after this mocked boundary.
     expect(ghExecFileAsyncMock).toHaveBeenCalledWith(['api', 'rate_limit'], {
       encoding: 'utf-8',
       host: 'github.com'
@@ -72,8 +71,7 @@ describe('getRateLimit', () => {
   })
 
   it('caches a failed probe for the TTL instead of re-spawning gh', async () => {
-    // Why: refreshes fail open past a probe failure, so without a negative cache
-    // an auth or transport failure would spawn the same doomed gh call repeatedly.
+    // Negative-cache failed probes so repeated refreshes do not respawn doomed gh calls.
     ghExecFileAsyncMock.mockRejectedValue(new Error('HTTP 404: Rate limiting is not enabled.'))
 
     const first = await getRateLimit()
@@ -145,9 +143,7 @@ describe('rateLimitGuard', () => {
   })
 
   it('fails open once the blocking bucket resetAt has elapsed', async () => {
-    // Why: probes can fail indefinitely (sleep past resetAt, network blip), so
-    // a stale exhausted snapshot must not block once GitHub has already reset
-    // the budget — a past-due pause would spin the coordinator drain loop.
+    // Exhausted snapshots from an ended window must not keep the refresh loop paused.
     await cacheExhaustedSnapshot(61)
 
     vi.setSystemTime(61_000)
@@ -156,9 +152,7 @@ describe('rateLimitGuard', () => {
   })
 })
 
-// Why: only default github.com traffic on the native runtime shares this
-// snapshot's budget. GHES hosts and WSL distros run against separate quotas,
-// so the shared guard must bypass them entirely.
+// Only native github.com calls share this snapshot; Enterprise and WSL have separate quotas.
 describe('shared-quota host scoping', () => {
   beforeEach(() => {
     vi.useFakeTimers()
@@ -198,8 +192,7 @@ describe('shared-quota host scoping', () => {
   })
 
   it('treats a WSL UNC cwd as non-shared even without an explicit wslDistro', () => {
-    // Why: the runner derives the WSL distro from a \\wsl.localhost\... cwd, so
-    // gh runs inside WSL and spends that distro's quota — not the native one.
+    // UNC cwd routes execution into the distro and spends its quota.
     expect(
       spendsSharedGitHubComQuota(
         { host: 'github.com' },
@@ -212,7 +205,6 @@ describe('shared-quota host scoping', () => {
         { cwd: '\\\\wsl$\\Ubuntu\\home\\me\\repo' }
       )
     ).toBe(false)
-    // Regular Windows/POSIX cwds keep sharing the native github.com budget.
     expect(spendsSharedGitHubComQuota({ host: 'github.com' }, { cwd: 'C:\\repos\\a' })).toBe(true)
     expect(spendsSharedGitHubComQuota({ host: 'github.com' }, { cwd: '/Users/me/repo' })).toBe(true)
   })
@@ -267,9 +259,7 @@ describe('shared-quota host scoping', () => {
   })
 })
 
-// Why: the breaker's reset probe must query the tripping scope's runtime/host
-// (WSL distro, GHES host), record into that scope only, and never touch the
-// shared native-github.com snapshot.
+// Refine only the tripping host/runtime's breaker; preserve the shared native snapshot.
 describe('scope-aware breaker reset probe', () => {
   const WSL_SCOPE = 'wsl:ubuntu:github.com'
   const GHES_SCOPE = 'native:github.acme-corp.com'
@@ -283,8 +273,7 @@ describe('scope-aware breaker reset probe', () => {
   })
 
   afterEach(() => {
-    // Clear per-scope breaker state without unregistering the module-load
-    // probe (which _resetGhRateLimitBreaker would drop for later tests).
+    // Preserve the module-load probe while clearing scoped breaker state.
     for (const scope of [WSL_SCOPE, GHES_SCOPE]) {
       for (const bucket of ALL_BUCKETS) {
         clearGhRateLimitBlock(bucket, scope)
@@ -300,7 +289,7 @@ describe('scope-aware breaker reset probe', () => {
   }
 
   it('refines a WSL-scope trip via a probe matching that scope', async () => {
-    // resetAt 601s > the 5-minute fallback so the refinement is observable.
+    // Choose a reset beyond the fallback window so refinement is observable.
     ghExecFileAsyncMock.mockResolvedValue({
       stdout: JSON.stringify({
         resources: {
@@ -312,7 +301,6 @@ describe('scope-aware breaker reset probe', () => {
     })
 
     notifyGhPrimaryRateLimit('core', WSL_SCOPE)
-    // Single-flight: a concurrent second trip must not spawn a second probe.
     notifyGhPrimaryRateLimit('core', WSL_SCOPE)
     await flushProbe()
 
@@ -322,12 +310,8 @@ describe('scope-aware breaker reset probe', () => {
       host: 'github.com',
       wslDistro: 'ubuntu'
     })
-    // The exhausted core bucket is refined to the real reset for THAT scope.
     expect(getGhRateLimitBlockedUntilMs('core', 1_000, WSL_SCOPE)).toBe(601_000)
-    // Non-exhausted buckets in the same scope stay clear.
     expect(getGhRateLimitBlockedUntilMs('search', 1_000, WSL_SCOPE)).toBeNull()
-    // The shared native-github.com snapshot was not written: the guard has no
-    // cached data and fails open.
     expect(rateLimitGuard('core')).toEqual({ blocked: false })
     expect(getGhRateLimitBlockedUntilMs('core', 1_000)).toBeNull()
   })
@@ -337,15 +321,13 @@ describe('scope-aware breaker reset probe', () => {
 
     notifyGhPrimaryRateLimit('core', GHES_SCOPE)
     await flushProbe()
-    // A second trip inside the failure TTL must not spawn another probe.
     notifyGhPrimaryRateLimit('core', GHES_SCOPE)
     await flushProbe()
 
     expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(1)
-    // Fail open: the blunt fallback block stands (5 minutes from trip time).
+    // Failed refinement leaves the existing fallback block in force.
     expect(getGhRateLimitBlockedUntilMs('core', 1_000, GHES_SCOPE)).toBe(301_000)
 
-    // Past the TTL the scope is probed again (and can recover on success).
     vi.setSystemTime(1_000 + 30_000)
     ghExecFileAsyncMock.mockResolvedValue({
       stdout: JSON.stringify({
@@ -360,7 +342,6 @@ describe('scope-aware breaker reset probe', () => {
       encoding: 'utf-8',
       host: 'github.acme-corp.com'
     })
-    // Budget is actually available in that scope — the block is cleared.
     expect(getGhRateLimitBlockedUntilMs('core', 31_000, GHES_SCOPE)).toBeNull()
   })
 })

@@ -11,12 +11,6 @@ export type SourceControlPathEntry = {
   path: string
 }
 
-export type SourceControlGroupedPathEntries<T extends SourceControlPathEntry> = {
-  staged: T[]
-  unstaged: T[]
-  untracked: T[]
-}
-
 export function isSourceControlFileFilterQueryTooLarge(
   query: string,
   maxBytes = SOURCE_CONTROL_FILE_FILTER_QUERY_MAX_BYTES
@@ -46,21 +40,4 @@ export function filterSourceControlPathEntries<T extends SourceControlPathEntry>
     return entries
   }
   return entries.filter((entry) => entry.path.toLowerCase().includes(filter.normalizedFilter))
-}
-
-export function filterSourceControlGroupedPathEntries<T extends SourceControlPathEntry>(
-  grouped: SourceControlGroupedPathEntries<T>,
-  filter: SourceControlFileFilterState
-): SourceControlGroupedPathEntries<T> {
-  if (filter.tooLarge) {
-    return { staged: [], unstaged: [], untracked: [] }
-  }
-  if (!filter.normalizedFilter) {
-    return grouped
-  }
-  return {
-    staged: filterSourceControlPathEntries(grouped.staged, filter),
-    unstaged: filterSourceControlPathEntries(grouped.unstaged, filter),
-    untracked: filterSourceControlPathEntries(grouped.untracked, filter)
-  }
 }

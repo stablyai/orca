@@ -2,7 +2,7 @@ import { CLAUDE_SIGN_IN_FAILED_MESSAGE } from '../../shared/claude-sign-in-link'
 import type { ClaudeCommandConfig, ClaudeCommandOptions } from './claude-command-process'
 import { prepareClaudeSignInBrowser, type ClaudeSignInBrowser } from './claude-sign-in-browser'
 
-// Why 10 minutes: copying the link into a private window takes longer than one click.
+// Allow time to copy the link into a private window and sign in.
 const LOGIN_TIMEOUT_MS = 600_000
 
 type ClaudeLoginSessionDependencies = {
@@ -13,12 +13,10 @@ type ClaudeLoginSessionDependencies = {
     options?: ClaudeCommandOptions
   ) => Promise<string>
   setCancel: (cancel: (() => boolean) | null) => void
-  /** Opens a WSL login's sign-in link on this computer; absent where Orca cannot open one. */
   openWslSignInLink?: ((signInLink: string) => void) | null
 }
 
-/** Runs a hidden `claude auth login` that writes its login straight into the account's folder.
- *  With `onLink`, no browser opens: the sign-in link goes there, and no link ends the sign-in. */
+/** With `onLink`, suppress browser opening and fail if no link arrives. */
 export async function runClaudeLoginSession(
   folder: ClaudeCommandConfig,
   dependencies: ClaudeLoginSessionDependencies,
@@ -35,21 +33,21 @@ export async function runClaudeLoginSession(
     return true
   })
   try {
-    // Why: stock distros have no xdg-open, wslview or BROWSER, so Claude in WSL opens nothing.
+    // Stock WSL distros may lack a browser opener.
     const openLink =
       !onLink && folder.linuxPath !== null && folder.wslDistro !== null
         ? (dependencies.openWslSignInLink ?? undefined)
         : undefined
-    // Why: if setup fails this throws; falling back would let Claude open the browser the user avoided.
+    // Copy-link setup must fail closed to respect the request to avoid opening a browser.
     const browser = onLink
       ? await prepareClaudeSignInBrowser(folder)
       : openLink
         ? await prepareOpenerBrowser(folder)
         : null
     const deliverLink = onLink ?? openLink
-    // Why both signals: a cancelled login must not open a tab for a link Claude wrote as it died.
+    // Suppress late links after cancellation or login completion.
     const stopped = AbortSignal.any([watch.signal, controller.signal])
-    // Why the full login window: auto-open never ends the login, and a cold distro can be slow.
+    // Auto-open waits through slow distro startup without ending the login.
     const waitMs = onLink ? undefined : LOGIN_TIMEOUT_MS
     void browser?.nextLink(stopped, waitMs).then((signInLink) => {
       if (stopped.aborted) {
@@ -63,7 +61,7 @@ export async function runClaudeLoginSession(
         linkMissing = true
         controller.abort()
       } else {
-        // Why not end it: the login stays cancellable and Copy link remains the fallback.
+        // Keep login cancellable; Copy link remains available as a fallback.
         console.warn('[claude-accounts] Claude handed over no WSL sign-in link to open.')
       }
     })
@@ -86,7 +84,7 @@ export async function runClaudeLoginSession(
   }
 }
 
-// Why null on failure: an auto-open that cannot be set up leaves the login as it was before.
+// Browser-opener setup is optional for ordinary login.
 async function prepareOpenerBrowser(
   folder: ClaudeCommandConfig
 ): Promise<ClaudeSignInBrowser | null> {

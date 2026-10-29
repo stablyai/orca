@@ -25,6 +25,9 @@ describe('classifySkillCloudInstallTarget', () => {
 
   it('keeps native and WSL installs in the local grant lane', async () => {
     await expect(
+      classifySkillCloudInstallTarget(runtime(false), { destination: { scope: 'global' } })
+    ).resolves.toBe('local')
+    await expect(
       classifySkillCloudInstallTarget(runtime(false), {
         destination: { scope: 'global', executionTarget: { kind: 'wsl', distro: 'Ubuntu' } }
       })

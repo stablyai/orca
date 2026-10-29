@@ -11,9 +11,9 @@ import type {
   StructuredAgentSessionProviderChild
 } from './structured-agent-session-host-types'
 import { sameProviderChild } from './structured-agent-session-provider-child'
+import type { StructuredAgentSessionHostRuntimeState } from './structured-agent-session-host-runtime-state'
 import { stopAgentSessionProviderRoot } from './structured-agent-session-provider-exit-proof'
 
-/** Stops one chat captured by a workspace Sleep and reports whether the stop is proven. */
 export async function stopWorkspaceSleepChat(input: {
   deps: Pick<StructuredAgentSessionHostDeps, 'store' | 'adapter' | 'logger'>
   sessions: StructuredAgentSessionConversations
@@ -27,6 +27,7 @@ export async function stopWorkspaceSleepChat(input: {
   const { deps, sessions, sessionId, child } = input
   let ownedStopped = false
   try {
+    deps.store.requireWritableRecord(sessionId)
     if (child) {
       await input.stopAgent(sessionId, { cause: 'user-close' })
     } else if (input.owned) {
@@ -69,15 +70,78 @@ export async function stopWorkspaceSleepChat(input: {
     !sessions.get(sessionId)?.child &&
     ended?.rootGone === true &&
     sameProviderChild(ended, child)
-  // A released reservation may still have an unproven root after restart; only
-  // exit evidence or a never-started record proves an unheld chat is stopped.
   const alreadyStopped =
-    !!after &&
-    after.lease.runtimeFence === input.fence &&
-    agentSessionLeaseIsReleased(after.lease) &&
-    (agentSessionLeaseOwnerVerdict(after.lease) === 'exited' ||
-      structuredSessionNeverStarted(after)) &&
+    after?.lease.runtimeFence === input.fence && workspaceSleepChatAtRest(deps, sessions, sessionId)
+  return childStopped || ownedStopped || alreadyStopped
+}
+
+/** Release alone cannot prove a restarted root stopped; require exit evidence or a never-started record. */
+function workspaceSleepChatAtRest(
+  deps: Pick<StructuredAgentSessionHostDeps, 'store' | 'adapter'>,
+  sessions: StructuredAgentSessionConversations,
+  sessionId: string
+): boolean {
+  const record = deps.store.getRecord(sessionId)
+  return (
+    !!record &&
+    agentSessionLeaseIsReleased(record.lease) &&
+    (agentSessionLeaseOwnerVerdict(record.lease) === 'exited' ||
+      structuredSessionNeverStarted(record)) &&
     !sessions.get(sessionId)?.child &&
     deps.adapter.hasOwnedAcquisition?.(sessionId) !== true
-  return childStopped || ownedStopped || alreadyStopped
+  )
+}
+
+export type WorkspaceSleepCloseResult = {
+  fence: number
+  stopped: boolean
+  admittedSends: number
+}
+
+/** Abort registered starts, then await them outside the lane their final commits need. */
+export function workspaceSleepStartAborts(
+  runtimeState: () => Pick<
+    StructuredAgentSessionHostRuntimeState,
+    'startFlights' | 'acquireAborts'
+  >,
+  sessionId: string
+) {
+  const aborted: Promise<unknown>[] = []
+  return {
+    abort: (): void => {
+      const flight = runtimeState().startFlights.get(sessionId)
+      if (flight) {
+        aborted.push(flight.outcome)
+      }
+      runtimeState().acquireAborts.abort(sessionId, 'closed while starting')
+    },
+    settle: (
+      input: Pick<Parameters<typeof stopWorkspaceSleepChat>[0], 'deps' | 'sessions' | 'sessionId'>,
+      result: WorkspaceSleepCloseResult | null
+    ) =>
+      settleWorkspaceSleepAbortedStarts(input, result, aborted, () =>
+        runtimeState().startFlights.has(sessionId)
+      )
+  }
+}
+
+/** Count an aborted start only after it settles with no newer start or remaining work. */
+async function settleWorkspaceSleepAbortedStarts(
+  input: Pick<Parameters<typeof stopWorkspaceSleepChat>[0], 'deps' | 'sessions' | 'sessionId'>,
+  result: WorkspaceSleepCloseResult | null,
+  abortedStarts: readonly Promise<unknown>[],
+  startRunning: () => boolean
+): Promise<WorkspaceSleepCloseResult | null> {
+  await Promise.allSettled(abortedStarts)
+  if (!result || result.stopped || abortedStarts.length === 0 || startRunning()) {
+    return result
+  }
+  const { deps, sessions, sessionId } = input
+  return workspaceSleepChatAtRest(deps, sessions, sessionId)
+    ? {
+        ...result,
+        fence: deps.store.getRecord(sessionId)?.lease.runtimeFence ?? result.fence,
+        stopped: true
+      }
+    : result
 }

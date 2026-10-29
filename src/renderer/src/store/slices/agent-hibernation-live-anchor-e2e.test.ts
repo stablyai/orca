@@ -61,9 +61,7 @@ describe('a finished Claude turn reaches the hibernation planner', () => {
     resetHibernationPaneAgeForTests()
   })
 
-  // Why: #10238 broadened the live recovery anchor to every resumable agent but left the
-  // planner's exemption Pi-only, so the two halves disagreed and no Claude pane could sleep.
-  // This pins the seam, not either half alone.
+  // Pin planner/anchor seam: broad resumable-agent recovery must match sleep exemption, formerly Pi-only (#10238).
   it('writes a live resume anchor that no longer blocks it', () => {
     const store = createTestStore()
     seedWorkspace(store)
@@ -117,8 +115,7 @@ describe('a finished Claude turn reaches the hibernation planner', () => {
         { providerSession: PROVIDER_SESSION }
       )
     }
-    // A metadata-less redelivery: main resends `done` with a fresh updatedAt and the
-    // ORIGINAL stateStartedAt, exactly as an OSC 9999 repaint or reconnect replay does.
+    // Metadata-less reconnect/OSC repaint refreshes updatedAt but preserves original stateStartedAt.
     store
       .getState()
       .setAgentStatus(
@@ -152,8 +149,7 @@ describe('a finished Claude turn reaches the hibernation planner', () => {
     )
     expect(getHibernationBoundaryResolvedAtByPaneKey()[PANE]).toBeUndefined()
 
-    // Assistant evidence proves a REAL completion; the store clears the boundary flag in
-    // place without advancing stateStartedAt, so the stamp is the only signal of it.
+    // Assistant evidence clears boundary flag without moving stateStartedAt; completion stamp is the only new signal.
     store.getState().setAgentStatus(
       PANE,
       {

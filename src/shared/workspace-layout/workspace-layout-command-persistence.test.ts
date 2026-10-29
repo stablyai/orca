@@ -1,5 +1,4 @@
-// Commands against what reaches disk: the legacy row-ownership marker and revision, a terminal tab
-// whose tab-bar id and terminal id differ, and the unsaved-draft refusal on preview replacement.
+// Verify disk effects: legacy row ownership/revision, distinct tab/terminal IDs and dirty-draft refusal on preview replacement.
 
 import { describe, expect, it } from 'vitest'
 import { LOCAL_EXECUTION_HOST_ID } from '../execution-host'
@@ -91,11 +90,11 @@ describe('a terminal tab whose tab-bar id and terminal id differ', () => {
     )
     const newLeaf = split.results[0]!.leafId!
     expect(split.results[0]!.paneKey).toBe(`term-agent:${newLeaf}`)
-    const record = loaded.layout.workspaces[GIT_KEY]!.leaves![leaf(3)]!.sleeping!
+    const record = loaded.layout.workspaces[GIT_KEY]!.leaves![leaf(3)]!.resume!
     const slept = build(
       context,
       [
-        { type: 'wake', workspace: GIT_KEY, paneKeys: [`term-agent:${leaf(3)}`] },
+        { type: 'wake', workspace: GIT_KEY, paneKeys: [`term-agent:${leaf(3)}`], recordOnly: true },
         {
           type: 'sleep',
           workspace: GIT_KEY,

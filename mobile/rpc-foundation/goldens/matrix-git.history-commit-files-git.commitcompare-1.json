@@ -4,6 +4,17 @@
   "family": "git.history-commit-files",
   "namedDeltas": [],
   "values": {
+    "02a8cf50aee0": {
+      "commitRow": ["first", "aaaaaaa", " · ", "dev", " · ", "1h", "outer refused", "Retry"],
+      "crash": {
+        "$rpc": "null"
+      },
+      "elements": {
+        "FlatList": 1
+      },
+      "labels": [],
+      "text": []
+    },
     "0a26f0498c96": {
       "name": "git.commitCompare#1",
       "ordinal": 4,
@@ -13,6 +24,17 @@
       "name": "git.history#1",
       "ordinal": 2,
       "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"git.history\",\"params\":{\"worktree\":\"id:repo42::/p\",\"limit\":50}}"
+    },
+    "109d59172d86": {
+      "commitRow": ["first", "aaaaaaa", " · ", "dev", " · ", "1h", "transport failure", "Retry"],
+      "crash": {
+        "$rpc": "null"
+      },
+      "elements": {
+        "FlatList": 1
+      },
+      "labels": [],
+      "text": []
     },
     "11a306daf1d5": {
       "name": "git.commitCompare#1",
@@ -195,17 +217,6 @@
           "isRpcDeliveryUnknown": true
         }
       }
-    },
-    "50a8663c6ca2": {
-      "commitRow": ["first", "aaaaaaa", " · ", "dev", " · ", "1h", "No file changes"],
-      "crash": {
-        "$rpc": "null"
-      },
-      "elements": {
-        "FlatList": 1
-      },
-      "labels": [],
-      "text": []
     },
     "5d7a655deafc": {
       "name": "git.history#1",
@@ -461,6 +472,26 @@
         }
       }
     },
+    "c2789ec35906": {
+      "commitRow": [
+        "first",
+        "aaaaaaa",
+        " · ",
+        "dev",
+        " · ",
+        "1h",
+        "The host sent a reply this app could not read (git.commitCompare)",
+        "Retry"
+      ],
+      "crash": {
+        "$rpc": "null"
+      },
+      "elements": {
+        "FlatList": 1
+      },
+      "labels": [],
+      "text": []
+    },
     "ce63cea4bc23": {
       "name": "git.commitCompare#1",
       "ordinal": 3,
@@ -534,6 +565,17 @@
           }
         }
       }
+    },
+    "e41b25e33a49": {
+      "commitRow": ["first", "aaaaaaa", " · ", "dev", " · ", "1h", "Unknown method", "Retry"],
+      "crash": {
+        "$rpc": "null"
+      },
+      "elements": {
+        "FlatList": 1
+      },
+      "labels": [],
+      "text": []
     },
     "eb79a9b3682a": {
       "status": "fulfilled",
@@ -630,7 +672,7 @@
             "mount": "eb79a9b3682a",
             "expand": "eb79a9b3682a"
           },
-          "state": "50a8663c6ca2",
+          "state": "c2789ec35906",
           "effects": []
         }
       },
@@ -643,7 +685,7 @@
             "mount": "eb79a9b3682a",
             "expand": "eb79a9b3682a"
           },
-          "state": "50a8663c6ca2",
+          "state": "c2789ec35906",
           "effects": []
         }
       },
@@ -656,7 +698,7 @@
             "mount": "eb79a9b3682a",
             "expand": "eb79a9b3682a"
           },
-          "state": "50a8663c6ca2",
+          "state": "c2789ec35906",
           "effects": []
         }
       },
@@ -669,7 +711,7 @@
             "mount": "eb79a9b3682a",
             "expand": "eb79a9b3682a"
           },
-          "state": "50a8663c6ca2",
+          "state": "c2789ec35906",
           "effects": []
         }
       },
@@ -682,7 +724,7 @@
             "mount": "eb79a9b3682a",
             "expand": "eb79a9b3682a"
           },
-          "state": "50a8663c6ca2",
+          "state": "c2789ec35906",
           "effects": []
         }
       },
@@ -695,7 +737,7 @@
             "mount": "eb79a9b3682a",
             "expand": "eb79a9b3682a"
           },
-          "state": "50a8663c6ca2",
+          "state": "02a8cf50aee0",
           "effects": []
         }
       },
@@ -708,7 +750,7 @@
             "mount": "eb79a9b3682a",
             "expand": "eb79a9b3682a"
           },
-          "state": "50a8663c6ca2",
+          "state": "322a1b963588",
           "effects": []
         }
       },
@@ -721,7 +763,7 @@
             "mount": "eb79a9b3682a",
             "expand": "eb79a9b3682a"
           },
-          "state": "50a8663c6ca2",
+          "state": "e41b25e33a49",
           "effects": []
         }
       },
@@ -734,7 +776,7 @@
             "mount": "eb79a9b3682a",
             "expand": "eb79a9b3682a"
           },
-          "state": "50a8663c6ca2",
+          "state": "109d59172d86",
           "effects": []
         }
       },
@@ -747,7 +789,7 @@
             "mount": "eb79a9b3682a",
             "expand": "eb79a9b3682a"
           },
-          "state": "50a8663c6ca2",
+          "state": "322a1b963588",
           "effects": []
         }
       }

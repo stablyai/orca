@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { OrcaRuntimeWithRuntimeId } from '../../../runtime/construction/runtime-identity-state'
 import { TerminalIntentionalStops } from '../../../runtime/terminal-intentional-stops'
 import { TerminalRunFactsRegister } from '../../../runtime/terminal-run-facts'
@@ -31,7 +32,7 @@ async function commit(
   const runtime = {
     terminalRunFacts: facts,
     intentionalPtyStops,
-    // Why the real method: the case under test is what the runtime does with each commit.
+    // Exercise real runtime commit handling through the fixture ports.
     noteTerminalSpawnCommit: OrcaRuntimeWithRuntimeId.prototype.noteTerminalSpawnCommit,
     registerPreAllocatedHandleForPty: vi.fn(),
     registerPty: vi.fn(),
@@ -75,6 +76,19 @@ describe('runtime spawn commit: run facts', () => {
     expect((await commit({ coldRestore })).freshSpawn).toBe(false)
   })
 
+  // STA-12043: a hook the new process sends while the commit persists must not read as older.
+  it('dates a new process by its spawn request, not its commit', async () => {
+    const facts = new TerminalRunFactsRegister()
+    let requestedAt = 0
+    await commit({}, facts, undefined, (ctx) => {
+      requestedAt = ctx.spawnRequestedAt
+      vi.spyOn(Date, 'now').mockReturnValue(requestedAt + 5_000)
+    })
+    vi.restoreAllMocks()
+
+    expect(facts.readProcessStartedAt(PTY_ID, INCARNATION_ID)).toBe(requestedAt)
+  })
+
   it('keeps a process run facts when the same incarnation commits again', async () => {
     const facts = new TerminalRunFactsRegister()
     await commit({}, facts)
@@ -97,6 +111,40 @@ describe('runtime spawn commit: run facts', () => {
 
     expect(stops.claimExit(PTY_ID, INCARNATION_ID)).toEqual([])
   })
+
+  it.each([false, true])(
+    'reports unavailable before binding even when the request was erased (%s)',
+    async (erased) => {
+      const onResumeOutcome = vi.fn()
+      const persistPtyBinding = vi.fn(async () => {
+        expect(onResumeOutcome.mock.calls).toEqual(
+          ORCA_LAYOUT_OWNER_IS_MAIN ? [[PTY_ID, 'resume-unavailable']] : []
+        )
+        return true
+      })
+
+      await commit({}, undefined, undefined, (ctx) => {
+        ctx.args.resumeProviderSession = erased
+          ? undefined
+          : { key: 'session_id', id: 'codex-session-1' }
+        ctx.result.agentResumeUnavailable = erased ? true : undefined
+        ctx.args.onResumeOutcome = onResumeOutcome
+        ctx.codexResumeUnavailable = !erased
+        ctx.codexResumeArgvDropped = true
+        ctx.hostSessionBinding = {
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this boundary pin observes the bind write without invoking its stored callback.
+          store: { persistPtyBinding } as unknown as NonNullable<
+            typeof ctx.hostSessionBinding
+          >['store'],
+          worktreeId: 'wt-1',
+          tabId: 'tab-1',
+          leafId: 'leaf-1'
+        }
+      })
+
+      expect(persistPtyBinding).toHaveBeenCalledOnce()
+    }
+  )
 
   it('records nothing for a spawn discarded because its binding save failed', async () => {
     const facts = new TerminalRunFactsRegister()
@@ -121,7 +169,7 @@ describe('runtime spawn commit: run facts', () => {
 
     expect(persistPtyBinding).toHaveBeenCalledOnce()
     expect(facts.read(PTY_ID, INCARNATION_ID).freshSpawn).toBe(false)
-    expect(stops.claimExit(PTY_ID, INCARNATION_ID)).toEqual(['reversible'])
+    expect(stops.claimExit(PTY_ID, INCARNATION_ID)).toEqual(['replaced'])
   })
 
   it.each([

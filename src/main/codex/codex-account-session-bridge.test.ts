@@ -80,6 +80,7 @@ describe('bridgeCodexSessionsIntoAccountHome', () => {
     expect(summary).toEqual({
       scannedFiles: 2,
       linkedFiles: 2,
+      skippedFiles: 0,
       bridgedThreads: new Map([
         [THREAD_A, '2026-07-20T10-00-00'],
         [THREAD_B, '2026-07-21T10-00-00']
@@ -100,8 +101,7 @@ describe('bridgeCodexSessionsIntoAccountHome', () => {
     })
 
     const targetPath = rolloutPath(targetHome, ROLLOUT_A)
-    // Why: hardlinks are the whole point — a resume that appends under one home
-    // must not fork the conversation into two diverging logs.
+    // Appends under either home must update the same log.
     expect(statSync(targetPath).ino).toBe(statSync(sourcePath).ino)
   })
 
@@ -137,6 +137,7 @@ describe('bridgeCodexSessionsIntoAccountHome', () => {
     expect(second).toEqual({
       scannedFiles: 1,
       linkedFiles: 0,
+      skippedFiles: 0,
       bridgedThreads: new Map([[THREAD_A, '2026-07-20T10-00-00']])
     })
   })
@@ -150,7 +151,12 @@ describe('bridgeCodexSessionsIntoAccountHome', () => {
       sourceCodexHomePaths: [targetHome, targetHome]
     })
 
-    expect(summary).toEqual({ scannedFiles: 0, linkedFiles: 0, bridgedThreads: new Map() })
+    expect(summary).toEqual({
+      scannedFiles: 0,
+      linkedFiles: 0,
+      skippedFiles: 0,
+      bridgedThreads: new Map()
+    })
   })
 
   it('does not hand a rollout it failed to link to the index heal', async () => {
@@ -180,7 +186,12 @@ describe('bridgeCodexSessionsIntoAccountHome', () => {
       sourceCodexHomePaths: [join(workspaceRoot, 'missing')]
     })
 
-    expect(summary).toEqual({ scannedFiles: 0, linkedFiles: 0, bridgedThreads: new Map() })
+    expect(summary).toEqual({
+      scannedFiles: 0,
+      linkedFiles: 0,
+      skippedFiles: 0,
+      bridgedThreads: new Map()
+    })
   })
 })
 
@@ -231,8 +242,6 @@ describe('startCodexAccountSessionBridgeInBackground', () => {
     expect(readFileSync(rolloutPath(secondTarget, ROLLOUT_A), 'utf-8')).toBe('session\n')
   })
 
-  // #20669: rollouts present when Codex first creates its state DB force a
-  // blocking backfill that times out the first TUI launch.
   it('lets Codex index a new home before linking history into it', async () => {
     const systemHome = join(workspaceRoot, 'system')
     const targetHome = join(workspaceRoot, 'account')
@@ -249,8 +258,7 @@ describe('startCodexAccountSessionBridgeInBackground', () => {
     expect(readFileSync(rolloutPath(targetHome, ROLLOUT_A), 'utf-8')).toBe('session\n')
   })
 
-  // Why: an older Codex keeps no state DB, and `sqlite_home` keeps it outside
-  // the home; either way every launch must keep linking new history.
+  // Older CLIs and sqlite_home can leave the home without a DB across launches.
   it('keeps linking new history on later launches when no state DB lives in the home', async () => {
     const systemHome = join(workspaceRoot, 'system')
     const targetHome = join(workspaceRoot, 'account')
@@ -263,7 +271,6 @@ describe('startCodexAccountSessionBridgeInBackground', () => {
 
     expect(readFileSync(rolloutPath(targetHome, ROLLOUT_A), 'utf-8')).toBe('first\n')
     expect(readFileSync(rolloutPath(targetHome, ROLLOUT_B), 'utf-8')).toBe('second\n')
-    // Only the empty home needed Codex to run first.
     expect(createStateDb).toHaveBeenCalledTimes(1)
   })
 

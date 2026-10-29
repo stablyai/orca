@@ -44,7 +44,7 @@ export type WindowLaunchProducer =
   | { kind: 'folder-composer'; agent: 'claude' | 'codex'; note: string }
 
 /** "+" entry points. Quick Launch items omit launchSource and get `menu`'s source by default. */
-export type PlusEntry = 'menu' | 'shortcut' | 'dashboard'
+export type PlusEntry = 'menu' | 'shortcut'
 const PRODUCER_LAUNCH_SOURCE = {
   'quick-command': 'quick_command',
   continuation: 'terminal_context_menu',
@@ -53,8 +53,7 @@ const PRODUCER_LAUNCH_SOURCE = {
 } as const
 const PLUS_LAUNCH_SOURCE: Record<PlusEntry, string> = {
   menu: 'tab_bar_quick_launch',
-  shortcut: 'shortcut',
-  dashboard: 'unknown'
+  shortcut: 'shortcut'
 }
 
 type ProjectRuntimeSent =
@@ -137,7 +136,6 @@ export function windowSpawnRequest(c: WindowLaunchCase): Record<string, unknown>
   return {
     ...PANE_GRID,
     cwd,
-    cwdFallback: 'worktree',
     env: {
       ...request.agentEnv,
       ORCA_WORKSPACE_ID: worktreeId,

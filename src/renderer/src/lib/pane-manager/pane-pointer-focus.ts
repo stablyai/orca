@@ -15,7 +15,6 @@ export function shouldFocusTerminalFromPanePointerDown(target: EventTarget | nul
     return true
   }
 
-  // Why: pane-local app controls (for example the title editor) are portaled
-  // into the pane container; focusing xterm from their pointerdown blurs them.
+  // Portaled pane controls, such as the title editor, lose focus if their pointerdown focuses xterm.
   return target.closest(APP_CONTROL_SELECTOR) === null
 }

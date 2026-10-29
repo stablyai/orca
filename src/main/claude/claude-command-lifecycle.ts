@@ -1,10 +1,4 @@
-// What Claude's per-command `command_lifecycle` frames (msg_lifecycle_v1) settle.
-//
-// A terminal state for a command that never started is a verdict: `cancelled` was withdrawn,
-// `discarded` was dropped when the CLI ended its session, `refused` was declined before it
-// queued. None ran. After `started`, 2.1.280 sends only `cancelled`, when an interrupt or a hard
-// failure ends the turn (measured), so the send may be in the conversation: any end is doubt.
-// An unstarted send's `cancelled` lands before the Stop's answer, so it settles if that is lost.
+// Lifecycle frames can reject only unstarted sends; completed alone leaves delivery uncertain.
 
 import {
   agentSessionFailureFact,
@@ -18,9 +12,9 @@ import {
   rejectClaudeDispatchWaiters,
   releaseClaudeDispatchWaitersInDoubt
 } from './claude-structured-dispatch'
-import { readClaudeFrameString } from './claude-structured-init-proof'
+import { readClaudeFrameString } from './structured/claude-structured-init-proof'
 import type { ClaudeLateDispatchSettlement } from './claude-replay-turn-resolution'
-import type { ClaudeSession, ClaudeStartedSend } from './claude-structured-session-state'
+import type { ClaudeSession, ClaudeStartedSend } from './structured/claude-structured-session-state'
 
 const UNSTARTED_VERDICT = {
   cancelled: 'cancelled',
@@ -38,7 +32,7 @@ export function observeClaudeCommandLifecycle(
   onSettledLate?: ClaudeLateDispatchSettlement
 ): void {
   const commandUuid = readClaudeFrameString(message, 'command_uuid')
-  // An echoed send has left both lists, so nothing here can reach a delivered message.
+  // Echoed sends leave both lists and cannot be rejected here.
   const waiter = [...session.dispatchWaiters, ...session.retiredDispatchWaiters].find(
     (candidate) => candidate.sentUuid === commandUuid
   )
@@ -47,7 +41,7 @@ export function observeClaudeCommandLifecycle(
   }
   const state = message.state
   if (state === 'started' || (state === 'queued' && waiter.commandLifecycle !== 'started')) {
-    // Forward only: a redelivered command re-emits `queued`, but it has still started.
+    // Redelivery can emit queued again after started.
     waiter.commandLifecycle = state
   } else if (isTerminalState(state) && waiter.commandLifecycle === 'started') {
     releaseClaudeDispatchWaitersInDoubt(
@@ -63,11 +57,17 @@ export function observeClaudeCommandLifecycle(
       agentSessionFailureFact(UNSTARTED_VERDICT[state]),
       onSettledLate
     )
+  } else if (state === 'completed' && waiter.commandLifecycle !== 'started' && !waiter.retired) {
+    releaseClaudeDispatchWaitersInDoubt(
+      session,
+      [waiter],
+      DISPATCH_DOUBT_PROVIDER_ENDED_UNANSWERED,
+      onSettledLate
+    )
   }
 }
 
-/** The send the CLI reported `started` and has not echoed: output it writes now is that send's
- *  turn. A local command (`/goal`) answers before its echo, so the echo cannot be what binds it. */
+/** Local commands such as `/goal` can output before their echo; bind them to the started send. */
 export function claudeStartedUnechoedSend(session: ClaudeSession): ClaudeStartedSend | null {
   const waiter = session.dispatchWaiters.find(
     (candidate) => candidate.commandLifecycle === 'started' && candidate.clientMessageId !== null
@@ -80,15 +80,20 @@ export function claudeStartedUnechoedSend(session: ClaudeSession): ClaudeStarted
     : null
 }
 
-/** A send the CLI took, until its echo, a terminal state or exit: the sweep must not rest its child. */
-export function claudeHoldsDispatch(session: ClaudeSession): boolean {
-  return session.dispatchWaiters.some((waiter) => waiter.commandLifecycle !== undefined)
+/** Include settlements until the host hears them, avoiding a gap in dispatch ownership. */
+export function claudeHeldSends(session: ClaudeSession): ReadonlySet<string> {
+  return new Set([
+    ...session.dispatchWaiters.flatMap((waiter) => waiter.clientMessageId ?? []),
+    ...(session.unreportedSettlements ?? [])
+  ])
 }
 
-/**
- * At idle, only a `started` send still unanswered is doubt: a turn that threw leaves it with no
- * terminal state. A `queued` one may still start: 2.1.280's code idles before re-reading its queue.
- */
+/** Pending lifecycle-tracked sends must keep the idle sweep from resting the child. */
+export function claudeHoldsDispatch(session: ClaudeSession | undefined): boolean {
+  return session?.dispatchWaiters.some((waiter) => waiter.commandLifecycle !== undefined) ?? false
+}
+
+/** Idle can precede queued work starting; release only started, unanswered sends as uncertain. */
 export function releaseClaudeDispatchesUnansweredAtIdle(
   session: ClaudeSession,
   onSettledLate?: ClaudeLateDispatchSettlement

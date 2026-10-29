@@ -71,6 +71,13 @@ describe('agentPhaseTransition', () => {
     expect(hookRowTransition('working', 'done', { state: 'done' })).toBe('turn-finished')
     expect(hookRowTransition('done', 'done', failed)).toBeNull()
   })
+
+  it('names no news for a session boundary, whose phase still reads done', () => {
+    const boundary = { state: 'done' as const, sessionBoundary: true }
+    expect(hookRowAgentPhase(boundary)).toBe('done')
+    expect(hookRowTransition('working', 'done', boundary)).toBeNull()
+    expect(hookRowTransition('needs-you', 'done', boundary)).toBeNull()
+  })
 })
 
 describe('agent transition scenarios', () => {

@@ -2,8 +2,6 @@ import type { EditorGet, EditorSet } from '../types/editor-set-get'
 import type { EditorSlice } from '../types/editor-slice'
 import { joinPath } from '@/lib/path'
 import type { OpenFile } from '../types/open-file'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner-switch'
-import { recordReopenedEditorFileInLayoutOwner } from '../tabs/editor-tab-layout-owner'
 import { toOpenConflictMetadata } from '../git/git-status-reconciliation'
 import { resolveEditorOpenTargetGroupId } from '../tabs/editor-open-target-group'
 import { resolveEditorPreviewIntent } from '../tabs/editor-preview-tab-setting'
@@ -23,7 +21,6 @@ export function createOpenConflictFile(
       const isPreview = resolveEditorPreviewIntent(get(), options?.preview)
       let editorItemTargetGroupId = options?.targetGroupId
       let openedConflictFile = true
-      const before = ORCA_LAYOUT_OWNER_IS_MAIN ? get() : null
       set((s) => {
         const id = absolutePath
         const conflict = toOpenConflictMetadata(entry)
@@ -125,7 +122,7 @@ export function createOpenConflictFile(
       if (!openedConflictFile) {
         return
       }
-      const tabId = openWorkspaceEditorItem(
+      openWorkspaceEditorItem(
         get(),
         absolutePath,
         worktreeId,
@@ -134,9 +131,6 @@ export function createOpenConflictFile(
         isPreview,
         editorItemTargetGroupId
       )
-      if (ORCA_LAYOUT_OWNER_IS_MAIN && before) {
-        recordReopenedEditorFileInLayoutOwner(before, get(), worktreeId, tabId)
-      }
     }
   }
 }

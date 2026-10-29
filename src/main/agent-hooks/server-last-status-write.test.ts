@@ -66,7 +66,6 @@ describe('Last-status persistence', () => {
           { launchToken: 'launch-bearer-must-not-persist' }
         )
       )
-      // Synchronous flush via stop() captures the trailing-debounced write.
       server.flushStatusPersistSync()
       expect(existsSync(lastStatusPath())).toBe(true)
       const file = JSON.parse(readFileSync(lastStatusPath(), 'utf8'))
@@ -87,8 +86,7 @@ describe('Last-status persistence', () => {
       expect(file.entries[PANE].launchTokenHash).toBe(
         createHash('sha256').update('launch-bearer-must-not-persist').digest('hex')
       )
-      // The shell fact is persisted: hydration reads it to decide whether a settled main agent held
-      // open by children may be seeded, which `mainAgent` alone cannot say (see server-types.ts).
+      // Shell evidence determines whether a settled main agent held open by children can be restored.
       expect(file.entries[PANE].claudeRunningNonAgentTask).toBe(true)
       expect(file.entries[PANE].payload.mainAgent).toEqual({
         state: 'done',

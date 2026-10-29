@@ -1,10 +1,12 @@
 import type { WebContents } from 'electron'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import { runInRemoteCliBrowserScope } from '../runtime/desktop-browser-bridge/remote-cli-browser-scope'
 import { captureFullPageScreenshot, captureScreenshot } from './cdp-screenshot'
 
 function createMockWebContents() {
   const mock = {
+    id: 7,
     isDestroyed: vi.fn(() => false),
     invalidate: vi.fn(),
     capturePage: vi.fn(),
@@ -71,7 +73,6 @@ describe('captureScreenshot', () => {
   it('sends the capture once and probes until the held page produces a frame', async () => {
     vi.useFakeTimers()
     const webContents = createMockWebContents()
-    // Undrawn: the capture hangs until a later request makes the page draw a frame.
     let drawFrame: (() => void) | null = null
     webContents.debugger.sendCommand
       .mockImplementationOnce(
@@ -383,6 +384,71 @@ describe('captureFullPageScreenshot', () => {
       format: 'jpeg',
       captureBeyondViewport: true,
       clip: { x: 0, y: 0, width: 800, height: 1600, scale: 1 }
+    })
+  })
+})
+
+describe('an SSH host’s capture', () => {
+  let url = 'https://example.com/'
+  const asHost = <T>(run: () => Promise<T>): Promise<T> =>
+    runInRemoteCliBrowserScope('wt-1', run, undefined, () => url.startsWith('https:'))
+  const REFUSED =
+    "This page is not browsing through the SSH host, so the host's orca CLI cannot use it."
+
+  afterEach(() => {
+    url = 'https://example.com/'
+  })
+
+  it('never captures a full page that moved to a desktop file while it was measured', async () => {
+    const webContents = createMockWebContents()
+    webContents.debugger.sendCommand.mockImplementation(async (method: string) => {
+      if (method === 'Page.getLayoutMetrics') {
+        url = 'file:///Users/me/private.txt'
+        return { cssContentSize: { width: 10, height: 10 } }
+      }
+      return { data: 'private-pixels' }
+    })
+
+    await expect(
+      asHost(() => captureFullPageScreenshot(webContents.guest, 'png', noHold))
+    ).rejects.toThrow(REFUSED)
+    expect(webContents.debugger.sendCommand).not.toHaveBeenCalledWith(
+      'Page.captureScreenshot',
+      expect.anything()
+    )
+  })
+
+  it('refuses a capture whose frame was drawn after the page moved to a desktop file', async () => {
+    const webContents = createMockWebContents()
+    webContents.debugger.sendCommand.mockImplementation(async () => {
+      url = 'file:///Users/me/private.txt'
+      return { data: 'private-pixels' }
+    })
+
+    await expect(
+      asHost(() => captureScreenshot(webContents.guest, { format: 'png' }, noHold))
+    ).rejects.toThrow(REFUSED)
+  })
+
+  it('stops at the next probe once the page moved to a desktop file, never falling back', async () => {
+    // Fake timers do not carry the host command context into probes.
+    const webContents = createMockWebContents()
+    webContents.debugger.sendCommand.mockImplementation(() => new Promise(() => {}))
+    const capture = asHost(() => captureScreenshot(webContents.guest, { format: 'png' }, noHold))
+    url = 'file:///Users/me/private.txt'
+
+    await expect(capture).rejects.toThrow(REFUSED)
+    expect(webContents.debugger.sendCommand).toHaveBeenCalledTimes(1)
+    expect(webContents.capturePage).not.toHaveBeenCalled()
+  })
+
+  it('still captures the desktop’s own page outside any host’s command', async () => {
+    url = 'file:///Users/me/private.txt'
+    const webContents = createMockWebContents()
+    webContents.debugger.sendCommand.mockResolvedValue({ data: 'own-pixels' })
+
+    await expect(captureScreenshot(webContents.guest, { format: 'png' }, noHold)).resolves.toEqual({
+      data: 'own-pixels'
     })
   })
 })

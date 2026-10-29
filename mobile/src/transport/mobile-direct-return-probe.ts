@@ -6,8 +6,6 @@ import type { MobileConnectionPath } from './stable-logical-rpc-client'
 
 const DIRECT_PROBE_INTERVAL_MS = 15_000
 
-// While the runtime channel rides the relay, periodically probe the direct
-// endpoint and migrate back once hysteresis proves it stable.
 export class DirectReturnProbe {
   private timer: ReturnType<typeof setTimeout> | null = null
 
@@ -108,8 +106,7 @@ export class DirectReturnProbe {
     } finally {
       this.activeProbe = null
       successful?.close()
-      // Why: a relay drop or backoff timer can arrive while the probe owns the
-      // operation mutex; afterProbe releases it and replays deferred recovery.
+      // Release the probe mutex and replay recovery queued by a concurrent relay drop/backoff timer.
       this.hooks.afterProbe()
       this.schedule()
     }

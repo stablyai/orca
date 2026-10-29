@@ -12,7 +12,6 @@ vi.mock('./terminal-parking-pass-candidates', () => ({
   canOrdinarilyParkRetentionCandidate: () => true,
   collectTerminalParkingPassCandidates: () => ({
     retentionCandidates: [],
-    // Fresh Set each pass, like the real selector.
     nextParkedTerminalWorktreeIds: new Set(parkingPass.parkedIds),
     nowMs: 0,
     overrides: {},
@@ -24,8 +23,7 @@ vi.mock('./terminal-pane/parked-terminal-buffer-capture', () => ({
 }))
 
 function useParkingPassHost() {
-  // Why own state: like the workbench's store subscriptions, an update on this fiber leaves lanes on
-  // its alternate, which defeats React's eager same-state bailout for the setters below.
+  // Give this fiber state updates so pending alternate lanes defeat React’s eager same-state bailout, as real subscriptions do.
   const [revision, setRevision] = useState(0)
   const [parked, setParked] = useState<ReadonlySet<string>>(() => new Set())
   const [forceParked, setForceParked] = useState<ReadonlySet<string>>(() => new Set())
@@ -68,8 +66,7 @@ describe('useTerminalParkingPass', () => {
     })
     expect([...result.current.parked]).toEqual(['wt-parked'])
 
-    // Why: during a worktree removal every pty-exit commit re-runs this pass; each no-op render it
-    // queued kept React's nested-update counter climbing until #185.
+    // No-op renders from each PTY-exit commit previously drove removal bursts past React’s nested-update limit.
     const settled = renders
     for (let i = 0; i < 5; i++) {
       act(() => result.current.bump())

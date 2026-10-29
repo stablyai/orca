@@ -5,7 +5,7 @@ import {
   type RefObject,
   type SetStateAction
 } from 'react'
-import type { JiraIssue } from '../../../shared/jira-types'
+import type { JiraIssue } from '../../../shared/jira/jira-types'
 import { subscribeJiraIssueMutation } from './jira-issue-mutation-queue'
 import {
   editedJiraIssueFields,

@@ -4,7 +4,6 @@ import { TerminalShellRecoveryBarrier } from './terminal-shell-recovery-barrier'
 import type { PtyIngressEmission } from '../../shared/pty-startup-ingress'
 
 const TRIGGER = '\x1b[?1049hTUI\x1b]133;D;137\x07'
-// The barrier holds the whole D mark; the ground rides on it.
 const MARK = '\x1b]133;D;137\x07'
 const HEAD = TRIGGER.slice(0, -MARK.length)
 const GROUNDED = `${MARK}${PROCESS_BOUNDARY_GROUND}`
@@ -181,8 +180,7 @@ describe('TerminalShellRecoveryBarrier', () => {
     await vi.waitFor(() => expect(barrier.getOwner()).toBe('shell'))
     expect(confirm).toHaveBeenCalledTimes(1)
 
-    // Why: the injected reset's ?1049l must ground the scanner's alt state;
-    // a bare D at the next plain prompt would otherwise loop the repair.
+    // Scan the injected alternate-screen reset or the next prompt would trigger recovery again.
     barrier.accept(passthrough('\x1b]133;C\x07ls\r\n\x1b]133;D;0\x07'))
 
     expect(confirm).toHaveBeenCalledTimes(1)
@@ -345,7 +343,6 @@ describe('TerminalShellRecoveryBarrier', () => {
 
     await vi.waitFor(() => expect(barrier.getOwner()).toBe('shell'))
     expect(released.slice(-2).map((emission) => emission.data)).toEqual([GROUNDED, 'prompt'])
-    // Grounded once: the next prompt opens no episode.
     barrier.accept(passthrough('\x1b]133;C\x07ls\x1b]133;D;0\x07'))
     expect(confirm).toHaveBeenCalledTimes(6)
   })

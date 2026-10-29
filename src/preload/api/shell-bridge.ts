@@ -5,6 +5,7 @@ import type {
   ShellOpenLocalPathResult
 } from '../../shared/shell-open-types'
 import type { ExecutionHostId } from '../../shared/execution-host'
+import type { ShellPathExistence } from '../../shared/path-existence-batch'
 import type { PreloadApi } from '../api-types'
 
 export const shellApi = {
@@ -30,7 +31,7 @@ export const shellApi = {
   openFileUri: (uri: string, ownerHostId: ExecutionHostId): Promise<void> =>
     ipcRenderer.invoke('shell:openFileUri', uri, ownerHostId),
 
-  pathsExist: (paths: string[]): Promise<boolean[]> =>
+  pathsExist: (paths: string[]): Promise<ShellPathExistence[]> =>
     ipcRenderer.invoke('shell:pathsExist', paths),
   pathExists: (path: string): Promise<boolean> => ipcRenderer.invoke('shell:pathExists', path),
 

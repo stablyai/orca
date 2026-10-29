@@ -4,21 +4,15 @@ import type { QueuedMessageRow } from './queued-message-table'
 
 function card(messageId = 'card'): QueuedMessageRow {
   return {
-    sessionId: 'folder-session',
     messageId,
     position: 1,
     body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'hello' }] },
     fingerprint: 'base',
-    createdAt: 1,
-    hostInstance: 'host-a',
     state: 'waiting',
     holdReason: null,
     returnedReason: null,
     returnedRejection: null,
-    settledAt: null,
-    settledByOp: null,
     consumedAs: null,
-    carriedFrom: null,
     queuedAt: null
   }
 }

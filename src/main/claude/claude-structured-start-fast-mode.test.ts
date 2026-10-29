@@ -1,11 +1,20 @@
-// A saved Fast the launch leaves out beside the agent Arguments' own `--settings`, applied by the
-// start once the child answers.
-
 import { expect, it, vi } from 'vitest'
-import { adapterFor, fakeClaude, identityFor } from './claude-structured-session-test-support'
+import {
+  adapterFor,
+  fakeClaude,
+  identityFor,
+  USER_MESSAGE
+} from './claude-structured-session-test-support'
+import { claudeOpened } from './claude-structured-startup-settled-test-support'
 
-it("applies a resumed conversation's saved Fast off after start beside the Arguments' settings", async () => {
+it("applies a resumed conversation's saved Fast off before message input beside the Arguments' settings", async () => {
+  let fastMode = true
   const claude = fakeClaude({
+    routes: {
+      apply_flag_settings: () => {
+        fastMode = false
+      }
+    },
     settings: { effective: { fastMode: true, fastModePerSessionOptIn: false } }
   })
   const adapter = adapterFor(claude, {
@@ -25,8 +34,23 @@ it("applies a resumed conversation's saved Fast off after start beside the Argum
   expect(claude.connections[0].launch.options.extraArgs).toEqual({
     settings: '/repo/claude.json'
   })
+  await claudeOpened(adapter, 'session-1')
+  claude.connections[0].getSettings = async () => ({
+    effective: { fastMode, fastModePerSessionOptIn: false }
+  })
+  await expect(
+    adapter.dispatch({
+      sessionId: 'session-1',
+      clientMessageId: 'message-fast',
+      body: USER_MESSAGE,
+      executionOptions: { fastMode: 'false' },
+      fence: 7
+    })
+  ).resolves.toMatchObject({ state: 'admitted' })
   await vi.waitFor(() =>
-    expect(claude.connections[0].calls.at(-1)).toEqual({
+    expect(
+      claude.connections[0].calls.find((call) => call.subtype === 'apply_flag_settings')
+    ).toEqual({
       subtype: 'apply_flag_settings',
       params: { settings: { fastMode: false } }
     })

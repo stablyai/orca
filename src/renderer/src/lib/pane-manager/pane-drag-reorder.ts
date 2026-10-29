@@ -8,12 +8,7 @@ import type {
   PaneExternalDropTarget,
   PaneStyleOptions
 } from './pane-manager-types'
-import type { PaneLayoutEditIntent } from '../../../../shared/rpc-contract/session-tabs-schemas-params'
 import { detachPaneFromTree, findPaneChildren, insertPaneNextTo } from './pane-tree-ops'
-
-// ---------------------------------------------------------------------------
-// Drag-to-reorder panes
-// ---------------------------------------------------------------------------
 
 export type DragReorderState = {
   dragSourcePaneId: number | null
@@ -33,7 +28,7 @@ export type DragReorderCallbacks = {
   applyDividerStyles: () => void
   refitPanesUnder: (el: HTMLElement) => void
   requestPaneReparentFrame?: (callback: FrameRequestCallback) => void
-  onLayoutChanged?: (intent?: PaneLayoutEditIntent) => void
+  onLayoutChanged?: () => void
   onDragActiveChange?: (active: boolean) => void
   resolveExternalDropTarget?: PaneExternalDropResolver
   onExternalPaneDrop?: PaneExternalDropHandler
@@ -62,7 +57,6 @@ export function cancelActivePaneDrag(state: DragReorderState): void {
   state.currentExternalDropTarget = null
 }
 
-/** True when dropping source onto target in zone would leave pane order unchanged. */
 export function isPaneDropNoOp(
   sourcePaneId: number,
   targetPaneId: number,
@@ -103,7 +97,6 @@ export function isPaneDropNoOp(
     : sourceIndex === targetIndex - 1
 }
 
-/** Move a pane from its current position to a new position relative to a target pane. */
 export function handlePaneDrop(
   sourcePaneId: number,
   targetPaneId: number,
@@ -141,20 +134,17 @@ function movePaneNextTo(
     return
   }
 
-  // 1. Detach source pane from the tree (without disposing its terminal)
   detachPaneFromTree(source, callbacks)
 
-  // 2. Insert source next to target in the requested zone
   insertPaneNextTo(source, target, zone, callbacks)
 
-  // 3. Refit all panes and persist
   for (const p of panes.values()) {
     callbacks.safeFit(p)
   }
   callbacks.applyPaneOpacity()
   callbacks.applyDividerStyles()
   updateMultiPaneState(callbacks)
-  callbacks.onLayoutChanged?.('gesture')
+  callbacks.onLayoutChanged?.()
 }
 
 export function showDropOverlay(state: DragReorderState): void {
@@ -174,7 +164,6 @@ export function hideDropOverlay(state: DragReorderState): void {
   }
 }
 
-/** Add/remove .has-multiple-panes on root to control drag handle visibility. */
 export function updateMultiPaneState(callbacks: DragReorderCallbacks): void {
   if (callbacks.getPanes().size >= 2) {
     callbacks.getRoot().classList.add('has-multiple-panes')

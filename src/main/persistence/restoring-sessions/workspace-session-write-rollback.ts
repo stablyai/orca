@@ -3,7 +3,6 @@ import type { WorkspaceSessionState } from '../../../shared/workspace-session-st
 
 const MISSING = Symbol('missing')
 
-/** A JSON-shaped slot of persisted session state, or the absent-key sentinel. */
 type RollbackSlot =
   | string
   | number

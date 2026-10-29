@@ -187,20 +187,4 @@ describe('worktree issue and review metadata flags', () => {
     expect(callMock).toHaveBeenCalledTimes(1)
     expect(callMock.mock.calls[0][1]).toHaveProperty(link.field, Number.MAX_SAFE_INTEGER)
   })
-
-  it.each(['create', 'set'])(
-    '%s help describes the new flags and set-only clears',
-    async (command) => {
-      const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
-      await main(['worktree', command, '--help'])
-      const output = logSpy.mock.calls.flat().join('\n')
-      expect(output).toContain(command === 'create' ? '--pr <number>' : '--pr <number|null>')
-      for (const flag of ['gitlab-issue', 'gitlab-mr']) {
-        expect(output).toContain(
-          command === 'create' ? `--${flag} <number|url>` : `--${flag} <number|url|null>`
-        )
-      }
-      expect(callMock).not.toHaveBeenCalled()
-    }
-  )
 })

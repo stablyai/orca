@@ -2,12 +2,15 @@ import type { AppState } from '@/store'
 import { getIndexedWorktreesById } from '@/store/worktree-repo-index'
 import { findRepoForHost } from '@/store/slices/repo-host-identity'
 import { getFolderWorkspaceConnectionId } from '@/lib/folder-workspace-connection'
+import { isWindowsAbsolutePathLike } from '../../../shared/cross-platform-path'
 import {
+  isLocalExecutionHost,
   parseExecutionHostId,
   toRuntimeExecutionHostId,
   type ExecutionHostId
 } from '../../../shared/execution-host'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
+import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 
 type WatchTargetRowState = Pick<
   AppState,
@@ -41,7 +44,7 @@ export function resolveEditorExternalWatchTargetRows(
   hostId: ExecutionHostId | null
 ): EditorExternalWatchTargetRows | null {
   const worktree = pickHostRow(
-    getIndexedWorktreesById(state.worktreesByRepo, worktreeId),
+    getIndexedWorktreesById(selectWorktreesByRepo(state), worktreeId),
     hostId,
     (row) =>
       row.hostId ??
@@ -53,7 +56,7 @@ export function resolveEditorExternalWatchTargetRows(
   const folderWorkspace =
     workspaceScope?.type === 'folder'
       ? pickHostRow(
-          state.folderWorkspaces.filter(
+          selectFolderWorkspaces(state).filter(
             (workspace) => workspace.id === workspaceScope.folderWorkspaceId
           ),
           hostId,
@@ -90,4 +93,33 @@ export function resolveEditorExternalWatchTargetRows(
       ? (repo.connectionId ?? null)
       : undefined
   return { worktree, repo, folderWorkspace, projectGroup, connectionId }
+}
+
+/** Only a proven-local Windows owner may match WSL alias paths for its watch root. */
+export function canWatchLocalWindowsWslAliases(
+  args: EditorExternalWatchTargetRows & {
+    worktreePath: string
+    runtimeEnvironmentId: string | null
+  }
+): boolean {
+  if (
+    args.runtimeEnvironmentId !== null ||
+    args.connectionId !== null ||
+    !isWindowsAbsolutePathLike(args.worktreePath)
+  ) {
+    return false
+  }
+  if (args.worktree) {
+    return (
+      !!args.repo &&
+      !args.worktree.runtimeOwnerEnvironmentId?.trim() &&
+      isLocalExecutionHost(args.worktree.hostId) &&
+      isLocalExecutionHost(args.repo.executionHostId)
+    )
+  }
+  return (
+    !!args.folderWorkspace &&
+    isLocalExecutionHost(args.folderWorkspace.executionHostId) &&
+    isLocalExecutionHost(args.projectGroup?.executionHostId)
+  )
 }

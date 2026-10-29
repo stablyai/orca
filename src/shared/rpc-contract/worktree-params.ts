@@ -45,9 +45,7 @@ export const AutomationWorkspaceProvenanceRequest = z.object({
   createRequestId: z.string()
 })
 
-// Why no dispatch token (unlike automation provenance): this is a descriptive
-// origin marker for sidebar filtering, not an authority grant. The host stamps
-// createdAt itself so a client clock can't skew sort order.
+// Descriptive provenance grants no authority; the host stamps createdAt to avoid client-clock sort skew.
 export const CliWorkspaceProvenanceRequest = z.object({
   callerTerminalHandle: OptionalString
 })
@@ -72,11 +70,15 @@ export const WorktreeTeardownMissingTerminalsParams = WorktreeDetectedListParams
 export const WorktreePsParams = z.object({
   limit: OptionalFiniteNumber,
   afterSnapshotId: z.string().min(1).max(128).nullable().optional(),
-  supportsWorktreeVisibilitySourceDefaults: z.literal(true).optional()
+  supportsWorktreeVisibilitySourceDefaults: z.literal(true).optional(),
+  // Opt-in: wait lookups read screens and probe PTYs, too costly for pollers; older hosts omit agentWait.
+  includeAgentWait: z.literal(true).optional()
 })
 
 export const WorktreeSortOrder = z.object({
-  orderedIds: z.array(z.string())
+  orderedIds: z.array(z.string()),
+  // Parallel to orderedIds: the copy each id names, so a same-id twin keeps its own order.
+  hostIds: z.array(z.string()).optional()
 })
 
 export const WorktreeSelector = z.object({
@@ -84,6 +86,11 @@ export const WorktreeSelector = z.object({
     .unknown()
     .transform((v) => (typeof v === 'string' ? v : ''))
     .pipe(z.string().min(1, 'Missing worktree selector'))
+})
+
+// Why optional: an older host strips the unknown field and marks its chats asleep as before.
+export const WorktreeSleepParams = WorktreeSelector.extend({
+  markChatsAsleep: z.boolean().optional()
 })
 
 export const WorktreeActivate = WorktreeSelector.extend({
@@ -112,12 +119,10 @@ export function assertLinkedWorkItemSourceContextMatch(
 }
 
 export const WorktreeSet = WorktreeSelector.extend({
-  // Why: '' is the blanking contract — "fall back to the branch/folder name".
-  // OptionalString coerced it to undefined, so on remote/SSH hosts clearing the
-  // name was dropped here and the old name came back on the next refresh.
+  // Empty clears to branch/folder fallback; OptionalString would drop remote clears and restore the old name.
   displayName: OptionalPlainString,
-  // Why: empty comments are meaningful metadata updates, so use the plain
-  // string parser instead of OptionalString's empty-as-undefined behavior.
+  firstAgentMessageRenameError: z.null().optional(),
+  // Preserve empty comment updates instead of coercing them to absent.
   comment: OptionalPlainString,
   linkedIssue: TriStateLinkedIssue,
   linkedPR: TriStateLinkedIssue,
@@ -157,6 +162,8 @@ export const WorktreeSet = WorktreeSelector.extend({
     .optional(),
   // Older clients may send unsupported review shapes alongside unrelated metadata edits.
   diffComments: z.array(DiffCommentSchema).optional().catch(undefined),
+  // The list the writer started from; the host applies only its changes so other devices' notes survive.
+  diffCommentsBase: z.array(DiffCommentSchema).optional().catch(undefined),
   mobileDiffReview: MobileDiffReviewSchema.optional().catch(undefined),
   parentWorktree: OptionalString,
   noParent: OptionalBoolean
@@ -173,14 +180,13 @@ export const WorktreeSet = WorktreeSelector.extend({
 export const WorktreeRemove = WorktreeSelector.extend({
   hostId: OptionalExecutionHostId,
   force: OptionalBoolean,
-  // Why (#11960): the CLI's --force is an unambiguous force affordance, but the
-  // desktop sets `force` for an ordinary confirmed delete too, so the PTY-stop
-  // waiver travels on its own field.
+  // Desktop force also means ordinary confirmed delete; PTY-stop waivers need their own field (#11960).
   allowUnverifiedPtyStop: OptionalBoolean,
   runHooks: OptionalBoolean,
-  // Why (#19334): a failed archive hook blocks removal. This waives that refusal and is recorded
-  // in the result; it is NOT `force`, and it does not decide whether the hook runs.
-  allowFailedArchiveHook: OptionalBoolean
+  // Waive failed-hook refusal explicitly and record it; independent of force and whether hooks run (#19334).
+  allowFailedArchiveHook: OptionalBoolean,
+  // Reply with Git's outcome instead of on acceptance; older hosts strip it and answer `removing: true` (#35135).
+  waitForBackgroundRemoval: OptionalBoolean
 })
 
 export const WorktreeForceDeleteBranch = WorktreeSelector.extend({

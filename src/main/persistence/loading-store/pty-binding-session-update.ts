@@ -6,8 +6,11 @@ import {
   layoutContainsLeafId
 } from '../restoring-sessions/terminal-layout-normalization'
 import { createMinimalPersistedTerminalTab } from '../restoring-sessions/session-owner-fields'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
+import { placedSplitRoot } from '../terminal-topology/terminal-pane-placement-graft'
 import { tabRowPtyIdAfterLeafBinding } from './terminal-tab-pty-ownership'
 import type { PersistPtyBindingArgs } from './pty-binding-persistence'
+import { reusedTerminalIdUnbinding } from './reused-terminal-id-unbind'
 
 export function applyPtyBinding(
   args: PersistPtyBindingArgs,
@@ -21,8 +24,7 @@ export function applyPtyBinding(
   const advanceTopologyFence = (): void => {
     const repoId = getRepoIdFromWorktreeId(bindingWorktreeId)
     const currentRevision = session.terminalTopologyRevisionByRepoId?.[repoId] ?? 0
-    // Why: a split is itself the authority — with no fence the renderer's pre-split
-    // pane list replays over it and the pane is lost even on the repo's first split.
+    // A split establishes authority immediately, even before the first topology revision.
     const establishesMembershipAuthority = args.expectedSourceBinding !== undefined
     if (
       !reconciledIncarnation &&
@@ -30,36 +32,48 @@ export function applyPtyBinding(
     ) {
       return
     }
-    // Why: host-admitted membership or incarnation changes must outrank a stale renderer replay.
+    // Host membership/incarnation changes must outrank stale renderer snapshots.
     session.terminalTopologyRevisionByRepoId = {
       ...session.terminalTopologyRevisionByRepoId,
       [repoId]: currentRevision + 1
     }
   }
-  if (args.incarnationId) {
-    session.terminalPtyIncarnationsByPaneKey = {
-      ...session.terminalPtyIncarnationsByPaneKey,
-      [paneKey]: args.incarnationId
-    }
-    if (session.terminalSurfaceTombstonesByPaneKey?.[paneKey]) {
-      session.terminalSurfaceTombstonesByPaneKey = {
-        ...session.terminalSurfaceTombstonesByPaneKey
-      }
-      delete session.terminalSurfaceTombstonesByPaneKey[paneKey]
-    }
+  // Unbind reused local IDs in the same commit that publishes the new incarnation.
+  const unbound =
+    ORCA_LAYOUT_OWNER_IS_MAIN && args.incarnationId
+      ? reusedTerminalIdUnbinding(session, { ...args, incarnationId: args.incarnationId })
+      : null
+  const stamps =
+    unbound?.terminalPtyIncarnationsByPaneKey ?? session.terminalPtyIncarnationsByPaneKey
+  const { [paneKey]: recordedIncarnation, ...otherIncarnations } = stamps ?? {}
+  if (args.incarnationId || (args.dropsIncarnation && recordedIncarnation)) {
+    session.terminalPtyIncarnationsByPaneKey = args.incarnationId
+      ? { ...stamps, [paneKey]: args.incarnationId }
+      : otherIncarnations
   }
-  const tabs = session.tabsByWorktree?.[bindingWorktreeId]
+  if (args.incarnationId && session.terminalSurfaceTombstonesByPaneKey?.[paneKey]) {
+    session.terminalSurfaceTombstonesByPaneKey = {
+      ...session.terminalSurfaceTombstonesByPaneKey
+    }
+    delete session.terminalSurfaceTombstonesByPaneKey[paneKey]
+  }
+  let rows = unbound?.tabsByWorktree ?? session.tabsByWorktree
+  let layoutsByTab = unbound?.terminalLayoutsByTabId ?? session.terminalLayoutsByTabId
+  const tabs = rows?.[bindingWorktreeId]
   const tab = tabs?.find((t) => t.id === args.tabId)
   if (tab) {
+    if (args.correctStartupCwd !== undefined) {
+      tab.startupCwd = args.correctStartupCwd
+    }
     tab.ptyId = tabRowPtyIdAfterLeafBinding(
       tab,
-      session.terminalLayoutsByTabId?.[args.tabId]?.ptyIdsByLeafId,
+      layoutsByTab?.[args.tabId]?.ptyIdsByLeafId,
       args.leafId,
       args.ptyId
     )
   } else {
     terminalMembershipChanged = true
-    // Why: pty:spawn can beat the debounced writer; persist a minimal tab so hydration won't prune the binding as orphaned.
+    // Persist spawn-created tabs before delayed renderer saves to keep their bindings from becoming orphans.
     const nextTabs = [
       ...(tabs ?? []),
       createMinimalPersistedTerminalTab({
@@ -68,10 +82,7 @@ export function applyPtyBinding(
         existingTabCount: tabs?.length ?? 0
       })
     ]
-    session.tabsByWorktree = {
-      ...session.tabsByWorktree,
-      [bindingWorktreeId]: nextTabs
-    }
+    rows = { ...rows, [bindingWorktreeId]: nextTabs }
     session.activeWorktreeId ??= bindingWorktreeId
     session.activeTabId ??= args.tabId
     session.activeTabIdByWorktree = {
@@ -79,7 +90,8 @@ export function applyPtyBinding(
       [bindingWorktreeId]: session.activeTabIdByWorktree?.[bindingWorktreeId] ?? args.tabId
     }
   }
-  // Why: host-initiated persist snapshots used to omit this write-once guard, so every launch or reattach treated the worktree as never having default terminals applied.
+  session.tabsByWorktree = rows
+  // Host-initiated binds must set the write-once default-terminal guard too.
   session.defaultTerminalTabsAppliedByWorktreeId = {
     ...session.defaultTerminalTabsAppliedByWorktreeId,
     [bindingWorktreeId]: true
@@ -94,23 +106,21 @@ export function applyPtyBinding(
       bindingWorktreeId
     ]
   }
-  if (!isTerminalLeafId(args.leafId)) {
-    // Why: keep legacy renderer-local pane ids out of durable leaf-keyed layout state after the UUID migration.
-    advanceTopologyFence()
-    return
-  }
-  const layout = session.terminalLayoutsByTabId?.[args.tabId]
-  if (layout) {
+  // Durable pane maps use UUID leaf keys; exclude legacy renderer-local IDs.
+  const leafKeyed = isTerminalLeafId(args.leafId)
+  const layout = layoutsByTab?.[args.tabId]
+  if (leafKeyed && layout) {
     if (!layout.root) {
       terminalMembershipChanged = true
-      // Why: load names every saved root, but the layout type still allows none; the binding needs a durable one.
       layout.root = { type: 'leaf', leafId: args.leafId }
       layout.activeLeafId = args.leafId
       layout.expandedLeafId = null
     } else if (!layoutContainsLeafId(layout.root, args.leafId)) {
       terminalMembershipChanged = true
-      // Why: splitPane spawns before its snapshot reaches main; add a minimal leaf so a crash can't strand the pane's binding.
-      layout.root = {
+      // Persist minimal split membership before renderer saves so crashes cannot strand the new binding.
+      // With main-owned layout, preserve the split position supplied by the window.
+      layout.root = (ORCA_LAYOUT_OWNER_IS_MAIN &&
+        placedSplitRoot(layout.root, args.leafId, args.placement)) || {
         type: 'split',
         direction: 'vertical',
         first: cloneLayoutNode(layout.root),
@@ -125,11 +135,11 @@ export function applyPtyBinding(
       ...layout.ptyIdsByLeafId,
       [args.leafId]: args.ptyId
     }
-  } else {
+  } else if (leafKeyed) {
     terminalMembershipChanged = true
-    // Why: first tab spawn — persist a minimal layout so a SIGKILL before the renderer snapshot can't lose ptyIdsByLeafId.
-    session.terminalLayoutsByTabId = {
-      ...session.terminalLayoutsByTabId,
+    // First spawns need a minimal durable layout before renderer snapshots arrive.
+    layoutsByTab = {
+      ...layoutsByTab,
       [args.tabId]: {
         root: { type: 'leaf', leafId: args.leafId },
         activeLeafId: args.leafId,
@@ -138,5 +148,6 @@ export function applyPtyBinding(
       }
     }
   }
+  session.terminalLayoutsByTabId = layoutsByTab
   advanceTopologyFence()
 }

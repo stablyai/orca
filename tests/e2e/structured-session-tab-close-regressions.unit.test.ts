@@ -3,6 +3,7 @@
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../src/shared/runtime-types'
 import type * as RuntimeRpcClient from '../../src/renderer/src/runtime/runtime-rpc-client'
+import type * as RuntimeLayoutClient from '../../src/renderer/src/runtime/runtime-layout-client'
 import { OrcaRuntimeService } from '../../src/main/runtime/orca-runtime'
 import { setStructuredAgentSessionHost } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-registry'
 import { useAppStore } from '../../src/renderer/src/store'
@@ -14,7 +15,7 @@ import { registerTerminalUiRoutingIpcBridge } from '../../src/renderer/src/hooks
 import type { RuntimeClientTarget } from '../../src/shared/runtime-client-target'
 import { applyWebSessionTabsSnapshot } from '../../src/renderer/src/runtime/web-session-tabs-sync/snapshot-api'
 import {
-  acceptPairedHostStructuredSessions,
+  suppressCancelledStructuredSessionTabs,
   retireStructuredAgentSessionTab
 } from '../../src/renderer/src/runtime/structured-agent-session-tab-retirement'
 import { isLocalSessionTabCloseOwned } from '../../src/renderer/src/runtime/local-session-tab-close-owner'
@@ -24,6 +25,14 @@ import {
   isWebSessionCloseIntentPending,
   resetWebSessionCloseIntentForTests
 } from '../../src/renderer/src/runtime/web-session-close-intent'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../src/shared/layout-owner-switch'
+import { toRuntimeExecutionHostId } from '../../src/shared/execution-host'
+import { makeWorktree } from '../../src/renderer/src/store/slices/worktrees-slice-test-fixtures'
+import { layoutApplyTestTransport } from '../../src/renderer/src/runtime/layout-apply-test-transport.test-fixture'
+import {
+  drawTabsFromMain,
+  type TabsDrawnFromMain
+} from '../../src/renderer/src/store/slices/tabs-drawn-from-main.test-fixture'
 
 type CloseRequest = { requestId: string; tabId: string; worktreeId: string; expiresAt?: number }
 
@@ -43,11 +52,15 @@ const bridge = vi.hoisted((): ProcessBoundary => ({
   pairedClose: null
 }))
 
+// Switch-on, the window's layout commands reach main's model, which the runtime's own commands share.
 vi.mock('../../src/renderer/src/runtime/runtime-rpc-client', async (importOriginal) => {
   const actual = await importOriginal<typeof RuntimeRpcClient>()
-  return {
-    ...actual,
-    callRuntimeRpc: async (
+  const { runtimeRpcClientWithLayoutApply } =
+    await import('../../src/renderer/src/runtime/layout-apply-test-transport.test-fixture')
+  // An untyped mock: the runtime client's generic result type is the caller's to name.
+  const callRuntimeRpc = vi.fn()
+  callRuntimeRpc.mockImplementation(
+    async (
       target: RuntimeClientTarget,
       method: string,
       params: { worktree: string; tabId: string; reason?: 'user' }
@@ -72,8 +85,32 @@ vi.mock('../../src/renderer/src/runtime/runtime-rpc-client', async (importOrigin
         reason: params.reason
       })
     }
-  }
+  )
+  return runtimeRpcClientWithLayoutApply({ ...actual, callRuntimeRpc })
 })
+vi.mock('../../src/renderer/src/runtime/runtime-layout-client', async (importOriginal) =>
+  (
+    await import('../../src/renderer/src/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeLayoutClientWithTestFrames(await importOriginal<typeof RuntimeLayoutClient>())
+)
+
+let main: TabsDrawnFromMain | undefined
+
+/** Main takes the window's current layout and answers its own layout commands from that model too. */
+async function mainHoldsWindowLayout(runtime: OrcaRuntimeService): Promise<void> {
+  main?.close()
+  main = await drawTabsFromMain(useAppStore)
+  if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+    Object.assign(runtime, {
+      applyLayoutCommand: (command: unknown) => layoutApplyTestTransport.call({ command })
+    })
+  }
+}
+
+function closeMain(): void {
+  main?.close()
+  main = undefined
+}
 
 vi.mock('../../src/renderer/src/runtime/structured-agent-session-close', () => ({
   closeStructuredAgentSession: async (_target: unknown, sessionId: string) => {
@@ -84,12 +121,8 @@ vi.mock('../../src/renderer/src/runtime/structured-agent-session-close', () => (
   }
 }))
 
-/**
- * After /clear the current chat keeps the tab id derived from its first session, so reopening that
- * first session from history lands in a suffixed tab. Closing or focusing the reopened tab from
- * main must reach that tab, not the current chat. Runs the real main close/focus path against the
- * real window store, mirror and IPC bridges; only the process boundary is stubbed.
- */
+// After /clear, history reopens the first conversation under a suffixed tab id; real main close/focus must target that tab.
+// Connect real window store/mirror/IPC with only the process boundary stubbed.
 describe('reopened structured session close', () => {
   const WORKTREE = 'repo-1::/tmp/wt-reopen'
   const CURRENT_SESSION = 'clear-x'
@@ -168,17 +201,15 @@ describe('reopened structured session close', () => {
           hostSessionCloses.push(sessionId)
         },
         setSessionTabVisibility: async () => undefined,
+        // Index the reopened chat separately because the current chat retains its first session’s tab id.
+        getSessionTabId: (sessionId: string) =>
+          sessionId === CURRENT_SESSION ? CURRENT_TAB : REOPENED_TAB,
         listSessionTabs: () => [
           { sessionId: CURRENT_SESSION, workspaceId: WORKTREE, agent: 'claude' },
           { sessionId: REOPENED_SESSION, workspaceId: WORKTREE, agent: 'claude' }
         ]
       } as never
     )
-    await runtime.restoreStructuredAgentSessionTabs()
-    const hostSnapshot: RuntimeMobileSessionTabsResult = await runtime.listMobileSessionTabs(
-      `id:${WORKTREE}`
-    )
-
     // The current chat after /clear: first session's tab id, new session's entity.
     useAppStore.setState({ activeWorktreeId: WORKTREE })
     useAppStore.getState().createUnifiedTab(WORKTREE, 'agent-session', {
@@ -186,7 +217,13 @@ describe('reopened structured session close', () => {
       entityId: CURRENT_SESSION,
       label: 'Claude Chat'
     })
+    await mainHoldsWindowLayout(runtime)
+    await runtime.restoreStructuredAgentSessionTabs()
+    const hostSnapshot: RuntimeMobileSessionTabsResult = await runtime.listMobileSessionTabs(
+      `id:${WORKTREE}`
+    )
     applyStructuredSessionTabSnapshots([hostSnapshot])
+    await main?.settle()
 
     const agentTabs = () =>
       (useAppStore.getState().unifiedTabsByWorktree[WORKTREE] ?? [])
@@ -203,6 +240,7 @@ describe('reopened structured session close', () => {
   })
 
   afterEach(() => {
+    closeMain()
     setStructuredAgentSessionHost(null)
     bridge.runtime = null
     bridge.closeHeld = null
@@ -238,7 +276,7 @@ describe('reopened structured session close', () => {
       expect(agentTabs()).toEqual([{ id: CURRENT_TAB, entityId: CURRENT_SESSION }])
       expect(bridge.rendererSessionCloses).toEqual([REOPENED_SESSION])
       expect(hostSessionCloses).toEqual([REOPENED_SESSION])
-      // The window already removed the tab, so main's relay is acknowledged, not reported missing.
+      // The window started this close, so main's relay is acknowledged, not reported missing.
       expect(closeResponses).toEqual([undefined])
     })
 
@@ -271,12 +309,8 @@ describe('reopened structured session close', () => {
   })
 })
 
-/**
- * Closing a chat tab removes it from the window at once, while the host is still handling the close.
- * A tab-list frame the host publishes in that gap (a working chat's status update, for one) still
- * lists the chat, and must not put it back at the end of the strip. Runs the real main close path
- * against the real window store and session-tabs mirror; only the process boundary is stubbed.
- */
+// Hold host close after the window removes its chat, then publish a still-listed frame that must not resurrect it.
+// Exercise real main/window/mirror paths with only the process boundary stubbed.
 describe('in-flight structured session close', () => {
   const WORKTREE = 'repo-1::/tmp/wt-stale-frame'
   const SESSIONS = ['chat-a', 'chat-b', 'chat-c'] as const
@@ -285,6 +319,8 @@ describe('in-flight structured session close', () => {
   async function setup(options: { hostFailsClose?: boolean } = {}) {
     let closeRequest: ((request: CloseRequest) => void) | undefined
     const pendingResponses = new Map<string, (error?: string) => void>()
+    // A failing close answers when the test says, so its frame can be read first.
+    const failingCloses: (() => void)[] = []
     const runtime = new OrcaRuntimeService()
     bridge.runtime = runtime
     vi.stubGlobal('api', {
@@ -308,7 +344,7 @@ describe('in-flight structured session close', () => {
         closeSessionTab: (tabId: string, worktreeId: string) =>
           new Promise<void>((resolve, reject) => {
             if (options.hostFailsClose) {
-              reject(new Error('window relay failed'))
+              failingCloses.push(() => reject(new Error('window relay failed')))
               return
             }
             const requestId = `close-${++nextRequest}`
@@ -346,16 +382,21 @@ describe('in-flight structured session close', () => {
           [...hostTabs].map((sessionId) => ({ sessionId, workspaceId: WORKTREE, agent: 'claude' }))
       } as never
     )
-    await runtime.restoreStructuredAgentSessionTabs()
-
     useAppStore.setState({ activeWorktreeId: WORKTREE })
+    await mainHoldsWindowLayout(runtime)
+    await runtime.restoreStructuredAgentSessionTabs()
     applyStructuredSessionTabSnapshots([await runtime.listMobileSessionTabs(`id:${WORKTREE}`)])
+    await main?.settle()
     // The window's live subscription to the host's tab list.
     runtime.onMobileSessionTabsChanged((snapshot) => applyStructuredSessionTabSnapshots([snapshot]))
 
     const strip = (): string[] =>
       (useAppStore.getState().groupsByWorktree[WORKTREE] ?? []).flatMap((group) => group.tabOrder)
-    return { runtime, strip, hostSessionCloses }
+    const failHostCloses = async (): Promise<void> => {
+      await vi.waitFor(() => expect(failingCloses.length).toBeGreaterThan(0))
+      failingCloses.splice(0).forEach((fail) => fail())
+    }
+    return { runtime, strip, hostSessionCloses, failHostCloses }
   }
 
   const initialStoreState = useAppStore.getState()
@@ -365,6 +406,7 @@ describe('in-flight structured session close', () => {
   })
 
   afterEach(() => {
+    closeMain()
     setStructuredAgentSessionHost(null)
     bridge.runtime = null
     bridge.rendererSessionCloses = []
@@ -400,6 +442,8 @@ describe('in-flight structured session close', () => {
       try {
         useAppStore.getState().closeUnifiedTab(tabIdOf('chat-b'))
         retirement = captureRetirement()
+        // Switch-on, the strip drops the chat once main's frame for the close lands.
+        await main?.settle()
         expect(strip()).toEqual([tabIdOf('chat-a'), tabIdOf('chat-c')])
 
         // The host has not handled the close yet, so its next frame still lists chat-b.
@@ -427,10 +471,12 @@ describe('in-flight structured session close', () => {
     })
 
     it('shows the chat again when the host could not close it', async () => {
-      const { strip } = await setup({ hostFailsClose: true })
+      const { strip, failHostCloses } = await setup({ hostFailsClose: true })
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
       useAppStore.getState().closeUnifiedTab(tabIdOf('chat-b'))
+      await main?.settle()
       expect(strip()).toEqual([tabIdOf('chat-a'), tabIdOf('chat-c')])
+      await failHostCloses()
 
       // The host still has the chat, so once the close fails the window re-reads and shows it.
       await vi.waitFor(() => expect(strip()).toContain(tabIdOf('chat-b')))
@@ -467,13 +513,28 @@ describe('in-flight structured session close', () => {
         useAppStore.setState((state) =>
           applyWebSessionTabsSnapshot(
             state,
-            acceptPairedHostStructuredSessions(snapshot, SERVER),
+            suppressCancelledStructuredSessionTabs(snapshot, {
+              kind: 'environment',
+              environmentId: SERVER
+            }),
             SERVER
           )
         )
       const strip = (): string[] =>
         (useAppStore.getState().groupsByWorktree[WORKTREE] ?? []).flatMap((group) => group.tabOrder)
-      useAppStore.setState({ activeWorktreeId: WORKTREE })
+      // The server owns the workspace, so its layout is mirrored, never drawn by main's frames.
+      useAppStore.setState({
+        activeWorktreeId: WORKTREE,
+        worktreesByRepo: {
+          'repo-1': [
+            makeWorktree({
+              id: WORKTREE,
+              repoId: 'repo-1',
+              hostId: toRuntimeExecutionHostId(SERVER)
+            })
+          ]
+        }
+      })
       applyServerFrame(frame(1))
       const chatB = useAppStore
         .getState()
@@ -501,6 +562,7 @@ describe('in-flight structured session close', () => {
 
       try {
         useAppStore.getState().closeUnifiedTab(chatB!.id)
+        await main?.settle()
         const after = before.filter((id) => id !== chatB!.id)
         expect(strip()).toEqual(after)
 

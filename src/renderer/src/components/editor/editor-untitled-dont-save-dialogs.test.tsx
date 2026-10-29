@@ -8,7 +8,7 @@ import {
   createUntitledNoteStore,
   type FakeEditorDisk
 } from './editor-autosave-controller-test-fixture'
-import { getDiskBaselineSignature } from './diff-content-signature'
+import { getDiskBaselineSignature } from '../../../../shared/disk-baseline-signature'
 import { useTerminalSaveDialog } from '../terminal/useTerminalSaveDialog'
 import {
   useTerminalEditorCloseDialogActions,

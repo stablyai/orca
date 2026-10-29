@@ -1,7 +1,4 @@
-/**
- * Tree keys. Picker checkboxes and result disclosures share arrow navigation; native Space/Enter
- * still acts on the focused control. The picker keeps its disclosures outside the Tab order.
- */
+/** Share arrow navigation between checkboxes and result disclosures; keep native Space/Enter and picker disclosure Tab behavior. */
 export function moveInTree(event: React.KeyboardEvent<HTMLElement>): void {
   const target = event.target
   if (!(target instanceof HTMLElement)) {

@@ -40,9 +40,18 @@ export function DiffCommentPopover({
   left,
   lineHeight = 0,
   title,
-  placeholder = 'Add note for the AI',
-  submitLabel = 'Add note',
-  submittingLabel = 'Saving…',
+  placeholder = translate(
+    'auto.components.diff.comments.DiffCommentPopover.f6c449191e',
+    'Add note for the AI'
+  ),
+  submitLabel = translate(
+    'auto.components.diff.comments.DiffCommentPopover.5fa4bfebaa',
+    'Add note'
+  ),
+  submittingLabel = translate(
+    'auto.components.diff.comments.DiffCommentCard.bb0a55f856',
+    'Saving…'
+  ),
   onCancel,
   onSubmit
 }: Props): React.JSX.Element {
@@ -57,7 +66,6 @@ export function DiffCommentPopover({
   // Why: keep onCancel in a ref so the mousedown listener reads it fresh without re-attaching when parents pass a new callback each render.
   const onCancelRef = useRef(onCancel)
   onCancelRef.current = onCancel
-  // Why: stable per-instance id so coexisting popovers don't collide on aria-labelledby references.
   const labelId = useId()
   // Why: seed at `top` for a correct first paint when there's room below; the layout effect flips it above the line if clipped.
   const [resolvedTop, setResolvedTop] = useState(top)
@@ -104,7 +112,6 @@ export function DiffCommentPopover({
   }, [measureResolvedTop])
 
   const focusTextareaRef = useCallback((textarea: HTMLTextAreaElement | null): void => {
-    // Why: focus on mount via the ref callback so no post-render Effect is needed.
     textarea?.focus()
   }, [])
 
@@ -130,7 +137,6 @@ export function DiffCommentPopover({
       if (hasDraftText(bodyRef.current)) {
         return
       }
-      // Why: read the latest onCancel from the ref so the listener isn't re-registered on every parent render (see onCancelRef above).
       onCancelRef.current()
     }
     document.addEventListener('mousedown', onDocumentMouseDown)

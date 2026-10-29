@@ -13,21 +13,33 @@ const mockToast = {
 const mockWriteClipboardText = vi.fn(async () => undefined)
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
 
+const projects: {
+  id: string
+  sourceRepoIds: string[]
+  localWindowsRuntimePreference?: { kind: 'windows-host' } | { kind: 'wsl'; distro: string }
+}[] = []
+
+const repos: { id: string; kind?: 'git' | 'folder'; connectionId?: string | null }[] = []
+
 const store = {
   activeRepoId: 'repo-1',
   activeWorktreeId: 'wt-1',
-  projects: [] as {
-    id: string
-    sourceRepoIds: string[]
-    localWindowsRuntimePreference?: { kind: 'windows-host' } | { kind: 'wsl'; distro: string }
-  }[],
-  repos: [] as { id: string; kind?: 'git' | 'folder'; connectionId?: string | null }[],
+  projects,
+  repos,
   settings: {} as {
     localWindowsRuntimeDefault?: { kind: 'windows-host' } | { kind: 'wsl'; distro: string }
   },
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: an empty test catalog; rows are typed below.
   worktreesByRepo: {} as Record<
     string,
-    { id: string; repoId: string; path?: string; projectId?: string }[]
+    {
+      id: string
+      repoId: string
+      path?: string
+      projectId?: string
+      hostId?: 'local' | 'ssh:box'
+      runtimeOwnerEnvironmentId?: string
+    }[]
   >,
   agentStatusByPaneKey: {} as Record<string, { agentType?: string }>,
   tabsByWorktree: {} as Record<string, { id: string; launchAgent?: string | null }[]>,
@@ -79,7 +91,9 @@ describe('forkAgentSessionFromPane', () => {
     store.repos = [{ id: 'repo-1', kind: 'git' }]
     store.settings = { localWindowsRuntimeDefault: { kind: 'windows-host' } }
     store.worktreesByRepo = {
-      'repo-1': [{ id: 'wt-1', repoId: 'repo-1', path: 'C:\\repo', projectId: 'repo-1' }]
+      'repo-1': [
+        { id: 'wt-1', repoId: 'repo-1', path: 'C:\\repo', projectId: 'repo-1', hostId: 'local' }
+      ]
     }
     store.agentStatusByPaneKey = {}
     store.tabsByWorktree = { 'wt-1': [{ id: 'tab-1' }] }
@@ -139,7 +153,9 @@ describe('forkAgentSessionFromPane', () => {
       undefined,
       undefined,
       undefined,
-      'codex'
+      'codex',
+      ...Array(14).fill(undefined),
+      { executionHostId: 'local' }
     )
 
     expect(mockLaunchAgentInNewTab).toHaveBeenCalledWith(
@@ -160,8 +176,7 @@ describe('forkAgentSessionFromPane', () => {
     )
   })
 
-  // A paired server's surface is published by the launcher; a seeding reveal would add a blank
-  // host terminal beside the chat or agent terminal.
+  // The launcher publishes the paired-host surface; seeding reveal would add an unwanted sibling shell.
   it('reveals a paired fork without seeding a surface of its own', async () => {
     store.agentStatusByPaneKey = {
       [`tab-1:${LEAF_ID}`]: { agentType: 'codex' }
@@ -383,7 +398,9 @@ describe('forkAgentSessionFromPane', () => {
       undefined,
       undefined,
       undefined,
-      undefined
+      undefined,
+      ...Array(14).fill(undefined),
+      { executionHostId: 'local' }
     )
     expect(mockLaunchAgentInNewTab).not.toHaveBeenCalled()
     expect(mockActivateAndRevealWorktree).toHaveBeenCalledWith('wt-fork', {
@@ -396,6 +413,24 @@ describe('forkAgentSessionFromPane', () => {
       'Fork context copied. Launch an agent and paste it to start the fork.'
     )
     expect(pane.terminal.focus).toHaveBeenCalled()
+  })
+
+  it("creates the fork through the source's server, not its SSH place", async () => {
+    store.worktreesByRepo = {
+      'repo-1': [
+        { id: 'wt-1', repoId: 'repo-1', hostId: 'ssh:box', runtimeOwnerEnvironmentId: 'env-1' }
+      ]
+    }
+    const { forkAgentSessionFromPane } = await import('./terminal-agent-session-fork')
+
+    await forkAgentSessionFromPane({
+      pane: makePane('Assistant: plan'),
+      tabId: 'tab-1',
+      worktreeId: 'wt-1',
+      groupId: null
+    })
+
+    expect(mockCreateWorktree.mock.calls[0]?.at(-1)).toEqual({ executionHostId: 'runtime:env-1' })
   })
 
   it('keeps the fork dialog path open when the source workspace has no git branch', async () => {

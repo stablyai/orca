@@ -1,22 +1,15 @@
-// Fetches the host's conversation outline for the message rail, only while the
-// pane is visible and older history is actually unloaded. A session whose whole
-// journal is loaded never asks.
-//
-// One fetch per stale edge, never per streamed batch: the request key is the
-// epoch while the outline is stale, so a live stream that keeps trimming the
-// window does not restart it. A failed read is retried a few times with backoff;
-// a host without the outline is never asked. Nothing here can block the
-// transcript — without an outline the rail maps the loaded messages.
+// Fetch outlines only for visible panes with unloaded history and host support; key stale requests by epoch to avoid streaming churn, retry with backoff and fall back to loaded rows.
 
 import { useEffect, useState } from 'react'
-import type { AgentSessionConversationOutline } from '../../../../shared/agent-session-conversation-outline'
+import type { AgentSessionConversationOutline } from '../../../../shared/agent-session/agent-session-conversation-outline'
+import type { AgentJournalCursor } from '../../../../shared/agent-session-journal-types'
+import { agentSessionContextFloorSequence } from '../../../../shared/agent-session-context-clear'
 import type { StructuredAgentSessionState } from '../../../../shared/structured-agent-session-reducer'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { readStructuredAgentSessionConversationOutline } from '@/runtime/structured-agent-session-client'
 import type { NativeChatRailOutlineEntry } from './native-chat-message-rail-items'
 import { selectStructuredRailOutline } from './structured-agent-session-rail-outline'
 
-/** Retries after a failed read, backing off from the base delay. */
 export const RAIL_OUTLINE_READ_RETRIES = 3
 export const RAIL_OUTLINE_READ_RETRY_BASE_MS = 2_000
 
@@ -24,11 +17,14 @@ export function useStructuredAgentSessionRailOutline({
   sessionId,
   target,
   state,
+  contextFloor,
   enabled
 }: {
   sessionId: string
   target: RuntimeClientTarget
   state: Pick<StructuredAgentSessionState, 'epoch' | 'items' | 'hasOlder'>
+  /** The host's latest `/clear`; the transcript shows nothing before it, so neither does the rail. */
+  contextFloor?: AgentJournalCursor
   enabled: boolean
 }): readonly NativeChatRailOutlineEntry[] | null {
   const [outline, setOutline] = useState<AgentSessionConversationOutline | null>(null)
@@ -36,7 +32,8 @@ export function useStructuredAgentSessionRailOutline({
   const view = selectStructuredRailOutline(current, {
     epoch: state.epoch,
     oldestLoadedSequence: state.items[0]?.sequence ?? null,
-    hasOlder: state.hasOlder
+    hasOlder: state.hasOlder,
+    contextFloor: agentSessionContextFloorSequence(contextFloor, state.epoch)
   })
   const requestKey = enabled && view.kind === 'stale' ? `${sessionId}:${state.epoch}` : null
   const [retry, setRetry] = useState<{ key: string | null; attempt: number }>({

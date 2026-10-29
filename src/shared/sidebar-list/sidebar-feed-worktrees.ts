@@ -23,11 +23,11 @@ export type SidebarFeedRowFacts = Partial<
 /** One feed workspace as the shared builder reads it, keyed by its identity. */
 export type SidebarFeedWorkspace = {
   identity: string
+  /** Carries the row's own lineage edge: same-id rows on two hosts each keep theirs. */
   worktree: Worktree
   facts: SidebarFeedRowFacts
   /** Set on a folder row: the builder lists folder workspaces apart from worktrees. */
   folderWorkspace: FolderWorkspace | null
-  lineage: WorkspaceRow['lineage']
 }
 
 /** The fields both a host's own rows and a paired server's rows carry for the list. */
@@ -75,7 +75,8 @@ function readFeedRow(
   const hostId = getExecutionHostIdFromWorktreeHostIdentity(identity)
   const owner = parseExecutionHostId(ownerHostId)
   const { defaultBranch, automationCreated, cliCreated, detachedHead, creatorProvenance } = row
-  const worktree: Worktree = {
+  // The inline edge the lineage projection reads off a resolved row (worktree-lineage-projection.ts).
+  const worktree: Worktree & { lineage: WorktreeLineage | null } = {
     id,
     ...(hostId ? { hostId } : {}),
     ...(owner?.kind === 'runtime' ? { runtimeOwnerEnvironmentId: owner.environmentId } : {}),
@@ -101,14 +102,23 @@ function readFeedRow(
     ...(creatorProvenance ? { creatorProvenance } : {}),
     lastActivityAt: row.recentAt ?? 0,
     ...(row.smartTier !== undefined ? { smartTier: row.smartTier, smartAt: row.smartAt } : {}),
-    ...extra
+    ...extra,
+    // The builder validates only the edge; provenance stays the host's.
+    lineage: row.lineage
+      ? {
+          worktreeId: id,
+          ...row.lineage,
+          origin: 'manual',
+          capture: { source: 'manual-action', confidence: 'explicit' },
+          createdAt: 0
+        }
+      : null
   }
   return {
     identity,
     worktree,
     facts: { defaultBranch, automationCreated, cliCreated, detachedHead, creatorProvenance },
-    folderWorkspace: row.kind === 'folder' ? folderWorkspaceOf(worktree, ownerHostId) : null,
-    lineage: row.lineage ?? null
+    folderWorkspace: row.kind === 'folder' ? folderWorkspaceOf(worktree, ownerHostId) : null
   }
 }
 
@@ -172,24 +182,4 @@ export function readFeedPairedServerRow(
 ): SidebarFeedWorkspace | null {
   const owner = parseExecutionHostId(getExecutionHostIdFromWorktreeHostIdentity(row.key))
   return owner?.kind === 'runtime' ? readFeedRow(row.key, row.worktreeId, owner.id, row) : null
-}
-
-/** The rows' stored lineage edges as the builder's lineage map, keyed by bare id as the window's. */
-export function readFeedLineage(
-  workspaces: readonly SidebarFeedWorkspace[]
-): Record<string, WorktreeLineage> {
-  const lineageById: Record<string, WorktreeLineage> = {}
-  for (const { worktree, lineage } of workspaces) {
-    if (lineage && !(worktree.id in lineageById)) {
-      // The builder validates only the edge; provenance stays the host's.
-      lineageById[worktree.id] = {
-        worktreeId: worktree.id,
-        ...lineage,
-        origin: 'manual',
-        capture: { source: 'manual-action', confidence: 'explicit' },
-        createdAt: 0
-      }
-    }
-  }
-  return lineageById
 }

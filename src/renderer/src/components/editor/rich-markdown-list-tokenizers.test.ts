@@ -1,6 +1,5 @@
 import type { MarkdownLexerConfiguration, MarkdownTokenizer } from '@tiptap/core'
-import { OrderedList } from '@tiptap/extension-list'
-import TaskList from '@tiptap/extension-task-list'
+import { OrderedList, TaskList } from '@tiptap/extension-list'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { RichMarkdownOrderedList } from './rich-markdown-ordered-list'
 import { RichMarkdownTaskList } from './rich-markdown-task-list'
@@ -52,8 +51,8 @@ describe('rich markdown list tokenizers', () => {
     )
   })
 
-  it.each(['a. first\nb. second\n', 'I. first\nII. second\n', '  3. indented\n'])(
-    'preserves upstream ordered marker support for %j',
+  it.each(['1) first\n2) second\n', '1.\u00a0no-break space\n', '  3. indented\n'])(
+    'matches the base tokenizer for %j',
     (source) => {
       expect(getTokenizer(RichMarkdownOrderedList).tokenize(source, [], lexer)).toEqual(
         getTokenizer(OrderedList).tokenize(source, [], lexer)

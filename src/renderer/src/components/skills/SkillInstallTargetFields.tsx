@@ -13,6 +13,7 @@ import { SkillInstallAgentPicker } from './SkillInstallAgentPicker'
 import { SkillInstallWorkspaceCombobox } from './SkillInstallWorkspaceCombobox'
 import type { SkillInstallWorkspaceChoice } from './skill-install-workspace-choices'
 import { translate } from '@/i18n/i18n'
+import { HostCombobox, type HostComboboxOption } from '../host-picker/HostCombobox'
 
 export function SkillInstallTargetFields(props: {
   environmentId: string
@@ -68,64 +69,17 @@ export function SkillInstallTargetFields(props: {
           <Label htmlFor={`${fieldId}-machine`}>
             {translate('auto.components.skills.SkillInstallTargetFields.b8a0b706ad', 'Machine')}
           </Label>
-          <Select
+          <HostCombobox
+            id={`${fieldId}-machine`}
             value={props.environmentId}
-            onValueChange={(value) => {
+            onChange={(value) => {
               props.onEnvironmentChange(value)
               props.onWorkspaceChange('')
               props.onExecutionTargetChange(null)
             }}
-          >
-            <SelectTrigger id={`${fieldId}-machine`} className="w-full min-w-0">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="local">
-                {translate(
-                  'auto.components.skills.SkillInstallTargetFields.8562dd1e6e',
-                  'This computer'
-                )}
-              </SelectItem>
-              {props.runtimeEnvironments.map((environment) => {
-                const status = props.runtimeStatus.get(environment.id)?.status
-                const unsupported =
-                  status !== null &&
-                  status !== undefined &&
-                  status.capabilities?.includes(
-                    props.requiredCapability ?? SKILL_INSTALL_CAPABILITY
-                  ) !== true
-                return (
-                  <SelectItem key={environment.id} value={environment.id} disabled={unsupported}>
-                    {environment.name}{' '}
-                    {unsupported
-                      ? translate(
-                          'auto.components.skills.SkillInstallTargetFields.0785d0a503',
-                          '— update required'
-                        )
-                      : ''}
-                  </SelectItem>
-                )
-              })}
-              {props.sshConnections.map((connection) => (
-                <SelectItem
-                  key={`ssh:${connection.id}`}
-                  value={`ssh:${connection.id}`}
-                  disabled={!connection.connected}
-                >
-                  {connection.label}{' '}
-                  {!connection.connected
-                    ? translate(
-                        'auto.components.skills.SkillInstallTargetFields.71eefd7660',
-                        '— disconnected'
-                      )
-                    : translate(
-                        'auto.components.skills.SkillInstallTargetFields.85d85880df',
-                        '· SSH'
-                      )}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            options={skillInstallMachineOptions(props)}
+            className="min-w-0"
+          />
         </div>
         <div className="space-y-2">
           <Label htmlFor={`${fieldId}-destination`}>
@@ -226,4 +180,43 @@ export function SkillInstallTargetFields(props: {
       />
     </>
   )
+}
+
+function skillInstallMachineOptions(props: {
+  runtimeEnvironments: readonly { id: string; name: string }[]
+  runtimeStatus: Map<string, { status: { capabilities?: string[] } | null }>
+  sshConnections: readonly { id: string; label: string; connected: boolean }[]
+  requiredCapability?: string
+}): HostComboboxOption[] {
+  const local: HostComboboxOption = {
+    id: 'local',
+    label: translate('auto.components.skills.SkillInstallTargetFields.8562dd1e6e', 'This computer')
+  }
+  const environments = props.runtimeEnvironments.map((environment): HostComboboxOption => {
+    const status = props.runtimeStatus.get(environment.id)?.status
+    const unsupported =
+      status !== null &&
+      status !== undefined &&
+      status.capabilities?.includes(props.requiredCapability ?? SKILL_INSTALL_CAPABILITY) !== true
+    return {
+      id: environment.id,
+      label: environment.name,
+      disabled: unsupported,
+      detail: unsupported
+        ? translate(
+            'auto.components.skills.SkillInstallTargetFields.0785d0a503',
+            '— update required'
+          )
+        : undefined
+    }
+  })
+  const ssh = props.sshConnections.map((connection): HostComboboxOption => ({
+    id: `ssh:${connection.id}`,
+    label: connection.label,
+    disabled: !connection.connected,
+    detail: connection.connected
+      ? translate('auto.components.skills.SkillInstallTargetFields.85d85880df', '· SSH')
+      : translate('auto.components.skills.SkillInstallTargetFields.71eefd7660', '— disconnected')
+  }))
+  return [local, ...environments, ...ssh]
 }

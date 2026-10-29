@@ -2,12 +2,13 @@ import {
   resolve,
   isPathInsideOrEqual,
   getLinearStatus,
-  LinearAgentAccessError,
-  getLinearCurrentIssueFromWorktree,
-  resolveLegacyLinearLinkWorkspace,
-  linearError,
   listLinearTeamsOrThrow
 } from './runtime-linear-command-dependencies'
+import { LinearAgentAccessError, linearError } from '../linear/issue-context/errors'
+import {
+  getLinearCurrentIssueFromWorktree,
+  resolveLegacyLinearLinkWorkspace
+} from '../linear/issue-context/current'
 import type {
   LinearCurrentIssueContextHints,
   LinearErrorCode,
@@ -16,6 +17,7 @@ import type {
 import type { ResolvedWorktree } from './runtime-worktree-path-identity'
 import { RuntimeLinearDedupeCommands } from './runtime-linear-dedupe-commands'
 import { isWslMoveWorktreeBlocked } from '../persistence/moving-wsl-projects/wsl-move-background-backoff'
+import { parseWorkspaceKey } from '../../shared/workspace-scope'
 
 export class RuntimeLinearTeamWriteCommands extends RuntimeLinearDedupeCommands {
   public parseLinearAttachmentUrl(value: string): URL {
@@ -90,12 +92,12 @@ export class RuntimeLinearTeamWriteCommands extends RuntimeLinearDedupeCommands 
     } catch (error) {
       throw this.mapLinearReadFailure(error)
     }
-    const normalized = teamInput.toLocaleLowerCase()
-    const idMatches = teams.filter((team) => team.id.toLocaleLowerCase() === normalized)
+    const normalized = teamInput.toLowerCase()
+    const idMatches = teams.filter((team) => team.id.toLowerCase() === normalized)
     const matches =
       idMatches.length > 0
         ? idMatches
-        : teams.filter((team) => team.key.toLocaleLowerCase() === normalized)
+        : teams.filter((team) => team.key.toLowerCase() === normalized)
     if (matches.length === 1 && matches[0].workspaceId) {
       return {
         id: matches[0].id,
@@ -156,8 +158,8 @@ export class RuntimeLinearTeamWriteCommands extends RuntimeLinearDedupeCommands 
     }
     const matches = teams.filter(
       (team) =>
-        team.id.toLocaleLowerCase() === teamInput.toLocaleLowerCase() ||
-        team.key.toLocaleLowerCase() === teamInput.toLocaleLowerCase()
+        team.id.toLowerCase() === teamInput.toLowerCase() ||
+        team.key.toLowerCase() === teamInput.toLowerCase()
     )
     if (matches.length === 1 && matches[0].workspaceId) {
       return {
@@ -189,8 +191,8 @@ export class RuntimeLinearTeamWriteCommands extends RuntimeLinearDedupeCommands 
       }
       const globalMatch = globalTeams.find(
         (team) =>
-          team.id.toLocaleLowerCase() === teamInput.toLocaleLowerCase() ||
-          team.key.toLocaleLowerCase() === teamInput.toLocaleLowerCase()
+          team.id.toLowerCase() === teamInput.toLowerCase() ||
+          team.key.toLowerCase() === teamInput.toLowerCase()
       )
       if (globalMatch) {
         throw linearError(
@@ -231,7 +233,7 @@ export class RuntimeLinearTeamWriteCommands extends RuntimeLinearDedupeCommands 
             'The provided Linear worktree context does not match the caller terminal.'
           )
         }
-        worktree = await this.resolveWorktreeSelector(`id:${terminal.worktreeId}`)
+        worktree = await this.resolveWorkspaceSelector(`id:${terminal.worktreeId}`)
       } catch (error) {
         if (error instanceof LinearAgentAccessError) {
           throw error
@@ -269,9 +271,12 @@ export class RuntimeLinearTeamWriteCommands extends RuntimeLinearDedupeCommands 
         worktree.linkedLinearIssueOrganizationUrlKey
       )
       if (backfill?.workspaceId) {
-        // The answer still serves this lookup; persisting it waits out a WSL move.
-        if (!isWslMoveWorktreeBlocked(worktree.id, worktree.hostId, worktree.path)) {
-          this.setWorktreeMeta(worktree.id, {
+        // The answer still serves this lookup; persisting it waits out a WSL move. Folder workspaces keep links on their own row, not in worktree metadata.
+        if (
+          parseWorkspaceKey(worktree.id)?.type !== 'folder' &&
+          !isWslMoveWorktreeBlocked(worktree.id, worktree.hostId, worktree.path)
+        ) {
+          this.setWorktreeMeta(worktree, {
             linkedLinearIssueWorkspaceId: backfill.workspaceId,
             linkedLinearIssueOrganizationUrlKey: backfill.organizationUrlKey ?? null
           })

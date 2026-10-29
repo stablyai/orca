@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
-import type { markStructuredAgentSessionLaunchCancelled } from '@/lib/structured-agent-session-launch-registry'
-import type { StructuredLaunchSlotOwner } from '@/lib/structured-agent-session-launch-slot'
+import type { markStructuredAgentSessionLaunchCancelled } from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
+import type { StructuredLaunchSlotOwner } from '@/lib/agent-session/launch/structured-agent-session-launch-slot'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 
 const mocks = vi.hoisted(() => ({
@@ -25,7 +25,7 @@ const mocks = vi.hoisted(() => ({
     >()
 }))
 
-vi.mock('@/lib/structured-agent-session-launch-registry', () => ({
+vi.mock('@/lib/agent-session/launch/structured-agent-session-launch-registry', () => ({
   hasStructuredAgentSessionLaunchCancellationTombstone: mocks.hasTombstone,
   markStructuredAgentSessionLaunchCancelled: mocks.markCancelled
 }))
@@ -72,7 +72,6 @@ import {
   resetWebSessionCloseIntentForTests
 } from './web-session-close-intent'
 import { LOCAL_STRUCTURED_SESSION_OWNER } from './local-structured-session-owner'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import { replaceRuntimeEnvironmentRevisions } from './runtime-environment-revision'
 
 const layoutOwner: StructuredLaunchSlotOwner = {
@@ -212,30 +211,6 @@ describe('structured agent session tab retirement', () => {
       new Set()
     )
     expect(closing(LOCAL_STRUCTURED_SESSION_OWNER)).toBe(false)
-  })
-
-  it('records no intent for a floating-panel chat, whose frames are never applied', async () => {
-    mocks.callRuntime.mockRejectedValue(new Error('window relay failed'))
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    beginStructuredAgentSessionTabClose({
-      layoutOwner,
-      target,
-      worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
-      sessionId: 'session-1',
-      provisional: false
-    })
-    expect(
-      isWebSessionCloseIntentPending(
-        { environmentId: LOCAL_STRUCTURED_SESSION_OWNER },
-        FLOATING_TERMINAL_WORKTREE_ID,
-        'agent-session:session-1',
-        Date.now()
-      )
-    ).toBe(false)
-    await vi.waitFor(() => expect(warn).toHaveBeenCalled())
-    await new Promise((resolve) => setTimeout(resolve, 0))
-    expect(mocks.reacceptLocal).not.toHaveBeenCalled()
-    warn.mockRestore()
   })
 
   it('shows a chat the local host kept by re-reading its worktree', async () => {

@@ -30,17 +30,16 @@ it.each(ACP_LAUNCH_SPECS)(
             }
           }))
         : spec.account
+    const readJournal = vi.fn(() => null)
     const resolve = createAcpStructuredLaunchResolver(
       { ...spec, account },
       {
         store: { getRecord: () => record, pinLaunchDirectory: vi.fn() },
-        readJournal: () => {
-          throw new Error('pre-clear history must not be sampled')
-        },
+        readJournal,
         resolveWorkspacePath: async () => '/repo/worktree',
         resolveEnvironment: async () => ({ PATH: '/usr/bin', HOME: '/home/test' }),
         resolveCommand: () => `/fixture/${spec.command}`,
-        probeVersion: async () => true,
+        probeVersion: async () => ({ version: null }),
         inheritedEnv: {}
       }
     )
@@ -54,7 +53,7 @@ it.each(ACP_LAUNCH_SPECS)(
       }
     })
     expect(launch.resume).toBeNull()
-    expect(launch.spec.dialect).toBe(spec.dialect)
+    expect(readJournal).not.toHaveBeenCalled()
     expect(launch.args).toEqual(spec.args({ fullAccess: false, pluginDir: null }))
   }
 )

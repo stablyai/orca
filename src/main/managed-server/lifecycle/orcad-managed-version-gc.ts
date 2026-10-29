@@ -1,9 +1,3 @@
-/**
- * After a managed deploy or update, removes this host's older orcad version dirs that are
- * proven stopped (design D10). Pins come from gcOldOrcadVersions: the active version, the
- * rollback target, journaled versions, and the version the live terminal daemon was forked
- * from. Anything the host cannot answer about is kept.
- */
 import type { NodeRuntimeTarget } from '../../../shared/node-runtime-pin'
 import type { ServeReadiness } from '../../server/serve-readiness'
 import { readOrcadActivationRecord } from '../activation/orcad-activation-record-store'
@@ -11,41 +5,44 @@ import { orcadSlotDir, type OrcadSlotOptions } from '../../ssh/orcad-recovery-sl
 import { gcOldOrcadVersions } from '../install/orcad-remote-gc'
 import { nodeRuntimeStorePins } from '../../ssh/pinned-runtime-host-target'
 
-/** The daemon's build when the readiness proves it; undefined when it cannot say. */
+/** null proves no daemon; undefined means its version is unknown. */
 export function provenLiveDaemonVersion(readiness: ServeReadiness): string | null | undefined {
   const daemon = readiness.health?.terminalDaemon
   if (daemon?.state === 'live' && daemon.buildVersion) {
     return daemon.buildVersion
   }
-  // A daemon that answered as absent forked from nothing; degraded or unreported proves nothing.
   return daemon?.state === 'absent' ? null : undefined
 }
 
-export async function pruneManagedOrcadVersions(args: {
+export type ManagedOrcadPruneArgs = {
   slot: OrcadSlotOptions
   serverTarget: NodeRuntimeTarget
   activeVersion: string
   readiness: ServeReadiness
-}): Promise<void> {
+}
+
+/** True only when GC ran and left no stale version dir behind. */
+export async function pruneManagedOrcadVersions(args: ManagedOrcadPruneArgs): Promise<boolean> {
   const liveDaemonVersion = provenLiveDaemonVersion(args.readiness)
-  // Why skip: without the daemon's version, GC could remove the tree a live daemon runs from.
+  // Unknown daemon versions could still execute from any candidate tree; skip GC.
   if (liveDaemonVersion === undefined) {
-    return
+    return false
   }
   try {
-    await gcOldOrcadVersions({
+    return await gcOldOrcadVersions({
       conn: args.slot.conn,
       host: args.slot.host,
       remoteHome: args.slot.remoteHome,
       currentDirAbsPath: orcadSlotDir(args.slot, args.activeVersion),
       record: await readOrcadActivationRecord(args.slot),
       liveDaemonVersion,
-      // Why both pins: a default and a compat orcad on one host share one runtime store.
+      // Default and compat builds share one runtime store.
       nodeRuntimePins: nodeRuntimeStorePins(args.serverTarget),
       signal: args.slot.signal
     })
   } catch (error) {
-    // Best effort: the deploy already succeeded, and the next connect tries again.
+    // Cleanup must not fail completed deploys; later connects retry.
     console.warn('[orcad-gc] Pruning old orcad versions failed:', error)
+    return false
   }
 }

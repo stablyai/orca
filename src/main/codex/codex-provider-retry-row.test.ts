@@ -1,5 +1,9 @@
-// A Codex stream error it is about to retry is a warning row per attempt, never a red row: the
-// journal keeps every attempt, and the transcript draws only the latest of a run.
+import {
+  acquireReadyCodexForTest,
+  adapterFor,
+  fakeCodex,
+  identityFor
+} from './codex-structured-session-adapter-fixture'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -10,7 +14,6 @@ import type {
 import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { createCodexJournalTranslator } from './codex-structured-journal-translation'
-import { adapterFor, fakeCodex, identityFor } from './codex-structured-session-adapter-fixture'
 import type { CodexStructuredSessionEvent } from './codex-structured-session-adapter'
 
 const THREAD_ID = 'thread-abc'
@@ -48,7 +51,6 @@ function notification(method: string, params: unknown): CodexStructuredSessionEv
   return { type: 'notification', sessionId: 'session-1', threadId: THREAD_ID, method, params }
 }
 
-/** The params the app server sends for a stream error it is about to retry. */
 function retryParams(message: string, additionalDetails?: string) {
   return {
     threadId: THREAD_ID,
@@ -103,7 +105,6 @@ describe('a Codex stream error it is about to retry', () => {
         payload: expect.objectContaining({ head: expect.stringContaining('Reconnecting... 3/5') })
       }
     })
-    // No row revises another: each attempt was written once.
     expect(rows.filter((row) => written.some((retry) => retry.key === row.key))).toHaveLength(3)
     expect(
       reduced(rows).filter((row) => row.body.kind === 'status' && row.body.tone === 'error')
@@ -153,7 +154,6 @@ describe('a Codex stream error it is about to retry', () => {
     const second = connect('generation-2')
     second.handle(retrying('Reconnecting... 1/5'))
 
-    // Each write is a new row: nothing the first connection wrote is revised.
     expect(retryRows(rows).map((row) => row.body.kind === 'status' && row.body.text)).toEqual([
       'Codex is retrying: Reconnecting... 1/5.',
       'Codex is retrying: Reconnecting... 2/5.',
@@ -171,7 +171,7 @@ describe('a Codex stream error it is about to retry', () => {
       publish: () => undefined
     }
     for (const fence of [7, 8]) {
-      await adapter.acquire({
+      await acquireReadyCodexForTest(adapter, {
         identity: identityFor('session-1'),
         fence,
         spawnToken: `spawn-${fence}`,

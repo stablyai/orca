@@ -1,6 +1,3 @@
-// The running child work a structured session's stream publishes, for the strip above the composer:
-// desktop's view of the same roster, the verdict its rows read, and the Stop that reaches them.
-
 import { useCallback, useMemo } from 'react'
 import type { AgentChildRowContext } from '../../../src/shared/agent-child-row-model'
 import type { AgentSessionCancelResult } from '../../../src/shared/agent-session-wire'
@@ -10,41 +7,44 @@ import {
   structuredSessionBackgroundTasksView,
   type StructuredSessionBackgroundTasksView
 } from '../../../src/shared/structured-session-background-tasks-view'
+import { structuredSessionForegroundCommands } from '../../../src/shared/structured-session-foreground-commands'
 import type { StructuredAgentSessionMutationResult } from './mobile-structured-agent-session-rpc'
 import type { MobileStructuredAgentMutate } from './use-mobile-structured-agent-mutation'
 
 export type MobileStructuredBackgroundTasks = {
-  /** The conversation these tasks belong to; the strip's open and stopping state is kept per one. */
+  // Scope strip expansion and stopping state to the conversation.
   sessionKey: string
   view: StructuredSessionBackgroundTasksView
-  /** The verdict every child row reads: unverifiable once this phone stops hearing the stream. Its
-   *  host clock offset also moves the rows' host-stamped clocks onto the phone's. */
+  // Treat retained rows as unverifiable off-stream; convert host timestamps with this offset.
   rowContext: AgentChildRowContext
-  /** One child by its provider id, or, with none, every background task the host can stop. */
   stop: (taskId?: string) => Promise<StructuredAgentSessionMutationResult<AgentSessionCancelResult>>
 }
 
-/** Coarser than one frame's delivery latency, finer than any clock a row shows. */
+// Ignore delivery jitter below the precision of displayed clocks.
 const OFFSET_GRAIN_MS = 1_000
 
 export function useMobileStructuredBackgroundTasks(args: {
   sessionKey: string
   state: StructuredAgentSessionState
   turnId: string | null
-  /** Live transport; without it the kept roster is the last thing heard, not what runs now. */
+  // Retained roster does not prove current liveness.
   connected: boolean
   mutate: MobileStructuredAgentMutate
 }): MobileStructuredBackgroundTasks {
   const { connected, mutate, sessionKey, state, turnId } = args
+  const { backgroundTasks, items, latestTurn } = state
   const view = useMemo(
-    () => structuredSessionBackgroundTasksView(state.backgroundTasks, turnId),
-    [state.backgroundTasks, turnId]
+    () =>
+      structuredSessionBackgroundTasksView(
+        backgroundTasks,
+        turnId,
+        structuredSessionForegroundCommands(backgroundTasks, { items, latestTurn })
+      ),
+    [backgroundTasks, items, latestTurn, turnId]
   )
-  // A disconnected or failed stream keeps the last roster on screen; its live claims then stand
-  // for nothing, so they read unverifiable rather than working.
+  // Keep the roster through stream failure without claiming its tasks still run.
   const streamLive = connected && state.status === 'ready'
-  // Re-derived from every frame's host sample, so a host restart or clock correction shows at once;
-  // rounded so a sample's own delivery jitter never rebuilds the rows (they memoize on the value).
+  // Use each host sample for restarts/clock corrections; round away jitter to preserve row memoization.
   const hostClock = state.hostClock
   const offsetMs = hostClock
     ? Math.round((hostClock.receivedAt - hostClock.hostNow) / OFFSET_GRAIN_MS) * OFFSET_GRAIN_MS

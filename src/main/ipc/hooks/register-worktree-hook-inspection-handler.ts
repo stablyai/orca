@@ -1,11 +1,12 @@
-import { getStoredRepoSshConnectionId } from '../../repo-execution-host'
 import { ipcMain } from 'electron'
-import type { ExecutionHostId } from '../../../shared/execution-host'
+import { getRepoDialableSshTargetId, type ExecutionHostId } from '../../../shared/execution-host'
 import { isFolderRepo } from '../../../shared/repo-kind'
 import { inspectSetupScriptImportCandidates } from '../../../shared/setup-script-imports'
 import { joinWorktreeRelativePath } from '../../runtime/runtime-relative-paths'
+import { windowsFsPath } from '../../wsl/wsl-unc-drive-fs-path'
+import { blockedWslDistroForPath } from '../../wsl/wsl-unc-access-gate'
 import { readFile, stat } from 'node:fs/promises'
-import { isENOENT } from '../filesystem-path-containment'
+import { isENOENT } from '../filesystem/filesystem-path-containment'
 import { resolveRepoForExecutionHost } from '../worktrees/repo-host-ownership'
 import type { WorktreeIpcContext } from '../worktrees/worktree-ipc-context'
 
@@ -16,14 +17,18 @@ export function registerWorktreeHookInspectionHandler(context: WorktreeIpcContex
     'hooks:inspectSetupScriptImports',
     async (_event, args: { repoId: string; hostId?: ExecutionHostId }) => {
       const repo = resolveRepoForExecutionHost(store, args.repoId, args.hostId)
-      // Why: this process serves no SSH filesystem.
-      if (!repo || isFolderRepo(repo) || getStoredRepoSshConnectionId(repo)) {
+      // SSH ownership must never fall through to local filesystem inspection.
+      if (!repo || isFolderRepo(repo) || getRepoDialableSshTargetId(repo)) {
+        return []
+      }
+      // A background sidebar inspection: opening `\\wsl.localhost` paths would boot a stopped distro (E9).
+      if (await blockedWslDistroForPath(repo.path)) {
         return []
       }
 
       return inspectSetupScriptImportCandidates(
         async (relativePath) => {
-          const filePath = joinWorktreeRelativePath(repo.path, relativePath)
+          const filePath = windowsFsPath(joinWorktreeRelativePath(repo.path, relativePath))
           try {
             return await readFile(filePath, 'utf-8')
           } catch (error) {
@@ -35,7 +40,7 @@ export function registerWorktreeHookInspectionHandler(context: WorktreeIpcContex
         },
         {
           fileExists: async (relativePath) => {
-            const filePath = joinWorktreeRelativePath(repo.path, relativePath)
+            const filePath = windowsFsPath(joinWorktreeRelativePath(repo.path, relativePath))
             try {
               const fileStat = await stat(filePath)
               return !fileStat.isDirectory()

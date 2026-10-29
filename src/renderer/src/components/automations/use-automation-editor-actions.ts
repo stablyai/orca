@@ -12,6 +12,7 @@ import type { AutomationsPageDestinationState } from './use-automations-page-des
 import type { AutomationsPageDestinationFormState } from './use-automations-page-destination-form'
 import type { AutomationsPageLocalState } from './use-automations-page-local-state'
 import type { AutomationsPageStoreState } from './use-automations-page-store-state'
+import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 
 /** Dialog open/edit actions, including host-captured re-reads and project changes. */
 export function useAutomationEditorActions({
@@ -152,7 +153,7 @@ export function useAutomationEditorActions({
         baseBranch: ''
       }))
       void fetchWorktrees(projectId, worktreeFetchOptions).then(() => {
-        const latestWorktrees = useAppStore.getState().worktreesByRepo[projectId] ?? []
+        const latestWorktrees = selectWorktreesByRepo(useAppStore.getState())[projectId] ?? []
         const latestWorktree = getDefaultWorktree(latestWorktrees)
         if (!latestWorktree) {
           return

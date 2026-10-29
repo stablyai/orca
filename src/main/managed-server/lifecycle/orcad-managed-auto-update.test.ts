@@ -41,9 +41,9 @@ vi.mock('../install/remote-versioned-install', () => ({
 
 import {
   autoUpdateManagedOrcadEnvironment,
-  planManagedOrcadAutoUpdate,
   resetBundledOrcadVersionsForTests
 } from './orcad-managed-auto-update'
+import { planManagedOrcadAutoUpdate } from './orcad-managed-update-decision'
 
 function record(overrides: Partial<OrcadActivationRecord>): OrcadActivationRecord {
   return { ...emptyOrcadActivationRecord(), active: '0.1.0+old', ...overrides }
@@ -162,7 +162,6 @@ describe('updating a managed orcad on connect', () => {
     })
     await expect(run()).resolves.toMatchObject({ outcome: 'deferred' })
 
-    // A fence another run holds briefly is retried later, never recorded as a failed update.
     mocks.runUpdate.mockResolvedValueOnce({
       outcome: 'deferred',
       code: 'orcad_activation_fence_busy',

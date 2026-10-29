@@ -26,8 +26,6 @@ describe('normalizeRetirableGeneratedName', () => {
   it('accepts pool names and every numbered tier, not just single digits', () => {
     expect(normalizeRetirableGeneratedName(` ${FIRST} `)).toBe(FIRST)
     expect(normalizeRetirableGeneratedName(`${FIRST}-2`)).toBe(`${FIRST}-2`)
-    // Why: the previous `-([2-9]\d*)` never matched these, so a path whose agent history was
-    // still on disk got reissued — the exact bug this module exists to prevent.
     expect(normalizeRetirableGeneratedName(`${FIRST}-10`)).toBe(`${FIRST}-10`)
     expect(normalizeRetirableGeneratedName(`${FIRST}-100`)).toBe(`${FIRST}-100`)
   })
@@ -136,8 +134,7 @@ describe('ensureRetiredWorktreeNamesBackfilled', () => {
       await ensureRetiredWorktreeNamesBackfilled(store, makeRepo('repo-a', '/repos/a'), settings)
       expect(merged).toEqual([{ repoId: 'repo-a', names: [FIRST] }])
 
-      // Why: the scan is cached per cwd namespace but the registry is per repo, so a second repo in
-      // the same namespace must still receive the merge rather than silently inheriting nothing.
+      // A shared namespace scan must still populate each repo's separate registry.
       await ensureRetiredWorktreeNamesBackfilled(store, makeRepo('repo-b', '/repos/b'), settings)
       expect(merged).toEqual([
         { repoId: 'repo-a', names: [FIRST] },
@@ -167,9 +164,6 @@ describe('ensureRetiredWorktreeNamesBackfilled', () => {
   })
 
   it('skips a runtime-owned repo, which has no connectionId but is still not local', async () => {
-    // Why: a `connectionId` check calls this repo local, so the scan reads THIS machine's
-    // directories and files them under the runtime's namespace — retiring names never used there
-    // while missing the ones that were. The host id is the only reliable local test.
     const root = await mkdtemp(join(tmpdir(), 'orca-retirement-runtime-'))
     const workspaceRoot = join(root, 'workspaces')
     await mkdir(join(workspaceRoot, FIRST), { recursive: true })

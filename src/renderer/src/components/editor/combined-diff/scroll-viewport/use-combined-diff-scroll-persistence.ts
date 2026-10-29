@@ -2,12 +2,12 @@ import { useLayoutEffect } from 'react'
 import type React from 'react'
 import type { VirtualizedScrollAnchor } from '@/hooks/useVirtualizedScrollAnchor'
 import type { ProgrammaticScrollMarks } from '@/hooks/programmatic-scroll-marks'
-import { setWithLRU } from '@/lib/scroll-cache'
 import type { DiffSection } from '../../diff-section-types'
 import {
-  combinedDiffScrollTopCache,
-  combinedDiffViewStateCache
-} from '../remember-view/combined-diff-view-memory'
+  readCombinedDiffViewMemory,
+  rememberCombinedDiffView,
+  type CombinedDiffViewLease
+} from '../remember-view/combined-diff-view-cache'
 import type { CombinedDiffScrollAnchors } from './use-combined-diff-scroll-anchors'
 
 export function useCombinedDiffScrollPersistence({
@@ -15,6 +15,7 @@ export function useCombinedDiffScrollPersistence({
   entrySignature,
   hasDirectScrollInput,
   latestDomScrollAnchorRef,
+  memoryLeaseRef,
   programmaticScrollMarks,
   scrollAnchorRef,
   scrollContainerRef,
@@ -30,6 +31,7 @@ export function useCombinedDiffScrollPersistence({
   entrySignature: string
   hasDirectScrollInput: () => boolean
   latestDomScrollAnchorRef: React.RefObject<VirtualizedScrollAnchor>
+  memoryLeaseRef: React.RefObject<CombinedDiffViewLease | null>
   programmaticScrollMarks: ProgrammaticScrollMarks
   scrollAnchorRef: React.RefObject<VirtualizedScrollAnchor>
   scrollContainerRef: React.RefObject<HTMLDivElement | null>
@@ -49,9 +51,9 @@ export function useCombinedDiffScrollPersistence({
       return
     }
 
-    const cached = combinedDiffViewStateCache.get(viewStateKey)
-    if (cached && cached.entrySignature === entrySignature) {
-      scrollOffsetRef.current = combinedDiffScrollTopCache.get(viewStateKey) ?? cached.scrollTop
+    const memory = readCombinedDiffViewMemory(viewStateKey)
+    if (memory?.view && memory.view.entrySignature === entrySignature) {
+      scrollOffsetRef.current = memory.scrollTop ?? 0
     }
 
     let anchorIdleTimerId: number | null = null
@@ -71,7 +73,7 @@ export function useCombinedDiffScrollPersistence({
       anchorIdleTimerId = window.setTimeout(() => {
         anchorIdleTimerId = null
         if (hasDirectScrollInput()) {
-          // Why: the idle timer can fire mid-wheel while TanStack still shows a transitional virtual window.
+          // Idle timers can fire mid-wheel while TanStack’s virtual window is still transitional.
           scheduleSettledAnchorPersist()
           return
         }
@@ -93,9 +95,7 @@ export function useCombinedDiffScrollPersistence({
       scrollTop: number
       writeAnchor: boolean
     }): void => {
-      const existing = combinedDiffViewStateCache.get(viewStateKey)
       scrollOffsetRef.current = scrollTop
-      setWithLRU(combinedDiffScrollTopCache, viewStateKey, scrollTop)
       if (writeAnchor) {
         if (recordDomAnchor) {
           persistScrollAnchor()
@@ -107,13 +107,7 @@ export function useCombinedDiffScrollPersistence({
         scheduleSettledAnchorPersist()
       }
       updateScrollbar()
-      if (!existing || existing.entrySignature !== entrySignature) {
-        return
-      }
-      setWithLRU(combinedDiffViewStateCache, viewStateKey, {
-        ...existing,
-        scrollTop
-      })
+      rememberCombinedDiffView(memoryLeaseRef.current, { scrollTop })
     }
     let lastScrollHeight = container.scrollHeight
     const handleScroll = (event: Event): void => {
@@ -127,12 +121,12 @@ export function useCombinedDiffScrollPersistence({
         return
       }
       if (shrank && scrollTop >= maxScrollTop - 1 && scrollOffsetRef.current > maxScrollTop + 1) {
-        // Why: pinned at a just-shrunk max from an unreachable offset is a browser clamp, not user input — re-pin, don't record it.
+        // A newly unreachable offset clamped to max is browser layout, not user intent; restore the anchor instead of recording it.
         setClampRestoreCount((count) => count + 1)
         updateScrollbar()
         return
       }
-      // Why: any unmarked scroll is the user's — even events delayed past their window by main-thread jank.
+      // Unmarked scrolls are user intent even if main-thread jank delays their events.
       recordVirtualScrollAnchor(scrollTop)
       updateCachedScrollPosition({
         recordDomAnchor: false,
@@ -142,7 +136,7 @@ export function useCombinedDiffScrollPersistence({
       })
     }
 
-    // Why: detach in the layout phase so the outgoing tab snapshots its real scroll before teardown fires a reset-to-top scroll.
+    // Detach during layout so outgoing tabs snapshot before teardown emits a reset-to-top scroll.
     updateScrollbar()
     const resizeObserver = new ResizeObserver(updateScrollbar)
     resizeObserver.observe(container)
@@ -165,6 +159,7 @@ export function useCombinedDiffScrollPersistence({
     entrySignature,
     hasDirectScrollInput,
     latestDomScrollAnchorRef,
+    memoryLeaseRef,
     persistScrollAnchor,
     programmaticScrollMarks,
     recordVirtualScrollAnchor,

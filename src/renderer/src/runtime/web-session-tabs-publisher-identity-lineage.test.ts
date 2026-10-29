@@ -7,23 +7,13 @@ import {
 } from './web-session-tabs-sync/tracking'
 import { resetWebSessionTabsSyncTestState } from './web-session-tabs-sync-test-harness'
 
-vi.mock('../store', () => ({ useAppStore: { setState: vi.fn() } }))
+// getState: snapshot receipt reads the held paired-tab closes; none here.
+vi.mock('../store', () => ({ useAppStore: { setState: vi.fn(), getState: () => ({}) } }))
 vi.mock('@/hooks/agent-hook-completion-notifications', () => ({
   observeAgentHookCompletionForNotification: vi.fn()
 }))
 
-/**
- * "Same publisher" had two answers that disagreed. `noteRetiredValue` treated a `:headless-merge:`
- * epoch as a successor of its base and retired the base when it became current, while
- * `sameSessionTabsPublicationLineage` treated the two as one publisher. The retired-value check
- * matched exactly, which is what kept those two from ever meeting: a suffixed frame was simply a
- * different string, so it never looked retired.
- *
- * The cost was that the same predecessor was accepted or rejected depending on which shape it
- * arrived in. These pin the single answer: a lineage sibling is the same publisher everywhere — it
- * advances the current epoch instead of superseding it, and it inherits its generation's
- * retirement instead of escaping it.
- */
+/** Treat headless-merge epochs as the same publisher everywhere: advance within a lineage without retiring the base, and inherit generation retirement. Exact-string fences let predecessors return; inconsistent lineage-aware fences let publishers retire themselves. */
 const ENV = 'remote-runtime'
 const WORKTREE = 'repo::/worktree'
 const GEN_1 = 'renderer-generation-1'
@@ -48,11 +38,7 @@ describe('a headless merge is the same publisher as its base epoch', () => {
     resetWebSessionTabsSyncTestState()
   })
 
-  /**
-   * The fail-open half. A superseded generation used to walk straight back in by republishing
-   * under a merged epoch, because the fence compared strings and the merged form was a different
-   * string. The bare form of the identical frame was rejected.
-   */
+  // Merged epochs must inherit retirement; exact-string fencing let superseded publishers return.
   for (const [label, epoch] of [
     ['bare', GEN_1],
     ['headless-merge', MERGED_GEN_1]
@@ -65,23 +51,14 @@ describe('a headless merge is the same publisher as its base epoch', () => {
     })
   }
 
-  /**
-   * The fail-closed half, and the reason this cannot be fixed in the fence alone. Making the fence
-   * lineage-aware while the base epoch is still retired by its own merged form has the generation
-   * retire itself: the rebuild arrives, retires `gen-1`, and is then rejected as a retired
-   * generation. A publisher must be able to add runtime-owned surfaces without fencing itself out.
-   */
+  // Lineage-aware fencing alone makes base-to-merged publication retire itself; same-lineage updates must advance instead.
   it('admits a generation rebuilding under a merged epoch, and returning to a bare one', () => {
     expect(decideWebSessionTabsSnapshot(frame(GEN_1, 1), ENV).apply).toBe(true)
     expect(decideWebSessionTabsSnapshot(frame(MERGED_GEN_1, 2), ENV).apply).toBe(true)
     expect(decideWebSessionTabsSnapshot(frame(GEN_1, 3), ENV).apply).toBe(true)
   })
 
-  /**
-   * The same single answer has to hold at the recovery gate, which fences on identity too. Since a
-   * retraction no longer retires anything, a handover is the only thing that reaches this fence:
-   * narrower than it was, not unreachable.
-   */
+  // Only handover now retires publishers; verify lineage identity at recovery gate too.
   for (const [label, epoch] of [
     ['bare', GEN_1],
     ['headless-merge', MERGED_GEN_1]
@@ -94,8 +71,7 @@ describe('a headless merge is the same publisher as its base epoch', () => {
       expect(successorReceived).toBeGreaterThan(firstReceived)
       expect(decideWebSessionTabsSnapshot(frame(GEN_2, 1), ENV).apply).toBe(true)
 
-      // A sibling stream delivers it late enough to win on delivery order; retired by lineage, so
-      // it must still lose.
+      // Late delivery cannot revive a retired lineage.
       const late = frame(epoch, 9)
       const lateReceived = recordReceivedWebSessionTabsSnapshot(ENV, late)
       expect(lateReceived).toBeGreaterThan(successorReceived)

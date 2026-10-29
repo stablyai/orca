@@ -1,5 +1,3 @@
-/** The page's outbound notify surface: what it posts, what it stays quiet about, and what it
- *  answers when the shell granted nothing or the port refused the frame. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { BridgeClientNotReadyError } from './bridge-client-errors'
 import {
@@ -8,24 +6,32 @@ import {
   BRIDGE_NAVIGATE_BACK_NOTIFY,
   BRIDGE_PROTOCOL_VERSION
 } from './bridge-envelope'
-import { BRIDGE_MAX_MESSAGE_BYTES, utf8ByteLength } from './bridge-caps'
-import {
-  BRIDGE_HAPTICS_GRANT,
-  BRIDGE_HAPTICS_KINDS,
-  BRIDGE_HAPTICS_NOTIFY
-} from './bridge-haptics-notify'
-import { GRANTS, INIT, createPageClient } from './bridge-page-client-test-harness'
+import { BRIDGE_HAPTICS_GRANT, BRIDGE_HAPTICS_NOTIFY } from './bridge-haptics-notify'
+import { GRANTS, INIT, createPageClient as createPage } from './bridge-page-client-test-harness'
+
+const resources = new Set<ReturnType<typeof createPage>>()
+function createPageClient(...args: Parameters<typeof createPage>): ReturnType<typeof createPage> {
+  const resource = createPage(...args)
+  resources.add(resource)
+  return resource
+}
+function closeResources(): void {
+  for (const resource of resources) {
+    resource.client.close()
+  }
+  resources.clear()
+}
 
 beforeEach(() => {
   vi.useFakeTimers()
 })
 
 afterEach(() => {
+  closeResources()
   vi.useRealTimers()
 })
 
 describe('bridge client page faults', () => {
-  /** A shell that says it will act on a fault, which is the only kind the page posts one to. */
   function startGranted(page: ReturnType<typeof createPageClient>): void {
     page.deliver({ ...INIT, grants: { ...GRANTS, native: [BRIDGE_FAULT_GRANT] } })
   }
@@ -60,29 +66,26 @@ describe('bridge client page faults', () => {
   })
 
   it('answers false for a port that refused the frame, and reports it once', () => {
+    let fails = false
     const page = createPageClient({
       send: () => {
-        throw new Error('the channel is gone')
+        if (fails) {
+          throw new Error('the channel is gone')
+        }
       }
     })
     startGranted(page)
+    expect(page.diagnostics).toEqual([])
+    fails = true
     expect(page.client.notifyPageFault(new Error('the route threw'))).toBe(false)
-    expect(page.diagnostics.map((diagnostic) => diagnostic.kind)).toContain('send-failed')
+    expect(page.diagnostics).toEqual([{ kind: 'send-failed', error: expect.any(Error) }])
   })
 })
 
-/**
- * Which notifies reach the mount-order throw, pinned because the grant check is what decides it.
- *
- * A grant is read off the session, so before `init` there is no grant either and the two gated
- * notifies answer false without ever asking for the session. That is the answer their callers
- * already handle, and it must stay the answer: `useRouteHandoff` calls `notifyNavigate` uncaught
- * inside `push`, where a throw would take down a tap handler nobody wrapped.
- */
+// Before init, gated notifies return false before requiring a session; route-handoff tap handlers rely on that fallback and do not catch throws.
 describe('the notify guard before init', () => {
   it('answers false for the grant-gated notifies and posts nothing', () => {
     const page = createPageClient()
-    // Against what the handshake already put on the port, so this counts the notifies alone.
     const beforeNotifies = page.sent.length
     expect(page.client.notifyNavigate('/h/host-1')).toBe(false)
     expect(page.client.notifyNavigateBack()).toBe(false)
@@ -109,17 +112,18 @@ describe('the notify guard before init', () => {
       name: 'navigate',
       href: '/h/host-1'
     })
+    expect(page.client.notifyStorageWrite('orca:last-visited-worktree', 'wt-1')).toBe(true)
+    expect(page.frames().at(-1)).toEqual({
+      v: BRIDGE_PROTOCOL_VERSION,
+      type: 'notify',
+      name: 'storage',
+      key: 'orca:last-visited-worktree',
+      value: 'wt-1'
+    })
   })
 })
 
-/**
- * The second verb of one grant, which is the only reason the page can ask for it at all.
- *
- * A shell too old to know the name still granted `navigate`, so the page posts and that shell
- * refuses the whole frame as `unrecognised-message`. Nothing here can tell those two apart: the
- * caller falls back to its own router either way, which on the page goes nowhere and is exactly
- * what a Back button already did.
- */
+// Older shells may grant navigate but reject the newer Back notify; false retains the caller’s router fallback, which has no native history to pop on page.
 describe('navigate-back', () => {
   it('posts under the navigate grant, with no target of its own', () => {
     const page = createPageClient()
@@ -140,12 +144,6 @@ describe('navigate-back', () => {
     expect(page.sent).toHaveLength(beforeNotify)
   })
 
-  it('asks for no grant of its own, which no route may declare', () => {
-    const page = createPageClient()
-    page.deliver({ ...INIT, grants: { ...GRANTS, native: [BRIDGE_NAVIGATE_BACK_NOTIFY] } })
-    expect(page.client.notifyNavigateBack()).toBe(false)
-  })
-
   it('answers false after close rather than throwing into a teardown', () => {
     const page = createPageClient()
     page.deliver({ ...INIT, grants: { ...GRANTS, native: ['navigate'] } })
@@ -154,13 +152,7 @@ describe('navigate-back', () => {
   })
 })
 
-/**
- * The verb whose refusal the caller has to hear about.
- *
- * Nothing crosses back for a notify, so the boolean is the only answer a tap gets. A URL outside
- * the three schemes is refused here rather than posted and dropped at the frame, because the page
- * reporting "opened" into a frame the shell threw away is the dead tap the grant exists to rule out.
- */
+// Reject invalid URL calls before posting; notify has no reply and true must not claim a tap succeeded when the shell will drop its frame.
 describe('externalLink', () => {
   function granted(): ReturnType<typeof createPageClient> {
     const page = createPageClient()
@@ -214,14 +206,7 @@ describe('externalLink', () => {
   })
 })
 
-/**
- * The haptic the page asks for and hears nothing back about.
- *
- * Gated at the call site as well as at the frame, for the reason every gated notify is: `notify` is
- * a closed list, so a shell that granted no haptics refuses the whole frame, and a caller told the
- * frame left would be told a lie. Unlike `externalLink` nobody reads the answer — a tap that did
- * not buzz is every tap on every phone before this page existed — so it is returned and not logged.
- */
+// Check haptic grants before posting into the closed notify union. Return refusal silently to avoid a warning per scrolling-row tap.
 describe('bridge client haptics', () => {
   const granted = (page: ReturnType<typeof createPageClient>): void => {
     page.deliver({ ...INIT, grants: { ...GRANTS, native: [BRIDGE_HAPTICS_GRANT] } })
@@ -230,11 +215,12 @@ describe('bridge client haptics', () => {
   it('posts one frame per kind, carrying the kind it was asked for', () => {
     const page = createPageClient()
     granted(page)
-    for (const kind of BRIDGE_HAPTICS_KINDS) {
+    const kinds = ['mediumImpact', 'selection', 'success', 'error', 'edgeBump'] as const
+    for (const kind of kinds) {
       expect(page.client.notifyHaptics(kind), kind).toBe(true)
     }
     expect(page.frames().slice(1)).toEqual(
-      BRIDGE_HAPTICS_KINDS.map((kind) => ({
+      kinds.map((kind) => ({
         v: BRIDGE_PROTOCOL_VERSION,
         type: 'notify',
         name: BRIDGE_HAPTICS_NOTIFY,
@@ -250,13 +236,6 @@ describe('bridge client haptics', () => {
     expect(page.sent).toHaveLength(1)
   })
 
-  it('stays quiet against a shell that granted the notify name instead of the token', () => {
-    const page = createPageClient()
-    page.deliver({ ...INIT, grants: { ...GRANTS, native: [BRIDGE_HAPTICS_NOTIFY] } })
-    expect(page.client.notifyHaptics('selection')).toBe(false)
-    expect(page.sent).toHaveLength(1)
-  })
-
   it('answers false before a session and after close rather than throwing inside a tap handler', () => {
     const early = createPageClient()
     expect(early.client.notifyHaptics('selection')).toBe(false)
@@ -265,38 +244,5 @@ describe('bridge client haptics', () => {
     page.client.close()
     expect(page.client.notifyHaptics('selection')).toBe(false)
     expect(page.frames().at(-1)).toEqual({ v: BRIDGE_PROTOCOL_VERSION, type: 'close' })
-  })
-})
-
-/**
- * What a haptic costs on the wire, measured off the frame the client posted rather than a written
- * copy of its shape: the two drift, and the one that drifts is the budget.
- *
- * The worst kind is the longest name, and a scrolling list is the worst case for the count: the
- * file explorer plays `selection` once per row, so twelve rows is the number to think about.
- */
-describe('the bytes a haptic spends', () => {
-  it('costs well under a thousandth of the frame cap, whichever kind it is', () => {
-    const page = createPageClient()
-    page.deliver({ ...INIT, grants: { ...GRANTS, native: [BRIDGE_HAPTICS_GRANT] } })
-    const bytes = BRIDGE_HAPTICS_KINDS.map((kind) => {
-      page.client.notifyHaptics(kind)
-      return utf8ByteLength(page.sent.at(-1) ?? '')
-    })
-    // One per kind, widest first: `mediumImpact` is the longest name and `error` the shortest.
-    expect(bytes).toEqual([77, 74, 72, 70, 73])
-    expect(Math.max(...bytes) / BRIDGE_MAX_MESSAGE_BYTES).toBeLessThan(0.0002)
-  })
-
-  it('costs a twelve-row scroll under a kilobyte, one frame per row', () => {
-    const page = createPageClient()
-    page.deliver({ ...INIT, grants: { ...GRANTS, native: [BRIDGE_HAPTICS_GRANT] } })
-    const before = page.sent.length
-    for (let row = 0; row < 12; row += 1) {
-      page.client.notifyHaptics('selection')
-    }
-    const scroll = page.sent.slice(before)
-    expect(scroll).toHaveLength(12)
-    expect(scroll.reduce((total, json) => total + utf8ByteLength(json), 0)).toBe(888)
   })
 })

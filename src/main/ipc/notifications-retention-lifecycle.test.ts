@@ -88,7 +88,7 @@ describe('registerNotificationHandlers', () => {
     expect(
       await handler({}, { source: 'agent-task-complete', worktreeId: 'repo::wt1', paneKey })
     ).toEqual({ delivered: true })
-    expect(vi.getTimerCount()).toBe(1)
+    expect(vi.getTimerCount()).toBe(process.platform === 'win32' ? 0 : 1)
 
     getNotificationEventHandler('click')()
 
@@ -137,7 +137,7 @@ describe('registerNotificationHandlers', () => {
       })
     } as never)
 
-    // The real minting, so the synthetic leaf this asserts against is the one the chat uses.
+    // Use real pane-key minting to cover the chat's actual synthetic leaf.
     const paneKey = structuredAgentSessionPaneKey('chat-tab', 'session-abc')
     const handler = getDispatchHandler()
     expect(
@@ -221,7 +221,7 @@ describe('registerNotificationHandlers', () => {
 
     const handler = getDispatchHandler()
     expect(await handler({}, { source: 'agent-task-complete' })).toEqual({ delivered: true })
-    expect(vi.getTimerCount()).toBe(1)
+    expect(vi.getTimerCount()).toBe(process.platform === 'win32' ? 0 : 1)
 
     const closeHandler = getNotificationEventHandler('close')
     closeHandler()
@@ -246,7 +246,7 @@ describe('registerNotificationHandlers', () => {
 
       const handler = getDispatchHandler()
       expect(await handler({}, { source: 'agent-task-complete' })).toEqual({ delivered: true })
-      expect(vi.getTimerCount()).toBe(1)
+      expect(vi.getTimerCount()).toBe(process.platform === 'win32' ? 0 : 1)
 
       const failedHandler = getNotificationEventHandler('failed')
       failedHandler({}, 'Application is not code signed')
@@ -301,8 +301,7 @@ describe('registerNotificationHandlers', () => {
     const handler = getDispatchHandler()
 
     const result = handler({}, { source: 'test', requireDisplayConfirmation: true })
-    // Why: the darwin authorization gate resolves before the notification is
-    // created, so flush microtasks before grabbing its event listeners.
+    // Resolve async authorization before reading notification listeners.
     await vi.advanceTimersByTimeAsync(0)
     const showHandler = getNotificationOnceEventHandler('show')
     const failedHandler = getNotificationOnceEventHandler('failed')

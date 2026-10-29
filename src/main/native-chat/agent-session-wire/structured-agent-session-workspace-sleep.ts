@@ -1,5 +1,8 @@
-import type { AgentSessionExecutionLocation } from '../../../shared/agent-session-record'
-import type { AgentSessionWorkspaceSleepResult } from '../../../shared/agent-session-workspace-sleep'
+import type {
+  AgentSessionExecutionLocation,
+  AgentSessionRecord
+} from '../../../shared/agent-session-record'
+import type { AgentSessionWorkspaceSleepResult } from '../../../shared/agent-session/agent-session-workspace-sleep'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import type { StructuredAgentSessionHostDeps } from './structured-agent-session-host-types'
 import type { StructuredAgentSessionConversationLifetime } from './structured-agent-session-conversation-lifetime'
@@ -7,22 +10,26 @@ import type { StructuredAgentSessionConversations } from './structured-agent-ses
 import type { StructuredAgentSessionTaskQueue } from './structured-agent-session-task-queue'
 
 type WorkspaceSleepHost = {
-  deps: Pick<StructuredAgentSessionHostDeps, 'store' | 'logger' | 'hasOpenDispatch'>
+  deps: Pick<StructuredAgentSessionHostDeps, 'store' | 'logger' | 'hasOpenDispatch' | 'now'>
   tasks: StructuredAgentSessionTaskQueue
   lifetime: Pick<StructuredAgentSessionConversationLifetime, 'closeForWorkspaceSleep'>
   sessions: StructuredAgentSessionConversations
   deliveryRunning: (sessionId: string) => boolean
   childWorkIncomplete: (sessionId: string) => boolean
+  publishRecordNotes: (sessionId: string) => void
 }
 
-/** Snapshot host-owned members and return only same-call, current positive stop receipts. */
+type WorkspaceSleepVerdict = { stopped: true } | { stopped: false; fence: number } | null
+
+/** Return only this call’s current proven stops; markAsleep marks exactly those receipts. */
 export async function sleepStructuredAgentSessionWorkspace(
   host: WorkspaceSleepHost,
-  workspaceId: string
+  workspaceId: string,
+  markAsleep = false
 ): Promise<AgentSessionWorkspaceSleepResult> {
-  let records: ReturnType<StructuredAgentSessionHostDeps['store']['listRecords']>
+  let records: ReturnType<StructuredAgentSessionHostDeps['store']['listConversations']>
   try {
-    records = host.deps.store.listRecords()
+    records = host.deps.store.listConversations()
   } catch (error) {
     host.deps.logger.warn('workspace chat inventory failed', {
       scope: 'workspace-chat-inventory',
@@ -38,53 +45,93 @@ export async function sleepStructuredAgentSessionWorkspace(
     ...host.tasks.pendingMembers(workspaceId, LOCAL_EXECUTION_HOST_ID)
   ])
   const sessionIds = [...candidates]
-  // Admits every close synchronously; `async` turns a synchronous throw into a rejection.
+  // async converts synchronous close failures to rejections while admitting every close immediately.
   const stops = await Promise.allSettled(
-    sessionIds.map(async (sessionId) =>
-      host.lifetime.closeForWorkspaceSleep(sessionId, workspaceId, LOCAL_EXECUTION_HOST_ID)
-    )
+    sessionIds.map(async (sessionId) => {
+      const stop = await host.lifetime.closeForWorkspaceSleep(
+        sessionId,
+        workspaceId,
+        LOCAL_EXECUTION_HOST_ID
+      )
+      return host.tasks.serialize(sessionId, async () => {
+        const record = host.deps.store.getConversation(sessionId)
+        if (
+          !stop ||
+          !record ||
+          !belongs(record.location) ||
+          record.currentFence !== stop.fence ||
+          host.deps.store.admittedSendCount(sessionId) !== stop.admittedSends
+        ) {
+          return null
+        }
+        if (!stop.stopped) {
+          return { stopped: false as const, fence: record.currentFence }
+        }
+        return settleWorkspaceSleepChat(host, sessionId, true, markAsleep)
+      })
+    })
   )
   const stoppedSessionIds: string[] = []
   const failures: NonNullable<AgentSessionWorkspaceSleepResult['failures']> = []
   for (const [index, stop] of stops.entries()) {
     const sessionId = sessionIds[index]
     if (stop.status === 'rejected') {
-      failures.push({ sessionId, reason: 'stop-unverifiable' })
-      continue
-    }
-    if (!stop.value) {
-      continue
-    }
-    try {
-      const record = host.deps.store.getRecord(sessionId)
-      if (!record || !belongs(record.location) || record.lease.runtimeFence !== stop.value.fence) {
-        continue
-      }
-      if (!stop.value.stopped) {
-        failures.push({ sessionId, reason: 'stop-unverifiable' })
-        continue
-      }
-      // Judge later work by facts, not lane occupancy: the stop queues its own end report.
-      const session = host.sessions.get(sessionId)
-      if (
-        session?.child ||
-        host.tasks.hasPendingAttach(sessionId) ||
-        host.deliveryRunning(sessionId) ||
-        host.childWorkIncomplete(sessionId) ||
-        session?.journal.pendingSubmissions().length ||
-        host.deps.hasOpenDispatch?.(record)
-      ) {
-        continue
-      }
-      stoppedSessionIds.push(sessionId)
-    } catch (error) {
-      host.deps.logger.warn('workspace chat stop receipt could not be checked', {
+      host.deps.logger.warn('workspace chat stop receipt could not be decided', {
         scope: 'workspace-chat-receipt',
         sessionId,
-        error
+        error: stop.reason
       })
+      failures.push({ sessionId, reason: 'stop-unverifiable' })
+    } else if (stop.value?.stopped) {
+      stoppedSessionIds.push(sessionId)
+    } else if (
+      stop.value &&
+      host.deps.store.getConversation(sessionId)?.currentFence === stop.value.fence
+    ) {
       failures.push({ sessionId, reason: 'stop-unverifiable' })
     }
   }
   return failures.length > 0 ? { stoppedSessionIds, failures } : { stoppedSessionIds }
+}
+
+async function settleWorkspaceSleepChat(
+  host: WorkspaceSleepHost,
+  sessionId: string,
+  stopped: boolean,
+  markAsleep: boolean
+): Promise<WorkspaceSleepVerdict> {
+  const current = host.deps.store.getRecord(sessionId)
+  if (!current) {
+    const conversation = host.deps.store.getConversation(sessionId)
+    return conversation ? { stopped: false, fence: conversation.currentFence } : null
+  }
+  if (!stopped) {
+    return { stopped: false, fence: current.lease.runtimeFence }
+  }
+  // Stop queues its own end report, so judge work by state rather than lane occupancy.
+  const quiet = (record: AgentSessionRecord): boolean => {
+    const session = host.sessions.get(sessionId)
+    return !(
+      session?.child ||
+      host.tasks.hasPendingAttach(sessionId) ||
+      host.deliveryRunning(sessionId) ||
+      host.childWorkIncomplete(sessionId) ||
+      session?.journal.pendingSubmissions().length ||
+      host.deps.hasOpenDispatch?.(record)
+    )
+  }
+  if (!markAsleep) {
+    return quiet(current) ? { stopped: true } : null
+  }
+  let marked = false
+  const now = host.deps.now?.() ?? Date.now()
+  // Check inside the write so the mark and receipt cannot disagree.
+  await host.deps.store.transitionHandoff(sessionId, (record) => {
+    marked = quiet(record)
+    return marked ? { ...record, sleptAt: now, updatedAt: now } : record
+  })
+  if (marked) {
+    host.publishRecordNotes(sessionId)
+  }
+  return marked ? { stopped: true } : null
 }

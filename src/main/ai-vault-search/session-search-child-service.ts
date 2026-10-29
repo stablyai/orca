@@ -7,15 +7,7 @@ import {
 } from '../ai-vault/session-scanner-service-spawn'
 import type { SessionSearchService } from './session-search-service'
 
-/**
- * The desktop's `SessionSearchService`: every call is forwarded to the scanner
- * child that owns the database. This process never opens the index file.
- *
- * A transport failure is a child that is starting, restarting or refusing, which
- * is `not-ready` rather than an error: the caller asked whether this host can
- * answer, and "not yet" is an answer. A child that is up and has no indexer says
- * `disabled` for itself.
- */
+/** Forward to the database-owning child; failed searches return not-ready while logging the error. */
 export function createChildSessionSearchService(
   calls = {
     search: searchSessionsInService,
@@ -27,7 +19,8 @@ export function createChildSessionSearchService(
     search: async (request, hostScope) => {
       try {
         return await calls.search(request, hostScope)
-      } catch {
+      } catch (error) {
+        console.warn('[ai-vault-search] search failed', error)
         return { kind: 'unavailable', reason: 'not-ready' }
       }
     },
@@ -39,8 +32,7 @@ export function createChildSessionSearchService(
       }
     },
     reconcile: async () => {
-      // Swallowed for the same reason: the caller's next search reports the state
-      // of the index, and a freshness wait that cannot run is a stale page, not a throw.
+      // A failed freshness wait leaves results stale; the next search reports availability.
       await calls.reconcile().catch(() => undefined)
     }
   }

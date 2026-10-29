@@ -1,11 +1,10 @@
-// A chat's one send slot: the pending entry that draws a message as sending and keeps any other send
-// of that chat out until it settles.
-
+import type { AgentJournalSkillRef } from '../../../../shared/agent-session-journal-types'
 import { createStructuredAgentSessionOperationId } from '../../../../shared/structured-agent-session-mutation'
 import {
   structuredAgentSessionSendBody,
   type StructuredAgentSessionAttachment
 } from '../../../../shared/structured-agent-session-send-mutation'
+import type { StructuredAgentSessionSendOutcome } from './structured-agent-session-send-runtime'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import {
   getStructuredAgentSessionPendingSends,
@@ -24,12 +23,20 @@ export type StructuredAgentSessionSendInput = {
   options?: Readonly<Record<string, string>>
   /** The caller keeps the text if it comes back, instead of the chat's composer. */
   callerKeepsText?: true
+  usageLimitContinuationOfTurnItemId?: string
+  /** Skills picked from the menu, by file; only to a host that takes them. */
+  skills?: readonly AgentJournalSkillRef[]
   /** Made while the chat read Stopping: drawn after that turn until the host records it. */
   sentWhileStopping?: true
   now?: number
 }
 
-/** Takes the chat's one send slot, drawn as sending; null while another send of the chat is out. */
+export type StructuredAgentSessionSendRequest = Pick<
+  StructuredAgentSessionSendInput,
+  'callerKeepsText' | 'usageLimitContinuationOfTurnItemId' | 'skills'
+> & { onSettled?: (outcome: StructuredAgentSessionSendOutcome) => void }
+
+/** Reserve the chat’s single unanswered-send slot; return null while occupied. */
 export function takeStructuredAgentSessionSendSlot(
   input: StructuredAgentSessionSendInput
 ): StructuredAgentSessionPendingSend | null {
@@ -40,11 +47,14 @@ export function takeStructuredAgentSessionSendSlot(
   const entry: StructuredAgentSessionPendingSend = {
     clientMessageId: createStructuredAgentSessionOperationId(createBrowserUuid),
     sessionId: input.sessionId,
-    body: structuredAgentSessionSendBody(input.text, attachments),
+    body: structuredAgentSessionSendBody(input.text, attachments, input.skills),
     previewUris: attachments.map((attachment) => attachment.previewUri),
     queuedAt: input.now ?? Date.now(),
     ...(input.delivery ? { delivery: input.delivery } : {}),
     ...(input.options ? { options: input.options } : {}),
+    ...(input.usageLimitContinuationOfTurnItemId
+      ? { usageLimitContinuationOfTurnItemId: input.usageLimitContinuationOfTurnItemId }
+      : {}),
     ...(input.callerKeepsText ? { callerKeepsText: true as const } : {}),
     ...(input.sentWhileStopping ? { sentWhileStopping: true as const } : {}),
     ...(attachments.some((attachment) => attachment.connectionId)

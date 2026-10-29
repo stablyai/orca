@@ -8,7 +8,7 @@ import type {
 import { joinSentences } from './sentence-joining'
 import { agentSessionSignInFor } from './agent-session-sign-in'
 
-const SENTENCE_END = /[.!?。！？][\p{Pe}\p{Pf}"']*\s*$/u
+const SENTENCE_END = /[.!?\u3002\uFF01\uFF1F][\p{Pe}\p{Pf}"']*\s*$/u
 
 // The sentences for a start no account or CLI on this host can make: also the chat's notice.
 
@@ -35,7 +35,8 @@ export function notSignedInSentence(
       : surface === 'rejection' &&
           context.messageSubmitted !== false &&
           signIn?.agent !== 'claude' &&
-          signIn?.agent !== 'codex'
+          signIn?.agent !== 'codex' &&
+          signIn?.agent !== 'antigravity'
         ? say(signIn ? 'thenSendAgain' : 'signInThenSend')
         : undefined
   const detail = fact.detail?.audience === 'person' ? fact.detail.text : undefined

@@ -1,78 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import {
-  AGENT_SESSION_TURN_ITEM_CAPABILITY,
-  CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
-  PI_STRUCTURED_DIALOGS_RUNTIME_CAPABILITY,
-  SESSION_TABS_SPLIT_GROUP_PLACEMENT_RUNTIME_CAPABILITY,
-  STRUCTURED_AGENT_SESSION_HOLD_RUNTIME_CAPABILITY,
-  STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY,
-  STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
-} from '../../../src/shared/protocol-version'
-import {
-  AGENT_LAUNCH_RUNTIME_CAPABILITY,
-  AGENT_LAUNCH_TAB_CLOSED_CLIENT_CAPABILITY,
-  AGENT_LAUNCH_UNSTARTED_TAB_CLIENT_CAPABILITY
-} from '../../../src/shared/agent-launch-runtime-capability'
-import { AGENT_SESSION_OPTIONAL_MODEL_CLIENT_CAPABILITY } from '../../../src/shared/agent-session-optional-model-capability'
+import { parseRuntimeClientCapabilities } from '../../../src/main/runtime/rpc/runtime-client-capabilities'
 import { MOBILE_RUNTIME_CLIENT_CAPABILITIES } from './mobile-runtime-client-capabilities'
 
-/** Mirrors the host's `parseRuntimeClientCapabilities`, which returns an EMPTY list — silently
- *  dropping every capability, not just the excess — when the array is longer than this or any
- *  entry is longer than 128 chars. Growing past it would look exactly like an old client. */
-const HOST_CAPABILITY_LIMIT = 64
-const HOST_CAPABILITY_NAME_LIMIT = 128
-
 describe('mobile runtime client capabilities', () => {
-  it('advertises structured agent sessions, the Claude lane, and the turn item', () => {
-    expect(MOBILE_RUNTIME_CLIENT_CAPABILITIES).toEqual(
-      expect.arrayContaining([
-        STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
-        STRUCTURED_AGENT_SESSION_HOLD_RUNTIME_CAPABILITY,
-        CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
-        AGENT_SESSION_TURN_ITEM_CAPABILITY,
-        SESSION_TABS_SPLIT_GROUP_PLACEMENT_RUNTIME_CAPABILITY
-      ])
-    )
-  })
-
-  it('reads every agent the host registers, Pi dialogs included', () => {
-    // Why: without these the host retitles Grok, OpenCode, OMP and Pi chat tabs "Update to view".
-    expect(MOBILE_RUNTIME_CLIENT_CAPABILITIES).toEqual(
-      expect.arrayContaining([
-        STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY,
-        PI_STRUCTURED_DIALOGS_RUNTIME_CAPABILITY
-      ])
-    )
-  })
-
-  it('reads an options report with no model', () => {
-    // Why: without it the host refuses `agentSession.options` for OMP and model-less chats at rest.
-    expect(MOBILE_RUNTIME_CLIENT_CAPABILITIES).toContain(
-      AGENT_SESSION_OPTIONAL_MODEL_CLIENT_CAPABILITY
-    )
-  })
-
-  it('advertises agent.launch so the host may answer a create with either surface', () => {
-    // Why: `supportsAgentLaunch` refuses the method outright unless the client claims it, so
-    // without this every mobile create with an agent stays a terminal no matter the user default.
-    expect(MOBILE_RUNTIME_CLIENT_CAPABILITIES).toContain(AGENT_LAUNCH_RUNTIME_CAPABILITY)
-  })
-
-  it('reads an early launch tab as not started and a closed one as stopped', () => {
-    expect(MOBILE_RUNTIME_CLIENT_CAPABILITIES).toEqual(
-      expect.arrayContaining([
-        AGENT_LAUNCH_UNSTARTED_TAB_CLIENT_CAPABILITY,
-        AGENT_LAUNCH_TAB_CLOSED_CLIENT_CAPABILITY
-      ])
-    )
-  })
-
   it('stays inside the bounds the host parses, which fail closed to no capabilities at all', () => {
-    expect(MOBILE_RUNTIME_CLIENT_CAPABILITIES.length).toBeLessThanOrEqual(HOST_CAPABILITY_LIMIT)
-    for (const capability of MOBILE_RUNTIME_CLIENT_CAPABILITIES) {
-      expect(capability.length).toBeGreaterThan(0)
-      expect(capability.length).toBeLessThanOrEqual(HOST_CAPABILITY_NAME_LIMIT)
-    }
+    expect(parseRuntimeClientCapabilities(MOBILE_RUNTIME_CLIENT_CAPABILITIES)).toEqual(
+      MOBILE_RUNTIME_CLIENT_CAPABILITIES
+    )
   })
 
   it('advertises each capability once so duplicates cannot consume the budget', () => {

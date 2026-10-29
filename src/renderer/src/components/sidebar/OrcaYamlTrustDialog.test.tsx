@@ -40,12 +40,6 @@ vi.mock('@/components/ui/button', () => ({
   )
 }))
 
-// Why: fall back to English defaults so this test doesn't depend on locale files
-// being loaded; the bug is missing JSX whitespace around those fragments.
-vi.mock('@/i18n/i18n', () => ({
-  translate: (_key: string, fallback: string) => fallback
-}))
-
 function decodeHtml(html: string): string {
   return html
     .replace(/&#x27;/g, "'")

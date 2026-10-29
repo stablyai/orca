@@ -16,6 +16,7 @@ import {
 } from './markdown-preview-source-routing'
 import { useDocumentDarkTheme } from '@/hooks/use-document-dark-theme'
 import { usePreserveSectionDuringExternalEdit } from './usePreserveSectionDuringExternalEdit'
+import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 
 export function useMarkdownPreviewSourceFoundation({
   content,
@@ -47,7 +48,6 @@ export function useMarkdownPreviewSourceFoundation({
   const matchesRef = useRef<Range[]>([])
   const searchInstanceRef = useRef<MarkdownPreviewSearchInstance>({})
   const lastAppliedInitialAnchorRef = useRef<string | null>(null)
-  const pendingEditorRevealFrameIdsRef = useRef<number[]>([])
   const [isSearchOpen, setIsSearchOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [matchCount, setMatchCount] = useState(0)
@@ -59,13 +59,12 @@ export function useMarkdownPreviewSourceFoundation({
   const openMarkdownPreview = useAppStore((s) => s.openMarkdownPreview)
   const setMarkdownViewMode = useAppStore((s) => s.setMarkdownViewMode)
   const frontmatterVisibleByFile = useAppStore((s) => s.markdownFrontmatterVisible)
-  const setPendingEditorReveal = useAppStore((s) => s.setPendingEditorReveal)
   const addDiffComment = useAppStore((s) => s.addDiffComment)
   const deleteDiffComment = useAppStore((s) => s.deleteDiffComment)
   const updateDiffComment = useAppStore((s) => s.updateDiffComment)
   const clearDeliveredDiffComments = useAppStore((s) => s.clearDeliveredDiffComments)
   const keybindings = useAppStore((s) => s.keybindings)
-  const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
+  const worktreesByRepo = useAppStore((s) => selectWorktreesByRepo(s))
   const sourceOpenFile = useAppStore((s) =>
     findMarkdownPreviewSourceOpenFile(s.openFiles, {
       sourceFileId,
@@ -174,7 +173,6 @@ export function useMarkdownPreviewSourceFoundation({
     matchesRef,
     searchInstanceRef,
     lastAppliedInitialAnchorRef,
-    pendingEditorRevealFrameIdsRef,
     isSearchOpen,
     setIsSearchOpen,
     query,
@@ -191,7 +189,6 @@ export function useMarkdownPreviewSourceFoundation({
     openMarkdownPreview,
     setMarkdownViewMode,
     frontmatterVisibleByFile,
-    setPendingEditorReveal,
     addDiffComment,
     deleteDiffComment,
     updateDiffComment,

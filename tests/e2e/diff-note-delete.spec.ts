@@ -1,21 +1,4 @@
-/**
- * E2E test for the saved-note "Delete" button inside a diff view.
- *
- * Why: the saved note card (DiffCommentCard) is rendered into a Monaco view
- * zone. Monaco routes mouse events to the editor by default, so the delete
- * button relies on `suppressMouseDown: false` plus per-element
- * stopPropagation handlers in `useDiffCommentDecorator.tsx`. A regression
- * anywhere in that chain (e.g. flipping suppressMouseDown, adding an
- * overlay that eats pointer events, removing the always-visible styling)
- * would make the button uninteractive with no type-check or unit-test
- * signal — this spec is the guard.
- *
- * The test seeds a DiffComment directly through the renderer store so it
- * does not depend on the hover-to-"+" affordance working, which is a
- * separate interaction path. It then opens the diff tab that will display
- * the saved note's view zone, clicks the trash button, and asserts the
- * store list is empty and the DOM zone is gone.
- */
+// Real clicks must reach React note controls inside Monaco view zones; propagation or overlay regressions escape store-only tests.
 
 import { test, expect } from './helpers/orca-app'
 import { waitForSessionReady, waitForActiveWorktree } from './helpers/store'
@@ -29,10 +12,7 @@ test.describe('Diff note delete', () => {
   test('clicking the trash button removes the saved note', async ({ orcaPage }) => {
     const worktreeId = await waitForActiveWorktree(orcaPage)
 
-    // Why: modify a tracked file so opening a diff shows real added/removed
-    // content rather than an empty "no changes" state. `src/index.ts` is
-    // seeded by global-setup with a single line, so rewriting it produces a
-    // diff the modified Monaco editor will render against.
+    // Modify a tracked fixture so Monaco renders a real diff instead of an empty state.
     const { relativePath } = await orcaPage.evaluate(async (wId) => {
       const store = window.__store
       if (!store) {
@@ -55,9 +35,7 @@ test.describe('Diff note delete', () => {
       return { relativePath: rel }
     }, worktreeId)
 
-    // Seed a diff comment directly through the store. This avoids depending
-    // on the hover-to-"+" interaction (a separate code path) so this spec
-    // stays focused on the delete affordance.
+    // Seed the note directly to isolate delete from the separate gutter-hover interaction.
     const addResult = await orcaPage.evaluate(
       async ({ wId, rel }) => {
         const store = window.__store
@@ -79,8 +57,6 @@ test.describe('Diff note delete', () => {
     expect(addResult, 'addDiffComment returned null').not.toBeNull()
     const commentId = addResult!.id
 
-    // Open the diff tab for this file so the decorator mounts a view zone
-    // for the seeded note.
     await orcaPage.evaluate(
       ({ wId, rel }) => {
         const store = window.__store
@@ -100,15 +76,12 @@ test.describe('Diff note delete', () => {
       { wId: worktreeId, rel: relativePath }
     )
 
-    // The note card is rendered into a Monaco view zone. Wait for the
-    // trash button itself rather than any parent container so we know the
-    // React root inside the zone has actually mounted.
+    // Wait for the trash button itself to prove the React root inside Monaco’s zone mounted.
     const deleteButton = orcaPage.getByTitle('Delete note').first()
     await expect(deleteButton).toBeVisible({ timeout: 15_000 })
 
     await deleteButton.click()
 
-    // Store must drop the comment …
     await expect
       .poll(
         async () =>
@@ -129,9 +102,6 @@ test.describe('Diff note delete', () => {
       )
       .toBe(false)
 
-    // …and the view zone must be unmounted, proving the click actually
-    // reached the React handler (not just some other listener that
-    // happened to mutate the store).
     await expect(orcaPage.getByTitle('Delete note')).toHaveCount(0, {
       timeout: 5_000
     })

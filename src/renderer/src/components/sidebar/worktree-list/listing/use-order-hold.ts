@@ -1,6 +1,11 @@
-import { useState, useSyncExternalStore } from 'react'
+import { useMemo, useState, useSyncExternalStore } from 'react'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../../../shared/sidebar-inputs-switch'
+import {
+  withHeldProjectRecency,
+  type SidebarFeedIndex
+} from '../../../../../../shared/sidebar-list/sidebar-feed-index'
 import type { SortBy } from '../../../../../../shared/sidebar-list/smart-sort'
+import type { ProjectOrderBy } from '../../../../../../shared/ui-chrome-types'
 import { mergeHeldOrder } from './held-order'
 
 const LIST_SELECTOR = '[data-worktree-sidebar-container]'
@@ -68,17 +73,18 @@ function subscribe(listener: () => void): () => void {
 const noSubscription = (): (() => void) => () => {}
 const notEngaged = (): boolean => false
 
-/**
- * Desktop only, display only: in Recent and Smart, rows stay put under the pointer and during a
- * drag, so a click never lands on a row that just moved; the new order applies on leave or drag end.
- */
-export function useOrderHeldWhileEngaged(ids: string[], sortBy: SortBy): string[] {
-  // Switch point: the stamp-sorted list moves on events, so it holds; today's list settles itself.
-  const engaged = useSyncExternalStore(
+function useListEngaged(): boolean {
+  // Only the main-input path needs event-driven hover holds; the legacy list settles independently.
+  return useSyncExternalStore(
     ORCA_SIDEBAR_INPUTS_IS_MAIN ? subscribe : noSubscription,
     ORCA_SIDEBAR_INPUTS_IS_MAIN ? isEngaged : notEngaged,
     notEngaged
   )
+}
+
+/** Hold Recent/Smart order during hover or drag so clicks cannot target moving rows; release on leave/end. */
+export function useOrderHeldWhileEngaged(ids: string[], sortBy: SortBy): string[] {
+  const engaged = useListEngaged()
   const [shown, setShown] = useState({ ids, sortBy })
   // Only Recent and Smart move on their own; a mode switch applies at once, like adds and removals.
   const holds = engaged && (sortBy === 'recent' || sortBy === 'smart')
@@ -91,4 +97,21 @@ export function useOrderHeldWhileEngaged(ids: string[], sortBy: SortBy): string[
     setShown(next)
   }
   return ORCA_SIDEBAR_INPUTS_IS_MAIN ? next.ids : ids
+}
+
+/** As above for project sections in Recent order: they keep the stamps they had at engagement. */
+export function useProjectRecencyHeldWhileEngaged(
+  index: SidebarFeedIndex,
+  projectOrderBy: ProjectOrderBy
+): SidebarFeedIndex {
+  const holds = useListEngaged() && projectOrderBy === 'recent'
+  const [heldFrom, setHeldFrom] = useState<SidebarFeedIndex | null>(null)
+  const nextHeldFrom = holds ? (heldFrom ?? index) : null
+  if (nextHeldFrom !== heldFrom) {
+    setHeldFrom(nextHeldFrom)
+  }
+  return useMemo(
+    () => (nextHeldFrom ? withHeldProjectRecency(index, nextHeldFrom) : index),
+    [index, nextHeldFrom]
+  )
 }

@@ -1,16 +1,4 @@
-/**
- * Shared rig for the STA-4343 wrong-host removal tests.
- *
- * One REAL temp directory per execution host stands in for that host's checkout,
- * each holding a marker file for its uncommitted work. The removal transports are
- * the only fakes and they ACTUALLY delete the directory of whichever host they are
- * routed to, so the assertions gate on filesystem state rather than call
- * arguments — and the single-host controls delete for real through the same rig.
- *
- * Every assertion built on this names both sides: which host's directory had to
- * survive AND which had to go, so neither a rig that deletes nothing nor one that
- * deletes everything can pass.
- */
+/** One real temp checkout per host; transport fakes delete whichever host they receive. Assert both survivor and deletion, including single-host controls, to reject inert or indiscriminate rigs (STA-4343). */
 import * as fs from 'node:fs'
 import * as os from 'node:os'
 import * as path from 'node:path'
@@ -55,12 +43,7 @@ export type RemovalTransportMocks = {
   }
 }
 
-/**
- * Points both destructive transports at the per-host directories: `worktrees.remove`
- * carries local and SSH removals, `runtimeEnvironments.call` carries paired-runtime
- * ones. Every routed host id is appended to `routedHostIds`, so a test can assert
- * exactly which host the destructive call reached — or that none was dispatched.
- */
+/** Wire local/SSH worktrees.remove and paired runtimeEnvironments.call to host directories; record every destructive host in routedHostIds. */
 export function installRemovalTransports(
   transports: RemovalTransportMocks,
   rootsByHostId: Partial<Record<ExecutionHostId, string>>,

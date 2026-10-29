@@ -59,7 +59,6 @@ function recorder() {
   }
 }
 
-/** Fires the coalescing window on demand instead of on wall time. */
 function manualWindow() {
   const pending: (() => void)[] = []
   return {
@@ -315,7 +314,6 @@ describe('codex journal translation', () => {
     const mutations = batches.at(-1)?.mutations ?? []
     expect(mutations).toEqual(
       expect.arrayContaining([
-        // The host saw the child go, so the call it was running was cut short.
         expect.objectContaining({
           body: expect.objectContaining({
             kind: 'tool-call',
@@ -410,7 +408,7 @@ describe('codex journal translation', () => {
     expectLifecycleBatchBounds(batches)
   })
 
-  it('bounds one streamed assistant settlement before lifecycle batching', () => {
+  it('settles an oversized streamed reply whole, as its own row outside a lifecycle batch', () => {
     const tap = recorder()
     const batches: LifecycleBatch[] = []
     tap.sink.appendLifecycleBatch = (settlementId, mutations) => {
@@ -454,13 +452,12 @@ describe('codex journal translation', () => {
         ? settled.body.blocks[0].text
         : ''
 
-    expect(checkpointText).toContain('output truncated')
-    expect(settledText).toContain('output truncated')
-    expect(Buffer.byteLength(settledText, 'utf8')).toBeLessThan(20 * 1024)
+    expect(oversized.startsWith(checkpointText)).toBe(true)
+    expect(settledText).toBe(oversized)
     expectLifecycleBatchBounds(batches)
   })
 
-  it('bounds authoritative completed assistant text before the journal append', () => {
+  it('saves authoritative completed assistant text whole', () => {
     const { translator, tap } = translatorWith()
     const oversized = 'b'.repeat(MAX_JOURNAL_LIFECYCLE_BATCH_BYTES + 1_024)
 
@@ -474,8 +471,7 @@ describe('codex journal translation', () => {
     const body = tap.rows[0]?.body
     const text =
       body?.kind === 'message' && body.blocks[0]?.type === 'text' ? body.blocks[0].text : ''
-    expect(text).toContain('output truncated')
-    expect(Buffer.byteLength(JSON.stringify(body), 'utf8')).toBeLessThan(20 * 1024)
+    expect(text).toBe(oversized)
   })
 
   it('terminalizes an active tool when its turn completes', () => {
@@ -537,7 +533,6 @@ describe('codex journal translation', () => {
         ]
       }
     ])
-    // A completed turn proves no interruption.
     expect(batches[0]?.mutations[0]).not.toHaveProperty('body.endedAs')
   })
 
@@ -623,14 +618,11 @@ describe('codex journal translation', () => {
     ask('approval-a')
     ask('approval-b')
 
-    // Two asks, two answerable rows — keying by the tool item would have made the
-    // second ask overwrite the first, leaving the turn blocked.
     const approvals = tap.rows.slice(-2)
     expect(approvals.map((row) => row.key)).toEqual([
       'orca:codex-prompt%3Athread-abc%3Aapproval-a',
       'orca:codex-prompt%3Athread-abc%3Aapproval-b'
     ])
-    // Both still name the command the shared item announced.
     expect(approvals.every((row) => (row.body as { detail?: string }).detail === 'ls')).toBe(true)
     expect(tap.bound.map(([, , promptKey]) => promptKey)).toEqual(['approval-a', 'approval-b'])
   })

@@ -1,3 +1,4 @@
+import type { HostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 import type {
   Automation,
   AutomationCreateInput,
@@ -17,12 +18,14 @@ import type {
   AutomationOwnerFenceOperation,
   AutomationOwnerPrecondition
 } from '../../../shared/automation-owner-precondition'
+import type { WorkspaceRunContext } from '../../../shared/task-source-context'
 import { getWorktreePathBasenameFromId } from '../../../shared/worktree/id'
 import { normalizeAutomationRunWorkspaceDisplayName } from '../scheduling-automations/automation-context-migration'
 import {
   createAutomation as createAutomationOperation,
   deleteAutomation as deleteAutomationOperation,
   listAutomations as listAutomationsOperation,
+  stampLegacyAutomationRunContext as stampLegacyAutomationRunContextOperation,
   updateAutomation as updateAutomationOperation,
   type AutomationDefinitionOperations
 } from '../scheduling-automations/automation-definition-operations'
@@ -37,6 +40,7 @@ import {
 } from '../scheduling-automations/automation-run-operations'
 import {
   advanceAutomationNextRun as advanceAutomationNextRunOperation,
+  disableAutomations as disableAutomationsOperation,
   getLatestAutomationOccurrence as getLatestAutomationOccurrenceOperation
 } from '../scheduling-automations/automation-schedule-operations'
 import {
@@ -154,6 +158,14 @@ export class AutomationPersistence {
     return updateAutomationOperation(getAutomationDefinitionOperations(this), id, updates, options)
   }
 
+  stampLegacyAutomationRunContext(automationId: string, runContext: WorkspaceRunContext): boolean {
+    return stampLegacyAutomationRunContextOperation(
+      getAutomationDefinitionOperations(this),
+      automationId,
+      runContext
+    )
+  }
+
   deleteAutomation(id: string, options?: { expectedOwner?: AutomationOwnerPrecondition }): void {
     deleteAutomationOperation(getAutomationDefinitionOperations(this), id, options)
   }
@@ -188,10 +200,13 @@ export class AutomationPersistence {
     return updateAutomationRunOperation(getAutomationRunOperations(this), result)
   }
 
-  snapshotAutomationRunWorkspaceDisplayName(workspaceId: string, displayName: string): number {
+  snapshotAutomationRunWorkspaceDisplayName(
+    target: HostWorktreeTarget,
+    displayName: string
+  ): number {
     return snapshotAutomationRunWorkspaceDisplayNameOperation(
       getAutomationRunOperations(this),
-      workspaceId,
+      target,
       displayName
     )
   }
@@ -205,6 +220,17 @@ export class AutomationPersistence {
       },
       id,
       now
+    )
+  }
+
+  disableAutomations(ids: ReadonlySet<string>): number {
+    return disableAutomationsOperation(
+      this[automationPersistenceContext].runtime.state,
+      () => {
+        markAutomationDefinitionDomain(this)
+        this[automationPersistenceContext].flushBarriers.flush()
+      },
+      ids
     )
   }
 

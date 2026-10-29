@@ -1,10 +1,4 @@
-/**
- * #11994: repo IPC mutations only sent `repos:changed` to the host's own renderer, so a
- * project deleted (or renamed/reordered) on the host stayed visible on every paired
- * client — clients refetch a remote catalog only on a `reposChanged` client event.
- * The broadcast lives in the shared `notifyReposChanged` helper so every repo mutation
- * fans out, and it must never be able to reject the IPC handler it runs inside.
- */
+/** Paired clients refetch only on reposChanged; broadcast failures must not reject committed mutations. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as ReposChangedNotificationModule from './repos/repos-changed-notification'
 
@@ -77,7 +71,10 @@ describe('repo IPC mutations notify paired clients', () => {
 
     await handlers.get('repos:removeForHost')!(null, { repoId: 'repo-1', hostId: 'ssh:host-1' })
 
-    expect(mockStore.removeProjectForHost).toHaveBeenCalledWith('repo-1', 'ssh:host-1')
+    expect(mockStore.removeProjectForHost).toHaveBeenCalledWith({
+      id: 'repo-1',
+      executionHostId: 'ssh:host-1'
+    })
     expect(notify).toHaveBeenCalledTimes(1)
     expect(mainWindow.webContents.send).toHaveBeenCalledWith('repos:changed')
   })

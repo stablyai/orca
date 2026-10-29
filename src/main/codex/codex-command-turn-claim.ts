@@ -7,8 +7,7 @@ import type {
 
 const CLAIM_BYTES = 4_096
 
-/** Records on the command's turn which provider turn carried it out. Persisted because nothing
- *  else re-derives it once the command settles, and a rewind has to place that turn's rows. */
+/** Persist the provider turn claim so rewind can place its rows after the command settles. */
 export function recordCodexCommandTurnClaim(
   sink: StructuredAgentSessionEventSink,
   commandTurnItemId: string,
@@ -22,7 +21,6 @@ export function recordCodexCommandTurnClaim(
     CLAIM_BYTES,
     (journal) => {
       const body = journal.itemBody(commandTurnItemId)
-      // Settled already — by the host, or by a child's death — leaves nothing to annotate.
       return body?.kind === 'turn' && body.state === 'running'
         ? { identity, body: { ...body, providerTurnId } }
         : null

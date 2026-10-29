@@ -1,25 +1,54 @@
 import { useCallback, useRef, useState } from 'react'
-import { Loader2, MonitorSmartphone, Pencil, Server, ServerOff, Trash2 } from 'lucide-react'
+import { Loader2, MoreHorizontal, Pencil, PlugZap, Trash2 } from 'lucide-react'
 import type {
   SshConnectionState,
   SshConnectionStatus,
   SshTarget
 } from '../../../../shared/ssh-types'
+import { Badge } from '../ui/badge'
 import { Button } from '../ui/button'
-import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
+import { Checkbox } from '../ui/checkbox'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger
+} from '../ui/dropdown-menu'
 import { isSshTargetConnecting, type SshTargetBusyAction } from './ssh-target-action-state'
+import { sshIdentityFileName } from './ssh-target-list-model'
+import { isManagedServerSshHost } from './SshManagedHostRemoveDialog'
+import {
+  SshTargetServerDialogs,
+  SshTargetServerMenuItems,
+  SshTargetServerStatusLine,
+  type SshTargetServerDialog
+} from './SshTargetServerStatus'
 import { translate } from '@/i18n/i18n'
-
-// ── Shared status helpers ────────────────────────────────────────────
+import { cn } from '@/lib/utils'
 
 export const STATUS_LABELS: Record<SshConnectionStatus, string> = {
-  disconnected: 'Disconnected',
-  connecting: 'Connecting\u2026',
-  'auth-failed': 'Auth failed',
-  'deploying-relay': 'Deploying relay\u2026',
-  connected: 'Connected',
-  reconnecting: 'Reconnecting\u2026',
-  'reconnection-failed': 'Reconnection failed',
+  get disconnected() {
+    return translate('settings.ssh.status.disconnected', 'Disconnected')
+  },
+  get connecting() {
+    return translate('settings.ssh.status.connecting', 'Connecting…')
+  },
+  get 'auth-failed'() {
+    return translate('settings.ssh.status.auth-failed', 'Auth failed')
+  },
+  get 'deploying-relay'() {
+    return translate('settings.ssh.status.deploying-relay', 'Deploying relay…')
+  },
+  get connected() {
+    return translate('settings.ssh.status.connected', 'Connected')
+  },
+  get reconnecting() {
+    return translate('settings.ssh.status.reconnecting', 'Reconnecting…')
+  },
+  get 'reconnection-failed'() {
+    return translate('settings.ssh.status.reconnection-failed', 'Reconnection failed')
+  },
   get error() {
     return translate('auto.components.settings.SshTargetCard.18968ede9e', 'Error')
   }
@@ -28,32 +57,33 @@ export const STATUS_LABELS: Record<SshConnectionStatus, string> = {
 export function statusColor(status: SshConnectionStatus): string {
   switch (status) {
     case 'connected':
-      return 'bg-emerald-500'
+      return 'bg-status-success'
     case 'connecting':
     case 'deploying-relay':
     case 'reconnecting':
-      return 'bg-yellow-500'
+      return 'bg-status-warning'
     case 'auth-failed':
     case 'reconnection-failed':
     case 'error':
-      return 'bg-red-500'
+      return 'bg-destructive'
     case 'disconnected':
       return 'bg-muted-foreground/40'
   }
 }
-
-// ── SshTargetCard ────────────────────────────────────────────────────
 
 type SshTargetCardProps = {
   target: SshTarget
   state: SshConnectionState | undefined
   testing: boolean
   busyAction?: SshTargetBusyAction
+  selected?: boolean
+  onSelectClick?: (targetId: string, shiftKey: boolean) => void
   onConnect: (targetId: string) => void | Promise<void>
   onDisconnect: (targetId: string) => void | Promise<void>
   onTest: (targetId: string) => void | Promise<void>
   onEdit: (target: SshTarget) => void
   onRemove: (targetId: string) => void
+  onServerChanged?: () => void
 }
 
 export function SshTargetCard({
@@ -61,24 +91,30 @@ export function SshTargetCard({
   state,
   testing,
   busyAction,
+  selected = false,
+  onSelectClick,
   onConnect,
   onDisconnect,
   onTest,
   onEdit,
-  onRemove
+  onRemove,
+  onServerChanged
 }: SshTargetCardProps): React.JSX.Element {
   const status: SshConnectionStatus = state?.status ?? 'disconnected'
   const [actionInFlight, setActionInFlight] = useState<'connect' | 'disconnect' | null>(null)
+  const [serverDialog, setServerDialog] = useState<SshTargetServerDialog | null>(null)
   const hasActionInFlight = actionInFlight !== null || busyAction !== undefined
   const removeInFlight = busyAction === 'remove'
   const mountedRef = useRef(true)
   const endpoint = target.username
     ? `${target.username}@${target.host}:${target.port}`
     : `${target.host}:${target.port}`
+  const keyName = sshIdentityFileName(target.identityFile)
+  const servedByOrcaServer =
+    isManagedServerSshHost(target) || state?.managedServer?.kind === 'managed'
 
   const handleCardRef = useCallback((node: HTMLDivElement | null): void => {
-    // Why: SSH target actions can resolve after the card is removed; the root
-    // ref gives async completions the same stale-write guard without an Effect.
+    // Root attachment guards async completions after card removal without a passive effect.
     mountedRef.current = node !== null
   }, [])
 
@@ -104,140 +140,178 @@ export function SshTargetCard({
     void Promise.resolve(onDisconnect(target.id)).finally(clearActionInFlight)
   }
 
-  const renderSecondaryIconActions = (): React.JSX.Element => (
-    <div className="flex items-center gap-1">
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => onEdit(target)}
-            className="size-7"
-            disabled={hasActionInFlight}
-            aria-label={translate(
-              'auto.components.settings.SshTargetCard.3d8af2949f',
-              'Edit target'
-            )}
-          >
-            <Pencil className="size-3" />
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent side="top" sideOffset={4}>
-          {translate('auto.components.settings.SshTargetCard.3d8af2949f', 'Edit target')}
-        </TooltipContent>
-      </Tooltip>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => onRemove(target.id)}
-            className="size-7 text-muted-foreground hover:text-red-400"
-            disabled={hasActionInFlight}
-            aria-label={
-              removeInFlight
-                ? translate('auto.components.settings.SshTargetCard.3d21a22d0e', 'Removing target')
-                : translate('auto.components.settings.SshTargetCard.7f7b3d7ab4', 'Remove target')
-            }
-          >
-            {removeInFlight ? (
-              <Loader2 className="size-3 animate-spin" />
-            ) : (
-              <Trash2 className="size-3" />
-            )}
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent side="top" sideOffset={4}>
-          {translate('auto.components.settings.SshTargetCard.7f7b3d7ab4', 'Remove target')}
-        </TooltipContent>
-      </Tooltip>
-    </div>
-  )
+  const renderStatus = (): React.JSX.Element | null => {
+    if (removeInFlight || testing) {
+      return (
+        <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          <Loader2 className="size-3 animate-spin" />
+          {removeInFlight
+            ? translate('auto.components.settings.SshTargetCard.removing', 'Removing…')
+            : translate('auto.components.settings.SshTargetCard.testing', 'Testing…')}
+        </span>
+      )
+    }
+    // Disconnected is the resting state of every saved host, so it stays unlabeled.
+    if (status === 'disconnected') {
+      return null
+    }
+    return (
+      <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+        <span className={cn('size-1.5 shrink-0 rounded-full', statusColor(status))} />
+        {STATUS_LABELS[status]}
+      </span>
+    )
+  }
+
+  const renderPrimaryAction = (): React.JSX.Element => {
+    if (status === 'connected') {
+      return (
+        <Button variant="ghost" size="xs" onClick={handleDisconnect} disabled={hasActionInFlight}>
+          {translate('auto.components.settings.SshTargetCard.4c86f30877', 'Disconnect')}
+        </Button>
+      )
+    }
+    if (isSshTargetConnecting(status)) {
+      return (
+        <Button variant="ghost" size="xs" disabled>
+          {translate('auto.components.settings.SshTargetCard.1810b51482', 'Connecting')}
+        </Button>
+      )
+    }
+    const button = (
+      <Button variant="ghost" size="xs" onClick={handleConnect} disabled={hasActionInFlight}>
+        {actionInFlight === 'connect' ? <Loader2 className="size-3 animate-spin" /> : null}
+        {translate('auto.components.settings.SshTargetCard.ec6543cee9', 'Connect')}
+      </Button>
+    )
+    if (status !== 'disconnected' || actionInFlight === 'connect') {
+      return button
+    }
+    // Reveal repetitive Connect labels on hover/focus while retaining width to avoid shifts.
+    return (
+      <span className="opacity-0 transition-opacity group-hover/row:opacity-100 group-has-[:focus-visible]/row:opacity-100">
+        {button}
+      </span>
+    )
+  }
 
   return (
     <div
       ref={handleCardRef}
       data-ssh-target-card=""
       data-ssh-target-label={target.label}
-      className="flex items-center gap-3 rounded-lg border border-border/50 bg-card/40 px-4 py-3"
+      data-selected={selected ? 'true' : undefined}
+      className="group/row flex items-start gap-3 px-3 py-2 transition-colors hover:bg-accent/40 data-[selected=true]:bg-accent/60 has-[[data-slot=checkbox]:focus-visible]:ring-2 has-[[data-slot=checkbox]:focus-visible]:ring-ring/60 has-[[data-slot=checkbox]:focus-visible]:ring-inset"
     >
-      <Server className="size-4 shrink-0 text-muted-foreground" />
+      {onSelectClick ? (
+        <Checkbox
+          className="mt-0.5"
+          checked={selected}
+          aria-label={translate(
+            'auto.components.settings.SshTargetCard.select',
+            'Select {{label}}',
+            {
+              label: target.label
+            }
+          )}
+          onClick={(event) => {
+            // Selection owns modifier-aware state; suppress Radix’s modifier-blind click toggle.
+            event.preventDefault()
+            onSelectClick(target.id, event.shiftKey)
+          }}
+        />
+      ) : null}
 
       <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2">
+        <div className="flex min-w-0 items-baseline gap-2">
           <span className="truncate text-sm font-medium">{target.label}</span>
-          <span className={`size-2 shrink-0 rounded-full ${statusColor(status)}`} />
-          <span className="text-[11px] text-muted-foreground">{STATUS_LABELS[status]}</span>
+          {servedByOrcaServer ? (
+            <Badge variant="hostContext" className="self-center">
+              {translate('auto.components.settings.SshTargetCard.orcaServer', 'Orca server')}
+            </Badge>
+          ) : null}
+          {/* Keep the separator outside monospace spans so its width stays compact. */}
+          <span className="min-w-0 truncate text-xs text-muted-foreground">
+            <span className="font-mono">{endpoint}</span>
+            {keyName ? (
+              <>
+                {' '}
+                <span className="px-0.5">·</span> <span className="font-mono">{keyName}</span>
+              </>
+            ) : null}
+          </span>
         </div>
-        <p className="truncate text-xs text-muted-foreground">
-          {endpoint}
-          {target.identityFile ? ` \u2022 ${target.identityFile}` : ''}
-        </p>
-        {/* Why not truncate: host key failures put the remedy (`ssh-keygen -R <host>`) at the end,
-            and a one-line clamp with no tooltip made it unreachable even on hover. */}
+        {/* Wrap host-key errors so the trailing recovery command remains reachable. */}
         {/* An unserved host's status line below says why, translated; this is its English twin. */}
         {state?.error && state.managedServer?.kind !== 'relay' ? (
-          <p className="mt-0.5 text-xs text-red-400 [overflow-wrap:anywhere]">{state.error}</p>
+          <p className="mt-0.5 text-xs text-destructive [overflow-wrap:anywhere]">{state.error}</p>
         ) : null}
+        <SshTargetServerStatusLine target={target} state={state} onOpenDialog={setServerDialog} />
       </div>
 
-      <div className="flex shrink-0 items-center gap-1">
-        {status === 'connected' ? (
-          <>
-            {renderSecondaryIconActions()}
+      <div className="flex shrink-0 items-center gap-2">
+        {renderStatus()}
+        {renderPrimaryAction()}
+        <DropdownMenu modal={false}>
+          <DropdownMenuTrigger asChild>
             <Button
               variant="ghost"
-              size="xs"
-              onClick={handleDisconnect}
-              className="gap-1.5"
-              disabled={hasActionInFlight}
-            >
-              <ServerOff className="size-3" />
-              {translate('auto.components.settings.SshTargetCard.4c86f30877', 'Disconnect')}
-            </Button>
-          </>
-        ) : isSshTargetConnecting(status) ? (
-          <>
-            {renderSecondaryIconActions()}
-            <Button variant="ghost" size="xs" disabled className="gap-1.5">
-              <Loader2 className="size-3 animate-spin" />
-              {translate('auto.components.settings.SshTargetCard.1810b51482', 'Connecting')}
-            </Button>
-          </>
-        ) : (
-          <>
-            {renderSecondaryIconActions()}
-            <Button
-              variant="ghost"
-              size="xs"
-              onClick={() => onTest(target.id)}
-              disabled={testing || hasActionInFlight}
-              className="gap-1.5"
-            >
-              {testing ? (
-                <Loader2 className="size-3 animate-spin" />
-              ) : (
-                <MonitorSmartphone className="size-3" />
+              size="icon-xs"
+              disabled={removeInFlight}
+              aria-label={translate(
+                'auto.components.settings.SshTargetCard.moreActions',
+                'More actions for {{label}}',
+                { label: target.label }
               )}
-              {translate('auto.components.settings.SshTargetCard.0e53e9f8e8', 'Test')}
-            </Button>
-            <Button
-              variant="ghost"
-              size="xs"
-              onClick={handleConnect}
-              className="gap-1.5"
-              disabled={hasActionInFlight}
             >
-              {actionInFlight === 'connect' ? (
-                <Loader2 className="size-3 animate-spin" />
-              ) : (
-                <Server className="size-3" />
-              )}
-              {translate('auto.components.settings.SshTargetCard.ec6543cee9', 'Connect')}
+              <MoreHorizontal />
             </Button>
-          </>
-        )}
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="min-w-44">
+            <DropdownMenuItem
+              disabled={
+                testing ||
+                hasActionInFlight ||
+                status === 'connected' ||
+                isSshTargetConnecting(status)
+              }
+              onSelect={() => void onTest(target.id)}
+            >
+              <PlugZap />
+              {translate(
+                'auto.components.settings.SshTargetCard.testConnection',
+                'Test connection'
+              )}
+            </DropdownMenuItem>
+            <DropdownMenuItem disabled={hasActionInFlight} onSelect={() => onEdit(target)}>
+              <Pencil />
+              {translate('auto.components.settings.SshTargetCard.edit', 'Edit…')}
+            </DropdownMenuItem>
+            <SshTargetServerMenuItems
+              target={target}
+              state={state}
+              onOpenDialog={setServerDialog}
+            />
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              variant="destructive"
+              disabled={hasActionInFlight}
+              onSelect={() => onRemove(target.id)}
+            >
+              <Trash2 />
+              {translate('auto.components.settings.SshTargetCard.remove', 'Remove…')}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
+
+      <SshTargetServerDialogs
+        target={target}
+        state={state}
+        dialog={serverDialog}
+        onDialogChange={setServerDialog}
+        onChanged={() => onServerChanged?.()}
+      />
     </div>
   )
 }

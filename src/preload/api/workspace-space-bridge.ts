@@ -4,6 +4,7 @@ import type {
   WorkspaceSpaceScanProgress
 } from '../../shared/workspace-space-types'
 import type { ExecutionHostId } from '../../shared/execution-host'
+import type { WorkspaceSpaceChange } from '../../shared/workspace-space-change'
 import type { PreloadApi } from '../api-types'
 
 export const workspaceSpaceApi = {
@@ -11,12 +12,14 @@ export const workspaceSpaceApi = {
   getCachedAnalysis: () => ipcRenderer.invoke('workspaceSpace:getCachedAnalysis'),
   cancel: () => ipcRenderer.invoke('workspaceSpace:cancel'),
   openWindow: () => ipcRenderer.invoke('workspaceSpace:openWindow'),
-  closeWindow: () => ipcRenderer.invoke('workspaceSpace:closeWindow'),
   publishWindowState: (state: unknown) =>
     ipcRenderer.invoke('workspaceSpace:publishWindowState', state),
   requestWindowState: () => ipcRenderer.invoke('workspaceSpace:requestWindowState'),
-  revealWorktree: (worktreeId: string, executionHostId?: ExecutionHostId) =>
-    ipcRenderer.invoke('workspaceSpace:revealWorktree', worktreeId, executionHostId),
+  revealWorktree: (
+    worktreeId: string,
+    executionHostId?: ExecutionHostId,
+    change?: WorkspaceSpaceChange
+  ) => ipcRenderer.invoke('workspaceSpace:revealWorktree', worktreeId, executionHostId, change),
   requestWorktreeRefresh: () => ipcRenderer.invoke('workspaceSpace:requestWorktreeRefresh'),
   publishWindowAnalysis: (analysis: WorkspaceSpaceAnalysis) =>
     ipcRenderer.invoke('workspaceSpace:publishWindowAnalysis', analysis),
@@ -41,12 +44,19 @@ export const workspaceSpaceApi = {
     ipcRenderer.on('workspaceSpace:windowState', listener)
     return () => ipcRenderer.removeListener('workspaceSpace:windowState', listener)
   },
-  onRevealWorktree: (callback: (worktreeId: string, executionHostId?: ExecutionHostId) => void) => {
+  onRevealWorktree: (
+    callback: (
+      worktreeId: string,
+      executionHostId?: ExecutionHostId,
+      change?: WorkspaceSpaceChange
+    ) => void
+  ) => {
     const listener = (
       _event: Electron.IpcRendererEvent,
       worktreeId: string,
-      executionHostId?: ExecutionHostId
-    ): void => callback(worktreeId, executionHostId)
+      executionHostId?: ExecutionHostId,
+      change?: WorkspaceSpaceChange
+    ): void => callback(worktreeId, executionHostId, change)
     ipcRenderer.on('workspaceSpace:revealWorktree', listener)
     return () => ipcRenderer.removeListener('workspaceSpace:revealWorktree', listener)
   },

@@ -1,9 +1,8 @@
-import type { CodexAppServerConnection } from './codex-app-server-connection'
+import type { CodexAppServerConnection } from './app-server/codex-app-server-connection-types'
 import type { CodexJournalTranslationAdmission } from './codex-structured-journal-translation'
 import type { CodexSession } from './codex-structured-session-state'
 
 const MAX_RETRY_EVENTS = 256
-const MAX_RETRY_BYTES = 8 * 1024 * 1024
 const RETRY_DELAY_MS = 25
 
 type PendingNotification = {
@@ -96,8 +95,7 @@ export function createCodexStructuredNotificationRetry(deps: {
       clearTimeout(state.timer)
       state.timer = null
     }
-    // The queue is no longer replayable. Drop it explicitly, release the read
-    // pause, and enter the adapter's generation-checked unexpected-exit seam.
+    // Unreplayable queues must release paused reads before host recovery.
     state.events.length = 0
     state.bytes = 0
     state.connection.resumeReading?.()
@@ -122,9 +120,7 @@ export function createCodexStructuredNotificationRetry(deps: {
       state = { connection, events: [], bytes: 0, timer: null, running: false, failed: false }
       states.set(sessionId, state)
     }
-    if (state.events.length >= MAX_RETRY_EVENTS || state.bytes + bytes > MAX_RETRY_BYTES) {
-      // A bounded queue cannot retain more traffic. Fail it truthfully so the
-      // provider's generation enters host recovery instead of stranding a pause.
+    if (state.events.length >= MAX_RETRY_EVENTS) {
       fail(sessionId, state, 'notification retry queue overflow')
       return
     }

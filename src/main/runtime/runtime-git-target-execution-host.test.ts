@@ -1,7 +1,4 @@
-// `resolveRuntimeGitTarget` read `store.getRepo(worktree.repoId)?.connectionId` and never looked at
-// `worktree.hostId`, so one arbitrarily chosen row decided the execution host for ~36 downstream
-// Git dispatches. `undefined` there meant "runtime host", "unresolved" and "genuinely local" at
-// once (#11163). These cases pin all four answers end to end; an `ssh:` host is refused by name.
+// Pin four execution-host answers (#11163): old repo-only lookup ignored worktree.hostId and treated unresolved/runtime/local as undefined. Refuse ssh: by name.
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('electron', () => ({
@@ -27,10 +24,6 @@ import { OrcaRuntimeService } from './orca-runtime'
 const REMOTE_PATH = '/srv/app-feature'
 const WORKTREE_ID = 'repo-shared::/srv/app-feature'
 
-type RuntimeInternals = {
-  resolveWorktreeSelector: (selector: string) => Promise<unknown>
-}
-
 function makeRuntime(repos: readonly Record<string, unknown>[], hostId?: string) {
   const store = {
     getSettings: () => ({ disabledTuiAgents: [], workspaceDir: '/tmp/workspaces' }),
@@ -40,7 +33,7 @@ function makeRuntime(repos: readonly Record<string, unknown>[], hostId?: string)
     getRepo: (id: string) => repos.find((repo) => repo.id === id)
   }
   const runtime = new OrcaRuntimeService(store as never)
-  vi.spyOn(runtime as unknown as RuntimeInternals, 'resolveWorktreeSelector').mockResolvedValue({
+  runtime['resolveGitWorktreeSelector'] = vi.fn().mockResolvedValue({
     id: WORKTREE_ID,
     repoId: 'repo-shared',
     path: REMOTE_PATH,
@@ -66,8 +59,7 @@ describe('runtime Git target execution host', () => {
     mocks.getStatus.mockReset().mockResolvedValue({ entries: [] })
   })
 
-  // The case whose absence let the original cross-host leak through review: two SSH hosts, and the
-  // rival row is the one `getRepo` returns first.
+  // Put a rival SSH row first to expose cross-host repo-id lookup.
   it('routes an ssh worktree to the host it names, not to a rival row on another ssh host', async () => {
     const runtime = makeRuntime(
       [
@@ -89,8 +81,7 @@ describe('runtime Git target execution host', () => {
     await expectRefusedFor(runtime.getRuntimeGitStatus(`id:${WORKTREE_ID}`), 'm4air')
   })
 
-  // `local` has no SSH namespace to nest in, so a surviving `connectionId` is a row contradicting
-  // itself. The old shape handed it out and dialled a remote host for a local workspace.
+  // Local rows cannot carry SSH connectionId; the old target dialed remote for local workspaces.
   it('ignores a stale connection on a row that declares itself local', async () => {
     const runtime = makeRuntime(
       [
@@ -109,9 +100,7 @@ describe('runtime Git target execution host', () => {
     expect(mocks.getStatus).toHaveBeenCalled()
   })
 
-  // A `runtime:` row's `connectionId` names a target in the *server's* namespace. Dialling it here
-  // reaches a same-named target on this client — a silent-wrong-host answer, worse than the
-  // silent-local one it replaced.
+  // Runtime connectionId names server-side SSH, never this client's same-named target.
   it('refuses a runtime host whose row carries a nested ssh target', async () => {
     const runtime = makeRuntime(
       [

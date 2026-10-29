@@ -1,7 +1,5 @@
-// Installs a managed runtime when the person asks, on the host that runs its chats. One instance per
-// runtime owns every change to its releases: it reclaims old ones once, first, then installs one at a
-// time. Publishing the release by rename is the commit point; a cancel after it changes nothing.
-// Remove deletes the releases only inside the host's ownership fence, never beside an install.
+// Serialize release changes per runtime; rename commits installation, so later cancellation cannot undo it.
+// Removal runs only inside the host ownership fence, never beside installation.
 
 import { randomUUID } from 'node:crypto'
 import { rm } from 'node:fs/promises'
@@ -23,14 +21,19 @@ const DEADLINE_MS = 45 * 60_000
 
 export type ManagedRuntimeInstallationDeps = {
   dataDirectory: string
-  /** Whether a start would run a copy found outside Orca's releases (PATH, install folders). */
   findExternal: () => Promise<boolean>
-  /** Runs `work` once nothing on this host runs the runtime; rejects without running it otherwise. */
+  /** Reject unless no host workload uses this runtime. */
   fence: (work: () => Promise<void>) => Promise<void>
   fetcher?: MainHttpClient['fetch']
 }
 
 type Run = { id: string; controller: AbortController; committed: boolean }
+
+const releaseChangeListeners = new Set<() => void>()
+export function onManagedRuntimeReleasesChanged(listener: () => void): () => void {
+  releaseChangeListeners.add(listener)
+  return () => releaseChangeListeners.delete(listener)
+}
 type InstalledFacts = Omit<ManagedRuntimeInstallState, 'agent' | 'revision' | 'operation'>
 
 export class ManagedRuntimeInstallation {
@@ -49,8 +52,7 @@ export class ManagedRuntimeInstallation {
     this.mutation = this.reclaim()
   }
 
-  /** Disk and PATH are reread on a `fresh` read and when the phase changes, never for byte
-   *  progress alone. */
+  /** Reread disk/PATH on fresh reads or phase changes, never byte-progress updates. */
   async status(fresh = true): Promise<ManagedRuntimeInstallState> {
     const { value: operation, revision } = this.state.get()
     const phase = `${operation?.id}:${operation?.phase}`
@@ -59,7 +61,6 @@ export class ManagedRuntimeInstallation {
       const read = this.readInstalledFacts()
       facts = { phase, read }
       this.facts = facts
-      // A failed read is retried by the next status, not replayed.
       read.catch(() => {
         this.facts = this.facts?.read === read ? null : this.facts
       })
@@ -67,7 +68,6 @@ export class ManagedRuntimeInstallation {
     return { agent: this.agent, revision, ...(await facts.read), operation }
   }
 
-  /** Calls `onChange` after every state revision until the returned unsubscribe. */
   subscribe(onChange: () => void): () => void {
     return this.state.subscribe(onChange)
   }
@@ -75,7 +75,7 @@ export class ManagedRuntimeInstallation {
   private async readInstalledFacts(): Promise<InstalledFacts> {
     const pin = this.runtime.pin()
     const { release, broken, unreadable } = resolveInstalledRuntimeRelease(this.root, pin)
-    // Unknown is not absent: a failed read keeps each client's last answer.
+    // Unreadable is not absent; preserve clients’ last known installation state.
     if (unreadable && !release?.current) {
       throw new Error(`Couldn't read the installed ${this.runtime.label} files on this host.`)
     }
@@ -87,13 +87,12 @@ export class ManagedRuntimeInstallation {
       installedVersion: release?.version ?? null,
       installedCurrent: release?.current ?? false,
       ...(pin && !release?.current && broken.includes(pin.version) && { damaged: true }),
-      // A damaged copy is removable too, though no launch runs it.
       canRemove: release !== null || broken.length > 0,
       source
     }
   }
 
-  /** Joins the running install; one being cancelled finishes its cleanup before the next starts. */
+  /** Join installs; canceled work must finish cleanup before another begins. */
   install(): ManagedRuntimeOperation {
     const { label } = this.runtime
     const pin = this.runtime.pin()
@@ -122,7 +121,6 @@ export class ManagedRuntimeInstallation {
     return operation
   }
 
-  /** Joins a running removal; refused while an install, or its cleanup, still runs. */
   remove(): ManagedRuntimeOperation {
     const current = this.state.get().value
     if (this.running && current?.kind === 'remove') {
@@ -145,8 +143,7 @@ export class ManagedRuntimeInstallation {
     return operation
   }
 
-  /** Resolves with the outcome once the work has unwound: `cancelled`, or `succeeded` when it had
-   *  already committed. No install queues behind a running one, so `mutation` ends with it. */
+  /** Await unwinding; already-committed installs succeed despite cancellation. */
   async cancel(operationId: string): Promise<ManagedRuntimeOperation | null> {
     const current = this.state.get().value
     if (current?.id !== operationId) {
@@ -165,11 +162,14 @@ export class ManagedRuntimeInstallation {
 
   private publish(run: Run, patch: Partial<ManagedRuntimeOperation>): void {
     const operation = this.state.get().value
-    // Once aborted, only the outcome moves it: progress from the unwinding work is stale.
+    // Once aborted, unwinding progress is stale; only final outcomes may advance state.
     const settles =
       patch.phase === 'succeeded' || patch.phase === 'cancelled' || patch.phase === 'failed'
     if (operation?.id === run.id && (settles || !run.controller.signal.aborted)) {
       this.state.set({ ...operation, ...patch })
+      if (settles) {
+        releaseChangeListeners.forEach((listener) => listener())
+      }
     }
   }
 
@@ -221,7 +221,7 @@ export class ManagedRuntimeInstallation {
   private async reclaim(): Promise<void> {
     const { release, unreadable } = resolveInstalledRuntimeRelease(this.root, this.runtime.pin())
     if (unreadable) {
-      // Which release a launch runs is unknown, so nothing is provably stale.
+      // Unknown active release means no release is provably stale.
       console.warn(`[managed-runtime] ${this.agent} releases unreadable; not reclaiming this run`)
       return
     }

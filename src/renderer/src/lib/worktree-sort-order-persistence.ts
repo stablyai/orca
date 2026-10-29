@@ -5,8 +5,7 @@ import { splitWorktreeSortOrderByHost } from './worktree-sort-order-host-split'
 
 function ignoreSortOrderPersistenceFailure(promise: Promise<unknown>): void {
   void promise.catch(() => {
-    // Why: sort-order restore is best-effort; SSH disconnects during smart sort
-    // must not surface as unhandled rejections that pollute crash diagnostics.
+    // Best-effort sort persistence must not turn SSH disconnects into unhandled crash diagnostics.
   })
 }
 
@@ -21,7 +20,7 @@ export function persistWorktreeSortOrderByHost(
         callRuntimeRpc(
           { kind: 'environment', environmentId: parsed.environmentId },
           'worktree.persistSortOrder',
-          { orderedIds: group.orderedIds },
+          { orderedIds: group.orderedIds, hostIds: group.rowHostIds },
           { timeoutMs: 15_000 }
         )
       )
@@ -29,7 +28,10 @@ export function persistWorktreeSortOrderByHost(
     }
 
     ignoreSortOrderPersistenceFailure(
-      window.api.worktrees.persistSortOrder({ orderedIds: group.orderedIds })
+      window.api.worktrees.persistSortOrder({
+        orderedIds: group.orderedIds,
+        hostIds: group.rowHostIds
+      })
     )
   }
 }

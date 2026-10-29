@@ -25,7 +25,7 @@ const ACTIVE_PATH = join('/work', 'feature')
 const SIBLING_PATH = join('/work', 'other')
 const HEAD = 'a'.repeat(40)
 
-function makeWatch(connectionId?: string): WorktreeBaseNotificationWatch {
+function makeWatch(): WorktreeBaseNotificationWatch {
   const headIdentityRefresh = createWorktreeHeadIdentityRefreshState()
   headIdentityRefresh.cache.primary = { worktreePath: PRIMARY_PATH, head: HEAD, branch: null }
   headIdentityRefresh.cache.entries.set('Feature1', {
@@ -42,7 +42,6 @@ function makeWatch(connectionId?: string): WorktreeBaseNotificationWatch {
     key: 'git-common:local',
     kind: 'git-common',
     path: COMMON_DIR,
-    ...(connectionId ? { connectionId } : {}),
     repos: new Map([['repo-1', { repoId: 'repo-1', repoName: 'project', nestWorkspaces: false }]]),
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: notifications only call isDestroyed.
     mainWindow: { isDestroyed: () => false } as never,
@@ -105,8 +104,7 @@ describe('scheduleWorktreeBaseNotification git status attribution', () => {
   })
 
   it('leaves sibling commits unattributed: the moved branch can be the active local upstream', async () => {
-    // A commit to `main` in a sibling writes its index and logs/HEAD; refs/heads/main
-    // itself is not polled, so the head move must still reach the active checkout.
+    // Sibling branch commits can change the active checkout's local upstream without polling refs/heads.
     for (const paths of [
       [
         ['worktrees', 'other', 'index'],
@@ -169,18 +167,9 @@ describe('scheduleWorktreeBaseNotification git status attribution', () => {
     )
   })
 
-  it('never attributes SSH watches, which keep no local head memo', async () => {
-    await flush(makeWatch('ssh-1'), [['worktrees', 'other', 'index']])
-    expect(notifyWorktreeGitStatusMetadataChanged).toHaveBeenCalledWith(
-      expect.anything(),
-      'repo-1',
-      null
-    )
-  })
-
-  it('keeps notifying while SSH index writes never pause', async () => {
-    const watch = makeWatch('ssh-1')
-    // Raw provider events every 100 ms: a restarting debounce would never fire.
+  it('keeps notifying while index writes never pause', async () => {
+    const watch = makeWatch()
+    // Events every 100 ms: a restarting debounce would never fire.
     for (let elapsed = 0; elapsed < 2_000; elapsed += 100) {
       scheduleWorktreeBaseNotification(watch, { gitStatusRepoIds: ['repo-1'] })
       await vi.advanceTimersByTimeAsync(100)

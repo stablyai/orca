@@ -51,3 +51,11 @@ export declare function grantAccessAsync(
   accessMask: number,
   options: GrantAccessOptions
 ): Promise<void>
+
+export type StdHandleInheritanceFailure = { stream: 'stdin' | 'stdout' | 'stderr'; code: number }
+
+/**
+ * Makes the process's std handles non-inheritable, skipping absent ones. Never throws; returns the
+ * handles SetHandleInformation rejected (e.g. a legacy console pseudo-handle) with their Win32 code.
+ */
+export declare function clearStdHandleInheritance(): StdHandleInheritanceFailure[]

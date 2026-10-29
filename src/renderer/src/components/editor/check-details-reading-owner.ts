@@ -1,5 +1,5 @@
 import type { OpenFile } from '@/store/slices/editor'
-import { resolveStepOutcome } from './check-job-step-status'
+import { resolveStepOutcome } from '../../../../shared/pr-check-step-status'
 import { scrollTopCache, setWithLRU } from '@/lib/scroll-cache'
 import {
   cancelCheckReadingIntents,

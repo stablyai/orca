@@ -1,10 +1,8 @@
 import type { CatalogModel, CatalogOption } from './agent-session-option-catalog'
 import type { AgentSessionOptionChoice, AgentSessionOptionsResult } from './agent-session-wire'
 
-// The picker options one listed model offers, built from what its host reported.
-
 function effortOption(model: AgentSessionOptionsResult['models'][number]): CatalogOption | null {
-  if (model.efforts.length <= 1) {
+  if (model.efforts.length === 0) {
     return null
   }
   return {
@@ -32,7 +30,7 @@ function fastModeOption(): CatalogOption {
 }
 
 /** Standard plus the tiers the model lists, valued by tier id; one choice in place of Fast. */
-function serviceTierOption(tiers: readonly AgentSessionOptionChoice[]): CatalogOption {
+export function serviceTierOption(tiers: readonly AgentSessionOptionChoice[]): CatalogOption {
   return {
     id: 'serviceTier',
     label: 'Speed',

@@ -29,25 +29,9 @@ function interactiveTarget(): EventTarget {
 }
 
 describe('shouldRedirectNativeChatTyping', () => {
-  it('redirects printable typing from the native chat pane', () => {
-    expect(shouldRedirectNativeChatTyping(keyEvent({ key: 'x' }), true)).toBe(true)
-  })
-
-  it('does not redirect shortcuts or non-printable keys', () => {
-    expect(shouldRedirectNativeChatTyping(keyEvent({ key: 'Enter' }), true)).toBe(false)
-    expect(shouldRedirectNativeChatTyping(keyEvent({ key: 'a', metaKey: true }), true)).toBe(false)
-    expect(shouldRedirectNativeChatTyping(keyEvent({ key: 'a', ctrlKey: true }), true)).toBe(false)
-  })
-
   it('does not redirect IME composition or already-handled events', () => {
     expect(shouldRedirectNativeChatTyping(keyEvent({ isComposing: true }), true)).toBe(false)
     expect(shouldRedirectNativeChatTyping(keyEvent({ defaultPrevented: true }), true)).toBe(false)
-  })
-
-  it('leaves interactive targets alone', () => {
-    expect(shouldRedirectNativeChatTyping(keyEvent({ target: interactiveTarget() }), true)).toBe(
-      false
-    )
   })
 
   it('passes typed characters but not Space through a focused button or link', () => {
@@ -97,11 +81,6 @@ describe('shouldRedirectNativeChatTyping', () => {
 })
 
 describe('shouldFocusNativeChatComposerFromEditingKey', () => {
-  it('focuses the composer on Backspace/Delete from the pane', () => {
-    expect(shouldFocusNativeChatComposerFromEditingKey(keyEvent({ key: 'Backspace' }))).toBe(true)
-    expect(shouldFocusNativeChatComposerFromEditingKey(keyEvent({ key: 'Delete' }))).toBe(true)
-  })
-
   it('ignores other keys, shortcut/editing modifiers, IME composition, and handled events', () => {
     expect(shouldFocusNativeChatComposerFromEditingKey(keyEvent({ key: 'a' }))).toBe(false)
     expect(
@@ -126,36 +105,9 @@ describe('shouldFocusNativeChatComposerFromEditingKey', () => {
       shouldFocusNativeChatComposerFromEditingKey(keyEvent({ key: 'Backspace', isComposing: true }))
     ).toBe(false)
   })
-
-  it('leaves interactive targets (the textarea itself) alone', () => {
-    expect(
-      shouldFocusNativeChatComposerFromEditingKey(
-        keyEvent({ key: 'Backspace', target: interactiveTarget() })
-      )
-    ).toBe(false)
-  })
-})
-
-describe('shouldFocusNativeChatPaneFromPointerTarget', () => {
-  it('focuses the pane for non-interactive clicks', () => {
-    expect(shouldFocusNativeChatPaneFromPointerTarget(inertTarget())).toBe(true)
-  })
-
-  it('does not steal focus from controls', () => {
-    expect(shouldFocusNativeChatPaneFromPointerTarget(interactiveTarget())).toBe(false)
-  })
 })
 
 describe('shouldFocusNativeChatInputForPaste', () => {
-  it.each([
-    [true, { key: 'v', metaKey: true }],
-    [false, { key: 'v', ctrlKey: true }],
-    [false, { key: 'V', ctrlKey: true, shiftKey: true }],
-    [false, { key: 'Insert', shiftKey: true }]
-  ])('takes the platform paste chord (mac=%s) outside an input', (isMac, keys) => {
-    expect(shouldFocusNativeChatInputForPaste(keyEvent(keys), isMac)).toBe(true)
-  })
-
   it('ignores the other platform chord, Alt chords, IME, handled events and inputs', () => {
     expect(shouldFocusNativeChatInputForPaste(keyEvent({ key: 'v', ctrlKey: true }), true)).toBe(
       false

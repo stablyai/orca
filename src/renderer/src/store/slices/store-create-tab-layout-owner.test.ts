@@ -13,6 +13,7 @@ import type { PublishedTab } from '../../../../shared/workspace-layout/workspace
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { LayoutApplyParams } from '../../../../shared/rpc-contract/workspace-layout-params'
 import { applyLayoutCommand } from '../../../../shared/workspace-layout/workspace-layout-commands'
+import { layoutCommandsOf } from '@/runtime/layout-apply-test-double'
 
 const mocks = vi.hoisted(() => ({
   layoutOwnerIsMain: true,
@@ -92,7 +93,6 @@ describe('createTab in a layout-owner build', () => {
         }
       }
     })
-    // The window drew it first: its callers act on the tab at once.
     expect(store.getState().tabsByWorktree[WORKTREE]?.map((tab) => tab.id)).toEqual([TAB])
   })
 
@@ -150,7 +150,9 @@ describe('createTab in a layout-owner build', () => {
       quickCommandLabel: ' Dev server '
     })
 
-    const { command } = LayoutApplyParams.parse(mocks.callRuntimeRpc.mock.calls[0]?.[2])
+    const [command] = layoutCommandsOf(
+      LayoutApplyParams.parse(mocks.callRuntimeRpc.mock.calls[0]?.[2]).command
+    )
     const applied = applyLayoutCommand(
       {
         hostId: LOCAL_EXECUTION_HOST_ID,
@@ -158,7 +160,7 @@ describe('createTab in a layout-owner build', () => {
         records: {},
         legacy: { terminalRowOwners: {} }
       },
-      command,
+      command!,
       { mintId: () => 'minted', mintLeafId: () => 'minted-leaf', now: () => 1 }
     )
     expect(applied.ok && applied.model.workspaces[WORKTREE]?.tabs[0]).toMatchObject({

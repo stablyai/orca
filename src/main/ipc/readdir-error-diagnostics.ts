@@ -2,15 +2,7 @@ import type { CrashReportBreadcrumbData } from '../../shared/crash-reporting'
 
 export type ReadDirThrowSite = 'ssh-provider' | 'authorize' | 'readdir'
 
-/**
- * Redacted shape of a directory path for crash diagnostics.
- *
- * Why shape, not the path: "Error invoking remote method 'fs:readDir'" reaches
- * the renderer with no cause. We want to know *what kind* of path failed (WSL
- * UNC, network share, drive letter, SSH) without recording the path itself —
- * even though breadcrumbs are path-redacted downstream, never collecting the
- * raw path is the safer default.
- */
+/** Classify failed directory paths without collecting raw paths in crash diagnostics. */
 export function classifyReadDirPath(
   dirPath: string,
   connectionId: string | undefined
@@ -38,10 +30,7 @@ function errorCode(error: unknown): string | undefined {
   return undefined
 }
 
-/**
- * Build the redacted breadcrumb payload for a thrown fs:readDir call: which
- * throw site fired, the error code/name, and the path shape — no raw path.
- */
+/** Report throw site, error code/name and path shape without raw paths. */
 export function buildReadDirErrorBreadcrumb(args: {
   dirPath: string
   connectionId: string | undefined

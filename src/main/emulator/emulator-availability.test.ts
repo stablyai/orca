@@ -3,6 +3,8 @@ import { inspectEmulatorAvailability } from './emulator-availability'
 import type { EmulatorBridge } from './emulator-bridge'
 import type { SimulatorDevice } from './simctl-simulator-devices'
 import type { BackendAvailability } from './backends/emulator-backend'
+import { EmulatorError } from './emulator-errors'
+import { emulatorFailureText } from '../../shared/emulator-failure-copy'
 
 type FakeBridgeOverrides = {
   supported?: boolean
@@ -17,9 +19,6 @@ const NO_ANDROID: BackendAvailability = {
   message: 'Android SDK not found. Install Android Studio and set ANDROID_HOME.'
 }
 
-// A minimal stand-in exposing only what inspectEmulatorAvailability touches: the
-// registered backends (iOS host gate + Android checkAvailability) and the iOS
-// passthroughs.
 function fakeBridge(overrides: FakeBridgeOverrides = {}): EmulatorBridge {
   const android = overrides.android ?? NO_ANDROID
   return {
@@ -128,5 +127,33 @@ describe('inspectEmulatorAvailability', () => {
     expect(result.available).toBe(false)
     expect(result.simctl.ok).toBe(false)
     expect(result.simctl.message).toBe('xcrun exploded')
+  })
+
+  it('codes known setup sentences without changing their English text', async () => {
+    const result = await inspectEmulatorAvailability(
+      fakeBridge({
+        supported: true,
+        listSimulators: async () => {
+          throw new EmulatorError(
+            'emulator_device_not_found',
+            emulatorFailureText('simulatorNotFound', { udid: 'udid-9' })
+          )
+        },
+        android: {
+          available: false,
+          devices: [],
+          message: 'adb exploded',
+          messageCode: 'adbUnavailable'
+        }
+      })
+    )
+    expect(result.simctl).toEqual({
+      ok: false,
+      message:
+        'Simulator udid-9 not found. Create one via Xcode > Window > Devices and Simulators.',
+      messageCode: 'simulatorNotFound',
+      messageParams: { udid: 'udid-9' }
+    })
+    expect(result.android).toMatchObject({ message: 'adb exploded', messageCode: 'adbUnavailable' })
   })
 })

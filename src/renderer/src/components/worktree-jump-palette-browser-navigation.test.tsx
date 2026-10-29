@@ -21,10 +21,25 @@ import {
   makeWorktree
 } from './worktree-jump-palette-test-fixtures'
 import type { QuickActionPaletteItem } from './worktree-jump-palette-model'
+import {
+  drawTabsFromMain,
+  type TabsDrawnFromMain
+} from '@/store/slices/tabs-drawn-from-main.test-fixture'
 
 vi.mock('@/hooks/useSettingsNavigationMetadata', () => ({
   useSettingsNavigationMetadata: () => []
 }))
+
+vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeRpcClientWithLayoutApply(await importOriginal())
+)
+vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeLayoutClientWithTestFrames(await importOriginal())
+)
 
 const { openWorkspaceBrowserTab } = vi.hoisted(() => ({ openWorkspaceBrowserTab: vi.fn() }))
 vi.mock(import('@/lib/workspace-browser-tab-open'), async (importOriginal) => ({
@@ -111,6 +126,8 @@ function usePalette() {
 }
 
 describe('Cmd+J website selection', () => {
+  let main: TabsDrawnFromMain | undefined
+
   beforeEach(() => {
     openWorkspaceBrowserTab.mockReset().mockResolvedValue(undefined)
     useAppStore.setState(
@@ -130,6 +147,8 @@ describe('Cmd+J website selection', () => {
 
   afterEach(() => {
     cleanup()
+    main?.close()
+    main = undefined
     vi.restoreAllMocks()
     useAppStore.setState(initialAppState, true)
   })
@@ -220,9 +239,11 @@ describe('Cmd+J website selection', () => {
               }
             })
           } else {
+            main = await drawTabsFromMain(useAppStore)
             useAppStore.getState().createBrowserTab('wt-beta', 'https://example.com/', {
               title: name
             })
+            await main.settle()
           }
           const { result } = renderHook(usePalette)
 

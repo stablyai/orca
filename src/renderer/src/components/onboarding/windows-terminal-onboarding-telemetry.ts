@@ -14,8 +14,7 @@ type WindowsTerminalSnapshotArgs = {
 export function bucketWindowsTerminalShell(
   shell: string | null | undefined
 ): WindowsTerminalSnapshot['default_shell'] {
-  // Why: shell values may become explicit paths; telemetry keeps only a
-  // bounded product bucket and never sends the path or WSL distro name.
+  // Bucket explicit shell paths without sending paths or WSL distro names.
   const normalized = (shell ?? '').toLowerCase()
   const normalizedName = normalized.replaceAll('\\', '/').split('/').pop()
   if (normalized === 'powershell.exe' || normalized === 'pwsh.exe') {

@@ -34,6 +34,7 @@ import {
   usageChipShowsPercentage
 } from './usage-unit-label'
 import { useStatusBarController } from './use-status-bar-controller'
+import { isOwnerNotSetUpPlaceholder } from './owner-usage-rate-limits'
 import { StatusBarVisibilityMenu } from './StatusBarVisibilityMenu'
 import { isPairedWebClientWindow } from '@/lib/desktop-window-chrome'
 
@@ -85,6 +86,7 @@ export function StatusBarSurface({
     isRefreshing,
     overflowing,
     petEnabled,
+    remoteOwner,
     rosterProviders,
     segmentsIconOnly,
     segmentsRef,
@@ -116,7 +118,7 @@ export function StatusBarSurface({
         if (!shouldOpenStatusBarContextMenu(event.target)) {
           return
         }
-        // Why: mirror the app-wide right-click pattern — close peer menus, then anchor a hidden trigger at the cursor so re-clicks reposition.
+        // Close peer menus and anchor at the cursor so repeated right-clicks reposition the menu.
         event.preventDefault()
         window.dispatchEvent(new Event(CLOSE_ALL_CONTEXT_MENUS_EVENT))
         const bounds = event.currentTarget.getBoundingClientRect()
@@ -132,10 +134,9 @@ export function StatusBarSurface({
         <div ref={usageRef} className="flex shrink-0 items-center gap-3">
           {isEmptyUsageState ? (
             showEmptyUsageCta ? (
-              <StatusBarUsageEmptyCta />
+              <StatusBarUsageEmptyCta remoteOwner={remoteOwner} />
             ) : null
           ) : hasVisibleUsageMeters ? (
-            // Consolidated roster pill → opens the all-agents Usage popover (mock parity).
             <StatusBarUsageChangeNotices hasVisibleUsageMeters={hasVisibleUsageMeters}>
               <DropdownMenu
                 open={usageMenuOpen}
@@ -192,8 +193,7 @@ export function StatusBarSurface({
                   side="top"
                   align="start"
                   sideOffset={8}
-                  // Keep the popover (and its drill-in submenus) above the status
-                  // bar instead of overlapping it — bottom padding ≈ footer height.
+                  // Reserve footer height so the popover and drill-in submenus stay above the status bar.
                   collisionPadding={{ top: 8, bottom: 32, left: 8, right: 8 }}
                   className="w-[360px] p-0"
                   onPointerDownOutside={usageMenuFocusHandoff.onPointerDownOutside}
@@ -212,9 +212,11 @@ export function StatusBarSurface({
                     onManageAccounts={handleManageAccounts}
                     onUsageDetails={handleUsageDetails}
                     renderRow={(p, rowNode) => {
-                      // Every provider drills into its detail panel (parity with the
-                      // per-provider dropdowns on main); Claude/Codex additionally get
-                      // the account switcher + runtime toggle + Codex reset credits.
+                      // Why: a placeholder has nothing to drill into; its row opens the host's accounts.
+                      if (isOwnerNotSetUpPlaceholder(p)) {
+                        return null
+                      }
+                      // Claude/Codex detail panels also expose account switching and runtime controls.
                       if (p.provider === 'claude') {
                         return (
                           <ClaudeSwitcherMenu

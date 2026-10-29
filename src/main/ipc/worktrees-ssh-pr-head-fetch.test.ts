@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { REVIEW_HEAD_FETCH_TIMEOUT_MS } from '../../shared/review-head-tracking-ref'
 import { getPullRequestPushTargetMock, gitExecFileAsyncMock } from './worktrees-test-module-mocks'
-import { handlers, setupWorktreeHandlers } from './worktrees-test-harness'
+import { handlers, harnessRepo, setupWorktreeHandlers, store } from './worktrees-test-harness'
 import { ORIGIN_HEAD_COMPONENT, ORIGIN_REMOTE_URL } from './worktrees-test-fixtures'
 import type { WorktreeRuntimeStub } from './worktrees-test-runtime-stub'
 
@@ -27,9 +27,6 @@ vi.mock('../github/client', async () =>
 )
 vi.mock('../source-control/hosted-review', async () =>
   (await import('./worktrees-test-module-mocks')).hostedReviewModuleMock()
-)
-vi.mock('../providers/ssh-filesystem-dispatch', async () =>
-  (await import('./worktrees-test-module-mocks')).sshFilesystemDispatchModuleMock()
 )
 vi.mock('./worktree-symlinks', async () =>
   (await import('./worktrees-test-module-mocks')).worktreeSymlinksModuleMock()
@@ -127,6 +124,22 @@ describe('registerWorktreeHandlers', () => {
     })
   })
 
+  it('refuses local git for a PR base on an executionHostId-only SSH repo', async () => {
+    store.getRepo.mockReturnValue({ ...harnessRepo, executionHostId: 'ssh:gpu' })
+    gitExecFileAsyncMock.mockResolvedValue({ stdout: `${ORIGIN_REMOTE_URL}\n`, stderr: '' })
+
+    const result = await Promise.resolve(
+      handlers['worktrees:resolvePrBase'](null, {
+        repoId: 'repo-1',
+        prNumber: 1849,
+        headRefName: 'feat/x'
+      })
+    ).catch((error: unknown) => error)
+
+    expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
+    expect(JSON.stringify(result)).toMatch(/SSH/)
+  })
+
   it('falls back to refs/pull/<N>/head when branch fetch fails for a PR', async () => {
     gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
       if (
@@ -159,7 +172,7 @@ describe('registerWorktreeHandlers', () => {
         'origin',
         '+refs/heads/feat/onboarding-model-choice-782:refs/remotes/origin/feat/onboarding-model-choice-782'
       ],
-      { cwd: '/workspace/repo' }
+      { cwd: '/workspace/repo', timeout: REVIEW_HEAD_FETCH_TIMEOUT_MS }
     )
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
       [

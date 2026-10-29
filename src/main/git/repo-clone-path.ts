@@ -15,11 +15,14 @@ export type ClaimedCloneTarget = {
 type CloneDirectoryIdentity = Pick<Stats, 'dev' | 'ino' | 'birthtimeMs'>
 
 export function deriveCloneRepoNameFromUrl(url: string): string {
-  // Why: direct callers can supply URLs whose default git clone folder would
-  // be "." or ".."; rejecting them prevents parent/destination deletion.
+  // Reject dot destinations before cleanup could remove a parent or unrelated folder.
   const source = url.replace(/\.git\/?$/, '')
   const isWindowsLocalSource = /^[A-Za-z]:[\\/]/.test(source) || source.startsWith('\\\\')
-  const repoName = isWindowsLocalSource ? win32.basename(source) : posix.basename(source)
+  const scpPath =
+    !isWindowsLocalSource && !source.includes('://')
+      ? source.match(/^(?:[^@/:]+@)?(?:\[[^\]]+\]|[^:/\s]+):(.+)$/)?.[1]
+      : undefined
+  const repoName = isWindowsLocalSource ? win32.basename(source) : posix.basename(scpPath ?? source)
   if (!repoName || repoName === '.' || repoName === '..') {
     throw new Error('Invalid repository name derived from URL')
   }
@@ -61,8 +64,7 @@ export function getClonePathComparisonKey(clonePath: string): string {
   const normalized = normalizeRuntimePathSeparators(resolvedClonePath)
   const wslUncMatch = normalized.match(/^\/\/(?:wsl\.localhost|wsl\$)\/([^/]+)(\/.*)?$/i)
   if (wslUncMatch) {
-    // Why: WSL UNC paths cross into a case-sensitive Linux filesystem, so only
-    // the Windows UNC server alias and distro segment should be case-folded.
+    // WSL paths stay case-sensitive after the UNC server/distro prefix.
     const linuxPath = (wslUncMatch[2] ?? '').replace(/\/+$/, '')
     return `//wsl/${wslUncMatch[1].toLowerCase()}${linuxPath}`
   }
@@ -109,14 +111,11 @@ export async function cleanupClaimedCloneTarget(
     return
   }
 
-  await rm(clonePath, { recursive: true, force: true }).catch(() => {
-    // Best-effort cleanup - do not mask the original clone failure.
-  })
+  await rm(clonePath, { recursive: true, force: true }).catch(() => {})
 }
 
 function cloneDirectoryIdentity(stats: Stats): CloneDirectoryIdentity {
-  // Why: fast remove/recreate cycles can reuse an inode; birthtime keeps us
-  // from treating a replacement directory as the clone target we created.
+  // Birthtime distinguishes replacements when rapid remove/create cycles reuse an inode.
   return { dev: stats.dev, ino: stats.ino, birthtimeMs: stats.birthtimeMs }
 }
 

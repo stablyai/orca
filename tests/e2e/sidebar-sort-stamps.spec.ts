@@ -3,7 +3,13 @@ import { test, expect } from './helpers/orca-app'
 import { postClaudeHook, readHookEndpoint } from './helpers/agent-hook-endpoint'
 import { SIDEBAR_INPUTS_BUILD } from './helpers/sidebar-inputs-build'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
-import { waitForActivePaneHookDescriptor, waitForActiveTerminalManager } from './helpers/terminal'
+import {
+  execInTerminal,
+  waitForActivePaneHookDescriptor,
+  waitForActivePanePtyId,
+  waitForActiveTerminalManager,
+  waitForTerminalOutput
+} from './helpers/terminal'
 import { RECENT_STAMP_THROTTLE_MS } from '../../src/shared/sidebar-list/sort-stamps'
 import {
   WorkspaceRowsSnapshotSchema,
@@ -36,6 +42,13 @@ test('the host stamps a workspace as its agent is prompted, finishes and asks fo
   await waitForActiveTerminalManager(orcaPage, 30_000)
   const endpoint = await readHookEndpoint(electronApp)
   const pane = await waitForActivePaneHookDescriptor(orcaPage)
+  // Wait for pane spawn and hold its foreground; spawn clears earlier hook status.
+  await execInTerminal(
+    orcaPage,
+    await waitForActivePanePtyId(orcaPage),
+    "printf 'agent-%s\\n' up; sleep 600"
+  )
+  await waitForTerminalOutput(orcaPage, 'agent-up', 20_000)
   const rowKey = `local|${pane.worktreeId}`
   await expect.poll(async () => (await readMainRow(orcaPage, rowKey))?.kind).toBe('git')
   const before = (await readMainRow(orcaPage, rowKey))!

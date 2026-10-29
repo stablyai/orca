@@ -112,6 +112,24 @@ describe('setActiveWorktree focus handling', () => {
       }
     }
   })
+
+  it('repairs a stale workspace key when reactivating the current worktree', () => {
+    const store = createTestStore()
+    const worktree = makeWorktree({ id: 'repo1::/path/current', repoId: 'repo1' })
+    store.setState({
+      worktreesByRepo: { repo1: [worktree] },
+      activeWorktreeId: worktree.id,
+      activeWorkspaceKey: worktreeWorkspaceKey('repo1::/path/stale'),
+      activeWorkspaceExecutionHostId: null,
+      activeTabTypeByWorktree: { [worktree.id]: 'terminal' },
+      rightSidebarExplorerView: 'files',
+      everActivatedWorktreeIds: new Set([worktree.id])
+    })
+
+    store.getState().setActiveWorktree(worktree.id)
+
+    expect(store.getState().activeWorkspaceKey).toBe(worktreeWorkspaceKey(worktree.id))
+  })
 })
 
 describe('markWorktreeVisited', () => {
@@ -366,7 +384,7 @@ describe('setWorktreesPinnedAndReveal', () => {
       revealWorktreeInSidebar: reveal
     } as Partial<AppState>)
 
-    store.getState().setWorktreesPinnedAndReveal([wt.id], true)
+    store.getState().setWorktreesPinnedAndReveal([wt], true)
 
     expect(store.getState().worktreesByRepo.repo1[0].isPinned).toBe(true)
     expect(reveal).toHaveBeenCalledWith(wt.id, { behavior: 'smooth', highlight: true })
@@ -382,7 +400,7 @@ describe('setWorktreesPinnedAndReveal', () => {
       revealWorktreeInSidebar: reveal
     } as Partial<AppState>)
 
-    store.getState().setWorktreesPinnedAndReveal([wt.id], false)
+    store.getState().setWorktreesPinnedAndReveal([wt], false)
 
     expect(store.getState().worktreesByRepo.repo1[0].isPinned).toBe(false)
     expect(reveal).toHaveBeenCalledWith(wt.id, { behavior: 'smooth', highlight: true })
@@ -399,7 +417,7 @@ describe('setWorktreesPinnedAndReveal', () => {
       revealWorktreeInSidebar: reveal
     } as Partial<AppState>)
 
-    store.getState().setWorktreesPinnedAndReveal([pinned.id], false)
+    store.getState().setWorktreesPinnedAndReveal([pinned], false)
 
     // The row unpins, but the viewport stays put because it isn't focused.
     expect(store.getState().worktreesByRepo.repo1[1].isPinned).toBe(false)
@@ -417,10 +435,33 @@ describe('setWorktreesPinnedAndReveal', () => {
       revealWorktreeInSidebar: reveal
     } as Partial<AppState>)
 
-    store.getState().setWorktreesPinnedAndReveal([other.id], true)
+    store.getState().setWorktreesPinnedAndReveal([other], true)
 
     expect(store.getState().worktreesByRepo.repo1[1].isPinned).toBe(true)
     expect(reveal).not.toHaveBeenCalled()
+  })
+
+  it("never scrolls to the focused card for its same-id twin's pin, and reveals the focused copy by host", () => {
+    const store = createTestStore()
+    const local = makeWorktree({ id: 'repo1::/a', repoId: 'repo1', path: '/a', hostId: 'local' })
+    const ssh = makeWorktree({ ...local, hostId: 'ssh:box' })
+    const reveal = vi.fn()
+    store.setState({
+      worktreesByRepo: { repo1: [local, ssh] },
+      activeWorktreeId: local.id,
+      activeWorkspaceExecutionHostId: 'local',
+      revealWorktreeInSidebar: reveal
+    })
+
+    store.getState().setWorktreesPinnedAndReveal([ssh], true)
+    expect(reveal).not.toHaveBeenCalled()
+
+    store.getState().setWorktreesPinnedAndReveal([local], true)
+    expect(reveal).toHaveBeenCalledWith(local.id, {
+      behavior: 'smooth',
+      highlight: true,
+      executionHostId: 'local'
+    })
   })
 
   it.each([
@@ -451,11 +492,68 @@ describe('setWorktreesPinnedAndReveal', () => {
         revealWorktreeInSidebar: reveal
       } as Partial<AppState>)
 
-      store.getState().setWorktreesPinnedAndReveal([parent.id], nextPinned)
+      store.getState().setWorktreesPinnedAndReveal([parent], nextPinned)
 
       expect(reveal).toHaveBeenCalledWith(child.id, { behavior: 'smooth', highlight: true })
     }
   )
+
+  it("follows a server-proxied focused row selected by its server's runtime alias", () => {
+    const store = createTestStore()
+    const proxied = makeWorktree({
+      id: 'repo1::/a',
+      repoId: 'repo1',
+      path: '/a',
+      hostId: 'ssh:box',
+      runtimeOwnerEnvironmentId: 'hub'
+    })
+    const reveal = vi.fn()
+    store.setState({
+      worktreesByRepo: { repo1: [proxied] },
+      activeWorktreeId: proxied.id,
+      activeWorkspaceExecutionHostId: 'runtime:hub',
+      revealWorktreeInSidebar: reveal
+    })
+
+    store.getState().setWorktreesPinnedAndReveal([proxied], true)
+
+    expect(reveal).toHaveBeenCalledWith(proxied.id, {
+      behavior: 'smooth',
+      highlight: true,
+      executionHostId: 'ssh:box'
+    })
+  })
+
+  it("does not reveal the focused descendant for its ancestor's twin on another host", () => {
+    const store = createTestStore()
+    const parent = makeWorktree({
+      id: 'repo1::/parent',
+      instanceId: 'parent-instance',
+      repoId: 'repo1',
+      hostId: 'local'
+    })
+    const parentTwin = makeWorktree({ ...parent, hostId: 'ssh:box' })
+    const child = makeWorktree({
+      id: 'repo1::/child',
+      instanceId: 'child-instance',
+      repoId: 'repo1',
+      hostId: 'local'
+    })
+    const reveal = vi.fn()
+    store.setState({
+      worktreesByRepo: { repo1: [parent, parentTwin, child] },
+      worktreeLineageById: {
+        [child.id]: makeLineage({ worktreeId: child.id, parentWorktreeId: parent.id })
+      },
+      activeWorktreeId: child.id,
+      activeWorkspaceExecutionHostId: 'local',
+      revealWorktreeInSidebar: reveal
+    })
+
+    store.getState().setWorktreesPinnedAndReveal([parentTwin], true)
+
+    expect(reveal).not.toHaveBeenCalled()
+  })
 
   it('reveals the focused descendant from embedded legacy lineage', () => {
     const store = createTestStore()
@@ -479,7 +577,7 @@ describe('setWorktreesPinnedAndReveal', () => {
       revealWorktreeInSidebar: reveal
     } as Partial<AppState>)
 
-    store.getState().setWorktreesPinnedAndReveal([parent.id], true)
+    store.getState().setWorktreesPinnedAndReveal([parent], true)
 
     expect(reveal).toHaveBeenCalledWith(child.id, { behavior: 'smooth', highlight: true })
   })
@@ -517,7 +615,7 @@ describe('setWorktreesPinnedAndReveal', () => {
       revealWorktreeInSidebar: reveal
     } as Partial<AppState>)
 
-    store.getState().setWorktreesPinnedAndReveal([first.id], true)
+    store.getState().setWorktreesPinnedAndReveal([first], true)
 
     expect(reveal).not.toHaveBeenCalled()
   })
@@ -545,7 +643,7 @@ describe('setWorktreesPinnedAndReveal', () => {
       revealWorktreeInSidebar: reveal
     } as Partial<AppState>)
 
-    store.getState().setWorktreesPinnedAndReveal([parent.id], true)
+    store.getState().setWorktreesPinnedAndReveal([parent], true)
 
     expect(reveal).not.toHaveBeenCalled()
   })
@@ -572,7 +670,7 @@ describe('setWorktreesPinnedAndReveal', () => {
       revealWorktreeInSidebar: reveal
     } as Partial<AppState>)
 
-    store.getState().setWorktreesPinnedAndReveal([parent.id], true)
+    store.getState().setWorktreesPinnedAndReveal([parent], true)
 
     expect(reveal).not.toHaveBeenCalled()
   })
@@ -586,7 +684,7 @@ describe('setWorktreesPinnedAndReveal', () => {
       revealWorktreeInSidebar: reveal
     } as Partial<AppState>)
 
-    store.getState().setWorktreesPinnedAndReveal([wt.id], true)
+    store.getState().setWorktreesPinnedAndReveal([wt], true)
 
     expect(reveal).not.toHaveBeenCalled()
     expect(store.getState().worktreesByRepo.repo1[0].isPinned).toBe(true)
@@ -601,7 +699,7 @@ describe('setWorktreesPinnedAndReveal', () => {
       revealWorktreeInSidebar: reveal
     } as Partial<AppState>)
 
-    store.getState().setWorktreesPinnedAndReveal(['repo1::/missing'], true)
+    store.getState().setWorktreesPinnedAndReveal([{ id: 'repo1::/missing' }], true)
 
     expect(reveal).not.toHaveBeenCalled()
     expect(store.getState().worktreesByRepo.repo1[0].isPinned).toBe(false)
@@ -637,7 +735,7 @@ describe('setWorktreesPinnedAndReveal', () => {
       revealWorktreeInSidebar: reveal
     } as Partial<AppState>)
 
-    store.getState().setWorktreesPinnedAndReveal([alreadyPinned.id, first.id, focused.id], true)
+    store.getState().setWorktreesPinnedAndReveal([alreadyPinned, first, focused], true)
 
     // Only the focused row is revealed, not the first-changed one.
     expect(reveal).toHaveBeenCalledTimes(1)
@@ -665,7 +763,7 @@ describe('setWorktreesPinnedAndReveal', () => {
       revealWorktreeInSidebar: reveal
     } as Partial<AppState>)
 
-    store.getState().setWorktreesPinnedAndReveal([first.id, second.id], true)
+    store.getState().setWorktreesPinnedAndReveal([first, second], true)
 
     expect(reveal).not.toHaveBeenCalled()
     expect(store.getState().worktreesByRepo.repo1[0].isPinned).toBe(true)

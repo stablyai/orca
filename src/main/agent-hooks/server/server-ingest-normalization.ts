@@ -9,6 +9,7 @@ import {
 } from '../../../shared/agent-hook-listener/opencode-session-registry'
 import type { NormalizedLocalHook } from './server-types'
 import { AgentHookServerTmuxStatus } from './server-tmux-status'
+import { getClaudeObservedConfigDirs } from '../../claude-accounts/claude-profile-installed-router'
 
 export abstract class AgentHookServerIngestNormalization extends AgentHookServerTmuxStatus {
   protected setClaudeBackgroundEvidence(
@@ -53,7 +54,6 @@ export abstract class AgentHookServerIngestNormalization extends AgentHookServer
         event.hookEventName === 'SessionStart' &&
         isOpenCodeSharedServerPost(source, body)
       ) {
-        // Why: a birth just arrived; bind it now instead of waiting out the poll interval.
         this.kickOpenCodeBinder()
       }
       return {
@@ -70,13 +70,18 @@ export abstract class AgentHookServerIngestNormalization extends AgentHookServer
     const previousRunningTask = this.state.claudeRunningNonAgentTaskPaneKeys.has(paneKey)
     const previousActiveCron = this.state.claudeActiveSessionCronPaneKeys.has(paneKey)
     const event = normalizeHookPayload(this.state, source, body, this.env)
+    const transcriptPath = event?.providerSession?.transcriptPath
+    if (transcriptPath) {
+      // A wrapper's CLAUDE_CONFIG_DIR is only visible here; History scans it too (#23505).
+      getClaudeObservedConfigDirs()?.observeTranscriptPath(transcriptPath)
+    }
     const nextRunningTask = this.state.claudeRunningNonAgentTaskPaneKeys.has(paneKey)
     const nextActiveCron = this.state.claudeActiveSessionCronPaneKeys.has(paneKey)
     this.setClaudeBackgroundEvidence(paneKey, previousRunningTask, previousActiveCron)
     if (!event || event.paneKey !== paneKey) {
       return { event }
     }
-    // Why: nested CLIs may inherit the pane key; only accepted statuses may mutate its background-work gate.
+    // Nested CLIs inherit pane keys; rejected status must not change the owner's background-work gate.
     return {
       event,
       onAccepted: () => this.setClaudeBackgroundEvidence(paneKey, nextRunningTask, nextActiveCron)
@@ -116,8 +121,7 @@ export abstract class AgentHookServerIngestNormalization extends AgentHookServer
       return
     }
     const exit = this.agentExitedAtByPaneKey.get(this.resolvePaneKeyAlias(normalized.event.paneKey))
-    // Why: a hook spooled a full second before a proven exit (stamps are whole seconds) describes
-    // the dead agent; replaying it would install an obsolete owner. A same-second one may not.
+    // Whole-second spool timestamps prove pre-exit ownership only with a full second of separation.
     if (exit && record.receivedAt + 1000 <= exit.at) {
       return
     }

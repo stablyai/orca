@@ -1,8 +1,8 @@
-// Keeps storage a copy of the draft store's memory: writes each changed draft whole, journals what
-// storage has not confirmed when the window goes away, and follows other windows' writes.
+// Persist whole memory records, journal unconfirmed changes on unload, and adopt other windows’ confirmed writes.
 
 import { basename } from '@/lib/path'
-import { isNativeChatKeptPastePath, isNativeChatPastedImagePath } from './native-chat-image-paste'
+import { isNativeChatKeptPastePath } from './native-chat-image-paste'
+import { isNativeChatPastedImagePath } from '../../../../shared/native-chat-image-label'
 import { isAgentSessionAttachmentStorePath } from '../../../../shared/agent-session-attachments'
 import {
   dirtyScopes,
@@ -13,7 +13,7 @@ import {
   records,
   refusedScopes,
   unconfirmed,
-  unverifiedScopes,
+  reconcileRestoredImageChecks,
   type AppendBeforeLoad,
   type DraftAppend,
   type DraftRecord,
@@ -54,10 +54,7 @@ export function isKeptLocalPaste(image: NativeChatComposerDraftImage): boolean {
   return !image.connectionId && isNativeChatKeptPastePath(image.path)
 }
 
-/** What storage keeps: not an unsaved launch-seed copy, and a paste outside Orca's paste folder
- *  (over SSH, or from before it) only by name. A paste a paired server stored for the chat stays
- *  whole: the server keeps it, and its claim at send refuses one it no longer has. Null when
- *  nothing is left. */
+/** Omit launch seeds; retain durable local/server pastes, reduce other pastes to unavailable names, and drop empty records. */
 function savedForm(record: DraftRecord): StoredNativeChatComposerDraft | null {
   const { unsavedText, ...saved } = record
   const images = saved.images.map((image) =>
@@ -142,8 +139,7 @@ export function flushNativeChatComposerDrafts(): void {
   }
 }
 
-/** Why: storage commits after this task, so what it has not confirmed when the window goes away
- *  is also written synchronously and replayed by the next load, a refused draft included. */
+/** Storage settles asynchronously; journal unconfirmed and refused writes synchronously before the window leaves. */
 function journalUnconfirmed(): void {
   flushNativeChatComposerDrafts()
   journalNativeChatComposerDraftChanges(unconfirmed)
@@ -170,8 +166,7 @@ function installFlushOnHide(): void {
   document.addEventListener('visibilitychange', journalWhenHidden)
 }
 
-/** Before the load lands, memory may not hold the saved draft, so an append is written onto what
- *  storage holds, read and written as one change. The loaded draft gets it again on landing. */
+/** Before hydration, append atomically to storage’s current record and replay over the eventual loaded draft. */
 function appendBeforeLoad(scopeKey: string, append: DraftAppend): void {
   load.appendSequence += 1
   const entry: AppendBeforeLoad = { sequence: load.appendSequence, append, committed: false }
@@ -209,9 +204,7 @@ function appendBeforeLoad(scopeKey: string, append: DraftAppend): void {
   track(scopeKey, written)
 }
 
-/** Marks a scope changed in memory: `deferred` coalesces typing into one write, `immediate`
- *  writes now. Before the startup load lands, an edit wins over the loaded draft and an append
- *  is applied again on top of it. */
+/** Coalesce deferred typing; persist immediate edits now, with pre-hydration edits replacing and appends replaying over loaded drafts. */
 export function persistNativeChatComposerDraft(
   scopeKey: string,
   persist: 'immediate' | 'deferred',
@@ -242,16 +235,7 @@ export function deleteLoadingNativeChatComposerDraftsWhere(
   }
 }
 
-function addsAnImage(
-  draft: StoredNativeChatComposerDraft,
-  previous: DraftRecord | undefined
-): boolean {
-  const held = new Set(previous?.images.map((image) => `${image.id}\0${image.path}`))
-  return draft.images.some((image) => !held.has(`${image.id}\0${image.path}`))
-}
-
-// Why: another window of the same app (two web-client tabs) can send or edit this draft; its write
-// replaces what this window holds unless this window has a change of its own not yet saved.
+// Adopt another window’s write only while this window has no unsaved local change.
 function adoptForeignChange(message: unknown): void {
   const scopeKey =
     typeof message === 'object' && message !== null && 'scopeKey' in message
@@ -268,13 +252,11 @@ function adoptForeignChange(message: unknown): void {
       }
       const draft = parseStoredNativeChatComposerDraft(value)
       if (draft) {
-        // Why: images this window already checked stay checked, so their chips don't flash.
-        if (addsAnImage(draft, records.get(scopeKey))) {
-          unverifiedScopes.add(scopeKey)
-        }
+        reconcileRestoredImageChecks(scopeKey, draft.images, records.get(scopeKey)?.images ?? [])
         records.set(scopeKey, draft)
       } else {
         records.delete(scopeKey)
+        reconcileRestoredImageChecks(scopeKey, [])
       }
       notifyScope(scopeKey)
     })
@@ -293,11 +275,7 @@ export function installNativeChatComposerDraftBroadcast(): void {
   }
 }
 
-/**
- * Settles once every write of this scope issued before the call has: true only when IndexedDB
- * completed each transaction, false when one was refused or failed. A change still waiting for its
- * deferred write is issued first, so it is included. Never settles on a timeout.
- */
+/** Flush deferred changes and await every already-issued scope write; true requires commits, false means refusal/failure, and never treat a timeout as success. */
 export async function nativeChatComposerDraftWriteSettled(scopeKey: string): Promise<boolean> {
   if (dirtyScopes.has(scopeKey)) {
     flushNativeChatComposerDrafts()

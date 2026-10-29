@@ -158,13 +158,13 @@ export class RuntimeHostStatusOwner {
     }
   }
 
-  authenticationRejected(): void {
+  authenticationRejected(message = 'Pair this client again.'): void {
     if (this.disposed) {
       return
     }
     this.retireRequest()
     this.clearRetry()
-    this.complete(runtimeHostStatusFailure('unauthorized', 'Pair this client again.'))
+    this.complete(runtimeHostStatusFailure('unauthorized', message))
   }
 
   dispose(): void {

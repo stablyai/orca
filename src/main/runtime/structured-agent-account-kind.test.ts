@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { resolveStructuredCodexAccountKind } from './structured-agent-account-home'
-import { getSystemCodexHomePath, resolveOrcaManagedCodexHomePath } from '../codex/codex-home-paths'
+import { getSystemCodexHomePath } from '../codex/codex-home-paths'
 import type { CodexManagedAccount } from '../../shared/managed-account-types'
 const ACCOUNT: CodexManagedAccount = {
   id: 'account-a',
@@ -24,20 +24,6 @@ describe('Codex sign-in instructions follow the probed home', () => {
   it('recognizes the system home even when Settings selects a managed account', () => {
     expect(resolveStructuredCodexAccountKind(getSystemCodexHomePath(), SETTINGS)).toBe('system')
   })
-  it.each([
-    ['account-a', 'managed'],
-    [null, 'system']
-  ] as const)(
-    'classifies the shared mirror with selection=%s',
-    (activeCodexManagedAccountId, kind) => {
-      expect(
-        resolveStructuredCodexAccountKind(resolveOrcaManagedCodexHomePath(), {
-          ...SETTINGS,
-          activeCodexManagedAccountId
-        })
-      ).toBe(kind)
-    }
-  )
   it('does not infer a managed account from a custom or WSL home', () => {
     expect(resolveStructuredCodexAccountKind('/custom/home', SETTINGS)).toBeUndefined()
     expect(

@@ -4,6 +4,7 @@ import { getShortcutPlatform } from '@/lib/shortcut-platform'
 import { useAppStore } from '@/store'
 import type { OpenFile } from '@/store/slices/editor'
 import { canOpenMarkdownPreview, isMarkdownPreviewShortcut } from './markdown-preview-controls'
+import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
 
 type UseMarkdownPreviewShortcutParams = {
   activeFile: OpenFile | null
@@ -75,8 +76,8 @@ export function useMarkdownPreviewShortcut({
         { sourceFileId: activeFileId ?? undefined }
       )
     }
-    window.addEventListener('keydown', handleKeyDown, { capture: true })
-    return () => window.removeEventListener('keydown', handleKeyDown, { capture: true })
+    addAppKeyListener('keydown', handleKeyDown)
+    return () => removeAppKeyListener('keydown', handleKeyDown)
   }, [
     activeFileDiffSource,
     activeFileMode,

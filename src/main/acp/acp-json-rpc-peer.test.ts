@@ -8,6 +8,7 @@ import {
   AcpRpcError
 } from './acp-errors'
 import { AcpScriptedAgent, deferred, tick } from './acp-scripted-agent.test-support'
+import { providerRequestTimeoutOf } from '../provider-process/provider-request-timeout'
 
 const peers: AcpJsonRpcPeer[] = []
 const agents: AcpScriptedAgent[] = []
@@ -216,6 +217,17 @@ describe('ACP JSON-RPC peer', () => {
     agent.on('next', (frame) => agent.reply(frame, 'ok'))
     expect(await peer.request('next', {})).toBe('ok')
     expect(agent.frames.map((frame) => frame.method)).toEqual(['wait', 'next'])
+  })
+
+  it('names the request and its deadline on a timeout, so a failed start can say which stalled', async () => {
+    vi.useFakeTimers()
+    const { peer } = fixture()
+    const timedOut = peer.request('session/new', {}, { timeoutMs: 300 }).catch((error) => error)
+    await vi.advanceTimersByTimeAsync(300)
+    expect(providerRequestTimeoutOf(await timedOut)).toEqual({
+      method: 'session/new',
+      timeoutMs: 300
+    })
   })
 
   it('bounds incoming requests without expiring user decisions', async () => {

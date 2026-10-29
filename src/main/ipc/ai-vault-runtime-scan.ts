@@ -12,6 +12,8 @@ import { aiVaultScanIssueResult } from '../ai-vault/session-list-results'
 export type RuntimeAiVaultHostInfo = {
   environmentId: string
   executionHostId: `runtime:${string}`
+  /** The saved environment's own record of how it is reached; picks the all-hosts scan budget. */
+  connectionDependency?: 'ssh-tunnel'
 }
 
 export type RuntimeAiVaultScanOptions = {
@@ -24,10 +26,7 @@ export type RuntimeAiVaultScanner = (
   options?: RuntimeAiVaultScanOptions
 ) => Promise<AiVaultListResult>
 
-/**
- * Why: an unreachable Orca server must cost this host's row, not the whole
- * multi-host list, so every failure except cancellation degrades to an issue.
- */
+/** Degrade host failures to issues; cancellation still propagates. */
 export async function scanRuntimeAiVaultSessions(args: {
   hostInfo: RuntimeAiVaultHostInfo
   scanner: RuntimeAiVaultScanner | undefined
@@ -61,8 +60,7 @@ export async function scanRuntimeAiVaultSessions(args: {
   }
 }
 
-// Optional keys are copied only when present so the RPC schema never sees an
-// explicit undefined for limit/force/scopePaths.
+// Omit absent optional keys rather than sending undefined through the RPC schema.
 function runtimeScanArgs(
   hostInfo: RuntimeAiVaultHostInfo,
   listArgs: AiVaultListArgs | undefined

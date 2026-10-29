@@ -13,16 +13,7 @@ internal fun isMobileWebShellSessionId(sessionId: String): Boolean =
     sessionId.length <= MOBILE_WEB_SHELL_MAX_SESSION_ID_LENGTH &&
     sessionId.all { it in 'a'..'z' || it in 'A'..'Z' || it in '0'..'9' || it == '-' || it == '_' }
 
-/**
- * The host label is a slice of the session id's digest, never a slice of the session id.
- *
- * Session ids are base64url, and `https` is a special scheme, so Chromium ASCII-lowercases every
- * host it loads and reports back while `java.net.URI.getHost()` answers null for a label holding
- * `_`. The host the interceptor compared against then never equalled the one it was handed, and
- * every asset fell to the refusal branch as a 403. Lowercase hex is canonical under both parsers,
- * 32 characters because a DNS label caps at 63 octets, and `.invalid` is reserved by RFC 2606 so it
- * can never resolve.
- */
+/** Use 32 lowercase SHA-256 hex characters, not base64url session slices: Chromium folds case and URI.getHost rejects underscores. .invalid is RFC 2606-reserved. */
 internal fun mobileWebShellOriginHost(sessionId: String): String? {
   if (!isMobileWebShellSessionId(sessionId)) return null
   val digest = MessageDigest.getInstance("SHA-256").digest(sessionId.toByteArray(Charsets.UTF_8))
@@ -48,10 +39,7 @@ internal data class MobileWebShellRequestParts(
   val urlLength: Int
 )
 
-/**
- * The map key for a request we are willing to answer, or null to refuse. Every clause is an allow,
- * so a component nobody anticipated falls to refusal rather than through it.
- */
+/** Allow only recognized request components; return the manifest key or refuse. */
 internal fun resolveMobileWebShellRequestPath(
   parts: MobileWebShellRequestParts,
   originHost: String

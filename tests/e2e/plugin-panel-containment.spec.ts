@@ -1,10 +1,5 @@
-/**
- * Invariant: a plugin panel cannot exfiltrate, navigate, or bypass the host bridge.
- * Oracle: a permissive loopback server receives zero requests while the real
- * sandboxed iframe reports CSP/navigation containment and a bounded bridge refusal.
- * Chromium is required because Vitest cannot exercise CSP or iframe sandboxing.
- * Maturity: experimental until this has CI soak history on all desktop platforms.
- */
+// Require zero loopback requests plus real iframe CSP/navigation containment and bounded bridge refusal.
+// Chromium is required; keep experimental maturity until CI soak covers every desktop platform.
 
 import { cp, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { createServer, type Server } from 'node:http'
@@ -248,38 +243,24 @@ test('contains hostile panel network and navigation probes', async ({
       )
     }
 
-    const bridgeErrorCode = await frame.locator('html').evaluate(
-      () =>
-        new Promise<string>((resolve, reject) => {
-          const requestId = 'small-invalid-probe'
-          const timer = setTimeout(() => reject(new Error('host sent no bridge refusal')), 5_000)
-          const onMessage = (event: MessageEvent): void => {
-            const data = event.data
-            if (
-              event.source !== window.parent ||
-              !data ||
-              data.type !== 'orca-panel-action-result' ||
-              data.requestId !== requestId
-            ) {
-              return
-            }
-            clearTimeout(timer)
-            window.removeEventListener('message', onMessage)
-            resolve(data.errorCode ?? 'missing_error_code')
-          }
-          window.addEventListener('message', onMessage)
-          window.parent.postMessage(
-            {
-              type: 'orca-panel-action',
-              requestId,
-              action: 'invalid.hostileAction',
-              params: {}
-            },
-            '*'
-          )
-        })
-    )
-    expect(bridgeErrorCode).toBe('invalid_request')
+    const bridgeErrorCode = await frame.locator('html').evaluate(async () => {
+      const orca: unknown = 'orca' in window ? window.orca : null
+      const host: unknown = typeof orca === 'object' && orca && 'host' in orca ? orca.host : null
+      const call: unknown = typeof host === 'object' && host && 'call' in host ? host.call : null
+      if (typeof call !== 'function') {
+        return 'missing_window_orca'
+      }
+      try {
+        await call('invalid.hostileAction', {})
+        return 'unexpected_success'
+      } catch (error) {
+        const code: unknown =
+          typeof error === 'object' && error && 'code' in error ? error.code : null
+        return typeof code === 'string' ? code : 'missing_error_code'
+      }
+    })
+    // Why the host's code: the renderer checks only the shape, the host gates the method.
+    expect(bridgeErrorCode).toBe('unknown_method')
 
     expect(server.requests).toEqual([])
     expect(orcaPage.url()).toBe(appUrl)

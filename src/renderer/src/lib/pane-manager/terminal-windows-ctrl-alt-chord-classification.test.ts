@@ -84,8 +84,7 @@ describe('isGenuineWindowsCtrlAltChord', () => {
 describe('shouldRepairWindowsCtrlAltChords', () => {
   it('repairs only Windows Chromium clients', () => {
     expect(shouldRepairWindowsCtrlAltChords(WINDOWS_ELECTRON_UA)).toBe(true)
-    // Why: Firefox does not rewrite composing Ctrl+Alt presses to AltGraph, so
-    // a false AltGraph state there does not prove the chord is genuine.
+    // Firefox keeps Ctrl+Alt for AltGr composition; false AltGraph there does not prove a genuine chord.
     expect(shouldRepairWindowsCtrlAltChords(WINDOWS_FIREFOX_UA)).toBe(false)
     expect(shouldRepairWindowsCtrlAltChords(MAC_ELECTRON_UA)).toBe(false)
   })
@@ -93,8 +92,7 @@ describe('shouldRepairWindowsCtrlAltChords', () => {
 
 describe('installWindowsCtrlAltChordRepair', () => {
   it('finds the internal classification seam on the real Terminal', () => {
-    // Upgrade tripwire: if a future xterm rename removes the seam, this fails
-    // loudly instead of silently reverting to dropped Ctrl+Alt chords.
+    // Fail on private-seam renames rather than silently dropping rescued chords after xterm upgrades.
     const terminal = new Terminal()
     try {
       expect(getThirdLevelShift(terminal)({ isWindows: true }, chord())).toBe(true)
@@ -134,9 +132,7 @@ describe('installWindowsCtrlAltChordRepair', () => {
   })
 })
 
-// Why: the repair intentionally adds no encoder — rescued chords must produce
-// whatever bytes xterm's own keyboard service computes for the protocol the
-// foreground app negotiated. These pin that contract for both protocol tiers.
+// Use xterm’s negotiated encoders without adding our own; pin emitted bytes for both protocol tiers.
 describe('rescued chords are encoded by xterm, not Orca', () => {
   function keyDownChord(overrides: Record<string, unknown>): Record<string, unknown> {
     return { ...chord(), repeat: false, ...overrides }

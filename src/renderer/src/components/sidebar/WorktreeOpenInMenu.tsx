@@ -37,7 +37,8 @@ type WorktreeOpenInMenuItemsProps = {
   /** The workspace the path belongs to; lets a server's workspace open over its SSH host. */
   workspace?: WorkspaceOwnerRef | null
   disabled?: boolean
-  labelPrefix?: string
+  /** Builds the whole translated item label so callers never prepend English fragments. */
+  formatLabel?: (appName: string) => string
 }
 
 export type OpenInMenuEntry = {
@@ -95,7 +96,7 @@ export function getOpenInEntryAvailability(
         capability.reason === 'local-only-editor'
           ? translate(
               'auto.components.sidebar.WorktreeOpenInMenu.remoteEditorHint',
-              'Only VS Code can open folders on an SSH host.'
+              'Only VS Code, Cursor, and Zed can open folders on an SSH host.'
             )
           : translate(
               'auto.components.sidebar.WorktreeOpenInMenu.remoteRuntimeEditorHint',
@@ -170,7 +171,6 @@ export async function openWorktreePath(args: {
       return
     }
   }
-  // Why: both checks above refuse an unresolved owner, so this is only a narrowing guard.
   if (owner === 'unresolved') {
     return
   }
@@ -222,7 +222,7 @@ export function WorktreeOpenInMenuItems({
   ownerUnresolved,
   workspace,
   disabled,
-  labelPrefix = ''
+  formatLabel
 }: WorktreeOpenInMenuItemsProps): React.JSX.Element {
   const openInWorktreePath = useOpenInWorktreePath({
     worktreePath,
@@ -265,8 +265,7 @@ export function WorktreeOpenInMenuItems({
               <ExternalLink className="size-3.5" />
             )}
             <span className="min-w-0 truncate">
-              {labelPrefix}
-              {entry.label}
+              {formatLabel ? formatLabel(entry.label) : entry.label}
             </span>
             {availability.metadata ? (
               <span className="ml-auto shrink-0 text-[11px] text-muted-foreground">
@@ -275,7 +274,7 @@ export function WorktreeOpenInMenuItems({
             ) : null}
           </DropdownMenuItem>
         )
-        // Why a wrapper: a disabled item takes no pointer events, so its own title never shows.
+        // Disabled items ignore pointer events; put explanatory titles on a wrapper.
         return availability.disabledReason ? (
           <div key={entry.id} title={availability.disabledReason}>
             {item}

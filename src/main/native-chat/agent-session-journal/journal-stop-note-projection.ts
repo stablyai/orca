@@ -8,7 +8,7 @@ export function projectJournalStopNote(
   item: AgentJournalRenderItem,
   items: ReadonlyMap<string, AgentJournalRenderItem>
 ): AgentJournalRenderItem {
-  // Field checks before the key parse: this runs for every item of every snapshot.
+  // Avoid key parsing for unrelated snapshot items.
   if (
     item.body.kind === 'status' &&
     item.body.failure?.kind === 'cancelUnconfirmed' &&

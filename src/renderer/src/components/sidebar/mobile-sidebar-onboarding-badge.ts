@@ -18,9 +18,7 @@ export function shouldShowMobileSidebarOnboardingBadge(
   return enabled && !dismissed
 }
 
-// Why: surface a one-time "Try it" badge on the Orca Mobile sidebar entry
-// for users who haven't paired any device. Clicking the row dismisses it
-// permanently, mirroring the once-and-done feel of an inbox unread dot.
+// Offer the Mobile badge until the user opens its row; persist dismissal across mounts.
 export function useMobileSidebarOnboardingBadge(enabled = true): {
   visible: boolean
   hasPairedDevice: boolean
@@ -45,8 +43,7 @@ export function useMobileSidebarOnboardingBadge(enabled = true): {
     visible:
       shouldShowMobileSidebarOnboardingBadge(enabled, dismissed) &&
       mobileDevices.loaded &&
-      // Why: a failed load also lands loaded:true with no devices; don't show
-      // the onboarding badge until we actually know the device list is empty.
+      // Failed loads also set loaded with no devices; do not mistake them for an empty list.
       !mobileDevices.error &&
       !mobileDevices.hasPairedDevice,
     hasPairedDevice: mobileDevices.hasPairedDevice,

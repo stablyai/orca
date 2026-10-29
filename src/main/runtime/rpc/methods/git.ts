@@ -90,6 +90,12 @@ export const GIT_METHODS = [
     handler: async (params, { runtime }) => runtime.getRuntimeGitConflictOperation(params.worktree)
   }),
   defineMethod({
+    name: 'git.mutationInFlight',
+    permission: 'workspace',
+    params: WorktreeSelector,
+    handler: async (params, { runtime }) => runtime.getRuntimeGitMutationInFlight(params.worktree)
+  }),
+  defineMethod({
     name: 'git.abortMerge',
     permission: 'workspace',
     params: WorktreeSelector,
@@ -246,7 +252,12 @@ export const GIT_METHODS = [
     permission: 'workspace',
     params: GitRemoteFileUrl,
     handler: async (params, { runtime }) =>
-      runtime.getRuntimeGitRemoteFileUrl(params.worktree, params.relativePath, params.line)
+      runtime.getRuntimeGitRemoteFileUrl(
+        params.worktree,
+        params.relativePath,
+        params.line,
+        params.endLine
+      )
   }),
   defineMethod({
     name: 'git.remoteCommitUrl',

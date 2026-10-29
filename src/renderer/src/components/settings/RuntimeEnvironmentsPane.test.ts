@@ -193,10 +193,7 @@ describe('RuntimeEnvironmentsPane host details', () => {
   })
 
   it('distinguishes transport-up/runtime-down from an attached ready runtime', () => {
-    // Why: the row tracks attachment (reachable + ready), which exposes Disconnect.
-    // Whether the host is the default *active* server is a separate concept, so it
-    // must NOT change this label — otherwise the dot/label/button disagree (a host
-    // showed "Available" with a grey dot yet offered Disconnect).
+    // Attachment determines Disconnect and connection labels; default-server selection must not make dot/label/button disagree.
     expect(getRuntimeServerConnectionState(details({ status: 'ready' }))).toBe(
       'runtime-unavailable'
     )
@@ -290,12 +287,8 @@ describe('RuntimeEnvironmentsPane host details', () => {
   })
 
   it('explains that the choice only picks the host for new projects', () => {
-    expect(getActiveServerModeDescription(true)).toContain(
-      'New projects are created on this computer'
-    )
-    expect(getActiveServerModeDescription(true)).toContain('stay on their own host')
-    expect(getActiveServerModeDescription(false)).toContain('default Host')
-    expect(getActiveServerModeDescription(false)).toContain('paired Orca runtime')
+    expect(getActiveServerModeDescription(true)).toBe('Existing projects stay where they are.')
+    expect(getActiveServerModeDescription(false)).toContain('new projects on the chosen server')
   })
 
   it('blocks removing the active server independently of local-runtime availability', () => {

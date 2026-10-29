@@ -49,7 +49,6 @@ describe('terminateProviderProcessTree', () => {
         terminateWindowsTree: async () => false
       })
     ).resolves.toBe('unverifiable')
-    // The held child is still killed through its handle.
     expect(target.kill).toHaveBeenCalledWith('SIGKILL')
   })
 

@@ -62,9 +62,6 @@ describe('producer linkage round-trips through the reducer', () => {
   })
 
   it('reads each mutation of a mixed batch as its own producer', () => {
-    // A batch can CREATE rows several agents produced — a settlement landing
-    // before any checkpoint did. The mutation that names a producer is that
-    // producer's; the one naming none is the session's own, beside it.
     const state = createJournalReducerState('session-1', EPOCH)
     applyJournalRow(
       state,
@@ -97,11 +94,6 @@ describe('producer linkage round-trips through the reducer', () => {
   })
 
   it('lets a correction win over the provisional row, without moving the bubble', () => {
-    // Write-through then correct: the row is written under the spawn call's own
-    // id, then re-appended under the canonical one. Revision is assigned inside
-    // the journal's serialized write step, so the later append always outranks
-    // — and `sequence`/`observedAt` stay pinned, so re-attributing a row does
-    // not relocate it in the timeline.
     const state = createJournalReducerState('session-1', EPOCH)
     const provisional = { agentId: 'toolu_1', providerParentRef: 'toolu_1' }
     applyJournalRow(
@@ -138,9 +130,6 @@ describe('producer linkage round-trips through the reducer', () => {
   })
 
   it('does not let a stale checkpoint undo a correction that already landed', () => {
-    // A text checkpoint carrying the OLD stamp, submitted after the correction,
-    // would re-root the row. It cannot: revision is read at write time, so the
-    // last write wins and the lane resolves linkage fresh on every checkpoint.
     const state = createJournalReducerState('session-1', EPOCH)
     applyJournalRow(
       state,
@@ -173,8 +162,6 @@ describe('producer linkage round-trips through the reducer', () => {
   })
 
   it('keeps linkage when a later revision rewrites the row', () => {
-    // The resolved-append path lost the marker once before by rebuilding the
-    // row without it, so the SECOND write is the one that matters here.
     const state = createJournalReducerState('session-1', EPOCH)
     for (const [seq, body] of [
       [1, text('look')],

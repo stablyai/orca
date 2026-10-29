@@ -25,6 +25,7 @@ describe('reconcileManagedWslCliRegistrations', () => {
       userDataPath: '/user-data',
       listDistros: async () => ['Ubuntu', 'Debian', 'Fedora'],
       listRunningDistros: async () => ['Ubuntu', 'Debian', 'Fedora'],
+      isDistroRunning: async (distro: string) => ['Ubuntu', 'Debian', 'Fedora'].includes(distro),
       registry,
       createInstaller: (distro) => {
         if (distro === 'Ubuntu') {
@@ -51,44 +52,6 @@ describe('reconcileManagedWslCliRegistrations', () => {
     ])
   })
 
-  it('passes the host launcher target through and records reconciliations against it', async () => {
-    const registry = {
-      getCandidates: vi.fn(async () => ['Ubuntu']),
-      recordObservations: vi.fn(async () => undefined)
-    }
-
-    await reconcileManagedWslCliRegistrations({
-      platform: 'win32',
-      isPackaged: true,
-      userDataPath: '/user-data',
-      appVersion: '1.4.138',
-      listDistros: async () => ['Ubuntu'],
-      listRunningDistros: async () => ['Ubuntu'],
-      getHostLauncherTarget: async () => 'C:\\Orca\\resources\\bin\\orca.exe',
-      registry,
-      createInstaller: () => ({
-        repairManagedRegistration: async () => ({
-          changed: true,
-          managed: true,
-          status: { state: 'installed' as const }
-        })
-      })
-    })
-
-    expect(registry.getCandidates).toHaveBeenCalledWith(['Ubuntu'], {
-      currentTarget: 'C:\\Orca\\resources\\bin\\orca.exe',
-      appVersion: '1.4.138'
-    })
-    expect(registry.recordObservations).toHaveBeenCalledWith([
-      {
-        distro: 'Ubuntu',
-        inspected: true,
-        managed: true,
-        reconciled: { target: 'C:\\Orca\\resources\\bin\\orca.exe', appVersion: '1.4.138' }
-      }
-    ])
-  })
-
   it('records unsupported distros without changing ownership and skips failed ones', async () => {
     const registry = {
       getCandidates: vi.fn(async () => ['Broken Distro', 'No Interop']),
@@ -101,6 +64,7 @@ describe('reconcileManagedWslCliRegistrations', () => {
       userDataPath: '/user-data',
       listDistros: async () => ['Broken Distro', 'No Interop'],
       listRunningDistros: async () => ['Broken Distro', 'No Interop'],
+      isDistroRunning: async (distro: string) => ['Broken Distro', 'No Interop'].includes(distro),
       registry,
       createInstaller: (distro) => ({
         repairManagedRegistration: async () => {
@@ -121,8 +85,7 @@ describe('reconcileManagedWslCliRegistrations', () => {
       { distro: 'No Interop', outcome: 'unchanged', state: 'unsupported', managed: false }
     ])
     expect(registry.recordObservations).toHaveBeenCalledTimes(1)
-    // Why: unsupported gets a TTL-stamped inspection (managed: null) so an
-    // interop-off distro is not re-probed and VM-booted on every startup.
+    // Cache unsupported inspections without changing ownership or repeating startup probes.
     expect(registry.recordObservations).toHaveBeenCalledWith([
       { distro: 'No Interop', inspected: true, managed: null, reconciled: null }
     ])
@@ -137,6 +100,7 @@ describe('reconcileManagedWslCliRegistrations', () => {
         userDataPath: '/user-data',
         listDistros: async () => ['Ubuntu'],
         listRunningDistros: async () => ['Ubuntu'],
+        isDistroRunning: async (distro: string) => ['Ubuntu'].includes(distro),
         registry: {
           getCandidates: async () => ['Ubuntu'],
           recordObservations: async () => {
@@ -161,23 +125,6 @@ describe('reconcileManagedWslCliRegistrations', () => {
     }
   })
 
-  it.each([
-    { platform: 'darwin' as const, isPackaged: true },
-    { platform: 'linux' as const, isPackaged: true },
-    { platform: 'win32' as const, isPackaged: false }
-  ])('does not inspect local, SSH, or development hosts for $platform', async (host) => {
-    const listDistros = vi.fn(async () => ['Ubuntu'])
-
-    await expect(
-      reconcileManagedWslCliRegistrations({
-        ...host,
-        userDataPath: '/user-data',
-        listDistros
-      })
-    ).resolves.toEqual([])
-    expect(listDistros).not.toHaveBeenCalled()
-  })
-
   it('lets a Settings removal win over a late startup repair for the same distro', async () => {
     const events: string[] = []
     let repairStarted!: () => void
@@ -197,6 +144,7 @@ describe('reconcileManagedWslCliRegistrations', () => {
       userDataPath: '/user-data',
       listDistros: async () => ['Ubuntu'],
       listRunningDistros: async () => ['Ubuntu'],
+      isDistroRunning: async (distro: string) => ['Ubuntu'].includes(distro),
       registry,
       createInstaller: () => ({
         repairManagedRegistration: async () => {
@@ -248,6 +196,7 @@ describe('reconcileManagedWslCliRegistrations', () => {
       userDataPath: '/user-data',
       listDistros: async () => ['Ubuntu', 'Debian'],
       listRunningDistros: async () => running,
+      isDistroRunning: async (distro: string) => running.includes(distro),
       deferUntilRunning: (distro: string, _key: string, task: () => unknown) => {
         deferred.set(distro, task)
       },
@@ -276,26 +225,34 @@ describe('reconcileManagedWslCliRegistrations', () => {
     })
   })
 
-  it('defers every candidate when no distro is running', async () => {
-    const repair = vi.fn()
-    const deferUntilRunning = vi.fn()
+  it('defers a listed distro that a settled read finds stopped, never spawning its repair (E9)', async () => {
+    const repaired: string[] = []
+    const deferred: string[] = []
     const results = await reconcileManagedWslCliRegistrations({
       platform: 'win32',
       isPackaged: true,
       userDataPath: '/user-data',
-      listDistros: async () => ['Ubuntu'],
-      listRunningDistros: async () => [],
-      deferUntilRunning,
-      registry: { getCandidates: async () => ['Ubuntu'], recordObservations: vi.fn() },
-      createInstaller: () => ({ repairManagedRegistration: repair })
+      listDistros: async () => ['Ubuntu', 'Debian'],
+      // The unsettled list still names Debian while it stops.
+      listRunningDistros: async () => ['Ubuntu', 'Debian'],
+      isDistroRunning: async (distro: string) => distro === 'Ubuntu',
+      deferUntilRunning: (distro: string) => {
+        deferred.push(distro)
+      },
+      registry: {
+        getCandidates: async () => ['Ubuntu', 'Debian'],
+        recordObservations: async () => undefined
+      },
+      createInstaller: (distro: string) => ({
+        repairManagedRegistration: async () => {
+          repaired.push(distro)
+          return { changed: false, managed: true, status: { state: 'installed' as const } }
+        }
+      })
     })
 
-    expect(results).toEqual([{ distro: 'Ubuntu', outcome: 'deferred' }])
-    expect(repair).not.toHaveBeenCalled()
-    expect(deferUntilRunning).toHaveBeenCalledWith(
-      'Ubuntu',
-      expect.any(String),
-      expect.any(Function)
-    )
+    expect(repaired).toEqual(['Ubuntu'])
+    expect(deferred).toEqual(['Debian'])
+    expect(results).toContainEqual({ distro: 'Debian', outcome: 'deferred' })
   })
 })

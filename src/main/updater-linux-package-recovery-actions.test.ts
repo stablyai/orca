@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { UpdateStatus } from '../shared/update-status-types'
 import type * as UpdaterModule from './updater'
 import { loadUpdaterModule, warmUpdaterModule } from './updater-test-module-loader'
+import { updaterMainWindow } from './updater-test-main-window'
 
 const {
   appMock,
@@ -67,7 +68,6 @@ vi.mock('electron', () => ({
 
 vi.mock('electron-updater', () => ({ autoUpdater: autoUpdaterMock }))
 vi.mock('./electron-updater-loader', () => ({ loadElectronAutoUpdater: () => autoUpdaterMock }))
-vi.mock('@electron-toolkit/utils', () => ({ is: { dev: false } }))
 vi.mock('./ipc/pty/kill-all', () => ({ killAllPty: vi.fn() }))
 vi.mock('./updater-changelog', () => ({ fetchChangelog: vi.fn().mockResolvedValue(null) }))
 vi.mock('./updater-nudge', () => ({
@@ -151,7 +151,7 @@ describe('linux package recovery actions', () => {
   }> => {
     const send = vi.fn()
     const updater = await loadUpdaterModule()
-    updater.setupAutoUpdater({ webContents: { send } } as never, {
+    updater.setupAutoUpdater(updaterMainWindow(send), {
       getLastUpdateCheckAt: () => Date.now()
     })
     return { send, updater }
@@ -295,7 +295,6 @@ describe('linux package recovery actions', () => {
       { reason: 'hash-mismatch', packageType: 'deb', version: '1.0.61' },
       expect.objectContaining({ level: 'warn' })
     )
-    // The replacement status has no recovery, so a second attempt cannot reach the artifact again.
     await expect(updater.showLinuxPackage()).rejects.toThrow(
       'No package install recovery is available.'
     )
@@ -322,7 +321,7 @@ describe('linux package recovery actions', () => {
       resolveLinuxPackageInstallInstructionsMock.mockResolvedValue({ ok: false, reason })
       const statusesBefore = errorStatuses(send).length
 
-      // Why: the renderer demotes copy on a rejection, so a missing package manager must not reject.
+      // Renderer copy actions are demoted on rejection; represent missing package managers as a result.
       await expect(updater.getLinuxPackageInstallInstructions()).resolves.toEqual({
         ok: false,
         reason,
@@ -336,7 +335,6 @@ describe('linux package recovery actions', () => {
         { reason, packageType: 'deb', version: '1.0.61' },
         expect.objectContaining({ level: 'warn' })
       )
-      // Show Package must remain reachable as the promoted action.
       await expect(updater.showLinuxPackage()).resolves.toBeUndefined()
     }
   )
@@ -353,7 +351,6 @@ describe('linux package recovery actions', () => {
       'could not read the downloaded package'
     )
 
-    // Why: a read error is not evidence the artifact is bad, so retrying must stay possible.
     expect(clearTrackedLinuxPackageArtifactMock).not.toHaveBeenCalled()
     expect(errorStatuses(send)).toHaveLength(statusesBefore)
     await expect(updater.showLinuxPackage()).resolves.toBeUndefined()
@@ -370,7 +367,7 @@ describe('linux package recovery actions', () => {
     )
 
     const pending = updater.getLinuxPackageInstallInstructions()
-    // A 160 MB hash outlives the cycle it started in; a newer download takes over meanwhile.
+    // Hashing can outlive its download cycle; replace the recovery while validation is pending.
     getTrackedLinuxPackageArtifactMock.mockReturnValue({ ...ARTIFACT })
     await activateRecovery(updater)
     settleValidation({ ok: false, reason: 'hash-mismatch' })

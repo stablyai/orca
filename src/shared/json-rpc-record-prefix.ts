@@ -161,8 +161,7 @@ function leadingJsonRpcProperties(prefix: string): LeadingProperty[] {
 }
 
 export function classifyJsonRpcPrefix(prefix: string): JsonRpcPrefix {
-  // Only inspect complete top-level properties. Searching arbitrary quoted
-  // keys would let a nested result/params object impersonate JSON-RPC fields.
+  // Inspect complete top-level fields only; nested result/params must not impersonate JSON-RPC envelope keys.
   const properties = leadingJsonRpcProperties(prefix)
   const method = properties.find((property) => property.key === 'method')?.value
   const id = properties.find((property) => property.key === 'id')?.value

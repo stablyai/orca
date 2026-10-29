@@ -10,8 +10,7 @@ import { MARKDOWN_DOCUMENT_LIST_JOIN_WINDOW_MS } from './markdown-document-list-
 
 const DOCUMENT_WATCH_DEBOUNCE_MS = 125
 
-// Why: a remounted pane must not join a scan that predates the latest change its unmounted
-// predecessor saw (that pane's pending follow-up died with it).
+// Remounted panes must bypass scans older than the latest observed change because unmount cancels their predecessor’s follow-up.
 const latestMembershipChangeAt = new Map<string, number>()
 const membershipChangeKey = (owner: string | null, rootPath: string): string =>
   `${owner ?? ''}::${normalizeRuntimePathForComparison(rootPath)}`
@@ -74,6 +73,7 @@ export function useMarkdownDocumentWatchRefresh({
     let scanSeq = 0
     let activeScan: number | null = null
     let scanWatchdog: ReturnType<typeof setTimeout> | undefined
+    let watchdogScale = 1
     let changedDuringScan = false
     let disposed = false
     const endScan = (scan: number): void => {
@@ -97,11 +97,18 @@ export function useMarkdownDocumentWatchRefresh({
         const scan = ++scanSeq
         activeScan = scan
         changedDuringScan = false
-        // Why: local and UNC listings have no timeout; stop waiting for a hung scan after the
-        // shared-request join window so later changes can scan again.
-        scanWatchdog = setTimeout(() => endScan(scan), MARKDOWN_DOCUMENT_LIST_JOIN_WINDOW_MS)
+        // Why: listings have no timeout; a doubling watchdog frees a hung scan yet lets a slow one publish.
+        scanWatchdog = setTimeout(() => {
+          watchdogScale = Math.min(watchdogScale * 2, 8)
+          endScan(scan)
+        }, MARKDOWN_DOCUMENT_LIST_JOIN_WINDOW_MS * watchdogScale)
         // Each pane can join a scan begun after the latest change, while bypassing an older snapshot.
-        void refresh(false, latestChangeAt).finally(() => endScan(scan))
+        void refresh(false, latestChangeAt).finally(() => {
+          if (activeScan === scan) {
+            watchdogScale = 1
+          }
+          endScan(scan)
+        })
       }, DOCUMENT_WATCH_DEBOUNCE_MS)
     }
     const handleChange = (event: WindowEventMap[typeof ORCA_WORKTREE_FILE_CHANGE_EVENT]): void => {

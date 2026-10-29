@@ -9,6 +9,7 @@ const observer = 'config/scripts/windows-native-benchmark-observer.mjs'
 const metadataCallers = [
   'config/scripts/node-server-change-scope.mjs',
   'config/scripts/pr-code-change-scope.mjs',
+  'config/scripts/orcad-windows-prebuild-cache.mjs',
   'config/scripts/windows-native-toolchain-routing.test.mjs'
 ]
 const capture = 'capture-windows-native-environment.cmd'

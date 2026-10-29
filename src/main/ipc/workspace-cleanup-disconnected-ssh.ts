@@ -32,8 +32,7 @@ export function synthesizeDisconnectedSshCleanupCandidates(
   const executionHostId = getRepoExecutionHostId(repo)
   if (targetWorktreeIds) {
     const candidates: WorkspaceCleanupCandidate[] = []
-    // Why: targeted refreshes name their workspaces already; walking all
-    // persisted metadata is unnecessary for disconnected SSH repos.
+    // Targeted refresh already names candidates; avoid traversing all persisted SSH metadata.
     for (const worktreeId of targetWorktreeIds) {
       if (!worktreeId.startsWith(repoWorktreePrefix)) {
         continue

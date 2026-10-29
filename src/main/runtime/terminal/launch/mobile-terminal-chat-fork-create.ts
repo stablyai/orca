@@ -1,6 +1,8 @@
-import { OrcaRuntimeWithCreateMobileSessionTerminal } from './mobile-terminal-create'
+import {
+  OrcaRuntimeWithCreateMobileSessionTerminal,
+  type OwnedMobileTerminalCreateOptions
+} from './mobile-terminal-create'
 import type { MobileTerminalCreateOptions } from './mobile-terminal-renderer-create'
-import type { OwnedMobileTerminalCreateOptions } from './mobile-terminal-owned-create'
 import type { TerminalWorkspaceLaunchScope } from '../../runtime-legacy-worker-terminal-recovery-types'
 import type { RuntimeMobileSessionCreateTerminalResult } from '../../../../shared/runtime-types'
 import {
@@ -10,7 +12,7 @@ import {
 import { buildMobileTerminalChatFork } from './mobile-terminal-chat-fork'
 import { isWslUncPath } from '../../../../shared/wsl-paths'
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
-import { applyClaudeTerminalImageViewerEnv } from '../../terminal-image-viewer-env'
+import { applyRemoteViewerLaunchEnv } from '../../remote-viewer-launch-env'
 import { deterministicAgentSessionUuid } from '../../runtime-agent-launch-resolution'
 import { rendererPublicationThrottle } from '../../../window/renderer-publication-throttle'
 import { PROJECT_RUNTIME_REPAIR_REQUIRED_CODE } from '../../../../shared/project-runtime-repair-message'
@@ -95,7 +97,7 @@ export abstract class OrcaRuntimeWithMobileChatForkCreate extends OrcaRuntimeWit
         }
         const settings = store.getSettings()
         const launchRuntime = this.resolveAgentLaunchRuntime(workspace, sourceAgent)
-        const startup = applyClaudeTerminalImageViewerEnv(
+        const startup = applyRemoteViewerLaunchEnv(
           buildMobileTerminalChatFork({
             prepared,
             settings,

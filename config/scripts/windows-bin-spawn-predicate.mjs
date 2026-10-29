@@ -75,8 +75,7 @@ export function hasNodeModulesBinSpawn(contents) {
     )
   }
 
-  // Why: arguments are folded textually, so a literal '..' segment would otherwise hide a
-  // path that resolves into node_modules/.bin at runtime.
+  // Fold literal .. segments or textual matching misses paths resolving into node_modules/.bin.
   function foldDotSegments(value) {
     const folded = []
     for (const segment of value.replace(/\\/g, '/').split('/')) {

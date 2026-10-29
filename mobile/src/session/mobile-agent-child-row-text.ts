@@ -1,62 +1,47 @@
-// The phone's words for one child row: the shared row model decides what it says (name, detail,
-// lead order); this only puts each detail kind into English, as desktop's agent rows phrase it.
-
 import {
+  agentChildRowDetailText,
   agentChildRowLeadTrail,
   agentChildRowName
 } from '../../../src/shared/agent-child-row-lead-trail'
 import type { AgentChildRowModel } from '../../../src/shared/agent-child-row-model'
 import type { AgentChildDisplayState } from '../../../src/shared/agent-status-child-work-display'
-import { formatAgentTypeLabel } from '../../../src/shared/agent-type-label'
-import { sayBackgroundTaskEnglish } from '../../../src/shared/background-task-copy'
-import {
-  backgroundTaskStateReason,
-  backgroundTaskStateWord
-} from '../../../src/shared/background-task-roster'
+import { sayMobileBackgroundTask } from './mobile-background-task-copy'
+import { translate } from '../i18n/mobile-i18n'
 import { agentStateLabel } from '../worktree/agent-row-display'
 
-// Mobile's agent-row words for every state they cover; only child rows reach `unverifiable`.
 export function mobileAgentChildStateLabel(state: AgentChildDisplayState): string {
-  return state === 'unverifiable' ? 'No recent update' : agentStateLabel(state)
+  return state === 'unverifiable'
+    ? translate('session.agentChildRow.noRecentUpdate', 'No recent update')
+    : agentStateLabel(state)
 }
 
-/** Coarse `34m` / `2h` / `3d`, floored so it never overstates the gap (desktop's no-update form). */
-function compactDuration(deltaMs: number): string {
+function mobileAgentChildRowCopy() {
+  return {
+    stateLabel: mobileAgentChildStateLabel,
+    ended: () => translate('session.agentChildRow.ended', 'Ended'),
+    sayBackgroundTask: sayMobileBackgroundTask
+  }
+}
+
+function noUpdateDuration(deltaMs: number): string {
   const minutes = Math.max(0, Math.floor(deltaMs / 60_000))
   if (minutes < 60) {
-    return `${minutes}m`
+    const count = minutes
+    return count === 1
+      ? translate('session.agentChildRow.minutes_one', '{{count}}m', { count })
+      : translate('session.agentChildRow.minutes_other', '{{count}}m', { count })
   }
   const hours = Math.floor(minutes / 60)
-  return hours < 24 ? `${hours}h` : `${Math.floor(hours / 24)}d`
-}
-
-function detailText(row: AgentChildRowModel, now: number): string {
-  const detail = row.detail
-  if (!detail) {
-    return ''
+  if (hours < 24) {
+    const count = hours
+    return count === 1
+      ? translate('session.agentChildRow.hours_one', '{{count}}h', { count })
+      : translate('session.agentChildRow.hours_other', '{{count}}h', { count })
   }
-  switch (detail.kind) {
-    case 'operation': {
-      const toolName = detail.toolName.trim()
-      const input = detail.input?.trim() ?? ''
-      return toolName && input ? `${toolName}: ${input}` : toolName
-    }
-    case 'monitoring':
-      return mobileAgentChildStateLabel('monitoring')
-    case 'message':
-      return detail.text
-    case 'ended':
-      return 'Ended'
-    case 'no-update':
-      return `No update in ${compactDuration(now - row.recencyAt)}`
-    case 'role':
-      return formatAgentTypeLabel(detail.agentType)
-    case 'reason':
-      return (
-        backgroundTaskStateReason(detail.state, sayBackgroundTaskEnglish) ??
-        backgroundTaskStateWord(detail.state, sayBackgroundTaskEnglish)
-      )
-  }
+  const count = Math.floor(hours / 24)
+  return count === 1
+    ? translate('session.agentChildRow.days_one', '{{count}}d', { count })
+    : translate('session.agentChildRow.days_other', '{{count}}d', { count })
 }
 
 export function mobileAgentChildRowName(row: AgentChildRowModel): string {
@@ -67,5 +52,13 @@ export function mobileAgentChildRowText(
   row: AgentChildRowModel,
   now: number
 ): { lead: string; trail: string } {
-  return agentChildRowLeadTrail(row, mobileAgentChildRowName(row), detailText(row, now))
+  const detail =
+    row.detail?.kind === 'no-update'
+      ? translate('session.agentChildRow.noUpdate', 'No update in {{value0}}', {
+          value0: noUpdateDuration(now - row.recencyAt)
+        })
+      : row.detail?.kind === 'role' && (!row.detail.agentType || row.detail.agentType === 'unknown')
+        ? translate('session.agentChildRow.agent', 'Agent')
+        : agentChildRowDetailText(row, now, mobileAgentChildRowCopy())
+  return agentChildRowLeadTrail(row, mobileAgentChildRowName(row), detail)
 }

@@ -11,9 +11,12 @@ import {
   type ViewStyle
 } from 'react-native'
 import { ArrowUp, ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react-native'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { colors } from '../theme/mobile-theme'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { MobileBrowserAddressField } from './MobileBrowserAddressField'
 import { MobileBrowserKeyRow } from './MobileBrowserKeyRow'
+import { MobileBrowserLoadFailure } from './MobileBrowserLoadFailure'
 import {
   MobileBrowserPointerModifiers,
   type BrowserPointerModifier
@@ -73,17 +76,11 @@ type MobileBrowserPaneViewProps = {
   zoom: BrowserZoomState
 }
 
-/**
- * The pane's chrome and the surface the frames paint into.
- *
- * "Never dark" holds only for a page that produces some frame that fits: with every frame over the
- * cap this sits on its busy spinner over an unpainted viewport, which the C6.6 device proof
- * measured with the area budget forced off — 299 dropped, 6 applied, the stream alive and no error
- * state, and nothing to look at. That is C6 ruling 1 working as written, not a failure of it: a
- * frame that does not fit is dropped rather than ending the stream. It is what the area budget
- * exists to keep from happening.
- */
+// Frame cap can leave viewport unpainted despite live stream; oversized frames are dropped, never fatal.
+// Area budget prevents starvation: C6.6 with budget disabled measured 299 dropped/6 applied and a persistent spinner.
 export function MobileBrowserPaneView(props: MobileBrowserPaneViewProps) {
+  const t = useMobileTranslation()
+  useMobileColorScheme()
   const {
     addressFocused,
     addressValue,
@@ -123,21 +120,21 @@ export function MobileBrowserPaneView(props: MobileBrowserPaneViewProps) {
       <View style={styles.toolbar}>
         <MobileBrowserToolbarIconButton
           disabled={controlsDisabled || !tab.canGoBack}
-          label="Back"
+          label={t('common.back', 'Back')}
           onPress={goBack}
         >
           <ChevronLeft size={15} color={buttonColor(!controlsDisabled && tab.canGoBack)} />
         </MobileBrowserToolbarIconButton>
         <MobileBrowserToolbarIconButton
           disabled={controlsDisabled || !tab.canGoForward}
-          label="Forward"
+          label={t('browser.paneView.forward', 'Forward')}
           onPress={goForward}
         >
           <ChevronRight size={15} color={buttonColor(!controlsDisabled && tab.canGoForward)} />
         </MobileBrowserToolbarIconButton>
         <MobileBrowserToolbarIconButton
           disabled={controlsDisabled}
-          label="Reload"
+          label={t('browser.paneView.reload', 'Reload')}
           onPress={reloadPage}
         >
           <RefreshCw size={15} color={buttonColor(!controlsDisabled)} />
@@ -150,6 +147,8 @@ export function MobileBrowserPaneView(props: MobileBrowserPaneViewProps) {
           onSubmit={() => void navigateToAddress()}
           focused={addressFocused}
           disabled={controlsDisabled}
+          loading={tab.loading}
+          loadFailed={tab.loadError != null}
         />
         <MobileBrowserViewModeSwitch
           disabled={controlsDisabled}
@@ -246,10 +245,10 @@ export function MobileBrowserPaneView(props: MobileBrowserPaneViewProps) {
             )}
           </View>
         ) : null}
+        {tab.loadError ? <MobileBrowserLoadFailure loadError={tab.loadError} /> : null}
         {!renderedFrameSource || busy || error ? (
           <View pointerEvents="none" style={styles.overlay}>
-            {/* Why: a stream can report ready and then deliver no frames, so key the
-                indicator off actually having pixels or it clears into a blank pane. */}
+            {/* Key busy indicator on received pixels, not ready status: ready streams may send no frames. */}
             {busy || (!renderedFrameSource && !error) ? (
               <ActivityIndicator size="small" color={colors.textSecondary} />
             ) : null}
@@ -259,7 +258,9 @@ export function MobileBrowserPaneView(props: MobileBrowserPaneViewProps) {
         {dialog ? (
           <View style={styles.dialogOverlay}>
             <View style={styles.dialogCard}>
-              <Text style={styles.dialogTitle}>Browser Dialog</Text>
+              <Text style={styles.dialogTitle}>
+                {t('browser.paneView.dialogTitle', 'Browser Dialog')}
+              </Text>
               <Text style={styles.dialogMessage}>{dialog.message}</Text>
               {/* The page is still blocked, so the buttons stay live and the card says why. */}
               {dialog.error ? <Text style={styles.dialogError}>{dialog.error}</Text> : null}
@@ -274,7 +275,7 @@ export function MobileBrowserPaneView(props: MobileBrowserPaneViewProps) {
                     ]}
                     onPress={() => void sendDialogCommand('browser.dialogDismiss')}
                   >
-                    <Text style={styles.dialogButtonText}>Cancel</Text>
+                    <Text style={styles.dialogButtonText}>{t('common.cancel', 'Cancel')}</Text>
                   </Pressable>
                 ) : null}
                 <Pressable
@@ -287,7 +288,9 @@ export function MobileBrowserPaneView(props: MobileBrowserPaneViewProps) {
                   ]}
                   onPress={() => void sendDialogCommand('browser.dialogAccept')}
                 >
-                  <Text style={[styles.dialogButtonText, styles.dialogButtonPrimaryText]}>OK</Text>
+                  <Text style={[styles.dialogButtonText, styles.dialogButtonPrimaryText]}>
+                    {t('common.ok', 'OK')}
+                  </Text>
                 </Pressable>
               </View>
             </View>
@@ -315,7 +318,7 @@ export function MobileBrowserPaneView(props: MobileBrowserPaneViewProps) {
             style={styles.keyboardInput}
             value={keyboardValue}
             onChangeText={setKeyboardValue}
-            placeholder="Type on page…"
+            placeholder={t('browser.paneView.keyboardPlaceholder', 'Type on page…')}
             placeholderTextColor={colors.textMuted}
             autoCapitalize="none"
             autoCorrect={false}
@@ -326,7 +329,7 @@ export function MobileBrowserPaneView(props: MobileBrowserPaneViewProps) {
             style={[styles.sendButton, (controlsDisabled || !keyboardValue) && styles.disabled]}
             disabled={controlsDisabled || !keyboardValue}
             onPress={() => void sendKeyboardText()}
-            accessibilityLabel="Send text to browser"
+            accessibilityLabel={t('browser.paneView.sendText', 'Send text to browser')}
           >
             <ArrowUp size={18} color={buttonColor(!controlsDisabled && !!keyboardValue)} />
           </Pressable>

@@ -5,6 +5,13 @@ import { useAppStore } from '@/store'
 import { makeWorktree, TEST_REPO } from '../store/slices/worktrees-slice-test-fixtures'
 import { resumeSleepingAgentSessionsForWorktree } from './resume-sleeping-agent-session'
 
+// Main's answer to the window's layout commands, as a switch-on build sends them.
+vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeRpcClientWithLayoutApply(await importOriginal())
+)
+
 const initialAppStoreState = useAppStore.getState()
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
 const OTHER_LEAF_ID = '22222222-2222-4222-8222-222222222222'
@@ -79,7 +86,7 @@ describe('resumeSleepingAgentSessionsForWorktree — SSH panes and stale worktre
   })
 
   it('resumes a leaf whose ssh pty is gone while its target is connected', () => {
-    const record = makeRecord({ origin: 'worktree-sleep' })
+    const record = makeRecord({ origin: 'quit' })
     setStoreState({
       activeWorktreeId: 'wt-other',
       tabsByWorktree: { 'wt-1': [makeTerminalTab('tab-1', 'wt-1')] },
@@ -177,8 +184,7 @@ describe('resumeSleepingAgentSessionsForWorktree — SSH panes and stale worktre
     expect(records[owned.paneKey]).toBe(owned)
   })
 
-  // The other record's host moved, so it can't resume the session; letting it claim the session
-  // would delete the only record that can, and nothing would resume.
+  // A host-moved claimant cannot resume; accepting it would delete the only usable record.
   it('ignores a claim from a record whose worktree now routes to another host', () => {
     const remotePath = '/home/neil/projects/wt-2'
     const remoteWorktreeId = `repo-2::${remotePath}`
@@ -242,8 +248,7 @@ describe('resumeSleepingAgentSessionsForWorktree — SSH panes and stale worktre
     expect(resumeSleepingAgentSessionsForWorktree('wt-1')).toBe(1)
   })
 
-  // Matching ids on two machines (a copied state dir) are two sessions, not one. Here only the
-  // catalog names this record's machine and only the capture stamp names the other's.
+  // Copied IDs on two machines remain distinct sessions; owner catalog and capture stamp can independently name their machines.
   it('ignores a claim from a pane on a different machine than this record', () => {
     const localPath = '/Users/neil/projects/wt-1'
     const localWorktreeId = `repo-1::${localPath}`

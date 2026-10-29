@@ -201,7 +201,13 @@ export const GITLAB_METHODS = [
     permission: 'workspace',
     params: WorkItemDetails,
     handler: async (params, { runtime }) =>
-      runtime.getGitLabRepoWorkItemDetails(params.repo, params.iid, params.type, params.projectRef)
+      runtime.getGitLabRepoWorkItemDetails(
+        params.repo,
+        params.iid,
+        params.type,
+        params.projectRef,
+        params.includeReviewDetails
+      )
   }),
   defineMethod({
     name: 'gitlab.workItemByPath',

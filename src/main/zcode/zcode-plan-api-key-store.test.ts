@@ -163,8 +163,7 @@ describe('zcode-plan-api-key-store', () => {
     expect(() => store.saveZcodePlanApiKey('new-key')).toThrow(
       'could not be stored securely on this device'
     )
-    // First write publishes the unrestricted replacement; the second restores
-    // the previous envelope so the user's old key survives the failed replace.
+    // Reject unrestricted replacement but restore the old envelope so the previous key survives failure.
     expect(writeSecureFileMock).toHaveBeenCalledTimes(2)
     expect(writeSecureFileMock).toHaveBeenLastCalledWith(storePath, previous.toString('utf8'), {
       shouldPublish: expect.any(Function)

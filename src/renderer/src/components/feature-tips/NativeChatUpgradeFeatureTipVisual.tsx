@@ -18,7 +18,6 @@ const SCENE_MS = 3600
 
 type DemoMenuItem = { icon: LucideIcon; label: string; highlighted?: boolean }
 
-// Scene 0 is a Claude native chat (row 0); scene 1 a Codex CLI session (row 1).
 function getSceneMenus(): DemoMenuItem[][] {
   const copyResume = {
     icon: Copy,
@@ -40,7 +39,7 @@ function getSceneMenus(): DemoMenuItem[][] {
         icon: SquareTerminal,
         label: translate(
           'auto.components.right.sidebar.AiVaultSessionRow.resumeInNewCli',
-          'Resume in New CLI'
+          'Resume in New Terminal'
         ),
         highlighted: true
       },
@@ -52,7 +51,7 @@ function getSceneMenus(): DemoMenuItem[][] {
         icon: MessagesSquare,
         label: translate(
           'auto.components.right.sidebar.AiVaultSessionRow.resumeInNewNativeChat',
-          'Resume in New Native Chat'
+          'Resume in New Chat'
         ),
         highlighted: true
       },
@@ -61,7 +60,6 @@ function getSceneMenus(): DemoMenuItem[][] {
   ]
 }
 
-/** A still copy of the row's ⋯ menu, lifted off the dark sidebar so the action reads at a glance. */
 function DemoActionMenu({
   items,
   opensUp
@@ -74,7 +72,7 @@ function DemoActionMenu({
       <span className="absolute right-2 top-2 flex size-6 items-center justify-center rounded-md bg-sidebar-accent text-foreground">
         <MoreHorizontal className="size-3.5" />
       </span>
-      {/* Why: the second row sits low in the panel, so its menu flips above like the real one. */}
+      {/* Low rows open their menu upward, matching the real panel. */}
       <div
         data-opens-up={opensUp}
         className="absolute right-2 top-9 z-10 min-w-[12.5rem] rounded-[11px] border border-foreground/20 bg-popover p-1 text-popover-foreground shadow-floating animate-in fade-in-0 zoom-in-[0.98] duration-150 data-[opens-up=true]:top-auto data-[opens-up=true]:bottom-[calc(100%-0.25rem)] motion-reduce:animate-none dark:border-foreground/25 dark:bg-[color-mix(in_srgb,var(--foreground)_10%,var(--popover))]"
@@ -98,7 +96,6 @@ export function NativeChatUpgradeFeatureTipVisual(): JSX.Element {
   const reducedMotion = usePrefersReducedMotion()
   const [scene, setScene] = useState(0)
   const menus = getSceneMenus()
-  // Why: reduced motion holds the first menu instead of alternating.
   const shownScene = reducedMotion ? 0 : scene
 
   useEffect(() => {
@@ -111,8 +108,7 @@ export function NativeChatUpgradeFeatureTipVisual(): JSX.Element {
 
   return (
     <DemoSessionPanel>
-      {/* Dimming the other rows keeps the eye on the open menu. Not clipped, so an upward menu
-          can overlap the header like the real one; the panel still clips the rows. */}
+      {/* Let upward menus overlap the header; the panel still clips rows. */}
       <div className="min-h-0 flex-1 [&>[data-focused=false]]:opacity-55">
         {getSessionSearchDemoRecentRows().map((row, index) => {
           const focused = index === shownScene

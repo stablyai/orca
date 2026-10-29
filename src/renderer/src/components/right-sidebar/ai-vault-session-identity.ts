@@ -2,17 +2,10 @@ import type { AiVaultListResult, AiVaultSession } from '../../../../shared/ai-va
 import { structuralValuesEqual } from '../../../../shared/structural-value-equality'
 import { reuseEqualCatalogRows } from '@/store/slices/worktree-catalog-reconciliation'
 
-// One instance is shared by every mounted hook, so it is frozen: an in-place
-// sort or push by any consumer would otherwise leak into every other panel.
+// Freeze the shared sentinel so one consumer cannot mutate every panel's initial rows.
 export const EMPTY_AI_VAULT_SESSIONS: readonly AiVaultSession[] = Object.freeze([])
 
-// Why: listSessions always structured-clones nested session rows (previewMessages,
-// subagent). A TTL miss remints scannedAt even when the disk contents did not
-// change, and all-host merge used to remint it even on cache-hit legs. The panel
-// only skipped apply when scannedAt matched, so alt-tab after 15s rebuilt
-// sessionProjectById + the worktree path map for every row. Reuse previous row
-// and result identity when the payload is structurally unchanged so those memos
-// stay cold. Reference compare is inert here — IPC clones never match.
+// IPC clones defeat reference equality and scannedAt changes on TTL misses; reuse structural identity to preserve row memos.
 export function reuseAiVaultListResult(
   current: AiVaultListResult | null,
   incoming: AiVaultListResult
@@ -39,11 +32,4 @@ export function reuseAiVaultListResult(
     return incoming
   }
   return { ...incoming, sessions, issues }
-}
-
-export function applyPublishedAiVaultList(
-  published: AiVaultListResult,
-  setScanResult: (updater: (prev: AiVaultListResult | null) => AiVaultListResult) => void
-): void {
-  setScanResult((prev) => reuseAiVaultListResult(prev, published))
 }

@@ -1,13 +1,7 @@
-import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
+import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import type { PtyTransport } from './pty-transport-types'
 
-/**
- * Releases a pane's transport for a restart and returns the PTY its replacement spawn must name.
- *
- * Why: main adopts a pane's live owner on spawn, so a local restart must not kill the old PTY
- * itself — the replacement spawn names it and main stops it before launching. Remote-runtime
- * hosts do not read that field, so they keep the kill-then-connect path.
- */
+/** Local main replaces the named old PTY during spawn; remote hosts lack that field and retain kill-then-connect compatibility. */
 export function releasePaneTransportForRestart(transport: PtyTransport | undefined): string | null {
   const existingPtyId = transport?.getPtyId()
   const replacesPtyId =

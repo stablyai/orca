@@ -38,10 +38,16 @@ vi.mock('@/lib/runtime-workspace-file-route', () => ({
   findWorkspaceFileRoute: vi.fn(() => null)
 }))
 
-vi.mock('@/store', () => ({ useAppStore: { getState: mocks.getState } }))
+vi.mock('@/store', () => ({
+  useAppStore: Object.assign(
+    (select: (state: ReturnType<typeof mocks.getState>) => unknown) => select(mocks.getState()),
+    { getState: mocks.getState }
+  )
+}))
 
 import { ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT } from './editor-autosave'
 import { useEditorPanelContentState } from './useEditorPanelContentState'
+import { createTestStore } from '@/store/slices/store-test-helpers'
 
 type Deferred<T> = {
   promise: Promise<T>
@@ -161,6 +167,7 @@ describe('useEditorPanelContentState visibility', () => {
     mocks.readRuntimeFileContent.mockReset()
     mocks.getState.mockReset()
     mocks.getState.mockReturnValue({
+      ...createTestStore().getState(),
       settings: null,
       openFiles: [],
       setLastKnownDiskSignature: vi.fn()
@@ -403,8 +410,7 @@ describe('useEditorPanelContentState visibility', () => {
 
     await act(async () => root.render(<Probe activeFile={file} isVisible={false} />))
     dispatchExternalChange(file)
-    // Why: the viewers render "Loading diff…" purely on a missing entry, so a
-    // retained (stale-marked) entry is what keeps the pane painted.
+    // Retaining a stale entry prevents the missing-entry Loading diff state while reload is pending.
     expect(snapshots.get('main')?.diffContents[file.id]?.modifiedContent).toBe('old diff')
     expect(snapshots.get('main')?.diffContents[file.id]?.isStale).toBe(true)
     expect(mocks.getRuntimeGitDiff).toHaveBeenCalledOnce()

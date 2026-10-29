@@ -139,7 +139,6 @@ describe('read-only editor tabs (AI Vault View Log)', () => {
     expect(restored).toEqual(
       expect.objectContaining({ readOnly: true, liveTail: true, isDirty: false, mode: 'edit' })
     )
-    expect(restored?.pendingDiskBaselineVerification).toBeUndefined()
     expect(store.getState().editorDrafts[LOG_PATH]).toBeUndefined()
   })
 

@@ -1,13 +1,4 @@
-/**
- * Byte-for-byte snapshots of every shell wrapper file Orca generates, for all
- * three transports (local PTY, daemon/SSH, relay overlay).
- *
- * Why: the zsh generators were unified behind one builder; these fixtures were
- * captured from the pre-unification code so any drift shows up as a diff.
- *
- * Fixtures live in ./__fixtures__/shell-wrapper-snapshots/ — see the README there
- * before accepting a rewrite; a local run updates them silently.
- */
+// Read __fixtures__/shell-wrapper-snapshots/README.md before accepting snapshot changes.
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -20,8 +11,6 @@ import {
 import { getShellLaunchConfig as getLocalShellLaunchConfig } from './providers/local-pty-shell-ready'
 import { selectShellStartupFeatures } from './shell-startup-features'
 
-// Why the real selector: the snapshots then pin what a startup-command pane
-// actually launches with, not a hand-written feature list.
 const STARTUP_COMMAND_FEATURES = selectShellStartupFeatures({
   shellPath: 'zsh',
   env: {},
@@ -30,8 +19,7 @@ const STARTUP_COMMAND_FEATURES = selectShellStartupFeatures({
   emitsStartupIdentity: true
 })
 
-// Why one zsh file: the wrapper hands ZDOTDIR back on its first lines, so zsh
-// reads .zprofile, .zshrc and .zlogin from the user's own directory.
+// ZDOTDIR handback lets zsh read later startup files directly from the user's directory.
 const WRAPPER_FILES = [
   ['zsh-zshenv', join('zsh', '.zshenv')],
   ['bash-rcfile', join('bash', 'rcfile')]
@@ -39,8 +27,7 @@ const WRAPPER_FILES = [
 
 const SNAPSHOT_DIR = join(__dirname, '__fixtures__', 'shell-wrapper-snapshots')
 
-// Why still normalized: the zsh hook no longer bakes a wrapper path at all, but
-// the bash rcfile can still carry one, and a temp root differs per run.
+// Bash still embeds a temporary wrapper root that varies per run.
 function withStableRoot(content: string, root: string): string {
   return content.split(root).join('<WRAPPER_ROOT>')
 }
@@ -56,21 +43,14 @@ async function expectWrapperFiles(transport: string, root: string): Promise<void
   }
 }
 
-/**
- * Every shell name the wrapper is allowed to write that is not Orca-namespaced.
- *
- * Each is a deliberate contract with the shell or with Orca's own features, not
- * scratch space: the history path, the config dir, the two PATH-shaped exports
- * agent overlays need, and the prompt-hook arrays the readiness and OSC 133
- * markers register through.
- */
+// Non-Orca globals allowed by the shell or agent-overlay contracts.
 const CONTRACT_GLOBALS = new Set([
   'BUFFER',
   'CODEX_HOME',
-  // Exported only inside the claude function's subshell, for that one Claude process.
+  // Exported only in the claude function's subshell.
   'CLAUDE_CONFIG_DIR',
   'HISTFILE',
-  'MIMOCODE_HOME',
+  'MIMOCODE_CONFIG_DIR',
   'OPENCODE_CONFIG_DIR',
   'OPENCODE_AUTH_CONTENT',
   'OPENCODE_DB',
@@ -108,8 +88,7 @@ function foreignGlobalsWritten(content: string): string[] {
   return [...names].sort()
 }
 
-// Why: all three generators are POSIX-only (the launch configs skip wrapping on
-// win32), and native Windows path separators would make the fixtures unstable.
+// Wrapping is POSIX-only; native Windows paths would make these fixtures unstable.
 const describePosix = process.platform === 'win32' ? describe.skip : describe
 
 describePosix('generated shell wrapper files', () => {
@@ -141,11 +120,7 @@ describePosix('generated shell wrapper files', () => {
     await expectWrapperFiles('daemon', getDaemonShellReadyWrapperRoot())
   })
 
-  // Why a rule and not another fixture: `REPLY`, zsh's shared scratch global,
-  // was the wrapper's resolver out-parameter. A user config that constrained it
-  // (`typeset -r REPLY`) aborted the wrapper at its first executable line — on
-  // every zsh pane, once wrapping widened past overlay/startup panes. The
-  // fixtures above would have shown that only to a reader who knew to look.
+  // User configs may constrain shell globals such as readonly REPLY; use Orca-owned scratch names.
   it.each([
     ['local', (): void => void ensureShellReadyWrappersAt(root), (): string => root],
     [

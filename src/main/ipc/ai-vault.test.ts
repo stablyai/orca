@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   scanRuntimeAiVaultSessions: vi.fn(),
   getAiVaultWslHomeDirs: vi.fn(),
   ipcHandle: vi.fn(),
+  trashItem: vi.fn(),
   deleteAiVaultSessionFile: vi.fn(),
   invalidateAiVaultSessionListCache: vi.fn(),
   invalidateSessionParseCacheEntry: vi.fn()
@@ -19,7 +20,8 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('electron', () => ({
   app: { on: vi.fn() },
-  ipcMain: { handle: mocks.ipcHandle }
+  ipcMain: { handle: mocks.ipcHandle },
+  shell: { trashItem: mocks.trashItem }
 }))
 
 vi.mock('../ai-vault/session-scanner-service-spawn', async (importOriginal) => ({
@@ -33,9 +35,7 @@ vi.mock('../ai-vault/session-delete', () => ({
   deleteAiVaultSessionFile: mocks.deleteAiVaultSessionFile
 }))
 
-// Why: only the invalidation seam is replaced — everything else (cachedList,
-// listAiVaultSessions, ...) keeps its real implementation so the existing
-// host-routing/caching tests below stay exercising real behavior.
+// Mock only invalidation so routing and cache tests retain the real list implementation.
 vi.mock('../ai-vault/cached-session-list', async (importOriginal) => {
   const actual = await importOriginal<typeof CachedSessionListModule>()
   return {
@@ -61,6 +61,7 @@ vi.mock('../wsl', () => ({
 const { resolveOmpSessionsDir } = await import('../ai-vault/omp-session-root')
 const { _internals, registerAiVaultHandlers } = await import('./ai-vault')
 const { deleteAiVaultSession: deleteAiVaultSessionWithDeps } = await import('./ai-vault-delete')
+const { deleteAiVaultSessionForRemoteClient } = await import('../ai-vault/host-session-delete')
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -94,6 +95,27 @@ describe('listAiVaultSessions host routing', () => {
         fail: expect.any(Function)
       })
     )
+  })
+
+  it('gives servers reached over an SSH tunnel the longer all-hosts scan budget', async () => {
+    registerAiVaultHandlers({
+      getActiveRuntimeAiVaultHostInfos: () => [
+        { environmentId: 'lan-server', executionHostId: 'runtime:lan-server' },
+        {
+          environmentId: 'ssh-server',
+          executionHostId: 'runtime:ssh-server',
+          connectionDependency: 'ssh-tunnel'
+        }
+      ],
+      scanRuntimeAiVaultSessions: mocks.scanRuntimeAiVaultSessions
+    })
+
+    await _internals.listAiVaultSessions({ executionHostScope: 'all', force: true })
+
+    const timeoutFor = (environmentId: string): unknown =>
+      mocks.scanRuntimeAiVaultSessions.mock.calls.find(([id]) => id === environmentId)?.[2]
+    expect(timeoutFor('lan-server')).toEqual({ timeoutMs: 3_000 })
+    expect(timeoutFor('ssh-server')).toEqual({ timeoutMs: 15_000 })
   })
 
   it('keeps direct runtime host scans on the normal runtime timeout', async () => {
@@ -388,7 +410,8 @@ describe('deleteAiVaultSession', () => {
         sessionId: args.sessionId,
         filePath: args.filePath,
         executionHostId: 'local'
-      })
+      }),
+      expect.any(Function)
     )
     expect(invalidateMultiHostListCache).toHaveBeenCalledTimes(1)
     expect(mocks.invalidateAiVaultSessionListCache).toHaveBeenCalledTimes(1)
@@ -439,9 +462,65 @@ describe('deleteAiVaultSession', () => {
       reason: 'invalid-path'
     })
     expect(mocks.deleteAiVaultSessionFile).toHaveBeenCalledWith(
-      expect.objectContaining({ filePath: '' })
+      expect.objectContaining({ filePath: '' }),
+      expect.any(Function)
     )
     expect(mocks.invalidateAiVaultSessionListCache).not.toHaveBeenCalled()
+  })
+
+  it("routes a server-hosted session to its owning host and drops that host's cached list", async () => {
+    const deleteRuntimeAiVaultSession = vi.fn().mockResolvedValue({ outcome: 'deleted' })
+    const invalidateMultiHostListCache = vi.fn()
+
+    const result = await deleteAiVaultSessionWithDeps(
+      { ...args, executionHostId: 'runtime:gpu%20box' },
+      { invalidateMultiHostListCache, deleteRuntimeSession: deleteRuntimeAiVaultSession }
+    )
+
+    expect(result).toEqual({ outcome: 'deleted' })
+    expect(deleteRuntimeAiVaultSession).toHaveBeenCalledWith(
+      'gpu box',
+      expect.objectContaining({ agent: 'gemini', filePath: args.filePath })
+    )
+    expect(invalidateMultiHostListCache).toHaveBeenCalledTimes(1)
+    // This computer never touches a path that belongs to another host.
+    expect(mocks.deleteAiVaultSessionFile).not.toHaveBeenCalled()
+  })
+
+  it('never routes the unresolved-owner sentinel to a host', async () => {
+    const deleteRuntimeAiVaultSession = vi.fn()
+    mocks.deleteAiVaultSessionFile.mockResolvedValue({
+      outcome: 'rejected',
+      agent: 'gemini',
+      reason: 'non-local-host'
+    })
+
+    await deleteAiVaultSessionWithDeps(
+      { ...args, executionHostId: 'runtime:unresolved-owner' },
+      {
+        invalidateMultiHostListCache: vi.fn(),
+        deleteRuntimeSession: deleteRuntimeAiVaultSession
+      }
+    )
+
+    expect(deleteRuntimeAiVaultSession).not.toHaveBeenCalled()
+  })
+
+  it("gives a paired client's delete on this desktop the Trash and the host-leg fence", async () => {
+    registerAiVaultHandlers()
+    mocks.deleteAiVaultSessionFile.mockResolvedValue({ outcome: 'deleted' })
+
+    const result = await deleteAiVaultSessionForRemoteClient({
+      agent: 'gemini',
+      filePath: args.filePath
+    })
+
+    expect(result).toEqual({ outcome: 'deleted' })
+    const [target, removePath] = mocks.deleteAiVaultSessionFile.mock.calls[0]
+    expect(target).toMatchObject({ executionHostId: 'local', filePath: args.filePath })
+    await removePath({ path: args.filePath, kind: 'file', roots: [] })
+    expect(mocks.trashItem).toHaveBeenCalledWith(args.filePath)
+    expect(mocks.invalidateAiVaultSessionListCache).toHaveBeenCalledTimes(1)
   })
 
   it('registers the aiVault:deleteSession IPC channel', () => {

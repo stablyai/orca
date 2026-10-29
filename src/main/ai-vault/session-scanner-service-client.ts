@@ -35,6 +35,7 @@ import {
   type AiVaultServiceRequestBody,
   type AiVaultServiceResultValue
 } from './session-scanner-service-protocol'
+import { forwardWslDistroNotesToChild } from './session-scanner-service-wsl-notes'
 
 export class AiVaultScannerServiceClient {
   private child: ChildProcess | null = null
@@ -47,6 +48,8 @@ export class AiVaultScannerServiceClient {
   private readonly restartPolicy = new AiVaultServiceRestartPolicy()
   private readonly sessionSearch = new AiVaultServiceSessionSearchHold()
   private disposed = false
+
+  private readonly stopForwardingWslNotes = forwardWslDistroNotesToChild(() => this.child)
 
   constructor(private readonly options: AiVaultServiceClientOptions) {}
 
@@ -81,7 +84,6 @@ export class AiVaultScannerServiceClient {
     })
   }
 
-  /** Push a consent or retention change, and while the index is on keep a child. */
   updateSessionSearch(init: AiVaultSessionSearchInit): void {
     if (this.disposed) {
       return
@@ -116,6 +118,7 @@ export class AiVaultScannerServiceClient {
       return
     }
     this.disposed = true
+    this.stopForwardingWslNotes()
     this.restartPolicy.dispose()
     this.idleRetirement.clear()
     const error = new Error('AI Vault service client was disposed.')
@@ -164,12 +167,7 @@ export class AiVaultScannerServiceClient {
     this.scheduleIdleIfNeeded()
   }
 
-  /**
-   * The index's own restart. A child indexing for the hold has no queued call to
-   * bring it back, so without this a fault stops the indexing until an unrelated
-   * request happens to arrive. The restart delay and circuit bound it, exactly as
-   * they bound a queued call's start.
-   */
+  /** Restart held indexing children even without queued requests, subject to backoff and the circuit. */
   private startSessionSearchChild(): void {
     if (this.disposed || !this.sessionSearch.holdsChild || this.child || this.readyWaiter) {
       return
@@ -288,8 +286,7 @@ export class AiVaultScannerServiceClient {
       this.readyWaiter.reject(error)
       this.readyWaiter = null
     }
-    // Recorded before the pending calls are settled so retryStartOrReject can see
-    // whether a respawn is actually coming.
+    // Record the respawn decision before settling calls that may retry.
     this.restartPolicy.recordFault(() => this.pump())
     const active = [...this.active.values()]
     this.active.clear()

@@ -16,7 +16,7 @@ import {
   createDeferredStructuredAgentSessionEventSink,
   type StructuredAgentSessionEventSink
 } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
-import type { CodexAppServerConnection } from './codex-app-server-connection'
+import type { CodexAppServerConnection } from './app-server/codex-app-server-connection-types'
 import { createCodexJournalTranslator } from './codex-structured-journal-translation'
 import {
   CODEX_COMMAND_APPROVAL_METHOD,
@@ -49,7 +49,6 @@ function recorder() {
   return { sink, rows, tombstones }
 }
 
-/** Latest body per identity, in first-seen order: what the journal reducer keeps. */
 function reduced(rows: readonly Row[]): Row[] {
   const latest = new Map<string, Row>()
   for (const row of rows) {
@@ -241,7 +240,6 @@ describe('codex turn lifecycle rows', () => {
     expect(appended.ok && appended.rows).toEqual([
       expect.objectContaining({
         kind: 'item',
-        v: 3,
         ts: 1_000,
         body: {
           kind: 'turn',
@@ -329,9 +327,6 @@ describe('codex turn lifecycle rows', () => {
     translator.handle(
       notification('turn/completed', { turn: { id: TURN_ID, status: 'failed' } }, 2_000)
     )
-    // The echo lands after the turn settled, so the revision is rebuilt from the
-    // remembered terminal row. A rebuild that named only the state would drop the
-    // verdict and leave the failure looking like an ordinary finished turn.
     translator.handle(
       notification(
         'item/started',
@@ -343,8 +338,7 @@ describe('codex turn lifecycle rows', () => {
       )
     )
 
-    // `requestedAt` proves this is the post-echo revision: the terminal row
-    // written at turn/completed had no request origin to carry yet.
+    // requestedAt distinguishes the post-echo revision from the original terminal row.
     const lifecycle = reduced(tap.rows).find((row) => row.key === LIFECYCLE_KEY)
     expect(lifecycle?.body).toMatchObject({
       kind: 'turn',
@@ -382,10 +376,6 @@ describe('codex turn lifecycle rows', () => {
     })
   })
 
-  // `TurnStatus` in the app-server protocol is `completed | interrupted | failed |
-  // inProgress`. Only `interrupted` is a stop; every other end completed the
-  // turn, and `outcome` says how. A status this build cannot place stays unknown
-  // rather than borrowing a verdict.
   it.each([
     ['interrupted', 'interrupted', 'cancellation'],
     ['failed', 'completed', 'failure'],
@@ -423,9 +413,6 @@ describe('codex turn lifecycle rows', () => {
     const translator = translatorFor(tap)
 
     translator.handle(notification('turn/started', { turn: { id: TURN_ID } }, 1_000))
-    // `status` is required on Codex's `Turn`, so its absence is a payload this
-    // host did not get. The lifecycle still has to name an arm; the verdict does
-    // not, and inventing `success` here is what a notification would fire on.
     translator.handle(notification('turn/completed', { turn: { id: TURN_ID } }, 2_000))
 
     const body = reduced(tap.rows).at(-1)?.body
@@ -467,7 +454,7 @@ describe('codex turn lifecycle rows', () => {
     ])
   })
 
-  it('replays a backpressured turn boundary with its original receipt time', async () => {
+  it('replays an oversized backpressured notification with its original receipt time', async () => {
     vi.useFakeTimers()
     const connection = {
       pauseReading: vi.fn(),
@@ -483,7 +470,13 @@ describe('codex turn lifecycle rows', () => {
     })
 
     expect(
-      retries.handle(SESSION_ID, 'turn/started', { turn: { id: TURN_ID } }, 1_000, -1)
+      retries.handle(
+        SESSION_ID,
+        'turn/started',
+        { turn: { id: TURN_ID }, output: 'x'.repeat(9 * 1024 * 1024) },
+        1_000,
+        -1
+      )
     ).toEqual({ accepted: false, reason: 'backpressure' })
     await vi.advanceTimersByTimeAsync(50)
 
@@ -492,7 +485,7 @@ describe('codex turn lifecycle rows', () => {
     expect(connection.resumeReading).not.toHaveBeenCalled()
   })
 
-  it('restores terminal rows for historical turns with both endpoints, in milliseconds', () => {
+  it('restores historical turn rows with optional endpoints in milliseconds', () => {
     const tap = recorder()
     const translator = translatorFor(tap)
 
@@ -535,7 +528,6 @@ describe('codex turn lifecycle rows', () => {
       })
     ).toEqual({ accepted: true })
 
-    // Each record precedes its turn's items, the order the live path writes.
     expect(tap.rows).toEqual([
       {
         key: 'legacy:codex:session-1:turn-lifecycle%3Aturn-done',
@@ -564,7 +556,6 @@ describe('codex turn lifecycle rows', () => {
         }
       },
       {
-        // The same shape a live failed completion writes.
         key: 'legacy:codex:session-1:turn-lifecycle%3Aturn-failed',
         body: {
           kind: 'turn',
@@ -578,7 +569,6 @@ describe('codex turn lifecycle rows', () => {
         }
       },
       {
-        // Ended, but not a status this build can place: no verdict, never a clean finish.
         key: 'legacy:codex:session-1:turn-lifecycle%3Aturn-unplaced',
         body: {
           kind: 'turn',
@@ -587,6 +577,26 @@ describe('codex turn lifecycle rows', () => {
           userItemId: 'codex:thread-abc:turn-unplaced:0',
           startedAt: 1_700_000_170_000,
           completedAt: 1_700_000_171_000
+        }
+      },
+      {
+        key: 'legacy:codex:session-1:turn-lifecycle%3Aturn-open',
+        body: {
+          kind: 'turn',
+          turnId: 'turn-open',
+          state: 'completed',
+          userItemId: 'codex:thread-abc:turn-open:0',
+          startedAt: 1_700_000_200_000
+        }
+      },
+      {
+        key: 'legacy:codex:session-1:turn-lifecycle%3Aturn-untimed',
+        body: {
+          kind: 'turn',
+          turnId: 'turn-untimed',
+          state: 'completed',
+          outcome: 'success',
+          userItemId: 'codex:thread-abc:turn-untimed:0'
         }
       }
     ])

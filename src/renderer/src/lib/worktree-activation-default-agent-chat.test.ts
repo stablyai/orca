@@ -20,6 +20,13 @@ import {
   registerWorktreeActivationReset
 } from './worktree-activation.test-fixture'
 
+// Main's answer to the window's layout commands, as a switch-on build sends them.
+vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeRpcClientWithLayoutApply(await importOriginal())
+)
+
 const defaultChat = vi.hoisted(() => ({
   open: vi.fn(),
   awaitsDetection: vi.fn(),
@@ -95,8 +102,7 @@ async function flushPromises(): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, 0))
 }
 
-// Why: with chat as the default view, clicking an empty workspace used to open a bare shell the
-// user then had to turn into a chat by hand.
+// Chat-default users should get chat immediately on empty activation, without converting an unwanted shell.
 describe('empty workspace seeding with a default agent chat', () => {
   it('opens the default agent chat instead of a shell', () => {
     defaultChat.open.mockReturnValue({ primaryTabId: 'chat-tab' })
@@ -196,8 +202,7 @@ describe('empty workspace seeding with a default agent chat', () => {
     expect(defaultChat.open).toHaveBeenCalledWith(worktree.id, expect.any(Function))
   })
 
-  // Why: CLI/phone creates, fallbacks after a failed agent launch, and the move after a delete
-  // activate with no intent; none of them may start an agent nobody picked.
+  // Activation without deliberate user intent (CLI/phone/failure/delete fallback) must not start an unrequested agent.
   it.each([
     ['no navigation intent', {}],
     ['a Blank Terminal pick', { ...USER_OPEN, agent: null }]
@@ -287,8 +292,7 @@ describe('the gated reseed that seeds an empty workspace in Electron', () => {
     expect(tabCount(worktree.id)).toBe(0)
   })
 
-  // Why: the wait used to keep the first activation's intent, so returning to the workspace through
-  // history (no host id) failed the first intent's host check and left it with no surface at all.
+  // Use latest activation intent: stale explicit host constraints once rejected later history navigation and left no surface.
   it('seeds for the latest activation when the workspace is reopened during the wait', async () => {
     defaultChat.open.mockReturnValue({ primaryTabId: null })
     defaultChat.awaitsDetection.mockReturnValue(true)

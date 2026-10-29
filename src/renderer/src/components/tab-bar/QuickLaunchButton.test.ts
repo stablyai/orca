@@ -1,6 +1,7 @@
 import React from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { makeWorktree, TEST_REPO } from '@/store/slices/worktrees-slice-test-fixtures'
 import { QuickLaunchAgentMenuItems } from './QuickLaunchButton'
 
 const {
@@ -128,8 +129,10 @@ beforeEach(() => {
   openSettingsTargetMock.mockReset()
   storeState.settings.defaultTuiAgent = 'codex'
   storeState.settings.disabledTuiAgents = []
-  storeState.worktreesByRepo = {}
-  storeState.repos = []
+  storeState.worktreesByRepo = {
+    [TEST_REPO.id]: [makeWorktree({ id: 'worktree-1', repoId: TEST_REPO.id, hostId: 'local' })]
+  }
+  storeState.repos = [TEST_REPO]
   storeState.openSettingsPage = openSettingsPageMock
   storeState.openSettingsTarget = openSettingsTargetMock
 })
@@ -155,8 +158,7 @@ describe('QuickLaunchAgentMenuItems', () => {
   })
 
   it('routes agent detection to the worktree-owning runtime host, not the local client', () => {
-    // Repro for the "Remote Server lists local agents" bug: a worktree owned by
-    // a paired runtime must probe that runtime, never the client's PATH.
+    // Detect agents on the workspace’s execution host; client PATH cannot describe a paired runtime.
     storeState.worktreesByRepo = {
       'repo-1': [{ id: 'worktree-1', repoId: 'repo-1', hostId: 'runtime:env-1' }]
     }
@@ -212,7 +214,7 @@ describe('QuickLaunchAgentMenuItems', () => {
 
     const html = renderAgentMenuItems()
 
-    expect(html).toContain('reach this workspace')
+    expect(html).toContain('list terminal agents for this workspace')
     expect(html).not.toContain('No agents detected')
   })
 

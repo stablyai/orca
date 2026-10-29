@@ -9,17 +9,13 @@ type Feedback = {
   status: Exclude<ClipboardTextCopyStatus, 'idle'>
 }
 
-/**
- * Clipboard write with brief success/failure feedback. Guards setState after
- * unmount (clipboard IPC can resolve after the menu/row is gone).
- */
+/** Show brief clipboard feedback, skipping late state writes after the menu/row unmounts. */
 export function useClipboardTextCopyFeedback(text: string): {
   canCopy: boolean
   copyText: () => Promise<boolean>
   status: ClipboardTextCopyStatus
 } {
-  // Why: key feedback to the copied body so a prop change drops stale labels
-  // without setState-in-effect (react-doctor no-adjust-state-on-prop-change).
+  // Key feedback to content so prop changes clear stale labels without derived-state effects.
   const [feedback, setFeedback] = useState<Feedback | null>(null)
   const isMountedRef = useRef(true)
   const resetTimerRef = useRef<number | null>(null)

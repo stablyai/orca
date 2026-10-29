@@ -17,13 +17,15 @@ export function CliChatResumeMenuItems({
 }): React.JSX.Element | null {
   const [source] = useState(() => resolveCliChatResumeSource(useAppStore.getState(), { tab }))
   const pending = useCliChatResumePending(source)
-  if (!source) {
+  // Radix disables pointer events on disabled items, so a tooltip-less "update" item would only confuse.
+  if (!source || source.hostUpdateRequired) {
     return null
   }
   return (
     <>
       {leadingSeparator ? <DropdownMenuSeparator /> : null}
       <AiVaultSessionSurfaceSwitchMenuItems
+        action="switch"
         menuKind="dropdown"
         tooltipSide="right"
         chatPending={pending}

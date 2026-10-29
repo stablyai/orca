@@ -9,62 +9,9 @@ import {
   isWorktreeHostIdentity
 } from '../../../shared/worktree/host-qualified-identity'
 import { splitWorktreeIdForFilesystem } from '../../../shared/worktree/id'
+import { repointRowArrays, repointRowRecord } from './worktree-identity-row-repoint'
 
-type WorktreeNamingRow = { worktreeId: string }
-
-/**
- * A session map keyed by pane, tab or environment whose VALUE names the worktree it belongs to.
- * Returns the repointed record, or null when no row named the old id — so the caller assigns to
- * the concrete field and the row type is never widened.
- */
-function repointRowRecord<Row extends WorktreeNamingRow>(
-  record: Record<string, Row> | undefined,
-  oldWorktreeId: string,
-  newWorktreeId: string
-): Record<string, Row> | null {
-  if (!record) {
-    return null
-  }
-  let changed = false
-  const next: Record<string, Row> = { ...record }
-  for (const [key, row] of Object.entries(record)) {
-    if (row?.worktreeId !== oldWorktreeId) {
-      continue
-    }
-    next[key] = { ...row, worktreeId: newWorktreeId }
-    changed = true
-  }
-  return changed ? next : null
-}
-
-/** Same, but each value is an array of such rows. */
-function repointRowArrays<Row extends WorktreeNamingRow>(
-  record: Record<string, Row[]> | undefined,
-  oldWorktreeId: string,
-  newWorktreeId: string
-): Record<string, Row[]> | null {
-  if (!record) {
-    return null
-  }
-  let changed = false
-  const next: Record<string, Row[]> = { ...record }
-  for (const [key, rows] of Object.entries(record)) {
-    if (!Array.isArray(rows) || !rows.some((row) => row?.worktreeId === oldWorktreeId)) {
-      continue
-    }
-    next[key] = rows.map((row) =>
-      row?.worktreeId === oldWorktreeId ? { ...row, worktreeId: newWorktreeId } : row
-    )
-    changed = true
-  }
-  return changed ? next : null
-}
-
-/**
- * Re-keys every worktreeId-keyed record in `state` from `oldWorktreeId` to `newWorktreeId`. Mutates `state` in place;
- * returns whether anything changed so the caller can gate its save. No-op when the ids match.
- * See `Store.migrateWorktreeIdentity` for why the rename happens.
- */
+/** Mutate worktree references in place; return whether anything changed so callers can gate persistence. */
 export function migrateWorktreeIdentity(
   state: PersistedState,
   oldWorktreeId: string,
@@ -110,14 +57,7 @@ export function migrateWorktreeIdentity(
       return false
     }
     let sessionChanged = false
-    /** Known and deliberately unresolved: when the target key ALREADY exists, the source wins and
-     *  the target's row is lost. `lastVisitedAtByWorktreeId` below is the one map that settles it
-     *  (`Math.max`), and its comment names the case — a partial migration leaves both identities
-     *  behind. There is no safe blanket rule here: "keep the target" is right when the target holds
-     *  a real closed-last-terminal tombstone (`tabsByWorktree[target] === []` is user intent, see
-     *  runtime/workspace-session-worktree-id.ts), and "keep the source" is right when the target row
-     *  is a stub, and nothing records which is newer. Reachable only by a repeated or partial
-     *  migration: on a normal rename this store holds rows under the old id alone. */
+    /** Known collision: source overwrites existing target on partial/repeated moves; no revision proves which is newer. */
     const moveSessionKey = <T>(
       record: Record<string, T> | undefined,
       mapValue: (value: T) => T = (value) => value
@@ -172,8 +112,7 @@ export function migrateWorktreeIdentity(
         sessionChanged = true
       }
     }
-    // Why the row too: rehydration only republishes a row whose `workspaceId` still equals the key
-    // it is filed under, so re-keying the map alone would strand every page under the new id.
+    // Rehydration requires workspaceId to match its map key; rekeying alone would strand pages.
     sessionChanged =
       moveSessionKey(session.clientHostedBrowserPagesByWorktree, (rows) =>
         rows.map((row) =>
@@ -200,8 +139,7 @@ export function migrateWorktreeIdentity(
         const nextKey = isWorktreeHostIdentity(key)
           ? `${key.slice(0, key.length - rawId.length)}${newWorktreeId}`
           : newWorktreeId
-        // Why max: a partial migration leaves both identities behind; taking the older one would
-        // regress Cmd+J recency after restart.
+        // Partial migrations can retain both IDs; max prevents recency regression.
         const existing = nextRecency[nextKey]
         nextRecency[nextKey] = existing === undefined ? value : Math.max(existing, value)
         delete nextRecency[key]
@@ -228,14 +166,7 @@ export function migrateWorktreeIdentity(
       session.activeWorkspaceKey = newWorkspaceKey
       sessionChanged = true
     }
-    // Why every row-valued map and not just the two that used to be here: a record keyed by pane or
-    // tab id still names its worktree in the value, and a stale one silently stops matching. A
-    // `closedTerminalTabTombstonesByTabId` row left on the old id never suppresses the tab it was
-    // minted for and never gets acknowledged, so the remote merge re-adds a tab the user closed.
-    // Spelled out per field rather than driven by a name list: indexing the session by a
-    // computed key cannot be written back without widening the row type, and the census test
-    // (`worktree-identity-migration-field-coverage.test.ts`) is what keeps a fourth field of this
-    // class from joining silently.
+    // Pane/tab/environment-keyed rows still carry worktree IDs in values; explicit typed fields retain census coverage.
     const nextSleeping = repointRowRecord(
       session.sleepingAgentSessionsByPaneKey,
       oldWorktreeId,
@@ -263,6 +194,15 @@ export function migrateWorktreeIdentity(
       session.closedTerminalTabTombstonesByTabId = nextClosedTombstones
       sessionChanged = true
     }
+    const nextClosedPanes = repointRowRecord(
+      session.closedTerminalPanesByPaneKey,
+      oldWorktreeId,
+      newWorktreeId
+    )
+    if (nextClosedPanes) {
+      session.closedTerminalPanesByPaneKey = nextClosedPanes
+      sessionChanged = true
+    }
     const nextCloseIntents = repointRowArrays(
       session.clientHostedBrowserCloseIntentsByEnvironment,
       oldWorktreeId,
@@ -272,11 +212,20 @@ export function migrateWorktreeIdentity(
       session.clientHostedBrowserCloseIntentsByEnvironment = nextCloseIntents
       sessionChanged = true
     }
+    const nextPairedTabCloseIntents = repointRowArrays(
+      session.pairedTerminalTabCloseIntentsByEnvironment,
+      oldWorktreeId,
+      newWorktreeId
+    )
+    if (nextPairedTabCloseIntents) {
+      session.pairedTerminalTabCloseIntentsByEnvironment = nextPairedTabCloseIntents
+      sessionChanged = true
+    }
     return sessionChanged
   }
 
   let changed = moveKey(state.worktreeMeta)
-  // Record the prior id so a session minted under it isn't reaped as an orphan.
+  // Retain the prior ID so existing terminal sessions do not become orphans.
   const newMeta = state.worktreeMeta[newWorktreeId]
   if (newMeta) {
     const prior = newMeta.priorWorktreeIds ?? []
@@ -290,11 +239,10 @@ export function migrateWorktreeIdentity(
   const movedLineage = state.worktreeLineageById[newWorktreeId]
   if (movedLineage && movedLineage.worktreeId === oldWorktreeId) {
     movedLineage.worktreeId = newWorktreeId
-    // Why: moveKey reports nothing when the record already sat under the new key, so flag the repair
-    // ourselves or the caller skips the save and the stale id comes back on reload.
+    // Repairing an already-rekeyed row still needs a save.
     changed = true
   }
-  // Why: children carry this as parentWorktreeId; keep the denormalized path-derived id consistent (parentWorktreeInstanceId is stable).
+  // Keep children's path-derived parent IDs consistent; parent instance identity stays stable.
   for (const lineage of Object.values(state.worktreeLineageById)) {
     if (lineage.parentWorktreeId === oldWorktreeId) {
       lineage.parentWorktreeId = newWorktreeId

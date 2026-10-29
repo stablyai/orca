@@ -47,7 +47,10 @@ afterEach(async () => {
   vi.useRealTimers()
 })
 
-async function replay(name: string) {
+async function replay(
+  name: string,
+  oversized: (frame: z.infer<typeof record>) => boolean = () => false
+) {
   const frames = capture(name)
   const states = frames.filter(
     ({ dir, frame }) => dir === 'out' && frame.type === 'response' && frame.command === 'get_state'
@@ -95,14 +98,30 @@ async function replay(name: string) {
     if (dir === 'in' && frame.type === 'abort') {
       turns.stop()
     }
-    if (dir === 'out' && (frame.type !== 'response' || frame.command === 'prompt')) {
+    if (dir === 'out' && oversized(frame)) {
+      turns.skipped(frame.type, JSON.stringify(frame).slice(0, 256))
+    } else if (dir === 'out' && (frame.type !== 'response' || frame.command === 'prompt')) {
       turns.receive(frame)
+    }
+    if (dir === 'out' && frame.type === 'response' && frame.command === 'get_state') {
+      // The idle probe resolved here in the captured run.
+      await new Promise<void>((resolve) => setImmediate(resolve))
     }
   }
   await new Promise<void>((resolve) => setImmediate(resolve))
   lane.flush()
   const rows = await rig.rows()
   return { rows, turns: await rig.turns(), accepted, failed, idle, settled }
+}
+
+function transcript(rows: Awaited<ReturnType<typeof replay>>['rows']): string {
+  return rows
+    .flatMap((row) =>
+      row.body.kind === 'message'
+        ? row.body.blocks.flatMap((block) => (block.type === 'text' ? [block.text] : []))
+        : []
+    )
+    .join('\n')
 }
 
 describe('scrubbed Pi 1.0.4 RPC captures', () => {
@@ -115,13 +134,24 @@ describe('scrubbed Pi 1.0.4 RPC captures', () => {
     expect(
       result.rows.some((row) => row.body.kind === 'tool-call' && row.body.state === 'completed')
     ).toBe(true)
-    const texts = result.rows.flatMap((row) =>
-      row.body.kind === 'message'
-        ? row.body.blocks.flatMap((block) => (block.type === 'text' ? [block.text] : []))
-        : []
+    expect(transcript(result.rows)).toContain('STEER_CONSUMED')
+    expect(transcript(result.rows)).toContain('FOLLOWUP_CONSUMED')
+  })
+  it('keeps the run and consumed inputs when Pi sends records too large to deliver', async () => {
+    const result = await replay('steer-followup', (frame) =>
+      ['tool_execution_end', 'message_end', 'turn_end', 'agent_end'].includes(frame.type)
     )
-    expect(texts.join('\n')).toContain('STEER_CONSUMED')
-    expect(texts.join('\n')).toContain('FOLLOWUP_CONSUMED')
+    expect(result.failed).not.toHaveBeenCalled()
+    expect(result.accepted.mock.calls.map(([id]) => id)).toEqual(['send-1', 'send-2', 'send-3'])
+    expect(result.turns.map((turn) => turn.outcome)).toEqual(['success'])
+    expect(
+      result.rows.filter((row) => row.body.kind === 'status' && row.body.tone === 'warning')
+    ).toHaveLength(1)
+    expect(result.rows.find((row) => row.body.kind === 'tool-call')?.body).toMatchObject({
+      name: 'bash',
+      state: 'completed'
+    })
+    expect(transcript(result.rows)).toContain('FOLLOWUP_CONSUMED')
   })
   it.each(['provider-fetch-error', 'provider-socket-error'])(
     'marks captured %s as failure with the provider diagnostic',
@@ -147,6 +177,14 @@ describe('scrubbed Pi 1.0.4 RPC captures', () => {
     expect(result.failed).not.toHaveBeenCalled()
     expect(result.turns[0]?.outcome).toBe('success')
     expect(result.accepted).toHaveBeenCalledWith('send-1')
+  })
+  it('tracks the run a captured Pi 1.3.0 subagent wake starts on the idle parent', async () => {
+    const result = await replay('subagent-wake')
+    expect(result.failed).not.toHaveBeenCalled()
+    expect(result.accepted.mock.calls.map(([id]) => id)).toEqual(['send-1'])
+    expect(result.turns.map((turn) => turn.outcome)).toEqual(['success', 'success'])
+    expect(result.idle).toHaveBeenCalledTimes(2)
+    expect(transcript(result.rows)).toContain('WAKE_CONSUMED')
   })
   it('preserves empty answers and literal Unicode separators in captured dialogs', () => {
     const dialogs = capture('dialogs').flatMap(({ dir, frame }) =>

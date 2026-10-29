@@ -1,5 +1,4 @@
 import type { PreloadApi } from '../../../../preload/api-types'
-import { normalizeAutoRenameBranchFromWorkDefaultOn } from '../../../../shared/auto-rename-branch-from-work-settings'
 import {
   getDefaultSettings,
   getDefaultUIState,
@@ -7,22 +6,17 @@ import {
 } from '../../../../shared/constants'
 import { normalizeWorktreeVisibilityDefaults } from '../../../../shared/external-worktree-visibility'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import {
-  normalizeOsc52ClipboardDefaultOn,
-  osc52ClipboardDefaultOnOverridesPersistedOff
-} from '../../../../shared/osc52-clipboard-settings'
+import { osc52ClipboardDefaultOnOverridesPersistedOff } from '../../../../shared/osc52-clipboard-settings'
 import type { PersistedUIState } from '../../../../shared/persisted-ui-state-types'
 import {
   applyPRBotAuthorOverride,
   normalizePRBotAuthorOverrides
 } from '../../../../shared/pr-bot-author-overrides'
-import { normalizeTerminalCursorStyleDefault } from '../../../../shared/terminal-cursor-style-settings'
-import { normalizeTerminalCustomThemes } from '../../../../shared/terminal-custom-themes'
-import { normalizeUiLanguage } from '../../../../shared/ui-language'
 import { readStoredWebRuntimeEnvironment } from '../web-runtime-environment'
 import {
   mergeSettings,
   mergeWebUIState,
+  migrateStoredWebSettings,
   runtimeChatPermissionSetting
 } from './web-preference-normalization'
 import { callRuntimeResult } from './web-runtime-calls'
@@ -33,19 +27,11 @@ import { SETTINGS_STORAGE_KEY, UI_STORAGE_KEY, readJson, writeJson } from './web
 export type WebSettingsApi = NonNullable<PreloadApi['settings']>
 
 export function getStoredSettings(): GlobalSettings {
-  webRuntimeState.activeEnvironment =
-    webRuntimeState.activeEnvironment ?? readStoredWebRuntimeEnvironment()
+  webRuntimeState.activeEnvironment ??= readStoredWebRuntimeEnvironment()
   const defaults = getDefaultSettings('~')
   const rawStoredSettings = window.localStorage.getItem(SETTINGS_STORAGE_KEY)
   const stored = readJson<Partial<GlobalSettings>>(SETTINGS_STORAGE_KEY, {})
-  const migratedStored = {
-    ...stored,
-    ...normalizeAutoRenameBranchFromWorkDefaultOn(stored),
-    ...normalizeTerminalCursorStyleDefault(stored),
-    ...normalizeOsc52ClipboardDefaultOn(stored),
-    terminalCustomThemes: normalizeTerminalCustomThemes(stored.terminalCustomThemes),
-    uiLanguage: normalizeUiLanguage(stored.uiLanguage)
-  }
+  const migratedStored = migrateStoredWebSettings(stored)
   if (
     rawStoredSettings &&
     (stored.autoRenameBranchFromWork !== migratedStored.autoRenameBranchFromWork ||
@@ -54,21 +40,20 @@ export function getStoredSettings(): GlobalSettings {
       stored.terminalCursorStyle !== migratedStored.terminalCursorStyle ||
       stored.terminalCursorStyleDefaultedToBlock !==
         migratedStored.terminalCursorStyleDefaultedToBlock ||
-      // Kept even though the terminalCustomThemes reference compare below already forces
-      // this branch for every stored blob: no migration should rely on that accident.
+      // Keep this explicit migration check even though terminalCustomThemes identity currently forces the branch.
       stored.terminalAllowOsc52Clipboard !== migratedStored.terminalAllowOsc52Clipboard ||
       stored.terminalAllowOsc52ClipboardDefaultedOnForAllUsers !==
         migratedStored.terminalAllowOsc52ClipboardDefaultedOnForAllUsers ||
       stored.terminalCustomThemes !== migratedStored.terminalCustomThemes ||
-      stored.uiLanguage !== migratedStored.uiLanguage)
+      stored.uiLanguage !== migratedStored.uiLanguage ||
+      stored.uiLanguagePortugueseMigrationApplied !== true)
   ) {
     try {
       const parsed = JSON.parse(rawStoredSettings) as unknown
       if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
         writeJson(SETTINGS_STORAGE_KEY, migratedStored)
         if (osc52ClipboardDefaultOnOverridesPersistedOff(stored)) {
-          // Why a raw merge, not readLocalWebUIState(): that path calls back into
-          // getStoredSettings(), and writing through it here would recurse.
+          // readLocalWebUIState calls getStoredSettings; raw merge avoids recursive migration writes.
           writeJson(UI_STORAGE_KEY, {
             ...readJson<Partial<PersistedUIState>>(UI_STORAGE_KEY, {}),
             osc52ClipboardDefaultOnNoticePending: true
@@ -165,14 +150,9 @@ export async function getRuntimeBackedStoredSettings(): Promise<GlobalSettings> 
       )
     }
     Object.assign(runtimeSettings, runtimeChatPermissionSetting(result.settings))
-    // Read-only mirror: the host owns this capability and `syncRuntimeBackedSettings` never
-    // sends it back, so web shows what the host enforces instead of a local value it ignores.
-    if (typeof result.settings.artifactSharingEnabled === 'boolean') {
-      runtimeSettings.artifactSharingEnabled = result.settings.artifactSharingEnabled
-    }
-    if (typeof result.settings.agentSkillSharingEnabled === 'boolean') {
-      runtimeSettings.agentSkillSharingEnabled = result.settings.agentSkillSharingEnabled
-    }
+    // Read-only host capability; a host without a sharing service omits it, which must not keep a stale local grant.
+    runtimeSettings.artifactSharingEnabled = result.settings.artifactSharingEnabled === true
+    runtimeSettings.agentSkillSharingEnabled = result.settings.agentSkillSharingEnabled === true
     const next = mergeSettings(local, runtimeSettings)
     writeStoredSettings(next)
     return settingsForActiveVisibilityOwner(next)
@@ -234,7 +214,7 @@ export async function syncRuntimeBackedSettings(
       updates.prBotAuthorOverrides
     )
   }
-  Object.assign(runtimeUpdates, runtimeChatPermissionSetting(updates))
+  Object.assign(runtimeUpdates, runtimeChatPermissionSetting(updates, false))
   if (Object.keys(runtimeUpdates).length === 0) {
     return localNext
   }
@@ -300,9 +280,7 @@ export async function updateRuntimePRBotAuthorOverride(args: {
 
 export function readLocalWebUIState(): PersistedUIState {
   const defaults = getDefaultUIState()
-  // Why settings first: getStoredSettings() runs the OSC 52 migration, which writes the
-  // notice arm into UI_STORAGE_KEY. Reading before it would snapshot a pre-arm state that
-  // every caller then writes back, erasing the arm the stamp can never raise again.
+  // Settings migration arms OSC 52’s UI notice; reading UI first would later overwrite that arm after its one-shot stamp.
   const storedSettings = getStoredSettings()
   const stored = readJson<Partial<PersistedUIState>>(UI_STORAGE_KEY, {})
   const base = {

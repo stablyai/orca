@@ -1,3 +1,4 @@
+import { OPENCODE_LAUNCH_OPTION_CATALOG } from './agent-session-option-catalog-opencode'
 import { CODEBUDDY_SESSION_OPTION_CATALOG } from './agent-session-option-catalog-codebuddy'
 import type { AgentType } from './agent-status-types'
 import { ANTIGRAVITY_SESSION_OPTION_CATALOG } from './agent-session-option-catalog-antigravity'
@@ -19,7 +20,7 @@ import type {
   CatalogModel,
   CatalogOption
 } from './agent-session-option-catalog-types'
-import type { SessionOptionValue } from './native-chat-session-options'
+import type { SessionOptionValue } from './native-chat/input/native-chat-session-options'
 
 export type {
   AgentSessionOptionCatalog,
@@ -79,9 +80,7 @@ export function mergeCatalogModels(
   return [...merged, ...discoveredById.values()]
 }
 
-/** Discovery decides membership; the seed keeps its option menus, which discovery never carries.
- *  Why: an unseeded model inherits the default seed's options because these catalogs' options are
- *  global CLI flags, not per-model capabilities — dropping them would hide the picker entirely. */
+/** Discovery controls membership; retain seed option menus. Unseeded models inherit default-seed global CLI flags so their picker stays available. */
 export function mergeDiscoveredAuthoritativeModels(
   seed: readonly CatalogModel[],
   discovered: readonly CatalogModel[]
@@ -92,12 +91,17 @@ export function mergeDiscoveredAuthoritativeModels(
     const { isDefault: _seeded, ...merged } = seedMatch
       ? { ...seedMatch, ...disc, options: seedMatch.options }
       : { ...disc, options: inheritedOptions }
-    // Why: the probe reports which id the CLI defaults to today; a seed flag frozen at
-    // release would keep naming the old one after the account's default moves.
+    // Use the probe's current CLI default; a release-frozen seed mislabels changed account defaults.
     return disc.isDefault ? { ...merged, isDefault: true } : merged
   })
 }
 
 export function sessionOptionValueIsValid(value: unknown): value is SessionOptionValue {
   return typeof value === 'string' || typeof value === 'boolean'
+}
+
+export function getAgentSessionOptionLaunchCatalog(
+  agent: AgentType
+): AgentSessionOptionCatalog | null {
+  return agent === 'opencode' ? OPENCODE_LAUNCH_OPTION_CATALOG : getAgentSessionOptionCatalog(agent)
 }

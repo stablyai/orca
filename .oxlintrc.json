@@ -1,48 +1,13 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
   "plugins": ["typescript", "react", "react-hooks", "react-perf", "unicorn"],
-  "jsPlugins": [
-    {
-      "name": "sort-comparator-performance",
-      "specifier": "./config/oxlint-plugins/sort-comparator-performance.mjs"
-    },
-    {
-      "name": "mobile-pairing",
-      "specifier": "./config/oxlint-plugins/mobile-pairing-qrcode-import.mjs"
-    },
-    {
-      "name": "app-store-performance",
-      "specifier": "./config/oxlint-plugins/app-store-performance.mjs"
-    },
-    {
-      "name": "quadratic-buffer-concat",
-      "specifier": "./config/oxlint-plugins/quadratic-buffer-concat.mjs"
-    },
-    {
-      "name": "renderer-scrollbar-style",
-      "specifier": "./config/oxlint-plugins/renderer-scrollbar-style.mjs"
-    },
-    {
-      "name": "native-chat-design-tokens",
-      "specifier": "./config/oxlint-plugins/native-chat-design-tokens.mjs"
-    },
-    {
-      "name": "ime-enter-guard",
-      "specifier": "./config/oxlint-plugins/ime-enter-guard.mjs"
-    }
-  ],
   "categories": {
     "correctness": "error"
   },
   "rules": {
-    "sort-comparator-performance/no-repeated-collator": "warn",
-    "app-store-performance/require-selector": "error",
-    "app-store-performance/no-identity-selector": "error",
-    "app-store-performance/no-fresh-selector-result": "error",
     "no-fallthrough": "error",
     "eslint/no-useless-call": "error",
     "oxc/no-accumulating-spread": "error",
-    "quadratic-buffer-concat/no-loop-carried-concat": "error",
     "react/jsx-no-duplicate-props": "error",
     "react/jsx-no-undef": "error",
     "react/no-children-prop": "error",
@@ -77,6 +42,7 @@
     "react/jsx-no-useless-fragment": ["error", { "allowExpressions": true }],
     "react/jsx-pascal-case": "error",
     "react/no-object-type-as-default-prop": "error",
+    "react/no-unstable-nested-components": ["warn", { "allowAsProps": true }],
     "react/self-closing-comp": "error",
     "react-hooks/rules-of-hooks": "error",
     "react-hooks/exhaustive-deps": "warn",
@@ -117,7 +83,6 @@
         ]
       }
     ],
-    "mobile-pairing/no-eager-qrcode-import": "error",
     "no-useless-return": "error",
     "prefer-template": "error",
     "unicorn/consistent-empty-array-spread": "error",
@@ -170,6 +135,10 @@
               {
                 "regex": "(?i)(?:^|[/\\\\])(?:web-session-tabs-sync-test-harness|web-runtime-browser-creation-placement-test-rig)(?:\\.[cm]?[jt]sx?)?(?:[?#].*)?$",
                 "message": "This module is unit-test support. Import the production web-session owner instead."
+              },
+              {
+                "regex": "\\.fixture(?:\\.tsx?)?(?:[?#].*)?$",
+                "message": "Component fixtures are dev-only and load through the fixture explorer's import.meta.glob; importing one would ship it in a production bundle."
               }
             ]
           }
@@ -179,8 +148,6 @@
     {
       "files": ["src/renderer/src/**/*.{ts,tsx}"],
       "rules": {
-        "renderer-scrollbar-style/require-styled-vertical-scrollbar": "error",
-        "ime-enter-guard/require-ime-guard": "error",
         "no-restricted-properties": [
           "error",
           {
@@ -188,14 +155,6 @@
             "message": "crypto.randomUUID is missing in non-secure contexts (Remote Web over plain HTTP), which white-screens the app. Use createBrowserUuid() from '@/lib/browser-uuid'."
           }
         ]
-      }
-    },
-    {
-      "files": ["src/renderer/src/components/native-chat/**/*.{ts,tsx}"],
-      "rules": {
-        "native-chat-design-tokens/no-arbitrary-font-size": "error",
-        "native-chat-design-tokens/no-softened-foreground": "error",
-        "native-chat-design-tokens/no-weakened-focus-ring": "error"
       }
     },
     {
@@ -213,13 +172,7 @@
     {
       "files": ["**/*.test.*", "**/*.spec.*", "**/*-benchmark.*"],
       "rules": {
-        "react/globals": "off",
-        "quadratic-buffer-concat/no-loop-carried-concat": "off",
-        "renderer-scrollbar-style/require-styled-vertical-scrollbar": "off",
-        "ime-enter-guard/require-ime-guard": "off",
-        "native-chat-design-tokens/no-arbitrary-font-size": "off",
-        "native-chat-design-tokens/no-softened-foreground": "off",
-        "native-chat-design-tokens/no-weakened-focus-ring": "off"
+        "react/globals": "off"
       }
     },
     {
@@ -259,6 +212,7 @@
   "ignorePatterns": [
     "src/main/acp/generated/acp-protocol.generated.ts",
     "src/shared/rpc-contract/rpc-params-catalog.generated.ts",
+    "src/cli/bundled-skill-guides.ts",
     "**/node_modules",
     "**/dist",
     "**/out",

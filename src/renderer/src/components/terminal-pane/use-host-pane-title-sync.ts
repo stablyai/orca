@@ -1,13 +1,11 @@
 import { useEffect } from 'react'
-import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
+import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-types'
 import { collectLeafIdsInOrder } from './terminal-layout-leaf-ids'
 import type { TerminalPaneLayoutController } from './use-terminal-pane-layout-persistence'
 
-/**
- * The pane titles a host-owned layout holds that an open pane does not show yet, by pane id.
- * The layout already keeps a local rename the host has not echoed (pending-pane-title-renames).
- */
+/** Sync owner-published pane titles while retaining pending local renames until host echo. */
 export function hostPaneTitleUpdates(args: {
   layout: TerminalLayoutSnapshot
   panes: readonly { id: number; leafId: string }[]
@@ -15,8 +13,8 @@ export function hostPaneTitleUpdates(args: {
 }): Map<number, string | null> {
   const updates = new Map<number, string | null>()
   const ptyIds = Object.values(args.layout.ptyIdsByLeafId ?? {})
-  // Local tabs are the window's own; only a host-owned layout is published by someone else.
-  if (!ptyIds.some((ptyId) => isRemoteRuntimePtyId(ptyId))) {
+  // Switch point: main publishes every layout; otherwise local tabs are the window's own.
+  if (!ORCA_LAYOUT_OWNER_IS_MAIN && !ptyIds.some((ptyId) => isRemoteRuntimePtyId(ptyId))) {
     return updates
   }
   const hostLeafIds = new Set(collectLeafIdsInOrder(args.layout.root))
@@ -59,7 +57,7 @@ export function useHostPaneTitleSync(controller: TerminalPaneLayoutController): 
       }
       return next
     }
-    // The store already holds the host's layout, so nothing is persisted or pushed back.
+    // The store already holds the owner's layout, so nothing is persisted or pushed back.
     paneTitlesRef.current = apply(paneTitlesRef.current)
     setPaneTitles(apply)
   }, [managerRef, paneLayoutRevision, paneTitlesRef, savedLayout, setPaneTitles])

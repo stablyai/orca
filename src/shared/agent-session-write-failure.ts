@@ -1,6 +1,4 @@
-// A chat write that did not happen, as a fact: what the person was doing, and what the host said.
-// Saved with a queued message, so it holds only what stays true after a reload; the words are
-// chosen from it when it is shown (`agent-session-refusal-notice.ts`).
+// Persist durable write-failure facts with queued cards; choose words at display via agent-session-refusal-notice.ts.
 
 import type { AgentSessionAccountKind } from './agent-session-availability'
 import {
@@ -11,6 +9,7 @@ import type { AgentSessionRewindReason } from './agent-session-rewind'
 import type { AgentSessionArgumentProblem } from './agent-session-argument-problem'
 import type { TuiAgent } from './tui-agent'
 import type { CodexInstallationProblem } from './codex-cli-installation'
+import type { AgentCliInstallationProblem } from './agent-cli-installation-problem'
 import {
   isAgentSessionWireRefusalCode,
   readAgentSessionRefusalReference,
@@ -20,9 +19,7 @@ import {
   type AgentSessionWireRefusalCode
 } from './agent-session-wire-refusals'
 
-/** What the person was doing, which decides what the notice says did not happen. `send` keeps
- *  the message behind a Retry control; `composer-send` puts it back in the composer, as the phone
- *  does. `read-history` is opening the chat to show its history, which writes nothing. */
+/** send retains a Retry card; composer-send returns text to the phone composer; read-history opens without writing. */
 export type AgentSessionWriteKind =
   | 'read-history'
   | 'send'
@@ -33,6 +30,8 @@ export type AgentSessionWriteKind =
   | 'answer'
   | 'option'
   | 'command'
+  /** Saving an edit of a queued message. */
+  | 'queued-edit'
   /** A /clear or /compact: refused while the agent works, in words of its own. */
   | 'clear'
   | 'compact'
@@ -62,6 +61,9 @@ export function agentSessionWriteKindForMethod(
   if (fingerprintMethod === 'agentSession.threadGoal') {
     return 'goal'
   }
+  if (fingerprintMethod === 'agentSession.queuedMessageUpdate') {
+    return 'queued-edit'
+  }
   if (
     fingerprintMethod === 'agentSession.conversationCommand' &&
     (fields.command === 'clear' || fields.command === 'compact')
@@ -71,14 +73,14 @@ export function agentSessionWriteKindForMethod(
   return 'command'
 }
 
-/** What a saved refusal keeps beside its reason: facts about the refused operation that stay true
- *  after a reload. Never the fence, revision or resolution, which move, nor any provider text. */
+/** Persist only facts stable after reload; never moving fences/revisions/resolutions or provider text. */
 type DurableRefusalFacts = {
   agent_session_operation_invalid: {
     rewindReason?: AgentSessionRewindReason
     account?: AgentSessionAccountKind
     argumentProblem?: AgentSessionArgumentProblem
     agent?: TuiAgent
+    agentInstallation?: AgentCliInstallationProblem
     codexInstallation?: CodexInstallationProblem
   }
   agent_session_operation_unknown: { rewindReason?: AgentSessionRewindReason }
@@ -92,6 +94,7 @@ const DURABLE_FACT_KEYS: Partial<Record<AgentSessionWireRefusalCode, readonly st
     'account',
     'argumentProblem',
     'agent',
+    'agentInstallation',
     'codexInstallation'
   ],
   agent_session_operation_unknown: ['rewindReason'],
@@ -121,8 +124,7 @@ export type AgentSessionWriteFailure =
    *  error inside the method). */
   | { kind: 'unconfirmed' }
 
-/** The refusal as a write keeps it. Details are read against the code, so a reason or verdict
- *  another build added is dropped and the code's own words stand. */
+/** Read saved details against code; drop newer reasons/verdicts and retain code wording. */
 function agentSessionWriteRefusal(
   code: AgentSessionWireRefusalCode,
   details: unknown
@@ -151,9 +153,7 @@ export function agentSessionRefusalFailure(
     : { kind: 'refused', code: refusal.code }
 }
 
-/** A request that threw, from the RPC error code the host answered with (undefined when none came
- *  back). Only a host that turned it away before running the method proves the write did not
- *  happen. */
+/** Only RPC proof the host refused before method execution proves no write; absent error codes cannot establish this. */
 export function agentSessionRpcErrorFailure(code: string | undefined): AgentSessionWriteFailure {
   if (code === 'method_not_found' || code === 'method_not_supported') {
     return { kind: 'refused', code: 'structured_agent_session_unsupported' }
@@ -167,9 +167,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
 }
 
-/** The refusal a failed request's error carries in its data. Takes both shapes a client meets: an
- *  RPC call's thrown error, whose payload is on `response.error`, and the payload a stream hands
- *  its error callback. Undefined from an older host, or for a failure that was not a refusal. */
+/** Read refusal data from thrown RPC response.error or stream error payloads; older hosts/non-refusals yield undefined. */
 export function readAgentSessionErrorRefusal(
   error: unknown
 ): AgentSessionRefusalReference | undefined {
@@ -181,9 +179,7 @@ export function readAgentSessionErrorRefusal(
   return isRecord(data) ? readAgentSessionRefusalReference(data.refusal) : undefined
 }
 
-/** What to say about a request that threw: the host's refusal when its error carried one, else
- *  what the RPC error code proves. Words only: whether the write may have happened stays the
- *  caller's own classification. */
+/** Prefer refusal data over RPC code for wording only; callers still decide whether effects may have happened. */
 export function agentSessionThrownFailure(
   error: unknown,
   rpcCode: string | undefined

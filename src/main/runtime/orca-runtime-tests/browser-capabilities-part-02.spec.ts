@@ -1,9 +1,16 @@
 import { describe, expect, it, vi } from 'vitest'
-import { OrcaRuntimeService } from '../orca-runtime-test-mocks.spec'
+import {
+  OrcaRuntimeService,
+  RuntimeBrowserCommands,
+  setRuntimeBrowserCommandsFactory,
+  setRuntimeBrowserUnavailableCause
+} from '../orca-runtime-test-mocks.spec'
+import { runtimeAdvertisesBrowserClientHosting } from '../../../shared/browser-client-hosting-eligibility'
 import {
   TEST_REPO_ID,
   TEST_WORKTREE_ID,
   TEST_WORKTREE_PATH,
+  createRuntime,
   store
 } from '../orca-runtime-test-fixtures.spec'
 
@@ -34,5 +41,23 @@ describe('OrcaRuntimeService', () => {
       internals.resolveWorktreeRemovalTarget(TEST_WORKTREE_ID, 'runtime:env-b')
     ).rejects.toThrow('selector_not_found')
     expect(internals.listResolvedWorktrees).not.toHaveBeenCalled()
+  })
+
+  // #30731: engine-free orcad can host client-rendered pages while reporting its local engine failure.
+  it('advertises client hosting from an engine-free factory while reporting the engine cause', () => {
+    setRuntimeBrowserCommandsFactory((host) => new RuntimeBrowserCommands(host), {
+      headless: true,
+      clientHostingWithoutEngine: true,
+      isAvailable: () => false
+    })
+    setRuntimeBrowserUnavailableCause({ reason: 'unconfigured' })
+    const status = createRuntime().getStatus()
+    expect(runtimeAdvertisesBrowserClientHosting(status.capabilities)).toBe(true)
+    expect(status.capabilities).toContain('browser.tab-create-known-id.v1')
+    expect(status.capabilities).not.toContain('browser.headless.v1')
+    expect(status.degradations).toContainEqual(
+      expect.objectContaining({ code: 'browser_unavailable', reason: 'unconfigured' })
+    )
+    setRuntimeBrowserUnavailableCause(null)
   })
 })

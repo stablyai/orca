@@ -31,7 +31,6 @@ type RuntimeRepairDialogProps = {
   name: string
 }
 
-/** Pastes a fresh pairing link into a saved server whose pairing it revoked. */
 export function RuntimeRepairDialog({
   open,
   onOpenChange,
@@ -42,7 +41,7 @@ export function RuntimeRepairDialog({
   return (
     <Dialog open={open} onOpenChange={(next) => !busy && onOpenChange(next)}>
       <DialogContent className="sm:max-w-md">
-        {/* Why inside the content: it unmounts on close, so a reopen starts from an empty link. */}
+        {/* Unmount form content on close so reopening starts with an empty link. */}
         <RuntimeRepairForm
           environmentId={environmentId}
           name={name}
@@ -133,8 +132,8 @@ function RuntimeRepairForm({
         </DialogTitle>
         <DialogDescription>
           {translate(
-            'auto.components.settings.RuntimeRepairDialog.description',
-            '{{name}} no longer accepts this computer. On {{name}}, open Settings → Remote Orca Servers → Share this host, create a link for another Orca client, then paste it here.',
+            'auto.components.settings.RuntimeRepairDialog.descriptionShareComputer',
+            '{{name}} no longer accepts this computer. On {{name}}, open Settings → Remote Orca Servers → Share this computer, create a link for another Orca, then paste it here.',
             { name }
           )}
         </DialogDescription>

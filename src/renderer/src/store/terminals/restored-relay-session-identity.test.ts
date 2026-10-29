@@ -1,8 +1,15 @@
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
 import { buildWorkspaceSessionPayload } from '@/lib/workspace-session'
 import { getOrphanTerminalIds } from '../slices/terminal-orphan-helpers'
 import { createTestStore, makeTab, makeWorktree } from '../slices/store-test-helpers'
+
+const layoutOwner = vi.hoisted(() => ({ isMain: false }))
+vi.mock('../../../../shared/layout-owner-switch', () => ({
+  get ORCA_LAYOUT_OWNER_IS_MAIN() {
+    return layoutOwner.isMain
+  }
+}))
 
 const TARGET_ID = 'target'
 const REPO_ID = 'repo-ssh'
@@ -65,72 +72,79 @@ function persistedSession(): WorkspaceSessionState {
   }
 }
 
-describe('restored relay session identity (#17743)', () => {
-  it('does not republish a hydration-nulled ptyId over the persisted relay session id', () => {
-    const store = seedStore()
-    store.getState().hydrateWorkspaceSession(persistedSession())
-
-    // Hydration deliberately nulls the row; that is the contract, not the bug.
-    expect(store.getState().tabsByWorktree[WORKTREE_ID][0].ptyId).toBeNull()
-    expect(store.getState().ptyIdsByTabId[TAB_ID]).toEqual([])
-    expect(store.getState().lastKnownRelayPtyIdByTabId[TAB_ID]).toBeUndefined()
-
-    const payload = buildWorkspaceSessionPayload(store.getState())
-
-    expect(payload.remoteSessionIdsByTabId).toEqual({ [TAB_ID]: RELAY_PTY_ID })
-    expect(payload.activeWorktreeIdsOnShutdown).toContain(WORKTREE_ID)
-    expect(payload.activeConnectionIdsAtShutdown).toEqual([TARGET_ID])
-  })
-
-  it('rebinds the restored tab to its live relay PTY and keeps publishing that id', async () => {
-    const store = seedStore()
-    store.getState().hydrateWorkspaceSession(persistedSession())
-
-    await store.getState().reconnectPersistedTerminals()
-
-    expect(store.getState().tabsByWorktree[WORKTREE_ID][0].ptyId).toBe(RELAY_PTY_ID)
-    expect(store.getState().ptyIdsByTabId[TAB_ID]).toEqual([RELAY_PTY_ID])
-    expect(buildWorkspaceSessionPayload(store.getState()).remoteSessionIdsByTabId).toEqual({
-      [TAB_ID]: RELAY_PTY_ID
+describe.each([false, true])(
+  'restored relay session identity (#17743) (layout owner is main: %s)',
+  (isMain) => {
+    beforeEach(() => {
+      layoutOwner.isMain = isMain
     })
-  })
 
-  it('keeps a deferred relay session id while the host is disconnected', async () => {
-    const store = seedStore('disconnected')
-    store.getState().hydrateWorkspaceSession(persistedSession())
-    await store.getState().reconnectPersistedTerminals()
+    it('does not republish a hydration-nulled ptyId over the persisted relay session id', () => {
+      const store = seedStore()
+      store.getState().hydrateWorkspaceSession(persistedSession())
 
-    expect(store.getState().deferredSshSessionIdsByTabId[TAB_ID]).toBe(RELAY_PTY_ID)
-    // Loss of contact is not evidence the remote PTY exited, so the handle survives into the next write.
-    expect(buildWorkspaceSessionPayload(store.getState()).remoteSessionIdsByTabId).toEqual({
-      [TAB_ID]: RELAY_PTY_ID
+      // Hydration deliberately nulls the row; that is the contract, not the bug.
+      expect(store.getState().tabsByWorktree[WORKTREE_ID][0].ptyId).toBeNull()
+      expect(store.getState().ptyIdsByTabId[TAB_ID]).toEqual([])
+      expect(store.getState().lastKnownRelayPtyIdByTabId[TAB_ID]).toBeUndefined()
+
+      const payload = buildWorkspaceSessionPayload(store.getState())
+
+      expect(payload.remoteSessionIdsByTabId).toEqual({ [TAB_ID]: RELAY_PTY_ID })
+      expect(payload.activeWorktreeIdsOnShutdown).toContain(WORKTREE_ID)
+      expect(payload.activeConnectionIdsAtShutdown).toEqual([TARGET_ID])
     })
-  })
 
-  it('leaves a tab whose relay handle is unverifiable alone instead of retiring it', async () => {
-    const store = seedStore('disconnected')
-    store.getState().hydrateWorkspaceSession(persistedSession())
-    await store.getState().reconnectPersistedTerminals()
+    it('rebinds the restored tab to its live relay PTY and keeps publishing that id', async () => {
+      const store = seedStore()
+      store.getState().hydrateWorkspaceSession(persistedSession())
 
-    // No live PTY, no row binding, host unreachable — `unverifiable`, never `exited`.
-    expect([...getOrphanTerminalIds(store.getState(), WORKTREE_ID)]).toEqual([])
-    expect(store.getState().tabsByWorktree[WORKTREE_ID].map((tab) => tab.id)).toEqual([TAB_ID])
-  })
+      await store.getState().reconnectPersistedTerminals()
 
-  it('does not invent a session id for a tab that never had one', () => {
-    const store = seedStore()
-    const session = persistedSession()
-    session.tabsByWorktree[WORKTREE_ID] = [
-      makeTab({ id: TAB_ID, worktreeId: WORKTREE_ID, ptyId: null })
-    ]
-    delete session.remoteSessionIdsByTabId
-    delete session.activeConnectionIdsAtShutdown
-    session.activeWorktreeIdsOnShutdown = []
-    store.getState().hydrateWorkspaceSession(session)
+      expect(store.getState().tabsByWorktree[WORKTREE_ID][0].ptyId).toBe(RELAY_PTY_ID)
+      expect(store.getState().ptyIdsByTabId[TAB_ID]).toEqual([RELAY_PTY_ID])
+      expect(buildWorkspaceSessionPayload(store.getState()).remoteSessionIdsByTabId).toEqual({
+        [TAB_ID]: RELAY_PTY_ID
+      })
+    })
 
-    const payload = buildWorkspaceSessionPayload(store.getState())
+    it('keeps a deferred relay session id while the host is disconnected', async () => {
+      const store = seedStore('disconnected')
+      store.getState().hydrateWorkspaceSession(persistedSession())
+      await store.getState().reconnectPersistedTerminals()
 
-    expect(payload.remoteSessionIdsByTabId).toBeUndefined()
-    expect(payload.activeWorktreeIdsOnShutdown).toEqual([])
-  })
-})
+      expect(store.getState().deferredSshSessionIdsByTabId[TAB_ID]).toBe(RELAY_PTY_ID)
+      // Loss of contact is not evidence the remote PTY exited, so the handle survives into the next write.
+      expect(buildWorkspaceSessionPayload(store.getState()).remoteSessionIdsByTabId).toEqual({
+        [TAB_ID]: RELAY_PTY_ID
+      })
+    })
+
+    it('leaves a tab whose relay handle is unverifiable alone instead of retiring it', async () => {
+      const store = seedStore('disconnected')
+      store.getState().hydrateWorkspaceSession(persistedSession())
+      await store.getState().reconnectPersistedTerminals()
+
+      // No live PTY, no row binding, host unreachable — `unverifiable`, never `exited`.
+      expect([...getOrphanTerminalIds(store.getState(), WORKTREE_ID)]).toEqual([])
+      expect(store.getState().tabsByWorktree[WORKTREE_ID].map((tab) => tab.id)).toEqual([TAB_ID])
+    })
+
+    it('does not invent a session id for a tab that never had one', () => {
+      const store = seedStore()
+      const session = persistedSession()
+      session.tabsByWorktree[WORKTREE_ID] = [
+        makeTab({ id: TAB_ID, worktreeId: WORKTREE_ID, ptyId: null })
+      ]
+      delete session.remoteSessionIdsByTabId
+      delete session.activeConnectionIdsAtShutdown
+      session.activeWorktreeIdsOnShutdown = []
+      store.getState().hydrateWorkspaceSession(session)
+
+      const payload = buildWorkspaceSessionPayload(store.getState())
+
+      expect(payload.remoteSessionIdsByTabId).toBeUndefined()
+      expect(payload.activeWorktreeIdsOnShutdown).toEqual([])
+    })
+  }
+)

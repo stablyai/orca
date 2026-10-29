@@ -1,3 +1,4 @@
+import type { ConfirmedUnsavedDiscards } from '@/store/slices/worktrees/teardown/removed-workspace-unsaved-files'
 import type { Worktree } from '../../../../shared/worktree/types'
 import type { PreservedBranchCleanup } from '@/lib/preserved-branch-cleanup'
 import { normalizeExecutionHostId } from '../../../../shared/execution-host'
@@ -15,8 +16,7 @@ export type WorktreeDeleteIdentity = Pick<Worktree, 'id' | 'instanceId' | 'hostI
 
 export type WorktreeDeleteOptions = {
   expectedInstanceId?: string
-  /** Why (STA-4343): the id-keyed map holds one row per `repoId::path`, so a row
-   *  that knows its host must say so or the delete lands on the other one. */
+  /** Pin deletion to the confirmed host because workspace IDs repeat across hosts. */
   expectedHostId?: ExecutionHostId
 }
 
@@ -26,8 +26,9 @@ export type WorktreeDeleteWithToastOptions = {
   onPreservedBranch?: (branch: PreservedBranchCleanup) => void
   suppressPreservedBranchToast?: boolean
   snapshotPruneBatchId?: string
-  // Batch deletion commits one focus handoff after all targets settle.
-  focusSuccessorOnDelete?: boolean
+  confirmedDiscards?: ConfirmedUnsavedDiscards
+  /** Throws when the confirmed workspace is gone; runs before every destructive send. */
+  assertBeforeDispatch?: () => void
 }
 
 export function toWorktreeDeleteIdentities(
@@ -36,7 +37,6 @@ export function toWorktreeDeleteIdentities(
   return worktrees.map(({ id, instanceId, hostId }) => ({ id, instanceId, hostId }))
 }
 
-/** Resolves one confirmed row: the id ALONE is not enough, so the host rides along. */
 export type WorktreeDeleteTargetLookup = (
   worktreeId: string,
   hostId: ExecutionHostId | undefined
@@ -46,8 +46,7 @@ export function resolveWorktreeBatchDeleteTargets(
   requestedWorktrees: readonly string[] | readonly WorktreeDeleteIdentity[],
   lookupTarget: WorktreeDeleteTargetLookup
 ): Worktree[] | null {
-  // Why (STA-4343): dedup on (id, host), not id — two hosts can publish the same
-  // `repoId::path`, and collapsing them here would silently drop one confirmed row.
+  // Deduplicate by ID and host so a same-ID twin cannot disappear from the confirmed batch.
   const uniqueRequests = Array.from(
     new Map(
       requestedWorktrees.map((request) => {
@@ -59,9 +58,7 @@ export function resolveWorktreeBatchDeleteTargets(
   const targets: Worktree[] = []
   for (const request of uniqueRequests) {
     const worktreeId = typeof request === 'string' ? request : request.id
-    // A request that names a host resolves on THAT host, so confirming a remote
-    // row can never fall through to a local checkout at the same path — and the
-    // other host's row stays reachable instead of being masked by the id-keyed map.
+    // Resolve an explicit host exactly so remote deletion cannot fall through to a local twin.
     const target =
       lookupTarget(worktreeId, typeof request === 'string' ? undefined : request.hostId) ?? null
     if (typeof request !== 'string' && (!target || target.instanceId !== request.instanceId)) {

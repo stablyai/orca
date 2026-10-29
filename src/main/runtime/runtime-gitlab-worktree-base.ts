@@ -1,18 +1,20 @@
 import type { GitPushTarget } from '../../shared/worktree/types'
 import type { Repo } from '../../shared/repo-types'
 import { isFolderRepo } from '../../shared/repo-kind'
+import { requireRepoLocalGitRoute } from '../repo-execution-host'
 import { fetchCompareBaseRefWithLocalFallback } from '../git/compare-base-ref-fetch'
 import { gitExecFileAsync } from '../git/runner'
+import { REVIEW_HEAD_FETCH_TIMEOUT_MS } from '../../shared/review-head-tracking-ref'
 import { getProjectRefForRemote, getWorkItemByProjectRef } from '../gitlab/client'
 import { getGlabKnownHosts } from '../gitlab/gl-utils'
 import {
   getLocalProjectGitExecOptions,
   getLocalProjectWorktreeGitOptions
 } from '../project-runtime-git-options'
-import { SshHostNotServedError } from '../providers/ssh-host-not-served-error'
 import type { ProjectRuntimeResolutionStore } from '../local-project-runtime-resolution'
 import { resolveRuntimeGitLabForkMrBase } from './runtime-gitlab-fork-mr-base'
 import { resolveRuntimeGitLabIssueSourceRemote } from './runtime-gitlab-issue-source-remote'
+import { reviewStartPointFailure } from '../../shared/review-start-point-failure-copy'
 
 export type RuntimeGitLabWorktreeBaseArgs = {
   repoSelector: string
@@ -40,14 +42,13 @@ export async function resolveRuntimeGitLabWorktreeBase(
   try {
     repo = await deps.resolveRepo(args.repoSelector)
   } catch {
-    return { error: 'Repo not found' }
+    return reviewStartPointFailure('repoNotFound')
   }
   if (isFolderRepo(repo)) {
-    return { error: 'Folder mode does not support creating worktrees.' }
+    return reviewStartPointFailure('folderUnsupported')
   }
-  if (repo.connectionId) {
-    throw new SshHostNotServedError(repo.connectionId)
-  }
+  // Use shared host gating: executionHostId may be a row's only SSH marker.
+  requireRepoLocalGitRoute(repo)
   const localGitExecOptions = getLocalProjectGitExecOptions(deps.store, repo)
   const localWorktreeGitOptions = getLocalProjectWorktreeGitOptions(deps.store, repo)
   const gitExec = (gitArgs: string[]) => gitExecFileAsync(gitArgs, localGitExecOptions)
@@ -74,7 +75,7 @@ export async function resolveRuntimeGitLabWorktreeBase(
       localWorktreeGitOptions
     )
     if (!projectRef) {
-      return { error: 'No GitLab project found for this repository.' }
+      return reviewStartPointFailure('gitlab.projectNotFound')
     }
     const item = await getWorkItemByProjectRef(
       repo.path,
@@ -85,12 +86,12 @@ export async function resolveRuntimeGitLabWorktreeBase(
       localWorktreeGitOptions
     )
     if (!item || item.type !== 'mr') {
-      return { error: `MR !${args.mrIid} not found.` }
+      return reviewStartPointFailure('gitlab.mrNotFound', { number: args.mrIid })
     }
     sourceBranch = (item.branchName ?? '').trim()
     targetBranch = (item.baseRefName ?? '').trim()
     if (!sourceBranch) {
-      return { error: `MR !${args.mrIid} has no source branch.` }
+      return reviewStartPointFailure('gitlab.mrSourceBranchMissing', { number: args.mrIid })
     }
     if (item.isCrossRepository === true) {
       isCrossRepository = true
@@ -108,7 +109,10 @@ export async function resolveRuntimeGitLabWorktreeBase(
   }
   const compareBaseRef = targetBranch ? `refs/remotes/${remote}/${targetBranch}` : undefined
   const fetchRemoteTrackingRef = async (branch: string, ref: string): Promise<void> => {
-    await gitExec(['fetch', remote, `+refs/heads/${branch}:${ref}`])
+    await gitExecFileAsync(['fetch', remote, `+refs/heads/${branch}:${ref}`], {
+      ...localGitExecOptions,
+      timeout: REVIEW_HEAD_FETCH_TIMEOUT_MS
+    })
   }
   const fetchCompareBaseRef = (): Promise<boolean> =>
     fetchCompareBaseRefWithLocalFallback({
@@ -133,13 +137,16 @@ export async function resolveRuntimeGitLabWorktreeBase(
     await fetchRemoteTrackingRef(sourceBranch, `refs/remotes/${remote}/${sourceBranch}`)
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
-    return { error: `Failed to fetch ${remote}/${sourceBranch}: ${message.split('\n')[0]}` }
+    return reviewStartPointFailure('fetchFailed', {
+      ref: `${remote}/${sourceBranch}`,
+      detail: message.split('\n')[0]
+    })
   }
   const remoteRef = `${remote}/${sourceBranch}`
   try {
     await gitExec(['rev-parse', '--verify', remoteRef])
   } catch {
-    return { error: `Remote ref ${remoteRef} does not exist after fetch.` }
+    return reviewStartPointFailure('remoteRefMissing', { ref: remoteRef })
   }
   const compareBaseFetched = await fetchCompareBaseRef()
   return {

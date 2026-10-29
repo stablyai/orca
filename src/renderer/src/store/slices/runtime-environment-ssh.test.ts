@@ -45,14 +45,11 @@ describe('runtime-environment-ssh slice', () => {
     store.getState().setEnvironmentRemovedSshTargetLabels(ENV_A, { 'ssh-dead': 'old box' })
 
     const state = store.getState()
-    // Local maps: bit-identical (same references, still empty).
     expect(state.sshConnectionStates).toBe(localStatesBefore)
     expect(state.sshTargetLabels).toBe(localLabelsBefore)
     expect(state.sshConnectionStates.size).toBe(0)
     expect(state.sshTargetsHydrated).toBe(false)
-    // Environment B's bucket: untouched reference.
     expect(state.sshStateByEnvironment.get(ENV_B)).toBe(bucketBBefore)
-    // Environment A's bucket: populated.
     const bucketA = state.sshStateByEnvironment.get(ENV_A)
     expect(bucketA?.connectionStates.get('ssh-a')?.status).toBe('connected')
     expect(bucketA?.connectionStates.get('ssh-a')).toMatchObject({
@@ -204,8 +201,7 @@ describe('runtime-environment-ssh slice', () => {
     it('resolve the owning environment bucket, not local state, for a remote-owned target', () => {
       const store = createTestStore()
       markReachable(store, ENV_A)
-      // Same target id exists locally as connected — must not leak into the
-      // environment read.
+      // Same target ID on local host must not leak into environment reads.
       store.getState().setSshConnectionState('ssh-1', connState('ssh-1', 'connected'))
       store.getState().setEnvironmentSshTargetsMetadata(ENV_A, [{ id: 'ssh-1', label: 'devbox' }])
       store
@@ -225,7 +221,6 @@ describe('runtime-environment-ssh slice', () => {
       store
         .getState()
         .setEnvironmentSshConnectionState(ENV_A, 'ssh-1', connState('ssh-1', 'disconnected'))
-      // Environment probe now records unreachable.
       store.getState().setRuntimeEnvironmentStatus(ENV_A, { status: null, checkedAt: Date.now() })
 
       const state = store.getState()

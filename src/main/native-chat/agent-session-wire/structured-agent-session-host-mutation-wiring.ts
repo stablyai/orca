@@ -30,16 +30,25 @@ export function createStructuredAgentSessionHostMutationContext(
     deps: input.deps,
     sessions: input.sessions,
     publish: (sessionId, journal) => input.subscribers.publish(sessionId, journal),
+    publishConversationName: (sessionId) => {
+      const record = input.deps.store.getRecord(sessionId)
+      if (input.deps.conversationNaming && record) {
+        input.deps.conversationNaming.publishName(record.location.workspaceId, sessionId)
+      } else {
+        input.clientDelivery.publishConversationName(sessionId)
+      }
+    },
     conversation: input.lifetime.conversation,
     readChildWork: input.clientDelivery.readChildWork,
     publishChildWork: input.clientDelivery.publishChildWork,
+    publishWorkChanged: (sessionId) => input.clientDelivery.publishGenerationEnded(sessionId),
     captureChildWorkStops: input.clientDelivery.captureChildWorkStops,
     childWorkOpen: input.clientDelivery.childWorkOpen,
     childWorkIncomplete: input.clientDelivery.childWorkIncomplete,
     serialize: input.serialize,
     openConversation: input.conversationDelivery.open,
-    ensureAgent: (sessionId) =>
-      agentStart.ensureStructuredAgentSessionAgentForOperation(input.attachContext(), sessionId),
+    claimAgent: (sessionId) => agentStart.claimOperationStart(input.attachContext(), sessionId),
+    startFlights: input.runtimeState.startFlights,
     startupAttempts: input.runtimeState.startupAttempts,
     deliveryOrder: input.runtimeState.deliveryOrder,
     joinChildClose: (sessionId) =>

@@ -1,13 +1,12 @@
-// How two copies of a composer draft compare, such as the draft now against the one that was sent.
-
+import { textLeftAfterSubmission } from '../../../../shared/submitted-draft-text'
 import type { JSONContent } from '@tiptap/react'
+import { slicePromptDocument } from './native-chat-prompt-document-text'
 import type {
   NativeChatComposerDraft,
   NativeChatComposerDraftImage
 } from './native-chat-composer-draft-storage'
 
-/** Equal documents count as unchanged even as new objects: an editor applying the stored draft
- *  produces its own copy, which must not read as a change to save. */
+/** Compare document values so adopting an equal editor copy cannot create a new unsaved change. */
 export function sameNativeChatComposerDraftDocument(
   left: JSONContent | undefined,
   right: JSONContent | undefined
@@ -34,26 +33,21 @@ export function sameNativeChatComposerDraftImages(
   )
 }
 
-/**
- * What a draft keeps once its send is accepted: anything added since, meaning text inserted into
- * the sent text (typing or a composition begun before the send settled) and images attached
- * meanwhile. Null when the draft was otherwise changed since (replaced, or edited inside the sent
- * text), which is then left as it is.
- */
+/** After acceptance, keep inserted text and newly attached images; return null for other edits so the current draft stays intact. */
 export function nativeChatComposerDraftLeftAfterSend(
   current: NativeChatComposerDraft,
   sent: NativeChatComposerDraft
 ): NativeChatComposerDraft | null {
-  let prefix = 0
-  while (prefix < sent.text.length && sent.text[prefix] === current.text[prefix]) {
-    prefix += 1
-  }
-  const rest = sent.text.slice(prefix)
-  if (current.text.length < sent.text.length || !current.text.endsWith(rest)) {
+  const left = textLeftAfterSubmission(current.text, sent.text)
+  if (!left) {
     return null
   }
   return {
-    text: current.text.slice(prefix, current.text.length - rest.length),
+    text: left.text,
+    ...(current.document
+      ? { document: slicePromptDocument(current.document, left.from, left.to) }
+      : {}),
+    ...(current.pastedTextFiles ? { pastedTextFiles: current.pastedTextFiles } : {}),
     images: current.images.filter((image) => !sent.images.some((held) => held.id === image.id))
   }
 }

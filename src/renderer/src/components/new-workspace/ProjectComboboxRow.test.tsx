@@ -30,17 +30,7 @@ function markedText(): string {
 }
 
 describe('MatchedText', () => {
-  it('underlines the matched run', () => {
-    act(() => {
-      root.render(<MatchedText text="orca" hits={[0, 1, 2, 3]} />)
-    })
-
-    expect(markedText()).toBe('orca')
-  })
-
-  // Hits are UTF-16 offsets; rendering splits by code point. An astral glyph is
-  // two code units but one rendered character, so every mark landed one glyph
-  // late (and the last one fell off the end).
+  // UTF-16 hit offsets and code-point rendering differ for emoji; marks must stay on the matched glyphs.
   it('aligns marks with the query when the name starts with an emoji', () => {
     const option: NewWorkspaceProjectOption = {
       kind: 'project',

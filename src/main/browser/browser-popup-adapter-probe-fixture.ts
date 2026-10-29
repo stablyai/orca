@@ -98,7 +98,6 @@ export class BrowserPopupAdapterProbeFixture {
         unrelatedDuringAdmission = false
         const response = allowNativeBrowserPopup({
           opener: guest,
-          targetUrl: details.url,
           options: { show: false },
           onCreated: ({ nativeWindow }) => {
             if (!nativeWindow) {
@@ -173,7 +172,7 @@ export class BrowserPopupAdapterProbeFixture {
           : {})
       }
     })
-    // Observation only; native creation keeps Chromium's original navigation.
+    // Observe creation without replacing Chromium's navigation.
     guest.prependListener('did-create-window', (window) =>
       this.observe(window.webContents, guest.id)
     )

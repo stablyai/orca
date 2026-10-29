@@ -1,3 +1,4 @@
+import { taskProviderFailure } from '../../shared/task-provider-failure'
 import type { LinearClient } from '@linear/sdk'
 import type { LinearIssueUpdate } from '../../shared/issue-mutation-types'
 import { acquire, release } from './linear-request-concurrency'
@@ -38,7 +39,7 @@ export async function createIssue(
 > {
   const entry = getClients(workspaceId)[0]
   if (!entry) {
-    return { ok: false, error: 'Not connected to Linear' }
+    return taskProviderFailure('linear.notConnected', 'Not connected to Linear')
   }
 
   await acquire()
@@ -58,11 +59,14 @@ export async function createIssue(
       ...(options?.labelIds ? { labelIds: options.labelIds } : {})
     })
     if (!result.success) {
-      return { ok: false, error: 'Linear create failed' }
+      return taskProviderFailure('linear.createFailed', 'Linear create failed')
     }
     const issue = await result.issue
     if (!issue) {
-      return { ok: false, error: 'Issue was created but could not be retrieved' }
+      return taskProviderFailure(
+        'linear.createdButUnavailable',
+        'Issue was created but could not be retrieved'
+      )
     }
     return {
       ok: true,
@@ -159,15 +163,12 @@ export async function updateIssue(
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const entry = getClients(workspaceId)[0]
   if (!entry) {
-    return { ok: false, error: 'Not connected to Linear' }
+    return taskProviderFailure('linear.notConnected', 'Not connected to Linear')
   }
 
   await acquire()
   try {
-    // Why: labelIds is a full-replace field — a TOCTOU race exists if another
-    // user changes labels between fetch and write. The caller passes the
-    // complete set built from recently-fetched data. Acceptable for v1;
-    // a future version could re-fetch right before writing or use webhooks.
+    // labelIds replaces the full set; concurrent label edits between caller read and write can be lost.
     const resolvedLabelIds = updates.labelIds
 
     const payload: Record<string, unknown> = {}
@@ -204,7 +205,7 @@ export async function updateIssue(
 
     const result = await entry.client.updateIssue(id, payload)
     if (!result.success) {
-      return { ok: false, error: 'Linear update failed' }
+      return taskProviderFailure('linear.updateFailed', 'Linear update failed')
     }
     return { ok: true }
   } catch (error) {

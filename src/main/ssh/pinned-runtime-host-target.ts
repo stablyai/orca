@@ -1,7 +1,4 @@
-/**
- * Which of Orca's pinned Node runtimes a host can run, by glibc alone: the host target's own, a
- * compat runtime below the default's glibc floor, or none.
- */
+/** Select native/compat pinned Node by host glibc floor, or refuse when neither can run. */
 import {
   COMPAT_SERVER_TARGET_BASES,
   isCompatServerTarget,
@@ -10,13 +7,12 @@ import {
   type NodeRuntimeTarget,
   type ServerTarget
 } from '../../shared/node-runtime-pin'
-import type { GlibcVersion } from './orcad-deployment-target'
+import type { GlibcVersion } from '../node-runtime/linux-libc-probe'
 
 /** Official linux builds of the pinned Node need glibc 2.28. */
 export const PINNED_NODE_GLIBC_FLOOR: GlibcVersion = { major: 2, minor: 28 }
 
 type CompatNodeRuntime = {
-  /** The pinned compat runtime and orcad slot it runs (NODE_RUNTIME_COMPAT_ASSETS). */
   runtimeTarget: CompatServerTarget
   /** The host target this runtime serves, e.g. linux-x64-glibc for a glibc 2.17 build. */
   hostTarget: ServerTarget
@@ -52,10 +48,7 @@ export function pinnedRuntimeTargetForHost(facts: {
   return compat?.runtimeTarget ?? null
 }
 
-/**
- * executableSha256 of every runtime the host store keeps pinned for `target`: the default runtime
- * and its compat ones, so GC never collects a runtime another slot on the host still runs.
- */
+/** Pin default and compatibility runtime hashes so GC cannot collect a runtime another slot still uses. */
 export function nodeRuntimeStorePins(target: NodeRuntimeTarget): string[] {
   const hostTarget = isCompatServerTarget(target) ? COMPAT_SERVER_TARGET_BASES[target] : target
   const targets = [

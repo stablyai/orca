@@ -14,8 +14,8 @@ describe('hasBinaryFileExtension', () => {
 
   it('rejects text files, dotfiles, and extensionless paths', () => {
     expect(hasBinaryFileExtension('src/index.ts')).toBe(false)
-    expect(hasBinaryFileExtension('.gitignore')).toBe(false)
-    expect(hasBinaryFileExtension('scripts/.eslintrc')).toBe(false)
+    expect(hasBinaryFileExtension('.png')).toBe(false)
+    expect(hasBinaryFileExtension('scripts/.png')).toBe(false)
     expect(hasBinaryFileExtension('Makefile')).toBe(false)
     expect(hasBinaryFileExtension(undefined)).toBe(false)
   })

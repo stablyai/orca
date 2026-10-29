@@ -1,23 +1,19 @@
-import { sameAgentStatusTerminalOwner } from '../../../../shared/agent-status-terminal-owner'
 import { isWslHookRelayConnectionId } from '../../../../shared/wsl-hook-relay-contract'
-import type { AgentStatusIpcPayload } from '../../../../shared/agent-status-types'
-import {
-  resolveAgentStatusIdentity,
-  shouldSuppressInheritedTerminalStatus
-} from '../../../../shared/agent-status-identity'
+import { pickHostTurnEnd, type AgentStatusIpcPayload } from '../../../../shared/agent-status-types'
 import { isDecorativeAgentTitleFrameChange } from '../../../../shared/agent-decorative-title-signature'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
 import { normalizeProgramStatusFacet } from '../../../../shared/program-status/facet'
 import { resolveAgentStatusTerminalTitle } from '@/lib/agent-status-terminal-title'
 import { track } from '@/lib/telemetry'
 import { resolveAgentPaneAuthorityKey } from '@/store/slices/agent-pane-authority'
-import type { AgentStatusUpdate } from '@/store/slices/agent-status'
+import type { AgentStatusUpdate } from '@/store/slices/agent-status/agent-status-contract'
 import { observeAgentHookCompletionForNotification } from '../agent-hook-completion-notifications'
 import { useAppStore } from '../../store'
 import {
   applyResolvedAgentTerminalTitleToTab,
   hasRuntimeBackedWorktreeAttribution,
   isAgentStatusForRecentlyClosedTab,
+  isInheritedFromActivePane,
   isSeenHostReplay,
   resolveHookPayloadAgentType,
   shouldApplyResolvedAgentTerminalTitleToTab
@@ -199,31 +195,11 @@ export function createAgentStatusEventApplicator(args: {
       : statusPayloadWithProvenance
     // Why null: main stitches the pane's current facet onto every publish, so absence means cleared.
     const statusPayloadWithProgramStatus = { ...statusPayloadWithObservation, programStatus }
-    const identity = resolveAgentStatusIdentity({
-      existing:
-        existingStatus &&
-        sameAgentStatusTerminalOwner(
-          {
-            connectionId: existingStatus.connectionId ?? null,
-            worktreeId: existingStatus.worktreeId
-          },
-          {
-            connectionId:
-              (ownershipConnectionId === undefined
-                ? existingStatus.connectionId
-                : ownershipConnectionId) ?? null,
-            worktreeId: data.worktreeId ?? owningWorktreeId ?? existingStatus.worktreeId
-          }
-        )
-          ? existingStatus
-          : undefined,
-      incoming: statusPayload.agentType,
-      now: data.receivedAt
-    })
     if (
       existingStatus &&
-      shouldSuppressInheritedTerminalStatus({
-        inheritedFromActivePane: identity.inheritedFromActivePane
+      isInheritedFromActivePane(existingStatus, data, statusPayload.agentType, {
+        connectionId: ownershipConnectionId,
+        worktreeId: owningWorktreeId
       })
     ) {
       return 'dropped'
@@ -240,7 +216,8 @@ export function createAgentStatusEventApplicator(args: {
           ? { evidenceObservedAt: data.evidenceObservedAt }
           : {}),
         stateStartedAt: data.stateStartedAt,
-        ...(Number.isFinite(data.turnStartedAt) ? { turnStartedAt: data.turnStartedAt } : {})
+        ...(Number.isFinite(data.turnStartedAt) ? { turnStartedAt: data.turnStartedAt } : {}),
+        ...pickHostTurnEnd(data)
       },
       routing: {
         tabId: ownerTabId,
@@ -255,10 +232,11 @@ export function createAgentStatusEventApplicator(args: {
       options?.replay === true || isSeenHostReplay(data, resolvedPayload.state, existingStatus)
     const applyPostCommitNotification = (): void => {
       if (statusWorktreeId && (!replayed || resolvedPayload.state === 'working')) {
-        const notificationPayload =
-          typeof data.stateStartedAt === 'number'
-            ? { ...resolvedPayload, stateStartedAt: data.stateStartedAt }
-            : resolvedPayload
+        const notificationPayload = {
+          ...resolvedPayload,
+          stateStartedAt: data.stateStartedAt,
+          ...pickHostTurnEnd(data)
+        }
         observeAgentHookCompletionForNotification({
           paneKey,
           worktreeId: statusWorktreeId,

@@ -24,40 +24,13 @@ export function buildLocalPtySpawnEnvironment(args: {
   plan: LocalPtyLaunchPlan
 }): Record<string, string> | Promise<Record<string, string>> {
   const { id, spawn, getOptions, plan } = args
-  const inheritedEnv = stripInheritedBuildModeEnv(process.env)
-  restoreManagedDataAccountEnvironment(inheritedEnv)
-  const spawnEnv: Record<string, string> = {
-    ...mergeGitConfigEnvProtocol(inheritedEnv, spawn.env),
-    TERM: 'xterm-256color',
-    COLORTERM: 'truecolor',
-    TERM_PROGRAM: 'Orca',
-    // Why: TUIs feature-gate on TERM_PROGRAM_VERSION; the fallback keeps tests and non-Electron runs working.
-    TERM_PROGRAM_VERSION: process.env.ORCA_APP_VERSION ?? '0.0.0-dev',
-    // Why: supports-hyperlinks rejects TERM_PROGRAM=Orca, so tools drop OSC 8 links; force it since xterm.js parses them.
-    FORCE_HYPERLINK: '1',
-    [ORCA_IMAGE_PROTOCOL_ENV]: ORCA_IMAGE_PROTOCOL_VALUE
-  } satisfies Record<string, string>
-  removeUnspecifiedPaneIdentityEnv(spawnEnv, spawn.env)
-  stripPiProcessOwnerEnv(spawnEnv)
-  removeAppImageRuntimeEnv(spawnEnv)
-  removeChromiumDisabledSessionBus(spawnEnv)
-  removeInheritedNoColor(spawnEnv)
-  for (const key of spawn.envToDelete ?? []) {
-    delete spawnEnv[key]
-  }
-  if (spawn.env?.TERM) {
-    spawnEnv.TERM = spawn.env.TERM
-  }
-  // Why after the strips and deletes: an alias must never outlive the value it mirrors.
-  applyScrubSafeAgentEnvAliases(spawnEnv)
+  const spawnEnv = buildInheritedLocalPtyEnvironment(spawn.env, spawn.envToDelete)
 
-  spawnEnv.LANG ??= 'en_US.UTF-8'
-
-  // Why: on Windows LANG doesn't set the console code page; PYTHONUTF8=1 forces Python UTF-8 stdio to avoid garbled CJK.
+  // Windows LANG cannot set Python console encoding; PYTHONUTF8 prevents garbled CJK stdio.
   if (process.platform === 'win32') {
     spawnEnv.PYTHONUTF8 ??= '1'
     if (isWindowsGitBashShellPath(plan.shellPath)) {
-      // Why: Git for Windows login files otherwise cd to $HOME, ignoring node-pty's cwd for repo-scoped terminals.
+      // Git login files otherwise cd to HOME instead of the requested terminal cwd.
       spawnEnv.CHERE_INVOKING ??= '1'
     }
   }
@@ -75,6 +48,41 @@ export function buildLocalPtySpawnEnvironment(args: {
     isWsl: plan.isWslShell,
     wslDistro: plan.launchWslDistro
   })
+}
+
+export function buildInheritedLocalPtyEnvironment(
+  explicitEnv: Record<string, string> | undefined,
+  envToDelete: readonly string[] = []
+): Record<string, string> {
+  const inheritedEnv = stripInheritedBuildModeEnv(process.env)
+  restoreManagedDataAccountEnvironment(inheritedEnv)
+  const spawnEnv: Record<string, string> = {
+    ...mergeGitConfigEnvProtocol(inheritedEnv, explicitEnv),
+    TERM: 'xterm-256color',
+    COLORTERM: 'truecolor',
+    TERM_PROGRAM: 'Orca',
+    // TUIs gate features on version; plain-node/test launches lack the app version.
+    TERM_PROGRAM_VERSION: process.env.ORCA_APP_VERSION ?? '0.0.0-dev',
+    // supports-hyperlinks rejects Orca by name despite xterm supporting OSC 8; force support.
+    FORCE_HYPERLINK: '1',
+    [ORCA_IMAGE_PROTOCOL_ENV]: ORCA_IMAGE_PROTOCOL_VALUE
+  } satisfies Record<string, string>
+  removeUnspecifiedPaneIdentityEnv(spawnEnv, explicitEnv)
+  stripPiProcessOwnerEnv(spawnEnv)
+  removeAppImageRuntimeEnv(spawnEnv)
+  removeChromiumDisabledSessionBus(spawnEnv)
+  removeInheritedNoColor(spawnEnv)
+  for (const key of envToDelete) {
+    delete spawnEnv[key]
+  }
+  if (explicitEnv?.TERM) {
+    spawnEnv.TERM = explicitEnv.TERM
+  }
+  // Create aliases after stripping/deletion so none outlives its source value.
+  applyScrubSafeAgentEnvAliases(spawnEnv)
+
+  spawnEnv.LANG ??= 'en_US.UTF-8'
+  return spawnEnv
 }
 
 /** App-level env builders can reintroduce deleted keys; enforce isolation after they finish. */

@@ -1,11 +1,6 @@
-// The ACP agent as the adapter holds it: one connection that owns both the agent's process and its
-// protocol (`createAcpAgentConnection`). Supervision, the process-tree teardown, Windows-safe
-// spawning and stdio are the connection's; turns, Stop and steering are the adapter's.
-
 import type { AcpAgentConnection, AcpAgentConnectionOptions } from './acp-agent-connection'
 import type { ProviderProcessLaunch } from '../provider-process/provider-process-launch'
 
-/** What the adapter uses of a connection; tests stand in a scripted agent behind the same surface. */
 export type AcpStructuredConnection = Pick<
   AcpAgentConnection,
   | 'initialize'
@@ -22,6 +17,7 @@ export type AcpStructuredConnection = Pick<
   | 'pid'
   | 'exited'
   | 'stderrTail'
+  | 'exitStatus'
   | 'onExit'
   | 'pauseReading'
   | 'resumeReading'
@@ -34,7 +30,7 @@ export type ConnectAcpAgent<Connection = AcpStructuredConnection> = (
   options: AcpAgentConnectionOptions
 ) => Connection
 
-/** Resolves once `connection`'s process exits, `signal` aborts, or `ms` pass, whichever is first. */
+/** Waits for process exit, abort or timeout. */
 export function waitForAcpExit(
   connection: AcpStructuredConnection,
   ms: number,
