@@ -175,14 +175,8 @@ export const createHostedReviewSlice: StateCreator<AppState, [], [], HostedRevie
     const linkedRefetch = shouldRefetchForLinkedHint(cached, hintKey)
     const scopedResultRefetch = shouldRefetchGitHubScopedResultForNoHint(cached, hintKey)
     const staleMergedHeadRefetch = isStaleMergedGitHubReviewForHead(cached, options?.currentHeadOid)
-    if (
-      !options?.userRefresh &&
-      !options?.force &&
-      !linkedRefetch &&
-      !scopedResultRefetch &&
-      !staleMergedHeadRefetch &&
-      isFreshHostedReview(cached)
-    ) {
+    const needsRefetch = linkedRefetch || scopedResultRefetch || staleMergedHeadRefetch
+    if (!options?.userRefresh && !options?.force && !needsRefetch && isFreshHostedReview(cached)) {
       return cached.data
     }
 
@@ -291,9 +285,7 @@ export const createHostedReviewSlice: StateCreator<AppState, [], [], HostedRevie
     if (
       !options?.userRefresh &&
       !options?.force &&
-      !linkedRefetch &&
-      !scopedResultRefetch &&
-      !staleMergedHeadRefetch &&
+      !needsRefetch &&
       options?.staleWhileRevalidate &&
       cached !== undefined &&
       cached.data !== null

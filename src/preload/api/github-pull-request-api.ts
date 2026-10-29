@@ -115,6 +115,7 @@ export type GithubPullRequestApi = {
   setPRCommentReaction: (args: {
     repoPath: string
     repoId?: string
+    repoOwnerExecutionHostId?: string
     sourceContext?: TaskSourceContext | null
     reactionSubjectId: string
     content: GitHubReactionContent
@@ -124,6 +125,7 @@ export type GithubPullRequestApi = {
   resolveReviewThread: (args: {
     repoPath: string
     repoId?: string
+    repoOwnerExecutionHostId?: string
     sourceContext?: TaskSourceContext | null
     threadId: string
     resolve: boolean

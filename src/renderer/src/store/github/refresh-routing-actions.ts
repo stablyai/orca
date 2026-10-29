@@ -34,9 +34,9 @@ export const createRefreshRoutingActions = (
         : { visibleReviewCardWorktreeIds: ids }
     )
   },
-  enqueueGitHubPRRefresh: (worktreeId, reason, priority = 0) => {
+  enqueueGitHubPRRefresh: (worktreeId, reason, priority = 0, executionHostId) => {
     const state = get()
-    const worktree = findWorktreeById(state, worktreeId)
+    const worktree = findWorktreeById(state, worktreeId, executionHostId)
     const candidate = worktree ? buildPRRefreshCandidate(state, worktree) : null
     if (!candidate) {
       return

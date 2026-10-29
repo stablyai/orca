@@ -17,7 +17,8 @@ import {
 } from './worktree-refresh'
 import {
   findIndexedDetectedWorktrees,
-  findIndexedRepoOwnerForHost
+  findIndexedRepoOwnerForHost,
+  worktreeOwnerHostIds
 } from '@/lib/worktree-runtime-owner-index'
 import { findKnownWorktreeById } from '../slices/worktrees/listing/detected-worktree-meta'
 import { getPRRefreshRuntimeRepoTarget } from './repository-routing'
@@ -67,15 +68,20 @@ export function* getVisibleHostedReviewWorkspaces(
       ) {
         continue
       }
+      const hostIds =
+        worktree.hostId || worktree.runtimeOwnerEnvironmentId
+          ? worktreeOwnerHostIds(worktree)
+          : [hostId]
       const activeHost = state.activeWorkspaceExecutionHostId
       const selected =
         id === state.activeWorktreeId &&
         (activeHost
-          ? hostId === activeHost
-          : owners.size === 1 || hostId === getSettingsFocusedExecutionHostId(state.settings))
+          ? hostIds.includes(activeHost)
+          : owners.size === 1 ||
+            hostIds.includes(getSettingsFocusedExecutionHostId(state.settings)))
       if (
         (options?.selectedOnly && !selected) ||
-        (!selected && visibleHosts && !visibleHosts.includes(hostId))
+        (!selected && visibleHosts && !hostIds.some((hostId) => visibleHosts.includes(hostId)))
       ) {
         continue
       }

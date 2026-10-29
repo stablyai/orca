@@ -3,6 +3,8 @@ import type { AppState } from '../types'
 import type { GitHubSlice } from './slice-types'
 import type { GitHubCommentResult, PRComment } from '../../../../shared/github/comment-types'
 import { translate } from '@/i18n/i18n'
+import { findRepoForGitHubOwner } from './repository-routing'
+import { hostedReviewOwnerIpcArgs } from '../slices/hosted-review-cache-state'
 import { callRuntimeRpc } from '../../runtime/runtime-rpc-client'
 import { restoreReactionOnSubject, setReactionOnSubject } from '@/lib/pr-comment-reactions'
 import { prCommentsCacheSuffix, sourceScopedRepoCacheKey } from './cache-identity'
@@ -20,8 +22,11 @@ export const createCommentMutationActions = (
   get: Parameters<StateCreator<AppState>>[1]
 ): Pick<GitHubSlice, 'addPRReviewCommentReply' | 'setPRCommentReaction'> => ({
   addPRReviewCommentReply: async (repoPath, prNumber, commentId, body, options) => {
-    const repo = get().repos?.find((candidate) =>
-      options?.repoId ? candidate.id === options.repoId : candidate.path === repoPath
+    const repo = findRepoForGitHubOwner(
+      get(),
+      options?.repoId,
+      repoPath,
+      options?.repoOwnerExecutionHostId
     )
     const repoId = options?.repoId ?? repo?.id
     const requestSettings = getGitHubRepoSourceSettings(get(), repo, options?.sourceContext)
@@ -71,6 +76,7 @@ export const createCommentMutationActions = (
               path: options?.path,
               line: options?.line,
               prRepo: options?.prRepo ?? null,
+              ...hostedReviewOwnerIpcArgs(options),
               sourceContext: options?.sourceContext
             })
     } catch (err) {
@@ -115,8 +121,11 @@ export const createCommentMutationActions = (
     reacted,
     options
   ) => {
-    const repo = get().repos?.find((candidate) =>
-      options?.repoId ? candidate.id === options.repoId : candidate.path === repoPath
+    const repo = findRepoForGitHubOwner(
+      get(),
+      options?.repoId,
+      repoPath,
+      options?.repoOwnerExecutionHostId
     )
     const repoId = options?.repoId ?? repo?.id
     const requestSettings = getGitHubRepoSourceSettings(get(), repo, options?.sourceContext)
@@ -182,6 +191,7 @@ export const createCommentMutationActions = (
               content,
               reacted,
               prRepo: options?.prRepo ?? null,
+              ...hostedReviewOwnerIpcArgs(options),
               sourceContext: options?.sourceContext
             })
     } catch (err) {

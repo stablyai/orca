@@ -197,6 +197,70 @@ describe('visible hosted review refresh targets', () => {
     )
   })
 
+  it.each(['github', 'gitlab'] as const)(
+    'selects a paired SSH workspace and refreshes %s through its runtime owner',
+    async (provider) => {
+      const owner: Repo = {
+        ...repo,
+        connectionId: 'builder',
+        executionHostId: 'runtime:owner-server'
+      }
+      const paired = {
+        ...worktree,
+        hostId: 'ssh:builder' as const,
+        runtimeOwnerEnvironmentId: 'owner-server',
+        ...(provider === 'github' ? { linkedPR: 12 } : { linkedGitLabMR: 8 })
+      }
+      const store = setup(owner)
+      store.setState({
+        repos: [repo, owner],
+        worktreesByRepo: { [repo.id]: [{ ...worktree, hostId: 'local' }, paired] },
+        activeWorktreeId: worktree.id,
+        activeWorkspaceExecutionHostId: 'ssh:builder',
+        visibleWorkspaceHostIds: ['ssh:builder'],
+        sshConnectionStates: new Map([
+          [
+            'builder',
+            { targetId: 'builder', status: 'connected', error: null, reconnectAttempt: 0 }
+          ]
+        ])
+      })
+      const key = `runtime:owner-server::${repo.id}::${worktree.branch}`
+      const selectedTargets = () =>
+        getVisibleHostedReviewRefreshTargets(store.getState(), store.getState, {
+          selectedOnly: true
+        })
+      expect(selectedTargets()).toMatchObject([{ key, selected: true }])
+      runtimeEnvironmentCall.mockResolvedValue({
+        id: 'review',
+        ok: true,
+        result: provider === 'github' ? makePR() : review
+      })
+      expect(await selectedTargets()[0].refresh()).toBe(true)
+      expect(store.getState().hostedReviewCache[key]?.data?.provider).toBe(provider)
+      expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
+        expect.objectContaining({
+          selector: 'owner-server',
+          method: provider === 'github' ? 'github.prForBranch' : 'hostedReview.forBranch'
+        })
+      )
+      expect(mockApi.gh.refreshPRNow).not.toHaveBeenCalled()
+      expect(mockApi.hostedReview.forBranch).not.toHaveBeenCalled()
+
+      store.setState({ activeWorkspaceExecutionHostId: 'runtime:owner-server' })
+      expect(selectedTargets()).toMatchObject([{ key, selected: true }])
+      store.setState({ activeWorkspaceExecutionHostId: 'local' })
+      expect(selectedTargets().some((target) => target.key === key)).toBe(false)
+
+      store.setState({ activeWorktreeId: null })
+      expect(targets(store)).toMatchObject([{ key, selected: false }])
+      store.setState({ visibleWorkspaceHostIds: null, workspaceHostScope: 'ssh:builder' })
+      expect(targets(store)).toMatchObject([{ key, selected: false }])
+      store.setState({ workspaceHostScope: 'runtime:other-server' })
+      expect(targets(store)).toEqual([])
+    }
+  )
+
   it('excludes folders, bare, archived, detached, missing and disconnected SSH workspaces', () => {
     const store = setup()
     store.setState({ repos: [{ ...repo, kind: 'folder' }] })

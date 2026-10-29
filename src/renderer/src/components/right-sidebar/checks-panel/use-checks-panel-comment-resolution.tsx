@@ -126,6 +126,7 @@ export function useChecksPanelCommentResolution(model: ChecksPanelCommentResolut
       })
       const ok = await resolveReviewThread(repo.path, prNumber, threadId, resolve, {
         repoId: repo.id,
+        repoOwnerExecutionHostId: forgeOwnerHostIdForWorkspace(repo, activeWorktree),
         prRepo: pr?.prRepo
       })
       if (!ok) {

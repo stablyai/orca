@@ -1,4 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { PRComment } from '../../../../shared/github/comment-types'
 import type { Repo } from '../../../../shared/repo-types'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { getGitHubPRCacheKey } from '../../../../shared/github/github-cache-key'
@@ -65,6 +66,8 @@ function setup(remoteRepo: Repo) {
 
 describe('PR panel with local and remote copies of one project', () => {
   beforeEach(() => {
+    vi.useFakeTimers()
+    vi.setSystemTime(1_000_000)
     vi.clearAllMocks()
     resetRemoteRuntimeMocks()
     mockApi.gh.refreshPRNow.mockReset()
@@ -83,6 +86,7 @@ describe('PR panel with local and remote copies of one project', () => {
       _meta: { runtimeId: 'server' }
     }))
   })
+  afterEach(() => vi.useRealTimers())
 
   it.each([
     { host: 'ssh', samePath: false },
@@ -288,6 +292,102 @@ describe('PR panel with local and remote copies of one project', () => {
         expect(mockApi.hostedReview.getCreationEligibility).toHaveBeenCalledWith(
           expect.objectContaining({
             connectionId: 'builder',
+            repoOwnerExecutionHostId: hostId
+          })
+        )
+      }
+    }
+  )
+
+  it.each(['ssh', 'runtime'] as const)(
+    'mutates the %s owner comment cache and preserves the same-ID twin',
+    async (host) => {
+      const remoteRepo: Repo = {
+        ...localRepo,
+        ...(host === 'ssh' ? { connectionId: 'builder' } : { executionHostId: 'runtime:server' })
+      }
+      const { store, hostId } = setup(remoteRepo)
+      const comment: PRComment = {
+        id: 1,
+        author: 'reviewer',
+        authorAvatarUrl: '',
+        body: 'Review',
+        createdAt: '',
+        url: '',
+        threadId: 'thread',
+        isResolved: false,
+        reactionSubjectId: 'subject'
+      }
+      const reply = { ...comment, id: 2, body: 'Reply' }
+      const conversation = { ...comment, id: 3, body: 'Conversation' }
+      const options = { repoId: remoteRepo.id, repoOwnerExecutionHostId: hostId }
+      const suffix = prCommentsCacheSuffix(remotePR.number)
+      const localKey = `project::${suffix}`
+      const remoteKey = `${hostId}::project::${suffix}`
+      const localEntry = { data: [comment], fetchedAt: Date.now() }
+      store.setState({ commentsCache: { [localKey]: localEntry } })
+      mockApi.gh.prComments.mockResolvedValue([comment])
+      mockApi.gh.resolveReviewThread.mockResolvedValue(true)
+      mockApi.gh.setPRCommentReaction.mockResolvedValue(false)
+      mockApi.gh.addPRReviewCommentReply.mockResolvedValue({ ok: true, comment: reply })
+      mockApi.gh.addIssueComment.mockResolvedValue({ ok: true, comment: conversation })
+      runtimeEnvironmentCall.mockImplementation(({ method }) => ({
+        id: method,
+        ok: true,
+        result:
+          method === 'github.prComments'
+            ? [comment]
+            : method === 'github.resolveReviewThread'
+              ? true
+              : method === 'github.setPRCommentReaction'
+                ? false
+                : {
+                    ok: true,
+                    comment: method === 'github.addPRReviewCommentReply' ? reply : conversation
+                  }
+      }))
+
+      await store.getState().fetchPRComments(remoteRepo.path, remotePR.number, options)
+      const resolving = store
+        .getState()
+        .resolveReviewThread(remoteRepo.path, remotePR.number, 'thread', true, options)
+      expect(store.getState().commentsCache[remoteKey]?.data?.[0].isResolved).toBe(true)
+      expect(await resolving).toBe(true)
+      const reacting = store
+        .getState()
+        .setPRCommentReaction(remoteRepo.path, remotePR.number, 'subject', '+1', true, options)
+      expect(store.getState().commentsCache[remoteKey]?.data?.[0].reactions).toEqual([
+        { content: '+1', count: 1, viewerHasReacted: true }
+      ])
+      expect(await reacting).toBe(false)
+      expect(store.getState().commentsCache[remoteKey]?.data?.[0].reactions ?? []).toEqual([])
+      await store
+        .getState()
+        .addPRReviewCommentReply(remoteRepo.path, remotePR.number, comment.id, reply.body, options)
+      await store
+        .getState()
+        .addPRConversationComment(remoteRepo.path, remotePR.number, conversation.body, options)
+      expect(store.getState().commentsCache[remoteKey]?.data?.map((entry) => entry.id)).toEqual([
+        1, 2, 3
+      ])
+      expect(store.getState().commentsCache[localKey]).toBe(localEntry)
+      if (host === 'runtime') {
+        expect(mockApi.gh.resolveReviewThread).not.toHaveBeenCalled()
+        expect(mockApi.gh.addIssueComment).not.toHaveBeenCalled()
+        expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
+          expect.objectContaining({
+            selector: 'server',
+            method: 'github.resolveReviewThread'
+          })
+        )
+      } else {
+        expect(mockApi.gh.resolveReviewThread).toHaveBeenCalledWith(
+          expect.objectContaining({
+            repoOwnerExecutionHostId: hostId
+          })
+        )
+        expect(mockApi.gh.addIssueComment).toHaveBeenCalledWith(
+          expect.objectContaining({
             repoOwnerExecutionHostId: hostId
           })
         )

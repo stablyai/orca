@@ -185,6 +185,7 @@ export function useChecksPanelAiQueue(model: ChecksPanelAiQueueInput) {
         ? {
             repoPath: repo.path,
             repoId: repo.id,
+            ownerHostId: forgeOwnerHostIdForWorkspace(repo, activeWorktree),
             prNumber,
             prRepo: pr.prRepo
           }
@@ -200,6 +201,7 @@ export function useChecksPanelAiQueue(model: ChecksPanelAiQueueInput) {
       return {
         repoPath: repo.path,
         repoId: repo.id,
+        ownerHostId: forgeOwnerHostIdForWorkspace(repo, activeWorktree),
         prNumber: link.number,
         prRepo: {
           owner: link.slug.owner,
@@ -214,7 +216,12 @@ export function useChecksPanelAiQueue(model: ChecksPanelAiQueueInput) {
     const githubResolveTarget =
       githubTarget ??
       (activeReview.provider === 'github' && prNumber
-        ? { repoPath: repo.path, repoId: repo.id, prNumber }
+        ? {
+            repoPath: repo.path,
+            repoId: repo.id,
+            prNumber,
+            ownerHostId: forgeOwnerHostIdForWorkspace(repo, activeWorktree)
+          }
         : undefined)
     // Why: the ack resolves against this MR after delivery, so pin the iid now — the panel
     // may already be showing a different review by then.
