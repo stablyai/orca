@@ -1,11 +1,11 @@
-import { buildStartupCommandSubmission } from '../../shared/startup-command-submission'
+import { deliverStagedStartupCommand } from './staged-startup-command-delivery'
 import {
   discardStagedStartupCommand,
   stageStartupCommand,
-  startupStagingFailureNotice,
   type StartupCommandStaging
 } from '../../shared/startup-command-staging'
 import { resolvePtyOwnerBackend } from '../../shared/pty-owner-backend'
+import { stageWindowsStartupCommand } from '../../shared/windows-startup-command-staging'
 import { getDaemonSessionResultMetadata } from './daemon-create-or-attach-result'
 import { enumerateDirectoryOnce } from './directory-enumeration-probe'
 import { normalizePtySize } from './daemon-pty-size'
@@ -152,6 +152,10 @@ async function spawnAndPublishSession(
       ? await isCwdReadableByThisProcess(opts.cwd, opts)
       : null
   deps.assertCreateAllowed()
+  const windowsMultilineCommand =
+    process.platform === 'win32' && !opts.launchAgent && /\r|\n/.test(opts.command ?? '')
+      ? opts.command
+      : undefined
   const subprocess = await deps.spawnSubprocess({
     sessionId: opts.sessionId,
     cols: size.cols,
@@ -159,7 +163,7 @@ async function spawnAndPublishSession(
     cwd: opts.cwd,
     env: opts.env,
     envToDelete: opts.envToDelete,
-    command: opts.command,
+    command: windowsMultilineCommand ? undefined : opts.command,
     startupCommandDelivery: opts.startupCommandDelivery,
     ...(opts.launchAgent ? { launchAgent: opts.launchAgent } : {}),
     shellOverride: opts.shellOverride,
@@ -171,7 +175,6 @@ async function spawnAndPublishSession(
   })
 
   let staging: StartupCommandStaging | undefined
-  // Reconcile fallback-shell capability or its first command could remain queued until timeout.
   const shellReadySupported =
     (opts.shellReadySupported ?? false) &&
     (subprocess.shellPath === undefined || shellPathSupportsPtyStartupBarrier(subprocess.shellPath))
@@ -245,28 +248,23 @@ async function spawnAndPublishSession(
     // Diagnostics must never turn a live PTY into a failed create.
   }
   if (startupCommandWritten && opts.command) {
-    staging = stageStartupCommand({
-      command: opts.command,
-      shellPath: subprocess.shellPath,
-      orcaBuiltLine: opts.launchAgent !== undefined
-    })
-    const notice = startupStagingFailureNotice(staging)
-    if (notice) {
-      session.startupIngress.accept(notice)
-      try {
-        deps.reportReadinessEvent?.('startup-command-stage-failed', {
-          sessionId: opts.sessionId,
-          reason: staging.failure
+    staging = windowsMultilineCommand
+      ? await stageWindowsStartupCommand({
+          command: windowsMultilineCommand,
+          shellPath: subprocess.shellPath ?? ''
         })
-      } catch {
-        // Diagnostics must never turn a live PTY into a failed create.
-      }
-    }
-    // Why: only Orca-wrapped shells advertise the paste-safe startup barrier.
-    session.writeStartupCommand(
-      buildStartupCommandSubmission(staging.command, {
-        bracketedPasteSafe: shellReadySupported
-      })
+      : stageStartupCommand({
+          command: opts.command,
+          shellPath: subprocess.shellPath,
+          orcaBuiltLine: opts.launchAgent !== undefined
+        })
+    deliverStagedStartupCommand(
+      session,
+      staging,
+      windowsMultilineCommand,
+      shellReadySupported,
+      opts.sessionId,
+      deps.reportReadinessEvent
     )
   }
 

@@ -153,7 +153,7 @@ export function sweepStaleStagedStartupCommands(args: { directory?: string; now?
     return
   }
   for (const name of names) {
-    if (!name.startsWith(STAGED_STARTUP_COMMAND_PREFIX) || !name.endsWith('.sh')) {
+    if (!/^orca-launch-[0-9a-f]+\.(?:sh|cmd|ps1)$/.test(name)) {
       continue
     }
     const path = join(directory, name)

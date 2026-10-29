@@ -32,7 +32,31 @@ function mockSubprocess(shellPath: string): SubprocessHandle {
 beforeEach(() => {
   tempDir = mkdtempSync(join(tmpdir(), 'orca-daemon-staging-'))
   vi.stubEnv('TMPDIR', tempDir)
+  vi.stubEnv('TEMP', tempDir)
+  vi.stubEnv('TMP', tempDir)
   exitSubprocess = undefined
+})
+
+const describeWindows = process.platform === 'win32' ? describe : describe.skip
+
+describeWindows('Windows multiline startup scripts', () => {
+  it('delivers a cmd script as one call and removes it on exit', async () => {
+    const sub = mockSubprocess('cmd.exe')
+    const host = new TerminalHost({ spawnSubprocess: () => sub })
+    await host.createOrAttach({
+      sessionId: 's-cmd-multiline',
+      cols: 80,
+      rows: 24,
+      command: 'set /p answer=Answer?\necho %answer%',
+      streamClient: { onData: vi.fn(), onExit: vi.fn() }
+    })
+    expect(sub.write).toHaveBeenCalledWith(expect.stringMatching(/^call ".*\.cmd"\r$/))
+    const [script] = readdirSync(tempDir)
+    expect(script).toMatch(/^orca-launch-[0-9a-f]+\.cmd$/)
+    expect(readFileSync(join(tempDir, script), 'utf8')).toContain('echo %answer%')
+    exitSubprocess?.(0)
+    expect(readdirSync(tempDir)).toEqual([])
+  })
 })
 
 afterEach(() => {
