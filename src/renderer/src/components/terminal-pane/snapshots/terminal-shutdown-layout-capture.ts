@@ -95,7 +95,7 @@ function serializeShutdownPaneScrollback(pane: ShutdownPane): string | undefined
   try {
     // Drain throttled output before capture so hidden/nonfocused panes retain queued bytes.
     flushTerminalOutput(pane.terminal)
-    const scrollback = pane.terminal.options.scrollback ?? 10_000
+    const scrollback = pane.terminal.options?.scrollback ?? 10_000
     // Absolute cursor restore avoids SerializeAddon’s one-column-short relative restore after wrap-pending rows.
     let serialized = serializeWithAbsoluteCursor(pane.serializeAddon, pane.terminal, {
       scrollback
