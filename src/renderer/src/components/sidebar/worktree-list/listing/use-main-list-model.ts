@@ -119,6 +119,7 @@ export function useMainSidebarListModel(args: SidebarListModelArgs): SidebarList
   const view: SidebarFeedView = useMemo(
     () => ({
       groupBy,
+      groupBySecondary: args.groupBySecondary,
       sortBy,
       projectOrderBy: args.projectOrderBy,
       collapsedGroups: PLANNED_UNCOLLAPSED,
@@ -134,6 +135,7 @@ export function useMainSidebarListModel(args: SidebarListModelArgs): SidebarList
     }),
     [
       groupBy,
+      args.groupBySecondary,
       sortBy,
       args.projectOrderBy,
       filterState,
@@ -174,6 +176,7 @@ export function useMainSidebarListModel(args: SidebarListModelArgs): SidebarList
         forcedVisibleWorktreeIds: args.agentSendTargetWorktreeId
           ? [args.agentSendTargetWorktreeId]
           : undefined,
+        emptySecondaryStatusSourceGroupKey: args.emptySecondaryStatusSourceGroupKey,
         importedWorktreesByRepo,
         newExternalWorktreesInboxByRepo
       }),
@@ -184,6 +187,7 @@ export function useMainSidebarListModel(args: SidebarListModelArgs): SidebarList
       view,
       rankedIds,
       args.agentSendTargetWorktreeId,
+      args.emptySecondaryStatusSourceGroupKey,
       importedWorktreesByRepo,
       newExternalWorktreesInboxByRepo
     ]
@@ -225,6 +229,7 @@ export function useMainSidebarListModel(args: SidebarListModelArgs): SidebarList
     collapsedGroups: args.collapsedGroups,
     agentSendTargetWorktreeId: args.agentSendTargetWorktreeId,
     groupBy,
+    groupBySecondary: args.groupBySecondary,
     pinnedDisplayPolicy: args.pinnedDisplayPolicy,
     worktrees: planned.visibleWorktrees,
     visibleWorktrees: planned.visibleWorktrees,

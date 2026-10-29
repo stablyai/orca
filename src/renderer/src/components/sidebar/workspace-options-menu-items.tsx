@@ -35,7 +35,7 @@ import {
   type WorkspaceViewSection
 } from '../../../../shared/workspace-view/workspace-view-options'
 import { translate } from '@/i18n/i18n'
-import { SidebarGroupByToggle } from './SidebarGroupByToggle'
+import { SidebarGroupByToggle, SidebarSecondaryGroupByToggle } from './SidebarGroupByToggle'
 
 export function useWorkspaceOptionsFilterBadge(): {
   hasAnyFilter: boolean
@@ -86,10 +86,28 @@ function HostsOptionItem({
 function GroupByOptionItem(): JSX.Element {
   const groupBy = useAppStore((s) => s.groupBy)
   const setGroupBy = useAppStore((s) => s.setGroupBy)
+  const groupBySecondary = useAppStore((s) => s.groupBySecondary)
+  const setGroupBySecondary = useAppStore((s) => s.setGroupBySecondary)
   return (
-    <div className="px-2 pt-0.5 pb-1">
-      <SidebarGroupByToggle groupBy={groupBy} setGroupBy={setGroupBy} />
-    </div>
+    <>
+      <div className="px-2 pt-0.5 pb-1">
+        <SidebarGroupByToggle groupBy={groupBy} setGroupBy={setGroupBy} />
+      </div>
+      {groupBy !== 'none' ? (
+        <>
+          <DropdownMenuLabel>
+            {translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.thenBy', 'Then by')}
+          </DropdownMenuLabel>
+          <div className="px-2 pt-0.5 pb-1">
+            <SidebarSecondaryGroupByToggle
+              primaryGroupBy={groupBy}
+              groupBy={groupBySecondary}
+              setGroupBy={setGroupBySecondary}
+            />
+          </div>
+        </>
+      ) : null}
+    </>
   )
 }
 
@@ -268,6 +286,7 @@ export function WorkspaceOptionsMenuItems({
 }): JSX.Element {
   const repoCount = useAppStore((s) => s.repos.length)
   const groupBy = useAppStore((s) => s.groupBy)
+  const groupBySecondary = useAppStore((s) => s.groupBySecondary)
   const showSleepingWorkspaces = useAppStore((s) => s.showSleepingWorkspaces)
   const hideWorkspacesFromOtherDevices = useAppStore((s) => s.hideWorkspacesFromOtherDevices)
   const newCardStyle = useAppStore((s) => s.settings?.experimentalNewWorktreeCardStyle === true)
@@ -276,6 +295,7 @@ export function WorkspaceOptionsMenuItems({
   const { hostOptions } = useSidebarHostScopeOptions()
   const sections = getShownWorkspaceViewSections({
     groupBy,
+    groupBySecondary,
     hideSleepingWorkspaces: !showSleepingWorkspaces,
     hideWorkspacesFromOtherDevices,
     newCardStyle,

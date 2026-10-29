@@ -30,7 +30,8 @@ import type {
 import type { ProjectGroupingModel } from '../../../../../../shared/project-section-grouping'
 import type {
   PinnedWorktreeDisplayPolicy,
-  WorktreeGroupBy
+  WorktreeGroupBy,
+  WorktreeGroupBySecondary
 } from '../../../../../../shared/sidebar-list/row-types'
 
 export const EMPTY_PROJECT_GROUPS: readonly ProjectGroup[] = []
@@ -43,6 +44,7 @@ export type VirtualizedWorktreeViewportProps = {
   activeWorkspaceExecutionHostId: ExecutionHostId | null
   currentWorktreeId: string | null
   groupBy: WorktreeGroupBy
+  groupBySecondary: WorktreeGroupBySecondary
   pinnedDisplayPolicy: PinnedWorktreeDisplayPolicy
   projectOrderBy: ProjectOrderBy
   toggleGroup: (key: string) => void
@@ -87,6 +89,10 @@ export type VirtualizedWorktreeViewportProps = {
   allRepoIds: string[]
   onReorderHostSections: (orderedHostIds: ExecutionHostId[]) => void
   onHostDragActiveChange: (active: boolean) => void
+  onWorktreeDragSourceChange: (
+    sourceGroupKey: string | null,
+    draggingWorktreeId: string | null
+  ) => void
   prCache: AppState['prCache'] | null
   hostedReviewCache: AppState['hostedReviewCache'] | null
   workspaceStatuses: readonly WorkspaceStatusDefinition[]

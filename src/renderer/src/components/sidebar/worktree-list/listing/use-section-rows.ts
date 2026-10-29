@@ -83,6 +83,7 @@ function createSidebarHostOptionsSelector() {
 
 export function useSidebarSectionRows(args: SectionRowsArgs) {
   const { repos, worktrees, repoMap, defaultHostId } = args
+  const groupBySecondary = args.groupBySecondary ?? 'none'
   const worktreesByRepo = useAppStore((s) => selectWorktreesByRepo(s))
   const workspaceHostOrder = useAppStore((s) => s.workspaceHostOrder)
   const setWorkspaceHostOrder = useAppStore((s) => s.setWorkspaceHostOrder)
@@ -159,10 +160,14 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
         hostLabelById,
         defaultHostId,
         pinnedDisplayPolicy: args.pinnedDisplayPolicy,
-        filterRepoIds: args.filterRepoIds
+        filterRepoIds: args.filterRepoIds,
+        groupBySecondary,
+        emptySecondaryStatusSourceGroupKey: args.emptySecondaryStatusSourceGroupKey ?? null
       }),
     [
       args.groupBy,
+      groupBySecondary,
+      args.emptySecondaryStatusSourceGroupKey,
       worktrees,
       repoMap,
       args.prCache,
@@ -190,6 +195,7 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
     collapsedGroups: args.effectiveCollapsedGroups,
     agentSendTargetWorktreeId: args.agentSendTargetWorktreeId ?? null,
     groupBy: args.groupBy,
+    groupBySecondary,
     pinnedDisplayPolicy: args.pinnedDisplayPolicy,
     worktrees,
     visibleWorktrees: worktrees,

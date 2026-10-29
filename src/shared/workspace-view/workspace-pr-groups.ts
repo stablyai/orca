@@ -4,6 +4,10 @@ export type PRGroupKey = 'done' | 'in-review' | 'in-progress' | 'closed'
 
 export const PR_GROUP_ORDER: readonly PRGroupKey[] = ['done', 'in-review', 'in-progress', 'closed']
 
+export function isPRGroupKey(value: string): value is PRGroupKey {
+  return value === 'done' || value === 'in-review' || value === 'in-progress' || value === 'closed'
+}
+
 /** The English copy; the desktop localizes its own, checked equal by a test. */
 export const PR_GROUP_LABELS: Record<PRGroupKey, string> = {
   done: 'Done',

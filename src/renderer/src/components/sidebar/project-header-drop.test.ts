@@ -4,15 +4,54 @@ import { getLogicalRepoOrderRankById } from '../../../../shared/project-section-
 
 import {
   applyAllRepoInsertAt,
+  canReorderProjectHeaders,
   computeProjectHeaderDropPreview,
   getProjectGroupOrderForSidebarDrop,
   getProjectHeaderDragBucketKey,
   getSidebarOrderedRepoHeaderIdsByBucket,
+  getSidebarRepoHeaderDragLayout,
   mapSidebarProjectHeaderDropIndexToSiblingInsertIndex,
   mapSidebarRepoDropIndexToAllRepoInsertAt
 } from './project-header-drop'
 import type { Row } from '../../../../shared/sidebar-list/row-types'
+import { repo } from './worktree-list-groups-test-fixtures'
 import type { Repo } from '../../../../shared/repo-types'
+
+describe('canReorderProjectHeaders', () => {
+  it('enables manual Project reordering at either hierarchy level', () => {
+    expect(
+      canReorderProjectHeaders({
+        groupBy: 'workspace-status',
+        groupBySecondary: 'repo',
+        projectOrderBy: 'manual'
+      })
+    ).toBe(true)
+    expect(
+      canReorderProjectHeaders({
+        groupBy: 'repo',
+        groupBySecondary: 'workspace-status',
+        projectOrderBy: 'manual'
+      })
+    ).toBe(true)
+  })
+
+  it('keeps Project headers inert outside manual Project grouping', () => {
+    expect(
+      canReorderProjectHeaders({
+        groupBy: 'workspace-status',
+        groupBySecondary: 'repo',
+        projectOrderBy: 'recent'
+      })
+    ).toBe(false)
+    expect(
+      canReorderProjectHeaders({
+        groupBy: 'workspace-status',
+        groupBySecondary: 'pr-status',
+        projectOrderBy: 'manual'
+      })
+    ).toBe(false)
+  })
+})
 
 describe('getProjectHeaderDragBucketKey', () => {
   it('uses ungrouped for repos without a project group', () => {
@@ -26,22 +65,24 @@ describe('getProjectHeaderDragBucketKey', () => {
 
 describe('getSidebarOrderedRepoHeaderIdsByBucket', () => {
   it('groups repo headers by project group membership', () => {
-    const rows = [
+    const rows: Row[] = [
       {
         type: 'header',
         key: 'repo:a',
         label: 'A',
         count: 1,
-        repo: { id: 'a', projectGroupId: 'group-a' }
+        icon: { kind: 'project' },
+        repo: { ...repo, id: 'a', projectGroupId: 'group-a' }
       },
       {
         type: 'header',
         key: 'repo:b',
         label: 'B',
         count: 1,
-        repo: { id: 'b' }
+        icon: { kind: 'project' },
+        repo: { ...repo, id: 'b' }
       }
-    ] as Row[]
+    ]
 
     expect(getSidebarOrderedRepoHeaderIdsByBucket(rows)).toEqual(
       new Map([
@@ -49,6 +90,50 @@ describe('getSidebarOrderedRepoHeaderIdsByBucket', () => {
         ['ungrouped', ['b']]
       ])
     )
+  })
+
+  it('isolates secondary Project headers by their primary lane', () => {
+    const rows: Row[] = [
+      {
+        type: 'header',
+        key: 'workspace-status:todo/project:git:git.example.com/org-a',
+        label: 'A',
+        count: 1,
+        icon: { kind: 'project' },
+        repo: { ...repo, id: 'a' }
+      },
+      {
+        type: 'header',
+        key: 'workspace-status:todo/project:git:git.example.com/org-b',
+        label: 'B',
+        count: 1,
+        icon: { kind: 'project' },
+        repo: { ...repo, id: 'b' }
+      },
+      {
+        type: 'header',
+        key: 'workspace-status:in-progress/project:git:git.example.com/org-a',
+        label: 'A',
+        count: 1,
+        icon: { kind: 'project' },
+        repo: { ...repo, id: 'a' }
+      }
+    ]
+
+    const layout = getSidebarRepoHeaderDragLayout(rows, true)
+    const todoBucket = layout.bucketByHeaderKey.get(
+      'workspace-status:todo/project:git:git.example.com/org-a'
+    )
+    const progressBucket = layout.bucketByHeaderKey.get(
+      'workspace-status:in-progress/project:git:git.example.com/org-a'
+    )
+
+    expect(todoBucket).not.toBe(progressBucket)
+    expect(layout.idsByBucket.get(todoBucket!)).toEqual(['a', 'b'])
+    expect(layout.idsByBucket.get(progressBucket!)).toEqual(['a'])
+    expect(
+      layout.indexByHeaderKey.get('workspace-status:todo/project:git:git.example.com/org-b')
+    ).toBe(1)
   })
 })
 

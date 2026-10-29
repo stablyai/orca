@@ -58,6 +58,8 @@ export const GROUP_BY_OPTIONS = localizeChoices<ChoiceId<typeof WORKSPACE_GROUP_
   }
 )
 
+export const SECONDARY_GROUP_BY_OPTIONS = GROUP_BY_OPTIONS
+
 export const SORT_OPTIONS = localizeChoices<ChoiceId<typeof WORKSPACE_SORT_BY_CHOICES>>(
   WORKSPACE_SORT_BY_CHOICES,
   {

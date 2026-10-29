@@ -68,6 +68,7 @@ describe('recent project rank scan budget', () => {
     const ctx: SectionAppendContext = {
       result: [],
       groupBy: 'repo',
+      projectGroupingActive: true,
       collapsedGroups: new Set(grouped.map(([key]) => key)),
       workspaceStatuses: [],
       repoMap: new Map(),
@@ -110,11 +111,13 @@ describe('recent project rank scan budget', () => {
     expect(ctx.result.slice(1)).toEqual(
       expected.map(([key, group]) => ({
         type: 'header',
+        groupKind: 'repo',
         key,
         label: group.label,
         count: 32,
         icon: { kind: 'project' },
         repo: group.repo,
+        projectGroup: undefined,
         projectGroupDepth: 1
       }))
     )

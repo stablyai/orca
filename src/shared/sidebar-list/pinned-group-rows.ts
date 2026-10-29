@@ -41,6 +41,7 @@ export function emitPinnedGroup(
 
   result.push({
     type: 'header',
+    groupKind: 'pinned',
     key: PINNED_GROUP_KEY,
     count: pinnedSectionWorktrees.length,
     icon: { kind: 'pinned' },

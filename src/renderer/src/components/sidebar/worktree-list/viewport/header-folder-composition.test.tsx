@@ -137,6 +137,7 @@ it('composes real dispatched headers, current repo gates and folder cache refres
       projectGroups,
       highlightedRevealRowKey: null,
       dragOverStatus: null,
+      dragOverStatusGroupKey: null,
       pinDragOver: false,
       projectHeaderHostContexts,
       getCachedFolderWorkspacePathStatus,
@@ -153,11 +154,11 @@ it('composes real dispatched headers, current repo gates and folder cache refres
         projectGroupDrag: { state: INITIAL_PROJECT_GROUP_DRAG_STATE, onHandlePointerDown: vi.fn() },
         sidebarRepoHeaderIdsByBucket: new Map(),
         sidebarProjectGroupHeaderIdsByBucket: new Map(),
-        repoHeaderIndexByRepoId: new Map(),
-        repoHeaderBucketByRepoId: new Map(),
+        repoHeaderIndexByHeaderKey: new Map(),
+        repoHeaderBucketByHeaderKey: new Map(),
         projectGroupHeaderIndexByGroupId: new Map(),
         projectGroupHeaderBucketByGroupId: new Map(),
-        repoHeaderSectionEndByRepoId: new Map(),
+        repoHeaderSectionEndByHeaderKey: new Map(),
         projectGroupHeaderSectionEndByGroupId: new Map()
       },
       projectActions: {

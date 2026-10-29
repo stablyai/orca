@@ -5,11 +5,16 @@ import { UNGROUPED_PROJECT_GROUP_KEY } from '../project-groups'
 export {
   PR_GROUP_ORDER,
   getPRLaneKey,
+  isPRGroupKey,
   type PRGroupKey
 } from '../workspace-view/workspace-pr-groups'
 
 export function getProjectGroupHeaderKey(groupId: string | null): string {
   return groupId ? `project-group:${groupId}` : UNGROUPED_PROJECT_GROUP_KEY
+}
+
+export function getNestedGroupKey(parentKey: string, childKey: string): string {
+  return `${parentKey}/${childKey}`
 }
 
 export const PINNED_GROUP_KEY = 'pinned'

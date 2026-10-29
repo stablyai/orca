@@ -9,7 +9,8 @@ import type {
   ImportedWorktreesCardCandidate,
   NewExternalWorktreesInboxCandidate,
   PinnedWorktreeDisplayPolicy,
-  WorktreeGroupBy
+  WorktreeGroupBy,
+  WorktreeGroupBySecondary
 } from '../../../../../../shared/sidebar-list/row-types'
 import type { SortBy } from '../../../../../../shared/sidebar-list/smart-sort'
 import type { WorkspaceStatusDefinition, Worktree } from '../../../../../../shared/worktree/types'
@@ -23,6 +24,7 @@ export type SidebarListModelArgs = {
   filterState: SidebarWorktreeFilters['filterState']
   sortBy: SortBy
   groupBy: WorktreeGroupBy
+  groupBySecondary?: WorktreeGroupBySecondary
   projectOrderBy: ProjectOrderBy
   pinnedDisplayPolicy: PinnedWorktreeDisplayPolicy
   defaultHostId: ExecutionHostId
@@ -40,6 +42,7 @@ export type SidebarListModelArgs = {
   detectedWorktreesByRepo: AppState['detectedWorktreesByRepo']
   prCache: AppState['prCache'] | null
   agentSendTargetWorktreeId: string | null
+  emptySecondaryStatusSourceGroupKey?: string | null
 }
 
 export type SidebarListModel = {
@@ -52,6 +55,7 @@ export type SidebarListModel = {
 export type SectionRowsArgs = {
   agentSendTargetWorktreeId?: string | null
   groupBy: WorktreeGroupBy
+  groupBySecondary?: WorktreeGroupBySecondary
   projectOrderBy: ProjectOrderBy
   pinnedDisplayPolicy: PinnedWorktreeDisplayPolicy
   defaultHostId: ExecutionHostId
@@ -73,4 +77,5 @@ export type SectionRowsArgs = {
   filterRepoIds: readonly string[]
   visibleWorkspaceHostIds: readonly ExecutionHostId[] | null
   workspaceHostScope: AppState['workspaceHostScope']
+  emptySecondaryStatusSourceGroupKey?: string | null
 }

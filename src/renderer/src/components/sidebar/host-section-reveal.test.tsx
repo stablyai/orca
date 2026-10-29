@@ -65,6 +65,7 @@ function sections(
   return renderHook(() =>
     useSidebarSectionRows({
       groupBy,
+      groupBySecondary: 'none',
       projectOrderBy: 'manual',
       pinnedDisplayPolicy: 'single-location',
       defaultHostId: 'local',
@@ -85,7 +86,8 @@ function sections(
       newExternalWorktreesInboxByRepo: new Map(),
       filterRepoIds: [],
       visibleWorkspaceHostIds,
-      workspaceHostScope: 'all'
+      workspaceHostScope: 'all',
+      emptySecondaryStatusSourceGroupKey: null
     })
   ).result.current.sectionRows
 }
@@ -127,6 +129,7 @@ for (const hostId of ['ssh:builder', 'runtime:builder'] as const) {
             }
           },
           groupBy,
+          groupBySecondary: 'none',
           pinnedDisplayPolicy: 'single-location',
           defaultHostId: 'local',
           prCache: null,

@@ -13,7 +13,8 @@ import type { RenderRow } from '../listing/render-row'
 import type { ProjectGroupingModel } from '../../../../../../shared/project-section-grouping'
 import type {
   PinnedWorktreeDisplayPolicy,
-  WorktreeGroupBy
+  WorktreeGroupBy,
+  WorktreeGroupBySecondary
 } from '../../../../../../shared/sidebar-list/row-types'
 import { getFolderWorkspaceRevealGroupKeys } from './folder-reveal'
 import { getWorktreeRevealCollapsedGroupKeys } from './worktree-reveal-group-keys'
@@ -38,6 +39,7 @@ export type PendingSidebarRevealArgs = {
   collapsedGroups: Set<string>
   toggleGroup: (key: string) => void
   groupBy: WorktreeGroupBy
+  groupBySecondary: WorktreeGroupBySecondary
   pinnedDisplayPolicy: PinnedWorktreeDisplayPolicy
   defaultHostId: ExecutionHostId
   prCache: AppState['prCache'] | null
@@ -51,8 +53,28 @@ export type PendingSidebarRevealArgs = {
   cancelPendingRevealFrames: () => void
 }
 
+export type PendingSidebarRevealExpansionArgs = Pick<
+  PendingSidebarRevealArgs,
+  | 'occurrencePlan'
+  | 'renderRows'
+  | 'worktrees'
+  | 'folderWorkspaces'
+  | 'repoMap'
+  | 'worktreeLineageById'
+  | 'collapsedGroups'
+  | 'toggleGroup'
+  | 'groupBy'
+  | 'groupBySecondary'
+  | 'pinnedDisplayPolicy'
+  | 'defaultHostId'
+  | 'prCache'
+  | 'workspaceStatuses'
+  | 'projectGroups'
+  | 'projectGrouping'
+>
+
 export function expandGroupsForWorktreeReveal(
-  args: PendingSidebarRevealArgs,
+  args: PendingSidebarRevealExpansionArgs | PendingSidebarRevealArgs,
   worktreeId: string,
   executionHostId?: ExecutionHostId
 ): void {
@@ -65,6 +87,7 @@ export function expandGroupsForWorktreeReveal(
     args.projectGroups,
     {
       groupBy: args.groupBy,
+      groupBySecondary: args.groupBySecondary,
       workspaceStatuses: args.workspaceStatuses,
       defaultHostId: args.defaultHostId,
       hostScopedGroups,

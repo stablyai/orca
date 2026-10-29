@@ -48,6 +48,8 @@ export type PersistedUIState = {
   markdownTocPanelWidth?: number
   combinedDiffFileTreeWidth?: number
   groupBy: 'none' | 'workspace-status' | 'repo' | 'pr-status'
+  /** Optional second hierarchy level; must differ from the primary grouping dimension. */
+  groupBySecondary: 'none' | 'workspace-status' | 'repo' | 'pr-status'
   sortBy: 'name' | 'smart' | 'recent' | 'repo' | 'manual'
   /** Project-header order in repo grouping, independent of workspace sort: manual permits drag, recent follows visible activity. */
   projectOrderBy: ProjectOrderBy

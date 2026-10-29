@@ -19,11 +19,12 @@ function makeRepo(id: string, overrides: Partial<Repo> = {}): Repo {
 
 function makeSession(
   repo: Repo,
-  sidebarRepoHeaderIds: readonly string[]
+  sidebarRepoHeaderIds: readonly string[],
+  bucketKey = getProjectHeaderDragBucketKey(repo)
 ): ProjectHeaderDragSession {
   return {
     repo,
-    bucketKey: getProjectHeaderDragBucketKey(repo),
+    bucketKey,
     sidebarRepoHeaderIds,
     pointerId: 1,
     headerRects: [],
@@ -116,6 +117,36 @@ describe('commitProjectHeaderDragDrop', () => {
 
     expect(onCommitProjectGroupOrder).toHaveBeenCalledWith(sshTwin, 'group-1', -1)
   })
+
+  it.each([false, true])(
+    'commits one global projectGroupOrder from a nested bucket: %s',
+    (nested) => {
+      const onCommitProjectGroupOrder = vi.fn()
+      const repos = [
+        makeRepo('a', { projectGroupId: 'group-1' }),
+        makeRepo('b', { projectGroupId: 'group-1' }),
+        makeRepo('c', { projectGroupId: 'group-1' })
+      ]
+      const repoById = new Map(repos.map((repo) => [repo.id, repo]))
+      const bucketKey = getProjectHeaderDragBucketKey(
+        repos[2],
+        nested ? 'workspace-status:todo' : undefined
+      )
+
+      commitProjectHeaderDragDrop({
+        session: makeSession(repos[2], ['a', 'b', 'c'], bucketKey),
+        sidebarDropIndex: 0,
+        orderedRepoIds: ['a', 'b', 'c'],
+        repoById,
+        liveRepos: repos,
+        usesProjectGroupOrdering: true,
+        onCommitRepoOrder: vi.fn(),
+        onCommitProjectGroupOrder
+      })
+
+      expect(onCommitProjectGroupOrder).toHaveBeenCalledWith(repos[2], 'group-1', -1)
+    }
+  )
 
   it('drops nothing when the dragged row changed group during the drag', () => {
     const onCommitProjectGroupOrder = vi.fn()

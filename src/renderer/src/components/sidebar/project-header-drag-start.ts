@@ -14,7 +14,10 @@ import type { Repo } from '../../../../shared/repo-types'
 
 export function createProjectHeaderDragSession(args: {
   event: PointerEvent<HTMLElement>
-  repo: Repo
+  repo?: Repo
+  repoId?: string
+  bucketKey?: ProjectHeaderDragBucketKey
+  repoById?: ReadonlyMap<string, Repo>
   sidebarRepoHeaderIdsByBucket: ReadonlyMap<ProjectHeaderDragBucketKey, readonly string[]>
   getScrollContainer: () => HTMLElement | null
 }): ProjectHeaderDragSession | null {
@@ -27,7 +30,11 @@ export function createProjectHeaderDragSession(args: {
   if (isRepoHeaderActionTarget(args.event.target, args.event.currentTarget)) {
     return null
   }
-  const bucketKey = getProjectHeaderDragBucketKey(args.repo)
+  const repo = args.repo ?? (args.repoId ? args.repoById?.get(args.repoId) : undefined)
+  if (!repo) {
+    return null
+  }
+  const bucketKey = args.bucketKey ?? getProjectHeaderDragBucketKey(repo)
   const sidebarRepoHeaderIds = args.sidebarRepoHeaderIdsByBucket.get(bucketKey) ?? []
   // A lone project cannot move within its bucket; preserve the collapse click instead.
   if (sidebarRepoHeaderIds.length <= 1) {
@@ -40,7 +47,7 @@ export function createProjectHeaderDragSession(args: {
   const handleEl = args.event.currentTarget
   // Delay pointer capture until promotion so ordinary clicks can still toggle collapse.
   return {
-    repo: args.repo,
+    repo,
     bucketKey,
     sidebarRepoHeaderIds,
     pointerId: args.event.pointerId,

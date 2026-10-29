@@ -17,7 +17,6 @@ import { createProjectHeaderDragSession } from './project-header-drag-start'
 import { getWorktreeSidebarDragAutoscroll } from './worktree-sidebar-drag-autoscroll'
 import { hasPointerBeenReleased } from './header-drag-pointer-release'
 import { swallowNextClickOnDragHandle } from './header-drag-click-swallow'
-import type { Repo } from '../../../../shared/repo-types'
 
 // Virtualized rows can unmount during drag; pointer events and cached header geometry avoid stale drop targets.
 
@@ -294,19 +293,28 @@ export function useRepoHeaderDrag({
     }
   }, [state.draggingRepoId])
 
-  const onHandlePointerDown = useCallback((event: React.PointerEvent<HTMLElement>, repo: Repo) => {
-    const session = createProjectHeaderDragSession({
-      event,
-      repo,
-      sidebarRepoHeaderIdsByBucket: sidebarRepoHeaderIdsByBucketRef.current,
-      getScrollContainer: getContainerRef.current
-    })
-    if (!session) {
-      return
-    }
-    dragSessionRef.current = session
-    setSessionArmed(true)
-  }, [])
+  const onHandlePointerDown = useCallback(
+    (
+      event: React.PointerEvent<HTMLElement>,
+      repoId: string,
+      bucketKey?: ProjectHeaderDragSession['bucketKey']
+    ) => {
+      const session = createProjectHeaderDragSession({
+        event,
+        repoId,
+        bucketKey,
+        repoById: repoByIdRef.current,
+        sidebarRepoHeaderIdsByBucket: sidebarRepoHeaderIdsByBucketRef.current,
+        getScrollContainer: getContainerRef.current
+      })
+      if (!session) {
+        return
+      }
+      dragSessionRef.current = session
+      setSessionArmed(true)
+    },
+    []
+  )
 
   return { state, onHandlePointerDown }
 }

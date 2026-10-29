@@ -73,6 +73,7 @@ export function appendWorktreeRows(
     collapsedGroups: Set<string>
     groupDepth: number
     sectionKey: string
+    projectGrouped?: boolean
     hostContextLabelByRepoId?: ReadonlyMap<string, string>
     hostContextLabelByWorktreeIdentity?: ReadonlyMap<string, string>
   }
@@ -92,6 +93,7 @@ export function appendWorktreeRows(
       repo: repoOf(worktree),
       depth: occurrence.depth,
       groupDepth: options.groupDepth,
+      projectGrouped: options.projectGrouped,
       isLastLineageChild: occurrence.isLastChild,
       lineageChildCount: occurrence.childCount,
       showProjectName: occurrence.showProjectName,
@@ -111,7 +113,8 @@ export function appendWorktreeRows(
 /** One host-keyed folder row constructor for all emitters; IDs can collide across hosts. */
 export function buildFolderWorkspaceRow(
   pair: RenderableFolderWorkspace,
-  groupDepth: number
+  groupDepth: number,
+  projectGrouped?: boolean
 ): FolderWorkspaceRow {
   return {
     type: 'folder-workspace',
@@ -119,6 +122,7 @@ export function buildFolderWorkspaceRow(
     folderWorkspace: pair.folderWorkspace,
     projectGroup: pair.projectGroup,
     depth: 0,
-    groupDepth
+    groupDepth,
+    projectGrouped
   }
 }

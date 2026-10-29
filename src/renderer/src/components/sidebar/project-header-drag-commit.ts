@@ -21,8 +21,14 @@ export function commitProjectHeaderDragDrop(args: {
   onCommitProjectGroupOrder: (project: Repo, projectGroupId: string | null, order: number) => void
 }): void {
   const draggedRepo = args.liveRepos.find((repo) => isSameRepoRow(repo, args.session.repo))
+  const liveBucketKey = draggedRepo ? getProjectHeaderDragBucketKey(draggedRepo) : null
+  // A nested bucket prefixes the parent lane; its suffix still identifies the live project group.
+  const isLiveBucket =
+    liveBucketKey !== null &&
+    (args.session.bucketKey === liveBucketKey ||
+      args.session.bucketKey.endsWith(`:${liveBucketKey}`))
   // Why: a group change mid-drag (another window or client) moved the row out of this bucket.
-  if (!draggedRepo || getProjectHeaderDragBucketKey(draggedRepo) !== args.session.bucketKey) {
+  if (!draggedRepo || !isLiveBucket) {
     return
   }
 

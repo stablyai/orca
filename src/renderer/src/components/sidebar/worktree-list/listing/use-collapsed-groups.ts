@@ -8,7 +8,8 @@ import type { WorkspaceStatusDefinition, Worktree } from '../../../../../../shar
 import type { WorktreeLineage } from '../../../../../../shared/worktree/lineage-types'
 import type {
   PinnedWorktreeDisplayPolicy,
-  WorktreeGroupBy
+  WorktreeGroupBy,
+  WorktreeGroupBySecondary
 } from '../../../../../../shared/sidebar-list/row-types'
 import type { ProjectGroupingModel } from '../../../../../../shared/project-section-grouping'
 import { getFolderWorkspaceRevealGroupKeys } from '../navigation/folder-reveal'
@@ -22,6 +23,7 @@ export function useEffectiveCollapsedGroups(args: {
   collapsedGroups: Set<string>
   agentSendTargetWorktreeId: string | null
   groupBy: WorktreeGroupBy
+  groupBySecondary?: WorktreeGroupBySecondary
   pinnedDisplayPolicy: PinnedWorktreeDisplayPolicy
   worktrees: readonly Worktree[]
   visibleWorktrees: readonly Worktree[]
@@ -42,6 +44,7 @@ export function useEffectiveCollapsedGroups(args: {
     hostScopedGroups = false,
     agentSendTargetWorktreeId,
     groupBy,
+    groupBySecondary = 'none',
     pinnedDisplayPolicy,
     worktrees,
     visibleWorktrees,
@@ -67,7 +70,7 @@ export function useEffectiveCollapsedGroups(args: {
         agentSendTargetWorktreeId,
         folderWorkspaces,
         projectGroups,
-        { groupBy, workspaceStatuses, defaultHostId, hostScopedGroups }
+        { groupBy, groupBySecondary, workspaceStatuses, defaultHostId, hostScopedGroups }
       )
       if (folderKeys.length === 0) {
         return collapsedGroups
@@ -91,6 +94,7 @@ export function useEffectiveCollapsedGroups(args: {
       hostScopedGroups,
       collapsedGroups,
       groupBy,
+      groupBySecondary,
       pinnedDisplayPolicy,
       prCache,
       workspaceStatuses,
@@ -106,6 +110,7 @@ export function useEffectiveCollapsedGroups(args: {
     collapsedGroups,
     hostScopedGroups,
     groupBy,
+    groupBySecondary,
     pinnedDisplayPolicy,
     worktrees,
     visibleWorktrees,

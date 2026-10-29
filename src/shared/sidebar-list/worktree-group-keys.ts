@@ -6,10 +6,38 @@ import {
   getWorkspaceStatus,
   getWorkspaceStatusGroupKey
 } from '../workspace-statuses'
-import { ALL_GROUP_KEY, getPRLaneKey, getProjectGroupHeaderKey } from './group-keys'
+import {
+  ALL_GROUP_KEY,
+  getNestedGroupKey,
+  getPRLaneKey,
+  getProjectGroupHeaderKey
+} from './group-keys'
 import { buildProjectGroupingIndex, getProjectGroupingForRepo } from '../project-section-grouping'
 import type { ProjectSectionModel } from '../project-section-grouping'
-import type { SidebarPRGroupReader, WorktreeGroupBy } from './row-types'
+import type { SidebarPRGroupReader, WorktreeGroupBy, WorktreeGroupBySecondary } from './row-types'
+
+function getProjectGroupKeysForRepo(
+  repoId: string,
+  repoMap: Map<string, Repo>,
+  projectGroups: readonly ProjectGroup[]
+): string[] {
+  const repo = repoMap.get(repoId)
+  const groupIds: string[] = []
+  const groupsById = new Map(projectGroups.map((group) => [group.id, group]))
+  const visited = new Set<string>()
+  let currentGroupId = repo?.projectGroupId ?? null
+  while (currentGroupId && !visited.has(currentGroupId)) {
+    const group = groupsById.get(currentGroupId)
+    if (!group) {
+      break
+    }
+    visited.add(currentGroupId)
+    groupIds.unshift(currentGroupId)
+    const parentId = group.parentGroupId ?? null
+    currentGroupId = parentId && groupsById.has(parentId) ? parentId : null
+  }
+  return groupIds.map((id) => getProjectGroupHeaderKey(id))
+}
 
 export function getGroupKeyForWorktree(
   groupBy: WorktreeGroupBy,
@@ -43,7 +71,8 @@ export function getGroupKeysForWorktree(
   prGroupOf: SidebarPRGroupReader | null,
   workspaceStatuses: readonly WorkspaceStatusDefinition[] = cloneDefaultWorkspaceStatuses(),
   projectGroups: readonly ProjectGroup[] = [],
-  projectGrouping?: ProjectSectionModel
+  projectGrouping?: ProjectSectionModel,
+  groupBySecondary: WorktreeGroupBySecondary = 'none'
 ): string[] {
   const groupKey = getGroupKeyForWorktree(
     groupBy,
@@ -56,24 +85,32 @@ export function getGroupKeysForWorktree(
   if (!groupKey) {
     return []
   }
-  if (groupBy !== 'repo') {
-    return [groupKey]
+  const primaryKeys =
+    groupBy === 'repo'
+      ? [...getProjectGroupKeysForRepo(worktree.repoId, repoMap, projectGroups), groupKey]
+      : [groupKey]
+  if (groupBy === 'none' || groupBySecondary === 'none' || groupBySecondary === groupBy) {
+    return primaryKeys
   }
-  const repo = repoMap.get(worktree.repoId)
-  const groupIds: string[] = []
-  const groupsById = new Map(projectGroups.map((group) => [group.id, group]))
-  const visited = new Set<string>()
-  let currentGroupId = repo?.projectGroupId ?? null
-  while (currentGroupId && !visited.has(currentGroupId)) {
-    const group = groupsById.get(currentGroupId)
-    if (!group) {
-      // Remote repos may precede Project Group metadata; reveal keys must match planSidebarRows’ fallback rows.
-      break
-    }
-    visited.add(currentGroupId)
-    groupIds.unshift(currentGroupId)
-    const parentId = group.parentGroupId ?? null
-    currentGroupId = parentId && groupsById.has(parentId) ? parentId : null
+  const secondaryKey = getGroupKeyForWorktree(
+    groupBySecondary,
+    worktree,
+    repoMap,
+    prGroupOf,
+    workspaceStatuses,
+    projectGrouping
+  )
+  if (!secondaryKey) {
+    return primaryKeys
   }
-  return [...groupIds.map((id) => getProjectGroupHeaderKey(id)), groupKey]
+  if (groupBySecondary !== 'repo') {
+    return [...primaryKeys, getNestedGroupKey(groupKey, secondaryKey)]
+  }
+
+  const nestedProjectGroupKeys = getProjectGroupKeysForRepo(
+    worktree.repoId,
+    repoMap,
+    projectGroups
+  ).map((key) => getNestedGroupKey(groupKey, key))
+  return [...primaryKeys, ...nestedProjectGroupKeys, getNestedGroupKey(groupKey, secondaryKey)]
 }

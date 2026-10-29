@@ -7,6 +7,15 @@ import type { ExecutionHostId } from '../execution-host'
 import type { PRGroupKey } from '../workspace-view/workspace-pr-groups'
 
 export type WorktreeGroupBy = 'none' | 'workspace-status' | 'repo' | 'pr-status'
+export type WorktreeGroupDimension = Exclude<WorktreeGroupBy, 'none'>
+export type WorktreeGroupBySecondary = 'none' | WorktreeGroupDimension
+export type GroupHeaderKind =
+  | 'all'
+  | 'pinned'
+  | 'repo'
+  | 'project-group'
+  | 'workspace-status'
+  | 'pr-status'
 /** A row's own registration of its repo; the same repo id can be registered on several hosts. */
 export type RepoOfWorktree = (worktree: Worktree) => Repo | undefined
 export type PinnedWorktreeDisplayPolicy = 'single-location' | 'duplicate-in-groups'
@@ -32,6 +41,8 @@ export type GroupHeaderRow = {
   type: 'header'
   collapseKey?: string
   key: string
+  /** Semantic role stays explicit when a secondary grouping differs from the primary mode. */
+  groupKind?: GroupHeaderKind
   /** Data label (project, project group, status); absent when the client names the header from its icon. */
   label?: string
   count: number
@@ -43,6 +54,7 @@ export type GroupHeaderRow = {
   hostWorktreeCounts?: ReadonlyMap<ExecutionHostId, number>
   hostWorktreeIds?: ReadonlyMap<ExecutionHostId, readonly string[]>
   worktreeIds?: readonly string[]
+  workspaceStatus?: WorkspaceStatus
 }
 
 export type WorktreeRow = {
@@ -54,6 +66,8 @@ export type WorktreeRow = {
   repo: Repo | undefined
   depth: number
   groupDepth: number
+  projectGrouped?: boolean
+  lineageTrail?: boolean[]
   isLastLineageChild: boolean
   lineageChildCount: number
   lineageGroupKey?: string
@@ -107,6 +121,7 @@ export type FolderWorkspaceRow = {
   projectGroup: ProjectGroup
   depth: number
   groupDepth: number
+  projectGrouped?: boolean
 }
 
 /** Stable create/repo identity only: subscribing to full progress records would rebuild the list on phase/loader churn. */

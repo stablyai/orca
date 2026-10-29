@@ -35,6 +35,7 @@ export function buildOrderedGroups(args: {
   repoOrder: Map<string, number> | undefined
   projectOrderBy: ProjectOrderBy
   folderWorkspaces?: readonly RenderableFolderWorkspace[]
+  includeEmptyWorkspaceStatusGroups?: boolean
 }): OrderedGroupEntry[] {
   const {
     groupBy,
@@ -50,7 +51,8 @@ export function buildOrderedGroups(args: {
     pendingByRepo,
     repoOrder,
     projectOrderBy,
-    folderWorkspaces = []
+    folderWorkspaces = [],
+    includeEmptyWorkspaceStatusGroups = false
   } = args
 
   if (groupBy === 'repo') {
@@ -127,6 +129,11 @@ export function buildOrderedGroups(args: {
       const group = grouped.get(key)
       if (group) {
         orderedGroups.push([key, group])
+      } else if (includeEmptyWorkspaceStatusGroups) {
+        orderedGroups.push([
+          key,
+          { label: status.label, items: [], repo: undefined, repoIds: new Set() }
+        ])
       }
     }
   } else {

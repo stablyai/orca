@@ -64,7 +64,8 @@ export function computeRenderedSidebarRows(
   const { prCache } = selectWorktreeListReviewCacheInputs(
     state,
     state.groupBy,
-    state.worktreeCardProperties
+    state.worktreeCardProperties,
+    state.groupBySecondary
   )
 
   const repoMap = getRepoMapFromState(state)
@@ -99,7 +100,8 @@ export function computeRenderedSidebarRows(
     // Why no hostLabelById: it only feeds display-only host context labels, never row order.
     defaultHostId,
     pinnedDisplayPolicy,
-    filterRepoIds: state.filterRepoIds
+    filterRepoIds: state.filterRepoIds,
+    groupBySecondary: state.groupBySecondary
   }).render(state.collapsedGroups)
 
   // Build the host registry only when sections may affect order; zero/one-host cases still safely no-op.

@@ -3,7 +3,7 @@ import type { WorktreeOccurrencePlan } from '../worktree-occurrence-plan'
 import type { WorkspaceStatusDefinition, Worktree } from '../worktree/types'
 import type { ExecutionHostId } from '../execution-host'
 import { getWorkspaceStatusFromGroupKey } from '../workspace-statuses'
-import type { PRGroupKey } from './group-keys'
+import { isPRGroupKey, type PRGroupKey } from './group-keys'
 import type { NoticeHostContext } from './host-labels'
 import {
   getLaneHostWorktreeCounts,
@@ -23,6 +23,7 @@ import type {
   ImportedWorktreesCardCandidate,
   NewExternalWorktreesInboxCandidate,
   PendingCreationRef,
+  GroupHeaderRow,
   RepoOfWorktree,
   Row,
   WorktreeGroupBy
@@ -32,6 +33,7 @@ import type {
 export type SectionAppendContext = {
   result: Row[]
   groupBy: WorktreeGroupBy
+  projectGroupingActive: boolean
   collapsedGroups: Set<string>
   workspaceStatuses: readonly WorkspaceStatusDefinition[]
   repoMap: Map<string, Repo>
@@ -47,19 +49,101 @@ export type SectionAppendContext = {
   occurrencePlan: WorktreeOccurrencePlan<Worktree>
 }
 
+export type GroupChildrenAppender = (
+  key: string,
+  group: OrderedGroupEntry[1],
+  groupDepth: number
+) => void
+
+export function buildGroupHeader(
+  ctx: SectionAppendContext,
+  key: string,
+  group: OrderedGroupEntry[1],
+  renderGroupBy: Exclude<WorktreeGroupBy, 'none'>,
+  projectGroupDepth = 0
+): GroupHeaderRow {
+  const folderPairs = group.folderWorkspaces ?? []
+  const sourceKey = group.sourceKey ?? key
+  if (renderGroupBy === 'repo') {
+    return {
+      type: 'header',
+      groupKind: group.projectGroup ? 'project-group' : 'repo',
+      key,
+      label: group.label,
+      count: group.items.length + folderPairs.length,
+      icon: { kind: 'project' },
+      repo: group.repo,
+      projectGroup: group.projectGroup,
+      projectGroupDepth
+    }
+  }
+  if (renderGroupBy === 'workspace-status') {
+    const workspaceStatus =
+      getWorkspaceStatusFromGroupKey(sourceKey, ctx.workspaceStatuses) ??
+      ctx.workspaceStatuses[0]?.id ??
+      'in-progress'
+    const definition = ctx.workspaceStatuses.find((status) => status.id === workspaceStatus)
+    return {
+      type: 'header',
+      groupKind: 'workspace-status',
+      key,
+      label: definition?.label ?? workspaceStatus,
+      count: group.items.length + folderPairs.length,
+      icon: { kind: 'workspace-status', status: workspaceStatus },
+      hostWorktreeCounts: getLaneHostWorktreeCounts(
+        group.items,
+        folderPairs,
+        ctx.repoOf,
+        ctx.defaultHostId
+      ),
+      hostWorktreeIds: getLaneHostWorktreeIds(
+        group.items,
+        folderPairs,
+        ctx.repoOf,
+        ctx.defaultHostId
+      ),
+      worktreeIds: group.items.map((worktree) => worktree.id),
+      workspaceStatus,
+      projectGroupDepth
+    }
+  }
+  const sourcePRGroup = sourceKey.replace(/^pr:/, '')
+  const prGroup: PRGroupKey = isPRGroupKey(sourcePRGroup) ? sourcePRGroup : 'in-progress'
+  return {
+    type: 'header',
+    groupKind: 'pr-status',
+    key,
+    count: group.items.length + folderPairs.length,
+    icon: { kind: 'pr-status', prGroup },
+    hostWorktreeCounts: getLaneHostWorktreeCounts(
+      group.items,
+      folderPairs,
+      ctx.repoOf,
+      ctx.defaultHostId
+    ),
+    hostWorktreeIds: getLaneHostWorktreeIds(
+      group.items,
+      folderPairs,
+      ctx.repoOf,
+      ctx.defaultHostId
+    ),
+    worktreeIds: group.items.map((worktree) => worktree.id),
+    projectGroupDepth
+  }
+}
+
 export function appendOrderedGroups(
   ctx: SectionAppendContext,
   groupsToAppend: OrderedGroupEntry[],
-  projectGroupDepth = 0
+  projectGroupDepth = 0,
+  appendChildren?: GroupChildrenAppender
 ): void {
   const {
     result,
     groupBy,
     collapsedGroups,
-    workspaceStatuses,
     repoMap,
     repoOf,
-    defaultHostId,
     hostLabelById,
     projectIndex,
     importedWorktreesByRepo,
@@ -68,73 +152,14 @@ export function appendOrderedGroups(
     mixedWorktreeHostContextLabels,
     occurrencePlan
   } = ctx
+  if (groupBy === 'none') {
+    return
+  }
   for (const [key, group] of groupsToAppend) {
     const isCollapsed = collapsedGroups.has(key)
     const repo = group.repo
     const folderPairs = group.folderWorkspaces ?? []
-    const header =
-      groupBy === 'repo'
-        ? {
-            type: 'header' as const,
-            key,
-            label: group.label,
-            count: group.items.length,
-            icon: { kind: 'project' as const },
-            repo,
-            projectGroupDepth
-          }
-        : groupBy === 'workspace-status'
-          ? (() => {
-              const workspaceStatus =
-                getWorkspaceStatusFromGroupKey(key, workspaceStatuses) ??
-                workspaceStatuses[0]?.id ??
-                'in-progress'
-              const definition = workspaceStatuses.find((status) => status.id === workspaceStatus)
-              return {
-                type: 'header' as const,
-                key,
-                label: definition?.label ?? workspaceStatus,
-                count: group.items.length + folderPairs.length,
-                icon: { kind: 'workspace-status' as const, status: workspaceStatus },
-                hostWorktreeCounts: getLaneHostWorktreeCounts(
-                  group.items,
-                  folderPairs,
-                  repoOf,
-                  defaultHostId
-                ),
-                hostWorktreeIds: getLaneHostWorktreeIds(
-                  group.items,
-                  folderPairs,
-                  repoOf,
-                  defaultHostId
-                ),
-                worktreeIds: group.items.map((worktree) => worktree.id)
-              }
-            })()
-          : (() => {
-              const prGroup = key.replace(/^pr:/, '') as PRGroupKey
-              return {
-                type: 'header' as const,
-                key,
-                count: group.items.length + folderPairs.length,
-                icon: { kind: 'pr-status' as const, prGroup },
-                hostWorktreeCounts: getLaneHostWorktreeCounts(
-                  group.items,
-                  folderPairs,
-                  repoOf,
-                  defaultHostId
-                ),
-                hostWorktreeIds: getLaneHostWorktreeIds(
-                  group.items,
-                  folderPairs,
-                  repoOf,
-                  defaultHostId
-                ),
-                worktreeIds: group.items.map((worktree) => worktree.id)
-              }
-            })()
-
-    result.push(header)
+    result.push(buildGroupHeader(ctx, key, group, groupBy, projectGroupDepth))
     if (!isCollapsed) {
       if (groupBy === 'repo') {
         const repoIds =
@@ -142,8 +167,8 @@ export function appendOrderedGroups(
             ? [...group.repoIds]
             : repo
               ? [repo.id]
-              : key.startsWith('repo:')
-                ? [key.slice('repo:'.length)]
+              : (group.sourceKey ?? key).startsWith('repo:')
+                ? [(group.sourceKey ?? key).slice('repo:'.length)]
                 : []
         for (const repoId of repoIds) {
           const candidate = importedWorktreesByRepo.get(repoId)
@@ -175,6 +200,10 @@ export function appendOrderedGroups(
           }
         }
       }
+      if (appendChildren) {
+        appendChildren(key, group, projectGroupDepth)
+        continue
+      }
       const hostContextLabelByRepoId =
         groupBy === 'repo'
           ? getMixedHostContextLabels(group, repoMap, projectIndex, hostLabelById)
@@ -182,12 +211,13 @@ export function appendOrderedGroups(
       appendWorktreeRows(result, repoOf, occurrencePlan, {
         collapsedGroups,
         groupDepth: projectGroupDepth,
+        projectGrouped: ctx.projectGroupingActive,
         sectionKey: key,
         hostContextLabelByRepoId,
         hostContextLabelByWorktreeIdentity: mixedWorktreeHostContextLabels
       })
       for (const pair of folderPairs) {
-        result.push(buildFolderWorkspaceRow(pair, projectGroupDepth))
+        result.push(buildFolderWorkspaceRow(pair, projectGroupDepth, ctx.projectGroupingActive))
       }
     }
   }
