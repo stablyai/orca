@@ -146,8 +146,6 @@ test('a bytes custom editor edits and saves a binary file', async ({
   orcaPage,
   seededRepoPath
 }) => {
-  // Why: on Linux CI the first bytes edit never marks the tab dirty (passes on macOS); tracked as an alpha follow-up.
-  test.fixme(process.platform === 'linux', 'bytes edit does not reach the tab on Linux CI')
   const pluginRoot = await mkdtemp(join(tmpdir(), 'orca-bytes-editor-'))
   const filePath = join(seededRepoPath, BYTES_FILE)
   // NULs make Orca treat it as binary, like a zip-based workbook.
@@ -198,7 +196,8 @@ test('a bytes custom editor edits and saves a binary file', async ({
     expect(await dirty()).toBe(false)
 
     const append = bytesFrame.locator('#append')
-    await append.click()
+    // Why a key: in a hidden Linux window the mouse never reaches a sandboxed frame's button.
+    await append.press('Enter')
     await expect.poll(dirty).toBe(true)
     await append.press(process.platform === 'darwin' ? 'Meta+s' : 'Control+s')
     const edited = Buffer.concat([original, Buffer.from([0xaa])])
