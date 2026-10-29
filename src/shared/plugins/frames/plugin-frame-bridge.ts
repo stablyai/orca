@@ -24,7 +24,9 @@ export const FRAME_EVENTS = {
   /** frame → host: a modifier chord, so Orca's save shortcut works inside an editor. */
   editorKeydown: 'editor.keydown',
   /** host → frame: the document, on ready and whenever it changes outside the frame. */
-  editorDocument: 'editor.document'
+  editorDocument: 'editor.document',
+  /** host → frame, payload {@link WorktreeSidebarCards}: a backdrop's card layout. */
+  worktreeSidebarCards: 'worktreeSidebar.cards'
 } as const
 
 /** Frame-local methods a custom editor handles or calls on the same envelope. */
@@ -36,6 +38,22 @@ export const EDITOR_METHODS = {
 } as const
 
 export type PluginFrameTheme = { colorScheme: 'light' | 'dark'; tokens: string }
+
+/** One visible workspace card, in CSS pixels from the backdrop's top-left corner. */
+export type WorktreeSidebarCard = {
+  /** Stable for the frame's lifetime; workspace ids carry paths, so they never leave the host. */
+  key: number
+  x: number
+  y: number
+  width: number
+  height: number
+  hovered: boolean
+  active: boolean
+  /** The card's status; present only for plugins granted `agent:read`. */
+  status?: string
+}
+
+export type WorktreeSidebarCards = { width: number; height: number; cards: WorktreeSidebarCard[] }
 
 export type PluginFrameHello = {
   protocol: typeof PLUGIN_PROTOCOL_VERSION

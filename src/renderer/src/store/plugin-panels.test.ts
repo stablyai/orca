@@ -4,6 +4,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { PluginHostListEntry } from '../../../preload/api-types'
 import {
   collectActivePluginCommands,
+  collectActivePluginPanels,
+  collectActivePluginSidebarBackdrop,
   collectEditablePluginCommands,
   usePluginPanelsStore
 } from './plugin-panels'
@@ -36,6 +38,33 @@ afterEach(() => {
 })
 
 describe('plugin panel list loading', () => {
+  it('keeps backdrops out of the right sidebar and lets only an enabled one draw', () => {
+    const backdrop = {
+      id: 'aurora',
+      title: 'Aurora',
+      tabKey: 'plugin:samples.glow/aurora' as const,
+      placement: 'worktree-sidebar-backdrop' as const
+    }
+    const tab = { id: 'notes', title: 'Notes', tabKey: 'plugin:samples.glow/notes' as const }
+    const pending = { ...plugin('samples.pending'), status: 'pending' as const, panels: [backdrop] }
+    const enabled = {
+      ...plugin('samples.glow'),
+      capabilities: [{ kind: 'agent:read', description: 'agent status' }],
+      panels: [backdrop, tab]
+    }
+
+    expect(collectActivePluginPanels([pending, enabled]).map((panel) => panel.id)).toEqual([
+      'notes'
+    ])
+    expect(collectActivePluginSidebarBackdrop([pending, enabled])).toEqual(
+      expect.objectContaining({ pluginKey: 'samples.glow', id: 'aurora', canReadAgents: true })
+    )
+    expect(collectActivePluginSidebarBackdrop([{ ...enabled, capabilities: [] }])).toEqual(
+      expect.objectContaining({ canReadAgents: false })
+    )
+    expect(collectActivePluginSidebarBackdrop([pending])).toBeNull()
+  })
+
   it('collects commands only from enabled plugin states', () => {
     const enabled = {
       ...plugin('samples.enabled'),

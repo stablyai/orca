@@ -8,6 +8,7 @@ import { setSidebarLiveWidth } from './sidebar-live-width'
 import SetupScriptPromptCard from './SetupScriptPromptCard'
 import WorktreeList from './WorktreeList'
 import WslMovedProjectsSection from './WslMovedProjectsSection'
+import { WorktreeSidebarBackdrop } from './WorktreeSidebarBackdrop'
 import SidebarToolbar from './SidebarToolbar'
 import WorkspaceKanbanDrawer from './WorkspaceKanbanDrawer'
 import type { VirtualizedScrollAnchor } from '@/hooks/useVirtualizedScrollAnchor'
@@ -160,7 +161,7 @@ function Sidebar({
     <TooltipProvider delayDuration={400}>
       <div
         ref={sidebarRef}
-        className="relative min-h-0 flex-shrink-0 bg-worktree-sidebar flex flex-col overflow-hidden scrollbar-sleek-parent"
+        className="relative isolate min-h-0 flex-shrink-0 bg-worktree-sidebar flex flex-col overflow-hidden scrollbar-sleek-parent"
         style={leftSidebarStyle}
         {...dropHandlers}
       >
@@ -190,6 +191,7 @@ function Sidebar({
               </React.Suspense>
             ) : (
               <>
+                <WorktreeSidebarBackdrop containerRef={containerRef} />
                 <LocalGitToolchainScanBanner />
                 <StartupWorktreeRefreshStatus />
                 <WorktreeList
