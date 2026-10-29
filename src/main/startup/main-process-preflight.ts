@@ -25,13 +25,7 @@ import {
 } from './main-process-error-guards'
 import { hydrateShellPath, mergePathSegments } from './hydrate-shell-path'
 import { configureRemoteServerUpdater } from '../runtime/remote-server-updater'
-import {
-  getRemoteServerUpdaterSnapshot,
-  checkForRemoteServerUpdate,
-  downloadRemoteServerUpdate,
-  installRemoteServerUpdate,
-  isQuittingForUpdate
-} from '../updater'
+import * as updater from '../updater'
 import { getDevInstanceIdentity, shouldApplyPreReadyAppName } from './dev-instance-identity'
 import { enableRendererHeapHeadroom } from './renderer-heap-headroom'
 import { configureLinuxDevShmUsage } from './linux-dev-shm-policy'
@@ -130,7 +124,8 @@ function initializeMainProcessPreflight(options: MainProcessPreflightOptions): b
   const isDev = !app.isPackaged
   // Resolve Windows appData before recovery/instance-lock steps can read userData.
   ensureWindowsAppDataPath(app)
-  if (runProfileStateRecoveryPreflight()) {
+  // Desktop exclusion precedes recovery writes; classification leaves raw recovery/CLI argv untouched.
+  if (updater.exitForInFlightMacUpdateInstall() || runProfileStateRecoveryPreflight()) {
     return false
   }
   // Redirect lost node-mode CLI launches before locking or argv rewriting; direct Linux serve exec preserves PID and only falls back on failure.
@@ -164,7 +159,7 @@ function initializeMainProcessPreflight(options: MainProcessPreflightOptions): b
     initialState: 'initializing',
     activateWindow: () => {
       // Updater replacement must not resurrect the old bundle.
-      if (!isQuittingForUpdate()) {
+      if (!updater.isQuittingForUpdate()) {
         options.focusExistingWindow()
       }
     },
@@ -176,10 +171,10 @@ function initializeMainProcessPreflight(options: MainProcessPreflightOptions): b
   // Expose version without Electron imports for main/daemon TERM_PROGRAM_VERSION.
   process.env.ORCA_APP_VERSION = app.getVersion()
   configureRemoteServerUpdater({
-    getSnapshot: getRemoteServerUpdaterSnapshot,
-    check: checkForRemoteServerUpdate,
-    download: downloadRemoteServerUpdate,
-    install: installRemoteServerUpdate
+    getSnapshot: updater.getRemoteServerUpdaterSnapshot,
+    check: updater.checkForRemoteServerUpdate,
+    download: updater.downloadRemoteServerUpdate,
+    install: updater.installRemoteServerUpdate
   })
   patchPackagedProcessPath()
   // The synchronous seed covers early IPC; packaged login-shell hydration adds rc PATH later.

@@ -133,7 +133,7 @@ describe('Electron recovery preflight', () => {
       'utf8'
     )
     const start = source.indexOf('export function runMainProcessPreflight(')
-    const recovery = source.indexOf('if (runProfileStateRecoveryPreflight())', start)
+    const recovery = source.indexOf('runProfileStateRecoveryPreflight())', start)
     const redirect = source.indexOf('const cliLaunchRedirect = maybeRedirectCliLaunch(', start)
     const admission = source.indexOf('acquireProfileStateRuntimeAdmission(', start)
     expect(start).toBeGreaterThanOrEqual(0)
@@ -141,6 +141,27 @@ describe('Electron recovery preflight', () => {
     expect(redirect).toBeGreaterThan(recovery)
     expect(admission).toBeGreaterThan(redirect)
     expect(source.slice(recovery, redirect)).toContain('return false')
+    const fence = source.indexOf('updater.exitForInFlightMacUpdateInstall()', start)
+    expect(fence).toBeGreaterThan(start)
+    expect(recovery).toBeGreaterThan(fence)
+    const gate = readFileSync(join(process.cwd(), 'src/main/mac-update-install-marker.ts'), 'utf8')
+    const gateStart = gate.indexOf('export function exitForInFlightMacUpdateInstall(')
+    expect(gate.indexOf('isDesktopLaunch({', gateStart)).toBeLessThan(
+      gate.indexOf('!shouldExitForInFlightMacUpdateInstall()', gateStart)
+    )
+    expect(gate).toContain('app.exit(MAC_UPDATE_INSTALL_LAUNCH_EXIT_CODE)')
+    expect(source.indexOf('process.argv = normalizeServeModeArgv(', start)).toBeGreaterThan(
+      recovery
+    )
+  })
+
+  it('rejects CLI-form recovery before normalization can turn it into an admitted rollback', () => {
+    const item = fixture()
+    item.argv[1] = 'serve'
+    expect(runProfileStateRecoveryPreflight(item.argv)).toBe(true)
+    expect(response()).toMatchObject({ ok: false })
+    expect(mocks.requestSingleInstanceLock).not.toHaveBeenCalled()
+    expect(readFileSync(item.databaseFile, 'utf8')).toBe('broken database')
   })
 
   it('leaves ordinary startup untouched', () => {

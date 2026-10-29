@@ -122,10 +122,17 @@ vi.mock('./serve-update-handoff', () => ({
   requestServeUpdateHandoff: requestServeUpdateHandoffMock
 }))
 
+const publishInstallMarker = vi.hoisted(() => vi.fn())
+vi.mock('./mac-update-install-marker', () => ({
+  markMacUpdateInstallInFlight: publishInstallMarker,
+  clearMacUpdateInstallMarker: vi.fn()
+}))
+
 warmUpdaterModule()
 
 describe('headless serve update install handoff', () => {
   beforeEach(() => {
+    publishInstallMarker.mockReset()
     vi.resetModules()
     vi.useFakeTimers()
     autoUpdaterMock.checkForUpdates.mockReset().mockResolvedValue(null)
@@ -329,6 +336,7 @@ describe('headless serve update install handoff', () => {
     expect(autoUpdaterMock.autoInstallOnAppQuit).toBe(false)
     expect(autoUpdaterMock.autoRunAppAfterInstall).toBe(false)
     expect(autoUpdaterMock.downloadUpdate).toHaveBeenCalledOnce()
+    expect(publishInstallMarker).not.toHaveBeenCalled()
     expect(autoUpdaterMock.quitAndInstall).toHaveBeenCalledWith(true, false)
     expect(autoUpdaterMock.quitAndInstall).toHaveBeenCalledOnce()
     expect(daemonSession).toEqual({ alive: true })

@@ -16,6 +16,8 @@ import type { PreQuitCleanupFailureMode, UpdateInstallMode } from './updater/upd
 
 const updater = new UpdaterSetup()
 
+export { exitForInFlightMacUpdateInstall } from './mac-update-install-marker'
+
 export type { PreQuitCleanupFailureMode, UpdateInstallMode, UpdaterSetupOptions }
 
 export function resolveUpdateInstallMode(isServeMode: boolean): UpdateInstallMode {

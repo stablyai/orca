@@ -159,6 +159,12 @@ vi.mock('./updater/serve-supervisor-install-park', async (importOriginal) => ({
   releaseServeSupervisorPark: async () => undefined
 }))
 
+const markerMock = vi.hoisted(() => ({ publish: vi.fn(), withdraw: vi.fn() }))
+vi.mock('./mac-update-install-marker', () => ({
+  markMacUpdateInstallInFlight: markerMock.publish,
+  clearMacUpdateInstallMarker: markerMock.withdraw
+}))
+
 warmUpdaterModule()
 
 async function prepareStagedMacUpdate(downloadUpdate: () => void): Promise<void> {
@@ -176,6 +182,8 @@ async function prepareStagedMacUpdate(downloadUpdate: () => void): Promise<void>
 
 describe('updater mac install handoff', () => {
   beforeEach(() => {
+    markerMock.publish.mockReset()
+    markerMock.withdraw.mockReset()
     vi.resetModules()
     autoUpdaterMock.reset()
     nativeUpdaterMock.on.mockReset()
@@ -376,6 +384,10 @@ describe('updater mac install handoff', () => {
       expect(autoUpdaterMock.quitAndInstall).not.toHaveBeenCalled()
 
       quitAndInstall()
+      expect(markerMock.publish).not.toHaveBeenCalled()
+      autoUpdaterMock.quitAndInstall.mockImplementation(() => {
+        expect(markerMock.publish).toHaveBeenCalledWith('1.0.61')
+      })
       finishCleanup()
       await vi.advanceTimersByTimeAsync(0)
 
@@ -803,6 +815,33 @@ describe('updater mac install handoff', () => {
       finishProbe([])
       await vi.advanceTimersByTimeAsync(0)
       expect(autoUpdaterMock.quitAndInstall).toHaveBeenCalledOnce()
+    }
+  )
+  it.runIf(process.platform === 'darwin').each(['throw', 'event'] as const)(
+    'withdraws the owned attempt before retry after native %s failure',
+    async (failure) => {
+      vi.useFakeTimers()
+      autoUpdaterMock.checkForUpdates.mockResolvedValue(undefined)
+      const { setupAutoUpdater, downloadUpdate, quitAndInstall, isQuittingForUpdate } =
+        await loadUpdaterModule()
+      setupAutoUpdater(updaterMainWindow(vi.fn()))
+      await prepareStagedMacUpdate(downloadUpdate)
+      autoUpdaterMock.quitAndInstall.mockImplementationOnce(() => {
+        expect(markerMock.publish).toHaveBeenCalledWith('1.0.61')
+        if (failure === 'throw') {
+          throw new Error('native install failed')
+        }
+        autoUpdaterMock.emit('error', new Error('native install failed'))
+        expect(markerMock.withdraw).toHaveBeenCalledOnce()
+      })
+      quitAndInstall()
+      await vi.advanceTimersByTimeAsync(1000)
+      expect(markerMock.withdraw).toHaveBeenCalledOnce()
+      expect(isQuittingForUpdate()).toBe(false)
+      quitAndInstall()
+      await vi.advanceTimersByTimeAsync(1000)
+      expect(markerMock.publish).toHaveBeenCalledTimes(2)
+      expect(autoUpdaterMock.quitAndInstall).toHaveBeenCalledTimes(2)
     }
   )
 })

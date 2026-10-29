@@ -27,6 +27,8 @@ const NODE_RUNTIME_INCLUDE = [
   'src/main/ai-vault/session-scanner-scope-walk.test.ts',
   // Electron main bridges streams with Node's implementation.
   'src/main/host/electron-http-client.test.ts',
+  // Electron main uses Node's file-URL decoding for startup refusal evidence.
+  'src/main/mac-update-install-marker.test.ts',
   'src/main/daemon/daemon-init-provider-installation.test.ts',
   'src/main/orcad/orcad-daemon-teardown-linux.test.ts',
   'src/renderer/src/components/terminal-pane/pty-input-write-queue.test.ts',

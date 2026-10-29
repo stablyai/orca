@@ -47,3 +47,4 @@
 1 src/shared/fish-binary-requirement.ts
 1 src/shared/openssh-default-shell.ts
 1 src/shared/secure-file.ts
+1 src/shared/shipit-process-listing.ts # Reviewed pre-ready macOS exception: relevant markers only; at most two ps probes, 1000ms/8MiB each.

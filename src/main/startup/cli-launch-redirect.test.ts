@@ -1,3 +1,4 @@
+import { isDesktopLaunch } from '../mac-update-install-marker'
 import { posix, win32 } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import {
@@ -507,4 +508,18 @@ describe('CLI launch redirect: in-process serve on Wayland (#25400)', () => {
   ])('leaves $name alone', ({ argv, platform }) => {
     expect(redirect(argv, () => platform)).not.toHaveBeenCalled()
   })
+})
+
+it.each([
+  [['Orca'], true],
+  [['Orca', '--serve'], false],
+  [['Orca', 'serve', '--profile-state-recovery', '{}'], false],
+  [['Orca', '/resources/app.asar.unpacked/out/cli/index.js', 'status'], false],
+  [['Orca', '--user-data-dir', '/tmp/serve', '--updated'], true]
+] as const)('classifies raw macOS argv without mutation: %j', (input, desktop) => {
+  const argv = [...input]
+  expect(
+    isDesktopLaunch({ argv, platform: 'darwin', isPackaged: true, resourcesPath: '/resources' })
+  ).toBe(desktop)
+  expect(argv).toEqual(input)
 })

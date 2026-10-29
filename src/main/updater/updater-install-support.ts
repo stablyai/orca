@@ -1,4 +1,5 @@
 import { app } from 'electron'
+import { clearMacUpdateInstallMarker } from '../mac-update-install-marker'
 import {
   isWindowsSignatureCheckUnavailableFailure,
   isWindowsSignatureMismatchFailure
@@ -73,6 +74,7 @@ export abstract class UpdaterInstallSupport extends UpdaterCheckState {
   }
 
   protected resetQuitForUpdateState(): void {
+    clearMacUpdateInstallMarker()
     this.quitAndInstallInProgress = false
     this.quittingForUpdate = false
     this.updateInstallCommitted = false

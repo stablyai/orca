@@ -1,3 +1,4 @@
+import { markMacUpdateInstallInFlight } from '../mac-update-install-marker'
 import { releaseSessionsForInstaller } from './updater-installer-session-release'
 import { withUpdaterSpan } from '../observability/instrumentation'
 import { runWithLaunchPath } from '../startup/hydrate-shell-path'
@@ -139,6 +140,9 @@ export abstract class UpdaterInstallExecution extends UpdaterMacInstallPreflight
         this.quitAndInstallNativeInvoked = true
         // Invoke before destroying PTYs/close guards so synchronous failure leaves the app usable.
         const supervisorOwnsRelaunch = this.updateInstallMode === 'supervised-headless-serve'
+        if (this.updateInstallMode === 'interactive') {
+          markMacUpdateInstallInFlight(pendingVersion)
+        }
         runWithLaunchPath(() =>
           this.getAutoUpdater().quitAndInstall(supervisorOwnsRelaunch, !supervisorOwnsRelaunch)
         )

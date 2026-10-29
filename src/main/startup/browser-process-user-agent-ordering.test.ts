@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { runMainProcessPreflight } from './main-process-preflight'
+import { runProfileStateRecoveryPreflight } from './profile-state-recovery-preflight'
 
 const mocks = vi.hoisted(() => {
   const events: string[] = []
@@ -36,6 +37,7 @@ const mocks = vi.hoisted(() => {
     userAgent: () => userAgent,
     showErrorBox: vi.fn(),
     backgroundLaunch: vi.fn(() => true),
+    updateGate: vi.fn(() => false),
     admission: vi.fn(),
     lock: vi.fn(() => true),
     afterIdentity: vi.fn((): void => {
@@ -59,6 +61,7 @@ vi.mock('../window/foreground-activation-policy', () => ({
 vi.mock('./cli-launch-redirect', () => ({
   maybeRedirectCliLaunch: () => ({ redirected: false, status: 0 })
 }))
+vi.mock('./profile-state-recovery-preflight')
 vi.mock('./serve-mode-argv', () => ({
   argvRequestsServeMode: () => false,
   normalizeServeModeArgv: (argv: string[]) => argv
@@ -83,6 +86,7 @@ vi.mock('./main-process-error-guards', () => ({
 vi.mock('./hydrate-shell-path')
 vi.mock('../runtime/remote-server-updater', () => ({ configureRemoteServerUpdater: vi.fn() }))
 vi.mock('../updater', () => ({
+  exitForInFlightMacUpdateInstall: mocks.updateGate,
   getRemoteServerUpdaterSnapshot: vi.fn(),
   checkForRemoteServerUpdate: vi.fn(),
   downloadRemoteServerUpdate: vi.fn(),
@@ -208,6 +212,28 @@ vi.mock('../browser/browser-identity-mode-store', () => ({
 }))
 
 describe('browser process user-agent startup ordering', () => {
+  it('stops before recovery and profile initialization when the update gate refuses startup', () => {
+    const originalArgv = process.argv
+    const rawArgv = ['/Applications/Orca.app/Contents/MacOS/Orca']
+    const platform = vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
+    mocks.app.isPackaged = true
+    process.argv = [...rawArgv]
+    mocks.updateGate.mockReturnValueOnce(true)
+    try {
+      expect(
+        runMainProcessPreflight({ focusExistingWindow: vi.fn(), requestDesktopActivation: vi.fn() })
+      ).toBe(false)
+      expect(mocks.updateGate).toHaveBeenCalledOnce()
+      expect(mocks.events).toEqual([])
+      expect(runProfileStateRecoveryPreflight).not.toHaveBeenCalled()
+      expect(process.argv).toEqual(rawArgv)
+    } finally {
+      mocks.app.isPackaged = false
+      process.argv = originalArgv
+      platform.mockRestore()
+    }
+  })
+
   it('explains admission refusal before a desktop launch exits', async () => {
     const platform = vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
     mocks.backgroundLaunch.mockReturnValueOnce(false)
