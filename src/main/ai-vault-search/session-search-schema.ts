@@ -8,7 +8,7 @@ import {
 // Cache transcript content verbatim; outbound snippet policy belongs at the transport boundary.
 
 // Bump to discard and rebuild this transcript-derived cache.
-export const SESSION_SEARCH_SCHEMA_VERSION = 8
+export const SESSION_SEARCH_SCHEMA_VERSION = 9
 
 // Keep paths and C++ intact; omit # so #123 also matches 123.
 const TOKENIZER = `tokenize="unicode61 tokenchars '_.-/+'"`
@@ -64,6 +64,12 @@ CREATE INDEX IF NOT EXISTS messages_session ON messages(session_row_id);
 -- Conversation scope filters user/assistant columns within this table.
 CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts USING fts5(
   user_text, assistant_text, tool_text, identifiers, ${TOKENIZER}, detail=full
+);
+-- Why a second table: unicode61 indexes a whole CJK run between punctuation as one
+-- token, so only trigram can match a substring. Rows without CJK text are never
+-- written here, so Latin-only indexes pay nothing for it.
+CREATE VIRTUAL TABLE IF NOT EXISTS messages_cjk_fts USING fts5(
+  user_text, assistant_text, tool_text, tokenize="trigram"
 );
 `
 

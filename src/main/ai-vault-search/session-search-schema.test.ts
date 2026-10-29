@@ -69,7 +69,7 @@ describe('openSessionSearchDatabase', () => {
     second.close()
   })
 
-  it('carries one FTS table and throws away an index that carries two', async () => {
+  it('carries the main and the CJK FTS tables and throws away an index that carries a third', async () => {
     const path = await tempDatabasePath()
     const fresh = openSessionSearchDatabase(path)
     const tables = (): string[] =>
@@ -78,7 +78,7 @@ describe('openSessionSearchDatabase', () => {
           .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE '%_fts'")
           .all() as { name: string }[]
       ).map((row) => row.name)
-    expect(tables()).toEqual(['messages_fts'])
+    expect(tables().sort()).toEqual(['messages_cjk_fts', 'messages_fts'])
 
     // A version bump must remove obsolete tables that CREATE IF NOT EXISTS would retain.
     fresh.exec('CREATE VIRTUAL TABLE conversation_fts USING fts5(user_text, assistant_text)')

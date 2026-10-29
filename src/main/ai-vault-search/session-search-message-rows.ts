@@ -2,6 +2,7 @@ import type SyncDatabase from '../sqlite/sync-database'
 import type { TranscriptMessage } from '../ai-vault/session-transcript-consumers'
 import { sliceAtCodeUnitLimit } from '../ai-vault/session-scanner-text-normalization'
 import { identifierShadowText } from './session-search-identifier-split'
+import { hasCjkText } from './session-search-query-planner'
 
 const CHUNK_TARGET_CHARS = 8000
 
@@ -63,7 +64,7 @@ export function* searchMessageRows(
   }
 }
 
-/** Insert metadata and FTS content together in the caller’s transaction. */
+/** Insert metadata, FTS and CJK trigram content together in the caller’s transaction. */
 export function insertSearchMessage(
   db: SyncDatabase,
   sessionId: number,
@@ -79,6 +80,11 @@ export function insertSearchMessage(
   db.prepare(
     'INSERT INTO messages_fts(rowid,user_text,assistant_text,tool_text,identifiers) VALUES (?,?,?,?,?)'
   ).run(id, user, assistant, tool, identifierShadowText(text))
+  if (hasCjkText(text)) {
+    db.prepare(
+      'INSERT INTO messages_cjk_fts(rowid,user_text,assistant_text,tool_text) VALUES (?,?,?,?)'
+    ).run(id, user, assistant, tool)
+  }
 }
 
 /** Delete matching metadata and FTS rows in the caller’s transaction; limit retention work per step. */
@@ -87,9 +93,11 @@ export function deleteSearchMessages(db: SyncDatabase, sessionId: number, limit 
     .prepare('SELECT id FROM messages WHERE session_row_id = ? LIMIT ?')
     .all(sessionId, limit) as { id: number }[]
   const full = db.prepare('DELETE FROM messages_fts WHERE rowid = ?')
+  const cjk = db.prepare('DELETE FROM messages_cjk_fts WHERE rowid = ?')
   const message = db.prepare('DELETE FROM messages WHERE id = ?')
   for (const { id } of ids) {
     full.run(id)
+    cjk.run(id)
     message.run(id)
   }
   return ids.length
