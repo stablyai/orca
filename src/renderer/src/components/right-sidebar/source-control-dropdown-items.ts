@@ -6,6 +6,7 @@ import {
   type CommitDisabledReason
 } from '../../../../shared/source-control-commit-eligibility'
 import type {
+  AmendDisabledReason,
   DropdownActionInputs,
   DropdownEntry
 } from '../../../../shared/source-control-dropdown-item-types'
@@ -34,6 +35,26 @@ function localizedCommitDisabledReason(reason: CommitDisabledReason): string {
       return translate(
         'auto.components.right.sidebar.source.control.primary.action.f01f16d77f',
         'Enter a commit message to commit'
+      )
+  }
+}
+
+function localizedAmendDisabledReason(reason: AmendDisabledReason): string {
+  switch (reason) {
+    case 'Create an initial commit before amending':
+      return translate(
+        'auto.components.right.sidebar.source.control.dropdown.items.titleAmendCreateInitialCommit',
+        'Create an initial commit before amending'
+      )
+    case 'Resolve conflicts before amending':
+      return translate(
+        'auto.components.right.sidebar.source.control.dropdown.items.titleAmendResolveConflicts',
+        'Resolve conflicts before amending'
+      )
+    case 'Enter a message or stage changes to amend':
+      return translate(
+        'auto.components.right.sidebar.source.control.dropdown.items.titleAmendEnterMessageOrStage',
+        'Enter a message or stage changes to amend'
       )
   }
 }
@@ -112,14 +133,38 @@ function localizedCommitCopy(): CommitDropdownCopy {
       'auto.components.right.sidebar.source.control.dropdown.items.titleCommitThenPullPush',
       'Commit, then pull and push'
     ),
-    commitDisabledReason: localizedCommitDisabledReason
+    amendCommit: translate(
+      'auto.components.right.sidebar.source.control.dropdown.items.amendCommit',
+      'Amend commit'
+    ),
+    amendFoldTitle: translate(
+      'auto.components.right.sidebar.source.control.dropdown.items.titleAmendFold',
+      'Fold staged changes into the last commit; the entered message replaces the old one'
+    ),
+    amendCreateInitialCommit: translate(
+      'auto.components.right.sidebar.source.control.dropdown.items.titleAmendCreateInitialCommit',
+      'Create an initial commit before amending'
+    ),
+    amendResolveConflicts: translate(
+      'auto.components.right.sidebar.source.control.dropdown.items.titleAmendResolveConflicts',
+      'Resolve conflicts before amending'
+    ),
+    amendEnterMessageOrStage: translate(
+      'auto.components.right.sidebar.source.control.dropdown.items.titleAmendEnterMessageOrStage',
+      'Enter a message or stage changes to amend'
+    ),
+    commitDisabledReason: localizedCommitDisabledReason,
+    amendDisabledReason: localizedAmendDisabledReason
   }
 }
 
 /** Keep menu shape stable across states: render every row, disabling blocked actions with tooltip reasons. */
 export function resolveDropdownItems(inputs: DropdownActionInputs): DropdownEntry[] {
   const ctx = deriveDropdownActionContext(inputs)
-  const { commit, commitPush, commitSync } = buildCommitDropdownItems(ctx, localizedCommitCopy())
+  const { commit, commitAmend, commitPush, commitSync } = buildCommitDropdownItems(
+    ctx,
+    localizedCommitCopy()
+  )
   const { push, forcePush, pull, fastForward, sync, rebase, fetch, publish } =
     buildRemoteDropdownItems(ctx, localizedRemoteCopy())
   const { createPR, pushCreatePR } = buildHostedReviewDropdownItems(ctx)
@@ -127,6 +172,7 @@ export function resolveDropdownItems(inputs: DropdownActionInputs): DropdownEntr
 
   const entries: DropdownEntry[] = [
     commit,
+    commitAmend,
     commitPush,
     commitSync,
     { kind: 'separator', id: 'before-remote' },

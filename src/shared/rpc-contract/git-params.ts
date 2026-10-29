@@ -97,10 +97,13 @@ export const GitCommitDiff = GitFilePath.extend({
 })
 
 export const GitCommit = WorktreeSelector.extend({
-  message: z
-    .unknown()
-    .transform((v) => (typeof v === 'string' ? v : ''))
-    .pipe(z.string().min(1, 'Missing commit message'))
+  // Require a real string — coercing null/numbers to '' would let an amend succeed without the message the client sent.
+  message: z.string(),
+  amend: z.boolean().optional()
+}).superRefine((params, ctx) => {
+  if (params.message.trim().length === 0 && params.amend !== true) {
+    ctx.addIssue({ code: 'custom', path: ['message'], message: 'Missing commit message' })
+  }
 })
 
 export const CommitMessageModelCapability = z.object({

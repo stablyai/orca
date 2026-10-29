@@ -29,7 +29,11 @@ export type IGitProvider = {
   ): Promise<GitStatusResult>
   checkIgnoredPaths(worktreePath: string, relativePaths: string[]): Promise<string[]>
   getHistory(worktreePath: string, options?: GitHistoryOptions): Promise<GitHistoryResult>
-  commit(worktreePath: string, message: string): Promise<{ success: boolean; error?: string }>
+  commit(
+    worktreePath: string,
+    message: string,
+    options?: { amend?: boolean }
+  ): Promise<{ success: boolean; error?: string }>
   getStagedCommitContext(worktreePath: string): Promise<CommitMessageDraftContext | null>
   getDiff(
     worktreePath: string,

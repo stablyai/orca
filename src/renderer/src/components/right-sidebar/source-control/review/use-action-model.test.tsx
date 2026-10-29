@@ -52,7 +52,8 @@ function renderActionModel({
       hostedReviewReviewLabel: 'pull request',
       hasSuppressedGitHubPRState: suppressed,
       conflictOperation: 'unknown',
-      effectiveBaseRef: null
+      effectiveBaseRef: null,
+      gitStatusHead: '0123456789abcdef0123456789abcdef01234567'
     })
   ).result.current
 }

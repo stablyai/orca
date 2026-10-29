@@ -54,6 +54,9 @@ export function useSourceControlActionDispatch({
         case 'commit':
           void handleCommit()
           return
+        case 'commit_amend':
+          void handleCommit(undefined, { amend: true })
+          return
         case 'commit_push':
           void runCompoundCommitAction('push')
           return

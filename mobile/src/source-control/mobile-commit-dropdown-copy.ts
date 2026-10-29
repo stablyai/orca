@@ -57,6 +57,42 @@ export function mobileCommitDropdownCopy(t: Translate): CommitDropdownCopy {
       'sourceControl.commitDropdown.commitThenPullPush',
       'Commit, then pull and push'
     ),
+    amendCommit: t('sourceControl.commitDropdown.amendCommit', 'Amend commit'),
+    amendFoldTitle: t(
+      'sourceControl.commitDropdown.amendFoldTitle',
+      'Fold staged changes into the last commit; the entered message replaces the old one'
+    ),
+    amendCreateInitialCommit: t(
+      'sourceControl.commitDropdown.amendCreateInitialCommit',
+      'Create an initial commit before amending'
+    ),
+    amendResolveConflicts: t(
+      'sourceControl.commitDropdown.amendResolveConflicts',
+      'Resolve conflicts before amending'
+    ),
+    amendEnterMessageOrStage: t(
+      'sourceControl.commitDropdown.amendEnterMessageOrStage',
+      'Enter a message or stage changes to amend'
+    ),
+    amendDisabledReason: (reason) => {
+      switch (reason) {
+        case 'Create an initial commit before amending':
+          return t(
+            'sourceControl.commitDropdown.amendCreateInitialCommit',
+            'Create an initial commit before amending'
+          )
+        case 'Resolve conflicts before amending':
+          return t(
+            'sourceControl.commitDropdown.amendResolveConflicts',
+            'Resolve conflicts before amending'
+          )
+        case 'Enter a message or stage changes to amend':
+          return t(
+            'sourceControl.commitDropdown.amendEnterMessageOrStage',
+            'Enter a message or stage changes to amend'
+          )
+      }
+    },
     commitDisabledReason: (reason) => {
       switch (reason) {
         case 'Resolve conflicts before committing':

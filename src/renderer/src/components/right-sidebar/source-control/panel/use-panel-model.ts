@@ -54,6 +54,7 @@ export function useSourceControlPanelModel() {
     isHostedReviewCreationLoading,
     isHostedReviewStateLoading,
     isRemoteOperationActive,
+    activeGitStatusHead,
     openModal,
     openCommittedDiff,
     refreshActiveGitStatusAfterMutation,
@@ -100,7 +101,8 @@ export function useSourceControlPanelModel() {
     hostedReviewReviewLabel: hostedReviewCreateCopy.reviewLabel,
     hasSuppressedGitHubPRState: suppressedGitHubPRState !== null,
     conflictOperation,
-    effectiveBaseRef
+    effectiveBaseRef,
+    gitStatusHead: activeGitStatusHead
   })
   const handleRelinkSuppressedGitHubPR = useCallback(() => {
     if (!activeWorktree || !activeWorktreeId || suppressedGitHubPRState?.status !== 'matched') {

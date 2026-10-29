@@ -4,7 +4,10 @@ import type { SourceControlPrimaryActionDecisionInputs } from './source-control-
 import { canSubmitCommit, resolveCommitDisabledReason } from './source-control-commit-eligibility'
 import type { GitConflictOperation } from './git-status-types'
 import { shouldForcePushWithLeaseForUpstream } from './git-upstream-status'
-import type { DropdownActionInputs } from './source-control-dropdown-item-types'
+import type {
+  AmendDisabledReason,
+  DropdownActionInputs
+} from './source-control-dropdown-item-types'
 
 export type DropdownActionContext = {
   upstreamStatus: SourceControlPrimaryActionDecisionInputs['upstreamStatus']
@@ -31,6 +34,7 @@ export type DropdownActionContext = {
   globalBusy: boolean
   commitDisabledReason: ReturnType<typeof resolveCommitDisabledReason>
   canCommit: boolean
+  amendDisabledReason: AmendDisabledReason | null
 }
 
 export function deriveDropdownActionContext(inputs: DropdownActionInputs): DropdownActionContext {
@@ -48,6 +52,7 @@ export function deriveDropdownActionContext(inputs: DropdownActionInputs): Dropd
     conflictOperation = 'unknown',
     branchCommitsAhead,
     hasCurrentBranch = true,
+    hasAmendableHead = true,
     canPushLinkedReviewWithoutUpstream = false,
     rebaseBaseRef,
     isPullRequestOperationActive = false
@@ -104,6 +109,15 @@ export function deriveDropdownActionContext(inputs: DropdownActionInputs): Dropd
       isPullRequestOperationActive
     })
 
+  // Amend tolerates an empty message (--no-edit rewords) and no staged files; only an unborn HEAD, conflicts, or a fully no-op amend block it.
+  const amendDisabledReason: AmendDisabledReason | null = !hasAmendableHead
+    ? 'Create an initial commit before amending'
+    : hasUnresolvedConflicts
+      ? 'Resolve conflicts before amending'
+      : stagedCount === 0 && !hasMessage
+        ? 'Enter a message or stage changes to amend'
+        : null
+
   return {
     upstreamStatus,
     hostedReviewCreation,
@@ -128,6 +142,7 @@ export function deriveDropdownActionContext(inputs: DropdownActionInputs): Dropd
     pushLabelCount,
     globalBusy,
     commitDisabledReason,
-    canCommit
+    canCommit,
+    amendDisabledReason
   }
 }

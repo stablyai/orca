@@ -7,10 +7,13 @@ export type DropdownActionInputs = SourceControlPrimaryActionDecisionInputs & {
   conflictOperation?: GitConflictOperation
   isPullRequestOperationActive?: boolean
   rebaseBaseRef?: string | null
+  // Why: git commit --amend fails while HEAD is unborn, so amend needs a signal Commit does not.
+  hasAmendableHead?: boolean
 }
 
 export type DropdownActionKind =
   | 'commit'
+  | 'commit_amend'
   | 'commit_push'
   | 'commit_sync'
   | 'abort_merge'
@@ -34,6 +37,12 @@ export type DropdownItem = {
   hint?: string
   variant?: 'default' | 'destructive'
 }
+
+// Shared context computes English reasons; each client's copy object translates them for display.
+export type AmendDisabledReason =
+  | 'Create an initial commit before amending'
+  | 'Resolve conflicts before amending'
+  | 'Enter a message or stage changes to amend'
 
 export type DropdownSeparator = { kind: 'separator'; id: string }
 

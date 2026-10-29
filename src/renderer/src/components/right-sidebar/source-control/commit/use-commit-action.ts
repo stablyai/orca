@@ -49,6 +49,7 @@ export function useSourceControlCommitAction({
     async (
       messageOverride?: string,
       options?: {
+        amend?: boolean
         skipStagedSnapshotCheck?: boolean
         skipActiveConflictCheck?: boolean
         target?: SourceControlOperationTarget
@@ -68,10 +69,12 @@ export function useSourceControlCommitAction({
       if (!target) {
         return false
       }
+      const amend = options?.amend === true
       const message = (messageOverride ?? commitMessage).trim()
+      // Amend folds staged changes into HEAD, so it may run with an empty message (--no-edit keeps the old one) and no staged files.
       if (
-        !message ||
-        (!options?.skipStagedSnapshotCheck && stagedCount === 0) ||
+        (!message && !amend) ||
+        (!amend && !options?.skipStagedSnapshotCheck && stagedCount === 0) ||
         (!options?.skipActiveConflictCheck && unresolvedConflictCount > 0)
       ) {
         return false
@@ -93,7 +96,8 @@ export function useSourceControlCommitAction({
             worktreePath: target.worktreePath,
             connectionId: target.connectionId
           },
-          message
+          message,
+          amend
         )
         if (!commitResult.success) {
           setCommitErrorForWorktree(target.worktreeId, commitResult.error ?? 'Commit failed')

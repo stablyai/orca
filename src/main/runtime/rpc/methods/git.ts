@@ -202,7 +202,7 @@ export const GIT_METHODS = [
     permission: 'workspace',
     params: GitCommit,
     handler: async (params, { runtime }) =>
-      runtime.commitRuntimeGit(params.worktree, params.message)
+      runtime.commitRuntimeGit(params.worktree, params.message, params.amend)
   }),
   ...GIT_COMMIT_MESSAGE_GENERATION_METHODS,
   defineMethod({

@@ -120,12 +120,13 @@ export class RuntimeGitSyncCommands {
 
   async commitRuntimeGit(
     worktreeSelector: string,
-    message: string
+    message: string,
+    amend?: boolean
   ): Promise<{ success: boolean; error?: string }> {
-    if (message.trim().length === 0) {
+    if (message.trim().length === 0 && amend !== true) {
       throw new Error('Commit message is required')
     }
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
-    return requireRuntimeGitProvider(target).commit(target.worktree.path, message)
+    return requireRuntimeGitProvider(target).commit(target.worktree.path, message, { amend })
   }
 }

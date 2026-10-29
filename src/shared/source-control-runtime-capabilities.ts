@@ -11,10 +11,15 @@ export const GITLAB_READY_FOR_REVIEW_UPDATE_REQUIRED_MESSAGE =
 // Commit-message generation: the host plans Antigravity with the model the user configured.
 export const ANTIGRAVITY_CONFIGURED_MODEL_RUNTIME_CAPABILITY =
   'git.antigravity-configured-model.v1' as const
+// Older servers strip `amend` from git.commit params and silently create a regular commit instead.
+export const GIT_COMMIT_AMEND_RUNTIME_CAPABILITY = 'git.commitAmend.v1' as const
+export const GIT_COMMIT_AMEND_UPDATE_REQUIRED_MESSAGE =
+  'Amending a commit requires a newer Orca server. Update the server and try again.'
 
 export const SOURCE_CONTROL_RUNTIME_CAPABILITIES = [
   ANTIGRAVITY_CONFIGURED_MODEL_RUNTIME_CAPABILITY,
   GITHUB_MARK_PR_READY_RUNTIME_CAPABILITY,
   MOBILE_GITHUB_MARK_PR_READY_RUNTIME_CAPABILITY,
-  GITLAB_READY_FOR_REVIEW_RUNTIME_CAPABILITY
+  GITLAB_READY_FOR_REVIEW_RUNTIME_CAPABILITY,
+  GIT_COMMIT_AMEND_RUNTIME_CAPABILITY
 ] as const

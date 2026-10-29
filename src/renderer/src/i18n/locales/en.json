@@ -14346,7 +14346,12 @@
                   "titleManualForcePush_other": "Force push {{count}} local commits with lease to update {{upstreamName}}.",
                   "titleUnpublishedForcePushBranch": "Force push this branch with lease and set an upstream if needed.",
                   "titleUnpublishedForcePushCount_one": "Force push {{count}} branch commit with lease and set an upstream if needed.",
-                  "titleUnpublishedForcePushCount_other": "Force push {{count}} branch commits with lease and set an upstream if needed."
+                  "titleUnpublishedForcePushCount_other": "Force push {{count}} branch commits with lease and set an upstream if needed.",
+                  "titleAmendCreateInitialCommit": "Create an initial commit before amending",
+                  "titleAmendResolveConflicts": "Resolve conflicts before amending",
+                  "titleAmendEnterMessageOrStage": "Enter a message or stage changes to amend",
+                  "amendCommit": "Amend commit",
+                  "titleAmendFold": "Fold staged changes into the last commit; the entered message replaces the old one"
                 }
               },
               "primary": {

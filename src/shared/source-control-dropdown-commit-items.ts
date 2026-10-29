@@ -1,7 +1,7 @@
 // Share commit blockers across Commit, Commit & Push, and Commit & Sync so disabled reasons agree.
 
 import type { CommitDisabledReason } from './source-control-commit-eligibility'
-import type { DropdownItem } from './source-control-dropdown-item-types'
+import type { AmendDisabledReason, DropdownItem } from './source-control-dropdown-item-types'
 import type { DropdownActionContext } from './source-control-dropdown-action-context'
 
 // Desktop localizes these strings; other clients pass their own copy.
@@ -24,8 +24,14 @@ export type CommitDropdownCopy = {
   publishBranchFirstToSync: string
   useCommitAndForcePush: string
   commitThenPullPush: string
+  amendCommit: string
+  amendFoldTitle: string
+  amendCreateInitialCommit: string
+  amendResolveConflicts: string
+  amendEnterMessageOrStage: string
   // Eligibility compares the English reasons, so copy translates them only for display.
   commitDisabledReason: (reason: CommitDisabledReason) => string
+  amendDisabledReason: (reason: AmendDisabledReason) => string
 }
 
 export const ENGLISH_COMMIT_DROPDOWN_COPY: CommitDropdownCopy = {
@@ -47,11 +53,19 @@ export const ENGLISH_COMMIT_DROPDOWN_COPY: CommitDropdownCopy = {
   publishBranchFirstToSync: 'Publish the branch first to sync commits',
   useCommitAndForcePush: 'Use Commit & Force Push — remote only has older copies of local commits',
   commitThenPullPush: 'Commit, then pull and push',
-  commitDisabledReason: (reason) => reason
+  amendCommit: 'Amend commit',
+  amendFoldTitle:
+    'Fold staged changes into the last commit; the entered message replaces the old one',
+  amendCreateInitialCommit: 'Create an initial commit before amending',
+  amendResolveConflicts: 'Resolve conflicts before amending',
+  amendEnterMessageOrStage: 'Enter a message or stage changes to amend',
+  commitDisabledReason: (reason) => reason,
+  amendDisabledReason: (reason) => reason
 }
 
 export type CommitDropdownItems = {
   commit: DropdownItem
+  commitAmend: DropdownItem
   commitPush: DropdownItem
   commitSync: DropdownItem
 }
@@ -73,16 +87,26 @@ export function buildCommitDropdownItems(
     behind,
     shouldForcePushWithLease,
     commitDisabledReason,
-    canCommit
+    canCommit,
+    amendDisabledReason
   } = ctx
   const commitDisabledTitle =
     commitDisabledReason === null ? null : copy.commitDisabledReason(commitDisabledReason)
+  const amendDisabledTitle =
+    amendDisabledReason === null ? null : copy.amendDisabledReason(amendDisabledReason)
 
   const commit: DropdownItem = {
     kind: 'commit',
     label: copy.commit,
     title: commitDisabledTitle ?? copy.commitStagedChanges,
     disabled: !canCommit
+  }
+
+  const commitAmend: DropdownItem = {
+    kind: 'commit_amend',
+    label: copy.amendCommit,
+    title: amendDisabledTitle ?? copy.amendFoldTitle,
+    disabled: globalBusy || amendDisabledReason !== null
   }
 
   // Committing changes divergence, so compound labels must omit pre-commit counts.
@@ -154,5 +178,5 @@ export function buildCommitDropdownItems(
       commitDisabledReason !== null
   }
 
-  return { commit, commitPush, commitSync }
+  return { commit, commitAmend, commitPush, commitSync }
 }

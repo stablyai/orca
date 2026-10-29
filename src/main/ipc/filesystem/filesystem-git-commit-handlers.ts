@@ -12,10 +12,18 @@ export function registerFilesystemGitCommitHandlers(context: FilesystemHandlerCo
     'git:commit',
     async (
       _event,
-      args: { worktreePath: string; message: string; connectionId?: string }
+      args: {
+        worktreePath: string
+        message: string
+        amend?: boolean
+        connectionId?: string
+      }
     ): Promise<{ success: boolean; error?: string }> => {
       // Validate at IPC so users receive a clear error before process launch.
-      if (typeof args.message !== 'string' || args.message.trim().length === 0) {
+      if (
+        typeof args.message !== 'string' ||
+        (args.message.trim().length === 0 && args.amend !== true)
+      ) {
         throw new Error('Commit message is required')
       }
       requireReachableGitRoute(getConnectionExecutionHostId(args.connectionId))
@@ -27,7 +35,8 @@ export function registerFilesystemGitCommitHandlers(context: FilesystemHandlerCo
       )
       return commitChanges(worktreePath, args.message, {
         ...gitOptions,
-        admissionTier: 'interactive'
+        admissionTier: 'interactive',
+        ...(args.amend === true ? { amend: true } : {})
       })
     }
   )

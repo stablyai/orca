@@ -122,7 +122,7 @@ export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
       <SourceControlForkPushNotice pushTarget={activeWorktree.pushTarget ?? null} />
 
       {shouldRenderCommitArea(unresolvedConflicts.length, conflictOperation) && (
-        <SourceControlCommitSurface {...props} showGenericEmptyState={showGenericEmptyState} />
+        <SourceControlCommitSurface {...props} />
       )}
 
       {hasFilteredUncommittedEntries && (

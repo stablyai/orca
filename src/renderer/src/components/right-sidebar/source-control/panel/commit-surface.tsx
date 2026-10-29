@@ -3,14 +3,13 @@ import { CommitArea } from '../commit/commit-area'
 import { writeCommitDraftForWorktree } from '../commit/commit-drafts'
 import type { SourceControlPanelReadyProps } from './panel-props'
 
-type SourceControlCommitSurfaceProps = SourceControlPanelReadyProps & {
-  showGenericEmptyState: boolean
-}
+// The composer stays reachable even on a clean tree: reword-only amend needs the message field
+// after a commit, which is exactly when nothing is staged.
+export type SourceControlCommitSurfaceProps = SourceControlPanelReadyProps
 
 export function SourceControlCommitSurface({
   activeRepo,
   model,
-  showGenericEmptyState,
   worktreePath
 }: SourceControlCommitSurfaceProps) {
   const {
@@ -143,7 +142,6 @@ export function SourceControlCommitSurface({
       isCreatingPr={isCreatingPr || isCreatePrIntentInFlight}
       isCreatePrIntentInFlight={isCreatePrIntentInFlight}
       groupId={activeGroupId ?? activeWorktreeId}
-      showComposer={!showGenericEmptyState}
       sourceControlAiActionsVisible={sourceControlAiActionsVisible}
       aiAgentConfigured={resolvedCommitMessageAi?.ok === true}
       isGenerating={isGenerating}

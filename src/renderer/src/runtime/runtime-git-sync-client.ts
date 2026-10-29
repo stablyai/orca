@@ -1,9 +1,13 @@
 import type { GitForkSyncExpectedUpstream, GitForkSyncResult } from '../../../shared/git-fork-sync'
 import type { GitUpstreamStatus } from '../../../shared/git-status-types'
 import { REBASE_FROM_BASE_RPC_TIMEOUT_MS } from '../../../shared/git-rebase-source'
+import {
+  GIT_COMMIT_AMEND_RUNTIME_CAPABILITY,
+  GIT_COMMIT_AMEND_UPDATE_REQUIRED_MESSAGE
+} from '../../../shared/source-control-runtime-capabilities'
 import type { GitPushTarget } from '../../../shared/worktree/types'
 import { resolveLocalWorktreePath, type RuntimeGitContext } from './runtime-git-client-context'
-import { callRuntimeRpc } from './runtime-rpc-client'
+import { assertRuntimeEnvironmentCapability, callRuntimeRpc } from './runtime-rpc-client'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
 
 export async function abortRuntimeGitMerge(context: RuntimeGitContext): Promise<void> {
@@ -210,20 +214,34 @@ export async function pushRuntimeGit(
 
 export async function commitRuntimeGit(
   context: RuntimeGitContext,
-  message: string
+  message: string,
+  amend?: boolean
 ): Promise<{ success: boolean; error?: string }> {
   const target = context.target
   if (target.kind === 'local' || !context.worktreeId) {
     return window.api.git.commit({
       worktreePath: resolveLocalWorktreePath(context),
       message,
+      ...(amend === true ? { amend: true } : {}),
       connectionId: context.connectionId
     })
+  }
+  if (amend === true) {
+    // An older server drops the amend flag and commits normally, so gate the RPC on the advertised capability.
+    await assertRuntimeEnvironmentCapability(
+      target.environmentId,
+      GIT_COMMIT_AMEND_RUNTIME_CAPABILITY,
+      GIT_COMMIT_AMEND_UPDATE_REQUIRED_MESSAGE
+    )
   }
   return callRuntimeRpc<{ success: boolean; error?: string }>(
     target,
     'git.commit',
-    { worktree: toRuntimeWorktreeSelector(context.worktreeId), message },
+    {
+      worktree: toRuntimeWorktreeSelector(context.worktreeId),
+      message,
+      ...(amend === true ? { amend: true } : {})
+    },
     { timeoutMs: 30_000 }
   )
 }

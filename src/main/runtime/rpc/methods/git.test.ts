@@ -293,6 +293,56 @@ describe('git RPC methods', () => {
     expect(runtime.bulkDiscardRuntimeGitPaths).not.toHaveBeenCalled()
   })
 
+  it('rejects non-string amend messages instead of coercing them to empty', async () => {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the dispatcher only reads getRuntimeId and the commit double.
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      commitRuntimeGit: vi.fn().mockResolvedValue({ success: true })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: GIT_METHODS })
+
+    const nullMessage = await dispatcher.dispatch(
+      makeRequest('git.commit', { worktree: 'id:wt-1', message: null, amend: true })
+    )
+    const missingMessage = await dispatcher.dispatch(
+      makeRequest('git.commit', { worktree: 'id:wt-1' })
+    )
+
+    expect(nullMessage.ok).toBe(false)
+    expect(nullMessage).toMatchObject({
+      error: expect.objectContaining({ code: 'invalid_argument' })
+    })
+    expect(missingMessage.ok).toBe(false)
+    expect(missingMessage).toMatchObject({
+      error: expect.objectContaining({ code: 'invalid_argument' })
+    })
+    expect(runtime.commitRuntimeGit).not.toHaveBeenCalled()
+  })
+
+  it('accepts an empty string message only for an amend', async () => {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the dispatcher only reads getRuntimeId and the commit double.
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      commitRuntimeGit: vi.fn().mockResolvedValue({ success: true })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: GIT_METHODS })
+
+    const amend = await dispatcher.dispatch(
+      makeRequest('git.commit', { worktree: 'id:wt-1', message: '', amend: true })
+    )
+    const plainCommit = await dispatcher.dispatch(
+      makeRequest('git.commit', { worktree: 'id:wt-1', message: '   ' })
+    )
+
+    expect(amend.ok).toBe(true)
+    expect(plainCommit.ok).toBe(false)
+    expect(plainCommit).toMatchObject({
+      error: expect.objectContaining({ code: 'invalid_argument' })
+    })
+    expect(runtime.commitRuntimeGit).toHaveBeenCalledTimes(1)
+    expect(runtime.commitRuntimeGit).toHaveBeenCalledWith('id:wt-1', '', true)
+  })
+
   it('routes remote operations to the runtime', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',
@@ -317,6 +367,9 @@ describe('git RPC methods', () => {
 
     await dispatcher.dispatch(
       makeRequest('git.commit', { worktree: 'id:wt-1', message: 'feat: test' })
+    )
+    await dispatcher.dispatch(
+      makeRequest('git.commit', { worktree: 'id:wt-1', message: '', amend: true })
     )
     await dispatcher.dispatch(makeRequest('git.generateCommitMessage', { worktree: 'id:wt-1' }))
     await dispatcher.dispatch(
@@ -369,7 +422,8 @@ describe('git RPC methods', () => {
       })
     )
 
-    expect(runtime.commitRuntimeGit).toHaveBeenCalledWith('id:wt-1', 'feat: test')
+    expect(runtime.commitRuntimeGit).toHaveBeenCalledWith('id:wt-1', 'feat: test', undefined)
+    expect(runtime.commitRuntimeGit).toHaveBeenCalledWith('id:wt-1', '', true)
     expect(runtime.generateRuntimeCommitMessage).toHaveBeenCalledWith('id:wt-1')
     expect(runtime.discoverRuntimeCommitMessageModels).toHaveBeenCalledWith('id:wt-1', 'cursor', {
       agentCmdOverrides: { cursor: 'cursor-agent' }

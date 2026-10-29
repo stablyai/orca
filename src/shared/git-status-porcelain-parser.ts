@@ -3,6 +3,10 @@ import { decodeGitCQuotedPath } from './git-cquoted-path'
 
 /** Parse porcelain v2 incrementally so callers can stop Git at the entry limit instead of buffering output past V8’s string ceiling.
  * Carry partial newline-delimited records between chunks. Defer unmerged u rows to caller resolution (using mW presence), but count them toward the cap. */
+
+// Porcelain v2 reports `# branch.oid (initial)` while HEAD is unborn.
+export const UNBORN_BRANCH_HEAD_OID = '(initial)' as const
+
 export type BranchMetadata = {
   head?: string
   branch?: string

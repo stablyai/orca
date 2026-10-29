@@ -71,7 +71,11 @@ export function createLocalGitProvider(options: LocalGitProviderOptions = {}): L
       checkIgnoredPaths(worktreePath, relativePaths, interactive),
     getHistory: (worktreePath, historyOptions = {}) =>
       getHistory(worktreePath, { ...historyOptions, ...interactive }),
-    commit: (worktreePath, message) => commitChanges(worktreePath, message, interactive),
+    commit: (worktreePath, message, commitOptions) =>
+      commitChanges(worktreePath, message, {
+        ...interactive,
+        ...(commitOptions?.amend === true ? { amend: true } : {})
+      }),
     getStagedCommitContext: (worktreePath) => getStagedCommitContext(worktreePath, interactive),
     getDiff: (worktreePath, filePath, staged, compareAgainstHead) =>
       getDiff(worktreePath, filePath, staged, compareAgainstHead, interactive),

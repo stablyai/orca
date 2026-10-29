@@ -27,6 +27,29 @@ describe('commitChanges', () => {
     expect(result).toEqual({ success: true })
   })
 
+  it('amends with the given message when amend is set', async () => {
+    gitExecFileAsyncMock.mockResolvedValue({ stdout: '[main abc1234] message\n', stderr: '' })
+
+    const result = await commitChanges('/repo', 'feat: reworded', { amend: true })
+
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
+      ['commit', '--amend', '-m', 'feat: reworded'],
+      { cwd: '/repo' }
+    )
+    expect(result).toEqual({ success: true })
+  })
+
+  it('amends with --no-edit when amend is set and the message is empty', async () => {
+    gitExecFileAsyncMock.mockResolvedValue({ stdout: '[main abc1234] message\n', stderr: '' })
+
+    const result = await commitChanges('/repo', '   ', { amend: true })
+
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['commit', '--amend', '--no-edit'], {
+      cwd: '/repo'
+    })
+    expect(result).toEqual({ success: true })
+  })
+
   it('returns stderr when commit fails (e.g. pre-commit hook)', async () => {
     gitExecFileAsyncMock.mockRejectedValue({
       stderr: 'pre-commit hook failed: lint errors\n'

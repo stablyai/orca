@@ -100,6 +100,25 @@ describe('registerFilesystemHandlers', () => {
     expect(url).toHaveBeenCalledTimes(1)
   })
 
+  it('forwards amend to commitChanges and allows an empty message', async () => {
+    commitChangesMock.mockResolvedValue({ success: true })
+
+    registerFilesystemHandlers(store as never)
+
+    await expect(
+      handlers.get('git:commit')!(null, {
+        worktreePath: WORKTREE_FEATURE_PATH,
+        message: '',
+        amend: true
+      })
+    ).resolves.toEqual({ success: true })
+
+    expect(commitChangesMock).toHaveBeenCalledWith(WORKTREE_FEATURE_PATH, '', {
+      admissionTier: 'interactive',
+      amend: true
+    })
+  })
+
   it('refuses ssh git:commit as not served instead of running local commitChanges', async () => {
     registerFilesystemHandlers(store as never)
 

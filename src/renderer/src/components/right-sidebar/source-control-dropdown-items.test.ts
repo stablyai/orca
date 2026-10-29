@@ -38,6 +38,7 @@ describe('resolveDropdownItems', () => {
     const kinds = items.map((item) => item.kind)
     expect(kinds).toEqual([
       'commit',
+      'commit_amend',
       'commit_push',
       'commit_sync',
       'separator',
@@ -52,6 +53,63 @@ describe('resolveDropdownItems', () => {
       'fetch',
       'publish'
     ])
+  })
+
+  it('enables Amend commit with only a message and disables it when there is nothing to amend', () => {
+    const rewordOnly = resolveDropdownItems(
+      inputs({
+        stagedCount: 0,
+        hasMessage: true,
+        upstreamStatus: { hasUpstream: true, ahead: 0, behind: 0 }
+      })
+    )
+    const rewordItems = Object.fromEntries(
+      rewordOnly.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
+    )
+    expect(rewordItems.commit_amend.disabled).toBe(false)
+    expect(rewordItems.commit_amend.label).toBe('Amend commit')
+
+    const noOp = resolveDropdownItems(
+      inputs({ upstreamStatus: { hasUpstream: true, ahead: 0, behind: 0 } })
+    )
+    const noOpItems = Object.fromEntries(
+      noOp.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
+    )
+    expect(noOpItems.commit_amend.disabled).toBe(true)
+    expect(noOpItems.commit_amend.title).toBe('Enter a message or stage changes to amend')
+
+    const conflicted = resolveDropdownItems(
+      inputs({
+        stagedCount: 1,
+        hasMessage: true,
+        hasUnresolvedConflicts: true,
+        upstreamStatus: { hasUpstream: true, ahead: 0, behind: 0 }
+      })
+    )
+    const conflictedItems = Object.fromEntries(
+      conflicted.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
+    )
+    expect(conflictedItems.commit_amend.disabled).toBe(true)
+    expect(conflictedItems.commit_amend.title).toBe('Resolve conflicts before amending')
+    expect(conflictedItems.commit.disabled).toBe(true)
+  })
+
+  it('disables Amend commit on an unborn HEAD while Commit stays available', () => {
+    const unborn = resolveDropdownItems(
+      inputs({
+        stagedCount: 1,
+        hasMessage: true,
+        hasAmendableHead: false,
+        upstreamStatus: { hasUpstream: true, ahead: 0, behind: 0 }
+      })
+    )
+    const unbornItems = Object.fromEntries(
+      unborn.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
+    )
+    expect(unbornItems.commit_amend.disabled).toBe(true)
+    expect(unbornItems.commit_amend.title).toBe('Create an initial commit before amending')
+    // Why: the first Commit is what creates the initial commit, so it must stay enabled.
+    expect(unbornItems.commit.disabled).toBe(false)
   })
 
   it('disables compound commit actions when no staged files', () => {
