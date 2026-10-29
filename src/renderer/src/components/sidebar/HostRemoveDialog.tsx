@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/button'
 import { SwitchIndicator } from '@/components/ui/switch'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { useAppStore } from '@/store'
+import type { AppState } from '@/store/types'
 import { getAllWorktreesFromState } from '@/store/selectors'
 import { translate } from '@/i18n/i18n'
 import { toSshExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
@@ -39,6 +40,16 @@ type HostRemoveDialogProps = {
   target: NonNullable<HostRemovalTarget> | { kind: 'wsl'; environmentId: string }
 }
 
+// Closed per-host dialogs skip catalog churn; the last open value survives the exit animation.
+function useOpenRetainedSelection<T>(open: boolean, select: (state: AppState) => T): T | null {
+  const live = useAppStore((s) => (open ? select(s) : null))
+  const [retained, setRetained] = useState(live)
+  if (live !== null && live !== retained) {
+    setRetained(live)
+  }
+  return live ?? retained
+}
+
 export function HostRemoveDialog({
   open,
   onOpenChange,
@@ -53,11 +64,11 @@ export function HostRemoveDialog({
   const mountedRef = useMountedRef()
 
   const repos = useAppStore((s) => s.repos)
-  const worktreesByRepo = useAppStore((s) => selectWorktreesByRepo(s))
-  const detectedWorktreesByRepo = useAppStore((s) => selectDetectedWorktreesByRepo(s))
+  const worktreesByRepo = useOpenRetainedSelection(open, selectWorktreesByRepo)
+  const detectedWorktreesByRepo = useOpenRetainedSelection(open, selectDetectedWorktreesByRepo)
 
   const sshResolution = useMemo(() => {
-    if (target.kind !== 'ssh') {
+    if (target.kind !== 'ssh' || !worktreesByRepo) {
       return null
     }
     return resolveSshHostRemoval({
@@ -68,7 +79,7 @@ export function HostRemoveDialog({
   }, [target, repos, worktreesByRepo])
 
   const unsavedTargets = useMemo(() => {
-    if (!sshResolution || !deleteWorkspaces) {
+    if (!sshResolution || !deleteWorkspaces || !worktreesByRepo || !detectedWorktreesByRepo) {
       return []
     }
     const hostId = toSshExecutionHostId(sshResolution.targetId)
