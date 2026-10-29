@@ -153,3 +153,21 @@ it.each(['dark', 'light', 'unknown'] as const)(
     })
   }
 )
+
+it('lists a lone terminal theme the install put in the showing slot under "Use now"', () => {
+  const terminal = { background: '#ffffff', foreground: '#111111', red: '#ff0000' }
+  state.settings = { ...getDefaultSettings('/tmp'), theme: 'dark', terminalThemeDark: id }
+  state.terminal = [
+    { id, pluginKey, pluginName: 'Dusk', label: 'Dusk Terminal', mode: 'light', terminal }
+  ]
+  render(<PluginThemeUseNow pluginKey={pluginKey} />)
+  expect(screen.queryByText('Use for light:')).toBeNull()
+  const chip = screen.getByRole('button', { name: 'Use now: Dusk Terminal' })
+  expect(chip.getAttribute('aria-pressed')).toBe('true')
+  fireEvent.click(chip)
+  expect(state.updateSettings).toHaveBeenCalledExactlyOnceWith({
+    terminalThemeDark: id,
+    terminalPluginPalettes: [{ id, colors: terminal }]
+  })
+  expect(toast.success).not.toHaveBeenCalled()
+})
