@@ -4,42 +4,35 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { makeWorktree, TEST_REPO } from '@/store/slices/worktrees-slice-test-fixtures'
 import { QuickLaunchAgentMenuItems } from './QuickLaunchButton'
 
-const {
-  shortcutLabelMock,
-  storeState,
-  openSettingsPageMock,
-  openSettingsTargetMock,
-  useDetectedAgentsMock
-} = vi.hoisted(() => ({
-  shortcutLabelMock: vi.fn<() => string | null>(),
-  storeState: {
-    settings: {
-      defaultTuiAgent: 'codex' as 'claude' | 'codex' | 'gemini' | 'blank' | null,
-      disabledTuiAgents: [] as string[]
+const { storeState, openSettingsPageMock, openSettingsTargetMock, useDetectedAgentsMock } =
+  vi.hoisted(() => ({
+    storeState: {
+      settings: {
+        defaultTuiAgent: 'codex' as 'claude' | 'codex' | 'gemini' | 'blank' | null,
+        disabledTuiAgents: [] as string[]
+      },
+      keybindings: {} as Record<string, string[]>,
+      runtimeStatusByEnvironmentId: new Map(),
+      detectedAgentIds: null,
+      localDetectedAgentIdsByContext: {},
+      remoteDetectedAgentIds: {},
+      runtimeDetectedAgentIds: {},
+      worktreesByRepo: {} as Record<string, unknown[]>,
+      repos: [] as unknown[],
+      openSettingsPage: vi.fn(),
+      openSettingsTarget: vi.fn()
     },
-    runtimeStatusByEnvironmentId: new Map(),
-    detectedAgentIds: null,
-    localDetectedAgentIdsByContext: {},
-    remoteDetectedAgentIds: {},
-    runtimeDetectedAgentIds: {},
-    worktreesByRepo: {} as Record<string, unknown[]>,
-    repos: [] as unknown[],
-    openSettingsPage: vi.fn(),
-    openSettingsTarget: vi.fn()
-  },
-  openSettingsPageMock: vi.fn(),
-  openSettingsTargetMock: vi.fn(),
-  useDetectedAgentsMock: vi.fn((): { detectedIds: string[] | null; detectionFailed?: boolean } => ({
-    detectedIds: ['claude', 'codex', 'gemini']
+    openSettingsPageMock: vi.fn(),
+    openSettingsTargetMock: vi.fn(),
+    useDetectedAgentsMock: vi.fn(
+      (): { detectedIds: string[] | null; detectionFailed?: boolean } => ({
+        detectedIds: ['claude', 'codex', 'gemini']
+      })
+    )
   }))
-}))
 
 vi.mock('@/hooks/useDetectedAgents', () => ({
   useDetectedAgents: useDetectedAgentsMock
-}))
-
-vi.mock('@/hooks/useShortcutLabel', () => ({
-  useOptionalShortcutLabel: shortcutLabelMock
 }))
 
 vi.mock('@/store', () => {
@@ -122,8 +115,7 @@ function rowMarkup(html: string, label: string): string {
 }
 
 beforeEach(() => {
-  shortcutLabelMock.mockReset()
-  shortcutLabelMock.mockReturnValue(null)
+  storeState.keybindings = {}
   useDetectedAgentsMock.mockClear()
   openSettingsPageMock.mockReset()
   openSettingsTargetMock.mockReset()
@@ -139,18 +131,16 @@ beforeEach(() => {
 
 describe('QuickLaunchAgentMenuItems', () => {
   it('renders the new-agent shortcut next to the configured default agent only', () => {
-    shortcutLabelMock.mockReturnValue('⌘⌥T')
+    storeState.keybindings = { 'tab.newAgent': ['Mod+Alt+T'] }
 
     const html = renderAgentMenuItems()
 
     expect(html.match(/data-dropdown-shortcut="true"/g) ?? []).toHaveLength(1)
-    expect(rowMarkup(html, 'Codex')).toContain('⌘⌥T')
-    expect(rowMarkup(html, 'Claude')).not.toContain('⌘⌥T')
-    expect(rowMarkup(html, 'Gemini')).not.toContain('⌘⌥T')
+    expect(rowMarkup(html, 'Codex')).toContain('data-dropdown-shortcut="true"')
   })
 
   it('hides the default-agent shortcut when the action is unbound', () => {
-    shortcutLabelMock.mockReturnValue(null)
+    storeState.keybindings = { 'tab.newAgent': [] }
 
     const html = renderAgentMenuItems()
 
@@ -219,7 +209,7 @@ describe('QuickLaunchAgentMenuItems', () => {
   })
 
   it('does not label an auto-picked or blank default as configured', () => {
-    shortcutLabelMock.mockReturnValue('⌘⌥T')
+    storeState.keybindings = { 'tab.newAgent': ['Mod+Alt+T'] }
 
     storeState.settings.defaultTuiAgent = null
     expect(renderAgentMenuItems()).not.toContain('data-dropdown-shortcut="true"')

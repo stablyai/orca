@@ -1,4 +1,4 @@
-import React, { useCallback, useRef } from 'react'
+import React, { useCallback, useMemo, useRef } from 'react'
 import { toast } from 'sonner'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
 import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
@@ -14,7 +14,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { getAgentCatalog, AgentIcon } from '@/lib/agent-catalog'
 import { useAppStore } from '@/store'
-import { useOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
+import { getShortcutPlatform } from '@/lib/shortcut-platform'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { LaunchSource } from '../../../../shared/telemetry-events'
 import { translate } from '@/i18n/i18n'
@@ -22,6 +22,7 @@ import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { cn } from '@/lib/utils'
 import type { NewTabAgentMenuRow } from '@/lib/new-tab-agent-menu-rows'
 import { useNewTabAgentMenuRows, type NewTabAgentMenuModel } from './use-new-tab-agent-menu-rows'
+import { resolveAgentMenuShortcuts } from './agent-menu-shortcuts'
 import { useAgentDetectionTargetForWorktree } from '@/hooks/useAgentDetectionTarget'
 import { chatUnavailableLabel, rowTitle, rowLabel, rowId } from './tab-agent-row-presentation'
 
@@ -174,7 +175,12 @@ export function ProjectedAgentMenuItems({
   const desktopDefaultAgent = useAppStore((s) => s.settings?.defaultTuiAgent)
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
-  const newAgentShortcut = useOptionalShortcutLabel('tab.newAgent')
+  const keybindings = useAppStore((s) => s.keybindings)
+  const disabledTuiAgents = useAppStore((s) => s.settings?.disabledTuiAgents)
+  const shortcuts = useMemo(
+    () => resolveAgentMenuShortcuts(keybindings, disabledTuiAgents, getShortcutPlatform()),
+    [keybindings, disabledTuiAgents]
+  )
   const openAgentSettings = useCallback(() => {
     openSettingsTarget({ pane: 'agents', repoId: null })
     openSettingsPage()
@@ -251,15 +257,12 @@ export function ProjectedAgentMenuItems({
             </DropdownMenuItem>
           )
         }
-        const showsDefaultAgentShortcut =
-          newAgentShortcut !== null && defaultAgent !== 'blank' && agent === defaultAgent
+        const shortcut = shortcuts.label(agent, agent === defaultAgent)
         const rowContent = (
           <>
             <AgentIcon agent={agent} size={14} />
             <span className="flex-1">{rowLabel(row)}</span>
-            {showsDefaultAgentShortcut ? (
-              <DropdownMenuShortcut>{newAgentShortcut}</DropdownMenuShortcut>
-            ) : null}
+            {shortcut ? <DropdownMenuShortcut>{shortcut}</DropdownMenuShortcut> : null}
           </>
         )
         const other = otherSurfaceRow(row, detectedIds)
