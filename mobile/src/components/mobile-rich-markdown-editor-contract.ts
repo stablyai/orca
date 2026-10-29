@@ -24,6 +24,7 @@ export type MobileRichMarkdownEditorMessage =
 export type MobileRichMarkdownEditorProps = {
   content: string
   editable: boolean
+  textScale?: number
   onChange: (content: string) => void
   onKeyboardInsetChange?: (bottom: number) => void
   onOpenLink: (url: string) => void

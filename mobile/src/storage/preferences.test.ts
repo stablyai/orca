@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { loadTerminalLinkOpenMode, saveTerminalLinkOpenMode } from './preferences'
+import { loadMarkdownTextScale, loadTerminalLinkOpenMode, saveTerminalLinkOpenMode } from './preferences'
 import {
   loadDefaultSessionView,
   loadSessionViewOverrides,
@@ -240,5 +240,18 @@ describe('terminal link open mode preference', () => {
     await Promise.all([firstMount, secondMount])
     await expect(reader).resolves.toBe('orca-browser')
     expect(stored).toBe('orca-browser')
+  })
+})
+
+describe('markdown text scale preference', () => {
+  it.each([
+    ['1.5', 1.5],
+    ['1.3', 1],
+    ['bogus', 1],
+    [null, 1]
+  ])('loads %s as %s', async (raw, expected) => {
+    vi.mocked(AsyncStorage.getItem).mockResolvedValue(raw)
+    await expect(loadMarkdownTextScale()).resolves.toBe(expected)
+    expect(AsyncStorage.getItem).toHaveBeenCalledWith('orca:markdownTextScale')
   })
 })

@@ -4,6 +4,7 @@ import { TEXT_INPUT_FONT_SIZE } from '../../platform/text-input-font-size'
 // Read theme at build time; native embeds sheet, page scopes it to editor host.
 // #editor scrolls itself: iOS WebKit stops drawing selection ~2 screens into an editable scrolled by a separate box (#34472).
 // Bind size to text-input seam: native body size, web>=16px floor prevents iOS focus zoom that keyboard seam mistakes for no keyboard; one binding keeps both hosts aligned.
+// Zoom only the editor's children so the editable root keeps the input-size floor and iOS does not zoom on focus.
 export function richMarkdownEditorStyle(): string {
   return `    :root {
       color-scheme: ${getMobileColorScheme()};
@@ -32,6 +33,7 @@ export function richMarkdownEditorStyle(): string {
       height: 100%;
       overflow: auto;
       overscroll-behavior: contain;
+      touch-action: pan-x pan-y;
       padding: 18px 16px 112px;
       outline: none;
       font-size: ${TEXT_INPUT_FONT_SIZE}px;
@@ -50,6 +52,7 @@ export function richMarkdownEditorStyle(): string {
       pointer-events: none;
     }
     #editor > :first-child { margin-top: 0; }
+    #editor > * { zoom: var(--markdown-text-scale, 1); }
     h1, h2, h3, h4, h5, h6 {
       margin: 1.5em 0 0.5em;
       font-weight: 600;

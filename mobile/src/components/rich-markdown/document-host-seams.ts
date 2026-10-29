@@ -16,10 +16,11 @@ export type RichMarkdownKeyboardInsetReader = {
   observe: (onChange: () => void) => () => void
 }
 
-/** The five things the page can ask a running document to do. */
+/** What the page can ask a running document to do. */
 export type RichMarkdownEditorApi = {
   setMarkdown: (markdown: string, generation: number) => void
   setEditable: (editable: boolean) => void
+  setTextScale: (scale: number) => void
   runCommand: (command: MobileRichMarkdownCommand) => Promise<void>
   currentMarkdown: () => string
   dismissKeyboard: () => void

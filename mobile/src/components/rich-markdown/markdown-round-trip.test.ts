@@ -192,8 +192,9 @@ describe('the editor document, from markdown and back', () => {
   it('round-trips a table cell that holds a pipe, and the backslash that hid it', () => {
     // Escape cell backslashes before pipes so literal pipe remains distinct from row separator.
     const markdown = ['| a \\| b | c\\\\d |', '| --- | --- |', '| 1 \\| 2 | 3 |'].join('\n')
-    const { scope, html } = surface(markdown)
+    const { scope, editor, html } = surface(markdown)
 
+    expect(editor.querySelector('table')?.parentElement).toBe(editor)
     expect(html).toContain('<th>a | b</th><th>c\\d</th>')
     expect(html).toContain('<td>1 | 2</td><td>3</td>')
     expect(currentMarkdown(scope)).toBe(markdown)
