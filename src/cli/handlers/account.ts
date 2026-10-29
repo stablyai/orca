@@ -50,6 +50,7 @@ import {
   selectAgentAccount
 } from './account-selection'
 import type { AntigravityAccountState } from '../../shared/antigravity-account-types'
+import { setClaudeAutoSwitch } from './account-auto-switch'
 
 type AccountsListSnapshot = {
   opencode?: ManagedDataAccountsState
@@ -301,5 +302,6 @@ export const ACCOUNT_HANDLERS: Record<string, CommandHandler> = {
   'account rm': async (ctx) => {
     rejectAccountRemoteSelectionFlags(ctx, 'orca account rm')
     await removeAgentAccount(ctx)
-  }
+  },
+  'account auto-switch': setClaudeAutoSwitch
 }
