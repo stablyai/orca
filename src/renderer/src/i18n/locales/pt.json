@@ -8579,8 +8579,8 @@
           "c64497148a": "O clique com o botão direito cola a área de transferência. Control-clique abre o menu de contexto."
         },
         "BrowserLinkRoutingSetting": {
-          "description": "Abre links http(s) no navegador integrado do Orca — do terminal, markdown e editor. {{shortcut}} sempre usa o seu navegador do sistema.",
-          "descriptionBase": "Abre links http(s) no navegador integrado do Orca — do terminal, markdown e editor."
+          "description": "Abre links http(s) de qualquer lugar do Orca no navegador integrado. Páginas de login e {{shortcut}} sempre usam o navegador do sistema.",
+          "descriptionBase": "Abre links http(s) de qualquer lugar do Orca no navegador integrado. Páginas de login continuam abrindo no navegador do sistema."
         },
         "TerminalRenderingSection": {
           "6d4c55bacc": "Imagens Inline",
@@ -17018,7 +17018,8 @@
                     "annotations": {
                       "0c7b9b2b7a": "Copiado",
                       "c937229f19": "Capturado",
-                      "1f5cb19034": "Anotação adicionada"
+                      "1f5cb19034": "Anotação adicionada",
+                      "limitReached": "Limite de {{limit}} anotações atingido. Envie, exclua ou limpe algumas para adicionar mais."
                     }
                   }
                 }
@@ -17033,7 +17034,10 @@
                     "024467ceac": "Cancelar",
                     "449d2c2629": "Intenção da anotação",
                     "38d320108c": "Recolher anotações",
-                    "9f209891a7": "Expandir anotações"
+                    "9f209891a7": "Expandir anotações",
+                    "includePageDetails": "Incluir detalhes da página",
+                    "copyFeedback": "Copiar feedback",
+                    "copyFeedbackWithPageDetails": "Copiar feedback com detalhes da página"
                   }
                 }
               }

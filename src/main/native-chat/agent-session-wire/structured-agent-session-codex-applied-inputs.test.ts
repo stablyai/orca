@@ -160,6 +160,11 @@ it('steers inherited applied inputs and sends an explicit effort or tier change 
     await eventually(() => expect(calls('turn/steer')).toHaveLength(2))
     const tier = await send({ model: 'model-a', serviceTier: 'flex' })
     await expectHeld(tier, 3, 2)
+    expect(
+      (await host.journalSnapshot(SESSION)).submissions.find(
+        (entry) => entry.clientMessageId === tier
+      )
+    ).toMatchObject({ options: { serviceTier: 'flex' } })
     codex.routes['turn/start'] = openTurn('turn-flex')
     await finish('turn-high')
     await eventually(() => expect(calls('turn/start')).toHaveLength(4))

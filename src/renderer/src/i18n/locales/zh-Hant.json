@@ -11663,8 +11663,8 @@
           "managedOverSshHelp": "這臺電腦會透過 SSH 更新此伺服器。請在「遠端 Orca 伺服器」中，點選此伺服器所在列的「更新」。"
         },
         "BrowserLinkRoutingSetting": {
-          "description": "在 Orca 內建瀏覽器中開啟來自終端機、Markdown 和編輯器的 http(s) 連結。{{shortcut}} 始終使用系統瀏覽器。",
-          "descriptionBase": "在 Orca 內建瀏覽器中開啟來自終端機、Markdown 和編輯器的 http(s) 連結。"
+          "description": "在 Orca 內建瀏覽器中開啟 Orca 各處的 http(s) 連結。登入頁面和 {{shortcut}} 始終使用系統瀏覽器。",
+          "descriptionBase": "在 Orca 內建瀏覽器中開啟 Orca 各處的 http(s) 連結。登入頁面仍會在系統瀏覽器中開啟。"
         },
         "BrowserLinkRoutingModifierSetting": {
           "titleSystem": "按住 Shift 在系統瀏覽器中開啟",
@@ -16727,7 +16727,8 @@
                     "annotations": {
                       "0c7b9b2b7a": "已複製",
                       "c937229f19": "已截圖",
-                      "1f5cb19034": "新增了註解"
+                      "1f5cb19034": "新增了註解",
+                      "limitReached": "已達到 {{limit}} 則註解的上限。請傳送、刪除或清除一些後再新增。"
                     }
                   }
                 }
@@ -16742,7 +16743,10 @@
                     "024467ceac": "取消",
                     "449d2c2629": "註解意圖",
                     "38d320108c": "摺疊註解",
-                    "9f209891a7": "展開註解"
+                    "9f209891a7": "展開註解",
+                    "includePageDetails": "包含頁面詳細資料",
+                    "copyFeedback": "複製回饋",
+                    "copyFeedbackWithPageDetails": "複製回饋及頁面詳細資料"
                   }
                 }
               }

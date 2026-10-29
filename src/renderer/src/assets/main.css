@@ -168,6 +168,12 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
+/* Why: only the drawer that carries it reads the live sidebar width; don't restyle its subtree per drag frame. */
+@property --workspace-sidebar-live-width {
+  syntax: '*';
+  inherits: false;
+}
+
 :root {
   --app-font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --font-sans: var(--app-font-family);

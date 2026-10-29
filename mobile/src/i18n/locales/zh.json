@@ -2514,7 +2514,8 @@
       "saveFailed": "保存快速命令失败"
     },
     "useSessionTerminalSendActions": {
-      "inputTooLarge": "输入内容过大（最大 256 KiB）"
+      "inputTooLarge": "输入内容过大（最大 256 KiB）",
+      "liveInputInterrupted": "实时输入已中断，输入框已清空。继续前请检查终端。"
     },
     "useStartup": {
       "wakeAgents": "请在主机上打开 Orca，以唤醒睡眠中的智能体。"

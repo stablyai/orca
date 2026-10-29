@@ -1,5 +1,8 @@
 import { retireStructuredAgentSessionReadOwner } from '@/components/native-chat/structured-agent-session-read-owner-registry'
 import { structuredAgentSessionTargetForHost } from '@/runtime/structured-agent-session-owner'
+import { launchStateLifecycle } from '../../structured-agent-session-launch-lifecycle'
+export { launchStateLifecycle } from '../../structured-agent-session-launch-lifecycle'
+import { forgetStructuredSessionSelection } from '../../structured-agent-session-selection-controller'
 import { useSyncExternalStore } from 'react'
 import type { TuiAgent } from '../../../../../shared/tui-agent'
 import type { StructuredLaunchFailure } from '../../structured-agent-session-launch-failure'
@@ -60,6 +63,9 @@ const structuredLaunchesBySessionId = new Map<string, StructuredLaunchState>()
 const structuredLaunchListeners = new Set<() => void>()
 
 export function resetStructuredAgentLaunchRegistryForTests(): void {
+  for (const sessionId of structuredLaunchesBySessionId.keys()) {
+    forgetStructuredSessionSelection(sessionId)
+  }
   structuredLaunchesBySessionId.clear()
   structuredLaunchListeners.clear()
   resetStructuredAgentLaunchCancellationForTests()
@@ -133,21 +139,6 @@ export function getPersistedStructuredAgentLaunchRecord(
 
 export function structuredLaunchStates(): IterableIterator<StructuredLaunchState> {
   return structuredLaunchesBySessionId.values()
-}
-
-export function launchStateLifecycle(
-  state: StructuredLaunchState
-): StructuredAgentSessionLaunchLifecycle {
-  if (state.cancelled || state.callers.outcome === 'cancelled') {
-    return 'cancelled'
-  }
-  if (state.callers.outcome === 'published') {
-    return 'published'
-  }
-  if (state.visibilityUnknown || state.callers.outcome === 'unknown') {
-    return 'visibility-unknown'
-  }
-  return state.callers.outcome === 'failed' ? 'failed' : 'pending'
 }
 
 export function getStructuredAgentSessionLaunchLifecycle(
@@ -249,6 +240,7 @@ function markStructuredAgentSessionLaunchCancelledInternal(
       )
     }
     state.cancelled = true
+    forgetStructuredSessionSelection(sessionId, state.intent.target)
     state.callers.outcome = 'cancelled'
     // Tombstones remain durable authority; drop in-memory dead promises so bulk closes cannot retain them all session.
     deleteStructuredLaunchStateIfCurrent(state)

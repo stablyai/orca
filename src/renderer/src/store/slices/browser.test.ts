@@ -611,7 +611,7 @@ describe('createBrowserSlice annotations', () => {
     expect(store.getState().setTabLabel).not.toHaveBeenCalled()
   })
 
-  it('caps stored browser annotations per page', async () => {
+  it('refuses browser annotations past the per-page cap instead of dropping the oldest', async () => {
     const { store, main } = await createTestStoreDrawnFromMain()
     const tab = store.getState().createBrowserTab('wt-1', 'https://example.com')
     await main.settle()
@@ -626,7 +626,8 @@ describe('createBrowserSlice annotations', () => {
 
     const annotations = store.getState().browserAnnotationsByPageId[pageId] ?? []
     expect(annotations).toHaveLength(GRAB_BUDGET.annotationsMaxPerPage)
-    expect(annotations[0]?.id).toBe('annotation-3')
+    expect(annotations[0]?.id).toBe('annotation-0')
+    expect(annotations.at(-1)?.id).toBe(`annotation-${GRAB_BUDGET.annotationsMaxPerPage - 1}`)
   })
 
   it('sanitizes persistent annotation payloads at the store boundary', async () => {

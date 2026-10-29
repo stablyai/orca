@@ -128,6 +128,9 @@ export async function buildRuntimePtySpawnOptions(
   if (!ctx.preAdoptedStablePane && args.wslUserAct !== true) {
     ctx.spawnOptions.wslBackgroundStart = true
   }
+  if (ctx.wslHoldReadAnchor !== undefined) {
+    ctx.spawnOptions.wslHoldReadAnchor = ctx.wslHoldReadAnchor
+  }
   if (
     args.onPtySpawnCommitted &&
     (ctx.provider instanceof LocalPtyProvider || routesFreshSpawnsToLocalProvider(ctx.provider))

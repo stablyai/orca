@@ -90,6 +90,7 @@ export async function prepareRuntimePtySpawn(
   ctx.terminalRuntimeOptions = target.terminalRuntimeOptions
   ctx.daemonShellOverride = ctx.terminalRuntimeOptions.shellOverride
   ctx.expectedWslDistro = target.expectedWslDistro
+  ctx.wslHoldReadAnchor = target.wslHoldReadAnchor
   ctx.codexSelectionTarget = target.codexSelectionTarget
   args.env = withClaudeProfileTerminalEnv(args.env, ctx.codexSelectionTarget)
   ctx.claudeAuth =

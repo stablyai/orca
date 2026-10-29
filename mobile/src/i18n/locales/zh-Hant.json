@@ -2514,7 +2514,8 @@
       "saveFailed": "儲存快速命令失敗"
     },
     "useSessionTerminalSendActions": {
-      "inputTooLarge": "輸入內容太大（上限為 256 KiB）"
+      "inputTooLarge": "輸入內容太大（上限為 256 KiB）",
+      "liveInputInterrupted": "即時輸入已中斷，輸入框已清空。繼續前請檢查終端。"
     },
     "useStartup": {
       "wakeAgents": "請在主機上開啟 Orca，以喚醒休眠中的代理程式。"

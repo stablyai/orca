@@ -11240,8 +11240,8 @@
           "managedOverSshHelp": "이 데스크톱이 SSH로 이 서버를 업데이트합니다. 원격 Orca 서버의 해당 행에서 업데이트를 사용하세요."
         },
         "BrowserLinkRoutingSetting": {
-          "description": "터미널, Markdown, 편집기의 http(s) 링크를 Orca 내장 브라우저에서 엽니다. {{shortcut}}을(를) 누르면 항상 시스템 브라우저를 사용합니다.",
-          "descriptionBase": "터미널, Markdown, 편집기의 http(s) 링크를 Orca 내장 브라우저에서 엽니다."
+          "description": "Orca 어디에서든 http(s) 링크를 내장 브라우저에서 엽니다. 로그인 페이지와 {{shortcut}}은(는) 항상 시스템 브라우저를 사용합니다.",
+          "descriptionBase": "Orca 어디에서든 http(s) 링크를 내장 브라우저에서 엽니다. 로그인 페이지는 계속 시스템 브라우저에서 열립니다."
         },
         "BrowserLinkRoutingModifierSetting": {
           "titleSystem": "Shift를 누른 채 클릭하면 웹 브라우저에서 열기",
@@ -16572,7 +16572,8 @@
                     "annotations": {
                       "0c7b9b2b7a": "복사됨",
                       "c937229f19": "스크린샷됨",
-                      "1f5cb19034": "주석이 추가됨"
+                      "1f5cb19034": "주석이 추가됨",
+                      "limitReached": "주석은 최대 {{limit}}개까지 추가할 수 있습니다. 더 추가하려면 일부를 보내거나 삭제하거나 지우세요."
                     }
                   }
                 }
@@ -16587,7 +16588,10 @@
                     "024467ceac": "취소",
                     "449d2c2629": "주석 의도",
                     "38d320108c": "주석 접기",
-                    "9f209891a7": "주석 펼치기"
+                    "9f209891a7": "주석 펼치기",
+                    "includePageDetails": "페이지 세부 정보 포함",
+                    "copyFeedback": "피드백 복사",
+                    "copyFeedbackWithPageDetails": "페이지 세부 정보와 함께 피드백 복사"
                   }
                 }
               }

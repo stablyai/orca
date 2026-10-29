@@ -234,7 +234,9 @@ export function canSetStructuredAgentSessionOption(
     return (
       descriptor?.settable === true &&
       descriptor.kind.type === 'select' &&
-      descriptor.kind.choices.some((choice) => choice.value === value)
+      (value === 'own'
+        ? state.permissionOwnSupported === true
+        : descriptor.kind.choices.some((choice) => choice.value === value))
     )
   }
   return (

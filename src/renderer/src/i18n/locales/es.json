@@ -11523,8 +11523,8 @@
           "managedOverSshHelp": "Este escritorio actualiza este servidor por SSH. Usa Actualizar en su fila de Servidores remotos de Orca."
         },
         "BrowserLinkRoutingSetting": {
-          "description": "Abre los enlaces http(s) del terminal, Markdown y el editor en el navegador integrado de Orca. {{shortcut}} siempre usa el navegador del sistema.",
-          "descriptionBase": "Abre los enlaces http(s) del terminal, Markdown y el editor en el navegador integrado de Orca."
+          "description": "Abre los enlaces http(s) de cualquier parte de Orca en su navegador integrado. Las páginas de inicio de sesión y {{shortcut}} siempre usan el navegador del sistema.",
+          "descriptionBase": "Abre los enlaces http(s) de cualquier parte de Orca en su navegador integrado. Las páginas de inicio de sesión siguen abriéndose en el navegador del sistema."
         },
         "BrowserLinkRoutingModifierSetting": {
           "titleSystem": "Mantenga presionada la tecla Mayús para abrir en su navegador web",
@@ -16976,7 +16976,8 @@
                     "annotations": {
                       "0c7b9b2b7a": "Copiado",
                       "c937229f19": "Captura tomada",
-                      "1f5cb19034": "Anotación añadida"
+                      "1f5cb19034": "Anotación añadida",
+                      "limitReached": "Se alcanzó el límite de {{limit}} anotaciones. Envíe, elimine o borre algunas para añadir más."
                     }
                   }
                 }
@@ -16991,7 +16992,10 @@
                     "09a7c1df70": "Editar anotación {{value0}}",
                     "449d2c2629": "Intención de la anotación",
                     "38d320108c": "Contraer anotaciones",
-                    "9f209891a7": "Expandir anotaciones"
+                    "9f209891a7": "Expandir anotaciones",
+                    "includePageDetails": "Incluir detalles de la página",
+                    "copyFeedback": "Copiar comentarios",
+                    "copyFeedbackWithPageDetails": "Copiar comentarios con detalles de la página"
                   }
                 }
               }

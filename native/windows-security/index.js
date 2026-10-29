@@ -14,7 +14,12 @@ module.exports = {
   getDaclAces: (path) => getAddon().getDaclAces(path),
   setDaclSddl: (path, sddl) => getAddon().setDaclSddl(path, sddl),
   setDaclSddlAsync: (path, sddl) => getAddon().setDaclSddlAsync(path, sddl),
-  createFileWithDacl: (path, sddl, data) => getAddon().createFileWithDacl(path, sddl, data),
+  createFileWithDacl: (path, sddl, data, strict) =>
+    getAddon().createFileWithDacl(path, sddl, data, strict),
+  readFileWithDacl: (path, maxBytes) => getAddon().readFileWithDacl(path, maxBytes),
+  readGenericCredential: (target) => getAddon().readGenericCredential(target),
+  writeGenericCredential: (target, user, data) =>
+    getAddon().writeGenericCredential(target, user, data),
   grantAccess: (path, sid, mask, options) => getAddon().grantAccess(path, sid, mask, options),
   grantAccessAsync: (path, sid, mask, options) =>
     getAddon().grantAccessAsync(path, sid, mask, options),

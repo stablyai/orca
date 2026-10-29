@@ -3364,7 +3364,8 @@
             "9cb1a0c984": "Add text",
             "2e26a06c70": "Add label",
             "36341ffc66": "Assign",
-            "e369bf4fec": "Select"
+            "e369bf4fec": "Select",
+            "linkedPullRequestsOverflow": "+{{count}} more"
           },
           "ProjectGroupHeader": {
             "82a22d2079": "Current",
@@ -11919,8 +11920,8 @@
           "managedOverSshHelp": "This desktop updates this server over SSH. Use Update on its row in Remote Orca Servers."
         },
         "BrowserLinkRoutingSetting": {
-          "description": "Open http(s) links in Orca's built-in browser — from the terminal, markdown, and the editor. {{shortcut}} always uses your system browser.",
-          "descriptionBase": "Open http(s) links in Orca's built-in browser — from the terminal, markdown, and the editor."
+          "description": "Open http(s) links from anywhere in Orca in its built-in browser. Sign-in pages and {{shortcut}} always use your system browser.",
+          "descriptionBase": "Open http(s) links from anywhere in Orca in its built-in browser. Sign-in pages still open in your system browser."
         },
         "BrowserLinkRoutingModifierSetting": {
           "titleSystem": "Hold Shift to open in your web browser",
@@ -17169,12 +17170,17 @@
                 "chatPaneRight": "chat pane right",
                 "splitChatDown": "split chat down",
                 "newChatBelow": "new chat below",
-                "chatPaneBelow": "chat pane below"
+                "chatPaneBelow": "chat pane below",
+                "browserRight": "browser right",
+                "splitBrowser": "split browser",
+                "browserSplit": "browser split"
               },
               "splitChatRight": "Split Chat Right",
               "splitChatRightDescription": "Open a new chat in a split pane to the right.",
               "splitChatDown": "Split Chat Down",
-              "splitChatDownDescription": "Open a new chat in a split pane below."
+              "splitChatDownDescription": "Open a new chat in a split pane below.",
+              "newBrowserTabSplitRight": "New Browser Tab in Right Split",
+              "newBrowserTabSplitRightDescription": "Open a browser tab in a new split to the right."
             }
           },
           "palette": {
@@ -17382,7 +17388,8 @@
                     "annotations": {
                       "0c7b9b2b7a": "Copied",
                       "c937229f19": "Screenshotted",
-                      "1f5cb19034": "Annotation added"
+                      "1f5cb19034": "Annotation added",
+                      "limitReached": "Limit of {{limit}} annotations reached. Send, delete or clear some to add more."
                     }
                   }
                 }
@@ -17397,7 +17404,10 @@
                     "024467ceac": "Cancel",
                     "449d2c2629": "Annotation intent",
                     "38d320108c": "Collapse annotations",
-                    "9f209891a7": "Expand annotations"
+                    "9f209891a7": "Expand annotations",
+                    "includePageDetails": "Include page details",
+                    "copyFeedback": "Copy feedback",
+                    "copyFeedbackWithPageDetails": "Copy feedback with page details"
                   }
                 }
               }
@@ -21396,7 +21406,9 @@
         "agy": "agy",
         "google": "google",
         "accounts": "accounts"
-      }
+      },
+      "windowsChanged": "The host default account changed. Select a saved account to apply it again.",
+      "windowsSessions": "Select applies and verifies the host default agy credential. Command choices and later account changes are handled by agy. Existing sessions may keep their previous account."
     },
     "claude": {
       "added": "Account added. Select it to use it for the next Claude you start.",
@@ -22367,7 +22379,8 @@
       "terminalSplitRight": "Split terminal right",
       "terminalSplitDown": "Split terminal down",
       "terminalSwitchInputSource": "Switch input source / language (native)",
-      "newAgentTab": "New {{agent}} tab"
+      "newAgentTab": "New {{agent}} tab",
+      "tabNewBrowserSplitRight": "New browser tab in right split"
     },
     "group": {
       "global": "Global",

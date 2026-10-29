@@ -98,3 +98,67 @@ describe('followWslAutomountRoots', () => {
     expect(knownWslAutomountRoots()).toEqual(['/mnt/'])
   })
 })
+
+describe('followWslAutomountRoots: one guest read per distro start', () => {
+  /** Settles the reads one confirmed list started before the next probe. */
+  async function observeRunning(times: number): Promise<void> {
+    for (let i = 0; i < times; i++) {
+      await listRunning(['Ubuntu'])
+      await new Promise((resolve) => setImmediate(resolve))
+    }
+  }
+
+  it.each(['/mnt/', '/custom/'])(
+    'reads a %s root once across many running observations, and once more after a restart',
+    async (root) => {
+      let reads = 0
+      follow(async () => {
+        reads += 1
+        return root
+      })
+      await observeRunning(10)
+      expect(reads).toBe(1)
+
+      await listRunning([])
+      await observeRunning(10)
+      expect(reads).toBe(2)
+    }
+  )
+
+  it('retries a read that failed or found nothing, then stops once one succeeds', async () => {
+    const results: (string | null | Error)[] = [new Error('wsl.exe timed out'), null, '/mnt/']
+    let reads = 0
+    follow(async () => {
+      const result = reads < results.length ? results[reads] : '/mnt/'
+      reads += 1
+      if (result instanceof Error) {
+        throw result
+      }
+      return result
+    })
+    await observeRunning(6)
+    expect(reads).toBe(3)
+  })
+
+  it('reads again after a restart even when the stop came while a read was in flight', async () => {
+    let reads = 0
+    let finishFirst: (root: string) => void = () => {}
+    follow(
+      (): Promise<string> =>
+        new Promise((resolve) => {
+          reads += 1
+          if (reads === 1) {
+            finishFirst = resolve
+          } else {
+            resolve('/mnt/')
+          }
+        })
+    )
+    await listRunning(['Ubuntu'])
+    await listRunning([])
+    finishFirst('/mnt/')
+    await new Promise((resolve) => setImmediate(resolve))
+    await observeRunning(3)
+    expect(reads).toBe(2)
+  })
+})

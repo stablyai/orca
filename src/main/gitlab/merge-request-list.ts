@@ -16,6 +16,7 @@ import {
   type LocalGitExecOptions
 } from './gl-utils'
 import { encodedProject } from './project-path-encoding'
+import { isTaskRepositoryIneligible } from '../git/task-repository-eligibility'
 
 function mrListStateFlags(state: MRListState): string[] {
   switch (state) {
@@ -50,6 +51,9 @@ export async function listMergeRequests(
     localGitOptions
   )
   if (!projectRef) {
+    if (await isTaskRepositoryIneligible(repoPath, 'gitlab', connectionId, localGitOptions)) {
+      return { items: [], page, perPage, totalCount: 0, totalPages: 0 }
+    }
     if (connectionId) {
       // Without local cwd, an unresolved SSH project could become an unrelated glab repository.
       return {

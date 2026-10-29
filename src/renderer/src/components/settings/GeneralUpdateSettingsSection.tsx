@@ -13,6 +13,7 @@ import { getUpdateCheckClickOptions, getUpdateCheckHint } from '@/lib/update-che
 import { GeneralRemoteServerUpdates } from './GeneralRemoteServerUpdates'
 import { ReleaseChannelSection } from './ReleaseChannelSection'
 import { getReleaseNotesUrlForVersion } from '../../../../shared/release-channel'
+import { openAppHttpLinkFromAnchor } from '@/lib/app-http-link-open'
 
 export function GeneralUpdateSettingsSection(): React.JSX.Element {
   const updateStatus = useAppStore((s) => s.updateStatus)
@@ -190,6 +191,7 @@ export function GeneralUpdateSettingsSection(): React.JSX.Element {
                     updateStatus.releaseUrl ?? getReleaseNotesUrlForVersion(updateStatus.version)
                   }
                   target="_blank"
+                  onClick={openAppHttpLinkFromAnchor}
                   rel="noopener noreferrer"
                   className="underline hover:text-foreground"
                 >
@@ -229,6 +231,7 @@ export function GeneralUpdateSettingsSection(): React.JSX.Element {
                     updateStatus.releaseUrl ?? getReleaseNotesUrlForVersion(updateStatus.version)
                   }
                   target="_blank"
+                  onClick={openAppHttpLinkFromAnchor}
                   rel="noopener noreferrer"
                   className="underline hover:text-foreground"
                 >

@@ -30,6 +30,7 @@ import { usePRFilesDiffViewPersistence } from './view-restore'
 import { buildInlineReviewComments } from './inline-comments'
 import { usePRFileSectionHeights } from './section-heights'
 import { usePRFileActiveSection } from './active-section'
+import { openAppHttpLink } from '@/lib/app-http-link-open'
 
 export function PRFilesCombinedDiffViewer({
   files,
@@ -249,7 +250,7 @@ export function PRFilesCombinedDiffViewer({
   )
 
   const openFilesOnGitHub = useCallback(() => {
-    void window.api.shell.openUrl(`${prUrl.replace(/\/$/, '')}/files`)
+    openAppHttpLink(`${prUrl.replace(/\/$/, '')}/files`)
   }, [prUrl])
 
   const handleAddLineComment = useCallback(

@@ -203,7 +203,7 @@ export function useMobileStructuredAgentSession(
     sessionCommands: args.sessionCommands,
     onSendError,
     queueSendsNext,
-    sendOptions: hostSupport?.sendOptions === true ? options.sendSelection : undefined,
+    sendSelection: options.sendSelection,
     takesSkills: hostSupport?.sendSkills === true
   })
   const { items, currentRequests, actionablePromptIds, status } = state

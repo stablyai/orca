@@ -11240,8 +11240,8 @@
           "managedOverSshHelp": "このサーバーはこのデスクトップから SSH で更新されます。リモート Orca サーバーの行にある「更新」を使ってください。"
         },
         "BrowserLinkRoutingSetting": {
-          "description": "ターミナル、Markdown、エディターの http(s) リンクを Orca の組み込みブラウザで開きます。{{shortcut}} は常にシステムブラウザを使用します。",
-          "descriptionBase": "ターミナル、Markdown、エディターの http(s) リンクを Orca の組み込みブラウザで開きます。"
+          "description": "Orca 内のあらゆる場所の http(s) リンクを組み込みブラウザで開きます。サインインページと {{shortcut}} は常にシステムブラウザを使用します。",
+          "descriptionBase": "Orca 内のあらゆる場所の http(s) リンクを組み込みブラウザで開きます。サインインページは引き続きシステムブラウザで開きます。"
         },
         "BrowserLinkRoutingModifierSetting": {
           "titleSystem": "Shift を押しながらクリックすると Web ブラウザで開きます",
@@ -16572,7 +16572,8 @@
                     "annotations": {
                       "0c7b9b2b7a": "コピーしました",
                       "c937229f19": "スクリーンショット",
-                      "1f5cb19034": "注釈を追加しました"
+                      "1f5cb19034": "注釈を追加しました",
+                      "limitReached": "注釈は {{limit}} 件までです。追加するには、いくつか送信、削除、またはクリアしてください。"
                     }
                   }
                 }
@@ -16587,7 +16588,10 @@
                     "024467ceac": "キャンセル",
                     "449d2c2629": "注釈の意図",
                     "38d320108c": "注釈を折りたたむ",
-                    "9f209891a7": "注釈を展開"
+                    "9f209891a7": "注釈を展開",
+                    "includePageDetails": "ページの詳細を含める",
+                    "copyFeedback": "フィードバックをコピー",
+                    "copyFeedbackWithPageDetails": "ページの詳細付きでフィードバックをコピー"
                   }
                 }
               }

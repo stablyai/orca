@@ -11240,8 +11240,8 @@
           "managedOverSshHelp": "此桌面通过 SSH 更新此服务器。请在远程 Orca 服务器中该服务器所在行使用“更新”。"
         },
         "BrowserLinkRoutingSetting": {
-          "description": "在 Orca 内置浏览器中打开来自终端、Markdown 和编辑器的 http(s) 链接。{{shortcut}} 始终使用系统浏览器。",
-          "descriptionBase": "在 Orca 内置浏览器中打开来自终端、Markdown 和编辑器的 http(s) 链接。"
+          "description": "在 Orca 内置浏览器中打开 Orca 各处的 http(s) 链接。登录页面和 {{shortcut}} 始终使用系统浏览器。",
+          "descriptionBase": "在 Orca 内置浏览器中打开 Orca 各处的 http(s) 链接。登录页面仍会在系统浏览器中打开。"
         },
         "BrowserLinkRoutingModifierSetting": {
           "titleSystem": "按住 Shift 在系统浏览器中打开",
@@ -16572,7 +16572,8 @@
                     "annotations": {
                       "0c7b9b2b7a": "已复制",
                       "c937229f19": "截图",
-                      "1f5cb19034": "添加了注释"
+                      "1f5cb19034": "添加了注释",
+                      "limitReached": "已达到 {{limit}} 条注释的上限。请发送、删除或清除一些后再添加。"
                     }
                   }
                 }
@@ -16587,7 +16588,10 @@
                     "024467ceac": "取消",
                     "449d2c2629": "注释意图",
                     "38d320108c": "折叠注释",
-                    "9f209891a7": "展开注释"
+                    "9f209891a7": "展开注释",
+                    "includePageDetails": "包含页面详情",
+                    "copyFeedback": "复制反馈",
+                    "copyFeedbackWithPageDetails": "复制反馈及页面详情"
                   }
                 }
               }

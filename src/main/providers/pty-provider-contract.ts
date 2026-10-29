@@ -99,6 +99,8 @@ export type PtySpawnOptions = {
   wslPassiveRestore?: true
   /** A main-side start no user act asked for (orchestration, automations, recovery): held like a passive restore. */
   wslBackgroundStart?: true
+  /** performance.now() before this spawn's startup-target hold read: the provider hold reuses only that read. */
+  wslHoldReadAnchor?: number
   agentSessionEnsure?: {
     claim: AgentSessionExecutionClaim
     surface: AgentSessionSurfaceBinding

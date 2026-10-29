@@ -20,6 +20,7 @@ import type {
   WorktreeCardJiraIssueDisplay
 } from './worktree-card-meta-types'
 import type { WorktreeCardPrDisplay } from './worktree-card-pr-display'
+import { openAppHttpLink } from '@/lib/app-http-link-open'
 
 export function WorktreeCardLinkedItemsSection({
   workspace,
@@ -75,7 +76,7 @@ export function WorktreeCardLinkedItemsSection({
         onOpen(item.url, event)
       } else {
         event.preventDefault()
-        void window.api.shell.openUrl(item.url)
+        openAppHttpLink(item.url, { worktreeId: workspace.id, event })
       }
     } else {
       event.preventDefault()

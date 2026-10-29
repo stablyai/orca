@@ -63,6 +63,7 @@ export type KeybindingActionId =
   | 'tab.newAgent'
   | AgentTabActionId
   | 'tab.newBrowser'
+  | 'tab.newBrowserSplitRight'
   | 'tab.newSimulator'
   | 'tab.newMarkdown'
   | 'tab.openMarkdown'

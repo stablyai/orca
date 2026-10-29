@@ -6,6 +6,7 @@ import { pluginCategoryLabel } from '../list/plugin-category-label'
 import { DetailSection } from './PluginDetailSections'
 import { formatPluginReleaseDate } from '../presentation/plugin-release-date'
 import { usePluginRollbackVersion } from '../state/use-plugin-rollback-version'
+import { openAppHttpLink } from '@/lib/app-http-link-open'
 
 function InfoRow({ label, value, mono = false }: { label: string; value: string; mono?: boolean }) {
   return (
@@ -32,7 +33,7 @@ function LinkButton({ url, label }: { url: string | null; label: string }) {
       variant="link"
       size="xs"
       className="-ml-2"
-      onClick={() => void window.api.shell.openUrl(url)}
+      onClick={(event) => openAppHttpLink(url, { event })}
     >
       {label}
       <ArrowUpRight />

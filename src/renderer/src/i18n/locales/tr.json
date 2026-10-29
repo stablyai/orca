@@ -11826,8 +11826,8 @@
           "managedOverSshHelp": "Bu masaüstü uygulaması bu sunucuyu SSH üzerinden günceller. Uzak Orca sunucuları bölümünde sunucunun satırındaki Güncelle seçeneğini kullanın."
         },
         "BrowserLinkRoutingSetting": {
-          "description": "http(s) bağlantılarını terminalden, markdown'dan ve düzenleyiciden Orca'nın yerleşik tarayıcısında açın. {{shortcut}} her zaman sistem tarayıcınızı kullanır.",
-          "descriptionBase": "http(s) bağlantılarını terminalden, markdown'dan ve düzenleyiciden Orca'nın yerleşik tarayıcısında açın."
+          "description": "Orca'nın her yerindeki http(s) bağlantılarını yerleşik tarayıcıda açın. Oturum açma sayfaları ve {{shortcut}} her zaman sistem tarayıcınızı kullanır.",
+          "descriptionBase": "Orca'nın her yerindeki http(s) bağlantılarını yerleşik tarayıcıda açın. Oturum açma sayfaları yine sistem tarayıcınızda açılır."
         },
         "BrowserLinkRoutingModifierSetting": {
           "titleSystem": "Web tarayıcınızda açmak için Shift tuşunu basılı tutun",
@@ -16941,7 +16941,8 @@
                     "annotations": {
                       "0c7b9b2b7a": "Kopyalandı",
                       "c937229f19": "Ekran görüntüsü alındı",
-                      "1f5cb19034": "Ek açıklama eklendi"
+                      "1f5cb19034": "Ek açıklama eklendi",
+                      "limitReached": "{{limit}} ek açıklama sınırına ulaşıldı. Daha fazla eklemek için bazılarını gönderin, silin veya temizleyin."
                     }
                   }
                 }
@@ -16956,7 +16957,10 @@
                     "024467ceac": "İptal",
                     "449d2c2629": "Ek açıklama amacı",
                     "38d320108c": "Ek açıklamaları daralt",
-                    "9f209891a7": "Ek açıklamaları genişlet"
+                    "9f209891a7": "Ek açıklamaları genişlet",
+                    "includePageDetails": "Sayfa ayrıntılarını ekle",
+                    "copyFeedback": "Geri bildirimi kopyala",
+                    "copyFeedbackWithPageDetails": "Geri bildirimi sayfa ayrıntılarıyla kopyala"
                   }
                 }
               }

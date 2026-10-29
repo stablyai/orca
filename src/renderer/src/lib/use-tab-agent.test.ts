@@ -415,7 +415,7 @@ describe('resolveTabAgentFromSignals', () => {
     ).toBe('codex')
   })
 
-  it('treats Claude-prefixed title text as Claude only when it names Claude', () => {
+  it('requires a Claude identity frame even without a known owner', () => {
     expect(
       resolveTabAgentFromSignals({
         hasObservedAgentSignal: false,
@@ -434,7 +434,7 @@ describe('resolveTabAgentFromSignals', () => {
         hookAgent: null,
         launchAgent: undefined
       })
-    ).toBe('claude')
+    ).toBeNull()
   })
 
   it('clears local launch identity once observed activity vanishes at a shell title', () => {
@@ -545,6 +545,22 @@ describe('useTabAgent', () => {
     createdAt: 1,
     launchAgent: 'codex'
   }
+
+  it('paints the completed owner while its task names another agent', async () => {
+    const paneKey = makePaneKey('tab-1', LEAF_ID)
+    useAppStore.setState({
+      terminalLayoutsByTabId: {
+        'tab-1': {
+          root: { type: 'leaf', leafId: LEAF_ID },
+          activeLeafId: LEAF_ID,
+          expandedLeafId: null
+        }
+      },
+      agentStatusByPaneKey: { [paneKey]: { ...completedAgentStatus(paneKey), agentType: 'claude' } }
+    })
+    await renderHookProbe({ ...baseTab, launchAgent: 'claude', title: '⠋ fix the grok launcher' })
+    expect(latestHookAgent).toBe('claude')
+  })
 
   beforeEach(() => {
     latestHookAgent = undefined

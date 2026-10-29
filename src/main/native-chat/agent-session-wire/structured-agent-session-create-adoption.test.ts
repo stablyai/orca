@@ -168,7 +168,7 @@ it.each([100, 1000])(
     const launch = await createClaudeStructuredLaunchResolver({
       store: rig.store,
       resolveWorkspacePath: async () => registered,
-      resolveCommand: () => process.execPath,
+      resolveCommand: () => ({ command: process.execPath, prefixArgs: [] }),
       resolveInheritedEnv: async () => ({}),
       resolveAuthPolicy: () => ({ account: 'system' }),
       resolveLaunchArgs: () => [],

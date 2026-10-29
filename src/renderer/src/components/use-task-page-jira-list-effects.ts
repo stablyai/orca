@@ -4,7 +4,7 @@ import { withCurrentSprintClause } from '../../../shared/jira/jira-jql-predicate
 import {
   buildJiraStatusCatalog,
   getJiraStatusCatalogScopeKey
-} from './task-page-jira-status-catalog'
+} from './task-page/jira/task-page-jira-status-catalog'
 import type { TaskPageLinearCollectionEffectsModel } from './task-page/linear/use-task-page-linear-collection-effects'
 import { useEffect, useMemo, useRef } from 'react'
 import {
