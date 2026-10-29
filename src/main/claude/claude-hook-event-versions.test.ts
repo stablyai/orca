@@ -7,6 +7,7 @@ import {
   claudeKnowsHookEvent,
   claudeKnowsStatusLine,
   parseClaudeCliVersion,
+  parseClaudeCliVersionOutput,
   UNRESOLVED_CLAUDE_VERSION,
   type ClaudeHookEventName
 } from './claude-hook-event-versions'
@@ -105,5 +106,14 @@ describe('parseClaudeCliVersion', () => {
   it('extracts Claude Code version output', () => {
     expect(parseClaudeCliVersion('2.1.261 (Claude Code)')).toBe('2.1.261')
     expect(parseClaudeCliVersion('unknown')).toBeNull()
+  })
+})
+
+describe('parseClaudeCliVersionOutput', () => {
+  it("ignores a launcher's own version", () => {
+    expect(parseClaudeCliVersionOutput('2.1.261 (Claude Code)\n')).toBe('2.1.261')
+    // `npx claude` with no Claude reachable, or a launcher answering for itself.
+    expect(parseClaudeCliVersionOutput('11.17.0\n')).toBeNull()
+    expect(parseClaudeCliVersionOutput('2.30.0')).toBeNull()
   })
 })

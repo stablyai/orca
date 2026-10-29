@@ -38,6 +38,12 @@ export function parseClaudeCliVersion(output: string | null | undefined): string
   return version && isValidAppVersion(version) ? version : null
 }
 
+// A launcher in Command (`npx claude`, `op run -- claude`) answers `--version` with its own
+// version; only Claude's own `x.y.z (Claude Code)` line may pick the hook events.
+export function parseClaudeCliVersionOutput(output: string | null | undefined): string | null {
+  return output && /\(Claude Code\)/i.test(output) ? parseClaudeCliVersion(output) : null
+}
+
 export function claudeVersionReaches(version: string | null | undefined, floor: string): boolean {
   const parsed = parseClaudeCliVersion(version)
   return parsed !== null && hasReachedAppVersion(parsed, floor)
@@ -95,7 +101,9 @@ export async function probeClaudeCliVersion(
       timeoutMs: launch?.timeoutMs ?? 5_000,
       maxOutputBytes: 4_096
     })
-    return result.code === 0 ? parseClaudeCliVersion(`${result.stdout}\n${result.stderr}`) : null
+    return result.code === 0
+      ? parseClaudeCliVersionOutput(`${result.stdout}\n${result.stderr}`)
+      : null
   } catch {
     return null
   }
