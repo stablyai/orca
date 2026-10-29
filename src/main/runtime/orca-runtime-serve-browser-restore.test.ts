@@ -9,6 +9,7 @@ import {
 import { withOpenedServeBrowserTab } from './serve-browser-tab-layout'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 import { BLANK_BROWSER_TAB_STATE } from '../../shared/workspace-layout/workspace-layout-beside'
+import { runInRemoteCliBrowserScope } from './desktop-browser-bridge/remote-cli-browser-scope'
 
 const BROWSER_ONLY_WORKTREE_ID = 'repo-1::/tmp/browser-only'
 
@@ -399,6 +400,43 @@ describe('a saved browser tab on a host with no window', () => {
 
     expect(listed.tabs.map((tab) => tab.browserPageId)).toEqual(['page-1', 'page-2'])
     expect(shown.tab.index).toBe(1)
+  })
+
+  it("lists an SSH host's restored tab in its bridged workspace, which has no repo row here", async () => {
+    const { runtime } = restartedServe(makeWorkspaceSessionWithHeadlessTerminal())
+    const sshWorkspace = 'ssh-repo::/srv/app'
+    runtime.mobileSessionTabsByWorktree.set(sshWorkspace, {
+      worktree: sshWorkspace,
+      publicationEpoch: 'epoch',
+      snapshotVersion: 1,
+      activeGroupId: null,
+      activeTabId: null,
+      activeTabType: null,
+      tabs: [
+        {
+          type: 'browser',
+          id: 'tab-ssh',
+          title: 'App',
+          browserWorkspaceId: 'tab-ssh',
+          browserPageId: 'page-ssh',
+          url: 'https://app.test/',
+          loading: false,
+          canGoBack: false,
+          canGoForward: false,
+          isActive: true
+        }
+      ]
+    })
+
+    const unscoped = await runtime.browserTabList({})
+    const bridged = await runInRemoteCliBrowserScope(sshWorkspace, () =>
+      runtime.browserTabList({ worktree: `id:${sshWorkspace}` })
+    )
+
+    expect(unscoped.tabs.some((tab) => tab.browserPageId === 'page-ssh')).toBe(false)
+    expect(bridged.tabs.map((tab) => [tab.browserPageId, tab.loaded])).toEqual([
+      ['page-ssh', false]
+    ])
   })
 
   it('starts the named saved page once for a tab show after a restart', async () => {

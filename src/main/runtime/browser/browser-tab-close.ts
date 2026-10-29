@@ -144,7 +144,7 @@ export class RuntimeBrowserTabClose {
   // Why the listing: indexes must match `tab list`, which includes restored tabs not yet loaded.
   private async listedTabAt(index: number, worktree: string | undefined) {
     const tabs = (await this.queries.browserTabList({ worktree })).tabs
-    if (index < 0 || index >= tabs.length) {
+    if (!Number.isInteger(index) || index < 0 || index >= tabs.length) {
       throw new Error(`Tab index ${index} out of range (0-${tabs.length - 1})`)
     }
     return tabs[index]

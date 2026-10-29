@@ -1,5 +1,8 @@
 import type { RuntimeServiceCommandSurface } from '../../runtime-service-command-surface'
-import { resolveRemoteCliBrowserScopeSelector } from '../../desktop-browser-bridge/remote-cli-browser-scope'
+import {
+  remoteCliBrowserScopeWorkspaceId,
+  resolveRemoteCliBrowserScopeSelector
+} from '../../desktop-browser-bridge/remote-cli-browser-scope'
 import type { ResolvedWorktree } from '../../runtime-worktree-path-identity'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
@@ -183,6 +186,10 @@ export abstract class OrcaRuntimeWithTerminalDrivers extends OrcaRuntimeWithFitO
         this.notifyMobileSessionTabsChanged(worktreeId),
       readBrowserTabBar: (worktreeId) =>
         readBrowserTabBar(this.mobileSessionTabsByWorktree, worktreeId, (id) => {
+          // Why: an SSH host's bridged workspace may have no row here, yet its pages render in this window.
+          if (id === remoteCliBrowserScopeWorkspaceId()) {
+            return true
+          }
           const scope = parseWorkspaceKey(id)
           return scope?.type === 'folder'
             ? (this.store?.getFolderWorkspaces?.() ?? []).some(
