@@ -8,6 +8,7 @@ import type { MainWindowFocusLifecycle } from './main-window-focus-lifecycle'
 import type { MainWindowStateLifecycle } from './main-window-state-lifecycle'
 import { syncTrafficLightPosition } from './main-window-visual-lifecycle'
 import { consumeUserQuitWindowClose } from './user-quit-window-close'
+import { windowOutlivesMainWindow } from './main-window-close-survivors'
 
 export const WINDOW_QUIT_RENDERER_ACK_TIMEOUT_MS = QUIT_RENDERER_ACK_TIMEOUT_MS
 
@@ -52,10 +53,12 @@ export function installMainWindowCloseLifecycle(args: {
     }, WINDOW_QUIT_RENDERER_ACK_TIMEOUT_MS)
     quitRendererAckTimer.unref?.()
   }
-  // Why: on Windows/Linux closing the main window quits through `window-all-closed`, so the
+  // Why: on Windows/Linux closing the last window quits through `window-all-closed`, so the
   // renderer must weigh running work as for a quit — otherwise the X button warns about paired
   // server terminals that outlive the quit, which File > Quit already skips (#30006).
-  const closeEndsApp = (): boolean => opts?.getWindowCloseEndsApp?.() ?? false
+  // Judged per close: another open window (e.g. an extension popout) keeps the app running.
+  const closeEndsApp = (): boolean =>
+    (opts?.getWindowCloseEndsApp?.() ?? false) && !windowOutlivesMainWindow(mainWindow)
 
   const onCloseRequestReceived = (event: Electron.IpcMainEvent, requestId: number): void => {
     if (event.sender.id === rendererWebContentsId && requestId === quitRendererAckRequestId) {
