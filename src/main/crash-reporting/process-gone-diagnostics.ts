@@ -265,7 +265,7 @@ function sampledProcessIsGone(
 }
 
 // Why: an inherited zero RLIMIT_RTTIME SIGKILLs children with no dump or OOM (Omarchy without rtkit).
-export function zeroRtTimeLimitCrashDetails(): Record<string, string> {
+function zeroRtTimeLimitCrashDetails(): Record<string, string> {
   const limit = readZeroRtTimeLimit()
   return limit ? { rlimitRtTimeSoftUs: limit.soft, rlimitRtTimeHardUs: limit.hard } : {}
 }
