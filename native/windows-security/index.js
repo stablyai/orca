@@ -17,5 +17,10 @@ module.exports = {
   createFileWithDacl: (path, sddl, data) => getAddon().createFileWithDacl(path, sddl, data),
   grantAccess: (path, sid, mask, options) => getAddon().grantAccess(path, sid, mask, options),
   grantAccessAsync: (path, sid, mask, options) =>
-    getAddon().grantAccessAsync(path, sid, mask, options)
+    getAddon().grantAccessAsync(path, sid, mask, options),
+  clearStdHandleInheritance: () => getAddon().clearStdHandleInheritance(),
+  spawnDetachedIsolated: (file, commandLine, cwd, environmentBlock, onExit) =>
+    getAddon().spawnDetachedIsolated(file, commandLine, cwd, environmentBlock, onExit),
+  // Reads the binding this package resolved, so a build probe tests the binary the app loads.
+  hasNativeExport: (name) => typeof getAddon()[name] === 'function'
 }

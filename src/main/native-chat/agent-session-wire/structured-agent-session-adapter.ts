@@ -59,7 +59,8 @@ export {
   AgentSessionPreSpawnError,
   AgentSessionPromptAnswerRejectedError,
   AgentSessionPromptUnavailableError,
-  isAgentSessionPreSpawnError
+  isAgentSessionPreSpawnError,
+  launchPreparationFailure
 } from './structured-agent-session-adapter-errors'
 export type { AgentSessionPreSpawnReason } from './structured-agent-session-adapter-errors'
 
@@ -277,21 +278,30 @@ export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & 
   ): Promise<void | Readonly<Record<string, string>>>
   /** Opt in only when setOption can update idle metadata without a provider turn. */
   canSetOptionWhileIdle?(input: StructuredAgentSessionSetOptionInput): boolean
+  /** Applied inputs for this exact child; observations never decide message admission. */
+  readAppliedInputOptions?(input: {
+    sessionId: string
+    fence: number
+    acquisitionGeneration: string | null
+    next: AgentSessionExecutionOptions | undefined
+  }): { active: AgentSessionExecutionOptions; next: AgentSessionExecutionOptions } | null
   /** Synchronous capability projection; never acquires inventory or changes saved intent. */
   projectOptions?(
     sessionId: string,
     options: Readonly<Record<string, string>>
   ): StructuredAgentSessionOptionProjection | undefined
-  /** Fetch outside the lane; apply under the same child’s fence. */
-  prepareReadOptions?(input: {
-    sessionId: string
-    fence: number
-  }): Promise<() => StructuredAgentSessionLiveOptions> | undefined
+  /** Memory projection only; optional native observations belong to provider activity. */
   readOptions?(input: {
     sessionId: string
     fence: number
   }): Promise<StructuredAgentSessionLiveOptions>
-  readOptionRestoreFailures?(sessionId: string): readonly string[]
+  /** A fresh independent text task; never acquires or writes a turn in the chat. */
+  generateText?(input: {
+    agent: string
+    accountHome: AgentSessionAccountHome
+    prompt: string
+    shouldExecute?: () => boolean
+  }): Promise<string | null>
   /** Copy the provider conversation without changing the chat’s ID; omit for CLI-based forks. */
   copyConversation?(input: {
     identity: AgentSessionJournalIdentity

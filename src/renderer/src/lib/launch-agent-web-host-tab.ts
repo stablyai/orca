@@ -15,7 +15,7 @@ import { translate } from '@/i18n/i18n'
 import { toWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
 import type { AgentTerminalLaunchCompletion } from './structured-agent-session-launch-admission'
 import {
-  agentPermissionNeedsPreparedCommand,
+  agentLaunchNeedsPreparedCommand,
   toAgentLaunchPreferences
 } from '../../../shared/agent-launch-preferences'
 
@@ -67,7 +67,7 @@ export function launchAgentInWebHostTab(args: {
     agentSessionKind: 'fresh',
     // Why: with or without a prompt, the desktop's launch settings decide args (#31986).
     launchAgent: agent,
-    preparedAgentCommand: agentPermissionNeedsPreparedCommand(agent, startupPlan.sessionOptions),
+    preparedAgentCommand: agentLaunchNeedsPreparedCommand(agent, startupPlan.sessionOptions),
     command: startupPlan.launchCommand,
     ...(startupPlan.env ? { env: startupPlan.env } : {}),
     launchConfig: startupPlan.launchConfig,

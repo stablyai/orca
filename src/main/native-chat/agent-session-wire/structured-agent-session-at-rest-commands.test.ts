@@ -11,7 +11,8 @@ import type {
 } from '../../../shared/agent-session-wire'
 import {
   CLAUDE_AT_REST_COMMANDS_TTL_MS,
-  ClaudeAtRestCommandCatalog
+  ClaudeAtRestCommandCatalog,
+  type ClaudeAtRestCommandsDeps
 } from '../../claude/claude-at-rest-commands'
 import { createClaudeCommandCatalogProbe } from '../../claude/claude-command-catalog-probe'
 import type { runAgentModelCatalogListing } from '../agent-model-catalog/agent-model-catalog-probe-runner'
@@ -73,15 +74,17 @@ function adapter(catalog: ClaudeAtRestCommandCatalog): StructuredAgentSessionAda
   }
 }
 
+// Isolate discovery to test folders; a large real home otherwise outlasts the menu wait.
+const discoverWithoutUserHome: ClaudeAtRestCommandsDeps['discover'] = async (args) => {
+  const { discoverSkills } = await import('../../skills/discovery')
+  return discoverSkills({ ...args, homeDir: join(directory, 'home'), refresh: true })
+}
+
 function catalogFor(workspacePath: string): ClaudeAtRestCommandCatalog {
   return new ClaudeAtRestCommandCatalog({
     resolveWorkspacePath: async () => workspacePath,
     now: () => clock,
-    // Isolate discovery to test folders, excluding the user’s home.
-    discover: async (args) => {
-      const { discoverSkills } = await import('../../skills/discovery')
-      return discoverSkills({ ...args, homeDir: join(directory, 'home'), refresh: true })
-    }
+    discover: discoverWithoutUserHome
   })
 }
 
@@ -182,7 +185,8 @@ describe("a Claude chat whose Claude isn't running lists Claude's own `/` comman
     const catalog = new ClaudeAtRestCommandCatalog({
       resolveWorkspacePath: async () => workspace,
       now: () => clock,
-      probe
+      probe,
+      discover: discoverWithoutUserHome
     })
     const record = () => store.getRecord(SESSION)!
     const commandNames = () => namesOf(catalog.read(record()) ?? null, 'command')

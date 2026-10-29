@@ -34,7 +34,8 @@ export async function preparePtyIpcSpawnPreflight(ctx: PtyIpcSpawnState): Promis
     const admission = ctx.deps.assertWorkspaceAcceptsNewPty(
       args.worktreeId,
       args.sessionId,
-      localPtySpawnCwd(args)
+      localPtySpawnCwd(args),
+      args.wslPassiveRestore === true
     )
     if (admission) {
       await admission
@@ -47,7 +48,8 @@ export async function preparePtyIpcSpawnPreflight(ctx: PtyIpcSpawnState): Promis
     const admission = ctx.deps.assertWorkspaceAcceptsNewPty(
       args.worktreeId,
       args.sessionId,
-      localPtySpawnCwd(args)
+      localPtySpawnCwd(args),
+      args.wslPassiveRestore === true
     )
     if (admission) {
       await admission
@@ -89,7 +91,16 @@ export async function preparePtyIpcSpawnPreflight(ctx: PtyIpcSpawnState): Promis
     projectRuntimeSource: { kind: 'sent', projectRuntime: args.projectRuntime },
     preAdopted: ctx.preAdoptedStablePane !== null,
     getSettings: ctx.deps.getSettings,
-    resolveStartupCwd: ctx.deps.resolvePtySpawnStartupCwd
+    resolveStartupCwd: ctx.deps.resolvePtySpawnStartupCwd,
+    ...(args.wslPassiveRestore === true
+      ? {
+          passiveWslRestore: {
+            sessionId: ctx.effectiveSessionId,
+            isNewSession: ctx.ownsNewIncarnation,
+            attachOnly: args.attachOnlyView === true
+          }
+        }
+      : {})
   })
   ctx.cwd = target.cwd
   ctx.prevalidatedCwd = target.prevalidatedCwd

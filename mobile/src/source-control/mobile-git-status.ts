@@ -1,3 +1,4 @@
+import { translate } from '../i18n/mobile-i18n'
 import type { GitFileStatus, GitStagingArea } from '../../../src/shared/git-status-types'
 import {
   buildSourceControlDisplaySections,
@@ -43,10 +44,12 @@ export type MobileSourceControlSection<TEntry extends MobileGitStatusEntry = Mob
     data: TEntry[]
   }
 
-const SECTION_TITLES: Record<SourceControlDisplaySectionId, string> = {
-  conflicts: 'Conflicts',
-  unstaged: 'Changes',
-  staged: 'Staged Changes'
+function sectionTitles(): Record<SourceControlDisplaySectionId, string> {
+  return {
+    conflicts: translate('sourceControl.gitStatus.conflicts', 'Conflicts'),
+    unstaged: translate('sourceControl.gitStatus.changes', 'Changes'),
+    staged: translate('sourceControl.gitStatus.stagedChanges', 'Staged Changes')
+  }
 }
 
 // Desktop's sections: conflicts pinned on top, then the user's group order, sorted like desktop.
@@ -54,13 +57,14 @@ export function buildMobileSourceControlSections<TEntry extends MobileGitStatusE
   entries: readonly TEntry[],
   groupOrder: SourceControlGroupOrder
 ): MobileSourceControlSection<TEntry>[] {
+  const titles = sectionTitles()
   return buildSourceControlDisplaySections(
     groupSourceControlEntries(entries.filter(hasKnownArea)),
     resolveSourceControlGroupOrder(groupOrder)
   ).map((section) => ({
     id: section.id,
     area: section.area,
-    title: SECTION_TITLES[section.id],
+    title: titles[section.id],
     data: section.items
   }))
 }

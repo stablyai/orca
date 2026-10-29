@@ -191,7 +191,8 @@ export function useQuickSubmitPreparation(input: QuickSubmitPreparationInput) {
         linkedLinearIssueOrganizationUrlKey,
         effectiveBranchNameOverride,
         branchIntent:
-          smartGitHubResolution.kind === 'none' && effectiveBranchNameOverride
+          smartGitHubResolution.kind === 'none' &&
+          (effectiveBranchNameOverride || branchIntent === 'create-new')
             ? branchIntent
             : undefined,
         submitBaseBranch,

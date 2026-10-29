@@ -1,3 +1,4 @@
+import { translate } from '../i18n/mobile-i18n'
 import { isHostedReviewCreateEligibilityConfirmable } from '../../../src/shared/hosted-review-create-confirmation'
 import { hostedReviewCopy } from './hosted-review-copy'
 import {
@@ -32,11 +33,21 @@ export function getMobilePrCreateSuccessWarning(
   const copy = hostedReviewCopy(provider)
   if (outcome.existing) {
     return outcome.number
-      ? `${copy.titleLabel} #${outcome.number} is already open.`
-      : `${copy.titleLabel} is already open.`
+      ? translate(
+          'sourceControl.prCreate.existingNumber',
+          '{{titleLabel}} #{{number}} is already open.',
+          { titleLabel: copy.titleLabel, number: outcome.number }
+        )
+      : translate('sourceControl.prCreate.existing', '{{titleLabel}} is already open.', {
+          titleLabel: copy.titleLabel
+        })
   }
   if (outcome.linkError) {
-    return `${copy.titleLabel} created, but Orca could not refresh it yet.`
+    return translate(
+      'sourceControl.prCreate.createdNotRefreshed',
+      '{{titleLabel}} created, but Orca could not refresh it yet.',
+      { titleLabel: copy.titleLabel }
+    )
   }
   return undefined
 }
@@ -59,35 +70,91 @@ export function getMobilePrCreateBlockMessage(prefill: MobilePrPrefill): string 
     prefill.reviewLookupOutcome === 'unavailable' ||
     (!reviewLookupKnown && (prefill.canCreate === true || prefill.blockedReason === 'needs_push'))
   ) {
-    return `Orca could not confirm whether this branch already has a ${copy.reviewLabel}. Try again in a moment.`
+    return translate(
+      'sourceControl.prCreate.lookupUnconfirmed',
+      'Orca could not confirm whether this branch already has a {{reviewLabel}}. Try again in a moment.',
+      { reviewLabel: copy.reviewLabel }
+    )
   }
   switch (prefill.blockedReason) {
     case 'dirty':
-      return `Commit changes before creating a ${copy.reviewLabel}.`
+      return translate(
+        'sourceControl.prCreate.dirty',
+        'Commit changes before creating a {{reviewLabel}}.',
+        { reviewLabel: copy.reviewLabel }
+      )
     case 'detached_head':
-      return `Check out a branch before creating a ${copy.reviewLabel}.`
+      return translate(
+        'sourceControl.prCreate.detachedHead',
+        'Check out a branch before creating a {{reviewLabel}}.',
+        { reviewLabel: copy.reviewLabel }
+      )
     case 'default_branch':
-      return `Switch to a feature branch before creating a ${copy.reviewLabel}.`
+      return translate(
+        'sourceControl.prCreate.defaultBranch',
+        'Switch to a feature branch before creating a {{reviewLabel}}.',
+        { reviewLabel: copy.reviewLabel }
+      )
     case 'no_upstream':
-      return `Publish commits before creating a ${copy.reviewLabel}.`
+      return translate(
+        'sourceControl.prCreate.noUpstream',
+        'Publish commits before creating a {{reviewLabel}}.',
+        { reviewLabel: copy.reviewLabel }
+      )
     case 'needs_sync':
-      return `Sync this branch before creating a ${copy.reviewLabel}.`
+      return translate(
+        'sourceControl.prCreate.needsSync',
+        'Sync this branch before creating a {{reviewLabel}}.',
+        { reviewLabel: copy.reviewLabel }
+      )
     case 'auth_required':
-      return `Authenticate before creating a ${copy.reviewLabel}.`
+      return translate(
+        'sourceControl.prCreate.authRequired',
+        'Authenticate before creating a {{reviewLabel}}.',
+        { reviewLabel: copy.reviewLabel }
+      )
     case 'unsupported_provider':
-      return `Creating ${copy.reviewLabel}s is not supported for this repo.`
+      return prefill.provider === 'gitlab'
+        ? translate(
+            'sourceControl.prCreate.unsupportedMergeRequests',
+            'Creating merge requests is not supported for this repo.'
+          )
+        : translate(
+            'sourceControl.prCreate.unsupportedPullRequests',
+            'Creating pull requests is not supported for this repo.'
+          )
     case 'existing_review':
-      return `A ${copy.reviewLabel} already exists for this branch.`
+      return translate(
+        'sourceControl.prCreate.existingReview',
+        'A {{reviewLabel}} already exists for this branch.',
+        { reviewLabel: copy.reviewLabel }
+      )
     case 'fork_head_unsupported':
-      return `Creating a ${copy.reviewLabel} from this fork is not supported.`
+      return translate(
+        'sourceControl.prCreate.forkHeadUnsupported',
+        'Creating a {{reviewLabel}} from this fork is not supported.',
+        { reviewLabel: copy.reviewLabel }
+      )
     case 'base_not_on_remote':
-      return `Push the base branch before creating a ${copy.reviewLabel}.`
+      return translate(
+        'sourceControl.prCreate.baseNotOnRemote',
+        'Push the base branch before creating a {{reviewLabel}}.',
+        { reviewLabel: copy.reviewLabel }
+      )
     case 'needs_push':
     case null:
     case undefined:
-      return `This branch is not ready for a ${copy.reviewLabel} yet.`
+      return translate(
+        'sourceControl.prCreate.notReady',
+        'This branch is not ready for a {{reviewLabel}} yet.',
+        { reviewLabel: copy.reviewLabel }
+      )
     default:
       // Accept future desktop blocked reasons while remaining safely blocked.
-      return `This branch is not ready for a ${copy.reviewLabel} yet.`
+      return translate(
+        'sourceControl.prCreate.notReady',
+        'This branch is not ready for a {{reviewLabel}} yet.',
+        { reviewLabel: copy.reviewLabel }
+      )
   }
 }

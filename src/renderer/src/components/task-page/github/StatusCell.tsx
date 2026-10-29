@@ -165,7 +165,12 @@ export function GHStatusCell({
                   })
             }
             if (!repo) {
-              throw new Error('No GitHub repository context available for this issue.')
+              throw new Error(
+                translate(
+                  'auto.components.TaskPage.noGitHubRepositoryContext',
+                  'No GitHub repository context available for this issue.'
+                )
+              )
             }
             const runtimeRepoId =
               sourceContext?.provider === 'github' ? (sourceContext.repoId ?? repo.id) : repo.id

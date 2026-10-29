@@ -28,6 +28,7 @@ import {
   resolveTitleDerivedPaneAgent,
   type TitleDerivedPaneForeground
 } from './title-derived-pane-agent-identity'
+import { translate } from '@/i18n/i18n'
 
 /** Title snapshots use one restart-stable authority; revisions are comparable only within it, never across authorities. */
 export const TITLE_DERIVED_AGENT_ROW_AUTHORITY_ID = 'renderer-title-projection'
@@ -181,7 +182,11 @@ function buildTitleDerivedAgentRow(args: {
   const rowLabel = agentType === titleAgentType && label ? label : formatAgentTypeLabel(agentType)
   const rowState = titleStatusToRowState(status)
   const secondary =
-    status === 'permission' ? 'Needs input' : status === 'working' ? 'Running' : 'Idle'
+    status === 'permission'
+      ? translate('auto.components.sidebar.titleDerivedAgentRows.needsInput', 'Needs input')
+      : status === 'working'
+        ? translate('auto.components.sidebar.titleDerivedAgentRows.running', 'Running')
+        : translate('auto.components.sidebar.titleDerivedAgentRows.idle', 'Idle')
   const entryState: AgentStatusState = rowState === 'waiting' ? 'waiting' : 'working'
   const entry: AgentStatusEntry = {
     paneKey,

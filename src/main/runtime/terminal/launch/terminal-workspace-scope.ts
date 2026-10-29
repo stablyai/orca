@@ -156,7 +156,7 @@ export abstract class OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktr
     const worktreeSelector = parsed?.type === 'worktree' ? `id:${parsed.worktreeId}` : selector
     const worktree =
       resolveCreatedWorktreeTerminalTarget(this.store, selector, createdWorktree) ??
-      (await this.resolveWorktreeSelector(worktreeSelector))
+      (await this.resolveGitWorktreeSelector(worktreeSelector))
     // Repo ids are host-blind; resolve the worktree owner or refuse as unresolved rather than spawn locally with a remote cwd (#11163).
     const resolution = resolveWorktreeLaunchHost(this.store?.getRepos() ?? [], worktree)
     if (resolution.kind === 'ambiguous') {

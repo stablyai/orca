@@ -6,7 +6,7 @@ import { getWorktreeAttachmentLabel } from '@/lib/worktree-attachment-label'
 import { cn } from '@/lib/utils'
 import { LinearPriorityIcon } from '@/components/linear-priority-icon'
 import { LinearStateCell } from './task-page-linear-issue-model'
-import { translate } from '@/i18n/i18n'
+import { getIntlLocale, translate } from '@/i18n/i18n'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { formatRelativeTime } from '../task-page-source-context'
 import { Button } from '@/components/ui/button'
@@ -220,7 +220,7 @@ export function TaskPageLinearIssueTable({
                   </div>
                 </TooltipTrigger>
                 <TooltipContent side="bottom" sideOffset={6}>
-                  {new Date(issue.updatedAt).toLocaleString()}
+                  {new Date(issue.updatedAt).toLocaleString(getIntlLocale())}
                 </TooltipContent>
               </Tooltip>
             ) : null}

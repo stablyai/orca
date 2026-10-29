@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it, vi } from 'vitest'
 import { AcpStructuredOptions, readAcpLiveOptions } from './acp-structured-options'
+import { writeAcpSessionOption } from './acp-session-option-write'
 import { grokModelEfforts } from './acp-dialects/grok-model-catalog'
 import { GROK_ACP_DIALECT } from './acp-dialects/grok-dialect'
 import { OMP_ACP_DIALECT } from './acp-dialects/omp-dialect'
@@ -108,8 +109,8 @@ describe('ACP session options', () => {
   )
 
   it.each([OPENCODE_ACP_DIALECT, OMP_ACP_DIALECT])(
-    'keeps picks out of catalog facts and expires dependent application proof',
-    (dialect) => {
+    'keeps native menus and observations separate from applied inputs',
+    async (dialect) => {
       const options = new AcpStructuredOptions(dialect)
       options.adoptSession({
         configOptions,
@@ -133,17 +134,43 @@ describe('ACP session options', () => {
       options.notePick('model')
       options.adoptModel('')
       options.adoptConfigOptions(null)
+      options.adoptConfigOptions(undefined)
+      expect(options.reported()).toEqual({ model: 'model-b', effort: 'high' })
       options.adoptConfigOptions(configOptions)
-      expect([...options.currentProof]).toEqual(['model', 'effort'])
-      for (const next of [
+      expect([...options.appliedInput]).toEqual([])
+      await writeAcpSessionOption(
+        {
+          setConfigOption: async () => ({ configOptions }),
+          setModel: async () => {}
+        },
+        options,
+        options.write('model', 'raw/retired')!,
+        {
+          agent: 'test',
+          key: 'model',
+          value: 'raw/retired',
+          timeoutMs: 1000
+        }
+      )
+      expect([...options.appliedInput]).toEqual([['model', 'raw/retired']])
+      const reports = [
+        { model: 'model-a' },
+        { model: 'model-b', effort: 'high' },
+        {},
+        { model: 'model-b', effort: 'high' }
+      ]
+      for (const [index, next] of [
         [{ ...configOptions[0]!, currentValue: 'model-a' }],
         configOptions,
         [],
         configOptions
-      ]) {
+      ].entries()) {
         options.adoptConfigOptions(next)
-        expect([...options.currentProof]).toEqual([])
+        expect([...options.appliedInput]).toEqual([['model', 'raw/retired']])
+        expect(options.reported()).toEqual(reports[index])
       }
+      options.adoptSession({ configOptions })
+      expect([...options.appliedInput]).toEqual([])
     }
   )
 

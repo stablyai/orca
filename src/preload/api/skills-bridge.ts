@@ -49,6 +49,7 @@ export const skillsApi = {
     ipcRenderer.invoke('skills:bundledExecute', request),
   prepareShare: (input: {
     skillIds: string[]
+    skillDirectories?: string[]
     bundleName: string
     target?: SkillDiscoveryTarget
     packageId?: string

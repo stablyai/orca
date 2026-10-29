@@ -195,6 +195,9 @@ describe('Codex background-only resume through hook shutdown', () => {
       })
       params.envelope.clientOperationId = `${Date.now()}-${'1'.padStart(32, '0')}`
       expect(await host.attach({ callerKey: 'restart-test' }, params)).toMatchObject({ ok: true })
+      await vi.waitFor(() =>
+        expect(host.collaboratorsForTests().sessions.get(SESSION)?.child?.phase).toBe('ready')
+      )
       const notify = runtime.codex.notify
       notify('turn/started', { threadId: RESTART_THREAD, turn: { id: 'lead-turn' } })
       if (kind === 'agent') {

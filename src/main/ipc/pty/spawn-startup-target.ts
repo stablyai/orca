@@ -13,7 +13,8 @@ import {
   resolveLocalPtyOptions,
   type ProjectRuntimeResolutionStore
 } from '../../local-project-runtime-resolution'
-import type { PtySpawnResult } from '../../providers/pty-provider-contract'
+import type { PtySpawnOptions, PtySpawnResult } from '../../providers/pty-provider-contract'
+import { holdPassiveRestoreOfStoppedWslDistro } from '../../daemon/daemon-wsl-passive-restore-hold'
 import { normalizeWindowsTerminalCwd } from '../../providers/windows-shell-args'
 import { wslUncDirectoryExistsAsync } from '../../wsl'
 import { getCodexSelectionTargetForPty } from './host-env/codex-home'
@@ -54,6 +55,8 @@ type PtySpawnStartupArgs = {
     cwd: string | undefined,
     missingDirFallback?: TerminalStartupCwdMissingDirFallback
   ) => string | undefined
+  /** A restore the user did not ask for; held here, before any provider or cwd probe can boot WSL. */
+  passiveWslRestore?: Pick<PtySpawnOptions, 'sessionId' | 'isNewSession' | 'attachOnly'>
 }
 
 export async function resolvePtySpawnStartupTarget(
@@ -70,6 +73,18 @@ export async function resolvePtySpawnStartupTarget(
       args.shellOverride,
       process.env.COMSPEC || 'powershell.exe'
     )
+  if (args.passiveWslRestore && !args.preAdopted) {
+    // E9: whichever provider runs (daemon, degraded or off), and before the cwd probe's `wsl.exe`.
+    await holdPassiveRestoreOfStoppedWslDistro(
+      { ...args.passiveWslRestore, wslPassiveRestore: true },
+      resolveWslSessionContext({
+        cwd: args.cwd,
+        sessionId: args.sessionId,
+        shellOverride: terminalRuntimeOptions.shellOverride,
+        terminalWindowsWslDistro: terminalRuntimeOptions.terminalWindowsWslDistro
+      })?.distro
+    )
+  }
   const startup = args.preAdopted
     ? {
         cwd: args.resolveStartupCwd(args.worktreeId, args.cwd),

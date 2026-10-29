@@ -12,6 +12,7 @@ import {
 import { closeHistory } from '@tiptap/pm/history'
 import { Slice } from '@tiptap/pm/model'
 import {
+  memo,
   useImperativeHandle,
   useLayoutEffect,
   useMemo,
@@ -19,6 +20,7 @@ import {
   type HTMLAttributes,
   type RefObject
 } from 'react'
+import { shallow } from 'zustand/shallow'
 import { EditorContent, useEditor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import Placeholder from '@tiptap/extension-placeholder'
@@ -51,7 +53,14 @@ type Props = Omit<HTMLAttributes<HTMLDivElement>, 'onChange' | 'onSelect'> & {
 
 const NO_IMAGES: readonly string[] = []
 
-export function NativeChatPromptEditor({
+// `initialValue` only seeds the editor at mount; keep the other props referentially stable or this memo stops helping.
+export const NativeChatPromptEditor = memo(
+  NativePromptEditor,
+  ({ initialValue: _previous, ...previous }, { initialValue: _next, ...next }) =>
+    shallow(previous, next)
+)
+
+function NativePromptEditor({
   scopeKey,
   imageRow = NO_IMAGES,
   inputRef,

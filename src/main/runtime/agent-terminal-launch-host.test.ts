@@ -13,7 +13,7 @@ import { OrcaRuntimeService } from './orca-runtime'
 const REMOTE_PATH = '/srv/app-feature'
 
 type RuntimeInternals = {
-  resolveWorktreeSelector: (selector: string) => Promise<unknown>
+  resolveGitWorktreeSelector: (selector: string) => Promise<unknown>
   buildStartupForAgent: (repo: unknown, agent: unknown, prompt: string) => unknown
   createTerminal: (selector: string, opts: unknown) => Promise<unknown>
 }
@@ -27,7 +27,7 @@ function makeRuntime(repos: readonly Record<string, unknown>[], hostId?: string)
   }
   const runtime = new OrcaRuntimeService(store as never)
   const internals = runtime as unknown as RuntimeInternals
-  vi.spyOn(internals, 'resolveWorktreeSelector').mockResolvedValue({
+  vi.spyOn(internals, 'resolveGitWorktreeSelector').mockResolvedValue({
     id: 'repo-shared::/srv/app-feature',
     repoId: 'repo-shared',
     path: REMOTE_PATH,

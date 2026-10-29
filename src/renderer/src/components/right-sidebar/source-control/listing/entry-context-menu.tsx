@@ -26,6 +26,7 @@ import {
   isRevealOrEditorOpenBlocked
 } from '@/lib/local-path-open-guard'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
+import { formatClipboardFilePath } from '@/lib/clipboard-file-path'
 import { NO_OPEN_IN_APPLICATIONS } from '@/lib/open-in-application-selection'
 import {
   getOpenInEntryAvailability,
@@ -77,8 +78,8 @@ export function SourceControlEntryContextMenu({
     if (!absolutePath) {
       return
     }
-    void window.api.ui.writeClipboardText(absolutePath)
-  }, [absolutePath])
+    void window.api.ui.writeClipboardText(formatClipboardFilePath(absolutePath, revealOwner))
+  }, [absolutePath, revealOwner])
 
   const handleCopyRelativePath = useCallback(() => {
     if (!relativePath) {

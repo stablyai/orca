@@ -12,7 +12,7 @@ import {
   collectLinkedJiraIssueRefs,
   findJiraIssueWorkspaceAttachmentsInIndex
 } from '@/lib/jira-issue-workspace-attachment'
-import { filterLinkedJiraIssues } from './task-page-jira-linked-issues'
+import { filterLinkedJiraIssues } from './task-page/jira/task-page-jira-linked-issues'
 import { sortJiraIssues } from './jira-issue-sorter'
 export function useTaskPageJiraListProjection(model: TaskPageLinearBoardModel) {
   const {

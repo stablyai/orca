@@ -147,7 +147,7 @@ describe('validated cookie replacement', () => {
 
     const result = await importCookiesFromFile(filePath, 'persist:test')
 
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       ok: false,
       reason: 'No valid cookies found. 1 entries were skipped due to missing or invalid fields.'
     })

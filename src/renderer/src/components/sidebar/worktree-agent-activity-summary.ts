@@ -1,3 +1,8 @@
+import { getStructuredAgentSessionTabsByPaneKey } from '@/components/native-chat/structured-agent-session-tabs'
+import {
+  selectVisibleAgentOrchestration,
+  type VisibleOrchestrationState
+} from '@/runtime/visible-agent-orchestration'
 import type { AppState } from '@/store'
 import { isExplicitAgentStatusFresh } from '@/lib/agent-status'
 import { migrationUnsupportedToAgentStatusEntry } from '../../../../shared/migration-unsupported-agent-entry'
@@ -56,10 +61,11 @@ export type AgentActivityInput = Pick<
   | 'agentStatusByPaneKey'
   | 'migrationUnsupportedByPtyId'
   | 'retainedAgentsByPaneKey'
-> & {
-  tabsByWorktree: AgentActivityTabsByWorktree
-  runtimeAgentOrchestrationByPaneKey?: AppState['runtimeAgentOrchestrationByPaneKey']
-}
+> &
+  VisibleOrchestrationState & {
+    tabsByWorktree: AgentActivityTabsByWorktree
+    runtimeAgentOrchestrationByPaneKey?: AppState['runtimeAgentOrchestrationByPaneKey']
+  }
 
 type AgentActivityCache = {
   tabsByWorktree: AgentActivityTabsByWorktree
@@ -82,7 +88,7 @@ export function selectWorktreeAgentActivitySummary(
 function getWorktreeAgentActivitySummaries(
   state: AgentActivityInput
 ): Map<string, WorktreeAgentActivitySummary> {
-  const runtimeAgentOrchestrationByPaneKey = state.runtimeAgentOrchestrationByPaneKey
+  const runtimeAgentOrchestrationByPaneKey = selectVisibleAgentOrchestration(state)
   if (
     agentActivityCache &&
     agentActivityCache.tabsByWorktree === state.tabsByWorktree &&
@@ -114,7 +120,12 @@ function getWorktreeAgentActivitySummaries(
 
   const now = Date.now()
   for (const [paneKey, entry] of Object.entries(state.agentStatusByPaneKey)) {
-    const paneIdentity = parseAgentStatusPaneIdentity(paneKey)
+    const paneIdentity = parseAgentStatusPaneIdentity(
+      paneKey,
+      state.unifiedTabsByWorktree
+        ? getStructuredAgentSessionTabsByPaneKey(state.unifiedTabsByWorktree).get(paneKey)
+        : undefined
+    )
     if (!paneIdentity) {
       continue
     }

@@ -1,7 +1,9 @@
+import { BROWSER_GOOGLE_COOKIE_CLEAR_CAPABILITY } from '../../shared/browser-runtime-capabilities'
 import { OrcaRuntimeWithGetRuntimeId } from './workspaces/session-hosts/get-runtime-id'
 import type { RuntimeDegradation, RuntimeStatus } from '../../shared/runtime-types'
 import {
   runtimeBrowserCommandsFactoryIsHeadless,
+  runtimeBrowserCommandsFactorySupportsGoogleCookieClear,
   runtimeBrowserCommandsFactorySupportsClientHosting,
   runtimeBrowserUnavailableCause
 } from './runtime-browser-commands-factory'
@@ -9,7 +11,6 @@ import { isBrowserIdentityModeStoreInitialized } from '../browser/browser-identi
 import { servesLocalWslMigrationSource } from '../orcad/orcad-migration-wsl-destination'
 import { ORCAD_MIGRATION_LOCAL_WSL_SOURCE_RUNTIME_CAPABILITY } from '../../shared/orcad-runtime-capabilities'
 import { advertisedOrcadMigrationDestinationCapabilities } from '../orcad/orcad-migration-destination-capabilities'
-import type { RuntimeCapability } from '../../shared/protocol-version'
 import { USAGE_CREDENTIALS_RUNTIME_CAPABILITY } from '../../shared/account-runtime-capabilities'
 import {
   BROWSER_CERTIFICATE_TRUST_RUNTIME_CAPABILITY,
@@ -55,6 +56,7 @@ import type { WorktreeSortOrderUpdate } from '../../shared/worktree/sort-order-u
 import { isDesktopBrowserBridgeHostEnabled } from './desktop-browser-bridge/desktop-browser-bridge-registry'
 import { DESKTOP_BROWSER_BRIDGE_RUNTIME_CAPABILITY } from '../../shared/desktop-browser-bridge-protocol'
 import { darkSwitchRuntimeCapabilities } from './dark-switch-runtime-capabilities'
+import { supportsDurableTerminalPromptDelivery } from './durable-terminal-prompt-delivery-support'
 
 type RuntimeStatusHost = {
   getAvailableAuthoritativeWindow(): unknown
@@ -65,18 +67,9 @@ type RuntimeStatusHost = {
   ): string[]
 }
 
-function supportsDurableTerminalPromptDelivery(): boolean {
-  if (typeof process.getBuiltinModule !== 'function') {
-    return false
-  }
-  try {
-    return process.getBuiltinModule('node:sqlite') !== undefined
-  } catch {
-    return false
-  }
-}
-
 export abstract class OrcaRuntimeWithGetStatus extends OrcaRuntimeWithGetRuntimeId {
+  protected abstract pruneUnregisteredWorktreeScans(): void
+
   private asRuntimeStatusHost(): RuntimeStatusHost {
     return this as unknown as RuntimeStatusHost
   }
@@ -92,8 +85,10 @@ export abstract class OrcaRuntimeWithGetStatus extends OrcaRuntimeWithGetRuntime
     // TEMPORARY compatibility field: older clients otherwise re-probe WSL capabilities indefinitely.
     const windowsProcessStartTimeAvailable =
       process.platform === 'win32' && isWindowsProcessStartTimeAvailable()
-    const capabilities: RuntimeCapability[] = RUNTIME_CAPABILITIES.filter(
+    const capabilities: NonNullable<RuntimeStatus['capabilities']> = RUNTIME_CAPABILITIES.filter(
       (capability) =>
+        (capability !== BROWSER_GOOGLE_COOKIE_CLEAR_CAPABILITY ||
+          runtimeBrowserCommandsFactorySupportsGoogleCookieClear()) &&
         (capability !== 'browser.screencast.v1' || canBrowse) &&
         (capability !== BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY || canHostClientPages) &&
         (capability !== BROWSER_TAB_CREATE_KNOWN_ID_RUNTIME_CAPABILITY ||
@@ -317,6 +312,7 @@ export abstract class OrcaRuntimeWithGetStatus extends OrcaRuntimeWithGetRuntime
   }
 
   protected notifyReposChanged(): void {
+    this.pruneUnregisteredWorktreeScans()
     wakeFolderRepoGitUpgradeWatch()
     this.notifier?.reposChanged()
     this.emitClientEvent({ type: 'reposChanged' })

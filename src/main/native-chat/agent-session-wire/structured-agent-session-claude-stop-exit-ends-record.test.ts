@@ -1,3 +1,4 @@
+import * as leaseRelease from './structured-agent-session-lease-release'
 // All provider operations join close; proven exit ends the child record, unproven close refuses dependent work.
 
 import { mkdtemp, rm } from 'node:fs/promises'
@@ -64,6 +65,7 @@ beforeEach(async () => {
       providerSessionId: PROVIDER_SESSION_ID,
       resumeLeafUuid: null,
       resumesTranscript: (store.getRecord(SESSION)?.providerHandleChain.length ?? 0) > 0,
+      cliFlag: async () => 'supported' as const,
       continuesChain: (store.getRecord(SESSION)?.providerHandleChain.length ?? 0) > 0
     }),
     onEvent: (event) => {
@@ -373,12 +375,9 @@ it('sends after a proven exit whose resume-point write and lease release both fa
   await openTurn(connection)
   refuseWritesOnceClosed(connection)
   persistHandle.mockRejectedValueOnce(new Error('resume point not written'))
-  const transition = store.transitionHandoff.bind(store)
-  vi.spyOn(store, 'transitionHandoff')
-    .mockImplementationOnce(async () => {
-      throw new Error('store unavailable')
-    })
-    .mockImplementation(transition)
+  vi.spyOn(leaseRelease, 'releaseStoredStructuredAgentSessionOwnerAfterExit').mockRejectedValueOnce(
+    new Error('store unavailable')
+  )
   await expect(stop()).resolves.toMatchObject({ ok: true, value: { cancelled: true } })
   frame(connection, INTERRUPTED_RESULT)
   await eventually(() => expect(child()).toBeNull())

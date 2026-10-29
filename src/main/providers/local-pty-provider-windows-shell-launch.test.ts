@@ -14,7 +14,8 @@ const {
   killWithDescendantSweepMock,
   isWslAvailableAsyncMock,
   wslUncDirectoryExistsAsyncMock,
-  createShellPromptReadinessProbeMock
+  createShellPromptReadinessProbeMock,
+  readWslDistroRunningStateMock
 } = vi.hoisted(() => ({
   existsSyncMock: vi.fn(),
   statSyncMock: vi.fn(),
@@ -28,7 +29,8 @@ const {
   killWithDescendantSweepMock: vi.fn(),
   isWslAvailableAsyncMock: vi.fn(),
   wslUncDirectoryExistsAsyncMock: vi.fn(),
-  createShellPromptReadinessProbeMock: vi.fn()
+  createShellPromptReadinessProbeMock: vi.fn(),
+  readWslDistroRunningStateMock: vi.fn()
 }))
 
 vi.mock('fs', () => ({
@@ -107,6 +109,10 @@ vi.mock('../wsl', () => ({
   wslUncDirectoryExistsAsync: (...args: unknown[]) => wslUncDirectoryExistsAsyncMock(...args)
 }))
 
+vi.mock('../wsl-background-distro-gate', () => ({
+  readWslDistroRunningState: (...args: unknown[]) => readWslDistroRunningStateMock(...args)
+}))
+
 vi.mock('../shell-prompt-readiness-probe', () => ({
   createShellPromptReadinessProbe: createShellPromptReadinessProbeMock
 }))
@@ -119,6 +125,7 @@ import {
   type LocalPtyMockProcess
 } from './local-pty-provider-test-harness'
 import { POWERLEVEL10K_WIZARD_DISABLE_ENV } from '../pty/powerlevel10k-wizard-env'
+import { wslDistroHoldMessage } from '../../shared/wsl-distro-stopped-hold'
 
 describe('LocalPtyProvider', () => {
   let provider: LocalPtyProvider
@@ -730,6 +737,40 @@ describe('LocalPtyProvider', () => {
           })
         })
       )
+    })
+
+    it('holds a daemon-off passive restore of a stopped WSL distro without spawning wsl.exe', async () => {
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+      readWslDistroRunningStateMock.mockResolvedValue('stopped')
+      spawnMock.mockClear()
+
+      await expect(
+        provider.spawn({
+          cols: 80,
+          rows: 24,
+          cwd: '\\\\wsl.localhost\\Ubuntu\\home\\fake\\repo',
+          sessionId: 'restored-session',
+          wslPassiveRestore: true
+        })
+      ).rejects.toThrow(wslDistroHoldMessage('Ubuntu', 'stopped'))
+      expect(readWslDistroRunningStateMock).toHaveBeenCalledWith('Ubuntu', {
+        retryUnverifiable: true
+      })
+      expect(spawnMock).not.toHaveBeenCalled()
+    })
+
+    it('restores a daemon-off WSL pane once its distro reads running', async () => {
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+      readWslDistroRunningStateMock.mockResolvedValue('running')
+
+      await provider.spawn({
+        cols: 80,
+        rows: 24,
+        cwd: '\\\\wsl.localhost\\Ubuntu\\home\\fake\\repo',
+        sessionId: 'restored-session',
+        wslPassiveRestore: true
+      })
+      expect(spawnMock.mock.calls.at(-1)?.[0]).toBe('wsl.exe')
     })
   })
 })

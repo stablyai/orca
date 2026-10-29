@@ -15,8 +15,6 @@ import { agentHookServer } from '../agent-hooks/server'
 import { resolveHostCodexSessionSourceHome } from '../codex/codex-session-source-home'
 import { browserManager } from '../browser/browser-manager'
 import { prewarmStructuredAgentModelCatalogs } from '../runtime/structured-agent-model-catalog-wiring'
-import { agentModelCatalogStore } from '../native-chat/agent-model-catalog/agent-model-catalog-store'
-import { createAgentModelCatalogSettingsExpiry } from '../native-chat/agent-model-catalog/agent-model-catalog-account-expiry'
 import { mainProcessState as state } from './main-process-state'
 
 // Settings that change which account or binary a new chat's agent runs under.
@@ -66,12 +64,7 @@ export function initializeMainProcessAccountServices(): void {
   void startCodexStateDbBackfillRecoveryInBackground(getOrcaManagedCodexHomePath())
   // Defer shared-home migration; compatibility launches re-arm non-destructive scans for new rollouts (#4444, #8612, #12480).
   state.codexSessionMigration.scheduleInitialRun()
-  const expireModelCatalogs = createAgentModelCatalogSettingsExpiry(
-    agentModelCatalogStore,
-    store.getSettings()
-  )
-  store.onSettingsChanged((updates, settings) => {
-    expireModelCatalogs(updates, settings)
+  store.onSettingsChanged((updates) => {
     // An account switch would otherwise leave the next chat's picker on a cold catalog.
     if (MODEL_CATALOG_ACCOUNT_SETTINGS.some((key) => key in updates)) {
       prewarmStructuredAgentModelCatalogs()

@@ -113,7 +113,6 @@ function errorDetails(error: AcpAgentError): string | undefined {
 }
 
 export const OMP_ACP_DIALECT: AcpDialect = {
-  // OMP resolves any thinking level against the selected model (model-controls.ts setThinkingLevel).
   normalizeToolUpdate,
   compactionReply,
   authenticationRequired: (error) => {

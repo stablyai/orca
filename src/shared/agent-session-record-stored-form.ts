@@ -10,6 +10,7 @@ import {
   decodePersistedAgentSessionProviderHandleChain,
   encodePersistedAgentSessionProviderHandleChain
 } from './agent-session-provider-handle'
+import { isAgentSessionLastTurn } from './agent-session-last-turn'
 import type { AgentSessionRecord } from './agent-session-record'
 
 /** Report decode changes needing writeback; handle encoding alone is unchanged across builds and needs none. */
@@ -22,12 +23,13 @@ export function decodePersistedAgentSessionRecord<L extends PersistedAgentSessio
   if (!providerHandleChain) {
     throw new Error('agent_session_provider_handle_invalid')
   }
-  const { sleptAt, ...rest } = record
+  const { sleptAt, lastTurn, ...rest } = record
   const validSleep = typeof sleptAt === 'number' && Number.isFinite(sleptAt) && sleptAt > 0
   return {
     record: {
       ...rest,
       ...(validSleep ? { sleptAt } : {}),
+      ...(isAgentSessionLastTurn(lastTurn) ? { lastTurn } : {}),
       providerHandleChain,
       lease: normalizeLegacyHandoffLease(record.lease)
     },

@@ -31,6 +31,7 @@ import {
   getWslHostsPausedLabel,
   getWslHostsTurnedOffLabel
 } from '../sidebar/wsl-host-row-status'
+import { wslHostStatusDetailMessage } from '../sidebar/wsl-host-failure-text'
 import { Badge } from '../ui/badge'
 import { Button } from '../ui/button'
 import { DropdownMenuItem } from '../ui/dropdown-menu'
@@ -200,7 +201,9 @@ export function WslHostsSection({
                           { version: deferred.candidateVersion }
                         )} ${managedServerOutcomeLabel({ outcome: 'deferred', code: deferred.code })}`
                       : `${unavailableLabel ?? getWslHostRowDetail(status)}${
-                          !unavailableLabel && status?.detail ? ` — ${status.detail}` : ''
+                          !unavailableLabel && status?.detail
+                            ? ` — ${wslHostStatusDetailMessage(status)}`
+                            : ''
                         }`}
                   </span>
                 }

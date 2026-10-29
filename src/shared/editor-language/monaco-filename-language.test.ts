@@ -90,7 +90,7 @@ describe('Monaco filename detection', () => {
     ['file.typ', 'typst'],
     ['file.nim', 'nim'],
     ['file.h', 'c'],
-    ['.env.staging', 'ini'],
+    ['.env.staging', 'dotenv'],
     ['file.unknown', 'plaintext'],
     ['folder.sol/README', 'plaintext'],
     ['folder.sol\\README', 'plaintext'],

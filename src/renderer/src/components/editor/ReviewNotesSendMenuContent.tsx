@@ -34,6 +34,7 @@ import { useWorktreeAgentRows } from '@/components/sidebar/useWorktreeAgentRows'
 import type { LaunchSource } from '../../../../shared/telemetry-events'
 import { agentRowDisplayDotState } from '@/lib/agent-row-dot-state'
 import { translate } from '@/i18n/i18n'
+import { agentSendDisabledReasonLabel } from '@/lib/agent-send-disabled-reason-label'
 
 type OrderedSendTarget = {
   target: NotesSendAgentTarget
@@ -223,8 +224,11 @@ function resolveCurrentSendTargetEligibility(
 ): { status: 'eligible' } | { status: 'disabled'; disabledReason: string } {
   const goneReason =
     target.messageTarget.kind === 'terminal'
-      ? 'Terminal is no longer available'
-      : 'Chat is no longer open'
+      ? translate(
+          'auto.components.editor.ReviewNotesSendMenu.terminalGone',
+          'Terminal is no longer available'
+        )
+      : translate('auto.components.editor.ReviewNotesSendMenu.chatGone', 'Chat is no longer open')
   const state = useAppStore.getState()
   const currentTarget = deriveNotesSendAgentTargets(
     state,
@@ -236,7 +240,9 @@ function resolveCurrentSendTargetEligibility(
       ? { status: 'eligible' }
       : {
           status: 'disabled',
-          disabledReason: currentTarget.disabledReason ?? goneReason
+          disabledReason: currentTarget.disabledReason
+            ? agentSendDisabledReasonLabel(currentTarget.disabledReason)
+            : goneReason
         }
   }
 
@@ -260,7 +266,10 @@ function AgentTargetMenuItem({
   // Use the sidebar’s display state so failed/stopped agents agree across surfaces.
   const state = agent ? agentRowDisplayDotState(agent) : 'idle'
   const timeAgo = agent ? formatAgentRelativeTime(agent, now) : null
-  const disabledReason = target.status === 'disabled' ? target.disabledReason : undefined
+  const disabledReason =
+    target.status === 'disabled' && target.disabledReason
+      ? agentSendDisabledReasonLabel(target.disabledReason)
+      : undefined
   const secondaryParts = [
     agentStateLabel(state),
     ...(timeAgo ? [timeAgo] : []),
@@ -332,15 +341,21 @@ function formatAgentRelativeTime(agent: DashboardAgentRowData, now: number): str
 function formatTimeAgo(ts: number, now: number): string {
   const delta = now - ts
   if (delta < 60_000) {
-    return 'just now'
+    return translate('auto.components.editor.ReviewNotesSendMenu.justNow', 'just now')
   }
   const minutes = Math.floor(delta / 60_000)
   if (minutes < 60) {
-    return `${minutes}m ago`
+    return translate('auto.components.editor.ReviewNotesSendMenu.minutesAgo', '{{minutes}}m ago', {
+      minutes
+    })
   }
   const hours = Math.floor(minutes / 60)
   if (hours < 24) {
-    return `${hours}h ago`
+    return translate('auto.components.editor.ReviewNotesSendMenu.hoursAgo', '{{hours}}h ago', {
+      hours
+    })
   }
-  return `${Math.floor(hours / 24)}d ago`
+  return translate('auto.components.editor.ReviewNotesSendMenu.daysAgo', '{{days}}d ago', {
+    days: Math.floor(hours / 24)
+  })
 }

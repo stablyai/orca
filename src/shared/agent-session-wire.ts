@@ -256,7 +256,12 @@ export type AgentSessionStatusSummary = {
 }
 
 /** `failedAt` dates the run, so a repeat failure with the same message still republishes. */
-export type AgentSessionNamingError = { message: string; failedAt: number }
+export type AgentSessionNamingError = {
+  message: string
+  failedAt: number
+  /** Names Orca-authored copy; `message` stays English for older clients. */
+  messageCode?: string
+}
 
 export type AgentSessionConversationName = {
   sessionId: string

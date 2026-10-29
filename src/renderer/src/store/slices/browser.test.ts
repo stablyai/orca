@@ -261,10 +261,12 @@ describe('createBrowserSlice annotations', () => {
   it('uses local browser profile defaults for client-local fallback pages', async () => {
     const { store, main } = await createTestStoreDrawnFromMain()
     store.setState({
-      settings: settingsWithRuntime('env-1'),
-      defaultBrowserSessionProfileIdByHostId: {
-        local: 'local-profile',
-        'runtime:env-1': 'runtime-profile'
+      settings: {
+        ...settingsWithRuntime('env-1')!,
+        browserDefaultProfileIdByHostId: {
+          local: 'local-profile',
+          'runtime:env-1': 'runtime-profile'
+        }
       }
     })
 
@@ -290,8 +292,11 @@ describe('createBrowserSlice annotations', () => {
     Object.assign(mockApi.browser, { sessionEnsureManagedProfile: ensureMock })
     const { store, main } = await createTestStoreDrawnFromMain({
       repos: [],
-      settings: { ...getDefaultSettings('/tmp'), browserProfileScope: 'repo' },
-      defaultBrowserSessionProfileId: 'user-default'
+      settings: {
+        ...getDefaultSettings('/tmp'),
+        browserProfileScope: 'repo',
+        browserDefaultProfileIdByHostId: { local: 'user-default' }
+      }
     })
 
     const first = store.getState().createBrowserTab('repo-a::/a/one', 'about:blank')

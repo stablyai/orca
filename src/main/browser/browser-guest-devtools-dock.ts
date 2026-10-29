@@ -1,7 +1,13 @@
 import { BrowserWindow, WebContentsView } from 'electron'
 import type { BrowserDevToolsDockBounds } from '../../shared/browser-devtools-dock'
 
+type DevToolsOpenOperation = {
+  isCurrent: () => boolean
+  finish: () => void
+}
+
 type DockedDevTools = {
+  operation: DevToolsOpenOperation
   guest: Electron.WebContents
   /** Replaced after a page crash; the entry itself lives until DevTools close. */
   view: WebContentsView
@@ -19,19 +25,66 @@ export class BrowserGuestDevToolsDock {
   private readonly docks = new Map<number, DockedDevTools>()
   /** Hosts still detaching: Electron opens nothing for a guest until its old frontend lets go. */
   private readonly releases = new Map<number, Promise<void>>()
+  private readonly pendingOpens = new Map<number, DevToolsOpenOperation>()
 
   isDocked(guestId: number): boolean {
     return this.docks.has(guestId)
   }
 
-  /** Returns false when the guest has no window to dock into. `onClosed` runs however it closes. */
-  async open(guest: Electron.WebContents, onClosed: () => void): Promise<boolean> {
+  isOpening(guestId: number): boolean {
+    return this.pendingOpens.has(guestId)
+  }
+
+  beginOpen(
+    guest: Electron.WebContents,
+    isCurrent: () => boolean = () => true
+  ): DevToolsOpenOperation {
+    const operation: DevToolsOpenOperation = {
+      isCurrent: () =>
+        this.pendingOpens.get(guest.id) === operation && !guest.isDestroyed() && isCurrent(),
+      finish: () => {
+        try {
+          if (!operation.isCurrent() && this.docks.get(guest.id)?.operation === operation) {
+            void this.releaseDock(guest.id)
+          }
+        } finally {
+          if (this.pendingOpens.get(guest.id) === operation) {
+            this.pendingOpens.delete(guest.id)
+          }
+        }
+      }
+    }
+    this.pendingOpens.set(guest.id, operation)
+    const dock = this.docks.get(guest.id)
+    if (dock) {
+      dock.operation = operation
+    }
+    return operation
+  }
+
+  /** Returns false when docking is unavailable or superseded. */
+  open(
+    guest: Electron.WebContents,
+    onClosed: () => void,
+    operation?: DevToolsOpenOperation
+  ): Promise<boolean> {
+    const pending = operation ?? this.beginOpen(guest)
+    const opened = this.openDock(guest, onClosed, pending)
+    return operation ? opened : opened.finally(pending.finish)
+  }
+
+  private async openDock(
+    guest: Electron.WebContents,
+    onClosed: () => void,
+    operation: DevToolsOpenOperation
+  ): Promise<boolean> {
     await this.releases.get(guest.id)
-    if (guest.isDestroyed()) {
+    if (!operation.isCurrent()) {
       return false
     }
     const existing = this.docks.get(guest.id)
     if (existing) {
+      existing.operation = operation
       existing.view.webContents?.focus()
       return true
     }
@@ -75,6 +128,7 @@ export class BrowserGuestDevToolsDock {
     guest.on('dom-ready', handleDomReady)
     guest.on('devtools-closed', handleClosed)
     this.docks.set(guest.id, {
+      operation,
       guest,
       view: attachDevToolsView(guest, window),
       window,
@@ -90,6 +144,21 @@ export class BrowserGuestDevToolsDock {
       },
       boundsGeneration: 0
     })
+    return true
+  }
+
+  async openDetached(
+    guest: Electron.WebContents,
+    operation: DevToolsOpenOperation
+  ): Promise<boolean> {
+    if (!operation.isCurrent()) {
+      return false
+    }
+    await this.releaseDock(guest.id)
+    if (!operation.isCurrent()) {
+      return false
+    }
+    guest.openDevTools({ mode: 'detach' })
     return true
   }
 
@@ -131,6 +200,11 @@ export class BrowserGuestDevToolsDock {
 
   /** Resolves once Electron has let go of the host, so DevTools can open again. */
   close(guestId: number): Promise<void> {
+    this.pendingOpens.delete(guestId)
+    return this.releaseDock(guestId)
+  }
+
+  private releaseDock(guestId: number): Promise<void> {
     const dock = this.docks.get(guestId)
     if (!dock) {
       return this.releases.get(guestId) ?? Promise.resolve()

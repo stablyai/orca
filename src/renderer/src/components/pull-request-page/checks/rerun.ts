@@ -7,6 +7,7 @@ import type { GitHubWorkItem } from '../../../../../shared/github/work-item-type
 import type { PRCheckDetail } from '../../../../../shared/github/check-types'
 import type { TaskSourceContext } from '../../../../../shared/task-source-context'
 import type { GitHubChecksTabState } from '../../github-checks-tab-state'
+import { codeHostErrorText } from '@/lib/code-host-error-copy'
 
 /** The checks tab mints one of these per context; only its reference identity is ever read. */
 type ChecksContextOwner = GitHubChecksTabState['contextOwner']
@@ -67,7 +68,7 @@ export async function rerunPullRequestChecks(args: {
       return
     }
     if (!result.ok) {
-      toast.error(result.error)
+      toast.error(codeHostErrorText(result))
       return
     }
     toast.success(

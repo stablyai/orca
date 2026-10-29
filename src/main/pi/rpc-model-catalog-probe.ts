@@ -1,3 +1,4 @@
+import { assertStructuredAgentResolutionCurrent } from '../native-chat/structured-agent-command-resolution'
 import { homedir } from 'node:os'
 import { requireLegacyAgentSessionAccountHome } from '../../shared/agent-session-account-home'
 import { parsePiModels } from '../../shared/commit-message-model-parsers'
@@ -38,8 +39,11 @@ export function piModelCatalogFromListing(stdout: string): AgentModelCatalogSucc
 
 export function createPiModelCatalogProbe(deps: PiModelCatalogProbeDeps): AgentModelCatalogProbe {
   return async (accountHome, options): Promise<AgentModelCatalogSuccess> => {
+    const operation = options?.operation ?? { signal: options?.signal }
+    assertStructuredAgentResolutionCurrent(operation)
     const cwd = deps.homePath ?? homedir()
     const { env, command } = await resolvePiRpcInvocation({
+      operation,
       accountDir: requireLegacyAgentSessionAccountHome(accountHome).path,
       resolveEnvironment: deps.resolveEnvironment,
       commandSettings: deps.resolveCommandSettings?.(),
@@ -47,7 +51,10 @@ export function createPiModelCatalogProbe(deps: PiModelCatalogProbeDeps): AgentM
       refreshEnvironmentAfterMiss: deps.refreshEnvironmentAfterMiss,
       resolveWorkingDirectory: () => cwd
     })
-    if ((await checkPiRpcVersion({ command, cwd, env }, deps.probeVersion)).status === 'tooOld') {
+    assertStructuredAgentResolutionCurrent(operation)
+    const release = await checkPiRpcVersion({ command, cwd, env }, deps.probeVersion)
+    assertStructuredAgentResolutionCurrent(operation)
+    if (release.status === 'tooOld') {
       throw new Error(`pi at ${command} does not run structured chats`)
     }
     const launch = buildPiRpcLaunch({

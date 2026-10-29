@@ -10,6 +10,7 @@ import {
 } from './agent-session-legacy-handoff-lease'
 /** Identity pins location, provider and account home independently of terminal tabs; the lease separately grants one process writer authority. */
 
+import type { AgentSessionLastTurn } from './agent-session-last-turn'
 import type { ExecutionHostId } from './execution-host'
 import {
   isAgentSessionConversationCommandRecord,
@@ -140,6 +141,8 @@ export type AgentSessionRecord = {
   conversationNameSource?: 'user'
   /** When the user's Sleep stopped this chat; the next admitted send clears it. */
   sleptAt?: number
+  /** Latest turn edge for lists that must not open conversation history. */
+  lastTurn?: AgentSessionLastTurn
   launchArgs?: AgentSessionLaunchArgs
   lease: AgentSessionLease
   createdAt: number

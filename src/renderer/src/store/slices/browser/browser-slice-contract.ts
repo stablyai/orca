@@ -237,7 +237,13 @@ export type BrowserSlice = {
     error: string | null
   } | null
   /** Loads one host's profiles; defaults to the host Browser settings is showing. */
-  fetchBrowserSessionProfiles: (hostId?: ExecutionHostId) => Promise<void>
+  fetchBrowserSessionProfiles: (hostId?: ExecutionHostId) => Promise<void | {
+    hostId: ExecutionHostId
+    environmentId: string
+    pairingRevision: number | undefined
+    profiles: BrowserSessionProfile[]
+    executorRuntimeId?: string
+  }>
   createBrowserSessionProfile: (
     scope: 'isolated' | 'imported',
     label: string
@@ -289,9 +295,7 @@ export type BrowserSlice = {
   /** The page whose history view is open; it opens what you pick in that page. */
   browserHistoryPageId: string | null
   setBrowserHistoryPageId: (pageId: string | null) => void
-  defaultBrowserSessionProfileId: string | null
-  defaultBrowserSessionProfileIdByHostId: Partial<Record<ExecutionHostId, string | null>>
-  setDefaultBrowserSessionProfileId: (profileId: string | null) => void
+  setDefaultBrowserSessionProfileId: (profileId: string | null) => Promise<void>
 }
 
 type BrowserStateCreator = StateCreator<AppState, [], [], BrowserSlice>

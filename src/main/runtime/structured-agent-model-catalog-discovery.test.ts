@@ -43,7 +43,8 @@ function context(): StructuredAgentModelCatalogContext {
     environment: {
       resolveBaseEnvironment: unused,
       resolveAgentEnvironment: unused,
-      refreshAfterMissingProgram: unused
+      refreshAfterMissingProgram: unused,
+      bindCatalogSources: () => () => {}
     }
   }
 }
@@ -138,7 +139,8 @@ describe('the model catalog contract on every registration', () => {
       environment: {
         resolveBaseEnvironment: env,
         resolveAgentEnvironment: env,
-        refreshAfterMissingProgram: async () => {}
+        refreshAfterMissingProgram: async () => {},
+        bindCatalogSources: () => () => {}
       }
     })
     const variables = { claude: 'CLAUDE_CONFIG_DIR', codex: 'CODEX_HOME', grok: 'GROK_HOME' }
@@ -185,7 +187,8 @@ describe('the model catalog contract on every registration', () => {
         environment: {
           resolveBaseEnvironment: env,
           resolveAgentEnvironment: env,
-          refreshAfterMissingProgram: refresh
+          refreshAfterMissingProgram: refresh,
+          bindCatalogSources: () => () => {}
         }
       })
       for (const [agent, variable] of Object.entries(agents)) {

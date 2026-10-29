@@ -129,7 +129,8 @@ export const createWorkItemAggregateActions = (
             limit: perRepoLimit,
             query: query || undefined,
             page,
-            ...(options?.noCache ? { noCache: true } : {})
+            ...(options?.noCache ? { noCache: true } : {}),
+            ...(options?.wakeWslDistro ? { wakeWslDistro: true } : {})
           })
           // Page-N errors bypass initial-fetch banners; log them to expose silent truncation (design §6).
           if (envelope.errors?.issues) {
@@ -189,7 +190,7 @@ export const createWorkItemAggregateActions = (
     return { items: merged, failedCount, errorTypes }
   },
 
-  countWorkItemsAcrossRepos: async (repos, query, perRepoLimit) => {
+  countWorkItemsAcrossRepos: async (repos, query, perRepoLimit, options) => {
     if (isGitHubWorkItemsQueryTooLarge(query)) {
       return { totalCount: 0, totalPages: 0 }
     }
@@ -207,7 +208,10 @@ export const createWorkItemAggregateActions = (
             r.path,
             r.sourceContext
           )
-          return await countGitHubWorkItemsForRepo(requestContext, { query: query || undefined })
+          return await countGitHubWorkItemsForRepo(requestContext, {
+            query: query || undefined,
+            ...(options?.wakeWslDistro ? { wakeWslDistro: true } : {})
+          })
         } catch {
           return 0
         } finally {

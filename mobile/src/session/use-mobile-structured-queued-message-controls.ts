@@ -3,6 +3,7 @@ import { useMobileQueuedMessageComposerActions } from './use-mobile-queued-messa
 // The host owns queued drafts; render its published cards even when it cannot queue new sends.
 
 import { useCallback, useMemo } from 'react'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
@@ -70,6 +71,7 @@ export function useMobileStructuredQueuedMessageControls(args: {
   onSendError: (message: string) => void
   onActionResolved?: () => void
 }): MobileStructuredQueuedMessageControls {
+  const t = useMobileTranslation()
   const {
     appendComposerText,
     mutate,
@@ -104,7 +106,8 @@ export function useMobileStructuredQueuedMessageControls(args: {
       orderedMessages,
       queuePause,
       queuedMessages,
-      submissions
+      submissions,
+      t
     ]
   )
   const { begin: beginInlineEdit, editor } = useMobileStructuredQueuedEdit({

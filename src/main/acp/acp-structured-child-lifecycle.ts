@@ -55,6 +55,22 @@ export class AcpStructuredChildren {
     return failedStart && session
   }
 
+  async closeAll(tasks: (Promise<boolean | void> | undefined)[]): Promise<void> {
+    const ids = new Set([...this.sessions.keys(), ...this.starts.failedSessionIds()])
+    // The host aborts in-progress starts before this teardown.
+    const results = await Promise.allSettled([
+      ...[...ids].map((sessionId) => this.stop(sessionId, true)),
+      ...tasks
+    ])
+    const failure = results.find((result) => result.status === 'rejected')
+    if (failure?.status === 'rejected') {
+      throw failure.reason
+    }
+    if (results.some((result) => result.status === 'fulfilled' && result.value === false)) {
+      throw new Error('an ACP agent child could not be proven stopped')
+    }
+  }
+
   private async stopSession(sessionId: string, requested: boolean): Promise<boolean> {
     const session = this.sessions.get(sessionId)
     if (!session || session.ended) {

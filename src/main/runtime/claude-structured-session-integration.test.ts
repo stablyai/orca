@@ -248,7 +248,8 @@ beforeEach(async () => {
         resolveClaudeAuthPolicy: () => claudeAuthPolicy,
         openClaudeConnection: claude.openConnection,
         claudeCliFlags: {
-          supports: async (flag) => flag.option === '--thinking-display',
+          check: async (flag) =>
+            flag.option === '--thinking-display' ? 'supported' : 'unsupported',
           prewarm: () => {},
           observeExit: () => {}
         },

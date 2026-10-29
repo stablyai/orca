@@ -23,6 +23,8 @@ export const worktreesApi = {
 
   cancelListDetected: (args) => ipcRenderer.invoke('worktrees:cancelListDetected', args),
 
+  scanStartingWslDistro: (args) => ipcRenderer.invoke('worktrees:scanStartingWslDistro', args),
+
   create: (args) => ipcRenderer.invoke('worktrees:create', args),
 
   adoptProvisionedRoot: (args) => ipcRenderer.invoke('worktrees:adoptProvisionedRoot', args),

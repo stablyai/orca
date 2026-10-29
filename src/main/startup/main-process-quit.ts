@@ -131,10 +131,16 @@ function installWillQuitHandler(): void {
     // Final stats flush closes working sessions synchronously; quit supplies no terminating hook to preserve their duration.
     state.starNag?.stop()
     state.automations?.stop()
-    // Await plugin shutdown/SIGKILL escalation or forked hosts can outlive Electron.
+    // Why: plugin hosts are forked children; dispose sends shutdown and
+    // escalates to SIGKILL so they cannot outlive the app. The promise joins
+    // the teardown barrier below — quitting before it resolves would let
+    // Electron exit first and orphan the hosts.
+    state.pluginKillListService?.dispose()
     state.pluginKillListService = null
     state.pluginMarketplaceService = null
     state.pluginMarketplaceInstaller = null
+    state.pluginAutoUpdater?.dispose()
+    state.pluginAutoUpdater = null
     const pluginHostShutdown = state.pluginService?.dispose() ?? Promise.resolve()
     const codexBackfillRecoveryShutdown = stopCodexStateDbBackfillRecoveries()
     stopCodexAccountSessionBridges()

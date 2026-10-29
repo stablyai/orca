@@ -1,7 +1,7 @@
 import type { JiraIssue } from '../../../shared/jira/jira-types'
 import { buildJiraTextMatchJql, mayBeJql } from '../../../shared/jira/jira-search-input-jql'
 import { searchJiraIssuesByKeyOrText } from './jira-key-or-text-search'
-import { getJiraBadRequestReason } from './task-page-jira-load-state'
+import { getJiraBadRequestReason } from './task-page/jira/task-page-jira-load-state'
 
 export type TaskPageJiraJqlRejection = {
   /** Jira's reason; '' when it gave none. */

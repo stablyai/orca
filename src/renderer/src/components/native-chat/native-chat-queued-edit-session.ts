@@ -12,7 +12,7 @@ import {
   type NativeChatQueuedEditDraft
 } from './native-chat-queued-edit-draft'
 import type { NativeChatComposerDraft } from './native-chat-composer-draft-storage'
-import { promptMarkersToImageReferences } from '../../../../shared/native-chat-image-transcript-markers'
+import { promptMarkersToImageReferences } from '../../../../shared/native-chat/transcript/native-chat-image-transcript-markers'
 import { nativeChatImageRowIds } from './native-chat-composer-image-references'
 import { useEffect } from 'react'
 import { toast } from 'sonner'

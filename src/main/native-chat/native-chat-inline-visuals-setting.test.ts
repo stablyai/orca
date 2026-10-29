@@ -45,7 +45,7 @@ describe('inline visuals launch preference', () => {
   it('starts Claude without visuals while preserving configured plugins, user folders and attachment access', async () => {
     const sessionId = 'claude-disabled'
     const { stateDirectory, prepareVisuals } = delivery(() => false)
-    const supports = vi.fn(async (_flag: ClaudeCliFlag) => true)
+    const check = vi.fn(async (_flag: ClaudeCliFlag) => 'supported' as const)
     const record = agentSessionRecordFixture({ sessionId })
     const launch = await createClaudeStructuredLaunchResolver({
       store: { getRecord: () => record, pinLaunchDirectory: vi.fn() },
@@ -57,7 +57,7 @@ describe('inline visuals launch preference', () => {
       resolveInheritedEnv: async () => ({ PATH: '/bin' }),
       attachmentDirectory: '/state/agent-session-attachments',
       hasTranscript: async () => false,
-      cliFlags: { supports },
+      cliFlags: { check },
       prepareVisuals
     })({ identity: { ...identityFor(sessionId), agent: 'claude', providerHandle: null } })
     expect(launch.options).not.toHaveProperty('plugins')
@@ -68,7 +68,7 @@ describe('inline visuals launch preference', () => {
     ])
     expect(launch.env).not.toHaveProperty(NATIVE_CHAT_SCRATCH_DIR_ENV)
     expect(launch.env?.KEEP).toBe('yes')
-    expect(supports.mock.calls.map(([flag]) => flag)).not.toContain(CLAUDE_PLUGIN_DIR_FLAG)
+    expect(check.mock.calls.map(([flag]) => flag)).not.toContain(CLAUDE_PLUGIN_DIR_FLAG)
     expect(existsSync(nativeChatScratchFolderFor(stateDirectory, sessionId))).toBe(false)
   })
 

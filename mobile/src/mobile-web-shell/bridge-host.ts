@@ -11,6 +11,7 @@ import {
   readBridgeClientMessage,
   type BridgeClientMessage,
   type BridgeColorScheme,
+  type BridgeUiLocale,
   type BridgeConnectionSnapshot,
   type BridgeInitRoute
 } from './bridge/bridge-envelope'
@@ -33,6 +34,7 @@ export type BridgeHost = {
   publishSafeAreaInsets: (next: BridgeSafeAreaInsets) => void
   publishKeyboardInset: (next: number) => void
   publishColorScheme: (next: BridgeColorScheme) => void
+  publishUiLocale: (next: BridgeUiLocale) => void
   // False leaves Back to native navigation, including pages predating this frame.
   sendBack: () => boolean
   // Transfer the session’s Back state on client-driven host rebuild; the mounted page never reclaims it. Ending sessions simply discard it.
@@ -66,7 +68,8 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
     onRefused: (issue) => options.onDiagnostic?.({ kind: 'route-update-refused', issue }),
     ...(options.safeAreaInsets === undefined ? {} : { safeAreaInsets: options.safeAreaInsets }),
     ...(options.keyboardInset === undefined ? {} : { keyboardInset: options.keyboardInset }),
-    ...(options.colorScheme === undefined ? {} : { colorScheme: options.colorScheme })
+    ...(options.colorScheme === undefined ? {} : { colorScheme: options.colorScheme }),
+    ...(options.uiLocale === undefined ? {} : { uiLocale: options.uiLocale })
   })
   let closed = false
   // Close ends document service until the next ready. Native delivery preserves frame order, so stragglers remain between those markers without an epoch.
@@ -123,6 +126,7 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
           safeAreaInsets: routes.safeAreaInsets(),
           keyboardInset: routes.keyboardInset(),
           colorScheme: routes.colorScheme(),
+          uiLocale: routes.uiLocale(),
           pageRoutes,
           ...(parsedRouteGrants?.success === true
             ? { pageRouteGrants: parsedRouteGrants.data }
@@ -286,6 +290,9 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
     },
     publishColorScheme: (next) => {
       routes.publishColorScheme(next, deliverable())
+    },
+    publishUiLocale: (next) => {
+      routes.publishUiLocale(next, deliverable())
     },
     sendBack: back.send,
     readSessionBack: back.read,

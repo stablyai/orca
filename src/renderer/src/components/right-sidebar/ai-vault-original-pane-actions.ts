@@ -7,7 +7,7 @@ import { findFolderWorkspaceOwner } from '@/lib/folder-workspace-runtime-owner'
 import { useAppStore } from '@/store'
 import { activateAiVaultStructuredSession } from '@/lib/activate-ai-vault-structured-session'
 import { findStructuredAgentSessionTab } from '@/lib/agent-session/structured-agent-session-tab-activation'
-import type { AgentStatusState } from '../../../../shared/agent-status-types'
+import type { AgentDotState } from '@/components/AgentStateDot'
 import type { AiVaultSession } from '../../../../shared/ai-vault-types'
 import { translate } from '@/i18n/i18n'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
@@ -22,7 +22,7 @@ export function useAiVaultOriginalPaneActions(): {
   getOriginalPaneTarget: (
     session: AiVaultSession
   ) => ReturnType<typeof findOriginalAiVaultSessionPane>
-  getSessionLiveState: (session: AiVaultSession) => AgentStatusState | null
+  getSessionLiveState: (session: AiVaultSession) => AgentDotState | null
   isStructuredSessionOpen: (session: AiVaultSession) => boolean
   /** Settles false when the pane is gone and nothing was switched. */
   jumpToOriginalPane: (session: AiVaultSession) => Promise<boolean>

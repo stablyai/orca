@@ -14,8 +14,8 @@ export type StructuredAgentSessionOptionProjection = {
 
 export type StructuredAgentSessionLiveOptions = AgentSessionOptionsResult & {
   catalogListing?: AgentModelCatalogLiveListing
-  /** Exact requested identity proven equivalent to current.model by this child's response. */
-  confirmedModelSelection?: string
+  /** The running CLI cannot change effort mid-chat, whatever its catalog lists. */
+  effortFixed?: true
 }
 
 export type StructuredAgentSessionRestingOptions = Pick<
@@ -67,6 +67,3 @@ export function structuredAgentSessionCapabilityView(
     )
   }
 }
-
-/** Whether a client accepts answers without a model. */
-export type StructuredAgentSessionOptionsReader = { readsWithoutModel: boolean }

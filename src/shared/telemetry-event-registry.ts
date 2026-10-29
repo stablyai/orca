@@ -112,7 +112,11 @@ import {
   sshHostServerMoveSchema,
   sshHostServerLegacyRelayBridgeSchema
 } from './telemetry-ssh-host-server-event-schemas'
-import { wslMoveOrchestratorSchema, wslMoveSchema } from './telemetry-wsl-move-event-schemas'
+import {
+  wslMoveOrchestratorSchema,
+  wslMoveUndoSchema,
+  wslMoveSchema
+} from './telemetry-wsl-move-event-schemas'
 
 // Breaking payload changes require a new event name to keep historical rows distinguishable; optional additions are safe.
 export const eventSchemas = {
@@ -228,6 +232,7 @@ export const eventSchemas = {
 
   wsl_move: wslMoveSchema,
   wsl_move_orchestrator: wslMoveOrchestratorSchema,
+  wsl_move_undo: wslMoveUndoSchema,
 
   wsl_usage_snapshot: wslUsageSnapshotSchema
 } as const

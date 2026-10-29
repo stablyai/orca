@@ -1,3 +1,10 @@
+import {
+  assertStructuredAgentResolutionCurrent,
+  resolveAgainAfterRefreshOnMissingProgram,
+  resolveStructuredAgentCommand,
+  type StructuredAgentCommandSettings,
+  type StructuredAgentResolutionOperation
+} from '../native-chat/structured-agent-command-resolution'
 // Launch from durable record values for the working directory, pinned account and resume session.
 
 import { delimiter } from 'node:path'
@@ -10,11 +17,6 @@ import {
 } from '../../shared/agent-session-provider-handle'
 import type { AgentSessionAccountHome } from '../../shared/agent-session-account-home'
 import type { resolveCliCommand } from '../../shared/node-cli-command-resolution'
-import {
-  resolveAgainAfterRefreshOnMissingProgram,
-  resolveStructuredAgentCommand,
-  type StructuredAgentCommandSettings
-} from '../native-chat/structured-agent-command-resolution'
 import {
   checkAgentCliVersion,
   type AgentCliVersionCheck,
@@ -74,6 +76,7 @@ export type AcpStructuredLaunchPartDeps = {
 } & Pick<AcpLaunchVisualsDeps, 'logger'>
 
 export type AcpLaunchInvocationDeps = {
+  operation?: StructuredAgentResolutionOperation
   /** Reread per acquisition. */
   resolveEnvironment: () => Promise<Record<string, string>>
   resolveLaunchEnv?: (agent: string) => Record<string, string>
@@ -153,7 +156,8 @@ export function resolveAcpLaunchInvocation(
   return resolveAgainAfterRefreshOnMissingProgram(
     () => readAcpLaunchInvocation(spec, accountHome, deps),
     deps.refreshEnvironmentAfterMiss,
-    { env: ({ env }) => env, cwd: deps.resolveWorkingDirectory }
+    { env: ({ env }) => env, cwd: deps.resolveWorkingDirectory },
+    deps.operation
   )
 }
 
@@ -162,7 +166,9 @@ async function readAcpLaunchInvocation(
   accountHome: AgentSessionAccountHome,
   deps: AcpLaunchInvocationDeps
 ): Promise<{ command: string; env: Record<string, string>; envToDelete: string[] }> {
+  assertStructuredAgentResolutionCurrent(deps.operation)
   const base = await deps.resolveEnvironment()
+  assertStructuredAgentResolutionCurrent(deps.operation)
   const env: Record<string, string> = spec.account.environment(accountHome, {
     ...base,
     ...deps.resolveLaunchEnv?.(spec.agent)

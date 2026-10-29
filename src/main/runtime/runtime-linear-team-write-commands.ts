@@ -17,6 +17,7 @@ import type {
 import type { ResolvedWorktree } from './runtime-worktree-path-identity'
 import { RuntimeLinearDedupeCommands } from './runtime-linear-dedupe-commands'
 import { isWslMoveWorktreeBlocked } from '../persistence/moving-wsl-projects/wsl-move-background-backoff'
+import { parseWorkspaceKey } from '../../shared/workspace-scope'
 
 export class RuntimeLinearTeamWriteCommands extends RuntimeLinearDedupeCommands {
   public parseLinearAttachmentUrl(value: string): URL {
@@ -232,7 +233,7 @@ export class RuntimeLinearTeamWriteCommands extends RuntimeLinearDedupeCommands 
             'The provided Linear worktree context does not match the caller terminal.'
           )
         }
-        worktree = await this.resolveWorktreeSelector(`id:${terminal.worktreeId}`)
+        worktree = await this.resolveWorkspaceSelector(`id:${terminal.worktreeId}`)
       } catch (error) {
         if (error instanceof LinearAgentAccessError) {
           throw error
@@ -270,8 +271,11 @@ export class RuntimeLinearTeamWriteCommands extends RuntimeLinearDedupeCommands 
         worktree.linkedLinearIssueOrganizationUrlKey
       )
       if (backfill?.workspaceId) {
-        // The answer still serves this lookup; persisting it waits out a WSL move.
-        if (!isWslMoveWorktreeBlocked(worktree.id, worktree.hostId, worktree.path)) {
+        // The answer still serves this lookup; persisting it waits out a WSL move. Folder workspaces keep links on their own row, not in worktree metadata.
+        if (
+          parseWorkspaceKey(worktree.id)?.type !== 'folder' &&
+          !isWslMoveWorktreeBlocked(worktree.id, worktree.hostId, worktree.path)
+        ) {
           this.setWorktreeMeta(worktree, {
             linkedLinearIssueWorkspaceId: backfill.workspaceId,
             linkedLinearIssueOrganizationUrlKey: backfill.organizationUrlKey ?? null

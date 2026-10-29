@@ -17,6 +17,44 @@ const STARTUP_UPDATE_PROMPT_SUPPRESSION_ARGS: Partial<Record<TuiAgent, readonly 
   codex: ['-c', 'check_for_update_on_startup=false']
 }
 
+// Why not win32: Codex there reads console input records and needs its burst for pastes (windowsInputRecordPasteNewline).
+// Elsewhere Orca's terminals bracket every paste, so the burst can only misread relayed typing (#34496).
+function agentTerminalInputArgs(
+  agent: TuiAgent,
+  platform: NodeJS.Platform | null
+): readonly string[] {
+  return agent === 'codex' && platform !== null && platform !== 'win32'
+    ? ['-c', 'disable_paste_burst=true']
+    : []
+}
+
+function isCodexExecutable(token: string | undefined): boolean {
+  const basename = token?.split(/[\\/]/).pop()?.toLowerCase()
+  return basename !== undefined && /^codex(?:\.(?:exe|cmd|bat|ps1))?$/.test(basename)
+}
+
+/** Appends the per-launch terminal input flags to a recorded agent command. */
+export function withAgentTerminalInputArgs(
+  command: string,
+  agent: TuiAgent,
+  /** OS that runs the agent; null when the host has not reported it. */
+  platform: NodeJS.Platform | null,
+  shell: AgentStartupShell
+): string {
+  const inputArgs = agentTerminalInputArgs(agent, platform)
+  const tokens = tokenizeStartupCommand(command, shell)
+  // Why: only a lone Codex invocation is safe; a wrapper may not forward -c, a compound line would
+  // hand it to another command, and the command may already set it or end its options with `--`.
+  return inputArgs.length &&
+    !/[;&|<>`$()\n]/.test(command) &&
+    tokens.ok &&
+    isCodexExecutable(tokens.tokens[0]) &&
+    !command.includes('disable_paste_burst') &&
+    !tokens.tokens.includes('--')
+    ? `${command} ${inputArgs.map((arg) => quoteStartupArg(arg, shell)).join(' ')}`
+    : command
+}
+
 export type ResolvedAgentLaunchCommand =
   | {
       ok: true
@@ -37,6 +75,8 @@ export function resolveAgentLaunchCommand(args: {
   isRemote?: boolean
   /** Launch-only, like session options: a resumed session must not inherit it. */
   suppressStartupUpdatePrompt?: boolean
+  /** OS that runs the agent when `platform` only picks quoting; null when unreported. */
+  agentHostPlatform?: NodeJS.Platform | null
 }): ResolvedAgentLaunchCommand {
   const override = args.cmdOverrides[args.agent]
   const command =
@@ -47,9 +87,14 @@ export function resolveAgentLaunchCommand(args: {
   const suppressionArgs = args.suppressStartupUpdatePrompt
     ? (STARTUP_UPDATE_PROMPT_SUPPRESSION_ARGS[args.agent] ?? [])
     : []
-  const launchHead = suppressionArgs.length
-    ? `${command} ${suppressionArgs.map((arg) => quoteStartupArg(arg, args.shell)).join(' ')}`
-    : command
+  const launchHead = withAgentTerminalInputArgs(
+    suppressionArgs.length
+      ? `${command} ${suppressionArgs.map((arg) => quoteStartupArg(arg, args.shell)).join(' ')}`
+      : command,
+    args.agent,
+    args.agentHostPlatform === undefined ? args.platform : args.agentHostPlatform,
+    args.shell
+  )
   const trailingTokens = args.agentArgs?.trim()
     ? tokenizeStartupCommand(args.agentArgs.trim(), args.shell)
     : { ok: true as const, tokens: [], spans: [] }

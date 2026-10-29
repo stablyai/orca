@@ -25,7 +25,10 @@ type SettingsSectionProps = {
   isActive?: boolean
   /** Header-scoped actions, such as Import from Ghostty. */
   headerAction?: React.ReactNode
-  /** Title-click hook for hidden staff controls such as Option-click reveals. */
+  /** Drops the title block while the body shows its own page header (a plugin's page). */
+  hideHeader?: boolean
+  /** Click handler on the section title — the hook for hidden staff
+   *  affordances (Option-click reveals), mirroring the Updates header. */
   onTitleClick?: (event: React.MouseEvent<HTMLHeadingElement>) => void
 }
 
@@ -42,6 +45,7 @@ export function SettingsSection({
   forceVisible = false,
   isActive,
   headerAction,
+  hideHeader = false,
   onTitleClick
 }: SettingsSectionProps): React.JSX.Element | null {
   const query = useAppStore((state) => state.settingsSearchQuery)
@@ -61,8 +65,11 @@ export function SettingsSection({
 
   return (
     <section id={id} data-settings-section={id} className={cn('scroll-mt-8 space-y-6', className)}>
-      <div className="flex flex-wrap items-start justify-between gap-4 border-b border-border/60 pb-5">
-        <div className="min-w-0 space-y-2">
+      <div
+        hidden={hideHeader}
+        className="flex items-start justify-between gap-4 border-b border-border/60 pb-5"
+      >
+        <div className="min-w-0 flex-1 space-y-2">
           <h2
             className="flex flex-wrap items-center gap-2 text-2xl font-semibold leading-tight text-foreground"
             onClick={onTitleClick}

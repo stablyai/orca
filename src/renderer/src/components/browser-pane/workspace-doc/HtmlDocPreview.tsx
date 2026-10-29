@@ -33,6 +33,8 @@ import { useDocPreviewWebviewHistory } from './doc-preview-webview-history'
 import { useDocPreviewGuestFocus } from './use-doc-preview-guest-focus'
 import { useDocPreviewGuestTools } from './use-doc-preview-guest-tools'
 import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
+import { formatClipboardFilePath } from '@/lib/clipboard-file-path'
+import { getOpenFileRevealOwner } from '@/lib/reveal-in-file-manager'
 import { subscribeDocPreviewExternalLinkConfirmation } from './doc-preview-external-link-confirmation'
 
 type PreviewState = 'loading' | 'ready' | 'unavailable'
@@ -321,7 +323,14 @@ export function HtmlDocPreview({
         history={historyWithConversionCrossings}
         onReload={handleReload}
         onHardReload={handleHardReload}
-        onCopyPath={() => void window.api.ui.writeClipboardText(identity.absolutePath)}
+        onCopyPath={() =>
+          void window.api.ui.writeClipboardText(
+            formatClipboardFilePath(
+              identity.absolutePath,
+              getOpenFileRevealOwner(useAppStore.getState(), previewDocument)
+            )
+          )
+        }
         onCopyRelativePath={() => void window.api.ui.writeClipboardText(relativePath)}
         onOpenSource={() => openDocPreviewSource(previewDocument)}
         onOpenExternally={() => openDocPreviewExternally(previewDocument)}

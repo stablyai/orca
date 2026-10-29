@@ -106,7 +106,7 @@ export function GitHubRow(props: { compact?: boolean } = {}): React.JSX.Element 
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => void refreshPreflightStatus({ force: true })}
+              onClick={() => void refreshPreflightStatus({ force: true, wakeWslDistro: true })}
             >
               {translate('auto.components.onboarding.IntegrationsStep.80e3ce0bc9', 'Re-check')}
             </Button>

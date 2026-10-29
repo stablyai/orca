@@ -70,7 +70,6 @@
 6 src/renderer/src/store/slices/worktrees/listing/known-ssh-worktree-fetch.ts # store writer
 3 src/renderer/src/store/slices/worktrees/listing/worktree-sort-order-patch.ts # store writer
 4 src/renderer/src/store/slices/worktrees/metadata/hosted-review-link-mutation.ts # store writer
-6 src/renderer/src/store/slices/worktrees/metadata/update-worktree-meta.ts # store writer
 8 src/renderer/src/store/slices/worktrees/metadata/update-worktrees-meta.ts # store writer
 2 src/renderer/src/store/slices/worktrees/metadata/worktree-git-identity-update.ts # store writer
 1 src/renderer/src/store/slices/worktrees/metadata/worktree-lineage-refresh.ts # store writer

@@ -21,10 +21,10 @@ vi.mock('./runtime-local-worktree-terminal-startup', () => ({
 }))
 
 vi.mock('./runtime-local-worktree-setup', () => ({
-  prepareRuntimeLocalWorktreeSetup: vi.fn(async () => ({
+  prepareRuntimeLocalWorktreeSetup: vi.fn(async (args: { warning?: string }) => ({
     setup: undefined,
     defaultTabs: undefined,
-    warning: undefined,
+    warning: args.warning,
     effectiveDecision: 'skip',
     hookFound: false,
     shouldRunSetup: false,
@@ -98,10 +98,10 @@ describe('runtime local create prepared-pool re-arm ordering', () => {
         metadataResult: { lineage: null, workspaceLineage: null, warnings: [] }
       }
     })
-    startTerminalsMock.mockImplementation(async () => {
+    startTerminalsMock.mockImplementation(async (args: { warning?: string }) => {
       calls.order.push('terminals')
       return {
-        warning: undefined,
+        warning: args.warning,
         returnedSetup: undefined,
         didSpawnSetup: false,
         didSpawnStartup: false,
@@ -121,6 +121,23 @@ describe('runtime local create prepared-pool re-arm ordering', () => {
 
     expect(startTerminalsMock).toHaveBeenCalledOnce()
     expect(calls.order).toEqual(['terminals', 'rearm'])
+  })
+
+  it('returns upstream warnings with other creation warnings', async () => {
+    createLocalMock.mockResolvedValueOnce({
+      worktree,
+      worktreePath: worktree.path,
+      includeCopyWarning: 'Some files were skipped.',
+      created: { path: worktree.path, head: 'abc', branch: 'app' },
+      addResult: { upstreamWarning: 'Check the push destination.' },
+      metadataResult: { lineage: null, workspaceLineage: null, warnings: [] }
+    })
+    const result = await makeRuntime().createManagedWorktree({
+      repoSelector: 'repo-1',
+      name: 'app'
+    })
+    expect(result.warning).toContain('Some files were skipped.')
+    expect(result.warning).toContain('Check the push destination.')
   })
 
   it('still arms the pool when terminal launch fails', async () => {

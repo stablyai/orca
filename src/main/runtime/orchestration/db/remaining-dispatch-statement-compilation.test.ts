@@ -62,6 +62,7 @@ function fixture(count = 1, version: 'fresh' | 'v41' = 'fresh') {
       ${DROP_REMOVED_WORK_TRIGGERS_SQL}
       DROP INDEX idx_runs_coordinator_orca_session_id;
       DROP INDEX idx_dispatch_assignee_orca_session_id;
+      DROP INDEX idx_dispatch_session_presentation;
       DROP TRIGGER trg_runs_remember_coordinator_insert;
       DROP TRIGGER trg_runs_remember_coordinator_update;
       DROP TRIGGER trg_messages_route_coordinator_mail;
@@ -92,7 +93,19 @@ function fixture(count = 1, version: 'fresh' | 'v41' = 'fresh') {
       .map((row) => row.name)
       .toSorted()
   ).toEqual(DISPATCH_CONTEXT_COLUMNS.toSorted())
+  const priorVersion = writer.db.pragma('user_version', { simple: true })
+  expect(
+    writer.db
+      .prepare("SELECT name FROM sqlite_master WHERE name = 'idx_dispatch_session_presentation'")
+      .get()
+  ).toBeDefined()
   const reader = new OrchestrationDb(path)
+  expect(reader.db.pragma('user_version', { simple: true })).toBe(priorVersion)
+  expect(
+    reader.db
+      .prepare("SELECT name FROM sqlite_master WHERE name = 'idx_dispatch_session_presentation'")
+      .get()
+  ).toBeDefined()
   databases.push(reader)
   return { writer, reader, run, entries }
 }

@@ -3,6 +3,7 @@ import type { ExtraProps } from 'react-markdown'
 import type { CommentMarkdownExtension } from '@/components/sidebar/CommentMarkdown'
 import {
   NATIVE_CHAT_VISUAL_TITLE_MAX_LENGTH,
+  NATIVE_CHAT_VISUAL_DIRECTIVE_MARKER,
   isNativeChatVisualFileName
 } from '../../../../shared/native-chat/native-chat-visual-directive'
 import { NativeChatInlineVisual } from './NativeChatInlineVisual'
@@ -55,6 +56,7 @@ function createVisualExtension(
   }
   return {
     remarkPlugins: [[remarkNativeChatVisuals, nonce]],
+    extraFlowSyntaxMarkers: [NATIVE_CHAT_VISUAL_DIRECTIVE_MARKER],
     sanitizeAttributes: { div: [...NATIVE_CHAT_VISUAL_PLACEHOLDER_PROPERTIES] },
     components: { div: VisualPlaceholder }
   }

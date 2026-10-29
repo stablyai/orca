@@ -8,6 +8,7 @@ import type {
   EditorOpenResult
 } from '@/store/slices/editor/types/editor-open-link-intent'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
+import { flashRevealedEditorView } from '@/components/tab-group/editor-reveal-flash'
 
 /** An explicit group request may only end in an editor in the scope it was captured from. */
 export function isExplicitEditorScopeKept(
@@ -45,7 +46,14 @@ export function openLinkedFileInEditor(
   const language = detectLanguage(file.filePath)
   // Why on shown: a layout-owner build draws a new view only with main's frame.
   const reveal = (shown: EditorOpenResult | null): void => {
-    if (!shown || position.line === null) {
+    if (!shown) {
+      return
+    }
+    // Why: a link to an already-active tab otherwise changes nothing on screen.
+    if (isCurrentRequest()) {
+      flashRevealedEditorView(shown.viewStateId)
+    }
+    if (position.line === null) {
       return
     }
     if (language === 'markdown') {

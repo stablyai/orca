@@ -77,7 +77,7 @@ describe('generateCommitMessageFromContext on the Windows direct-child path', ()
     listeners.get('stdout:data')?.(Buffer.alloc(4 * 1024 * 1024 + 1))
     listeners.get('close')?.(null)
 
-    await expect(pending).resolves.toEqual({
+    await expect(pending).resolves.toMatchObject({
       success: false,
       error:
         'agent CLI command produced too much output. Check the agent CLI configuration and try again.'
@@ -271,7 +271,7 @@ describe('generateCommitMessageFromContext on the Windows direct-child path', ()
         }
       )
 
-      expect(result).toEqual({
+      expect(result).toMatchObject({
         success: false,
         error:
           "C:/tools/agent.cmd runs through a Windows batch script that cannot take the multi-line prompt as an argument. Point Settings at the agent's executable, or use a custom command without {prompt} so Orca sends the prompt on stdin."

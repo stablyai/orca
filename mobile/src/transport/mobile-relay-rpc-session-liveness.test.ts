@@ -237,6 +237,25 @@ describe('mobile relay RPC session liveness', () => {
     expect(fakes.close).toHaveBeenCalledOnce()
   })
 
+  it('probes for a caller that stopped hearing back, even inside the foreground cooldown', async () => {
+    const session = await authenticateSession()
+    session.notifyForeground('focus')
+    const firstProbe = sentRequests()[0]!
+    fakes.linkOptions!.onText(
+      JSON.stringify({ id: firstProbe.id, ok: true, result: {}, _meta: { runtimeId: 'r1' } })
+    )
+
+    // Just heard from, so not suspect yet.
+    session.probeLivenessNow?.()
+    expect(fakes.sendText).toHaveBeenCalledOnce()
+    await vi.advanceTimersByTimeAsync(4_000)
+    session.probeLivenessNow?.()
+    expect(fakes.sendText).toHaveBeenCalledTimes(2)
+    await vi.advanceTimersByTimeAsync(4_000)
+
+    expect(session.getState()).toBe('disconnected')
+  })
+
   it('redials after one 4s miss when a retained relay returns from the background', async () => {
     const onLog = vi.fn<ConnectionLogSink>()
     const session = await authenticateSession(onLog)

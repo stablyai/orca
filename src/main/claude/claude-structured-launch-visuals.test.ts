@@ -10,7 +10,9 @@ import {
 import {
   CLAUDE_CLI_FLAG_PROBE_KILL_AFTER_MS,
   CLAUDE_PLUGIN_DIR_FLAG,
-  type ClaudeCliFlag
+  CLAUDE_THINKING_DISPLAY_FLAG,
+  type ClaudeCliFlag,
+  type ClaudeCliFlagFact
 } from './claude-cli-flag-support'
 
 const SESSION_ID = 'orca-session-visuals'
@@ -28,9 +30,16 @@ const IDENTITY: AgentSessionJournalIdentity = {
   providerHandle: null
 }
 
+type Supports = (flag: ClaudeCliFlag, launch: unknown, budgetMs?: number) => Promise<boolean>
+
+const checkOf =
+  (supports: Supports) =>
+  async (...args: Parameters<Supports>): Promise<ClaudeCliFlagFact> =>
+    (await supports(...args)) ? 'supported' : 'unsupported'
+
 function launch(options: {
   prepareVisuals?: (sessionId: string) => Promise<NativeChatVisualsLaunch | null>
-  supports?: (flag: ClaudeCliFlag, launch: unknown, budgetMs?: number) => Promise<boolean>
+  supports?: Supports
   launchArgs?: string[]
   env?: Record<string, string>
   attachmentDirectory?: string
@@ -44,7 +53,7 @@ function launch(options: {
     resolveEnv: () => options.env ?? {},
     hasTranscript: async () => false,
     ...(options.attachmentDirectory ? { attachmentDirectory: options.attachmentDirectory } : {}),
-    ...(options.supports ? { cliFlags: { supports: options.supports } } : {}),
+    ...(options.supports ? { cliFlags: { check: checkOf(options.supports) } } : {}),
     ...(options.prepareVisuals ? { prepareVisuals: options.prepareVisuals } : {})
   })({ identity: IDENTITY })
 }
@@ -144,6 +153,8 @@ describe('a Claude chat launch with inline visuals', () => {
       async (_flag: ClaudeCliFlag, _launch: unknown, _budgetMs?: number) => false
     )
     await launch({ supports })
-    expect(supports).toHaveBeenCalledTimes(1)
+    expect(
+      supports.mock.calls.filter(([flag]) => flag === CLAUDE_THINKING_DISPLAY_FLAG)
+    ).toHaveLength(1)
   })
 })

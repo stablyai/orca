@@ -2,6 +2,7 @@ import type { ConnectionPresentationModel } from './use-mobile-tasks-connection-
 import { View, MobileSearchField } from './mobile-tasks-dependencies'
 import { styles } from './mobile-tasks-legacy-styles'
 import { getTaskPresetQuery, scopeGitHubTaskSearch } from './mobile-tasks-legacy-foundation'
+import { translate } from '../i18n/mobile-i18n'
 
 export function renderMobileTasksSearchControl(model: ConnectionPresentationModel) {
   const {
@@ -33,11 +34,20 @@ export function renderMobileTasksSearchControl(model: ConnectionPresentationMode
         onChangeText={isGithubProjectSearch ? setGithubProjectSearch : setQuery}
         placeholder={
           isGithubProjectSearch
-            ? 'Search project view...'
+            ? translate('tasks.searchControl.projectPlaceholder', 'Search project view...')
             : provider === 'jira'
               ? // Jira accepts raw JQL, matching desktop.
-                'Jira JQL, e.g. project = ABC AND statusCategory != Done'
-              : `Search ${providerLabel} tasks...`
+                translate(
+                  'tasks.searchControl.jiraPlaceholder',
+                  'Jira JQL, e.g. project = ABC AND statusCategory != Done'
+                )
+              : translate(
+                  'tasks.searchControl.providerPlaceholder',
+                  'Search {{provider}} tasks...',
+                  {
+                    provider: providerLabel
+                  }
+                )
         }
         // Preset text is not an override; Project’s explicit empty filter must not leave Clear visible forever.
         showClear={

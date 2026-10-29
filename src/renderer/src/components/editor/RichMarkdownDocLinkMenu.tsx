@@ -66,10 +66,11 @@ export function RichMarkdownDocLinkMenu({
       )}
       {overflow ? (
         <div className="rich-markdown-doc-link-footer">
-          {translate('auto.components.editor.RichMarkdownDocLinkMenu.2aaf7d9678', 'Showing')}{' '}
-          {rows.length}{' '}
-          {translate('auto.components.editor.RichMarkdownDocLinkMenu.90c5f0e1e4', 'of')}{' '}
-          {totalMatches}
+          {translate(
+            'auto.components.editor.RichMarkdownDocLinkMenu.showingOfTotal',
+            'Showing {{shown}} of {{total}}',
+            { shown: rows.length, total: totalMatches }
+          )}
         </div>
       ) : null}
       <div className="rich-markdown-doc-link-hint">

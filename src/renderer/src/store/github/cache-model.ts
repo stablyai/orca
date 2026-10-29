@@ -31,6 +31,8 @@ export type FetchOptions = {
   requireComplete?: boolean
   allowStaleFallback?: boolean
   sourceContext?: TaskSourceContext | null
+  /** A Tasks Refresh/Retry or a single-repo open: a user act that may start a stopped WSL distro. */
+  wakeWslDistro?: boolean
 }
 
 export type RepoScopedFetchOptions = FetchOptions & { repoId?: string }

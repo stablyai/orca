@@ -113,6 +113,49 @@ describe('physical session liveness', () => {
     }
   })
 
+  it('ends a silent socket after one 4s miss when a caller stopped hearing back', async () => {
+    const client = connect('ws://desktop.invalid', 'token', 'server-key')
+    const socket = sockets[0]!
+    socket.authenticate()
+
+    try {
+      // Just heard from, so not suspect yet.
+      const probes = () => socket.sent.filter((frame) => frame.includes('mobile-liveness-'))
+      client.probeLivenessNow?.()
+      await vi.advanceTimersByTimeAsync(4_000)
+      expect(probes()).toHaveLength(0)
+
+      client.probeLivenessNow?.()
+      expect(probes()).toHaveLength(1)
+      await vi.advanceTimersByTimeAsync(3_999)
+      expect(socket.close).not.toHaveBeenCalled()
+      await vi.advanceTimersByTimeAsync(1)
+
+      expect(socket.close).toHaveBeenCalledOnce()
+      expect(client.getState()).toBe('reconnecting')
+    } finally {
+      client.close()
+    }
+  })
+
+  it('turns a tolerant probe already running into a decisive one', async () => {
+    const client = connect('ws://desktop.invalid', 'token', 'server-key')
+    const socket = sockets[0]!
+    socket.authenticate()
+
+    try {
+      // A network switch starts the three-miss probe first.
+      client.notifyForeground('network-change')
+      await vi.advanceTimersByTimeAsync(4_000)
+      client.probeLivenessNow?.()
+      await vi.advanceTimersByTimeAsync(4_000)
+
+      expect(socket.close).toHaveBeenCalledOnce()
+    } finally {
+      client.close()
+    }
+  })
+
   it('counts authenticated terminal binary output as liveness', async () => {
     const client = connect('ws://desktop.invalid', 'token', 'server-key')
     const socket = sockets[0]!

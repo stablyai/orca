@@ -207,7 +207,12 @@ describe('Codex structured launch version admission', () => {
         })
       ).toMatchObject({
         ok: true,
-        command: shell === 'cmd' ? 'codex "--model" "chosen"' : "codex '--model' 'chosen'"
+        command:
+          shell === 'cmd'
+            ? 'codex "--model" "chosen"'
+            : shell === 'posix'
+              ? "codex '-c' 'disable_paste_burst=true' '--model' 'chosen'"
+              : "codex '--model' 'chosen'"
       })
     }
   )

@@ -21,32 +21,20 @@ export function writeAcpSessionOption(
     return Promise.reject(abortSignalReason(signal))
   }
   const revision = ++options.writeRevision
-  options.currentProof.delete(bound.key)
-  if (bound.key === 'model') {
-    options.currentProof.delete('effort')
-  }
+  options.invalidateInput(bound.key)
   const adopt = (apply: () => void): void => {
     if (options.writeRevision !== revision) {
       throw new Error(`${agent} option write was superseded`)
     }
     apply()
-    options.currentProof.add(bound.key)
-    options.applied.set(bound.key, bound.value)
-    if (bound.key === 'model') {
-      options.applied.delete('effort')
-    }
+    options.appliedInput.set(bound.key, write.method === 'config' ? write.value : write.modelId)
   }
   let completed = false
   const applied =
     write.method === 'config'
       ? connection.setConfigOption(write.configId, write.value).then((result) => {
           completed = true
-          adopt(() =>
-            options.adoptConfigOptions(
-              result.configOptions,
-              bound.key === 'model' ? bound.value : undefined
-            )
-          )
+          adopt(() => options.adoptConfigOptions(result.configOptions))
         })
       : connection.setModel(write.modelId).then(() => {
           completed = true

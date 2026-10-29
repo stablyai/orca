@@ -6,6 +6,8 @@ import {
 } from '../../../../shared/browser-extension-url'
 import { browserManager } from '../../browser-manager'
 import { emitBrowserExtensionEvent } from '../browser-extension-api-host'
+import { getBrowserExtensionContextSignal } from '../browser-extension-context-lifetime'
+import { getHostSessionState } from '../browser-extension-contexts'
 import { chooseDownloadSavePath } from './downloads-save-as'
 import {
   BrowserExtensionApiError,
@@ -152,8 +154,10 @@ function startDownload(
   owner: Electron.WebContents,
   url: string,
   options: z.infer<typeof optionsSchema>,
-  place: DownloadPlace
+  place: DownloadPlace,
+  signal: AbortSignal
 ): Promise<number> {
+  requireDownloadContext(signal)
   // Why: the tab can close during the save dialog or an earlier identical start.
   if (owner.isDestroyed()) {
     throw new BrowserExtensionApiError('The tab closed before the download started')
@@ -192,6 +196,12 @@ function startDownload(
   return started
 }
 
+function requireDownloadContext(signal: AbortSignal): void {
+  if (signal.aborted) {
+    throw new BrowserExtensionApiError('Extension context was unloaded')
+  }
+}
+
 async function download(
   caller: BrowserExtensionCaller,
   options: z.infer<typeof optionsSchema>
@@ -207,9 +217,15 @@ async function download(
   const filename = requestedFilename(options.filename)
   const url = resolveDownloadUrl(caller, options.url)
   const owner = downloadOwner(caller)
+  const state = getHostSessionState(caller.session)
+  if (!state) {
+    throw new BrowserExtensionApiError('Extension context was unloaded')
+  }
+  const signal = getBrowserExtensionContextSignal(state, caller.extension.id)
   const place: DownloadPlace = { filename }
   if (saveAs) {
     const savePath = await chooseDownloadSavePath(owner, url, filename)
+    requireDownloadContext(signal)
     if (savePath === null) {
       throw new BrowserExtensionApiError('Download canceled by the user')
     }
@@ -218,8 +234,8 @@ async function download(
   const key = `${owner.id} ${url}`
   const previous = startsInFlight.get(key) ?? Promise.resolve()
   const start = previous.then(
-    () => startDownload(caller, owner, url, options, place),
-    () => startDownload(caller, owner, url, options, place)
+    () => startDownload(caller, owner, url, options, place, signal),
+    () => startDownload(caller, owner, url, options, place, signal)
   )
   startsInFlight.set(key, start)
   try {

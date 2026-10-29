@@ -1,3 +1,4 @@
+import { taskProviderErrorMessage, taskProviderErrorText } from '@/lib/task-provider-error-copy'
 import { useState } from 'react'
 import { ChevronDown, CircleAlert, ExternalLink, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -53,12 +54,12 @@ export function JiraIssueTransitionControl({
         setOpen(false)
         reset()
       } else {
-        setSubmitError(result.error)
+        setSubmitError(taskProviderErrorMessage(result))
       }
     } catch (error) {
       setSubmitError(
         error instanceof Error
-          ? error.message
+          ? taskProviderErrorText(error.message)
           : translate(
               'auto.components.JiraIssueWorkspace.ea21952aa3',
               'Failed to update Jira issue.'

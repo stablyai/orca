@@ -26,6 +26,10 @@ import {
   withText,
   readOrHoldReply
 } from './mobile-queued-edit-hook.test-fixture'
+import { insertDictationText } from '../dictation/mobile-dictation-text-insertion'
+
+// What the composer hands the editor for words said into a field that was never focused.
+const spoken = (text: string) => (draft: string) => insertDictationText(draft, text, null).text
 
 describe('mobile in-place queued Edit', () => {
   const {
@@ -147,7 +151,7 @@ describe('mobile in-place queued Edit', () => {
         )
       }
       act(() => setMobileNativeChatDraftText('original-bottom', 'bottom'))
-      act(() => expect(insert('later')).toBe(!cancel))
+      act(() => expect(insert(spoken('later'))).toBe(!cancel))
       expect(state.bottomText).toBe(cancel ? 'bottom' : 'bottom later')
     }
   )
@@ -304,7 +308,7 @@ describe('mobile in-place queued Edit', () => {
         saving = state.hook!.queued.editor!.save()
       })
       act(() => {
-        expect(insert('speech')).toBe(true)
+        expect(insert(spoken('speech'))).toBe(true)
       })
       await act(async () => {
         reply!(mutationOk({ status, messageId: message.messageId }))
@@ -314,7 +318,7 @@ describe('mobile in-place queued Edit', () => {
         expect(state.bottomText).toBe('')
         expect(state.hook!.queued.editor!.text).toBe('submitted speech')
         act(() => {
-          expect(insert('later')).toBe(true)
+          expect(insert(spoken('later'))).toBe(true)
         })
         expect(state.bottomText).toBe('')
         expect(state.hook!.queued.editor!.text).toBe('submitted speech later')

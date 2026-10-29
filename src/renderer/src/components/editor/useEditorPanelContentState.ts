@@ -146,7 +146,10 @@ export function useEditorPanelContentState({
           delete next[file.id]
           return next
         })
-        void loadDiffContent(file, { force: true })
+        void loadDiffContent(file, {
+          force: true,
+          ...(options?.wakeWslDistro ? { wakeWslDistro: true } : {})
+        })
         return
       }
       delete fileLoadRetryAttemptsRef.current[file.id]

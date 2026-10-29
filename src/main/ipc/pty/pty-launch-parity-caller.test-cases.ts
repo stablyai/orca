@@ -26,7 +26,7 @@ const rpc = (
   params: Record<string, unknown>
 ): HostLaunchCall => ({ kind: 'rpc', method, params })
 const POSIX_CLAUDE = "claude '--dangerously-skip-permissions'"
-const CODEX = "codex '--dangerously-bypass-approvals-and-sandbox'"
+const CODEX = "codex '-c' 'disable_paste_burst=true' '--dangerously-bypass-approvals-and-sandbox'"
 
 // Paired new-tab requests carry intent; host planning determines command and environment.
 const PAIRED_TAB_PATH = '/worktree'

@@ -3,6 +3,8 @@ import type { AgentStatusIpcPayload } from '../../../../shared/agent-status-type
 import type { DashboardCard, DashboardSnapshot } from '../../../../shared/dashboard-snapshot'
 import { patchDashboardSnapshotFromAgentStatus } from './dashboard-agent-status-patch'
 
+import { dashboardCardDisplayState } from '../../../../shared/dashboard-snapshot'
+
 function card(overrides: Partial<DashboardCard> = {}): DashboardCard {
   return {
     paneKey: 'tab-1:leaf-1',
@@ -44,6 +46,46 @@ function snapshot(cards: DashboardCard[] = [card()]): DashboardSnapshot {
 }
 
 describe('patchDashboardSnapshotFromAgentStatus', () => {
+  it.each(['cancellation', 'failure', 'unconfirmed'] as const)(
+    'projects a newer %s verdict and clears it on the next full status',
+    (outcome) => {
+      const patched = patchDashboardSnapshotFromAgentStatus(
+        snapshot(),
+        event({
+          state: 'done',
+          mainAgent: { state: 'done', outcome, stateStartedAt: 250 }
+        })
+      ).snapshot
+      expect(dashboardCardDisplayState(patched.cards[0])).toBe(
+        outcome === 'cancellation'
+          ? 'interrupted'
+          : outcome === 'failure'
+            ? 'failed'
+            : 'unconfirmed'
+      )
+      expect(patched.cards[0].bucket).toBe('done')
+      for (const interrupted of [undefined, false]) {
+        const cleared = patchDashboardSnapshotFromAgentStatus(
+          patched,
+          event({ state: 'working', interrupted, receivedAt: 400, stateStartedAt: 350 })
+        ).snapshot
+        expect(dashboardCardDisplayState(cleared.cards[0])).toBe('working')
+      }
+      expect(
+        patchDashboardSnapshotFromAgentStatus(
+          patched,
+          event({ receivedAt: 400, programStatusOnly: true })
+        ).snapshot
+      ).toBe(patched)
+      expect(
+        patchDashboardSnapshotFromAgentStatus(
+          patched,
+          event({ receivedAt: 400, providerSessionOnly: true })
+        ).snapshot
+      ).toBe(patched)
+    }
+  )
+
   it('patches one known card without rebuilding the dashboard topology', () => {
     const original = snapshot([card(), card({ paneKey: 'tab-2:leaf-2' })])
     const result = patchDashboardSnapshotFromAgentStatus(original, event())

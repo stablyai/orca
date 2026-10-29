@@ -1,9 +1,7 @@
 import type { Automation } from '../../../../shared/automations-types'
 import { getRepoExecutionHostId, parseExecutionHostId } from '../../../../shared/execution-host'
-import {
-  describeRuntimeCompatBlock,
-  evaluateRuntimeCompat
-} from '../../../../shared/protocol-compat'
+import { evaluateRuntimeCompat } from '../../../../shared/protocol-compat'
+import { describeRuntimeCompatBlock } from '@/lib/runtime-host-copy'
 import {
   MIN_COMPATIBLE_RUNTIME_SERVER_VERSION,
   RUNTIME_PROTOCOL_VERSION

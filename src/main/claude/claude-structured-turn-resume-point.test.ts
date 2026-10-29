@@ -105,6 +105,7 @@ async function liveOwner(
       providerSessionId: PROVIDER_SESSION_ID,
       resumeLeafUuid: options.resumeLeafUuid === undefined ? 'resumed-at' : options.resumeLeafUuid,
       resumesTranscript: options.resumesTranscript ?? true,
+      cliFlag: async () => 'supported' as const,
       continuesChain: true
     }),
     onEvent: (event) => events.push(event),

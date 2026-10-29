@@ -129,7 +129,10 @@ export function createReattachPayloadHandlers(
       if (modelSnapshot) {
         // Scan/reset needs composed snapshot bytes; actual writes use alt-screen choreography to preserve scrollback.
         const modelData = `${modelSnapshot.scrollbackAnsi ?? ''}${modelSnapshot.data}`
-        session.rememberReattachPayloadAgentSignal(modelData, { fullScreenReplay: true })
+        session.rememberReattachPayloadAgentSignal(modelData, {
+          fullScreenReplay: true,
+          imageTitle: modelSnapshot.lastTitle
+        })
         const modelCols = modelSnapshot.cols
         const modelRows = modelSnapshot.rows
         if (
@@ -164,7 +167,8 @@ export function createReattachPayloadHandlers(
             modelData,
             Boolean(ctx.connectResult?.coldRestore),
             modelSnapshot.alternateScreen ?? ctx.connectResult?.isAlternateScreen,
-            modelSnapshot.terminalOwner
+            modelSnapshot.terminalOwner,
+            modelSnapshot.lastTitle
           )
         )
         if (modelSnapshot.pendingEscapeTailAnsi) {

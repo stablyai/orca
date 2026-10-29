@@ -3,6 +3,8 @@ import { defaultCancelTimer, defaultScheduleTimer, type ScheduleTimer } from './
 export const LIVENESS_IDLE_MS = 20_000
 export const LIVENESS_PROBE_TIMEOUT_MS = 8_000
 export const MISSED_PROBE_LIMIT = 3
+// One miss ends a session already suspected dead; long enough for radio wake and TCP retransmit before redial.
+export const DECISIVE_PROBE_TIMEOUT_MS = 4_000
 
 declare const rpcSessionIdentityBrand: unique symbol
 
@@ -35,6 +37,7 @@ export class RpcSessionLivenessWatchdog {
   private identity: RpcSessionIdentity | null = null
   private timer: ReturnType<typeof setTimeout> | null = null
   private probing = false
+  private probingDecisively = false
   private missedProbes = 0
   private lastInboundAt = 0
   private lastVoluntaryProbeAt: number | null = null
@@ -106,6 +109,19 @@ export class RpcSessionLivenessWatchdog {
     this.startProbe(identity, decisiveTimeoutMs)
   }
 
+  // For a caller that stopped hearing back: a session heard from within the window is not suspect, no foreground rate limit applies, and a tolerant probe already running is cut short.
+  probeCurrentDecisively(): void {
+    const identity = this.identity
+    const decisiveRunning = this.probing && this.probingDecisively
+    if (
+      identity &&
+      !decisiveRunning &&
+      this.now() - this.lastInboundAt >= DECISIVE_PROBE_TIMEOUT_MS
+    ) {
+      this.startProbe(identity, DECISIVE_PROBE_TIMEOUT_MS)
+    }
+  }
+
   stop(identity: RpcSessionIdentity): void {
     if (this.identity !== identity) {
       return
@@ -143,6 +159,7 @@ export class RpcSessionLivenessWatchdog {
     }
     this.clearActiveTimer()
     this.probing = true
+    this.probingDecisively = decisiveTimeoutMs !== null
     const sentAt = this.now()
     let sent = false
     try {

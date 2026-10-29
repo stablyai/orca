@@ -155,7 +155,8 @@ export async function createGiteaPullRequest(
     return {
       ok: false,
       code: 'validation',
-      error: 'Create PR failed: base branch, head branch, and title are required.'
+      error: 'Create PR failed: base branch, head branch, and title are required.',
+      reason: 'base_head_title_required'
     }
   }
   if (head.toLowerCase() === base.toLowerCase()) {

@@ -24,6 +24,7 @@ import {
 } from './file-target'
 import { parseExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
 import type { FileStat } from '../../providers/filesystem-provider-contract'
+import { assertRuntimeReadWslDistroRunning } from '../runtime-wsl-background-read-gate'
 
 type RuntimeFileAccessHost = Pick<
   RuntimeFileCommandHost,
@@ -126,6 +127,10 @@ export class RuntimeFileAccess {
   ): Promise<PathExistenceResult[]> {
     validatePathExistenceBatch(relativePaths)
     const targets = await resolveFileExplorerPaths(this.host, worktreeSelector, relativePaths)
+    // Link checks on render and retry timers: never start a stopped WSL distro (E9).
+    if (targets[0]) {
+      await assertRuntimeReadWslDistroRunning(targets[0])
+    }
     return readRuntimeFilePathExistence(targets, this.host)
   }
 

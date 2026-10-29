@@ -9,7 +9,8 @@ import type {
   BridgeColorScheme,
   BridgeConnectionSnapshot,
   BridgeHostMessage,
-  BridgeInitRoute
+  BridgeInitRoute,
+  BridgeUiLocale
 } from './bridge-envelope'
 
 type InitMessage = Extract<BridgeHostMessage, { type: 'init' }>
@@ -23,6 +24,7 @@ export type BridgeClientShellSession = {
   onSafeAreaInsetsUpdate: (listener: (insets: BridgeSafeAreaInsets) => void) => () => void
   onKeyboardInsetUpdate: (listener: (height: number) => void) => () => void
   onColorSchemeUpdate: (listener: (scheme: BridgeColorScheme) => void) => () => void
+  onUiLocaleUpdate: (listener: (locale: BridgeUiLocale | null) => void) => () => void
   close: () => void
 }
 
@@ -36,6 +38,7 @@ export function createBridgeClientShellSession(args: {
   const insetsListeners = new Set<(insets: BridgeSafeAreaInsets) => void>()
   const keyboardListeners = new Set<(height: number) => void>()
   const schemeListeners = new Set<(scheme: BridgeColorScheme) => void>()
+  const uiLocaleListeners = new Set<(locale: BridgeUiLocale | null) => void>()
 
   return {
     current: () => session,
@@ -54,6 +57,8 @@ export function createBridgeClientShellSession(args: {
       const movedKeyboard = held !== null && held.keyboardInset !== keyboardInset
       const colorScheme = message.colorScheme ?? 'dark'
       const movedScheme = held !== null && held.colorScheme !== colorScheme
+      const uiLocale = message.uiLocale ?? null
+      const movedUiLocale = held !== null && held.uiLocale !== uiLocale
       session =
         update === null
           ? { ...readShellSession(message), safeAreaInsets }
@@ -62,7 +67,8 @@ export function createBridgeClientShellSession(args: {
               route: message.route ?? null,
               safeAreaInsets,
               keyboardInset,
-              colorScheme
+              colorScheme,
+              uiLocale
             }
       // Reprime on every init to repair refused stale generations after client rebuild; identical pane-update snapshots emit no transition.
       args.prime(message.connection)
@@ -83,6 +89,11 @@ export function createBridgeClientShellSession(args: {
       if (movedScheme) {
         for (const listener of schemeListeners) {
           listener(colorScheme)
+        }
+      }
+      if (movedUiLocale) {
+        for (const listener of uiLocaleListeners) {
+          listener(uiLocale)
         }
       }
       // Publish only changed routes; repeated ready used for state repair must not retrigger the current pane.
@@ -126,6 +137,12 @@ export function createBridgeClientShellSession(args: {
       schemeListeners.add(listener)
       return () => {
         schemeListeners.delete(listener)
+      }
+    },
+    onUiLocaleUpdate: (listener) => {
+      uiLocaleListeners.add(listener)
+      return () => {
+        uiLocaleListeners.delete(listener)
       }
     },
     close: () => {

@@ -369,6 +369,8 @@ def render_accessibility_tree(root, root_path, compact_browser_tabs=False, geome
     records = []
     lines = []
     truncation = {"truncated": False, "maxNodes": MAX_NODES, "maxDepth": MAX_DEPTH, "maxDepthReached": False}
+    # Tab compaction shrinks records mid-walk, so len(records) would reuse retained indexes.
+    next_index = 0
 
     def text_snippets(node, limit=6, max_depth=3):
         values = []
@@ -419,12 +421,13 @@ def render_accessibility_tree(root, root_path, compact_browser_tabs=False, geome
         return role in {"panel", "filler", "unknown", "section"} and not has_text and not meaningful_actions(item["actions"]) and summary is None and child_count <= 1
 
     def walk(node, depth, path):
+        nonlocal next_index
         if len(records) >= MAX_NODES or depth > MAX_DEPTH:
             truncation["truncated"] = True
             if depth > MAX_DEPTH:
                 truncation["maxDepthReached"] = True
             return
-        item = record(node, len(records), path)
+        item = record(node, next_index, path)
         role_key = (item["controlType"] or "").lower()
         title = item["name"] or item["automationId"] or ""
         suppressed = suppress_children(role_key, title, item["value"], None)
@@ -439,6 +442,7 @@ def render_accessibility_tree(root, root_path, compact_browser_tabs=False, geome
                 walk(child, depth, path + [child_index])
             return
         records.append(item)
+        next_index += 1
         if geometry_nodes is not None:
             geometry_nodes[id(item)] = node
         role_label = item["localizedControlType"] or item["controlType"]

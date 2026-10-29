@@ -95,7 +95,11 @@ export function structuredSummaryConversationNaming(
   return failure?.forName === name
     ? {
         conversationName: name,
-        namingError: { message: failure.message, failedAt: failure.failedAt }
+        namingError: {
+          message: failure.message,
+          failedAt: failure.failedAt,
+          ...(failure.messageCode ? { messageCode: failure.messageCode } : {})
+        }
       }
     : { conversationName: name }
 }
@@ -122,4 +126,17 @@ export function retainedStructuredStatusSummaries(
   return [...publications].map(
     ({ summary }) => renamedStructuredStatusSummary(summary, deps, summary.sessionId) ?? summary
   )
+}
+
+export function releasedStructuredStatusSummary(
+  previous: AgentSessionStatusSummary
+): AgentSessionStatusSummary {
+  const {
+    hostExecutionOwned: _hostExecutionOwned,
+    hostExecutionPhase: _hostExecutionPhase,
+    stopping: _stopping,
+    restartResume: _restartResume,
+    ...retained
+  } = previous
+  return { ...retained, runtimePermission: null }
 }

@@ -57,6 +57,8 @@ export const AGENT_SESSION_FAILURE_COPY = {
   agentNotSignedIn: 'Sign in to {{agent}}.',
   cliMissing:
     "{{agent}} wasn't found on the computer running this chat. Install it, or check its Command in Settings → Agents.",
+  cliMissingInWslDistro:
+    "{{agent}} isn't installed in the WSL distro {{distro}}. Install it inside {{distro}}, or check its Command in Settings → Agents.",
   signInFirst: 'Sign in first.',
   signInThenRunCommand: 'Sign in, then run /{{command}} again.',
   signInThenSend: 'Sign in, then send your message again.',
@@ -80,6 +82,8 @@ export const AGENT_SESSION_FAILURE_COPY = {
     "{{agent}} isn't installed on the computer running this chat. Install it from the chat in a current version of Orca.",
   fullAccessAsRoot:
     "{{agent}} won't use Full access while it runs as root. Choose another permission for {{agent}} in Settings → Agents for the computer running this chat, then start a new chat.",
+  launchPreparationFailed:
+    "Orca couldn't prepare {{agent}} to start on the computer running this chat.",
   conversationOpenElsewhere:
     'Codex is still holding this conversation open. Try again in a moment, or close other Codex terminals.',
   conversationOpenInTerminal:
@@ -94,6 +98,9 @@ export const AGENT_SESSION_FAILURE_COPY = {
   providerExitedRejection: '{{agent}} stopped before this message was sent.',
   providerExitedAnswer:
     '{{agent}} has stopped, so your answer was not sent. Send a message to continue.',
+  claudeEffortInvalid:
+    'Claude effort is invalid; choose low, medium, high, xhigh, or max and send again.',
+  modelUnavailable: "{{agent}} couldn't use {{detail}}. Pick another model and send again.",
   providerRejected: "{{agent}} didn't accept this message.",
   providerRejectedQuoted: "{{agent}} didn't accept this message: {{detail}}.",
   attachmentEmpty: 'An image on this message is empty, so the message was not sent.',
@@ -177,6 +184,8 @@ export type AgentSessionFailureCopyValues = {
   loginCommand?: string
   slashCommand?: string
   detail?: string
+  /** The WSL distro a WSL host runs in, as its host record names it. */
+  distro?: string
   /** A usage limit's name, from the `usageLimitWindow*` pieces. */
   window?: string
   /** When a usage limit resets, in the reader's clock. */

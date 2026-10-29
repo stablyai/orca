@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import type { editor as monacoEditor } from 'monaco-editor'
+import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import { useDocumentDarkTheme } from '@/hooks/use-document-dark-theme'
 import { DiffSectionItem } from '@/components/editor/DiffSectionItem'
@@ -356,11 +357,20 @@ export function PRFilesCombinedDiffViewer({
                     retrySection={retrySection}
                     toggleSection={toggleSection}
                     openSection={openFilesOnGitHub}
-                    openSectionTitle="Open files on GitHub"
+                    openSectionTitle={translate(
+                      'auto.components.GitHubItemDialog.85a2b66f54',
+                      'Open files on GitHub'
+                    )}
                     renderHeaderTrailingContent={renderViewedCheckbox}
                     onAddLineComment={handleAddLineComment}
-                    addLineCommentLabel="Comment"
-                    addLineCommentPlaceholder="Add a review comment"
+                    addLineCommentLabel={translate(
+                      'auto.components.GitHubItemDialog.bf43425540',
+                      'Comment'
+                    )}
+                    addLineCommentPlaceholder={translate(
+                      'auto.components.GitHubItemDialog.86d84a17ca',
+                      'Add a review comment'
+                    )}
                     getCommentableLineNumbers={getCommentableLineNumbers}
                     setSectionHeights={setSectionHeights}
                     setSections={setSections}

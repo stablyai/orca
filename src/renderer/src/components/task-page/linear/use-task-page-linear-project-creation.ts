@@ -1,3 +1,4 @@
+import { taskProviderErrorMessage, taskProviderErrorText } from '@/lib/task-provider-error-copy'
 import type { TaskPageGitHubIssueCreationModel } from '../github/use-task-page-github-issue-creation'
 import { useCallback } from 'react'
 import { linearCreateProject } from '@/runtime/runtime-linear-project-client'
@@ -66,7 +67,7 @@ export function useTaskPageLinearProjectCreation(model: TaskPageGitHubIssueCreat
       )
       if (!result.ok) {
         toast.error(
-          result.error ||
+          taskProviderErrorMessage(result) ||
             translate('auto.components.TaskPage.3ca9b424a3', 'Failed to create project.')
         )
         return
@@ -107,7 +108,7 @@ export function useTaskPageLinearProjectCreation(model: TaskPageGitHubIssueCreat
     } catch (error) {
       toast.error(
         error instanceof Error
-          ? error.message
+          ? taskProviderErrorText(error.message)
           : translate('auto.components.TaskPage.3ca9b424a3', 'Failed to create project.')
       )
     } finally {

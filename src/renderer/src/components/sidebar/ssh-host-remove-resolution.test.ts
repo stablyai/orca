@@ -1,10 +1,5 @@
 import { describe, it, expect } from 'vitest'
 import { resolveSshHostRemoval } from './ssh-host-remove-resolution'
-import type { SshConnectionState } from '../../../../shared/ssh-types'
-
-function connected(id: string): Map<string, SshConnectionState> {
-  return new Map([[id, { targetId: id, status: 'connected', error: null, reconnectAttempt: 0 }]])
-}
 
 describe('resolveSshHostRemoval', () => {
   const repos = [
@@ -23,33 +18,20 @@ describe('resolveSshHostRemoval', () => {
     const result = resolveSshHostRemoval({
       targetId: 'ssh-1',
       repos,
-      worktrees,
-      sshConnectionStates: new Map()
+      worktrees
     })
     expect(result.workspaceWorktreeIds.sort()).toEqual(
       ['repo-a::/wt/feature', 'repo-b::/wt/x'].sort()
     )
     expect(result.hostRepoIds.sort()).toEqual(['repo-a', 'repo-b'])
     expect(result.workspaceCount).toBe(4)
-    expect(result.isConnected).toBe(false)
-  })
-
-  it('reports connected when the target relay is connected', () => {
-    const result = resolveSshHostRemoval({
-      targetId: 'ssh-1',
-      repos,
-      worktrees,
-      sshConnectionStates: connected('ssh-1')
-    })
-    expect(result.isConnected).toBe(true)
   })
 
   it('reports zero workspaces for a target nothing points at', () => {
     const result = resolveSshHostRemoval({
       targetId: 'ssh-unused',
       repos,
-      worktrees,
-      sshConnectionStates: new Map()
+      worktrees
     })
     expect(result.workspaceCount).toBe(0)
     expect(result.hostRepoIds).toEqual([])
@@ -67,8 +49,7 @@ describe('resolveSshHostRemoval', () => {
         { id: 'repo-a::/wt/x', repoId: 'repo-a', isMainWorktree: false },
         { id: 'repo-a::/wt/x', repoId: 'repo-a', isMainWorktree: false },
         { id: 'repo-a::/wt/x', repoId: 'repo-a', isMainWorktree: false }
-      ],
-      sshConnectionStates: new Map()
+      ]
     })
     expect(result.hostRepoIds).toEqual(['repo-a'])
     expect(result.workspaceWorktreeIds).toEqual(['repo-a::/wt/x'])

@@ -13,24 +13,25 @@ import type {
   LinuxPackageInstallRecovery
 } from '../../shared/update-status-types'
 import { UpdaterInstallSupport } from './updater-install-support'
+import {
+  updaterCodedMessage,
+  updaterFailureText,
+  type UpdaterFailureCode
+} from '../../shared/updater-failure-copy'
 
-const LINUX_PACKAGE_RECOVERY_MESSAGES: Record<LinuxPackageRecoveryUnavailableReason, string> = {
-  missing:
-    'The downloaded package is no longer in the update cache. Download the update again, or get it from the official release page.',
+const LINUX_PACKAGE_RECOVERY_CODES: Record<
+  LinuxPackageRecoveryUnavailableReason,
+  UpdaterFailureCode
+> = {
+  missing: 'linuxPackageMissing',
   // Also covers traversal/symlink escape from cache; do not claim only file type changed.
-  'not-regular':
-    'The downloaded package is no longer a valid file in the update cache. Download the update again, or get it from the official release page.',
-  'hash-mismatch':
-    'The downloaded package no longer matches the verified release, so Orca will not hand it to a package manager. Download the update again, or get it from the official release page.',
-  'read-failed':
-    'Orca could not read the downloaded package. Download the update again, or get it from the official release page.',
-  'no-sudo':
-    'No sudo command was found in the system directories, so Orca cannot build a safe install command. Show the package and install it with your package manager.',
-  'no-package-manager':
-    'No supported package manager was found in the system directories, so Orca cannot build a safe install command. Show the package and install it with your package manager.',
+  'not-regular': 'linuxPackageNotRegular',
+  'hash-mismatch': 'linuxPackageHashMismatch',
+  'read-failed': 'linuxPackageReadFailed',
+  'no-sudo': 'linuxPackageNoSudo',
+  'no-package-manager': 'linuxPackageNoPackageManager',
   // Capture tracks absolute cache paths; invalid paths indicate a bug.
-  'invalid-package-path':
-    'The downloaded package is not at a usable path, so Orca cannot build a safe install command. Show the package and install it with your package manager.'
+  'invalid-package-path': 'linuxPackageInvalidPath'
 }
 
 // Clear status recovery with the artifact or renderer actions stay enabled.
@@ -88,12 +89,12 @@ export abstract class UpdaterPackageRecovery extends UpdaterInstallSupport {
   ): never {
     this.assertCurrentLinuxPackageRecovery(recovery, artifact)
     this.recordLinuxPackageRecoveryUnavailable(recovery, reason)
-    const message = LINUX_PACKAGE_RECOVERY_MESSAGES[reason]
+    const coded = updaterCodedMessage(LINUX_PACKAGE_RECOVERY_CODES[reason])
     if (RECOVERY_CLEARING_REASONS.includes(reason)) {
       clearTrackedLinuxPackageArtifact()
-      this.sendStatus({ state: 'error', message, version: recovery.version })
+      this.sendStatus({ state: 'error', ...coded, version: recovery.version })
     }
-    throw new Error(message)
+    throw new Error(coded.message)
   }
 
   protected async getLinuxPackageInstallInstructions(): Promise<LinuxPackageInstallInstructions> {
@@ -116,7 +117,7 @@ export abstract class UpdaterPackageRecovery extends UpdaterInstallSupport {
         return {
           ok: false,
           reason: result.reason,
-          message: LINUX_PACKAGE_RECOVERY_MESSAGES[result.reason]
+          message: updaterFailureText(LINUX_PACKAGE_RECOVERY_CODES[result.reason])
         }
       }
       this.failLinuxPackageRecovery(recovery, artifact, result.reason)

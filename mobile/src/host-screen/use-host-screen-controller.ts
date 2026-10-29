@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useLocalSearchParams, usePathname } from 'expo-router'
 import { useRouteHandoff } from '../navigation/route-handoff'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -46,6 +47,7 @@ export function useHostScreenController({
   onHideSidebar,
   actionsInRail = false
 }: HostScreenProps = {}) {
+  useMobileTranslation()
   const params = useLocalSearchParams<{ hostId: string; notice?: string }>()
   const hostId = hostIdProp ?? params.hostId
   const [dismissedNotice, setDismissedNotice] = useState<string | null>(null)

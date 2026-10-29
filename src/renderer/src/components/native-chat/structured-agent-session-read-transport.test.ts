@@ -87,10 +87,12 @@ describe('structured agent-session read transport generations', () => {
 
   function start(
     applyEvent: Parameters<typeof startStructuredAgentSessionReadTransport>[0]['applyEvent'],
-    applyError = vi.fn()
+    applyError = vi.fn(),
+    applyRequests = vi.fn()
   ) {
     return startStructuredAgentSessionReadTransport({
       subscribeRetryNow: () => () => {},
+      applyRequests,
       applyEvent,
       applyError,
       getCursor: () => null,
@@ -248,33 +250,57 @@ describe('structured agent-session read transport generations', () => {
     }
   })
 
-  it('reopens once for a current-request version whose read keeps failing', async () => {
+  const currentRequests = {
+    contract: AGENT_SESSION_CURRENT_REQUESTS_CLIENT_CAPABILITY,
+    sessionId: 'session-a',
+    epoch: 'epoch-a',
+    publisher: 'publisher-a',
+    revision: 1,
+    owner: 'owner-a',
+    version: 'version-a'
+  }
+
+  it('re-reads a current-request version after temporary failures without reopening', async () => {
     vi.useFakeTimers()
     try {
-      mocks.call.mockRejectedValue(new Error('Invalid current requests'))
-      const currentRequests = {
-        contract: AGENT_SESSION_CURRENT_REQUESTS_CLIENT_CAPABILITY,
-        sessionId: 'session-a',
-        epoch: 'epoch-a',
-        publisher: 'publisher-a',
-        revision: 1,
-        owner: 'owner-a',
-        version: 'version-a'
-      }
+      mocks.call
+        .mockRejectedValueOnce(new Error('timed out'))
+        .mockRejectedValueOnce(new Error('timed out'))
+        .mockResolvedValueOnce({ marker: currentRequests, json: '[]', nextCursor: null })
+      const applyError = vi.fn()
+      const applyRequests = vi.fn()
+      const transport = start(vi.fn(), applyError, applyRequests)
+      await flushPromises()
+      attempts[0].closed.resolve({ unsubscribe: attempts[0].unsubscribe })
+      await flushPromises()
+      attempts[0].onEvent(snapshot(1, currentRequests))
+      await vi.advanceTimersByTimeAsync(750 + 1_500)
+      expect(mocks.call).toHaveBeenCalledTimes(3)
+      expect(applyRequests).toHaveBeenCalledWith({
+        type: 'requests-complete',
+        marker: currentRequests,
+        items: []
+      })
+      expect(applyError).not.toHaveBeenCalled()
+      expect(attempts).toHaveLength(1)
+      transport.dispose()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('does not re-read a current-request version whose answer breaks the contract', async () => {
+    vi.useFakeTimers()
+    try {
+      mocks.call.mockResolvedValue({ marker: currentRequests, json: '{}', nextCursor: null })
       const transport = start(vi.fn())
       await flushPromises()
       attempts[0].closed.resolve({ unsubscribe: attempts[0].unsubscribe })
       await flushPromises()
       attempts[0].onEvent(snapshot(1, currentRequests))
-      await vi.advanceTimersByTimeAsync(750)
-      expect(attempts).toHaveLength(2)
-
-      attempts[1].closed.resolve({ unsubscribe: attempts[1].unsubscribe })
-      await flushPromises()
-      attempts[1].onEvent(snapshot(1, currentRequests))
       await vi.advanceTimersByTimeAsync(30_000)
-      expect(mocks.call).toHaveBeenCalledTimes(2)
-      expect(attempts).toHaveLength(2)
+      expect(mocks.call).toHaveBeenCalledTimes(1)
+      expect(attempts).toHaveLength(1)
       transport.dispose()
     } finally {
       vi.useRealTimers()

@@ -1,3 +1,4 @@
+import { suspendSurfaceTouchGestures } from './surface-interaction-lifecycle'
 import type { TerminalDocumentScope } from './document-scope'
 import { applyFitScale } from './fit-scale'
 import { notify } from './host-notify'
@@ -14,6 +15,7 @@ import { applyTextScale } from './text-scaling'
 import { resetWriteQueue } from './write-queue'
 
 export type TerminalHostMessage = {
+  active?: boolean
   id?: number
   type?: string
   cols?: number
@@ -86,6 +88,7 @@ export function handleMsg(scope: TerminalDocumentScope, msg: TerminalHostMessage
   } else if (msg.type === 'write') {
     write(scope, msg.data!)
   } else if (msg.type === 'clear') {
+    scope.pendingReplayScrollAnchorRows = null
     scope.terminalGeneration++
     resetWriteQueue(scope)
     resumeTerminalDataReplyAuthority(scope)
@@ -113,6 +116,13 @@ export function handleMsg(scope: TerminalDocumentScope, msg: TerminalHostMessage
     }
   } else if (msg.type === 'reset-zoom') {
     applyFitScale(scope, 'reset-zoom-msg')
+  } else if (msg.type === 'set-interaction-active') {
+    if (typeof msg.active === 'boolean') {
+      scope.interactionActive = msg.active
+      if (!msg.active) {
+        suspendSurfaceTouchGestures(scope)
+      }
+    }
   } else if (msg.type === 'set-theme') {
     applyTerminalTheme(scope, msg.terminalTheme)
   } else if (msg.type === 'cancel-select') {

@@ -27,6 +27,8 @@ export type SplitPaneInMainOptions = {
   activate?: boolean
   /** The window's own split keeps a pane whose start failed, showing why, as its spawn did. */
   keepPaneOnStartFailure?: boolean
+  /** The user's own act (a CLI or window split); without it a stopped WSL distro holds the start. */
+  wslUserAct?: true
 }
 
 export abstract class OrcaRuntimeWithSplitPaneInMain extends OrcaRuntimeWithSplitPtyBackedTerminal {
@@ -109,6 +111,7 @@ export abstract class OrcaRuntimeWithSplitPaneInMain extends OrcaRuntimeWithSpli
         ...opts.env
       }),
       envToDelete: opts.envToDelete,
+      ...(opts.wslUserAct ? { wslUserAct: true } : {}),
       connectionId: workspace.connectionId,
       worktreeId: workspace.id,
       preAllocatedHandle,

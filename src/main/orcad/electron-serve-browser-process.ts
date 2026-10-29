@@ -1,3 +1,4 @@
+import { BROWSER_GOOGLE_COOKIE_CLEAR_CAPABILITY } from '../../shared/browser-runtime-capabilities'
 import { mkdtemp } from 'node:fs/promises'
 import { createServer, type AddressInfo } from 'node:net'
 import { tmpdir } from 'node:os'
@@ -69,11 +70,13 @@ export class ElectronServeBrowserProcess {
   private child: ReturnType<typeof spawnProcess> | null = null
   private metadata: RuntimeMetadata | null = null
   private readonly tabs = new ElectronSidecarTabRegistry()
+  private googleCookieClearSupported = false
   private sidecarDataPath: string | null = null
 
   constructor(private readonly executablePath: string) {}
 
   async start(signal?: AbortSignal): Promise<void> {
+    this.googleCookieClearSupported = false
     signal?.throwIfAborted()
     const temporaryRoot = process.platform === 'win32' ? tmpdir() : '/tmp'
     const userDataPath = await mkdtemp(join(temporaryRoot, 'orcad-browser-'))
@@ -118,6 +121,9 @@ export class ElectronServeBrowserProcess {
           )
           signal?.throwIfAborted()
           if (status.capabilities?.includes('browser.headless.v1')) {
+            this.googleCookieClearSupported = status.capabilities.includes(
+              BROWSER_GOOGLE_COOKIE_CLEAR_CAPABILITY
+            )
             this.metadata = metadata
             return
           }
@@ -147,16 +153,17 @@ export class ElectronServeBrowserProcess {
       // Startup checks membership before resolving commands dynamically.
       has: (_target, property) => typeof property === 'string' && property !== 'then',
       get: (_target, property) => {
-        if (property === 'then') {
-          return undefined
-        }
-        if (typeof property !== 'string') {
+        if (property === 'then' || typeof property !== 'string') {
           return undefined
         }
         return (...args: unknown[]) => this.invoke(host, property, args)
       }
     })
   }
+  supportsGoogleCookieClear(): boolean {
+    return this.isAvailable() && this.googleCookieClearSupported
+  }
+
   isAvailable(): boolean {
     return this.metadata !== null && isProcessAlive(this.metadata.pid)
   }
@@ -173,6 +180,7 @@ export class ElectronServeBrowserProcess {
     const sidecarDataPath = this.sidecarDataPath
     this.child = null
     this.metadata = null
+    this.googleCookieClearSupported = false
     this.sidecarDataPath = null
     this.tabs.clear()
     if (sidecarPid) {

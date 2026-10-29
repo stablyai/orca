@@ -5,6 +5,7 @@ import {
   AgentSessionAcquisitionRootExitObservedError,
   AgentSessionAcquisitionExitUnprovenError,
   AgentSessionAcquisitionExitProvenError,
+  launchPreparationFailure,
   type AgentSessionAcquisition,
   type StructuredAgentSessionAcquireInput,
   type StructuredAgentSessionAdapter
@@ -70,7 +71,10 @@ export class PiRpcSessionAdapter implements StructuredAgentSessionAdapter {
           attempt.signal
         )
       } catch (error) {
-        throw new AgentSessionPreSpawnError(error)
+        // A start withdrawn while resolving is a close, not a failed preparation.
+        throw attempt.signal.aborted
+          ? new AgentSessionPreSpawnError(error)
+          : launchPreparationFailure(error)
       }
       if (attempt.signal.aborted) {
         throw new AgentSessionPreSpawnError(new Error('Pi closed while starting'))

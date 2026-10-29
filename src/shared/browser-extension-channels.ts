@@ -12,6 +12,9 @@ export const BROWSER_EXTENSION_INVOKE_CHANNEL = 'browserExtension:invoke'
 /** Main → extension context, only for events that context registered. Payload: BrowserExtensionEventPayload. */
 export const BROWSER_EXTENSION_EVENT_CHANNEL = 'browserExtension:event'
 
+/** Main → listening frame. The transferred port owns the frame's listener registrations. */
+export const BROWSER_EXTENSION_FRAME_LIFETIME_CHANNEL = 'browserExtension:frameLifetime'
+
 export type BrowserExtensionInvokeRequest =
   | { type: 'call'; namespace: string; method: string; args: unknown[] }
   // Why: lets main skip contexts with no listener and restart a stopped worker only when it listens.

@@ -166,7 +166,7 @@ export abstract class OrcaRuntimeWithTransitionGraphReloadToTerminalState extend
       : this.resolveFolderWorkspaceSelector(selector)
     return folderWorkspace
       ? this.folderWorkspaceToResolvedWorktree(folderWorkspace)
-      : this.resolveWorktreeSelector(selector)
+      : this.resolveGitWorktreeSelector(selector)
   }
 
   protected async resolveEmulatorWorkspaceId(selector: string): Promise<string> {

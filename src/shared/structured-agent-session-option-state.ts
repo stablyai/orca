@@ -55,13 +55,14 @@ export function structuredAgentSessionOwnValue(
 export function replaceStructuredAgentSessionAnsweredValues(
   record: StructuredAgentSessionOptionRecord,
   answered: Readonly<Partial<Record<(typeof ANSWERED_VALUE_IDS)[number], SessionOptionValue>>>,
-  sourceFor: (id: string) => TrackedNativeChatSessionOption['source']
+  sourceFor: (id: string) => TrackedNativeChatSessionOption['source'],
+  replaceUnknownModel = false
 ): void {
   for (const id of ANSWERED_VALUE_IDS) {
     const value = answered[id]
     if (value !== undefined) {
       record.values[id] = { value, source: sourceFor(id) }
-    } else if (id !== 'model') {
+    } else if (id !== 'model' || replaceUnknownModel) {
       delete record.values[id]
     }
   }

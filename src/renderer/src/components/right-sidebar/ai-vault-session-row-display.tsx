@@ -8,7 +8,7 @@ import { WorktreeHostContextBadge } from '@/components/sidebar/WorktreeHostConte
 import RepoBadgeLabel from '@/components/repo/RepoBadgeLabel'
 import { AgentStateDot } from '@/components/AgentStateDot'
 import { AgentIcon } from '@/lib/agent-catalog'
-import type { AgentStatusState } from '../../../../shared/agent-status-types'
+import type { AgentDotState } from '@/components/AgentStateDot'
 import { useRepoById } from '@/store/selectors'
 import { resolveRepoBadgeColor } from '../../../../shared/repo-badge-color'
 import { splitWorktreeIdForFilesystem } from '../../../../shared/worktree/id'
@@ -41,7 +41,7 @@ export function SessionMetadata({
   sourceHostLabel
 }: {
   session: AiVaultSession
-  liveState: AgentStatusState | null
+  liveState: AgentDotState | null
   updatedAt: string
   worktreeInfo: AiVaultSessionWorktreeInfo | null
   vaultScope: AiVaultScope

@@ -67,6 +67,8 @@ export type TerminalCreateOptions = {
   terminalKittyKeyboardProtocol?: boolean
   terminalImageViewerSupported?: boolean
   terminalColorQueryReplies?: TerminalOscColorQueryReplyColors
+  /** Unvalidated wire value: the creator's palette and cursor, pinned with its colours on a windowed host. */
+  terminalViewAttributes?: unknown
   viewMode?: 'terminal' | 'chat'
   /** The tab group a background create joins; defaults to the first group. */
   targetGroupId?: string
@@ -101,6 +103,8 @@ export type TerminalCreateOptions = {
   agentSessionCreateOperationId?: string
   /** The paired client's declared intent; the host's fork gate validates and may defer it. */
   spawnIntent?: SpawnIntent
+  /** The user's own act (a CLI command, a paired client's create, a launch); without it a stopped WSL distro holds the start. */
+  wslUserAct?: true
   signal?: AbortSignal
   /** Refuse (`worktree_terminals_sleeping`) instead of waking a worktree the host has put to sleep. */
   refuseSleptWorktree?: boolean

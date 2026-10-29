@@ -27,7 +27,7 @@ import { AgentModelCatalogStore } from '../native-chat/agent-model-catalog/agent
 import type { AgentSessionRecordStore } from '../runtime/agent-session-record-store'
 import { withLiveCatalogListing } from '../native-chat/agent-model-catalog/agent-model-catalog-entry'
 import { AcpStructuredOptions } from './acp-structured-options'
-import { seedOptionsAdmittedOnSavedListing } from '../runtime/agent-session-record-options'
+import { readStructuredAgentSessionOptions } from '../native-chat/agent-session-wire/structured-agent-session-options-read'
 import { structuredAgentSessionHandingOver } from '../native-chat/agent-session-wire/structured-agent-session-handing-over'
 
 const recording = JSON.parse(
@@ -248,14 +248,6 @@ it.each([
       efforts: [],
       effortsKnown: false
     })
-    expect(
-      seedOptionsAdmittedOnSavedListing(
-        'antigravity',
-        { model: PRO, effort: 'low' },
-        saved.models,
-        new Set()
-      )
-    ).toEqual({ model: PRO, effort: 'low' })
     const scans = vi.spyOn(rig.journal(), 'submissions')
     if (path === 'cold') {
       await rig.host.close(SESSION, 'user-close')
@@ -273,6 +265,7 @@ it.each([
       expect(
         rig
           .writes()
+          .slice(proWrites)
           .filter(
             ({ params }) => SetSessionConfigOptionRequestSchema.parse(params).configId === 'model'
           )
@@ -287,7 +280,12 @@ it.each([
     }
     const id = await rig.deliver('Pro without re-picking effort')
     expect(rig.journal().submission(id)?.options).toMatchObject({ model: PRO, effort: 'low' })
-    expect(rig.writes().slice(proWrites).at(-1)?.params).toMatchObject({
+    expect(
+      rig
+        .writes()
+        .slice(path === 'cold' || path === 'restart' ? 0 : proWrites)
+        .at(-1)?.params
+    ).toMatchObject({
       configId: 'thinking_level',
       value: 'low'
     })
@@ -295,7 +293,7 @@ it.each([
 )
 
 it.each([false, 'normal', 'live', 'busy', 'held'] as const)(
-  'scopes prior Medium through %s model application',
+  'attempts retained Medium after %s Pro selection and accepts an explicit Low correction',
   async (path) => {
     const rig = await openModels({ saved: { model: FLASH, effort: 'medium' } })
     expect(await rig.picks('model', FLASH)).toMatchObject({ ok: true })
@@ -313,39 +311,48 @@ it.each([false, 'normal', 'live', 'busy', 'held'] as const)(
       })
       await rig.rig.settle()
       await rig.host.readOptions(SESSION)
-      expect(rig.rig.adapter['children'].sessions.get(SESSION)?.options.applied.get('effort')).toBe(
-        'medium'
-      )
+      expect(
+        rig.rig.adapter['children'].sessions.get(SESSION)?.options.appliedInput.get('effort')
+      ).toBe('medium')
     }
-    await rig.picks('model', PRO)
+    expect(await rig.picks('model', PRO)).toMatchObject({ ok: true })
     await rig.host.readOptions(SESSION)
-    if (path) {
-      expect(rig.store.getRecord(SESSION)?.options).toEqual({ model: PRO })
-      const before = framesOf(rig.rig.child(), 'session/prompt').length
-      const parked = path === 'busy' ? await send(rig.host, 'provider effort on Pro') : undefined
-      if (parked) {
-        expect(rig.journal().submission(parked)?.options).toEqual({ model: PRO })
-        await rig.rig.settle()
-        expect(framesOf(rig.rig.child(), 'session/prompt')).toHaveLength(before)
-      }
-      await wake()
-      await (parked ? rig.complete(parked) : rig.deliver('provider effort on Pro'))
-      await rig.picks('model', FLASH)
-      await rig.deliver('opening default on Flash')
-      expect(rig.writes().at(-1)?.params).toMatchObject({
-        configId: 'thinking_level',
-        value: 'high'
-      })
-    } else {
-      const id = await send(rig.host, 'explicit Medium')
-      await waitFor(() => expect(rig.journal().submission(id)?.dispatchState).toBe('rejected'))
-      expect(rig.writes().at(-1)?.params).toMatchObject({
-        configId: 'thinking_level',
-        value: 'medium'
-      })
-      expect(rig.store.getRecord(SESSION)?.options).toEqual({ model: PRO, effort: 'medium' })
-      expect(framesOf(rig.rig.child(), 'session/prompt')).toHaveLength(1)
+    expect(rig.store.getRecord(SESSION)?.options).toEqual({ model: PRO, effort: 'medium' })
+    const before = framesOf(rig.rig.child(), 'session/prompt').length
+    const id = await send(rig.host, 'retained Medium')
+    if (path === 'busy' || path === 'held') {
+      expect(rig.journal().submission(id)?.options).toEqual({ model: PRO, effort: 'medium' })
+      await rig.rig.settle()
+      expect(framesOf(rig.rig.child(), 'session/prompt')).toHaveLength(before)
     }
+    await wake()
+    await waitFor(() =>
+      expect(rig.journal().submission(id)).toMatchObject({
+        options: { model: PRO, effort: 'medium' },
+        dispatchState: 'rejected',
+        rejection: { kind: 'providerRejected' }
+      })
+    )
+    await waitFor(() =>
+      expect(structuredAgentSessionHandingOver(rig.journal()).has(id)).toBe(false)
+    )
+    expect(rig.writes().at(-1)?.params).toMatchObject({
+      configId: 'thinking_level',
+      value: 'medium'
+    })
+    expect(rig.store.getRecord(SESSION)?.options).toEqual({ model: PRO, effort: 'medium' })
+    expect(framesOf(rig.rig.child(), 'session/prompt')).toHaveLength(
+      before + (path === 'held' ? 1 : 0)
+    )
+    expect(
+      framesOf(rig.rig.child(), 'session/prompt').some(({ params }) =>
+        JSON.stringify(params).includes('retained Medium')
+      )
+    ).toBe(false)
+    expect(await rig.picks('effort', 'low')).toMatchObject({ ok: true })
+    const corrected = await rig.deliver('supported Low')
+    expect(rig.journal().submission(corrected)?.options).toEqual({ model: PRO, effort: 'low' })
+    expect(rig.writes().at(-1)?.params).toMatchObject({ configId: 'thinking_level', value: 'low' })
   }
 )
 
@@ -414,11 +421,22 @@ it.each([10, 100, 'Send', 'rejection'] as const)(
     await waitFor(() => expect(held).toBeDefined())
     await waitFor(() => expect(receipted).toBe(true))
     expect(await receipt).toMatchObject({ ok: true })
+    const readingUnderLane = vi.spyOn(rig.rig.adapter, 'readOptions')
+    const framesBeforeRead = rig.rig.child().agent.frames.length
     let readDone = false
-    const reading = rig.host.readOptions(SESSION).then((answer) => {
+    const reading = Promise.all([
+      rig.host.readOptions(SESSION),
+      rig.host.readOptions(SESSION)
+    ]).then(([answer, phone]) => {
+      for (const result of [answer, phone]) {
+        expect(result.current).toMatchObject({ model: FLASH, effort: 'low' })
+      }
       readDone = true
       return answer
     })
+    await rig.rig.settle()
+    expect(readingUnderLane).not.toHaveBeenCalled()
+    expect(rig.rig.child().agent.frames).toHaveLength(framesBeforeRead)
     for (let i = 1; i < (typeof count === 'string' ? 4 : count); i++) {
       expect(await rig.picks('model', i % 2 ? FLASH : PRO)).toMatchObject({ ok: true })
       expect(rig.store.getRecord(SESSION)?.options).toEqual({
@@ -499,17 +517,20 @@ it.each([10, 100, 'Send', 'rejection'] as const)(
 it.each(['Stop', 'deadline', 'child close', 'unproven close'] as const)(
   'retires an uncertain producer on %s without sending on its old channel',
   async (ending) => {
+    let holding = false
     const rig = await openModels({
       timeoutMs: 100,
       control: (_agent, frame) =>
-        SetSessionConfigOptionRequestSchema.parse(frame.params).configId === 'model'
+        holding && SetSessionConfigOptionRequestSchema.parse(frame.params).configId === 'model'
     })
     await rig.deliver('history before uncertainty')
+    const priorWrites = rig.writes().length
+    holding = true
     if (ending === 'deadline' || ending === 'unproven close') {
       vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
     }
     await rig.picks('model', PRO)
-    await waitFor(() => expect(rig.writes()).toHaveLength(1))
+    await waitFor(() => expect(rig.writes()).toHaveLength(priorWrites + 1))
     const child = rig.rig.child()
     const native = rig.rig.adapter['children'].sessions.get(SESSION)!
     if (ending === 'unproven close') {
@@ -517,10 +538,13 @@ it.each(['Stop', 'deadline', 'child close', 'unproven close'] as const)(
     }
     const handles = rig.store.getRecord(SESSION)?.providerHandleChain.map(({ handle }) => handle)
     expect(handles?.length).toBeGreaterThan(0)
-    const pending = rig.writes()[0]!
+    const pending = rig.writes()[priorWrites]!
     await rig.picks('model', FLASH)
     await rig.picks('model', PRO)
-    const reading = rig.host.readOptions(SESSION)
+    const reading = rig.host.readOptions(SESSION).then(
+      (answer) => ({ answer }),
+      (error: unknown) => ({ error })
+    )
     const id = await send(rig.host, 'accepted while outstanding')
     if (ending === 'Stop') {
       await stop(rig.host)
@@ -531,7 +555,12 @@ it.each(['Stop', 'deadline', 'child close', 'unproven close'] as const)(
     }
     vi.useRealTimers()
     await waitFor(() => expect(child.exited).toBe(ending !== 'unproven close'))
-    await reading
+    const readResult = await reading
+    if (ending === 'unproven close') {
+      expect(readResult).toMatchObject({
+        error: { message: expect.stringContaining('no live antigravity child') }
+      })
+    }
     await rig.rig.settle()
     expect(framesOf(child, 'session/prompt')).toHaveLength(1)
     expect(await rig.messages()).toContain('history before uncertainty')
@@ -571,7 +600,12 @@ it.each(['Stop', 'deadline', 'child close', 'unproven close'] as const)(
 )
 
 it.each([
-  { flat: false, model: 'gemini-3.8-flash-medium', shown: FLASH, noEffort: false },
+  {
+    flat: false,
+    model: 'gemini-3.8-flash-medium',
+    shown: 'gemini-3.8-flash-medium',
+    noEffort: false
+  },
   {
     flat: true,
     model: 'gemini-3.8-flash-medium',
@@ -586,7 +620,6 @@ it.each([
     await rig.picks('model', model)
     const answer = await rig.host.readOptions(SESSION)
     expect(answer.current.model).toBe(shown)
-    expect('confirmedModelSelection' in answer).toBe(false)
     expect(framesOf(rig.rig.child(), 'session/prompt')).toHaveLength(0)
     if (noEffort) {
       expect(answer.models.find((row) => row.id === PRO)?.efforts.map((row) => row.value)).toEqual([
@@ -604,5 +637,108 @@ it.each([
             : SetSessionConfigOptionRequestSchema.parse(params).value === model
       )
     ).toBe(true)
+    if (!flat && model === 'gemini-3.8-flash-medium') {
+      const before = rig
+        .writes()
+        .filter(
+          ({ params }) => SetSessionConfigOptionRequestSchema.parse(params).configId === 'model'
+        ).length
+      for (const configOptions of [
+        response('pro').configOptions,
+        [],
+        response('legacy').configOptions
+      ]) {
+        rig.rig.child().agent.notify('session/update', {
+          sessionId: PROVIDER_SESSION,
+          update: { sessionUpdate: 'config_option_update', configOptions }
+        })
+        await rig.rig.settle()
+        await rig.deliver('same successful raw input after observation')
+      }
+      expect(
+        rig
+          .writes()
+          .filter(
+            ({ params }) => SetSessionConfigOptionRequestSchema.parse(params).configId === 'model'
+          )
+      ).toHaveLength(before)
+    }
+  }
+)
+
+it.each(['new cycle', 'replacement', 'rest'] as const)(
+  'joins once then reads current state after %s without native read work',
+  async (transition) => {
+    const rig = await openModels({ control: () => true })
+    await rig.picks('model', PRO)
+    await waitFor(() => expect(rig.writes()).toHaveLength(1))
+    const old = rig.rig.child()
+    const base = rig.host['mutationContext']()
+    const entered = Promise.withResolvers<void>()
+    const continueRead = Promise.withResolvers<void>()
+    let entries = 0
+    let inLane = false
+    const readOptions = rig.rig.adapter.readOptions.bind(rig.rig.adapter)
+    const observed = vi.spyOn(rig.rig.adapter, 'readOptions').mockImplementation((input) => {
+      expect(inLane).toBe(true)
+      return readOptions(input)
+    })
+    const reading = readStructuredAgentSessionOptions(
+      {
+        ...base,
+        serialize: async <T>(id: string, task: () => Promise<T>): Promise<T> => {
+          if (++entries === 2) {
+            entered.resolve()
+            await continueRead.promise
+          }
+          return base.serialize(id, async () => {
+            inLane = true
+            try {
+              return await task()
+            } finally {
+              inLane = false
+            }
+          })
+        }
+      },
+      SESSION,
+      { readsWithoutModel: true }
+    )
+    await rig.rig.settle()
+    expect(observed).not.toHaveBeenCalled()
+    old.agent.reply(rig.writes()[0]!, response('pro'))
+    await entered.promise
+    if (transition === 'new cycle') {
+      await rig.picks('model', FLASH)
+      await waitFor(() => expect(rig.writes()).toHaveLength(2))
+    } else {
+      await rig.host.close(SESSION, 'user-close')
+      if (transition === 'replacement') {
+        expect(await rig.attach(rig.fence())).toMatchObject({ ok: true })
+        await rig.ready()
+        expect(rig.rig.child()).not.toBe(old)
+      }
+    }
+    const child = rig.host.collaboratorsForTests().sessions.get(SESSION)?.child
+    const frames = rig.rig.child().agent.frames.length
+    continueRead.resolve()
+    const answer = await reading
+    expect(entries).toBe(2)
+    expect(rig.rig.child().agent.frames).toHaveLength(frames)
+    if (transition === 'rest') {
+      expect(observed).not.toHaveBeenCalled()
+    } else {
+      expect(observed).toHaveBeenCalledExactlyOnceWith({ sessionId: SESSION, fence: child!.fence })
+      expect(
+        answer.models.find((row) => row.id === (transition === 'new cycle' ? FLASH : PRO))
+      ).toMatchObject({ efforts: [], effortsKnown: false })
+    }
+    if (transition === 'new cycle') {
+      expect(rig.state.deliveryOrder.optionsReady(SESSION)).toBeDefined()
+      rig.rig.child().agent.reply(rig.writes()[1]!, { configOptions: session.configOptions })
+    }
+    await waitFor(() =>
+      expect(rig.ownership()).toEqual({ tasks: 0, handles: 0, places: 0, lanes: 0 })
+    )
   }
 )

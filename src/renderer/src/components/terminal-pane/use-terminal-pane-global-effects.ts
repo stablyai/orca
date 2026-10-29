@@ -36,6 +36,8 @@ type UseTerminalPaneGlobalEffectsArgs = {
   isChatViewMode?: boolean
   isWorktreeActive?: boolean
   isSyncFitEnabled: boolean
+  /** Keep WebGL attached in a laid-out hidden host so a likely reveal skips context and atlas setup. */
+  warmRendererWhileHidden?: boolean
   paneCount: number
   managerRef: React.RefObject<PaneManager | null>
   containerRef: React.RefObject<HTMLDivElement | null>
@@ -67,6 +69,7 @@ export function useTerminalPaneGlobalEffects({
   isChatViewMode = false,
   isWorktreeActive = isVisible,
   isSyncFitEnabled,
+  warmRendererWhileHidden = false,
   paneCount,
   managerRef,
   containerRef,
@@ -82,6 +85,7 @@ export function useTerminalPaneGlobalEffects({
   const hasCompletedVisibleResumeRef = useRef(false)
   const renderingSuspendedByVisibilityRef = useRef(false)
   const hiddenReasonRef = useRef<TerminalHiddenReason | null>(null)
+  const warmedWhileHiddenRef = useRef(false)
   const rendererVisible = isVisible && isWorktreeActive
   // Watch leaf → PTY rebinds even without activity/visibility changes so main grants the live PTY its interactive reserve.
   const activeLeafPtyId = useAppStore((state) => {
@@ -158,7 +162,30 @@ export function useTerminalPaneGlobalEffects({
       wasWorktreeActiveRef.current = isWorktreeActive
       hasCompletedVisibleResumeRef.current = true
       hiddenReasonRef.current = null
+      warmedWhileHiddenRef.current = false
       applyPendingFollowOutputRequests()
+      return
+    }
+    if (warmRendererWhileHidden && isWorktreeActive === false) {
+      if (wasVisible) {
+        captureViewportPositions(false)
+      }
+      manager.resumeRendering()
+      warmedWhileHiddenRef.current = true
+      renderingSuspendedByVisibilityRef.current = false
+      hiddenReasonRef.current = 'surface'
+      wasVisibleRef.current = false
+      wasWorktreeActiveRef.current = isWorktreeActive
+      return
+    }
+    if (warmedWhileHiddenRef.current) {
+      // Warm-up ended without a reveal; release the context like any hidden worktree.
+      warmedWhileHiddenRef.current = false
+      manager.suspendRendering()
+      renderingSuspendedByVisibilityRef.current = true
+      hiddenReasonRef.current = 'surface'
+      wasVisibleRef.current = false
+      wasWorktreeActiveRef.current = isWorktreeActive
       return
     }
     const hiddenState = hideTerminalVisibility({
@@ -179,6 +206,7 @@ export function useTerminalPaneGlobalEffects({
     isChatViewMode,
     isWorktreeActive,
     rendererVisible,
+    warmRendererWhileHidden,
     applyPendingFollowOutputRequests,
     captureViewportPositions,
     containerRef,

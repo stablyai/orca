@@ -220,7 +220,31 @@ export function buildRuntimeMobileBrowserProjection(state: AppState): string {
   )},"pagesByWorkspace":${buildBrowserPagesProjection(getBrowserPagesByWorkspace(state))}}`
 }
 
-// Monaco re-spreads drafts per keystroke; memoize each file’s unchanged string so typing does not rehash all dirty files.
+let cachedDraftSourceFileIds: {
+  source: AppState['openFiles']
+  ids: ReadonlySet<string>
+} | null = null
+
+function getEditorDraftSourceFileIds(openFiles: AppState['openFiles']): ReadonlySet<string> {
+  if (cachedDraftSourceFileIds?.source === openFiles) {
+    return cachedDraftSourceFileIds.ids
+  }
+  const indexes = getOpenFileIndexes(openFiles)
+  const ids = new Set<string>()
+  for (const file of openFiles) {
+    if (!isMobilePublishableOpenFile(file)) {
+      continue
+    }
+    const source = getMobileMarkdownSourceFile(file, indexes.byWorktreeAndId.get(file.worktreeId))
+    if (source) {
+      ids.add(source.id)
+    }
+  }
+  cachedDraftSourceFileIds = { source: openFiles, ids }
+  return ids
+}
+
+// Reuse unchanged file hashes between coalesced snapshot captures.
 function getEditorDraftHashCache(
   editorDrafts: AppState['editorDrafts'],
   openFiles: AppState['openFiles']
@@ -230,26 +254,11 @@ function getEditorDraftHashCache(
     return cached
   }
 
-  let sourceFileIds = cached?.openFiles === openFiles ? cached.sourceFileIds : undefined
-  if (!sourceFileIds) {
-    const indexes = getOpenFileIndexes(openFiles)
-    const ids = new Set<string>()
-    for (const file of openFiles) {
-      if (!isMobilePublishableOpenFile(file)) {
-        continue
-      }
-      const source = getMobileMarkdownSourceFile(file, indexes.byWorktreeAndId.get(file.worktreeId))
-      if (source) {
-        ids.add(source.id)
-      }
-    }
-    sourceFileIds = ids
-  }
+  const sourceFileIds = getEditorDraftSourceFileIds(openFiles)
 
   const previousEntries = cached?.entries
   const entries = new Map<string, EditorDraftHashCacheEntry>()
   const hashByFileId = new Map<string, string>()
-  const parts: string[] = []
   for (const fileId of sourceFileIds) {
     const content = editorDrafts[fileId]
     if (content === undefined) {
@@ -260,21 +269,17 @@ function getEditorDraftHashCache(
     if (previous?.content === content) {
       entry = previous
     } else {
-      const fileIdJson = previous?.fileIdJson ?? JSON.stringify(fileId)
       const hash = stableHashString(content)
-      entry = { content, hash, fileIdJson, projection: `${fileIdJson}:${JSON.stringify(hash)}` }
+      entry = { content, hash }
     }
     entries.set(fileId, entry)
     hashByFileId.set(fileId, entry.hash)
-    parts.push(entry.projection)
   }
   const next: EditorDraftHashCache = {
     source: editorDrafts,
     openFiles,
-    sourceFileIds,
     entries,
-    hashByFileId,
-    projection: `{${parts.join(',')}}`
+    hashByFileId
   }
   graphState.cachedEditorDraftHashes = next
   return next
@@ -283,11 +288,18 @@ function getEditorDraftHashCache(
 export function buildRuntimeMobileEditorDraftsProjection(
   editorDrafts: AppState['editorDrafts'],
   openFiles: AppState['openFiles']
-): string {
-  return getEditorDraftHashCache(editorDrafts, openFiles).projection
+): ReadonlyMap<string, string> {
+  const drafts = new Map<string, string>()
+  for (const fileId of getEditorDraftSourceFileIds(openFiles)) {
+    const content = editorDrafts[fileId]
+    if (content !== undefined) {
+      drafts.set(fileId, content)
+    }
+  }
+  return drafts
 }
 
-/** Per-file draft version stamps for the mobile session snapshot; shares the keystroke memo. */
+/** Per-file version stamps are hashed only when a mobile snapshot is built. */
 export function getEditorDraftVersionByFileId(
   editorDrafts: AppState['editorDrafts'],
   openFiles: AppState['openFiles']
@@ -301,4 +313,5 @@ export function resetRuntimeMobileSyncProjectionCachesForTests(): void {
   graphState.cachedBrowserWorkspacesProjection = null
   graphState.cachedBrowserPagesProjection = null
   graphState.cachedEditorDraftHashes = null
+  cachedDraftSourceFileIds = null
 }

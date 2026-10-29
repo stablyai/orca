@@ -1,3 +1,4 @@
+import type { TerminalViewAttributes } from '../../../../shared/terminal-view-attributes'
 import type { PtySpawnSizeSeed } from '../spawn-options-assembly'
 import type { PtySpawnOutcome } from '../spawn-outcome'
 import type { PtyRegistrationClaim } from '../../../runtime/runtime-terminal-state-records'
@@ -128,6 +129,8 @@ export type RuntimePtySpawnArgs = {
   resumeProviderSession?: AgentProviderSessionMetadata
   /** `saved`: built from a pane's saved facts, which the host refuses for a chat's conversation. */
   resumeOrigin?: 'saved'
+  /** The user's own act (a CLI command, a paired client's create, a launch); without it a stopped WSL distro holds the start. */
+  wslUserAct?: true
   connectionId?: string | null
   worktreeId?: string
   preAllocatedHandle?: string
@@ -145,6 +148,10 @@ export type RuntimePtySpawnArgs = {
   placement?: TerminalPanePlacement
   terminalKittyKeyboardProtocol?: boolean
   terminalColorQueryReplies?: { foreground?: string; background?: string }
+  /** A paired launcher's theme: its PTY answers OSC 10/11 with it over the host-wide theme. */
+  launcherColorQueryReplies?: { foreground?: string; background?: string }
+  /** That launcher's palette and cursor, so its PTY's OSC 4/12 agree with its OSC 10/11. */
+  launcherViewAttributes?: TerminalViewAttributes
   agentSessionEnsure?: {
     claim: AgentSessionExecutionClaim
     surface: AgentSessionSurfaceBinding

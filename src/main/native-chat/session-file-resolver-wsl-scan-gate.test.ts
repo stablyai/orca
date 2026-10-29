@@ -29,6 +29,15 @@ vi.mock('./wsl-transcript-fs-gate', async (importOriginal) => ({
 vi.mock('../ai-vault/session-scanner-discovery', () => ({
   walkSessionFiles: mocks.walk
 }))
+// These cases cover root and path policy; the E9 gate has its own suite.
+vi.mock('./wsl-transcript-running-admission', () => ({ admitWslTranscriptPath: async () => {} }))
+vi.mock('../wsl/wsl-home-unless-stopped', async () => {
+  const wsl = await import('../wsl')
+  return {
+    wslHomeUnlessStopped: (distro: string) => wsl.getWslHomeAsync(distro),
+    listRunningWslHomeDirsUnlessStopped: () => wsl.listRunningWslHomeDirsAsync()
+  }
+})
 vi.mock('../wsl', () => ({
   getWslHomeAsync: vi.fn(async () => '\\\\wsl.localhost\\Ubuntu\\home\\ada'),
   listRunningWslDistrosAsync: vi.fn(async () => ['Ubuntu']),

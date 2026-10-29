@@ -1,7 +1,4 @@
-import type { StructuredAgentSessionMutate } from './use-structured-agent-session-mutate'
-import type { StructuredAgentSessionLaunchView } from './use-native-chat-provisional-launch'
-import type { AgentType } from '../../../../shared/agent-status-types'
-import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import type { StructuredAgentSessionOptionsArgs } from './structured-agent-session-options-contract'
 import { toast } from 'sonner'
 import { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
 import type { AgentSessionOptionResult } from '../../../../shared/agent-session-wire'
@@ -33,22 +30,7 @@ import {
   type StructuredLaunchOptionOutcome
 } from '@/lib/structured-agent-session-launch-options'
 
-export type StructuredAgentSessionOptionsArgs = {
-  agent: AgentType
-  sessionId: string
-  target: RuntimeClientTarget
-  transportEnabled: boolean
-  isVisible: boolean
-  providerVisible: boolean
-  providerStarting?: boolean
-  providerRunning?: boolean
-  hostOptionStamp?: string
-  fence: number | null
-  turnId: string | null
-  unloadedTurnRevisions: number | undefined
-  mutate: StructuredAgentSessionMutate
-  launch?: StructuredAgentSessionLaunchView
-}
+export type { StructuredAgentSessionOptionsArgs } from './structured-agent-session-options-contract'
 
 const NO_HELD_OPTIONS: Readonly<Record<string, string>> = {}
 
@@ -213,12 +195,14 @@ export function useStructuredAgentSessionOptions(args: StructuredAgentSessionOpt
     },
     [launchSeedOptions, optionStateRef, optionView, rememberOptionPicks]
   )
+  const interactionReadyRef = useRef(acceptsPicks)
   const lockSnapshotRef = useRef(
     (snapshot: ReturnType<typeof structuredAgentSessionOptionSnapshot>) => snapshot
   )
   const lockSnapshot = (snapshot: ReturnType<typeof structuredAgentSessionOptionSnapshot>) =>
     !acceptsPicks ? lockedStructuredAgentSessionOptionSnapshot(snapshot) : snapshot
   useLayoutEffect(() => {
+    interactionReadyRef.current = acceptsPicks
     lockSnapshotRef.current = lockSnapshot
   })
   const optionSnapshot = lockSnapshot(
@@ -242,14 +226,15 @@ export function useStructuredAgentSessionOptions(args: StructuredAgentSessionOpt
           },
           id,
           value,
-          lockSnapshotRef.current(structuredAgentSessionOptionSnapshot(view))
+          lockSnapshotRef.current(structuredAgentSessionOptionSnapshot(view)),
+          interactionReadyRef.current
         )
       ) {
         return false
       }
       if (!transportEnabled || fence === null) {
         // No fence yet: the launch holds it and applies it before anything else is sent.
-        const applied = holdStructuredAgentSessionLaunchOption(sessionId, id, encoded, view)
+        const applied = holdStructuredAgentSessionLaunchOption(sessionId, id, encoded)
         void applied?.then(settleLaunchOptionPick)
         return applied !== null
       }

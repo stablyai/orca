@@ -134,6 +134,7 @@ export function updateBatchAgentPaneKey(
   present: boolean,
   batchContext?: WebSessionTabsBatchContext
 ): void {
+  batchContext?.changedAgentPaneKeys?.add(paneKey)
   const tabId = parsePaneKey(paneKey)?.tabId
   const index = batchContext?.agentPaneKeysByTabId
   if (!tabId || !index) {
@@ -209,6 +210,7 @@ export function buildRetractedMirroredTabSweepPatch(
     const paneKeys = scopedPaneKeysByTabId.get(tabId)
     const patch = buildRetiredTerminalTabStateSweepPatch(sweepState, [tabId], undefined, {
       preserveActivityClearedState: true,
+      changedAgentPaneKeys: batchContext?.changedAgentPaneKeys,
       ...(paneKeys ? { paneKeys } : {})
     })
     if (patch) {

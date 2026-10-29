@@ -12,8 +12,13 @@ const UNKNOWN_FLAG = new Error(
 
 type Support = ReturnType<typeof createClaudeCliFlagSupport>
 
+const supports = async (
+  support: Support,
+  ...args: Parameters<Support['check']>
+): Promise<boolean> => (await support.check(...args)) === 'supported'
+
 const thinking = (support: Support, launch: typeof LAUNCH): Promise<boolean> =>
-  support.supports(CLAUDE_THINKING_DISPLAY_FLAG, launch)
+  supports(support, CLAUDE_THINKING_DISPLAY_FLAG, launch)
 
 type Probe = (
   command: string,
@@ -90,7 +95,7 @@ describe('whether a launch passes a Claude CLI flag', () => {
       20
     )
     const [plugins, thinkingDisplay] = await Promise.all([
-      support.supports(CLAUDE_PLUGIN_DIR_FLAG, LAUNCH, 1_000),
+      supports(support, CLAUDE_PLUGIN_DIR_FLAG, LAUNCH, 1_000),
       thinking(support, LAUNCH)
     ])
     expect(plugins).toBe(true)
@@ -103,7 +108,7 @@ describe('whether a launch passes a Claude CLI flag', () => {
     const held = heldProbe()
     const { support } = supportWith(held.probe, 20)
     const started = performance.now()
-    await expect(support.supports(CLAUDE_PLUGIN_DIR_FLAG, LAUNCH, 80)).resolves.toBe(false)
+    await expect(supports(support, CLAUDE_PLUGIN_DIR_FLAG, LAUNCH, 80)).resolves.toBe(false)
     expect(performance.now() - started).toBeLessThan(500)
   })
 
@@ -199,7 +204,7 @@ describe('whether a launch passes a Claude CLI flag', () => {
 
   it('answers every flag from one probe, each against its own first version', async () => {
     const { support, calls } = supportWith(async () => '2.1.0')
-    await expect(support.supports(CLAUDE_PLUGIN_DIR_FLAG, LAUNCH)).resolves.toBe(true)
+    await expect(supports(support, CLAUDE_PLUGIN_DIR_FLAG, LAUNCH)).resolves.toBe(true)
     await expect(thinking(support, LAUNCH)).resolves.toBe(false)
     expect(calls).toHaveBeenCalledTimes(1)
   })
@@ -209,7 +214,7 @@ describe('whether a launch passes a Claude CLI flag', () => {
     const { support, calls } = supportWith(held.probe, 1_000)
     const both = Promise.all([
       thinking(support, LAUNCH),
-      support.supports(CLAUDE_PLUGIN_DIR_FLAG, LAUNCH)
+      supports(support, CLAUDE_PLUGIN_DIR_FLAG, LAUNCH)
     ])
     await vi.waitFor(() => expect(calls).toHaveBeenCalled())
     held.answer('2.1.280')
@@ -222,7 +227,7 @@ describe('whether a launch passes a Claude CLI flag', () => {
     await thinking(support, LAUNCH)
     support.observeExit(LAUNCH, new Error("error: unknown option '--plugin-dir'"))
     await vi.waitFor(async () =>
-      expect(await support.supports(CLAUDE_PLUGIN_DIR_FLAG, LAUNCH)).toBe(false)
+      expect(await supports(support, CLAUDE_PLUGIN_DIR_FLAG, LAUNCH)).toBe(false)
     )
     await expect(thinking(support, LAUNCH)).resolves.toBe(true)
   })
@@ -234,7 +239,7 @@ describe('whether a launch passes a Claude CLI flag', () => {
     support.observeExit(LAUNCH, UNKNOWN_FLAG)
     await new Promise((resolve) => setTimeout(resolve, 0))
     version = '2.1.280'
-    await expect(support.supports(CLAUDE_PLUGIN_DIR_FLAG, LAUNCH)).resolves.toBe(true)
+    await expect(supports(support, CLAUDE_PLUGIN_DIR_FLAG, LAUNCH)).resolves.toBe(true)
     await expect(thinking(support, LAUNCH)).resolves.toBe(false)
   })
 
@@ -244,7 +249,7 @@ describe('whether a launch passes a Claude CLI flag', () => {
     support.prewarm(LAUNCH)
     await vi.waitFor(() => expect(calls).toHaveBeenCalledOnce())
     held.answer('2.1.280')
-    await expect(support.supports(CLAUDE_PLUGIN_DIR_FLAG, LAUNCH)).resolves.toBe(true)
+    await expect(supports(support, CLAUDE_PLUGIN_DIR_FLAG, LAUNCH)).resolves.toBe(true)
     support.prewarm(LAUNCH)
     await new Promise((resolve) => setTimeout(resolve, 0))
     expect(calls).toHaveBeenCalledOnce()
@@ -265,12 +270,12 @@ describe('whether a launch passes a Claude CLI flag', () => {
 
   it('answers from what is known without starting a probe when asked not to', async () => {
     const { support, calls } = supportWith(async () => '2.1.280')
-    await expect(support.supports(CLAUDE_THINKING_DISPLAY_FLAG, LAUNCH, 250, false)).resolves.toBe(
+    await expect(supports(support, CLAUDE_THINKING_DISPLAY_FLAG, LAUNCH, 250, false)).resolves.toBe(
       false
     )
     expect(calls).not.toHaveBeenCalled()
-    await support.supports(CLAUDE_PLUGIN_DIR_FLAG, LAUNCH)
-    await expect(support.supports(CLAUDE_THINKING_DISPLAY_FLAG, LAUNCH, 250, false)).resolves.toBe(
+    await supports(support, CLAUDE_PLUGIN_DIR_FLAG, LAUNCH)
+    await expect(supports(support, CLAUDE_THINKING_DISPLAY_FLAG, LAUNCH, 250, false)).resolves.toBe(
       true
     )
     expect(calls).toHaveBeenCalledOnce()

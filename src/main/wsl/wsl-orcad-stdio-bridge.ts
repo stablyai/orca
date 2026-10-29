@@ -10,9 +10,12 @@ import {
   type OrcadStdioBridgeDependencies
 } from '../managed-server/lifecycle/orcad-stdio-bridge-provider'
 import type { StartedPortForward } from '../ssh/port-forwarding/ssh-port-forward-provider'
+import { assertWslUncPathRunning } from './wsl-unc-access-gate'
 
 export type WslOrcadStdioBridgeOptions = {
   environmentId: string
+  /** The distro each bridge child runs in; a dial is refused while it is stopped (E9). */
+  distro: string
   /** orcad's loopback port inside the distro. */
   remotePort: number
   /** 0 picks a free one. */
@@ -27,7 +30,7 @@ export function listenWslOrcadStdioBridge(
   options: WslOrcadStdioBridgeOptions,
   dependencies: OrcadStdioBridgeDependencies = ORCAD_STDIO_BRIDGE_DEPENDENCIES
 ): Promise<StartedPortForward> {
-  const { events } = options
+  const { distro, events } = options
   return startOrcadStdioBridge(
     transport,
     {
@@ -39,13 +42,16 @@ export function listenWslOrcadStdioBridge(
       remotePort: options.remotePort,
       label: options.label
     },
-    events
-      ? {
-          ...dependencies,
-          openChannel: async (conn, bridge) =>
-            observeWslOrcadBridgeChannel(await dependencies.openChannel(conn, bridge), events)
-        }
-      : dependencies
+    {
+      ...dependencies,
+      openChannel: async (conn, bridge) => {
+        // A dial (a client's reconnect, a runtime call, the watch) is never a user act, and each
+        // spawns wsl.exe, which boots a stopped distro. A user act boots it by connecting first.
+        await assertWslUncPathRunning('', distro)
+        const channel = await dependencies.openChannel(conn, bridge)
+        return events ? observeWslOrcadBridgeChannel(channel, events) : channel
+      }
+    }
   )
 }
 

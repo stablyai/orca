@@ -231,6 +231,7 @@ describe('agent session RPC methods', () => {
       expect.any(Function)
     )
     expect(createTerminal).toHaveBeenCalledWith('id:worktree-1', {
+      wslUserAct: true,
       command: 'codex resume provider-session-1',
       startupCommandDelivery: undefined,
       env: undefined,

@@ -2,7 +2,7 @@ import {
   normalizeBackgroundTaskKind,
   normalizeBackgroundTaskState
 } from '../../../shared/native-chat/input/native-chat-background-task-row'
-import { normalizeSubagentState } from '../../../shared/native-chat-subagent-summary'
+import { normalizeSubagentState } from '../../../shared/native-chat/transcript/native-chat-subagent-summary'
 import type { NativeChatBlock, NativeChatSubagentState } from '../../../shared/native-chat-types'
 
 type WorkerTranscriptActivityBlock = Extract<

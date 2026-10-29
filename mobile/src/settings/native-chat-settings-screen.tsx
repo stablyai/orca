@@ -6,9 +6,11 @@ import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileDefaultSessionViewPreference } from '../session/use-mobile-default-session-view-preference'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 
 export default function NativeChatSettingsScreen({ onBack }: { onBack?: () => void }) {
   useMobileColorScheme()
+  const t = useMobileTranslation()
   const router = useRouter()
   const insets = useSafeAreaInsets()
 
@@ -20,33 +22,47 @@ export default function NativeChatSettingsScreen({ onBack }: { onBack?: () => vo
       <View style={styles.topRow}>
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="Back"
+          accessibilityLabel={t('common.back', 'Back')}
           style={styles.backButton}
           onPress={onBack ?? (() => router.back())}
         >
           <ChevronLeft size={22} color={colors.textSecondary} />
         </Pressable>
-        <Text style={styles.heading}>Chat UI</Text>
+        <Text style={styles.heading}>
+          {t('settings.nativeChatSettingsScreen.title', 'Chat UI')}
+        </Text>
       </View>
 
       <ScrollView
         contentContainerStyle={{ paddingBottom: insets.bottom + spacing.lg }}
         showsVerticalScrollIndicator={false}
       >
-        <Text style={styles.groupHeading}>DEFAULT VIEW</Text>
+        <Text style={styles.groupHeading}>
+          {t('settings.nativeChatSettingsScreen.defaultViewHeading', 'DEFAULT VIEW')}
+        </Text>
         <Text style={styles.groupDescription}>
-          Choose how supported agent sessions (Claude, Codex, and other chat-capable agents) open on
-          this device. Terminal shows the raw CLI; Chat UI shows a chat interface like the desktop
-          app. You can still switch any individual session from its long-press menu.
+          {t(
+            'settings.nativeChatSettingsScreen.defaultViewDescription',
+            'Choose how supported agent sessions (Claude, Codex, and other chat-capable agents) open on this device. Terminal shows the raw CLI; Chat UI shows a chat interface like the desktop app. You can still switch any individual session from its long-press menu.'
+          )}
         </Text>
         <View style={[styles.section, styles.sectionTopGap]}>
           <View style={styles.row}>
             <View style={styles.rowContent}>
-              <Text style={styles.rowLabel}>Open sessions in Chat UI</Text>
-              <Text style={styles.rowSublabel}>{chatDefault ? 'On' : 'Off'}</Text>
+              <Text style={styles.rowLabel}>
+                {t('settings.nativeChatSettingsScreen.openInChatUi', 'Open sessions in Chat UI')}
+              </Text>
+              <Text style={styles.rowSublabel}>
+                {chatDefault
+                  ? t('settings.nativeChatSettingsScreen.on', 'On')
+                  : t('settings.nativeChatSettingsScreen.off', 'Off')}
+              </Text>
             </View>
             <Switch
-              accessibilityLabel="Open sessions in Chat UI"
+              accessibilityLabel={t(
+                'settings.nativeChatSettingsScreen.openInChatUi',
+                'Open sessions in Chat UI'
+              )}
               value={chatDefault}
               onValueChange={(next) => setDefaultView(next ? 'chat' : 'terminal')}
               trackColor={{ false: colors.bgRaised, true: colors.textSecondary }}

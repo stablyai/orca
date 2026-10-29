@@ -16,6 +16,24 @@ import {
 } from './agent-session-wire/structured-agent-session-adapter'
 import { guestNativePathEnv, resolveGuestNativeProgram } from '../ipc/wsl-guest-windows-drive-path'
 
+export type StructuredAgentResolutionOperation = {
+  deadline?: number
+  current?: () => boolean
+  signal?: AbortSignal
+}
+
+export function assertStructuredAgentResolutionCurrent(
+  operation?: StructuredAgentResolutionOperation
+): void {
+  operation?.signal?.throwIfAborted()
+  if (
+    operation?.current?.() === false ||
+    (operation?.deadline !== undefined && Date.now() >= operation.deadline)
+  ) {
+    throw new Error('Agent resolution operation ended')
+  }
+}
+
 export type StructuredAgentCommandSettings = Partial<
   Pick<GlobalSettings, 'agentCmdOverrides' | 'agentDefaultEnv'>
 >
@@ -79,7 +97,8 @@ export type ProgramSearch<T> = {
 /** Bare names may resolve only at spawn through a relative PATH entry under the launch cwd. */
 async function foundNothing<T extends { command: string }>(
   resolved: T,
-  search: ProgramSearch<T>
+  search: ProgramSearch<T>,
+  operation?: StructuredAgentResolutionOperation
 ): Promise<boolean> {
   if (isAbsolute(resolved.command) || /[\\/]/.test(resolved.command)) {
     return false
@@ -95,6 +114,7 @@ async function foundNothing<T extends { command: string }>(
   const from =
     (await waitForPromiseWithSignal(Promise.resolve(search.cwd?.()), search.signal)) ??
     process.cwd()
+  assertStructuredAgentResolutionCurrent(operation)
   const found = resolveCliCommand(resolved.command, {
     pathEnv: relative.map((entry) => resolvePath(from, entry)).join(delimiter),
     homePath: env?.HOME ?? env?.USERPROFILE
@@ -106,15 +126,20 @@ async function foundNothing<T extends { command: string }>(
 export async function resolveAgainAfterRefreshOnMissingProgram<T extends { command: string }>(
   resolve: () => Promise<T>,
   refreshAfterMiss: ((askedAt: number) => Promise<void>) | undefined,
-  search: ProgramSearch<T>
+  search: ProgramSearch<T>,
+  operation?: StructuredAgentResolutionOperation
 ): Promise<T> {
+  assertStructuredAgentResolutionCurrent(operation)
   if (!refreshAfterMiss) {
     return waitForPromiseWithSignal(resolve(), search.signal)
   }
   const askedAt = Date.now()
   try {
     const resolved = await waitForPromiseWithSignal(resolve(), search.signal)
-    if (!(await foundNothing(resolved, search))) {
+    assertStructuredAgentResolutionCurrent(operation)
+    const missing = await foundNothing(resolved, search, operation)
+    assertStructuredAgentResolutionCurrent(operation)
+    if (!missing) {
       return resolved
     }
   } catch (error) {
@@ -126,8 +151,10 @@ export async function resolveAgainAfterRefreshOnMissingProgram<T extends { comma
       throw error
     }
   }
+  assertStructuredAgentResolutionCurrent(operation)
   search.signal?.throwIfAborted()
   await waitForPromiseWithSignal(refreshAfterMiss(askedAt), search.signal)
   search.signal?.throwIfAborted()
+  assertStructuredAgentResolutionCurrent(operation)
   return waitForPromiseWithSignal(resolve(), search.signal)
 }

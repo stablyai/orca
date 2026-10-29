@@ -118,8 +118,10 @@ export function TaskPageJiraContent({
           />
           <div className="flex shrink-0 items-center gap-2 text-2xs text-muted-foreground">
             <span>
-              {displayedJiraIssues.length}{' '}
-              {translate('auto.components.TaskPage.b7bae28b6a', 'shown')}
+              {translate('auto.components.TaskPage.shownCount', '{{count}} shown', {
+                count: displayedJiraIssues.length,
+                defaultValue_one: '{{count}} shown'
+              })}
             </span>
             {jiraViewMode === 'list' ? (
               <JiraListColumnsMenu ids={jiraColumnIds} onToggle={toggleJiraColumn} />

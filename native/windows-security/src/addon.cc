@@ -6,6 +6,8 @@
 #include <aclapi.h>
 #include <sddl.h>
 
+#include "isolated-spawn.h"
+
 #include <functional>
 #include <memory>
 #include <string>
@@ -384,6 +386,34 @@ Napi::Value GrantAccessAsync(const Napi::CallbackInfo& info) {
   return promise;
 }
 
+// Clear HANDLE_FLAG_INHERIT on the std handles so a spawn with bInheritHandles=TRUE can't leak them
+// to a long-lived child; libuv duplicates an inheritable copy for an explicit stdio 'inherit'.
+// Returns only failures, as [{ stream, code }]; absent handles are skipped.
+Napi::Value ClearStdHandleInheritance(const Napi::CallbackInfo& info) {
+  auto env = info.Env();
+  struct Stream {
+    DWORD id;
+    const char* name;
+  };
+  const Stream streams[] = {{STD_INPUT_HANDLE, "stdin"},
+                            {STD_OUTPUT_HANDLE, "stdout"},
+                            {STD_ERROR_HANDLE, "stderr"}};
+  auto failures = Napi::Array::New(env);
+  for (const auto& stream : streams) {
+    HANDLE handle = GetStdHandle(stream.id);
+    if (handle == nullptr || handle == INVALID_HANDLE_VALUE) {
+      continue;
+    }
+    if (!SetHandleInformation(handle, HANDLE_FLAG_INHERIT, 0)) {
+      auto failure = Napi::Object::New(env);
+      failure.Set("stream", stream.name);
+      failure.Set("code", static_cast<double>(GetLastError()));
+      failures.Set(failures.Length(), failure);
+    }
+  }
+  return failures;
+}
+
 }  // namespace
 
 Napi::Object Init(Napi::Env env, Napi::Object exports) {
@@ -394,6 +424,8 @@ Napi::Object Init(Napi::Env env, Napi::Object exports) {
   exports.Set("createFileWithDacl", Napi::Function::New(env, CreateFileWithDaclJs));
   exports.Set("grantAccess", Napi::Function::New(env, GrantAccessJs));
   exports.Set("grantAccessAsync", Napi::Function::New(env, GrantAccessAsync));
+  exports.Set("clearStdHandleInheritance", Napi::Function::New(env, ClearStdHandleInheritance));
+  exports.Set("spawnDetachedIsolated", Napi::Function::New(env, SpawnDetachedIsolated));
   return exports;
 }
 

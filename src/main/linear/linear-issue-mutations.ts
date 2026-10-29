@@ -1,3 +1,4 @@
+import { taskProviderFailure } from '../../shared/task-provider-failure'
 import type { LinearClient } from '@linear/sdk'
 import type { LinearIssueUpdate } from '../../shared/issue-mutation-types'
 import { acquire, release } from './linear-request-concurrency'
@@ -38,7 +39,7 @@ export async function createIssue(
 > {
   const entry = getClients(workspaceId)[0]
   if (!entry) {
-    return { ok: false, error: 'Not connected to Linear' }
+    return taskProviderFailure('linear.notConnected', 'Not connected to Linear')
   }
 
   await acquire()
@@ -58,11 +59,14 @@ export async function createIssue(
       ...(options?.labelIds ? { labelIds: options.labelIds } : {})
     })
     if (!result.success) {
-      return { ok: false, error: 'Linear create failed' }
+      return taskProviderFailure('linear.createFailed', 'Linear create failed')
     }
     const issue = await result.issue
     if (!issue) {
-      return { ok: false, error: 'Issue was created but could not be retrieved' }
+      return taskProviderFailure(
+        'linear.createdButUnavailable',
+        'Issue was created but could not be retrieved'
+      )
     }
     return {
       ok: true,
@@ -159,7 +163,7 @@ export async function updateIssue(
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const entry = getClients(workspaceId)[0]
   if (!entry) {
-    return { ok: false, error: 'Not connected to Linear' }
+    return taskProviderFailure('linear.notConnected', 'Not connected to Linear')
   }
 
   await acquire()
@@ -201,7 +205,7 @@ export async function updateIssue(
 
     const result = await entry.client.updateIssue(id, payload)
     if (!result.success) {
-      return { ok: false, error: 'Linear update failed' }
+      return taskProviderFailure('linear.updateFailed', 'Linear update failed')
     }
     return { ok: true }
   } catch (error) {

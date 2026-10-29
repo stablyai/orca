@@ -47,7 +47,9 @@ vi.mock('@/i18n/i18n', () => ({
     values
       ? Object.entries(values).reduce(
           (text, [key, value]) => text.replaceAll(`{{${key}}}`, String(value)),
-          fallback
+          values.count === 1 && typeof values.defaultValue_one === 'string'
+            ? values.defaultValue_one
+            : fallback
         )
       : fallback
 }))

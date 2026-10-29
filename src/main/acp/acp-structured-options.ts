@@ -49,7 +49,10 @@ function isSelect(option: SessionConfigOption): option is SelectOption {
 
 export class AcpStructuredOptions {
   constructor(
-    private readonly dialect: Pick<AcpDialect, 'modelEfforts' | 'withheldCommands'> = {}
+    private readonly dialect: Pick<
+      AcpDialect,
+      'modelEfforts' | 'withheldCommands' | 'effortChangesModel'
+    > = {}
   ) {}
 
   private configOptions: SessionConfigOption[] = []
@@ -58,13 +61,21 @@ export class AcpStructuredOptions {
   // Only new sessions resolve configured defaults; loaded sessions retain their saved choices.
   private resolvesConfig = false
   readonly picked = new Set<string>()
-  /** Installed Orca policy and successful writes, distinct from native agent reports. */
+  readonly appliedInput = new Map<string, string>()
   readonly applied = new Map<string, string>()
-  private initialChoice: Readonly<Record<string, string>> = {}
-  private modelSelection: { requested: string; reported: string } | null = null
-  currentProof = new Set<string>()
   writeRevision = 0
 
+  invalidateInput(key: string): void {
+    this.appliedInput.delete(key)
+    if (key === 'model') {
+      this.appliedInput.delete('effort')
+    }
+    if (key === 'effort' && this.dialect.effortChangesModel) {
+      this.appliedInput.delete('model')
+    }
+  }
+
+  /** The session state a new, load or resume response reported. */
   adoptSession(
     response: {
       configOptions?: SessionConfigOption[] | null
@@ -75,82 +86,22 @@ export class AcpStructuredOptions {
     this.configOptions = response.configOptions ?? []
     this.models = response.models ?? null
     this.resolvesConfig = origin === 'new'
-    this.initialChoice = this.reported()
-    this.currentProof = new Set(Object.keys(this.initialChoice))
-    this.confirmModelSelection(response.models?.currentModelId)
-  }
-
-  /** Native selection before any message changed this child. */
-  messageDefault(): Readonly<Record<string, string>> {
-    return this.initialChoice
+    this.appliedInput.clear()
   }
 
   notePick(key: string): void {
     this.picked.add(key)
   }
 
-  adoptConfigOptions(
-    configOptions: SessionConfigOption[] | null | undefined,
-    requestedModel?: string
-  ): void {
+  adoptConfigOptions(configOptions: SessionConfigOption[] | null | undefined): void {
     if (configOptions) {
-      const previousModel = this.currentModel()
       this.configOptions = configOptions
-      this.adoptOwnChoice(previousModel)
-      if (requestedModel !== undefined) {
-        this.confirmModelSelection(requestedModel)
-      } else if (this.modelSelection?.reported !== this.select('model')?.currentValue) {
-        this.modelSelection = null
-      }
     }
-  }
-
-  /** Until Orca writes a key, a later report is still the agent's own (OpenCode's start answers
-   *  before its catalog loads); an effort belongs to its model, so it stops with either write. */
-  private adoptOwnChoice(previousModel: string | undefined): void {
-    if (this.currentModel() !== previousModel) {
-      this.currentProof.delete('model')
-      this.currentProof.delete('effort')
-      this.modelSelection = null
-    }
-    if (this.picked.has('model')) {
-      return
-    }
-    const reported = this.reported()
-    const own = this.picked.has('effort') ? ['model'] : ['model', 'effort']
-    const choice: Record<string, string> = { ...this.initialChoice }
-    for (const key of own) {
-      const value = reported[key]
-      if (value === undefined) {
-        delete choice[key]
-        this.currentProof.delete(key)
-      } else {
-        choice[key] = value
-        if (!this.applied.has('model') && !this.applied.has('effort')) {
-          this.currentProof.add(key)
-        }
-      }
-    }
-    this.initialChoice = choice
-  }
-
-  confirmedModelSelection(): string | undefined {
-    return this.currentProof.has('model') &&
-      this.modelSelection?.reported === this.select('model')?.currentValue
-      ? this.modelSelection?.requested
-      : undefined
-  }
-
-  private confirmModelSelection(requested: string | undefined): void {
-    const reported = this.select('model')?.currentValue
-    this.modelSelection = requested && reported ? { requested, reported } : null
   }
 
   adoptModel(modelId: string): void {
     if (this.models) {
-      const previousModel = this.currentModel()
       this.models = { ...this.models, currentModelId: modelId }
-      this.adoptOwnChoice(previousModel)
     }
   }
 
@@ -196,7 +147,7 @@ export class AcpStructuredOptions {
           ...(choice.description ? { description: choice.description } : {})
         }))
       : []
-    const currentModel = this.currentModel()
+    const currentModel = (modelOption?.currentValue ?? this.models?.currentModelId) || undefined
     const listed: { id: string; label: string; description?: string }[] = modelOption
       ? selectChoices(modelOption).map((choice) => ({
           id: choice.value,
@@ -277,10 +228,6 @@ export class AcpStructuredOptions {
       : null
   }
 
-  private currentModel(): string | undefined {
-    return (this.select('model')?.currentValue ?? this.models?.currentModelId) || undefined
-  }
-
   // Match the mode category rather than assuming an agent's config ID.
   modeConfigId(): string {
     return this.select('mode')?.id ?? 'mode'
@@ -315,7 +262,6 @@ export async function readAcpLiveOptions(
       ...options.current,
       reportedPermissionMode: session.options.reportedPermissionMode(permissionModes)
     },
-    confirmedModelSelection: session.options.confirmedModelSelection(),
     acceptsImages
   }
 }

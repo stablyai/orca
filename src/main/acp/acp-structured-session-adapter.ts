@@ -35,17 +35,23 @@ import { stopAcpChildren, acpChildStopCapabilities } from './acp-structured-chil
 import * as childState from './acp-structured-child'
 import { AcpStructuredChildren } from './acp-structured-child-lifecycle'
 import { AcpConversationCopies } from './acp-conversation-copies'
+import { AcpTextTasks } from './acp-text-task'
 import { supportsAcpStructuredLocation } from './acp-structured-location-support'
 
 export class AcpStructuredSessionAdapter implements SessionAdapter {
   readonly atRestCommands: AcpStructuredSessionAdapterDeps['atRestCommands']
   private readonly children: AcpStructuredChildren
   private readonly copies: AcpConversationCopies
+  private readonly textTasks: AcpTextTasks
   constructor(private readonly deps: AcpStructuredSessionAdapterDeps) {
     this.atRestCommands = deps.atRestCommands
     this.children = new AcpStructuredChildren(deps)
     this.copies = new AcpConversationCopies(deps)
+    this.textTasks = new AcpTextTasks(deps)
   }
+
+  generateText: NonNullable<SessionAdapter['generateText']> = (input) =>
+    this.textTasks.generate(input)
 
   copyConversation: NonNullable<SessionAdapter['copyConversation']> = (input) =>
     this.copies.copy(input)
@@ -305,23 +311,11 @@ export class AcpStructuredSessionAdapter implements SessionAdapter {
   forceCloseSession = (sessionId: string): Promise<boolean> => this.children.stop(sessionId, false)
 
   async closeAll(): Promise<void> {
-    const commands = this.atRestCommands?.closeAll?.()
-    const copiedChildren = this.copies.closeAll()
-    const { children } = this
-    const ids = new Set([...children.sessions.keys(), ...children.starts.failedSessionIds()])
-    // The host aborts in-progress starts before this teardown.
-    const results = await Promise.allSettled([
-      ...[...ids].map((sessionId) => children.stop(sessionId, true)),
-      copiedChildren,
-      commands
+    await this.children.closeAll([
+      this.atRestCommands?.closeAll?.(),
+      this.copies.closeAll(),
+      this.textTasks.closeAll()
     ])
-    const failure = results.find((result) => result.status === 'rejected')
-    if (failure?.status === 'rejected') {
-      throw failure.reason
-    }
-    if (results.some((result) => result.status === 'fulfilled' && result.value === false)) {
-      throw new Error('an ACP agent child could not be proven stopped')
-    }
   }
 
   private live(sessionId: string): AcpStructuredSession {
