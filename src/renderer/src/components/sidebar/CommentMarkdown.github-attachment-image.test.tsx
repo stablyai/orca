@@ -5,7 +5,6 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import CommentMarkdown from './CommentMarkdown'
 
-// These fixtures exercise prose, links and images without rendering diagrams.
 const mocks = vi.hoisted(() => ({
   mermaid: vi.fn(() => {
     throw new Error('These fixtures must not render Mermaid diagrams')

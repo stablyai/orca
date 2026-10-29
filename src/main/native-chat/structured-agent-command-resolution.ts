@@ -1,3 +1,4 @@
+import { waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
 import { delimiter, isAbsolute, resolve as resolvePath } from 'node:path'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import type { TuiAgent } from '../../shared/tui-agent'
@@ -13,7 +14,25 @@ import {
   AgentSessionPreSpawnError,
   isAgentSessionPreSpawnError
 } from './agent-session-wire/structured-agent-session-adapter'
-import { guestNativePathEnv } from '../ipc/wsl-guest-windows-drive-path'
+import { guestNativePathEnv, resolveGuestNativeProgram } from '../ipc/wsl-guest-windows-drive-path'
+
+export type StructuredAgentResolutionOperation = {
+  deadline?: number
+  current?: () => boolean
+  signal?: AbortSignal
+}
+
+export function assertStructuredAgentResolutionCurrent(
+  operation?: StructuredAgentResolutionOperation
+): void {
+  operation?.signal?.throwIfAborted()
+  if (
+    operation?.current?.() === false ||
+    (operation?.deadline !== undefined && Date.now() >= operation.deadline)
+  ) {
+    throw new Error('Agent resolution operation ended')
+  }
+}
 
 export type StructuredAgentCommandSettings = Partial<
   Pick<GlobalSettings, 'agentCmdOverrides' | 'agentDefaultEnv'>
@@ -36,15 +55,12 @@ function resolveOverride(
     : null
 }
 
-// Windows starts .exe/.com directly and .cmd/.bat through Orca's shim handling; an extensionless
-// file would fail to spawn with no word about the setting.
+// Extensionless commands cannot spawn on Windows; .cmd/.bat use Orca’s shim handling.
 function spawnableOn(platform: NodeJS.Platform, command: string): boolean {
   return platform !== 'win32' || /\.(exe|com|cmd|bat)$/i.test(command)
 }
 
-/** Re-read the existing setting for every session acquisition and catalog probe. A set Command
- *  that names no runnable program refuses the start rather than quietly running the stock CLI.
- *  Without one, `stock` names the agent's own binary (the agent id by default). */
+/** Read live settings on every lookup; invalid explicit commands must refuse instead of launching stock CLI. */
 export function resolveStructuredAgentCommand(
   agent: TuiAgent,
   settings: CommandSettings,
@@ -52,16 +68,19 @@ export function resolveStructuredAgentCommand(
   stock: { command?: string; resolve?: typeof resolveCliCommand } = {}
 ): string {
   if (!hasExplicitTuiLaunchCommand(settings, agent)) {
-    // Why: inside a WSL guest the inherited PATH ends in /mnt/<drive> dirs holding Windows shims.
-    const pathEnv = guestNativePathEnv(options.pathEnv)
-    return (stock.resolve ?? resolveCliCommand)(
-      stock.command ?? agent,
-      pathEnv === options.pathEnv ? options : { ...options, pathEnv }
-    )
+    // WSL PATH may contain drive-mounted Windows shims after native entries.
+    const command = stock.command ?? agent
+    const resolved = resolveGuestNativeProgram(command, options, stock.resolve)
+    if (resolved === null) {
+      throw new AgentSessionPreSpawnError(
+        `${command} is installed only on Windows, not in WSL ${process.env.WSL_DISTRO_NAME ?? 'distro'}`,
+        { reason: 'cliMissing' }
+      )
+    }
+    return resolved
   }
   const command = resolveOverride(agent, settings, options)
   if (!command || !spawnableOn(options.platform ?? process.platform, command)) {
-    // The value stays out of the message: a saved command line can carry a secret.
     throw new AgentSessionPreSpawnError(`the ${agent} Command setting is not a runnable program`, {
       reason: 'agentCommandNotRunnable'
     })
@@ -69,18 +88,17 @@ export function resolveStructuredAgentCommand(
   return command
 }
 
-/** What a lookup searched: the env whose PATH it used, and the directory its program starts in. */
 export type ProgramSearch<T> = {
+  signal?: AbortSignal
   env: (resolved: T) => NodeJS.ProcessEnv | undefined
-  /** Orca's own working directory when absent. */
   cwd?: () => Promise<string> | string
 }
 
-/** Whether a lookup found nothing. A bare name back may still be in a relative PATH entry (a
- *  workspace `bin`), which the spawn searches from its own directory and the lookup did not. */
+/** Bare names may resolve only at spawn through a relative PATH entry under the launch cwd. */
 async function foundNothing<T extends { command: string }>(
   resolved: T,
-  search: ProgramSearch<T>
+  search: ProgramSearch<T>,
+  operation?: StructuredAgentResolutionOperation
 ): Promise<boolean> {
   if (isAbsolute(resolved.command) || /[\\/]/.test(resolved.command)) {
     return false
@@ -93,7 +111,10 @@ async function foundNothing<T extends { command: string }>(
   if (relative.length === 0) {
     return true
   }
-  const from = (await search.cwd?.()) ?? process.cwd()
+  const from =
+    (await waitForPromiseWithSignal(Promise.resolve(search.cwd?.()), search.signal)) ??
+    process.cwd()
+  assertStructuredAgentResolutionCurrent(operation)
   const found = resolveCliCommand(resolved.command, {
     pathEnv: relative.map((entry) => resolvePath(from, entry)).join(delimiter),
     homePath: env?.HOME ?? env?.USERPROFILE
@@ -101,29 +122,39 @@ async function foundNothing<T extends { command: string }>(
   return !isAbsolute(found)
 }
 
-/** Resolves a launch's program from the shell snapshot. When nothing is found there (see
- *  `foundNothing`, or a Command setting naming no program), waits for a reread that started after
- *  this lookup did and resolves once more, so an agent installed before it starts. A found
- *  program never waits. */
+/** On a miss, await a shell refresh started after this lookup and retry once; found programs never wait. */
 export async function resolveAgainAfterRefreshOnMissingProgram<T extends { command: string }>(
   resolve: () => Promise<T>,
   refreshAfterMiss: ((askedAt: number) => Promise<void>) | undefined,
-  search: ProgramSearch<T>
+  search: ProgramSearch<T>,
+  operation?: StructuredAgentResolutionOperation
 ): Promise<T> {
+  assertStructuredAgentResolutionCurrent(operation)
   if (!refreshAfterMiss) {
-    return resolve()
+    return waitForPromiseWithSignal(resolve(), search.signal)
   }
   const askedAt = Date.now()
   try {
-    const resolved = await resolve()
-    if (!(await foundNothing(resolved, search))) {
+    const resolved = await waitForPromiseWithSignal(resolve(), search.signal)
+    assertStructuredAgentResolutionCurrent(operation)
+    const missing = await foundNothing(resolved, search, operation)
+    assertStructuredAgentResolutionCurrent(operation)
+    if (!missing) {
       return resolved
     }
   } catch (error) {
-    if (!isAgentSessionPreSpawnError(error) || error.reason !== 'agentCommandNotRunnable') {
+    // cliMissing: only a Windows copy was found; a refreshed shell may now show a WSL install.
+    if (
+      !isAgentSessionPreSpawnError(error) ||
+      (error.reason !== 'agentCommandNotRunnable' && error.reason !== 'cliMissing')
+    ) {
       throw error
     }
   }
-  await refreshAfterMiss(askedAt)
-  return resolve()
+  assertStructuredAgentResolutionCurrent(operation)
+  search.signal?.throwIfAborted()
+  await waitForPromiseWithSignal(refreshAfterMiss(askedAt), search.signal)
+  search.signal?.throwIfAborted()
+  assertStructuredAgentResolutionCurrent(operation)
+  return waitForPromiseWithSignal(resolve(), search.signal)
 }

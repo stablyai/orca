@@ -1,3 +1,4 @@
+import { isTerminalInputPaused } from '../../../runtime/terminal-input-admission'
 import type { IpcMainEvent, IpcMainInvokeEvent } from 'electron'
 import type { PtyRendererDelivery } from '../session'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
@@ -32,7 +33,6 @@ export type PtyWritePayload = {
   id: string
   data: string
   inputKind: TerminalInputKind
-  /** Accepted-write callers only: wait for the provider's settlement, on any provider. */
   requireWriteSettlement?: true
 }
 export type PtyViewportClaimPayload = { id: string; cols: number; rows: number }
@@ -69,10 +69,14 @@ export function createPtyWriteInput(deps: {
 
   const writePtyProviderInputWithinLimit = (
     provider: IPtyProvider,
-    id: string,
-    data: string,
+    args: PtyWritePayload,
     verify = false
   ): boolean | Promise<boolean> => {
+    const { id, data } = args
+    if (runtime && isTerminalInputPaused(runtime, id, 'desktop')) {
+      return false
+    }
+    noteRendererPtyInput(args)
     const chunks = iterateTerminalInputChunks(data)
     const first = chunks.next()
     if (first.done) {
@@ -122,21 +126,21 @@ export function createPtyWriteInput(deps: {
 
   const writePtyProviderInput = (
     provider: IPtyProvider,
-    id: string,
-    data: string,
+    args: PtyWritePayload,
     verify = false
   ): boolean | Promise<boolean> => {
+    const { id, data } = args
     try {
       const tooLarge = isTerminalInputTooLargeWithDeferredMeasurement(data)
       if (typeof tooLarge === 'boolean') {
-        return tooLarge ? false : writePtyProviderInputWithinLimit(provider, id, data, verify)
+        return tooLarge ? false : writePtyProviderInputWithinLimit(provider, args, verify)
       }
       return tooLarge
         .then((result) => {
           if (result) {
             return false
           }
-          return writePtyProviderInputWithinLimit(provider, id, data, verify)
+          return writePtyProviderInputWithinLimit(provider, args, verify)
         })
         .catch((error) => {
           return failedWrite(id, error, verify)
@@ -169,8 +173,7 @@ export function createPtyWriteInput(deps: {
         }
         wroteChunk = true
         if (!nextChunk.done) {
-          // setImmediate, not setTimeout(0): the yield exists to let abort/data callbacks run
-          // between chunks, and a clamped timer tick per 16 KiB is pure latency.
+          // Yield through the check phase for abort/data callbacks without a clamped timer tick per 16 KiB.
           await new Promise((resolve) => setImmediate(resolve))
         }
         chunk = nextChunk
@@ -226,21 +229,16 @@ export function createPtyWriteInput(deps: {
       }
       return accepted
     }
-    const result = writePtyProviderInput(provider, args.id, args.data, verify)
+    const result = writePtyProviderInput(provider, args, verify)
     return typeof result === 'boolean' ? observe(result) : result.then(observe)
   }
 
   const writePtyInput = (args: PtyWritePayload): boolean | Promise<boolean> => {
-    // Why: mobile-presence-lock defense-in-depth — the renderer's onData guard can let one keystroke slip during the state-flip lag, so catch it server-side. See docs/mobile-presence-lock.md.
-    if (runtime?.getDriver(args.id).kind === 'mobile') {
-      return false
-    }
     const provider = ptyOwnership.has(args.id) ? tryGetProviderForPty(args.id) : undefined
     if (!provider) {
       return false
     }
     try {
-      noteRendererPtyInput(args)
       return writeAndObserveInput(provider, args)
     } catch {
       return false
@@ -255,18 +253,14 @@ export function createPtyWriteInput(deps: {
     if (!provider?.hasPty?.(args.id)) {
       return false
     }
-    noteRendererPtyInput(args)
     return writeAndObserveInput(provider, args, true)
   }
 
   const writePtyInputAccepted = (args: PtyWritePayload): boolean | Promise<boolean> => {
-    if (runtime?.getDriver(args.id).kind === 'mobile') {
-      return false
-    }
     if (args.requireWriteSettlement === true) {
       return writePtyInputSettled(args)
     }
-    // Why: the ack infers Ctrl+C/Escape reached the local PTY; SSH providers are fire-and-forget relay notifications and can't truthfully acknowledge yet.
+    // Only local ownership can acknowledge delivery; SSH relay writes remain fire-and-forget.
     if (ptyOwnership.get(args.id) !== LOCAL_EXECUTION_HOST_ID) {
       return false
     }
@@ -275,7 +269,6 @@ export function createPtyWriteInput(deps: {
       return false
     }
     try {
-      noteRendererPtyInput(args)
       return writeAndObserveInput(provider, args)
     } catch {
       return false

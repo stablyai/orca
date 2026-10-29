@@ -5,7 +5,6 @@ import type { RpcClient } from '../transport/rpc-client'
 
 const NO_HOST_LABELS: ReadonlyMap<ExecutionHostId, string> = new Map()
 
-/** The names the desktop's SSH hosts show under, as the host screen reads them: one read. */
 export function useHostLabelById(
   client: RpcClient | null,
   connected: boolean
@@ -23,7 +22,6 @@ export function useHostLabelById(
           setLabels(hostLabelById)
         }
       })
-      // Unread labels fall back to host ids, as the host screen's do before its first read.
       .catch(() => {})
     return () => {
       live = false

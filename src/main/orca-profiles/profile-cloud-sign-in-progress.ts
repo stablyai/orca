@@ -2,7 +2,7 @@ import type { OrcaCloudSignInProgress } from '../../shared/orca-profiles'
 
 type ProgressListener = (progress: OrcaCloudSignInProgress | null) => void
 
-// Why one record: the newest attempt owns the progress, so an older attempt's late calls are no-ops.
+// Only the newest attempt owns progress; late updates from older attempts are ignored.
 let current: { attempt: number; link: string | null; cancel: () => void } | null = null
 const listeners = new Set<ProgressListener>()
 

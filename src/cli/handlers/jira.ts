@@ -9,8 +9,8 @@ import type {
   JiraProject,
   JiraTransition,
   JiraUser
-} from '../../shared/jira-types'
-import { isResolvedJiraIssueMatch, parseJiraIssueUrl } from '../../shared/jira-issue-url'
+} from '../../shared/jira/jira-types'
+import { isResolvedJiraIssueMatch, parseJiraIssueUrl } from '../../shared/jira/jira-issue-url'
 import type { CommandHandler, HandlerContext } from '../dispatch'
 import {
   getOptionalPositiveIntegerFlag,

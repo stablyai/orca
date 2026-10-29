@@ -1,6 +1,4 @@
-// The models a session's options answer lists, the same whether a child answers live or the host
-// answers for a chat at rest: the catalog's rows, plus the current model when the catalog does not
-// list it. Nothing says which efforts an unlisted model takes, so its row offers none.
+// Include unlisted current models without inferred capabilities, for both live and resting reads.
 
 import type {
   AgentSessionModelCatalogResult,
@@ -26,7 +24,6 @@ export type StructuredAgentSessionRestingOptions = Pick<
   fallback: AgentSessionOptionsResult['models']
 }
 
-/** A list plus the literal selection; an unlisted model proves no capability. */
 export function structuredAgentSessionOptionModels<TModel extends AgentSessionModelOption>(
   catalog: readonly TModel[],
   current: string | undefined,
@@ -41,7 +38,7 @@ export function structuredAgentSessionOptionModels<TModel extends AgentSessionMo
   return models
 }
 
-/** Installed rows are the only choices; seeds stand in only when that list is unknown. */
+/** Use seeds only for unknown listings; installed rows are authoritative. */
 export function structuredAgentSessionCapabilityView(
   installed:
     | {

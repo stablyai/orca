@@ -41,7 +41,7 @@ export function closeTerminalLinkActionRequest(
 
 type LinkActionDetails = Pick<
   TerminalLinkActionRequest,
-  'destination' | 'kind' | 'primary' | 'alternate' | 'secondaryActions'
+  'destination' | 'copyValue' | 'kind' | 'primary' | 'alternate' | 'secondaryActions'
 >
 
 export function requestTerminalLinkAction(

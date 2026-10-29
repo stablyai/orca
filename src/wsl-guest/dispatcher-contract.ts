@@ -51,17 +51,11 @@ export type RelayClient = {
   bulkChain: Promise<void>
   nextOutgoingSeq: number
   highestReceivedSeq: number
-  // Why: a client that never frames anything has no staleness to measure, so the silence window
-  // cannot see it. Its attach time is the only clock it has.
+  // Attach time bounds never-speaking clients that have no lastReceivedAt for silence checks.
   attachedAt: number
-  // Why: the relay had no inbound-liveness signal at all, so a half-open client was never reaped
-  // and kept its owner lease and paused PTYs indefinitely.
+  // Reap half-open clients so abandoned viewers cannot retain owner leases and paused PTYs forever.
   lastReceivedAt: number | null
-  // Why silence is only held against a client that sends keepalives: not every client speaks that
-  // protocol. The remote `orca` CLI opens the socket, sends one `orca.cli` request and then waits
-  // for a result that is deliberately budgeted in minutes, so
-  // judging it on inbound silence would kill `terminal wait`, `--wait` and `orchestration ask`
-  // after 20s. Only a client that has proven it participates is eligible.
+  // Apply silence windows only after observed keepalives; remote CLI requests may wait minutes without inbound traffic.
   keepaliveObserved: boolean
   generation: number
   closed: boolean
@@ -83,8 +77,7 @@ export type PendingRelayRequest = {
   timer: ReturnType<typeof setTimeout>
 }
 
-// Why: the log key set is rebuilt per generation, but a producer minting synthetic method names would still
-// grow it inside one generation — cap it well above the fixed relay method vocabulary.
+// Cap method diagnostics within each generation because synthetic method names can grow without bound.
 export const DROPPED_NOTIFICATION_LOG_KEY_LIMIT = 64
 
 export const RESPONSE_OVER_CAPACITY_MESSAGE =

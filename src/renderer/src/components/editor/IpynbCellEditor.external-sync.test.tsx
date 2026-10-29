@@ -82,7 +82,7 @@ vi.mock('@/lib/monaco-setup', async () => {
 })
 
 function notebookContent(
-  cells: { id: string; source: string; kind?: 'code' | 'markdown' }[],
+  cells: { id: string | null; source: string; kind?: 'code' | 'markdown' }[],
   language = 'python'
 ): string {
   return JSON.stringify({
@@ -90,7 +90,7 @@ function notebookContent(
     nbformat_minor: 5,
     metadata: { language_info: { name: language } },
     cells: cells.map(({ id, source, kind }) => ({
-      id,
+      ...(id === null ? {} : { id }),
       cell_type: kind ?? 'code',
       metadata: {},
       execution_count: null,
@@ -126,6 +126,7 @@ function NotebookCells({
         return (
           <IpynbCellSource
             key={key}
+            modelKey={cell.id === null ? null : JSON.stringify([modelScope, cell.id])}
             cell={cell}
             source={
               hasIpynbSourceDraft(editing.sourceDrafts, key)
@@ -163,7 +164,10 @@ function appendText(model: editor.ITextModel, text: string): void {
   })
 }
 
+// Monaco keeps disposed undo history globally, so each test gets its own model URIs.
+let modelScope = 0
 beforeEach(() => {
+  modelScope += 1
   vi.useFakeTimers()
   vi.clearAllMocks()
 })
@@ -312,5 +316,120 @@ describe('active notebook cell external reload', () => {
     expect(model.getValue()).toBe('**Updated**\n\nParagraph')
     expect(onDirtyStateHint).not.toHaveBeenCalled()
     expect(onContentChange).not.toHaveBeenCalled()
+  })
+})
+
+describe('notebook cell undo lifetime', () => {
+  const callbacks = () => ({
+    onContentChange: vi.fn<(content: string) => void>(),
+    onDirtyStateHint: vi.fn<(dirty: boolean) => void>()
+  })
+
+  async function undo(model: editor.ITextModel): Promise<void> {
+    await act(async () => {
+      await model.undo()
+    })
+  }
+
+  it('restores cell undo after switching cells and after the notebook view remounts', async () => {
+    const handlers = callbacks()
+    const content = notebookContent([
+      { id: 'a', source: 'first source' },
+      { id: 'b', source: 'second source' }
+    ])
+    const firstView = render(<NotebookCells content={content} {...handlers} />)
+    fireEvent.mouseDown(screen.getByRole('button', { name: 'first source' }), { button: 0 })
+    appendText(activeModel(), '!')
+    fireEvent.mouseDown(screen.getByRole('button', { name: 'second source' }), { button: 0 })
+    appendText(activeModel(), '?')
+    fireEvent.mouseDown(screen.getByRole('button', { name: 'first source!' }), { button: 0 })
+    await undo(activeModel())
+    expect(activeModel().getValue()).toBe('first source')
+    expect(screen.getByRole('button', { name: 'second source?' })).toBeDefined()
+
+    const edited = handlers.onContentChange.mock.calls.at(-1)?.[0] ?? ''
+    firstView.unmount()
+    render(<NotebookCells content={edited} {...handlers} />)
+    fireEvent.mouseDown(screen.getByRole('button', { name: 'second source?' }), { button: 0 })
+    await undo(activeModel())
+    expect(activeModel().getValue()).toBe('second source')
+  })
+
+  it('drops cell undo when the source changed while the cell was inactive', async () => {
+    const handlers = callbacks()
+    const { rerender } = render(
+      <NotebookCells
+        content={notebookContent([
+          { id: 'a', source: 'original' },
+          { id: 'b', source: 'other' }
+        ])}
+        {...handlers}
+      />
+    )
+    fireEvent.mouseDown(screen.getByRole('button', { name: 'original' }), { button: 0 })
+    appendText(activeModel(), '!')
+    fireEvent.mouseDown(screen.getByRole('button', { name: 'other' }), { button: 0 })
+    rerender(
+      <NotebookCells
+        content={handlers.onContentChange.mock.calls.at(-1)?.[0] ?? ''}
+        {...handlers}
+      />
+    )
+    rerender(
+      <NotebookCells
+        content={notebookContent([
+          { id: 'a', source: 'from disk' },
+          { id: 'b', source: 'other' }
+        ])}
+        {...handlers}
+      />
+    )
+    fireEvent.mouseDown(screen.getByRole('button', { name: 'from disk' }), { button: 0 })
+    await undo(activeModel())
+    expect(activeModel().getValue()).toBe('from disk')
+  })
+
+  it('does not carry undo to another id-less cell that moves into the same position', async () => {
+    const handlers = callbacks()
+    const { rerender } = render(
+      <NotebookCells
+        content={notebookContent([
+          { id: null, source: 'text' },
+          { id: null, source: 'text!' }
+        ])}
+        {...handlers}
+      />
+    )
+    fireEvent.mouseDown(screen.getByRole('button', { name: 'text' }), { button: 0 })
+    appendText(activeModel(), '!')
+    fireEvent.mouseDown(screen.getByRole('button', { name: 'text!' }), { button: 0 })
+    rerender(
+      <NotebookCells
+        content={handlers.onContentChange.mock.calls.at(-1)?.[0] ?? ''}
+        {...handlers}
+      />
+    )
+    rerender(
+      <NotebookCells content={notebookContent([{ id: null, source: 'text!' }])} {...handlers} />
+    )
+    fireEvent.mouseDown(screen.getByRole('button', { name: 'text!' }), { button: 0 })
+    handlers.onContentChange.mockClear()
+    await undo(activeModel())
+    expect(activeModel().getValue()).toBe('text!')
+    expect(handlers.onContentChange).not.toHaveBeenCalled()
+  })
+
+  it('opens a cell whose id is duplicated in the notebook', () => {
+    render(
+      <NotebookCells
+        content={notebookContent([
+          { id: 'dup', source: 'first' },
+          { id: 'dup', source: 'second' }
+        ])}
+        {...callbacks()}
+      />
+    )
+    fireEvent.mouseDown(screen.getByRole('button', { name: 'first' }), { button: 0 })
+    expect(liveModels.map((model) => model.getValue())).toEqual(['first', 'second'])
   })
 })

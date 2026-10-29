@@ -13,7 +13,6 @@ export type AiVaultPanelWorkspaceRows = {
   repo: ReturnType<typeof selectRepoByIdForActiveWorkspace>
 }
 
-/** The workspace's catalog row and its project, read the way the active workspace's are. */
 export function selectAiVaultPanelWorkspace(
   state: AppState,
   workspace: AiVaultPanelWorkspace

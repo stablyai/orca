@@ -120,8 +120,7 @@ describe('readGitCommonHeadIdentities', () => {
 
   it('rejects traversal-shaped symrefs instead of reading outside the common dir', async () => {
     const commonDir = await makeCommonDir()
-    // A crafted repo can put arbitrary content in HEAD; backslash segments
-    // would traverse on Windows where join treats them as separators too.
+    // Crafted HEAD ref names must not traverse through Windows backslash separators.
     await writeFile(join(dirname(commonDir), '..', 'outside.txt'), 'secret\n')
     for (const ref of [
       'refs/heads/../../../outside.txt',

@@ -6,13 +6,7 @@ import {
   type ArchiveHookRunResult
 } from '../shared/worktree/archive-hook-removal-gate'
 
-/**
- * The archive-hook precondition for a destructive worktree removal (#19334). Call it while the
- * checkout, its registration, its agents and its ownership evidence are all still intact: on a
- * failure it throws, and no caller may stop a PTY, deregister, or delete before it has returned.
- *
- * Returns the override record when the failure was explicitly waived, `undefined` on success.
- */
+/** Run before PTY teardown, deregistration or deletion, while the archive hook still has its checkout. */
 export function gateWorktreeRemovalOnArchiveHook(args: {
   worktreePath: string
   result: ArchiveHookRunResult

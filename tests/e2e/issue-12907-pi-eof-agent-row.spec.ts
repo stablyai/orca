@@ -34,8 +34,7 @@ test('Pi EOF removes the completed agent row from the live Electron sidebar (#12
   const script: StagedTerminalNodeScript = stageNodeScriptForTerminal(
     "process.stdout.write('PI_EOF_AGENT_READY\\r\\n\\x1b]0;Pi\\x07'); process.stdin.resume(); process.stdin.on('end', () => process.exit(0))"
   )
-  // Keep the shell from becoming the surviving process after the child accepts
-  // EOF. The queued `exit` runs after node exits, on POSIX shells used here.
+  // Exit the POSIX shell after Node accepts EOF so the surviving shell cannot hide agent cleanup.
   await sendToTerminal(orcaPage, ptyId, `${script.command}; exit\r`)
   try {
     await waitForTerminalOutput(orcaPage, 'PI_EOF_AGENT_READY', 15_000)

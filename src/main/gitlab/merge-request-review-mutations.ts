@@ -186,7 +186,7 @@ export async function resolveMRDiscussion(
       }
       await acquire()
       try {
-        // Why: GitLab resolves/reopens the whole discussion thread, not a single note.
+        // GitLab resolves the entire discussion, not an individual note.
         await glabExecFileAsync(
           [
             'api',

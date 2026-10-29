@@ -1,7 +1,5 @@
 // @vitest-environment happy-dom
 
-// One press is one action: a later press of the same control is never answered from an earlier one.
-
 import { act, renderHook } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -36,8 +34,12 @@ type Answer =
   | { ok: false; refusal: { code: string; message: string } }
 
 const LOST = new Error('the connection dropped before the host answered')
+const CONFLICT = {
+  ok: false,
+  refusal: { code: 'agent_session_conflict', message: 'The chat changed.' }
+} as const
 
-/** The host's ledger: an id it already ran gets that answer again, and nothing runs. */
+/** Model host idempotency: replay recorded answers without repeating the operation. */
 function ledgerHost(run: (method: string, params: Params) => Answer) {
   const ledger = new Map<string, Answer>()
   const ids: string[] = []
@@ -124,7 +126,6 @@ describe('a write pressed again', () => {
 
   it('says nothing when the same answer is clicked again after its reply was lost', async () => {
     const resolution = { state: 'resolved', selectedOptionId: 'allow' }
-    // A host that already resolved the prompt that way answers with the resolution it holds.
     const host = ledgerHost(() => ({
       ok: true,
       value: { itemId: 'item-1', revision: 2, resolution }
@@ -181,7 +182,6 @@ describe('a conversation command typed again', () => {
   })
 })
 
-/** A host that holds each Stop until the test answers the ones it was sent. */
 function heldStops() {
   const answers: (() => void)[] = []
   const ids: string[] = []
@@ -202,6 +202,79 @@ function heldStops() {
 
 const stop = (current: ReturnType<typeof render>['current'], turnId = 'turn-1') =>
   current.mutate('agentSession.cancel', 'agentSession.cancel', { turnId })
+
+it.each([
+  [false, { turnId: 'turn-1' }],
+  [true, { turnId: 'turn-1' }],
+  [true, { turnId: 'background-tasks', scope: 'background-tasks', taskId: 'task-command' }]
+] as const)('keeps an admitted Stop after closure (quiet=%s, %j)', async (quiet, fields) => {
+  const capability = Promise.withResolvers<boolean>()
+  mocks.hostAnswersRepeatedStops.mockReturnValue(capability.promise)
+  mocks.call.mockResolvedValue({ ok: true, value: { cancelled: true } })
+  const stateRef = { current: { fence: 3 } }
+  const target = { kind: 'environment', environmentId: 'host-A' } as const
+  const view = renderHook(() =>
+    useStructuredAgentSessionMutate({ sessionId: 'session-A', target, stateRef })
+  )
+  const isCurrent = view.result.current.capturePresentation()
+  const pending = view.result.current.write('agentSession.cancel', 'agentSession.cancel', fields)
+  expect(mocks.call).not.toHaveBeenCalled()
+  stateRef.current.fence = 4
+  view.unmount()
+  capability.resolve(quiet)
+  expect(await pending).toEqual({ kind: 'done', value: { cancelled: true } })
+  expect(mocks.call).toHaveBeenCalledExactlyOnceWith(target, 'agentSession.cancel', {
+    ...fields,
+    envelope: {
+      sessionId: 'session-A',
+      clientOperationId: 'operation-1',
+      expectedRuntimeFence: 3,
+      payloadFingerprint: expect.any(String)
+    }
+  })
+  expect(isCurrent()).toBe(false)
+})
+
+it.each([false, true])('reports only current host Stops (%s)', async (reportCurrent) => {
+  const first = Promise.withResolvers<unknown>()
+  mocks.call.mockReturnValueOnce(first.promise).mockResolvedValue({ ok: true, value: 'B' })
+  const view = renderHook(
+    ({ environmentId }) =>
+      useStructuredAgentSessionMutate({
+        sessionId: 'session-1',
+        target: { kind: 'environment', environmentId },
+        stateRef: { current: { fence: 3 } }
+      }),
+    { initialProps: { environmentId: 'A' } }
+  )
+  const pendingA = stop(view.result.current)
+  await vi.waitFor(() => expect(mocks.call).toHaveBeenCalledTimes(1))
+  view.rerender({ environmentId: 'B' })
+  expect(await stop(view.result.current)).toBe('B')
+  view.rerender({ environmentId: 'A' })
+  const currentPresses = reportCurrent ? [stop(view.result.current), stop(view.result.current)] : []
+  const raw = view.result.current.write('agentSession.cancel', 'agentSession.cancel', {
+    turnId: 'turn-1'
+  })
+  await vi.waitFor(() =>
+    expect(mocks.hostAnswersRepeatedStops).toHaveBeenCalledTimes(reportCurrent ? 5 : 3)
+  )
+  first.resolve(CONFLICT)
+  expect(await Promise.all([pendingA, ...currentPresses])).toEqual(
+    reportCurrent ? [null, null, null] : [null]
+  )
+  const outcome = await raw
+  expect(outcome).toMatchObject({
+    kind: 'not-done',
+    notice: expect.any(String),
+    failure: { kind: 'refused', code: 'agent_session_conflict' }
+  })
+  expect(mocks.toastError).toHaveBeenCalledTimes(reportCurrent ? 1 : 0)
+  if (reportCurrent && outcome.kind === 'not-done') {
+    expect(mocks.toastError).toHaveBeenCalledWith(outcome.notice)
+  }
+  expect(mocks.call.mock.calls.map(([target]) => target.environmentId)).toEqual(['A', 'B'])
+})
 
 describe('a Stop pressed again, against a host without the quiet repeated Stop', () => {
   it('joins the one still in flight instead of sending a second', async () => {
@@ -239,6 +312,27 @@ describe('a Stop pressed again, against a host without the quiet repeated Stop',
 
     expect(mocks.call).toHaveBeenCalledOnce()
     expect(mocks.toastError).toHaveBeenCalledOnce()
+  })
+
+  it('keeps repeated raw failures truthful without reporting them', async () => {
+    const failure = Promise.withResolvers<unknown>()
+    mocks.call.mockReturnValue(failure.promise)
+    const { current } = render()
+    const writes = [
+      current.write('agentSession.cancel', 'agentSession.cancel', { turnId: 'turn-1' }),
+      current.write('agentSession.cancel', 'agentSession.cancel', { turnId: 'turn-1' })
+    ]
+    await vi.waitFor(() => expect(mocks.call).toHaveBeenCalledOnce())
+    failure.resolve(CONFLICT)
+    for (const outcome of await Promise.all(writes)) {
+      expect(outcome).toMatchObject({
+        kind: 'not-done',
+        notice: expect.any(String),
+        failure: { kind: 'refused', code: 'agent_session_conflict' }
+      })
+    }
+    expect(mocks.call).toHaveBeenCalledOnce()
+    expect(mocks.toastError).not.toHaveBeenCalled()
   })
 
   it('sends a new Stop once the first has settled', async () => {
@@ -303,3 +397,29 @@ describe('a Stop pressed again, against a host that answers a repeat quietly', (
     expect(new Set(host.ids).size).toBe(2)
   })
 })
+
+it.each([
+  'Codex could not apply the selected model and effort. This goal change was not sent. Check the selection and try again.',
+  'Codex did not confirm the selected model and effort. This goal change was not sent. Check the chat and try again.'
+])(
+  'preserves the pre-goal settings explanation on the existing control failure surface: %s',
+  async (message) => {
+    mocks.call.mockResolvedValue({
+      ok: false,
+      refusal: {
+        code: 'agent_session_operation_invalid',
+        message,
+        details: { reason: 'providerRejected' }
+      }
+    })
+    const { current } = render()
+    await act(async () => {
+      expect(
+        await current.mutate('agentSession.threadGoal', 'agentSession.threadGoal', {
+          change: { kind: 'set', objective: 'ship it' }
+        })
+      ).toBeNull()
+    })
+    expect(mocks.toastError).toHaveBeenCalledExactlyOnceWith(message)
+  }
+)

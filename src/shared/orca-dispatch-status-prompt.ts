@@ -1,33 +1,21 @@
-// Why: full Orca dispatch preambles are multi-KB (CLI instructions before
-// `=== TASK ===`). A naive first-N-char fold of the agent-status prompt keeps
-// only lifecycle boilerplate and drops the task body the UI needs as a
-// fallback label before orchestration metadata arrives. Compact the status
-// prompt so preamble detection, the live task id, and the task body all fit
-// inside AGENT_STATUS_MAX_FIELD_LENGTH.
+// Compact multi-KB dispatch boilerplate so preamble identity, task id and task-body fallback all fit AGENT_STATUS_MAX_FIELD_LENGTH.
 
 export const ORCA_DISPATCH_STATUS_PREAMBLE_PREFIX =
   'You are working inside Orca, a multi-agent IDE.'
 export const ORCA_DISPATCH_STATUS_TASK_MARKER = '=== TASK ==='
-// Why: typed, not pasted, so Claude Code honors the brief: it follows a <pasted_content> block
-// only where the user's own words ask it to, and refused bare pasted briefs (STA-8200).
+// Type this lead: Claude follows pasted briefs only when user prose explicitly asks; bare pasted_content was refused (STA-8200).
 export const ORCA_DISPATCH_PROMPT_LEAD_LINE =
   'Please carry out this task from my Orca coordinator by following the brief I pasted below.'
 const ORCA_DISPATCH_STATUS_TASK_ID_MARKER = 'Your task ID is:'
-// Why: real preambles put === TASK === near the end (~4KB+). Scan past the
-// normal single-line budget so the task body is still reachable for compacting.
+// Real task markers follow 4KB+ preambles; scan beyond the one-line preview budget to reach the body.
 const ORCA_DISPATCH_STATUS_SOURCE_SCAN_LIMIT = 24_576
 const PASTED_CONTENT_OPEN_TAG = '<pasted_content'
 // Why: Claude Code's tag carries only a short id; bound the search for `>`.
 const PASTED_CONTENT_OPEN_TAG_MAX_LENGTH = 64
 
-/**
- * Index of the preamble prefix, or -1. Hook prompts may carry the typed lead
- * line and Claude Code's `<pasted_content>` wrapper ahead of it, and hosts
- * without the lead line still send the bare preamble.
- */
+/** Find preamble start or -1 through optional typed lead/pasted_content wrappers, including older hosts’ bare preambles. */
 export function findOrcaDispatchPreambleStart(value: string): number {
-  // Why: status payloads cross a trust boundary. Keep dispatch detection
-  // bounded too, or leading whitespace can bypass the normalizer's scan cap.
+  // Bound trusted-shape detection too: arbitrary leading whitespace must not bypass the status normalizer’s scan cap.
   const scanEnd = Math.min(value.length, ORCA_DISPATCH_STATUS_SOURCE_SCAN_LIMIT)
   let start = skipTrimWhitespace(value, 0, scanEnd)
   if (value.startsWith(ORCA_DISPATCH_PROMPT_LEAD_LINE, start)) {
@@ -54,11 +42,7 @@ function skipTrimWhitespace(value: string, from: number, scanEnd: number): numbe
   return index
 }
 
-/**
- * Collapse a multi-KB dispatch preamble into a single-line status preview that
- * still carries enough structure for UI helpers, or null when `value` is not one:
- *   `<preamble prefix> Your task ID is: <id> === TASK === <task body>`
- */
+/** Single-line <prefix> Your task ID is: <id> === TASK === <body> status preview; null for non-dispatch prompts. */
 export function compactDispatchPromptForStatus(
   value: string,
   maxLength: number,
@@ -99,8 +83,7 @@ export function compactDispatchPromptForStatus(
     }
   }
 
-  // Why: keep the dispatch prefix (isOrcaDispatchPrompt) + task id (label match)
-  // + task body (fallback preview) so UI helpers still work on the 200-char field.
+  // Retain preamble identity, task-label id and fallback body inside the 200-character status field.
   let compact = ORCA_DISPATCH_STATUS_PREAMBLE_PREFIX
   if (taskId) {
     compact += ` ${ORCA_DISPATCH_STATUS_TASK_ID_MARKER} ${taskId}`
@@ -111,13 +94,8 @@ export function compactDispatchPromptForStatus(
   return normalizeSingleLine(compact, maxLength)
 }
 
-/**
- * Locate the Orca task separator in a dispatch prompt scan window.
- * Why: base-drift commit subjects are repository-controlled and may mention
- * `=== TASK ===`. Raw multi-line preambles must use the standalone line Orca
- * emits; already-normalized single-line status previews intentionally keep the
- * marker inline so re-normalization and UI helpers stay consistent.
- */
+/** Require standalone === TASK === in multiline preambles because repository-controlled commit subjects may quote it.
+ * Normalized single-line previews retain inline markers for idempotent cross-hop/UI reads. */
 export function findOrcaDispatchTaskMarkerIndex(value: string): number {
   let searchFrom = 0
   while (searchFrom < value.length) {

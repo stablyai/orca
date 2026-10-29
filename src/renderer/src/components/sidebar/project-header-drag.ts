@@ -19,10 +19,7 @@ import { hasPointerBeenReleased } from './header-drag-pointer-release'
 import { swallowNextClickOnDragHandle } from './header-drag-click-swallow'
 import type { Repo } from '../../../../shared/repo-types'
 
-// Why pointer events instead of HTML5 DnD: rows are absolutely-positioned by
-// react-virtual and unmount/remount as scroll changes, so DnD enter/leave fire
-// against stale targets. With pointer events we cache the active set of repo
-// header positions and compute the drop index from the live pointer Y.
+// Virtualized rows can unmount during drag; pointer events and cached header geometry avoid stale drop targets.
 
 export function useRepoHeaderDrag({
   orderedRepoIds,
@@ -127,7 +124,7 @@ export function useRepoHeaderDrag({
       try {
         session.handleEl.releasePointerCapture(session.pointerId)
       } catch {
-        // capture may already be released (pointercancel, element unmounted)
+        // Pointer cancellation or unmount may already have released capture.
       }
       if (session.promoted) {
         clickSwallowTimeoutRef.current = swallowNextClickOnDragHandle(session.handleEl)
@@ -221,15 +218,11 @@ export function useRepoHeaderDrag({
           return
         }
         session.promoted = true
-        // Why: setPointerCapture can throw if the element is detached. Check
-        // isConnected first to avoid the throw; the global pointer listeners
-        // still fire, so dragging keeps working even if capture fails.
+        // Virtualization may detach headers; global listeners keep dragging alive without capture.
         if (session.handleEl.isConnected) {
           try {
             session.handleEl.setPointerCapture(session.pointerId)
-          } catch {
-            // Ignore capture failure; global listeners will handle the drag.
-          }
+          } catch {}
         }
         refreshHeaderRects()
         setState({ draggingRepoId: session.repo.id, dropIndex: null, dropIndicatorY: null })

@@ -194,6 +194,29 @@ describe('monaco large text paste', () => {
     )
   })
 
+  it('rejects a replacement model before yielded byte measurement reaches insertion', async () => {
+    const { editor, edits, replaceModel } = makeEditor()
+    const resultSpy = vi.fn()
+    const event = pasteEvent('x'.repeat(32))
+
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the paste reads only the editor methods makeEditor stubs.
+    handleMonacoLargeTextPaste(editor as never, event, {
+      directMaxBytes: 4,
+      measureYieldAfterCodeUnits: 8,
+      yieldToEventLoop: async () => replaceModel(),
+      onPasteResult: resultSpy
+    })
+    await flushPromises()
+
+    expect(edits).toEqual([])
+    expect(resultSpy).toHaveBeenCalledWith({
+      status: 'rejected',
+      reason: 'target-unavailable',
+      byteLength: 32,
+      chunksWritten: 0
+    })
+  })
+
   it('updates Monaco selection for mixed newlines without splitting chunk text', async () => {
     const { editor, edits } = makeEditor()
     const split = vi.spyOn(String.prototype, 'split')

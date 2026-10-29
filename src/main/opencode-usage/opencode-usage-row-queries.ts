@@ -30,16 +30,10 @@ type OpenCodeSessionUsageRow = {
   tokens_cache_write: number
 }
 
-// Why: OpenCode 2 copies every v1 `session` row into `session_v2` and then only
-// writes there, so a migrated opencode.db holds both tables and the same session
-// id in each. Reading `session` alone loses every OpenCode 2 session (#15841);
-// reading both unfiltered would double-count the migrated ones. First entry is
-// the generation OpenCode still writes to.
+// OpenCode 2 freezes session after copying to session_v2; prioritize live rows without double-counting.
 const SESSION_TABLES_BY_PRIORITY = ['session_v2', 'session'] as const
 
-// What the session *is*, with the SQL literal to substitute when no generation
-// carries the column. The live generation answers these; an older twin only
-// fills in what the live one left NULL.
+// Prefer live metadata; legacy rows fill NULLs using these defaults for absent columns.
 const SESSION_METADATA_COLUMNS: Record<string, string> = {
   project_id: 'NULL',
   directory: 'NULL',
@@ -57,12 +51,11 @@ const SESSION_TOKEN_COLUMNS = [
   'tokens_cache_write'
 ] as const
 
-// What the session *spent*. Merged per column, never row-at-a-time.
+// Merge usage per column, not per row.
 const SESSION_USAGE_COLUMNS = ['cost', ...SESSION_TOKEN_COLUMNS] as const
 
 const SESSION_TOKEN_TOTAL = SESSION_TOKEN_COLUMNS.map((name) => `s.${name}`).join(' + ')
 
-/** One generation's row for a session id, merged into the select that owns it. */
 type SessionContributor = { table: string; alias: string }
 
 function columnRef(
@@ -73,14 +66,7 @@ function columnRef(
   return columnExists(db, contributor.table, name) ? `${contributor.alias}.${name}` : null
 }
 
-// Why the live generation rather than whichever row has the bigger numbers:
-// after the v1 import, `session` is frozen while `session_v2` keeps being
-// written, so a pre-migration directory, title or timestamp survives in the
-// legacy twin indefinitely. The import also derives `session_v2.model` from the
-// last user message when the v1 row had none (`transformSession` in upstream
-// `v1-migration.bun.ts`), so the legacy row is the one that can be NULL here —
-// 23 of 234 shared ids on a real migrated database. Older generations only fill
-// NULLs.
+// Frozen legacy metadata can outlive migration; use it only where live values are NULL.
 function buildMetadataExpression(
   db: Database.Database,
   contributors: readonly SessionContributor[],
@@ -97,14 +83,8 @@ function buildMetadataExpression(
   return `COALESCE(${[...refs, ...tail].join(', ')})`
 }
 
-// Why per column rather than picking a winning row: both rows aggregate the same
-// assistant messages of the same session. The import re-derives every v2 total
-// from decoded messages and drops the ones that fail to decode, so each v2
-// column starts at or below its frozen legacy twin and then grows as the session
-// keeps running. Neither side can invent usage, so each column's MAX is a
-// strictly tighter lower bound on the truth than either row alone and can never
-// exceed it. Choosing a row instead lets a token comparison zero a recorded
-// cost, or a cost comparison zero recorded tokens.
+// Migration may drop undecodable messages, then live totals grow: each column’s MAX preserves
+// the strongest recorded lower bound without a winning row zeroing other cost/token columns.
 function buildUsageExpression(
   db: Database.Database,
   contributors: readonly SessionContributor[],
@@ -116,8 +96,7 @@ function buildUsageExpression(
   if (refs.length === 0 || contributors.length === 1) {
     return refs[0] ?? '0'
   }
-  // An outer-joined generation is NULL for ids it never held, and SQLite's
-  // scalar MAX() returns NULL if any argument is.
+  // Outer joins yield NULL for absent generations; SQLite scalar MAX propagates NULL.
   const guarded = refs.map((ref) => `COALESCE(${ref}, 0)`)
   return guarded.length === 1 ? (guarded[0] ?? '0') : `MAX(${guarded.join(', ')})`
 }
@@ -134,8 +113,7 @@ function buildSessionTableSelect(
   index: number
 ): string {
   const table = tables[index] ?? ''
-  // Only lower-priority generations join in: a higher-priority one holding this
-  // id would have excluded the row outright, so it has nothing to contribute.
+  // Higher-priority holders exclude this row, so only lower generations can contribute.
   const contributors: SessionContributor[] = [
     { table, alias: 't' },
     ...tables
@@ -154,9 +132,7 @@ function buildSessionTableSelect(
     .slice(1)
     .map((other) => `LEFT JOIN ${other.table} ${other.alias} ON ${other.alias}.id = t.id`)
     .join(' ')
-  // Exactly one select claims each id: the highest-priority generation holding
-  // it. Exclusive because every lower select rejects an id a higher one has,
-  // exhaustive because the highest one holding it never rejects it.
+  // Each ID belongs to its highest-priority holder; lower selects exclude higher holders.
   const exclusions = tables
     .slice(0, index)
     .map((other) => `NOT EXISTS (SELECT 1 FROM ${other} o WHERE o.id = t.id)`)
@@ -164,7 +140,6 @@ function buildSessionTableSelect(
   return `SELECT t.id, ${columns.join(', ')} FROM ${table} t${joins ? ` ${joins}` : ''}${exclusions ? ` WHERE ${exclusions}` : ''}`
 }
 
-/** A single deduplicated session relation spanning every session table generation. */
 function buildSessionSource(db: Database.Database, tables: readonly string[]): string {
   const selects = tables.map((_table, index) => buildSessionTableSelect(db, tables, index))
   return `(${selects.join(' UNION ALL ')})`
@@ -190,8 +165,7 @@ function getAssistantSessionMessageCount(db: Database.Database): number {
   return row?.count ?? 0
 }
 
-// `some`, not `every`: the merged row takes each usage column from whichever
-// generation carries it, so one table missing them costs nothing.
+// One generation’s usage columns suffice because merging fills each column independently.
 function hasSessionUsageColumns(db: Database.Database, tables: readonly string[]): boolean {
   return tables.some((table) =>
     ['cost', 'tokens_input', 'tokens_output', 'tokens_reasoning', 'tokens_cache_read'].every(
@@ -264,8 +238,7 @@ export function selectUsageRows(db: Database.Database): OpenCodeUsageRow[] {
   }
   const sessionSource = buildSessionSource(db, sessionTables)
 
-  // Why: newer OpenCode DBs maintain session-level token/cost totals. Reading
-  // one aggregate row per session is faster than parsing every message blob.
+  // Session aggregates avoid parsing every message blob.
   if (hasSessionUsageColumns(db, sessionTables) && getSessionUsageRowCount(db, sessionSource) > 0) {
     return selectSessionUsageRows(db, sessionSource)
   }

@@ -1,9 +1,4 @@
-// The roster entries a history page needs but does not carry.
-//
-// A page serves a contiguous run of the journal, and its cursor is its first item, so it
-// cannot pull an older roster row in without skipping the rows between. A subagent whose
-// rows are on the page but whose spawn is older than it would then reach the client with
-// no name. The page names it beside its items instead; items and cursor are unchanged.
+// Keep history/cursors contiguous; name off-page subagent spawns separately so visible child rows keep labels.
 
 import {
   agentJournalItemSubagentId,
@@ -11,10 +6,9 @@ import {
 } from '../../../shared/agent-session-journal-producer'
 import type { AgentJournalRenderItem } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionSubagentRosterEntry } from '../../../shared/agent-session-wire'
-import { namedSubagents } from '../../../shared/native-chat-subagent-items'
+import { namedSubagents } from '../../../shared/native-chat/transcript/native-chat-subagent-items'
 import type { NativeChatSubagentEntry } from '../../../shared/native-chat-types'
 
-/** Bounds the field well inside the page's envelope reserve. */
 const MAX_ENTRIES = 64
 const MAX_BYTES = 16 * 1024
 
@@ -25,8 +19,7 @@ function rosterEntries(item: AgentJournalRenderItem): readonly NativeChatSubagen
   return item.body.blocks.flatMap(namedSubagents)
 }
 
-/** `journal` in journal order; `page` a run of it. Undefined when the page names every
- *  subagent it holds. */
+/** Input journal is ordered; omit the roster when the page already names every visible subagent. */
 export function offPageSubagentRoster(
   journal: readonly AgentJournalRenderItem[],
   page: readonly AgentJournalRenderItem[]

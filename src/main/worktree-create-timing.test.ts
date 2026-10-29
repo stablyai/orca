@@ -57,7 +57,6 @@ describe('createWorktreeCreateTimingRecorder', () => {
       )
 
       expect(recorder.failedPhase(error)).toBe('git_worktree_add')
-      // The phase that threw is still timed.
       expect(recorder.finish().phases.map((phase) => phase.phase)).toEqual([
         'resolve_name',
         'git_worktree_add'

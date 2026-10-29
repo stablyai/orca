@@ -2,7 +2,16 @@ import { createHash } from 'node:crypto'
 import type { Dirent } from 'node:fs'
 import { lstat, open, opendir } from 'node:fs/promises'
 import { isAbsolute, join, relative, sep } from 'node:path'
-import type { SkillBundleFileIdentity } from '../../shared/skill-freshness'
+
+export type SkillBundleFileIdentity = {
+  path: string
+  size: number
+  executable: boolean
+  classification: 'text' | 'binary'
+  exactSha256: string
+  textNormalizedSha256: string | null
+  identitySha256: string
+}
 
 type ObservedSkillFile = SkillBundleFileIdentity
 
@@ -31,23 +40,12 @@ export function observedSkillPackagesMatch(
   )
 }
 
-// Why: package identity compares a live user directory against a tree the generator read
-// from a clean checkout, so anything the OS deposits on its own counts as drift the user
-// never caused. One Finder visit writes .DS_Store, and that alone would mark the copy
-// outdated.
-//
-// Only OS-authored names belong here. Tolerating unexpected files in general would let a
-// modified skill pass: the entry is safe precisely because an official SKILL.md never
-// references these, so no agent can be routed into one. Mirrored in
-// config/scripts/generate-skill-bundle-manifest.mjs so neither side of the comparison can
-// bake one in. Deliberately NOT extended to mode bits — that would weaken identity for
-// real scripts.
+// Ignore only plain OS metadata files, mirrored in the bundle generator, or Finder visits mark pristine copies outdated. Preserve mode-bit identity for real scripts.
 const OS_METADATA_FILE_NAMES = new Set(['.ds_store', 'thumbs.db', 'ehthumbs.db', 'desktop.ini'])
 
 export function isOsMetadataSkillEntryName(name: string): boolean {
   const folded = name.toLocaleLowerCase('en-US')
-  // AppleDouble sidecars ('._SKILL.md') appear whenever a skill is copied through a
-  // filesystem that cannot hold macOS metadata inline.
+  // AppleDouble sidecars appear when the filesystem cannot store macOS metadata inline.
   return OS_METADATA_FILE_NAMES.has(folded) || folded.startsWith('._')
 }
 
@@ -213,19 +211,14 @@ export async function observeSkillPackage(
     } finally {
       await directoryHandle.close().catch(() => undefined)
     }
-    // Why: runtime Electron and the build's Node may carry different ICU data;
-    // identity order must match the generator without locale-sensitive collation.
+    // Use code-unit ordering so runtime/build ICU differences cannot change identity.
     entries.sort((left, right) => compareCodeUnits(left.name, right.name))
     for (const entry of entries) {
       if (signal?.aborted) {
         throw new Error('skill-install-cancelled')
       }
       const absolutePath = join(directory, entry.name)
-      // Only a plain file is OS-authored, so the type decides and not the name alone: a
-      // directory or link wearing the name would otherwise hide a subtree from identity and
-      // slip past the link and special-file guards below. Decided before the case-fold map
-      // so two spellings of one sidecar cannot collide, and tolerant of a vanished entry so
-      // an unreadable sidecar cannot fail the whole package.
+      // Ignore metadata only when absent or a plain file; links/directories must still pass content guards. Filter before case-folding so sidecar spellings cannot collide.
       if (isOsMetadataSkillEntryName(entry.name)) {
         const sidecarStat = await lstat(absolutePath).catch(() => null)
         if (!sidecarStat || sidecarStat.isFile()) {
@@ -286,12 +279,7 @@ export async function observeSkillPackage(
   return { files, observedDigest: skillPackageDigest(files) }
 }
 
-/**
- * Whether every file the bundled entry lists is present with the same identity.
- *
- * Files the entry does not list are ignored: agent CLIs drop their own metadata beside an
- * official SKILL.md (Codex writes `agents/openai.yaml`), and that is not drift.
- */
+/** Require every bundled file identity; tolerate extra agent metadata such as agents/openai.yaml beside unchanged official bytes. */
 export function matchesBundledSkillFiles(
   observed: ObservedSkillPackage,
   expectedFiles: readonly SkillBundleFileIdentity[]

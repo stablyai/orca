@@ -54,6 +54,13 @@ describe('OMP retired-pane remote ingress', () => {
       'ssh'
     )
     expect(server.getStatusSnapshot()).toEqual([])
+    server.ingestRemote(
+      { paneKey: PANE, source: 'omp', hookEventName: 'before_agent_start', payload: working },
+      'ssh'
+    )
+    expect(server.getStatusSnapshot()).toEqual([
+      expect.objectContaining({ paneKey: PANE, state: 'working' })
+    ])
   })
 
   it('a replay cannot restore a retired OMP pane', () => {
@@ -64,5 +71,12 @@ describe('OMP retired-pane remote ingress', () => {
       'ssh'
     )
     expect(server.getStatusSnapshot()).toEqual([])
+    server.ingestRemote(
+      { paneKey: PANE, source: 'omp', hookEventName: 'before_agent_start', payload: working },
+      'ssh'
+    )
+    expect(server.getStatusSnapshot()).toEqual([
+      expect.objectContaining({ paneKey: PANE, state: 'working' })
+    ])
   })
 })

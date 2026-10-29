@@ -9,11 +9,7 @@ import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire
 import { isAiVaultAgent } from './session-list-result-validation'
 import { findResumeOwnership } from './structured-session-ownership'
 
-/**
- * A fork of a chat's conversation, for an agent whose chat makes the copy: the chat's host copies
- * it and answers the copy, which the terminal resumes and no chat owns. Null for any other prepare.
- * Runs on the host that runs the chat, as every resume preparation does.
- */
+/** On the chat’s execution host, create an unowned copy for agents whose adapters handle forks. */
 export async function copyStructuredChatConversation(
   args: AiVaultPrepareSessionResumeArgs
 ): Promise<AiVaultPrepareSessionResumeResult | null> {
@@ -22,7 +18,12 @@ export async function copyStructuredChatConversation(
   }
   const host = getStructuredAgentSessionHost()
   const ownership = findResumeOwnership(args)
-  const record = ownership ? host?.deps.store.getRecord(ownership.sessionId) : undefined
+  const record =
+    ownership &&
+    host &&
+    host.deps.store.selectWritableRecord(ownership.sessionId).kind !== 'missing'
+      ? host.deps.store.requireWritableRecord(ownership.sessionId)
+      : undefined
   const copy = host?.deps.adapter.copyConversation
   if (!host || !ownership || !record || !copy) {
     throw new Error('This chat is no longer in Orca, so it cannot be copied to a new CLI.')
@@ -36,7 +37,11 @@ export async function copyStructuredChatRecordConversation(
 ): Promise<AiVaultPrepareSessionResumeResult> {
   const host = getStructuredAgentSessionHost()
   const copy = host?.deps.adapter.copyConversation
-  if (!host || !copy || !isAiVaultAgent(record.provider)) {
+  if (!host) {
+    throw new Error('This chat cannot be copied to a new CLI.')
+  }
+  record = host.deps.store.requireWritableRecord(record.sessionId)
+  if (!copy || !isAiVaultAgent(record.provider)) {
     throw new Error('This chat cannot be copied to a new CLI.')
   }
   const forkedSession = await copy.call(host.deps.adapter, {
@@ -66,7 +71,7 @@ export async function copyStructuredChatRecordConversation(
     useRealCodexHome: false,
     forkedSession: {
       ...forkedSession,
-      // The chat's own agent, not the row's: an OpenCode 2 row's chat runs `opencode`.
+      // Use the chat provider’s CLI; an opencode2 history row may run opencode.
       agent: record.provider
     }
   }

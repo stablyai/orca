@@ -37,7 +37,7 @@ export async function resolveOrcadDeploymentTargetFacts(options: {
   }
 }
 
-/** The runtime target an assembled bundle was built for, a compat one included. */
+/** Read the assembled bundle's recorded runtime target, including compatibility builds. */
 export function readOrcadBundleTarget(localOrcadDir: string): NodeRuntimeTarget {
   const recorded = readFileSync(join(localOrcadDir, ORCAD_SERVER_TARGET_FILENAME), 'utf8').trim()
   if (!isNodeRuntimeTarget(recorded)) {

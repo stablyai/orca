@@ -6,15 +6,7 @@ import { getDiffCommentLineLabel } from '@/lib/diff-comment-compat'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
 
-// Why: the saved-note card lives inside a Monaco view zone's DOM node.
-// useDiffCommentDecorator creates a React root per zone and renders this
-// component into it so we can use normal lucide icons and JSX instead of
-// hand-built DOM + inline SVG strings.
-//
-// User-facing copy uses "Note" rather than "Comment" so it is not confused
-// with GitHub PR review comments (which some diff-view surfaces also render).
-// Internal types/ids (`DiffComment`, `diffComments`, `addDiffComment`) keep
-// the old names so we don't have to migrate the persisted WorktreeMeta shape.
+// Render note cards in per-zone React roots; keep persisted DiffComment names while UI says Note to distinguish PR review comments.
 
 type Props = {
   lineNumber: number
@@ -27,9 +19,7 @@ type Props = {
   createdAtLabel?: string
   url?: string
   onDelete?: () => void
-  // Why: Monaco view zones have a fixed `heightInPx` set at insertion time
-  // and aren't auto-measured. The parent decorator re-syncs that height when
-  // the rendered card wraps or grows so it cannot overlap following lines.
+  // Monaco zones do not auto-measure; notify the decorator when wrapping/growth needs a new heightInPx.
   onContentResize?: () => void
   observeRenderedSize?: boolean
   onSubmitEdit?: (body: string) => Promise<boolean>
@@ -68,9 +58,7 @@ export function DiffCommentCard({
   const resizeAfterCloseRef = useRef(false)
   const observesRenderedSize = observeRenderedSize === true && onContentResize !== undefined
 
-  // Why: stash `onContentResize` in a ref so resize effects do not depend on
-  // the decorator's fresh arrow each render. Re-running the edit layout effect
-  // would yank the caret to the textarea's end while the user is mid-edit.
+  // Read the latest resize callback without rerunning edit layout; fresh parent arrows would move the caret to the end mid-edit.
   const onContentResizeRef = useRef(onContentResize)
   onContentResizeRef.current = onContentResize
 
@@ -97,8 +85,7 @@ export function DiffCommentCard({
         }
       }
     }
-    // Why: narrow diff panes can wrap body/header text after Monaco's initial
-    // estimate; observe the real card height in either diff layout.
+    // Initial Monaco estimates miss narrow-pane wrapping; observe actual card height in both diff layouts.
     const observer = new ResizeObserver(() => notifyResize())
     observer.observe(card)
     return () => {
@@ -109,9 +96,7 @@ export function DiffCommentCard({
     }
   }, [observesRenderedSize])
 
-  // Why: focus + auto-grow the textarea on entering edit mode. Layout effect
-  // so the height is set before the browser paints — a measurement pass on
-  // the next animation frame would visibly jump from 0 to N px.
+  // Measure the newly edited textarea before paint so its view zone cannot jump on the next frame.
   useLayoutEffect(() => {
     if (!editing) {
       if (resizeAfterCloseRef.current) {
@@ -131,9 +116,7 @@ export function DiffCommentCard({
   }, [editing])
 
   const scheduleContentResizeAfterClose = (): void => {
-    // Why: closing edit mode removes the textarea/footer before Monaco can
-    // re-measure the view zone. Let the layout effect run after React commits
-    // the body-only card so async saves cannot measure the old edit height.
+    // Measure after the body-only commit; async saves must not retain the textarea/footer height.
     resizeAfterCloseRef.current = true
   }
 
@@ -152,7 +135,12 @@ export function DiffCommentCard({
   const canSubmit = !submitting && trimmedDraft.length > 0 && trimmedDraft !== body
   const lineLabel =
     label === undefined ? getDiffCommentLineLabel({ lineNumber, startLine }).toLowerCase() : label
-  const metaText = [author || 'Note', lineLabel, createdAtLabel || (sentAt ? 'sent' : null)]
+  const metaText = [
+    author || translate('auto.components.diff.comments.DiffCommentCard.noteAuthorFallback', 'Note'),
+    lineLabel,
+    createdAtLabel ||
+      (sentAt ? translate('auto.components.diff.comments.DiffCommentCard.sentMeta', 'sent') : null)
+  ]
     .filter(Boolean)
     .join(' ')
 
@@ -168,10 +156,7 @@ export function DiffCommentCard({
         setEditing(false)
       }
     } catch (err) {
-      // Why: surface the error in the console but keep the editor open with
-      // the draft intact so the user can retry. Without this, a rejection from
-      // `onSubmitEdit` becomes an unhandled promise rejection at the call sites
-      // (`void handleSubmit()`).
+      // Catch rejected saves and retain the draft for retry; fire-and-forget callers cannot handle this rejection.
       console.error('Failed to submit diff comment edit:', err)
     } finally {
       if (mountedRef.current) {

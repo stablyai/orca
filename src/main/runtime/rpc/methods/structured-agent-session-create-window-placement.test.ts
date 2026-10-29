@@ -1,5 +1,4 @@
-// A chat this machine's window creates is placed by the window's own open, where it reserved the
-// chat's place; main's publish of it places nothing. Any other caller's chat main places itself.
+// The local window places its reserved chat itself; main places chats for every other caller.
 import '../unused-default-rpc-methods.test-fixture'
 import { afterEach, beforeEach, expect, it } from 'vitest'
 import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
@@ -38,13 +37,17 @@ afterEach(async () => {
 })
 
 // The transport's caller stamp, which the fixture forwards with the rest of the client.
-const create = (client: typeof CLIENT & { caller?: RpcCallerIdentity }) =>
+const create = (
+  client: typeof CLIENT & { caller?: RpcCallerIdentity },
+  tabPlacement?: { groupId?: string; afterTabId?: string }
+) =>
   call(
     'agentSession.create',
     structuredAgentSessionCreateParams({
       sessionId: SESSION,
       worktree: 'id:workspace-1',
       agent: 'codex',
+      ...(tabPlacement ? { tabPlacement } : {}),
       randomUuid: () => '00000000-0000-0000-0000-0000000000fb',
       now: NOW
     }),
@@ -66,3 +69,17 @@ it.each([
     expect(published?.placedByWindow).toBe(byWindow ? true : undefined)
   }
 )
+
+it("passes a paired client's chosen place to main's placement, outside the fingerprint (L270)", async () => {
+  const phone = { ...CLIENT, caller: { kind: 'paired-device', deviceId: 'desktop-2' } } as const
+  const placement = { groupId: 'server-group-1', afterTabId: 'server-tab-1' }
+  expect(await create(phone, placement)).toMatchObject({ ok: true, result: { ok: true } })
+
+  const published = runtimeCalls.publishStructuredAgentSessionTab?.mock.calls[0]?.[0]
+  expect(published?.placement).toEqual(placement)
+  // A retry naming another place replays the same create.
+  expect(await create(phone, { groupId: 'server-group-2' })).toMatchObject({
+    ok: true,
+    result: { ok: true }
+  })
+})

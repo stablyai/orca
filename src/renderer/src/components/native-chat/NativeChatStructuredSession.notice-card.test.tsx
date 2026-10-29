@@ -55,7 +55,6 @@ function composerOnError(): NativeChatStructuredComposerTransport['onError'] {
 }
 
 it("shows the chat's own error and a composer error together, where one used to hide the other", () => {
-  // A history read that failed beside a transcript it keeps: the chat's own line.
   mocks.status = 'error'
   mocks.readRefusal = {
     code: 'agent_session_journal_unreadable',

@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PRInfo } from '../../../../shared/github/pull-request-types'
 import type { Repo } from '../../../../shared/repo-types'
 import { useHostedReviewActions, type HostedReviewActionInfo } from './use-hosted-review-actions'
+import { presentGitHubPRMergeState } from '../github-pr-merge-state'
 
 const confirmationMocks = vi.hoisted(() => ({
   confirm: vi.fn()
@@ -65,7 +66,9 @@ function HookProbe(props: {
     shortLabel: 'PR',
     reviewLabel: 'pull request',
     defaultMergeMethod: 'squash',
-    autoMergeAction: null,
+    autoMergeAction: props.pullRequest
+      ? presentGitHubPRMergeState(props.pullRequest).autoMergeAction
+      : null,
     onRefreshReview: props.onRefreshReview
   })
   return null
@@ -116,6 +119,35 @@ describe('useHostedReviewActions', () => {
       root = null
     }
     document.body.replaceChildren()
+  })
+
+  it('refreshes stale eligibility after auto-merge fails while retaining the provider error', async () => {
+    const pr: PRInfo = {
+      number: review.number,
+      title: 'PR',
+      state: 'open',
+      url: 'https://github.com/stablyai/orca/pull/1015',
+      updatedAt: '2026-10-21T16:31:00Z',
+      mergeable: 'MERGEABLE',
+      mergeStateStatus: 'BLOCKED',
+      checksStatus: 'pending',
+      autoMergeAllowed: true,
+      prRepo
+    }
+    const error =
+      'Failed to enable auto-merge for pull request: gh: Pull request is in unstable status'
+    vi.mocked(window.api.gh.setPRAutoMerge).mockResolvedValue({ ok: false, error })
+    const onRefreshReview = vi.fn().mockRejectedValue(new Error('refresh unavailable'))
+    await renderHook(makeRepo(), onRefreshReview, pr)
+
+    await act(async () => {
+      await latest?.handleAutoMerge()
+    })
+
+    expect(latest?.actionError).toBe(error)
+    expect(latest?.merging).toBe(false)
+    expect(onRefreshReview).toHaveBeenCalledOnce()
+    expect(window.api.gh.mergePR).not.toHaveBeenCalled()
   })
 
   it('routes runtime-owned GitHub PR merges through the runtime host', async () => {

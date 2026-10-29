@@ -14,13 +14,7 @@ export type ClientIpRateLimiterOptions = {
 
 type Bucket = { tokens: number; updatedAt: number }
 
-// Read x-forwarded-for from the right. Cloud Run appends the connecting peer,
-// so the last value is the only one it wrote; everything to its left is
-// whatever the caller sent and can be a fresh forgery on every request.
-// trustedProxyHops is how many appenders sit between Cloud Run and the client
-// (0 today, 1 once a load balancer fronts it). A header too short for that
-// depth is not trusted at all and falls through to the shared bucket, which
-// throttles rather than opens.
+// Read from the right: Cloud Run appends the peer, while callers can forge earlier entries. Skip trusted proxy hops (0 direct, 1 behind LB); short chains share the throttled fallback bucket.
 export function readClientIp(context: Context, trustedProxyHops = 0): string {
   const hops =
     context.req

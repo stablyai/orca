@@ -46,7 +46,9 @@ export async function submitCrashReport(
 ): Promise<CrashReportSubmitResult> {
   const report = await getRequestedCrashReport(store, args)
   if (!report) {
-    const diagnosticUpload = prepareCrashDiagnosticBundle(args.includeDiagnosticLogs !== false)
+    const diagnosticUpload = await prepareCrashDiagnosticBundle(
+      args.includeDiagnosticLogs !== false
+    )
     const diagnosticBundle = diagnosticUpload.diagnosticBundle
     const reportOnlyDiagnosticBundle = diagnosticBundleForReportOnlyRetry(diagnosticUpload)
     const result = await submitFeedback({
@@ -69,8 +71,7 @@ export async function submitCrashReport(
     return result.ok
       ? { ok: true, report: null, diagnosticBundle: submittedDiagnosticBundle }
       : {
-          // Why: the transport-only attachment failure may contain raw
-          // endpoint detail; only its sanitized bundle reason crosses IPC.
+          // Only sanitized bundle reasons may cross IPC; raw failures can include endpoint details.
           ok: false,
           status: result.status,
           error: result.error,
@@ -99,7 +100,9 @@ export async function submitCrashReport(
 
   inFlightSubmissions.add(report.id)
   try {
-    const diagnosticUpload = prepareCrashDiagnosticBundle(args.includeDiagnosticLogs !== false)
+    const diagnosticUpload = await prepareCrashDiagnosticBundle(
+      args.includeDiagnosticLogs !== false
+    )
     const diagnosticBundle = diagnosticUpload.diagnosticBundle
     const reportOnlyDiagnosticBundle = diagnosticBundleForReportOnlyRetry(diagnosticUpload)
     const result = await submitFeedback({
@@ -122,8 +125,7 @@ export async function submitCrashReport(
     const submittedDiagnosticBundle = resolveSubmittedDiagnosticBundle(diagnosticUpload, result)
     if (!result.ok) {
       return {
-        // Why: keep the renderer contract allow-listed instead of leaking
-        // the transport's internal diagnosticBundleFailure object.
+        // Preserve the allow-listed renderer contract without internal transport diagnostics.
         ok: false,
         status: result.status,
         error: result.error,
@@ -134,8 +136,7 @@ export async function submitCrashReport(
     rememberSubmittedReportId(report.id)
     if (report.status === 'dismissed') {
       try {
-        // Why: startup prompts are dismissed before the user can send from
-        // the still-open dialog, so successful uploads must update storage.
+        // Startup prompts dismiss before sending; successful uploads must update dismissed storage.
         const sent = await store.markDismissedSent(report.id)
         return {
           ok: true,
@@ -159,9 +160,7 @@ export async function submitCrashReport(
         diagnosticBundle: submittedDiagnosticBundle
       }
     } catch (error) {
-      // Why: the upstream submission already succeeded. A local persistence
-      // failure must not present as upload failure or invite duplicate sends
-      // during this app session.
+      // Upload already succeeded; local persistence failure must not invite duplicate sends.
       console.error('[crash-reporting] Failed to mark crash report sent:', error)
       return {
         ok: true,

@@ -56,8 +56,7 @@ export async function advanceToNextSshClient(delayMs: number): Promise<void> {
   await vi.advanceTimersByTimeAsync(1)
 }
 
-// Why: security-key transport selection scans the real ~/.ssh defaults, so a developer's own
-// FIDO2 key would otherwise decide which transport these tests take.
+// Keep developer FIDO2 keys from deciding transport selection.
 export function createSystemSshBinaryModule(): SystemSshBinaryModuleMock {
   return { findSystemSsh: findSystemSshMock }
 }
@@ -96,7 +95,7 @@ export function createControlSocketModule(): ControlSocketModuleMock {
   return { removeControlSocketPath: removeControlSocketPathMock }
 }
 
-// Why: an unreadable config keeps the developer's own ~/.ssh/config out of alias-claim verdicts.
+// Unreadable config isolates alias claims from the developer's ~/.ssh/config.
 export function createSshConfigParserModule(): Record<string, never> {
   return {}
 }

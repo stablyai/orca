@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, expect, it } from 'vitest'
 import { resolveCli } from './runtime-serve-terminal-smoke.mjs'
-import { packagedNodeRuntimePath } from './build-orcad-node.mjs'
+import { NODE_RUNTIME_ASSETS } from '../../src/shared/node-runtime-pin.ts'
 import { currentTarget } from './server-build-target.mjs'
 import { ORCAD_CLI_ENTRY_FILENAME } from '../../src/shared/orcad-artifacts.ts'
 
@@ -30,7 +30,13 @@ it('drives Orcad with its packaged CLI and pinned Node even when a desktop CLI e
   mkdirSync(dirname(bundled), { recursive: true })
   writeFileSync(bundled, '')
   expect(resolveCli('orcad', root)).toEqual({
-    command: packagedNodeRuntimePath(directory, currentTarget()),
+    command: join(
+      root,
+      'out',
+      'runtimes',
+      `node-${NODE_RUNTIME_ASSETS[currentTarget()].executableSha256}`,
+      ...(process.platform === 'win32' ? ['node.exe'] : ['bin', 'node'])
+    ),
     prefix: [bundled]
   })
 })

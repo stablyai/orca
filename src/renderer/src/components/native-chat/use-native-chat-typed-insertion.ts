@@ -6,8 +6,7 @@ import {
 import { useCallback, type Dispatch, type RefObject, type SetStateAction } from 'react'
 import { appendReturnedDraftText } from '../../../../shared/returned-draft-text'
 
-/** Imperative text insertion and focus for the composer textarea, used by the
- *  paste pipeline and the composer's imperative handle. */
+/** Insert/focus through the composer input for paste and imperative callers. */
 export function useNativeChatTypedInsertion(args: {
   textareaRef: RefObject<NativeChatComposerInput | null>
   isComposing: () => boolean
@@ -73,7 +72,6 @@ export function useNativeChatTypedInsertion(args: {
     [showDraft, usableInput]
   )
 
-  // Reads the live input when a delayed clipboard read settles.
   const insertPastedText = useCallback(
     (text: string): boolean => insertNativeChatPastedText(textareaRef.current, text),
     [textareaRef]

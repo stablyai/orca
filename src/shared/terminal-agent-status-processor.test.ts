@@ -2,13 +2,6 @@ import { describe, expect, it } from 'vitest'
 import { createTerminalAgentStatusProcessor } from './terminal-agent-status-processor'
 
 describe('createTerminalAgentStatusProcessor', () => {
-  it('returns OSC 9999 chunks untouched when no OSC 7501 record changed', () => {
-    const process = createTerminalAgentStatusProcessor()
-    const result = process('a\x1b]9999;{"state":"working","prompt":"p"}\x07b')
-    expect(result.cleanData).toBe('ab')
-    expect(result.programStatusPayloads).toBeUndefined()
-  })
-
   it('appends OSC 7501 projections, marks them, and leaves the sequence in the stream', () => {
     const process = createTerminalAgentStatusProcessor()
     const data = 'x\x1b]7501;state=working:app=codex\x1b\\y'

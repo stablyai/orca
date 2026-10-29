@@ -28,7 +28,7 @@ function servedHost(initial: WorkspaceSessionState = getDefaultWorkspaceSession(
     }
   )
   const tabs = new ServeBrowserTabs({
-    backend: () => ({ createTab: vi.fn(), closeTab: vi.fn() }),
+    backend: () => ({ createTab: vi.fn(), closeTab: vi.fn(), ownsTab: () => true }),
     livePageIds: () => new Set(),
     savedWorktreeIds: () => [WT],
     session: () => session,

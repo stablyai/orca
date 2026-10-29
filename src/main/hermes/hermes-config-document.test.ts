@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { parse } from 'yaml'
-import { disablePlugin, enablePlugin, updateConfigContent } from './hermes-config-yaml'
+import {
+  disablePlugin,
+  enablePlugin,
+  installOrcaStatusConfig,
+  updateConfigContent
+} from './hermes-config-yaml'
 
 const fixture = [
   '# Operator documentation',
@@ -98,6 +103,19 @@ describe('Hermes YAML document edits', () => {
     const output = updateConfigContent(input, enablePlugin)
     expect(output.content).toBeNull()
     expect(output.detail).toBeTruthy()
+  })
+
+  it('adds the passthrough beside an anchored terminal setting', () => {
+    const input =
+      'terminal:\n  docker_env: &env {A: "1"}\n  backend: local\nshared_env: *env\nplugins:\n  enabled: [other]\n'
+    const output = updateConfigContent(input, installOrcaStatusConfig).content ?? ''
+    expect(parse(output)).toMatchObject({
+      terminal: { docker_env: { A: '1' }, backend: 'local' },
+      shared_env: { A: '1' }
+    })
+    expect(parse(output).terminal.client_env_passthrough).toContain('ORCA_AGENT_PANE')
+    expect(output).toContain('docker_env: &env {A: "1"}')
+    expect(output).toContain('shared_env: *env')
   })
 
   it('keeps folded scalars, quoted strings and long lines in a real update', () => {

@@ -150,8 +150,7 @@ describe('CodexStructuredSessionAdapter prompts', () => {
     const codex = fakeCodex()
     const events: CodexStructuredSessionEvent[] = []
     const adapter = await acquired(codex, {}, events)
-    // A shell bridge re-asks per command under one parent tool item, so only the
-    // approval id tells the two requests apart.
+    // Shell-bridge commands share a tool item; approval IDs distinguish their requests.
     const ask = (id: number, approvalId: string): void => {
       codex.connections[0].handlers.onServerRequest?.({
         id,
@@ -205,7 +204,6 @@ describe('CodexStructuredSessionAdapter prompts', () => {
         commit
       })
     ).rejects.toThrow(AgentSessionPromptAnswerRejectedError)
-    // Refused before the journal records an answer the agent never receives.
     expect(commit).not.toHaveBeenCalled()
     expect(codex.connections[0].replies).toEqual([])
   })
@@ -250,6 +248,62 @@ describe('CodexStructuredSessionAdapter prompts', () => {
       { id: 12, result: { answers: { q1: { answers: ['yes'] }, q2: { answers: ['no'] } } } }
     ])
   })
+
+  it.each(['accept', 'acceptForSession', 'cancel'])(
+    'durably journals and answers MCP approval %s once',
+    async (optionId) => {
+      const codex = fakeCodex()
+      const events: CodexStructuredSessionEvent[] = []
+      const adapter = await acquired(codex, {}, events)
+      codex.connections[0].handlers.onServerRequest?.({
+        id: 13,
+        method: 'mcpServer/elicitation/request',
+        params: {
+          threadId: THREAD_ID,
+          turnId: 'turn-1',
+          serverName: 'local',
+          mode: 'form',
+          message: 'Allow local tool?',
+          requestedSchema: { type: 'object', properties: {} },
+          _meta: { codex_approval_kind: 'mcp_tool_call', persist: ['session'] }
+        }
+      })
+      expect(codex.connections[0].replies).toEqual([])
+      const event = events.find((event) => event.type === 'prompt')
+      if (!event || event.type !== 'prompt') {
+        throw new Error('MCP approval missing from journal')
+      }
+      adapter.bindPromptItemId('session-1', 'journal-mcp', event.codexItemId)
+      const commit = vi.fn(async () => undefined)
+      const answer = {
+        sessionId: 'session-1',
+        itemId: 'journal-mcp',
+        kind: 'approval' as const,
+        response: { kind: 'option' as const, optionId },
+        fence: 7,
+        commit
+      }
+      await adapter.answerPrompt(answer)
+      expect(commit).toHaveBeenCalledOnce()
+      expect(codex.connections[0].replies).toEqual([
+        {
+          id: 13,
+          result: {
+            action: optionId === 'cancel' ? 'cancel' : 'accept',
+            content: null,
+            _meta: {
+              accept: null,
+              acceptForSession: { persist: 'session' },
+              cancel: { codex_approval_cancellation_reason: 'user' }
+            }[optionId]
+          }
+        }
+      ])
+      await expect(adapter.answerPrompt(answer)).rejects.toThrow('no longer waiting on')
+      expect(commit).toHaveBeenCalledOnce()
+      expect(codex.connections[0].replies).toHaveLength(1)
+    }
+  )
 
   it('declines MCP elicitation and journals the explicit disposition', async () => {
     const codex = fakeCodex()

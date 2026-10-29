@@ -38,7 +38,10 @@ export function buildUpdateCardErrorModel({
     return installError
       ? {
           title: translate('auto.components.UpdateCard.4cf109845a', 'Update Error'),
-          summary: 'Could not restart to install the update.',
+          summary: translate(
+            'auto.components.UpdateCard.restartToInstallFailed',
+            'Could not restart to install the update.'
+          ),
           detail: installError,
           releaseUrl: getReleaseNotesUrlForVersion(cachedVersion),
           primaryAction: {
@@ -104,7 +107,10 @@ export function buildUpdateCardErrorModel({
     return {
       variant: 'http1Compatibility',
       title: translate('auto.components.UpdateCard.1339b82cee', 'HTTP/2 Download Blocked'),
-      summary: 'Orca can retry through HTTP/1.1 compatibility mode.',
+      summary: translate(
+        'auto.components.UpdateCard.http1RetryAvailable',
+        'Orca can retry through HTTP/1.1 compatibility mode.'
+      ),
       explainer: translate(
         'auto.components.UpdateCard.90559b14e3',
         'This turns on a process-wide Electron networking switch after restart. Use it for corporate VPNs or proxies that reject HTTP/2 update downloads.'
@@ -113,7 +119,7 @@ export function buildUpdateCardErrorModel({
       releaseUrl: getReleaseNotesUrlForVersion(cachedVersion),
       primaryAction: {
         label: translate('auto.components.UpdateCard.933c6fdf5b', 'Enable & Restart'),
-        pendingLabel: 'Restarting...',
+        pendingLabel: translate('auto.components.UpdateCard.restarting', 'Restarting...'),
         isPending: compatibilityRelaunching,
         onClick: onEnableHttp1Compatibility
       }
@@ -148,13 +154,18 @@ export function buildUpdateCardErrorModel({
     }
   }
   return {
-    title: cachedVersion ? 'Update Error' : 'Update Check Failed',
+    title: cachedVersion
+      ? translate('auto.components.UpdateCard.4cf109845a', 'Update Error')
+      : translate('auto.components.UpdateCard.updateCheckFailed', 'Update Check Failed'),
     summary:
       cachedVersion && status.retryable === false
         ? status.message
         : cachedVersion
-          ? 'Could not complete the update.'
-          : 'Could not check for updates.',
+          ? translate(
+              'auto.components.UpdateCard.updateIncomplete',
+              'Could not complete the update.'
+            )
+          : translate('auto.components.UpdateCard.checkFailed', 'Could not check for updates.'),
     detail: status.message,
     releaseUrl: getReleaseNotesUrlForVersion(cachedVersion),
     primaryAction:

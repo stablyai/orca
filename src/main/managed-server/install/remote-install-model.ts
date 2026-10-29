@@ -1,20 +1,4 @@
-/**
- * The things Orca installs into `~/.orca-remote/`, and the rules that keep them from
- * touching each other.
- *
- * Design D10 (to be tracked in docs/reference/remote-server-install-model.md): the relay and
- * orcad converge into one server package; on the host that is `server-<version>/` plus the
- * shared `runtimes/node-<sha256>/` store. Legacy `relay-*` / `orcad-*` directories belong to a
- * migration sweep that deletes only on an `exited` verdict, handed over in two releases: this
- * one lists them as diagnostics only. Until then each is its own namespace, so the prefix has
- * to be a parameter rather than a literal.
- *
- * GC ownership is the trap that parameterization creates. Each model garbage-collects ONLY
- * its own directories — see `remoteInstallDirOwner`. Relay's regex happened to be narrow
- * enough already; making the prefix a parameter is exactly what could have widened it into
- * deleting a live orcad tree, so the ownership rule is asserted here rather than left to
- * whichever regex a caller passes.
- */
+// Each install model owns its namespace; GC must never delete another model's live directories.
 import {
   relayArtifactFilenames,
   RELAY_INSTALL_COMPLETE_FILENAME,
@@ -57,8 +41,7 @@ export const ORCAD_INSTALL_MODEL: RemoteInstallModel = {
   nativeDepsPackageName: 'orca-orcad',
   versionFilename: ORCAD_VERSION_FILENAME,
   installCompleteFilename: ORCAD_INSTALL_COMPLETE_FILENAME,
-  // libc changes no file name, so `<os>-<arch>` names every slot file. The page's hashed assets
-  // are named only by its manifest, required here; the sentinel follows the whole-tree upload.
+  // libc does not change slot filenames; require the manifest for hashed page assets.
   requiredArtifacts: (host) => orcadArtifactFilenames(`${host.os}-${host.arch}`, [])
 }
 
@@ -67,23 +50,13 @@ export const REMOTE_INSTALL_MODELS: readonly RemoteInstallModel[] = [
   ORCAD_INSTALL_MODEL
 ]
 
-/**
- * The version half of a directory name, shared by both models.
- *
- * Why `[0-9]` and not `\d`: this exact source string is also embedded in an awk ERE and a
- * PowerShell `-match` on the remote host. Those three dialects agree on `[0-9]`, `\.` and
- * `\+`; only JavaScript understands `\d`.
- */
+// This pattern also runs in awk ERE and PowerShell; use their shared [0-9] syntax.
 const VERSION_PATTERN = String.raw`v?[0-9]+\.[0-9]+\.[0-9]+(\+[0-9a-f]+)?`
 
-/** Suffix GC leaves behind mid-delete; the listing must surface these so they can be swept. */
+// Surface interrupted-GC tombstones in listings so later passes can finish deletion.
 const TOMBSTONE_PATTERN = String.raw`\.gc-tombstone\.[0-9]+\.[0-9]+`
 
-/**
- * Why validated and not merely typed: the prefix is interpolated into a remote `find -name`
- * glob, an awk regex and a single-quoted PowerShell literal. A quote or a metacharacter
- * here would be a remote-shell injection on the client's own connection.
- */
+// Prefixes enter host globs, regexes and shell literals; reject metacharacters before interpolation.
 function assertSafeDirPrefix(dirPrefix: string): void {
   if (!/^[a-z][a-z0-9-]*$/.test(dirPrefix)) {
     throw new Error(`Unsafe remote install dir prefix: ${JSON.stringify(dirPrefix)}`)
@@ -95,33 +68,21 @@ export function remoteInstallDirName(model: RemoteInstallModel, fullVersion: str
   return `${model.dirPrefix}-${fullVersion}`
 }
 
-/** Matches a live version dir for exactly one model — never a tombstone, never a sibling model. */
 export function remoteInstallVersionDirRegex(model: RemoteInstallModel): RegExp {
   assertSafeDirPrefix(model.dirPrefix)
   return new RegExp(`^${model.dirPrefix}-(${VERSION_PATTERN})$`)
 }
 
-/** A strictly named leftover of one model's interrupted GC rename; safe to delete on sight. */
 export function remoteInstallGcTombstoneRegex(model: RemoteInstallModel): RegExp {
   assertSafeDirPrefix(model.dirPrefix)
   return new RegExp(`^${model.dirPrefix}-(${VERSION_PATTERN})${TOMBSTONE_PATTERN}$`)
 }
 
-/** What the remote listing is allowed to return: live dirs plus their tombstones. */
 export function remoteInstallListingRegexSource(model: RemoteInstallModel): string {
   assertSafeDirPrefix(model.dirPrefix)
   return `^${model.dirPrefix}-(${VERSION_PATTERN})(${TOMBSTONE_PATTERN})?$`
 }
 
-/**
- * Which owner a directory found in `~/.orca-remote/` belongs to, or null for anything no
- * owner created.
- *
- * Design D10: **the model that created a directory owns it, and nothing else may delete it**
- * (amended only in the release after the two-step hand-over). A relay GC pass that saw
- * `orcad-0.1.0+abc` would be looking at the live install of a peer whose lifecycle it has no
- * view into — the SSH-execution-boundary collapse in directory form.
- */
 export function remoteInstallDirOwner(dirName: string): RemoteInstallDirOwner | null {
   if (dirName === ORCAD_RUNTIMES_DIRNAME) {
     return 'runtimes'
@@ -134,20 +95,15 @@ export function remoteInstallDirOwner(dirName: string): RemoteInstallDirOwner | 
   return null
 }
 
-/** True when `model` is allowed to garbage-collect `dirName`. */
 export function remoteInstallGcPermits(model: RemoteInstallModel, dirName: string): boolean {
   return remoteInstallDirOwner(dirName) === model.id
 }
 
-/**
- * `runtimes` is the shared Node store (design D5). No version-dir model owns it, so neither
- * model's GC can list or delete it; only `remote-node-runtime-store-gc.ts` collects inside it.
- */
+// Only runtime-store GC may collect shared runtimes; version-directory models cannot own them.
 type RemoteInstallDirOwner = RemoteInstallModelId | 'runtimes'
 
 type RemoteInstallInventory = Record<RemoteInstallDirOwner | 'unknown', string[]>
 
-/** Group a raw `~/.orca-remote/` listing by owning model, for diagnostics and the client's choice. */
 export function inventoryRemoteInstallDirs(dirNames: readonly string[]): RemoteInstallInventory {
   const inventory: RemoteInstallInventory = { relay: [], orcad: [], runtimes: [], unknown: [] }
   for (const name of dirNames) {

@@ -11,14 +11,13 @@ import {
 } from './mobile-endpoint-supervisor-test-fakes'
 import { MobileEndpointSupervisor } from './mobile-endpoint-supervisor'
 import { MobileRelaySessionEstablisher } from './mobile-relay-session-establisher'
-import type { RelayReconnectController } from './mobile-relay-reconnect-controller'
+import { RelayReconnectController } from './mobile-relay-reconnect-controller'
+import { createStableLogicalRpcClient } from './stable-logical-rpc-client'
 
 vi.mock('react-native', () => ({ Platform: { OS: 'ios' } }))
 vi.mock('expo-secure-store', () => ({ WHEN_UNLOCKED_THIS_DEVICE_ONLY: 'when-unlocked' }))
 vi.mock('expo-crypto', () => ({ getRandomBytes: (length: number) => new Uint8Array(length) }))
 
-// Focus/network nudge routing, make-before-break replacement, and the
-// happy-eyeballs race — split from the main supervisor suite (max-lines).
 describe('mobile endpoint supervisor nudges', () => {
   beforeEach(() => {
     vi.useFakeTimers()
@@ -30,8 +29,11 @@ describe('mobile endpoint supervisor nudges', () => {
   })
 
   it('replaces a relay make-before-break on a network nudge without going grey', async () => {
-    const logical = new FakeLogicalClient('disconnected', 'lan')
+    const logical = createStableLogicalRpcClient(new FakeSession('disconnected'), 'lan')
+    const activeRelay = new FakeRelaySession('connected')
+    const replacement = new FakeRelaySession('connecting')
     const deps = dependencies({
+      openRelay: vi.fn().mockReturnValueOnce(activeRelay).mockReturnValue(replacement),
       openDirect: vi.fn(() => new FakeSession('disconnected'))
     })
     const supervisor = new MobileEndpointSupervisor(logical, host.id, relay, deps)
@@ -40,14 +42,29 @@ describe('mobile endpoint supervisor nudges', () => {
     expect(deps.openRelay).toHaveBeenCalledOnce()
     expect(logical.getActivePath()).toBe('relay')
 
-    // The OS reports a network handoff, but the relay never published onclose.
-    // The replacement authenticates, migrateTo swaps sessions — never disconnected.
+    const states: string[] = []
+    const unsubscribe = logical.onStateChange((state) => states.push(state))
     supervisor.nudge('network-change')
     await vi.advanceTimersByTimeAsync(0)
     expect(deps.openRelay).toHaveBeenCalledTimes(2)
-    expect(logical.suspendActiveSession).not.toHaveBeenCalled()
     expect(logical.getState()).toBe('connected')
+    expect(logical.getGeneration()).toBe(2)
+    expect(activeRelay.close).not.toHaveBeenCalled()
+    expect(replacement.close).not.toHaveBeenCalled()
+    replacement.publishState('connected')
+    await vi.advanceTimersByTimeAsync(0)
+    expect(logical.getGeneration()).toBe(3)
+    expect(activeRelay.close).toHaveBeenCalledOnce()
+    expect(replacement.close).not.toHaveBeenCalled()
+    expect(states).not.toContain('disconnected')
+    await logical.sendRequest('status.get')
+    expect(replacement.sendRequest).toHaveBeenCalledWith('status.get', undefined, undefined)
+    expect(activeRelay.sendRequest).not.toHaveBeenCalled()
+    expect(logical.getState()).toBe('connected')
+    unsubscribe()
     supervisor.stop()
+    expect(vi.getTimerCount()).toBe(0)
+    logical.close()
   })
 
   it('suspends only after a failed replacement dial, then backs off further nudges', async () => {
@@ -68,21 +85,18 @@ describe('mobile endpoint supervisor nudges', () => {
     await supervisor.start()
     expect(openRelay).toHaveBeenCalledOnce()
 
-    // PEER_DROPPED on the replacement: the suspect session comes down so the
-    // armed retry can run, and the failure books the shared cooldown.
+    // A failed replacement must retire the suspect session and book shared cooldown so the armed retry can recover.
     supervisor.nudge('network-change')
     await vi.advanceTimersByTimeAsync(0)
     expect(logical.suspendActiveSession).toHaveBeenCalledOnce()
     expect(openRelay).toHaveBeenCalledTimes(2)
 
-    // More flap nudges share the existing cooldown rather than opening sockets.
     for (let i = 0; i < 5; i++) {
       supervisor.nudge('network-change')
       await vi.advanceTimersByTimeAsync(0)
     }
     expect(openRelay).toHaveBeenCalledTimes(2)
 
-    // Exactly one retry fires at the 250 ms deterministic backoff boundary.
     await vi.advanceTimersByTimeAsync(249)
     expect(openRelay).toHaveBeenCalledTimes(2)
     await vi.advanceTimersByTimeAsync(1)
@@ -107,7 +121,6 @@ describe('mobile endpoint supervisor nudges', () => {
     await vi.advanceTimersByTimeAsync(0)
     expect(openRelay).toHaveBeenCalledOnce()
 
-    // Manual retry uses the same app-resume nudge as a background/foreground cycle.
     supervisor.nudge('app-resume')
     await vi.advanceTimersByTimeAsync(0)
 
@@ -129,7 +142,6 @@ describe('mobile endpoint supervisor nudges', () => {
     expect(logical.suspendActiveSession).not.toHaveBeenCalled()
     expect(deps.openRelay).not.toHaveBeenCalled()
 
-    // Repeated focus events never create a second supervisor-owned liveness policy.
     supervisor.nudge('focus')
     await vi.advanceTimersByTimeAsync(0)
     expect(logical.sendRequest).not.toHaveBeenCalled()
@@ -138,7 +150,7 @@ describe('mobile endpoint supervisor nudges', () => {
 
   it('queues a network replacement that lands while another dial owns the mutex', async () => {
     const logical = new FakeLogicalClient('disconnected', 'lan')
-    let resolveWrite: (() => void) | null = null
+    let resolveWrite: (() => void) | undefined
     const deps = dependencies({
       openDirect: vi.fn(() => new FakeSession('disconnected')),
       writeBundle: vi
@@ -155,9 +167,7 @@ describe('mobile endpoint supervisor nudges', () => {
     await supervisor.start()
     expect(deps.openRelay).toHaveBeenCalledOnce()
 
-    // First handoff nudge dials a replacement whose bookkeeping write is slow,
-    // holding the recovery mutex; the second nudge arriving then must neither
-    // suspend the session nor be dropped.
+    // Queue a second handoff while slow persistence holds the recovery mutex.
     supervisor.nudge('network-change')
     await vi.advanceTimersByTimeAsync(0)
     expect(deps.openRelay).toHaveBeenCalledTimes(2)
@@ -166,7 +176,6 @@ describe('mobile endpoint supervisor nudges', () => {
 
     resolveWrite?.()
     await vi.advanceTimersByTimeAsync(0)
-    // The in-flight replacement satisfies the queued intent — no third socket.
     expect(deps.openRelay).toHaveBeenCalledTimes(2)
     expect(logical.getState()).toBe('connected')
     supervisor.stop()
@@ -195,14 +204,15 @@ describe('mobile endpoint supervisor nudges', () => {
   })
 
   it('withdraws the racing relay dial when direct authenticated while it was in flight', async () => {
-    // Direct won between the grace timer firing and the relay session
-    // authenticating; the migration must withdraw instead of closing the winner.
-    const logical = new FakeLogicalClient('connected', 'lan')
-    const relaySession = new FakeRelaySession('connected')
-    const setActiveSession = vi.fn()
+    // Withdraw if direct wins before relay authentication; never close the winning session.
+    const directSession = new FakeSession('connecting')
+    const logical = createStableLogicalRpcClient(directSession, 'lan')
+    const relaySession = new FakeRelaySession('connecting')
+    const controller = new RelayReconnectController(dependencies(), vi.fn())
+    const setActiveSession = vi.spyOn(controller, 'setActiveSession')
     const establisher = new MobileRelaySessionEstablisher({
       logical,
-      controller: { setActiveSession } as unknown as RelayReconnectController,
+      controller,
       openRelay: vi.fn(() => relaySession),
       randomBytes: (length) => new Uint8Array(length),
       writeBundle: vi.fn(async () => {}),
@@ -222,28 +232,32 @@ describe('mobile endpoint supervisor nudges', () => {
       onDialFailure: vi.fn()
     })
 
-    const outcome = await establisher.dialEligible([bundle.current])
+    const dialing = establisher.dialEligible([bundle.current])
+    expect(logical.getState()).toBe('connecting')
+    expect(relaySession.close).not.toHaveBeenCalled()
+    directSession.publishState('connected')
+    relaySession.publishState('connected')
+    const outcome = await dialing
     expect(outcome).toEqual({ outcome: 'aborted' })
     expect(setActiveSession).not.toHaveBeenCalled()
     expect(relaySession.close).toHaveBeenCalled()
     expect(logical.getActivePath()).toBe('lan')
+    expect(logical.getGeneration()).toBe(1)
+    expect(directSession.close).not.toHaveBeenCalled()
+    expect(vi.getTimerCount()).toBe(0)
+    logical.close()
   })
 
   it('withdraws a relay replacement that authenticates after backgrounding', async () => {
-    const logical = new FakeLogicalClient('connected', 'relay')
-    const relaySession = new FakeRelaySession('connected')
-    const setActiveSession = vi.fn()
+    const activeRelay = new FakeSession('connected')
+    const logical = createStableLogicalRpcClient(activeRelay, 'relay')
+    const relaySession = new FakeRelaySession('connecting')
+    const controller = new RelayReconnectController(dependencies(), vi.fn())
+    const setActiveSession = vi.spyOn(controller, 'setActiveSession')
     let active = true
-    logical.migrateTo.mockImplementation(async (_session, _path, _timeout, shouldAbort) => {
-      active = false
-      if (shouldAbort?.()) {
-        relaySession.close()
-        throw new Error('migration superseded')
-      }
-    })
     const establisher = new MobileRelaySessionEstablisher({
       logical,
-      controller: { setActiveSession } as unknown as RelayReconnectController,
+      controller,
       openRelay: vi.fn(() => relaySession),
       randomBytes: (length) => new Uint8Array(length),
       writeBundle: vi.fn(async () => {}),
@@ -263,11 +277,19 @@ describe('mobile endpoint supervisor nudges', () => {
       onDialFailure: vi.fn()
     })
 
-    const outcome = await establisher.dialEligible([bundle.current])
+    const dialing = establisher.dialEligible([bundle.current])
+    expect(relaySession.close).not.toHaveBeenCalled()
+    active = false
+    relaySession.publishState('connected')
+    const outcome = await dialing
 
     expect(outcome).toEqual({ outcome: 'aborted' })
     expect(setActiveSession).not.toHaveBeenCalled()
     expect(relaySession.close).toHaveBeenCalledOnce()
     expect(logical.getActivePath()).toBe('relay')
+    expect(logical.getGeneration()).toBe(1)
+    expect(activeRelay.close).not.toHaveBeenCalled()
+    expect(vi.getTimerCount()).toBe(0)
+    logical.close()
   })
 })

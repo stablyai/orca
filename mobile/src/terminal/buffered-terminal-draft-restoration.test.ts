@@ -51,7 +51,7 @@ describe('buffered terminal draft restoration', () => {
     const rejectedDraft = 'rejected command'
     const pendingRestorations = new Map()
     const token = beginBufferedTerminalDraftRestoration(pendingRestorations, terminal)
-    let drafts = { [terminal]: rejectedDraft }
+    let drafts: Record<string, string> = { [terminal]: rejectedDraft }
     drafts = updateBufferedTerminalDraft(drafts, terminal, '')
     invalidateBufferedTerminalDraftRestoration(pendingRestorations, terminal)
     drafts = updateBufferedTerminalDraft(drafts, terminal, 'new command')
@@ -71,7 +71,10 @@ describe('buffered terminal draft restoration', () => {
     const sendOrigin = activeHandle
     const pendingRestorations = new Map()
     const token = beginBufferedTerminalDraftRestoration(pendingRestorations, sendOrigin)
-    let drafts = { [terminalA]: rejectedDraft, [terminalB]: 'new command for B' }
+    let drafts: Record<string, string> = {
+      [terminalA]: rejectedDraft,
+      [terminalB]: 'new command for B'
+    }
     drafts = updateBufferedTerminalDraft(drafts, sendOrigin, '')
     activeHandle = terminalB
 

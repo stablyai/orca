@@ -1,4 +1,4 @@
-import type { TaskPageLinearBoardModel } from './use-task-page-linear-board'
+import type { TaskPageLinearBoardModel } from './task-page/linear/use-task-page-linear-board'
 import { useMemo, useCallback } from 'react'
 import { findTaskPageJiraIssue } from '@/components/task-page-jira-cache-selectors'
 import {

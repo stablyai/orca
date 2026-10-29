@@ -1,19 +1,40 @@
+import {
+  localhostLabelRouteForHttpLink,
+  openLabeledLocalhostLink,
+  type LocalhostLinkRepo,
+  type LocalhostLinkProject,
+  type LocalhostLinkWorktree
+} from './http-link-localhost-route'
+import type { WorkspacePortScanResult } from '../../../shared/workspace-ports'
+
+import type { BrowserLinkOpenContext } from './browser-link-destination'
+import type { LinkOpenIntent, LinkSourceState } from './link-open-intent'
+import { captureLinkOpenIntent, canOpenLinkInSourceGroup } from './link-open-intent'
+import type { AppState } from '@/store/types'
 import { translate } from '@/i18n/i18n'
 import { isFloatingWorkspaceId } from '../../../shared/floating-workspace-worktree'
-import {
-  parseLoopbackUrlWithPort,
-  type LocalhostWorktreeLabelRoute
-} from '../../../shared/localhost-worktree-labels'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
-import type { WorkspacePort, WorkspacePortScanResult } from '../../../shared/workspace-ports'
 import { toast } from 'sonner'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import { reselectWorkspaceKeepingHost } from './active-workspace-host'
+import {
+  captureBrowserLinkReveal,
+  type BrowserLinkSelectionSubscriber
+} from './browser-link-reveal'
+import {
+  isHttpLinkBackgroundOpen,
+  openLocalHttpLinkTab,
+  prepareRemoteHttpLinkTab,
+  type HttpLinkBrowserRequestFields,
+  type HttpLinkBrowserTabState
+} from './http-link-browser-placement'
 
 export type OpenHttpLinkOptions = {
   worktreeId?: string | null
-  /** Terminal-only opt-in for routing a remote-owned source through its managed browser. */
+  /** Opt-in for routing a remote-owned source through its managed browser. */
   allowRemoteInApp?: boolean
+  /** Preserve a source surface's existing desktop-browser provider for remote documents. */
+  allowClientBrowserFallback?: boolean
   /** Unconditional: always use the system browser regardless of settings. */
   forceSystemBrowser?: boolean
   /** Unconditional for local sources: open inside Orca regardless of settings. */
@@ -21,6 +42,7 @@ export type OpenHttpLinkOptions = {
   /** The Shift escape-hatch modifier was held; resolveModifierRouting decides what it means. */
   modifierHeld?: boolean
   sourceOwner?: HttpLinkSourceOwner
+  linkContext?: BrowserLinkOpenContext
 }
 
 export type HttpLinkSourceOwner =
@@ -29,10 +51,14 @@ export type HttpLinkSourceOwner =
   | { kind: 'ssh'; connectionId: string }
   | { kind: 'unknown' }
 
-type StoreAccessor = () => {
+export type HttpLinkStoreState = HttpLinkBrowserTabState & {
+  unifiedTabsByWorktree?: LinkSourceState['unifiedTabsByWorktree']
+  groupsByWorktree?: AppState['groupsByWorktree']
+  layoutByWorktree?: AppState['layoutByWorktree']
   settings?: Partial<
     Pick<
       GlobalSettings,
+      | 'openLinksInAppInBackground'
       | 'openLinksInApp'
       | 'openLinksInAppModifierInverts'
       | 'activeRuntimeEnvironmentId'
@@ -42,7 +68,6 @@ type StoreAccessor = () => {
   setActiveWorktree: (worktreeId: string, executionHostId?: ExecutionHostId) => void
   activeWorktreeId?: string | null
   activeWorkspaceExecutionHostId?: ExecutionHostId | null
-  createBrowserTab: (worktreeId: string, url: string, opts: { activate: boolean }) => unknown
   repos?: readonly LocalhostLinkRepo[]
   projects?: readonly LocalhostLinkProject[]
   worktreesByRepo?: Record<string, LocalhostLinkWorktree[]>
@@ -51,38 +76,47 @@ type StoreAccessor = () => {
   workspacePortScansByKey?: Record<string, WorkspacePortScanResult>
 }
 
-type WorkspaceHttpLinkBrowserRequest = {
+export type HttpLinkGroupActionRequest = {
+  workspaceId: string
+  sourceTabId?: string | null
+  url?: string
+  sourceOwner?: HttpLinkSourceOwner
+}
+let groupActionAvailability: ((request: HttpLinkGroupActionRequest) => boolean) | null = null
+export function registerHttpLinkGroupActionAvailability(
+  check: (request: HttpLinkGroupActionRequest) => boolean
+): void {
+  groupActionAvailability = check
+}
+
+type StoreAccessor = () => HttpLinkStoreState
+
+type WorkspaceHttpLinkBrowserRequest = HttpLinkBrowserRequestFields & {
   workspaceId: string
   url: string
   intent: { kind: 'url' }
+  linkContext?: BrowserLinkOpenContext
   expectedRuntimeEnvironmentId?: string
   expectedSshConnectionId?: string
+  allowClientBrowserFallback?: boolean
 }
 
-type WorkspaceHttpLinkBrowserOpener = (request: WorkspaceHttpLinkBrowserRequest) => Promise<void>
+/** Resolves to the page id when the page renders on this desktop, else null. */
+type WorkspaceHttpLinkBrowserOpener = (
+  request: WorkspaceHttpLinkBrowserRequest
+) => Promise<string | null | void>
 
-type LocalhostLinkRepo = {
-  id: string
-  displayName: string
-}
-
-type LocalhostLinkProject = LocalhostLinkRepo
-
-type LocalhostLinkWorktree = {
-  id: string
-  projectId?: string
-}
-
-// Why: store access is injected via registerHttpLinkStoreAccessor rather than
-// a direct `import '@/store'` to avoid a circular import — store/slices/editor.ts
-// imports this module, and '@/store' transitively imports editor.ts. Without
-// the break, several renderer test files that load this module first see
-// `createEditorSlice` as undefined at store/index.ts initialization.
+// Inject store access to break editor-slice → HTTP routing → store initialization cycles.
 let storeAccessor: StoreAccessor | null = null
+let storeSubscriber: BrowserLinkSelectionSubscriber | undefined
 let workspaceHttpLinkBrowserOpener: WorkspaceHttpLinkBrowserOpener | null = null
 
-export function registerHttpLinkStoreAccessor(fn: StoreAccessor): void {
+export function registerHttpLinkStoreAccessor(
+  fn: StoreAccessor,
+  subscribe?: BrowserLinkSelectionSubscriber
+): void {
   storeAccessor = fn
+  storeSubscriber = subscribe
 }
 
 export function registerWorkspaceHttpLinkBrowserOpener(
@@ -91,18 +125,35 @@ export function registerWorkspaceHttpLinkBrowserOpener(
   workspaceHttpLinkBrowserOpener = fn
 }
 
-// Scope: http(s) URLs only. file: URIs and in-worktree markdown targets are
-// owned by resolveMarkdownLinkTarget and must stay on that path — this helper
-// is only invoked on target.kind === 'external' (and for the terminal's http
-// branch). Shift+Cmd/Ctrl is the escape hatch: click handlers pass modifierHeld
-// so resolveModifierRouting applies it; forceSystemBrowser stays reserved for
-// callers that must bypass the setting unconditionally.
-/**
- * Resolves what the Shift modifier means for one click. Historically it always
- * forced the system browser, which is a no-op when that is already the default;
- * openLinksInAppModifierInverts makes it flip whichever way Link Routing points
- * so the other destination is always one click away.
- */
+export function captureHttpLinkIntent(
+  workspaceId: string,
+  sourceTabId?: string | null,
+  explicitSourceGroup = false
+): LinkOpenIntent | null {
+  const state = storeAccessor?.()
+  return state
+    ? captureLinkOpenIntent(state, workspaceId, sourceTabId, { explicitSourceGroup })
+    : null
+}
+
+export function canHttpLinkOpenInSourceGroup(
+  workspaceId: string,
+  sourceTabId?: string | null,
+  url?: string,
+  sourceOwner?: HttpLinkSourceOwner
+): boolean {
+  const state = storeAccessor?.()
+  if (
+    groupActionAvailability &&
+    !groupActionAvailability({ workspaceId, sourceTabId, url, sourceOwner })
+  ) {
+    return false
+  }
+  return state ? canOpenLinkInSourceGroup(state, workspaceId, sourceTabId) : false
+}
+
+// Route only external http(s); file/markdown targets stay with resolveMarkdownLinkTarget. Modifier-held resolves the user’s Shift choice; forceSystemBrowser is unconditional.
+/** Shift traditionally forces system browser; the inversion setting instead chooses the other destination when system is already default. */
 function resolveModifierRouting(
   modifierHeld: boolean,
   openLinksInApp: boolean,
@@ -117,27 +168,56 @@ function resolveModifierRouting(
   return { wantsOrca: !openLinksInApp, wantsSystemBrowser: openLinksInApp }
 }
 
+function reportHttpLinkBrowserOpenFailure(error: unknown): void {
+  toast.error(
+    error instanceof Error
+      ? error.message
+      : translate('auto.lib.workspace.browser.tab.open.urlFailed', 'Unable to open URL.')
+  )
+}
+
+async function openSystemHttpLink(url: string): Promise<void> {
+  try {
+    await window.api.shell.openUrl(url)
+  } catch {
+    reportHttpLinkBrowserOpenFailure(null)
+  }
+}
+
 export function openHttpLink(url: string, opts: OpenHttpLinkOptions = {}): void {
-  const {
-    worktreeId,
-    allowRemoteInApp,
-    forceSystemBrowser,
-    forceInApp,
-    modifierHeld,
-    sourceOwner
-  } = opts
+  // Ownerless legacy callers retain their default-server classification without asserting an owner.
+  const ownerlessRemoteActive =
+    !opts.sourceOwner && Boolean(storeAccessor?.()?.settings?.activeRuntimeEnvironmentId?.trim())
+  executeHttpLink(url, opts, ownerlessRemoteActive)
+}
+
+export function openOwnedHttpLink(
+  url: string,
+  opts: OpenHttpLinkOptions & { sourceOwner: HttpLinkSourceOwner }
+): void {
+  executeHttpLink(url, opts, false)
+}
+
+function executeHttpLink(
+  url: string,
+  opts: OpenHttpLinkOptions,
+  remoteRuntimeActive: boolean
+): void {
+  if (opts.linkContext?.isCurrentRequest?.() === false) {
+    return
+  }
+  const { worktreeId, allowRemoteInApp, forceSystemBrowser, forceInApp, sourceOwner } = opts
   if (sourceOwner?.kind === 'unknown') {
     return
   }
   const state = storeAccessor?.()
-  const remoteRuntimeActive = Boolean(state?.settings?.activeRuntimeEnvironmentId?.trim())
   const effectiveSourceOwner = sourceOwner
   const sourceIsLocal = effectiveSourceOwner
     ? effectiveSourceOwner.kind === 'local'
     : !remoteRuntimeActive
   const openLinksInApp = state?.settings?.openLinksInApp === true
   const modifier = resolveModifierRouting(
-    Boolean(modifierHeld),
+    Boolean(opts.modifierHeld),
     openLinksInApp,
     state?.settings?.openLinksInAppModifierInverts === true
   )
@@ -155,74 +235,81 @@ export function openHttpLink(url: string, opts: OpenHttpLinkOptions = {}): void 
       effectiveSourceOwner?.kind === 'ssh' ||
       (!effectiveSourceOwner && remoteRuntimeActive))
   ) {
-    if (workspaceHttpLinkBrowserOpener) {
+    if (workspaceHttpLinkBrowserOpener && state) {
+      const fields = prepareRemoteHttpLinkTab(state, worktreeId)
+      const reveal = captureBrowserLinkReveal(
+        () => storeAccessor?.() ?? state,
+        storeSubscriber,
+        opts.linkContext?.canReveal
+      )
       void workspaceHttpLinkBrowserOpener({
         workspaceId: worktreeId,
         url,
         intent: { kind: 'url' },
+        ...fields,
+        linkContext: { linkIntent: null, ...opts.linkContext, canReveal: reveal.canReveal },
+        ...(opts.allowClientBrowserFallback ? { allowClientBrowserFallback: true } : {}),
         ...(effectiveSourceOwner?.kind === 'runtime'
           ? { expectedRuntimeEnvironmentId: effectiveSourceOwner.runtimeEnvironmentId }
           : effectiveSourceOwner?.kind === 'ssh'
             ? { expectedSshConnectionId: effectiveSourceOwner.connectionId }
             : {})
-      }).catch((error) => {
-        toast.error(
-          error instanceof Error
-            ? error.message
-            : translate('auto.lib.workspace.browser.tab.open.urlFailed', 'Unable to open URL.')
-        )
       })
+        .catch(reportHttpLinkBrowserOpenFailure)
+        .finally(reveal.dispose)
     }
     return
   }
 
   if (wantsOrca && sourceIsLocal && worktreeId && state) {
-    // Why: http clicks from inside a worktree should not push a worktree-switch
-    // history entry — the user isn't changing worktrees, they're opening a tab
-    // in the one they're already in. activateAndRevealWorktree is reserved for
-    // file-link jumps that genuinely switch worktrees.
-    if (!isFloatingWorkspaceId(worktreeId)) {
-      // Why: the floating workspace uses a synthetic worktree id. Promoting it
-      // to the global activeWorktreeId deselects the real repo workspace.
-      reselectWorkspaceKeepingHost(state, worktreeId)
+    const getState = () => storeAccessor?.() ?? state
+    const reveal = captureBrowserLinkReveal(getState, storeSubscriber, opts.linkContext?.canReveal)
+    const openLocal = (chosenUrl: string): void => {
+      if (opts.linkContext?.isCurrentRequest?.() === false) {
+        reveal.dispose()
+        return
+      }
+      if (workspaceHttpLinkBrowserOpener) {
+        void workspaceHttpLinkBrowserOpener({
+          workspaceId: worktreeId,
+          url: chosenUrl,
+          intent: { kind: 'url' },
+          linkContext: { linkIntent: null, ...opts.linkContext, canReveal: reveal.canReveal },
+          ...(isHttpLinkBackgroundOpen(state)
+            ? { focusOnCreate: false, selectWorktree: false }
+            : {})
+        })
+          .catch(reportHttpLinkBrowserOpenFailure)
+          .finally(reveal.dispose)
+        return
+      }
+      const activate = !isHttpLinkBackgroundOpen(state) && reveal.canReveal()
+      reveal.dispose()
+      if (activate && !isFloatingWorkspaceId(worktreeId)) {
+        reselectWorkspaceKeepingHost(state, worktreeId)
+      }
+      openLocalHttpLinkTab(getState(), worktreeId, chosenUrl, undefined, activate)
     }
     const localhostRoute = localhostLabelRouteForHttpLink(url, state, sourceOwner)
     if (!localhostRoute) {
-      state.createBrowserTab(worktreeId, url, { activate: true })
+      openLocal(url)
       return
     }
-    void openLabeledLocalhostLink(url, localhostRoute, (labeledUrl) => {
-      state.createBrowserTab(worktreeId, labeledUrl, { activate: true })
-    })
+    void openLabeledLocalhostLink(url, localhostRoute, openLocal)
     return
   }
 
   const localhostRoute = state ? localhostLabelRouteForHttpLink(url, state, sourceOwner) : null
   if (!localhostRoute) {
-    void window.api.shell.openUrl(url)
+    void openSystemHttpLink(url)
     return
   }
   void openLabeledLocalhostLink(url, localhostRoute, (labeledUrl) => {
-    void window.api.shell.openUrl(labeledUrl)
+    if (opts.linkContext?.isCurrentRequest?.() === false) {
+      return
+    }
+    void openSystemHttpLink(labeledUrl)
   })
-}
-
-function localhostLabelRouteForHttpLink(
-  url: string,
-  state: ReturnType<StoreAccessor>,
-  sourceOwner?: HttpLinkSourceOwner
-): LocalhostWorktreeLabelRoute | null {
-  if (sourceOwner && sourceOwner.kind !== 'local') {
-    return null
-  }
-  if (!sourceOwner && state.settings?.activeRuntimeEnvironmentId?.trim()) {
-    return null
-  }
-  const sourceScan =
-    sourceOwner?.kind === 'local'
-      ? (state.workspacePortScansByKey?.['local:all'] ?? null)
-      : undefined
-  return localhostLabelRouteForTerminalLink(url, state, sourceOwner?.kind === 'local', sourceScan)
 }
 
 export async function resolveLocalhostHttpLinkDisplayUrl(
@@ -233,8 +320,7 @@ export async function resolveLocalhostHttpLinkDisplayUrl(
   if (!state) {
     return null
   }
-  // Why: the hover label must resolve the same route the click will take, or a
-  // remote pane's loopback URL gets shown with a local worktree's label.
+  // Resolve hover and click through the same route so remote loopback cannot borrow a local workspace label.
   const localhostRoute = localhostLabelRouteForHttpLink(url, state, sourceOwner)
   if (!localhostRoute) {
     return null
@@ -245,90 +331,4 @@ export async function resolveLocalhostHttpLinkDisplayUrl(
   } catch {
     return null
   }
-}
-
-async function openLabeledLocalhostLink(
-  fallbackUrl: string,
-  route: LocalhostWorktreeLabelRoute,
-  open: (url: string) => void
-): Promise<void> {
-  try {
-    const result = await window.api.localhostWorktreeLabels.register(route)
-    open(result.url)
-  } catch {
-    open(fallbackUrl)
-  }
-}
-
-function localhostLabelRouteForTerminalLink(
-  rawUrl: string,
-  state: ReturnType<StoreAccessor>,
-  ignoreActiveRuntime = false,
-  sourceScan?: WorkspacePortScanResult | null
-): LocalhostWorktreeLabelRoute | null {
-  if (
-    state.settings?.localhostWorktreeLabelsEnabled !== true ||
-    (!ignoreActiveRuntime && state.settings?.activeRuntimeEnvironmentId?.trim())
-  ) {
-    return null
-  }
-  // Why: only loopback links we can attribute to a scanned workspace port
-  // should get a worktree label; everything else must stay as-is.
-  const parsed = parseLoopbackUrlWithPort(rawUrl)
-  if (!parsed) {
-    return null
-  }
-  const scan = sourceScan === undefined ? state.workspacePortScan?.result : sourceScan
-  const port = findWorkspacePortByNumber(scan, Number(parsed.port))
-  if (!port) {
-    return null
-  }
-  const repo = state.repos?.find((entry) => entry.id === port.owner.repoId) ?? null
-  if (!repo) {
-    return null
-  }
-  const worktree = findWorktreeById(state, port.owner.worktreeId)
-  const project =
-    worktree?.projectId && state.projects
-      ? (state.projects.find((entry) => entry.id === worktree.projectId) ?? null)
-      : null
-  const projectSource = project ?? repo
-  return {
-    targetUrl: parsed.toString(),
-    projectName: projectSource.displayName,
-    worktreeName: port.owner.displayName,
-    worktreePath: port.owner.path,
-    repoId: repo.id,
-    worktreeId: port.owner.worktreeId
-  }
-}
-
-function findWorkspacePortByNumber(
-  scan: WorkspacePortScanResult | null | undefined,
-  portNumber: number
-): (WorkspacePort & { kind: 'workspace' }) | null {
-  const port =
-    scan?.ports.find(
-      (candidate): candidate is WorkspacePort & { kind: 'workspace' } =>
-        candidate.kind === 'workspace' && candidate.port === portNumber
-    ) ?? null
-  return port
-}
-
-function findWorktreeById(
-  state: ReturnType<StoreAccessor>,
-  worktreeId: string
-): LocalhostLinkWorktree | null {
-  const fromAllWorktrees = state.allWorktrees?.().find((worktree) => worktree.id === worktreeId)
-  if (fromAllWorktrees) {
-    return fromAllWorktrees
-  }
-  const worktreesByRepo = state.worktreesByRepo ?? {}
-  for (const worktrees of Object.values(worktreesByRepo)) {
-    const worktree = worktrees.find((entry) => entry.id === worktreeId)
-    if (worktree) {
-      return worktree
-    }
-  }
-  return null
 }

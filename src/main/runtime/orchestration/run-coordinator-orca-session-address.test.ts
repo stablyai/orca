@@ -43,7 +43,7 @@ function refillAfterReopen(db: OrchestrationDb, path: string, runId: string): Or
   return new OrchestrationDb(path)
 }
 
-/** A handle-less coordinator row; no writer records one until the caller resolver lands. */
+/** Insert a handle-less chat coordinator directly as a historical fixture. */
 function insertSessionCoordinatedRun(db: OrchestrationDb, runId: string): void {
   db.db
     .prepare(
@@ -71,13 +71,11 @@ describe('Run coordinator Orca session address', () => {
     db = new OrchestrationDb(':memory:')
     insertSessionCoordinatedRun(db, 'run_session')
 
-    // The column holds the bare id; only the remembered address carries the orca_session_id: prefix.
     expect(db.getRunRaw('run_session')?.coordinator_orca_session_id).toBe(CHAT_SESSION_ID)
     expect(addressesFor(db, 'run_session')).toEqual([CHAT_ADDRESS])
     expect(parseOrcaSessionAddress(addressesFor(db, 'run_session')[0])).toBe(CHAT_SESSION_ID)
     expect(db.getRunMailboxOwnerIdsForHandle(CHAT_ADDRESS)).toEqual(['run_session'])
     expect(db.getRunMailboxOwnerIdsForHandle(CHAT_SESSION_ID)).toEqual([])
-    // The existing routing trigger matches the address by string equality, unchanged.
     const reply = db.insertMessage({
       runId: 'run_session',
       from: 'term_worker',
@@ -121,7 +119,7 @@ describe('Run coordinator Orca session address', () => {
     const olderBuild = triggers.map((sql) =>
       sql.replaceAll(`'${ORCA_SESSION_ADDRESS_PREFIX}'`, "'session:'")
     )
-    // Otherwise the reopen below would find current triggers and prove nothing.
+    // Verify trigger differences so reopening actually exercises replacement.
     olderBuild.forEach((sql, index) => expect(sql).not.toBe(triggers[index]))
     db.db.exec(`
       DROP TRIGGER trg_runs_remember_coordinator_insert;
@@ -263,7 +261,6 @@ describe('Run coordinator Orca session address', () => {
     backfillStructuredWorkerOrcaSessionIds(db.db)
     expect(db.getRunRaw(first.id)?.coordinator_orca_session_id).toBe(WORKER_SESSION_ID)
 
-    // A second Run from the same pane unbinds the first.
     const second = db.createRun({
       objective: 'second',
       coordinatorHandle: handle,
@@ -281,8 +278,7 @@ describe('Run coordinator Orca session address', () => {
       coordinator_handle: 'term_taker',
       coordinator_orca_session_id: null
     })
-    // A remembered address is never forgotten, so the worker's session address reaches exactly the
-    // Runs its handle does.
+    // Remembered worker-session addresses must reach exactly the Runs their handles reach.
     expect(db.getRunMailboxOwnerIdsForHandle(WORKER_ADDRESS)).toEqual([first.id, second.id].sort())
     expect(db.getRunMailboxOwnerIdsForHandle(handle)).toEqual([first.id, second.id].sort())
   })

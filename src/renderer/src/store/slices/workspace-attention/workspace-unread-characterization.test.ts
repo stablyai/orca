@@ -21,9 +21,7 @@ import {
   typeInPane
 } from './workspace-unread-characterization-driver'
 
-// Pins the unread transitions (workspace flag, tab/pane/completion markers, persistence,
-// activity bumps, Dock count, floating dot). The production on-screen scan runs against each store
-// with Orca's window visible and focused unless a test says otherwise.
+// Pin marker/flag persistence, activity, Dock and floating-dot transitions using the production scan; default window is visible/focused.
 
 vi.mock('sonner', () => ({
   toast: { info: vi.fn(), success: vi.fn(), error: vi.fn(), warning: vi.fn(), dismiss: vi.fn() }

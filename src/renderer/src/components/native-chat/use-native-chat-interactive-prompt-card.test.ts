@@ -24,7 +24,7 @@ afterEach(() => {
 })
 
 describe('useNativeChatInteractivePromptCard', () => {
-  // The hook runs in the pane's view, so each render here re-renders the whole transcript.
+  // This hook runs in the pane, so each render also rerenders the transcript.
   it('does not re-render for a tool call that carries no prompt', () => {
     setStatus({ state: 'working', toolName: 'Read' })
     let renders = 0

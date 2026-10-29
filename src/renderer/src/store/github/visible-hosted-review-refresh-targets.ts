@@ -6,7 +6,8 @@ import {
 } from '../slices/hosted-review-cache-identity'
 import {
   getRepoExecutionHostId,
-  getSettingsFocusedExecutionHostId
+  getSettingsFocusedExecutionHostId,
+  parseExecutionHostId
 } from '../../../../shared/execution-host'
 import { reviewRefreshIntervalMs } from '../../../../shared/review-refresh-policy'
 import {
@@ -22,6 +23,7 @@ import { getPRRefreshRuntimeRepoTarget } from './repository-routing'
 import type { VisibleHostedReviewRefreshTarget } from './visible-hosted-review-refresh-scheduler'
 import { shouldCoordinateVisibleGitHubReview } from './visible-hosted-review-refresh-ownership'
 import { selectDetectedWorktreesByRepo, selectWorktreesByRepo } from '../workspace-record-selectors'
+import { isWslHostOffForForge } from './wsl-host-off-forge'
 
 export function* getVisibleHostedReviewWorkspaces(
   state: AppState,
@@ -60,6 +62,13 @@ export function* getVisibleHostedReviewWorkspaces(
         continue
       }
       const hostId = getRepoExecutionHostId(repo)
+      const runtimeHost = parseExecutionHostId(hostId)
+      if (
+        runtimeHost?.kind === 'runtime' &&
+        isWslHostOffForForge(state, runtimeHost.environmentId)
+      ) {
+        continue
+      }
       const activeHost = state.activeWorkspaceExecutionHostId
       const selected =
         id === state.activeWorktreeId &&
@@ -222,6 +231,8 @@ export function visibleHostedReviewRefreshInputsChanged(
     state.repos !== previous.repos ||
     state.settings !== previous.settings ||
     state.sshConnectionStates !== previous.sshConnectionStates ||
+    // A WSL host turning ready brings its rows back into the refresh (E9).
+    state.wslHostStatuses !== previous.wslHostStatuses ||
     state.prCache !== previous.prCache ||
     state.hostedReviewCache !== previous.hostedReviewCache ||
     state.tabsByWorktree !== previous.tabsByWorktree ||

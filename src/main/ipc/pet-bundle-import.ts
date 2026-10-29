@@ -1,3 +1,4 @@
+import { translateMain } from '../i18n/main-i18n'
 import { BrowserWindow, dialog } from 'electron'
 import { mkdir, readFile, rename, rm, stat } from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
@@ -16,9 +17,9 @@ export async function importPetBundle(
 ): Promise<CustomPet | null> {
   const senderWindow =
     BrowserWindow.fromWebContents(event.sender) ?? BrowserWindow.getFocusedWindow()
-  // Why: the bundle is a folder, but Finder may let users pick `pet.json` inside it — post-pick logic walks up to the parent.
+  // Finder may select pet.json inside the bundle; accept it and use its parent.
   const options: Electron.OpenDialogOptions = {
-    title: 'Pick a .codex-pet bundle',
+    title: translateMain('native.dialog.importPetBundle', 'Pick a .codex-pet bundle'),
     properties: ['openFile', 'openDirectory', 'treatPackageAsDirectory']
   }
   const result = senderWindow
@@ -53,7 +54,7 @@ export async function importPetBundle(
   let manifest: ResolvedPetManifest<PetManifest>
   try {
     const raw = await readFile(manifestPath, 'utf8')
-    // Why: defend against TOCTOU — the file may have grown between the stat check and this read.
+    // Recheck the read size because the file may have grown after stat.
     if (Buffer.byteLength(raw, 'utf8') > MAX_MANIFEST_BYTES) {
       throw new Error('pet.json exceeded the manifest size limit.')
     }
@@ -66,14 +67,14 @@ export async function importPetBundle(
 
   const sprite = await buildBundleSprite(manifest, sheetSrc)
 
-  // Why: always a fresh UUID (not the manifest's display-hint id) to avoid collisions, unsafe ids, and re-import clobbering.
+  // Ignore manifest IDs to prevent collisions, unsafe paths and re-import overwrites.
   const id = randomUUID()
   const root = getPetsDir()
   await mkdir(root, { recursive: true })
   const destDir = join(root, id)
   const sheetExt = sheetClass.ext
   const sheetFileName = `spritesheet${sheetExt}`
-  // Why: stage into a sibling .tmp then atomically rename, so a mid-copy failure can't leave a half-imported bundle.
+  // Stage beside the destination so failed copies cannot publish a partial bundle.
   const tmpDir = `${destDir}.tmp`
   try {
     await rm(tmpDir, { recursive: true, force: true }).catch(() => {})
@@ -95,7 +96,6 @@ export async function importPetBundle(
     mimeType: sheetClass.mimeType,
     kind: 'bundle',
     sprite,
-    // Why: renderer falls back to spriteFps when sprite is undefined (detected-frame bundles).
     ...(manifest.fps !== undefined ? { spriteFps: manifest.fps } : {})
   }
 }

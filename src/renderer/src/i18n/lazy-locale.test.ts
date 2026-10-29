@@ -2,20 +2,16 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
   UI_LANGUAGE_CHINESE,
+  UI_LANGUAGE_CHINESE_TRADITIONAL,
   UI_LANGUAGE_ENGLISH,
   UI_LANGUAGE_PORTUGUESE,
+  UI_LANGUAGE_RUSSIAN,
   UI_LANGUAGE_SPANISH
 } from '../../../shared/ui-language'
 import { i18n, setRendererPluginLanguagePacks, setRendererUiLanguage } from './i18n'
 import { pluginLanguageResourceId } from '../../../shared/plugins/plugin-language-pack-artifact'
 
-// Why: the renderer now lazy-loads non-English catalogs through an i18next
-// backend instead of bundling all five into the startup chunk. This guards the
-// invariant that switching language (I18nProvider effect / Settings) resolves
-// real translations once changeLanguage() settles — and that any direct
-// i18n.changeLanguage() call (used across the codebase and tests) transparently
-// loads its catalog. A regression would silently show English to a user who
-// picked another language.
+// Every changeLanguage caller must transparently load real non-English translations before its promise settles.
 
 describe('renderer i18n lazy locale loading', () => {
   beforeEach(async () => {
@@ -42,6 +38,38 @@ describe('renderer i18n lazy locale loading', () => {
     await setRendererUiLanguage(UI_LANGUAGE_PORTUGUESE)
     expect(i18n.language).toBe('pt')
     expect(i18n.t('menu.file', { defaultValue: 'File' })).not.toBe('File')
+  })
+
+  it('loads Russian and selects its complete CLDR plural family', async () => {
+    await setRendererUiLanguage(UI_LANGUAGE_RUSSIAN)
+    expect(i18n.language).toBe('ru')
+    expect(i18n.t('menu.file', { defaultValue: 'File' })).toBe('Файл')
+    for (const [count, expected] of [
+      [0, '0 изображений'],
+      [1, '1 изображение'],
+      [2, '2 изображения'],
+      [5, '5 изображений'],
+      [11, '11 изображений'],
+      [21, '21 изображение'],
+      [22, '22 изображения'],
+      [25, '25 изображений'],
+      [1.5, '1.5 изображения']
+    ] as const) {
+      expect(
+        i18n.t('components.native-chat.queuedMessages.imageCount', {
+          defaultValue: '{{count}} images',
+          count
+        })
+      ).toBe(expected)
+    }
+  })
+
+  it('falls back from Traditional Chinese to English, never Simplified', async () => {
+    i18n.addResourceBundle('zh', 'translation', { zhOnlyKey: '简体' }, true, true)
+    await setRendererUiLanguage(UI_LANGUAGE_CHINESE_TRADITIONAL)
+    expect(i18n.language).toBe('zh-Hant')
+    expect(i18n.t('menu.file', { defaultValue: 'File' })).not.toBe('File')
+    expect(i18n.t('zhOnlyKey', { defaultValue: 'English' })).toBe('English')
   })
 
   it.each(['network', 'http', 'invalid-json'] as const)(

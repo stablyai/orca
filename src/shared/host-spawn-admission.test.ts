@@ -140,7 +140,7 @@ describe('decideSpawnAdmission', () => {
     expect(decide(state, facts(), 0).kind).toBe('admit')
   })
 
-  it('admits an old caller at its deadline instead of refusing, and defers a negotiated one', () => {
+  it('admits an old caller whose retry would miss its deadline and defers a negotiated one', () => {
     const state = createSpawnAdmissionState(LIMITS, 0)
     state.automaticBucket = { tokens: 0, updatedAt: 0 }
     expect(decide(state, facts({ deadlineAt: 500 }), 0)).toEqual({

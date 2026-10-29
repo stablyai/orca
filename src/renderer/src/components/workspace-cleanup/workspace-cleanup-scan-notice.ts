@@ -32,30 +32,47 @@ export function formatWorkspaceCleanupScanNotice(
     .map((error) => formatScanErrorRepoName(error, repoNameById))
     .join(', ')
   const moreCount = visibleErrors.length - 3
-  const suffix =
-    moreCount > 0
-      ? translate('components.workspace.cleanup.scan.moreErrors', ', +{{value0}} more', {
-          value0: moreCount
-        })
-      : ''
-  return translate(
-    'components.workspace.cleanup.scan.multipleErrors',
-    'Could not check {{value0}} repositories ({{value1}}{{value2}}). Some workspaces may be missing. Refresh to try again.',
-    { value0: visibleErrors.length, value1: repoNames, value2: suffix }
-  )
+  return moreCount > 0
+    ? visibleErrors.length === 1
+      ? translate(
+          'components.workspace.cleanup.scan.multipleErrorsWithMore_one',
+          'Could not check {{count}} repository ({{names}}, +{{moreCount}} more). Some workspaces may be missing. Refresh to try again.',
+          { count: visibleErrors.length, names: repoNames, moreCount }
+        )
+      : translate(
+          'components.workspace.cleanup.scan.multipleErrorsWithMore_other',
+          'Could not check {{count}} repositories ({{names}}, +{{moreCount}} more). Some workspaces may be missing. Refresh to try again.',
+          { count: visibleErrors.length, names: repoNames, moreCount }
+        )
+    : visibleErrors.length === 1
+      ? translate(
+          'components.workspace.cleanup.scan.multipleErrorsCount_one',
+          'Could not check {{count}} repository ({{names}}). Some workspaces may be missing. Refresh to try again.',
+          { count: visibleErrors.length, names: repoNames }
+        )
+      : translate(
+          'components.workspace.cleanup.scan.multipleErrorsCount_other',
+          'Could not check {{count}} repositories ({{names}}). Some workspaces may be missing. Refresh to try again.',
+          { count: visibleErrors.length, names: repoNames }
+        )
 }
 
-/** Reports scan size without classifying the user's work. */
 export function formatWorkspaceCleanupReadyToast(workspaceCount: number): string {
   if (workspaceCount === 0) {
     return translate('components.workspace.cleanup.scan.noWorkspaces', 'No workspaces found.')
   }
   if (workspaceCount === 1) {
-    return translate('components.workspace.cleanup.scan.readyOne', '1 workspace found.')
+    return translate(
+      'components.workspace.cleanup.scan.readyCount_one',
+      '{{count}} workspace found.',
+      { count: workspaceCount }
+    )
   }
-  return translate('components.workspace.cleanup.scan.readyMany', '{{value0}} workspaces found.', {
-    value0: workspaceCount
-  })
+  return translate(
+    'components.workspace.cleanup.scan.readyCount_other',
+    '{{count}} workspaces found.',
+    { count: workspaceCount }
+  )
 }
 
 function formatScanErrorRepoName(

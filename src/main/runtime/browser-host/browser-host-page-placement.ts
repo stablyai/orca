@@ -206,7 +206,7 @@ export class BrowserHostPagePlacementRegistry {
     return retirement
   }
 
-  /** Returns each fenced page's retirement, so the caller can complete what the client never will. */
+  /** Return retirements the fenced client can no longer complete. */
   fenceClientHostPlacements(host: BrowserHostPlacementIdentity): BrowserPageRetirement[] {
     assertBrowserHostPlacementIdentity(host)
     const fenced: BrowserPageRetirement[] = []
@@ -221,7 +221,7 @@ export class BrowserHostPagePlacementRegistry {
       }
       state.retirement ??= Object.freeze({ browserPageId, placement })
       state.retirementTerminal = true
-      // A completion already running owns the delete; completing again would throw.
+      // An in-flight completion owns deletion; a duplicate would throw.
       if (!state.retirementCompletionInProgress) {
         fenced.push(state.retirement)
       }

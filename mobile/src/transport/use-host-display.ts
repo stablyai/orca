@@ -13,13 +13,8 @@ export type HostDisplaySource = {
   lastKnownHostPlatform?: NodeJS.Platform
 }
 
-/**
- * The display precedence, stated once: a live-reported descriptor beats the persisted last-known
- * one — including a live reply that reported nothing, which is the desktop's own answer. The title
- * is the phone's override, else the live machine name, else the stored resolved `name`; the live
- * name leads only because the stored copy catches up on the next host-list load.
- * Pass null while the host record is still loading.
- */
+// Live descriptors override persisted identity even when empty; the phone’s rename still wins the title.
+// Pass null while loading; older shell labels retain their legacy classification.
 export function useHostDisplay(host: HostDisplaySource | null): HostDisplayResolution {
   const live = useHostDescriptor(host?.id)
   // Why: a source without identity fields (a page handed its host by an older shell) holds a label.

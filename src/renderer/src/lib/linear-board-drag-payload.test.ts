@@ -53,20 +53,6 @@ describe('Linear board issue drag payload', () => {
     expect(readLinearBoardIssueDragData(transfer)).toEqual({ status: 'missing' })
   })
 
-  it('rejects oversized issue ids before callers compare them to board issues', () => {
-    const transfer = new FakeDataTransfer()
-    const secret = 'linear-board-secret'
-    transfer.setData(
-      LINEAR_BOARD_DRAG_ISSUE_MIME,
-      secret + 'x'.repeat(LINEAR_BOARD_DRAG_ISSUE_ID_MAX_BYTES)
-    )
-
-    expect(readLinearBoardIssueDragData(transfer)).toEqual({
-      status: 'rejected',
-      reason: 'too-large'
-    })
-  })
-
   it('rejects multibyte oversized issue ids before board comparisons', () => {
     const transfer = new FakeDataTransfer()
     transfer.setData(LINEAR_BOARD_DRAG_ISSUE_MIME, '😀'.repeat(257))

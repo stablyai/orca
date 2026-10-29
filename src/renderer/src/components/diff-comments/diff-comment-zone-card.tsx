@@ -109,9 +109,15 @@ export function renderDiffCommentZoneCard(
               groupId={activeGroupId}
               modeIdParts={['diff-comment-note', worktreeId, filePath, comment.id]}
               scopes={getSingleCommentSendScopes(comment, formatCommentPrompt)}
-              targetModeLabel="This note"
+              targetModeLabel={translate(
+                'auto.components.diff.comments.useDiffCommentDecorator.995fa28b50',
+                'This note'
+              )}
               triggerClassName="orca-diff-comment-edit"
-              disabledTooltip="Note already sent"
+              disabledTooltip={translate(
+                'auto.components.diff.comments.diffCommentZoneCard.noteAlreadySent',
+                'Note already sent'
+              )}
               onDelivered={(notes) => void clearDeliveredDiffComments(worktreeId, notes)}
             />
           ) : null

@@ -1,3 +1,4 @@
+import type * as ReactModule from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const reactHookRuntime = vi.hoisted(() => ({
@@ -6,7 +7,7 @@ const reactHookRuntime = vi.hoisted(() => ({
 }))
 
 vi.mock('react', async () => {
-  const actual = await vi.importActual<typeof import('react')>('react') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
+  const actual = await vi.importActual<typeof ReactModule>('react')
   return {
     ...actual,
     useMemo<T>(factory: () => T) {
@@ -17,6 +18,9 @@ vi.mock('react', async () => {
     },
     useEffect() {
       return undefined
+    },
+    useContext() {
+      return false
     },
     useRef<T>(initial: T) {
       return { current: initial }
@@ -181,8 +185,6 @@ describe('ImageViewer PDF scroll cache key', () => {
     vi.clearAllMocks()
   })
 
-  // Why: nothing else pins the wiring, so a dropped prop anywhere between
-  // EditorContent and PdfViewer would ship as silently amnesiac scrolling.
   it('forwards the scroll cache key to PdfViewer', async () => {
     expect(await renderPdfViewerProps('/repo/report.pdf::tab-2:pdf')).toMatchObject({
       filePath: '/repo/report.pdf',
@@ -247,8 +249,7 @@ describe('ImageViewer pre-load layout box', () => {
     vi.clearAllMocks()
   })
 
-  // Why: the scroll surface's inner box is w-max/h-max, so percentage maxes resolve
-  // to none and a 6000x4000 image lays out at natural resolution before onLoad.
+  // The w-max/h-max scroll box makes percentage maxima ineffective before image load; viewport units must bound natural dimensions.
   it('bounds both scroll surfaces with viewport units before the image loads', async () => {
     const images = findElementsByType(await renderExpandedImageViewer(pngBase64(1)), 'img')
 
@@ -260,5 +261,44 @@ describe('ImageViewer pre-load layout box', () => {
       expect(className).not.toContain('max-h-full')
       expect(className).not.toContain('max-w-full')
     }
+  })
+})
+
+describe('ImageViewer reading its bytes by URL', () => {
+  beforeEach(() => {
+    reactHookRuntime.states = []
+    reactHookRuntime.index = 0
+    vi.clearAllMocks()
+  })
+
+  it('shows an image from its orca-media URL, sized from the grant', async () => {
+    reactHookRuntime.index = 0
+    const module = await import('./ImageViewer')
+    const rendered = expandNode(
+      module.default({
+        src: 'orca-media://file/token?revision=r1',
+        byteSize: 2048,
+        filePath: '/repo/preview.png',
+        mimeType: 'image/png'
+      })
+    )
+    expect(findPreviewImage(rendered).props.src).toBe('orca-media://file/token?revision=r1')
+    expect(JSON.stringify(rendered)).toContain('2.0 KB')
+  })
+
+  it("hands a PDF's URL to PdfViewer instead of base64", async () => {
+    reactHookRuntime.index = 0
+    const module = await import('./ImageViewer')
+    const [pdf] = findElementsByType(
+      expandNode(
+        module.default({
+          src: 'orca-media://file/doc?revision=r1',
+          filePath: '/repo/report.pdf',
+          mimeType: 'application/pdf'
+        })
+      ),
+      'PdfViewer'
+    )
+    expect(pdf?.props).toMatchObject({ src: 'orca-media://file/doc?revision=r1', content: '' })
   })
 })

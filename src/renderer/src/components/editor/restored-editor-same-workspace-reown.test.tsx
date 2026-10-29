@@ -24,7 +24,7 @@ vi.mock('@/runtime/runtime-file-read-client', async (importOriginal) => ({
   readRuntimeFileContent: mocks.readRuntimeFileContent
 }))
 vi.mock('../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
-// Main draws the tabs and answers each move (T1 transport, apply mode).
+// Use main-owned layout frames and move acknowledgments.
 vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
   (
     await import('@/runtime/layout-apply-test-transport.test-fixture')
@@ -43,7 +43,6 @@ const FOLDER = 'folder:pkg'
 const FILE_PATH = '/repo-a/pkg/a.md'
 const SERVER_REPO = 'repo-s::/root/repo'
 
-/** A local git workspace and a local folder workspace opened on one of its subfolders. */
 function seedNestedLocalWorkspaces(): void {
   useAppStore.setState(useAppStore.getInitialState(), true)
   useAppStore.setState(
@@ -76,7 +75,6 @@ function seedNestedLocalWorkspaces(): void {
   )
 }
 
-/** A tab opened by absolute path (a terminal link) for a file inside its own folder workspace. */
 function openAbsoluteTabInFolder(): string {
   return useAppStore.getState().openFile(
     {
@@ -103,12 +101,11 @@ async function drawFromMain<T>(open: () => T): Promise<T> {
   return opened
 }
 
-/** Commands sent after the tab was drawn. */
 function layoutCommands(): unknown[] {
   return layoutApplyTestTransport.sent.slice(sentBefore)
 }
 
-/** The workspace now lives on its managed server; the tab was saved by the relay era, unstamped. */
+/** Simulate unstamped relay-era tabs whose workspace has moved to a managed server. */
 function seedServerWorkspace(): void {
   useAppStore.setState(useAppStore.getInitialState(), true)
   useAppStore.setState({
@@ -214,7 +211,6 @@ describe('a restored tab re-owned inside its own workspace, layout-owner build',
     const [file] = useAppStore.getState().openFiles
     expect(file).toMatchObject({ worktreeId: FOLDER, relativePath: 'a.md' })
     expect(file!.id).not.toBe(id)
-    // Main's frame shows the tab under the re-owned file.
     expect(useAppStore.getState().unifiedTabsByWorktree[FOLDER]).toEqual([
       expect.objectContaining({ entityId: file!.id })
     ])
@@ -239,7 +235,7 @@ describe('a restored tab re-owned inside its own workspace, layout-owner build',
   it("tells main of a re-own that reaches a tab before main's frame draws it", async () => {
     seedNestedLocalWorkspaces()
     main = await drawTabsFromMain(useAppStore)
-    // Main holds the open's answer: its frame has yet to draw the tab.
+    // Hold the open acknowledgment so re-owning must wait for main to draw the tab.
     layoutApplyTestTransport.answerWith('pending')
     const id = openAbsoluteTabInFolder()
     expect(useAppStore.getState().unifiedTabsByWorktree[FOLDER] ?? []).toEqual([])
@@ -266,7 +262,6 @@ describe('a restored tab re-owned inside its own workspace, layout-owner build',
         renames: [expect.objectContaining({ fileId: id, newFileId: file!.id })]
       })
     ])
-    // Main's tab shows the file the window holds, not its old id.
     expect(useAppStore.getState().unifiedTabsByWorktree[FOLDER]).toEqual([
       expect.objectContaining({ entityId: file!.id })
     ])

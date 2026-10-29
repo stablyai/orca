@@ -22,11 +22,7 @@ function providerFrameKinds(items: { body: AgentJournalItemBody }[]): string[] {
   )
 }
 
-/**
- * The queue-bookkeeping frame Claude Code 2.1.258 emits for every uuid-stamped
- * command: `command_uuid` plus a state, and no content of its own. Shape and
- * states taken from the CLI's own emission sites.
- */
+/** Queue-bookkeeping shape captured from CLI 2.1.258 emission sites. */
 function commandLifecycle(state: 'started' | 'completed' | 'cancelled', uuid: string) {
   return {
     type: 'message' as const,
@@ -96,7 +92,6 @@ describe('Claude command_lifecycle frames', () => {
     })
 
     expect(providerFrameKinds(state.items)).toEqual([])
-    // The turn's real content is untouched.
     expect(
       state.items.flatMap((item) =>
         item.body.kind === 'message' && item.body.role === 'assistant' ? [item.body.blocks] : []

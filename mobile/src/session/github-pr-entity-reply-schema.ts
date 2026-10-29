@@ -10,25 +10,14 @@ import type {
 } from '../../../src/shared/github/pull-request-types'
 import type { PRCheckDetail } from '../../../src/shared/github/check-types'
 
-// The entities the `github.*` PR reads are built out of: users, review summaries, repo identities,
-// merge settings, check summaries, conversation comments and check rows. Checked against
-// src/shared/github/pull-request-types.ts, comment-types.ts and check-types.ts, which
-// src/main/runtime/rpc/methods/github-pull-request-methods.ts returns from the GitHub client
-// verbatim.
-//
-// One rule runs through the file: a member the entity is *identified* by is required, and an entity
-// missing one drops out of its list rather than failing the whole reply — which is what main's
-// `return null` inside a `flatMap` did. Everything else is a salvaged optional with main's own
-// default applied in the transform, because the shared types declare those members non-optional and
-// every renderer reads them unguarded.
+// Require entity identity, salvage malformed list members, and default other fields for unguarded renderers.
 
 export const PR_STATE = ['open', 'closed', 'merged', 'draft'] as const
 export const CHECK_STATUS = ['pending', 'success', 'failure', 'neutral'] as const
 export const MERGEABLE_STATE = ['MERGEABLE', 'CONFLICTING', 'UNKNOWN'] as const
 export const REVIEW_DECISION = ['APPROVED', 'CHANGES_REQUESTED', 'REVIEW_REQUIRED'] as const
 const CHECK_RUN_STATUS = ['queued', 'in_progress', 'completed'] as const
-// `action_required` stays in the set: dropping it rendered a merge-blocking approval gate as a
-// pending check, because the shared classifier counts it as a failure.
+// Keep action_required: the shared classifier treats approval gates as failure, not pending.
 const CHECK_RUN_CONCLUSION = [
   'success',
   'failure',
@@ -52,12 +41,10 @@ const REACTION_CONTENT = [
   'eyes'
 ] as const
 
-/** A string member that reads as absent when the host sends something else. */
 export function prText(name: string) {
   return salvagedOptional(name, z.string())
 }
 
-/** A number member; non-finite reads as absent, the way `Number.isFinite` gated main's. */
 export function prCount(name: string) {
   return salvagedOptional(name, z.number().finite())
 }
@@ -66,7 +53,7 @@ export function prFlag(name: string) {
   return salvagedOptional(name, z.boolean())
 }
 
-/** A tri-state member: an explicit `null` is a value the sidebar routes on, not an absence. */
+// Preserve explicit null: the sidebar distinguishes it from an absent flag.
 export function prNullableFlag(name: string) {
   return salvagedOptional(name, z.boolean().nullable())
 }
@@ -75,12 +62,10 @@ export function prNullableText(name: string) {
   return salvagedOptional(name, z.string().nullable())
 }
 
-/** A list that reads as empty when the host sends no array, which is what `readStringArray` did. */
 export function prStringList(name: string) {
   return salvagedOptional(name, salvagingArray(z.string()))
 }
 
-/** `login` identifies the user; a row without one was never rendered. */
 const assignableUserSchema = z
   .looseObject({
     login: z.string(),
@@ -99,13 +84,7 @@ export function prUserList(name: string) {
 
 export const assignableUsersSchema = salvagingArray(assignableUserSchema)
 
-/**
- * One review.
- *
- * Desktop maps `latestReviews` to a top-level `login`; raw `gh pr view --json` keeps a nested
- * `author.login`. Both are accepted so mobile never drops a reviewer, which is why `login` is
- * assembled in the transform rather than declared required at the top level.
- */
+// Accept desktop’s top-level login and raw gh’s author.login so neither host shape loses reviewers.
 const reviewSummarySchema = z
   .looseObject({
     login: prText('login'),
@@ -137,13 +116,7 @@ export function prReviewList(name: string) {
   return salvagedOptional(name, salvagingArray(reviewSummarySchema))
 }
 
-/**
- * The head repo a fork PR's checks and merge are keyed on.
- *
- * Empty owner or repo is malformed rather than a valid identity, so `.min(1)` keeps main's falsy
- * drop. `host` is carried because dropping it strips the GitHub Enterprise identity before every
- * subsequent PR RPC, forcing the host to re-derive it per call.
- */
+// Require nonempty fork identity and preserve host so GHES actions cannot fall back to github.com.
 const repoIdentitySchema = z
   .looseObject({ owner: z.string().min(1), repo: z.string().min(1), host: prText('host') })
   .transform((identity): GitHubRepositoryIdentity => ({
@@ -156,8 +129,6 @@ export function prRepoIdentity(name: string) {
   return salvagedOptional(name, repoIdentitySchema)
 }
 
-/** `defaultMethod` decides which methods the merge picker may offer, so a settings block without a
- *  readable one is no settings block at all. */
 const mergeMethodSettingsSchema = z
   .looseObject({
     defaultMethod: z.enum(MERGE_METHOD),
@@ -180,7 +151,6 @@ export function prMergeMethodSettings(name: string) {
   return salvagedOptional(name, mergeMethodSettingsSchema)
 }
 
-/** `state` is the summary; the counts are all defaulted, so a block without a state is dropped. */
 const checkSummarySchema = z
   .looseObject({
     state: z.enum(CHECK_SUMMARY_STATE),
@@ -207,7 +177,6 @@ const reactionSchema = z
   .looseObject({ content: z.enum(REACTION_CONTENT), count: z.number().finite() })
   .transform((reaction): GitHubReaction => ({ content: reaction.content, count: reaction.count }))
 
-/** One conversation comment. `id` is the identity the timeline keys and threads by. */
 const prCommentSchema = z
   .looseObject({
     id: z.number().finite(),
@@ -232,7 +201,6 @@ const prCommentSchema = z
     body: comment.body ?? '',
     createdAt: comment.createdAt ?? '',
     url: comment.url ?? '',
-    // An empty reaction list reads as absent, so the timeline renders no reaction row at all.
     reactions: comment.reactions?.length ? comment.reactions : undefined,
     path: comment.path,
     threadId: comment.threadId,
@@ -243,12 +211,11 @@ const prCommentSchema = z
     isBot: comment.isBot
   }))
 
-/** Preserves upstream order — the timeline relies on it for thread grouping. */
+// Preserve upstream order because timeline thread grouping depends on it.
 export function prCommentList(name: string) {
   return salvagedOptional(name, salvagingArray(prCommentSchema))
 }
 
-/** One check row. `name` labels it and `status` decides its icon, so neither can be defaulted. */
 const checkDetailSchema = z
   .looseObject({
     name: z.string(),

@@ -1,16 +1,8 @@
 import { getPluginHostMethodSpec, isPluginPanelAction } from './plugin-host-api'
 import type { PluginCapabilityKind } from './plugin-capabilities'
 
-/**
- * The capability gate — pure, electron-free, shared by the Electron main
- * host, the headless serve RPC path, and the relay so a security decision
- * cannot land on desktop while drifting on the remote path. Deny-by-default:
- * an empty capability set grants nothing. A conformance test runs identical
- * cases against the desktop and relay enforcement surfaces.
- *
- * Ported from community PR #5801's electron-free gate, rekeyed to the host
- * API v0 spec table.
- */
+/** Shared Electron-free deny-by-default gate for desktop, serve and relay; conformance tests pin identical decisions.
+ * Ported from community PR #5801 to the host API v0 table. */
 
 export type PluginGateErrorCode =
   | 'unknown_method'
@@ -23,11 +15,9 @@ export type PluginGateDecision =
   | { granted: false; code: PluginGateErrorCode; error: string }
 
 export type PluginGateSubject = {
-  /** Capability kinds from the manifest the user consented to; null when the
-   *  plugin is unknown, invalid, disabled, or consent is missing/stale. */
+  /** Null for unknown/invalid/disabled plugins or missing/stale consent. */
   grantedCapabilities: readonly PluginCapabilityKind[] | null
-  /** True when the call arrives over the sandboxed panel bridge (narrower
-   *  method surface than workers). */
+  /** Sandboxed panels have fewer callable methods than trusted workers. */
   viaPanel: boolean
 }
 
@@ -43,8 +33,7 @@ export function gatePluginHostCall(subject: PluginGateSubject, method: string): 
       error: `method ${method} is not available to sandboxed panels`
     }
   }
-  // Why: a disabled/unknown/stale-consent plugin must fail exactly like an
-  // ungranted capability — no probe-able distinction for plugin code.
+  // Unknown, disabled and stale-consent plugins must be indistinguishable from ungranted capabilities.
   if (subject.grantedCapabilities === null) {
     return {
       granted: false,

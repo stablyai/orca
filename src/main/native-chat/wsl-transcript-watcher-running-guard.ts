@@ -22,7 +22,7 @@ export function createRunningGuardedTranscriptNativeWatcher(
   onEvent: () => void,
   onRetry: () => void
 ): TranscriptNativeWatcher {
-  // fs.watch cannot see an SSH host's file; the reconciliation poll stats it there instead.
+  // Remote files use host-side stat reconciliation; native fs.watch cannot observe them here.
   if (isWslTranscriptWatcherPath(filePath) || parseSshTranscriptPath(filePath)) {
     return {
       bind: () => false,

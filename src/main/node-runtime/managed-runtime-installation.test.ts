@@ -78,7 +78,6 @@ it('installs only when asked, with progress, cancel, retry, and a status read fr
   })
   expect(await readdir(root)).toEqual(['1.0'])
 
-  // Whole files without a receipt looped as damaged; Install now rewrites it, with no download.
   await rm(join(root, '1.0', RUNTIME_RELEASE_RECEIPT))
   expect(await installation.status()).toMatchObject({ damaged: true })
   const rewrite = installation.install()

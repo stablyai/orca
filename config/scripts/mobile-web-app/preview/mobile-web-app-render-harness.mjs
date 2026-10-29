@@ -6,11 +6,7 @@ import { fileURLToPath } from 'node:url'
 
 export const projectDir = fileURLToPath(new URL('../../../..', import.meta.url))
 
-/**
- * Both CSP constants are a list of quoted directives with `//` comments between them, and those
- * comments quote directive text. Dropping comment lines first is what keeps a comment out of the
- * header a test serves.
- */
+// Drop full-line comments before parsing quoted Kotlin CSP directives; comments also quote directive text.
 export function parseCspDirectives(source, startMarker, endMarker) {
   const start = source.indexOf(startMarker)
   const end = source.indexOf(endMarker)
@@ -29,10 +25,7 @@ export function parseCspDirectives(source, startMarker, endMarker) {
   return directives.join('; ')
 }
 
-/**
- * The shipped policy, read from the Kotlin source so a test cannot drift from what the shell
- * actually sends. Parsed rather than imported: the constant lives in a JVM module.
- */
+// Read shipped Kotlin CSP; copied fixture can drift and JVM constant cannot be imported here.
 export async function readShellCsp() {
   const source = await readFile(
     join(
@@ -44,14 +37,7 @@ export async function readShellCsp() {
   return parseCspDirectives(source, 'listOf(', ').joinToString')
 }
 
-/**
- * The other headers the shell puts on the document, read from the Kotlin source for the same reason
- * the policy is. String literals only, so the policy itself -- assigned from a constant -- stays
- * `readShellCsp`'s job and is not reported twice.
- *
- * Throws on an empty result rather than returning one: a rig that served no header would otherwise
- * measure the browser's own default and call it the shell's guarantee.
- */
+// Read literal document headers from Kotlin; CSP constant stays readShellCsp’s job. Throw if none found or browser defaults could masquerade as shell guarantees.
 export async function readShellDocumentHeaders() {
   const source = await readFile(
     join(
@@ -75,14 +61,9 @@ export async function readShellDocumentHeaders() {
   return headers
 }
 
-/**
- * The envelope version the page speaks, read from the contract rather than written down twice. A
- * bumped `v` would otherwise reach a test as a 30s timeout naming nothing.
- */
+// Read protocol version from contract; copied stale version would hide behind mount timeout.
 export async function readBridgeProtocolVersion() {
-  // The module that declares it, which is the one both halves of the envelope import: the envelope
-  // re-exports the name, so a reader keyed on the re-export would answer for whichever file the
-  // last split left it in.
+  // Read declaring module rather than envelope reexport so source splits cannot silently change reader target.
   const source = await readFile(
     join(projectDir, 'mobile/src/mobile-web-shell/bridge/bridge-frame-fields.ts'),
     'utf8'
@@ -94,13 +75,7 @@ export async function readBridgeProtocolVersion() {
   return Number(match[1])
 }
 
-/**
- * The bridge's window caps, read from the modules that define them.
- *
- * The shell double below has to price a frame the way `BridgeHostSubscriptions` does, and a double
- * carrying its own copy of these numbers is a double that goes on passing after the real host's
- * changed. `BRIDGE_MAX_UNACKED_BYTES` is written as a product, so the reader evaluates one.
- */
+// Read actual bridge window caps, including product expression, so double prices frames identically after host changes.
 export async function readBridgeWindowCaps() {
   const sources = await Promise.all(
     [
@@ -126,13 +101,7 @@ export async function readBridgeWindowCaps() {
   }
 }
 
-/**
- * The base64 one append of the clipboard-image upload carries, read from the leaf that defines it.
- *
- * The page's canvas resize is measured against this, so a check carrying its own copy is one that
- * goes on passing after the upload path's chunk has moved. Written as a product, so the reader
- * evaluates one the way the window caps above do.
- */
+// Read upload base64 chunk cap/product from source; copied resize budget could pass after upload path changes.
 export async function readClipboardImageUploadChunkBase64Chars() {
   const source = await readFile(
     join(projectDir, 'mobile/src/session/mobile-clipboard-image-upload-chunk.ts'),
@@ -148,10 +117,7 @@ export async function readClipboardImageUploadChunkBase64Chars() {
     .reduce((product, factor) => product * factor, 1)
 }
 
-/**
- * The JPEG quality the pane asks Chromium for, read from the module that sends it. A test that
- * encoded its fixtures at a retyped quality would certify the budget at a number nothing ships.
- */
+// Read shipped screencast JPEG quality; copied value would certify budget for an encoder configuration no product uses.
 export async function readBrowserFrameQuality() {
   const source = await readFile(
     join(projectDir, 'mobile/src/browser/browser-screencast-request-parameters.ts'),
@@ -164,11 +130,7 @@ export async function readBrowserFrameQuality() {
   return Number(match[1]) / 100
 }
 
-/**
- * The page's client-identity placeholder, read from the module that declares it. A rig carrying its
- * own copy would go on passing after the real one moved, which is the whole reason every other
- * constant here is read rather than retyped.
- */
+// Read page client-identity placeholder from declaration so rig cannot silently retain stale copy.
 export async function readBridgePageClientIdentity() {
   const source = await readFile(
     join(projectDir, 'mobile/src/mobile-web-shell/bridge/bridge-page-client-identity.ts'),
@@ -184,7 +146,6 @@ export async function readBridgePageClientIdentity() {
   return { placeholder: read('BRIDGE_PAGE_CLIENT_ID') }
 }
 
-/** The grant the shell offers every page, read from the same source for the same reason. */
 export async function readBridgeFaultGrant() {
   const source = await readFile(
     join(projectDir, 'mobile/src/mobile-web-shell/bridge/bridge-frame-fields.ts'),
@@ -197,7 +158,6 @@ export async function readBridgeFaultGrant() {
   return match[1]
 }
 
-/** The name the page posts its first frame under, read where the page and the shell both read it. */
 export async function readBridgePagePainted() {
   const source = await readFile(
     join(projectDir, 'mobile/src/mobile-web-shell/bridge/bridge-page-painted.ts'),
@@ -210,11 +170,7 @@ export async function readBridgePagePainted() {
   return match[1]
 }
 
-/**
- * Every name a Back press can travel under, read where the product reads them: the claim and the
- * frame this lane added, and the pop the page asks for when it has nothing to spend a press on.
- * The third is what separates "the sheet closed" from "the whole screen went".
- */
+// Read claim/back/pop names from source; observing pop distinguishes sheet close from whole-screen navigation.
 export async function readBridgeBackNames() {
   const lane = await readFile(
     join(projectDir, 'mobile/src/mobile-web-shell/bridge/bridge-page-back.ts'),
@@ -233,24 +189,9 @@ export async function readBridgeBackNames() {
   return { claim: claim[1], frame: frame[1], navigateBack: navigateBack[1] }
 }
 
-/**
- * The shell's half of the bridge, as the page's channel sees it.
- *
- * The entry mounts nothing until `init` lands, so a render check with no shell renders no route at
- * all. This answers `ready`, answers the methods `replies` names, and refuses everything else: a
- * real reply would make this file the place domain behaviour is decided, and every screen below
- * already has a state for an RPC that failed. `grants` and `pageRoutes` are what the shell would
- * have negotiated, and every notify the page posts is kept whole in `__orcaRenderCheckNotifies`,
- * because a control that handed something to the shell and one that did nothing look the same on
- * the document.
- *
- * It answers RPC the way a refusing host does and serves a screencast stream the way the real
- * `BridgeHostSubscriptions` does, including its whole `canCarry` rule and the page's acks. It is
- * not the host: it decides no domain behaviour, and every reply a screen sees is one a check
- * named.
- *
- * Serialized as a page init script, so it takes plain data and closes over nothing.
- */
+// Reply ready/init to mount page; answer only caller-supplied RPC fixtures and refuse others so transport double decides no domain behavior.
+// Keep whole notifies: shell handoff and inert action leave same document. Match binary canCarry/ack ledger to real host.
+// Serialized init script must close over nothing and accept plain data.
 export function installShellDouble({
   version,
   sessionId,
@@ -269,36 +210,27 @@ export function installShellDouble({
   safeAreaInsets = null,
   ownsHostArea = false
 }) {
-  // Where the page's own fault reports land. Read back after the render, so a route that threw
-  // under the boundary names itself instead of timing out as a page that never mounted.
+  // Capture boundary faults so blank route reports own error instead of timing out.
   globalThis.__orcaRenderCheckFaults = []
-  // Every grant-gated notify the page posted, whole and in order. A control that decided to hand
-  // something to the shell and a control that did nothing look identical on the document; this is
-  // the only thing that tells them apart.
+  // Keep grant-gated notifies in order to distinguish shell handoff from no action.
   globalThis.__orcaRenderCheckNotifies = []
-  // Every request the page issued, whole and in order, so a check can say which verb a gesture
-  // produced and with what geometry rather than only that something was sent.
+  // Keep full request verbs/geometry to assert gesture’s actual host effect.
   globalThis.__orcaRenderCheckRequests = []
-  // The subscriptions the double accepted, with the `wantsBinary` each one asked for: the negative
-  // case is "the page did not ask", which no assertion on the frames can see.
+  // Record wantsBinary on accepted subscriptions; absent request cannot be inferred from absent frames.
   globalThis.__orcaRenderCheckSubscribes = []
-  // Binary events this double refused to post because they exceeded the frame cap, which is the
-  // shell's drop rule reproduced where the page can watch it survive one.
+  // Count host-cap frame drops so page can prove stream survives rejected frame.
   globalThis.__orcaRenderCheckDroppedFrames = []
-  // Every ack seq the page posted, in order. Without this a stream that never acked and one that
-  // acked every frame look the same from the page's side.
+  // Record ack sequence: page paint alone cannot prove every frame acknowledged.
   globalThis.__orcaRenderCheckAcks = []
   const openStreams = new Map()
-  // One Back press, on demand. The shell decides when the key goes to the page, so a check has no
-  // other way to make one happen: nothing the document does produces this frame.
+  // Shell owns Back delivery; expose explicit injection because document cannot generate this host frame.
   globalThis.__orcaRenderCheckSendBack = () => {
     if (backFrame === null) {
       throw new Error('this shell double was not given the back frame name')
     }
     channel.onmessage?.({ data: JSON.stringify({ v: version, type: backFrame }) })
   }
-  // One `init` as the shell builds it; a second one for the same session is how the shell moves
-  // the route or the safe-area insets under a live page.
+  // Allow second init to update live route/safe-area like shell.
   const initFrame = (patch = {}) => ({
     v: version,
     type: 'init',
@@ -313,21 +245,18 @@ export function installShellDouble({
     },
     grants: {
       rpc: { maxPendingRequests: 64, maxSubscriptions: 32 },
-      // The fault grant alone unless the caller named a set: every check needs that one,
-      // and a check that names none must not be handed an undefined list.
+      // Default to fault-only grants; unnamed list must not be undefined.
       native: grants ?? [faultGrant]
     },
     ...(pageRoutes === null ? {} : { pageRoutes }),
-    // Omitted when the caller names none, which is the older-shell case the page falls back
-    // on: an absent field is not an empty one, and the page reads the difference.
+    // Omit absent coverage for older-shell behavior; empty field has different semantics.
     ...(pageRouteGrants === null ? {} : { pageRouteGrants }),
-    // Omitted for a shell too old to name one, which is the case the page has a panel for.
+    // Omit unnamed route for old-shell missing-route panel.
     ...(route === null ? {} : { route }),
     ...(host === null ? {} : { host }),
     storage,
-    // Omitted when a check names none, which is every shell before the field.
     ...(safeAreaInsets === null ? {} : { safeAreaInsets }),
-    // Only the wide host-area session sends it, so every other check runs without.
+    // Host-area session ownership appears only on wide host route.
     ...(ownsHostArea ? { ownsHostArea: true } : {}),
     ...patch
   })
@@ -338,8 +267,7 @@ export function installShellDouble({
     postMessage: (json) => {
       const frame = JSON.parse(json)
       const answer = (message) => {
-        // A microtask, not a task: the page posts `ready` while its script is still running, and
-        // this keeps the answer behind it without moving a timer the page's backoff reads.
+        // Reply ready in microtask after entry script without moving timer used by page backoff.
         queueMicrotask(() => {
           channel.onmessage?.({ data: JSON.stringify(message) })
         })
@@ -355,9 +283,7 @@ export function installShellDouble({
         }
         return
       }
-      // The result the caller named for this method, carried in the envelope a real host uses.
-      // Anything unnamed still takes the refusal below, so a screen only ever sees data a test
-      // asked for.
+      // Only named caller fixtures answer; all other methods must follow refusal path.
       if (frame.type === 'subscribe' && streams.includes(frame.method)) {
         globalThis.__orcaRenderCheckSubscribes.push({
           id: frame.id,
@@ -365,14 +291,12 @@ export function installShellDouble({
           params: frame.params,
           wantsBinary: frame.wantsBinary === true
         })
-        // Accepted by saying nothing, exactly as the real host does: a subscription is open until
-        // an `error` or an `end` closes it, and the first thing the page hears is an event.
+        // Subscription acceptance is silent like host; first reply is event until error/end closes stream.
         openStreams.set(frame.id, { seq: 0, unacked: [], unackedBytes: 0 })
         return
       }
       if (frame.type === 'ack') {
-        // The page's ack is what reopens the window, so a double that ignored it would drop
-        // frames the real host carries. Read exactly as `BridgeHostSubscriptions.ack` reads it.
+        // Consume ack exactly like host to reopen frame/byte window; ignored acks would falsely drop valid stream frames.
         const stream = openStreams.get(frame.id)
         if (stream) {
           let acked = 0
@@ -419,18 +343,8 @@ export function installShellDouble({
     },
     onmessage: null
   }
-  /**
-   * One screencast frame from the shell, priced the way `BridgeHostSubscriptions` prices it.
-   *
-   * All three arms of the host's `canCarry`, not just the size one: a frame over the message cap,
-   * a window already holding the most frames it may, and a window whose bytes this frame would
-   * push past the limit. Dropping is the behaviour under test — the event goes nowhere, the
-   * stream stays open, and the next frame paints — so a double that posted an uncarriable frame
-   * would prove the page decodes something no shell could have sent.
-   *
-   * The window only stays open because the page acks, which the `ack` arm above consumes. That is
-   * what makes a long stream a real test of both rather than of neither.
-   */
+  // Match all host canCarry bounds: message cap, inflight frame count and inflight bytes; uncarriable frames drop without closing stream.
+  // Long stream requires actual page acks to reopen same ledger, not artificial unlimited delivery.
   globalThis.__orcaRenderCheckEmitBinary = (id, binary) => {
     const stream = openStreams.get(id)
     if (!stream) {
@@ -454,19 +368,8 @@ export function installShellDouble({
     channel.onmessage?.({ data: json })
     return 'posted'
   }
-  /**
-   * One JSON stream event from the shell, on the same ledger the binary emitter uses.
-   *
-   * The host serves `session.tabs.subscribe` and `terminal.subscribe` as JSON events — the native
-   * client decodes the terminal's binary frames into `scrollback`/`data` payloads before the bridge
-   * ever sees them — so a check that drives a screen off a live stream needs this and not the
-   * binary arm. No window rule: these payloads are a check's own fixtures and are nowhere near the
-   * cap, and a drop here would read as the page ignoring an event it was never sent.
-   *
-   * It still owes the ledger its bytes. The `ack` arm subtracts what it finds on `unacked`, so a
-   * frame that took a slot without paying for it drove `unackedBytes` negative on the first ack and
-   * left the binary emitter's window admitting frames past the cap for the life of the stream.
-   */
+  // Session/terminal streams arrive as JSON: native client decodes terminal binary before bridge. Fixture events are below cap, so do not invent drop.
+  // Still charge bytes to shared ledger: ack subtracts them, and uncharged JSON once made byte count negative/unbounded.
   globalThis.__orcaRenderCheckEmitEvent = (id, payload) => {
     const stream = openStreams.get(id)
     if (!stream) {
@@ -481,7 +384,6 @@ export function installShellDouble({
     channel.onmessage?.({ data: json })
     return 'posted'
   }
-  /** The window as the double holds it, so a check can read the ledger both emitters share. */
   globalThis.__orcaRenderCheckWindow = (id) => {
     const stream = openStreams.get(id)
     return stream === undefined
@@ -491,16 +393,9 @@ export function installShellDouble({
   globalThis.orcaBridge = channel
 }
 
-/** How long a check waits for a mount's reads before it reports what the page did send. */
 const RECORDED_REQUEST_MS = 30_000
 
-/**
- * The double's request log, once every method named is in it.
- *
- * A route issues its first reads from effects that run after the commit painting its chrome, so a
- * snapshot taken where the awaited text lands is a race a loaded machine loses. The bound names
- * what never arrived and what did.
- */
+// Await effect-issued startup RPCs after chrome paint; snapshot at text commit races loaded CI. Bound reports missing and received verbs.
 export async function waitForRecordedRequests(
   page,
   methods,
@@ -523,13 +418,7 @@ export async function waitForRecordedRequests(
   }
 }
 
-/**
- * The page server the render checks run against: the built bundle, under the shell's own policy.
- *
- * `transformChunk` is how a check poisons one route chunk without building a second bundle.
- * `cspHeader` may be a function of the request, and `handleRequest` lets a check answer a path of
- * its own on this origin.
- */
+// Serve real built bundle under shipped CSP; transformChunk poisons real route, per-request CSP/report handler supports preview arms.
 export async function createBundleServer({
   outDir,
   cspHeader,
@@ -540,29 +429,20 @@ export async function createBundleServer({
   const requestedPaths = []
   const server = createServer((request, response) => {
     const path = new URL(request.url, 'http://localhost').pathname
-    // Every path this origin was asked for, the browser's own fetches included. A favicon request
-    // is made by the browser process rather than the page, and Playwright's `page.on('request')`
-    // never reports one, so the server is the only place a check can see it.
+    // Log server requests including browser-process favicon fetch invisible to page.on(request).
     requestedPaths.push(path)
-    // An endpoint of the check's own, answered before anything is looked for on disk: a policy's
-    // `report-uri` has to name a real server, and naming this one keeps it on the page's origin.
+    // Answer custom report endpoint before filesystem lookup; CSP report-uri must resolve on actual page origin.
     if (handleRequest?.(request, response, path)) {
       return
     }
-    // A browser asks for this on its own and the shell's WebView never does. The bundle carries
-    // no icon, so a 404 would put a console error in every check that runs against a full Chrome
-    // -- which is what CI resolves -- and none against the bundled headless shell. Kept for the
-    // probe documents the checks compose themselves, which declare no icon; the page's own
-    // document does declare one, and answering 204 hides nothing from a check that reads the
-    // request rather than the response (`mobile-web-app-session-render.test.mjs`).
+    // Return 204 favicon for probe documents: full runner Chrome auto-fetches it, bundled headless/WebView do not.
+    // Product document carries data icon; session-render asserts request absence via server log, so response fallback hides no product regression.
     if (path === '/favicon.ico') {
       response.writeHead(204)
       response.end()
       return
     }
-    // A route path serves the entrypoint and the page routes client-side. A path naming a file
-    // has to come out of the bundle or 404, the same as the shell's manifest map: answering it
-    // with the document instead would hide a publicPath the script cannot fetch from.
+    // Serve entry for route paths only; missing file assets must 404 or catch-all hides bad publicPath.
     const namesAFile = path.slice(path.lastIndexOf('/')).includes('.')
     const file = namesAFile ? path.slice(1) : 'index.html'
     readFile(join(outDir, file)).then(
@@ -571,16 +451,12 @@ export async function createBundleServer({
         const headers = {
           'content-type': contentTypeForExtension(extname(file).slice(1))
         }
-        // The document carries the shell's real policy, so a directive the page violates fails
-        // here rather than on a phone. Assets carry none, exactly as the native handler does.
+        // Attach shipped CSP to document only, matching native asset handler.
         if (file === 'index.html' && cspHeader) {
-          // A function when the policy is per-document: the preview rig appends this document's own
-          // report endpoint, which carries the arm's nonce.
+          // Per-document CSP function supplies nonce-specific report endpoint.
           headers['content-security-policy'] =
             typeof cspHeader === 'function' ? cspHeader(request) : cspHeader
         }
-        // Whatever else the shell puts on the document, on the document only, exactly as the native
-        // handler does.
         if (file === 'index.html' && documentHeaders) {
           Object.assign(headers, documentHeaders)
         }
@@ -597,15 +473,8 @@ export async function createBundleServer({
   return { server, origin: `http://127.0.0.1:${String(server.address().port)}`, requestedPaths }
 }
 
-/**
- * A handler of the page's own, installed before the bundle so the terminal meets a `window.onerror`
- * that belongs to someone else.
- *
- * Reading `null` three times would pass on a terminal that assigned `null` over a real handler,
- * which is the failure this seam exists to prevent. The sentinel is identity-checked in the page
- * rather than marshalled out of it — a function does not survive `evaluate` — and it returns
- * false so the browser still reports the error normally.
- */
+// Install page-owned onerror sentinel before terminal; identity-check within page since function cannot survive evaluate serialization.
+// Return false to preserve normal reporting; null-only checks miss terminal overwriting another consumer’s handler.
 export function installPageErrorSentinel() {
   globalThis.__orcaSentinelCalls = []
   const sentinel = (message) => {
@@ -616,17 +485,8 @@ export function installPageErrorSentinel() {
   window.onerror = sentinel
 }
 
-/**
- * Every animation frame and timer, tagged with the mount that scheduled it.
- *
- * Installed before the bundle loads, so the document's own scheduling goes through it. Each
- * schedule remembers the `#terminal-container` that was on the page at the time; a callback that
- * runs once that element has left the document is a frame or timer of the first mount firing
- * into the second, which is the whole finding. The element rather than a counter the test bumps,
- * because React unmounts on its own schedule and a callback that runs while the first terminal is
- * still up is not a leak. Every schedule is kept, not just the ones still owed, so the test can
- * say that there was something to leak before it says that nothing did.
- */
+// Tag scheduled work with current terminal container; firing after that element leaves DOM proves callback leaked into replacement.
+// Use actual DOM lifetime, not test mount counter (React schedules independently); retain all schedules to prove work existed before asserting none leaked.
 export function installSchedulerRecorder() {
   globalThis.__orcaScheduler = { watching: false, scheduled: [], leaked: [], heldFrames: 0 }
   const state = globalThis.__orcaScheduler
@@ -654,12 +514,9 @@ export function installSchedulerRecorder() {
       if (!state.watching || typeof callback !== 'function') {
         return schedule(callback, ...rest)
       }
-      // The line that called this, which is the script the work belongs to. Line 0 is the error's
-      // own header and line 1 is this wrapper.
       const caller = ((new Error('scheduled').stack ?? '').split('\n')[2] ?? '').trim()
       const container = document.getElementById('terminal-container')
-      // `fired` is what makes "owed" readable: a callback that has not run is still owed, whether
-      // it was cancelled or is merely waiting, and cancelling never sets it.
+      // Track fired separately: cancelled and pending callbacks can both remain unfired.
       const entry = { kind, caller, owned: container !== null, fired: false }
       state.scheduled.push(entry)
       const recorded = (...args) => {
@@ -682,16 +539,11 @@ export function installSchedulerRecorder() {
   globalThis.setInterval = wrap(globalThis.setInterval.bind(globalThis), 'interval')
 }
 
-/** Recorded before anything else runs, so a refusal during the page's own boot is counted. */
-/**
- * Every window and document listener the page holds, by target, type and phase.
- *
- * Identity, not a tally: `addEventListener` with a listener the target already holds is a no-op in
- * the DOM, and `removeEventListener` with one it does not hold is too, so counting calls would
- * report leaks a browser does not have. The set is the live listeners, which is what a snapshot
- * before and after a mount can be compared on.
- */
-export function installListenerRecorder() {
+// Install before bundle so boot-time refusal counts too.
+// Track listener identity/target/type/phase, not add/remove call totals: DOM duplicate adds and absent removes are no-ops.
+export function installListenerRecorder({ selector } = {}) {
+  const elements = new WeakMap()
+  let nextElement = 0
   const live = new Map()
   globalThis.__orcaListeners = {
     snapshot: () =>
@@ -702,7 +554,13 @@ export function installListenerRecorder() {
       )
   }
   const keyFor = (target, type, options) => {
-    const where = target === globalThis ? 'window' : target === document ? 'document' : null
+    let where = target === globalThis ? 'window' : target === document ? 'document' : null
+    if (where === null && selector && target instanceof Element && target.matches(selector)) {
+      if (!elements.has(target)) {
+        elements.set(target, ++nextElement)
+      }
+      where = `element ${elements.get(target)}`
+    }
     if (where === null) {
       return null
     }
@@ -739,13 +597,7 @@ export function installCspViolationRecorder() {
   })
 }
 
-/**
- * Every computed property of `html` and `body`, as one string each.
- *
- * The oracle for "the page mount styles only what it owns" is a page of the same application with
- * no terminal on it, so the comparison is against another page rather than against a list of
- * properties someone chose. A rule that escaped the host would have to move one of these.
- */
+// Compare every html/body computed property against same app without terminal; handpicked style list could miss escaped rule.
 export async function readRootComputedStyles(page) {
   return await page.evaluate(() => {
     const read = (element) => {
@@ -760,12 +612,7 @@ export async function readRootComputedStyles(page) {
   })
 }
 
-/**
- * What the terminal's injected sheet matches, and how much of it there is.
- *
- * The rule count is the precondition for the empty list: a sheet that was never planted, or one
- * the browser refused, would match nothing for a reason that has nothing to do with scoping.
- */
+// Require injected rule count before interpreting no escaped matches; missing/refused sheet also matches nothing.
 export async function terminalStyleReach(page) {
   return await page.evaluate(() => {
     const sheet = [...document.styleSheets].find(
@@ -785,4 +632,13 @@ export async function terminalStyleReach(page) {
     }
     return { rules: sheet.cssRules.length, outside }
   })
+}
+
+export async function waitForPageFrames(page) {
+  await page.evaluate(
+    () =>
+      new Promise((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+      )
+  )
 }

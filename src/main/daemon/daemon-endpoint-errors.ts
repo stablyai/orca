@@ -2,18 +2,12 @@ import { DAEMON_ENDPOINT_LOST_MESSAGE } from './daemon-endpoint-ownership'
 import { DaemonConnectionLostError } from './daemon-errors'
 import { DAEMON_UNAVAILABLE_RECONNECT_MESSAGE } from './types'
 
-/**
- * Narrow on purpose: only the daemon's own reply for a request type it does not implement.
- * A transient failure must stay unproven rather than be mistaken for a missing capability.
- * The server throws `Unknown request type: <type>`; the client rejects with that text, which
- * `addNodePtyRecoveryHint` only ever prepends to.
- */
+/** Match the server's unknown-request reply; transient errors do not prove a missing capability. */
 export function isUnknownRequestTypeError(err: unknown): boolean {
   return err instanceof Error && err.message.includes('Unknown request type')
 }
 
-// Why: syscall='connect' distinguishes a dead-socket ENOENT/ECONNREFUSED from token-file ENOENT (no syscall);
-// message strings incl. wedged-daemon "Hello response timed out" (#8689) also warrant a respawn.
+// Require connect errors to exclude missing token files; hello timeouts also permit respawn.
 export function isDaemonGoneError(err: unknown): boolean {
   if (!(err instanceof Error)) {
     return false

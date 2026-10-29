@@ -1,5 +1,4 @@
-// Runtime creates (CLI, agents, phone, paired clients, orchestration) reuse prepared checkouts
-// like the app's own creates, so they must send the same create events, exactly once each.
+// Runtime creates reuse prepared checkouts and must emit the same once-only create events as the app.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('electron', () => ({
@@ -51,6 +50,7 @@ import {
   beginPreparationWork,
   type PreparationWork
 } from '../worktree-create-concurrency'
+import { partialRuntimeStore } from './runtime-store-partial-fixture'
 
 const gitRepo = {
   id: 'repo-1',
@@ -74,12 +74,12 @@ type RuntimeInternals = {
 }
 
 function makeRuntime(repo: Record<string, unknown> = gitRepo): OrcaRuntimeService {
-  const store = {
-    getSettings: () => ({ disabledTuiAgents: ['codex'], workspaceDir: '/worktrees' }),
-    getProjectHostSetups: () => []
-  }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: every store method this create path reaches is supplied above.
-  const runtime = new OrcaRuntimeService(store as never)
+  const runtime = new OrcaRuntimeService(
+    partialRuntimeStore({
+      getSettings: () => ({ disabledTuiAgents: ['codex'], workspaceDir: '/worktrees' }),
+      getProjectHostSetups: () => []
+    })
+  )
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the named members all exist on the service; the cast only exposes non-public ones to the spies.
   const internals = runtime as unknown as RuntimeInternals
   vi.spyOn(internals, 'resolveRepoSelector').mockResolvedValue(repo)
@@ -192,7 +192,6 @@ describe('runtime create events', () => {
     let competing: PreparationWork | undefined
     mocks.createLocal.mockImplementation(async ({ rearm }: LocalCreateArgs) => {
       competing = beginPreparationWork()
-      // The re-arm starts its build synchronously when fired, after the create's last step.
       rearm.fire = () => {
         beginPreparationWork()
         beginPreparationWork()
@@ -249,7 +248,6 @@ describe('runtime create events', () => {
       create_entry_point: 'runtime',
       execution_host: 'ssh'
     })
-    // SSH would need a remote round trip, so the repo is not probed.
     expect(mocks.probe).not.toHaveBeenCalled()
   })
 

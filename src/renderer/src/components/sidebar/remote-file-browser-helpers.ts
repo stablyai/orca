@@ -34,11 +34,7 @@ export function filterEntries(entries: DirEntry[], filter: string): DirEntry[] {
   return entries.filter((e) => e.name.toLowerCase().includes(q))
 }
 
-// Enter-key behavior for the filter input:
-//   (a) filtered set has exactly one folder → navigate into it
-//       (files alongside it don't block — a folder match wins)
-//   (b) filtered set has exactly one file and no folders → fileHint
-//   (c) otherwise → noop
+// Enter prefers a unique folder; otherwise a unique file shows a hint, and ambiguous matches do nothing.
 export type EnterAction =
   | { type: 'navigate'; name: string }
   | { type: 'fileHint' }
@@ -87,29 +83,22 @@ export function parentPath(p: string, pathFlavor: FilesystemPathFlavor = 'posix'
   return parent || '/'
 }
 
-// ---------- Path-aware filter parsing ----------
-
 export type ParsedInput =
   | { mode: 'filter'; filter: string }
   | {
       mode: 'path'
-      // `root` = absolute `/`, `home` = resolved SSH user home, `cwd` = the
-      // currently committed resolvedPath, `drive` = a Windows drive root.
+      // Resolve against the filesystem root, remote home, current directory, or Windows drive root.
       base: 'root' | 'home' | 'cwd' | 'drive'
       // Canonical `M:\` root; only set when `base` is 'drive'.
       driveRoot?: string
-      // Segments to resolve one-by-one from the base. Empty string segments
-      // never appear here — repeated separators are surfaced via `invalid`.
+      // Committed segments exclude empty entries; repeated separators are invalid.
       committedSegments: string[]
-      // The part after the final separator. Drives the local filter applied
-      // to the resolved preview directory; empty when input ends with `/`.
+      // Text after the final separator filters the preview listing.
       trailingFilter: string
-      // Only set for repeated-separator inputs; other resolution failures are
-      // reported at resolve time so error messages can name the failing seg.
+      // Report repeated separators here; resolve-time errors can name the failing segment.
       invalid?: string
     }
 
-// Slashes, drive anchors, and standalone base markers enter path mode.
 export function isPathMode(raw: string, pathFlavor: FilesystemPathFlavor = 'posix'): boolean {
   if (raw.includes('/')) {
     return true
@@ -133,13 +122,10 @@ export function parsePathInput(
   pathFlavor: FilesystemPathFlavor = 'posix'
 ): ParsedInput {
   if (!isPathMode(raw, pathFlavor)) {
-    // Filter mode preserves the raw text; trimming happens inside
-    // `filterEntries` so leading/trailing spaces don't alter the input shown
-    // back to the user.
+    // Keep the displayed input intact; filterEntries trims only for matching.
     return { mode: 'filter', filter: raw }
   }
 
-  // Base-marker literals with no trailing slash.
   if (raw === '~') {
     return { mode: 'path', base: 'home', committedSegments: [], trailingFilter: '' }
   }
@@ -156,7 +142,6 @@ export function parsePathInput(
   if (pathFlavor === 'win32' && isDrivePath(raw)) {
     base = 'drive'
     driveRoot = driveRootOf(raw)
-    // Strip the drive anchor; segments accept either Windows separator.
     remainder = raw.slice(2).replace(/^[\\/]/, '')
   } else if (raw.startsWith('/')) {
     base = 'root'
@@ -169,8 +154,7 @@ export function parsePathInput(
     remainder = raw
   }
 
-  // Don't collapse `//`: the visible input must agree with the path being
-  // resolved. Report it as invalid and let the caller surface the error.
+  // Reject repeated separators so the resolved path agrees with the visible input.
   const hasRepeatedSeparators =
     base === 'drive' ? /[\\/]{2,}/.test(remainder) : remainder.includes('//')
   if (hasRepeatedSeparators) {
@@ -180,16 +164,14 @@ export function parsePathInput(
       driveRoot,
       committedSegments: [],
       trailingFilter: '',
-      invalid: 'Invalid path: repeated separators'
+      invalid: translate(
+        'auto.components.sidebar.RemoteFileBrowser.invalidPathRepeatedSeparators',
+        'Invalid path: repeated separators'
+      )
     }
   }
 
-  // Reject control characters (including NUL and newlines) in path input.
-  // These segments are eventually shell-escaped and passed to `cd <path> && ls`;
-  // embedded newlines would corrupt the line-based `ls -1` parser, and NUL
-  // bytes cause undefined behavior in the shell / C string boundaries. Single-
-  // quote shell-escaping protects against injection but not against these
-  // structural hazards, so we reject at the parse layer.
+  // Reject controls before directory resolution: quoting alone cannot protect line-based listings or NUL boundaries.
   // eslint-disable-next-line no-control-regex
   if (/[\x00-\x1F]/.test(remainder)) {
     return {
@@ -198,12 +180,14 @@ export function parsePathInput(
       driveRoot,
       committedSegments: [],
       trailingFilter: '',
-      invalid: 'Invalid path: control characters are not allowed'
+      invalid: translate(
+        'auto.components.sidebar.RemoteFileBrowser.invalidPathControlCharacters',
+        'Invalid path: control characters are not allowed'
+      )
     }
   }
 
-  // `split('/')` leaves an empty string when `remainder` ends with `/`, which
-  // is the only legal "empty tail" and simply means "no trailing filter".
+  // A trailing separator is the only legal empty segment and means no trailing filter.
   const parts =
     remainder === '' ? [''] : base === 'drive' ? remainder.split(/[\\/]/) : remainder.split('/')
   const trailingFilter = parts.at(-1) ?? ''
@@ -217,8 +201,6 @@ export type SegmentOutcome =
   | { type: 'descend'; name: string }
   | { type: 'error'; message: string }
 
-// Pure decision step for one committed segment. The caller supplies the
-// base path (for error messages) and that base's listing.
 export function resolveSegmentStep(
   segment: string,
   basePath: string,
@@ -230,16 +212,13 @@ export function resolveSegmentStep(
   if (segment === '..') {
     return { type: 'stay' } // caller turns this into parent navigation
   }
-  // Exact (case-sensitive) match wins. When both `Documents` and `documents`
-  // exist on a case-sensitive POSIX filesystem, the user's literal spelling
-  // must be authoritative.
+  // On case-sensitive hosts, literal spelling wins when entries differ only by case.
   const exact = baseEntries.find((e) => e.name === segment)
   if (exact) {
     if (exact.isDirectory) {
       return { type: 'descend', name: exact.name }
     }
-    // Stop resolution: prefix-matching to a similarly-named folder here would
-    // silently bypass a real file the user pointed at.
+    // An exact file match must not fall through to a similarly named folder.
     return {
       type: 'error',
       message: translate(
@@ -249,11 +228,7 @@ export function resolveSegmentStep(
       )
     }
   }
-  // Fall back to case-insensitive matching so segment resolution agrees with
-  // the case-insensitive filter input. Without this, typing `documents/`
-  // errors while typing `documents` finds `Documents` via the filter — the
-  // two modes must not disagree. Remote listings can still be case-sensitive;
-  // we only accept CI matches when the case-sensitive match is absent.
+  // When literal matching fails, align path resolution with the case-insensitive filter.
   const segLower = segment.toLowerCase()
   const ciExact = baseEntries.find((e) => e.name.toLowerCase() === segLower)
   if (ciExact) {

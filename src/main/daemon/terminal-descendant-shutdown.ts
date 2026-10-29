@@ -9,8 +9,7 @@ import {
   SHUTDOWN_DESCENDANT_VERIFY_MS
 } from './immediate-kill-reply-budget'
 
-// Keep one fresh table for the short burst of verifier polls that follows a shutdown signal.
-// This bounds process-table fanout without reusing a completed capture for a later polling round.
+// Share in-flight shutdown scans and retain results for 25ms to limit process-table fanout.
 let sharedShutdownCapture: {
   promise: ReturnType<ProcessTableReader>
   expires?: ReturnType<typeof setTimeout>

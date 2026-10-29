@@ -93,7 +93,7 @@ export function IpynbToolbarButton({
 
 export type IpynbRunState = 'idle' | 'queued' | 'running'
 
-/** VS Code-style gutter: a fixed `[n]` count with a run button slot below it, shown on hover or focus. */
+/** Reserve a fixed count and run-button slot so hover/focus does not shift the cell. */
 export function IpynbRunPrompt({
   executionCount,
   state,
@@ -102,17 +102,16 @@ export function IpynbRunPrompt({
 }: {
   executionCount: number | null
   state: IpynbRunState
-  /** How long the last run took, once it has finished. */
   duration: string | null
   onRun: () => void
 }): React.JSX.Element {
   return (
     <div className="flex flex-col items-center">
-      {/* h-5 matches one code line, so the count sits on the first line's centre. */}
+      {/* Match the first code line’s height to align its count. */}
       <span className="flex h-5 items-center font-mono text-[11px] text-muted-foreground">
         [{state === 'idle' ? (executionCount ?? ' ') : '*'}]
       </span>
-      {/* Why: `invisible` keeps the slot's box, so revealing the button never moves anything. */}
+      {/* Retain the hidden run slot to prevent layout shifts on reveal. */}
       <div
         className={cn(
           state === 'idle' && 'invisible group-focus-within:visible group-hover:visible'

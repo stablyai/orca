@@ -16,13 +16,14 @@ import {
 } from '@/lib/onboarding-folder-agent-launch'
 import { markOnboardingProjectAdded } from '@/lib/onboarding-project-checklist'
 import { translate } from '@/i18n/i18n'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { upsertAddedRepoWithProjectHostSetup } from './add-repo-store-upsert'
 import { worktreeRefreshOptions } from './add-repo-runtime-owner'
 import { addRuntimeSshRepo } from '@/runtime/runtime-ssh-target-management'
 import type { Repo } from '../../../../shared/repo-types'
 import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 
-// Why: the SSH target is a paired server's own host, and only that server adds a project on it.
+// Only the paired server can add folder projects on its own SSH host.
 async function addSshFolderProject(args: {
   connectionId: string
   runtimeEnvironmentId: string | null
@@ -50,6 +51,7 @@ async function addSshFolderProject(args: {
 }
 
 const NonGitFolderDialog = React.memo(function NonGitFolderDialog() {
+  useUiLanguageRevision()
   const activeModal = useAppStore((s) => s.activeModal)
   const modalData = useAppStore((s) => s.modalData)
   const closeModal = useAppStore((s) => s.closeModal)
@@ -95,23 +97,18 @@ const NonGitFolderDialog = React.memo(function NonGitFolderDialog() {
           })
           const state = useAppStore.getState()
           const hadProjectBeforeAdd = stateBeforeAdd.repos.length > 0
-          await markOnboardingProjectAdded('addedFolder')
+          const onboardingBeforeAdd = await markOnboardingProjectAdded('addedFolder')
           await state.fetchWorktrees(repo.id, ownerOptions)
-          // Why: mirror the local non-git folder flow — without this the
-          // dialog closes and the UI shows no visible change, making the
-          // add feel like a no-op. Activating the synthetic folder
-          // worktree reveals it in the sidebar and opens the workspace.
+          // Reveal the synthetic folder workspace so successful adds show a visible result, matching local folders.
           const folderWorktree = selectWorktreesByRepo(useAppStore.getState())[repo.id]?.find(
             (worktree) => worktree.hostId === ownerOptions.executionHostId
           )
           if (folderWorktree) {
-            const onboarding = await window.api.onboarding.get().catch(() => null)
-            // Why: SSH users can hit this dialog from Add Project after
-            // dismissing onboarding, bypassing the local addNonGitFolder path.
+            // SSH adds can bypass addNonGitFolder after onboarding dismissal; resolve the default agent here too.
             const launch = resolveDismissedOnboardingFolderAgentLaunch({
               worktreeId: folderWorktree.id,
               store: useAppStore.getState(),
-              onboarding,
+              onboarding: onboardingBeforeAdd,
               hasExistingProject: hadProjectBeforeAdd,
               executionHostId: ownerOptions.executionHostId ?? connectionId
             })
@@ -122,8 +119,7 @@ const NonGitFolderDialog = React.memo(function NonGitFolderDialog() {
             })
           }
         } catch (err) {
-          // This code path calls the server directly (not through the store),
-          // so the store's toast handling does not apply.
+          // Direct server calls bypass store error toasts; surface failures here.
           toast.error(
             err instanceof Error
               ? err.message

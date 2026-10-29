@@ -205,7 +205,9 @@ describe('OpenCode SQLite process retirement', () => {
     signal.abort(new Error('read cancelled'))
     expect(await active).toMatchObject({ message: 'read cancelled' })
     client.dispose()
-    expect(await Promise.all(queued)).toHaveLength(64)
+    for (const error of await Promise.all(queued)) {
+      expect(error).toMatchObject({ message: 'Worker request queue disposed' })
+    }
     await expect(client.parse(args)).rejects.toThrow('disposed')
   })
 

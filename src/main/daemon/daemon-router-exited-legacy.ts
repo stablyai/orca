@@ -5,10 +5,7 @@ import type { DaemonPtyAdapterSubscriptionFanout } from './daemon-pty-adapter-su
 
 export type ExitedLegacyVerdict = 'retired' | 'already-retired' | 'not-exited'
 
-/**
- * Unlists a legacy daemon whose socket is gone and whose process has exited. Why both: a refused
- * socket alone is loss of contact, and only a vanished pid proves the daemon owns nothing.
- */
+/** Retirement requires both endpoint loss and process-exit proof; lost contact alone cannot prove absence. */
 export function retireExitedLegacyAdapter(args: {
   adapter: DaemonPtyAdapter
   error: unknown
@@ -30,9 +27,9 @@ export function retireExitedLegacyAdapter(args: {
     return 'already-retired'
   }
   args.legacy.splice(index, 1)
-  // Why: the fanout was built from a copy of the adapters, so splicing the legacy list alone leaves it on the dead socket.
+  // The subscription fanout holds its own copy of the adapter list.
   args.subscriptions.dropAdapter(adapter)
-  // Why: the socket is already gone; a failed disconnect must not fail the caller.
+  // Disconnect failure must not undo proven retirement.
   void Promise.resolve()
     .then(() => adapter.disconnectOnly())
     .catch(() => undefined)

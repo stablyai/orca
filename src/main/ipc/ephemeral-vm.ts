@@ -10,8 +10,7 @@ import {
   type EphemeralVmRecipeResultWarning
 } from '../../shared/ephemeral-vm-recipe-diagnostics'
 import { getProvisionedRootRecipeRepoUrl } from '../../shared/ephemeral-vm-recipe-repo-url'
-// Why: import directly from the doctor module (not the barrel) — it uses Node
-// fs/path and must stay out of the browser bundle that imports the barrel.
+// Import the Node-only doctor directly so browser consumers of the barrel do not bundle fs/path.
 import { doctorEphemeralVmRecipe } from '../../shared/ephemeral-vm-recipe-doctor'
 import { updateEphemeralVmRuntimeStatus } from '../../shared/ephemeral-vm-runtime-store'
 import type { EphemeralVmRuntimeRecord } from '../../shared/ephemeral-vm-runtimes'
@@ -36,6 +35,7 @@ import { registerEphemeralVmRuntimeHandlers } from './ephemeral-vm-runtime-handl
 import type { PluginService } from '../plugins/plugin-service'
 import { getApprovedPluginVmRecipes } from '../plugins/plugin-approved-vm-recipes'
 import { resolveProvisionedRootSource } from '../ephemeral-vm/provisioned-root-source'
+import { getRuntimeEnvironmentRegistryRoot } from './runtime-environments/runtime-environment-registry-root'
 
 const activeProvisionControllers = new Map<string, AbortController>()
 
@@ -146,8 +146,7 @@ export function registerEphemeralVmHandlers(store: Store, pluginService?: Plugin
           chunk: redactEphemeralVmRecipeDiagnosticText(chunk)
         })
       }
-      // Why: deregister only when the whole handler settles, so cancelProvision still finds the
-      // controller for every phase that reads its signal.
+      // Retain cancellation registration until every signal-consuming provisioning phase settles.
       try {
         let recipeRepoUrl = repo.repo.gitRemoteIdentity?.remoteUrl
         let sourceRef = args.ref
@@ -244,7 +243,7 @@ export function registerEphemeralVmHandlers(store: Store, pluginService?: Plugin
 
         let environment: ReturnType<typeof addEnvironmentFromPairingCode>
         try {
-          environment = addEnvironmentFromPairingCode(app.getPath('userData'), {
+          environment = addEnvironmentFromPairingCode(getRuntimeEnvironmentRegistryRoot(), {
             name: buildEphemeralEnvironmentName(repo.repo.displayName, result.runtime.id),
             pairingCode: connection.pairingCode,
             source: 'ephemeral-vm'

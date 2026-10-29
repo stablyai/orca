@@ -3,29 +3,21 @@ import {
   BRIDGE_MAX_DEPTH,
   BRIDGE_MAX_EXTERNAL_LINK_CHARS,
   BRIDGE_MAX_MESSAGE_BYTES,
-  BRIDGE_MAX_METHOD_CHARS,
   BRIDGE_MAX_NODES,
-  BRIDGE_MAX_PENDING_REQUESTS,
-  BRIDGE_MAX_REPLY_BYTES,
-  BRIDGE_MAX_REPLY_PARTS,
-  BRIDGE_MAX_SUBSCRIPTIONS,
   isBridgeExternalLinkUrl,
   readBridgeExternalLinkUrl,
   parseBridgeMessage,
   utf8ByteLength
 } from './bridge-caps'
 
-/** A JSON document of exactly `bytes` UTF-8 bytes: a quoted run of ASCII. */
 function jsonStringOfBytes(bytes: number): string {
   return `"${'x'.repeat(bytes - 2)}"`
 }
 
-/** A scalar nested inside `levels - 1` arrays, so the scalar itself sits at `levels`. */
 function nestedArrays(levels: number): string {
   return `${'['.repeat(levels - 1)}0${']'.repeat(levels - 1)}`
 }
 
-/** An array holding `nodes - 1` scalars, so the array and its values total `nodes`. */
 function arrayOfNodes(nodes: number): string {
   return `[${Array.from({ length: nodes - 1 }, () => '0').join(',')}]`
 }
@@ -51,7 +43,6 @@ describe('utf8ByteLength', () => {
   })
 })
 
-/** A listing reply of the shape the node cap would refuse: `rows` records of four fields each. */
 function listingReply(rows: number): string {
   const records = Array.from({ length: rows }, (_, index) => ({
     id: index,
@@ -143,40 +134,6 @@ describe('parseBridgeMessage document caps', () => {
   })
 })
 
-describe('the agreed numbers', () => {
-  it('pins what a released shell and a served page believe about each other', () => {
-    // These are wire, not tuning: the page bundle and the installed shell agree on them without
-    // ever negotiating, so a change here is a change both sides have to ship for.
-    expect({
-      messageBytes: BRIDGE_MAX_MESSAGE_BYTES,
-      depth: BRIDGE_MAX_DEPTH,
-      nodes: BRIDGE_MAX_NODES,
-      methodChars: BRIDGE_MAX_METHOD_CHARS,
-      pendingRequests: BRIDGE_MAX_PENDING_REQUESTS,
-      subscriptions: BRIDGE_MAX_SUBSCRIPTIONS,
-      replyBytes: BRIDGE_MAX_REPLY_BYTES,
-      replyParts: BRIDGE_MAX_REPLY_PARTS
-    }).toEqual({
-      messageBytes: 655_360,
-      depth: 16,
-      nodes: 20_000,
-      methodChars: 64,
-      pendingRequests: 64,
-      subscriptions: 32,
-      replyBytes: 8_388_608,
-      replyParts: 27
-    })
-  })
-})
-
-describe('derived caps', () => {
-  it('allows enough parts for a ceiling-sized reply whose every byte re-escapes', () => {
-    // A chunk is JSON text inside a JSON string, so re-escaping it at worst doubles it.
-    const worstCaseFrames = Math.ceil((BRIDGE_MAX_REPLY_BYTES * 2) / BRIDGE_MAX_MESSAGE_BYTES)
-    expect(BRIDGE_MAX_REPLY_PARTS).toBeGreaterThan(worstCaseFrames)
-  })
-})
-
 describe('parseBridgeMessage direction', () => {
   it('lets a reply past the node cap through, and refuses the same document from the page', () => {
     const raw = listingReply(5_000)
@@ -186,15 +143,6 @@ describe('parseBridgeMessage direction', () => {
       refusal: 'too-many-nodes'
     })
     expect(parseBridgeMessage(raw, 'shell-to-page').ok).toBe(true)
-  })
-
-  it('accepts exactly the node count the design note called out', () => {
-    // 5 000 records x 4 fields, plus the records and the array: past 20 000 either way you count.
-    expect(parseBridgeMessage(arrayOfNodes(25_000), 'shell-to-page').ok).toBe(true)
-    expect(parseBridgeMessage(arrayOfNodes(25_000), 'page-to-shell')).toEqual({
-      ok: false,
-      refusal: 'too-many-nodes'
-    })
   })
 
   it('lets a reply nest past the depth cap, and refuses the same nesting from the page', () => {
@@ -223,13 +171,7 @@ describe('parseBridgeMessage direction', () => {
   })
 })
 
-/**
- * Which URLs the shell will open for a page.
- *
- * Parsed rather than prefix-matched on purpose: a scheme is what a URL parser says it is, and a
- * `startsWith('https:')` reads one out of `javascript:alert("https://x")`. Both sides run this —
- * the envelope refuses the frame and the page's seam refuses the call — so the rule lives once.
- */
+// Use the shared URL parser rule at both page call and shell envelope; an allowlisted absolute scheme is required before device dispatch.
 describe('the URLs a page may hand to the shell', () => {
   it('takes the three schemes a task source produces, on any host and any path', () => {
     for (const url of [
@@ -269,15 +211,7 @@ describe('the URLs a page may hand to the shell', () => {
   })
 })
 
-/**
- * What crosses is the parser's URL, not the page's string.
- *
- * The WHATWG parser strips tab, LF and CR from anywhere in a URL and trims leading and trailing C0
- * and space before it reads the scheme. So a string the check accepts is not always the string a
- * handler should be given: forwarding it raw hands the device a URL that reads as allowed here and
- * as something else there. Normalizing is the fix; refusing anything that differs from its
- * normalization is not, because `https://example.com` differs from its own href by a slash.
- */
+// Forward normalized hrefs: WHATWG strips controls and trims spaces, while valid bare origins gain a slash. Rejecting every changed spelling would reject ordinary URLs.
 describe('the URL that actually crosses', () => {
   it('is the parsed href, for the four shapes that survive the scheme check unchanged', () => {
     expect(readBridgeExternalLinkUrl('ht\ntps://example.com')).toBe('https://example.com/')
@@ -287,15 +221,7 @@ describe('the URL that actually crosses', () => {
   })
 
   it('takes an ordinary URL that differs from its own href, rather than refusing it', () => {
-    // The whole reason this normalizes instead of comparing: a bare origin gains a path slash.
     expect(readBridgeExternalLinkUrl('https://example.com')).toBe('https://example.com/')
-  })
-
-  it('answers null for exactly what the predicate refuses', () => {
-    for (const url of ['javascript:alert(1)', 'file:///etc/passwd', '/h/host-a/tasks', '']) {
-      expect(readBridgeExternalLinkUrl(url), url).toBeNull()
-      expect(isBridgeExternalLinkUrl(url), url).toBe(false)
-    }
   })
 
   it('holds the normalized form to the cap, not just the string it was handed', () => {

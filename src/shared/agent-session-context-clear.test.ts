@@ -147,8 +147,9 @@ describe('completed context clear projections', () => {
 
   it('includes new sends but excludes older unknown sends even at the current fence', () => {
     const currentSend = { ...oldSend, clientMessageId: 'new-send', acceptedSequence: 6 }
+    const boundarySend = { ...oldSend, clientMessageId: 'boundary-send', acceptedSequence: 5 }
     const rows = [user, clear, row(7, { kind: 'turn', turnId: 'new-turn', state: 'running' })]
-    expect(agentSessionCurrentContextRows(rows, [oldSend, currentSend])).toEqual({
+    expect(agentSessionCurrentContextRows(rows, [oldSend, boundarySend, currentSend])).toEqual({
       items: [rows[2]],
       submissions: [currentSend]
     })

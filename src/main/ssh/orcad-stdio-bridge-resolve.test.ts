@@ -1,5 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { orcadPosixStdioBridgeCommand } from '../managed-server/lifecycle/orcad-stdio-bridge-script'
+import {
+  orcadBashStdioBridgeCommand,
+  orcadPosixStdioBridgeCommand
+} from '../managed-server/lifecycle/orcad-stdio-bridge-script'
 import type { OrcadHostTransport } from './orcad-host-transport'
 import { getRemoteHostPlatform } from './ssh-remote-platform'
 import { resolveOrcadStdioBridge } from './orcad-stdio-bridge'
@@ -26,13 +29,13 @@ afterEach(() => {
 })
 
 describe('resolving the stdio bridge', () => {
-  it('uses the POSIX bridge for a WSL distro without probing its platform again', async () => {
+  it('uses the bash bridge for a WSL distro without probing its platform again', async () => {
     const bridge = await resolveOrcadStdioBridge(
       transport({ kind: 'wsl', id: 'wsl:ubuntu', distro: 'Ubuntu', label: 'Ubuntu' }),
       6768
     )
     expect(bridge).toEqual({
-      command: orcadPosixStdioBridgeCommand(6768),
+      command: orcadBashStdioBridgeCommand(6768),
       mode: 'raw',
       wrapCommand: true
     })

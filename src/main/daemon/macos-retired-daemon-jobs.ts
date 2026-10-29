@@ -56,7 +56,7 @@ export async function listMacDaemonJobVersions(userDataPath: string): Promise<nu
   return [...versions]
 }
 
-/** launchctl's structured argument block provides exact endpoint ownership, without parsing argv text. */
+/** Validate endpoint identity from structured launchctl arguments rather than lossy argv text. */
 export async function readMacDaemonRecoveryJob(
   userDataPath: string,
   runtimeDir: string,

@@ -4,9 +4,6 @@ import type { ShortcutKeyComboDetails } from '@/hooks/useShortcutLabel'
 import { ShortcutKeyCombo } from '../ShortcutKeyCombo'
 import { translate } from '@/i18n/i18n'
 
-/** Renders the primary keyboard shortcut combo inline, or an "Unassigned"
- *  hint when the action has no binding. Platform-aware glyphs come from
- *  ShortcutKeyCombo. */
 export function ShortcutHintList({
   combos
 }: {

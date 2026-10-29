@@ -1,24 +1,16 @@
 import type { TerminalDocumentScope } from './document-scope'
 import { C1_CSI, ESC } from './escape-introducers'
 
-/** Claude's record dot, which iOS WebKit would otherwise promote to a colourful emoji glyph. */
+// Force Claude’s status dot to text presentation on iOS WebKit.
 const CLAUDE_STATUS_DOT = '\u23fa'
 
-/** The variation selector that forces the text glyph. */
 const TEXT_PRESENTATION_SELECTOR = '\ufe0e'
 
-/** The variation selector that forces the emoji glyph. */
 const EMOJI_PRESENTATION_SELECTOR = '\ufe0f'
 
-/**
- * The dot with any trailing selectors, as one pattern.
- *
- * A literal rather than a construction: a `new RegExp` at a module's top level is parse-time work
- * (ruling 20), and `replace` leaves no `lastIndex` behind for the next document to find.
- */
+// Use a literal to keep module evaluation inert; replace does not retain lastIndex across document calls.
 const CLAUDE_STATUS_DOT_PATTERN = /\u23fa[\ufe0e\ufe0f]*/g
 
-/** How far a split DECSET may be carried before the mode scan gives up. */
 const PRIVATE_MODE_SCAN_TAIL_LIMIT = 4096
 
 export function resetWriteQueue(scope: TerminalDocumentScope) {
@@ -38,7 +30,6 @@ export function endsWithStatusDotPresentationSequence(data: string) {
   return i >= 0 && data.charAt(i) === CLAUDE_STATUS_DOT
 }
 
-// Why: iOS WebKit promotes Claude's record/status dot to a colorful emoji glyph.
 export function normalizeStatusDotPresentation(scope: TerminalDocumentScope, data: string) {
   if (typeof data !== 'string' || data.length === 0) {
     return data
@@ -79,8 +70,7 @@ export function nextQueuedWrite(scope: TerminalDocumentScope) {
   const next = scope.writeQueue[scope.writeQueueHead]
   scope.writeQueue[scope.writeQueueHead] = undefined
   scope.writeQueueHead++
-  // Why: high-throughput terminals can enqueue faster than xterm parses;
-  // compact consumed slots so drain work stays O(1) without retaining old chunks.
+  // Compact consumed slots to retain constant-time draining without holding parsed chunks.
   if (scope.writeQueueHead > 128 && scope.writeQueueHead * 2 > scope.writeQueue.length) {
     scope.writeQueue = scope.writeQueue.slice(scope.writeQueueHead)
     scope.writeQueueHead = 0
@@ -105,8 +95,7 @@ export function extractMouseModeScanTail(input: string) {
     return ''
   }
   const tail = input.slice(start)
-  // Why: PTY/SSH chunks can split a long combined DECSET before the final h/l.
-  // Keep parser state far beyond normal mode lists while still bounding memory.
+  // Carry split combined DECSET state across PTY/SSH chunks, bounded beyond normal mode-list lengths.
   if (tail.length > PRIVATE_MODE_SCAN_TAIL_LIMIT) {
     return ''
   }
@@ -139,8 +128,7 @@ export function pumpWrites(scope: TerminalDocumentScope, gen: number): void {
     return
   }
   scope.writesDraining = true
-  // Why: xterm.write() parses asynchronously. Row adjustment/resizing must
-  // wait until replayed SGR attributes have landed in the buffer.
+  // xterm parses writes asynchronously; wait for replayed attributes before resizing rows.
   scope.term.write(next, function () {
     if (gen !== scope.terminalGeneration) {
       return

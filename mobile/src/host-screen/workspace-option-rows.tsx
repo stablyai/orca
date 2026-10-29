@@ -2,6 +2,7 @@ import { Children, type ReactNode } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import { Check, ChevronRight } from 'lucide-react-native'
 import { colors } from '../theme/mobile-theme'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { MobileSwitch } from '../components/MobileSwitch'
 import type { WorkspaceViewChoice } from '../../../src/shared/workspace-view/workspace-view-options'
 import { hostScreenStyles as styles } from './host-screen-styles'
@@ -12,10 +13,10 @@ export function CheckRow(props: {
   detail?: string
   indent?: boolean
   leading?: ReactNode
-  /** Pick-one rows read as radio buttons. */
   radio?: boolean
   disabled?: boolean
 }) {
+  useMobileColorScheme()
   return (
     <Pressable
       style={[
@@ -45,9 +46,8 @@ export function CheckRow(props: {
   )
 }
 
-/** Rows inside one option's card, a hairline between each. */
 export function OptionRowList({ children }: { children: ReactNode }) {
-  // Children.map keys each result by its child's own key.
+  useMobileColorScheme()
   return (
     <>
       {Children.map(children, (child, i) => (
@@ -81,13 +81,14 @@ export function ChoiceRows<Id extends string>(props: {
   )
 }
 
-/** A filter switch, as the desktop's switch rows; only the switch takes the tap (one write on web). */
+/* Only the switch takes the tap, avoiding duplicate writes on web. */
 export function SwitchRow(props: {
   label: string
   value: boolean
   onChange: (value: boolean) => void
   indent?: boolean
 }) {
+  useMobileColorScheme()
   return (
     <View style={[styles.filterRow, props.indent && styles.optionRowIndented]}>
       <Text style={styles.filterRowText} numberOfLines={1}>
@@ -102,8 +103,8 @@ export function SwitchRow(props: {
   )
 }
 
-/** An option with its current value; tapping it opens the option's own page. */
 export function DrillRow(props: { label: string; value: string; onPress: () => void }) {
+  useMobileColorScheme()
   return (
     <Pressable
       style={styles.filterRow}

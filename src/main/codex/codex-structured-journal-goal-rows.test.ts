@@ -99,8 +99,7 @@ describe('codex goal frames as journal rows', () => {
   it('does not repeat the row while only the counters climb', () => {
     const { rows, frames: generic } = frames()
 
-    // Codex re-sends the goal through the turn as accounting ticks; a live session
-    // emitted these two seconds apart with nothing else changed.
+    // Captured live accounting ticks, two seconds apart.
     generic.appendUnhandled('notification:thread/goal/updated', goalFrame({}), THREAD)
     generic.appendUnhandled(
       'notification:thread/goal/updated',
@@ -182,7 +181,6 @@ describe('codex goal frames as journal rows', () => {
     generic.appendUnhandled('notification:warning', { message: 'disk almost full' }, THREAD)
     generic.appendUnhandled('notification:warning', { message: 'disk almost full' }, THREAD)
 
-    // No goal dedupe applies, so both warnings still land.
     expect(rows).toHaveLength(2)
   })
 })

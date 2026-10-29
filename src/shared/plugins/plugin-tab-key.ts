@@ -1,8 +1,6 @@
 import { isPluginManifestId, isSafePluginId } from './plugin-id-format'
 
-// Why its own module: these are pure string predicates, but living in
-// plugin-manifest.ts made the renderer's sidebar route reducer pull zod and the
-// whole manifest schema graph into the boot chunk.
+// Pure boot-path predicates avoid pulling Zod and manifest schemas into renderer sidebar startup.
 
 /** Canonical install identity: `<publisher>.<id>` (also the install dir name). */
 export function isQualifiedPluginKey(value: string): boolean {

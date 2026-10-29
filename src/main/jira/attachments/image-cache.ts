@@ -22,9 +22,7 @@ const inFlight = new Map<
 >()
 let expiryTimer: ReturnType<typeof setTimeout> | null = null
 let scheduledExpiryAt = Infinity
-// Why: mid-flight downloads must not repopulate cache after disconnect/clearToken.
-// Why ONE ticker across both scopes: summing separate counters lets distinct clear
-// states collide, passing the guard and re-inserting credentialed bytes.
+// One ticker prevents global/site clears from colliding and letting stale credentialed bytes repopulate the cache.
 let epochTicker = 0
 let globalEpoch = 0
 const siteEpoch = new Map<string, number>()
@@ -116,7 +114,7 @@ function getCachedImage(siteId: string, attachmentId: string): ImageValue | null
     cache.delete(key)
     return null
   }
-  // Why: delete-then-set refreshes insertion order for LRU-style eviction.
+  // Refresh insertion order for LRU-style eviction.
   cache.delete(key)
   cache.set(key, entry)
   return entry.image
@@ -141,10 +139,7 @@ function setCachedImage(args: {
   scheduleAttachmentExpiry()
 }
 
-/**
- * Singleflight loader: concurrent cold misses share one download within their
- * cancellation domain. Failed loads are not cached so a later retry can succeed.
- */
+/** Share cold downloads within a cancellation domain; failed loads remain retryable. */
 async function loadImageWithCache(args: {
   siteId: string
   attachmentId: string
@@ -171,7 +166,6 @@ async function loadImageWithCache(args: {
       if (!loaded) {
         return null
       }
-      // Why: return bytes to the waiter but skip cache if site was cleared mid-flight.
       if (!args.signal?.aborted && attachmentImagesEpoch(args.siteId) === epochAtStart) {
         setCachedImage({
           siteId: args.siteId,

@@ -1,6 +1,5 @@
-// Parity oracle for native-chat launches: the exact child every agent spawns, read at the spawn
-// boundary, with production's own dependency wiring. A refactor of the launch path must leave the
-// snapshot file unchanged.
+import { agentSessionRefusalError } from '../../shared/agent-session-wire-refusals'
+// Capture native-chat children at the spawn boundary with production wiring; launch-path refactors must preserve these snapshots.
 
 import { chmod, mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -153,6 +152,7 @@ import {
   structuredWorkerIdentities,
   structuredWorkerProcessIncarnation
 } from './structured-worker-identity'
+import { partialRuntimeStore } from './runtime-store-partial-fixture'
 
 // A new agent goes last: its cases then shift only the configured ones' session ids.
 const AGENTS = [
@@ -465,6 +465,19 @@ function eventSink(): StructuredAgentSessionEventSink {
 function adapterContext(): StructuredAgentAdapterContext {
   const store = {
     getRecord: (sessionId: string) => records.get(sessionId) ?? null,
+    selectWritableRecord: (sessionId: string) => {
+      const record = records.get(sessionId)
+      return record ? { kind: 'writable' as const, record } : { kind: 'missing' as const }
+    },
+    requireWritableRecord: (sessionId: string) => {
+      const record = records.get(sessionId)
+      if (!record) {
+        throw agentSessionRefusalError('agent_session_identity_required', {
+          reason: 'recordMissing'
+        })
+      }
+      return record
+    },
     pinLaunchDirectory: async (sessionId: string, directory: string) => {
       pins.push({ sessionId, directory })
       const record = records.get(sessionId)
@@ -582,10 +595,11 @@ beforeAll(async () => {
   process.env = inheritedEnvironment()
   installAppEnvironment()
   settings = defaultSettings()
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the host wiring reads only the store's getSettings method.
-  const runtime = new OrcaRuntimeService({
-    getSettings: () => settings
-  } as never)
+  const runtime = new OrcaRuntimeService(
+    partialRuntimeStore({
+      getSettings: () => settings
+    })
+  )
   await runtime.ensureStructuredAgentSessionHost()
   const production = capture.productionDeps.at(-1)
   if (!production) {
@@ -597,8 +611,7 @@ beforeAll(async () => {
     logger: { warn: () => {}, error: () => {} },
     resolveWorkspacePath: async (workspaceId) =>
       join(root, workspaceId === FLOATING_TERMINAL_WORKTREE_ID ? 'floating' : 'worktree'),
-    // The login shell's variables, read once per host like production's snapshot: its own PATH,
-    // one variable the configured cases name and one they do not.
+    // Model the host-captured shell PATH plus one inherited and one excluded named variable.
     resolveEnvironment: async () => ({
       PATH: `${join(root, 'bin')}:/opt/login-shell/bin:/usr/bin:/bin`,
       HOME: join(root, 'home'),
@@ -616,8 +629,7 @@ beforeAll(async () => {
   }
 })
 
-// Again after the shared setup's own per-test environment, so this app's CLI paths are the run's;
-// and each case inherits the same environment whatever ran before it.
+// Reinstall app CLI paths after shared setup so every launch case inherits the same environment.
 beforeEach(() => {
   installAppEnvironment()
   process.env = inheritedEnvironment()
@@ -629,6 +641,45 @@ afterAll(async () => {
 })
 
 describe.skipIf(process.platform === 'win32')('native-chat launch parity', () => {
+  it('wires only OMP at-rest discovery through configured host launch inputs without a conversation spawn', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const launch = {
+      agent: 'omp',
+      workspace: 'worktree',
+      start: 'fresh',
+      worker: false,
+      configured: true
+    } as const
+    const { record } = await recordFor(launch, 'omp-first-open')
+    settings = settingsFor(launch)
+    const context = adapterContext()
+    const adapter = STRUCTURED_AGENT_RUNTIME_REGISTRATIONS.find(
+      ({ definition }) => definition.agent === 'omp'
+    )!.createAdapter(context)
+    capture.spawns.length = 0
+    try {
+      expect(await adapter.atRestCommands!.settled!(record, 1_000)).toBeUndefined()
+      expect(capture.spawns).toHaveLength(1)
+      const child = childOf(capture.spawns[0]!)
+      expect(child.command).toBe('<root>/custom-bin/omp-custom')
+      expect(child.cwd).toBe('<root>/worktree')
+      expect(child.args).toEqual(expect.arrayContaining(['acp', '--session-dir']))
+      expect(child.env).toMatchObject({ PARITY_OVERLAY: 'omp-configured' })
+      expect(child.env).not.toHaveProperty('ORCA_AGENT_SESSION_ID')
+      expect(pins).toEqual([])
+      for (const agent of ['grok', 'opencode', 'opencode2', 'antigravity']) {
+        expect(
+          STRUCTURED_AGENT_RUNTIME_REGISTRATIONS.find(
+            ({ definition }) => definition.agent === agent
+          )!.createAdapter(context).atRestCommands
+        ).toBeUndefined()
+      }
+    } finally {
+      await adapter.closeAll()
+      vi.mocked(console.warn).mockRestore()
+    }
+  })
+
   it.each(CASES.map((launch, index) => [caseName(launch), launch, index] as const))(
     '%s',
     async (_name, launch, index) => {

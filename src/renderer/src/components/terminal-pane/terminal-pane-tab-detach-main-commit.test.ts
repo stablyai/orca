@@ -1,5 +1,4 @@
-// Layout-owner build: terminal-pane-tab-detach-commit.test.ts's roll-forward outcomes, with main's
-// `movePaneToNewTab` answered (and its frame drawn) after what the user did meanwhile.
+// Main move responses/frames can arrive after intervening user actions; verify roll-forward outcomes matching window-side commit tests.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { toast } from 'sonner'
 import type * as AgentStatusModule from '@/lib/agent-status'

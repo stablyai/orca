@@ -3,6 +3,8 @@ import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native'
 import { Check } from 'lucide-react-native'
 
 import { colors, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { BottomDrawer } from './BottomDrawer'
 import { BOTTOM_DRAWER_HIDE_DURATION_MS } from './bottom-drawer-constants'
 
@@ -27,6 +29,7 @@ export function PickerListDrawer<T extends PickerListItem>({
   onClose,
   renderIcon
 }: Props<T>) {
+  const colorScheme = useMobileColorScheme()
   const [closing, setClosing] = useState(false)
   const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const drawerVisible = visible && !closing
@@ -75,6 +78,7 @@ export function PickerListDrawer<T extends PickerListItem>({
       </View>
       <FlatList
         data={items}
+        extraData={colorScheme}
         keyExtractor={(item) => item.id}
         style={styles.group}
         contentContainerStyle={items.length === 0 ? styles.emptyContent : undefined}
@@ -112,10 +116,11 @@ export function PickerListDrawer<T extends PickerListItem>({
 }
 
 function PickerSeparator() {
+  useMobileColorScheme()
   return <View style={styles.separator} />
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   header: {
     paddingHorizontal: spacing.xs,
     paddingBottom: spacing.sm
@@ -166,4 +171,4 @@ const styles = StyleSheet.create({
   itemTextSelected: {
     fontWeight: '600'
   }
-})
+}))

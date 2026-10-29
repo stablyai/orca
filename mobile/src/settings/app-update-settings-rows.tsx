@@ -1,6 +1,8 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import type { KnownAppUpdate } from '../storage/app-update-preferences'
 import { colors, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { formatTimeAgo } from '../worktree/agent-row-display'
 
 export type AppUpdateCheckRowStatus = 'idle' | 'checking' | 'up-to-date' | 'failed'
@@ -22,7 +24,6 @@ function checkRowValue(status: AppUpdateCheckRowStatus, lastCheckedAt: number | 
   return `Last checked ${ago === 'just now' ? ago : `${ago} ago`}`
 }
 
-/** Settings' version row and manual check; the update row stays after the home card is dismissed. */
 export function AppUpdateSettingsRows(props: {
   installedVersion: string | null
   available: KnownAppUpdate | null
@@ -32,6 +33,7 @@ export function AppUpdateSettingsRows(props: {
   onUpdate: (url: string) => void
   onCheck: () => void
 }) {
+  useMobileColorScheme()
   const checkValue = checkRowValue(props.checkStatus, props.lastCheckedAt, props.now)
   const { available, installedVersion, onUpdate } = props
   const versionRow = available ? (
@@ -68,8 +70,7 @@ export function AppUpdateSettingsRows(props: {
   )
 }
 
-// Same panel, rows and separator as MobileSettingsSection.
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   section: {
     backgroundColor: colors.bgPanel,
     borderRadius: 12,
@@ -97,4 +98,4 @@ const styles = StyleSheet.create({
     backgroundColor: colors.borderSubtle,
     marginHorizontal: spacing.md
   }
-})
+}))

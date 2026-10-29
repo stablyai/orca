@@ -18,13 +18,6 @@ import { mapWithConcurrency } from '../../shared/map-with-concurrency'
 
 const PLUGIN_LIST_PROJECTION_CONCURRENCY = 4
 
-/**
- * Wire projection of installed plugins for the renderer and serve RPC.
- * `invalid` = unreadable/failed manifest; `pending` = awaiting (re-)consent;
- * `idle` = enabled with no worker running (lazy); `restarting` = waiting for
- * supervised backoff; `errored` = crashed past the budget or failed to activate.
- */
-
 export type PluginListPanelEntry = {
   id: string
   title: string
@@ -95,8 +88,7 @@ export async function buildPluginList(
     PLUGIN_LIST_PROJECTION_CONCURRENCY,
     async (plugin, index): Promise<PluginListEntry> => {
       if (isInvalidDiscoveredPlugin(plugin)) {
-        // Why: invalid dev paths can contain private absolute desktop paths;
-        // never project those as identity over desktop/serve transports.
+        // Invalid dev paths may expose private absolute paths; use opaque identities for clients.
         const fallbackKey = plugin.pluginKey ?? `invalid-development-plugin-${index + 1}`
         return {
           pluginKey: fallbackKey,
@@ -135,9 +127,7 @@ export async function buildPluginList(
         status = worker.state === 'running' ? 'running' : 'idle'
       }
       const candidateLockEntry = lock.plugins[plugin.pluginKey]
-      // Why: never show provenance for bytes other than the current executable
-      // identity. Dev overrides execute outside the immutable installed tree and
-      // must never inherit the shadowed install's pinned-source attribution.
+      // Show provenance only for current immutable bytes; dev overrides cannot inherit installed attribution.
       const lockEntry =
         candidateLockEntry &&
         !plugin.isDev &&

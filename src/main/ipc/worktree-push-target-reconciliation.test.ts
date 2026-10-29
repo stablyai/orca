@@ -95,7 +95,7 @@ describe('isOrcaGeneratedPrRemoteName', () => {
 
 describe('reconcileOrphanedPrRemotesWithExec', () => {
   it('leaves a remote alone when no worktree metadata ever proves Orca created it (user-created, ambiguous)', async () => {
-    // Same naming shape a user could coincidentally pick; no pushTarget anywhere claims it.
+    // Remote naming alone does not establish Orca ownership.
     const exec = makeExec({ remotes: remoteLines([{ name: FORK_REMOTE, url: FORK_URL }]) })
     const reclaimed = await reconcileOrphanedPrRemotesWithExec(
       REPO_PATH,
@@ -142,7 +142,6 @@ describe('reconcileOrphanedPrRemotesWithExec', () => {
       branchConfig: `branch.contributor/fix.remote ${FORK_REMOTE}`,
       localBranches: 'contributor/fix\nmain'
     })
-    // Metadata for the worktree that created it is gone, but the branch it preserved lives on.
     const reclaimed = await reconcileOrphanedPrRemotesWithExec(
       REPO_PATH,
       REPO_ID,
@@ -157,7 +156,6 @@ describe('reconcileOrphanedPrRemotesWithExec', () => {
   it('reclaims a remote whose protecting branch config is stale (path 2, branch since deleted)', async () => {
     const exec = makeExec({
       remotes: remoteLines([{ name: FORK_REMOTE, url: FORK_URL }]),
-      // Config line survives even though `contributor/fix` no longer exists.
       branchConfig: `branch.contributor/fix.remote ${FORK_REMOTE}`,
       localBranches: 'main'
     })
@@ -174,13 +172,12 @@ describe('reconcileOrphanedPrRemotesWithExec', () => {
 
   it('reclaims a remote left behind by a worktree removed outside Orca (path 3)', async () => {
     const exec = makeExec({ remotes: remoteLines([{ name: FORK_REMOTE, url: FORK_URL }]) })
-    // Metadata still records the (now-vanished) worktree's Orca-created pushTarget.
     const reclaimed = await reconcileOrphanedPrRemotesWithExec(
       REPO_PATH,
       REPO_ID,
       storeOf({ [worktreeId('/wt/gone')]: forkTarget() }),
       exec,
-      [] // no live worktrees at all
+      []
     )
     expect(reclaimed).toEqual([FORK_REMOTE])
     expect(removeCalls(exec)).toEqual([['remote', 'remove', FORK_REMOTE]])
@@ -192,9 +189,8 @@ describe('reconcileOrphanedPrRemotesWithExec', () => {
       REPO_PATH,
       REPO_ID,
       storeOf({
-        // The worktree whose removal originally bailed (legacy metadata, no remoteCreated flag)...
+        // The original worktree lacks ownership, but its removed sibling inherited the Orca-created marker.
         [worktreeId('/wt/legacy')]: forkTarget({ remoteCreated: false }),
-        // ...but a sibling that reused the remote correctly inherited ownership, and is also gone.
         [worktreeId('/wt/sibling-gone')]: forkTarget({ remoteCreated: true })
       }),
       exec,

@@ -15,10 +15,7 @@ import type { PluginWorkerFactory } from './plugin-worker-manager'
 
 const PLUGIN_COUNT = 20
 const SAMPLE_COUNT = 20
-// Real disk I/O, so the number moves with machine load: ~16-34ms idle, higher
-// when the suite saturates the box. Sized to catch an order-of-magnitude
-// regression rather than scheduling noise — the behavioral assertions below
-// (no worker spawned, no plugin code run) are what this test really guards.
+// Disk scheduling varies; catch large regressions while separately asserting no worker/code execution.
 const STARTUP_P95_BUDGET_MS = 400
 
 let userDataPath = ''

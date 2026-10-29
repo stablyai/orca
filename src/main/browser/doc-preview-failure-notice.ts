@@ -14,15 +14,10 @@ export function setDocPreviewFailureSink(sink: DocPreviewFailureSink | null): vo
   failureSink = sink
 }
 
-/**
- * The preview shell cannot read the guest's HTTP status, and a 4xx body renders as
- * if it were the document. Pushing the reason lets the shell replace that with a
- * localized notice for the failure the user actually hit.
- */
+// The shell cannot inspect guest HTTP status; push failures so it can replace the rendered error body.
 export function publishDocPreviewFailure(failure: DocPreviewFailure): void {
   const sink = failureSink
-  // Why: a read can outlive the window that asked for it, and sending into torn-down
-  // WebContents throws — an unreadable asset must not take the protocol handler with it.
+  // Reads can outlive their window; a destroyed sink must not break the protocol handler.
   if (!sink || sink.isDestroyed?.()) {
     return
   }

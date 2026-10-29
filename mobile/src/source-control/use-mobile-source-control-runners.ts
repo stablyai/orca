@@ -46,13 +46,9 @@ type Params = {
   setCreatedPrUrl: (next: string | null) => void
   setCreatedPrWarning: (next: string | null) => void
   recordCommitFailure: RecordMobileCommitFailure
-  // Hub override: switch to the History segment instead of pushing the route.
   onOpenHistory?: () => void
 }
 
-// All git workflow + action-sheet runners for the source-control panel. Split
-// out of the state hook to keep each file under the line limit; behavior is
-// unchanged from the original inline definitions.
 export function useMobileSourceControlRunners(params: Params) {
   const {
     client,
@@ -254,9 +250,7 @@ export function useMobileSourceControlRunners(params: Params) {
 
   const openHistory = useCallback(() => {
     setShowActionSheet(false)
-    // Inside the hub, History is a segment — switch to it rather than pushing a
-    // route. Fallback pushes the hub with `tab=history` (not the redirecting
-    // /history route) so deep links land in one hop.
+    // History is a local hub segment; fallback navigation targets the hub directly to avoid a redirect hop.
     if (onOpenHistory) {
       onOpenHistory()
       return
@@ -273,7 +267,6 @@ export function useMobileSourceControlRunners(params: Params) {
     }
   }, [hostId, onOpenHistory, router, setShowActionSheet, worktreeId])
 
-  // Switch to a local branch, then reload status.
   const checkoutBranch = useCallback(
     async (branch: string) => {
       setShowBranchPicker(false)
@@ -284,7 +277,6 @@ export function useMobileSourceControlRunners(params: Params) {
 
   const actionSheetRunners = useMobileSourceControlActionSheetRunners({
     client,
-    worktreeId,
     sendGitRequest,
     runGitWorkflow,
     runGitSequence,
@@ -295,7 +287,6 @@ export function useMobileSourceControlRunners(params: Params) {
     setShowActionSheet
   })
 
-  // Abort an in-progress merge/rebase from the conflict banner.
   const abortConflictOperation = useCallback(
     async (operation: string) => {
       const method =

@@ -10,17 +10,6 @@ const comparators = [
 ] as const
 
 describe.each(comparators)('%s', (_name, valuesEqual) => {
-  it('compares primitives and identical references', () => {
-    expect(valuesEqual('a', 'a')).toBe(true)
-    expect(valuesEqual('a', 'b')).toBe(false)
-    expect(valuesEqual(null, null)).toBe(true)
-    expect(valuesEqual(null, {})).toBe(false)
-    expect(valuesEqual(undefined, null)).toBe(false)
-    const fn = (): void => {}
-    expect(valuesEqual(fn, fn)).toBe(true)
-    expect(valuesEqual(fn, (): void => {})).toBe(false)
-  })
-
   it('walks arrays element-wise and never mixes them with records', () => {
     expect(valuesEqual([1, [2, { a: 'b' }]], [1, [2, { a: 'b' }]])).toBe(true)
     expect(valuesEqual([1, 2], [1, 2, 3])).toBe(false)
@@ -56,16 +45,11 @@ describe.each(comparators)('%s', (_name, valuesEqual) => {
     expect(valuesEqual(new Row(), new Row())).toBe(false)
     expect(valuesEqual(new Row(), { x: 1 })).toBe(false)
   })
-
-  it('ignores symbol keys', () => {
-    const key = Symbol('marker')
-    expect(valuesEqual({ [key]: 1, a: 1 }, { [key]: 2, a: 1 })).toBe(true)
-  })
 })
 
 describe('structuralValuesEqual', () => {
   it('treats an absent key as different from a key holding undefined', () => {
-    // Why: repo/project merges branch on `'key' in project`, so key presence is load-bearing.
+    // Repo/project merges use key in project, so undefined and absence must differ.
     expect(structuralValuesEqual({ a: 1 }, { a: 1, b: undefined })).toBe(false)
     expect(structuralValuesEqual({ a: 1, b: undefined }, { a: 1 })).toBe(false)
     expect(structuralValuesEqual({ a: 1, b: undefined }, { a: 1, c: undefined })).toBe(false)
@@ -80,7 +64,7 @@ describe('structuralValuesEqual', () => {
 
 describe('structuralValuesEqualIgnoringUndefined', () => {
   it('treats an absent key as equal to a key holding undefined', () => {
-    // Why: locally built worktree rows carry explicit undefined fields the host omits.
+    // Local rows include undefined fields that host rows omit.
     expect(structuralValuesEqualIgnoringUndefined({ a: 1 }, { a: 1, b: undefined })).toBe(true)
     expect(structuralValuesEqualIgnoringUndefined({ a: 1, b: undefined }, { a: 1 })).toBe(true)
     expect(

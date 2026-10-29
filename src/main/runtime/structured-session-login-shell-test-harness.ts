@@ -1,8 +1,4 @@
-/**
- * A structured session's child env beside a HOME whose login profiles put a stand-in global `orca`
- * first, as `/usr/local/bin` often is. Shared by the bash suite (every lane) and the zsh suite
- * (the real-shell lane, which installs zsh).
- */
+/** Bash/zsh login profiles put a fake global Orca first; zsh runs only in the real-shell lane. */
 
 import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'

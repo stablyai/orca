@@ -214,9 +214,7 @@ export class DesktopScriptProviderClient {
       try {
         return checkedBridgeResponse(await host.request(request), '')
       } catch (error) {
-        // Only a helper that cannot start falls back; operation errors surface.
-        // The host is kept: it re-probes after its cooldown, so a transient bad
-        // spawn cannot strand the session on one powershell.exe per operation.
+        // Fall back only for unavailable hosts; retain the host so its cooldown can restore service.
         if (!isRuntimeHostUnavailable(error)) {
           throw error
         }
@@ -282,7 +280,7 @@ function checkedBridgeResponse(response: BridgeResponse, stderr: string): Bridge
   return response
 }
 
-// Why Windows only: the Linux provider is a python3 one-shot with no serve mode.
+// Linux supports one-shot Python calls only; Windows also supports persistent serve mode.
 function defaultRuntimeHost(
   platform: DesktopScriptPlatform,
   scriptPath: string

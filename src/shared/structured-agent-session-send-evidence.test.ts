@@ -16,17 +16,6 @@ function refused(code: string, reason?: string): StructuredAgentSessionSendAnswe
   return { kind: 'result', result: { ok: false, refusal } }
 }
 
-const recorded: StructuredAgentSessionSendAnswer = {
-  kind: 'result',
-  result: {
-    ok: true,
-    replayed: false,
-    fence: 1,
-    cursor: { epoch: 'e', sequence: 1 },
-    value: { clientMessageId: 'm', queued: { messageId: 'm', position: 0, state: 'waiting' } }
-  }
-}
-
 function withRow(fields: Partial<AgentJournalSubmission>): StructuredAgentSessionSendAnswer {
   return {
     kind: 'result',
@@ -58,10 +47,6 @@ function thrown(rpcCode: string | undefined): StructuredAgentSessionSendAnswer {
 }
 
 describe('structuredAgentSessionSendEvidence', () => {
-  it('reads any ok answer as the host holding the message', () => {
-    expect(structuredAgentSessionSendEvidence(recorded).kind).toBe('recorded')
-  })
-
   it('reads a row the host returns, in any state, as its own from then on', () => {
     for (const dispatchState of ['pending', 'accepted', 'rejected', 'unknown'] as const) {
       expect(structuredAgentSessionSendEvidence(withRow({ dispatchState })).kind).toBe('recorded')

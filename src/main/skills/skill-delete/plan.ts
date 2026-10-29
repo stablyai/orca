@@ -32,8 +32,7 @@ import type { SkillScanRoot } from '../skill-discovery-sources'
 
 type IndexedSkillPlacement = { candidate: SkillPlacementCandidate; ordinal: number }
 
-/** Overlapping roots can reach one directory twice. Staging the same path twice
- *  would fail the second rename and roll the whole skill back. */
+/** Deduplicate overlapping roots or the second stage rename fails and rolls the skill back. */
 function dedupePlacements(
   placements: readonly ClassifiedPlacement[],
   semantics: SkillPathSemantics
@@ -76,12 +75,7 @@ export type ResolvedSkillDeletePlan = {
   placementRoots: Map<string, ClassifiedPlacement[]>
 }
 
-/**
- * One enumeration serves the whole batch, and `previewDelete` and `delete` both
- * come through here. There is deliberately no second enumeration path: a
- * preview promising one set of removals and a delete performing another is the
- * failure this design exists to avoid.
- */
+/** Enumerate once per batch through the same path for preview/delete so promised removals match execution. */
 export async function buildSkillDeletePlan(
   input: SkillDeletePlanInput
 ): Promise<ResolvedSkillDeletePlan> {
@@ -92,27 +86,18 @@ export async function buildSkillDeletePlan(
     ...(input.homeDir ? { homeDir: input.homeDir } : {})
   })
   const rootPaths = roots.map((root) => root.path)
-  // Widen the guest allow-list before anything touches it: the WSL filesystem's
-  // constructor list covers installable providers only, a strict subset of the
-  // discovery roots, so nearly every placement would throw before a safety rule
-  // ever ran. This is a second, independent containment check with its own
-  // semantics; it does not replace the shared path guard.
+  // Authorize all discovery roots before inspection; WSL install-provider roots are narrower. This independent containment check does not replace the shared path guard.
   input.filesystem.authorizeRoots?.(rootPaths.map(toFilesystemPath))
 
   const api = semantics.sep === '\\' ? pathWin32 : pathPosix
-  // Placements are literal paths inside literal roots; the canonical path is a
-  // realpath. Comparing the two spellings makes every skill under a symlinked
-  // component (a symlinked home, macOS `/tmp` -> `/private/tmp`) read `unowned`,
-  // so canonical classification gets roots resolved the same way it is.
+  // Compare canonical paths against realpath roots; literal roots misclassify symlinked homes and macOS /tmp as unowned.
   const context: SkillDeleteGuardContext = { semantics, roots }
   const canonicalContext: SkillDeleteGuardContext = {
     semantics,
     roots: await resolvedRoots(roots, input.filesystem, toFilesystemPath)
   }
   const requested = input.request.skills
-  // Inspect only paths a root already owns. A path outside every root is
-  // `unowned` by definition, and asking the guest filesystem about it would
-  // throw its own containment error before any of this reported a reason.
+  // Inspect only owned paths; asking the guest about outside paths would throw before returning unowned.
   const inspectable = requested.filter(
     (skill) => owningSkillRoot(api.dirname(skill.skillFilePath), context) !== null
   )
@@ -208,8 +193,7 @@ async function resolvedRoots(
   })
 }
 
-/** Guest realpaths already come back in host-owned spelling; native ones are
- *  the same string space. Falls back to the literal root if they ever diverge. */
+/** Guest realpaths use host-owned spelling; fall back to literal roots if conversion diverges. */
 function fromFilesystemPath(
   realpath: string,
   literalRoot: string,

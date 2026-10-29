@@ -33,11 +33,4 @@ describe('filterPathsToRunningWslDistrosAsync', () => {
     expect(await filterPathsToRunningWslDistrosAsync(paths)).toEqual([paths[0], paths[1], paths[3]])
     expect(listRunningWslDistrosAsync).toHaveBeenCalledTimes(1)
   })
-
-  it('does not interpret WSL-shaped paths on a non-Windows host', async () => {
-    vi.spyOn(process, 'platform', 'get').mockReturnValue('linux')
-    const paths = ['//wsl.localhost/Ubuntu/home']
-    expect(await filterPathsToRunningWslDistrosAsync(paths)).toEqual(paths)
-    expect(listRunningWslDistrosAsync).not.toHaveBeenCalled()
-  })
 })

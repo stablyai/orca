@@ -7,25 +7,19 @@ import {
 } from '../../../shared/agent-session-journal-item-key'
 import type { AgentJournalItemIdentity } from '../../../shared/agent-session-journal-types'
 
-// Fixtures mirror the shapes the providers actually emit: a resumed Codex
-// thread renumbers its items positionally, and a forked Claude session copies
-// history with the ORIGINAL item uuids.
-
 const THREAD = '019fd8ca-edbe-7c43-b231-4c7aea3a2d89'
 const TURN_A = '019fd8ca-edbe-7c43-b231-4c7aea3a2d89'
 const TURN_B = '019fd8cb-1c40-7a02-9f31-0f1a54b7c211'
 
 describe('codex identity survives positional renumbering', () => {
   it('keys the same logical item identically before and after a resume', () => {
-    // First run: the app server labels the second turn's user message item-3.
     const live: AgentJournalItemIdentity = {
       provider: 'codex',
       threadId: THREAD,
       turnId: TURN_B,
       ordinal: 0
     }
-    // After `thread/resume` the same item comes back as item-1 of the replayed
-    // history. Ordinal-within-turn is unchanged, so the key is unchanged.
+    // Resume renumbers raw IDs; stable turn ordinals must preserve identity.
     const resumed: AgentJournalItemIdentity = {
       provider: 'codex',
       threadId: THREAD,
@@ -81,8 +75,7 @@ describe('claude identity', () => {
   })
 
   it('reconciles a forked transcript onto the parent item rather than duplicating it', () => {
-    // `--fork-session` mints a new session id but copies records verbatim, so a
-    // copied record still names the session it was written in.
+    // Forks copy original item UUIDs and session IDs unchanged.
     const parent = agentJournalItemKey({
       provider: 'claude',
       sessionId: '29eb22a4-6a5f-4f21-9b0c-1d7f3a2e5c88',
@@ -169,9 +162,7 @@ describe('bounded component domain separation', () => {
 })
 
 describe('oversized identity bounding on Unicode boundaries', () => {
-  // 39 UTF-16 units of ASCII put the astral character's surrogate pair across
-  // the 40-unit diagnostic-head cut. Pre-fix the head ended in a lone high
-  // surrogate and `encodeURIComponent` threw `URIError: URI malformed`.
+  // Split an astral pair at the old 40-unit diagnostic cut to exercise Unicode-safe bounding.
   const STRADDLING = `${'a'.repeat(39)}😀${'x'.repeat(1100)}`
   const straddlingIdentity: AgentJournalItemIdentity = {
     provider: 'codex',
@@ -189,7 +180,6 @@ describe('oversized identity bounding on Unicode boundaries', () => {
 
   it('stays deterministic and collision-resistant for straddling ids', () => {
     expect(agentJournalItemKey(straddlingIdentity)).toBe(agentJournalItemKey(straddlingIdentity))
-    // A different oversized value sharing the same head still gets its own key.
     expect(agentJournalItemKey({ ...straddlingIdentity, turnId: `${STRADDLING}y` })).not.toBe(
       agentJournalItemKey(straddlingIdentity)
     )
@@ -217,8 +207,7 @@ describe('oversized identity bounding on Unicode boundaries', () => {
 })
 
 describe('ill-formed UTF-16 identity totality', () => {
-  // JSON.parse admits lone surrogates, so any JSON string is a legal component;
-  // pre-fix these threw `URIError: URI malformed` in `encodeURIComponent`.
+  // JSON permits lone surrogates, so identity encoding must handle them without URIError.
   const LONE_HIGH = '\ud83d'
   const LONE_LOW = '\ude00'
 

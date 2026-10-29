@@ -330,20 +330,44 @@ describe('ordered region decisions and migration outcomes', () => {
 
   it('rejects stale assignment basis and requires both thresholds', async () => {
     const context = await setup()
+    for (const measurements of [
+      { 'us-central1': 96, 'asia-east2': 72 },
+      { 'us-central1': 200, 'asia-east2': 175 }
+    ]) {
+      const rejected = await window(context)
+      await expect(
+        context.store.exchangeRegionCorrection(
+          identity,
+          {
+            v: 1,
+            action: 'report',
+            generation: rejected.generation,
+            assignmentEpoch: rejected.assignmentEpoch,
+            policyVersion: 1,
+            outcome: 'conclusive',
+            measurements
+          },
+          rejected.assignmentEpoch
+        )
+      ).resolves.toMatchObject({ reportStatus: 'accepted' })
+      expect(await context.store.previewRegionCorrection()).toEqual({ ineligible: 1 })
+    }
     const issued = await window(context)
-    await context.store.exchangeRegionCorrection(
-      identity,
-      {
-        v: 1,
-        action: 'report',
-        generation: issued.generation,
-        assignmentEpoch: issued.assignmentEpoch,
-        policyVersion: 1,
-        outcome: 'conclusive',
-        measurements: { 'us-central1': 150, 'asia-east2': 100 }
-      },
-      issued.assignmentEpoch
-    )
+    await expect(
+      context.store.exchangeRegionCorrection(
+        identity,
+        {
+          v: 1,
+          action: 'report',
+          generation: issued.generation,
+          assignmentEpoch: issued.assignmentEpoch,
+          policyVersion: 1,
+          outcome: 'conclusive',
+          measurements: { 'us-central1': 125, 'asia-east2': 100 }
+        },
+        issued.assignmentEpoch
+      )
+    ).resolves.toMatchObject({ reportStatus: 'accepted' })
     expect(await context.store.previewRegionCorrection()).toEqual({
       'us-central1-to-asia-east2': 1
     })

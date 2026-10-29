@@ -21,24 +21,11 @@ import type {
 import { isUsageScanWorkerProgress } from './usage-scan-worker-protocol'
 import { createUsageScanWorkerTransport } from './usage-scan-worker-cache-cleanup'
 
-// Why (#20940): this module owns the request half of the shared usage scan
-// worker — FIFO one-at-a-time dispatch, a no-progress deadline, respawn-on-fault
-// — while WorkerThreadRequestQueue owns the queue mechanics and
-// LazyWorkerThreadHost owns the thread's lifetime. The default spawn and the
-// process-wide singleton live in usage-scan-worker-spawn.ts.
+// #20940: serialize provider scans with WorkerThreadRequestQueue; LazyWorkerThreadHost owns thread lifetime and the spawn module owns layout/singleton.
 
-// Why no-progress rather than wall clock: a cold scan of a real history is
-// legitimately minutes — 637 s measured on a 30 GB corpus with 300 worktrees
-// before #21130, ~51 s after — and a slower disk or a larger corpus goes past
-// any fixed budget. A wall-clock deadline killed those scans, recorded a scan
-// error, and left the cache unadvanced, so the next refresh started cold and
-// died at the same point, forever. The worker posts a file counter as it goes
-// (`UsageScanWorkerProgress`), so this window only has to cover the gap between
-// two files; it stays generous because a single huge rollout is still one gap.
+// Cold corpora can exceed any total deadline; time only gaps between progress reports. A huge rollout is one gap, so keep the window generous.
 export const USAGE_SCAN_NO_PROGRESS_TIMEOUT_MS = 10 * 60_000
-// One user action refreshes several providers in a burst, and the store's own
-// staleness window is 5 minutes. Long enough to serve a burst, short enough that
-// an idle app is not holding a thread.
+// Keep the worker through provider-refresh bursts, then release the idle thread.
 export const IDLE_TEARDOWN_MS = 60_000
 export const MAX_CONSECUTIVE_DEATHS = 3
 
@@ -50,12 +37,7 @@ type ProviderScanResult<TSession, TDaily> = {
   dailyAggregates: TDaily[]
 }
 
-/**
- * Main-thread bridge that runs first-party usage scans on a worker thread.
- * Every route fails closed: a worker that cannot spawn, times out, or crashes
- * rejects, and the caller's store records a scan error and keeps the previous
- * projection rather than moving the parse back onto the main thread.
- */
+/** Unavailable, timed-out or crashed workers reject; stores retain their previous projection instead of parsing on main. */
 export class UsageScanWorkerClient {
   private readonly queue: WorkerThreadRequestQueue<UsageScanWorkerRequest, UsageScanWorkerResponse>
 
@@ -70,19 +52,13 @@ export class UsageScanWorkerClient {
       describeTimeout: (timeoutMs) => `Usage scan worker reported no progress for ${timeoutMs}ms`,
       describeExit: (code) => `Usage scan worker exited with code ${code}`,
       describeCrashLoop: (lastError) => `Usage scan worker crashed repeatedly (${lastError})`,
-      // Why: never fall back to scanning on the main thread here. A missing
-      // bundle or a resource-exhausted spawn must surface as a scan error, not
-      // reintroduce the main-process occupancy this boundary exists to remove.
+      // Missing/resource-starved workers must fail closed; main-thread scanning would reintroduce event-loop blocking.
       onUnavailable: (err) =>
         log(`[usage-scan] worker unavailable; usage scans will report an error. ${message(err)}`)
     })
   }
 
-  /**
-   * Run one provider's scan on the worker.
-   * @param body - Provider id, worktree refs, and where that provider's per-source cache lives.
-   * @returns The worker's value for that provider.
-   */
+  /** sourceCache identifies provider records that stay on the worker. */
   scan(body: UsageScanWorkerScanBody): Promise<UsageScanWorkerValue> {
     return this.dispatch(body)
   }
@@ -124,13 +100,6 @@ function wrongProvider(expected: UsageScanWorkerProviderId, value: UsageScanWork
   return new Error(`Usage scan worker answered for ${actual}, expected ${expected}`)
 }
 
-/**
- * Scan Claude usage transcripts on the shared worker.
- * @param scan - Dispatch function, injected so tests need no real thread.
- * @param worktrees - Worktree refs used to attribute usage.
- * @param sourceCache - Where the worker reads and writes that provider's per-source cache.
- * @returns The session and daily projections.
- */
 export async function scanClaudeUsageOnWorker(
   scan: (body: UsageScanWorkerScanBody) => Promise<UsageScanWorkerValue>,
   worktrees: UsageScanWorktreeRef[],
@@ -143,13 +112,6 @@ export async function scanClaudeUsageOnWorker(
   return { sessions: value.sessions, dailyAggregates: value.dailyAggregates }
 }
 
-/**
- * Scan Codex rollouts on the shared worker.
- * @param scan - Dispatch function, injected so tests need no real thread.
- * @param worktrees - Worktree refs used to attribute usage.
- * @param sourceCache - Where the worker reads and writes that provider's per-source cache.
- * @returns The session and daily projections.
- */
 export async function scanCodexUsageOnWorker(
   scan: (body: UsageScanWorkerScanBody) => Promise<UsageScanWorkerValue>,
   worktrees: UsageScanWorktreeRef[],
@@ -162,13 +124,6 @@ export async function scanCodexUsageOnWorker(
   return { sessions: value.sessions, dailyAggregates: value.dailyAggregates }
 }
 
-/**
- * Scan OpenCode usage databases on the shared worker.
- * @param scan - Dispatch function, injected so tests need no real thread.
- * @param worktrees - Worktree refs used to attribute usage.
- * @param sourceCache - Where the worker reads and writes that provider's per-source cache.
- * @returns The session and daily projections.
- */
 export async function scanOpenCodeUsageOnWorker(
   scan: (body: UsageScanWorkerScanBody) => Promise<UsageScanWorkerValue>,
   worktrees: UsageScanWorktreeRef[],
@@ -181,13 +136,6 @@ export async function scanOpenCodeUsageOnWorker(
   return { sessions: value.sessions, dailyAggregates: value.dailyAggregates }
 }
 
-/**
- * Scan Muse Code session logs on the shared worker.
- * @param scan - Dispatch function, injected so tests need no real thread.
- * @param worktrees - Worktree refs used to attribute usage.
- * @param sourceCache - Where the worker reads and writes that provider's per-source cache.
- * @returns The session and daily projections.
- */
 export async function scanMuseUsageOnWorker(
   scan: (body: UsageScanWorkerScanBody) => Promise<UsageScanWorkerValue>,
   worktrees: UsageScanWorktreeRef[],

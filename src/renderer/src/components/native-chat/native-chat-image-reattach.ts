@@ -1,8 +1,7 @@
 import { translate } from '@/i18n/i18n'
 import type { NativeChatComposerImageAttachment } from './NativeChatComposerField'
 
-/** Why the composer can't send while it holds images that couldn't be brought back; null when it
- *  holds none. Removing always works; re-attaching only for a file, so the reason names removing. */
+/** Missing images hold Send; offer removal because pasted images cannot always be reattached. */
 export function nativeChatAttachImagesAgainReason(
   attachments: readonly NativeChatComposerImageAttachment[]
 ): string | null {
@@ -30,8 +29,6 @@ export function nativeChatImagesHoldSend(
   )
 }
 
-/** Whether the composer's images keep it from sending, and the reason to show when the user can
- *  fix it. */
 export function nativeChatImageSendBlock(
   attachments: readonly NativeChatComposerImageAttachment[]
 ): { holdsSend: boolean; reason: string | null } {

@@ -95,7 +95,7 @@ describe('restored client-local editor tabs', () => {
 
   beforeEach(() => {
     latestFileContents = {}
-    // Why an empty fs API: restoring must read with nothing re-granted or prepared first.
+    // Restored reads must work without re-granting or preparing file access.
     vi.stubGlobal('api', { fs: {} })
     mocks.readRuntimeFileContent.mockReset()
     mocks.readRuntimeFileContent.mockResolvedValue({ content: '# local', isBinary: false })

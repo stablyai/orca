@@ -1,5 +1,7 @@
 import { Platform, StyleSheet, Text, TextInput, View } from 'react-native'
 import { colors, radii, spacing } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { browserAddressFieldStyles } from './browser-address-field-styles'
 import { compactMobileBrowserFileAddress } from './browser-url'
 import { MobileBrowserLoadProgress } from './MobileBrowserLoadProgress'
@@ -27,6 +29,7 @@ export function MobileBrowserAddressField({
   onSubmit,
   value
 }: Props): React.JSX.Element {
+  useMobileColorScheme()
   const fileLabel = focused ? null : compactMobileBrowserFileAddress(value)
   const selection = focused ? undefined : { start: 0, end: 0 }
 
@@ -44,9 +47,7 @@ export function MobileBrowserAddressField({
         autoCapitalize="none"
         autoCorrect={false}
         keyboardType={Platform.OS === 'ios' ? 'url' : 'default'}
-        // Why: `keyboardType` is a native-only enum, so in a browser the URL keyboard is lost and
-        // the field falls back to a plain one. `inputMode` is what a browser reads, and it takes
-        // precedence over `keyboardType`, so it must stay undefined everywhere else.
+        // Browser reads inputMode, not native keyboardType; keep it undefined on native where it would override URL keyboard.
         inputMode={Platform.OS === 'web' ? 'url' : undefined}
         numberOfLines={1}
         returnKeyType="go"
@@ -70,7 +71,7 @@ export function MobileBrowserAddressField({
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   field: {
     flex: 1,
     minWidth: 0,
@@ -83,4 +84,4 @@ const styles = StyleSheet.create({
     borderRadius: radii.input,
     backgroundColor: colors.bgRaised
   }
-})
+}))

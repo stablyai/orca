@@ -30,9 +30,7 @@ function assistantMessage(uuid: string, content: unknown[]) {
   }
 }
 
-// A proposed plan reaches us two ways: the permission callback, and the
-// assistant tool-use stream. Neither can be assumed to fire on its own, so the
-// stream ingress is pinned separately from the approval path.
+// Plans can arrive through tool-use streams or permission callbacks; cover each ingress independently.
 describe('Claude journal translation, plan ingress', () => {
   it('keeps an assistant ExitPlanMode tool use independently journalled', () => {
     const state = sinkState()

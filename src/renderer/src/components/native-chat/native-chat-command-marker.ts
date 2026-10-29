@@ -1,17 +1,12 @@
-// Locally-recorded slash commands (e.g. `/clear`). They dispatch into the
-// agent's TUI rather than the conversation, so native chat renders its own
-// marker line and applies their transcript boundaries — kept out of the
-// optimistic-send pruning in native-chat-pending.ts, which is a separate rule.
+// Slash-command feedback and transcript boundaries stay separate from optimistic user-send pruning.
 
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
-import { setBoundedScopeCacheEntry } from '../../../../shared/native-chat-scope-cache'
+import { setBoundedScopeCacheEntry } from '../../../../shared/native-chat/native-chat-scope-cache'
+import { translate } from '@/i18n/i18n'
 
-/** A locally-recorded slash command (e.g. `/clear`). Slash commands dispatch to
- *  the agent's TUI and are not chat turns, so we surface a small system line as
- *  feedback that the command ran rather than echoing a user bubble. */
+/** Local slash-command feedback replaces user-turn echoes for commands dispatched into the TUI. */
 export type NativeChatCommandMarker = {
   id: string
-  /** The command as typed, e.g. `/clear`. */
   command: string
   sentAt: number
   /** What the host answered, for a command the agent never saw. */
@@ -46,8 +41,7 @@ export function appendCommandMarkerCache(
 ): NativeChatCommandMarker[] {
   commandMarkerCounter += 1
   const key = commandMarkerScopeKey(scope)
-  // Why: native/TUI view switches remount the chat surface, but slash commands
-  // are not transcript turns, so their local feedback needs a pane-scoped cache.
+  // Cache feedback across native/TUI remounts because slash commands create no transcript turn.
   const next = [
     ...(commandMarkerCache.get(key) ?? []),
     {
@@ -57,10 +51,7 @@ export function appendCommandMarkerCache(
       ...(output === undefined ? {} : { output })
     }
   ].slice(-COMMAND_MARKER_LIMIT)
-  // Why: the per-key array is capped at 8, but the KEY (paneKey\0agent\0sessionId,
-  // sessionId changes on every /clear) is ephemeral and was never evicted, so it
-  // grew one entry per (pane, session) for the renderer's whole life. LRU-bound
-  // the key count (mirrors the #7566 draft/attachment caches in this folder).
+  // Bound scope keys as well as per-scope markers; changing session ids would otherwise grow the cache forever.
   setBoundedScopeCacheEntry(commandMarkerCache, key, next)
   return [...next]
 }
@@ -92,16 +83,11 @@ export function applyCommandMarkerBoundaries(
   if (clearSentAt === null) {
     return messages as NativeChatMessage[]
   }
-  // Why: `/clear` mutates the TUI/transcript asynchronously. Hide the current
-  // transcript immediately so native chat reflects the command before the agent
-  // writes a replacement session or truncates the file.
+  // Hide pre-clear history immediately while the TUI asynchronously replaces or truncates its transcript.
   return messages.filter((message) => message.timestamp !== null && message.timestamp > clearSentAt)
 }
 
-/** Render command markers as compact `system` messages. The `system` role draws
- *  as a muted aside (not a user bubble); the text avoids the harness noise
- *  prefixes so stripNoiseMessages keeps it. A host-answered command shows its
- *  answer in place of the `Ran` line: the answer is the feedback. */
+/** Use system asides without harness-noise prefixes; host-answered commands show their answer instead of Ran. */
 export function commandMarkersAsMessages(
   markers: readonly NativeChatCommandMarker[]
 ): NativeChatMessage[] {
@@ -109,7 +95,16 @@ export function commandMarkersAsMessages(
     id: `command:${marker.id}`,
     role: 'system' as const,
     // Why: a host answer is one sentence, so it reads as the aside it replaces, not a grid.
-    blocks: [{ type: 'text' as const, text: marker.output ?? `Ran ${marker.command}` }],
+    blocks: [
+      {
+        type: 'text' as const,
+        text:
+          marker.output ??
+          translate('components.native-chat.commandMarker.ran', 'Ran {{command}}', {
+            command: marker.command
+          })
+      }
+    ],
     timestamp: marker.sentAt,
     source: 'scrape' as const
   }))

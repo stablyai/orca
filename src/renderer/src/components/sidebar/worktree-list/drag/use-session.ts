@@ -40,17 +40,13 @@ export type WorktreeStatusDropRequest = {
 
 export type WorktreeDragSession = ReturnType<typeof useWorktreeDragSession>
 
-// Owns the geometry side of a sidebar row drag: which groups exist, which ids travel
-// together, and where the insertion line lands for a given pointer position.
 export function useWorktreeDragSession(args: {
   rows: HostSectionRow[]
   scrollRef: React.RefObject<HTMLDivElement | null>
 }) {
   const { rows, scrollRef } = args
   const worktreeDragSessionRef = useRef<WorktreeSidebarDragSession | null>(null)
-  // Why: cross-group hovers hit-test a group the session never captured, so hold
-  // that group's drop decision separately or a card expanding in the target group
-  // moves the insertion line under a still pointer.
+  // Hold cross-group drop anchors separately so expanding target cards cannot move the line under a still pointer.
   const statusDropAnchorsRef = useRef<Map<string, WorktreeSidebarDropAnchor>>(new Map())
 
   const worktreeDragGroups = useMemo(() => getWorktreeDragGroups(rows), [rows])
@@ -165,8 +161,7 @@ export function useWorktreeDragSession(args: {
         return null
       }
       const scrollTop = container.scrollTop
-      // Why: only real pointer or scroll movement should re-decide the slot; a
-      // card growing under a still pointer must not move it.
+      // Reevaluate only on pointer/scroll movement so card growth cannot change a stationary drop target.
       const anchor = shouldReevaluateWorktreeSidebarDropAnchor({
         anchor: session.anchor,
         pointerY,
@@ -231,8 +226,7 @@ export function useWorktreeDragSession(args: {
     [computeWorktreeDropForGroup, scrollRef]
   )
 
-  // Why: consumers pass session-derived callbacks into memoised cards; a fresh object every
-  // render would defeat those bail-outs.
+  // Keep session callback identity stable for memoized cards.
   return useMemo(
     () => ({
       worktreeDragSessionRef,

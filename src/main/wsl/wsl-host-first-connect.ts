@@ -1,13 +1,11 @@
-/**
- * The connect step of a first WSL host Add. Until the Add persists a record, nothing else (Remove,
- * disabling the experiment, startup adoption) can find this distro's connection or detached
- * holder, so every way the Add can end without a host must release them here.
- */
+/** Before Add persists its record, removal/disable/startup cannot find the connection or detached holder. Every unsuccessful Add must release both here. */
 import { errorMessage } from '../../shared/error-message'
 import type { WslHostAddResult } from '../../shared/wsl-host-types'
 import { OrcadHostUnsupportedError } from '../orcad/orcad-host-unavailable'
 import type { WslHostConnector } from './wsl-host-service'
 import { WslOrcadLaunchDeferredError } from './wsl-orcad-connection-errors'
+import { WslDistroVersion1Error, wslUnsupportedDistroFixMessage } from './wsl-distro-unsupported'
+import { RemoteNodeRuntimeSelfTestError } from '../ssh/orcad-remote-node-runtime-report'
 import type { WslOrcadConnection } from './wsl-orcad-connection'
 
 type WslHostAddRefusal = Extract<WslHostAddResult, { ok: false }>
@@ -34,8 +32,8 @@ export async function connectForWslHostAdd(
     }
     return {
       ok: false,
-      kind: error instanceof OrcadHostUnsupportedError ? 'unsupported-wsl1' : 'failed',
-      message: errorMessage(error)
+      kind: connectFailureKind(error),
+      message: wslUnsupportedDistroFixMessage(error) ?? errorMessage(error)
     }
   }
   const refusal = lateRefusal()
@@ -44,4 +42,15 @@ export async function connectForWslHostAdd(
     return refusal
   }
   return { connection }
+}
+
+/** A distro Orca can't run in reads apart from a connect that may work on retry. */
+function connectFailureKind(error: unknown): WslHostAddRefusal['kind'] {
+  if (error instanceof WslDistroVersion1Error) {
+    return 'unsupported-wsl1'
+  }
+  return error instanceof OrcadHostUnsupportedError ||
+    error instanceof RemoteNodeRuntimeSelfTestError
+    ? 'unsupported-distro'
+    : 'failed'
 }

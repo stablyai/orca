@@ -17,10 +17,7 @@ export function createTarget(overrides?: Partial<SshTarget>): SshTarget {
   }
 }
 
-/**
- * Walks an attempt's initial auth ladder against a host that keeps listing `hostMethods`, stopping
- * after `maxAttempts` methods as a host that disconnects at its MaxAuthTries would.
- */
+/** Drive auth methods until exhausted or the host's simulated MaxAuthTries limit. */
 export function walkInitialAuthLadder(
   config: unknown,
   hostMethods: AuthenticationType[],

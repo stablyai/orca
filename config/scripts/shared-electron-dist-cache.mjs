@@ -10,11 +10,7 @@ const IDENTITY_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]*$/
 // Sibling of path.txt, never inside dist: an install replaces dist wholesale.
 const MARKER_FILENAME = '.orca-shared-dist'
 
-/**
- * Where sibling worktrees of one repository keep their shared extracted Electron.
- *
- * Null means "install normally" -- every caller treats a missing entry as "do what you did before".
- */
+// Return repository-wide shared Electron location or null for normal install; folder workspaces also use normal install.
 export function resolveSharedElectronDistEntry(options) {
   const { repoRoot, version, targetPlatform, targetArch } = options
   const env = options.env ?? process.env
@@ -25,8 +21,7 @@ export function resolveSharedElectronDistEntry(options) {
   if (![version, targetPlatform, targetArch].every((part) => IDENTITY_PATTERN.test(part ?? ''))) {
     return null
   }
-  // Under pnpm's global virtual store every worktree already shares one electron package dir;
-  // adopting a cache entry would swap the dist out from under worktrees running it.
+  // Skip cache under global pnpm store: worktrees already share package and replacing dist would displace running apps.
   if ((options.isSharedPackageDir ?? isSharedPackageDir)(options.electronPackageDir, repoRoot)) {
     return null
   }
@@ -72,11 +67,7 @@ export function recordAdoptedSharedElectronDist(entry, write) {
   }
 }
 
-/**
- * Share a validated cache entry into `stagePath`. Deliberately never falls back to a byte copy --
- * with no storage to share the caller is better off with its normal install, which this must not
- * slow down.
- */
+// Share validated entry without byte-copy fallback: when storage cannot be shared, caller’s normal install is preferable.
 export function shareElectronDistFromCache(entry, stagePath, options) {
   const { version, platformPath } = options
   if (!isUsableElectronDist(entry.entryPath, version, platformPath)) {
@@ -90,13 +81,7 @@ export function shareElectronDistFromCache(entry, stagePath, options) {
   return isUsableElectronDist(stagePath, version, platformPath)
 }
 
-/**
- * Publish this worktree's dist as the shared entry, best effort.
- *
- * No lock: staging names are unique and `rename` onto a populated directory fails with ENOTEMPTY,
- * so a concurrent publisher either wins the rename or cleans up its own staging tree. Neither can
- * observe a half-written entry, and a usable entry already in place is never overwritten.
- */
+// Publish via unique staging/atomic rename without lock: populated entry blocks racing replacement; usable entry is never overwritten.
 export function publishSharedElectronDist(distPath, entry, options = {}) {
   const { version, platformPath } = options
   const uuid = options.uuid ?? randomUUID
@@ -110,8 +95,7 @@ export function publishSharedElectronDist(distPath, entry, options = {}) {
   try {
     mkdirSync(entry.cacheRoot, { recursive: true })
     ;(options.share ?? shareTree)(distPath, stagePath)
-    // Before publishing, not after: an entry is visible the instant the rename lands, and under
-    // hardlink sharing this is the only thing standing between a stray write and every worktree.
+    // Protect before publish: rename exposes entry immediately, and hardlink writes would mutate every worktree.
     ;(options.protect ?? makeTreeReadOnly)(stagePath)
   } catch {
     rmSync(stagePath, { recursive: true, force: true })

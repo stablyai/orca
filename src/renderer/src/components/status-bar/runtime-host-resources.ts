@@ -5,7 +5,7 @@ import type { RuntimeHostResourceSample } from './resource-usage-merge-types'
 
 export type RuntimeHostResourceResult =
   | { status: 'sampled'; worktrees: WorktreeMemory[] }
-  // Why: a server that never answered is unverifiable, so the panel names it instead of showing it idle.
+  // An unanswered server is unverifiable, not idle.
   | { status: 'unreachable' }
   | { status: 'update-required' }
 
@@ -95,7 +95,7 @@ function finiteNumber(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? value : null
 }
 
-// Why: servers ship independently; keep well-formed rows and drop the rest rather than trusting the shape.
+// Independently updated servers may send mixed shapes; keep valid rows and reject malformed data.
 function parseSnapshotWorktrees(value: unknown): WorktreeMemory[] | null {
   if (!isRecord(value) || !Array.isArray(value.worktrees)) {
     return null

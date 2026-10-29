@@ -196,11 +196,7 @@ describe('windows mobile firewall', () => {
   })
 
   it('keeps the elevated child encoded because Start-Process re-splits its ArgumentList', async () => {
-    // Why: `Start-Process -ArgumentList` joins the array into one ShellExecuteEx parameter
-    // string without quoting and PowerShell re-splits it on whitespace, which collapses runs
-    // of spaces. Measured on Windows 11: a `-Command` payload turned `C:\My  App\Orca.exe`
-    // into `C:\My App\Orca.exe`, i.e. a firewall rule for the wrong program. Base64 is the
-    // only form that survives that hop, so this site must not follow the local runner.
+    // Elevated Start-Process joins/re-splits argv and collapses spaces in executable paths; only this hop needs base64.
     const runPowerShell = vi.fn().mockResolvedValue('{"launched":true,"exitCode":0}')
     await repairWindowsMobileFirewall(
       6769,
@@ -218,9 +214,7 @@ describe('windows mobile firewall', () => {
   })
 
   it('runs the local PowerShell over argv with a plain -Command script', async () => {
-    // Why: execFile reaches CreateProcess with no shell in between, so the script needs no
-    // base64 armouring, and argv preserves runs of spaces that the elevated hop cannot.
-    // `-EncodedCommand` here was pure EDR signal.
+    // Direct CreateProcess argv preserves spaces without encoding; -EncodedCommand here only adds EDR signal.
     const execFileMock = vi.mocked(execFile)
     execFileMock.mockImplementation(((_file, _args, _options, callback) => {
       callback(null, '{"privateFirewallEnabled":true,"networkCategory":"Private"}', '')

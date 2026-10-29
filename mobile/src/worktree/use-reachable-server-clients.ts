@@ -8,11 +8,7 @@ import {
 import type { RpcClient } from '../transport/rpc-client'
 import { useRelayHosts } from './relay-hosts-feed'
 
-/**
- * The desktop's servers from the shared feed while `active`, and a scoped client for each one this
- * phone can reach now. The clients change only when the set of ready servers does, so a health or
- * label change re-lists nothing.
- */
+// Key clients by the ready-server set so health/label changes cannot trigger repo reloads.
 export function useReachableServerClients(
   client: RpcClient | null,
   hostCapabilities: readonly string[],
@@ -30,7 +26,6 @@ export function useReachableServerClients(
     .join('\n')
   const serverClients = useMemo(
     () => reachableServerClients(client, hostCapabilities, servers ?? []),
-    // Keyed on the ready set rather than the feed's rows: see above.
     [client, hostCapabilities, readyKey]
   )
   return { servers, serverClients }

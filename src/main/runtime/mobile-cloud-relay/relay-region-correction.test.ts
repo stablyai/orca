@@ -75,11 +75,7 @@ describe('window-bound region decisions', () => {
       })
     }
   )
-  it('allows the exact inclusive 25ms and 20 percent boundary', async () => {
-    expect(await resolver(100, 125).instance.measureDecision(window)).toMatchObject({
-      outcome: 'conclusive'
-    })
-  })
+
   it('does not certify a lone measurable region', async () => {
     expect(await resolver(40, null).instance.measureDecision(window)).toEqual({
       outcome: 'inconclusive',

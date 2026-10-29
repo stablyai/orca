@@ -9,11 +9,7 @@ async function realpathKey(path: string): Promise<string | null> {
   }
 }
 
-/**
- * The registered project whose directory is the same one `path` resolves to on this host.
- * Why: a symlink alias (repo-link -> repo) passes every string comparison yet names the same
- * checkout. Distinct checkouts keep distinct real paths, so they are never merged.
- */
+/** Resolve symlink aliases so the same checkout cannot be registered twice. */
 export async function findProjectAtSameRealPath<T extends { path: string }>(
   projects: readonly T[],
   path: string

@@ -11,12 +11,7 @@ export function getComposerEligibleRepos(repos: readonly Repo[]): Repo[] {
   return getNewWorkspaceDialogEligibleRepos(repos)
 }
 
-/**
- * After creating a per-workspace-env, its runtime-owned SSH repo becomes the active repo — but it's
- * excluded from the composer's eligible repos (hidden plumbing). Without this, the composer can't
- * match `activeRepoId`, so it falls back to the first eligible repo (a different project). Map the
- * active runtime repo to its local sibling in the same project so the composer stays on that project.
- */
+/** Map hidden per-workspace-runtime repos to their visible project sibling so composer selection cannot fall back to another project. */
 export function resolveComposerActiveRepoId(
   repos: readonly Repo[],
   eligibleRepos: readonly Repo[],

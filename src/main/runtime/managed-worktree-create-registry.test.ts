@@ -1,5 +1,4 @@
-// Every runtime create (CLI, agents, phone, paired clients, orchestration) is listed in the host's
-// creation registry while it runs, and names its workspace before the host announces it.
+// Runtime creates must enter the host registry and name their workspace before announcement.
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('../../shared/sidebar-inputs-switch', () => ({ ORCA_SIDEBAR_INPUTS_IS_MAIN: true }))
@@ -45,6 +44,7 @@ vi.mock('../ipc/registered-worktree-roots-scoped-invalidation', () => ({
 }))
 
 import { OrcaRuntimeService } from './orca-runtime'
+import { partialRuntimeStore } from './runtime-store-partial-fixture'
 
 const gitRepo = {
   id: 'repo-1',
@@ -68,12 +68,12 @@ type RuntimeInternals = {
 }
 
 function makeRuntime(repo: Record<string, unknown> = gitRepo): OrcaRuntimeService {
-  const store = {
-    getSettings: () => ({ disabledTuiAgents: ['codex'], workspaceDir: '/worktrees' }),
-    getProjectHostSetups: () => []
-  }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: every store method this create path reaches is supplied above.
-  const runtime = new OrcaRuntimeService(store as never)
+  const runtime = new OrcaRuntimeService(
+    partialRuntimeStore({
+      getSettings: () => ({ disabledTuiAgents: ['codex'], workspaceDir: '/worktrees' }),
+      getProjectHostSetups: () => []
+    })
+  )
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the named members all exist on the service; the cast only exposes non-public ones to the spies.
   const internals = runtime as unknown as RuntimeInternals
   vi.spyOn(internals, 'resolveRepoSelector').mockResolvedValue(repo)

@@ -12,6 +12,10 @@ import type { RpcRequest, RpcResponse } from './core'
 import { RpcDispatcher } from './dispatcher'
 import { ORCHESTRATION_METHODS } from './methods/orchestration'
 import { createRootDispatch } from '../orchestration/db/root-dispatch-test-fixture'
+import type { RuntimeStore } from '../runtime-store-contract'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
+import { parsePaneKey } from '../../../shared/stable-pane-id'
+import { bindPaneFirst } from '../bind-first-pane.test-fixture'
 
 const WORKER_HANDLE = 'term_pre_update_worker'
 const WORKER_PANE = 'tab_pre_update:33333333-3333-4333-8333-333333333333'
@@ -52,6 +56,28 @@ afterEach(() => {
     rmSync(dir, { recursive: true, force: true })
   }
 })
+
+/** Layout-owner builds: an empty store whose session holds main's layout, which binds the panes. */
+function updateLayoutStore(): RuntimeStore {
+  return {
+    getRepos: () => [],
+    getRepo: () => undefined,
+    addRepo: vi.fn<RuntimeStore['addRepo']>(),
+    updateRepo: vi.fn<RuntimeStore['updateRepo']>(),
+    getAllWorktreeMeta: () => ({}),
+    getWorktreeMeta: () => undefined,
+    setWorktreeMeta: vi.fn<RuntimeStore['setWorktreeMeta']>(),
+    removeWorktreeMeta: vi.fn<RuntimeStore['removeWorktreeMeta']>(),
+    getGitHubCache: vi.fn<RuntimeStore['getGitHubCache']>(),
+    getSettings: () => ({
+      workspaceDir: '/workspaces',
+      nestWorkspaces: false,
+      refreshLocalBaseRefOnWorktreeCreate: false,
+      branchPrefix: 'none',
+      branchPrefixCustom: ''
+    })
+  }
+}
 
 function createUpdateHarness(): Harness {
   const dir = mkdtempSync(join(tmpdir(), 'orca-update-settlement-'))
@@ -111,15 +137,19 @@ function createUpdateHarness(): Harness {
         launchToken: 'current-coordinator-launch-token'
       }
     ]
-    const runtime = new OrcaRuntimeService(null, undefined, {
-      attestAgentHookCompatibilityAuthority: ({ paneKey, launchTokenHash }) => {
-        const authority = authorities.find((candidate) => candidate.paneKey === paneKey)
-        return authority &&
-          createHash('sha256').update(authority.launchToken).digest('hex') === launchTokenHash
-          ? { paneKey, source: 'hydrated_commitment' }
-          : null
+    const runtime = new OrcaRuntimeService(
+      ORCA_LAYOUT_OWNER_IS_MAIN ? updateLayoutStore() : null,
+      undefined,
+      {
+        attestAgentHookCompatibilityAuthority: ({ paneKey, launchTokenHash }) => {
+          const authority = authorities.find((candidate) => candidate.paneKey === paneKey)
+          return authority &&
+            createHash('sha256').update(authority.launchToken).digest('hex') === launchTokenHash
+            ? { paneKey, source: 'hydrated_commitment' }
+            : null
+        }
       }
-    })
+    )
     const internals = runtime as unknown as {
       recordPtyWorktree: (ptyId: string, worktreeId: string, state: Record<string, unknown>) => void
       issuePtyHandle: (pty: unknown) => string
@@ -128,6 +158,16 @@ function createUpdateHarness(): Harness {
       restoredOrchestrationAuthorityByPtyId: Map<string, Record<string, unknown>>
     }
     for (const authority of authorities) {
+      const pane = parsePaneKey(authority.paneKey)
+      if (!pane) {
+        throw new Error(`Expected a stable pane key: ${authority.paneKey}`)
+      }
+      bindPaneFirst(runtime, {
+        worktreeId: 'repo::/retained-worktree',
+        tabId: pane.tabId,
+        leafId: pane.leafId,
+        ptyId: authority.ptyId
+      })
       internals.recordPtyWorktree(authority.ptyId, 'repo::/retained-worktree', {
         connected: true,
         paneKey: authority.paneKey,

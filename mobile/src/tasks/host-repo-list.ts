@@ -1,18 +1,10 @@
-/** The host repo list as a client-scoped resource.
- *
- * Why this is a state machine rather than a `repos` array plus a "did we fetch
- * it" flag: the Tasks screen is reused across hosts and `forceReconnect` swaps
- * the client underneath it, so a bare array cannot say *which* client answered,
- * and an empty array cannot say whether the host has no repos or was never
- * asked. Both ambiguities silently filtered every GitHub Project row (#12966).
- */
+// Track which client answered and whether it was fetched; host switches and unfetched empty arrays otherwise hide Project rows.
 
 export type HostRepoListStatus = 'idle' | 'loading' | 'loaded' | 'error'
 
 export type HostRepoListState<Repo> = {
   status: HostRepoListStatus
-  /** Last successful response. Retained across a reload so refreshing does not
-   *  blank the list, and cleared only by `reset`. */
+  // Retain rows through reload; reset only on identity change.
   repos: Repo[]
   error: string
 }
@@ -49,15 +41,12 @@ export function hostRepoListReducer<Repo>(
   }
 }
 
-/** Whether a fetch has finished, successfully or not. Callers gate their empty
- *  state on this: "no repos yet" must not render as "this host has no repos". */
+// Do not show no repos until a fetch has settled.
 export function hasSettledHostRepoList(state: HostRepoListState<unknown>): boolean {
   return state.status === 'loaded' || state.status === 'error'
 }
 
-/** Whether `loadTasks` still needs to fetch before it can trust `repos`. An
- *  in-flight request does not count as fetched, so a caller that needs the list
- *  now awaits its own request rather than reading a stale array. */
+// An in-flight request is not fetched; callers needing current repos must await a request.
 export function needsHostRepoListFetch(state: HostRepoListState<unknown>): boolean {
   return state.status !== 'loaded'
 }

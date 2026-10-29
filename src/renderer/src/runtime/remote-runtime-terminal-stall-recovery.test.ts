@@ -86,7 +86,7 @@ describe('remote terminal stalled stream recovery', () => {
 
     await vi.advanceTimersByTimeAsync(REMOTE_TERMINAL_DELIVERY_STALL_TIMEOUT_MS)
 
-    expect(onTransportClose).toHaveBeenCalledWith({ recoverable: true })
+    expect(onTransportClose).toHaveBeenCalledWith({ recoverable: true, stalled: true })
     expect(sentUnsubscribeStreamIds()).toEqual([stalled.streamId])
     expect(unsubscribe).not.toHaveBeenCalled()
     expect(recordBreadcrumb).toHaveBeenCalledWith({
@@ -169,7 +169,7 @@ describe('remote terminal stalled stream recovery', () => {
     expect(onTransportClose).not.toHaveBeenCalled()
     await vi.advanceTimersByTimeAsync(5_000)
 
-    expect(onTransportClose).toHaveBeenCalledWith({ recoverable: true })
+    expect(onTransportClose).toHaveBeenCalledWith({ recoverable: true, stalled: true })
     expect(sentUnsubscribeStreamIds()).toEqual([stream.streamId])
   })
 
@@ -193,7 +193,7 @@ describe('remote terminal stalled stream recovery', () => {
     expect(sentFrames(TerminalStreamOpcode.SnapshotRequest)).toHaveLength(1)
     await vi.advanceTimersByTimeAsync(REMOTE_TERMINAL_SNAPSHOT_REQUEST_TIMEOUT_MS)
 
-    expect(onTransportClose).toHaveBeenCalledWith({ recoverable: true })
+    expect(onTransportClose).toHaveBeenCalledWith({ recoverable: true, stalled: true })
     expect(sentUnsubscribeStreamIds()).toEqual([stream.streamId])
     expect(recordBreadcrumb).toHaveBeenCalledWith({
       name: 'remote_terminal_stream_stall_recovery',
@@ -284,7 +284,7 @@ describe('remote terminal stalled stream recovery', () => {
     await vi.advanceTimersByTimeAsync(0)
 
     expect(onData).toHaveBeenCalledOnce()
-    expect(onTransportClose).toHaveBeenCalledWith({ recoverable: true })
+    expect(onTransportClose).toHaveBeenCalledWith({ recoverable: true, stalled: true })
     expect(sentUnsubscribeStreamIds()).toEqual([stream.streamId])
   })
 
@@ -364,7 +364,7 @@ describe('remote terminal stalled stream recovery', () => {
     emitSnapshot(stream.streamId, advancedPayload?.requestId ?? 0, 'second-output', 25)
     await vi.advanceTimersByTimeAsync(0)
 
-    expect(onTransportClose).toHaveBeenCalledWith({ recoverable: true })
+    expect(onTransportClose).toHaveBeenCalledWith({ recoverable: true, stalled: true })
     expect(sentUnsubscribeStreamIds()).toEqual([stream.streamId])
   })
 

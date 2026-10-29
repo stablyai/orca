@@ -1,6 +1,4 @@
-// Where in-box hook clients find this relay's loopback hook server: endpoint-directory naming
-// policy (per-user $HOME default, sibling-of-socket layout, Windows named-pipe path flattening) and
-// the ORCA_AGENT_HOOK_* env vars injected into relay-spawned PTYs. IO-free.
+// Define hook endpoint paths and PTY env coordinates without IO; Windows pipe paths require flattening.
 import { basename, dirname, join } from 'node:path'
 import { homedir } from 'node:os'
 
@@ -9,7 +7,7 @@ import {
   ORCA_HOOK_RAW_JSON_TRANSPORT
 } from '../shared/agent-hook-types'
 
-// Why: relay's userData equivalent under $HOME so each user on a shared dev box gets their own 0o700 dir.
+// Use a per-user relay directory so shared hosts isolate endpoint files with mode 0700.
 const RELAY_HOOKS_DIR_NAME = '.orca-relay'
 const RELAY_HOOKS_SUBDIR = 'agent-hooks'
 

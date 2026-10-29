@@ -17,8 +17,7 @@ describe('resolveNestedWorkerMaxDepth', () => {
     expect(resolveNestedWorkerMaxDepth({ nestedWorkerMaxDepth: 3 })).toBe(3)
   })
 
-  // A malformed setting must not become a way to get unlimited nesting, so every
-  // rejected shape falls back to the default rather than disabling the cap.
+  // Malformed settings must fall back to the cap, never disable nesting limits.
   it.each([
     ['a numeric string', '2'],
     ['a boolean', true],

@@ -1,6 +1,7 @@
+import { NOT_REOPENED, reopenPaneAfterMissingReattach } from './cold-restore-resume-startup'
 import { writeStartupCwdFallbackNotice } from './startup-cwd-fallback-notice'
 import { armPaneOwnerRetry } from './pane-owner-recovery'
-import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime-pty-id'
+import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { warnTerminalLifecycleAnomaly } from '../terminal-lifecycle-diagnostics'
 import { isSshSessionGoneError, recordPtyConnectDiagnostic } from './pty-connect-limits'
 import { toProcessExitStartup } from './process-exit-startup'
@@ -65,8 +66,6 @@ async function prepareDeferredSessionReattach(
   void connectDeferredSessionReattach(session, deferredReattachSessionId, options)
 }
 
-const NOT_REOPENED: HeldPaneReopenOutcome = { reopened: false, agentResumed: false }
-
 /** Resolves to what the reattach did, which a held pane's release reports. */
 function connectDeferredSessionReattach(
   session: ConnectPanePtySession,
@@ -79,8 +78,7 @@ function connectDeferredSessionReattach(
   session.allowInitialIdleCacheSeed = true
   recordPtyConnectDiagnostic(`pane=${session.pane.id} -> REATTACH ${deferredReattachSessionId}`)
 
-  // Why: pre-signal (declare) before the reattach connect so the cooperation gate suppresses the daemon seed for this paneKey; Electron preserves IPC order.
-  // See docs/mobile-prefer-renderer-scrollback.md (Renderer-side prerequisite requirement #4).
+  // Declare before connect; Electron’s ordered IPC suppresses daemon seeding before reattach (docs/mobile-prefer-renderer-scrollback.md, prerequisite #4).
   const preSignalPromise =
     session.runtimeEnvironmentId || isRemoteRuntimePtyId(deferredReattachSessionId)
       ? Promise.resolve(null)
@@ -120,7 +118,8 @@ function connectDeferredSessionReattach(
       session.reportError(message)
     },
     // Why the resume even under main: it is what main ran, so a capacity retry resumes it again.
-    toProcessExitStartup(resumeStartup ?? session.paneStartup)
+    toProcessExitStartup(resumeStartup ?? session.paneStartup),
+    resumeStartup ?? session.paneStartup
   )
   session.beginReattachLiveDataDeferral(outputCallbacks.generation)
   session.transportConnectInFlightSince = Date.now()
@@ -137,6 +136,7 @@ function connectDeferredSessionReattach(
     ...(coldRestoreStartup?.resumeProviderSession
       ? { resumeProviderSession: coldRestoreStartup.resumeProviderSession }
       : {}),
+    ...(coldRestoreStartup ? { resumeOrigin: coldRestoreStartup.resumeOrigin } : {}),
     ...(coldRestoreStartup?.launchToken ? { launchToken: coldRestoreStartup.launchToken } : {}),
     ...(coldRestoreStartup?.agent ? { launchAgent: coldRestoreStartup.agent } : {}),
     ...(session.shouldDeclareHiddenAtSpawn() ? { initiallyHidden: true } : {}),
@@ -148,15 +148,7 @@ function connectDeferredSessionReattach(
     session.deps.paneTransportsRef.current.get(session.pane.id) === session.transport &&
     outputCallbacks.generation === session.transportStreamGeneration
   const startFreshInstead = (): Promise<HeldPaneReopenOutcome> =>
-    session
-      .startFreshColdRestoreAgentResume(coldRestoreStartup, { forceBlankRestoredViewport: true })
-      .then(
-        (ptyId: string | null) => ({
-          reopened: ptyId !== null,
-          agentResumed: ptyId !== null && resumedAgent(ptyId)
-        }),
-        () => NOT_REOPENED
-      )
+    reopenPaneAfterMissingReattach(session, coldRestoreStartup, resumedAgent)
 
   void Promise.resolve(reattachPromise)
     .catch(() => null)
@@ -243,7 +235,8 @@ function connectDeferredSessionReattach(
         result,
         deferredReattachSessionId,
         coldRestoreStartup,
-        outputCallbacks.generation
+        outputCallbacks.generation,
+        outputCallbacks.launchContext
       )
       if (accepted && isCurrentReattach()) {
         writeStartupCwdFallbackNotice(session, result)

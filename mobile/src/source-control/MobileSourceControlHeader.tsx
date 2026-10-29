@@ -1,19 +1,18 @@
 import { Pressable, Text, View } from 'react-native'
 import { ChevronLeft, ExternalLink, RefreshCw, X } from 'lucide-react-native'
 import { colors } from '../theme/mobile-theme'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { styles } from './mobile-source-control-styles'
 
 type Props = {
   embedded: boolean
   worktreeLabel: string
   ioBusy: boolean
-  /** Pops the route. The embedded dock does not pop anything, which is why `onClose` is separate. */
   onBack: () => void
-  /** Dismisses the dock beside the terminal, which is a close and must not be called Back. */
+  // Dock dismissal does not pop a route; keep it separate from Back.
   onClose: () => void
   onRefresh: () => void
-  // When set (PR segment ready with a host URL), show open-on-web flush-right of
-  // the title so the control stays visible while the PR body scrolls.
+  // Keep open-on-web in the header while the PR body scrolls.
   onOpenPrWeb?: () => void
   prNumber?: number | null
 }
@@ -28,10 +27,10 @@ export function MobileSourceControlHeader({
   onOpenPrWeb,
   prNumber = null
 }: Props) {
+  useMobileColorScheme()
   return (
     <View style={styles.topBar}>
-      {/* Two controls, not one with a conditional label: the dock's dismiss is a close, and a
-          single control serving both modes has to be named Back in a mode where it closes. */}
+      {/* Dock dismissal and route Back have distinct semantics. */}
       {embedded ? (
         <Pressable
           style={({ pressed }) => [styles.backButton, pressed && styles.backButtonPressed]}

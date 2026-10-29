@@ -4,7 +4,12 @@ import {
   refusedRpcMessageOrFallback
 } from '../transport/rpc-refusal-message'
 import type { RpcResponse } from '../transport/types'
-import { gitBulkStageRun, gitCommitRun, gitPushRun } from './mobile-git-mutation-operations'
+import {
+  gitBulkStageRun,
+  gitCommitRun,
+  gitFastForwardRun,
+  gitPushRun
+} from './mobile-git-mutation-operations'
 import { gitStatusProjectionRead } from './mobile-git-read-operations'
 import type { MobileGitStatusResult } from './mobile-git-status'
 import type { RpcOperationSender } from '../transport/rpc-operation-sender'
@@ -38,11 +43,7 @@ export function mobileHostedReviewBranchStillMatches(
   return Boolean(branch && (branch === inputBranch || branch === `refs/heads/${inputBranch}`))
 }
 
-/**
- * One settle shape for the preparation mutations. Two catches because main had two paths: a
- * refusal with no message falls back to the step's copy, while a transport drop surfaces its own
- * message verbatim and keeps its delivery-unknown mark on the way out.
- */
+// Refusal without a message uses step copy; transport errors retain their own message and delivery-unknown mark.
 async function settleMobileHostedReviewMutation(
   send: () => Promise<RpcResponse>,
   interpret: (reply: RpcResponse) => unknown,
@@ -71,6 +72,17 @@ export function pushMobileHostedReviewBranch(
     () => gitPushRun.request(client, params),
     (reply) => gitPushRun.interpret(reply),
     fallback
+  )
+}
+
+export function fastForwardMobileHostedReviewBranch(
+  client: RpcOperationSender,
+  worktreeId: string
+): Promise<MobileHostedReviewMutationResult> {
+  return settleMobileHostedReviewMutation(
+    () => gitFastForwardRun.request(client, { worktree: `id:${worktreeId}` }),
+    (reply) => gitFastForwardRun.interpret(reply),
+    'Could not update the remote branch. Retry Create PR.'
   )
 }
 
@@ -103,7 +115,7 @@ export async function commitMobileHostedReviewStagedChanges(
   } catch (error) {
     return { ok: false, error: refusedRpcMessageOrFallback(error, 'Commit failed') }
   }
-  // An accepted reply still reports in-band, so `success: false` is a failed commit.
+  // Acceptance can still carry an in-band commit failure.
   return outcome.success === true
     ? { ok: true }
     : { ok: false, error: hostReplyErrorTextOrFallback(outcome.error, 'Commit failed') }

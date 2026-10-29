@@ -5,7 +5,7 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
 import type { Repo } from '../../../../../shared/repo-types'
 import type { TaskSourceContext } from '../../../../../shared/task-source-context'
-import type { TaskPageComposerActionsModel } from '../../use-task-page-composer-actions'
+import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
 import { TaskPageGitHubRows } from './Rows'
 
 type CellProps = { repo: Repo | null; sourceContext: TaskSourceContext | null }

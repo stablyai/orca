@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => {
     restoreUpdate: vi.fn(() => null),
     redeploy: vi.fn(async () => true),
     forgetVerdict: vi.fn(),
+    restoreForwards: vi.fn(async () => {}),
     startListener
   }
 })
@@ -29,7 +30,7 @@ vi.mock('../../../shared/runtime-environment-store', () => ({
       return { id, orcadDeployment: { sshTargetId: 'ssh-1' } }
     }
     mocks.reads[id] = (mocks.reads[id] ?? 0) + 1
-    // A fresh object per read, so a test can tell the re-read after bring-up from the first.
+    // Fresh records distinguish the post-bring-up read from the initial lookup.
     return { ...environment, read: mocks.reads[id] }
   }
 }))
@@ -56,6 +57,9 @@ vi.mock('../ssh/ssh-ipc-context', () => ({
   getCurrentMainWindow: () => null
 }))
 vi.mock('../ssh/ssh-renderer-broadcast', () => ({ broadcastSshState: vi.fn() }))
+vi.mock('../ssh/ssh-managed-port-forward-restore', () => ({
+  restoreManagedHostPortForwards: mocks.restoreForwards
+}))
 vi.mock('../ssh/ssh-host-launch-session-note', () => ({
   forgetLaunchSessionVerdict: mocks.forgetVerdict
 }))
@@ -85,7 +89,6 @@ describe('resolving a managed runtime for a call', () => {
     await resolveManagedRuntimeEnvironment('/u', 'env-1')
     expect(mocks.redeploy).toHaveBeenCalledWith('env-1', expect.any(Function))
     expect(mocks.restoreUpdate).not.toHaveBeenCalled()
-    // The forward is rebuilt for the port the redeployed server bound, not reused.
     expect(mocks.ensureTunnel).toHaveBeenCalledTimes(1)
     expect(mocks.rebuildTunnel).toHaveBeenCalledWith('/u', 'env-1')
   })
@@ -111,6 +114,27 @@ describe('resolving a managed runtime for a call', () => {
     await resolveManagedRuntimeEnvironment('/u', 'env-1')
     expect(mocks.forgetVerdict).not.toHaveBeenCalled()
   })
+
+  // #32484: an update check that never settles, or a failed redeploy, publishes no served status.
+  it.each([
+    ['a serving server', { state: 'serving' }, true],
+    [
+      'a server whose redeploy failed',
+      { state: 'unverifiable', detail: MANAGED_ORCAD_NOT_ACTIVATED_DETAIL },
+      false
+    ]
+  ] as const)(
+    'restores saved forwards once the tunnel is up, for %s',
+    async (_name, serving, redeployed) => {
+      mocks.verify.mockResolvedValue(serving)
+      mocks.redeploy.mockResolvedValueOnce(redeployed)
+      await resolveManagedRuntimeEnvironment('/u', 'env-1')
+      expect(mocks.restoreForwards).toHaveBeenCalledWith('ssh-1', { tunnelUp: true })
+      expect(mocks.ensureTunnel.mock.invocationCallOrder[0]).toBeLessThan(
+        mocks.restoreForwards.mock.invocationCallOrder[0]
+      )
+    }
+  )
 
   it('leaves a serving server to the once-per-session update check', async () => {
     mocks.verify.mockResolvedValue({ state: 'serving' })
@@ -138,7 +162,7 @@ describe('resolving a runtime for a call, by host kind', () => {
   afterEach(() => vi.unstubAllEnvs())
 
   it('brings a WSL host up through its service, never through an SSH tunnel', async () => {
-    // The record re-read after bring-up, which may have moved the bridge port.
+    // Bring-up may change the WSL bridge port.
     await expect(resolveManagedRuntimeEnvironment('/u', 'wsl:ubuntu')).resolves.toEqual({
       ...wsl,
       read: 2

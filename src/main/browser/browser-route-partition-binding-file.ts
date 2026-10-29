@@ -5,24 +5,13 @@ export const BINDING_STORE_VERSION = 2
 const LEGACY_BINDING_STORE_VERSION = 1
 const FINGERPRINT_RE = /^[a-f0-9]{64}$/
 
-/**
- * Persisted binding for one route partition.
- *
- * `storageScope` names the environment record that owns the partition so
- * explicit lifecycle events (environment removal) and orphan collection can
- * find it without re-deriving an identity that needs a live connection.
- * `null` marks a pre-scope entry from the per-boot partition scheme, whose
- * partition name can no longer be derived and is therefore always an orphan.
- * `lastUsedAt` orders capacity eviction; 0 marks an entry written before the
- * store recorded it, which is therefore evicted first.
- * `aliasFingerprints` are newer identities adopted onto the partition. They sit beside
- * `fingerprint` rather than replacing it, so an older build that reads only `fingerprint`
- * still finds the same jar instead of reporting a binding conflict.
- */
 export type BrowserRoutePartitionBinding = {
   fingerprint: string
+  /** Environment or direct-SSH owner digest; null marks a legacy unscoped binding. */
   storageScope: string | null
+  /** Zero marks missing legacy recency and takes eviction priority. */
   lastUsedAt: number
+  /** Aliases preserve the primary fingerprint for older builds that cannot read them. */
   aliasFingerprints?: readonly string[]
 }
 
@@ -142,8 +131,7 @@ function parseBinding(legacy: boolean, entry: unknown): BrowserRoutePartitionBin
   }
 }
 
-// Why lenient: an alias only widens lookup, so a malformed one is dropped rather than
-// making the whole binding file unreadable.
+// Ignore malformed aliases: they only widen lookup and need not invalidate the binding file.
 function parseAliasFingerprints(value: unknown): readonly string[] {
   if (!Array.isArray(value)) {
     return []

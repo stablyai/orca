@@ -8,18 +8,12 @@ export type RuntimeLocalWorktreeCreateBase = {
   /** The base the add uses: the request's, or the local branch it fell back to. */
   baseBranch: string
   remoteTrackingBase: RemoteTrackingBase | null
-  /**
-   * Best-effort refresh the git create runs after naming, since it cannot change the base: the
-   * existing tracking ref, or `fetch origin` for a plain base that is not local yet.
-   */
+  /** Refresh after naming without changing base: tracking ref if present, otherwise fetch origin for nonlocal bases. */
   deferredRefresh: 'tracking_ref' | 'origin' | null
   baseFallback?: WorktreeCreateBaseFallback
 }
 
-/**
- * Decides the base before naming, because branch reuse and conflict checks must see the base the
- * add will use, including the local fallback.
- */
+/** Resolve base/fallback before naming so branch reuse and conflict checks see the actual add base. */
 export async function resolveRuntimeLocalWorktreeCreateBase(args: {
   repoPath: string
   baseBranch: string
@@ -56,16 +50,14 @@ export async function resolveRuntimeLocalWorktreeCreateBase(args: {
     return { baseBranch, remoteTrackingBase, deferredRefresh: 'tracking_ref' }
   }
   if (hasNamedLocalBaseRef) {
-    // Why: a local ref of the requested name (often a plain local branch like `team/feature`) is
-    // the base asked for, so there is nothing to fetch and no fallback to report.
+    // Existing local refs are the requested base; no fetch or fallback needed.
     return { baseBranch, remoteTrackingBase: null, deferredRefresh: null }
   }
   const refresh = await args.timing.time('refresh_base_ref', () =>
     args.refreshRemoteTrackingBase(repoPath, remoteTrackingBase, options)
   )
   if (!refresh.ok) {
-    // Why: fetch first so an online create still gets the fresh remote base; only when that fails
-    // (offline) does the local branch the remote names beat failing the create, and the result says so.
+    // Try fresh remote first; offline, allow its named local branch only with an explicit fallback result.
     if (
       args.allowLocalBaseFallback &&
       (await hasLocalWorktreeBaseRef(repoPath, remoteTrackingBase.branch, options))

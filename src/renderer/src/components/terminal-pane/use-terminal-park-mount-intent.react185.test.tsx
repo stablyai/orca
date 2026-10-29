@@ -57,8 +57,7 @@ describe('useTerminalParkMountIntent', () => {
     act(() => root.unmount())
   })
 
-  // Why: the lifecycle effect re-runs on cwd changes for the same component
-  // instance, so intent cached per instance would resupply a stale park reveal.
+  // Cwd changes rerun lifecycle on the same instance; cached park intent would replay a stale reveal.
   it('re-reads park intent when the same instance re-renders after disposal', () => {
     parkTab()
     const container = document.createElement('div')

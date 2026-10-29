@@ -31,8 +31,6 @@ describe('useIpcEvents silent terminal adoption (surfaceOwner: false)', () => {
     const harness = await loadIpcEventsHarness(storeState)
     harness.useIpcEvents()
 
-    // Control: `orca terminal create` (no surfaceOwner) keeps its reveal so the
-    // user can find the terminal they just asked for.
     harness.createTerminal({
       worktreeId: 'wt-2',
       ptyId: 'pty-cli',
@@ -54,8 +52,7 @@ describe('useIpcEvents silent terminal adoption (surfaceOwner: false)', () => {
     asMock(storeState.setActiveTabType).mockClear()
     asMock(storeState.setActiveTab).mockClear()
 
-    // Regression: a workspace created in the background spawns its agent terminal
-    // here; the tab must still be adopted, but the sidebar must not scroll to it.
+    // Adopt background-created agent tabs without scrolling the sidebar to them.
     harness.createTerminal({
       worktreeId: 'wt-2',
       ptyId: 'pty-background-create',
@@ -81,7 +78,6 @@ describe('useIpcEvents silent terminal adoption (surfaceOwner: false)', () => {
     const harness = await loadIpcEventsHarness(storeState)
     harness.useIpcEvents()
 
-    // Control: the same request without surfaceOwner still reveals its workspace.
     harness.requestTerminalCreate({
       requestId: 'req-cli',
       worktreeId: 'wt-2',

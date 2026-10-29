@@ -19,6 +19,7 @@ import {
 import { stubRuntimeEnvironmentBridge } from './runtime-environment-bridge-fixture'
 
 const mocks = vi.hoisted(() => ({
+  changedAgentPaneKeys: new Set<string>(),
   getState: vi.fn(),
   setState: vi.fn(),
   subscribe: vi.fn(),
@@ -59,9 +60,10 @@ vi.mock('./web-session-tabs-sync/tracking-decisions', async (importOriginal) => 
   decideWebSessionTabsSnapshot: mocks.decideWebSessionTabsSnapshot
 }))
 vi.mock('./web-session-tabs-sync/store-patch', () => ({
-  applyWebSessionTabsStorePatch: (buildPatch: (state: unknown) => unknown) => {
-    mocks.setState(buildPatch)
-    // The production caller invokes the returned settle receipt.
+  applyWebSessionTabsStorePatch: (
+    buildPatch: (state: unknown, changedAgentPaneKeys: Set<string>) => unknown
+  ) => {
+    mocks.setState((state: unknown) => buildPatch(state, mocks.changedAgentPaneKeys))
     return () => {}
   }
 }))
@@ -213,9 +215,7 @@ describe('createWebRuntimeSessionTerminal', () => {
   ])(
     'routes a Kimi resume by capability (advertised=$gated) instead of the generic host-authority probe',
     async ({ gated, authority }) => {
-      // Why: an old host answers the widened ensureAgentSession enum with invalid_argument, which
-      // runRemoteAgentSessionLaunch does not retry on — the per-agent probe is the only thing
-      // keeping a remote Kimi resume from dying instead of degrading to a legacy launch.
+      // Old hosts reject widened ensureAgentSession enums without retry; per-agent probes preserve Kimi’s legacy fallback.
       const runtimeCall = vi.fn(async (request: { method: string }) => {
         if (request.method === 'status.get') {
           return {
@@ -399,7 +399,10 @@ describe('createWebRuntimeSessionTerminal', () => {
     expect(mocks.applyWebSessionTabsSnapshot).toHaveBeenCalledWith(
       { state: 'before', activeWorktreeId: WORKTREE_ID },
       snapshot,
-      ENVIRONMENT_ID
+      ENVIRONMENT_ID,
+      undefined,
+      undefined,
+      mocks.changedAgentPaneKeys
     )
   })
 
@@ -619,8 +622,7 @@ describe('createWebRuntimeSessionTerminal', () => {
       })
     ).resolves.toEqual({ status: 'created' })
 
-    // No paste runs for an argv-prefill draft, so this is the only thing that
-    // fills the mirrored tab's composer on this host class.
+    // Argv-prefill sends no paste, so only this seeds the mirrored composer.
     expect(mocks.deliverLaunchPromptToAgentTab).not.toHaveBeenCalled()
     expect(mocks.seedNativeChatLaunchDraftForAgentTab).toHaveBeenCalledWith({
       tabId: 'web-terminal-host-tab-2',

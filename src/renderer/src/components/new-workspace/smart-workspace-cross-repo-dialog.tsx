@@ -18,7 +18,7 @@ export function renderSmartWorkspaceCrossRepoDialog(
     crossRepoPrompt,
     dismissCrossRepoPrompt,
     crossRepoSwitchTitle,
-    crossRepoSwitchDescriptionSuffix,
+    formatCrossRepoSwitchDescription,
     selectedRepo,
     crossRepoSwitchFallbackLabel,
     handleUseCurrentRepo,
@@ -36,12 +36,9 @@ export function renderSmartWorkspaceCrossRepoDialog(
         <DialogHeader className="min-w-0">
           <DialogTitle>{crossRepoSwitchTitle}</DialogTitle>
           <DialogDescription className="break-words">
-            {translate(
-              'auto.components.new.workspace.SmartWorkspaceNameField.ad188067ae',
-              'The GitHub URL points to'
-            )}{' '}
-            {crossRepoPrompt?.link.slug.owner}/{crossRepoPrompt?.link.slug.repo}
-            {crossRepoSwitchDescriptionSuffix}
+            {formatCrossRepoSwitchDescription(
+              `${crossRepoPrompt?.link.slug.owner ?? ''}/${crossRepoPrompt?.link.slug.repo ?? ''}`
+            )}
           </DialogDescription>
         </DialogHeader>
         <DialogFooter className="min-w-0 sm:flex-wrap">
@@ -58,10 +55,10 @@ export function renderSmartWorkspaceCrossRepoDialog(
           >
             <span className="min-w-0 truncate">
               {translate(
-                'auto.components.new.workspace.SmartWorkspaceNameField.eadf877af5',
-                'Keep'
-              )}{' '}
-              {selectedRepo?.displayName ?? crossRepoSwitchFallbackLabel}
+                'auto.components.new.workspace.SmartWorkspaceNameField.keepRepo',
+                'Keep {{name}}',
+                { name: selectedRepo?.displayName ?? crossRepoSwitchFallbackLabel }
+              )}
             </span>
           </Button>
           {crossRepoPrompt?.matchingRepo ? (
@@ -71,10 +68,10 @@ export function renderSmartWorkspaceCrossRepoDialog(
             >
               <span className="min-w-0 truncate">
                 {translate(
-                  'auto.components.new.workspace.SmartWorkspaceNameField.a76fcb4fa0',
-                  'Switch to'
-                )}{' '}
-                {crossRepoPrompt.matchingRepo.displayName}
+                  'auto.components.new.workspace.SmartWorkspaceNameField.switchToRepo',
+                  'Switch to {{name}}',
+                  { name: crossRepoPrompt.matchingRepo.displayName }
+                )}
               </span>
             </Button>
           ) : allowCrossRepoProjectAdd ? (

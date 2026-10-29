@@ -1,6 +1,8 @@
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native'
 import { Check, Download, Trash2 } from 'lucide-react-native'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import {
   CLOUD_MODEL_NEEDS_KEY,
   dictationModelRowAction,
@@ -40,8 +42,7 @@ function modelMeta(model: MobileSpeechModel): string {
   return formatSize(model.sizeBytes)
 }
 
-// Renders the speech-model rows shared between the setup sheet and the Voice
-// settings page: size/progress, recommended badge, selected check, download, delete.
+// Share model size/progress/recommendation/selection/download/delete rows between setup and Voice settings.
 export function VoiceModelList({
   setup,
   disabled,
@@ -50,6 +51,7 @@ export function VoiceModelList({
   onDownload,
   onDelete
 }: Props): React.JSX.Element {
+  useMobileColorScheme()
   return (
     <View style={disabled ? styles.disabled : undefined} pointerEvents={disabled ? 'none' : 'auto'}>
       {setup.models.map((model, idx) => {
@@ -142,7 +144,7 @@ export function VoiceModelList({
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   disabled: { opacity: 0.5 },
   modelRow: {
     flexDirection: 'row',
@@ -190,4 +192,4 @@ const styles = StyleSheet.create({
     backgroundColor: colors.borderSubtle,
     marginHorizontal: spacing.md
   }
-})
+}))

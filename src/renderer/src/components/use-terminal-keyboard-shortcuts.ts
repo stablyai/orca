@@ -7,7 +7,6 @@ export function useTerminalKeyboardShortcuts(controller: TerminalActivationContr
   const {
     activeWorktreeId,
     handleCloseAllFiles,
-    handleNewAgentTab,
     handleNewBrowserTab,
     handleNewFile,
     handleNewSimulatorTab,
@@ -38,7 +37,6 @@ export function useTerminalKeyboardShortcuts(controller: TerminalActivationContr
     handleNewSimulatorTab,
     handleNewFile,
     handleNewTab,
-    handleNewAgentTab,
     handleCloseAllFiles,
     keybindings,
     mobileEmulatorEnabled,

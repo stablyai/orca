@@ -7,18 +7,8 @@ import {
 
 const SAFE_GRAB_URL_PROTOCOLS = new Set(['http:', 'https:', 'file:'])
 
-/**
- * Re-validate and clamp all string, array, and budget fields in a grab payload
- * before forwarding to the renderer. This is the main-side safety net: even if
- * the guest runtime is compromised, the payload that reaches renderer chrome
- * respects the documented budgets.
- *
- * Returns null if the payload is structurally invalid (missing required fields).
- */
+/** Revalidate untrusted guest payloads before forwarding them to renderer chrome. */
 export function clampGrabPayload(raw: unknown): BrowserGrabPayload | null {
-  // Why: the guest payload is completely untrusted. A compromised or
-  // malfunctioning guest could return anything. Validate structural shape
-  // before accessing nested properties to avoid unhandled TypeErrors.
   if (!raw || typeof raw !== 'object') {
     return null
   }
@@ -51,16 +41,13 @@ export function clampGrabPayload(raw: unknown): BrowserGrabPayload | null {
   const safeNum = (n: unknown, fallback = 0): number =>
     typeof n === 'number' && Number.isFinite(n) ? n : fallback
 
-  // Why: mirror the guest-side secret detection on the main side so a
-  // compromised guest cannot smuggle secret-bearing values through attributes
-  // or URLs. This is the defense-in-depth layer.
+  // Repeat guest-side secret heuristics at the main-process boundary.
   const containsSecret = (val: string): boolean => {
     const lower = val.toLowerCase()
     return GRAB_SECRET_PATTERNS.some((p) => lower.includes(p))
   }
 
-  // Why: mirror the guest-side URL sanitization. Strip query strings and
-  // fragments to prevent token leakage even if the guest is compromised.
+  // Strip queries and fragments, which may contain tokens.
   const sanitizeUrl = (rawUrl: unknown): string => {
     const str = typeof rawUrl === 'string' ? rawUrl : ''
     if (!str) {
@@ -78,15 +65,10 @@ export function clampGrabPayload(raw: unknown): BrowserGrabPayload | null {
       url.hash = ''
       return url.toString()
     } catch {
-      // Why: returning the raw string on parse failure could preserve
-      // javascript: URIs or other non-http schemes. Return empty.
       return ''
     }
   }
 
-  // Why: re-filter attributes on the main side so a compromised guest cannot
-  // smuggle unsafe attribute names (e.g., event handlers) or secret-bearing
-  // values into the payload that reaches the renderer.
   const safeAttributes = (attrs: unknown): Record<string, string> => {
     if (!attrs || typeof attrs !== 'object') {
       return {}
@@ -151,8 +133,6 @@ export function clampGrabPayload(raw: unknown): BrowserGrabPayload | null {
 
   return {
     page: {
-      // Why: re-sanitize the URL main-side so a compromised guest cannot
-      // pass through query strings containing tokens or secrets.
       sanitizedUrl: sanitizeUrl(page.sanitizedUrl),
       title: safeStr(page.title, 500),
       viewportWidth: safeNum(page.viewportWidth),

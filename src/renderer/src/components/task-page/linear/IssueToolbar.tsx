@@ -1,4 +1,4 @@
-import type { TaskPageComposerActionsModel } from '../../use-task-page-composer-actions'
+import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
 import { ChevronLeft, SlidersHorizontal, List, ArrowDownUp, Eye } from 'lucide-react'
@@ -18,7 +18,7 @@ import type {
   LinearViewMode,
   LinearGroupBy,
   LinearOrderBy
-} from '@/components/task-page-localized-options'
+} from '../../../../../shared/linear/issue-view-resume-state'
 export function TaskPageLinearIssueToolbar({
   model
 }: {
@@ -189,7 +189,13 @@ export function TaskPageLinearIssueToolbar({
           </DropdownMenuContent>
         </DropdownMenu>
         <div className="text-[11px] text-muted-foreground">
-          {pagedLinearIssues.length} {translate('auto.components.TaskPage.b7bae28b6a', 'shown')}
+          {pagedLinearIssues.length === 1
+            ? translate('auto.components.TaskPage.shownCount_one', '{{count}} shown', {
+                count: pagedLinearIssues.length
+              })
+            : translate('auto.components.TaskPage.shownCount_other', '{{count}} shown', {
+                count: pagedLinearIssues.length
+              })}
         </div>
       </div>
     </div>

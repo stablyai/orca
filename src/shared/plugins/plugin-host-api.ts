@@ -2,20 +2,9 @@ import { z } from 'zod'
 import { PLUGIN_EVENT_NAMES } from './plugin-manifest'
 import type { PluginCapabilityKind } from './plugin-capabilities'
 
-/**
- * Host API v0 — the separately-versioned public facade plugins call. Every
- * method carries params AND result schemas plus capability/mutation metadata;
- * handlers (bound in main) delegate to runtime services. The raw runtime-RPC
- * registry is never exposed: its methods have no result schemas and evolve at
- * internal velocity.
- *
- * This table is the single source of truth for the capability gate, the panel
- * bridge action set, and the worker SDK. Electron-free by design: desktop
- * main, headless serve, the relay conformance path, and tests all import it.
- *
- * EXPERIMENTAL: additive-only within pluginApi major 1 once frozen; no
- * stability promises before then.
- */
+/** Versioned plugin facade with params/results and capability/mutation metadata, shared by desktop/serve/relay.
+ * Keep raw internal RPC private: it lacks result schemas and evolves independently. Gate, panel actions and worker SDK
+ * derive from this table. Experimental until frozen, then additive-only within pluginApi major 1. */
 
 export const PANEL_ACTION_TEXT_MAX_LENGTH = 4096
 export const PLUGIN_WORKSPACE_TERMINAL_LIMIT = 50
@@ -27,8 +16,7 @@ const workspaceReadContextResult = z
   .object({
     branch: z.string().max(PLUGIN_WORKSPACE_LABEL_MAX_LENGTH),
     displayName: z.string().max(PLUGIN_WORKSPACE_LABEL_MAX_LENGTH),
-    /** Terminals of the focused worktree, so callers can address a specific
-     *  terminal id — the API has no "active terminal" write target. */
+    /** Explicit focused-worktree terminal IDs; the API offers no active-terminal mutation target. */
     terminals: z
       .array(
         z
@@ -43,8 +31,7 @@ const workspaceReadContextResult = z
   .nullable()
 
 const terminalSendTextParams = z.object({
-  /** Explicit target. Never "the active terminal": a focus change must not
-   *  redirect a delayed plugin write into another pane (design-doc rule). */
+  /** Explicit target prevents delayed writes following focus changes into another pane. */
   terminalId: z.string().min(1).max(PLUGIN_TERMINAL_ID_MAX_LENGTH),
   text: z.string().min(1).max(PANEL_ACTION_TEXT_MAX_LENGTH),
   enter: z.boolean().default(false)
@@ -258,8 +245,7 @@ export function getPluginHostMethodSpec(name: string): PluginHostMethodSpec | nu
   return SPEC_BY_NAME.get(name) ?? null
 }
 
-/** Actions sandboxed panels may request over the postMessage bridge. Derived
- *  from the spec table so the panel surface can never drift from the gate. */
+/** Derive panel-callable actions from the API table so the bridge cannot drift from capability enforcement. */
 export const PLUGIN_PANEL_ACTIONS = PLUGIN_HOST_API_V0.filter((entry) => entry.panel).map(
   (entry) => entry.name
 )

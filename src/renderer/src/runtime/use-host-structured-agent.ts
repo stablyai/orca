@@ -1,5 +1,5 @@
 import { useCallback, useSyncExternalStore } from 'react'
-import type { AgentSessionRegisteredAgent } from '../../../shared/agent-session-registered-agents'
+import type { AgentSessionRegisteredAgent } from '../../../shared/agent-session/agent-session-registered-agents'
 import { isAgentSessionHandleProvider } from '../../../shared/agent-session-provider-handle'
 import { LOCAL_EXECUTION_HOST_ID, toRuntimeExecutionHostId } from '../../../shared/execution-host'
 import { lastVerifiedRuntimeStatus } from '../../../shared/runtime-host-status'

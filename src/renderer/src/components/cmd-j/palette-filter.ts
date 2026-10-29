@@ -5,10 +5,7 @@ import { resolveWorktreeFilterHostId, type PaletteFilterModel } from './palette-
 
 export type PaletteFilterField = 'host' | 'repository'
 
-/**
- * Sorted arrays rather than Sets: identity is stable across renders and the
- * serialized form is a cheap memo dependency for the palette's search passes.
- */
+/** Sorted arrays keep identity and serialized memo dependencies stable across renders. */
 export type PaletteFilterState = {
   hostIds: readonly string[]
   repoIds: readonly string[]
@@ -57,7 +54,6 @@ function addValues(values: readonly string[], ids: readonly string[]): readonly 
   return [...merged].sort()
 }
 
-/** Bulk-add for "Select all matching"; de-dupes while preserving stable no-ops. */
 export function addPaletteFilterValues(
   filter: PaletteFilterState,
   field: PaletteFilterField,
@@ -89,7 +85,6 @@ function sortedUnique(values: Iterable<string>): string[] {
   return [...new Set(values)].sort()
 }
 
-/** Seeds the palette from the sidebar's exact host and repository scope. */
 export function buildPaletteFilterFromSidebarScope(
   scope: SidebarScopeForPaletteFilter
 ): PaletteFilterState {
@@ -111,10 +106,7 @@ export type PaletteFilterPredicate = {
   matchesGroupHostId: (hostId: ExecutionHostId) => boolean
 }
 
-/**
- * Returns null when no filter is active so callers can skip the pass entirely
- * rather than paying an identity-predicate call per row.
- */
+/** Return null for inactive filtering so callers can skip per-row predicate calls. */
 export function buildPaletteFilterPredicate(
   filter: PaletteFilterState,
   model: PaletteFilterModel
@@ -165,14 +157,12 @@ export function buildPaletteFilterPredicate(
       if (!selectedHostIds) {
         return true
       }
-      // Why: worktree.hostId wins over the repo fallback — a runtime-owned
-      // workspace can live on a different host than the repo it came from.
+      // A worktree’s host stamp overrides its repo; runtime-owned workspaces can live elsewhere.
       return selectedHostIds.has(
         resolveWorktreeFilterHostId(worktree, model.repoById, model.defaultHostId)
       )
     },
-    // Why: a group header has no repository, so a repository selection
-    // excludes every group row; only the host axis can keep one.
+    // Group headers belong to no repository; only host-only filters may retain them.
     matchesGroupHostId: (hostId) =>
       selectedRepoIds === null && (!selectedHostIds || selectedHostIds.has(hostId))
   }

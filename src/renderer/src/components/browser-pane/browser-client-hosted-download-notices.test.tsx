@@ -135,8 +135,7 @@ describe('client-hosted browser download notices', () => {
     )
   })
 
-  // Why: the page's pane unmounts on a page switch or close while its download keeps running, and
-  // an unsettled loading toast has no close button.
+  // Downloads outlive their panes; an unsettled loading toast has no close button.
   it('settles the toast after the page that started the download is gone', () => {
     renderNotices()
     emitRequested()
@@ -159,8 +158,7 @@ describe('client-hosted browser download notices', () => {
     expect(toastMocks.success).not.toHaveBeenCalled()
   })
 
-  // Why: bytes for a client-hosted page land on the remote workspace, so this toast is the only
-  // place a long download shows any movement at all.
+  // Remote downloads have no local shelf; this toast is their only visible progress.
   it('moves the toast forward as bytes arrive', () => {
     renderNotices()
     emitRequested()

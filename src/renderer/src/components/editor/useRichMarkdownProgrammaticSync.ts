@@ -185,19 +185,22 @@ function applyExternalRichMarkdownContent(
   try {
     const hadFocus = editor.isFocused
     const { from: prevFrom, to: prevTo } = editor.state.selection
-    editor.commands.setContent(
-      encodeRawMarkdownHtmlForRichEditor(content, codec, { htmlSuperscriptLinks: true }),
-      {
-        contentType: 'markdown',
-        emitUpdate: false
-      }
-    )
-    // Why: normalizeEmptyListItems avoids splitting hard-wrapped paragraphs from
-    // external content, matching onCreate's single-paragraph reflow behavior.
+    // Exclude other views’ edits/reloads from this view’s undo so it cannot revert or resurrect their text.
+    editor
+      .chain()
+      .setMeta('addToHistory', false)
+      .setContent(
+        encodeRawMarkdownHtmlForRichEditor(content, codec, { htmlSuperscriptLinks: true }),
+        {
+          contentType: 'markdown',
+          emitUpdate: false
+        }
+      )
+      .run()
+    // Normalize empty lists without splitting soft-wrapped prose, matching initial editor loading.
     normalizeEmptyListItems(editor)
     lastCommittedMarkdownRef.current = content
-    // Why: reset the reconciliation baseline to the freshly loaded external bytes
-    // so subsequent edits preserve the new source style, not the pre-reload one.
+    // Adopt external source style so later edits cannot revive the pre-reload formatting.
     originalSourceRef.current = content
     baseCanonicalRef.current = editor.getMarkdown()
     if (hadFocus) {

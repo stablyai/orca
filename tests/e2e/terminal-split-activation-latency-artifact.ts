@@ -22,11 +22,7 @@ function redactSamples(samples: unknown): unknown {
   )
 }
 
-/**
- * Strips machine-identifying data so a report can be shared verbatim: the seeded
- * repo lives under an operator-overridable path, and cleanup/abort text is
- * unbounded free-form error output.
- */
+// Strip machine paths from operator-controlled fixture locations and unbounded cleanup/abort errors before sharing reports.
 export function sanitizeTerminalSplitLatencyReport(
   report: Record<string, unknown>
 ): Record<string, unknown> {

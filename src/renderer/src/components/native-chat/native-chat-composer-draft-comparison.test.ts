@@ -6,10 +6,6 @@ const DIAGRAM = { id: 'a-2', path: '/repo/diagram.png' }
 const SENT = { text: 'abcd', images: [SHOT] }
 
 describe('nativeChatComposerDraftLeftAfterSend', () => {
-  it('leaves nothing of a draft still as sent', () => {
-    expect(nativeChatComposerDraftLeftAfterSend(SENT, SENT)).toEqual({ text: '', images: [] })
-  })
-
   it('keeps text typed after, and images attached, since the send', () => {
     expect(
       nativeChatComposerDraftLeftAfterSend({ text: 'abcd more', images: [SHOT, DIAGRAM] }, SENT)

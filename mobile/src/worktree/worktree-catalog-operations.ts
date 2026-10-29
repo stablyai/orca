@@ -2,16 +2,9 @@ import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-o
 import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
 import { retiredWorktreeNamesSchema, worktreeCatalogSchema } from './worktree-catalog-reply-schema'
 
-// Both reads here are best-effort: a refused catalog leaves the last proven counts and the last
-// confirmed rows in place rather than rendering a host as empty (STA-3123).
+// Catalog refusal preserves proven counts/rows (STA-3123); retired-name refusal instead reads as an empty registry.
 
-/**
- * worktree.ps. One family for all three readers — the Home card's summary, the host screen's
- * snapshot poll and the agent-history panel's `scopePaths` seed — because they ask the same
- * question with the same acceptance. The checked reader keeps the `unchanged` envelope readable —
- * the snapshot client admits one the card never sees — and the skip is what carries an absent or
- * null result to each caller's own failure path instead of to a property read on it.
- */
+// Share acceptance across catalog consumers; admit unchanged replies and route null results to caller failure handling.
 export const worktreeCatalogRead = bindDeferredRpcOperation(
   defineRpcOperation({
     name: 'worktree.catalog-or-skip',
@@ -22,11 +15,7 @@ export const worktreeCatalogRead = bindDeferredRpcOperation(
   })
 )
 
-/**
- * Names already spent in one repo. The payload is unchecked because the call site projects it
- * through `readRetiredNameRegistryForRepo`, which reads a refusal as an empty registry — the
- * behaviour a skip preserves, and not the same thing as the failure a rejection means here.
- */
+// Forward retired-name replies to the per-repo validator; refusal yields an empty registry while transport rejection remains failure.
 export const retiredWorktreeNamesRead = bindDeferredRpcOperation(
   defineRpcOperation({
     name: 'worktree.retired-names-or-skip',

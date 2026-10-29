@@ -1,6 +1,4 @@
-// A layout-owner server's held panes (status 'held' in its frames) on this desktop's existing
-// newer-build banner. Reopen asks that server's main to release them; the desktop starts nothing,
-// and the server's next frames (status cleared, pane bound) show the result.
+// Show server frame status=held in the existing newer-build banner. Reopen asks server main; desktop starts nothing and subsequent cleared/bound frames show recovery.
 
 import type { NewerDaemonReopenResult } from '../../../shared/newer-daemon-hold'
 import { isTerminalLeafId, makePaneKey } from '../../../shared/stable-pane-id'

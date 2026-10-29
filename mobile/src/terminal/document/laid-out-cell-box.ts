@@ -2,7 +2,6 @@ import { sameCellBox, type TerminalLaidOutCellBox } from '../terminal-cell-box'
 import type { TerminalDocumentScope } from './document-scope'
 import { notify } from './host-notify'
 
-/** The box xterm laid out at the current text scale, with its grid; null before one. */
 export function laidOutCellBox(scope: TerminalDocumentScope): TerminalLaidOutCellBox | null {
   const term = scope.term
   const dimensions = term && term._core && term._core._renderService?.dimensions
@@ -17,12 +16,7 @@ export function laidOutCellBox(scope: TerminalDocumentScope): TerminalLaidOutCel
   return { cellBox, cols: term.cols, rows: term.rows }
 }
 
-/**
- * Tells the host each box xterm lays out that differs from the last: after init, a renderer swap
- * on context loss, a text-size or DPR change, or a resize (the DOM renderer's width follows cols).
- * `refit` is a box that changed while the grid did not, which only a renderer or pixel-ratio
- * change does; one that arrives with a new grid is that grid's own, so refitting it would loop.
- */
+// Report changed measured boxes; refit only when the grid is unchanged or grid-driven refits would loop.
 export function reportLaidOutCellBox(scope: TerminalDocumentScope) {
   const laidOut = laidOutCellBox(scope)
   if (!laidOut) {

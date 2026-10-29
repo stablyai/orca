@@ -8,7 +8,6 @@ import {
 } from './github-api-repository'
 import { acquire, classifyGhError, ghExecFileAsync, release } from './gh-utils'
 
-// Use the selected source for issue-number edits.
 export async function updateIssue(
   repoPath: string,
   issueNumber: number,
@@ -40,7 +39,6 @@ export async function updateIssue(
   const repo = `${ownerRepo.owner}/${ownerRepo.repo}`
   const errors: string[] = []
 
-  // State change requires a separate command
   if (updates.state) {
     await acquire()
     try {
@@ -58,11 +56,9 @@ export async function updateIssue(
         await ghExecFileAsync(['issue', 'reopen', String(issueNumber), '--repo', repo], ghOptions)
       }
     } catch (err) {
+      // Why: gh exits 0 when the issue is already in the target state, so any failure is real.
       const stderr = err instanceof Error ? err.message : String(err)
-      // Treat "already closed/open" as a no-op
-      if (!stderr.toLowerCase().includes('already')) {
-        errors.push(classifyGhError(stderr).message)
-      }
+      errors.push(classifyGhError(stderr).message)
     } finally {
       release()
     }
@@ -77,10 +73,10 @@ export async function updateIssue(
           '-X',
           'PATCH',
           `repos/${ownerRepo.owner}/${ownerRepo.repo}/issues/${issueNumber}`,
-          '--raw-field',
-          `body=${updates.body}`
+          '--input',
+          '-'
         ],
-        ghOptions
+        { ...ghOptions, stdin: JSON.stringify({ body: updates.body }) }
       )
     } catch (err) {
       const stderr = err instanceof Error ? err.message : String(err)
@@ -90,7 +86,6 @@ export async function updateIssue(
     }
   }
 
-  // Field edits (labels, assignees, title) via gh issue edit
   const editArgs: string[] = ['issue', 'edit', String(issueNumber), '--repo', repo]
   let hasEditArgs = false
 

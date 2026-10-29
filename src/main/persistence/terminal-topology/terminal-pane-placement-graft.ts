@@ -9,11 +9,7 @@ import {
 } from '../../../shared/workspace-layout/terminal-pane-tree'
 import { cloneLayoutNode } from '../restoring-sessions/terminal-layout-normalization'
 
-/**
- * Where a split's new pane joins a tree that lacks it: as the window's tree places it when that
- * tree is this one plus only the pane (the one way to say "before" or split a group of panes),
- * else beside the parent pane. Null when the spawn names no split or a parent this tree lacks.
- */
+/** Accept a proposed tree only if it adds this leaf alone; otherwise split beside the parent or return null. */
 export function placedSplitRoot(
   root: TerminalPaneLayoutNode,
   leafId: string,
@@ -48,7 +44,7 @@ function addsOnlyLeaf(
   )
 }
 
-/** Main's tree with only the window's new split taken; main's own divider positions stay. */
+/** Take the new split without overwriting main's divider positions. */
 function withNewSplit(
   proposed: TerminalPaneLayoutNode,
   root: TerminalPaneLayoutNode,
@@ -66,7 +62,7 @@ function withNewSplit(
       second: isNew(proposed.second) ? cloneLayoutNode(proposed.second) : cloneLayoutNode(root)
     }
   }
-  // addsOnlyLeaf proved `root` is this split, with the new pane inside one side.
+  // addsOnlyLeaf proves the old root belongs inside this proposed split.
   if (root.type === 'leaf') {
     return cloneLayoutNode(root)
   }

@@ -10,17 +10,11 @@ import type { SidebarFeedView } from '../../../src/shared/sidebar-list/sidebar-f
 import type { ProjectOrderBy } from '../../../src/shared/ui-chrome-types'
 import type { MobileViewState } from '../worktree/workspace-view-settings'
 
-/**
- * The view the desktop's sidebar shows, from the shared UI state and settings this phone mirrors.
- * The host list is passed resolved with an "all" scope, which every builder step reads the same
- * as the desktop's legacy scope.
- */
+// Mirror desktop UI/settings into the shared sidebar builder; resolved all-host scope matches desktop legacy scope.
 export function buildHostFeedView(args: {
   view: MobileViewState
   projectOrderBy: ProjectOrderBy
-  /** The feed's desktop facts: its focused host, its names for its hosts, pinned placement. */
   desktop: DesktopSidebarFacts | null
-  /** The desktop's platform names its own host; the phone's must never. */
   hostPlatform: NodeJS.Platform | null
 }): SidebarFeedView {
   const { view, desktop, hostPlatform } = args

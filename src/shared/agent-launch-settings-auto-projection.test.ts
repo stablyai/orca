@@ -61,6 +61,6 @@ describe('agent launch permission projection compatibility', () => {
         { type: 'permissions', mode: 'auto', exceptAuto: true },
         'darwin'
       )
-    ).toThrow()
+    ).toThrow('Auto cannot apply to agents without automatic permission review')
   })
 })

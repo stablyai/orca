@@ -1,6 +1,4 @@
-// DI seam for WslHookRelayManager: the full dependency contract plus the
-// production wiring. Tests construct the manager with fakes for everything
-// that spawns wsl.exe or touches the live agentHookServer.
+import { CLAUDE_AGENT_VIEW_MOD_SOURCE } from '../claude/agent-view-mod-source'
 import { bindRemoteClaudeInterruptReconciliation } from '../ssh/ssh-agent-hook-interrupt-reconciliation'
 import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
@@ -22,32 +20,26 @@ import {
 } from './wsl-hook-relay-launch'
 import { waitForWslRelaySentinel } from './wsl-hook-relay-sentinel'
 import { listWslDistrosAsync } from '../wsl'
-import { isWslDistroRunning } from '../wsl-background-distro-gate'
+import { deferUntilWslDistroRunning, isWslDistroRunning } from '../wsl-background-distro-gate'
 import { isWslAgentHookRelayEnabled } from '../../shared/agent-hook-relay'
+import { wslBridgePtyPresence, type WslBridgePtyPresence } from './wsl-bridge-pty-presence'
+import {
+  readDaemonBridgeSessions,
+  type DaemonBridgeSessionVerdict
+} from './wsl-bridge-daemon-sessions'
 
-// Why: fresh WSL intermittently throws "Catastrophic failure (E_UNEXPECTED)"
-// under concurrent wsl.exe spawn load; the retry pause is a dep so tests can
-// collapse it.
+// Concurrent wsl.exe spawns can trigger transient E_UNEXPECTED failures.
 export const WSL_RELAY_TRANSIENT_RETRY_DELAY_MS = 2_000
 
-// Restart/cooldown policy for the manager's state machine.
 export const FAILURE_COOLDOWN_BASE_MS = 60_000
 export const FAILURE_COOLDOWN_MAX_MS = 10 * 60_000
-// Why: a distro without node >= 18 will not grow one mid-session; probe
-// rarely instead of once per PTY spawn.
+// Rate-limit unsupported Node probes rather than repeating them for every PTY spawn.
 export const NO_NODE_COOLDOWN_MS = 10 * 60_000
-// Why: a previously-healthy relay dying mid-session (mux protocol error, WSL
-// restart) must self-recover — a live agent session produces no new PTY
-// spawns, so waiting for the next ensure would leave status dead for good.
+// Recover without a new PTY spawn so surviving agent sessions regain status updates.
 export const RUNNING_TEARDOWN_COOLDOWN_MS = 10_000
-// Why: only a relay that stayed up this long resets the failure counter — a
-// connect-then-crash loop must keep escalating its cooldown, not sit at the
-// running-teardown base forever.
+// Only stable uptime resets failures; rapid connect/crash loops must keep escalating cooldown.
 export const STABLE_UPTIME_MS = 2 * 60_000
-// Why: re-running the (byte-equality idempotent) installers picks up configs
-// that appear after first install — e.g. Codex's runtime-home config.toml is
-// seeded by the launch path, so its hook-trust entries can only be written
-// once that file exists. The one-shot timer covers single-spawn sessions.
+// Retry idempotent installs after launch creates configs; the one-shot covers single-spawn sessions.
 export const REINSTALL_MIN_INTERVAL_MS = 30_000
 export const REINSTALL_ONE_SHOT_DELAY_MS = 60_000
 
@@ -60,12 +52,15 @@ export type WslHookRelayManagerDeps = {
   resolveBundle: typeof resolveWslHookRelayBundle
   readBundle: (jsPath: string) => Buffer
   listDistros: () => Promise<string[]>
-  /** Restart timers check this so relay recovery never resurrects a VM the user shut down. */
+  /** Recovery must not boot a distro the user shut down. */
   isDistroRunning: typeof isWslDistroRunning
+  deferUntilRunning: typeof deferUntilWslDistroRunning
   spawnRelay: typeof spawnWslRelayProcess
   runInstall: typeof runWslInstallProcess
   waitForSentinel: typeof waitForWslRelaySentinel
   ingest: (envelope: Record<string, unknown>, connectionId: string) => void
+  beginRelaySession?: (connectionId: string) => void
+  receiveClaudeAgentView?: (body: unknown) => unknown
   bindInterruptReconciliation?: (
     mux: Parameters<typeof bindRemoteClaudeInterruptReconciliation>[1],
     connectionId: string,
@@ -74,14 +69,18 @@ export type WslHookRelayManagerDeps = {
   installHooks: typeof installRemoteManagedAgentHooks
   installCodex: (runtimeHomePath: string, distro: string) => Promise<AgentHookInstallStatus | null>
   managedHookSettings: () => ManagedHookDetectionSettings
-  /** Plugin source strings shipped to the guest relay so an Orca update needn't redeploy the relay bundle. */
+  /** Update guest plugins without redeploying the relay bundle. */
   pluginSources: () => PluginSources
   warn: (message: string) => void
   transientRetryDelayMs: number
+  /** Live bridge terminals per distro; a relay idles out only when its distro has none. */
+  bridgePtyPresence: Pick<WslBridgePtyPresence, 'count' | 'onChange'>
+  /** Whether the terminal daemon still runs a bridge session there, mounted or not. */
+  daemonBridgeSessions: (distro: string) => Promise<DaemonBridgeSessionVerdict>
+  idleStopMs?: number
 }
 
-/** Every relay start — spawn, PTY reattach, crash recovery — funnels through this gate,
- *  so the user's agent-status-hooks switch is read live instead of at each call site. */
+/** Read the hooks setting live for spawn, reattach, and crash recovery. */
 export function isWslHookRelayAllowed(deps: WslHookRelayManagerDeps): boolean {
   return (
     deps.platform() === 'win32' &&
@@ -94,22 +93,23 @@ export const defaultWslHookRelayDeps: WslHookRelayManagerDeps = {
   platform: () => process.platform,
   remoteHooksEnabled: () => isWslAgentHookRelayEnabled(),
   hookCoordsEnv: () => agentHookServer.buildPtyEnv(),
-  // Why: the Windows endpoint file path (userData + namespace) is stable
-  // across app restarts and distinct per instance — exactly the identity the
-  // guest endpoint dir must carry so surviving agents re-coordinate.
+  receiveClaudeAgentView: (body) => agentHookServer.claudeAgentViews.receive(body),
+  // A restart-stable endpoint namespace lets surviving agents rediscover this instance.
   instanceKey: () => {
     const source = agentHookServer.endpointFilePath
     return source ? createHash('sha256').update(source).digest('hex').slice(0, 12) : null
   },
+  bridgePtyPresence: wslBridgePtyPresence,
+  daemonBridgeSessions: readDaemonBridgeSessions,
   resolveBundle: resolveWslHookRelayBundle,
   readBundle: (jsPath) => readFileSync(jsPath),
   listDistros: () => listWslDistrosAsync(),
   isDistroRunning: isWslDistroRunning,
+  deferUntilRunning: deferUntilWslDistroRunning,
   spawnRelay: spawnWslRelayProcess,
   runInstall: runWslInstallProcess,
   waitForSentinel: waitForWslRelaySentinel,
-  // Why: the WSL relay protocol advertises no run-serving capability; stamped onto a copy so the
-  // wire-deserialized notification object itself is never mutated.
+  // WSL advertises no run-serving capability; annotate a copy of the received notification.
   ingest: (envelope, connectionId) => {
     const capped = {
       ...envelope,
@@ -119,6 +119,7 @@ export const defaultWslHookRelayDeps: WslHookRelayManagerDeps = {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: envelope is the wire-deserialized notification; ingestRemote independently re-validates paneKey's type before trusting anything here.
     return agentHookServer.ingestRemote(capped as IngestEnvelope, connectionId)
   },
+  beginRelaySession: (connectionId) => agentHookServer.beginRemoteRelaySession(connectionId),
   bindInterruptReconciliation: (mux, connectionId, isCurrent) =>
     bindRemoteClaudeInterruptReconciliation(agentHookServer, mux, connectionId, isCurrent),
   installHooks: installRemoteManagedAgentHooks,
@@ -128,8 +129,8 @@ export const defaultWslHookRelayDeps: WslHookRelayManagerDeps = {
       wslDistro: distro
     }),
   managedHookSettings: () => null,
-  // Why: only OpenCode is in scope for WSL now; the payload shape stays identical to SSH so Pi/OMP are additive later.
   pluginSources: () => ({
+    claudeAgentViewSource: CLAUDE_AGENT_VIEW_MOD_SOURCE,
     opencodePluginSource: getOpenCodePluginSource(),
     opencode2PluginSource: getOpenCode2PluginSource(),
     piExtensionSource: getPiAgentStatusExtensionSource('pi'),

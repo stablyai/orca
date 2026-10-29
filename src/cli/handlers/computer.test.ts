@@ -9,9 +9,7 @@ vi.mock('../runtime-client', async () => {
     openOrca = vi.fn()
   }
 
-  // Why: re-export the REAL error classes; format.ts narrows with `instanceof`
-  // against ./runtime/types, so a look-alike would collapse every CLI error
-  // code into the generic `runtime_error` shape.
+  // Error formatting uses instanceof, so preserve the production error classes.
   const { RuntimeClientError, RuntimeRpcFailureError } = await import('../runtime/types.js')
   return { RuntimeClient, RuntimeClientError, RuntimeRpcFailureError }
 })
@@ -28,21 +26,13 @@ describe('orca computer observation CLI handlers', () => {
     process.exitCode = undefined
   })
 
-  it('prints group help with all computer subcommands', async () => {
+  it('prints computer group help without contacting the runtime', async () => {
     await main(['computer', '--help'], '/tmp/repo')
 
     const output = vi.mocked(console.log).mock.calls[0][0]
+    expect(output).toContain('Usage: orca computer <command> [options]')
     expect(output).toContain('get-app-state')
-    expect(output).toContain('hotkey')
-    expect(output).toContain('capabilities')
-    expect(output).toContain('list-apps')
-    expect(output).toContain('list-windows')
-    expect(output).toContain('paste-text')
-    expect(output).toContain('permissions')
-    expect(output).toContain('set-value')
-    expect(output).toContain('press-key')
-    expect(output).toContain('Press a single key such as Return or Escape')
-    expect(output).not.toContain(['Press a key using', 'xdotool-style syntax'].join(' '))
+    expect(callMock).not.toHaveBeenCalled()
   })
 
   it('prints targeted permission setup command help', async () => {

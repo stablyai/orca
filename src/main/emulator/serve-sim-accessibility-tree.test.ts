@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { netFetchMock } = vi.hoisted(() => ({ netFetchMock: vi.fn() }))
 
-vi.mock('electron', () => ({ net: { fetch: netFetchMock } }))
+vi.mock('../network/http-client', () => ({ getMainHttpClient: () => ({ fetch: netFetchMock }) }))
 
 import { requestServeSimAccessibilityTree } from './serve-sim-accessibility-tree'
 

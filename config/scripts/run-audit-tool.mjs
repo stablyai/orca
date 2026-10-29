@@ -34,7 +34,11 @@ export function installAuditTools(root = ROOT, run = runProcessSync) {
   })
 }
 
-export function runAuditTool(tool, args, { root = ROOT, run = runProcessSync } = {}) {
+export function runAuditTool(
+  tool,
+  args,
+  { root = ROOT, run = runProcessSync, stdio = 'inherit' } = {}
+) {
   const entry = auditToolEntry(tool, root)
   // Recheck the manifest and lock on every run; an old install must not bypass a reviewed update.
   const installed = installAuditTools(root, run)
@@ -45,7 +49,8 @@ export function runAuditTool(tool, args, { root = ROOT, run = runProcessSync } =
     program: process.execPath,
     args: [entry, ...args],
     cwd: root,
-    stdio: 'inherit',
+    stdio,
+    maxOutputBytes: 64 * 1024 * 1024,
     timeoutMs: null
   })
 }

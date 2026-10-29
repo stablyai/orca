@@ -1,19 +1,14 @@
 import { statfs } from 'node:fs/promises'
 import path from 'node:path'
 
-// Why: a system-managed Windows pagefile — and a macOS swapfile — only grows
-// into free space on its own volume, so low available commit is a REFUSED
-// allocation only when that volume is full too. Linux is excluded on purpose:
-// its swap is a fixed partition, a fixed-size swapfile, or zram, none of which
-// grow into root-fs free space, so the number would read as headroom that
-// cannot exist. The measured volume ships alongside because Windows only names
-// the DEFAULT pagefile drive; a relocated pagefile lives elsewhere.
+// Volume space is context only: Windows pagefile location and growth limits are unknown here.
+// Linux is excluded because free filesystem space cannot expand fixed swap or zram.
 
 const BYTES_PER_MB = 1024 * 1024
 
 export type SwapVolumeFreeSpace = {
   freeMB: number
-  /** Which volume was measured, separator-trimmed so redaction sees no path. */
+  /** Measured volume label, with trailing separators removed for redaction. */
   volume: string
 }
 

@@ -74,7 +74,7 @@ it('ignores other workspaces, other hosts, path events and storm overflows', () 
     worktreePath: '/repo',
     events: [{ kind: 'update', absolutePath: '/repo/a.ts' }]
   })
-  // Why: a storm overflow only refreshes git status; re-reading every section per flush would fan out.
+  // Storm overflow refreshes status only; rereading every section per flush would fan out.
   dispatch({
     worktreePath: '/repo',
     events: [{ kind: 'overflow', absolutePath: '/repo' }]

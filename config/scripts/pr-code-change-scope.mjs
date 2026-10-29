@@ -1,9 +1,13 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import process from 'node:process'
 import { pathToFileURL } from 'node:url'
 import { isLayoutOracleSource } from './pr-layout-oracle-route.mjs'
-import { LINUX_PACKAGE_TESTS, WINDOWS_PACKAGE_TESTS } from './pr-package-test-paths.mjs'
+import {
+  isCloudTestRunnerInput,
+  isWindowsProcessProbePath,
+  LINUX_PACKAGE_TESTS,
+  WINDOWS_PACKAGE_TESTS
+} from './pr-package-test-paths.mjs'
 
 const DOCS_ONLY_FILES = new Set([
   'README.md',
@@ -68,10 +72,7 @@ const GIT_COMPAT_PREFIXES = [
   'config/scripts/git-binary-compatibility'
 ]
 
-// Why narrow: the contract pins Codex's read-repair, so it runs when the heal that
-// depends on it, its app-server transport, or the contract itself changes. The same
-// job pins --no-daemon for Orca's codex shell wrapper, the project-trust key, and the
-// approval Orca writes for its hook entry in managed Codex homes and ~/.codex.
+// Scope real Codex contract to read-repair/transport plus wrapper --no-daemon, project trust and hook approvals in managed/user homes.
 const CODEX_INDEX_HEAL_CONTRACT_PREFIXES = [
   'src/main/codex/codex-hook-file-entry-binary-contract',
   'src/main/codex/codex-hook-trust-',
@@ -104,7 +105,7 @@ const CODEX_INDEX_HEAL_CONTRACT_PREFIXES = [
   'src/main/codex/codex-app-server-session',
   'src/main/codex/codex-state-db',
   'src/main/sqlite/sync-database',
-  'src/main/codex/codex-app-server-capability-signal',
+  'src/main/codex/app-server/codex-app-server-capability-signal',
   'src/main/provider-process/provider-process-exit-deadline',
   'src/main/provider-process/provider-process-launch',
   'src/main/provider-process/provider-record-reader',
@@ -157,10 +158,8 @@ const ORCAD_BROWSER_PREFIXES = [
   'src/main/orcad/electron-serve-browser-process'
 ]
 
-// The page bundle the desktop packages: the builder and verifier, the manifest writer and the
-// packaging guard they share, the entry, the route tree it mounts, the mobile source those routes
-// import, and the shell policy the render check runs the page under.
-// What decides which deps each package sees; package.json and the lockfile already force every job.
+// Include page build/verification/manifest/packaging, entry/routes/imported mobile sources and render-check shell policy.
+// Dependency visibility also matters; package.json/lockfile already force all jobs.
 const DEPENDENCY_ISOLATION_PREFIXES = [
   'pnpm-workspace.yaml',
   'config/pnpmfile.cjs',
@@ -173,6 +172,7 @@ const DEPENDENCY_ISOLATION_PREFIXES = [
 ]
 
 const MOBILE_WEB_APP_PREFIXES = [
+  '.github/scripts/prepare-ubuntu-apt.sh',
   'config/scripts/build-mobile-web-app',
   'config/scripts/run-mobile-web-app-checks',
   'src/packages/process-host/',
@@ -191,7 +191,7 @@ const MOBILE_WEB_APP_PREFIXES = [
   'mobile/pnpm-lock.yaml',
   'mobile/modules/orca-mobile-web-shell/',
   // Chat visuals on both mobile surfaces are built from it; their in-page links check runs here.
-  'src/shared/native-chat-visual-shell'
+  'src/shared/native-chat/native-chat-visual-shell'
 ]
 
 function changesMobileWebApp(changedFiles) {
@@ -213,8 +213,7 @@ const CROSS_VERSION_WIRE_PREFIXES = [
   'src/shared/terminal-stream-protocol',
   'src/shared/browser-client-host-protocol',
   'src/shared/browser-network-tunnel-protocol',
-  // The released and current WebSocket transports both accept the web upgrade marker
-  // (cross-version-web-upgrade-marker).
+  // Both released/current WebSocket transports must accept web upgrade marker (cross-version-web-upgrade-marker).
   'src/main/runtime/rpc/ws-transport.ts',
   'src/shared/web-origin-security.ts',
   'src/shared/browser-client-host-placement',
@@ -222,8 +221,7 @@ const CROSS_VERSION_WIRE_PREFIXES = [
   'src/shared/rpc-contract/agent-launch-params',
   'src/shared/agent-session-wire',
   'src/shared/agent-session-mutation-envelope',
-  // The send a client builds (the agent-session suite sends it to the release host) and the
-  // fingerprint the host's ledger and journal re-derive.
+  // Cover client sends to release hosts and fingerprints re-derived by host ledger/journal.
   'src/shared/structured-agent-session-mutation.ts',
   'src/shared/structured-agent-session-send-mutation.ts',
   'src/shared/agent-session-record',
@@ -275,7 +273,7 @@ const CROSS_VERSION_WIRE_PREFIXES = [
   'src/renderer/src/lib/agent-launch-routing.ts',
   'src/renderer/src/runtime/paired-host-client-capabilities.ts',
   'src/shared/electron-remote-runtime-client-capabilities.ts',
-  'src/shared/remote-runtime-client-capabilities.ts',
+  'src/shared/remote-runtime/remote-runtime-client-capabilities.ts',
   // An older app opening a newer orchestration database (orchestration-delivery-downgrade).
   'src/main/runtime/orchestration/db.ts',
   'src/main/runtime/orchestration/db/',
@@ -330,15 +328,15 @@ const NATIVE_CACHE_FILES = new Set([
   'config/scripts/electron-platform-path.mjs',
   'config/scripts/zip-extractor-command.mjs',
   'src/shared/zip-extractor-command.ts',
-  'config/scripts/shared-electron-dist-cache.mjs',
-  'config/scripts/shared-tree-publish.mjs',
   'config/scripts/space-sharing-copy.mjs',
-  'config/scripts/native-build-entry.cjs',
-  'config/scripts/native-build-entry-probe.cjs',
-  'config/scripts/shared-native-build.mjs'
+  'config/scripts/native-dependency-lock-digest.mjs',
+  'config/scripts/orcad-prebuild-node-gyp.mjs',
+  'config/scripts/msbuild-file-tracking.mjs'
 ])
 
 const NATIVE_CACHE_PREFIXES = [
+  'config/scripts/native-build-entry',
+  'config/scripts/shared-',
   'config/patches/node-pty@',
   'config/patches/@vscode__windows-process-tree',
   // The vendored addons' sources: build/ and bin/ beside them are ignored, so nothing else lands here.
@@ -413,13 +411,13 @@ const DESKTOP_IRRELEVANT_PREFIXES = [
 ]
 
 const STATIC_ANALYSIS_AUDIT_SCRIPTS = [
+  'lint:js-plugins',
   'audit:code-quality:native',
   'audit:code-quality:type-aware',
   'audit:anti-slop'
 ]
 
-// Positional arguments of an oxlint invocation are the trees it lints. `--config` consumes the
-// next token; every other flag here is valueless.
+// oxlint positional args name lint trees; --config consumes one value, other listed flags none.
 function oxlintScanRoots(command) {
   const roots = []
   for (const segment of command.split('&&')) {
@@ -438,9 +436,7 @@ function oxlintScanRoots(command) {
   return roots
 }
 
-// Why derived from the commands rather than listed here: `mobile/` is desktop-irrelevant for every
-// other job, yet these audits lint it. A second, hand-maintained copy of "which trees the gate
-// reads" is what let #20702 land violations no PR check ran, so read it off the argv instead.
+// Derive lint trees from command argv: mobile is otherwise desktop-irrelevant, and duplicate scope lists let #20702 bypass audits.
 function readStaticAnalysisScanRoots() {
   const manifest = join(import.meta.dirname, '../../package.json')
   const { scripts = {} } = JSON.parse(readFileSync(manifest, 'utf8'))
@@ -475,18 +471,15 @@ function readFormatIgnoredPrefixes() {
 const FORMAT_IGNORED_PREFIXES = readFormatIgnoredPrefixes()
 
 export function isDocsOnlyPath(file) {
-  if (DOCS_ONLY_FILES.has(file)) {
-    return true
-  }
-  if (DOCS_ONLY_PREFIXES.some((prefix) => file.startsWith(prefix))) {
-    return true
-  }
-  return /^README\.[^/]+\.md$/.test(file)
+  return (
+    DOCS_ONLY_FILES.has(file) ||
+    DOCS_ONLY_PREFIXES.some((prefix) => file.startsWith(prefix)) ||
+    /^README\.[^/]+\.md$/.test(file)
+  )
 }
 
 export function shouldRunPrChecks(changedFiles) {
-  // Why empty-run: a silent empty diff is more likely a detector bug than a
-  // genuine no-op PR, so fail closed and keep the expensive jobs.
+  // Empty diff likely signals detector failure; fail closed and retain expensive jobs.
   if (changedFiles.length === 0) {
     return true
   }
@@ -494,10 +487,7 @@ export function shouldRunPrChecks(changedFiles) {
 }
 
 export function needsMobileDependencies(changedFiles) {
-  // Why: static analysis lints CHANGED files, mobile ones included, and its
-  // type-aware pass resolves types from mobile/node_modules. Mobile is a
-  // separate pnpm project, so without this the root-only install leaves every
-  // mobile type an `error` type and the gate reports phantom findings.
+  // Changed-mobile type-aware lint needs mobile/node_modules: root-only install resolves mobile types as error and produces phantom findings.
   return changedFiles.length === 0 || changedFiles.some((file) => file.startsWith('mobile/'))
 }
 
@@ -506,8 +496,7 @@ export const DAEMON_INIT_TEST_SUPPORT = 'src/main/daemon/daemon-init-dependency-
 const DAEMON_INIT_TEST_SCOPE = new Set([
   DAEMON_INIT_TEST_SUPPORT,
   'src/main/native-chat/agent-session-wire/structured-agent-session-claude-queued-stop.test.ts',
-  'config/scripts/process-host-build-dist.test.mjs',
-  'src/main/codex/codex-app-server-connection.test.ts'
+  'config/scripts/process-host-build-dist.test.mjs'
 ])
 
 export function isDaemonInitTestSupportChange(files, modifiedOnly = false) {
@@ -540,17 +529,11 @@ export function classifyPrJobs(
           ))
     ])
   )
-  // Why outside should_run: a mobile-only diff is desktop-irrelevant and skips every job above,
-  // but the repo-wide audits lint mobile/, and skipping them lands the violation on main, where
-  // it then fails this same gate on every later PR's merge ref.
-  // Why formatted paths too: the formatting check reads the whole tree, so a docs-only diff that
-  // skipped it would land drift that then fails every later PR.
+  // Keep repo-wide audits outside desktop should_run: mobile-only diffs still need lint; formatted/docs paths also require whole-tree formatting.
   jobs.static_analysis =
     jobs.static_analysis ||
     changedFiles.some((file) => isStaticAnalysisScannedPath(file) || isFormatCheckedPath(file))
-  // Why outside should_run, for the same reason: a mobile-only diff is desktop-irrelevant, and
-  // that is exactly the diff that changes the page this job builds. Gated on should_run it would
-  // skip on every PR that can break it and run on none.
+  // Page-bundle gate must bypass desktop should_run or mobile-only diffs skip the very build they change.
   jobs.mobile_web_app = jobs.mobile_web_app || changesMobileWebApp(changedFiles)
   const mobileCiTools =
     allowMobileCiTools &&
@@ -561,6 +544,7 @@ export function classifyPrJobs(
   return {
     should_run: shouldRun,
     mobile_ci_tools: mobileCiTools,
+    windows_process_probe: shouldRun && (forceAll || changedFiles.some(isWindowsProcessProbePath)),
     // Relay contracts exercise host/cloud code; any input outside the renderer keeps them.
     relay_integration:
       shouldRun &&
@@ -590,8 +574,7 @@ function jobDetector(job) {
       return (files) => files.some((file) => matchesPrefix(file, SHELL_PREFIXES))
     case 'orcad_browser':
       return (files) => files.some((file) => matchesPrefix(file, ORCAD_BROWSER_PREFIXES))
-    // Not redundant with the lift below the jobs map: without a case here the default detector
-    // returns true, which would run this job on every desktop-relevant PR.
+    // Handle inside map too: default detector otherwise runs this job on every desktop-relevant PR.
     case 'mobile_web_app':
       return changesMobileWebApp
     case 'cross-version-wire':
@@ -616,14 +599,15 @@ function isLinuxPackagePath(file) {
 }
 
 function isWindowsPackagePath(file) {
-  return WINDOWS_PACKAGE_TESTS.includes(file) || isProductBundlePath(file, WINDOWS_PACKAGE_PREFIXES)
+  return (
+    WINDOWS_PACKAGE_TESTS.includes(file) ||
+    isWindowsProcessProbePath(file) ||
+    isProductBundlePath(file, WINDOWS_PACKAGE_PREFIXES)
+  )
 }
 
 function isProductBundlePath(file, extraPrefixes) {
-  if (isTestFile(file)) {
-    return false
-  }
-  return file.startsWith('src/') || matchesPrefix(file, extraPrefixes)
+  return !isTestFile(file) && (file.startsWith('src/') || matchesPrefix(file, extraPrefixes))
 }
 
 // These shared fixtures are consumed only by unit tests.
@@ -653,7 +637,9 @@ function isDesktopIrrelevantPath(file) {
 function isStaticAnalysisScannedPath(file) {
   // Fail closed: roots we failed to parse must keep the gate, not silently drop it.
   return (
-    STATIC_ANALYSIS_SCAN_PREFIXES.length === 0 || matchesPrefix(file, STATIC_ANALYSIS_SCAN_PREFIXES)
+    STATIC_ANALYSIS_SCAN_PREFIXES.length === 0 ||
+    matchesPrefix(file, STATIC_ANALYSIS_SCAN_PREFIXES) ||
+    isCloudTestRunnerInput(file)
   )
 }
 
@@ -678,8 +664,7 @@ function matchesPrefix(file, prefixes) {
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  // Why streamed, not readFileSync(0): a single read of fd 0 throws EAGAIN once the writer
-  // outgrows the 64 KB pipe buffer, which a stale PR base.sha reaches easily.
+  // Stream stdin: readFileSync(0) can throw EAGAIN beyond the 64KB pipe buffer on stale-base diffs.
   let input = ''
   process.stdin.setEncoding('utf8')
   for await (const chunk of process.stdin) {

@@ -26,9 +26,7 @@ export function SshPassphraseDialog(): React.JSX.Element | null {
 
   const requestId = request?.requestId
 
-  // Why: reset form state during render (not useEffect) so the cleared input is
-  // visible on the same paint as the new request arriving — useEffect would
-  // leave one render showing the previous passphrase value.
+  // Reset before paint so new requests cannot flash the previous credential.
   const [prevRequestId, setPrevRequestId] = useState(requestId)
   if (requestId !== prevRequestId) {
     setPrevRequestId(requestId)
@@ -38,8 +36,7 @@ export function SshPassphraseDialog(): React.JSX.Element | null {
     }
   }
 
-  // Why: focusing from the ref callback avoids a passive request-id Effect while
-  // still canceling stale frames when the request or mounted input changes.
+  // Ref-owned focus frames avoid passive request effects and cancel on request/input replacement.
   const setInputRef = useCallback(
     (input: HTMLInputElement | null): void => {
       inputRef.current = input
@@ -61,9 +58,7 @@ export function SshPassphraseDialog(): React.JSX.Element | null {
   )
 
   const handleSubmit = useCallback(async () => {
-    // Why: keyboard-interactive servers may accept an empty response (e.g.
-    // plain Enter to trigger a default MFA push); passwords and passphrases
-    // are never empty.
+    // Keyboard-interactive prompts may accept empty Enter for MFA; passwords/passphrases cannot.
     if (!request || (!value && request.kind !== 'keyboard-interactive')) {
       return
     }
@@ -114,9 +109,7 @@ export function SshPassphraseDialog(): React.JSX.Element | null {
 
   return (
     <Dialog open={open} onOpenChange={(isOpen) => !isOpen && void handleCancel()}>
-      {/* Why: a credential prompt is a preemptive modal that must sit above any
-          open popover/menu (popover z-60, menus z-70) — the default dialog z-50
-          would let a still-open picker cover the focused input. */}
+      {/* Credential prompts must cover existing menus/popovers, whose z-order exceeds the default dialog. */}
       <DialogContent
         showCloseButton={false}
         overlayClassName="!z-[140]"

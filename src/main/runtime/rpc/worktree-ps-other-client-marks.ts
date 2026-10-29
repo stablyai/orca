@@ -6,11 +6,7 @@ import {
 import type { RpcContext } from './core'
 import { isHostOwnPhone } from './host-own-phone'
 
-/**
- * Marks the rows this host calls another client's, for its own phone, which applies the shared
- * "Hide other-client workspaces" value itself. A delegated phone belongs to another desktop, whose
- * view this host cannot speak for.
- */
+/** Mark ownership for this host's phone to apply its filter; delegated phones belong to another desktop whose view this host cannot infer. */
 export function markWorktreePsOtherClientRows<T extends RuntimeWorktreePsResult>(
   result: T,
   context: Pick<RpcContext, 'clientKind' | 'pairedDeviceParentId'>

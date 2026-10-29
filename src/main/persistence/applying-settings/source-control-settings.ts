@@ -37,7 +37,7 @@ export function retireLegacyInstructionsForClearedTextActionRecipes(
     if (instructionsByOperation?.[actionId] === '') {
       continue
     }
-    // Why: {basePrompt} is the explicit clear state; an empty instruction shadows rollback commitMessageAi.customPrompt on normalize/project.
+    // Empty overrides suppress legacy prompts; {basePrompt} explicitly clears customization.
     instructionsByOperation = { ...instructionsByOperation, [actionId]: '' }
     changed = true
   }

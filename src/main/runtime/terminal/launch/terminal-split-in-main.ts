@@ -1,5 +1,4 @@
-// Layout-owner build: a split of a pane in main's layout is written and started by main, under the
-// caller's proposed pane id; every view, the window's included, attaches to the terminal it starts.
+// Main writes and starts its owned splits under the proposed pane id; every view attaches to that terminal.
 import { OrcaRuntimeWithSplitPtyBackedTerminal } from './terminal-split-surface'
 import type { RuntimeTerminalSplit } from '../../../../shared/runtime-types'
 import { mainOwnsTabLayout } from './main-owned-tab-layout'
@@ -136,7 +135,6 @@ export abstract class OrcaRuntimeWithSplitPaneInMain extends OrcaRuntimeWithSpli
       makePaneKey(source.tabId, leafId),
       spawnSurfaceClaimSequence(this.graphSequence)
     )
-    // Phones and session.tabs list the pane without a window's report, as the other splits do.
     this.publishPtyBackedMobileSessionTerminal(workspace.id, createdPty, {
       tabId: source.tabId,
       leafId,

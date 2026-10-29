@@ -6,6 +6,7 @@ import { Code, Pencil } from 'lucide-react-native'
 import { MobileMarkdown } from '../components/MobileMarkdown'
 import { MobileSourceCopyButton } from '../components/MobileSourceCopyButton'
 import { colors } from '../theme/mobile-theme'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import {
   MobileFilePreviewSourceText,
   MobileFilePreviewTruncatedNote
@@ -33,11 +34,11 @@ export function MobileFileMarkdownPreview({
   worktreeId,
   onOpenFile
 }: Props) {
+  useMobileColorScheme()
   const [mode, setMode] = useState<'preview' | 'source'>(() => (initialLine ? 'source' : 'preview'))
   const [previousRelativePath, setPreviousRelativePath] = useState(relativePath)
   const [previousInitialLine, setPreviousInitialLine] = useState(initialLine)
-  // Why: opening a different file or line target must switch modes before paint,
-  // never briefly retain the prior file's manually selected mode.
+  // Switch modes before paint for a new file or line target; do not flash the previous manual mode.
   if (relativePath !== previousRelativePath || initialLine !== previousInitialLine) {
     setPreviousRelativePath(relativePath)
     setPreviousInitialLine(initialLine)

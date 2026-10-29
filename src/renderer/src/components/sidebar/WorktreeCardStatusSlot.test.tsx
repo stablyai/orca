@@ -2,10 +2,26 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { WorktreeCardStatusSlot } from './WorktreeCardStatusSlot'
-import type { WorktreeCardPrDisplay } from './worktree-card-pr-display'
+import { getWorktreeCardPrDisplay, type WorktreeCardPrDisplay } from './worktree-card-pr-display'
+import { gitlabMrCheckCases } from '../../../../shared/gitlab-mr-checks.test-fixture'
+import { buildParentPrChecksProjection } from '../right-sidebar/parent-pr-checks-rows'
+import { FolderWorkspacePrChecksRow } from '../right-sidebar/FolderWorkspacePrChecksRow'
+import { presentGitLabMRMergeState } from '../right-sidebar/gitlab-mr-merge-state'
+import { getActiveChecksStatus } from '../right-sidebar/active-checks-status'
+import { ReviewChecksBadge, ReviewChecksIndicator } from './WorktreeCardMetadataStatusBadges'
+import { WorktreeReferenceStack } from './WorktreeReferenceStack'
+import type { WorkspaceReferenceDetailsMap } from './workspace-reference-details'
+import { getFolderWorkspaceCardPrDisplay } from './folder-workspace-card-pr-display'
+import { formatHostedReviewLabel } from '../status-bar/hosted-review-label'
+import { reviewRefreshIntervalMs } from '../../../../shared/review-refresh-policy'
 import { summarizeWorkspaceReviewChecks } from '../../../../shared/workspace-review-checks'
 import { getWorkspaceAttachmentKey } from '../../../../shared/workspace-attachment-normalization'
-import { referenceAttachment, referenceReview } from './workspace-reference-fixtures.test-support'
+import {
+  referenceAttachment,
+  referenceReview,
+  referenceRepo,
+  referenceWorkspace
+} from './workspace-reference-fixtures.test-support'
 
 const mocks = vi.hoisted(() => ({
   status: 'active',
@@ -48,6 +64,105 @@ describe('WorktreeCardStatusSlot', () => {
     state: 'open',
     status: 'pending'
   }
+
+  it.each(gitlabMrCheckCases)(
+    'presents the normalized $name without claiming passing',
+    ({ review: mapped, cardLabel, tone, rowSummary, mergeLabel, directMergeAvailable }) => {
+      const { status } = mapped
+      const worktree = { ...referenceWorkspace, linkedPR: null, linkedGitLabMR: 7 }
+      const hostedReviewCache = {
+        'local::repo::feature': { data: mapped, fetchedAt: 1, linkedReviewHintKey: 'gitlab:7' }
+      }
+      const context = {
+        worktrees: [worktree],
+        repos: [referenceRepo],
+        settings: null,
+        hostedReviewCache,
+        prCache: {},
+        checksCache: {}
+      }
+      const projection = buildParentPrChecksProjection(context)
+      const card = renderToStaticMarkup(
+        <WorktreeCardStatusSlot
+          worktreeId={worktree.id}
+          showStatus
+          showUnreadAction={false}
+          isUnread={false}
+          unreadTooltip=""
+          onPointerDown={vi.fn()}
+          onToggleUnread={vi.fn()}
+          newCardStyle
+          prDisplay={getWorktreeCardPrDisplay(mapped, null, 7)}
+        />
+      )
+      expect(card).toContain(cardLabel)
+      expect(card).toContain(tone)
+      expect(card).not.toContain('Passing')
+      const row = renderToStaticMarkup(
+        <FolderWorkspacePrChecksRow
+          row={projection.rows[0]}
+          expanded={false}
+          onToggle={vi.fn()}
+          onLoadCheckDetails={async () => null}
+        />
+      )
+      expect(row).toContain(rowSummary)
+      expect(row).not.toMatch(/Checks passing|lucide-circle-check/)
+      expect(projection.summary.passing).toBe(0)
+      expect(presentGitLabMRMergeState(mapped)).toMatchObject({
+        label: mergeLabel,
+        directMergeAvailable
+      })
+      expect(
+        getActiveChecksStatus({
+          ...context,
+          activeWorktreeId: worktree.id,
+          worktreesByRepo: { repo: [worktree] }
+        })
+      ).toBe(status)
+      const item = { provider: 'gitlab', type: 'mr', number: 7 } as const
+      const details = {
+        [getWorkspaceAttachmentKey(item)]: { title: mapped.title, url: mapped.url, review: mapped }
+      } satisfies WorkspaceReferenceDetailsMap
+      expect(summarizeWorkspaceReviewChecks([item], details)).toMatchObject({
+        state: status,
+        passed: 0
+      })
+      expect(
+        renderToStaticMarkup(<WorktreeReferenceStack items={[item]} details={details} />)
+      ).toContain(tone)
+      const checkLabel = { failure: 'Failing', pending: 'Pending', neutral: '' }[status]
+      for (const Badge of [ReviewChecksBadge, ReviewChecksIndicator]) {
+        const badge = renderToStaticMarkup(<Badge status={mapped.status} />)
+        expect(badge).toEqual(checkLabel ? expect.stringContaining(`Checks: ${checkLabel}`) : '')
+      }
+      expect(
+        getFolderWorkspaceCardPrDisplay({
+          ...context,
+          folderWorkspaceId: 'folder',
+          worktreeMap: new Map([[worktree.id, worktree]]),
+          repoMap: new Map([['repo', referenceRepo]]),
+          worktreeLineageById: {},
+          workspaceLineageByChildKey: {
+            child: {
+              childWorkspaceKey: `worktree:${worktree.id}`,
+              parentWorkspaceKey: 'folder:folder',
+              origin: 'cli',
+              capture: { source: 'env-workspace', confidence: 'inferred' },
+              createdAt: 1
+            }
+          }
+        })
+      ).toMatchObject({ state: 'open', status })
+      expect(formatHostedReviewLabel(mapped)).toBe(`MR !7 Open, ${status}`)
+      expect(reviewRefreshIntervalMs({ state: mapped.state, checksStatus: mapped.status })).toBe(
+        120_000
+      )
+      expect(reviewRefreshIntervalMs({ state: 'merged', checksStatus: mapped.status })).toBe(
+        status === 'pending' ? 60_000 : null
+      )
+    }
+  )
 
   it('uses checks from every attached review rather than the legacy passing review', () => {
     const items = [referenceAttachment(1), referenceAttachment(2)]
@@ -297,6 +412,30 @@ describe('WorktreeCardStatusSlot', () => {
     expect(markup).not.toContain('data-tooltip-root')
   })
 
+  it('marks the review status as last known while its WSL host is off (E9)', () => {
+    const render = (reviewStale: boolean) =>
+      renderToStaticMarkup(
+        <WorktreeCardStatusSlot
+          worktreeId="wt-1"
+          showStatus
+          showUnreadAction={false}
+          isUnread={false}
+          unreadTooltip="Mark as unread"
+          onPointerDown={vi.fn()}
+          onToggleUnread={vi.fn()}
+          prDisplay={review}
+          newCardStyle
+          reviewStale={reviewStale}
+        />
+      )
+    const stale = render(true)
+    expect(stale).toContain('PR checks: Failed · Last known status')
+    expect(stale).toContain('shimmer')
+    // The cached badge is kept, not dropped.
+    expect(stale).toContain('text-rose-500/85')
+    expect(render(false)).not.toContain('Last known status')
+  })
+
   it('uses the unified compact review glyph for GitLab MR status', () => {
     const markup = renderToStaticMarkup(
       <WorktreeCardStatusSlot
@@ -340,8 +479,7 @@ describe('WorktreeCardStatusSlot', () => {
   })
 
   it('keeps sleeping distinct from PR status when new card style is on', () => {
-    // Why done, not inactive: a slept workspace keeps its retained done rows,
-    // so its status still reads 'done' — the exact case from #19624.
+    // Sleeping retains done rows; test that state rather than inactive.
     mocks.status = 'done'
     mocks.sleeping = true
     const markup = renderToStaticMarkup(
@@ -358,7 +496,6 @@ describe('WorktreeCardStatusSlot', () => {
       />
     )
 
-    // Why: sleep must stay distinct from awake completion; sleeping never collapses into PR.
     expect(markup).toContain('Sleeping')
     expect(markup).toContain('lucide-moon')
     expect(markup).not.toContain('PR checks: Failed')
@@ -421,7 +558,6 @@ describe('WorktreeCardStatusSlot', () => {
         hasBranchIdentity
       />
     )
-    // Why: sleeping wins over the branch lane, even with an identity present.
     expect(sleepingMarkup).toContain('Sleeping')
     expect(sleepingMarkup).toContain('lucide-moon')
     expect(sleepingMarkup).not.toContain('lucide-git-branch')

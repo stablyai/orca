@@ -11,11 +11,6 @@ export type {
   SlashMenuState
 } from './rich-markdown-slash-command-catalog'
 
-/**
- * Executes a slash command by first deleting the typed slash text, then
- * delegating to the command's run method. Image is special-cased because
- * window.prompt() is not supported in Electron's renderer process.
- */
 export function runSlashCommand(
   editor: Editor,
   slashMenu: { from: number; to: number },
@@ -24,8 +19,7 @@ export function runSlashCommand(
   onEmojiCommand?: () => void
 ): void {
   editor.chain().focus().deleteRange({ from: slashMenu.from, to: slashMenu.to }).run()
-  // Why: image insertion cannot rely on window.prompt() in Electron, so this
-  // command is rerouted into the editor's local image picker flow.
+  // Route image commands to the editor’s picker because Electron does not support window.prompt.
   if (command.id === 'image' && onImageCommand) {
     onImageCommand()
     return
@@ -37,10 +31,6 @@ export function runSlashCommand(
   command.run(editor)
 }
 
-/**
- * Inspects the editor selection to decide whether the slash-command menu
- * should be open (and where to position it), or dismissed.
- */
 export function syncSlashMenu(
   editor: Editor,
   root: HTMLDivElement | null,

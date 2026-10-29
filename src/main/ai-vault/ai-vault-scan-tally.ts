@@ -9,7 +9,6 @@ type AgentTally = {
   openSources: number
 }
 
-/** What one scan has found and read so far, for the progress it reports. */
 export class AiVaultScanTally {
   private readonly agents = new Map<AiVaultAgent, AgentTally>()
   private stage: AiVaultScanWork['stage'] = 'finding'
@@ -28,8 +27,7 @@ export class AiVaultScanTally {
   }
 
   addFile(agent: AiVaultAgent, file: { path: string; dev?: number; ino?: number }): void {
-    // Why: a hard link is one file within an execution namespace; WSL distros
-    // can reuse the same device and inode numbers for unrelated files.
+    // Inodes identify hardlinks only within one execution namespace; WSL distros can reuse them.
     const identity =
       typeof file.dev === 'number' &&
       typeof file.ino === 'number' &&
@@ -72,7 +70,7 @@ export class AiVaultScanTally {
         })
       }
     }
-    // Discovery settles in any order; a fixed order keeps the rows from jumping.
+    // Fixed provider order prevents rows jumping as discovery finishes.
     agents.sort((a, b) => AI_VAULT_AGENTS.indexOf(a.agent) - AI_VAULT_AGENTS.indexOf(b.agent))
     return {
       stage: this.stage,

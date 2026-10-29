@@ -1,10 +1,9 @@
 import { StyleSheet } from 'react-native'
 import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
+import { themedStyleSheet } from '../../theme/themed-styles'
 import { TEXT_INPUT_FONT_SIZE } from '../../platform/text-input-font-size'
 
-// Styles for the plain-text reply / root-comment composer. Muted/monochrome to
-// match the PR comment timeline; split out to keep PRCommentComposer focused.
-export const prCommentComposerStyles = StyleSheet.create({
+export const prCommentComposerStyles = themedStyleSheet(() => ({
   container: {
     // Input → Cancel/Save needs clear separation (title edit was flush without this).
     gap: spacing.md
@@ -62,4 +61,4 @@ export const prCommentComposerStyles = StyleSheet.create({
     color: colors.statusRed,
     fontSize: typography.metaSize
   }
-})
+}))

@@ -165,8 +165,7 @@ export async function resolveTerminalOrphanInventory(args: {
       listedByHandle.set(terminal.handle, terminal)
     }
   }
-  // Older hosts omit hostScope entirely; an unscoped absence cannot prove a PTY exited. A peer
-  // runtime named in `omittedHostIds` is disclosure rather than a gap this host owed (#18595).
+  // Old hosts omit hostScope, so absence proves no exit. omittedHostIds peers disclose scope without making this host incomplete (#18595).
   const hostScopeUnverifiable = !hostScopeCensusIsComplete(listed.hostScope)
   const dispositions = new Map<string, RecoveryDisposition>()
   const claims: RuntimeTerminalOrphanAdoptionClaim[] = []
@@ -204,14 +203,7 @@ export async function resolveTerminalOrphanInventory(args: {
     ) {
       disposition = 'retain'
     } else if (surface.pending && terminal.ptyId !== surface.expectedPtyId) {
-      // Rebind, never retire. `expectedPtyId` is the ptyId of the *snapshot frame's* pending row;
-      // `terminal.ptyId` is the answer to a `terminal.list` with `requireFreshPtyLiveness: true`, so
-      // the host has just attested this handle is live under a different PTY. A PTY id changing
-      // across a host relaunch is the normal case, not evidence of death (#11495). Retaining emits a
-      // ready row bound to the host's handle, which is the rebind — the handle is the identity, the
-      // ptyId behind it is the host's business. Removal here needs what the two branches around it
-      // already require: an explicit `retiredTerminalSurfaces` entry, or two authoritative
-      // inventories omitting the identity. See docs/reference/ssh-execution-boundary.md.
+      // Fresh liveness attests this handle under a replacement PTY: rebind, never retire on ID rotation (#11495). Handle is identity; removal still requires explicit retiredTerminalSurfaces or two authoritative absences (docs/reference/ssh-execution-boundary.md).
       disposition = 'retain'
     } else if (!hasStrongOrphanIdentity(terminal, surface, snapshot.worktree)) {
       disposition = 'retain'

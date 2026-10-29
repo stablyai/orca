@@ -51,6 +51,68 @@ function hostEmit(index = 0): (event: AgentSessionStatusEvent) => void {
 }
 
 describe('structured agent session status feed', () => {
+  it('orders naming observations without changing retained turns, Sleep or confirmation', async () => {
+    const feed = getStructuredAgentSessionStatusFeed(LOCAL)
+    const stop = feed.activate()
+    await vi.advanceTimersByTimeAsync(0)
+    const retained = {
+      ...summary('one'),
+      turnOutcome: 'interruption' as const,
+      permissionMode: 'plan',
+      model: 'model',
+      statusStartedAt: 2,
+      sleptAt: 3
+    }
+    hostEmit()({ type: 'status', session: retained })
+    const status = feed.getSnapshot()
+    const metadata = (conversationName: string) => ({
+      type: 'snapshot' as const,
+      sessions: [],
+      namingActiveSessionIds: [],
+      conversationNames: [{ sessionId: 'one', conversationName }]
+    })
+    hostEmit()(metadata('Before'))
+    expect(feed.getSnapshot()).toBe(status)
+    expect(feed.getSessionSleepState('one')).toBe(3)
+    expect(feed.getSessionSleepState('cold')).toBeUndefined()
+    expect(feed.getSessionObservation('cold')).toBe('unverifiable')
+    hostEmit()({
+      ...metadata('Before'),
+      conversationNames: [
+        {
+          sessionId: 'one',
+          conversationName: 'Before',
+          namingError: { message: 'Failed', failedAt: 1 }
+        }
+      ]
+    })
+    hostEmit()(metadata('Before'))
+    expect(feed.getNamingSnapshot().get('one')).not.toHaveProperty('namingError')
+    hostEmit()({
+      type: 'snapshot',
+      sessions: [retained],
+      conversationNames: JSON.parse('[null, {"sessionId":"one","conversationName":5}]')
+    })
+    expect(feed.getNamingSnapshot().get('one')?.conversationName).toBe('Before')
+    hostEmit()({ ...metadata('After'), sessions: [{ ...retained, conversationName: 'Stale' }] })
+    expect(feed.getNamingSnapshot().get('one')?.conversationName).toBe('After')
+    hostEmit()({ type: 'end' })
+    expect(feed.getSessionObservation('one')).toBe('unverifiable')
+    expect(feed.getNamingSnapshot().get('one')?.conversationName).toBe('After')
+    await vi.advanceTimersByTimeAsync(300)
+    hostEmit(1)({
+      ...metadata('Restarted'),
+      conversationNames: [
+        { sessionId: 'one', conversationName: 'Restarted' },
+        { sessionId: 'cold', conversationName: 'Cold' }
+      ]
+    })
+    expect(feed.getSessionObservation('one')).toBe('unverifiable')
+    expect(feed.getSessionObservation('cold')).toBe('unverifiable')
+    expect(feed.getSnapshot().get('one')).toMatchObject(retained)
+    stop()
+    expect(feed.getNamingSnapshot().get('one')?.conversationName).toBe('Restarted')
+  })
   beforeEach(() => {
     vi.useFakeTimers()
     vi.clearAllMocks()

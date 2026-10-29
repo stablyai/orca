@@ -37,7 +37,7 @@ describe('Pi session wake', () => {
       state: 'working',
       capturedAt: 1,
       updatedAt: 1,
-      origin: 'worktree-sleep'
+      origin: 'quit'
     }
     const tab: TerminalTab = {
       id: 'tab-1',

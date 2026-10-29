@@ -28,8 +28,7 @@ describe('commonPropsSchema', () => {
     expect(parsed.success).toBe(false)
   })
 
-  // Why: empty install/session IDs would collapse analytics across unrelated
-  // installs or process lifetimes instead of preserving event attribution.
+  // Empty IDs would collapse attribution across installs/process lifetimes.
   it('rejects empty analytics identities', () => {
     const basePayload = {
       app_version: '1.3.33',

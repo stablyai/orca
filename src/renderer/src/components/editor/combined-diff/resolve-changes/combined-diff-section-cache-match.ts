@@ -13,8 +13,7 @@ export function combinedDiffSectionsMatchEntryMetadata({
   sections: readonly DiffSection[]
   treeMode: CombinedDiffFileTreeMode
 }): boolean {
-  // Why: same-path combined sections can survive status refreshes; metadata
-  // drift means restoring cached content would replay stale, partial diffs.
+  // Same-path rows can change metadata; restoring mismatched cached sections would replay stale or partial diffs.
   return (
     sections.length === entries.length &&
     sections.every((section, index) => {

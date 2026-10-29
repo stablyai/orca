@@ -1,3 +1,4 @@
+import { translate } from '@/i18n/i18n'
 import { useCallback, useEffect, type Dispatch, type RefObject, type SetStateAction } from 'react'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { getConnectionId } from '@/lib/connection-context'
@@ -97,7 +98,10 @@ export function useCreatePullRequestFieldGeneration({
 
   let generateDisabledReason: string | undefined
   if (submitting) {
-    generateDisabledReason = 'Create PR in progress...'
+    generateDisabledReason = translate(
+      'auto.components.right.sidebar.CreatePullRequest.createInProgress',
+      'Create PR in progress...'
+    )
   } else if (!resolvedPullRequestAi?.ok) {
     generateDisabledReason =
       resolvedPullRequestAi?.error ?? 'Enable Source Control AI in Settings -> Git.'
@@ -123,15 +127,19 @@ export function useCreatePullRequestFieldGeneration({
         )
       }
       if (!target) {
-        setGenerateError('The workspace host is unresolved. Refresh the workspace and retry.')
+        setGenerateError(
+          translate(
+            'auto.components.right.sidebar.CreatePullRequest.workspaceHostUnresolved',
+            'The workspace host is unresolved. Refresh the workspace and retry.'
+          )
+        )
         return
       }
       const requestId = generationRequestIdRef.current + 1
       generationRequestIdRef.current = requestId
       const connectionId = getConnectionId(worktreeId) ?? undefined
       const requestContext = {
-        // Why: PR generation belongs to the visible worktree owner. Global
-        // focused-host changes must not retarget an in-flight generation.
+        // Pin generation to the worktree owner so focused-host navigation cannot retarget it.
         target,
         prefs: settings,
         worktreeId,

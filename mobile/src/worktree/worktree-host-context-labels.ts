@@ -55,20 +55,14 @@ function getResolvedWorktreeRowIdentity(
   )
 }
 
-// Kept as a local adapter so existing mobile imports remain stable.
-
-/**
- * Host label per row identity, only when the list spans more than one host — a single-host
- * list gains nothing from a badge on every row. Mirrors the desktop sidebar's mixed-host rule.
- */
+// Match desktop mixed-host badges; single-host lists need no repeated label.
 export function getWorktreeHostContextLabels(
   worktrees: readonly Worktree[],
   sources: HostLabelSources
 ): Map<string, string> | undefined {
   return getSharedMixedHostContextLabels(worktrees, {
     getHostId: (worktree) => resolveWorktreeHostId(worktree, sources.repoHostIdByRepoId),
-    // Legacy hosts omit row.hostId; key by the resolved repo owner so duplicate
-    // worktree ids from different hosts do not overwrite each other's label.
+    // Resolve repo ownership for legacy rows so same-id worktrees on different hosts cannot overwrite labels.
     getIdentity: (worktree) => getResolvedWorktreeRowIdentity(worktree, sources.repoHostIdByRepoId),
     sources
   })

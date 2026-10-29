@@ -154,6 +154,7 @@ export function removeConflictingWebOverrides(
     if (conflictingOverrides.size === 0) {
       return next
     }
+    next = { ...next }
     for (const actionId of conflictingOverrides) {
       delete next[actionId]
     }

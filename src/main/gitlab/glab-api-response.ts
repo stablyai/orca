@@ -5,8 +5,7 @@ export type GlabApiResponse = {
 
 /** @internal - exported for tests through gl-utils. */
 export function parseGlabApiResponse(stdout: string): GlabApiResponse {
-  // Why: response is HTTP status, headers, blank line, then body.
-  // Find the first blank line (CRLF or LF) as the boundary.
+  // HTTP headers end at the first blank line, accepting either CRLF or LF.
   const separator = findHeaderBodySeparator(stdout)
   if (!separator) {
     return { body: stdout, headers: {} }
@@ -14,7 +13,6 @@ export function parseGlabApiResponse(stdout: string): GlabApiResponse {
   const headerBlock = stdout.slice(0, separator.index)
   const body = stdout.slice(separator.bodyStart)
   const headers: Record<string, string> = {}
-  // Skip the status line and parse the rest as key: value.
   const lines = headerBlock.split(/\r?\n/)
   for (const line of lines) {
     const m = line.match(/^([A-Za-z][A-Za-z0-9-]*):\s*(.*)$/)
@@ -40,15 +38,10 @@ export function parseGlabPaginationHeader(
 /** A non-list body carrying no GitLab error text — opaque data, so there is nothing to classify. */
 export class GlabNonListResponseError extends Error {}
 
-// Why: glab allows a 10MB body; this is what keeps a proxy's whole response out of the error banner.
+// Bound diagnostics before multi-megabyte proxy bodies reach the error banner.
 const REPORTED_PAYLOAD_LIMIT = 300
 
-/**
- * Parse a glab list response, failing readably when GitLab answers with a JSON object.
- *
- * Why: glab exits 0 on error envelopes and proxy wrappers, so `JSON.parse(...).map` threw an
- * opaque `.map is not a function` that the caller's classifier could only report as "unknown".
- */
+/** glab can exit 0 with an error object or proxy wrapper; distinguish it from a valid list before mapping. */
 export function parseGlabJsonList<T>(payload: string): T[] {
   const parsed: unknown = JSON.parse(payload)
   if (Array.isArray(parsed)) {
@@ -58,8 +51,7 @@ export function parseGlabJsonList<T>(payload: string): T[] {
   if (reported) {
     throw new Error(`GitLab returned an error: ${reported}`)
   }
-  // Why: slice the raw payload rather than re-serializing `parsed` — same text, without
-  // stringifying a multi-megabyte body just to keep the preview.
+  // Slice original bytes without serializing a multi-megabyte parsed object for its preview.
   throw new GlabNonListResponseError(
     `GitLab returned a non-list response: ${payload.trim().slice(0, REPORTED_PAYLOAD_LIMIT)}`
   )

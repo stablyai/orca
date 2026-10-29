@@ -37,10 +37,7 @@ export abstract class OrcaRuntimeWithGetUnpersistedTrackedTitleForPty extends Or
     return this.ptyTitleTrackersByPtyId.get(ptyId)?.tracker.getLastNormalizedTitle() ?? null
   }
 
-  /** Why: synthetic agent title frames no longer ride pty:data, so neither
-   *  renderer xterm nor the headless emulator observes them. Mobile-parity
-   *  snapshot titles must prefer main's tracker over snapshot lastTitle, or
-   *  hook-driven spinner/idle titles vanish from mobile tabs. */
+  /** Synthetic hook titles bypass both xterms; mobile snapshots must prefer main's tracker over serialized lastTitle. */
   protected preferTrackedLastTitle<T extends { lastTitle?: string }>(
     ptyId: string,
     snapshot: T
@@ -52,7 +49,7 @@ export abstract class OrcaRuntimeWithGetUnpersistedTrackedTitleForPty extends Or
     return { ...snapshot, lastTitle: tracked }
   }
 
-  /** Decorative comparison key: only recognized agent titles fold leading spinner frames. */
+  /** Decorative comparison key: only recognized agent titles fold spinner frames. */
   protected makeDecorativeTitleGateKey(rawTitle: string, normalizedTitle: string): string {
     return getDecorativeTitleGateKey(rawTitle, normalizedTitle)
   }
@@ -62,12 +59,7 @@ export abstract class OrcaRuntimeWithGetUnpersistedTrackedTitleForPty extends Or
     if (existing) {
       return existing
     }
-    // Why: trackers are created lazily on the first observed chunk. After an
-    // app relaunch the PTY/leaf records can already hold a persisted title; a
-    // cold tracker would miss the parked working→idle completion and never
-    // arm the stale-title timer for a persisted 'working' title.
-    // Why the display clear first: a tracker recreated after a relay drop must not re-arm on the
-    // working title the timer already retired.
+    // Seed cold trackers from persisted titles for completion/stale-working timers; prefer an existing display clear so retired spinners stay retired.
     const pty = this.ptysById.get(ptyId)
     let initialTitle = pty?.titleDisplayClear?.title ?? pty?.lastOscTitle ?? null
     if (initialTitle === null) {
@@ -93,9 +85,7 @@ export abstract class OrcaRuntimeWithGetUnpersistedTrackedTitleForPty extends Or
               live.lastTitle = { raw: rawTitle, normalized: normalizedTitle }
             }
           }
-          // Why: the same gate the mobile fan-out below already uses, applied one hop earlier —
-          // a spinner frame the renderer store discards should not cost a pty:sideEffect message
-          // at all. See decorative-title-fact-emission.ts for why repeats still heartbeat.
+          // Suppress decorative side-effect churn one hop before renderer dedupe; repeats still heartbeat (decorative-title-fact-emission.ts).
           const nowMs = Date.now()
           if (
             shouldEmitTitleFactForFrame({
@@ -137,9 +127,7 @@ export abstract class OrcaRuntimeWithGetUnpersistedTrackedTitleForPty extends Or
             return
           }
           if (live?.applyingChunk) {
-            // Why: synthetic spinner ticks change only the braille glyph
-            // ~12.5x/sec; fanning out full mobile session snapshots per frame
-            // is pure churn. Raw lastOscTitle updates above stay cheap.
+            // Synthetic spinner glyphs tick ~12.5Hz; update cheap title records without publishing whole mobile snapshots.
             if (!decorativeOnly) {
               this.mobileSessionTabsAgentStatusHeartbeat.observeSemanticTitle(ptyId)
               live.chunkTouchedSessionTabs = true
@@ -205,10 +193,7 @@ export abstract class OrcaRuntimeWithGetUnpersistedTrackedTitleForPty extends Or
       chunkTouchedSessionTabs: false,
       pendingFacts: [],
       afterFacts: [],
-      // Why: command-code facts exist only for the pty:sideEffect channel —
-      // headless serve skips the per-chunk scrape entirely. The detector
-      // self-arms on the Command Code banner; the spawn command (when main
-      // saw one) mirrors the renderer detector's startupCommand fast-arm.
+      // Headless serve has no side-effect consumer, so skip Command Code scraping; otherwise arm from launch command or banner.
       commandCodeDetector: this.terminalSideEffectConsumerAvailable
         ? this.createTerminalSideEffectCommandCodeDetector(ptyId)
         : null,

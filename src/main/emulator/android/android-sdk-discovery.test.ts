@@ -3,7 +3,6 @@ import { describe, expect, it } from 'vitest'
 import { discoverAndroidSdk } from './android-sdk-discovery'
 import type { DiscoverAndroidSdkOptions } from './android-sdk-discovery'
 
-// Fake `exists` predicate: only paths placed in the set are reported present.
 const existsIn = (paths: Iterable<string>): ((path: string) => boolean) => {
   const set = new Set(paths)
   return (path: string) => set.has(path)
@@ -15,7 +14,6 @@ const adbFor = (sdkRoot: string, win32: boolean): string =>
 const emulatorFor = (sdkRoot: string, win32: boolean): string =>
   join(sdkRoot, 'emulator', win32 ? 'emulator.exe' : 'emulator')
 
-// discoverAndroidSdk requires both adb and the emulator binary to be present.
 const sdkToolsFor = (sdkRoot: string, win32: boolean): string[] => [
   adbFor(sdkRoot, win32),
   emulatorFor(sdkRoot, win32)

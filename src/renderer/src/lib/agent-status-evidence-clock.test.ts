@@ -40,5 +40,20 @@ describe('staleness measures when evidence was observed, not when it was deliver
     const row = workingRow({ evidenceObservedAt: NOW })
     expect(isFreshNonDoneAgentStatus(row, NOW)).toBe(true)
     expect(isExplicitAgentStatusFresh(row, NOW, AGENT_STATUS_STALE_AFTER_MS)).toBe(true)
+
+    const mirrored = workingRow({
+      updatedAt: OBSERVED_AT,
+      evidenceObservedAt: OBSERVED_AT,
+      mirroredEvidenceReceivedAt: NOW
+    })
+    expect(isFreshNonDoneAgentStatus(mirrored, NOW)).toBe(true)
+    expect(isExplicitAgentStatusFresh(mirrored, NOW, AGENT_STATUS_STALE_AFTER_MS)).toBe(true)
+
+    const expiredMirror = workingRow({
+      evidenceObservedAt: NOW,
+      mirroredEvidenceReceivedAt: OBSERVED_AT
+    })
+    expect(isFreshNonDoneAgentStatus(expiredMirror, NOW)).toBe(false)
+    expect(isExplicitAgentStatusFresh(expiredMirror, NOW, AGENT_STATUS_STALE_AFTER_MS)).toBe(false)
   })
 })

@@ -57,8 +57,7 @@ async function disposeTerminalHostSessions(
       if (isAlreadyTracked?.(session)) {
         return
       }
-      // Why: live children retain native ownership until physical exit, while
-      // exited children must release handles without signalling a recycled pid.
+      // Keep live native owners until physical exit; release exited handles without signalling recycled PIDs.
       if (session.isAlive) {
         await disposeLiveSession(session)
       } else {

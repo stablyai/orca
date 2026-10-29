@@ -74,7 +74,7 @@ describe('legacy structural TUI identity at the execution-host boundary', () => 
     bindOpenCodeSession(state, 'ses_b', { paneKey: PANE_A, boundAt: 1, basis: 'argv' })
     trackOpenCodePaneLaunchToken(state, PANE_A, 'creator-live')
     const tokens = [...state.lastLaunchTokenByPaneKey]
-    const owner = lookupOpenCodeSessionPane(state, 'ses_b')
+    const owner = { ...lookupOpenCodeSessionPane(state, 'ses_b') }
     const admitOpenCodeTui = vi.fn(() => false)
     expect(normalizeHookPayload(state, 'opencode', body(), 'test', { admitOpenCodeTui })).toBeNull()
     expect(admitOpenCodeTui).toHaveBeenCalledExactlyOnceWith({
@@ -84,7 +84,7 @@ describe('legacy structural TUI identity at the execution-host boundary', () => 
       hasExplicitPrompt: false
     })
     expect([...state.lastLaunchTokenByPaneKey]).toEqual(tokens)
-    expect(lookupOpenCodeSessionPane(state, 'ses_b')).toBe(owner)
+    expect(lookupOpenCodeSessionPane(state, 'ses_b')).toEqual(owner)
     expect(state.lastStatusByPaneKey.size).toBe(0)
     expect(state.lastPromptByPaneKey.size).toBe(0)
   })

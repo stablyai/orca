@@ -37,7 +37,6 @@ const hookDeniedSchema = z.looseObject({
   cancellationContext: z.looseObject({ reason: z.string().optional() }).nullish()
 })
 const promptErrorDataSchema = z.looseObject({ message: z.string() })
-/** Grok writes its result text as the failure's reason only for these ends. */
 const FAILED_STOP_REASONS = ['error', 'rate_limit']
 const SESSION_NOTIFICATIONS = ['x.ai/session_notification', 'x.ai/session/update']
 
@@ -78,7 +77,7 @@ function contextWindow(models: unknown): number | undefined {
   )
 }
 
-/** Grok ends a hook-denied prompt as `cancelled`, naming the hook's verdict in `_meta`. */
+// Grok reports hook denial as cancellation with a verdict in _meta.
 function hookBlock(meta: unknown): AcpHookBlock | undefined {
   const parsed = hookDeniedSchema.safeParse(meta)
   const reason = parsed.data?.cancellationContext?.reason?.trim()
@@ -133,7 +132,7 @@ function notification(
       : { disposition: 'map', usage: { window: { tokens, capturedAt: at } } }
   }
   if (canonical === 'x.ai/session/prompt_complete') {
-    // A copy of the turn's end; only its failure reason is read, in case the end carried none.
+    // Duplicate turn endings may supply a missing failure reason.
     const parsed = promptCompleteSchema.safeParse(params)
     const detail = parsed.success
       ? failureDetail(parsed.data.stopReason, parsed.data.agentResult)
@@ -167,7 +166,7 @@ function notification(
   const meta = turnMetaSchema.safeParse(envelope._meta)
   const completion = completionSchema.safeParse(envelope.update)
   const response = responseSchema.safeParse(envelope.update)
-  // Only a retry Grok gave up on is read; it names no turn, so it joins the one running.
+  // Exhausted retries have no turn ID; attach their failure to the running turn.
   const retry = retrySchema.safeParse(envelope.update)
   const retryFailure =
     retry.success && retry.data.type === 'failed' && retry.data.message?.trim()

@@ -1,5 +1,4 @@
-// Layout-owner build: terminal-pane-tab-detach.test.ts's drag-out outcomes, reached through
-// main's `movePaneToNewTab` and the frame that draws its result.
+// Exercise drag-out through main’s movePaneToNewTab and resulting frames, matching the window-side detach suites.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import { buildWorkspaceSessionPayload } from '@/lib/workspace-session'

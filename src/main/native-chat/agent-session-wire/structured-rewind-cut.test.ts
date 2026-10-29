@@ -1,7 +1,3 @@
-// A rewind keeps the journal's own rows of the turns before the cut. A subagent's rows belong to
-// the main turn they arrived in, whatever their own thread's turn ids, so one that lands after the
-// cut stays with a kept turn and goes with an undone one.
-
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -63,7 +59,7 @@ it("keeps a subagent row with the main turn it arrived in, across the subagent's
     )
   }
   await append(item('main', 'a'), 'main a')
-  // One subagent turn spans both main turns.
+  // One child turn spans both main turns, so membership must follow main-turn scope.
   await append(item('child', 'c', 0), 'child in a', 'a')
   const mainB: AgentJournalItemBody = {
     kind: 'message',
@@ -109,7 +105,6 @@ it('rewinds only to a message that opened its turn, and still cuts at one alread
     )
     return { kind: 'turn' as const, turnItemId: agentJournalItemKey(turn) }
   }
-  // Restored history scopes an opener to its own turn; its record names it.
   const first = await turnRecord('turn-1', 'm1')
   await journal.appendItem(claude('m1'), user('m1'), { fence: 1, turnScope: first })
   await journal.appendItem(claude('a1'), text('a1'), { fence: 1, turnScope: first })
@@ -119,7 +114,6 @@ it('rewinds only to a message that opened its turn, and still cuts at one alread
     turnScope: AGENT_JOURNAL_THREAD_SCOPE
   })
   await journal.appendItem(claude('a2'), text('a2'), { fence: 1, turnScope: second })
-  // Sent while Claude was still answering m2: it joined m2's turn.
   await journal.appendItem(claude('m3'), user('m3'), { fence: 1, turnScope: second })
 
   expect(['m1', 'm2', 'm3'].map((uuid) => isStructuredRewindTarget(journal, key(uuid)))).toEqual([

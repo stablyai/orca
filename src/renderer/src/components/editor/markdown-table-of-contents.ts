@@ -27,9 +27,7 @@ function isMarkdownTocLevel(value: number): value is MarkdownTocLevel {
   return value >= 1 && value <= 5
 }
 
-// Scoped local fork of the tiny entities@6.0.1 surface Orca used here.
-// Why: TOC labels only need common/numeric entity decoding before inline
-// Markdown stripping, not the full entity database.
+// Use the needed entities@6.0.1 behavior locally: TOC labels need common/numeric decoding without the full entity database.
 function decodeTocHtmlEntities(text: string): string {
   return text.replace(/&(#x[0-9a-f]+|#\d+|[a-z][a-z0-9]+);/gi, (match, entity: string) => {
     const normalized = entity.toLowerCase()
@@ -60,8 +58,7 @@ export function stripInlineMarkdownForToc(text: string): string {
   return foldMarkdownTocWhitespace(stripped)
 }
 
-// Why: headings can come from large pasted markdown; TOC labels only need
-// collapsed display whitespace, not a whole-string whitespace regex pass.
+// Collapse display whitespace without another full-string regex pass over large pasted headings.
 function foldMarkdownTocWhitespace(value: string): string {
   let normalized = ''
   let pendingWhitespace = false
@@ -120,9 +117,7 @@ type MarkdownAstNode = {
   value?: string
 }
 
-// Scoped local fork of mdast-util-to-string@4.0.0 for heading nodes.
-// Why: TOC generation only needs text/alt/child concatenation from parsed
-// Markdown headings, so a local walker keeps the dependency boundary smaller.
+// Keep the heading-only mdast-util-to-string@4.0.0 behavior locally to avoid the broader dependency.
 function markdownAstNodeToText(node: MarkdownAstNode): string {
   if (typeof node.value === 'string') {
     return node.value
@@ -138,8 +133,7 @@ export function buildMarkdownTableOfContents(markdown: string): MarkdownTocItem[
   const root = { id: 'toc-root', level: 1 as const, title: '', children: [] }
   const stack: MarkdownTocItem[] = [root]
 
-  // Why: parsing Markdown keeps the TOC aligned with rendered setext/GFM/entity
-  // headings without carrying separate mdast stringifier/entity packages.
+  // Use the parser so TOC headings match rendered setext/GFM/entity behavior.
   const tree = unified()
     .use(remarkParse)
     .use(remarkGfm)

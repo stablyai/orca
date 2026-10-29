@@ -1,10 +1,4 @@
-/**
- * E2E test for scrolling an overflowing tab strip: the scroll must not re-render the tabs, and the
- * scroll thumb must still track the strip.
- *
- * Why E2E: only real Chromium lays out the strip and delivers the scroll and resize callbacks the
- * thumb follows, and only the whole app shows every React commit a scroll step causes.
- */
+// Scroll real Chromium overflow without rerendering the tab strip while its thumb tracks scroll/resize; count whole-app React commits.
 
 import type { Locator, Page } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
@@ -54,11 +48,7 @@ async function addBackgroundTerminalTabs(
   )
 }
 
-/**
- * Records how many tabs each React commit re-renders, the way React DevTools highlights updates:
- * through the commit hook the renderer always installs. Commits that render no tab (the sidebar,
- * terminals starting up) are left out.
- */
+// Count tab renders through the installed React DevTools commit hook, excluding commits with no tab work.
 async function startRecordingTabRenders(page: Page): Promise<void> {
   await page.evaluate(() => {
     // Function, class, forwardRef and memo components; bit 1 is React's PerformedWork flag.
@@ -193,10 +183,7 @@ test.describe('Tab strip scroll render isolation', () => {
       MIN_SCROLL_RANGE_PX
     )
 
-    // Start and end mid-strip so neither scroll edge flips the arrows, fades or dock. Why set it
-    // here and hold until it sticks: opening the tabs left the strip pinned to its end, and the
-    // scroll event that releases that pin only lands with the next frame — about a second in CI's
-    // hidden window. A tab retitling inside that window re-pins the strip to the end.
+    // Start/end mid-strip to keep edge flags unchanged; wait for the initial scroll event to release end pinning despite late retitles.
     await expect
       .poll(
         async () => {
@@ -211,8 +198,7 @@ test.describe('Tab strip scroll render isolation', () => {
       .toBe(START_SCROLL_LEFT_PX)
     // That scroll flipped the end-edge flags; the commit it caused is not the scroll under test.
     await takeTabRenders(orcaPage)
-    // Why wheel events dispatched in the page: real input waits for a frame per step, and CI's hidden
-    // window draws about one a second. The strip's own wheel handler still does the scrolling.
+    // Dispatch page wheel events through the real strip handler; native input waits for CI’s sparse hidden-window frames.
     await strip.evaluate(
       async (el, { steps, delta }) => {
         for (let i = 0; i < steps; i++) {
@@ -228,8 +214,7 @@ test.describe('Tab strip scroll render isolation', () => {
     expect(await strip.evaluate((el) => el.scrollLeft)).toBe(
       START_SCROLL_LEFT_PX + WHEEL_STEPS * WHEEL_DELTA_PX
     )
-    // Why "many tabs": before the fix every scroll step re-rendered all of them in one commit;
-    // a single tab can still update itself (a late retitle).
+    // Reject many-tab commits; a single late retitle may still update one tab.
     expect((await takeTabRenders(orcaPage)).filter((tabs) => tabs >= 3)).toEqual([])
     await expectThumbToTrackStrip(strip)
 

@@ -28,8 +28,7 @@ describe('shallow watch delivery probe', () => {
   })
 
   it('reports no delivery when registration succeeds but nothing is emitted', async () => {
-    // The observed macOS 26.3.1 failure: fs.watch returns a watcher, stays mute,
-    // and never raises an error — indistinguishable from an idle repo.
+    // macOS can accept a watcher yet deliver no events or errors, indistinguishable from an idle repo.
     watchMock.mockImplementation(stubWatcher())
     await expect(measureShallowWatchDelivery(20)).resolves.toBe(false)
   })

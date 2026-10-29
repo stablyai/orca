@@ -78,7 +78,7 @@ export function PRFilesCombinedDiffBody({
     section: DiffSection,
     args: { lineNumber: number; startLine?: number; body: string }
   ) => Promise<boolean>
-  // Why: a stable callback, not an inline arrow — this re-keys every mounted row's comment decorator.
+  // Keep this callback stable or every row’s comment decorator is re-keyed.
   getCommentableLineNumbers: (section: DiffSection) => readonly number[] | undefined
   setSectionHeights: React.Dispatch<React.SetStateAction<Record<number, number>>>
   setSections: React.Dispatch<React.SetStateAction<DiffSection[]>>

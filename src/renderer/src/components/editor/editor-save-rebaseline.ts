@@ -1,8 +1,11 @@
 import type { AppState } from '@/store'
 import type { OpenFile } from '@/store/slices/editor'
+import { editorBufferIdForFile } from '@/store/slices/editor/buffers/editor-buffer-identity-cache'
 import { getWrittenContentDiskSignature } from '../../../../shared/disk-baseline-signature'
 import type { FileWriteDiskConflict } from '../../../../shared/file-write-disk-precondition'
 import { notifyEditorFileCacheStale } from './editor-autosave'
+import { hasPendingEditorBufferChange } from './editor-pending-flush'
+import { trackExternalChangeConflictAction } from './editor-external-change-telemetry'
 import {
   pauseAutosaveForNonUtf8File,
   resumeAutosaveForNonUtf8File
@@ -14,7 +17,6 @@ import {
   waitForEditorBaselineRestamp
 } from './editor-save-disk-precondition'
 
-/** Conflict state is a record field, so it reaches every view of the record. */
 export function setModelExternalMutation(
   state: AppState,
   fileId: string,
@@ -43,21 +45,17 @@ export function waitForModelBaselineRestamps(state: AppState, file: OpenFile): P
   return Promise.all(tabs.map((sibling) => waitForEditorBaselineRestamp(sibling.id)))
 }
 
-/**
- * After a write the model's one baseline moves to it. Tabs sharing the model show the written text
- * (it is their text), so their conflict mark clears and a clean one's cached copy is dropped.
- */
+/** Advance the shared baseline and clear conflicts; evict clean sibling caches unless the record holds newer edits. */
 export function rebaselineAfterEditorWrite(state: AppState, fileId: string, content: string): void {
-  // Why computed: the signature of what a UTF-8 write leaves on disk, with no extra stat.
+  // Match the bytes a UTF-8 write produces without an extra stat.
   const moved = setEditorDiskBaseline(state, fileId, getWrittenContentDiskSignature(content))
   noteEditorBaselineWrite(fileId)
   const file = state.openFiles.find((openFile) => openFile.id === fileId)
   if (file) {
-    // Why: disk now holds this UTF-8 write, so a non-UTF-8 pause no longer applies.
+    // The completed UTF-8 write ends any non-UTF-8 autosave pause.
     resumeAutosaveForNonUtf8File(file)
   }
-  // Why: views of one record share its draft. While it holds edits beyond this write, every view
-  // must show them, not disk; the written draft itself is about to be settled.
+  // Newer record edits must stay visible in every view instead of being replaced by disk text.
   const draft = state.editorDrafts[fileId]
   const recordDirty = draft !== undefined && draft !== content
   for (const sibling of moved) {
@@ -67,6 +65,51 @@ export function rebaselineAfterEditorWrite(state: AppState, fileId: string, cont
     }
     if (!recordDirty) {
       notifyEditorFileCacheStale(sibling.id)
+    }
+  }
+}
+
+export function settleEditorRecordAfterWrite(
+  getState: () => AppState,
+  viewId: string,
+  content: string
+): void {
+  rebaselineAfterEditorWrite(getState(), viewId, content)
+  const state = getState()
+  const currentDraft = state.editorDrafts[viewId]
+  const stillDirty =
+    (currentDraft !== undefined && currentDraft !== content) ||
+    hasPendingEditorBufferChange(state, viewId)
+  state.markFileDirty(viewId, stillDirty, { written: true })
+  if (!stillDirty) {
+    state.clearEditorDraft(viewId)
+  }
+  const savedFile = state.openFiles.find((openFile) => openFile.id === viewId)
+  if (savedFile?.externalMutation === 'changed') {
+    trackExternalChangeConflictAction(savedFile, 'save_overwrite')
+    state.setExternalMutation(viewId, null)
+  }
+}
+
+/** With no original views left, settle retained records and advance detached peers’ baselines without clearing their edits. */
+export function settleEditorWriteWithoutViews(
+  state: AppState,
+  recordViewIds: readonly string[],
+  identityKey: string,
+  content: string
+): void {
+  const signature = getWrittenContentDiskSignature(content)
+  state.settleKeptEditorBuffers(recordViewIds, content, signature)
+  for (const peer of state.openFiles) {
+    if (
+      peer.lastKnownDiskSignature === signature ||
+      editorBufferIdForFile(peer, state) !== identityKey
+    ) {
+      continue
+    }
+    state.setLastKnownDiskSignature(peer.id, signature)
+    if (!peer.isDirty) {
+      notifyEditorFileCacheStale(peer.id)
     }
   }
 }

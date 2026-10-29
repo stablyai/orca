@@ -30,7 +30,7 @@ import { removeRegisteredSshTarget } from './ssh-session-teardown'
 import { notifyReposChanged } from '../repos/repos-changed-notification'
 import { requestDesktopBrowserBridgeReconcile } from '../desktop-browser-bridge-reconcile'
 
-// Why: add/import can re-adopt workspaces orphaned on a removed target id (see ssh-target-readoption); the renderer must refresh its repo list to surface them.
+// Add/import can re-adopt orphaned workspaces; report them so the renderer refreshes repo ownership.
 function takeRepoReadoptions(): SshRepoReadoption[] {
   const store = getSshTargetRegistryStore()
   if (!store || store.lastRepoReadoptions.length === 0) {
@@ -43,13 +43,12 @@ function takeRepoReadoptions(): SshRepoReadoption[] {
   )) {
     rotateSshProviderAuthority(targetId)
   }
-  // Why: paired clients refetch repos only on this event, and they may have made the change.
+  // Paired clients refetch repositories only on this event.
   notifyReposChanged(getCurrentMainWindow())
   return repoReadoptions
 }
 
-// Why: generations, provisioning, the server fence and the runtime ladder cache are main-owned;
-// a renderer must not forge them.
+// Generation, provisioning, fences and runtime ladder cache are main-owned; strip renderer claims.
 function omitRendererSshTargetGeneration<
   T extends {
     generation?: unknown
@@ -59,6 +58,7 @@ function omitRendererSshTargetGeneration<
     managedServerMoveOffered?: unknown
     managedServerLeaveBehind?: unknown
     managedServerUpdateFailure?: unknown
+    managedServerRemoved?: unknown
     remoteRuntimeResolution?: unknown
   }
 >(
@@ -72,6 +72,7 @@ function omitRendererSshTargetGeneration<
   | 'managedServerMoveOffered'
   | 'managedServerLeaveBehind'
   | 'managedServerUpdateFailure'
+  | 'managedServerRemoved'
   | 'remoteRuntimeResolution'
 > {
   const {
@@ -82,6 +83,7 @@ function omitRendererSshTargetGeneration<
     managedServerMoveOffered: _managedServerMoveOffered,
     managedServerLeaveBehind: _managedServerLeaveBehind,
     managedServerUpdateFailure: _managedServerUpdateFailure,
+    managedServerRemoved: _managedServerRemoved,
     remoteRuntimeResolution: _remoteRuntimeResolution,
     ...rest
   } = value
@@ -107,7 +109,6 @@ export function assertNotManagedServerHost(targetId: string): void {
 
 function addSshTarget(input: SshTargetCreateInput): SshTargetAddResult {
   const target = getSshTargetRegistryStore()!.addTarget(omitRendererSshTargetGeneration(input))
-  // Why: re-adding a removed host can re-adopt orphaned workspaces; refresh the renderer's repo list so they move back onto the live host.
   const repoReadoptions = takeRepoReadoptions()
   return { target, repoReadoptions }
 }
@@ -120,13 +121,11 @@ function updateSshTarget(id: string, updates: SshTargetUpdateInput): SshTarget |
     id,
     omitRendererSshTargetGeneration(updates)
   )
-  // Why first: turning "Allow this host's orca CLI to control Orca" off must revoke the bridge at once.
+  // Revoke desktop-browser control immediately when permission is disabled.
   requestDesktopBrowserBridgeReconcile()
   const environmentId = getManagedOrcadFenceEnvironmentId(updated ?? undefined)
   if (environmentId && updated) {
-    // Why: the tunnel and the SSH transport under it were built from the old fields, so both go
-    // and the next use dials the edited target. Only a host reached through its managed server:
-    // one an older build changed is unserved, so it has no managed connect to redial.
+    // Edited managed hosts need fresh tunnels and transports; unserved hosts have no managed route to redial.
     const redial =
       !allowsDirectSshRelay(updated) &&
       (!before || fingerprintRuntimeSshTarget(before) !== fingerprintRuntimeSshTarget(updated))
@@ -148,7 +147,7 @@ async function removeSshTarget(id: string): Promise<void> {
 }
 
 export function registerSshTargetCrudHandlers(): void {
-  // Why: paired clients manage this host's targets over RPC with the same rules as SSH settings.
+  // Apply identical mutation rules to paired RPC and local Settings.
   setSshTargetMutations({ add: addSshTarget, update: updateSshTarget, remove: removeSshTarget })
 
   ipcMain.handle('ssh:listTargets', () => {
@@ -177,8 +176,7 @@ export function registerSshTargetCrudHandlers(): void {
     return { targets, repoReadoptions }
   })
 
-  // Why: add-host dialog picks one config entry to prefill the form; does not
-  // mutate the target store (bulk sync stays on Settings → Import).
+  // Prefill the add-host form without importing targets; bulk sync belongs to Settings.
   ipcMain.handle('ssh:listConfigHosts', (_event, args?: SshConfigHostListArgs) => {
     return listUserSshConfigHostSummaries(
       getSshTargetRegistryStore()!.listTargets(),

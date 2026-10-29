@@ -9,9 +9,16 @@ describe('a background-task frame a client admits', () => {
       listed
     )
     expect(incomplete).not.toBe(listed)
-    expect(incomplete?.incomplete).toBe(true)
+    expect(listed).toEqual({ state: 'monitoring', children: [] })
+    expect(incomplete).toEqual({ state: 'monitoring', children: [], incomplete: true })
+    const complete = admitAgentSessionBackgroundTaskState(
+      { state: 'monitoring', children: [] },
+      incomplete
+    )
+    expect(complete).not.toBe(incomplete)
+    expect(complete).toEqual({ state: 'monitoring', children: [] })
     expect(
-      admitAgentSessionBackgroundTaskState({ state: 'monitoring', children: [] }, incomplete)
-    ).not.toBe(incomplete)
+      admitAgentSessionBackgroundTaskState({ state: 'monitoring', children: [] }, complete)
+    ).toBe(complete)
   })
 })

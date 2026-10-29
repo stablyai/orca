@@ -22,13 +22,10 @@ import {
 import { isDocPreviewSession } from '../browser/doc-preview-protocol'
 import { registerHostFrameNavigationGuard } from './host-frame-navigation-guard'
 import { installPrivilegedWindowNavigationPolicy } from './privileged-window-navigation'
+import { parseChromeExtensionUrl } from '../../shared/browser-extension-url'
+import { getBrowserExtensionSessionForProfile } from '../browser/extensions/browser-extension-session-loader'
 
-/**
- * Why a separate admission rule: `normalizeBrowserNavigationUrl` answers only for
- * http(s) and `file:`, so `orca-preview://` can only ever attach here — and only
- * on the doc-preview partition, carrying a grant the main process minted for a
- * deliberate user preview action. Web content has no way to reach either.
- */
+/** orca-preview is outside normal browser URL admission; require the doc partition and a main-minted user-preview grant. */
 function isAdmissibleDocPreviewAttach(partition: string, src: string): boolean {
   if (partition !== DOC_PREVIEW_PARTITION) {
     return false
@@ -37,31 +34,40 @@ function isAdmissibleDocPreviewAttach(partition: string, src: string): boolean {
   return target !== null && getDocPreviewGrant(target.grantId) !== null
 }
 
+/**
+ * Why its own rule: extension pages (options, tabs.create) are not typed URLs, so they attach only
+ * in a local browser-profile partition whose session has that extension loaded — i.e. installed
+ * and enabled for that profile. Route, SSH and doc-preview partitions never qualify.
+ */
+function isAdmissibleExtensionPageAttach(partition: string, src: string): boolean {
+  const extensionUrl = parseChromeExtensionUrl(src)
+  if (!extensionUrl || !browserSessionRegistry.isAllowedPartition(partition)) {
+    return false
+  }
+  const profile = browserSessionRegistry.listProfiles().find((p) => p.partition === partition)
+  const sess = profile ? getBrowserExtensionSessionForProfile(profile.id) : null
+  return Boolean(sess?.extensions.getExtension(extensionUrl.extensionId))
+}
+
 export function installMainWindowWebviewSecurity(mainWindow: BrowserWindow): void {
   installPrivilegedWindowNavigationPolicy(mainWindow.webContents)
-  // Why here and on every fresh shell document: the renderer holds the only record of which
-  // preview owns which grant, and a reload throws that record away. Grants it can no longer
-  // release would stay live read authorities for the rest of the process.
+  // New shell documents discard preview ownership bookkeeping; revoke grants the replacement renderer cannot release.
   revokeAllDocPreviewGrants()
   mainWindow.webContents.on('did-start-navigation', (details) => {
     if (details.isMainFrame && !details.isSameDocument) {
       revokeAllDocPreviewGrants()
     }
   })
-  // Why these contents and not the window: every live preview is a guest of this WebContents, and
-  // it is also the failure sink itself — once it is destroyed no grant it minted has a reader left.
+  // These WebContents own every preview and its failure sink; destruction leaves no readers.
   mainWindow.webContents.on('destroyed', () => {
     setDocPreviewFailureSink(null)
     revokeAllDocPreviewGrants()
   })
-  // Why: containment must be listening before any plugin panel or chat visual frame is
-  // created, so register it with the window's other navigation policy.
+  // Install containment before any plugin/chat srcdoc frame is created.
   registerHostFrameNavigationGuard(mainWindow.webContents)
 
   const browserWindowClosePreload = join(__dirname, 'browser-window-close-preload.js')
-  // Why a preview gets a preload at all: it is our own editor surface, not a browsing guest. This
-  // one only decides what a click on a link means, and it is pinned here so no renderer-supplied
-  // value can reach a preview guest and no other attach path can acquire it.
+  // Only previews get this pinned editor-link preload; never accept renderer preload values or expose it to browsing guests.
   const docPreviewLinkPreload = join(__dirname, 'doc-preview-link-preload.js')
   mainWindow.webContents.on('will-attach-webview', (event, webPreferences, params) => {
     const src = typeof params.src === 'string' ? params.src : ''
@@ -69,15 +75,15 @@ export function installMainWindowWebviewSecurity(mainWindow: BrowserWindow): voi
     const partition = typeof webPreferences.partition === 'string' ? webPreferences.partition : ''
     const isProfilePartition = browserSessionRegistry.isAllowedPartition(partition)
     const isRoutePartition = browserRouteSessionRegistry.isAllowedPartition(partition)
-    // Why: local direct-SSH partitions exist only after their proxy is verified,
-    // so admission here can never race an unproxied session. They navigate like
-    // profile partitions — the renderer owns their URLs, no main-side grants.
+    // Direct-SSH partitions exist only after proxy verification; renderer URLs need no main-side grants, like profile partitions.
     const isLocalSshPartition = isLocalSshBrowserPartition(partition)
     const isDocPreviewAttach = isAdmissibleDocPreviewAttach(partition, src)
+    const isExtensionPageAttach = isAdmissibleExtensionPageAttach(partition, src)
 
-    // Why: fail closed — deny any src or partition not in the registry allowlist so a renderer bug can't smuggle preload/Node into an unprivileged guest.
+    // Require an allowlisted src/partition; renderer mistakes must not grant preload/Node authority.
     if (
       !isDocPreviewAttach &&
+      !isExtensionPageAttach &&
       (!normalizedSrc ||
         (!isProfilePartition && !isRoutePartition && !isLocalSshPartition) ||
         (isRoutePartition && normalizedSrc !== ORCA_BROWSER_BLANK_URL))
@@ -87,33 +93,33 @@ export function installMainWindowWebviewSecurity(mainWindow: BrowserWindow): voi
     }
 
     delete params.preload
-    // Why: preload runs in the page's main world before inline scripts can call window.close().
+    // Install main-world close policy before inline scripts can call window.close.
     webPreferences.preload = isDocPreviewAttach ? docPreviewLinkPreload : browserWindowClosePreload
-    // Why: older Electron builds expose preloadURL alongside preload; delete both so the guest can't inherit the main preload bridge.
+    // Clear legacy preloadURL as well as preload so guests cannot inherit the main bridge.
     delete (webPreferences as Record<string, unknown>).preloadURL
-    // Why delete something Electron does not set: 43 does not pass the embedder's
-    // additionalArguments down to a guest, so this clears a key that is absent today. Kept as
-    // insurance — if that ever changes, the guest would read this app's browser-host id.
+    // Electron 43 omits inherited arguments; clear defensively so future inheritance cannot leak browser-host identity.
     delete webPreferences.additionalArguments
     webPreferences.nodeIntegration = false
-    webPreferences.nodeIntegrationInSubFrames = false
+    // Why every local profile: a framed extension page needs Orca's extension preload, and
+    // extensions can be switched on after the tab opens. Sandboxed and without Node, the flag only
+    // runs the same preloads per frame; the close guard keeps to the top frame and the extension
+    // preload, registered only while extensions run, acts only in chrome-extension:// frames.
+    webPreferences.nodeIntegrationInSubFrames = isProfilePartition
     webPreferences.enableBlinkFeatures = ''
     webPreferences.disableBlinkFeatures = ''
     webPreferences.webSecurity = true
     webPreferences.allowRunningInsecureContent = false
     webPreferences.contextIsolation = true
     webPreferences.sandbox = true
-    // Why: force the browser guest policy even if host markup omits or misspells a preference.
+    // Force hardened guest preferences even if host markup omits/misspells them.
     Object.assign(webPreferences, ORCA_BROWSER_GUEST_WEB_PREFERENCES)
-    // Why: keep the registry-validated partition so isolated session profiles use their own storage while other hardening stays intact.
+    // Preserve only the registry-validated partition so isolated profiles keep their storage.
     webPreferences.partition = partition
   })
 
   mainWindow.webContents.on('did-attach-webview', (_event, guest) => {
     if (isDocPreviewSession(guest.session)) {
-      // Why: preview guests never join browser-tab routing, popups or auth-identity tracking; the
-      // workspace-doc profile is what refuses all three. The attach is also the point a live window
-      // exists to receive read failures for that guest.
+      // workspace-doc guests cannot use browser routing/popups/auth identity; attach this live host as their read-failure sink.
       setDocPreviewFailureSink(mainWindow.webContents)
       browserManager.attachGuestPolicies(guest, null, {
         profile: 'workspace-doc',
@@ -121,11 +127,11 @@ export function installMainWindowWebviewSecurity(mainWindow: BrowserWindow): voi
       })
       return
     }
-    // Why: attach guest popup/nav policy at creation; waiting for renderer registration races target=_blank/early redirects past it.
+    // Install popup/navigation policy at creation or early redirects/target=_blank can outrun registration.
     browserManager.attachGuestPolicies(guest)
-    // Why: route guests override the generic popup fallback and stay blank until exact main-owned registration.
+    // Route guests stay blank until exact main-owned registration and override generic popup routing.
     browserRouteWebContentsRegistry.attachGuest(guest)
-    // Why: the session proxy cannot stop WebRTC UDP; only the per-contents policy does.
+    // Proxies cannot block WebRTC UDP; enforce it per WebContents.
     enforceLocalSshWebRtcPolicyForGuest(guest)
   })
 }

@@ -6,8 +6,6 @@ import { capOpenCodeHookText } from './listener-limits'
 import type { HookListenerState } from './listener-state'
 import type { ToolSnapshot } from './listener-event'
 
-// ─── Per-pane field caches + extractors ─────────────────────────────
-
 export type ExtractedPromptText = {
   text: string
   source:
@@ -56,7 +54,7 @@ export function extractPromptText(hookPayload: Record<string, unknown>): Extract
       // Why: trim so prompts match readStringField output — whitespace would otherwise leak into UI and caches.
       return { text: value.trim(), source: key as Exclude<ExtractedPromptText['source'], null> }
     }
-    // Why: Kimi sends `prompt` as a content-block array, not a string; extract it for real prompt keys but skip `message` (ambiguous status field).
+    // Kimi prompts may be content-block arrays; message remains ambiguous status text.
     if (key !== 'message' && Array.isArray(value)) {
       const text = contentBlockArrayText(value)
       if (text.length > 0) {
@@ -64,7 +62,7 @@ export function extractPromptText(hookPayload: Record<string, unknown>): Extract
       }
     }
   }
-  // Why: OpenCode sends MessagePart { role, text } with no UserPromptSubmit; when role === 'user' the text is the prompt.
+  // OpenCode user MessagePart supplies prompts without UserPromptSubmit.
   if (hookPayload.role === 'user' && typeof hookPayload.text === 'string') {
     const trimmed = capOpenCodeHookText(hookPayload.text.trim())
     if (trimmed.length > 0) {
@@ -100,7 +98,7 @@ export function resolvePrompt(
   promptText: string,
   options?: { resetOnNewTurn?: boolean }
 ): string {
-  // Why: harness-injected turns fire UserPromptSubmit but aren't the user's ask — keep cached prompt; match only known tags so real <tags> still reset the turn.
+  // Known harness turns retain the user prompt; unknown tags still open real turns.
   if (isKnownHarnessInjectedUserTurnText(promptText)) {
     return state.lastPromptByPaneKey.get(paneKey) ?? ''
   }
@@ -124,7 +122,7 @@ export function resolveToolState(
     state.lastToolByPaneKey.delete(paneKey)
   }
   const previous = state.lastToolByPaneKey.get(paneKey) ?? {}
-  // Why: undefined means either "no update" or "input not previewable"; extractor metadata decides whether to inherit stale input.
+  // Extractor metadata distinguishes absent updates from explicitly unpreviewable input.
   const clearsUnpreviewableInput =
     update.hasToolInputField === true && update.toolInput === undefined
   const clearsUnidentifiedTool =
@@ -142,14 +140,12 @@ export function resolveToolState(
   const merged: ToolSnapshot = {
     toolName,
     toolInput,
-    // Why: don't inherit previous.interactivePrompt — valid only for its one AskUserQuestion event; carrying it forward leaves a stale live card.
+    // Never inherit interactivePrompt or answered cards linger.
     interactivePrompt: update.interactivePrompt,
     lastAssistantMessage: update.clearLastAssistantMessage
       ? undefined
       : (update.lastAssistantMessage ?? previous.lastAssistantMessage),
-    // Why: the provenance flag has to move with the value it describes — inherit it
-    // only when the message itself is inherited, or a later prose turn keeps the
-    // previous tool result's flag and stays suppressed in native chat.
+    // Inherit output provenance only with the message, or later prose remains wrongly suppressed.
     lastAssistantMessageIsToolOutput: update.clearLastAssistantMessage
       ? undefined
       : update.lastAssistantMessage === undefined

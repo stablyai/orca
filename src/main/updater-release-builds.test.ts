@@ -41,8 +41,7 @@ function requestHeaders(call = 0): Record<string, string> {
   return fetchMock.mock.calls[call][1].headers
 }
 
-/** Every platform's manifest by default, so a case that is not about asset
- *  filtering stays readable and stays green whatever platform is passed. */
+// Non-filtering cases need installable assets on every tested platform.
 const allPlatformAssets = [
   { name: 'latest-mac.yml' },
   { name: 'orca-macos-arm64.dmg' },
@@ -115,8 +114,6 @@ describe('listReleaseBuilds', () => {
     ])
   })
 
-  // Why: the main repo serves stable and rc from one endpoint, so an unfiltered
-  // list would offer RC tags under the Stable channel.
   it('separates stable from rc in the shared main repo', async () => {
     fetchMock.mockResolvedValue(
       jsonResponse([release('v1.4.160-rc.2'), release('v1.4.159'), release('v1.4.158')])
@@ -134,8 +131,6 @@ describe('listReleaseBuilds', () => {
     ).resolves.toEqual(['1.4.160-rc.2'])
   })
 
-  // Why: a draft release has no downloadable assets; offering it makes the
-  // switch action fail with a 404 after the user commits to it.
   it('skips drafts and unparseable tags', async () => {
     fetchMock.mockResolvedValue(
       jsonResponse([
@@ -150,10 +145,6 @@ describe('listReleaseBuilds', () => {
     expect(builds.map((build) => build.version)).toEqual(['1.4.159'])
   })
 
-  // Why: the hourly workflow composes the release title and the picker renders it
-  // verbatim, so the two can never drift. A title that only repeats the tag says
-  // nothing the version beside it does not, and must not become a picker row
-  // reading "v1.4.163-hourly.202607311933".
   it('keeps a composed release title and drops one that repeats the tag', async () => {
     fetchMock.mockResolvedValue(
       jsonResponse([
@@ -173,9 +164,6 @@ describe('listReleaseBuilds', () => {
     ])
   })
 
-  // Why: the mac and Windows legs publish into one release independently, and
-  // either can fail. Offering a row the running platform has no artifact for
-  // sends the user into a download that 404s after they commit to it.
   it('hides builds that published no artifact for this platform', async () => {
     fetchMock.mockResolvedValue(
       jsonResponse([
@@ -191,8 +179,6 @@ describe('listReleaseBuilds', () => {
     ).resolves.toEqual(['1.4.163-hourly.202607312054'])
   })
 
-  // The mac-only releases every dev channel published before Windows builds
-  // existed must simply not appear on Windows, rather than erroring.
   it('returns an empty list when no build has this platform artifact', async () => {
     fetchMock.mockResolvedValue(
       jsonResponse([
@@ -215,8 +201,7 @@ describe('listReleaseBuilds', () => {
     ).resolves.toEqual(['1.4.163-hourly.202607312054'])
   })
 
-  // Why: on Windows a signed stable cannot reach a dev channel through the
-  // updater, so the picker needs a direct download to hand the user instead.
+  // Signed Windows builds cannot switch to unsigned channels in-app; offer the direct installer.
   it('resolves the platform installer download url', async () => {
     fetchMock.mockResolvedValue(jsonResponse([release('v1.4.163-hourly.202607312054')]))
 
@@ -248,8 +233,6 @@ describe('listReleaseBuilds', () => {
     await expect(listReleaseBuilds('hourly', 'win32')).resolves.toEqual([])
   })
 
-  // Why: unauthenticated requests draw from a 60/hour bucket shared by every
-  // caller behind the same IP; the user's own token has a 5000/hour bucket.
   it('sends the local gh token as a bearer header when one is available', async () => {
     tokenMock.mockResolvedValue('gho_abc')
     fetchMock.mockResolvedValue(jsonResponse([release('v1.4.159')]))
@@ -270,8 +253,6 @@ describe('listReleaseBuilds', () => {
     expect(requestHeaders()).toEqual({ Accept: 'application/vnd.github+json' })
   })
 
-  // Why: a revoked keyring token must not take the picker down when the
-  // unauthenticated request still lists the public repo.
   it('retries unauthenticated once when GitHub rejects the token', async () => {
     tokenMock.mockResolvedValue('gho_stale')
     fetchMock
@@ -295,9 +276,6 @@ describe('listReleaseBuilds', () => {
     expect(rejectTokenMock).not.toHaveBeenCalled()
   })
 
-  // Why: the token's 5000/hour bucket and the per-IP bucket are independent, so
-  // a spent token — an agent running gh in a loop — must not take the picker down
-  // while the unauthenticated request would still succeed.
   it('falls back to the per-IP bucket when the token is rate limited and tells the gh breaker', async () => {
     tokenMock.mockResolvedValue('gho_abc')
     fetchMock
@@ -319,10 +297,7 @@ describe('listReleaseBuilds', () => {
     expect(requestHeaders(1)).toEqual({ Accept: 'application/vnd.github+json' })
   })
 
-  // Why: GitHub attaches `x-ratelimit-remaining: 0` to some secondary limits too, and
-  // those carry Retry-After, which bars any retry before it elapses — the per-IP one
-  // included. Tripping the primary breaker would also block every unrelated core gh
-  // command until the hourly reset over a short abuse-throttle.
+  // Secondary limits can also report zero remaining; Retry-After forbids even an unauthenticated retry.
   it('reports a secondary limit carrying retry-after without retrying or tripping the breaker', async () => {
     const nowMs = 1_800_000_000_000
     vi.spyOn(Date, 'now').mockReturnValue(nowMs)
@@ -398,7 +373,6 @@ describe('listReleaseBuilds', () => {
 
       const failure = listReleaseBuilds('stable', 'darwin')
       await expect(failure).rejects.toThrow(/rate limit reached/)
-      // Why: the user is signed in; the breaker, not a missing login, kept the token home.
       await expect(failure).rejects.not.toThrow(/gh auth login/)
 
       expect(tokenMock).toHaveBeenCalledTimes(1)
@@ -446,8 +420,6 @@ describe('listReleaseBuilds', () => {
     await expect(listReleaseBuilds('hourly', 'darwin')).rejects.toThrow(/in about 2 minutes/)
   })
 
-  // Why: a 403 without rate-limit headers is a permission or access problem, and
-  // telling the user to wait would send them waiting for a reset that never comes.
   it('reports a 403 without rate-limit headers as a plain HTTP error', async () => {
     fetchMock.mockResolvedValue(jsonResponse(null, { ok: false, status: 403 }))
 
@@ -469,8 +441,6 @@ describe('rateLimitResetAtMs', () => {
     expect(rateLimitResetAtMs(new Headers(), nowMs)).toBeNull()
   })
 
-  // Why: a secondary limit sends both, and only Retry-After is the wait GitHub asked
-  // for — quoting the hour-out primary window would tell the user to wait far too long.
   it('prefers retry-after over the primary reset epoch', () => {
     const headers = new Headers({
       'x-ratelimit-reset': String(nowMs / 1000 + 10 * 60),
@@ -488,7 +458,6 @@ describe('rateLimitResetAtMs', () => {
     expect(rateLimitResetAtMs(new Headers({ 'retry-after': '90' }), nowMs)).toBe(nowMs + 90_000)
   })
 
-  // Why: secondary limits may send Retry-After as an HTTP date (RFC 9110).
   it('reads retry-after as an HTTP date', () => {
     const headers = new Headers({ 'retry-after': new Date(nowMs + 5 * 60_000).toUTCString() })
     expect(rateLimitResetAtMs(headers, nowMs)).toBe(nowMs + 5 * 60_000)

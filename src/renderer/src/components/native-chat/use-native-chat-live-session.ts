@@ -9,7 +9,7 @@ import {
   createNativeChatMerger,
   replaceList
 } from '../../../../shared/native-chat-merge'
-import { mergeNativeChatLiveSession, nativeChatHookAwaitsInput } from './native-chat-live-status'
+import { mergeNativeChatLiveSession } from '../../../../shared/native-chat/native-chat-live-status'
 import {
   hasMoreNativeChatHistory,
   NATIVE_CHAT_INITIAL_LIMIT,
@@ -27,20 +27,20 @@ import { openNativeChatTranscriptStream } from './native-chat-stream-teardown'
 export type { NativeChatLiveSession, ReadState } from './native-chat-live-session-contract'
 
 export type UseNativeChatLiveSessionArgs = {
-  /** Composite `${tabId}:${leafId}` key — selects the live hook entry. */
+  /** Composite `${tabId}:${leafId}` hook-entry key. */
   paneKey: string
   agent: AgentType
-  /** The agent's own session id, or null before it reports one — nothing to read/tail, so the view shows live hook state. */
+  /** Null until reported; use live hook state before there is a session to read. */
   sessionId: string | null
-  /** Authoritative transcript path from the hook, preferred over reconstructing it from sessionId. Null when not reported. */
+  /** Prefer the hook’s authoritative path over reconstruction from sessionId. */
   transcriptPath?: string | null
-  /** Runtime owner (Model B): non-null routes read/subscribe to the remote host; null keeps the local IPC path. */
+  /** Non-null routes reads/subscriptions to the owning remote host; null uses local IPC. */
   runtimeEnvironmentId?: string | null
   /** False suspends transcript IO while retaining the last committed session. */
   enabled?: boolean
 }
 
-// Stable empty-base reference so a non-ready read doesn't churn the base axis.
+// Keep the base axis stable through non-ready reads.
 const EMPTY_MESSAGES: readonly NativeChatMessage[] = []
 
 let subscriptionCounter = 0
@@ -50,30 +50,14 @@ function nextSubscriptionId(): string {
   return `native-chat-${subscriptionCounter}-${Date.now()}`
 }
 
-// Why: a new session's transcript can take minutes to appear on disk (#8401).
-// Only a guess at the flush delay — a host that reports the transcript pending
-// overrides it outright. Exported for tests.
+// New transcripts may take minutes to flush (#8401); explicit host-pending frames override this guessed retry window.
 export const NOTFOUND_RETRY_WINDOW_MS = 60_000
 
-/**
- * Renderer hook that streams a NativeChatSession for a pane: windowed
- * `readSession` + live `subscribe` tail, merged with live hook turn-state.
- *
- * Pagination: read is windowed to the most recent `limit` turns; `loadEarlier`
- * re-reads a larger window to prepend older history. Read results replace the
- * base list; live appends accumulate separately so a re-read never drops them.
- *
- * Transport: per-owner (getNativeChatSessionTransport) — a runtime-owned pane
- * (Model B) reads/tails the remote host; local/ssh panes keep the local IPC path.
- *
- * Teardown: subscription closes when hidden, unmounted, or rebound so no source
- * generation leaks a watcher.
- */
+/** Read/tail the owning host’s transcript; pagination replaces the base while separate live appends survive rereads. */
 export function useNativeChatLiveSession(
   args: UseNativeChatLiveSessionArgs
 ): NativeChatLiveSession {
   const { paneKey, agent, sessionId, transcriptPath, runtimeEnvironmentId, enabled = true } = args
-  // Stable per owner id so a re-render without an owner flip keeps the same transport and doesn't re-subscribe.
   const transport = useMemo(
     () => getNativeChatSessionTransport(runtimeEnvironmentId ?? null),
     [runtimeEnvironmentId]
@@ -83,12 +67,11 @@ export function useNativeChatLiveSession(
   const [loadingEarlier, setLoadingEarlier] = useState(false)
   const [olderHistoryGeneration, setOlderHistoryGeneration] = useState(0)
   const [transcriptLifecycle, transcriptLifecycleControl] = useNativeChatTranscriptLifecycle()
-  // The active read window; raised by loadEarlier to page in older history.
   const limitRef = useRef(NATIVE_CHAT_INITIAL_LIMIT)
 
-  // Appended messages accumulate separately from the snapshot so pagination doesn't lose in-flight appends; merged by id and capped to the read window (#6).
+  // Separate live appends from snapshots so pagination cannot lose in-flight content.
   const [appended, setAppended] = useState<NativeChatMessage[]>([])
-  // Id-dedup merger backing `appended`; caches the id→index map so each live frame costs O(incoming), not O(existing) (#18).
+  // Cache the id index so each frame costs O(incoming), not O(existing).
   const appendMergerRef = useRef<ReturnType<typeof createNativeChatMerger>>(undefined!)
   appendMergerRef.current ??= createNativeChatMerger(NATIVE_CHAT_SOURCE_PRIORITY)
 
@@ -101,7 +84,7 @@ export function useNativeChatLiveSession(
   }, [enabled])
   const latestSessionId = useRef<string | null>(sessionId)
   latestSessionId.current = sessionId
-  // Tracks the current transport so a load-earlier resolve from a prior host is discarded after an owner flip (session id can stay the same).
+  // Owner flips can retain sessionId; transport identity must also fence stale pagination.
   const latestTransport = useRef(transport)
   latestTransport.current = transport
   const transcriptEpochRef = useRef(0)
@@ -115,7 +98,7 @@ export function useNativeChatLiveSession(
   const retainedSourceKeyRef = useRef(sourceKey)
 
   useEffect(() => {
-    // Why: agent/path/owner rebinds can keep the same session; every source generation must invalidate pagination captured before it.
+    // Agent/path/owner rebinds may retain sessionId; invalidate every prior pagination generation.
     transcriptEpochRef.current += 1
     setOlderHistoryGeneration(transcriptEpochRef.current)
     setLoadingEarlier(false)
@@ -134,7 +117,6 @@ export function useNativeChatLiveSession(
     }
     transcriptLifecycleControl.reset()
     if (!sessionId) {
-      // No session id yet: surface live hook state on an empty transcript; backfills once the id arrives.
       setRead({ phase: 'ready', messages: [] })
       replaceList(appendMergerRef.current, [])
       setAppended([])
@@ -143,16 +125,14 @@ export function useNativeChatLiveSession(
     }
 
     let cancelled = false
-    // Set by the first authoritative frame so the readSession seed below can't clobber a live snapshot.
+    // Authoritative frames outrank the independent read seed.
     let frameArrived = false
-    // Set once the host reports no transcript on disk yet, which makes a notFound
-    // read known-good news rather than a failure worth surfacing.
+    // Host-confirmed missing transcripts are expected until flushed, not errors.
     let transcriptPending = false
     const retryTimer = createNativeChatReadRetryTimer()
     const retryStartedAt = Date.now()
-    // Re-bound as a const: TS drops the `!sessionId` narrowing inside the hoisted nested function.
     const activeSessionId = sessionId
-    // Why: a reveal re-reads the same source, so keep the window the user paged in; only a new source starts over.
+    // Reveals retain the paged window; only a new source resets it.
     if (sourceChanged) {
       limitRef.current = NATIVE_CHAT_INITIAL_LIMIT
     }
@@ -161,7 +141,7 @@ export function useNativeChatLiveSession(
     setAppended([])
     setHasMore(false)
 
-    // Independent initial seed in case subscribe never delivers a snapshot; applied only until an authoritative frame lands so a live snapshot wins.
+    // Seed independently for silent streams, but never overwrite an authoritative frame.
     function loadSession(attempt: number): void {
       if (!latestEnabled.current || frameArrived || transcriptPending) {
         return
@@ -174,8 +154,7 @@ export function useNativeChatLiveSession(
           }
           if (result && 'error' in result) {
             if (result.notFound) {
-              // The live stream owns recovery once it confirms the missing file;
-              // an older host gets the bounded seed retry as its fallback.
+              // The live stream owns confirmed missing-file recovery; older hosts need bounded seed retries.
               if (transcriptPending) {
                 return
               }
@@ -216,22 +195,19 @@ export function useNativeChatLiveSession(
           return
         }
         if (frame.type === 'snapshot' || frame.type === 'replacement') {
-          // Why: snapshots and inode replacements are authoritative generations; older pagination must not repaint them.
+          // Snapshots/inode replacements start authoritative generations that stale pagination must not repaint.
           transcriptEpochRef.current += 1
           setOlderHistoryGeneration(transcriptEpochRef.current)
           setLoadingEarlier(false)
           if ('error' in frame && frame.error) {
-            // Why: an error frame carries no transcript, so it must not consume the seed — a healthy read still has to repair the pane.
+            // Error frames carry no transcript; leave the independent seed eligible to repair the pane.
             setRead({ phase: 'error', error: frame.error })
             return
           }
           if (frame.type === 'snapshot' && frame.pending === true) {
-            // No transcript exists yet (an agent that hasn't flushed, or was never
-            // prompted). Move off 'loading' so the view stops spinning, but keep
-            // an in-flight seed and appended tail eligible — this is not a read.
+            // Pending ends the spinner without consuming the in-flight seed or appended tail.
             transcriptPending = true
-            // The live resolve-poll stream now owns the eventual initial drain;
-            // stop duplicating its filesystem probes forever from the renderer.
+            // The host resolve poll owns recovery; stop duplicate renderer filesystem probes.
             retryTimer.cancel()
             setRead({ phase: 'awaiting' })
             return
@@ -245,7 +221,7 @@ export function useNativeChatLiveSession(
           return
         }
         transcriptLifecycleControl.append(frame.lifecycle)
-        // Merge by id then bound to the window; the base read + assembler re-dedup mean trimming the append tail can't drop a covered turn (#6).
+        // Bound the deduped append tail; the base read/assembler still cover trimmed turns.
         setAppended(applyAppend(appendMergerRef.current, frame.messages, limitRef.current))
       }
     )
@@ -255,10 +231,9 @@ export function useNativeChatLiveSession(
       retryTimer.cancel()
       closeStream()
     }
-    // `transport` identity changes on an owner flip, re-running this effect to re-subscribe against the new host.
   }, [agent, enabled, sessionId, sourceKey, transcriptPath, transport, transcriptLifecycleControl])
 
-  // The page in flight for the current transcript epoch; concurrent callers join it.
+  // Concurrent callers share the current epoch’s page.
   const olderPageRef = useRef<{
     epoch: number
     promise: Promise<NativeChatOlderPageResult>
@@ -282,7 +257,6 @@ export function useNativeChatLiveSession(
     const promise = transport
       .readSession(agent, sessionId, nextLimit, transcriptPath ?? undefined)
       .then((result): NativeChatOlderPageResult => {
-        // Ignore a stale resolve from a swapped session or flipped owner — either would paint the wrong host's history.
         if (
           !latestEnabled.current ||
           latestSessionId.current !== sessionId ||
@@ -295,20 +269,20 @@ export function useNativeChatLiveSession(
           return 'failed'
         }
         limitRef.current = nextLimit
-        // Read results are an ordered tail: replace the base list so the older page prepends in order; live appends stay separate.
+        // Replace the ordered base tail to prepend history; preserve separate live appends.
         setRead({ phase: 'ready', messages: result.messages })
         transcriptLifecycleControl.replaceFromPagination(result.lifecycle, lifecycleRevision)
         const more = hasMoreNativeChatHistory(result.messages.length, nextLimit)
         setHasMore(more)
         return result.messages.length > loadedCount ? 'applied' : more ? 'unchanged' : 'exhausted'
       })
-      // Swallow a rejected "load more" read: keep the already-loaded transcript intact rather than surface the rejection.
+      // Keep loaded history when pagination rejects.
       .catch((): NativeChatOlderPageResult => 'failed')
       .finally(() => {
         if (olderPageRef.current?.promise === promise) {
           olderPageRef.current = null
         }
-        // Clear the loading flag on the current epoch even when the result is discarded, so a stale resolve can't wedge it true.
+        // Discarded results must still clear loading within the current epoch.
         if (latestEnabled.current && transcriptEpochRef.current === requestEpoch) {
           setLoadingEarlier(false)
         }
@@ -317,7 +291,7 @@ export function useNativeChatLiveSession(
     return promise
   }, [agent, sessionId, transcriptPath, transport, hasMore, read, transcriptLifecycleControl])
 
-  // Computed outside the status memo so hookState churn (status-only) never re-runs the assembler.
+  // Keep status-only hook updates from rerunning the assembler.
   const baseMessages = read.phase === 'ready' ? read.messages : EMPTY_MESSAGES
   const { assembledMessages, normalizedMessages } = useNativeChatAssembledMessages({
     agent,
@@ -336,17 +310,12 @@ export function useNativeChatLiveSession(
       transcriptLifecycle,
       statusTailMessage: assembledMessages.at(-1),
       hookHasWorkingSubagents,
-      // Why: show live watcher-append content over a spinner/stale error (#8401), so overrides apply only when nothing is appended.
+      // Live content outranks stale errors/spinners; apply overrides only before any append (#8401).
       loading: read.phase === 'loading' && appended.length === 0,
       ...(read.phase === 'error' && appended.length === 0 ? { error: read.error } : {})
     })
     return {
       ...session,
-      hookAwaitingInput: nativeChatHookAwaitsInput(
-        hookState,
-        hookStateStartedAt,
-        transcriptLifecycle
-      ),
       hasMore,
       loadingEarlier,
       olderHistoryGeneration,

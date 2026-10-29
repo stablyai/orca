@@ -1,11 +1,4 @@
-// Why: Orca's fork-remote refspecs (#17828) carry a trailing `*` specifically so a
-// deleted/renamed upstream branch degrades to a silent zero-match fetch, not a hard
-// failure -- see `buildNarrowForkFetchRefspec`'s comment. That is now the primary
-// defense. This wrapper is a cheap backstop for the one case the `*` doesn't cover: a
-// truly literal (non-wildcard) `refs/heads/<branch>` refspec somehow ends up configured
-// (hand-edited `.git/config`, a future regression, etc), which -- unlike a wide refspec's
-// silently-skipped wildcards -- exits nonzero with "couldn't find remote ref" and fetches
-// NOTHING for that remote, not even other branches it also tracks.
+// Literal stale refspecs can fail the entire fetch; wildcard zero-match tolerance does not cover them.
 import { extractExecError } from './exec-error'
 import { removeStaleForkFetchRefspec, type GitExecFn } from './fork-remote-refspec'
 
@@ -15,15 +8,10 @@ export function parseMissingForkBranchRef(stderr: string): string | null {
   return MISSING_REMOTE_REF_PATTERN.exec(stderr)?.[1] ?? null
 }
 
-// Bounds the repair loop; git reports one missing ref per fetch attempt (see #17828 PR
-// description), so this comfortably covers even a fork remote tracking many stale branches.
+// Git reports one missing ref per fetch; bound the repair loop.
 const MAX_STALE_REFSPEC_REPAIR_ATTEMPTS = 20
 
-/**
- * Runs `runFetch`, and on a "couldn't find remote ref" failure for a refspec this remote
- * tracks, drops that one stale refspec and retries -- so a branch deleted upstream degrades
- * to "no longer updates for that branch" instead of "fetch fails for the whole remote".
- */
+/** Remove a configured literal refspec only when Git reports its source missing, then retry. */
 export async function fetchForkRemoteWithStaleRefspecRepair(
   execGit: GitExecFn,
   repoPath: string,
@@ -43,7 +31,6 @@ export async function fetchForkRemoteWithStaleRefspecRepair(
       ) {
         throw error
       }
-      // loop: retry now that the dead refspec is gone
     }
   }
   throw new Error(`Exceeded stale fork-remote refspec repair attempts for "${remoteName}"`)

@@ -10,7 +10,7 @@ import {
   RUNTIME_CAPABILITIES,
   WORKTREE_VISIBILITY_DEFAULTS_RUNTIME_CAPABILITY
 } from '../../../../shared/protocol-version'
-import { remoteRuntimeClientCapabilities } from '../../../../shared/remote-runtime-client-capabilities'
+import { remoteRuntimeClientCapabilities } from '../../../../shared/remote-runtime/remote-runtime-client-capabilities'
 import { REPO_SEARCH_REFS_MAX_LIMIT } from '../../../../shared/repo-search-limits'
 import { SSH_TARGET_MANAGEMENT_RUNTIME_CAPABILITY } from '../../../../shared/ssh-target-management'
 
@@ -110,35 +110,6 @@ describe('repo RPC methods', () => {
     expect(inProcessResponse).toMatchObject({ ok: true, result })
   })
 
-  it('projects inherited visibility for old clients but preserves inheritance for capable clients', async () => {
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: repo.list only calls the fixture methods defined below.
-    const runtime = {
-      getRuntimeId: () => 'test-runtime',
-      enrichMissingRepoGitRemoteIdentities: vi.fn(),
-      listVisibleRepos: () => [
-        { id: 'repo-1', path: '/repo', externalWorktreeVisibilityLegacy: false }
-      ],
-      getClientSettings: () => ({ worktreeVisibilityDefaults: { external: 'show' } })
-    } as unknown as OrcaRuntimeService
-    const dispatcher = new RpcDispatcher({ runtime, methods: REPO_METHODS })
-    const legacyReplies: string[] = []
-    const currentReplies: string[] = []
-
-    await dispatcher.dispatchStreaming(makeRequest('repo.list'), (reply) =>
-      legacyReplies.push(reply)
-    )
-    await dispatcher.dispatchStreaming(
-      makeRequest('repo.list'),
-      (reply) => currentReplies.push(reply),
-      { clientCapabilities: [WORKTREE_VISIBILITY_DEFAULTS_RUNTIME_CAPABILITY] }
-    )
-
-    expect(JSON.parse(legacyReplies[0]!).result.repos[0].externalWorktreeVisibility).toBe('show')
-    expect(
-      JSON.parse(currentReplies[0]!).result.repos[0].externalWorktreeVisibility
-    ).toBeUndefined()
-  })
-
   it('projects inherited visibility on repo mutation responses for old clients', async () => {
     const repo = {
       id: 'repo-1',
@@ -146,10 +117,13 @@ describe('repo RPC methods', () => {
       kind: 'git' as const,
       externalWorktreeVisibilityLegacy: false
     }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: repo.add, visibility projection and response envelope use only these supplied runtime methods, including raw settings.
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       addRepo: vi.fn().mockResolvedValue(repo),
-      getClientSettings: () => ({ worktreeVisibilityDefaults: { external: 'show' } })
+      requireStore: () => ({
+        getSettings: () => ({ worktreeVisibilityDefaults: { external: 'show' } })
+      })
     } as unknown as OrcaRuntimeService
     const dispatcher = new RpcDispatcher({ runtime, methods: REPO_METHODS })
 

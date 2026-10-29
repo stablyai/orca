@@ -8,7 +8,9 @@ import type {
   LinearProjectSummary
 } from '../../../shared/linear/project-types'
 import {
+  linearProjectBacklogLabel,
   linearProjectDateLabel,
+  linearProjectNoneLabel,
   linearProjectMetadataLabels,
   linearProjectPriorityLabel,
   linearProjectProgressPercent,
@@ -95,11 +97,17 @@ export function LinearProjectOverviewContent({
                 <Progress value={Math.max(0, Math.min(100, progress))} />
                 {typeof presentation.scope === 'number' ? (
                   <div className="mt-2 text-xs text-muted-foreground">
-                    {presentation.scope}{' '}
-                    {translate(
-                      'auto.components.linear.project.view.surfaces.3ad562bdf4',
-                      'scoped issues'
-                    )}
+                    {presentation.scope === 1
+                      ? translate(
+                          'auto.components.linear.project.view.surfaces.scopedIssueCount_one',
+                          '{{count}} scoped issue',
+                          { count: presentation.scope }
+                        )
+                      : translate(
+                          'auto.components.linear.project.view.surfaces.scopedIssueCount_other',
+                          '{{count}} scoped issues',
+                          { count: presentation.scope }
+                        )}
                   </div>
                 ) : null}
               </section>
@@ -143,11 +151,11 @@ export function LinearProjectOverviewContent({
           <aside className="min-w-0 space-y-3">
             <LinearProjectPropertyRow
               label={translate('auto.components.linear.project.view.surfaces.9ddb58edbd', 'Status')}
-              value={linearProjectUnknownText(presentation.status) ?? 'Backlog'}
+              value={linearProjectUnknownText(presentation.status) ?? linearProjectBacklogLabel()}
             />
             <LinearProjectPropertyRow
               label={translate('auto.components.linear.project.view.surfaces.f5ef24cf46', 'Health')}
-              value={linearProjectUnknownText(presentation.health) ?? 'None'}
+              value={linearProjectUnknownText(presentation.health) ?? linearProjectNoneLabel()}
             />
             <LinearProjectPropertyRow
               label={translate(

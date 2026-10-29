@@ -1,0 +1,22 @@
+{
+  "common": {
+    "back": "返回"
+  },
+  "settings": {
+    "appearance": {
+      "language": {
+        "description": "选择“系统”时，将跟随此设备的语言。权限提示始终使用设备语言。",
+        "heading": "语言",
+        "systemWithCurrent": "系统（{{language}}）"
+      },
+      "theme": {
+        "dark": "深色",
+        "description": "选择“系统”时，将跟随此设备的浅色或深色设置。",
+        "heading": "主题",
+        "light": "浅色",
+        "system": "系统"
+      },
+      "title": "外观"
+    }
+  }
+}

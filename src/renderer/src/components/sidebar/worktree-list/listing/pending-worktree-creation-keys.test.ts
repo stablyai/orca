@@ -15,8 +15,7 @@ function makePending(creationId: string, repoId: string): PendingCreations[strin
 }
 
 describe('selectPendingWorktreeCreationKeys', () => {
-  // Why: this runs inside an always-mounted sidebar subscriber, so zustand
-  // re-evaluates it on every store write in the app.
+  // The always-mounted sidebar reevaluates this selector on every store write.
   it('returns the shared frozen empty when nothing is pending', () => {
     const empty: PendingCreations = {}
 

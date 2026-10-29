@@ -10,11 +10,11 @@ import type { ClaudeStreamJsonConnection } from './claude-stream-json-connection
 import type { ClaudeJournalTranslator } from './claude-journal-translator-contract'
 import { createClaudeJournalTranslator } from './claude-structured-journal-translation'
 import type { ClaudeGoalBackgroundWork } from './claude-background-task-tracker'
-import type { ClaudeInitProof } from './claude-structured-init-proof'
+import type { ClaudeInitProof } from './structured/claude-structured-init-proof'
 import type {
   ClaudeAcquisitionAttempt,
   ClaudeAcquireCallbacks
-} from './claude-structured-session-state'
+} from './structured/claude-structured-session-state'
 
 export function createClaudeSessionJournalTranslator(
   sink: StructuredAgentSessionEventSink | undefined,
@@ -57,7 +57,7 @@ export function createClaudeJournalFailureHandler(input: {
   }
 }
 
-// A write refused under backpressure may have no later provider event to retry it, so the drain does.
+// Retry on drain because the provider may send no further events.
 function retryOwedWritesOnDrain(
   translator: ClaudeJournalTranslator | null
 ): StructuredAgentSessionSinkAdmission {
@@ -92,11 +92,6 @@ export function bindClaudeJournalReadingControl(
   })
 }
 
-/**
- * Every binding an acquisition makes between the connection and the journal:
- * reading control, and the `/context` breakdown the translator asks for. One
- * release covers both.
- */
 export function bindClaudeConnectionJournalControls(
   sink: StructuredAgentSessionEventSink | undefined,
   connection: ClaudeStreamJsonConnection,

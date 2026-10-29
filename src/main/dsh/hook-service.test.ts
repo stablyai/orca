@@ -14,12 +14,7 @@ import { wrapWindowsBatchHookCommand } from '../agent-hooks/windows-direct-cmd-h
 import { DshHookService } from './hook-service'
 import { DSH_HOOK_EVENTS } from './hook-settings'
 
-// Why: getSharedManagedScriptPath() writes under homedir()/.orca and the patch layer
-// resolves via DSH_HOME ?? ~/.dsh. Point the home env at a temp dir and clear DSH_HOME so
-// install/remove never touches the real ~/.orca or a developer's own DSH home.
-// Why both names: os.homedir() reads $HOME on POSIX and %USERPROFILE% on Windows, and this
-// file asserts the Windows script name too — setting only HOME would let a Windows run edit
-// the developer's real home.
+// Redirect HOME and USERPROFILE and clear DSH_HOME so tests cannot edit real user config.
 let home: string
 let originalHome: string | undefined
 let originalUserProfile: string | undefined
@@ -81,8 +76,6 @@ describe('DshHookService', () => {
     expect(patch).toContain("name: '@deepseek-ai/dsh-hooks-claude-code'")
     expect(patch).toContain(`configPath: '${managedHooksPath()}'`)
 
-    // Exactly the events DSH's bridge can fire — registering more would register nothing
-    // for them and leave the status permanently `partial`.
     expect(Object.keys(readManagedHooks().hooks).sort()).toEqual([...DSH_HOOK_EVENTS].sort())
     expect(readFileSync(scriptPath(), 'utf-8').length).toBeGreaterThan(0)
   })
@@ -93,8 +86,7 @@ describe('DshHookService', () => {
   })
 
   it('restores the pane identity DSH scrubs before anything reads it', () => {
-    // DSH drops env names containing KEY/TOKEN, so the script has to recover ORCA_PANE_KEY
-    // and ORCA_AGENT_LAUNCH_TOKEN from their aliases before the guard or the spool run.
+    // DSH scrubs KEY/TOKEN variables, so restore aliases before guards or spooling.
     new DshHookService().install()
     const script = readFileSync(scriptPath(), 'utf-8')
     const restoreAt = script.indexOf('ORCA_AGENT_PANE')
@@ -104,7 +96,7 @@ describe('DshHookService', () => {
     expect(restoreAt).toBeLessThan(guardAt)
   })
 
-  // Why: runs on every OS; windows-hook-payload-delivery.test.ts runs each form under DSH's shell.
+  // Shell execution is covered separately by windows-hook-payload-delivery.test.ts.
   it('registers the Windows batch hook command for every event', () => {
     const platform = vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
     try {
@@ -174,10 +166,8 @@ describe('DshHookService', () => {
     expect(status.detail).toContain('/somewhere/else.json')
   })
 
-  // Why POSIX-only: on Windows chmod toggles the read-only attribute, so `mode & 0o777`
-  // reads 0o666 for any writable file and the assertion cannot mean what it says.
+  // Windows chmod controls read-only state rather than POSIX permission bits.
   it.skipIf(process.platform === 'win32')('keeps an owner-only patch file owner-only', () => {
-    // CWE-732: the temp+rename replacement must not widen the file to the umask default.
     const userRows = '- id: llm-deepseek\n  config: {}\n'
     mkdirSync(join(home, '.dsh'), { recursive: true })
     writeFileSync(configPath(), userRows, 'utf-8')
@@ -188,8 +178,6 @@ describe('DshHookService', () => {
   })
 
   it('refuses a flow-style patch file instead of corrupting it', () => {
-    // Appending a block entry after `[…]` is invalid YAML — DSH would then fail to load the
-    // user's own layer as well as Orca's hooks, so install must change nothing.
     const flow = '[{ id: llm-deepseek }]\n'
     mkdirSync(join(home, '.dsh'), { recursive: true })
     writeFileSync(configPath(), flow, 'utf-8')
@@ -200,8 +188,6 @@ describe('DshHookService', () => {
     expect(installed.detail).toContain('flow-style sequence')
     expect(readFileSync(configPath(), 'utf-8')).toBe(flow)
 
-    // Why re-read: a later status poll must keep saying why, not decay to a bare
-    // `not_installed` that gives the user nothing to act on.
     const polled = service.getStatus()
     expect(polled.state).toBe('error')
     expect(polled.detail).toContain('flow-style sequence')

@@ -2,9 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { RelayDispatcher } from './dispatcher'
 import { encodeFrame, MessageType } from './protocol'
 
-// Why both id shapes: parseJsonRpcMessage only checks the version, so a request id may arrive as a
-// string, while rpc.cancel coerces its id through Number(...). The abort index must file both
-// under one key or the cancel for a string-id request is silently dropped.
+// The codec admits string request ids while rpc.cancel coerces to Number; both must locate the same abort entry.
 describe('rpc.cancel request-id coercion', () => {
   let dispatcher: RelayDispatcher
 

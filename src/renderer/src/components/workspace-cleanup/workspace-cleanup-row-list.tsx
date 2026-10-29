@@ -83,8 +83,7 @@ export function WorkspaceCleanupRowList(props: WorkspaceCleanupRowListState): Re
             workspaceStatusLabel={row.workspaceStatusLabel}
             gitEvidencePending={props.gitPendingWorktreeIds.has(row.worktreeId)}
             deletionPhase={props.deletionPhaseByIdentity[row.identity]}
-            // Why: a background rescan must not lock rows; only an actual
-            // removal batch or this row's own deletion disables it.
+            // Background scans leave rows interactive; only batch removal or the row’s own delete disables them.
             removing={props.deletingIdentities.has(row.identity)}
             selected={
               props.selectedIds.has(row.identity) && !props.deletingIdentities.has(row.identity)

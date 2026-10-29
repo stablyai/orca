@@ -5,36 +5,22 @@ import {
   removeVersionedCacheDatabase
 } from '../sqlite/versioned-cache-database'
 
-// The index stores transcript content as written, with no redaction. A secret in
-// a transcript is already plaintext under the user's home directory and is
-// treated as compromised; this is a second copy of content the user already
-// holds. What a snippet may carry once it leaves this machine is a transport
-// policy, decided where the wire is.
+// Cache transcript content verbatim; outbound snippet policy belongs at the transport boundary.
 
-// Bump to drop and rebuild: the index is a cache over the transcripts, never a source.
-export const SESSION_SEARCH_SCHEMA_VERSION = 6
+// Bump to discard and rebuild this transcript-derived cache.
+export const SESSION_SEARCH_SCHEMA_VERSION = 8
 
-// unicode61 keeps `_ . - /` inside tokens so paths and identifiers match exactly;
-// the `identifiers` column carries the split form (see session-search-identifier-split).
-// Why: `+` keeps `C++` a token of its own instead of the letter `c`; `#` is
-// left out so `#123` still answers a search for `123`.
+// Keep paths and C++ intact; omit # so #123 also matches 123.
 const TOKENIZER = `tokenize="unicode61 tokenchars '_.-/+'"`
 
 const SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY, value TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS sessions(
-  -- AUTOINCREMENT, because this id names rows in the messages table for longer
-  -- than the row itself lives: retention cuts a session loose in one
-  -- transaction and reclaims its messages over many. A plain rowid is reissued
-  -- as max+1, so a session created inside that window would be handed a freed
-  -- id and adopt whatever of the purged conversation the drain had not reached,
-  -- behind a live session no later purge visits.
+  -- Never reuse IDs while orphaned messages may still reference the deleted session.
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   agent TEXT NOT NULL,
   session_id TEXT NOT NULL,
-  -- The transcript this session was decoded from. Not unique: OpenCode's SQLite
-  -- sessions all report the store's own path here, while files.path holds the
-  -- synthetic db#sessionId candidate that really is one per session.
+  -- OpenCode sessions share a store path here; files.path holds the unique synthetic candidate.
   file_path TEXT NOT NULL,
   codex_home TEXT,
   title TEXT NOT NULL,
@@ -60,49 +46,47 @@ CREATE TABLE IF NOT EXISTS files(
   mtime_ms REAL NOT NULL,
   size_bytes INTEGER,
   session_row_id INTEGER,
-  -- What this row still owes a reader, so that nothing has to be remembered
-  -- between passes. 'current': the rows match the file at the stat recorded
-  -- here. 'due': the index is behind on content it cannot reach by appending,
-  -- so the next pass reads the file whole. 'failed': the last read did not
-  -- commit, and the two columns below are what stop it being retried for ever.
+  -- current covers the recorded stat; due needs a whole read; failed did not commit.
   state TEXT NOT NULL DEFAULT 'current',
   fail_count INTEGER NOT NULL DEFAULT 0,
-  -- The mtime the failures were observed at. A file that fails at one stat is
-  -- left alone once it has failed enough times, and only a change to this stat
-  -- can mean the file itself changed, so it is the whole retry policy.
+  -- Retry held-out failures only after the source mtime changes.
   failed_mtime_ms REAL
 );
--- Retention walks the expiring end of this column; without it that is a full scan and a sort.
 CREATE INDEX IF NOT EXISTS files_mtime ON files(mtime_ms);
 CREATE TABLE IF NOT EXISTS messages(
   id INTEGER PRIMARY KEY,
   session_row_id INTEGER NOT NULL,
   role TEXT NOT NULL,
-  ts TEXT
+  ts TEXT,
+  text_truncated INTEGER NOT NULL DEFAULT 0
 );
--- Both the replace delete and the orphan drain walk a session's rows through this.
 CREATE INDEX IF NOT EXISTS messages_session ON messages(session_row_id);
--- One FTS table, not two. A conversation-scoped search is a column filter on
--- this one — 'MATCH {user_text assistant_text}: q' with bm25 weights that zero
--- the other two — and PR 4 measured that at 1.16-1.36x the p95 of a dedicated
--- second table on a 105 MB corpus, under the 2x bar the decision was set at.
+-- Conversation scope filters user/assistant columns within this table.
 CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts USING fts5(
   user_text, assistant_text, tool_text, identifiers, ${TOKENIZER}, detail=full
 );
 `
 
-/**
- * Opens the index, rebuilding it whenever what is on disk cannot be trusted
- * (see openVersionedCacheDatabase): the index is a cache over the transcripts.
- */
 export function openSessionSearchDatabase(path: string): SyncDatabase {
   return openVersionedCacheDatabase(path, {
     version: SESSION_SEARCH_SCHEMA_VERSION,
     sql: SCHEMA_SQL,
-    afterSchema: (db) =>
-      db
-        .prepare('INSERT OR IGNORE INTO meta(key, value) VALUES (?, ?)')
-        .run('index_incarnation', randomUUID())
+    afterSchema: (db) => {
+      db.prepare('INSERT OR IGNORE INTO meta(key, value) VALUES (?, ?)').run(
+        'index_incarnation',
+        randomUUID()
+      )
+      // Older Cursor rows omitted the file-time fallback; repair metadata without rereading transcripts.
+      db.exec(`
+        UPDATE sessions SET updated_at = (
+          SELECT strftime('%Y-%m-%dT%H:%M:%fZ', CAST(files.mtime_ms AS INTEGER) / 1000.0, 'unixepoch')
+          FROM files WHERE files.path = sessions.file_path AND files.session_row_id = sessions.id
+        )
+        WHERE agent = 'cursor' AND updated_at IS NULL
+          AND EXISTS (SELECT 1 FROM files WHERE files.path = sessions.file_path
+            AND files.session_row_id = sessions.id)
+      `)
+    }
   })
 }
 

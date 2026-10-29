@@ -16,8 +16,8 @@ import {
   classifyTransitionRequirements,
   transitionAllowedValueKey,
   transitionAllowedValueLabel
-} from '../../../shared/jira-transition-fields'
-import type { JiraIssueUpdate, JiraTransition } from '../../../shared/jira-types'
+} from '../../../shared/jira/jira-transition-fields'
+import type { JiraIssueUpdate, JiraTransition } from '../../../shared/jira/jira-types'
 
 type Props = {
   transition: JiraTransition

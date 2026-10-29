@@ -54,8 +54,7 @@ function touchTap() {
   }
 }
 
-// What a desktop pane snapshot looks like: normal-buffer scrollback, the alternate screen, the
-// tracking modes the serializer writes, then the encoding the pane appends at the very end.
+// Match desktop serialization: normal scrollback precedes alternate snapshot, with mouse encoding appended last.
 const PANE_PREFIX = `scrollback\r\n${ESC}[?1049h${ESC}[H codex prompt${ESC}[?1003h`
 
 describe('mobile mouse encoding proof', () => {

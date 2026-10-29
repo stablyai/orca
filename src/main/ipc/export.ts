@@ -1,6 +1,7 @@
 import { BrowserWindow, dialog, ipcMain } from 'electron'
 import { writeFile } from 'node:fs/promises'
 import { ExportTimeoutError, htmlToPdf } from '../lib/html-to-pdf'
+import { abortWhenRendererGone } from './renderer-lifetime-abort'
 
 export type ExportHtmlToPdfArgs = {
   html: string
@@ -21,12 +22,12 @@ export function registerExportHandlers(): void {
         return { success: false, error: 'No content to export' }
       }
 
+      const lifetime = abortWhenRendererGone(event.sender)
       try {
-        const pdfBuffer = await htmlToPdf(html)
+        const pdfBuffer = await htmlToPdf(html, lifetime.signal)
+        lifetime.signal.throwIfAborted()
 
-        // Why: sanitize to keep the suggested filename legal on every platform.
-        // Windows forbids /\:*?"<>| in filenames; truncate to keep the OS save
-        // dialog stable when titles are pathologically long.
+        // Keep long titles and Windows-forbidden characters out of suggested save filenames.
         const sanitizedTitle = title.replace(/[/\\:*?"<>|]/g, '_').slice(0, 100) || 'export'
         const defaultFilename = `${sanitizedTitle}.pdf`
 
@@ -39,13 +40,18 @@ export function registerExportHandlers(): void {
           ? await dialog.showSaveDialog(parent, dialogOptions)
           : await dialog.showSaveDialog(dialogOptions)
 
+        lifetime.signal.throwIfAborted()
         if (canceled || !filePath) {
           return { success: false, cancelled: true }
         }
 
+        lifetime.dispose()
         await writeFile(filePath, pdfBuffer)
         return { success: true, filePath }
       } catch (error) {
+        if (lifetime.signal.aborted) {
+          return { success: false, cancelled: true }
+        }
         if (error instanceof ExportTimeoutError) {
           return { success: false, error: 'Export timed out' }
         }
@@ -53,6 +59,8 @@ export function registerExportHandlers(): void {
           success: false,
           error: error instanceof Error ? error.message : 'Failed to export PDF'
         }
+      } finally {
+        lifetime.dispose()
       }
     }
   )

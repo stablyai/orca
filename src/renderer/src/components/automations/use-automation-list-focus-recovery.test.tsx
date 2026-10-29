@@ -1,9 +1,6 @@
 // @vitest-environment happy-dom
 
-/**
- * The hook, not the pure resolver: what it repairs depends on where focus went
- * after it left a row, and only a real DOM can answer that.
- */
+/** Exercise real DOM focus: the hook must distinguish lost row focus from a user who moved elsewhere. */
 
 import { act, useRef } from 'react'
 import { createRoot, type Root } from 'react-dom/client'

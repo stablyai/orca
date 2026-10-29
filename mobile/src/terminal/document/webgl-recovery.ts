@@ -26,8 +26,7 @@ export function attachWebglAddon(scope: TerminalDocumentScope, allowRecovery: bo
   let addon: TerminalDocumentWebglAddon | null = null
   try {
     addon = scope.createWebglAddon()
-    // Why: no addon is the DOM renderer, which is a fallback rather than a failure; the
-    // catch below is for an engine that has one and threw building it.
+    // Null addon means supported DOM fallback; only thrown construction errors indicate failure.
     if (!addon) {
       return false
     }
@@ -46,8 +45,7 @@ export function attachWebglAddon(scope: TerminalDocumentScope, allowRecovery: bo
         if (!allowRecovery) {
           return
         }
-        // Why: one delayed retry handles transient iOS context loss without
-        // entering a GPU crash loop; a second loss stays on the DOM renderer.
+        // Retry context loss once to recover transient iOS failure without a GPU crash loop.
         cancelWebglContextRecovery(scope)
         const recoveryTerm = scope.term
         const recoveryGeneration = scope.terminalGeneration
@@ -89,8 +87,7 @@ function onDocumentVisibilityChange(scope: TerminalDocumentScope) {
   if (document.visibilityState !== 'visible') {
     return
   }
-  // Why: iOS may restore the xterm model while discarding GPU pixels/theme
-  // paint state, so visibility must rebuild the atlas and repaint every row.
+  // iOS can retain the model but lose GPU pixels/theme; rebuild the atlas and repaint on visibility.
   applyTerminalTheme(scope, scope.terminalThemeInput, true)
   try {
     if (scope.webglAddon && scope.webglAddon.clearTextureAtlas) {

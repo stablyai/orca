@@ -1,21 +1,5 @@
-/**
- * Real git-subprocess churn for the multi-workspace typing bench.
- *
- * Why this exists: every pre-existing scenario in
- * terminal-multi-workspace-typing-latency.spec.ts loads the app with PTY bytes
- * only, and PTY bytes turn out to be cheap — 24 hidden panes at 512 KB/s left
- * typing at 17 ms p50 because main drops hidden renderer-bound bytes at the
- * hidden-delivery gate. What the field reports actually have and the bench did
- * not is dozens of repositories being polled by the sidebar/source-control
- * pollers, which spawn a git child per worktree. Those pollers are gated on
- * document visibility (isWindowVisible), so a headless bench window never
- * starts them and the dominant main-thread load is simply absent.
- *
- * This drives the same work through the same production path — main's
- * `git:status` handler and its GitAdmissionScheduler — from the renderer, so it
- * runs headless without depending on window visibility or on the sidebar being
- * mounted.
- */
+// Drive real git:status admission work explicitly: visibility-gated pollers never start in a hidden bench window.
+// PTY-only load misses this field bottleneck because main drops hidden renderer-bound output.
 import type { Page } from '@stablyai/playwright-test'
 import { execFileSync } from 'node:child_process'
 import { mkdirSync, writeFileSync } from 'node:fs'
@@ -35,16 +19,10 @@ export type GitChurnStats = {
   firstError: string | null
 }
 
-// Matches the sibling probes (runtime-graph-publication-probe): the handle must
-// live on `window` to survive between page.evaluate calls, and `declare global`
-// would need an `interface` the lint rules forbid.
+// Keep the handle on window across page.evaluate calls without a suite-wide interface augmentation.
 type GitChurnWindow = Window & { __orcaGitChurnLoad?: { stop: () => GitChurnStats } }
 
-/**
- * Builds `repoCount` real repositories, each with `filesPerRepo` tracked files
- * and a dirty working tree, so `git status` does measurable work instead of
- * returning instantly on an empty repo.
- */
+// Use dirty, populated repositories so git status cannot short-circuit on an empty tree.
 export function createGitChurnRepos(
   rootDirectory: string,
   repoCount: number,
@@ -60,8 +38,7 @@ export function createGitChurnRepos(
     git('init', '--quiet')
     git('config', 'user.email', 'bench@example.com')
     git('config', 'user.name', 'Bench')
-    // Why nested directories: a flat tree of N files understates the readdir
-    // and lstat cost that dominates `git status` on a real checkout.
+    // Nested directories model the readdir/lstat cost of real checkouts.
     for (let fileIndex = 0; fileIndex < filesPerRepo; fileIndex++) {
       const directory = path.join(repoPath, `dir-${fileIndex % 64}`)
       mkdirSync(directory, { recursive: true })
@@ -69,8 +46,7 @@ export function createGitChurnRepos(
     }
     git('add', '-A')
     git('commit', '--quiet', '-m', 'seed')
-    // Why left dirty: a clean tree lets git short-circuit; the reported setups
-    // all have modified worktrees.
+    // Keep files dirty so git cannot short-circuit the reported workload.
     for (let fileIndex = 0; fileIndex < Math.min(filesPerRepo, 64); fileIndex++) {
       const directory = path.join(repoPath, `dir-${fileIndex % 64}`)
       writeFileSync(path.join(directory, `file-${fileIndex}.txt`), `modified ${fileIndex}\n`)
@@ -80,12 +56,7 @@ export function createGitChurnRepos(
   return repos
 }
 
-/**
- * Registers each repo with Orca. Required: main's `git:status` handler rejects
- * any path that is not a known repository or worktree ("Access denied: unknown
- * repository or worktree path"), so an unregistered churn loop only measures
- * its own rejection path.
- */
+// Register every repository or git:status measures only its access-denied path.
 export async function registerGitChurnRepos(
   page: Page,
   repoPaths: string[]
@@ -95,8 +66,7 @@ export async function registerGitChurnRepos(
     let registered = 0
     for (const repoPath of paths) {
       try {
-        // Why inspect the result: repos:add REPORTS failure as { error }, it
-        // does not throw, so a try/catch alone would count a refusal as success.
+        // repos:add reports { error } without throwing; catch alone would count refusals as success.
         const result = await window.api.repos.add({ path: repoPath, kind: 'git' })
         if (result && typeof result === 'object' && 'error' in result) {
           failures.push(String(result.error).slice(0, 200))
@@ -111,11 +81,7 @@ export async function registerGitChurnRepos(
   }, repoPaths)
 }
 
-/**
- * Starts `concurrency` renderer-side loops that keep calling `git.status`
- * across `repoPaths` until stopped. Each call routes through main's IPC
- * handler and admission scheduler exactly as a sidebar poll does.
- */
+// Drive renderer IPC through the production status handler and scheduler, matching sidebar polling.
 export async function startGitChurnLoad(
   page: Page,
   repoPaths: string[],
@@ -153,8 +119,7 @@ export async function startGitChurnLoad(
               300
             )
           }
-          // Why the yield: a loop whose call rejects synchronously would spin the
-          // renderer thread and measure the spin, not git churn.
+          // Yield after synchronous rejection so the benchmark cannot measure a renderer spin loop.
           await new Promise((resolve) => setTimeout(resolve, 0))
           const durationMs = performance.now() - startedAt
           stats.settled += 1

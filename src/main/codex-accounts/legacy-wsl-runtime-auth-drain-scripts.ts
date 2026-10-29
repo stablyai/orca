@@ -198,12 +198,10 @@ fi
 if [ "$7" = 1 ]; then
   cp -- "$source_auth" "$temporary_auth"
   chmod 600 "$temporary_auth"
-  # Codex rewrites auth.json in place, so this copy is a second read: verify the
-  # bytes being promoted, not the ones freshness was judged on.
+  # Revalidate copied bytes: in-place auth rotation may race the earlier freshness check.
   [ "$(hash_file "$temporary_auth")" = "$5" ] || exit 42
   [ "$(hash_file "$target_auth")" = "$6" ] || exit 39
-  # The hard link keeps the destination inode observable without creating a
-  # missing-path crash window. In-place writers update both names.
+  # Pin the live inode without a missing-path crash window; in-place writes affect both names.
   ln -- "$target_auth" "$temporary_previous_auth"
   [ "$(hash_file "$temporary_previous_auth")" = "$6" ] || exit 39
   mv -f -- "$temporary_auth" "$target_auth"
@@ -216,8 +214,7 @@ fi
 if [ "$8" != 1 ]; then
   expected_target_hash="$6"
   [ "$7" != 1 ] || expected_target_hash="$5"
-  # Keep both live auth inodes observable while links are staged, then prove
-  # the paths still name those identities before publishing the bridge.
+  # Pin live auth inodes so hash and path-identity checks can guard session-link publication.
   ln -- "$source_auth" "$temporary_source_auth"
   ln -- "$target_auth" "$temporary_destination_auth"
   [ "$(hash_file "$temporary_source_auth")" = "$5" ] || exit 40
@@ -269,8 +266,7 @@ if [ "$8" = 1 ]; then
   [ "$(hash_file "$temporary_destination_auth")" = "$expected_target_hash" ] || exit 45
   [ "$target_auth" -ef "$temporary_destination_auth" ] || exit 45
   [ "$(hash_file "$temporary_destination_snapshot")" = "$expected_target_hash" ] || exit 45
-  # The atomic replacement detaches the destination path from any writer that
-  # already opened the old inode; read-only mode blocks new writers until commit.
+  # Install a read-only snapshot to detach existing writers from the destination path.
   mv -f -- "$temporary_destination_snapshot" "$target_auth"
   if [ "$(hash_file "$temporary_destination_auth")" != "$expected_target_hash" ]; then
     mv -f -- "$temporary_destination_auth" "$target_auth"

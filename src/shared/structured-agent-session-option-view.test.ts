@@ -82,7 +82,7 @@ describe('a Claude model its CLI no longer lists', () => {
     }
   })
 
-  it('keeps a remembered model and effort, including under a model with no listed effort', () => {
+  it('waits for an unlisted seed and carries a current effort without an offered menu', () => {
     // The placeholder stands until the host answers with the chat's own model; create seeds it.
     expect(carried(withHostList(), remembered)).toBeUndefined()
     const haiku = { id: 'haiku', label: 'Haiku', isDefault: false, efforts: [] }
@@ -92,6 +92,13 @@ describe('a Claude model its CLI no longer lists', () => {
       current: { model: 'haiku', effort: 'high' }
     })
     expect(shown(listed, undefined, {})).toEqual({ model: 'haiku', effort: 'high' })
+    expect(carried(listed)).toEqual({ model: 'haiku', effort: 'high' })
+    expect(
+      structuredAgentSessionShownSnapshot(listed).find((entry) => entry.id === 'effort')
+    ).toMatchObject({
+      settable: false,
+      kind: { currentValue: 'high', choices: [{ value: 'high', label: 'high' }] }
+    })
   })
 })
 
@@ -102,10 +109,22 @@ describe('what a send carries', () => {
     expect(carried(withHostList(fresh(), listing))).toEqual({ model: 'sonnet' })
   })
 
-  it('carries a pick on its way as given', () => {
-    const listed = withHostList(fresh(), { ...LISTED, models: [OPUS, SONNET] })
-    expect(carried(listed, remembered, { model: 'sonnet' })).toMatchObject({ model: 'sonnet' })
-    expect(carried(withHostList(), undefined, { model: 'claude-retired' })).toMatchObject({
+  it('carries held picks without committing them to the chat', () => {
+    const listed = {
+      ...withHostList(fresh(), { ...LISTED, models: [OPUS, SONNET] }),
+      pendingId: 'model'
+    }
+    const originalRecord = structuredClone(listed.record)
+    const view = structuredAgentSessionOptionView(listed, remembered, {
+      model: 'sonnet',
+      effort: 'high'
+    })
+    expect(structuredAgentSessionSendSelection(view)).toEqual({ model: 'sonnet', effort: 'high' })
+    expect(view.pendingId).toBe('model')
+    expect(view.record).not.toBe(listed.record)
+    expect(listed.record).toEqual(originalRecord)
+    expect(carried(listed, remembered, { model: 'sonnet' })).toEqual({ model: 'sonnet' })
+    expect(carried(withHostList(), undefined, { model: 'claude-retired' })).toEqual({
       model: 'claude-retired'
     })
   })
@@ -152,6 +171,12 @@ describe("a chat's model and effort, apart from the defaults filling them in", (
     const state = resumed()
     expect(shown(state, undefined, {})).toEqual({ model: 'opus', effort: 'low' })
     expect(carried(state)).toEqual({ model: 'opus', effort: 'low' })
+    expect(
+      structuredAgentSessionShownSnapshot(state).map(({ id, valueSource }) => ({ id, valueSource }))
+    ).toEqual([
+      { id: 'model', valueSource: 'dispatched' },
+      { id: 'effort', valueSource: 'dispatched' }
+    ])
   })
 
   it('lets a new chat pick its effort before its first message, under the default it shows', () => {

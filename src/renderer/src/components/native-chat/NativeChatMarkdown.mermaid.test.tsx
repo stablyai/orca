@@ -53,7 +53,6 @@ function reply(source: string, streaming: boolean): React.JSX.Element {
 }
 
 const heldRenders: PromiseWithResolvers<{ svg: string }>[] = []
-/** Holds the next Mermaid render until the test settles it. */
 function holdNextRender(): PromiseWithResolvers<{ svg: string }> {
   const held = Promise.withResolvers<{ svg: string }>()
   heldRenders.push(held)

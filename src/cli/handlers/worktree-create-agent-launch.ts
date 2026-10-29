@@ -1,8 +1,4 @@
-/**
- * `worktree create --agent`: the worktree and its agent in one `agent.launch`, so the agent follows
- * `--surface`, else the user's Chat UI setting, like every other launch. A host older than
- * `agent.launch` gets the create's own startup terminal, which cannot take a model, effort or surface.
- */
+// Use agent.launch for surface/model/effort; older hosts fall back to the create startup terminal.
 
 import type { AgentLaunchResult } from '../../shared/agent-launch-intent'
 import {

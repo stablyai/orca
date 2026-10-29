@@ -140,8 +140,7 @@ describe('shutdown checkpoint restart lifecycle', () => {
     expect(harness.stageBeforeUnloadSync).toHaveBeenCalledTimes(2)
   })
 
-  // Mirrors the e2e fixture in tests/e2e/update-install-renderer-checkpoint-recovery.spec.ts,
-  // which asserted the pre-STA-5505 bare message long after the cause suffix landed (STA-5668).
+  // Match the E2E checkpoint failure with its cause suffix (tests/e2e/update-install-renderer-checkpoint-recovery.spec.ts, STA-5668).
   it('names the snapshot-build cause when dirty drafts block the checkpoint', async () => {
     const snapshotFailure = "Cannot read properties of null (reading 'toLowerCase')"
     vi.spyOn(console, 'error').mockImplementation(() => {})

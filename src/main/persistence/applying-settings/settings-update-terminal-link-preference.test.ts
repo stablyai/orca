@@ -2,12 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import {
-  closeTestStores,
-  createStore,
-  testState,
-  writeDataFile
-} from '../../persistence-test-harness'
+import { closeTestStores, createStore, testState, writeDataFile } from '../persistence-test-harness'
 import { getDefaultPersistedState } from '../../../shared/constants'
 import { updateSettings, type SettingsMutationOperations } from './settings-update'
 

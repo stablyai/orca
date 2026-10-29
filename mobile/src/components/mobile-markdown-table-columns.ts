@@ -1,7 +1,6 @@
 import { spacing } from '../theme/mobile-theme'
 
-// Per-glyph advances at the 12px table font, measured on agent tables: 6.4 regular and 6.9 bold
-// on average, and up to 8.7 for a bold word. A wrong guess wraps text; it cannot misalign columns.
+// Measured 12px advances: 6.4 regular, 6.9 bold, up to 8.7 per bold glyph. Estimation affects wrapping, never column alignment.
 const AVERAGE_GLYPH_WIDTH = 7
 const WIDEST_GLYPH_WIDTH = 9
 // Horizontal padding plus the right border of `styles.tableCell`.

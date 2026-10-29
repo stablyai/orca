@@ -1,18 +1,45 @@
 import { useSyncExternalStore } from 'react'
-import type { SkillUpdateRun } from '../../../../shared/skill-freshness'
+import type { BundledSkillInstallResult } from '../../../../shared/bundled-skill-plan'
+import {
+  summarizeBundledSkillOutcomes,
+  type BundledSkillResultSummary
+} from '../../../../shared/bundled-skill-summary'
 import { notifyInstalledAgentSkillsChanged } from '@/hooks/useInstalledAgentSkills'
+import { bundledSkillTargetKey, type BundledSkillTarget } from '@/lib/bundled-skill-target'
+import { executeBundledSkillsOnTarget } from '@/runtime/runtime-bundled-skills-client'
 import {
   getSkillFreshnessUpdateDialogRequest,
   subscribeSkillFreshnessUpdateDialog
 } from './skill-freshness-update-dialog'
 
-// Why: the run outlives the dialog — closing the window must not cancel it, and
-// the status-bar segment needs the same snapshot. Keeping it outside React means
-// neither surface owns the lifecycle.
-let run: SkillUpdateRun = { state: 'idle' }
+export type SkillUpdateRun =
+  | { state: 'idle' }
+  | { state: 'running'; targetKey: string; names: string[]; startedAt: number }
+  | {
+      state: 'done'
+      targetKey: string
+      names: string[]
+      finishedAt: number
+      result: BundledSkillInstallResult
+      summary: BundledSkillResultSummary
+      needsAttention: boolean
+    }
+  /** The request itself failed; nothing says what reached the disk. */
+  | { state: 'error'; targetKey: string; names: string[]; finishedAt: number; message: string }
+
+type RunSlot = {
+  run: SkillUpdateRun
+  token: number
+  successTimer: ReturnType<typeof setTimeout> | null
+}
+
+const IDLE: SkillUpdateRun = Object.freeze({ state: 'idle' })
+// Why per target: a run on one host must never overwrite, or be overwritten by, another's.
+const slots = new Map<string, RunSlot>()
 const listeners = new Set<() => void>()
-let subscribed = false
-let successTimer: ReturnType<typeof setTimeout> | null = null
+let nextToken = 0
+// The status bar reports the run the user started last, whichever host it ran on.
+let latestTargetKey: string | null = null
 
 /** How long a finished run keeps its green check in the status bar. */
 export const SKILL_UPDATE_SUCCESS_LINGER_MS = 4000
@@ -23,107 +50,142 @@ function emit(): void {
   }
 }
 
-function clearSuccessTimer(): void {
-  if (successTimer) {
-    clearTimeout(successTimer)
-    successTimer = null
+function slotFor(targetKey: string): RunSlot {
+  let slot = slots.get(targetKey)
+  if (!slot) {
+    slot = { run: IDLE, token: 0, successTimer: null }
+    slots.set(targetKey, slot)
+  }
+  return slot
+}
+
+function isSuccess(run: SkillUpdateRun): boolean {
+  return run.state === 'done' && run.summary.ok && !run.needsAttention
+}
+
+function clearSuccessTimer(slot: RunSlot): void {
+  if (slot.successTimer) {
+    clearTimeout(slot.successTimer)
+    slot.successTimer = null
   }
 }
 
-/**
- * Why: a success needs to be *seen*, then get out of the way. Errors stay until
- * the user acts on them. The dialog renders this same run, so retiring it while
- * the dialog is open would yank the result rows out from under someone reading
- * them — there, closing the dialog is what acknowledges the run.
- */
-function scheduleSuccessLinger(): void {
-  clearSuccessTimer()
-  if (run.state !== 'success' || getSkillFreshnessUpdateDialogRequest()) {
+/** Let visible success linger briefly; keep problems until acknowledged, and let an open dialog own acknowledgment. */
+function scheduleSuccessLinger(targetKey: string): void {
+  const slot = slotFor(targetKey)
+  clearSuccessTimer(slot)
+  if (!isSuccess(slot.run) || getSkillFreshnessUpdateDialogRequest()) {
     return
   }
-  successTimer = setTimeout(() => {
-    successTimer = null
-    void acknowledgeSkillUpdateRun()
+  slot.successTimer = setTimeout(() => {
+    slot.successTimer = null
+    acknowledgeSkillUpdateRun(targetKey)
   }, SKILL_UPDATE_SUCCESS_LINGER_MS)
 }
 
 // Opening the dialog on a lingering success hands ownership back to it.
-subscribeSkillFreshnessUpdateDialog(scheduleSuccessLinger)
-
-function setRun(next: SkillUpdateRun): void {
-  const wasRunning = run.state === 'running'
-  run = next
-  scheduleSuccessLinger()
-  // A run that stopped changes what's on disk — including a cancelled one, which
-  // may have written several skills before the kill landed. Without this a Stop
-  // leaves the rows and the count describing the pre-run scan, so the Update
-  // button re-offers skills that already updated.
-  if (next.state === 'success' || next.state === 'error' || (wasRunning && next.state === 'idle')) {
-    notifyInstalledAgentSkillsChanged()
+subscribeSkillFreshnessUpdateDialog(() => {
+  for (const targetKey of slots.keys()) {
+    scheduleSuccessLinger(targetKey)
   }
+})
+
+function setRun(targetKey: string, run: SkillUpdateRun): void {
+  slotFor(targetKey).run = run
+  scheduleSuccessLinger(targetKey)
   emit()
 }
 
-function ensureSubscribed(): void {
-  if (subscribed) {
-    return
-  }
-  subscribed = true
-  window.api.skills.onUpdateRun(setRun)
-  void window.api.skills.getUpdateRun().then((current) => {
-    // Don't clobber a live push that landed while this promise was in flight.
-    if (run.state === 'idle') {
-      setRun(current)
-    }
-  })
-}
-
 export function subscribeSkillUpdateRun(listener: () => void): () => void {
-  ensureSubscribed()
   listeners.add(listener)
   return () => listeners.delete(listener)
 }
 
-export function getSkillUpdateRun(): SkillUpdateRun {
-  return run
+export function getSkillUpdateRun(targetKey: string | null): SkillUpdateRun {
+  return (targetKey && slots.get(targetKey)?.run) || IDLE
 }
 
-export function useSkillUpdateRun(): SkillUpdateRun {
-  return useSyncExternalStore(subscribeSkillUpdateRun, getSkillUpdateRun, getSkillUpdateRun)
+export function useSkillUpdateRun(targetKey: string | null): SkillUpdateRun {
+  const read = (): SkillUpdateRun => getSkillUpdateRun(targetKey)
+  return useSyncExternalStore(subscribeSkillUpdateRun, read, read)
 }
 
-// Why: every caller fires these from an event handler with `void`. Swallowing
-// here rather than at each call site keeps a dropped IPC from surfacing as an
-// unhandled rejection; the run state itself is pushed from main either way.
-export async function startSkillUpdateRun(names: readonly string[]): Promise<void> {
-  ensureSubscribed()
-  try {
-    await window.api.skills.startUpdateRun([...names])
-  } catch (error) {
-    console.error('Failed to start skill update run', error)
+export function useLatestSkillUpdateRun(): SkillUpdateRun {
+  const read = (): SkillUpdateRun => getSkillUpdateRun(latestTargetKey)
+  return useSyncExternalStore(subscribeSkillUpdateRun, read, read)
+}
+
+/** Executes the plan the user reviewed on `target`, identified by its digest. */
+export async function startSkillUpdateRun(request: {
+  target: BundledSkillTarget
+  names: string[]
+  planDigest: string
+  force: string[]
+}): Promise<void> {
+  const { target, names } = request
+  const targetKey = bundledSkillTargetKey(target)
+  const slot = slotFor(targetKey)
+  if (slot.run.state === 'running') {
+    return
   }
-}
-
-export async function cancelSkillUpdateRun(): Promise<void> {
-  try {
-    await window.api.skills.cancelUpdateRun()
-  } catch (error) {
-    console.error('Failed to cancel skill update run', error)
+  const token = ++nextToken
+  slot.token = token
+  latestTargetKey = targetKey
+  setRun(targetKey, { state: 'running', targetKey, names, startedAt: Date.now() })
+  const settled = await executeBundledSkillsOnTarget(target, request.planDigest, {
+    force: request.force
+  }).then(
+    (result): SkillUpdateRun => {
+      const summary = summarizeBundledSkillOutcomes(result)
+      return {
+        state: 'done',
+        targetKey,
+        names,
+        finishedAt: Date.now(),
+        result,
+        summary,
+        needsAttention: summary.skills.some((skill) => skill.text === 'Needs attention')
+      }
+    },
+    (error: unknown): SkillUpdateRun => ({
+      state: 'error',
+      targetKey,
+      names,
+      finishedAt: Date.now(),
+      message: error instanceof Error ? error.message : String(error)
+    })
+  )
+  // Why: a completion for a run that was acknowledged or replaced is stale.
+  if (slots.get(targetKey)?.token !== token) {
+    return
   }
+  setRun(targetKey, settled)
+  // A run of any outcome may have changed the disk, so every skills surface re-reads it.
+  notifyInstalledAgentSkillsChanged()
 }
 
-export async function acknowledgeSkillUpdateRun(): Promise<void> {
-  try {
-    await window.api.skills.acknowledgeUpdateRun()
-  } catch (error) {
-    console.error('Failed to acknowledge skill update run', error)
+export function acknowledgeSkillUpdateRun(targetKey: string): void {
+  const slot = slots.get(targetKey)
+  if (!slot || slot.run.state === 'idle' || slot.run.state === 'running') {
+    return
+  }
+  clearSuccessTimer(slot)
+  slot.token = ++nextToken
+  setRun(targetKey, IDLE)
+}
+
+export function acknowledgeLatestSkillUpdateRun(): void {
+  if (latestTargetKey) {
+    acknowledgeSkillUpdateRun(latestTargetKey)
   }
 }
 
 /** @internal - tests need a clean module between cases. */
 export function _resetSkillUpdateRunStore(): void {
-  run = { state: 'idle' }
-  subscribed = false
-  clearSuccessTimer()
+  for (const slot of slots.values()) {
+    clearSuccessTimer(slot)
+  }
+  slots.clear()
   listeners.clear()
+  latestTargetKey = null
 }

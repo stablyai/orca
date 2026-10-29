@@ -48,8 +48,23 @@ export function PRFilesCombinedDiffToolbar({
           </Tooltip>
         )}
         <span className="truncate text-xs text-muted-foreground">
-          {files.filter(isPRFileViewed).length} / {files.length}{' '}
-          {translate('auto.components.GitHubItemDialog.f2d02cdf8c', 'files viewed')}
+          {files.length === 1
+            ? translate(
+                'auto.components.GitHubItemDialog.filesViewed_one',
+                '{{viewed}} / {{count}} file viewed',
+                {
+                  viewed: files.filter(isPRFileViewed).length,
+                  count: files.length
+                }
+              )
+            : translate(
+                'auto.components.GitHubItemDialog.filesViewed_other',
+                '{{viewed}} / {{count}} files viewed',
+                {
+                  viewed: files.filter(isPRFileViewed).length,
+                  count: files.length
+                }
+              )}
         </span>
       </div>
       <div className="flex shrink-0 items-center gap-2">

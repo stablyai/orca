@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { MACHINE_NAME_MAX_LENGTH, normalizeMachineName } from './machine-name'
+import { normalizeMachineName } from './machine-name'
 
 describe('normalizeMachineName', () => {
   it('trims surrounding whitespace', () => {
@@ -7,8 +7,8 @@ describe('normalizeMachineName', () => {
   })
 
   it('caps the stored length after trimming', () => {
-    const long = ` ${'x'.repeat(MACHINE_NAME_MAX_LENGTH + 20)} `
-    expect(normalizeMachineName(long)).toHaveLength(MACHINE_NAME_MAX_LENGTH)
+    expect(normalizeMachineName(` ${'x'.repeat(255)} `)).toBe('x'.repeat(255))
+    expect(normalizeMachineName(` ${'x'.repeat(256)} `)).toBe('x'.repeat(255))
   })
 
   it('reads anything that is not a string as the detected-name default', () => {

@@ -1,5 +1,5 @@
-import type { JiraIssue } from '../../../shared/jira-types'
-import type { JiraProjectReference } from '../../../shared/jira-project-reference'
+import type { JiraIssue } from '../../../shared/jira/jira-types'
+import type { JiraProjectReference } from '../../../shared/jira/jira-project-reference'
 import { getJiraProjectSelectionKey } from './task-page-jira-project-selection'
 
 export function getJiraStatusCatalogScopeKey(

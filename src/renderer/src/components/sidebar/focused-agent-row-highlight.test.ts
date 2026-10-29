@@ -93,8 +93,6 @@ describe('getFocusedAgentPaneKeyForWorktree', () => {
   })
 
   it('highlights a focused row whose status has decayed past freshness', () => {
-    // Why: the inline card keeps decayed agents visible; clicking one must still
-    // color the row even though its status is no longer fresh.
     const state = makeState({
       agentStatusByPaneKey: {
         [PANE_KEY]: makeAgentStatusEntry(PANE_KEY, 1)

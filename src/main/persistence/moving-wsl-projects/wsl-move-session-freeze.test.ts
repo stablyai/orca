@@ -5,13 +5,10 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultPersistedState, getDefaultWorkspaceSession } from '../../../shared/constants'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import type { Tab, TabGroup } from '../../../shared/tab-types'
 import type { Store } from '../../persistence'
-import {
-  closeTestStores,
-  createStore,
-  makeTerminalTab,
-  testState
-} from '../../persistence-test-harness'
+import { closeTestStores, createStore, testState } from '../persistence-test-harness'
+import { makeTerminalTab } from '../persistence-session-fixtures'
 import { wslMoveCutoverFixture as cutover } from '../__fixtures__/wsl-mover/wsl-move-cutover-fixture'
 import { seedWslMoveCutover } from '../__fixtures__/wsl-mover/wsl-move-journal-seeding'
 import { ProfileStateSqliteAuthority } from '../profile-state/profile-state-sqlite-authority'
@@ -109,6 +106,87 @@ describe('WSL move session freeze', () => {
     seedWslMoveCutover(testState.dir, cutover('move-1', 'destination-committed'))
     store.setWorkspaceSession(session('edited', 'editor'))
     expect(titles(store)).toEqual({ moving: ['slept'], staying: ['edited'] })
+  })
+
+  describe('once the host owns the project', () => {
+    const tab = (id: string, contentType: Tab['contentType']): Tab => ({
+      id,
+      entityId: id,
+      groupId: 'group-1',
+      worktreeId: MOVING,
+      contentType,
+      label: id,
+      customLabel: null,
+      color: null,
+      sortOrder: 0,
+      createdAt: 0
+    })
+    const group = (tabOrder: string[], activeTabId: string | null): TabGroup => ({
+      id: 'group-1',
+      worktreeId: MOVING,
+      activeTabId,
+      tabOrder
+    })
+    const withTabs = (base: WorkspaceSessionState, tabs: Tab[], active: string | null) => ({
+      ...base,
+      unifiedTabs: { [MOVING]: tabs },
+      tabGroups: {
+        [MOVING]: [
+          group(
+            tabs.map((entry) => entry.id),
+            active
+          )
+        ]
+      }
+    })
+    const movingTabs = (store: Store) => ({
+      tabs: store.getWorkspaceSession().unifiedTabs?.[MOVING]?.map((entry) => entry.id),
+      order: store.getWorkspaceSession().tabGroups?.[MOVING]?.[0]?.tabOrder,
+      active: store.getWorkspaceSession().tabGroups?.[MOVING]?.[0]?.activeTabId
+    })
+
+    it("takes the project's chat tabs as written and keeps its terminals as the quiesce left them", () => {
+      store.setWorkspaceSession(
+        withTabs(
+          session('slept', 'terminal'),
+          [tab('moving-tab', 'terminal'), tab('agent-session:old', 'agent-session')],
+          'moving-tab'
+        )
+      )
+      seedWslMoveCutover(testState.dir, cutover('move-1', 'destination-committed'))
+      // The renderer holds only the chats of a moved project: it dropped the terminal tab.
+      store.setWorkspaceSession(
+        withTabs(
+          session('edited', 'editor'),
+          [tab('agent-session:old', 'agent-session'), tab('agent-session:new', 'agent-session')],
+          'agent-session:new'
+        )
+      )
+      expect(titles(store)).toEqual({ moving: ['slept'], staying: ['edited'] })
+      expect(movingTabs(store)).toEqual({
+        tabs: ['moving-tab', 'agent-session:old', 'agent-session:new'],
+        order: ['moving-tab', 'agent-session:old', 'agent-session:new'],
+        active: 'agent-session:new'
+      })
+
+      // A closed chat goes; the slept terminal stays.
+      store.setWorkspaceSession(
+        withTabs(session('edited', 'editor'), [tab('agent-session:new', 'agent-session')], null)
+      )
+      expect(movingTabs(store)).toEqual({
+        tabs: ['moving-tab', 'agent-session:new'],
+        order: ['moving-tab', 'agent-session:new'],
+        active: 'agent-session:new'
+      })
+    })
+
+    it('still refuses chat tab writes while the move is only quiesced', () => {
+      seedWslMoveCutover(testState.dir, cutover('move-1', 'quiesced'))
+      store.setWorkspaceSession(
+        withTabs(session('edited', 'editor'), [tab('agent-session:new', 'agent-session')], null)
+      )
+      expect(movingTabs(store).tabs).toBeUndefined()
+    })
   })
 
   it('freezes nothing, with one warning, when the journal cannot be read', () => {

@@ -32,28 +32,24 @@ export function createCodexSessionBackfillAuditWriter(
     await appendFile(auditLogPath, serializedRecord, { encoding: 'utf-8' })
   }
   return async (record): Promise<boolean> => {
-    // Why: a crash can leave a partial final JSON object. A leading newline
-    // quarantines that torn tail so this recovery record remains parseable.
+    // A leading newline isolates torn JSON tails left by crashes.
     const serializedRecord = `\n${JSON.stringify({
       at: new Date().toISOString(),
       ...record,
-      // Why: a later managed-lane pass can recreate the same thread id, so a
-      // terminal heal outcome must identify this particular publication event.
+      // Thread IDs can recur; healing must identify this publication event.
       recordId: randomUUID()
     })}\n`
     try {
       await appendRecord(serializedRecord)
       return true
     } catch {
-      // Why: the heal consumes this ledger as its work queue. Retry the same
-      // record once so a transient mkdir/write failure cannot omit a session.
+      // This ledger queues healing; retry transient writes so sessions are not omitted.
     }
     try {
       await appendRecord(serializedRecord)
       return true
     } catch (error) {
-      // Why: a published hardlink/copy may already be in use, so persistent
-      // ledger failure is reported but cannot safely roll back the backfill.
+      // Published files may already be in use, so ledger failures cannot roll them back.
       console.warn('[codex-session-backfill] Failed to append audit record:', error)
       return false
     }
@@ -168,8 +164,7 @@ export async function recordExistingCodexSessionForHeal(
   fileEventId?: string
 ): Promise<boolean> {
   summary.skippedExistingFiles += 1
-  // Why: this also recovers a rollout installed before a crash or audit
-  // failure; thread/read is idempotent for a pre-existing real-home file.
+  // Re-enqueue existing rollouts to recover publication crashes; thread/read is idempotent.
   return appendCodexSessionHealAuditRecord(writer, summary, {
     action: 'existing',
     source,

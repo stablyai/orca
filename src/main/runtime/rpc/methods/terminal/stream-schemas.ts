@@ -20,13 +20,12 @@ export const TerminalMultiplexSubscribeFrame = TerminalHandle.extend({
       outputPause: z.literal(1).optional(),
       outputPauseDropNotice: z.literal(1).optional(),
       writeUnavailable: z.literal(1).optional(),
-      // Why separate from writeUnavailable: older clients read that frame as rejected input and
-      // quarantine the next line, so only clients that know it can also mean "host lost" get it.
+      // Old clients quarantine input after writeUnavailable; send host-lost semantics only to clients that understand them.
       endpointLossNotice: z.literal(1).optional(),
       inputAck: z.literal(1).optional()
     })
     .optional(),
-  // Why: names the client's input sequence space; it survives stream replacement so replays dedupe.
+  // Name the client input sequence domain across stream replacement so replay deduplicates.
   inputSessionId: z.string().min(1).max(128).optional()
 })
 

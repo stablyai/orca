@@ -1,9 +1,8 @@
 import { StyleSheet } from 'react-native'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
 
-// Empty-state, retry, and committed-diff-preview drawer styles. Split from the
-// main source-control stylesheet to stay under the line limit.
-export const diffStyles = StyleSheet.create({
+export const diffStyles = themedStyleSheet(() => ({
   state: {
     flex: 1,
     alignItems: 'center',
@@ -111,4 +110,4 @@ export const diffStyles = StyleSheet.create({
     fontSize: typography.metaSize,
     lineHeight: 17
   }
-})
+}))

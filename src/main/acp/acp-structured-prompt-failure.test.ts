@@ -19,7 +19,6 @@ function specFor(agent: string): AcpLaunchSpec {
   return spec
 }
 
-/** Fails the first prompt with `code`, after the turn started unless `beforeTurn`. */
 async function failFirstPrompt(
   spec: AcpLaunchSpec,
   error: { code: number; message: string; data?: unknown },
@@ -52,7 +51,7 @@ async function failFirstPrompt(
 }
 
 const WORDS = 'Model quota exceeded for this workspace; try again in 5 minutes.'
-// OpenCode 1.18.31's recorded answer when its model provider fails: data is only metadata.
+// OpenCode 1.18.31 provider-error data contains metadata, not user-facing failure text.
 const OPENCODE_PROVIDER_ERROR = {
   code: -32603,
   message: 'Internal error: CAPTURE_PROVIDER_400',

@@ -1,46 +1,18 @@
 import type { GitDiffResult } from '../../../../shared/git-diff-compare-types'
 import type { CsvFilePreview } from './csv/csv-file-content'
 
-/**
- * Thrown when a worktree's host owner is not yet known (the backing repo has
- * not hydrated). The retry gate treats this as transient so the read recovers
- * once the SSH connection finishes establishing, instead of latching a local
- * "access denied" for a remote path (#6648).
- */
+/** Transient owner hydration/connection failure; retry instead of reading remote paths locally and latching access errors. */
 export const WORKTREE_OWNER_NOT_READY_ERROR =
   'Connecting to the remote host… retrying once the workspace is ready.'
 
-/**
- * Terminal message shown once the owner-not-ready retry budget is exhausted —
- * the remote host never finished connecting. Truthful (no longer claims it is
- * still retrying) and points the user at the Retry button, which starts a fresh
- * budget (#6648).
- */
+/** Show after connection retry exhaustion; explicit Retry starts a fresh budget. */
 export const WORKTREE_OWNER_UNREACHABLE_ERROR =
   "Couldn't reach the remote host. Check the connection, then retry."
 
-/**
- * Machine code the runtime host returns when its worktree resolver cannot place
- * the file's workspace. It is UNKNOWN, not absence: the same code covers a deleted
- * git worktree, a cold or failing scan (see remote-browser-stream-errors.ts), and
- * a synchronous miss for an unregistered folder-workspace id or removed repo. For
- * git worktrees the file-read path has no definitive "gone" answer; the codes that
- * are definitive (`folder_workspace_path_missing:<path>`,
- * `worktree_execution_host_unresolved`) are not classified here yet and still land
- * on their raw text. The retry gate bounds this one, then swaps in the terminal
- * message below — never an automatic close (#21041).
- */
+/** Selector failure means unresolved ownership, never proven deletion: cold scans, removed repos and unregistered folder workspaces share this code. Bound retries and show a terminal error without closing the tab. */
 export const WORKTREE_HOST_SELECTOR_NOT_FOUND_CODE = 'selector_not_found'
 
-/**
- * Client-side sentinel stored on `loadErrorCode` once the selector-not-found retry
- * budget is spent. Namespaced `editor_` so it cannot be confused with the CLI's
- * `worktree_host_unresolved` client error. The comparison key is deliberately not
- * the display text, so localizing the message can never break the terminal-state
- * check. Truthful about what is known (the host could not resolve the workspace)
- * and what is not (whether it still exists); Retry starts a fresh budget, and the
- * only close path is the tab strip's own, so nothing here discards a draft (#21041).
- */
+/** Namespaced terminal sentinel after selector retries expire; localize by code and leave draft-aware closing to the tab strip. */
 export const WORKTREE_HOST_UNRESOLVED_CODE = 'editor_host_workspace_unresolved'
 
 /** English fallback for `loadError` alongside the code above; the error view localizes it by code. */
@@ -49,6 +21,7 @@ export const WORKTREE_HOST_UNRESOLVED_ERROR =
 
 export type FileContent = {
   mediaUrl?: string
+  size?: number
   csvPreview?: CsvFilePreview
   content: string
   isBinary: boolean

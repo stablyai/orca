@@ -1,6 +1,4 @@
-// Panes' terminal bindings a frame changed show without a workspace build: the store's pane trees
-// take the frame's bindings, and each tab's focused pane is resolved as the build resolves it.
-// Anything only a build shows exactly falls back to one.
+// Apply binding-only changes directly to pane trees and resolve focus like full builds; fall back when direct binding cannot reproduce a build.
 
 import { resolvePtyBoundActiveLeafId } from '@/components/terminal-pane/terminal-layout-leaf-ids'
 import type { AppState } from '@/store/types'
@@ -18,12 +16,7 @@ function sharesATerminal(layout: PublishedWorkspaceLayout): boolean {
   return new Set(ptyIds).size !== ptyIds.length
 }
 
-/**
- * `layouts` with the frame's bindings of the `rebound` terminal tabs shown, the same object when it
- * already shows them. A tab the window's own command holds stays as the store has it, as a build
- * keeps it. Null when only a build shows them as it would: a terminal two panes name (restore
- * releases one), or a pane tree the store lacks or draws otherwise.
- */
+/** Keep held tabs and return original layouts on no-op. Return null for missing/different pane trees or duplicate terminal bindings that require restore to release one. */
 export function terminalLayoutsWithFrameBindings(
   layouts: TerminalLayouts,
   workspace: string,

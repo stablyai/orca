@@ -58,8 +58,7 @@ describe('source-control huge repo warning dismissals', () => {
     const originalProbe = beginHugeRepoWarningProbe(originalWorktree)
     expect(markHugeRepoWarningDismissed(originalProbe)).toBe(true)
 
-    // Why: visibility filters can temporarily hide a still-live external
-    // worktree, while an authoritative missing scan proves its lifecycle ended.
+    // Visibility filters may hide live worktrees; only authoritative absence proves their lifecycle ended.
     forgetHugeRepoWarningDismissalsForWorktrees([])
     expect(hasDismissedHugeRepoWarning(beginHugeRepoWarningProbe({ ...originalWorktree }))).toBe(
       true

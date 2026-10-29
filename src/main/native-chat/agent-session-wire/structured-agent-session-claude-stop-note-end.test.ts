@@ -1,6 +1,6 @@
+import { structuredAgentSessionHandingOver } from './structured-agent-session-handing-over'
 import type { AgentJournalRenderItem } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionSubscribeEvent } from '../../../shared/agent-session-wire'
-// Stop notes follow interrupted ends written by the shipping Claude translator.
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -97,7 +97,7 @@ beforeEach(async () => {
     claimKeyId: 'key-1',
     mintSpawnToken: () => 'spawn-a',
     logger: log.logger,
-    // Ticked by hand only, and with no idle window: a tick reaps whatever is at rest.
+    // Tick manually with no idle threshold to reap resting agents.
     idleSweep: { intervalMs: 3_600_000, idleMs: 0 },
     now: () => NOW
   })
@@ -133,7 +133,6 @@ function envelope(
     | 'agentSession.cancel'
     | 'agentSession.setOption'
     | 'agentSession.queuedMessageSend',
-  // The fingerprint's own field shape, as the sibling host tests type it.
   fields: Parameters<typeof computeAgentSessionPayloadFingerprint>[0]['fields']
 ) {
   return {
@@ -216,7 +215,7 @@ const stopAcrossGrace = createStoppedClaudeDeadline({
   laneDrained
 })
 
-/** As the real connection: once a close begins it refuses every write, proven or not. */
+/** Refuse writes as soon as close starts, before exit proof. */
 function closeUnprovenFor(connection: FakeConnection, failures: number): void {
   const close = connection.close
   let left = failures
@@ -358,3 +357,70 @@ it('keeps the note unconfirmed when the turn completes', async () => {
     expect(notes[0]?.body).toMatchObject({ failure: { kind: 'cancelUnconfirmed' } })
   })
 })
+
+it.each([false, true])(
+  'keeps only positively unwritten Claude input on Close (written: %s)',
+  async (written) => {
+    const connection = claude.connections[0]!
+    const held = Promise.withResolvers<void>()
+    const entered = Promise.withResolvers<void>()
+    const control = vi.spyOn(connection, 'setModel').mockImplementation(async () => {
+      entered.resolve()
+      await held.promise
+    })
+    const dispatch = vi.spyOn(adapter, 'dispatch')
+    const fields = { body: hostTestMessage('recover exact input'), options: { model: 'opus' } }
+    const sending = await host.send(CALLER, {
+      envelope: envelope('agentSession.send', fields),
+      userSend: true,
+      ...fields
+    })
+    if (!sending.ok) {
+      throw new Error(JSON.stringify(sending.refusal))
+    }
+    const id = sending.value.clientMessageId
+    const journal = host['sessions'].get(SESSION)!.journal
+    const waiting = host.waitForSendSettlement(SESSION, id)
+    try {
+      await entered.promise
+      expect(connection.sent).toHaveLength(0)
+      const original = structuredAgentSessionHandingOver(journal).get(id)?.input
+      if (written) {
+        held.resolve()
+        await eventually(() => expect(connection.sent).toHaveLength(1))
+      }
+      await host.close(SESSION, 'user-close')
+      held.resolve()
+      await Promise.allSettled(dispatch.mock.results.map((result) => result.value))
+      await original?.finalization.completion
+      await host.flushStreamedEvents(SESSION)
+      await journal['queue'].drain()
+      const row = journal.submission(id)
+      const cards = journal.queuedMessages.list()
+      expect(original).toBeDefined()
+      expect(structuredAgentSessionHandingOver(journal).has(id)).toBe(false)
+      expect(connection.sent).toHaveLength(written ? 1 : 0)
+      expect((await waiting)?.value).toEqual({ clientMessageId: id, submission: row })
+      expect(row).toMatchObject({
+        clientMessageId: id,
+        source: { kind: 'user' },
+        options: fields.options
+      })
+      expect(cards.map((card) => card.messageId)).toEqual(written ? [] : [id])
+      if (!written) {
+        expect(row).toMatchObject({
+          dispatchState: 'rejected',
+          keptAsQueuedMessageId: id,
+          rejection: { kind: 'chatClosed' }
+        })
+        expect(cards[0]).toMatchObject({ body: fields.body, options: fields.options, position: 0 })
+      } else {
+        expect(row).not.toHaveProperty('keptAsQueuedMessageId')
+      }
+    } finally {
+      held.resolve()
+      control.mockRestore()
+      dispatch.mockRestore()
+    }
+  }
+)

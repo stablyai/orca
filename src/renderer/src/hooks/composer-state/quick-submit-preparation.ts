@@ -4,10 +4,10 @@ import { useCallback } from 'react'
 import type { HookCheckResult } from '@/runtime/runtime-hooks-client'
 import { settleComposerSubmit } from '@/lib/composer-submit-cancellation'
 import {
-  getSetupConfig,
   getLinkedWorkItemProvider,
   canUseIssueCommandForLinkedItemProvider
 } from '@/lib/new-workspace'
+import { getDefaultSetupDecision, getSetupConfig } from '../../../../shared/orca-hook-setup-config'
 import type { SetupDecision } from '../../../../shared/worktree/create-types'
 import type { WorktreeCreationRequest } from '@/lib/pending-worktree-creation'
 import { resolveComposerBranchNameOverrideForCreate } from '../composer-branch-selection'
@@ -18,6 +18,7 @@ import type { PendingSmartGitHubSubmitResolution } from './source-selection-deci
 export function useQuickSubmitPreparation(input: QuickSubmitPreparationInput) {
   const {
     branchAutoNameRef,
+    branchIntent,
     branchNameOverridePreservesNameEdits,
     checkedHooksContextKey,
     commitHookCheckIfCurrent,
@@ -95,12 +96,7 @@ export function useQuickSubmitPreparation(input: QuickSubmitPreparationInput) {
         }
         submitSetupConfig = getSetupConfig(selectedRepo, hookCheck.hooks)
         submitResolvedSetupDecision =
-          setupDecision ??
-          (!submitSetupConfig || setupPolicy === 'ask'
-            ? null
-            : setupPolicy === 'run-by-default'
-              ? 'run'
-              : 'skip')
+          setupDecision ?? getDefaultSetupDecision(Boolean(submitSetupConfig), setupPolicy)
       }
 
       if (selectedRepoIsGit && submitSetupConfig && setupPolicy === 'ask' && !setupDecision) {
@@ -194,6 +190,10 @@ export function useQuickSubmitPreparation(input: QuickSubmitPreparationInput) {
         linkedLinearIssueWorkspaceId,
         linkedLinearIssueOrganizationUrlKey,
         effectiveBranchNameOverride,
+        branchIntent:
+          smartGitHubResolution.kind === 'none' && effectiveBranchNameOverride
+            ? branchIntent
+            : undefined,
         submitBaseBranch,
         createDisplayName,
         pendingFirstAgentMessageRename,
@@ -202,6 +202,7 @@ export function useQuickSubmitPreparation(input: QuickSubmitPreparationInput) {
     },
     [
       branchNameOverridePreservesNameEdits,
+      branchIntent,
       checkedHooksContextKey,
       commitHookCheckIfCurrent,
       enableIssueAutomation,

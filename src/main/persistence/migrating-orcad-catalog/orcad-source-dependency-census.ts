@@ -24,11 +24,10 @@ import { paneBelongsToTabs } from '../../../shared/workspace-session-pane-owners
 export type OrcadMigrationSourceDependencyCensus = {
   totalCount: number
   counts: Record<OrcadMigrationDependencyKind, number>
-  /** For the kinds it can name: what blocks and how to clear it. */
+  /** Blocker names and remedies where available. */
   names?: Partial<Record<OrcadMigrationDependencyKind, string[]>>
 }
 
-/** What still references the target that this manifest cannot carry. */
 export function collectOrcadMigrationUntransferredDependencyCensus(
   state: PersistedState,
   manifest: OrcadMigrationManifest,
@@ -59,7 +58,7 @@ export function collectOrcadMigrationUntransferredDependencyCensus(
     'terminal-lease': state.sshRemotePtyLeases.filter(
       (lease) => lease.targetId === scope.targetId && lease.state !== 'terminated'
     ).length,
-    // Left behind, recovery records stay with this desktop; the terminal gate still proves exit.
+    // Retained recoveries can stay behind; the terminal gate still requires exit.
     'terminal-recovery': orcadMigrationLeavesBehind(state, scope.targetId)
       ? 0
       : countTerminalRecoveryState(state, scope, sessions)
@@ -67,16 +66,18 @@ export function collectOrcadMigrationUntransferredDependencyCensus(
   return {
     counts,
     totalCount: ORCAD_MIGRATION_DEPENDENCY_KINDS.reduce((total, kind) => total + counts[kind], 0),
-    names:
-      dormant.blockedSessionItems.length > 0
+    names: {
+      ...(dormant.blockedSessionItems.length > 0
         ? { 'workspace-session': dormant.blockedSessionItems }
-        : {}
+        : {}),
+      ...(dormant.runningAutomationItems.length > 0
+        ? { 'automation-run': dormant.runningAutomationItems }
+        : {})
+    }
   }
 }
 
-// Consumer recoveries never block: the terminal gate proves before every move that their leases exited.
-// Legacy pane-key aliases never block either: an alias only routes hook events and names a terminal
-// the tab or pane already records, which the lease checks and the terminal gate govern.
+// The terminal gate proves recovery leases exited; hook aliases add no independent terminal ownership.
 function countTerminalRecoveryState(
   state: PersistedState,
   scope: OrcadMigrationSourceScope,

@@ -20,7 +20,6 @@ vi.mock('electron', () => ({
 
 const { scheduleSecretProtectionGapReport } = await import('./deferred-secret-protection-report')
 
-/** Stands in for the BrowserWindow the app creates first. */
 function fakeWindow(): { once: (event: string, listener: Listener) => void; reveal: () => void } {
   const listeners: Listener[] = []
   return {
@@ -60,7 +59,7 @@ describe('scheduleSecretProtectionGapReport', () => {
       encryptString: (plainText) => Buffer.from(plainText),
       decryptString: (cipher) => cipher.toString(),
       describeProtectionGap: () => {
-        // Why count here: this is the call that blocks on the OS keyring.
+        // Count the call that blocks on the OS keyring.
         probes += 1
         return 'The OS keyring is unavailable.'
       }
@@ -108,17 +107,14 @@ describe('scheduleSecretProtectionGapReport', () => {
     expect(logged).toEqual(['[secrets] The OS keyring is unavailable.'])
   })
 
-  /** Runs an already-queued setImmediate; the 1ms is slack, not a delay under test. */
+  /** Drain queued setImmediate callbacks; the 1ms is slack. */
   const drain = (): void => void vi.advanceTimersByTime(1)
 
   it('does not probe the keyring while the first window is still being created', () => {
-    // Why this is the regression: probing here blocked the window for 76s on a locked
-    // Linux keyring, which reads to the user as "the app will not open" (STA-5765).
+    // A locked Linux keyring once delayed the first window by 76s (STA-5765).
     schedule()
     createWindow()
-    // Why drain: creation alone must arm nothing. Asserting before the queue drains
-    // would also pass if the probe were merely queued off `browser-window-created`,
-    // which on the real path still lands before the window paints.
+    // Drain the queue to catch probes scheduled before the first paint.
     drain()
     expect(probes).toBe(0)
     expect(logged).toEqual([])
@@ -128,8 +124,7 @@ describe('scheduleSecretProtectionGapReport', () => {
     schedule()
     const window = createWindow()
     window.reveal()
-    // Why: the reveal handler must return before the blocking probe runs, or the paint
-    // it is waiting on is the thing being blocked.
+    // The reveal handler must return before the blocking probe.
     expect(probes).toBe(0)
     drain()
     expect(probes).toBe(1)
@@ -137,12 +132,10 @@ describe('scheduleSecretProtectionGapReport', () => {
   })
 
   it('still reports when ready-to-show never fires, so a failed reveal is not silent', () => {
-    // Why: a GPU/driver failure can keep ready-to-show from ever firing, and headless
-    // serve has no window at all.
+    // GPU failures can prevent ready-to-show; serve has no window.
     schedule()
     createWindow()
-    // Why bracket the wait instead of running every timer: an unbounded flush passes for
-    // any fallback delay, including one long enough to never arrive in a real session.
+    // Bracket the fallback deadline so an excessive delay cannot pass.
     vi.advanceTimersByTime(14_000)
     drain()
     expect(probes).toBe(0)
@@ -156,9 +149,7 @@ describe('scheduleSecretProtectionGapReport', () => {
     const window = createWindow()
     window.reveal()
     drain()
-    // Why assert the timer is gone and not just the probe count: the once-guard alone makes
-    // the count right, so without this the fallback could stay armed for 15s past the reveal
-    // and nothing here would notice.
+    // A once-guard could hide a fallback timer left armed after reveal.
     expect(vi.getTimerCount()).toBe(0)
     vi.runAllTimers()
     vi.advanceTimersByTime(60_000)
@@ -167,8 +158,7 @@ describe('scheduleSecretProtectionGapReport', () => {
   })
 
   it('does not let the fallback timer hold the process open', () => {
-    // Why: the report is diagnostics; a referenced 15s timer would keep a quitting app alive
-    // for up to 15s after its last window closed.
+    // A diagnostic timer must not keep a quitting app alive.
     const timers: ReturnType<typeof setTimeout>[] = []
     const original = globalThis.setTimeout
     const spy = vi.spyOn(globalThis, 'setTimeout').mockImplementation(((
@@ -188,9 +178,7 @@ describe('scheduleSecretProtectionGapReport', () => {
   })
 
   it('does not probe again when the window reveals after the fallback already reported', () => {
-    // Why this order and not the reverse: a GPU that presents late reveals the window
-    // after the fallback has already reported, and a second blocking keyring probe would
-    // freeze the main thread exactly as the user starts interacting.
+    // A late reveal after fallback must not trigger another blocking probe.
     schedule()
     const window = createWindow()
     vi.advanceTimersByTime(15_100)
@@ -202,9 +190,7 @@ describe('scheduleSecretProtectionGapReport', () => {
   })
 
   it('does not turn a throwing report into a fatal main-process error', () => {
-    // Why: deferred, this runs off whenReady's promise chain, where a throw is an
-    // uncaughtException the main-process guard re-throws fatally (#9441) — not the
-    // unhandled rejection the app survives. A diagnostic must never end the process.
+    // Deferred throws become fatal uncaught exceptions instead of promise rejections (#9441).
     let thrown = 0
     scheduleSecretProtectionGapReport({
       dataFile,
@@ -222,8 +208,7 @@ describe('scheduleSecretProtectionGapReport', () => {
   })
 
   it('reports inline in headless serve, before the runtime is advertised as ready', () => {
-    // Why not deferred: serve opens no window, so the fallback would fire only after
-    // clients could already have paired, and a frozen main thread reads as a dead host.
+    // Serve must probe before advertising readiness to clients.
     scheduleSecretProtectionGapReport({
       dataFile,
       log: (m) => void logged.push(m),

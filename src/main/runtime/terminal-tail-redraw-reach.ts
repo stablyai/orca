@@ -4,9 +4,7 @@ import {
 } from './terminal-ansi-normalization'
 import type { RetainedTailRedrawCursor } from './terminal-tail-redraw-buffer'
 
-// Why module-level: this ran `new RegExp` per redraw chunk — i.e. per TUI frame per PTY.
-// Safe to share because `summedUpwardCursorReach` is synchronous and non-reentrant; it resets
-// `lastIndex` before every scan.
+// Reuse synchronous, non-reentrant scans' regex and reset lastIndex; constructing per TUI chunk adds allocation.
 const CURSOR_UP_PATTERN = new RegExp(`${String.fromCharCode(27)}\\[(\\d*)(?:;[\\d;]*)?A`, 'g')
 
 function summedUpwardCursorReach(
@@ -22,9 +20,7 @@ function summedUpwardCursorReach(
   return reach
 }
 
-// Why net: a TUI repaints each frame with a cursor-up to the same rows, so summing every CUU in
-// a multi-frame chunk overstated the reach and forced the O(tail) unwindowed path. Mirrors the
-// redraw model's own tokenizing, so only rows its cursor can actually visit are counted.
+// Repeated frames revisit the same rows; net cursor reach avoids summing CUUs into a false unwindowed fallback.
 function netUpwardCursorReach(
   normalizedChunk: string,
   previousRedrawCursor: RetainedTailRedrawCursor | null

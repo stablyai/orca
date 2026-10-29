@@ -26,7 +26,7 @@ export function assertWorktreeParentFlagsCompatible(
   }
 }
 
-function getWorkspaceKeyParentSelector(selector: string): string | undefined {
+export function getWorkspaceKeyParentSelector(selector: string): string | undefined {
   const rawSelector = selector.startsWith('id:') ? selector.slice('id:'.length) : selector
   return isWorkspaceKey(rawSelector) ? rawSelector : undefined
 }
@@ -43,8 +43,7 @@ export async function resolveCreateParentSelector(
 
   const parentWorkspace = getWorkspaceKeyParentSelector(rawParentWorktree)
   if (parentWorkspace) {
-    // Why: create exposes one public parent flag, while the runtime still needs
-    // workspace keys to preserve folder/worktree lineage accurately.
+    // The public parent flag can name either kind; runtime workspace keys preserve folder lineage.
     return { parentWorkspace }
   }
 
@@ -53,7 +52,7 @@ export async function resolveCreateParentSelector(
     ? getWorkspaceKeyParentSelector(parentWorktree)
     : undefined
   if (resolvedParentWorkspace) {
-    // Why: active/current may resolve to a folder workspace pseudo-worktree id.
+    // active/current can resolve to a folder workspace pseudo-worktree id.
     return { parentWorkspace: resolvedParentWorkspace }
   }
 

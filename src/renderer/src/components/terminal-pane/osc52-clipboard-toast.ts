@@ -29,8 +29,7 @@ export function showOsc52ClipboardBlockedToast(): void {
         ),
         onClick: () => {
           const store = useAppStore.getState()
-          // Why: open the exact row instead of a generic Terminal page so the
-          // remote-copy failure points to the setting named by the shell message.
+          // Open the exact setting named by the remote-copy failure.
           store.setSettingsSearchQuery('')
           store.openSettingsTarget({
             pane: 'terminal',
@@ -42,8 +41,7 @@ export function showOsc52ClipboardBlockedToast(): void {
       }
     }
   )
-  // Why latch after: a throw above would otherwise burn the session's one notice
-  // without ever showing it, leaving the opted-out user with silent failures.
+  // Latch after successful display so a throw cannot spend the session’s only notice.
   hasShownOsc52ClipboardBlockedToast = true
 }
 
@@ -65,6 +63,38 @@ export function showOsc52ClipboardFailedToast(): void {
       duration: 12_000
     }
   )
-  // Why latch after: same as blocked — don't burn the session notice on a throw.
+  // Latch only after successful display, as for blocked writes.
   hasShownOsc52ClipboardFailedToast = true
+}
+
+const OSC52_CLIPBOARD_COPY_RETRY_TOAST_ID = 'osc52-clipboard-copy-retry'
+
+/** Browsers refuse clipboard writes without a recent gesture; the Copy click supplies one. Not latched: each refusal replaces the last. */
+export function showOsc52ClipboardCopyRetryToast(
+  text: string,
+  writeClipboardText: (text: string) => Promise<void>
+): void {
+  toast.error(
+    translate(
+      'auto.components.terminal.pane.osc52.clipboard.failed.toast.de286dcfe1',
+      'Terminal copy needs a click'
+    ),
+    {
+      id: OSC52_CLIPBOARD_COPY_RETRY_TOAST_ID,
+      description: translate(
+        'auto.components.terminal.pane.osc52.clipboard.failed.toast.84c938ffa2',
+        'The browser blocked a copy from the terminal app. Click Copy to put the text on your clipboard.'
+      ),
+      duration: 30_000,
+      action: {
+        label: translate(
+          'auto.components.terminal.pane.osc52.clipboard.failed.toast.a73165c6c5',
+          'Copy'
+        ),
+        onClick: () => {
+          void writeClipboardText(text).catch(showOsc52ClipboardFailedToast)
+        }
+      }
+    }
+  )
 }

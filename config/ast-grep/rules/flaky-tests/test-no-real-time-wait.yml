@@ -1,0 +1,130 @@
+# Ratcheted by config/scripts/check-flaky-test-pattern-ratchet.mjs; info severity keeps
+# `pnpm lint:ast-grep` quiet about the grandfathered baseline.
+# The TSX document below mirrors the TypeScript one; keep them in sync.
+id: test-no-real-time-wait
+language: typescript
+severity: info
+message: A real-time wait makes the test slow and flaky. Await the condition instead (expect.poll, vi.waitFor, a locator assertion) or drive fake timers.
+note: 'A zero-delay yield is allowed. For a deliberate wait, add `// ast-grep-ignore: test-no-real-time-wait -- <reason>` above it.'
+files:
+  - '**/*.test.ts'
+  - '**/*.test.tsx'
+  - '**/tests/e2e/**'
+utils:
+  resolves-promise-executor:
+    inside:
+      stopBy: end
+      kind: new_expression
+      all:
+        - has: { field: constructor, regex: '^Promise$' }
+        - has:
+            field: arguments
+            has:
+              nthChild: 1
+              any:
+                - has: { field: parameter, pattern: $R }
+                - has:
+                    {
+                      field: parameters,
+                      has: { nthChild: 1, has: { field: pattern, pattern: $R } }
+                    }
+  nonzero-delay:
+    has: { field: arguments, has: { nthChild: 2, not: { regex: '^0$' } } }
+  # Inline checks rather than `constraints`: those run after matching, so a rejected candidate
+  # would end a `has` search instead of letting it try the next node.
+  real-time-sleep:
+    any:
+      - kind: call_expression
+        has: { field: function, has: { field: property, regex: '^waitForTimeout$' } }
+      - kind: await_expression
+        has:
+          kind: call_expression
+          all:
+            - has: { field: function, regex: '^setTimeout$' }
+            - has: { field: arguments, has: { nthChild: 1, kind: number } }
+      - kind: await_expression
+        has:
+          kind: call_expression
+          all:
+            - has: { field: function, regex: '^(sleep|delay|wait|pause)$' }
+            - has: { field: arguments, has: { nthChild: 1, not: { regex: '^0$' } } }
+      # Callback forms first: `any` keeps the first match, and `setTimeout($R, …)` would otherwise
+      # bind $R to the callback and fail the executor check.
+      - all:
+          - pattern: setTimeout(() => $R($$$), $MS)
+          - matches: nonzero-delay
+          - matches: resolves-promise-executor
+      - all:
+          - pattern: setTimeout(() => { $R($$$) }, $MS)
+          - matches: nonzero-delay
+          - matches: resolves-promise-executor
+      - all:
+          - pattern: setTimeout($R, $MS)
+          - matches: nonzero-delay
+          - matches: resolves-promise-executor
+rule:
+  matches: real-time-sleep
+---
+id: test-no-real-time-wait-tsx
+language: tsx
+severity: info
+message: A real-time wait makes the test slow and flaky. Await the condition instead (expect.poll, vi.waitFor, a locator assertion) or drive fake timers.
+note: 'A zero-delay yield is allowed. For a deliberate wait, add `// ast-grep-ignore: test-no-real-time-wait -- <reason>` above it.'
+files:
+  - '**/*.test.ts'
+  - '**/*.test.tsx'
+  - '**/tests/e2e/**'
+utils:
+  resolves-promise-executor:
+    inside:
+      stopBy: end
+      kind: new_expression
+      all:
+        - has: { field: constructor, regex: '^Promise$' }
+        - has:
+            field: arguments
+            has:
+              nthChild: 1
+              any:
+                - has: { field: parameter, pattern: $R }
+                - has:
+                    {
+                      field: parameters,
+                      has: { nthChild: 1, has: { field: pattern, pattern: $R } }
+                    }
+  nonzero-delay:
+    has: { field: arguments, has: { nthChild: 2, not: { regex: '^0$' } } }
+  # Inline checks rather than `constraints`: those run after matching, so a rejected candidate
+  # would end a `has` search instead of letting it try the next node.
+  real-time-sleep:
+    any:
+      - kind: call_expression
+        has: { field: function, has: { field: property, regex: '^waitForTimeout$' } }
+      - kind: await_expression
+        has:
+          kind: call_expression
+          all:
+            - has: { field: function, regex: '^setTimeout$' }
+            - has: { field: arguments, has: { nthChild: 1, kind: number } }
+      - kind: await_expression
+        has:
+          kind: call_expression
+          all:
+            - has: { field: function, regex: '^(sleep|delay|wait|pause)$' }
+            - has: { field: arguments, has: { nthChild: 1, not: { regex: '^0$' } } }
+      # Callback forms first: `any` keeps the first match, and `setTimeout($R, …)` would otherwise
+      # bind $R to the callback and fail the executor check.
+      - all:
+          - pattern: setTimeout(() => $R($$$), $MS)
+          - matches: nonzero-delay
+          - matches: resolves-promise-executor
+      - all:
+          - pattern: setTimeout(() => { $R($$$) }, $MS)
+          - matches: nonzero-delay
+          - matches: resolves-promise-executor
+      - all:
+          - pattern: setTimeout($R, $MS)
+          - matches: nonzero-delay
+          - matches: resolves-promise-executor
+rule:
+  matches: real-time-sleep

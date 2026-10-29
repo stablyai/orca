@@ -1,8 +1,4 @@
-/**
- * The orcad a WSL host already runs, read before an app update replaces it (Track E1). SSH asks
- * it through its tunnel; a WSL host has no standing tunnel during deploy, so this opens a
- * short-lived stdio bridge. Anything unproven reads as an unverifiable census, never zero.
- */
+/** E1: open a temporary bridge for incumbent census before activation. Unproven state is unverifiable, never zero; WSL has no standing deploy tunnel. */
 import { pairedRuntimeConnectionFromOffer } from '../../shared/paired-runtime-connection'
 import { parsePairingCode, type PairingOffer } from '../../shared/pairing'
 import { ORCAD_MANAGED_REMOTE_PORT } from '../../shared/orcad-managed-runtime'
@@ -33,10 +29,7 @@ export type WslOrcadIncumbent = {
   census: OrcadTerminalCensus
   /** The incumbent's proven readiness; null when it could not be started or proven. */
   readiness: ServeReadiness | null
-  /**
-   * Counts again (no wake) just before activation stops the incumbent, closing its terminal
-   * admission first so none starts before the stop; never zero unread.
-   */
+  /** Recount without wake and close terminal admission before activation stops the incumbent; unreadable never means zero. */
   recount: () => Promise<OrcadTerminalCensus>
   /** Reopens the admission `recount` closed, when the incumbent keeps running. */
   releaseAdmission: () => Promise<void>
@@ -82,10 +75,7 @@ const DEFAULT_DEPENDENCIES: WslOrcadIncumbentDependencies = {
   census: requestOrcadTerminalCensus
 }
 
-/**
- * Wakes the active slot if a reboot or idle exit stopped it (its daemon then starts empty, so
- * the census proves zero), then asks it for its census over a bridge closed before returning.
- */
+/** Wake reboot/idle-stopped incumbent, census its daemon, then close the temporary bridge before returning. */
 export async function readWslOrcadIncumbent(
   args: IncumbentArgs,
   dependencies: WslOrcadIncumbentDependencies = DEFAULT_DEPENDENCIES
@@ -140,7 +130,7 @@ async function countIncumbentTerminals(
       orcadBoundPort(readiness) ?? ORCAD_MANAGED_REMOTE_PORT,
       args.context.target
     )
-    // Why the enrolled grant: counting with the startup offer would enroll a new device each start.
+    // Use enrolled grants; startup offers would enroll a fresh device on every census.
     const offer = parsePairingCode(
       tunneledOrcadPairingCode(readiness, forward.entry.localPort, args.paired)
     )

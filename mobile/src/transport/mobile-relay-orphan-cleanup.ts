@@ -11,8 +11,7 @@ export async function scheduleOrphanedMobileRelayCleanup(args: {
   const removeOverlay = args.removeOverlay ?? removeMobileRelayHostRouting
   for (const hostId of new Set(args.hostIds)) {
     try {
-      // Why: an older build may remove the legacy host while retaining the v2
-      // namespace; persist keychain cleanup intent before dropping that pointer.
+      // Persist keychain cleanup intent before removing an overlay orphaned by an older build’s host removal.
       await scheduleCleanup(hostId, args.deleteCredential)
       await removeOverlay(hostId)
     } catch {

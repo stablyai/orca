@@ -18,8 +18,7 @@ export const PR_CHECK_LOG_TAIL_ERROR_CONTEXT_LINES = 2
 export const PR_CHECK_LOG_TAIL_MAX_EARLIER_LINES = 30
 export const PR_CHECK_LOG_TAIL_EARLIER_SEPARATOR = '… earlier errors …'
 
-// Why: install/cache steps can flood the tail; pull a small window around earlier
-// error markers so failures remain visible without downloading the full job log.
+// Install/cache output may bury earlier errors; retain a small error window without downloading the full log.
 const ERROR_LINE_PATTERN =
   /(?:##\[error\]|::error::|::error\b|\berror:|FAILED|exit code|ENOENT|EACCES|panic:|AssertionError)/i
 
@@ -100,8 +99,7 @@ function buildCheckLogTail(logText: string): string {
 
   const cappedEarlierIndexes = earlierIndexes.slice(-PR_CHECK_LOG_TAIL_MAX_EARLIER_LINES)
   const earlierLines = cappedEarlierIndexes.map((index) => lines[index] ?? '')
-  // Why: if the recent tail alone exceeds the byte cap, keep the earlier error
-  // context visible instead of truncating it back out of the combined excerpt.
+  // Retain earlier error context even when the recent tail alone exceeds the byte cap.
   return joinLogExcerptWithByteCap(
     [...earlierLines, PR_CHECK_LOG_TAIL_EARLIER_SEPARATOR],
     recentLines

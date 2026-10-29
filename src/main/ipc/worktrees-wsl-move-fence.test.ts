@@ -52,7 +52,7 @@ const STAYING = 'repo-2::/workspace/other-wt'
 let userDataPath: string
 beforeEach(() => {
   setupWorktreeHandlers()
-  // The staying worktree's repo must be registered: an unstamped write resolves its host from it.
+  // Unstamped writes resolve ownership through the registered repo.
   store.getRepos.mockReturnValue([harnessRepo, { ...harnessRepo, id: 'repo-2' }])
   userDataPath = mkdtempSync(join(tmpdir(), 'wsl-move-worktree-ipc-'))
   loadWslMoveFence(userDataPath)

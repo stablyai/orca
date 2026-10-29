@@ -3,6 +3,7 @@ import { View, Text, Pressable } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { ChevronLeft, Copy, Check, Send } from 'lucide-react-native'
 import { colors, spacing } from '../theme/mobile-theme'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { ConnectionLog } from '../components/ConnectionLog'
 import { connectionDiagnosticsScreenStyles as styles } from './connection-diagnostics-screen-styles'
 import type { ConnectionLogEntry, ConnectionState } from '../transport/types'
@@ -36,6 +37,7 @@ export function ConnectionDiagnosticsView({
   entries: readonly ConnectionLogEntry[]
   onBack: () => void
 }) {
+  useMobileColorScheme()
   const insets = useSafeAreaInsets()
   return (
     <View style={[styles.container, { paddingTop: insets.top + spacing.sm }]}>

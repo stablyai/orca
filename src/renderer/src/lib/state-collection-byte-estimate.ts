@@ -1,19 +1,6 @@
-/**
- * Sampled byte estimates for the largest top-level collections in a state
- * object, for renderer_memory_highwater breadcrumbs.
- *
- * Why bytes when summarizeStateCollectionSizes already reports counts: entry
- * counts stay flat when a slice grows by VALUE weight — the 97b9e86d OOM leaked
- * ~700MB while its biggest slice grew by 4 entries. Counts name what got LONG;
- * these estimates name what got FAT.
- *
- * Estimates are heuristic (sampled, extrapolated, shared references counted
- * per slice). __budgetHitSlices marks totals that saturated the scan budget.
- */
+/** Estimate sampled collection bytes alongside counts: OOM 97b9e86d grew ~700MB with only four new entries. Heuristics extrapolate samples/count shared references per slice; __budgetHitSlices marks scan saturation. */
 
-// Why sampling is capped and first-window biased: this runs at >=60% heap
-// pressure, so bounded work beats unbiased coverage. Iteration allocates
-// nothing beyond the sample window; there is no stringify.
+// Under >=60% heap pressure, cap work with a first-window sample; avoid stringify or allocations beyond that window.
 const SAMPLE_TARGET = 16
 const SAMPLE_WINDOW = 1024
 const NODE_BUDGET_PER_SLICE = 4096
@@ -52,8 +39,7 @@ export function estimateStateCollectionKB(state: unknown, limit: number): Record
       continue
     }
     let kb = 0
-    // Why: one exotic slice (throwing getter, revoked proxy) must not sink the
-    // whole census; the registry only sees the surviving slices.
+    // Throwing getters/revoked proxies must not sink the surviving census slices.
     try {
       const ctx: EstimateContext = {
         nodesLeft: NODE_BUDGET_PER_SLICE,
@@ -88,8 +74,7 @@ export function estimateStateCollectionKB(state: unknown, limit: number): Record
   }
   sizes.sort((a, b) => b[1] - a[1])
   const top = Object.fromEntries(sizes.slice(0, limit))
-  // Why __totalKB: a small unsaturated total can exonerate the whole state
-  // object and redirect investigation without a local repro.
+  // Small unsaturated __totalKB can rule out the whole store and redirect investigation without local reproduction.
   top.__totalKB = totalKB
   if (budgetHitSlices > 0) {
     top.__budgetHitSlices = budgetHitSlices
@@ -121,8 +106,7 @@ function estimateValueBytes(value: unknown, depth: number, ctx: EstimateContext)
   if (value === null) {
     return BYTES_PRIMITIVE
   }
-  // Why: cycles and intra-slice shared references count once — retained-size
-  // semantics are out of scope for a breadcrumb heuristic.
+  // Count cycles/shared references once per slice; retained-size analysis is outside this heuristic.
   if (ctx.seen.has(value)) {
     return 0
   }

@@ -18,7 +18,7 @@ vi.mock(
   './file-watcher-host',
   async () => (await import('./orca-runtime-files-mock-registry')).fileWatcherHostMock
 )
-vi.mock('../ipc/filesystem-auth', async () =>
+vi.mock('../ipc/filesystem/filesystem-auth', async () =>
   (await import('./orca-runtime-files-mock-registry')).filesystemAuthModuleMock()
 )
 vi.mock('../git/runner', async () =>
@@ -32,8 +32,7 @@ vi.mock(
 describe('RuntimeFileCommands', () => {
   useRuntimeFileCommandsLifecycle()
 
-  // Why: mobile opens every image tab through files.readPreview, so this constant is the most
-  // reachable way to overflow the outbound envelope and kill the socket.
+  // Mobile image tabs use readPreview; exceeding the outbound budget would kill their socket.
   describe('previewable binary budget', () => {
     const previewTempDirs: string[] = []
 

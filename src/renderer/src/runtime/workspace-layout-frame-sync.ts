@@ -1,15 +1,4 @@
-// The window's layout slices drawn from main's layout stream (design phase E2b), in a layout-owner
-// build only. Main publishes every workspace it holds; this window shows a frame's workspace when
-// it writes that workspace to a partition this machine owns (a paired server's stay the mirror's)
-// and holds it (startup restore keeps only workspaces the catalog knows; a first visit adds one).
-//
-// A tab the window drew, closed or moved before main answered stays as drawn until the answer is
-// in (layout-owner-drawn-tab-holds); everything else shows as each frame arrives.
-//
-// A records frame shows only what it changed (design E2a): panes' bindings and live titles apply
-// alone, and any other record builds its workspace from the store's view. Only a workspace the
-// store does not show from frames yet (startup, a reopened stream, a first visit, one sent whole)
-// takes the full build, whose view the window reads back through its save and the Loader.
+// Layout-owner windows draw main’s locally owned, held workspaces; paired servers remain mirror-owned. Local tab changes stay drawn until main answers (layout-owner-drawn-tab-holds). Records frames apply binding/title deltas directly and rebuild other changed workspaces from store. Startup/reopen/new/whole workspaces use full save/Loader builds (E2a/E2b).
 
 import { showFramePatch, withMovedTabsSelected } from '@/store/slices/tabs/moved-tab-selection'
 import { useAppStore } from '@/store'
@@ -93,8 +82,7 @@ export function openWorkspaceLayoutFrameSync(
   let snapshotReceived = false
   let flushQueued = false
   let streamOpen = true
-  /** Workspaces whose pane trees the store may still lack: a build ran for them, or a tab the
-   *  window's own command held skipped one. */
+  // Workspaces needing pane trees after a build or skipped held-tab update.
   let paneTreeKeys = new Set<string>()
   const paneStartsShown = framePaneFactsShown()
 
@@ -217,8 +205,7 @@ export function openWorkspaceLayoutFrameSync(
       // Against the store, not the frame: a held tab's tree may lag the pane trees drawn since.
       paneTreeKeys.add(key)
     }
-    // A closed stream's cache is frozen: answers the window draws itself (a split, close or create)
-    // show then; any other change waits for the reopened stream's snapshot.
+    // Closed-stream cache is frozen: draw local command answers now; other changes wait for reopened snapshot.
     if (!streamOpen) {
       followHeldTabs()
       return
@@ -279,8 +266,7 @@ export function openWorkspaceLayoutFrameSync(
   })
   // Against the store: the window may have drawn over main's tree for this tab since.
   const stopReleaseListener = onTabPaneTreeRedraw((tabId) => {
-    // A closed stream's cache is frozen: answers the window draws itself (a split, close or create)
-    // show then; any other change waits for the reopened stream's snapshot.
+    // Closed-stream cache is frozen: draw local command answers now; other changes wait for reopened snapshot.
     if (!streamOpen) {
       return
     }
@@ -291,8 +277,7 @@ export function openWorkspaceLayoutFrameSync(
     )
   })
 
-  // A workspace only main held (a CLI-started tab) shows on the window's first visit, so the
-  // activation finds main's tab rather than seeding a second one.
+  // Draw main-only workspace on first visit or activation seeds a duplicate instead of finding CLI-started tabs.
   const stopHeldWorkspacesListener = onWorkspaceStartsDrawing(
     store,
     source.draws,

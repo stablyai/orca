@@ -64,7 +64,6 @@ describe('execution host provider dispatch', () => {
       expect(requireReachableFilesystemRoute('local')).toMatchObject({ kind: 'local' })
     })
 
-    // Characterization: the message is the one an unreachable ssh host already showed.
     it('throws the typed not-served error for an ssh host', () => {
       for (const require of [requireReachableGitRoute, requireReachableFilesystemRoute]) {
         expect(() => require(`ssh:${connectionId}`)).toThrow(SshHostNotServedError)

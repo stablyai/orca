@@ -1,36 +1,27 @@
 import type { UISlice, UISliceGet, UISliceSet } from './ui-slice-contract'
 import { getSetupScriptPromptDismissalKey } from '../../../lib/setup-script-prompt'
+import {
+  withOrcaHookRepoAlwaysTrusted,
+  withOrcaHookScriptConfirmed
+} from '../../../../../shared/orca-hook-trust-entries'
 
 export function createUiTrustActions(set: UISliceSet, _get: UISliceGet): Partial<UISlice> {
   return {
     trustedOrcaHooks: {},
     markOrcaHookScriptConfirmed: (repoId, kind, contentHash) =>
       set((s) => {
-        const existing = s.trustedOrcaHooks[repoId]
-        const currentEntry = existing?.[kind]
-        if (currentEntry?.contentHash === contentHash) {
+        const next = withOrcaHookScriptConfirmed(s.trustedOrcaHooks, repoId, kind, contentHash)
+        if (next === s.trustedOrcaHooks) {
           return s
         }
-        const nextRepo = {
-          ...existing,
-          [kind]: { contentHash, approvedAt: Date.now() }
-        }
-        const next = { ...s.trustedOrcaHooks, [repoId]: nextRepo }
         window.api.ui.set({ trustedOrcaHooks: next }).catch(console.error)
         return { trustedOrcaHooks: next }
       }),
     markOrcaHookRepoAlwaysTrusted: (repoId) =>
       set((s) => {
-        const existing = s.trustedOrcaHooks[repoId]
-        if (existing?.all) {
+        const next = withOrcaHookRepoAlwaysTrusted(s.trustedOrcaHooks, repoId)
+        if (next === s.trustedOrcaHooks) {
           return s
-        }
-        const next = {
-          ...s.trustedOrcaHooks,
-          [repoId]: {
-            ...existing,
-            all: { approvedAt: Date.now() }
-          }
         }
         window.api.ui.set({ trustedOrcaHooks: next }).catch(console.error)
         return { trustedOrcaHooks: next }

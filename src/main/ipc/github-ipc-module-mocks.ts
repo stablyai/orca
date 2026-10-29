@@ -1,7 +1,6 @@
 import { type Mock, vi } from 'vitest'
 
-// Mocked module shapes for the GitHub IPC route tests. Built inside `vi.hoisted`
-// so each test file's own `vi.mock` factories can hand the objects back verbatim.
+// Build hoisted module shapes for each route test's vi.mock factories.
 
 const CLIENT_EXPORTS = [
   'getPRForBranch',

@@ -177,8 +177,7 @@ export function getProjectGroupingForRepo<R extends Pick<ProjectSectionRepo, 'di
       projectId: project.id
     }
   }
-  // Why: provisioned runtime copies and non-ambiguous checkouts follow project
-  // identity rather than path-scoped setup identity, so they stay in one project.
+  // Provisioned copies and unambiguous checkouts share project identity rather than path-scoped setup identity.
   return {
     key: `project:${project.id}`,
     label: project.displayName,
@@ -214,7 +213,6 @@ export function buildProjectOwnershipIndex<Item, R extends ProjectSectionRepo>(a
   return ownership
 }
 
-/** Files `item` under its displayed project section. */
 function addItemToProjectSection<Item, R extends ProjectSectionRepo>(
   sections: Map<string, ProjectSectionEntry<Item, R>>,
   item: Item,
@@ -232,10 +230,7 @@ function addItemToProjectSection<Item, R extends ProjectSectionRepo>(
   section.repoIds.add(repoId)
 }
 
-/**
- * Opens the project section for a repo that has no rows to file, or joins the repo to the open one.
- * `requireRepo` skips repo ids missing from the catalog, which would otherwise read "Unknown".
- */
+/** Open empty repo sections; requireRepo skips missing catalog IDs instead of showing Unknown. */
 function ensureProjectSectionForRepo<Item, R extends ProjectSectionRepo>(
   sections: Map<string, ProjectSectionEntry<Item, R>>,
   repoId: string,
@@ -260,11 +255,8 @@ function ensureProjectSectionForRepo<Item, R extends ProjectSectionRepo>(
   })
 }
 
-/**
- * Project sections in header order, unlabelled (see withRepoSectionDisplayLabels): rows first, then
- * empty-project placeholders, notice rows' repos (opened with the notice's own repo if the catalog
- * lacks it), and repos with a workspace being created.
- */
+/** Build unlabelled sections: rows, placeholders, notice repos (with catalog fallback), then pending workspace repos.
+ * Header order is applied here; withRepoSectionDisplayLabels supplies labels. */
 export function buildProjectSections<
   Item extends ActivityItem,
   R extends ProjectSectionRepo
@@ -293,18 +285,15 @@ export function buildProjectSections<
       projectIndex
     )
   }
-  // Why: repos can arrive before worktree scans, but stale IDs passed by
-  // older snapshots must not render an "Unknown" project header.
+  // Repos may precede scans; ignore stale placeholder IDs instead of rendering Unknown headers.
   for (const repoId of args.placeholderRepoIds) {
     ensureProjectSectionForRepo(sections, repoId, repoMap, projectIndex, { requireRepo: true })
   }
-  // Why: the default policy removes pinned worktrees from natural groups,
-  // but actionable notice rows still need a project section to render in.
+  // Pinned worktrees leave natural groups, but actionable notices still need project sections.
   for (const [repoId, fallbackRepo] of args.noticeRepos ?? []) {
     ensureProjectSectionForRepo(sections, repoId, repoMap, projectIndex, { fallbackRepo })
   }
-  // Why: creating the first worktree in a repo leaves it with no group yet;
-  // ensure one so the in-progress row nests under its repo instead of being dropped.
+  // Ensure a section for first-workspace creation so its pending row is not dropped.
   for (const repoId of args.pendingRepoIds ?? []) {
     ensureProjectSectionForRepo(sections, repoId, repoMap, projectIndex)
   }

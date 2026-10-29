@@ -18,6 +18,12 @@ describe('runAcceptedMobileSessionTabsEffects', () => {
       const options = {
         effectiveTabs: [
           {
+            id: 'browser-other',
+            type: 'browser' as const,
+            isActive: false,
+            browserPageId: 'page-other'
+          },
+          {
             id: 'browser-1',
             type: 'browser' as const,
             isActive: true,
@@ -39,7 +45,12 @@ describe('runAcceptedMobileSessionTabsEffects', () => {
       runAcceptedMobileSessionTabsEffects(options)
 
       expect(pendingPageId).toBeNull()
-      expect(activateBrowserTab).toHaveBeenCalledTimes(1)
+      expect(activateBrowserTab).toHaveBeenCalledExactlyOnceWith({
+        id: 'browser-1',
+        type: 'browser',
+        isActive: true,
+        browserPageId: 'page-1'
+      })
     }
   )
 
@@ -86,7 +97,12 @@ describe('runAcceptedMobileSessionTabsEffects', () => {
 
     runAcceptedMobileSessionTabsEffects({
       ...base,
-      effectiveTabs: [markdown],
+      effectiveTabs: [
+        { ...markdown, id: 'browser-dirty', type: 'browser' },
+        { ...markdown, id: 'markdown-inactive', isActive: false },
+        { ...markdown, id: 'markdown-clean', isDirty: false },
+        markdown
+      ],
       source: 'stream'
     })
     expect(markActiveMarkdownStale).toHaveBeenCalledExactlyOnceWith('markdown-1')

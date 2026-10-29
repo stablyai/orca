@@ -21,10 +21,7 @@ export function createBrowserPageConversionActions(
 ): Pick<BrowserSlice, 'convertBrowserPage' | 'reopenClosedBrowserPage' | 'setActiveBrowserPage'> {
   return {
     convertBrowserPage: (pageId, target, options) => {
-      // Why the same assert as createBrowserTab: a conversion materializes a browser surface the
-      // same way a creation does, and a paired web client that cannot host one must refuse here too.
-      // Ownership is resolved ONCE, on the plan's own terms — property-present-undefined means
-      // worktree-inferred — so the assert and the plan cannot disagree about what is being built.
+      // Resolve ownership once (present undefined means worktree-inferred) and apply create’s hosting assertion so plan and permission agree, including paired web refusals.
       const oldPageForOwnership = findPage(get().browserPagesByWorkspace, pageId)
       const declaredOwnership =
         target.kind === 'workspace-doc'
@@ -53,8 +50,7 @@ export function createBrowserPageConversionActions(
             return s
           }
           converted = plan.newPage
-          // Why collected rather than released inside the reducer: revoking is main-process work, and
-          // it must happen exactly once even if a later set() retries the reducer.
+          // Collect revocations outside reducers so main executes once even if set retries.
           if (plan.oldPage.docLocation) {
             docPageIdToRelease = plan.oldPage.id
           }
@@ -114,8 +110,7 @@ export function createBrowserPageConversionActions(
             get().recordClientHostedBrowserCloseIntents
           )
         }
-        // Why after the reducer: a closed document must stop being readable, and the grant is the only
-        // authority the preview scheme honors — but the store row has to stop naming it first.
+        // Remove row before revoking its grant; closed docs must lose the preview scheme’s sole read authority.
         if (docPageIdToRelease) {
           releaseDocPreviewGrant(docPageIdToRelease)
         }

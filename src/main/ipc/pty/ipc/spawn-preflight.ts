@@ -9,16 +9,16 @@ import {
 import { getProvider } from '../provider/registry'
 import { resolvePtySpawnStartupTarget } from '../spawn-startup-target'
 import type { PtyIpcSpawnState } from './spawn-state'
+import { localPtySpawnCwd } from '../host-env/spawn-cwd'
 import { getConnectionExecutionHostId } from '../../../../shared/execution-host'
 
 export async function preparePtyIpcSpawnPreflight(ctx: PtyIpcSpawnState): Promise<void> {
   const args = ctx.args
-  // Establish daemon identity before the first await so hidden delivery is gated before byte zero.
-  // Only this machine spawns here: an `ssh:` connection throws, so every line below is local.
+  // Establish local daemon identity before yielding so early output can be hidden; SSH execution is rejected here.
   ctx.provider = getProvider(getConnectionExecutionHostId(args.connectionId))
   ctx.isDaemonHostSpawn =
     !(ctx.provider instanceof LocalPtyProvider) && !routesFreshSpawnsToLocalProvider(ctx.provider)
-  ctx.isMintedSessionId = args.sessionId === undefined && ctx.isDaemonHostSpawn
+  ctx.ownsNewIncarnation = args.sessionId === undefined && ctx.isDaemonHostSpawn
   ctx.effectiveSessionId =
     args.sessionId ?? (ctx.isDaemonHostSpawn ? mintPtySessionId(args.worktreeId) : undefined)
   ctx.effectiveSessionAppId = ctx.effectiveSessionId
@@ -31,7 +31,11 @@ export async function preparePtyIpcSpawnPreflight(ctx: PtyIpcSpawnState): Promis
     ctx.deps.transitionSpawnHiddenRendererPtyDeliveryState(ctx.preSpawnHiddenMarkId, true)
   }
   if (!ctx.earlyStablePaneOwner) {
-    const admission = ctx.deps.assertWorkspaceAcceptsNewPty(args.worktreeId, args.sessionId)
+    const admission = ctx.deps.assertWorkspaceAcceptsNewPty(
+      args.worktreeId,
+      args.sessionId,
+      localPtySpawnCwd(args)
+    )
     if (admission) {
       await admission
     }
@@ -40,7 +44,11 @@ export async function preparePtyIpcSpawnPreflight(ctx: PtyIpcSpawnState): Promis
   ctx.preAdoptedStablePane = null
   ctx.spawnTiming.mark('stable_adoption')
   if (ctx.earlyStablePaneOwner && !ctx.preAdoptedStablePane) {
-    const admission = ctx.deps.assertWorkspaceAcceptsNewPty(args.worktreeId, args.sessionId)
+    const admission = ctx.deps.assertWorkspaceAcceptsNewPty(
+      args.worktreeId,
+      args.sessionId,
+      localPtySpawnCwd(args)
+    )
     if (admission) {
       await admission
     }
@@ -53,7 +61,7 @@ export async function preparePtyIpcSpawnPreflight(ctx: PtyIpcSpawnState): Promis
     const previousHiddenMarkId = ctx.preSpawnHiddenMarkId
     ctx.isDaemonHostSpawn =
       !(ctx.provider instanceof LocalPtyProvider) && !routesFreshSpawnsToLocalProvider(ctx.provider)
-    ctx.isMintedSessionId = args.sessionId === undefined && ctx.isDaemonHostSpawn
+    ctx.ownsNewIncarnation = args.sessionId === undefined && ctx.isDaemonHostSpawn
     ctx.effectiveSessionId =
       args.sessionId ?? (ctx.isDaemonHostSpawn ? mintPtySessionId(args.worktreeId) : undefined)
     ctx.effectiveSessionAppId = ctx.effectiveSessionId
@@ -71,9 +79,7 @@ export async function preparePtyIpcSpawnPreflight(ctx: PtyIpcSpawnState): Promis
     }
   }
   ctx.isClaudeLaunch = !ctx.preAdoptedStablePane && isClaudeLaunchCommand(args.command)
-  // Why: daemon host-env setup needs a stable id BEFORE provider.spawn so buildPtyHostEnv hooks/Pi cleanup can run; daemon still honors opts.sessionId ?? mint().
-  // Note: sessionId is STABLE across daemon restarts by design — do NOT simplify to a fresh UUID per spawn; that orphans reconnectable state.
-  // Why: only clear ids minted in THIS request on failure — a caller-supplied args.sessionId may name an existing PTY we must not clobber.
+  // Stable caller IDs preserve reconnect state; failure cleanup must remove only IDs minted by this request.
   const target = await resolvePtySpawnStartupTarget({
     worktreeId: args.worktreeId,
     cwd: args.cwd,

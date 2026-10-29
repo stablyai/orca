@@ -18,6 +18,7 @@ import {
 } from './acp-structured-adapter.test-support'
 
 afterEach(async () => {
+  vi.useRealTimers()
   await closeProviderTimelineRigs()
 })
 
@@ -70,7 +71,7 @@ describe('ACP Stop names a turn', () => {
     await sendHello(rig, 'new')
     await rig.frame('session/prompt', 1)
     await rig.settle()
-    // The journal shows no turn running: Grok has not echoed the new prompt yet, as with Claude.
+    // Before the first echo, the new prompt has no running journal turn.
     await expect(
       rig.adapter.cancelTurn({
         sessionId: SESSION,
@@ -104,11 +105,10 @@ describe('ACP Stop names a turn', () => {
         resolveLiveTurnId: () => live
       })
     ).resolves.toEqual({ cancelled: true })
-    // The steer's cancel, then the Stop's own bounded one.
     expect(rig.sent('session/cancel')).toHaveLength(2)
     expect(rig.settled).toEqual(
       expect.arrayContaining([
-        // Held by Orca, never prompted: proof it never reached the agent.
+        // A held steer never reached the agent.
         expect.objectContaining({
           clientMessageId: 'follow-up',
           state: 'rejected',
@@ -143,7 +143,7 @@ describe('ACP Stop of a turn Grok began itself', () => {
     await rig.adapter.awaitStoppedRequestEnd(SESSION, Date.now())
     expect(rig.sent('session/cancel')).toHaveLength(1)
     expect((await journalTurns(rig)).at(-1)).toMatchObject({ state: 'interrupted' })
-    // The host ends the child next; the adapter does not end it on its own.
+    // Process teardown belongs to the host.
     expect(rig.child().closes).toBe(0)
   })
 
@@ -152,10 +152,20 @@ describe('ACP Stop of a turn Grok began itself', () => {
     await rig.acquire()
     rig.child().agent.notify('session/update', replyChunk('task-completed-background-1', 'Busy'))
     await rig.settle()
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] })
     await expect(rig.adapter.cancelTurn({ sessionId: SESSION, fence: 1 })).resolves.toEqual({
       cancelled: true
     })
-    await rig.adapter.awaitStoppedRequestEnd(SESSION, Date.now())
+    let resolved = false
+    const stopped = rig.adapter.awaitStoppedRequestEnd(SESSION, Date.now()).then(() => {
+      resolved = true
+    })
+    await vi.advanceTimersByTimeAsync(19)
+    expect(resolved).toBe(false)
+    expect(rig.child().closes).toBe(0)
+    await vi.advanceTimersByTimeAsync(1)
+    await stopped
+    expect(resolved).toBe(true)
     expect((await journalTurns(rig)).at(-1)).toMatchObject({ state: 'running' })
     expect(rig.child().closes).toBe(0)
   })
@@ -182,7 +192,7 @@ describe('ACP connection loss', () => {
       ])
     )
     expect(rig.child().closes).toBe(1)
-    // Nothing was opened for a send the agent never echoed, so nothing claims it completed.
+    // An unacknowledged prompt never opened a turn to mark complete.
     expect(await journalTurns(rig)).toEqual([])
     await expect(sendHello(rig, 'after')).rejects.toThrow(/no live grok child/)
   })
@@ -199,8 +209,50 @@ describe('ACP connection loss', () => {
     expect(rig.ended[0]).toMatchObject({
       type: 'ended',
       cause: 'unexpected-exit',
-      reason: 'grok ACP agent exited: panic: out of memory',
-      failure: { kind: 'providerExited', detail: { text: 'panic: out of memory' } }
+      reason: 'grok ACP agent exited (code 0): panic: out of memory',
+      failure: { kind: 'providerExited', detail: { text: '(code 0)\npanic: out of memory' } }
+    })
+  })
+
+  it('reports how a crash ended and keeps a startup warning in stderr as a log, not its cause', async () => {
+    const rig = await openAcpAdapterRig()
+    await rig.acquire()
+    const warning = '[pi-web-access] Dynamic tool activation requires Pi 0.86.0 or newer'
+    rig.child().stderr = warning
+    rig.child().exit({ code: null, signal: 'SIGTERM', processless: false })
+    await waitFor(() => expect(rig.ended).toHaveLength(1))
+    expect(rig.ended[0]).toMatchObject({
+      cause: 'unexpected-exit',
+      reason: `grok ACP agent exited (signal SIGTERM): ${warning}`,
+      failure: {
+        kind: 'providerExited',
+        detail: { text: `(signal SIGTERM)\n${warning}`, audience: 'log' }
+      }
+    })
+  })
+
+  it('adds the exit status to the stream loss that came before a silent exit', async () => {
+    const rig = await openAcpAdapterRig()
+    await rig.acquire()
+    const child = rig.child()
+    child.proveClose = async () => false
+    child.agent.close()
+    await rig.settle()
+    child.exit({ code: null, signal: 'SIGKILL', processless: false })
+    await waitFor(() => expect(rig.ended).toHaveLength(1))
+    expect(rig.ended[0]?.reason).toBe(
+      'grok ACP connection closed: ACP connection closed (signal SIGKILL)'
+    )
+  })
+
+  it('keeps the exit code of a crash that printed nothing to stderr', async () => {
+    const rig = await openAcpAdapterRig()
+    await rig.acquire()
+    rig.child().exit({ code: 1, signal: null, processless: false })
+    await waitFor(() => expect(rig.ended).toHaveLength(1))
+    expect(rig.ended[0]).toMatchObject({
+      reason: 'grok ACP agent exited (code 1)',
+      failure: { kind: 'providerExited', detail: { text: '(code 1)', audience: 'log' } }
     })
   })
 
@@ -213,7 +265,6 @@ describe('ACP connection loss', () => {
     child.agent.close()
     await rig.settle()
     expect(rig.ended).toEqual([])
-    // Never left Orca, so it is not recorded as unconfirmed.
     expect(
       await rig.adapter.dispatch({
         sessionId: SESSION,
@@ -226,7 +277,7 @@ describe('ACP connection loss', () => {
       reason: 'Grok stopped before this message was sent.',
       rejection: { kind: 'providerExited', neverReachedAgent: true }
     })
-    // The next start's stop of the old child is one Orca asked for; it does not rename the crash.
+    // Cleanup retries must preserve the earlier crash's cause.
     await expect(rig.acquire()).rejects.toMatchObject({
       name: 'AgentSessionAcquisitionExitUnprovenError'
     })
@@ -234,8 +285,8 @@ describe('ACP connection loss', () => {
     await waitFor(() => expect(rig.ended).toHaveLength(1))
     expect(rig.ended[0]).toMatchObject({
       cause: 'unexpected-exit',
-      reason: 'grok ACP agent exited: panic: late',
-      failure: { kind: 'providerExited', detail: { text: 'panic: late' } }
+      reason: 'grok ACP agent exited (code 0): panic: late',
+      failure: { kind: 'providerExited', detail: { text: '(code 0)\npanic: late' } }
     })
   })
 
@@ -259,7 +310,6 @@ describe('ACP connection loss', () => {
     await sendHello(rig, 'garbled')
     const prompt = await rig.frame('session/prompt')
     rig.child().agent.notify('session/update', replyChunk('prompt:garbled', 'partial'))
-    // Usage without the totals the schema requires: the answer fails to parse.
     rig.child().agent.reply(prompt, {
       stopReason: 'end_turn',
       usage: { inputTokens: 10, outputTokens: 2 }
@@ -311,7 +361,6 @@ describe('ACP refusals', () => {
       ])
     )
     expect(await journalTurns(rig)).toEqual([])
-    // The session takes the next send.
     rig.child().agent.on('session/prompt', () => {})
     await sendHello(rig, 'next')
     await rig.frame('session/prompt', 1)
@@ -477,7 +526,6 @@ describe('ACP session release', () => {
     await rig.acquire()
     expect(rig.adapter.backgroundTaskStops(SESSION)).toBeDefined()
     await rig.adapter.closeSession(SESSION)
-    // Both answer from the entry the adapter holds for a chat; none is left.
     expect(rig.adapter.backgroundTaskStops(SESSION)).toBeUndefined()
     expect(rig.adapter.readCommands(SESSION)).toBeUndefined()
   })

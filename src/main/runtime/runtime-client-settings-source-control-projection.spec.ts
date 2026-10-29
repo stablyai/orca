@@ -4,8 +4,7 @@ import { createGlobalSettingsFixture } from '../../shared/global-settings-test-f
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import { getDefaultSourceControlAiSettings } from '../../shared/source-control-ai'
 
-// Why: `settings.get` is an explicit allowlist. A paired client's AI buttons resolve their agent
-// from the saved per-action recipe, and a recipe missing here reads as "none saved" on the client.
+// settings.get is an allowlist: omitted per-action agent recipes look unsaved to paired AI buttons.
 function projectionOf(settings: Partial<GlobalSettings>) {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: get() reads nothing but store.getSettings(); every other RuntimeStore member is unreachable from that path.
   return new RuntimeClientSettingsController({ getSettings: () => settings } as never).get()
@@ -49,5 +48,29 @@ describe('RuntimeClientSettingsController source control launch recipes', () => 
       'resolveComments',
       'resolveConflicts'
     ])
+  })
+})
+
+describe('RuntimeClientSettingsController source control list order', () => {
+  it('publishes the group order so paired clients list changes the same way', () => {
+    expect(projectionOf({ sourceControlGroupOrder: 'staged-first' }).sourceControlGroupOrder).toBe(
+      'staged-first'
+    )
+    expect(projectionOf({}).sourceControlGroupOrder).toBe('changes-first')
+  })
+
+  it('publishes the compare base and whitespace choices desktop diffs use', () => {
+    const projected = projectionOf({
+      sourceControlCompareAgainstUpstream: true,
+      diffShowWhitespace: true
+    })
+    expect(projected).toMatchObject({
+      sourceControlCompareAgainstUpstream: true,
+      diffShowWhitespace: true
+    })
+    expect(projectionOf({})).toMatchObject({
+      sourceControlCompareAgainstUpstream: false,
+      diffShowWhitespace: false
+    })
   })
 })

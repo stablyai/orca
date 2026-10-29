@@ -267,9 +267,7 @@ describe('AgentHookServer listener replay', () => {
     }
   })
 
-  // STA-4114: a detach/reattach cycle retires the pane, and nothing lifted the fence.
-  // Reviving only on a new turn cannot help a pane re-attached mid-turn (its remaining
-  // events are agent_end, not a new-turn event) or one re-attached idle.
+  // Reattach must restore mid-turn and idle panes without waiting for a new-turn event.
   for (const kind of ['pi', 'omp'] as const) {
     it(`re-attaching a retired ${kind} pane restores status without needing a new turn`, async () => {
       const server = new AgentHookServer()
@@ -289,8 +287,7 @@ describe('AgentHookServer listener replay', () => {
         await postHook({ hook_event_name: 'before_agent_start', prompt: 'turn in flight' })
         server.retirePaneAuthority(PANE)
 
-        // The turn was already running, so only its completion is left to report —
-        // and while retired it is suppressed. This is the reported permanent failure.
+        // A surviving turn may have only its completion left to report.
         await postHook({ hook_event_name: 'agent_end' })
         expect(server.getStatusSnapshot()).toEqual([])
 
@@ -306,7 +303,7 @@ describe('AgentHookServer listener replay', () => {
     })
   }
 
-  it('re-attaching a retired pane while idle re-opens it for a much later first turn', async () => {
+  it('re-attaching an idle retired pane accepts completion and a later turn', async () => {
     const server = new AgentHookServer()
     await server.start({ env: 'production' })
     try {
@@ -321,13 +318,10 @@ describe('AgentHookServer listener replay', () => {
           body: JSON.stringify(buildBody(payload, { launchToken: 'idle-reattach-token' }))
         })
 
-      // Nothing in flight: the pane is retired and re-attached while the agent sits idle.
       server.retirePaneAuthority(PANE)
       expect(server.restorePaneAuthority(PANE)).toBe(true)
 
-      // Why: prove the fence is already down before any turn event arrives. Asserting
-      // only on before_agent_start would also pass if a turn boundary lifted the fence,
-      // so it cannot distinguish re-attach revival from turn-triggered revival (#14626).
+      // Use a completion event to distinguish reattach revival from new-turn revival.
       await postHook({ hook_event_name: 'agent_end' })
       expect(server.getStatusSnapshot()).toEqual([
         expect.objectContaining({ paneKey: PANE, state: 'done' })
@@ -357,7 +351,6 @@ describe('AgentHookServer listener replay', () => {
           body: JSON.stringify(buildBody(payload, { launchToken: 'closed-tab-token' }))
         })
 
-      // Pane fence AND tab fence are both standing; re-attach may lift neither.
       server.retirePaneAuthority(PANE)
       server.dropStatusEntriesByTabPrefix('tab-1')
       expect(server.restorePaneAuthority(PANE)).toBe(false)
@@ -365,16 +358,13 @@ describe('AgentHookServer listener replay', () => {
       await postHook({ hook_event_name: 'before_agent_start', prompt: 'after tab close' })
       expect(server.getStatusSnapshot()).toEqual([])
 
-      // The pane fence must still be standing too, not silently lifted underneath.
       expect(server.restorePaneAuthority(PANE)).toBe(false)
     } finally {
       server.stop()
     }
   })
 
-  // STA-4114: retirement fences every alias of a pane and deletes the alias itself.
-  // Restoring only the owner key leaves the physical key the live process still posts
-  // fenced forever — the detached pane, which is the canonical re-attach case.
+  // Reattach must rebuild retired aliases because the live process still posts its original pane key.
   it('re-attaching a detached pane accepts hooks on the pane key its process launched under', async () => {
     const server = new AgentHookServer()
     await server.start({ env: 'production' })
@@ -392,15 +382,13 @@ describe('AgentHookServer listener replay', () => {
         })
 
       await postHook({ hook_event_name: 'before_agent_start', prompt: 'turn in flight' })
-      // Detach into another tab. The live process keeps posting PANE (server.ts:1614),
-      // so the alias is the only thing routing it to its new owner.
+      // Detached processes keep posting their original key; aliases route them to the new owner.
       server.transferPaneAuthority(PANE, detachedPane, 'pty-detached')
       server.retirePaneAuthority(detachedPane)
       expect(server.restorePaneAuthority(detachedPane)).toBe(true)
 
       await postHook({ hook_event_name: 'agent_end' })
-      // One row under the OWNER key. Lifting the fence without rebuilding the alias
-      // mints a second row on the stale key instead.
+      // Restoring fences without aliases would create a duplicate row under the old key.
       expect(server.getStatusSnapshot()).toEqual([
         expect.objectContaining({ paneKey: detachedPane, state: 'done' })
       ])
@@ -464,8 +452,7 @@ describe('AgentHookServer listener replay', () => {
       await postHook({ hook_event_name: 'before_agent_start', prompt: 'turn in flight' })
       server.transferPaneAuthority(PANE, detachedPane, 'pty-detached')
       server.retirePaneAuthority(detachedPane)
-      // The tab the pane was detached into is closed: the stronger claim wins, and the
-      // alias must not be resurrected to route a live process into a closed tab.
+      // Closed-tab ownership overrides pane restoration.
       server.dropStatusEntriesByTabPrefix('tab-2')
       expect(server.restorePaneAuthority(detachedPane)).toBe(false)
 
@@ -476,9 +463,7 @@ describe('AgentHookServer listener replay', () => {
     }
   })
 
-  // Why: the guard above short-circuits on the closed owner, so it never reaches the
-  // alias rebuild. Restoring the ORIGINAL key does reach it — and rebuilding the alias
-  // there would route a live process into the closed tab and silence it again.
+  // Restoring the original key must not rebuild an alias into the closed owner tab.
   it('re-opens the original pane instead of rebuilding an alias into a closed tab', async () => {
     const server = new AgentHookServer()
     await server.start({ env: 'production' })
@@ -500,7 +485,6 @@ describe('AgentHookServer listener replay', () => {
       server.retirePaneAuthority(detachedPane)
       server.dropStatusEntriesByTabPrefix('tab-2')
 
-      // The pane the process actually lives in is tab-1, which is still open.
       expect(server.restorePaneAuthority(PANE)).toBe(true)
 
       await postHook({ hook_event_name: 'agent_end' })
@@ -512,15 +496,7 @@ describe('AgentHookServer listener replay', () => {
     }
   })
 
-  // Why: closedAgentStatusTabIds is LRU-bounded, so the tab fence is not permanent.
-  // If restoring a sibling key lifted the closed tab's PANE fence too, eviction of the
-  // tab id would leave nothing at all holding that pane shut.
-  //
-  // Why a non-boundary event: a genuine new turn deliberately lifts the pane fence
-  // (STA-3386), so it cannot be used to prove the fence exists. Measured on the pre-fix
-  // tree, `claude` + `UserPromptSubmit` already revived this pane; this case only ever
-  // passed with `before_agent_start` because the gate matched two raw literals and did not
-  // recognize pi's boundary. The control below keeps it from passing for that reason again.
+  // After tab-ID eviction, the pane fence must remain; use a non-boundary event that cannot lift it.
   it('leaves a closed tab pane fenced once its tab id is evicted', async () => {
     const server = new AgentHookServer()
     await server.start({ env: 'production' })
@@ -556,8 +532,7 @@ describe('AgentHookServer listener replay', () => {
       )
       expect(server.getStatusSnapshot()).toEqual([])
 
-      // Why: proves the empty snapshot above came from the fence and not from an inert
-      // event — the same post on an unfenced pane must produce a row.
+      // An unfenced control proves the event itself is active.
       await postHook(
         { hook_event_name: 'agent_end', prompt: 'unfenced control' },
         { paneKey: makePaneKey('tab-9', LEAF_3), tabId: 'tab-9' }
@@ -568,9 +543,7 @@ describe('AgentHookServer listener replay', () => {
     }
   })
 
-  // Why: a detach re-points a legacy numeric alias at an owner in another tab, so the
-  // fence can hold keys from two tabs at once. A legacy key never parses as a stable
-  // one, so a stable-only tab check would wave it through when its own tab is closed.
+  // Detached legacy aliases can span tabs; their own closed tab must remain fenced.
   it('keeps a legacy alias fenced when its own tab closed but the owner tab did not', async () => {
     const server = new AgentHookServer()
     await server.start({ env: 'production' })
@@ -595,8 +568,7 @@ describe('AgentHookServer listener replay', () => {
       server.retirePaneAuthority(detachedPane)
       server.dropStatusEntriesByTabPrefix('tab-1')
 
-      // The owner tab is open, so the restore proceeds — but the legacy key's own tab
-      // is closed, and its alias must not be rebuilt into the still-open owner.
+      // Restore the open owner without reviving an alias from the closed tab.
       expect(server.restorePaneAuthority(detachedPane)).toBe(true)
 
       await postHook({ hook_event_name: 'before_agent_start', prompt: 'after tab-1 close' })
@@ -627,7 +599,6 @@ describe('AgentHookServer listener replay', () => {
 
       server.registerPaneKeyAlias(legacyPane, PANE, 'pty-old')
       server.retirePaneAuthority(PANE)
-      // The pane rebound to a different owner before the restore landed.
       server.registerPaneKeyAlias(legacyPane, reboundPane, 'pty-new')
       server.restorePaneAuthority(PANE)
 
@@ -658,8 +629,7 @@ describe('AgentHookServer listener replay', () => {
       await postHook({ hook_event_name: 'UserPromptSubmit', prompt: 'first launch' })
       server.retirePaneAuthority(PANE)
 
-      // Why: `claude --resume` in the reused shell pane emits only SessionStart while idle;
-      // without the un-retire the resumed session stays rowless until a prompt (STA-3386).
+      // Idle Claude resume emits only SessionStart; restoration cannot wait for a prompt.
       await postHook({ hook_event_name: 'SessionStart', source: 'resume' })
 
       expect(server.getStatusSnapshot()).toEqual([
@@ -737,7 +707,13 @@ describe('AgentHookServer closed-tab suppression bound', () => {
       internals.markTabClosedForAgentStatus(`closed-tab-${i}`)
     }
 
-    // Set stays bounded; oldest ids are evicted, most-recent are retained.
+    const refreshedTab = `closed-tab-${total - CLOSED_AGENT_STATUS_TAB_IDS_MAX}`
+    const nextOldestTab = `closed-tab-${total - CLOSED_AGENT_STATUS_TAB_IDS_MAX + 1}`
+    internals.markTabClosedForAgentStatus(refreshedTab)
+    internals.markTabClosedForAgentStatus('closed-tab-next')
+
+    expect(internals.closedAgentStatusTabIds.has(refreshedTab)).toBe(true)
+    expect(internals.closedAgentStatusTabIds.has(nextOldestTab)).toBe(false)
     expect(internals.closedAgentStatusTabIds.size).toBe(CLOSED_AGENT_STATUS_TAB_IDS_MAX)
     expect(internals.closedAgentStatusTabIds.has('closed-tab-0')).toBe(false)
     expect(internals.closedAgentStatusTabIds.has(`closed-tab-${total - 1}`)).toBe(true)

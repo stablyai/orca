@@ -82,19 +82,12 @@ function bareSpecifierPackage(specifier) {
   return specifier.startsWith('@') ? segments.slice(0, 2).join('/') : segments[0]
 }
 
-/**
- * The in-root path of a package import whose realpath leaves the root.
- *
- * Under pnpm's global virtual store `<root>/node_modules/<pkg>` links into a store shared by every
- * worktree, so Node's realpath lands outside the root even though the artifact does carry the
- * dependency. Accept it only when a node_modules link inside the root really leads there.
- */
+// Accept external realpath only via actual in-root node_modules link: global pnpm store lives outside artifact while dependency remains shipped.
 function linkedPathInsideRoot(artifactRoot, importer, specifier, resolved) {
   const isBare = !specifier.startsWith('.') && !isAbsolute(specifier)
   let directory = dirname(importer)
   while (!isOutsideRoot(artifactRoot, directory)) {
-    // A bare import reaches the store through node_modules/<pkg>; a relative one through the
-    // linked package dir it sits in.
+    // Bare import crosses node_modules link; relative import crosses linked package directory.
     const candidates = isBare
       ? [join(directory, 'node_modules', bareSpecifierPackage(specifier)), directory]
       : [directory]

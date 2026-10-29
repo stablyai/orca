@@ -62,16 +62,14 @@ export async function adoptRuntimeTerminalOrphansFromInventory(
   }
   let planned: RuntimeTerminalOrphanAdoptionPlan
   if (ports.runDurableMutation) {
-    // Why checked and written inside the store's transaction: a write queued ahead may change the
-    // session, and only the transaction's rollback skips the topology-fence rebase, which treats
-    // a write below the fence (this rollback) as a stale renderer replay and keeps the adoption.
+    // Check/write inside the transaction: prior queued writes may alter topology, and only transaction rollback avoids fence rebase treating rollback as stale replay.
     const outcome = await ports.runDurableMutation<RuntimeTerminalOrphanAdoptionPlan | Error>(
       () => {
         let next: RuntimeTerminalOrphanAdoptionPlan
         try {
           next = plan()
         } catch (error) {
-          // A throwing callback freezes the store; a refusal must not.
+          // Refuse outside throwing transaction callbacks, which freeze the store.
           return {
             value: error instanceof Error ? error : new Error(String(error)),
             persist: false

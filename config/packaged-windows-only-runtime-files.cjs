@@ -6,8 +6,7 @@ const { readPeMachine } = require('./scripts/windows-pe-machine.cjs')
 
 /** Files a runtime package publishes that no desktop package, or only Windows, loads. */
 const RUNTIME_PACKAGE_EXCLUDED_FILES = {
-  // Why: ssh2 spawns pagent.exe only for PuTTY's Pageant agent on Windows; its C source and build
-  // script are build inputs on every platform.
+  // ssh2 uses pagent.exe only on Windows; C source/build script are build-only everywhere.
   ssh2: {
     everyPlatform: ['util/pagent.c', 'util/build_pagent.bat'],
     nonWindows: ['util/pagent.exe']
@@ -38,8 +37,7 @@ function collectWindowsExecutables(directory, found) {
   return found
 }
 
-// Why a content check, not a name list: a dependency bump can add a PE file under any name, and
-// scanners flag a Windows binary in a macOS or Linux install whatever it is called.
+// Inspect content: dependency bumps can add PE files under arbitrary names, and scanners flag them in non-Windows installs.
 function assertNoWindowsExecutablesInRuntimeNodeModules(resourcesDir, electronPlatformName) {
   const nodeModulesDir = join(resourcesDir, 'node_modules')
   if (electronPlatformName === 'win32' || !existsSync(nodeModulesDir)) {

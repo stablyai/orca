@@ -1,4 +1,4 @@
-import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime-pty-id'
+import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { isHibernationDoneRecord } from '../../../../../shared/hibernation-done-record'
 import type { ColdRestoreAgentResumeStartup } from './fresh-spawn-types'
 

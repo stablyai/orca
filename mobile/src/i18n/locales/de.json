@@ -1,0 +1,22 @@
+{
+  "common": {
+    "back": "Zurück"
+  },
+  "settings": {
+    "appearance": {
+      "language": {
+        "description": "„System“ übernimmt die Gerätesprache. Berechtigungsabfragen verwenden immer die Gerätesprache.",
+        "heading": "SPRACHE",
+        "systemWithCurrent": "System ({{language}})"
+      },
+      "theme": {
+        "dark": "Dunkel",
+        "description": "„System“ übernimmt den hellen oder dunklen Modus des Geräts.",
+        "heading": "DESIGN",
+        "light": "Hell",
+        "system": "System"
+      },
+      "title": "Darstellung"
+    }
+  }
+}

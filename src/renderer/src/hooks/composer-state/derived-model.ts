@@ -3,7 +3,7 @@ import type { OrcaHooks, SetupRunPolicy } from '../../../../shared/orca-yaml-hoo
 import type { SparsePreset } from '../../../../shared/worktree/create-types'
 import type { RetiredNameRegistry } from '../../../../shared/worktree/retired-name-registry'
 import type { GitHubLinkQuery } from '@/lib/github-links'
-import type { SetupConfig } from '@/lib/new-workspace'
+import type { SetupConfig } from '../../../../shared/orca-hook-setup-config'
 
 export type ComposerDerivedModel = {
   sparsePresetsForRepo: SparsePreset[]

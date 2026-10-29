@@ -106,7 +106,6 @@ export function useBrowserPageKeyboardShortcuts({
       if (isEditableKeyboardTarget(e.target)) {
         return
       }
-      // Ignore if modifier keys are held — user may be doing Cmd+C etc.
       if (e.metaKey || e.ctrlKey || e.altKey) {
         return
       }

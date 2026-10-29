@@ -3,6 +3,7 @@ import { callAbortableRuntimeEnvironment } from '../../runtime/abortable-runtime
 import { toRuntimeWorktreeSelector } from '../../runtime/runtime-worktree-selector'
 import { translate } from '@/i18n/i18n'
 import { callRuntimeResult } from './web-runtime-calls'
+import { mutateGitPath, mutateGitPaths } from './web-git-mutations'
 import { requireGitStageWorktreeScopeReceipt } from '../../../../shared/git-stage-worktree-scope'
 import { requireActiveEnvironment, updateEnvironmentFromResponse } from './web-runtime-session'
 import {
@@ -94,6 +95,12 @@ export function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
         worktree: toRuntimeWorktreeSelector(worktree.id),
         limit,
         baseRef
+      })
+    },
+    mutationInFlight: async ({ worktreePath }) => {
+      const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
+      return callRuntimeResult('git.mutationInFlight', {
+        worktree: toRuntimeWorktreeSelector(worktree.id)
       })
     },
     conflictOperation: async ({ worktreePath }) => {
@@ -266,12 +273,13 @@ export function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
         await mutateGitPath('git.discard', worktreePath, filePath)
       }
     },
-    remoteFileUrl: async ({ worktreePath, relativePath, line }) => {
+    remoteFileUrl: async ({ worktreePath, relativePath, line, endLine }) => {
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
       return callRuntimeResult('git.remoteFileUrl', {
         worktree: toRuntimeWorktreeSelector(worktree.id),
         relativePath,
-        line
+        line,
+        endLine
       })
     },
     remoteCommitUrl: async ({ worktreePath, sha }) => {
@@ -282,25 +290,4 @@ export function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
       })
     }
   }
-}
-
-export async function mutateGitPath(
-  method: string,
-  worktreePath: string,
-  filePath: string
-): Promise<void> {
-  const file = await resolveRuntimeFilePath(filePath, worktreePath)
-  await callRuntimeResult(method, {
-    worktree: toRuntimeWorktreeSelector(file.worktree.id),
-    filePath: file.relativePath
-  })
-}
-
-export async function mutateGitPaths(
-  method: string,
-  worktreePath: string,
-  filePaths: string[]
-): Promise<void> {
-  const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
-  await callRuntimeResult(method, { worktree: toRuntimeWorktreeSelector(worktree.id), filePaths })
 }

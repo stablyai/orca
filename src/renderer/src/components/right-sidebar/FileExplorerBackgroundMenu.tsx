@@ -13,8 +13,7 @@ function stopRightButtonMenuSelection(event: React.PointerEvent): void {
   if (event.button !== 2) {
     return
   }
-  // Why: the synthetic trigger sits at the cursor; the right-button release
-  // can otherwise land on "New File" and select it immediately.
+  // Right-button release over the cursor-positioned trigger must not immediately select New File.
   event.preventDefault()
   event.stopPropagation()
 }

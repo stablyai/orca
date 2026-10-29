@@ -1,20 +1,11 @@
-/**
- * The dormant migration's terminal gate: a relay PTY cannot move into orcad, so the source must
- * prove that every terminal it ever leased on the target has exited, or (COMPAT legacy-relay-bridge)
- * leave the ones that may still run to the bridge. Loss of contact is never exit: a census that
- * cannot answer, or a lease nothing can account for, never reads as `exited`.
- */
+/** Relay PTYs cannot move to orcad: prove host-wide exit or retain possible survivors in the legacy bridge. Lost contact and unaccounted leases never prove exit. */
 import { isLiveSshPtyLease, type SshRemotePtyLease } from '../../shared/ssh-types'
 import type { Store } from '../persistence'
 import { PtyExitProof } from '../pty-exit-proof'
 
 export type OrcadMigrationTerminalVerdict =
   | { verdict: 'exited'; provenPtyIds: string[] }
-  /**
-   * COMPAT(legacy-relay-bridge, revisit 2027-01-15): relay terminals may still run, and the host
-   * converts anyway. Converting stops nothing; src/main/ssh/legacy-relay/ keeps serving
-   * these leases' panes from the old relay until each terminal exits.
-   */
+  /** COMPAT(legacy-relay-bridge, revisit 2027-01-15): conversion stops nothing; the bridge serves possible surviving leases until relay-proven exit. */
   | {
       verdict: 'bridged'
       relayVerdict: 'live' | 'unverifiable'
@@ -29,23 +20,14 @@ export type OrcadMigrationTerminalVerdict =
       hostTerminals?: number
     }
 
-/** A census of the host's relay endpoints. */
 export type HostRelayTerminalProof = { verdict: 'exited' | 'live' | 'unverifiable'; count: number }
 
-/**
- * Every relay endpoint on the account, whichever desktop's target launched it. The only evidence
- * that can prove the host idle; a census that throws proves nothing.
- */
+/** Only a complete account-wide relay census can prove idle; other desktops hash different target ids and failed censuses prove nothing. */
 export type CensusHostRelayTerminals = () => Promise<HostRelayTerminalProof>
 
 type LeaseStore = Pick<Store, 'getSshRemotePtyLeases'>
 
-/**
- * Taken before the fence. Read-only, so previews may ask. Only a complete host-wide census can
- * prove exit: another desktop's relay on the same account runs under a different target id, and
- * nothing else can answer for leases an older build left behind. Without a census, any lease that
- * may still run blocks, and an empty lease list is `unverifiable`, never exit.
- */
+/** Read-only pre-fence assessment. Only host-wide census proves exit; without it even an empty local lease list stays unverifiable. */
 export async function assessOrcadMigrationTerminals(
   store: LeaseStore,
   targetId: string,
@@ -91,10 +73,7 @@ async function hostWideVerdict(
   }
 }
 
-/**
- * Only the host-wide census counted them: no lease or listing of this target names one, so they
- * run under another desktop's target or session and stopping this target's terminals can't end them.
- */
+/** Host-censused terminals without local leases belong to another desktop/session; stopping this target cannot end them. */
 export function terminalsRunElsewhere(proof: OrcadMigrationTerminalVerdict): boolean {
   return (
     (proof.verdict === 'live' || proof.verdict === 'unverifiable') &&
@@ -103,12 +82,7 @@ export function terminalsRunElsewhere(proof: OrcadMigrationTerminalVerdict): boo
   )
 }
 
-/**
- * Whoever acts on an exited proof (a conversion or a move) marks every lease it covers terminated,
- * so later checks stop reading them as running or unverifiable and the next connect can convert.
- * Attached ones too (#29083): only a host-wide census proves exit, and with no relay left on the
- * host an `attached` row is one an older build never got to detach.
- */
+/** Retire every lease covered by proven host-wide exit, including attached rows older builds never detached (#29083). */
 export function retireProvenExitedLeases(
   store: Pick<Store, 'getSshRemotePtyLeases' | 'markSshRemotePtyLease'>,
   targetId: string,
@@ -126,10 +100,7 @@ export function retireProvenExitedLeases(
   }
 }
 
-/**
- * Re-checked under the fence, after the direct session was let go: the fence stops new leases, so any
- * lease the earlier proof did not cover means a terminal started in between.
- */
+/** Recheck after fencing blocks new leases: any lease absent from the earlier proof started between checks. */
 export function confirmOrcadMigrationTerminalsUnderFence(
   store: LeaseStore,
   targetId: string,

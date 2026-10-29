@@ -171,8 +171,7 @@ export function useEmulatorControlStream(
           }
           continue
         }
-        // Why: serve-sim spaces keyboard HID frames slightly; sending
-        // down/up/shift frames in the same tick can be dropped by CoreSimulator.
+        // Space HID frames because CoreSimulator can drop down/up/shift events sent in the same tick.
         const timerId = window.setTimeout(() => {
           keyboardTimerIdsRef.current.delete(timerId)
           sendKeyboardFrameNow(frame)

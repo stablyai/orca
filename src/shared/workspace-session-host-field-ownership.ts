@@ -19,11 +19,8 @@ export const WORKSPACE_SESSION_FIELD_OWNERSHIP = {
   activeTabId: 'global',
   browserUrlHistory: 'global',
   workspaceDocHistory: 'global',
-  // Why global rather than per-partition: this is the client's own record of which connections it
-  // owed work to at shutdown, not state belonging to any one workspace.
+  // Client shutdown/reconnect obligations are global, independent of workspace ownership.
   activeConnectionIdsAtShutdown: 'global',
-  // Why global: keyed by runtime environment rather than by worktree, and it is this client's
-  // record of what it owes those environments — the same reason SSH connection state stays local.
   clientHostedBrowserCloseIntentsByEnvironment: 'global',
   pairedTerminalTabCloseIntentsByEnvironment: 'global',
   tabsByWorktree: 'worktreeKeyed',
@@ -33,8 +30,7 @@ export const WORKSPACE_SESSION_FIELD_OWNERSHIP = {
   activeTabTypeByWorktree: 'worktreeKeyed',
   activeTabIdByWorktree: 'worktreeKeyed',
   browserTabsByWorktree: 'worktreeKeyed',
-  // Runtime-authored, never written by this renderer; classified so a merged read still routes each
-  // worktree's rows back to the host that owns them instead of dropping them.
+  // Runtime-authored rows still need owner routing on merged reads, even though the renderer never writes them.
   clientHostedBrowserPagesByWorktree: 'worktreeKeyed',
   unifiedTabs: 'worktreeKeyed',
   tabGroups: 'worktreeKeyed',
@@ -45,8 +41,7 @@ export const WORKSPACE_SESSION_FIELD_OWNERSHIP = {
   activeWorkspaceKey: 'global',
   activeWorktreeIdsOnShutdown: 'worktreeArray',
   terminalLayoutsByTabId: 'tabKeyed',
-  // Local-only, never uploaded — but still routed per host so a tab's park scrollback follows its
-  // own partition rather than merging across hosts the way sleepingAgentKeyed rows do.
+  // Local-only scrollback never uploads but follows its tab’s host partition; do not merge it across hosts like sleeping-agent rows.
   localOnlyScrollbackByTabId: 'tabKeyed',
   remoteSessionIdsByTabId: 'tabKeyed',
   browserPagesByWorkspace: 'browserWorkspaceKeyed',
@@ -56,9 +51,9 @@ export const WORKSPACE_SESSION_FIELD_OWNERSHIP = {
   // Why: this host-issued fence must never collide while unified renderer state merges equal repo ids across hosts.
   terminalTopologyRevisionByRepoId: 'hostPrivate',
   terminalSurfaceTombstonesByPaneKey: 'surfaceTombstoneKeyed',
-  // Why not tabKeyed: the tab is already gone, so worktreeIdByTabId can never resolve it. Routing by
-  // the record's own worktreeId is the same problem terminalSurfaceTombstonesByPaneKey has.
-  closedTerminalTabTombstonesByTabId: 'surfaceTombstoneKeyed'
+  // Closed tabs no longer appear in worktreeIdByTabId; route tombstones by their recorded workspace, as for closed panes.
+  closedTerminalTabTombstonesByTabId: 'surfaceTombstoneKeyed',
+  closedTerminalPanesByPaneKey: 'surfaceTombstoneKeyed'
 } as const satisfies Record<keyof WorkspaceSessionState, WorkspaceSessionFieldOwnership>
 
 // Why: an unclassified persisted field would otherwise disappear from every non-local host.
@@ -69,7 +64,6 @@ type MissingOwnership = Exclude<
 const exhaustive: [MissingOwnership] extends [never] ? true : never = true
 void exhaustive
 
-/** The global fields that name what the client is focused on. */
 export const SESSION_FOCUS_FIELDS = [
   'activeRepoId',
   'activeWorktreeId',
@@ -82,33 +76,14 @@ export const GLOBAL_WORKSPACE_SESSION_FIELDS = (
   Object.keys(WORKSPACE_SESSION_FIELD_OWNERSHIP) as (keyof WorkspaceSessionState)[]
 ).filter((field) => WORKSPACE_SESSION_FIELD_OWNERSHIP[field] === 'global')
 
-/**
- * Global session fields that belong to the 'local' slice alone: `splitWorkspaceSessionByHost`
- * writes them only there and `mergeWorkspaceSessionsFromHosts` reads them only from there. A copy
- * inside a non-local partition is residue no read can reach — stale `browserUrlHistory` replicas
- * alone were 589 KB, 12.7% of a 4.65 MB store, rewritten on every save and reparsed on every
- * launch.
- *
- * Deliberately NOT every field in `GLOBAL_WORKSPACE_SESSION_FIELDS`. Two separate gates disqualify
- * the rest, and both are load-bearing:
- *  - `activeWorktreeId` and `activeWorkspaceKey` are `'direct'` in
- *    `WORKSPACE_SESSION_WORKTREE_REFERENCE_KIND`, and both `collectPersistedSessionWorktreeOwners`
- *    and the deregistered-repo residue sweep read them out of EVERY partition. Dropping one
- *    un-owns a worktree, and an un-owned worktree gets its metadata pruned.
- *  - `activeTabId`, `activeConnectionIdsAtShutdown` and `activeRepoId` have live main-side readers
- *    on a partition: `isPersistedTerminalLeafActive` falls back to `activeTabId` for the mobile
- *    projection, and the runtime attach-window handoff unions `activeConnectionIdsAtShutdown`.
- *
- * `workspace-session-partitions.test.ts` re-checks both gates for every field listed here.
- */
+/** These globals are read from local only; redundant non-local copies waste every save/load.
+ * Keep focus/workspace references used to establish ownership and fields with main-side partition readers (activeTabId, activeConnectionIdsAtShutdown, activeRepoId). The partition tests verify both exclusions. */
 export const HOST_PARTITION_REDUNDANT_GLOBAL_FIELDS = [
   'browserUrlHistory',
   'workspaceDocHistory'
 ] as const satisfies readonly (keyof WorkspaceSessionState)[]
 
-/** Serialize-side sweep over every non-local partition. The load path re-seeds these fields at
- *  their default from the session defaults spread, so a partition that holds only that default
- *  still costs bytes on every save; this is where those go. Returns the input when nothing drops. */
+/** Sweep non-local slices on serialization because default spreading reintroduces these fields on load. Return the input if nothing drops. */
 export function withoutRedundantPartitionGlobals<
   T extends Partial<Record<string, WorkspaceSessionState>>
 >(partitions: T, local: Partial<WorkspaceSessionState> | undefined): T {
@@ -130,14 +105,11 @@ export function withoutRedundantPartitionGlobals<
   return (pruned as T | undefined) ?? partitions
 }
 
-/** Non-local slice template: the same globals minus the ones only 'local' is ever read for. */
 export function hostPartitionSliceTemplate(template: WorkspaceSessionState): WorkspaceSessionState {
   return withoutRedundantGlobalFields(template, template)
 }
 
-/** Drop redundant globals only where `local` already holds the field — exactly when the merge's
- *  fallback to another slice cannot fire. Returns `slice` untouched when nothing is dropped, so
- *  callers that rely on identity keep it. */
+/** Drop redundant globals only when local already holds them, preserving merge fallback. Return slice unchanged for a no-op. */
 export function withoutRedundantGlobalFields<T extends Partial<WorkspaceSessionState>>(
   slice: T,
   local: Partial<WorkspaceSessionState> | undefined

@@ -10,10 +10,7 @@ import {
 } from 'react'
 import type { BrowserAddressBarSuggestion } from './browser-address-bar-suggestions'
 
-/**
- * Chrome-style inline autocomplete: typing the start of a visited address fills in the rest,
- * selected, so Enter goes there and the next keystroke simply replaces it.
- */
+/** Select the completed suffix so Enter accepts it and the next keystroke replaces it. */
 export function useBrowserAddressBarInlineCompletion({
   inputRef,
   value,
@@ -36,8 +33,7 @@ export function useBrowserAddressBarInlineCompletion({
   /** Moving the caret off the completion (ArrowRight, End, a click) accepts it as typed text. */
   acceptOnCaretMove: (event: SyntheticEvent<HTMLInputElement>) => void
 } {
-  // Why an object: the next keystroke often completes to the same text, and a fresh object still
-  // re-renders so the selection below is put back after React restores the input's value.
+  // Use fresh object identity to restore selection even when consecutive keystrokes produce the same completed text.
   const [inline, setInline] = useState<{ text: string } | null>(null)
   const inlineText = inline?.text ?? null
   const pendingSelectionRef = useRef<{ start: number; end: number } | null>(null)
@@ -97,8 +93,7 @@ export function useBrowserAddressBarInlineCompletion({
   return { inlineText, completeTyping, clearInline, showInline, acceptOnCaretMove }
 }
 
-// Why typing only: like Chrome, a paste, an IME composition or a deletion never completes,
-// so Backspace removes the completion instead of bringing it straight back.
+// Complete only typing; paste, IME and deletion must not restore the suffix Backspace just removed.
 function isTypingAtEnd(event: ChangeEvent<HTMLInputElement>, typed: string): boolean {
   const native = event.nativeEvent
   return (

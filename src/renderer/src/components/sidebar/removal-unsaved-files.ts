@@ -39,10 +39,7 @@ export function projectRemovalTargets(
   )
 }
 
-/**
- * For removals with no confirm of their own: refuses while they would discard unsaved editor
- * text, and says which workspace or project to save or close first.
- */
+/** Refuse removal without confirmation when it would discard unsaved editor text. */
 export function blockRemovalForUnsavedFiles(
   getState: () => AppState,
   targets: readonly WorktreePurgeTarget[],

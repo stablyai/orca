@@ -137,7 +137,6 @@ describe('estimateWorktreeParentPickerHeight', () => {
   it('grows with the candidate count up to the list cap', () => {
     expect(estimateWorktreeParentPickerHeight(1)).toBe(79 + 56)
     expect(estimateWorktreeParentPickerHeight(3)).toBe(79 + 168)
-    // Why: matches the height measured on a rendered picker in the dev app.
     expect(estimateWorktreeParentPickerHeight(300)).toBe(367)
   })
 

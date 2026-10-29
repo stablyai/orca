@@ -75,7 +75,6 @@ function setupCopy(mode: SetupMode, env: string, folder: string) {
   }
 }
 
-/** Gets ipykernel into the notebook's Python: pip install, or a new .venv when pip is locked out. */
 export function IpynbKernelSetupDialog({
   filePath,
   rootPath,

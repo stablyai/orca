@@ -35,19 +35,14 @@ export function mergeSystemCodexConfigIntoRuntime(
       .filter((section) => getProjectTrustLevel(section.block) === 'untrusted')
       .map((section) => getRevocationTomlSectionHeaderKey(section.header))
   )
-  // Why: an exact-cased trusted entry in ~/.codex is the user's latest explicit
-  // decision for that exact project; a loosely-matched (case-drifted) revocation
-  // must not override it, or re-granting trust would be reverted every mirror.
+  // Exact-cased re-grants must override legacy case-drifted revocations or each mirror reverts trust.
   const systemTrustedProjectHeaders = new Set(
     systemProjectSections
       .filter((section) => getProjectTrustLevel(section.block) === 'trusted')
       .map((section) => getTomlSectionHeaderKey(section.header))
   )
   const systemMcpServers = readMcpServerTomlOwnership(systemConfig)
-  // Why: ordinary Codex settings should mirror ~/.codex exactly; runtime hook
-  // trust and project trust are written under Orca's managed CODEX_HOME and
-  // must survive the copy unless the user explicitly revoked project trust in
-  // the system config.
+  // Mirror ordinary settings while retaining runtime trust, subject to explicit system project revocations.
   return joinTomlBlocks([
     stripRuntimeOwnedTomlSections(systemConfig, runtimeProjectHeaders, {
       systemHomeDir: systemConfigDir,

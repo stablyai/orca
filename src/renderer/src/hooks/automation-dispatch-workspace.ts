@@ -195,8 +195,7 @@ export async function prepareAutomationDispatchWorkspace(args: {
           undefined,
           undefined,
           undefined,
-          // Why: the automation session below owns the prompt-bearing
-          // agent tab; createdWithAgent would reopen an empty fallback.
+          // The automation owns its prompt-bearing tab; createdWithAgent would reopen an empty fallback.
           undefined,
           undefined,
           undefined,

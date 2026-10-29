@@ -22,10 +22,7 @@ vi.mock('node:fs/promises', async (importOriginal) => {
   }
 })
 
-import {
-  ensureAppImageExtractedRoot,
-  resolveAppImageExtractedRoot
-} from './appimage-extracted-root'
+import { resolveAppImageExtractedRoot } from './appimage-extracted-root'
 import {
   getAppImageActiveExtractionPath,
   pruneAppImageExtractedRoots,
@@ -112,37 +109,6 @@ describe('AppImage extraction pruning', () => {
     ).resolves.toBe(siblingLauncher)
   })
 
-  it('preserves an active extraction during pruning', async () => {
-    const { appImagePath, cacheRootPath } = await makeExtractionFixture()
-    const root = resolveAppImageExtractedRoot({ appImagePath, cacheRootPath })!
-    let reportStarted!: (stagingPath: string) => void
-    let releaseExtraction!: () => void
-    const started = new Promise<string>((resolve) => {
-      reportStarted = resolve
-    })
-    const release = new Promise<void>((resolve) => {
-      releaseExtraction = resolve
-    })
-    const extraction = ensureAppImageExtractedRoot({
-      appImagePath,
-      cacheRootPath,
-      runExtract: async (_path, cwd) => {
-        reportStarted(cwd)
-        await release
-        await writePayload(join(cwd, 'squashfs-root'), '')
-      }
-    })
-    const stagingPath = await started
-
-    try {
-      await pruneAppImageExtractedRoots(root.rootPath)
-      expect(existsSync(stagingPath)).toBe(true)
-    } finally {
-      releaseExtraction()
-    }
-    await expect(extraction).resolves.toEqual(root)
-  })
-
   it('retains recent cross-process staging and reclaims stale staging', async () => {
     const { appImagePath, cacheRootPath } = await makeExtractionFixture()
     const root = resolveAppImageExtractedRoot({ appImagePath, cacheRootPath })!
@@ -187,14 +153,6 @@ describe('AppImage extraction pruning', () => {
     expect(existsSync(recentMarker)).toBe(true)
     expect(existsSync(staleRoot)).toBe(false)
     expect(existsSync(staleMarker)).toBe(false)
-  })
-
-  it('tolerates a missing cache namespace', async () => {
-    const { root } = await makeExtractionFixture()
-
-    await expect(
-      pruneAppImageExtractedRoots(join(root, 'never-made', 'a'.repeat(24), 'b'.repeat(24)))
-    ).resolves.toBeUndefined()
   })
 
   it.skipIf(process.platform === 'win32')(

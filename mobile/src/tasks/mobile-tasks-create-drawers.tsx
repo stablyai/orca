@@ -86,8 +86,7 @@ export function renderMobileTasksCreateDrawer(model: ConnectionPresentationModel
                 selectedCreateTarget
                   ? {
                       backgroundColor: getRepoBadgeColor(
-                        selectedCreateTarget as RepoSummary,
-                        (selectedCreateTarget as RepoSummary).displayName
+                        'badgeColor' in selectedCreateTarget ? selectedCreateTarget : undefined
                       )
                     }
                   : undefined

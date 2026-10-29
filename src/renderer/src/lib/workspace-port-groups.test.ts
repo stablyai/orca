@@ -7,6 +7,10 @@ import {
 
 describe('workspace port group caches', () => {
   it('returns stable empty references when no scan result exists', () => {
+    expect(getWorkspacePortsByWorktreeId(null).size).toBe(0)
+    expect(getWorkspacePortGroups(null)).toEqual([])
+    expect(getExternalWorkspacePorts(null)).toEqual([])
+
     expect(getWorkspacePortsByWorktreeId(null)).toBe(getWorkspacePortsByWorktreeId(undefined))
     expect(getWorkspacePortGroups(null)).toBe(getWorkspacePortGroups(undefined))
     expect(getExternalWorkspacePorts(null)).toBe(getExternalWorkspacePorts(undefined))

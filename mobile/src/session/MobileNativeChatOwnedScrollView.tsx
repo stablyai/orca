@@ -9,11 +9,10 @@ import {
   type Ref
 } from 'react'
 import { Platform, ScrollView } from 'react-native'
-import { MobileNativeChatDisclosureContext } from './mobile-native-chat-disclosure-store'
+import { MobileNativeChatDisclosureContext } from './native-chat/transcript/mobile-native-chat-disclosure-store'
 
 const RootAddress = createContext<{ id: string; address: string; owner: string } | null>(null)
 
-/** Every vertical transcript viewport declares its owner, even before it overflows. */
 export function MobileNativeChatOwnedScrollView({
   positionKey,
   rootIdentity = positionKey,

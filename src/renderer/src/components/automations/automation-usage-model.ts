@@ -1,7 +1,7 @@
+import { translate } from '@/i18n/i18n'
 import type { AutomationRunUsage } from '../../../../shared/automations-types'
 
-// Why: the summary is computed by whichever authority owns the retained runs, so
-// it lives in shared code; only the display formatting below is renderer-only.
+// Keep retained-run summaries shared across owning authorities; only display formatting belongs to the renderer.
 export type { AutomationUsageSummary } from '../../../../shared/automation-usage-summary'
 export { summarizeAutomationRunUsage } from '../../../../shared/automation-usage-summary'
 
@@ -32,9 +32,27 @@ export function getAutomationUsageStatusLabel(
   usage: AutomationRunUsage | null | undefined
 ): string {
   if (!usage || usage.status === 'unavailable') {
-    return usage?.unavailableMessage ?? 'Usage unavailable'
+    return (
+      usage?.unavailableMessage ??
+      translate('auto.components.automations.AutomationsPage.usageUnavailable', 'Usage unavailable')
+    )
   }
-  const cost = formatAutomationCost(usage.estimatedCostUsd)
-  const tokens = formatAutomationTokens(usage.totalTokens)
-  return `${tokens} tokens · ${cost}`
+  const count = usage.totalTokens ?? 0
+  const params = {
+    count,
+    tokens: formatAutomationTokens(usage.totalTokens),
+    cost: formatAutomationCost(usage.estimatedCostUsd)
+  }
+  // count drives CLDR plural selection; tokens is the compact display form.
+  return count === 1
+    ? translate(
+        'auto.components.automations.usage.tokensAndCost_one',
+        '{{tokens}} token · {{cost}}',
+        params
+      )
+    : translate(
+        'auto.components.automations.usage.tokensAndCost_other',
+        '{{tokens}} tokens · {{cost}}',
+        params
+      )
 }

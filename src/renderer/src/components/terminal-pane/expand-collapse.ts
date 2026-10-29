@@ -69,10 +69,7 @@ export function applyExpandedLayoutTo(
       }
       rememberPaneStyle(snapshots, child)
       if (child === current) {
-        // Only update flex — do NOT reset display to '' because split
-        // containers rely on inline `display: flex` (no CSS class rule
-        // exists for it). Clearing it collapses the flex context, which
-        // prevents FitAddon from measuring the expanded dimensions.
+        // Preserve inline display:flex because clearing it collapses split layout and breaks FitAddon measurement.
         child.style.flex = '1 1 auto'
       } else {
         child.style.display = 'none'
@@ -125,11 +122,7 @@ export function createExpandCollapseActions(state: ExpandCollapseState) {
     restoreExpandedLayoutFrom(state.expandedStyleSnapshotRef.current)
   }
 
-  // Why: expand/collapse flips inline display/flex styles on ancestor panes
-  // synchronously. The rAF here lets layout settle so FitAddon's
-  // proposeDimensions reads the final rects, not the pre-toggle ones.
-  // safeFit owns scroll preservation; content matching here jumped to the
-  // wrong duplicate scrollback line in long sessions.
+  // Fit after rAF settles ancestor display/flex changes; safeFit owns scroll preservation to avoid matching duplicate scrollback lines.
   const refreshPaneSizes = (focusActive: boolean): void => {
     requestPaneSizeRefreshFrame(state, () => {
       const manager = state.managerRef.current
@@ -207,8 +200,7 @@ export function createExpandCollapseActions(state: ExpandCollapseState) {
   }
 }
 
-// Why: four of these actions are deps of the terminal keyboard effect; unstable
-// identities would tear down and re-register its window listeners every render.
+// Keep keyboard-effect dependencies stable so expand/collapse cannot reinstall window listeners on every render.
 export function useExpandCollapseActions(state: ExpandCollapseState) {
   const {
     expandedPaneIdRef,

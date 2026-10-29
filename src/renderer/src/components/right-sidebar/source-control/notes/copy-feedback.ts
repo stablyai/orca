@@ -12,7 +12,7 @@ export function useCopyFeedbackState<T>(resetValue: T): [T, (value: T) => void] 
     }
   }, [])
 
-  // Why: copy feedback timers are event-owned but still need unmount cleanup so delayed work can't update a destroyed component.
+  // Clean up event-owned timers on unmount so delayed feedback cannot update a destroyed component.
   useEffect(() => {
     mountedRef.current = true
     return () => {

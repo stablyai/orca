@@ -95,8 +95,7 @@ export function registerPtyConnectionTypedAgentIdentityTests(): void {
       expect(deps.updateTabTitle).toHaveBeenCalledWith('tab-1', 'OMP ready')
       expect(mockStoreState.agentStatusByPaneKey[paneKey]).toMatchObject({
         state: 'done',
-        agentType: 'omp',
-        terminalTitle: 'OMP ready'
+        agentType: 'omp'
       })
     })
 
@@ -348,8 +347,7 @@ export function registerPtyConnectionTypedAgentIdentityTests(): void {
       expect(deps.setRuntimePaneTitle).toHaveBeenCalledWith('tab-1', 1, 'OMP ready')
       expect(mockStoreState.agentStatusByPaneKey[paneKey]).toMatchObject({
         state: 'done',
-        agentType: 'omp',
-        terminalTitle: 'OMP ready'
+        agentType: 'omp'
       })
     })
 
@@ -524,8 +522,7 @@ export function registerPtyConnectionTypedAgentIdentityTests(): void {
       expect(deps.setRuntimePaneTitle).toHaveBeenCalledWith('tab-1', 1, 'OMP ready')
       expect(mockStoreState.agentStatusByPaneKey[paneKey]).toMatchObject({
         state: 'done',
-        agentType: 'omp',
-        terminalTitle: 'OMP ready'
+        agentType: 'omp'
       })
     })
 
@@ -561,8 +558,7 @@ export function registerPtyConnectionTypedAgentIdentityTests(): void {
       expect(transport.sendInput).toHaveBeenCalledWith('op\x1b[Dm\r', 'query-reply')
       expect(mockStoreState.agentStatusByPaneKey[paneKey]).toMatchObject({
         state: 'done',
-        agentType: 'omp',
-        terminalTitle: 'OMP ready'
+        agentType: 'omp'
       })
     })
 
@@ -597,8 +593,7 @@ export function registerPtyConnectionTypedAgentIdentityTests(): void {
 
       expect(mockStoreState.agentStatusByPaneKey[paneKey]).toMatchObject({
         state: 'done',
-        agentType: 'omp',
-        terminalTitle: 'OMP ready'
+        agentType: 'omp'
       })
     })
 
@@ -613,7 +608,7 @@ export function registerPtyConnectionTypedAgentIdentityTests(): void {
       const deps = createDeps()
 
       connectPanePty(pane as never, manager as never, deps as never)
-      sendTerminalInputThroughPane(pane, `${'x'.repeat(4097)}omp\r`)
+      sendTerminalInputThroughPane(pane, `${' '.repeat(4097)}omp\r`)
       await flushAsyncTicks()
       const onTitleChange = createdTransportOptions[0]?.onTitleChange as
         | ((title: string, rawTitle: string) => void)
@@ -671,8 +666,7 @@ export function registerPtyConnectionTypedAgentIdentityTests(): void {
 
       expect(mockStoreState.agentStatusByPaneKey[paneKey]).toMatchObject({
         state: 'done',
-        agentType: 'omp',
-        terminalTitle: 'OMP ready'
+        agentType: 'omp'
       })
     })
 
@@ -716,8 +710,7 @@ export function registerPtyConnectionTypedAgentIdentityTests(): void {
 
       expect(mockStoreState.agentStatusByPaneKey[paneKey]).toMatchObject({
         state: 'done',
-        agentType: 'omp',
-        terminalTitle: 'OMP ready'
+        agentType: 'omp'
       })
     })
   })

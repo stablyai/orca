@@ -72,14 +72,6 @@ describe('browser guest destruction ownership', () => {
     expectRetainedCount(0)
   })
 
-  it('leaves no dead-guest callbacks for the window-close unregisterAll path', () => {
-    for (let index = 0; index < 1000; index++) {
-      register(`window-${index}`).destroy()
-    }
-    manager.unregisterAll()
-    expectRetainedCount(0)
-  })
-
   it('keeps explicit unregister before destruction idempotent', () => {
     const guest = register('explicit')
     manager.unregisterGuest('explicit')

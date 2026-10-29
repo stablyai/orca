@@ -70,7 +70,6 @@ vi.mock('./rate-limit', () => ({
   rateLimitGuard: rateLimitGuardMock,
   noteRateLimitSpend: noteRateLimitSpendMock,
   getRateLimit: vi.fn(async () => ({ ok: false, error: 'not probed in tests' })),
-  // Mirror production: shared-scope calls delegate to the global guard/spend.
   repositoryRateLimitGuard: vi.fn((_repo: unknown, bucket: string) => rateLimitGuardMock(bucket)),
   noteRepositoryRateLimitSpend: vi.fn((_repo: unknown, bucket: string, cost?: number) =>
     noteRateLimitSpendMock(bucket, cost)
@@ -82,8 +81,7 @@ vi.mock('./github-api-repository', async (importOriginal) => {
   const actual = await importOriginal<typeof GithubApiRepositoryModule>()
   return {
     ...actual,
-    // Why: these suites drive source resolution through the legacy gh-utils
-    // mocks; bridge the hosted seams onto the same mocks.
+    // Bridge hosted source resolution to the suite's gh-utils fixtures.
     resolveIssueGitHubApiRepositorySource: (
       repoPath: string,
       preference: unknown,
@@ -118,8 +116,6 @@ import { _resetRemoteNameListingCache } from '../git/remote-name-listing'
 
 import { _resetOriginGitHubApiRepositoryCache } from './github-api-repository'
 
-// The origin-repository cache is module-level state; reset it so slugs
-// resolved by one test cannot leak into the next.
 beforeEach(() => {
   _resetOriginGitHubApiRepositoryCache()
 })
@@ -139,17 +135,12 @@ describe('listWorkItems', () => {
     acquireMock.mockReset()
     releaseMock.mockReset()
     acquireMock.mockResolvedValue(undefined)
-    // Why: preference-aware `listWorkItems` calls `resolveIssueSource`.
-    // Route through the same `getIssueOwnerRepoMock` so existing tests that
-    // only set up `getIssueOwnerRepoMock` continue to work.
+    // Preserve one source lookup through the preference-aware resolver.
     resolveIssueSourceMock.mockImplementation(async () => ({
       source: await getIssueOwnerRepoMock(),
       fellBack: false
     }))
-    // Why: since #7331 `resolvePrWorkItemSource` fetches origin through
-    // `getOwnerRepoForRemote` (getOwnerRepo became upstream-first). Delegate
-    // the origin probe to `getOwnerRepoMock` so existing tests keep defining
-    // the PR-side origin through it; default upstream to null.
+    // Bridge explicit origin to getOwnerRepoMock; upstream candidates require opt-in fixtures.
     getOwnerRepoForRemoteMock.mockImplementation(
       async (repoPath: string, remoteName: string, connectionId?: string | null, opts = {}) =>
         remoteName === 'origin' ? getOwnerRepoMock(repoPath, connectionId, opts) : null
@@ -169,8 +160,6 @@ describe('listWorkItems', () => {
 
     const calls = ghExecFileAsyncMock.mock.calls
     expect(calls.length).toBeGreaterThan(0)
-    // Why: every list spawn must pin options.host so the runner targets the
-    // Enterprise server instead of gh's default host.
     expect(calls.every(([, options]) => options?.host === 'github.acme-corp.com')).toBe(true)
   })
 
@@ -178,8 +167,7 @@ describe('listWorkItems', () => {
     getIssueOwnerRepoMock.mockResolvedValue(null)
     getOwnerRepoMock.mockResolvedValue(null)
 
-    // Why: unresolved sources must return empty null-source envelopes (not throw, not query) so the renderer can
-    // distinguish "no GitHub source detected" from genuine zero via `sources` (#9660 follow-up).
+    // Null-source envelopes distinguish unavailable repository identity from successful empty work.
     await expect(listWorkItems('/private-repo', 36)).resolves.toMatchObject({
       items: [],
       sources: { issues: null, prs: null }
@@ -287,7 +275,7 @@ describe('listWorkItems', () => {
         '--repo',
         'acme/widgets',
         '--search',
-        'is:pr assignee:@me sort:created-desc'
+        'assignee:@me sort:created-desc'
       ],
       { cwd: '/repo-root' }
     )
@@ -369,8 +357,6 @@ describe('listWorkItems', () => {
       null,
       localGitOptions
     )
-    // Why: the suite bridge routes origin through getOwnerRepoMock and non-origin
-    // remotes through getOwnerRepoForRemoteMock.
     expect(getOwnerRepoMock).toHaveBeenCalledWith('/repo-root', null, localGitOptions)
     expect(getOwnerRepoForRemoteMock).toHaveBeenCalledWith(
       '/repo-root',
@@ -519,7 +505,7 @@ describe('listWorkItems', () => {
         '--repo',
         'acme/widgets',
         '--search',
-        'is:pr is:open draft:true sort:created-desc'
+        'is:open draft:true sort:created-desc'
       ],
       { cwd: '/repo-root' }
     )
@@ -579,7 +565,7 @@ describe('listWorkItems', () => {
         '--repo',
         'acme/widgets',
         '--search',
-        'is:pr is:merged sort:created-desc'
+        'is:merged sort:created-desc'
       ],
       { cwd: '/repo-root' }
     )
@@ -647,7 +633,7 @@ describe('listWorkItems', () => {
         '--state',
         'all',
         '--search',
-        'is:pr is:closed -is:merged sort:created-desc'
+        'is:closed -is:merged sort:created-desc'
       ]),
       { cwd: '/repo-root' }
     )
@@ -753,7 +739,7 @@ describe('listWorkItems', () => {
         '--repo',
         'acme/widgets',
         '--search',
-        'is:pr is:open sort:created-desc'
+        'is:open sort:created-desc'
       ],
       { cwd: '/repo-root' }
     )

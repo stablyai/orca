@@ -41,12 +41,6 @@ function createHandlers(overrides: Partial<GpuFallbackEngagementHandlers> = {}):
 }
 
 describe('engageGpuFallbackAfterCrashBurst', () => {
-  // Repro for the Windows startup GPU cluster (v1.4.190, exit -2147483645).
-  // Measured on Windows 11 26200 / Electron 43.1.0: Chromium's own ladder aborts
-  // the whole browser ("GPU process isn't usable. Goodbye.") on the 6th GPU
-  // crash, 1.285s after the 3rd — the crash that trips this threshold. If the
-  // marker is only written after the user answers the modal, the app dies first
-  // and the next launch retries hardware acceleration, looping forever.
   it('persists the safe-graphics marker before the restart prompt is answered', async () => {
     let resolvePrompt: ((decision: GpuFallbackRestartDecision) => void) | undefined
     const { handlers } = createHandlers({
@@ -61,7 +55,6 @@ describe('engageGpuFallbackAfterCrashBurst', () => {
     const engaging = engageGpuFallbackAfterCrashBurst(ENGAGEMENT, handlers)
     await Promise.resolve()
 
-    // Chromium kills the process here; whatever is on disk now is all the next launch gets.
     expect(handlers.persistMarker).toHaveBeenCalledWith(ENGAGEMENT)
 
     resolvePrompt?.('restart')
@@ -101,7 +94,6 @@ describe('engageGpuFallbackAfterCrashBurst', () => {
     const { handlers } = createHandlers({ isQuitting: () => true })
     await engageGpuFallbackAfterCrashBurst(ENGAGEMENT, handlers)
     expect(handlers.restartIntoSafeGraphics).not.toHaveBeenCalled()
-    // The marker stays: a quit is not the user declining safe graphics.
     expect(handlers.clearMarker).not.toHaveBeenCalled()
   })
 
