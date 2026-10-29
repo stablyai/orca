@@ -76,6 +76,13 @@ export function useRemoteFileBrowserProjectFolderKeys({
 }: ProjectFolderKeyArgs): (e: KeyboardEvent<HTMLInputElement>) => void {
   return useCallback(
     (e: KeyboardEvent<HTMLInputElement>) => {
+      const folder = projectFolders[activeIndex]
+      // Entry rows open on Enter with any modifier, so a highlighted folder must claim every Enter.
+      if (e.key === 'Enter' && folder !== undefined && !isImeOwnedKeyboardEvent(e)) {
+        e.preventDefault()
+        navigate(folder)
+        return
+      }
       const modified = e.shiftKey || e.metaKey || e.ctrlKey || e.altKey
       if (projectFolders.length > 0 && !modified && !isImeOwnedKeyboardEvent(e)) {
         if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
@@ -84,12 +91,6 @@ export function useRemoteFileBrowserProjectFolderKeys({
           moveHighlight(
             stepRemoteFileBrowserHighlight(activeIndex, delta, projectFolders.length + entryCount)
           )
-          return
-        }
-        const folder = projectFolders[activeIndex]
-        if (e.key === 'Enter' && folder !== undefined) {
-          e.preventDefault()
-          navigate(folder)
           return
         }
       }
