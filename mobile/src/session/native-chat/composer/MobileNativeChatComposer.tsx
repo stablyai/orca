@@ -45,6 +45,7 @@ import {
   MobileNativeChatComposerMic,
   type MobileNativeChatMicProps
 } from './MobileNativeChatComposerMic'
+import { DictationAutoSendRow, useDictationAutoSend } from './DictationAutoSendRow'
 
 const NO_FILE_PATHS: string[] = []
 const NO_ATTACHMENTS: PendingNativeChatImage[] = []
@@ -152,9 +153,11 @@ export function MobileNativeChatComposer({
     setPicker({ page: request.id, refocus: false })
   }
   const files = structured?.files ?? NO_FILES
+  const autoSend = useDictationAutoSend(sendSurfaceId)
   const menu = useMobileNativeChatComposerMenu({
     value,
-    onChangeText: (text) => {
+    // Typing and every menu pick edit through here; dictation writes the draft from above.
+    onChangeText: autoSend.withdrawBefore((text: string) => {
       if (editSession && draftScopeKey) {
         pruneMobileNativeChatDraftSkills(
           draftScopeKey,
@@ -163,7 +166,7 @@ export function MobileNativeChatComposer({
         )
       }
       onChangeText(text)
-    },
+    }),
     onPickSkill: (skill) => {
       if (onPickSkill && skill.path) {
         onPickSkill({ name: skill.token.slice(1), path: skill.path })
@@ -279,6 +282,7 @@ export function MobileNativeChatComposer({
         />
       ) : null}
       <View style={styles.composerInset} testID="native-chat-composer-inset">
+        <DictationAutoSendRow sendSurfaceId={sendSurfaceId} onSend={handleSend} />
         <View style={styles.bar} testID="native-chat-composer">
           <MobileNativeChatComposerAttachments
             images={attachments}
@@ -292,12 +296,14 @@ export function MobileNativeChatComposer({
             value={value}
             skillToken={menu.skillToken}
             onChangeText={menu.onFieldChange}
-            onFocus={() => {
+            onFocus={autoSend.withdrawBefore(() => {
               setFocused(true)
               if (draftScopeKey) {
                 focusMobileNativeChatTextDestination(draftScopeKey)
               }
-            }}
+            })}
+            // A tap reaches here even when the field already has focus, unlike onFocus.
+            onTouchStart={autoSend.withdraw}
             onBlur={() => setFocused(false)}
             // Controlled only transiently right after an autocomplete insert.
             selection={menu.pendingSelection ?? undefined}
@@ -378,7 +384,9 @@ export function MobileNativeChatComposer({
                   <MobileNativeChatSendButton
                     canSend={canSend}
                     sendFollowUp={sendFollowUp}
-                    onSend={(intent) => void handleSend(intent)}
+                    onSend={autoSend.withdrawBefore(
+                      (intent?: MobileNativeChatSendIntent) => void handleSend(intent)
+                    )}
                   />
                 )}
               </MobileNativeChatControlSwap>

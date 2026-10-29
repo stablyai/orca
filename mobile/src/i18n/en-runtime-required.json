@@ -57,6 +57,10 @@
     }
   },
   "chat": {
+    "dictationAutoSend": {
+      "announcement_one": "Sending message in {{count}} second. Tap Cancel to keep it as a draft.",
+      "announcement_other": "Sending message in {{count}} seconds. Tap Cancel to keep it as a draft."
+    },
     "notice": {
       "modelFallback": "Claude switched models: {{from}} → {{to}}."
     },
