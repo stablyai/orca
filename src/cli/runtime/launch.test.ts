@@ -862,7 +862,7 @@ describe('launchOrcaApp', () => {
 
       expect(spawnMock).toHaveBeenCalledWith(
         'open',
-        ['/Applications/Orca.app', '--args', '--disable-gpu'],
+        ['-n', '/Applications/Orca.app', '--args', PIN_PROFILE, '--disable-gpu'],
         expect.objectContaining({
           detached: true,
           stdio: 'ignore',
