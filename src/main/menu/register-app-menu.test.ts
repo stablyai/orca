@@ -73,6 +73,17 @@ function getSubmenu(
 }
 
 describe('registerAppMenu', () => {
+  it('exposes New Window only while multiple windows are enabled', () => {
+    const onNewWindow = vi.fn()
+    registerAppMenu({ ...buildMenuOptions(), multiWindowEnabled: () => false, onNewWindow })
+    expect(
+      getSubmenu(getTemplate(), 'File').find((item) => item.id === 'new-window')
+    ).toBeUndefined()
+    buildFromTemplateMock.mockClear()
+    registerAppMenu({ ...buildMenuOptions(), multiWindowEnabled: () => true, onNewWindow })
+    const item = getSubmenu(getTemplate(), 'File').find((item) => item.id === 'new-window')
+    expect(item?.click).toBe(onNewWindow)
+  })
   it.each(['linux', 'win32', 'darwin'] as const)(
     'leaves Ctrl+M to the terminal while preserving macOS minimize on %s',
     (platform) => {

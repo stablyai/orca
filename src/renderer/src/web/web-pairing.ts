@@ -94,7 +94,8 @@ export function clearPairingInputFromAddressBar(): void {
   if (!window.location.hash && !window.location.search) {
     return
   }
-  const cleanUrl = `${window.location.origin}${window.location.pathname}`
+  const workerWindow = new URLSearchParams(window.location.search).get('orcaWindow') === 'worker'
+  const cleanUrl = `${window.location.origin}${window.location.pathname}${workerWindow ? '?orcaWindow=worker' : ''}`
   // Why: pairing payloads include the runtime auth token. Clear them after
   // import so refresh/share/browser history no longer expose the secret.
   window.history.replaceState(null, document.title, cleanUrl)

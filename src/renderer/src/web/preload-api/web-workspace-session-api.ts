@@ -13,6 +13,7 @@ import { sanitizeWebRuntimeWorkspaceSession } from '../web-workspace-session'
 import { readLocalWebUIState } from './web-preferences-store'
 import { requireActiveEnvironmentOrNull } from './web-runtime-session'
 import { SESSION_STORAGE_KEY, readJson, writeJson } from './web-storage'
+import { isWorkerWindow } from './web-worker-window-ui'
 
 export function sessionStorageKeyForHost(hostId?: string | null): string {
   const resolved = normalizeExecutionHostId(hostId) ?? LOCAL_EXECUTION_HOST_ID
@@ -55,8 +56,12 @@ export function getStoredWorkspaceSession(hostId?: string | null): WorkspaceSess
   // Why: replaying browser-local terminal handles first creates stale remote PTYs; mirror host session-tabs instead.
   return sanitizeWebRuntimeWorkspaceSession({
     ...getDefaultWorkspaceSession(),
-    activeRepoId: ui.lastActiveRepoId,
-    activeWorktreeId: ui.lastActiveWorktreeId,
+    activeRepoId: isWorkerWindow()
+      ? (localSession.activeRepoId ?? ui.lastActiveRepoId)
+      : ui.lastActiveRepoId,
+    activeWorktreeId: isWorkerWindow()
+      ? (localSession.activeWorktreeId ?? ui.lastActiveWorktreeId)
+      : ui.lastActiveWorktreeId,
     lastVisitedAtByWorktreeId: localSession.lastVisitedAtByWorktreeId
   })
 }

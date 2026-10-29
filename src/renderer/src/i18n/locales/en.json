@@ -970,6 +970,17 @@
         "notPng": "Repo icons must be PNG files.",
         "tooLarge": "Repo icon image must be 256KB or smaller."
       }
+    },
+    "multiWindow": {
+      "copy": "Adds File > New Window. Each window has its own project filters and tabs, with accounts and running sessions on this profile.",
+      "title": "Multiple windows",
+      "description": "Open additional Orca windows with independent projects and tabs.",
+      "keywords": {
+        "window": "window",
+        "monitor": "monitor",
+        "project": "project",
+        "experimental": "experimental"
+      }
     }
   },
   "menu": {
@@ -1004,7 +1015,8 @@
     "copy": "Copy",
     "selectAll": "Select All",
     "quitAndStopAllSessions": "Quit Completely...",
-    "quitAndStopAllSessionsTooltip": "Also stops every terminal session, including running agents. Plain Quit keeps them running so Orca reattaches on next launch."
+    "quitAndStopAllSessionsTooltip": "Also stops every terminal session, including running agents. Plain Quit keeps them running so Orca reattaches on next launch.",
+    "newWindow": "New Window"
   },
   "tray": {
     "openOrca": "Open Orca",
@@ -22586,6 +22598,10 @@
       "images": "Images",
       "repoIconImages": "Repo icon images",
       "audio": "Audio"
+    },
+    "window": {
+      "unavailable": "Additional windows are unavailable.",
+      "openFailed": "Could not open another Orca window."
     }
   },
   "taskProviders": {

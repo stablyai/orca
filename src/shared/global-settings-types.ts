@@ -441,6 +441,8 @@ export type GlobalSettings = GlobalSettingsBase & {
   machineName: string
   /** Opt-in animated pet overlay; off unmounts it and renderer toggles apply immediately. */
   experimentalPet: boolean
+  /** Additional desktop windows connect to this profile's runtime with independent navigation. */
+  experimentalMultiWindow?: boolean
   /** Legacy persisted key from before the sidekick -> pet rename; read only during migration, new writes use experimentalPet. */
   experimentalSidekick?: boolean
   /** Experimental: left-sidebar Agents view — threaded feed of agent completions, blocking/unread state, worktree creation. */

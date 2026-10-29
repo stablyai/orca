@@ -11,6 +11,8 @@ import { createAppMenuSelectionItem, resolveNativeEditTarget } from './app-menu-
 import { createAppMenuQuitItems, type AppMenuQuitHandlers } from './app-menu-quit-item'
 import { createAppMenuReloadAndDevToolsItems } from './app-menu-reload-devtools-items'
 import { createAppWindowMenu } from './app-menu-window'
+import { isWorkerWindowRenderer } from '../window/worker-window'
+import { createNewWindowMenuItems } from './app-menu-new-window'
 
 export type AppearanceMenuState = {
   showTasksButton: boolean
@@ -27,6 +29,8 @@ export function getNextDefaultOnAppearanceSettingValue(current: boolean | undefi
 }
 
 type RegisterAppMenuOptions = AppMenuQuitHandlers & {
+  multiWindowEnabled?: () => boolean
+  onNewWindow?: () => void
   onOpenSettings: () => void
   onOpenSetupGuide: (window?: Electron.BaseWindow | null) => void
   onOpenFeatureTour: (window?: Electron.BaseWindow | null) => void
@@ -145,7 +149,12 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
 
   const fileMenu: Electron.MenuItemConstructorOptions = {
     label: translateMain('menu.file', 'File'),
-    submenu: [settingsItem, { type: 'separator' }, ...createAppMenuQuitItems(options)]
+    submenu: [
+      ...createNewWindowMenuItems(options.multiWindowEnabled?.(), options.onNewWindow),
+      settingsItem,
+      { type: 'separator' },
+      ...createAppMenuQuitItems(options)
+    ]
   }
 
   // Keep menu hints while non-macOS Ctrl+Z/Ctrl+Y reach focused terminal or DOM controls.
@@ -171,6 +180,10 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
           // Electron paste cannot resolve ownership among Orca terminal/chat surfaces.
           const focusedWindow = BrowserWindow.getFocusedWindow()
           if (focusedWindow) {
+            if (isWorkerWindowRenderer(focusedWindow.webContents)) {
+              focusedWindow.webContents.paste()
+              return
+            }
             // Focused DevTools must own paste over the renderer's last-focused terminal (#16285).
             const nativeTarget = resolveNativeEditTarget(focusedWindow)
             if (nativeTarget) {

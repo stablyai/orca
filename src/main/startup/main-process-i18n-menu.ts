@@ -1,4 +1,4 @@
-import { app, BrowserWindow } from 'electron'
+import { app, BrowserWindow, dialog } from 'electron'
 import { setMainUiLanguage } from '../i18n/main-i18n'
 import {
   registerAppMenu,
@@ -20,6 +20,7 @@ import {
 import { ensureAutoUpdaterConfigured } from '../window/attach-main-window-services'
 import { logStartupMilestone } from './startup-diagnostics'
 import { browserManager } from '../browser/browser-manager'
+import { createWorkerWindow, zoomWorkerWindowIfFocused } from '../window/worker-window'
 
 export async function initializeMainProcessI18nAndMenu(): Promise<void> {
   const store = state.store
@@ -29,6 +30,19 @@ export async function initializeMainProcessI18nAndMenu(): Promise<void> {
   await setMainUiLanguage(store.getSettings().uiLanguage)
   logStartupMilestone('i18n-ready')
   registerAppMenu({
+    multiWindowEnabled: () => store.getSettings().experimentalMultiWindow === true,
+    onNewWindow: () => {
+      const runtime = state.runtimeRpc
+      if (!runtime) {
+        return
+      }
+      void createWorkerWindow(runtime, store).catch((error: unknown) => {
+        dialog.showErrorBox(
+          'Orca',
+          error instanceof Error ? error.message : 'Could not open another Orca window.'
+        )
+      })
+    },
     appMenuLabel: state.devInstanceIdentity?.name ?? app.name,
     ...getAppMenuQuitHandlers(),
     onCheckForUpdates: (options) => {
@@ -58,17 +72,29 @@ export async function initializeMainProcessI18nAndMenu(): Promise<void> {
     },
     // Zoom the focused popout rather than changing the main window behind it.
     onZoomIn: () => {
-      if (!zoomDashboardPopoutIfFocused('in') && !zoomWorkspaceSpaceWindowIfFocused('in')) {
+      if (
+        !zoomWorkerWindowIfFocused('in') &&
+        !zoomDashboardPopoutIfFocused('in') &&
+        !zoomWorkspaceSpaceWindowIfFocused('in')
+      ) {
         state.mainWindow?.webContents.send('terminal:zoom', 'in')
       }
     },
     onZoomOut: () => {
-      if (!zoomDashboardPopoutIfFocused('out') && !zoomWorkspaceSpaceWindowIfFocused('out')) {
+      if (
+        !zoomWorkerWindowIfFocused('out') &&
+        !zoomDashboardPopoutIfFocused('out') &&
+        !zoomWorkspaceSpaceWindowIfFocused('out')
+      ) {
         state.mainWindow?.webContents.send('terminal:zoom', 'out')
       }
     },
     onZoomReset: () => {
-      if (!zoomDashboardPopoutIfFocused('reset') && !zoomWorkspaceSpaceWindowIfFocused('reset')) {
+      if (
+        !zoomWorkerWindowIfFocused('reset') &&
+        !zoomDashboardPopoutIfFocused('reset') &&
+        !zoomWorkspaceSpaceWindowIfFocused('reset')
+      ) {
         state.mainWindow?.webContents.send('terminal:zoom', 'reset')
       }
     },

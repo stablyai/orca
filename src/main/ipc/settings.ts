@@ -62,8 +62,9 @@ function sanitizeRendererSettingsUpdate(args: Partial<GlobalSettings>): Partial<
   return sanitizedArgs
 }
 
-// Electron menus do not react to settings; rebuild appearance checkboxes after writes.
-const APPEARANCE_MENU_KEYS: readonly (keyof GlobalSettings)[] = [
+// Electron menus do not react to settings; rebuild affected entries after writes.
+const MENU_SETTING_KEYS: readonly (keyof GlobalSettings)[] = [
+  'experimentalMultiWindow',
   'showTasksButton',
   'showAutomationsButton',
   'showMobileButton',
@@ -255,7 +256,7 @@ export function registerSettingsHandlers(
       void prepareLocalWorktreeRootsForRepos(store)
       scheduleCurrentWorktreeBaseDirectoryWatcherSync()
     }
-    if (APPEARANCE_MENU_KEYS.some((key) => key in sanitizedArgs)) {
+    if (MENU_SETTING_KEYS.some((key) => key in sanitizedArgs)) {
       rebuildAppMenu()
     }
     if ('appIcon' in sanitizedArgs && before.appIcon !== result.appIcon) {

@@ -12,6 +12,8 @@ import { NativeChatExperimentalSetting } from './NativeChatExperimentalSetting'
 import { AgentDashboardExperimentalSetting } from './AgentDashboardExperimentalSetting'
 import { EphemeralVmsExperimentalSetting } from './EphemeralVmsExperimentalSetting'
 import { BrowserExtensionsExperimentalSetting } from './BrowserExtensionsExperimentalSetting'
+import { ExperimentalMultiWindowSetting } from './ExperimentalMultiWindowSetting'
+import { getMultiWindowSearchEntry } from './multi-window-search-entry'
 import { WslHostsExperimentalSetting } from './WslHostsExperimentalSetting'
 import { wslHostsAvailable } from '../sidebar/use-wsl-hosts-enabled'
 import {
@@ -37,6 +39,7 @@ export function ExperimentalPane({
   hiddenExperimentalUnlocked = false
 }: ExperimentalPaneProps): React.JSX.Element {
   const searchQuery = useAppStore((s) => s.settingsSearchQuery)
+  const showMultiWindow = matchesSettingsSearch(searchQuery, [getMultiWindowSearchEntry()])
   const showPet = matchesSettingsSearch(searchQuery, [getExperimentalSearchEntry().pet])
   const showNativeChat = matchesSettingsSearch(searchQuery, [
     getExperimentalSearchEntry().nativeChat
@@ -62,6 +65,9 @@ export function ExperimentalPane({
 
   return (
     <div className="space-y-4">
+      {showMultiWindow ? (
+        <ExperimentalMultiWindowSetting settings={settings} updateSettings={updateSettings} />
+      ) : null}
       {showAgentDashboard ? (
         <AgentDashboardExperimentalSetting settings={settings} updateSettings={updateSettings} />
       ) : null}

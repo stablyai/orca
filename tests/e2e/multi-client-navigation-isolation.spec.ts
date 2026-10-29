@@ -21,6 +21,7 @@ type TestWorktreeIds = {
 }
 
 const isPairedBrowserRun = process.env.ORCA_E2E_WEB_CLIENT === '1'
+test.use({ orcaAppExtraArgs: process.platform === 'linux' ? ['--ozone-platform=x11'] : [] })
 
 test.skip(
   !isPairedBrowserRun,
@@ -117,7 +118,8 @@ async function openPairedClient(
 }
 
 async function selectWorktree(page: Page, worktreeId: string): Promise<void> {
-  await worktreeRowSurface(page, worktreeId).click()
+  // Hidden Electron windows cannot satisfy Chromium's animation-frame stability wait.
+  await worktreeRowSurface(page, worktreeId).click({ force: true })
   await expectActiveWorktree(page, worktreeId)
 }
 

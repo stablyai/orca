@@ -7,6 +7,7 @@ import { getNativeChatExperimentalSearchEntry } from './native-chat-experimental
 import { getEphemeralVmsSearchEntry } from './ephemeral-vms-search'
 import { getBrowserExtensionsExperimentalSearchEntry } from './browser-extensions-experimental-search'
 import { getWslHostsExperimentalSearchEntry } from './wsl-hosts-experimental-search'
+import { getMultiWindowSearchEntry } from './multi-window-search-entry'
 
 export const getExperimentalPaneSearchEntries = createLocalizedCatalog(
   (): SettingsSearchEntry[] => [
@@ -184,6 +185,7 @@ export const getExperimentalPaneSearchEntries = createLocalizedCatalog(
     getNewWorktreeCardStyleSearchEntry(),
     getEphemeralVmsSearchEntry(),
     getBrowserExtensionsExperimentalSearchEntry(),
+    getMultiWindowSearchEntry(),
     // Index WSL toggles only on Windows desktops that expose them.
     ...(typeof window !== 'undefined' && window.api?.runtimeEnvironments?.wslHosts
       ? [getWslHostsExperimentalSearchEntry()]

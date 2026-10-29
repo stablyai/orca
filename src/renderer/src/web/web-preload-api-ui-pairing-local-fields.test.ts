@@ -23,6 +23,33 @@ vi.mock('./web-runtime-client', () => ({
 }))
 
 describe('web UI preload API pairing-local fields', () => {
+  it('keeps a desktop worker window project filter and view state off the host', async () => {
+    runtimeClient.call.mockImplementation((method) =>
+      Promise.resolve({
+        id: method,
+        ok: true,
+        result: { ui: { filterRepoIds: ['host-project'], groupBy: 'none', activeView: 'tasks' } },
+        _meta: { runtimeId: 'runtime-1' }
+      })
+    )
+    const globals = installBrowserGlobals('Linux')
+    globals.window.location.search = '?orcaWindow=worker'
+    writeStoredRuntimeEnvironment(globals.storage)
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+    await globals.window.api.ui.set({
+      filterRepoIds: ['worker-project'],
+      groupBy: 'repo',
+      activeView: 'terminal'
+    })
+    expect(runtimeClient.call).toHaveBeenCalledWith('ui.set', {}, expect.anything())
+    const ui = await globals.window.api.ui.get()
+    expect(ui).toMatchObject({
+      filterRepoIds: ['worker-project'],
+      groupBy: 'repo',
+      activeView: 'terminal'
+    })
+  })
   afterEach(async () => {
     try {
       const { removeActiveRuntimeEnvironment } = await import('./preload-api/web-runtime-session')

@@ -9,7 +9,6 @@ import { assertClipboardTextWithinLimitWithYield } from '../../../../shared/clip
 import type { ReadClipboardTextOptions } from '../../../../shared/clipboard-text'
 import { normalizeFeatureInteractions } from '../../../../shared/feature-interactions'
 import type { FeatureInteractionId } from '../../../../shared/feature-interactions'
-import { omitPairingLocalUiFields } from '../../../../shared/pairing-local-ui-fields'
 import type { PairedUiState } from '../../../../shared/pairing-local-ui-fields'
 import {
   clipboardHasImage,
@@ -30,13 +29,15 @@ import { callRuntimeResult } from './web-runtime-calls'
 import { requireActiveEnvironmentOrNull } from './web-runtime-session'
 import { UI_STORAGE_KEY, noopUnsubscribe, writeJson } from './web-storage'
 
+import { omitWorkerWindowUiFields, workerWindowLocalUiState } from './web-worker-window-ui'
+
 /** Combines browser-local preferences with host persistence; acknowledged writes remain distinct from best-effort writes. */
 export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
   const explorerRoots = createWebExplorerRootSync()
   /** Captures the target host and strips browser-local or unsupported fields before sending a UI update. */
   const prepareHostUpdates = (updates: Parameters<PreloadApi['ui']['set']>[0]) => {
     const environmentId = requireActiveEnvironmentOrNull()?.id
-    const hostUpdates = omitPairingLocalUiFields(updates)
+    const hostUpdates = omitWorkerWindowUiFields(updates)
     explorerRoots.prepare(environmentId, hostUpdates)
     return { environmentId, hostUpdates }
   }
@@ -58,6 +59,7 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
         const local = readLocalWebUIState()
         const next = {
           ...mergeHostWebUIState(local, result.ui),
+          ...workerWindowLocalUiState(local),
           osc52ClipboardDefaultOnNoticePending: mergeOsc52ClipboardNoticePending(local, result.ui),
           featureInteractions: mergeFeatureInteractionState(
             local.featureInteractions,
