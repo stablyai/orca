@@ -99,8 +99,10 @@ export function resolveUnixPaneShellPath(
 }
 
 export function shellPathSupportsPtyStartupBarrier(shellPath: string): boolean {
-  // Why win32 first: Windows pwsh startup commands ride the launch args, so
-  // gating its stdin would hold the pane with no marker ever coming.
+  // Why win32 first: no marker ever arms for Windows panes, so gating its stdin
+  // would hold the pane with no marker ever coming. Fitting pwsh startup
+  // commands ride the launch args; oversized ones fall back to stdin there with
+  // no barrier.
   if (process.platform === 'win32') {
     return false
   }
@@ -176,8 +178,9 @@ export function getShellLaunchConfig(
   }
 
   if (isPowerShellExecutableName(shellName)) {
-    // Why no marker on win32: Windows pwsh startup commands ride the launch args
-    // (see windows-shell-args.ts), so nothing queues behind a marker there.
+    // Why no marker on win32: pwsh startup commands ride the launch args when
+    // they fit (see windows-shell-args.ts); oversized ones fall back to stdin
+    // with no barrier. Nothing queues behind a marker that never arms.
     const supportsReadyMarker = process.platform !== 'win32' && features.includes('ready')
     return {
       args: [

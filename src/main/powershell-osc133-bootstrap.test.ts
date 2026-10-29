@@ -8,12 +8,14 @@ import { resolveWindowsShellLaunchArgs } from './providers/windows-shell-args'
 import { STARTUP_COMMAND_FEATURES } from './shell-startup-launch-intent-fixtures'
 
 describe('PowerShell OSC 133 bootstrap', () => {
-  // Bootstrap and startup commands share the EncodedCommand size limit: reasonable
-  // commands ride in the shell args, and oversized ones fall back to barrier-queued
-  // stdin delivery, which the pwsh startup barrier makes safe (#27293). The
-  // launch-arg tests below pin only the argv side of that split; stdin delivery
-  // itself is exercised by the daemon/barrier suites (daemon-pty-startup-delivery,
-  // the terminal-host queueing specs, and the live pwsh shell-ready spec).
+  // Bootstrap and startup commands share the EncodedCommand size limit: commands
+  // that fit ride in the shell args, and oversized ones fall back to stdin
+  // delivery — safe behind the pwsh startup barrier on Unix (#27293), but on
+  // Windows no barrier arms and the daemon writes the command to startup stdin
+  // unprotected. The launch-arg tests below pin only the argv side of that
+  // split; stdin delivery itself is exercised by the daemon/barrier suites
+  // (daemon-pty-startup-delivery, the terminal-host queueing specs, and the live
+  // pwsh shell-ready spec).
   it('leaves room for a realistic startup command to ride in the shell args', () => {
     const cwd = `C:\\Users\\alice\\${'nested-project-folder\\'.repeat(5)}repo`
     const result = resolveWindowsShellLaunchArgs(

@@ -112,8 +112,9 @@ export function getShellLaunchConfig(
   }
 
   if (isPowerShellExecutableName(shellName)) {
-    // Why no marker on win32: Windows pwsh startup commands ride the launch args
-    // (see windows-shell-args.ts), so nothing queues behind a marker there.
+    // Why no marker on win32: pwsh startup commands ride the launch args when
+    // they fit (see windows-shell-args.ts); oversized ones fall back to stdin
+    // with no barrier. Nothing queues behind a marker that never arms.
     const supportsReadyMarker = process.platform !== 'win32' && features.includes('ready')
     return {
       args: [
