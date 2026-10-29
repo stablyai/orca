@@ -35,14 +35,14 @@ export function equivalentInterruptAgentType(
   return normalizedActual === normalizedBaseline
 }
 
-// Why: validate the durable `${tabId}:${leafUuid}` leaf suffix at write/hydrate so legacy numeric rows fail closed.
+// Durable caches reject legacy numeric keys; only stable pane IDs survive restart.
 export function isValidPaneKey(value: unknown): value is string {
   return (
     typeof value === 'string' && value.length <= MAX_PANE_KEY_LEN && parsePaneKey(value) !== null
   )
 }
 
-// Why: remote metadata-only rows are currently a Pi contract; user-dismissed rows use an internal persisted marker instead.
+// Remote identity-only rows are a Pi contract; dismissed rows use a separate retained marker.
 export function isValidPiProviderSessionOnly(
   providerSession: AgentProviderSessionMetadata | undefined,
   agentType: AgentType | undefined

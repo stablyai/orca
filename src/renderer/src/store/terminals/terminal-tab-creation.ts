@@ -1,7 +1,10 @@
 import { warnIfZCodeCannotOpenSession } from '@/components/terminal-pane/zcode-missing-tui-notice'
 import { clearWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
-import { isValidHostTerminalTabId } from '../../../../shared/terminal-tab-id'
+import {
+  isValidHostTerminalTabId,
+  isValidMirroredHostTerminalTabId
+} from '../../../../shared/terminal-tab-id'
 import { getNextTerminalOrdinal } from '../../../../shared/workspace-layout/terminal-tab-ordinal'
 import { singlePaneLayoutSnapshot } from '../slices/terminal-helpers'
 import { isTerminalLeafId } from '../../../../shared/stable-pane-id'
@@ -76,10 +79,13 @@ export function createTerminalTabCreationActions(
         const existing = (s.tabsByWorktree[worktreeId] ?? []).filter(
           (entry) => !orphanTerminalIds.has(entry.id)
         )
-        // Why: only honor a non-empty trimmed hint; useIpcEvents spreads `id` whenever tabId !== undefined, so a stray '' would break paneKey routing.
+        // Trim ID hints: IPC can include empty IDs, which break pane-key routing.
         const trimmedHint = typeof options?.id === 'string' ? options.id.trim() : ''
-        const hintedId =
-          trimmedHint.length > 0 && isValidHostTerminalTabId(trimmedHint) ? trimmedHint : undefined
+        // Why: `web-terminal-` ids are reserved for mirrored host tabs, so an IPC-spread hint must not take one.
+        const hintIsValid = options?.mirroredHostTab
+          ? isValidMirroredHostTerminalTabId(trimmedHint)
+          : isValidHostTerminalTabId(trimmedHint)
+        const hintedId = trimmedHint.length > 0 && hintIsValid ? trimmedHint : undefined
         // Why: the caller's PTY routes agent status by this id, so a fresh id would orphan it and aliasing would corrupt another tab's.
         if (
           hintedId !== undefined &&
@@ -137,7 +143,7 @@ export function createTerminalTabCreationActions(
           ...(options?.forceHostRuntime ? { forceHostRuntime: true } : {}),
           ...(options?.launchAgent ? { launchAgent: options.launchAgent } : {}),
           ...(options?.agentLaunchPane ? { agentLaunchPane: options.agentLaunchPane } : {}),
-          // Why: mark click-caused (not work-caused) spawns so updateTabPtyId skips the activity/sortEpoch bump that would reorder Recent/Smart on click.
+          // Tag click-driven spawn so bind cannot reorder Recent/Smart via activity/sortEpoch.
           ...(options?.pendingActivationSpawn ? { pendingActivationSpawn: true } : {})
         }
         // Switch point: a tab main already made is drawn with main's creation facts.

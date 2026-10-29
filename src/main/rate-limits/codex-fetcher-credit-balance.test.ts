@@ -6,7 +6,7 @@ const { childSpawnMock, readFileMock } = vi.hoisted(() => ({
   readFileMock: vi.fn()
 }))
 
-// The probe's child runs in-process here; the worker transport has its own suite.
+// Keep child-process assertions in this suite; worker transport is covered separately.
 vi.mock(
   '../worker-thread-child-process/worker-thread-child-process',
   () =>
@@ -20,7 +20,7 @@ vi.mock('./codex-auth-presence', () => ({
   probeCodexAuthPresence: vi.fn(async () => 'present')
 }))
 
-// The recovery's supervised stop imports the process-table reader, which needs the real execFile.
+// Mock recovery so its process-table import does not require real execFile.
 vi.mock('../codex/codex-state-db-backfill-recovery', () => ({
   startCodexStateDbBackfillRecoveryInBackground: vi.fn()
 }))
@@ -38,7 +38,7 @@ function parseRpcRequest(line: string): { id?: number; method?: string } {
   }
 }
 
-// Like the real app-server, the fake dies on stdin EOF or a signal.
+// Model real app-server EOF/signal exit.
 class FakeRpcChild extends EventEmitter {
   readonly stdout = new EventEmitter()
   readonly stderr = new EventEmitter()

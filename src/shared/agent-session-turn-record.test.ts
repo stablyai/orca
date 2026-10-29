@@ -126,10 +126,7 @@ describe('readAgentJournalTurnOutcome', () => {
   )
 
   it('never reads an old host completed row as success', () => {
-    // The mixed-version case this field exists for. Hosts that predate it wrote
-    // `completed` for a turn the provider ended with an API error, so a newer
-    // client must read those as UNKNOWN. Collapsing absent into success would
-    // make every historical failure indistinguishable from a clean turn.
+    // Pre-outcome hosts marked API-error turns completed; absent verdict must remain unknown or historical failures become successes.
     expect(readAgentJournalTurnOutcome(turn)).toBeNull()
     expect(readAgentJournalTurnOutcome({ turnId: 't', state: 'completed' })).toBeNull()
     expect(
@@ -140,9 +137,7 @@ describe('readAgentJournalTurnOutcome', () => {
   })
 
   it('reads a verdict from a later vocabulary as unknown rather than an arm', () => {
-    // The persisted field is an open string so a newer host's row stays readable.
-    // That means the decoded value is typed as an arm this build knows without
-    // having been checked against one, and this reader is the check.
+    // Persisted verdicts are open strings; the reader, not schema typing, checks known arms.
     expect(readAgentJournalTurnOutcome({ ...turn, outcome: 'partially-refused' })).toBeNull()
   })
 
@@ -187,10 +182,7 @@ describe('legacyAgentJournalTurnStatusBody', () => {
   })
 
   it('carries the verdict to a client that predates the turn item', () => {
-    // The downgrade is the only carrier an old client gets. Its own text still
-    // reads "completed" — that copy is the pre-existing contract and this change
-    // does not move it — but the verdict travels under `turnLifecycle`, so a
-    // client that learns to read it needs no host change.
+    // Keep legacy completed copy while carrying the verdict under turnLifecycle, so clients can learn outcomes without a host change.
     const failed = { ...turn, outcome: 'failure' as const }
     expect(legacyAgentJournalTurnStatusBody(failed, 'legacy:claude:s:turn-lifecycle%3At1')).toEqual(
       {
@@ -204,7 +196,8 @@ describe('legacyAgentJournalTurnStatusBody', () => {
 
 describe('journalRowSchemaVersion', () => {
   it('stamps only rows that carry a turn item with the current version', () => {
-    expect(AGENT_SESSION_JOURNAL_SCHEMA_VERSION).toBe(3)
+    // The newest this build reads is the queue row's.
+    expect(AGENT_SESSION_JOURNAL_SCHEMA_VERSION).toBe(4)
     expect(journalRowSchemaVersion([agentJournalTurnBody(turn)])).toBe(3)
     expect(journalRowSchemaVersion([{ kind: 'message' }, { kind: 'status' }])).toBe(2)
     expect(journalRowSchemaVersion([])).toBe(2)

@@ -27,7 +27,6 @@ export {
   USAGE_WARNING_PERCENT
 } from './provider-extra-usage-section'
 
-// Re-exported from its shared home so status-bar callers keep a single import.
 export { clampUsedPercent }
 
 export {
@@ -36,25 +35,22 @@ export {
   getProviderUsageStatusLabel
 } from './usage-error-copy'
 
-// ---------------------------------------------------------------------------
-// Formatting helpers
-// ---------------------------------------------------------------------------
-
 export function formatTimeAgo(ts: number): string {
   const diff = Date.now() - ts
   if (diff < 60_000) {
-    return 'just now'
+    return translate('auto.components.status.bar.tooltip.justNow', 'just now')
   }
   const mins = Math.floor(diff / 60_000)
   if (mins < 60) {
-    return `${mins}m ago`
+    return translate('auto.components.status.bar.tooltip.minutesAgo', '{{minutes}}m ago', {
+      minutes: mins
+    })
   }
   const hours = Math.floor(mins / 60)
-  return `${hours}h ago`
+  return translate('auto.components.status.bar.tooltip.hoursAgo', '{{hours}}h ago', { hours })
 }
 
-// Re-export so existing tooltip consumers/tests keep their import path; the
-// implementation is shared with mobile in src/shared/rate-limit-reset-format.
+// Preserve tooltip imports while sharing countdown formatting with mobile.
 export { formatResetCountdown }
 
 export function formatResetCreditExpiry(
@@ -78,10 +74,6 @@ export function formatResetCreditExpiry(
         value0: duration
       })
 }
-
-// ---------------------------------------------------------------------------
-// Shared icon component
-// ---------------------------------------------------------------------------
 
 export function ProviderIcon({ provider }: { provider: string }): React.JSX.Element {
   if (provider === 'codex') {
@@ -149,10 +141,6 @@ function ErrorMessage({
   )
 }
 
-// ---------------------------------------------------------------------------
-// Window section derivation
-// ---------------------------------------------------------------------------
-
 export function getWindowSections(
   p: ProviderRateLimits
 ): { label: string; window: RateLimitWindow | null }[] {
@@ -160,8 +148,7 @@ export function getWindowSections(
     const bucketSections = p.buckets.map((b) => ({ label: b.name, window: b as RateLimitWindow }))
     return [
       ...bucketSections,
-      // Why: Cursor reports the plan total in `monthly` and its pools as buckets,
-      // so dropping it here would hide the number closest to the user's cap.
+      // Include Cursor’s monthly plan total because pools can understate proximity to its cap.
       ...(p.monthly
         ? [
             {
@@ -207,14 +194,7 @@ export function getWindowSections(
   return sections
 }
 
-// ---------------------------------------------------------------------------
-// Tooltip — progress bar section for a single window
-// ---------------------------------------------------------------------------
-
-// Why: the base tooltip component uses `bg-foreground text-background` which
-// inverts the color scheme (light bg in dark mode). These rich tooltips use
-// `text-background` for primary text and `text-background/50` for secondary
-// to stay readable inside the inverted tooltip container.
+// Tooltips invert the theme; use background text tokens for legible primary and secondary content.
 
 function ProviderRateLimitWindowSection({
   window,
@@ -321,7 +301,11 @@ export function ProviderPanel({
     )
   }
 
-  const updatedAgo = p.updatedAt ? `Updated ${formatTimeAgo(p.updatedAt)}` : 'Not yet updated'
+  const updatedAgo = p.updatedAt
+    ? translate('auto.components.status.bar.tooltip.updatedAgo', 'Updated {{time}}', {
+        time: formatTimeAgo(p.updatedAt)
+      })
+    : translate('auto.components.status.bar.tooltip.notYetUpdated', 'Not yet updated')
   const resetCreditCount =
     showResetCredits && p.provider === 'codex'
       ? (p.rateLimitResetCredits?.availableCount ?? null)
@@ -343,13 +327,14 @@ export function ProviderPanel({
           <div className={mutedClass}>
             {resetCreditCount === 1
               ? translate(
-                  'auto.components.status.bar.tooltip.45198c7d95',
-                  '1 rate-limit reset available'
+                  'auto.components.status.bar.tooltip.rateLimitResetsAvailable_one',
+                  '{{count}} rate-limit reset available',
+                  { count: resetCreditCount }
                 )
               : translate(
-                  'auto.components.status.bar.tooltip.bce421cba3',
-                  '{{value0}} rate-limit resets available',
-                  { value0: resetCreditCount }
+                  'auto.components.status.bar.tooltip.rateLimitResetsAvailable_other',
+                  '{{count}} rate-limit resets available',
+                  { count: resetCreditCount }
                 )}
           </div>
         ) : null}

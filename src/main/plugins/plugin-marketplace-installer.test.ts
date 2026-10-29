@@ -2,19 +2,33 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { PluginCatalogRelease } from '../../shared/plugins/plugin-catalog-release'
 import type { PluginMarketplace } from '../../shared/plugins/plugin-marketplace'
 import { readPluginLockfile } from './plugin-install'
 import { PluginMarketplaceInstaller } from './plugin-marketplace-installer'
 import { PluginMarketplaceService } from './plugin-marketplace-service'
 
-const git = vi.hoisted(() => ({
-  checkout: vi.fn(),
-  version: '1.0.0',
-  publisher: 'community',
-  id: 'notes',
-  commit: 'a'.repeat(40),
-  payload: 'first'
-}))
+const git = vi.hoisted(
+  (): {
+    checkout: ReturnType<typeof vi.fn>
+    version: string
+    publisher: string
+    id: string
+    commit: string
+    payload: string
+    v2: boolean
+    release: PluginCatalogRelease | undefined
+  } => ({
+    checkout: vi.fn(),
+    version: '1.0.0',
+    publisher: 'community',
+    id: 'notes',
+    commit: 'a'.repeat(40),
+    payload: 'first',
+    v2: false,
+    release: undefined
+  })
+)
 
 vi.mock('./plugin-git-repository', () => ({
   checkoutPluginGitSource: git.checkout
@@ -40,7 +54,8 @@ function marketplace(): PluginMarketplace {
           url: 'https://github.com/community/notes.git',
           ref: 'stable'
         },
-        categories: ['productivity']
+        categories: ['productivity'],
+        ...(git.release ? { release: git.release } : {})
       }
     ]
   }
@@ -51,7 +66,13 @@ async function writeCurrentPlugin(destination: string): Promise<void> {
   await writeFile(
     join(destination, 'orca-plugin.json'),
     JSON.stringify({
-      manifestVersion: 1,
+      ...(git.v2
+        ? {
+            manifestVersion: 2,
+            execution: 'instructional',
+            contributes: { commands: [{ id: 'tasks', title: 'Tasks', action: 'view.tasks' }] }
+          }
+        : { manifestVersion: 1 }),
       id: git.id,
       publisher: git.publisher,
       name: 'Notes',
@@ -98,6 +119,8 @@ beforeEach(() => {
   git.id = 'notes'
   git.commit = 'a'.repeat(40)
   git.payload = 'first'
+  git.v2 = false
+  git.release = undefined
   git.checkout.mockReset()
   git.checkout.mockImplementation(async ({ destination }: { destination: string }) => {
     await writeCurrentPlugin(destination)
@@ -154,6 +177,38 @@ describe('PluginMarketplaceInstaller', () => {
     await expect(readFile(join(root, 'plugins', 'plugins.lock.json'))).rejects.toMatchObject({
       code: 'ENOENT'
     })
+  })
+
+  it('installs only the exact bytes a catalog release pins', async () => {
+    git.v2 = true
+    const unpinnedSetup = await setup()
+    const unpinned = await unpinnedSetup.installer.preview(
+      unpinnedSetup.sourceId,
+      'community.notes'
+    )
+    git.release = {
+      version: '1.0.0',
+      commit: git.commit,
+      contentHash: unpinned.contentHash,
+      execution: 'instructional',
+      minimumOrca: '1.0.0',
+      types: ['instructions']
+    }
+    const { installer, sourceId } = await setup()
+    const preview = await installer.preview(sourceId, 'community.notes')
+    // The pinned commit is fetched directly, so the listed branch is display text only.
+    expect(git.checkout).toHaveBeenLastCalledWith(expect.objectContaining({ ref: git.commit }))
+    await expect(installer.install(preview)).resolves.toMatchObject({ ok: true })
+    expect(git.checkout).toHaveBeenLastCalledWith(expect.objectContaining({ ref: git.commit }))
+    git.payload = 'tampered at the same commit'
+
+    await expect(installer.install(preview)).resolves.toEqual({
+      ok: false,
+      error: 'plugin bytes do not match the catalog release'
+    })
+    await expect(installer.preview(sourceId, 'community.notes')).rejects.toThrow(
+      'plugin bytes do not match the catalog release'
+    )
   })
 
   it('rejects a source whose manifest identity differs from its listing', async () => {

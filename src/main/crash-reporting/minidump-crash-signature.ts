@@ -1,15 +1,4 @@
-// Extracts the diagnosable parts of a Crashpad minidump without symbols.
-//
-// Why: a Chromium CHECK/DCHECK surfaces to `render-process-gone` as exit code
-// 0x80000003 (STATUS_BREAKPOINT) and nothing else, so the exit code alone can
-// never name the failing check. Some Crashpad builds expose the fatal line as
-// `LOG_FATAL`; Electron 43 on Windows only carries it in captured process
-// memory. Both forms are recoverable without symbols or minidump_stackwalk.
-//
-// Layouts are from Crashpad's minidump_extensions.h and the Windows
-// MINIDUMP_* structs. Everything here is bounds-checked and returns null
-// rather than throwing: a truncated dump must degrade, not break crash
-// reporting.
+// Layouts follow Crashpad minidump_extensions.h and Windows MINIDUMP_* structs.
 
 import { findStream, isMinidump, MinidumpView, type MinidumpSource } from './minidump-stream-reader'
 import { readCrashpadAnnotations } from './minidump-crashpad-annotations'
@@ -19,13 +8,12 @@ import { readMinidumpFaultContext, type MinidumpFaultContext } from './minidump-
 const STREAM_TYPE_MODULE_LIST = 4
 const STREAM_TYPE_EXCEPTION = 6
 const STREAM_TYPE_SYSTEM_INFO = 7
-// MINIDUMP_SYSTEM_INFO.PlatformId; Crashpad writes its own ids for macOS and Linux.
+// Crashpad uses different PlatformId values for macOS and Linux.
 const SYSTEM_INFO_PLATFORM_ID_OFFSET = 20
 const VER_PLATFORM_WIN32_NT = 2
 
 const MODULE_RECORD_SIZE = 108
-// 8x headroom over a measured 1042-image macOS renderer, whose whole list a
-// 1_024 cap dropped; a dump claiming more than this is corrupt.
+// Allow headroom for macOS renderers with over 1,024 loaded images.
 const MAX_MODULE_LIST_MODULES = 8_192
 const MODULE_BASE_OFFSET = 0
 const MODULE_SIZE_OFFSET = 8
@@ -39,7 +27,7 @@ const EXCEPTION_ADDRESS_OFFSET = EXCEPTION_RECORD_OFFSET + 16
 export type MinidumpCrashSignature = {
   /** Chromium's fatal log line, e.g. `[...:FATAL:node.cc(123)] Check failed: !x.` */
   readonly checkMessage?: string
-  /** Source file basename parsed out of `checkMessage`. */
+  /** Source file basename from the annotated or embedded log line. */
   readonly checkFile?: string
   readonly checkLine?: number
   /** Crashpad `ptype`: `renderer`, `gpu-process`, `browser`. */
@@ -102,7 +90,6 @@ function toHex(value: bigint): string {
   return `0x${value.toString(16)}`
 }
 
-/** Parses the annotation form, which uses `file.cc(123)`. */
 function parseCheckLocation(checkMessage: string): {
   file?: string
   line?: number
@@ -131,19 +118,11 @@ function findFaultingModule(
 }
 
 export type MinidumpParseOptions = {
-  /**
-   * Process type the caller will accept. A dump from any other process is
-   * discarded by the caller anyway, so parsing stops at `processType` and the
-   * returned signature is deliberately partial — read only `processType` when
-   * it does not match.
-   */
+  /** On a mismatch, only processType and annotations are populated; skip expensive scans. */
   readonly expectedProcessType?: string
 }
 
-/**
- * Parses a Crashpad minidump into the fields that make a CHECK failure
- * nameable. Returns null when the buffer is not a minidump.
- */
+/** Returns null for invalid minidump headers; malformed fields may yield a partial signature. */
 export async function parseMinidumpCrashSignature(
   dump: Buffer | MinidumpSource,
   options: MinidumpParseOptions = {}
@@ -168,8 +147,7 @@ export async function parseMinidumpCrashSignature(
   if (processType) {
     signature.processType = processType
   }
-  // Annotations are bounded; the scans below are not. A renderer crash would
-  // otherwise scan every fresh GPU/utility dump end to end before rejecting it.
+  // Reject unrelated dumps before scanning their captured memory for log lines.
   if (options.expectedProcessType !== undefined && processType !== options.expectedProcessType) {
     return signature
   }
@@ -201,9 +179,7 @@ export async function parseMinidumpCrashSignature(
         signature.faultingModule = faulting.name
         signature.faultingModuleOffset = faulting.offset
       }
-      // Code bytes only from a loaded module in a Windows dump: they exist to diff against the
-      // shipped binary. JIT memory adds nothing, and on macOS/Linux Crashpad records the touched
-      // data address here, not the instruction pointer.
+      // Capture Windows module code for binary comparison; POSIX may report a data address here.
       signature.fault = await readMinidumpFaultContext(view, exception.rva, code, address, {
         captureCodeBytes: faulting !== undefined && (await isWindowsDump(view))
       })
@@ -213,7 +189,6 @@ export async function parseMinidumpCrashSignature(
   return signature
 }
 
-/** Flattens a signature into `CrashReportRecord.details` keys. */
 export function minidumpSignatureDetails(
   signature: MinidumpCrashSignature
 ): Record<string, string | number> {

@@ -1,13 +1,4 @@
-// Where each subagent's rows live in the transcript.
-//
-// A subagent's rows are not the conversation's: they sit in a section of their own,
-// keyed by the agent id its roster entry and its rows share. One the session spawned
-// opens under the loaded roster row that names it. One another subagent spawned opens
-// inside that subagent's section, where its first row happened. One whose roster row
-// is not loaded — its spawn is on an older page, or it was never announced — opens
-// where its first row happened, in the conversation. Its name and state come from the
-// client's roster, which outlives the loaded window; only a subagent no roster ever
-// named goes unnamed.
+// Retained roster metadata names windowed-out spawns; place children under loaded roster entries, their parent section or their first conversation row.
 
 import type { AgentJournalPosition } from '../../../../shared/agent-session-journal-types'
 import {
@@ -19,30 +10,25 @@ import type { NativeChatSubagentRow } from '../../../../shared/native-chat-trans
 import type { StructuredAgentSubagentRoster } from '../../../../shared/structured-agent-session-subagent-roster'
 import { compareMessages } from './native-chat-session-assembler'
 
-/** Where the roster row naming a subagent sits in the journal. */
 export type NativeChatSubagentRosterPlace = {
   rowId: string
   position: AgentJournalPosition | undefined
 }
 
 export type NativeChatSubagentSections = {
-  /** Each subagent's own rows, by its id. */
   rows: ReadonlyMap<string, readonly NativeChatSubagentRow[]>
   /** The entry of the first roster naming each subagent: a loaded one, else the client's. */
   entries: ReadonlyMap<string, NativeChatSubagentEntry>
-  /** The roster row each entry came from. */
   rosters: ReadonlyMap<string, NativeChatSubagentRosterPlace>
   /** Roster row id → the subagents whose sections open under it, in roster order. */
   anchoredAt: ReadonlyMap<string, readonly string[]>
-  /** Every other subagent, by the section it opens in (null: the conversation), in
-   *  the order of their first rows. */
+  /** Unanchored sections by enclosing agent (null for conversation), ordered by first row. */
   openAt: ReadonlyMap<string | null, readonly string[]>
   /** Row id → the sections enclosing it, outermost first. */
   pathOf: ReadonlyMap<string, readonly string[]>
 }
 
-/** What the reader opened (true) or closed (false) by hand: each subagent's section, and
- *  each roster row's list, which hides the sections under that row while it is closed. */
+/** Explicit reader choices override defaults; closed roster lists hide their child sections. */
 export type NativeChatSubagentChoices = {
   sections: ReadonlyMap<string, boolean>
   rosters: ReadonlyMap<string, boolean>
@@ -53,15 +39,13 @@ export const NO_NATIVE_CHAT_SUBAGENT_CHOICES: NativeChatSubagentChoices = {
   rosters: new Map()
 }
 
-/** A roster row's list: open or closed, and the children with a section, each open or
- *  closed. An open child's rows follow its entry. */
+/** An open child’s rows follow its roster entry. */
 export type NativeChatSubagentRosterState = {
   open: boolean
   sections: ReadonlyMap<string, boolean>
 }
 
-/** A roster's entries, broken after each open section's entry: the roster row draws the
- *  first run, and each later run follows the rows of the child that ended the one before. */
+/** Break roster entries after each open child; later entry runs follow that child’s rows. */
 export function nativeChatSubagentEntryRuns(
   agents: readonly NativeChatSubagentEntry[],
   sections: ReadonlyMap<string, boolean>
@@ -126,7 +110,6 @@ export function nativeChatSubagentSections(
     }
   }
   const firstRow = (agentId: string): NativeChatMessage => rows.get(agentId)![0]!.message
-  // The subagent that spawned this one, when it has a section to hold it.
   const spawnerOf = (agentId: string): string | null => {
     const parent = firstRow(agentId).parentAgentId
     return parent !== undefined && parent !== agentId && rows.has(parent) ? parent : null
@@ -192,8 +175,7 @@ export function nativeChatSubagentSections(
   return { rows, entries, rosters, anchoredAt, openAt, pathOf }
 }
 
-/** Every subagent's rows in transcript order: apart from the merge below, so an
- *  update to the conversation alone (the parent streaming) reuses it. */
+/** Sort child rows separately so parent-only streaming updates reuse their order. */
 export function nativeChatSubagentRowsInOrder(
   subagentRows: ReadonlyMap<string, readonly NativeChatSubagentRow[]>
 ): readonly NativeChatSubagentRow[] {
@@ -202,8 +184,7 @@ export function nativeChatSubagentRowsInOrder(
     .sort((a, b) => compareMessages(a.message, b.message))
 }
 
-/** Every row with its turn, the conversation's and each subagent's together, in
- *  transcript order: a subagent's edits are real changes in the turn they happened. */
+/** Merge parent and child rows in transcript order so child edits remain in their actual turns. */
 export function nativeChatRowsInTranscriptOrder(
   messages: readonly NativeChatMessage[],
   turnKeys: readonly (string | undefined)[],

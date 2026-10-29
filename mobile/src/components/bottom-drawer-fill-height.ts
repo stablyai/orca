@@ -1,8 +1,4 @@
-// Why: fill-mode sheets need a stable outer height so docked chrome (e.g. the
-// smart-source TextInput) does not ride result-list reflow. Height shrinks by
-// the keyboard inset; the sheet is also lifted with marginBottom equal to that
-// inset so the bottom edge sits on the keyboard top (height shrink alone still
-// leaves the dock in the keyboard footprint).
+// Stable fill height keeps docked input from riding results; shrink height and lift marginBottom by keyboard inset to put bottom edge above keys.
 
 export function resolveBottomDrawerFillHeight(input: {
   screenHeight: number
@@ -12,8 +8,6 @@ export function resolveBottomDrawerFillHeight(input: {
 }): number {
   const topGap = input.topGap ?? 16
   const keyboardInset = Math.max(0, input.keyboardInset)
-  // Never exceed the space under the status-bar gap and above the keyboard —
-  // a hard minHeight here would grow the sheet upward under the status bar
-  // while marginBottom still equals the full keyboard inset.
+  // Cap below status-bar gap and above keyboard; hard minHeight would grow upward under status bar while full inset still lifts sheet.
   return Math.max(0, input.screenHeight - input.topInset - topGap - keyboardInset)
 }

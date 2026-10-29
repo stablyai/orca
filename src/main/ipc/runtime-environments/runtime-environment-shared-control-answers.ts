@@ -1,7 +1,4 @@
-/**
- * Each environment's control socket and when it last heard from its server while ready. A leaf
- * module: the serving gate reads it without importing the connection cache, which imports the gate back.
- */
+/** Keep answer timestamps in a leaf module to break the serving gate/connection-cache import cycle. */
 export type SharedControlSocket = {
   isReady(): boolean
   readonly socketGeneration: { peek(): number }
@@ -19,7 +16,7 @@ const sources = new Map<
   string,
   { connection: SharedControlSocket; answeredAt: () => number | null; instance: number }
 >()
-// Why: a replacement connection restarts its socket generation, so the key needs the instance too.
+// Connection replacements restart socket generations; include instance identity in the key.
 let nextInstance = 0
 
 export function setSharedControlAnswerSource(

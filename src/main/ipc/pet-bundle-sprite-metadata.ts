@@ -8,13 +8,12 @@ import type { PetManifestLike, ResolvedPetManifest } from './pet-bundle'
 async function readSheetDimensions(
   buffer: Buffer
 ): Promise<{ width: number; height: number } | null> {
-  // Why: nativeImage can fail on some valid WebP that Chromium renders — read WebP dims from the header before native decode.
+  // Chromium renders some WebP variants nativeImage cannot decode; prefer header dimensions.
   const webpDims = readWebpDimensionsFromBuffer(buffer)
   if (webpDims) {
     return webpDims
   }
 
-  // Why: nativeImage can't decode SVG (vector → no pixel grid) — pet bundles must use a raster sheet.
   const image = nativeImage.createFromBuffer(buffer)
   if (image.isEmpty()) {
     return null
@@ -26,16 +25,16 @@ async function readSheetDimensions(
   return { width: size.width, height: size.height }
 }
 
-/** Undefined when the manifest declares no frame layout — the renderer then falls back to spriteFps. */
+/** Without a frame layout, the renderer uses spriteFps. */
 export async function buildBundleSprite<T extends PetManifestLike>(
   manifest: ResolvedPetManifest<T>,
   sheetSrc: string
 ): Promise<NonNullable<CustomPet['sprite']> | undefined> {
   let sprite: NonNullable<CustomPet['sprite']> | undefined
   if (manifest.frame) {
-    // Why: only decode when a frame layout needs validating — nativeImage can fail on some WebP variants in headless contexts.
+    // Decode only for layout validation; nativeImage may reject otherwise renderable WebP.
     const sheetBuf = await readFile(sheetSrc)
-    // Why: defend against TOCTOU — file may have grown between stat and read.
+    // Recheck the read size because the file may have grown after stat.
     if (sheetBuf.byteLength > MAX_BYTES) {
       throw new Error('Spritesheet exceeded the size limit.')
     }

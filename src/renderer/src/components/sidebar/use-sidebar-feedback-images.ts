@@ -33,11 +33,9 @@ export function useSidebarFeedbackImages(params: {
   const [images, setImages] = useState<FeedbackImageDraft[]>([])
   const [pendingImageReadCount, setPendingImageReadCount] = useState(0)
   const liveImageDraftsRef = useRef<FeedbackImageDraft[]>([])
-  // Why: the paste gate answers synchronously, so batches still queued or being
-  // read count against it — otherwise two quick pastes both see room for four.
+  // Reserve queued reads synchronously so rapid pastes cannot each claim the same free capacity.
   const pendingImageReadsRef = useRef({ count: 0, bytes: 0 })
-  // Why: a shrunk image's size is unknown until it is read, so batches read one
-  // at a time, each sized against what the batches before it actually committed.
+  // Read batches serially because compression sizes are unknown until earlier batches commit.
   const readQueueRef = useRef<Promise<void> | null>(null)
 
   const clearImages = useCallback(() => {
@@ -46,7 +44,6 @@ export function useSidebarFeedbackImages(params: {
     setImages([])
   }, [])
 
-  // Why: object URLs for the thumbnails leak until revoked.
   useEffect(
     () => () => {
       liveImageDraftsRef.current.forEach(releaseFeedbackImageDraft)
@@ -55,8 +52,7 @@ export function useSidebarFeedbackImages(params: {
     []
   )
 
-  // Why: a read's callback moves its batch from pending to the live ref in one
-  // step, but rendered state lags a render, so only the ref covers that gap.
+  // Rendered state lags read completion; the live ref closes that reservation-count gap.
   const getReservedImageCapacity = useCallback((): { count: number; bytes: number } => {
     const liveDrafts = liveImageDraftsRef.current
     const pendingReads = pendingImageReadsRef.current
@@ -126,8 +122,7 @@ export function useSidebarFeedbackImages(params: {
           }
         }
       )
-      // Why: the tail is what the next batch waits on, so a throw inside either
-      // callback would leave it rejected and report every later attach as unreadable.
+      // Recover the queue tail after callback errors so later attachments are not poisoned by a rejected promise.
       readQueueRef.current = settled.catch((error: unknown) => {
         console.error('Failed to settle a feedback image batch:', error)
       })

@@ -5,6 +5,7 @@ import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState, RpcResponse } from '../transport/types'
 import type { Worktree } from '../worktree/workspace-list-types'
 import { QODER_OWNED_TERMINAL_CREATE_CAPABILITY } from '../../../src/shared/qoder-terminal-create-capability'
+import { buildMobileAgentHistoryCard } from './agent-history-session-card'
 
 const connection = vi.hoisted((): { client: RpcClient | null; state: ConnectionState } => ({
   client: null,
@@ -38,6 +39,95 @@ function fakeClient(sendRequest: RpcClient['sendRequest'], generation?: () => nu
     ...(generation ? { getGeneration: generation } : {})
   }
 }
+
+it('updates a mounted History card from its client naming feed without another query', async () => {
+  let emit = (_value: unknown): void => {}
+  const send = vi.fn<RpcClient['sendRequest']>(async (method) => ({
+    id: 'reply',
+    ok: true,
+    result:
+      method === 'status.get'
+        ? { capabilities: ['aiVault.v1'] }
+        : {
+            issues: [],
+            sessions: [
+              {
+                id: 'row',
+                agent: 'codex',
+                sessionId: 'provider-id',
+                title: 'Before',
+                cwd: null,
+                modifiedAt: '2026-10-21',
+                previewMessages: [],
+                messageCount: 1,
+                structuredSession: { sessionId: 'host-session', workspaceId: 'workspace' }
+              }
+            ]
+          }
+  }))
+  const subscribe = vi.fn<RpcClient['subscribe']>((_method, _params, listener) => {
+    emit = listener
+    return () => {}
+  })
+  connection.client = { ...fakeClient(send), subscribe }
+  connection.state = 'connected'
+  const worktrees: Worktree[] = []
+  let hostId = 'host'
+  function Card() {
+    const { screenState } = useMobileAgentHistoryState({
+      hostId,
+      worktreeId: 'workspace',
+      worktrees,
+      worktreesLoaded: true
+    })
+    const session = screenState.kind === 'ready' ? screenState.sessions[0] : null
+    return createElement(
+      'span',
+      null,
+      session ? buildMobileAgentHistoryCard(session, null, 0).title : ''
+    )
+  }
+  let tree: ReactTestRenderer | undefined
+  await act(async () => {
+    tree = create(createElement(Card))
+  })
+  try {
+    expect(JSON.stringify(tree?.toJSON())).toContain('Before')
+    await act(async () => {
+      emit({
+        type: 'snapshot',
+        sessions: [],
+        namingActiveSessionIds: [],
+        conversationNames: [{ sessionId: 'host-session', conversationName: 'After' }]
+      })
+    })
+    expect(JSON.stringify(tree?.toJSON())).toContain('After')
+    expect(send).toHaveBeenCalledTimes(2)
+    expect(subscribe).toHaveBeenCalledOnce()
+    connection.client = {
+      ...fakeClient(async (method) =>
+        method === 'status.get'
+          ? { id: 'status-b', ok: true, result: { capabilities: ['aiVault.v1'] } }
+          : new Promise<RpcResponse>(() => {})
+      ),
+      subscribe
+    }
+    hostId = 'host-b'
+    await act(async () => tree?.update(createElement(Card)))
+    await act(async () =>
+      emit({
+        type: 'snapshot',
+        sessions: [],
+        namingActiveSessionIds: [],
+        conversationNames: [{ sessionId: 'host-session', conversationName: 'Other host' }]
+      })
+    )
+    expect(JSON.stringify(tree?.toJSON())).toContain('Before')
+    expect(JSON.stringify(tree?.toJSON())).not.toContain('Other host')
+  } finally {
+    await act(async () => tree?.unmount())
+  }
+})
 
 it.each([
   'host/client replacement',
@@ -149,7 +239,7 @@ it.each([
         cwd: '/owned/workspace',
         codexHome: null
       },
-      hostPlatform: 'darwin'
+      workspacePlatform: 'darwin'
     })
     await act(async () => {
       resolveRetired(firstStatus)

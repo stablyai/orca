@@ -1,7 +1,4 @@
-/**
- * #27267: a move to the managed server that stops short must never leave the host locked with no
- * way forward. Each stop either releases the fence or keeps it, says so, and resumes next connect.
- */
+/** #27267: stopped conversions must release their fence or report it retained and resume next connect. */
 import { describe, expect, it, vi } from 'vitest'
 import type { SshTarget } from '../../shared/ssh-types'
 import {
@@ -16,7 +13,6 @@ const target: SshTarget = { id: 'ssh-1', label: 'Box', host: 'box', port: 22, us
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the orchestrator reads only the environment id.
 const environment = { id: 'env-1' } as never
 
-/** The journal and registration a conversion leaves, as the connect's collaborators see them. */
 function fencedHost(phase: 'source-fenced' | 'destination-staged', registered: boolean) {
   const host: { phase: string | null; registered: boolean } = { phase, registered }
   return {

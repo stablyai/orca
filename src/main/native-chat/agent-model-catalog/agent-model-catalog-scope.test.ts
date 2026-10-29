@@ -1,8 +1,10 @@
+import { agentSessionConversationView } from '../../../shared/agent-session-conversation-view'
 import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import { resolveCliCommand } from '../../../shared/node-cli-command-resolution'
+import { agentSessionRecordFixture } from '../agent-session-record-test-fixture'
 import { createClaudeModelCatalogProbe } from '../../claude/claude-model-catalog-probe'
 import { createCodexModelCatalogProbe } from '../../codex/codex-model-catalog-probe'
 import {
@@ -73,6 +75,86 @@ describe('installed catalog invocation identity', () => {
   )
 })
 
+describe('original operation through actual nested resolution', () => {
+  it.each(['overlay', 'environment', 'auth'] as const)(
+    'starts no stage after %s resolves beyond the original deadline',
+    async (held) => {
+      vi.useFakeTimers()
+      const gate = Promise.withResolvers<void>()
+      const entered = Promise.withResolvers<void>()
+      const stages: string[] = []
+      const stage = async (name: string) => {
+        stages.push(name)
+        if (name === held) {
+          entered.resolve()
+          await gate.promise
+        }
+      }
+      const runListing = vi.fn(async () => '')
+      const probe = createClaudeModelCatalogProbe({
+        resolveLaunchArgs: () => [],
+        resolveEnv: async () => {
+          await stage('overlay')
+          return {}
+        },
+        resolveInheritedEnv: async () => {
+          await stage('environment')
+          return { PATH: '/fixture' }
+        },
+        resolveCommand: () => {
+          stages.push('lookup')
+          return '/fixture/claude'
+        },
+        resolveAuthPolicy: async () => {
+          await stage('auth')
+          return { account: 'system' }
+        },
+        runListing
+      })
+      const record = agentSessionRecordFixture({
+        sessionId: 'catalog-scope-session',
+        provider: 'claude',
+        accountHome: { variable: 'CLAUDE_CONFIG_DIR', path: '/fixture/account' }
+      })
+      const store = new AgentModelCatalogStore()
+      const service = createAgentModelCatalogService({
+        store,
+        getConversation: () => {
+          const held = record
+          return held ? agentSessionConversationView(held) : undefined
+        },
+        getRecord: () => record,
+        drivesRecord: () => true,
+        resolveAccountHome: async () => record.accountHome,
+        recordWorkspacePath: async () => '/fixture/workspace',
+        probes: { claude: probe }
+      })
+      try {
+        const demand = service.demand({
+          agent: 'claude',
+          sessionId: record.sessionId,
+          deadline: Date.now() + 10
+        })
+        await entered.promise
+        const before = [...stages]
+        await vi.advanceTimersByTimeAsync(11)
+        await demand
+        gate.resolve()
+        await vi.advanceTimersByTimeAsync(0)
+        expect(stages).toEqual(before)
+        expect(runListing).not.toHaveBeenCalled()
+        expect(service.snapshot({ agent: 'claude', sessionId: record.sessionId })).toEqual({
+          origin: 'unknown'
+        })
+      } finally {
+        gate.resolve()
+        service.stop()
+        vi.useRealTimers()
+      }
+    }
+  )
+})
+
 describe('a picker read with the CLI missing', () => {
   it('waits on at most one shell rerun per hold window, and finds a CLI installed after it', async () => {
     const root = mkdtempSync(join(tmpdir(), 'orca-catalog-missing-cli-'))
@@ -101,6 +183,7 @@ describe('a picker read with the CLI missing', () => {
       let now = 1_000
       const service = createAgentModelCatalogService({
         store: new AgentModelCatalogStore({ now: () => now }),
+        getConversation: () => undefined,
         getRecord: () => undefined,
         drivesRecord: () => true,
         resolveAccountHome: async () => ({ variable: 'CLAUDE_CONFIG_DIR', path: root }),

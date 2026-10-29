@@ -11,8 +11,7 @@ import { spawnCodexBackfillRecoveryProcess } from '../codex/codex-state-db-backf
 import { probeOpenCodeLaunchModelContext } from '../opencode/opencode-launch-model-context'
 import { spawnSourceControlAgent } from '../text-generation/source-control-agent-launch'
 
-// Every production launch path must hand the supervisor its report channel; an adapter that
-// rewrites stdio drops it, and the guard then never watches the group.
+// Adapters that rewrite stdio can silently drop the supervisor group-report channel.
 
 const { registrations } = vi.hoisted(() => {
   const recorded: { site: string; armed: boolean }[] = []
@@ -35,7 +34,7 @@ vi.mock('./provider-group-orphan-guard', async (importOriginal) => {
 
 const dir = mkdtempSync(join(tmpdir(), 'orca-guard-launch-paths-'))
 afterAll(() => rmSync(dir, { recursive: true, force: true }))
-// Exits at once, so each supervisor relays its exit and stops on its own.
+// Exit promptly so supervisors relay the outcome and stop without test cleanup.
 const QUICK_EXIT = ['-e', 'setTimeout(() => {}, 50)']
 
 function exited(child: Pick<ChildProcess, 'exitCode' | 'signalCode' | 'once'>): Promise<void> {

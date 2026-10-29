@@ -202,8 +202,7 @@ describe('DaemonClient', () => {
       }
       for (const socket of [connectedClient.controlSocket, connectedClient.streamSocket]) {
         expect(socket?.listenerCount('connect')).toBe(0)
-        // One live error listener remains: the disconnect handler installed
-        // after the daemon hello handshake succeeds.
+        // The post-handshake disconnect handler still needs one error listener.
         expect(socket?.listenerCount('error')).toBe(1)
       }
     })
@@ -393,8 +392,7 @@ describe('DaemonClient', () => {
     })
 
     it('survives a cancelCreateOrAttach the daemon refuses', async () => {
-      // Why: v1-v10 daemons have no cancel case and answer with an error. Escalating
-      // that to a disconnect would reject every sibling session's in-flight request.
+      // Old daemons reject cancellation; that refusal must not disconnect sibling sessions.
       const received: string[] = []
       await startMockDaemon({
         onControlMessage: (msg) => {
@@ -433,9 +431,7 @@ describe('DaemonClient', () => {
     })
 
     it('rejects in-flight requests as DaemonConnectionLostError when the socket dies', async () => {
-      // Why: the error class is the only signal separating "the wire is gone" from
-      // "the daemon answered with an error"; requestDaemonRpc keys the decision to
-      // tear down the shared connection off it.
+      // Only transport errors may tear down the connection shared by sibling requests.
       const serverSockets: Socket[] = []
       await startMockDaemon({ onControlMessage: () => null })
       server.on('connection', (socket) => serverSockets.push(socket))
@@ -576,10 +572,8 @@ describe('DaemonClient', () => {
       client.onDisconnected(disconnected)
       await client.ensureConnected()
 
-      // Wait for both sockets to be tracked
       await waitFor(() => serverSockets.length >= 2)
 
-      // Destroy all server-side sockets to simulate daemon crash
       for (const socket of serverSockets) {
         socket.destroy()
       }
@@ -600,7 +594,7 @@ describe('DaemonClient', () => {
       await startMockDaemon({
         onControlMessage: (msg) => {
           received.push(msg)
-          return null // no response
+          return null
         }
       })
 
@@ -617,7 +611,6 @@ describe('DaemonClient', () => {
     })
 
     it('reports a dropped delivery when not connected', () => {
-      // Why: STA-2373 relies on this false to detect a write silently swallowed by a dead socket.
       client = new DaemonClient({ socketPath, tokenPath })
       expect(client.notify('write', { sessionId: 'session-1', data: 'hello' })).toBe(false)
     })
@@ -656,7 +649,6 @@ describe('DaemonClient', () => {
         throw new Error('EPIPE')
       })
 
-      // Swallowed, not rethrown: a dead socket must not tear down the caller.
       expect(client.notify('write', { sessionId: 'session-1', data: 'hello' })).toBe(false)
     })
 

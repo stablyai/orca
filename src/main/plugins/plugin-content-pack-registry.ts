@@ -5,6 +5,10 @@ import {
   type ValidDiscoveredPlugin
 } from './plugin-discovery'
 import { PluginLanguagePackRegistry } from './plugin-language-pack-registry'
+import {
+  createPluginTerminalThemeRegistry,
+  createPluginThemeRegistry
+} from './plugin-theme-registries'
 import { PluginVmRecipeRegistry } from './plugin-vm-recipe-registry'
 import { PluginCommandRegistry } from './plugin-command-registry'
 import { verifyInstructionalPluginContent } from './plugin-instructional-content-integrity'
@@ -20,17 +24,20 @@ type ContentFamily = {
 
 export class PluginContentPackRegistry {
   readonly languagePacks: PluginLanguagePackRegistry
+  readonly themes: ReturnType<typeof createPluginThemeRegistry>
+  readonly terminalThemes: ReturnType<typeof createPluginTerminalThemeRegistry>
   readonly vmRecipes: PluginVmRecipeRegistry
   readonly commands: PluginCommandRegistry
   private readonly activationErrors = new Map<string, string>()
 
   constructor(
     contentVerifier: PluginContentVerifier,
-    /** Revocation chokepoint: no caller-supplied predicate can readmit a
-     *  killed plugin's language packs, VM recipes, or commands. */
+    /** No caller predicate may readmit revoked contributions. */
     private readonly isKilled: (pluginKey: string) => boolean
   ) {
     this.languagePacks = new PluginLanguagePackRegistry(contentVerifier)
+    this.themes = createPluginThemeRegistry(contentVerifier)
+    this.terminalThemes = createPluginTerminalThemeRegistry(contentVerifier)
     this.vmRecipes = new PluginVmRecipeRegistry()
     this.commands = new PluginCommandRegistry()
   }
@@ -71,9 +78,7 @@ export class PluginContentPackRegistry {
     )
 
     while (true) {
-      // `approvedKeys` is a snapshot from before the awaited verification
-      // above, so a kill list arriving during that wait would otherwise still
-      // publish. Re-read revocation here, the last gate before publication.
+      // Approval predates awaited verification; recheck revocation immediately before publication.
       const approveAtomically = (plugin: ValidDiscoveredPlugin): boolean =>
         approvedKeys.has(plugin.pluginKey) &&
         !excluded.has(plugin.pluginKey) &&
@@ -111,10 +116,12 @@ export class PluginContentPackRegistry {
     return null
   }
 
-  /** Every contribution family, in error-reporting order; a new family is one entry here. */
+  /** Keep contribution errors in this family order. */
   private families(keybindings: KeybindingOverrides = {}): readonly ContentFamily[] {
     return [
       this.languagePacks,
+      this.themes,
+      this.terminalThemes,
       this.vmRecipes,
       {
         reconcile: async (discovered, isApproved) =>

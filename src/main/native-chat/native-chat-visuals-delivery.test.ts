@@ -6,8 +6,8 @@ import {
   NATIVE_CHAT_VISUAL_MAX_BYTES,
   NATIVE_CHAT_VISUAL_MAX_PER_MESSAGE,
   parseNativeChatVisualDirectiveLine
-} from '../../shared/native-chat-visual-directive'
-import { NATIVE_CHAT_VISUAL_THEME_TOKENS } from '../../shared/native-chat-visual-shell'
+} from '../../shared/native-chat/native-chat-visual-directive'
+import { NATIVE_CHAT_VISUAL_THEME_TOKENS } from '../../shared/native-chat/native-chat-visual-shell'
 import { ORCAD_NATIVE_CHAT_VISUALS_ARTIFACTS } from '../../shared/orcad-artifacts'
 import {
   createNativeChatVisualsDelivery,
@@ -87,7 +87,6 @@ describe('preparing a chat for visuals', () => {
     expect(prepared).toEqual({ folder: nativeChatScratchFolderFor(state, 'chat-1'), skill: SKILL })
     const mode = statSync(prepared!.folder).mode & 0o777
     expect(process.platform === 'win32' || mode === 0o700).toBe(true)
-    // A second launch of the same chat reuses it.
     await expect(prepare('chat-1')).resolves.toEqual(prepared)
   })
 
@@ -101,7 +100,6 @@ describe('preparing a chat for visuals', () => {
       })('chat-1')
     ).resolves.toBeNull()
     expect(missingSkill.warn).toHaveBeenCalledOnce()
-    // A file where the scratch root should be makes every mkdir fail.
     const state = tempDir()
     writeFileSync(nativeChatScratchRootFor(state), 'not a folder')
     const failedFolder = logger()

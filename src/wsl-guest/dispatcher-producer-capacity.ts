@@ -49,7 +49,7 @@ export abstract class RelayDispatcherProducerCapacity extends RelayDispatcherPro
     return this.activeClients().map((client) => client.id)
   }
 
-  // Why: signed on purpose — `budget >= 0` is an exact fits-check that a floored budget cannot express.
+  // Keep signed headroom so budget >= 0 remains an exact fits check.
   producerEnvelopeBudget(
     method: string,
     params: Record<string, unknown>,
@@ -57,8 +57,7 @@ export abstract class RelayDispatcherProducerCapacity extends RelayDispatcherPro
   ): number {
     if (clientId !== undefined) {
       const client = this.clients.get(clientId)
-      // Why: a detached or closed target has no room at all — reporting infinite capacity passes a
-      // fits-check and the frame is then dropped by the publish seam instead.
+      // Closed/detached targets have no capacity; infinity would wrongly pass admission before publication drops the frame.
       if (!client || client.closed) {
         return Number.MIN_SAFE_INTEGER
       }

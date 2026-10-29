@@ -152,10 +152,7 @@ export function getNewWorkspaceProjectGroupHostId(group: ProjectGroup): Executio
   return getRepoExecutionHostId(group)
 }
 
-/**
- * A folder workspace can only be backed by a group whose host is still actionable — a removed
- * or unreachable host must not be selectable, restorable from a draft, or kept once selected.
- */
+/** Require actionable hosts for folder selection, draft restore and retention of an existing pick. */
 export function findActionableFolderProjectGroup({
   projectGroups,
   groupId,

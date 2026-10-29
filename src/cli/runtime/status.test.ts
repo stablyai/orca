@@ -27,8 +27,7 @@ afterEach(async () => {
   servers.clear()
 })
 
-// Why: legacy runtime metadata compatibility only applies to local Unix socket
-// metadata; Windows uses named pipes and cannot run this fixture directly.
+// This legacy fixture uses Unix sockets; Windows runtimes use named pipes.
 describe.skipIf(process.platform === 'win32')('CLI runtime status', () => {
   it('uses the legacy singular runtime transport when reporting status', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-status-'))
@@ -86,10 +85,7 @@ describe.skipIf(process.platform === 'win32')('CLI runtime status', () => {
   })
 })
 
-// Why: `kill(pid, 0)` answers EPERM when the pid exists under another uid — an Orca the
-// CLI was pointed at with ORCA_USER_DATA_PATH, or one started with sudo. Reading that
-// refusal as absence reports a live app as a dead one
-// (docs/reference/ssh-execution-boundary.md).
+// EPERM proves a PID exists under another uid; it must not mark a live runtime dead.
 describe.skipIf(process.platform === 'win32')('CLI status pid fallback', () => {
   async function statusWithUnreachableRuntime(
     killError: NodeJS.ErrnoException
@@ -147,8 +143,6 @@ describe('projectRemoteAppStatus', () => {
     } as RuntimeStatus
   }
 
-  // STA-4792 defect 4: the reported output was running:false alongside desktopWindowStatus
-  // 'available', while the target's GUI was demonstrably up.
   it('reports the target app as running when a renderer owns the graph there', () => {
     expect(projectRemoteAppStatus(remoteStatus({ desktopWindowStatus: 'available' }))).toEqual({
       running: true,
@@ -164,12 +158,10 @@ describe('projectRemoteAppStatus', () => {
     }
   )
 
-  // A headless `serve` reports no window at all.
   it('reports not running when the target has no desktop window status', () => {
     expect(projectRemoteAppStatus(remoteStatus())).toEqual({ running: false, pid: null })
   })
 
-  // Why: old runtimes predate the explicit status but a positive window id still proves a window.
   it('honors the authoritativeWindowId fallback for older runtimes', () => {
     expect(projectRemoteAppStatus(remoteStatus({ authoritativeWindowId: 3 }))).toEqual({
       running: true,
@@ -178,8 +170,6 @@ describe('projectRemoteAppStatus', () => {
     })
   })
 
-  // Why: the SSH host-passthrough answers for the Orca host the caller reached, and used to
-  // claim running:true unconditionally. Both transports now share this projection.
   it('does not claim a desktop app for a headless serve on any transport', () => {
     expect(projectRemoteAppStatus(remoteStatus({ desktopWindowStatus: 'openable' }))).toEqual({
       running: false,

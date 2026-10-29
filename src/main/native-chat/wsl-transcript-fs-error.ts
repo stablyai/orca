@@ -2,6 +2,7 @@ export const WSL_TRANSCRIPT_FS_SLOW_MESSAGE =
   'WSL transcript files are temporarily unavailable because filesystem access is taking too long. Try again shortly or restart Orca if the issue continues.'
 export const WSL_TRANSCRIPT_FS_CAPACITY_MESSAGE =
   'WSL transcript discovery is temporarily unavailable because too many filesystem requests are already waiting. Try again shortly or restart Orca if the issue continues.'
+const WSL_TRANSCRIPT_FS_DISTRO_NOT_RUNNING_PREFIX = 'WSL transcript files are unavailable because'
 const WSL_TRANSCRIPT_FS_PROCESS_FAILURE_PREFIX =
   'WSL transcript files are temporarily unavailable because the filesystem helper process failed'
 
@@ -38,16 +39,28 @@ export function wslTranscriptFsProcessFailureError(detail: unknown): WslTranscri
   )
 }
 
-/** Layers that only see a flattened message use this to spot a refusal. */
+/** Reading would boot the distro (E9), or WSL couldn't say it runs; nothing touched its files. */
+export function wslTranscriptFsDistroNotRunningError(
+  distro: string,
+  state: 'stopped' | 'unverifiable'
+): WslTranscriptFsError {
+  return new WslTranscriptFsError(
+    'unavailable',
+    state === 'stopped'
+      ? `${WSL_TRANSCRIPT_FS_DISTRO_NOT_RUNNING_PREFIX} WSL distro '${distro}' is not running. Open a terminal in it to start it.`
+      : `${WSL_TRANSCRIPT_FS_DISTRO_NOT_RUNNING_PREFIX} WSL didn't answer whether '${distro}' is running. Try again shortly.`
+  )
+}
+
 export function isWslTranscriptFsRefusalMessage(message: string): boolean {
   return (
     message === WSL_TRANSCRIPT_FS_SLOW_MESSAGE ||
+    message.startsWith(WSL_TRANSCRIPT_FS_DISTRO_NOT_RUNNING_PREFIX) ||
     message === WSL_TRANSCRIPT_FS_CAPACITY_MESSAGE ||
     message.startsWith(WSL_TRANSCRIPT_FS_PROCESS_FAILURE_PREFIX)
   )
 }
 
-/** Narrow a caught error to a gate refusal, rethrowing anything else. */
 export function wslTranscriptFsRefusal(error: unknown): WslTranscriptFsError {
   if (error instanceof WslTranscriptFsError) {
     return error

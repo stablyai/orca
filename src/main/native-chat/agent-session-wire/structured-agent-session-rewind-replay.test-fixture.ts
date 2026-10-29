@@ -1,9 +1,16 @@
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
+import type { StructuredAgentSessionEventSink } from './structured-agent-session-event-sink'
 import { expect, type Mock } from 'vitest'
 import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import type { StructuredAgentSessionHost } from './structured-agent-session-host'
-import { HOST_TEST_SESSION, HOST_TEST_THREAD } from './structured-agent-session-host-test-data'
+import {
+  HOST_TEST_SESSION,
+  HOST_TEST_THREAD,
+  hostTestAttachParams,
+  hostTestMessage
+} from './structured-agent-session-host-test-data'
 
 type RewindReplayFixture = {
   host: StructuredAgentSessionHost
@@ -65,4 +72,44 @@ export async function expectRetainedPrefixRewindReplay({
   )
   expect(await host.rewind(caller, request)).toMatchObject({ ok: true, replayed: true })
   expect(rewind).toHaveBeenCalledTimes(1)
+}
+
+export async function expectLargeRetainedPrefixRewind({
+  host,
+  store,
+  rewind,
+  sink,
+  params
+}: Pick<RewindReplayFixture, 'host' | 'store' | 'rewind' | 'params'> & {
+  sink: () => StructuredAgentSessionEventSink
+}) {
+  expect(await host.attach(caller, hostTestAttachParams(null))).toMatchObject({ ok: true })
+  const events = sink()
+  const message = (turnId: string) => ({
+    provider: 'codex' as const,
+    threadId: HOST_TEST_THREAD,
+    turnId,
+    ordinal: 0
+  })
+  for (let turn = 0; turn < 300; turn++) {
+    events.appendItem(message(`kept-${turn}`), hostTestMessage('x'.repeat(12_000)), {
+      turnScope: AGENT_JOURNAL_THREAD_SCOPE
+    })
+  }
+  for (const turnId of ['drop', 'tip']) {
+    events.appendItem(message(turnId), hostTestMessage(turnId), {
+      turnScope: AGENT_JOURNAL_THREAD_SCOPE
+    })
+  }
+  await host.flushStreamedEvents(HOST_TEST_SESSION)
+
+  expect(
+    await host.rewind(caller, await params(agentJournalItemKey(message('drop'))))
+  ).toMatchObject({ ok: true })
+  expect(rewind).toHaveBeenCalledWith(expect.objectContaining({ beforeTurnId: 'drop' }))
+  const { items } = await host.journalSnapshot(HOST_TEST_SESSION)
+  expect(items.map(({ itemId }) => itemId)).toEqual(
+    Array.from({ length: 300 }, (_, turn) => agentJournalItemKey(message(`kept-${turn}`)))
+  )
+  expect(store.getRecord(HOST_TEST_SESSION)?.rewind).toMatchObject({ phase: 'completed' })
 }

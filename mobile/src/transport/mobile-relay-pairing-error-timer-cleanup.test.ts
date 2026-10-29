@@ -215,7 +215,7 @@ describe('closed relay pairing client error timer ownership', () => {
     ])
   })
 
-  it('preserves an already settled RPC through explicit close and late errors', async () => {
+  it('preserves a settled RPC and rejects new work after explicit close and late errors', async () => {
     const target = fixture()
     await authenticate(target)
     const pending = target.client.sendRequest('status.get')
@@ -226,7 +226,11 @@ describe('closed relay pairing client error timer ownership', () => {
     target.client.close()
     target.socket.onerror?.()
     expect(vi.getTimerCount()).toBe(0)
-    expect(await pending).toBe(response)
+    const afterClose = target.client.sendRequest('after-close').catch((error: unknown) => error)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(target.channel.sendText).toHaveBeenCalledOnce()
+    expect(await afterClose).toEqual(new Error('relay pairing client closed'))
+    expect(vi.getTimerCount()).toBe(0)
     expect(closedLogs(target.logs)).toHaveLength(1)
     expect(target.channel.dispose).toHaveBeenCalledOnce()
   })

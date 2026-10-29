@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { AntigravityAccountService } from './native-account-service'
 import { parseAntigravityNativeCredential } from './native-credential-codec'
-import { credential, harness } from './native-account-test-fixtures'
+import { credential, harness, refreshedWithoutIdToken } from './native-account-test-fixtures'
 
 describe('Antigravity native account identity and selection', () => {
   it('keeps one stable account through access, refresh, expiry, ID-token and email rotation', async () => {
@@ -75,7 +75,7 @@ describe('Antigravity native account identity and selection', () => {
       authMethod: 'consumer',
       identityKnown: false
     })
-    await expect(h.service.addCurrentAccount()).rejects.toThrow('no stable Google identity')
+    await expect(h.service.addCurrentAccount()).rejects.toThrow('Google did not confirm')
     expect(h.getVault().accounts).toHaveLength(0)
   })
 
@@ -155,5 +155,41 @@ describe('Antigravity native account identity and selection', () => {
       .mockResolvedValueOnce(parseAntigravityNativeCredential(credential('a', 2)))
     await expect(h.service.removeAccount(id)).rejects.toThrow('Select another')
     expect(h.getVault().accounts).toHaveLength(1)
+  })
+
+  it('saves an id_token-less credential under the subject Google confirms, once per subject', async () => {
+    const h = harness(refreshedWithoutIdToken(1, 'refresh-old'))
+    h.lookupIdentity.mockResolvedValue({
+      issuer: 'https://accounts.google.com',
+      subject: 'google-subject',
+      email: 'a@example.invalid'
+    })
+    const saved = await h.service.addCurrentAccount()
+    expect(h.lookupIdentity).toHaveBeenCalledWith('synthetic-1')
+    expect(saved.accounts).toMatchObject([
+      { subject: 'google-subject', email: 'a@example.invalid' }
+    ])
+    expect(saved.activeAccountId).toBe(saved.accounts[0].id)
+
+    h.setNative(refreshedWithoutIdToken(2, 'refresh-new'))
+    const resaved = await h.service.addCurrentAccount()
+    expect(resaved.accounts).toHaveLength(1)
+    expect(resaved.activeAccountId).toBe(saved.activeAccountId)
+    expect(h.getVault().accounts[0].credentials).toBe(refreshedWithoutIdToken(2, 'refresh-new'))
+  })
+
+  it('rejects a save if the native account changes during identity lookup, then allows retry', async () => {
+    const h = harness(refreshedWithoutIdToken(1))
+    h.lookupIdentity.mockImplementationOnce(async () => {
+      h.setNative(credential('b'))
+      return { issuer: 'https://accounts.google.com', subject: 'a', email: 'a@example.invalid' }
+    })
+
+    await expect(h.service.addCurrentAccount()).rejects.toThrow(
+      'native Antigravity account changed'
+    )
+    expect(h.getVault().accounts).toHaveLength(0)
+    expect(h.getNative()).toBe(credential('b'))
+    expect((await h.service.addCurrentAccount()).accounts).toMatchObject([{ subject: 'b' }])
   })
 })

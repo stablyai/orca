@@ -5,7 +5,7 @@ import {
   parseArgs,
   validateCommandAndFlags
 } from './args'
-import { specPaths, type CommandSpec } from './command-spec'
+import type { CommandSpec } from './command-spec'
 import { suggestCommands, unknownCommandData } from './command-suggestion'
 import { COMMAND_SPECS } from './specs'
 
@@ -71,7 +71,7 @@ describe('live destructive command recovery', () => {
 
   it('keeps every declared alias accepted and normalized to its canonical command', () => {
     for (const spec of COMMAND_SPECS) {
-      for (const path of specPaths(spec)) {
+      for (const path of [spec.path, ...(spec.aliases ?? [])]) {
         expect(findCommandSpec(COMMAND_SPECS, path)).toBe(spec)
         const parsed = normalizeCommandPositionals(COMMAND_SPECS, parseArgs(path))
         expect(parsed.commandPath).toEqual(spec.path)

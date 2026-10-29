@@ -30,7 +30,7 @@ function openRestoredDirtyTab(
     worktreeId: 'wt-1'
   }
 ): void {
-  // A layout-owner build keys a floating workspace's file by its owner, not its path.
+  // Use owner-qualified file IDs, matching the app’s floating workspace layout.
   const fileId = store.getState().openFile({
     filePath,
     ...owner,
@@ -138,7 +138,7 @@ describe('attachRestoredTabConflictScan', () => {
   })
 
   it('retries a failed read and marks once the file becomes readable', async () => {
-    // Why: SSH/runtime connections come up after launch; the first reads fail.
+    // SSH/runtime transports may become ready only after initial startup reads fail.
     mocks.readRuntimeFileContent
       .mockRejectedValueOnce(new Error('connection not ready'))
       .mockResolvedValue({ content: 'agent rewrote this offline', isBinary: false })
@@ -157,7 +157,6 @@ describe('attachRestoredTabConflictScan', () => {
   })
 
   it('leaves a restored dirty tab unmarked when disk already holds its draft', async () => {
-    // Why: its next guarded save lands (disk already equals it) and the tab goes clean.
     mocks.readRuntimeFileContent.mockResolvedValue({ content: 'restored draft', isBinary: false })
     const store = createTestStore()
     openRestoredDirtyTab(store, '/repo/file.ts', 'original baseline')
@@ -187,8 +186,7 @@ describe('attachRestoredTabConflictScan', () => {
 
     try {
       await vi.advanceTimersByTimeAsync(10)
-      // Why: in-session drift is the live watcher's job; re-reading here would
-      // turn the scan into a poller and skew the 'restore' telemetry origin.
+      // Leave in-session drift to live watchers; polling here would misattribute later conflicts to restoration.
       expect(mocks.readRuntimeFileContent).not.toHaveBeenCalled()
     } finally {
       detach()
@@ -206,7 +204,6 @@ describe('attachRestoredTabConflictScan', () => {
       await vi.advanceTimersByTimeAsync(10)
       const tab = store.getState().openFiles[0]
       expect(tab?.externalMutation).toBe('deleted')
-      // Why: the verification is resolved — no further retries may fire.
       await vi.advanceTimersByTimeAsync(60_000)
       expect(mocks.readRuntimeFileContent).toHaveBeenCalledTimes(1)
     } finally {
@@ -303,9 +300,7 @@ describe('attachRestoredTabConflictScan', () => {
   })
 
   it('caps concurrent verification reads and drains the queue without dropping tabs', async () => {
-    // Why: a restored session with many dirty tabs must not fire one disk
-    // read per tab at once — on SSH/remote runtimes that competes with
-    // connection recovery. The cap is 3; the rest queue and all complete.
+    // Limit restored-tab reads so remote RPCs cannot overwhelm connection recovery; queued tabs must all complete.
     const pendingReads: ((value: { content: string; isBinary: boolean }) => void)[] = []
     mocks.readRuntimeFileContent.mockImplementation(
       () =>
@@ -358,10 +353,7 @@ describe('attachRestoredTabConflictScan', () => {
   })
 
   it('verifies a queued tab against its live baseline, not the stale queued snapshot', async () => {
-    // Why: ids are paths, so a tab re-baselined (saved / reopened) while it
-    // waits behind the concurrency cap must be compared against its current
-    // baseline. Queuing the OpenFile snapshot would mark the live tab using the
-    // old lastKnownDiskSignature.
+    // Queued IDs can be saved or reopened before dispatch; compare current baselines rather than captured OpenFile snapshots.
     const pending: {
       filePath: string
       resolve: (value: { content: string; isBinary: boolean }) => void
@@ -373,7 +365,6 @@ describe('attachRestoredTabConflictScan', () => {
         })
     )
     const store = createTestStore()
-    // Three reads fill the concurrency cap; the fourth waits in the queue.
     for (let i = 0; i < 4; i++) {
       openRestoredDirtyTab(store, `/repo/file-${i}.ts`, 'stale baseline')
     }
@@ -382,12 +373,10 @@ describe('attachRestoredTabConflictScan', () => {
     try {
       expect(mocks.readRuntimeFileContent).toHaveBeenCalledTimes(3)
 
-      // The queued tab is re-baselined to match current disk while it waits.
       store
         .getState()
         .setLastKnownDiskSignature('/repo/file-3.ts', getDiskBaselineSignature('current disk'))
 
-      // Drain the in-flight reads; each frees a slot so the queued tab dispatches.
       for (const filePath of ['/repo/file-0.ts', '/repo/file-1.ts', '/repo/file-2.ts']) {
         pending
           .find((p) => p.filePath === filePath)!

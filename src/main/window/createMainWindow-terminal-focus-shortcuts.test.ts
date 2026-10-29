@@ -85,7 +85,14 @@ describe('createMainWindow', () => {
     expect(disabledPreventDefault).not.toHaveBeenCalled()
     expect(webContents.send).not.toHaveBeenCalledWith('ui:dictationKeyDown')
 
+    // #18691: with no model the renderer still needs the chord to show its setup toast.
     voice.enabled = true
+    const noModelPreventDefault = vi.fn()
+    windowHandlers['before-input-event']({ preventDefault: noModelPreventDefault }, dictationInput)
+    expect(noModelPreventDefault).toHaveBeenCalledTimes(1)
+    expect(webContents.send).toHaveBeenCalledWith('ui:dictationKeyDown')
+
+    webContents.send.mockClear()
     voice.sttModel = 'test-model'
     voice.dictationMode = 'hold'
     const holdPreventDefault = vi.fn()

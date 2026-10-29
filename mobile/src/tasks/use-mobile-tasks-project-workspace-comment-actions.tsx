@@ -106,10 +106,7 @@ export function useMobileTasksProjectWorkspaceCommentActions(model: WorkspaceCre
       }
       setProjectMutating(true)
       try {
-        // An issue and a pull request are different methods, so each arm sends its own operation
-        // rather than one call picking a method string.
-        // Params repeated rather than hoisted so each send textually carries its own host, which
-        // is what github-project-host-routing-source.test.ts pins.
+        // Keep host selection on each typed provider send; source checks verify Project calls route to their owning host.
         const updated =
           type === 'issue'
             ? githubProjectIssueUpdate.interpret(

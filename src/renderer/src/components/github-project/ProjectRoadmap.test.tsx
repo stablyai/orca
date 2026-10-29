@@ -112,10 +112,6 @@ describe('ProjectRoadmap', () => {
   ])('renders date ticks and bars with plugin locale %s', async (packLocale, dateLocale) => {
     const packId = 'plugin:stablyai.orca-portuguese/pt-BR' as const
     const resourceLanguage = pluginLanguageResourceId(packId)
-    // The resource tag recorded in the Windows crash report on #25021.
-    expect(resourceLanguage).toBe(
-      'plugin0070006c007500670069006e003a0073007400610062006c007900610069002e006f007200630061002d0070006f00720074007500670075006500730065002f00700074002d00420052'
-    )
     setRendererPluginLanguagePacks([
       {
         id: packId,

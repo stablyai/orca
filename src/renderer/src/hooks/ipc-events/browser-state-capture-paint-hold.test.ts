@@ -30,6 +30,7 @@ function captureHoldHandler(unsubs: (() => void)[] = []): (event: CapturePaintHo
         onActivateView: subscribe,
         onPaneFocus: subscribe,
         onOpenLinkInOrcaTab: subscribe,
+        onSessionProfilesChanged: subscribe,
         onCapturePaintHold: (callback: (event: CapturePaintHoldEvent) => void) => {
           handler = callback
           return () => {}

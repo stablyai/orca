@@ -31,11 +31,7 @@ export type WorkspacePort =
   | (WorkspacePortBase & {
       kind: 'workspace'
       owner: WorkspacePortOwner
-      /** Origin captured from terminal output (e.g. Vite's `Network: https://...:3001/`).
-       *  Only set when a workspace-attributed PTY printed a URL whose port matches
-       *  this listener. Origin only — never includes path, query, fragment, or
-       *  userinfo. Prefer this over `protocol://connectHost:port` for the open and
-       *  copy-link actions. */
+      /** Prefer this origin for open/copy when a workspace PTY printed a URL matching the listener’s port. Excludes path, query, fragment and userinfo. */
       advertisedUrl?: string
     })
   | (WorkspacePortBase & {

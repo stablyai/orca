@@ -5,8 +5,7 @@ import type { ForceReconnect, RpcClientContextValue } from './rpc-client-context
 
 const page = vi.hoisted(() => ({ read: (): RpcClientContextValue | null => null }))
 
-// The page bundle resolves `./client-context` to its `.web` sibling. Forwarded lazily rather than
-// re-exported, because the sibling imports these hooks back and an awaited mock of it deadlocks.
+// Forward lazily to the .web context; awaiting a mock of its reciprocal hook import deadlocks.
 vi.mock('./client-context', () => ({ useRpcClientContext: () => page.read() }))
 
 import { createShellPageClient } from '../mobile-web-shell/bridge/page-bootstrap'

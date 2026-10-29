@@ -328,13 +328,7 @@ describe('web session browser placement', () => {
     ).toBe('group-0')
   })
 
-  /**
-   * A record survives adoption because the group it named is still reserved against cleanup, so
-   * every later write to that entry has to carry the spent intent with it. Nothing in the create
-   * flow can reach these two paths today — the mark needs the host to publish the provisional id,
-   * and the move only fires when it mints a different one — but the module is what promises the
-   * three states stay consistent, not the order its callers happen to run in.
-   */
+  // Spent intents must survive both re-record and ID-move paths while group reservations remain; current caller order does not exercise both, but the module guarantees all three states.
   describe('a create intent the host already spent', () => {
     function recordAdoptedPage(remotePageId: string): void {
       recordWebSessionBrowserPlacement({
@@ -395,9 +389,7 @@ describe('web session browser placement', () => {
       ).toBeUndefined()
     })
 
-    // Why re-marking is worth its own case: the mark runs on every snapshot for every published
-    // page, so the second one is the common case, not an edge. A mark that rewrote the entry
-    // instead of amending it would drop the group reservation the entry is being kept alive for.
+    // Every snapshot remarks published pages; repeated marking must retain the reserved group.
     it('keeps its group and its cleanup claim when a later snapshot marks it again', () => {
       recordAdoptedPage('page-1')
       markWebSessionBrowserPlacementAdopted({

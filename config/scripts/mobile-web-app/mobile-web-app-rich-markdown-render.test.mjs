@@ -1,18 +1,5 @@
-/**
- * The rich Markdown editor in the page, in a real browser, under the policy the shell ships.
- *
- * The native component puts a hand-written document inside a `WebView` and talks to it over
- * `postMessage` and `injectJavaScript`. The page has no WebView, so it mounts the same modules and
- * calls them. That makes four claims this file measures rather than asserts: that all fifteen
- * toolbar commands change the document under the shipped header with no violation; that `ready`
- * and `change` reach the component through its own seam and never through the shell's bridge
- * object; that a remount leaves nothing of the first mount behind (rulings 20 and 21); and that the
- * surface is on the 16 px floor and the two URL commands are answered by a modal rather than by the
- * `null` both shells return from `window.prompt`.
- *
- * Both engines, because the shell is WKWebView on one platform and a Chromium WebView on the other,
- * and `document.execCommand` — which the whole program is built on — is the engine's.
- */
+// Exercise real editor in Chromium/WebKit under shipped CSP: toolbar effects, private ready/change seam, listener/style cleanup, font floor and URL modal.
+// Native WebView postMessage/injectJavaScript are replaced by direct module calls; execCommand behavior requires real engines.
 import { Buffer } from 'node:buffer'
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -31,24 +18,15 @@ import {
   createBundleServer,
   installCspViolationRecorder,
   installListenerRecorder,
-  installSchedulerRecorder,
   readShellCsp
 } from './preview/mobile-web-app-render-harness.mjs'
 
 const mobileDir = fileURLToPath(new URL('../../../mobile', import.meta.url))
 const componentDir = join(mobileDir, 'src/components')
 
-/**
- * The surface's floor, read out of the seam's own module rather than retyped.
- *
- * The number was a literal `16` under a comment claiming it was read, which is the shape the seam
- * exists to prevent: a theme that raised the body size past the floor would move what the page
- * computes and leave this asserting the old number. `textInputFontSizeFloor` is the same reader the
- * closure census uses, and it throws rather than defaulting when the seam is gone.
- */
+// Read font floor from seam module; a copied 16 would silently drift when theme body size rises above it.
 const FLOOR = textInputFontSizeFloor(mobileDir)
 
-/** Every command, with how to set the document up for it and what it must produce. */
 const COMMANDS = [
   { label: 'H1', command: 'heading1', select: 'all', expect: 'h1' },
   { label: 'H2', command: 'heading2', select: 'all', expect: 'h2' },
@@ -64,24 +42,16 @@ const COMMANDS = [
   { label: 'Code block', command: 'codeBlock', select: 'all', expect: 'pre' }
 ]
 
-/** Paragraph is the fifteenth, and it is the only one whose proof is a document it undoes. */
+// Paragraph undoes another command; starting from p would prove nothing.
 const PARAGRAPH = { label: 'Body', command: 'paragraph' }
 
-/**
- * The two that need a URL, and the element each inserts.
- *
- * The image's URL is this server's own, because an inserted `<img>` is fetched: a name that does
- * not resolve put a load failure in the console, and WebKit reports it where chromium does not.
- * Serving it is also the stronger reading — the element the command inserted actually painted
- * under the shipped policy rather than merely appearing in the markup.
- */
+// Serve inserted image locally: nonexistent URL logs WebKit load failure; successful paint proves shipped CSP admits it.
 const IMAGE_PATH = '/inserted.png'
 const URL_COMMANDS = [
   { label: 'Link', title: 'Link URL', path: '/linked', expect: 'a[href]' },
   { label: 'Image', title: 'Image URL', path: IMAGE_PATH, expect: 'img' }
 ]
 
-/** One transparent pixel, served for the image the Image command inserts. */
 const PIXEL = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFAAH/q842iQAAAABJRU5ErkJggg==',
   'base64'
@@ -90,8 +60,7 @@ const PIXEL = Buffer.from(
 const ENGINES = [
   {
     name: 'chromium',
-    // CI runs this against the runner's Google Chrome rather than paying for a download, the same
-    // override shape as every other render check here.
+    // Use runner Chrome override to avoid CI browser downloads.
     launch: () => {
       const executablePath = process.env.ORCA_MOBILE_WEB_RENDER_BROWSER
       return chromium.launch({ headless: true, ...(executablePath ? { executablePath } : {}) })
@@ -100,16 +69,8 @@ const ENGINES = [
   { name: 'webkit', launch: () => webkit.launch({ headless: true }) }
 ]
 
-/**
- * The page under test: the real component, mounted by the real React, with a handle on its props.
- *
- * Not a re-implementation. The controller, the mount, the document's own modules and the toolbar
- * are all the behaviour under test, and a probe that called `runCommand` itself would prove nothing
- * about any of them.
- *
- * `content` is fed back from `onChange`, which is what `MarkdownReader` does: a harness that held
- * the prop still would have the controller replacing the document under every edit.
- */
+// Mount actual component/controller/modules; direct runCommand bypasses tested toolbar and mount behavior.
+// Feed onChange into content like MarkdownReader or controller overwrites every edit from stale prop.
 const PAGE_ENTRY = `
 import { createElement, useEffect, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
@@ -192,14 +153,7 @@ function Harness() {
 createRoot(document.getElementById('root')).render(createElement(Harness))
 `
 
-/**
- * A recorder over `window.ReactNativeWebView`, installed before the bundle runs.
- *
- * Ruling 19's claim on the page is an absence, and an absence needs an instrument: on the shell
- * that object is the bridge's, so an editor message posted through it would put editor JSON into
- * the bridge's own channel. Defined rather than left undefined, so "the page never reaches for it"
- * is measured against something that would have answered.
- */
+// Install ReactNativeWebView recorder before bundle: absence alone cannot prove editor JSON avoids shell bridge if bridge object never existed.
 function installBridgeObjectRecorder() {
   globalThis.__orcaBridgeReads = []
   const bridge = {
@@ -225,8 +179,7 @@ beforeAll(async () => {
   if (!bundles) {
     return
   }
-  // Inside mobile/ rather than the system temp dir: the entry resolves the component beside it,
-  // and esbuild resolves a bare specifier from the importer upward.
+  // Keep entry under mobile/ so upward bare-import resolution finds component dependencies.
   await mkdir(join(mobileDir, '.tmp'), { recursive: true })
   scratch = await mkdtemp(join(mobileDir, '.tmp', 'rich-markdown-render-'))
   const outDir = join(scratch, 'bundle')
@@ -248,17 +201,11 @@ beforeAll(async () => {
     logLevel: 'silent',
     nodePaths: [join(mobileDir, 'node_modules')],
     alias: { 'react-native': 'react-native-web' },
-    // The barrel re-exports a `LucideProvider` its own context module does not export, which is the
-    // same shape the app bundle carries this plugin for.
+    // Match app plugin: barrel reexports LucideProvider absent from its context module.
     plugins: [lucideBarrelPlugin],
-    // `.web.jsx` and `.web.js` are here for the reason the app bundle has them: without them
-    // `react-native-svg`, which the toolbar's icons pull in, resolves its Fabric components and
-    // fails on `codegenNativeComponent`.
+    // Prefer .web.jsx/.web.js or toolbar’s react-native-svg resolves Fabric and fails codegenNativeComponent.
     resolveExtensions: ['.web.tsx', '.web.ts', '.web.jsx', '.web.js', '.tsx', '.ts', '.jsx', '.js'],
-    // Four of `MOBILE_WEB_APP_SHIMS`, because this entry reaches the same React Native modules the
-    // app bundle does: RN ships untranspiled JSX in `.js`, reads `process.env` at module scope, and
-    // assumes a Metro `global` — measured, `isFabric` threw `global is not defined` before the page
-    // mounted at all, and every case in this file failed at `data-ready`.
+    // Match app’s RN shims for JSX-in-.js, process.env and Metro global; missing global made isFabric throw before mount.
     loader: { '.js': 'jsx' },
     banner: {
       js: "globalThis.process ??= { env: { NODE_ENV: 'production', EXPO_OS: 'web' }, platform: 'web', version: '', nextTick: (fn) => setTimeout(fn, 0) };"
@@ -272,8 +219,7 @@ beforeAll(async () => {
   })
   await writeFile(
     join(outDir, 'index.html'),
-    // The root reset the shipped document carries: every box below the mount is `flex: 1`, so
-    // without a definite height on all three the editor measures 0 and paints nothing.
+    // Match shipped root reset: flex children need definite height on all three ancestors or editor paints at height zero.
     `<!doctype html><html><head><meta charset="utf-8">${MOBILE_WEB_APP_ROOT_RESET}` +
       `${MOBILE_WEB_APP_NATIVE_PARITY_STYLE}</head>` +
       '<body><div id="root"></div>' +
@@ -298,8 +244,7 @@ beforeAll(async () => {
 afterAll(async () => {
   server?.close()
   if (scratch) {
-    // This run's directory only: `mobile/.tmp` is a shared ignored root and another suite may hold
-    // one of its own.
+    // Remove this run’s scratch only; other suites share mobile/.tmp.
     await rm(scratch, { recursive: true, force: true })
   }
 })
@@ -315,23 +260,14 @@ async function openPage(browser) {
   page.on('pageerror', (error) => consoleErrors.push(`pageerror: ${error.message}`))
   await page.addInitScript(installBridgeObjectRecorder)
   await page.addInitScript(installCspViolationRecorder)
-  await page.addInitScript(installListenerRecorder)
-  await page.addInitScript(installSchedulerRecorder)
+  await page.addInitScript(installListenerRecorder, { selector: '#editor' })
   await page.goto(`${origin}/`, { waitUntil: 'domcontentloaded' })
   await page.waitForFunction(() => document.body.dataset.ready === 'yes')
   await page.waitForSelector('#first-surface #editor')
   return { page, consoleErrors }
 }
 
-/**
- * Sets the content through the component's prop and waits for the document to hold that markup.
- *
- * The oracle is the surface's whole `innerHTML`, not its text. Text cannot tell one block type from
- * another — `### body text here` and `body text here` read the same — so a run that waited on text
- * passed while the document was still the one the command before it left, and the next case selected
- * a range inside an element that was not there any more. Measured: `setEnd` threw
- * `IndexSizeError` in chromium and the fifteen-command loop timed out in webkit.
- */
+// Wait for whole innerHTML, not text: block changes preserve text and stale ranges caused Chromium IndexSizeError/WebKit timeout.
 async function setContent(page, markdown, html) {
   await page.evaluate((next) => globalThis.__orcaEditor.set({ content: next }), markdown)
   await page.waitForFunction(
@@ -341,12 +277,7 @@ async function setContent(page, markdown, html) {
   )
 }
 
-/**
- * The same, for the two documents whose markup this file does not write down.
- *
- * A checklist and a link render nested markup whose exact serialization is the engine's, so the
- * wait names the element the case is about to act on instead.
- */
+// For engine-serialized checklist/link markup, wait on target element instead of exact HTML.
 async function setContentWithin(page, markdown, selector) {
   await page.evaluate((next) => globalThis.__orcaEditor.set({ content: next }), markdown)
   await page.waitForFunction(
@@ -357,24 +288,14 @@ async function setContentWithin(page, markdown, selector) {
   )
 }
 
-/**
- * The plain paragraph a command case starts from, numbered so no two are the same.
- *
- * The content prop is what resets the document, and the controller only pushes when it differs
- * from what the editor last reported. Re-setting the same string is therefore a no-op, and the
- * next command would run against the document the one before it left. Both list commands used to
- * make that worse rather than better: `insertUnorderedList` nests the `<ul>` inside the `<p>` it
- * was given on both engines, and the serializer read the paragraph inline, so pressing it reported
- * the paragraph's own text back unchanged.
- */
+// Number paragraph seeds so content prop changes: identical input is a controller no-op after prior command.
+// Nested ul-in-p serialization once returned unchanged text, leaving next command against previous document.
 const bodyFor = (index) => `body text ${String(index)}`
 
-/** The surface's markup, which is what every command is read off. */
 function readSurface(page, surface = '#first-surface') {
   return page.evaluate((id) => document.querySelector(`${id} #editor`)?.innerHTML ?? null, surface)
 }
 
-/** Selects the whole surface, or its first word, through the browser's own selection. */
 async function select(page, how) {
   await page.evaluate((mode) => {
     const editor = document.querySelector('#first-surface #editor')
@@ -393,7 +314,6 @@ async function select(page, how) {
   }, how)
 }
 
-/** One toolbar press, as a user makes it. */
 async function press(page, label) {
   await page.locator(`[aria-label="${label}"]`).click()
 }
@@ -418,13 +338,11 @@ describeEditor(
           try {
             await setContent(page, '# Title', '<h1>Title</h1>')
             expect(await readSurface(page)).toBe('<h1>Title</h1>')
-            // The document's `ready` is what made the controller push that content, so the markup
-            // above is the seam working end to end.
+            // Initial markup proves document ready reached controller and pushed content through seam.
             expect(await page.evaluate(() => globalThis.__orcaBridgeReads)).toEqual([])
             expect(await page.evaluate(() => globalThis.__orcaCspViolations)).toEqual([])
             expect(consoleErrors).toEqual([])
-            // Never: the screen's own `keyboard-occlusion.web.ts` measures the same viewport with
-            // the same formula, and a report here would lift its bar twice.
+            // No editor occlusion report: screen’s web module already measures viewport, so reporting twice would lift bar twice.
             expect(await page.evaluate(() => globalThis.__orcaEditor.insets)).toEqual([])
           } finally {
             await page.close()
@@ -437,15 +355,9 @@ describeEditor(
             const size = await page.evaluate(
               () => getComputedStyle(document.querySelector('#first-surface #editor')).fontSize
             )
-            // At or above, not equal to the floor: the seam is `Math.max(bodySize, floor)`, so a
-            // theme whose body size passes the floor raises what the page computes and still keeps
-            // the rule. Equality against the floor would be the stale literal again, one module
-            // further away.
+            // Assert at least floor: seam uses max(bodySize, floor), so larger theme text is valid.
             expect(Number.parseFloat(size)).toBeGreaterThanOrEqual(FLOOR)
-            // And the sheet reaches only the editor. The oracle is one of the document's own
-            // variables, which its `:root` rule declares and everything under it reads: set on the
-            // host, and nowhere else. A sheet appended unscoped would have it on the root element,
-            // where it would recolour every screen the shell can show.
+            // CSS variable must exist only on editor host; unscoped stylesheet would recolor every page screen.
             const variable = await page.evaluate(() => ({
               onRoot: getComputedStyle(document.documentElement)
                 .getPropertyValue('--editor-surface')
@@ -467,9 +379,7 @@ describeEditor(
             for (const [index, entry] of COMMANDS.entries()) {
               const body = bodyFor(index)
               await setContent(page, body, `<p>${body}</p>`)
-              // The precondition each command needs: what it is about to produce is not there yet.
-              // Without it a command the controller never delivered would pass on the document the
-              // one before it left.
+              // Require command effect absent beforehand or undelivered command could pass on previous document.
               expect(
                 await page.evaluate(
                   (selector) =>
@@ -489,8 +399,7 @@ describeEditor(
               )
             }
 
-            // Paragraph is the fifteenth and the only one whose effect is to undo another's: it is
-            // a true no-op on a `<p>`, which is why a run that starts from one measures nothing.
+            // Paragraph must undo another block type; it is a no-op on p.
             await setContent(page, '# Title', '<h1>Title</h1>')
             await select(page, 'all')
             await press(page, PARAGRAPH.label)
@@ -509,14 +418,7 @@ describeEditor(
           }
         }, 600_000)
 
-        /**
-         * A list typed on the surface, read back as markdown, and rendered from that markdown.
-         *
-         * `insertUnorderedList` puts the `<ul>` inside the `<p>` it was given rather than replacing
-         * it — measured here on WebKit 26.4 and Chromium 147 both — and a serializer that read such
-         * a paragraph inline reported its own text with no marker, so the bullet the user pressed
-         * was gone the moment the host saved what the document reported.
-         */
+        // Both engines nest unordered list inside existing p; inline paragraph serialization once dropped bullet when saved.
         it('edits and selects under the shipped document style, which makes other text unselectable', async () => {
           const { page, consoleErrors } = await openPage(browser)
           try {
@@ -529,7 +431,7 @@ describeEditor(
               () =>
                 document.querySelector('#first-surface #editor p')?.textContent === 'alpha bravo'
             )
-            // The browser's own gesture, not a Range: `body` is `user-select: none` on the page.
+            // Use browser gesture: a scripted Range bypasses body user-select:none.
             await page.evaluate(() => window.getSelection()?.removeAllRanges())
             await word.dblclick()
             expect(await page.evaluate(() => window.getSelection()?.toString().trim())).not.toBe('')
@@ -557,9 +459,7 @@ describeEditor(
             await page.waitForFunction(() => globalThis.__orcaEditor.changes.length > 0, null, {
               timeout: 15_000
             })
-            // The precondition: the engine really did nest the list inside the paragraph. An engine
-            // that replaced the paragraph would leave this case measuring the flat shape, which the
-            // serializer never got wrong.
+            // Require real ul-in-p nesting or case would exercise flat list shape serializer already handled.
             expect(
               await page.evaluate(
                 () =>
@@ -567,14 +467,11 @@ describeEditor(
                   null
               )
             ).toBe('P')
-            // What the host would save.
             expect(await page.evaluate(() => globalThis.__orcaEditor.changes.at(-1))).toBe(
               `- ${body}`
             )
 
-            // And the trip closes: that markdown comes back in as a list rather than a paragraph.
-            // Through a different document first, because the prop already holds this string and
-            // re-setting the same one is a no-op.
+            // Round-trip saved Markdown through different content first; resetting identical prop would be a no-op.
             await setContent(page, 'plain again', '<p>plain again</p>')
             await setContent(page, `- ${body}`, `<ul><li><p>${body}</p></li></ul>`)
 
@@ -593,8 +490,7 @@ describeEditor(
               await setContent(page, body, `<p>${body}</p>`)
               await select(page, 'word')
               await press(page, entry.label)
-              // The seam both shells could not answer: neither implements the delegate
-              // `window.prompt` needs, so on the phone these two commands silently do nothing.
+              // Phone shells lack window.prompt delegate, so URL commands need modal to avoid silent no-op.
               await expect
                 .poll(() => page.locator(`text=${entry.title}`).count(), { timeout: 15_000 })
                 .toBeGreaterThan(0)
@@ -609,8 +505,13 @@ describeEditor(
                 entry.expect,
                 { timeout: 15_000 }
               )
+              expect(
+                await page
+                  .locator(`#first-surface #editor ${entry.expect}`)
+                  .getAttribute(entry.label === 'Link' ? 'href' : 'src')
+              ).toBe(`${origin}${entry.path}`)
             }
-            // Insertion precedes image loading; a refused image must still fail this paint check.
+            // Insertion precedes loading; require image paint so policy refusal still fails.
             await expect
               .poll(
                 () =>
@@ -636,7 +537,7 @@ describeEditor(
             })
             await page.locator('#first-surface #editor input[type="checkbox"]').first().click()
             await page.waitForFunction(() => globalThis.__orcaEditor.changes.length > 0)
-            // One tap raises click, input and change, and each of the three used to report.
+            // Single tap emits click/input/change; each once reported duplicate change.
             expect(await page.evaluate(() => globalThis.__orcaEditor.changes)).toHaveLength(1)
             expect(await page.evaluate(() => globalThis.__orcaEditor.changes[0])).toContain('[x]')
 
@@ -668,24 +569,37 @@ describeEditor(
           }
         }, 600_000)
 
-        it('leaves no listener, timer or frame of the first mount in the second', async () => {
+        it('removes the first editor listeners and mounts a working second document', async () => {
           const { page, consoleErrors } = await openPage(browser)
           const listeners = () => page.evaluate(() => globalThis.__orcaListeners.snapshot())
           try {
             await setContent(page, 'first document', '<p>first document</p>')
+            const first = await listeners()
+            const firstOwned = Object.fromEntries(
+              Object.entries(first).filter(([key]) => key.startsWith('element '))
+            )
+            expect(
+              Object.keys(firstOwned)
+                .map((key) => key.split(' ').at(-1))
+                .sort()
+            ).toEqual(['change', 'click', 'input', 'keydown'])
+            expect(Object.values(firstOwned)).toEqual([1, 1, 1, 1])
 
-            // A first mount installs listeners no dispose can take off — react-native-web's
-            // responder system arms itself on the first `View` the page renders — so the baseline a
-            // per-mount leak would move is the snapshot after one whole cycle, not before it.
+            // Baseline after first mount cycle: RN-Web installs permanent responder listeners on first View, outside per-mount disposal.
             await page.evaluate(() => globalThis.__orcaEditor.set({ mounted: false }))
             await page.waitForFunction(() => document.querySelector('#first-surface') === null)
+            await expect
+              .poll(
+                async () =>
+                  Object.keys(await listeners()).filter((key) => key.startsWith('element ')),
+                { timeout: 5_000 }
+              )
+              .toEqual([])
             const afterOneCycle = await listeners()
-            // The precondition that makes the comparison below non-vacuous: the recorder is reading
-            // real listeners, so a snapshot of nothing cannot pass as a snapshot of no leak.
+            // Require recorder saw real listeners so empty snapshots cannot pass as no leak.
             expect(Object.keys(afterOneCycle).length).toBeGreaterThan(0)
 
             await page.evaluate(() => {
-              globalThis.__orcaScheduler.watching = true
               globalThis.__orcaEditor.set({ mounted: true, generation: 1 })
             })
             await page.waitForSelector('#first-surface #editor')
@@ -697,13 +611,23 @@ describeEditor(
                 document.querySelector('#first-surface #editor')?.querySelector('b,strong') !== null
             )
 
-            // The second mount is live, and the page is listening to exactly what it was after the
-            // first cycle. A mount that registered anything of its own would show up here.
-            expect(await listeners()).toEqual(afterOneCycle)
-            expect(await page.evaluate(() => globalThis.__orcaScheduler.leaked)).toEqual([])
+            const second = await listeners()
+            const globals = Object.fromEntries(
+              Object.entries(second).filter(([key]) => !key.startsWith('element '))
+            )
+            expect(globals).toEqual(afterOneCycle)
+            const secondOwned = Object.fromEntries(
+              Object.entries(second).filter(([key]) => key.startsWith('element '))
+            )
+            expect(
+              Object.keys(secondOwned)
+                .map((key) => key.split(' ').at(-1))
+                .sort()
+            ).toEqual(['change', 'click', 'input', 'keydown'])
+            expect(Object.values(secondOwned)).toEqual([1, 1, 1, 1])
+            expect(Object.keys(secondOwned).some((key) => key in firstOwned)).toBe(false)
             expect(await page.evaluate(() => globalThis.__orcaCspViolations)).toEqual([])
             expect(consoleErrors).toEqual([])
-            // The sheet stays in the head across mounts, and there is one of it.
             expect(
               await page.evaluate(
                 () => document.querySelectorAll('#orca-rich-markdown-document-style').length
@@ -722,9 +646,7 @@ describeEditor(
               globalThis.__orcaEditor.set({ both: true, secondContent: 'second only' })
             )
             await page.waitForSelector('#second-surface #editor')
-            // The markup's id is the same in both hosts, so a page-wide read would have handed the
-            // second document the first one's surface: one would be empty and the other would hold
-            // both documents' content and both documents' listeners.
+            // Editor IDs repeat across hosts: document-wide lookup would bind second editor to first surface/listeners.
             await page.waitForFunction(() =>
               (document.querySelector('#second-surface #editor')?.textContent ?? '').includes(
                 'second only'
@@ -741,8 +663,7 @@ describeEditor(
             await page.waitForFunction(() =>
               globalThis.__orcaEditor.secondChanges.includes('typed in the second')
             )
-            // The edit reached the second editor's own host, and the first document neither
-            // reported it nor lost its content.
+            // Require edit reaches second host without reporting through or changing first editor.
             expect(await page.evaluate(() => globalThis.__orcaEditor.changes)).not.toContain(
               'typed in the second'
             )

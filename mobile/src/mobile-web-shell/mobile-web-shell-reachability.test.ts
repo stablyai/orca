@@ -4,7 +4,6 @@ import type { ConnectionState } from '../transport/types'
 
 import { readMobileWebShellReachability } from './mobile-web-shell-reachability'
 
-/** Only `client === null` is read, but a real shape keeps this out of the casting gate. */
 function fakeClient(): RpcClient {
   return {
     sendRequest: vi.fn(),
@@ -36,12 +35,7 @@ describe('readMobileWebShellReachability', () => {
     expect(reachability('handshaking')).toBe('connecting')
   })
 
-  /**
-   * Observed on a simulator with the paired desktop stopped: the client never settles on
-   * `disconnected`. It dials, fails, schedules a retry and cycles `connecting` -> `reconnecting`
-   * with the delay growing to a minute. Reading `reconnecting` as "still dialling" left a phone
-   * holding a verified cached generation spinning on `checking` forever instead of opening it.
-   */
+  // A stopped desktop cycles connecting/reconnecting indefinitely; reconnecting must open verified cache instead of waiting forever.
   it('treats a scheduled retry as an unreachable host, not as a dial in progress', () => {
     expect(reachability('reconnecting')).toBe('unreachable')
   })

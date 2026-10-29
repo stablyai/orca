@@ -94,7 +94,6 @@ afterEach(() => {
   cleanup()
 })
 
-/** The open reply arrives when the test says, so nothing races it. */
 function deferOpen(): (result: PlainSshTerminalOpenResult) => void {
   let resolve: (result: PlainSshTerminalOpenResult) => void = () => {}
   open.mockImplementation(
@@ -154,7 +153,6 @@ describe('plain SSH terminal', () => {
     act(() => emit({ kind: 'data', sessionId: 's1', data: 'Enter passphrase: ' }))
     await act(async () => resolveOpen({ ok: true, sessionId: 's1', label: 'lambda' }))
     expect(written).toEqual(['Enter passphrase: '])
-    // Rendered output is acked, so main resumes a paused ssh.
     expect(ack).toHaveBeenCalledWith({ sessionId: 's1', chars: 'Enter passphrase: '.length })
 
     act(() => emit({ kind: 'exit', sessionId: 's1', exitCode: 0 }))

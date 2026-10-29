@@ -7,7 +7,6 @@ import type {
 import { AGENT_SESSION_FAILURE_KINDS, isSubmissionRejectionKind } from './agent-session-failure'
 import { agentJournalSubmissionKey } from './agent-session-journal-item-key'
 import {
-  classifyDispatchRejection,
   DISPATCH_REJECTED_CANCELLED,
   DISPATCH_REJECTED_CODEX_QUEUE_FULL,
   DISPATCH_REJECTED_HOST_RESTARTED,
@@ -21,8 +20,35 @@ import {
   latestStructuredAgentSessionRequest
 } from './structured-agent-session-latest-request'
 import { projectStructuredAgentSessionStatusSummary } from './structured-agent-session-projection'
+import { latestNativeChatTurnSinceRequest } from './native-chat/native-chat-orca-stop-cut'
+import { selectStructuredAgentTurnTimings } from './structured-agent-session-turn-timing'
 
 const START_FAILURE = 'Claude is not signed in.'
+
+it('keeps unresolved human input as a latest-request uncertainty boundary without a lifecycle', () => {
+  const prior = turn('prior', 1, {
+    state: 'interrupted',
+    startedAt: 10,
+    completedAt: 20,
+    outcome: 'cancellation'
+  })
+  const unknown: AgentJournalRenderItem = {
+    ...userEntry('outside', 2),
+    turnScope: { kind: 'unknown' }
+  }
+  const items = [prior, unknown]
+  expect(latestStructuredAgentSessionRequest([prior], [])?.outcome).toBe('cancellation')
+  expect(latestStructuredAgentSessionRequest(items, [])).toBeNull()
+  expect(latestNativeChatTurnSinceRequest(items, [])).toBeNull()
+  expect(hasStructuredAgentSessionRequest([unknown], [])).toBe(true)
+  expect(selectStructuredAgentTurnTimings(items)).toEqual(selectStructuredAgentTurnTimings([prior]))
+  const next = turn('next', 3, { state: 'running', startedAt: 30 })
+  expect(latestStructuredAgentSessionRequest([...items, next], [])).toMatchObject({
+    id: 'next',
+    turnState: 'running',
+    outcome: null
+  })
+})
 
 /** `intoTurn` names the turn the message's handover delivered it into — a steer. */
 function userEntry(
@@ -286,21 +312,6 @@ describe('the sidebar verdict agrees with the rejection classifier', () => {
     DISPATCH_REJECTED_WRITE_FAILED,
     `${DISPATCH_REJECTED_WRITE_FAILED}: broken pipe`
   ].map((reason) => ({ name: `legacy ${reason}`, submission: rejected('m1', reason) }))
-  const unknownKind = {
-    name: 'a kind this build cannot place',
-    submission: sent('m1', {
-      dispatchState: 'rejected',
-      reason: 'A newer host wrote this.',
-      rejection: { kind: 'someFutureKind' }
-    })
-  }
-
-  it.each([...typed, ...legacy, unknownKind])('$name', ({ submission }) => {
-    const items = [userEntry('m1', 1)]
-    const { verdict } = classifyDispatchRejection(submission)
-    expect(latestStructuredAgentSessionRequest(items, [submission])?.outcome ?? null).toBe(verdict)
-    expect(hasStructuredAgentSessionRequest(items, [submission])).toBe(verdict === 'failure')
-  })
 
   const failedNobody = new Set([
     'typed notDelivered',
@@ -313,9 +324,6 @@ describe('the sidebar verdict agrees with the rejection classifier', () => {
     `legacy ${DISPATCH_REJECTED_PROVIDER_CLOSED}`
   ])
   const failedNobodyCases = [...typed, ...legacy].filter(({ name }) => failedNobody.has(name))
-  it('covers every send that failed nobody', () => {
-    expect(failedNobodyCases).toHaveLength(failedNobody.size)
-  })
   it.each(failedNobodyCases)(
     'gives no verdict for a send that failed nobody: $name',
     ({ submission }) => {

@@ -1,11 +1,5 @@
-/**
- * Typed extension-point registry. An extension point is a named, typed slot
- * (like a Go interface value); plugins register implementations and hosts
- * resolve them without compile-time knowledge of the implementor. Runtime
- * registration because plugins load (and unload) dynamically.
- *
- * All P0 points are EXPERIMENTAL — excluded from compatibility guarantees.
- */
+/** Typed extension slots resolve dynamic plugin implementations without compile-time coupling. P0 points are experimental
+ * and excluded from compatibility guarantees. */
 
 declare const extensionPointBrand: unique symbol
 
@@ -13,8 +7,7 @@ export type PluginExtensionPoint<T> = {
   readonly key: string
   /** Experimental points may change or vanish between releases. */
   readonly experimental: boolean
-  // Why: phantom field carries T so register/resolve stay type-safe per point
-  // even though the runtime value is just `{ key, experimental }`.
+  // Phantom T keeps per-point register/resolve typed while runtime values contain only key/experimental.
   readonly [extensionPointBrand]?: T
 }
 
@@ -25,8 +18,7 @@ export function definePluginExtensionPoint<T>(
   return { key, experimental: options.experimental }
 }
 
-/** A contributed command whose handler lives in the plugin's worker. The
- *  proxy lazily activates the worker on first invoke. */
+/** Lazily activate the worker when invoking its contributed command. */
 export type PluginWorkerCommand = {
   readonly commandId: string
   invoke(args?: unknown): Promise<unknown>
@@ -77,8 +69,7 @@ export function createPluginExtensionRegistry(): PluginExtensionRegistry {
     },
     resolve<T>(point: PluginExtensionPoint<T>, pluginId: string, providerId?: string) {
       const registrations = (byPoint.get(point.key) ?? []) as PluginExtensionRegistration<T>[]
-      // Why: without a providerId the first registration wins — only safe for
-      // single-provider plugins; multi-provider callers must address by id.
+      // Without providerId, first registration wins; multi-provider plugins must be addressed by id.
       const match = registrations.find(
         (registration) =>
           registration.pluginId === pluginId &&

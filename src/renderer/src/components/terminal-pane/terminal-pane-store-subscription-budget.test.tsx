@@ -1,13 +1,5 @@
 // @vitest-environment happy-dom
-/**
- * TerminalPane mounts once per retained tab, and zustand visits every listener
- * synchronously on every publication, so the per-pane subscription count is a
- * direct multiplier on agent-status burn (docs/reference/renderer-agent-status-performance.md).
- *
- * On `main` one mounted pane opened 49 listeners; 33 of them earned nothing — 28
- * store actions and 4 duplicate reads of one unified tab, all of which can never
- * change, plus a dispatch-status read left behind by the notice that consumed it.
- */
+// Every retained tab multiplies synchronous Zustand listener visits; cap subscriptions and fold stable actions/duplicate reads (renderer-agent-status-performance.md).
 import { act, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -21,14 +13,9 @@ import {
 } from './use-terminal-pane-store-actions'
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
-/**
- * Pinned budget for one mounted TerminalPane. Raising it costs one extra listener
- * visit per store publication for every retained tab in the app — read the doc
- * above before you do.
- */
+/** One extra listener costs a visit per publication for every retained tab; consult the performance doc before raising. */
 const TERMINAL_PANE_LISTENER_BUDGET = 15
-/** What the same mount cost before the stable-action and unified-tab folds: one listener per
- *  bound action (each new stable action raises this by one, never the budget) plus the folded reads. */
+/** Compare with pre-fold mount cost: one listener per stable action plus folded duplicate reads. */
 const PRE_FOLD_LISTENERS_PER_PANE = 44
 
 const originalState = useAppStore.getState()
@@ -93,8 +80,7 @@ describe('TerminalPane store subscription budget', () => {
     )
     const withOnePane = listenerCount()
 
-    // The provider itself subscribes, so the marginal cost of a pane is measured
-    // by adding a second one to the already-mounted tree.
+    // Measure a second pane so the shared provider’s subscriptions are excluded from marginal cost.
     rerender(
       <LinkRoutingPreferenceDialogProvider>
         <PaneProbe tabId="tab-1" />

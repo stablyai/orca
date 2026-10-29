@@ -2,7 +2,7 @@
 
 import { act, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { JiraConnectionStatus, JiraIssue, JiraSite } from '../../../../shared/jira-types'
+import type { JiraConnectionStatus, JiraIssue, JiraSite } from '../../../../shared/jira/jira-types'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
 import { useJiraUrlSource } from './use-jira-url-source'
 
@@ -172,7 +172,6 @@ describe('useJiraUrlSource', () => {
     act(() => result.current.retry())
     await advanceLookup()
 
-    // A forced retry still needs a fresh read — the cached answer is what failed.
     expect(mocks.readJiraStatus).toHaveBeenCalledTimes(1)
     expect(result.current.issue?.key).toBe('ORCA-1')
   })

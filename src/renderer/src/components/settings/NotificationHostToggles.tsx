@@ -28,7 +28,7 @@ export function NotificationHostToggles({
     [host.id, ...(host.aliasHostIds ?? [])].some((id) => mutedSourceIds.has(id))
   const mutedHosts = hostOptions.filter(isMuted)
   const mutedCount = mutedHosts.length
-  // Why muted ones pinned: an off switch must never be hidden behind the row cap.
+  // Pin muted hosts so row limits cannot hide the switch needed to unmute.
   const rows = useBoundedHostRows(hostOptions, new Set(mutedHosts.map((host) => host.id)))
   // Keep an effective mute reachable after the last remote machine is removed.
   if (hostOptions.length <= 1 && mutedCount === 0) {

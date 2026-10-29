@@ -40,7 +40,7 @@ export function getHookWslContext(
     return null
   }
 
-  // Why: project runtime can route a Windows checkout through WSL, so hooks need the Linux view of the path.
+  // Project runtime may route a Windows checkout through WSL; hooks need its Linux path.
   return {
     distro: wslDistro,
     linuxPath: toLinuxPath(cwd)

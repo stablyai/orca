@@ -187,7 +187,7 @@ function getClaudeStatusAccountsFromSettings(
   }
 }
 
-// Why: with a Remote Orca Server, local GlobalSettings describe this desktop, not the owner — the server snapshot wins (#7973).
+// For remote ownership, desktop settings cannot override the owner’s account snapshot.
 
 /** `ownerEnvironmentId` is the server owning the shown accounts; `null` is this desktop. */
 export function resolveClaudeStatusAccountState(

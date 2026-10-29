@@ -57,20 +57,17 @@ export function SourceControlBranchSection({
 }): React.JSX.Element {
   const baseRef = branchSummary.baseRef?.trim()
   const fileCount = filteredBranchEntries.length
-  // Why: the heading counts files that differ from the compare base, not every
-  // file the branch ever touched — a rebased branch makes the two read alike.
-  // A narrowing filter changes what the number means, so the label goes silent
-  // rather than claim the filtered count is the branch total.
+  // Counts measure current base differences, not historical touches; omit the total label when filters narrow the list.
   const countTitle =
     baseRef && fileCount === totalBranchEntryCount
       ? fileCount === 1
         ? translate(
-            'auto.components.right.sidebar.SourceControl.branchFilesChangedVsBaseOne',
-            '1 file changed vs {{ref}}',
-            { ref: formatSourceControlRefLabel(baseRef) }
+            'auto.components.right.sidebar.SourceControl.branchFilesChangedVsBase_one',
+            '{{count}} file changed vs {{ref}}',
+            { count: fileCount, ref: formatSourceControlRefLabel(baseRef) }
           )
         : translate(
-            'auto.components.right.sidebar.SourceControl.branchFilesChangedVsBaseOther',
+            'auto.components.right.sidebar.SourceControl.branchFilesChangedVsBase_other',
             '{{count}} files changed vs {{ref}}',
             { count: fileCount, ref: formatSourceControlRefLabel(baseRef) }
           )

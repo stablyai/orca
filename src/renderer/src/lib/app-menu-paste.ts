@@ -98,8 +98,7 @@ export async function handleAppMenuPasteRequest({
         redactedDiagnostic: rejectedResult.redactedDiagnostic
       })
     }
-    // Why: a native fallback after async failure would paste into whichever
-    // control gained focus, not the text control Orca already resolved.
+    // After async failure, native paste could target newly focused controls instead of the resolved owner.
     if (target.ownerDocument.activeElement !== target) {
       const rejectedResult = createTextControlRejectedResult(
         'target-unavailable',
@@ -125,8 +124,7 @@ export async function handleAppMenuPasteRequest({
     return { status: 'handled', target: 'text-control' }
   }
 
-  // Why: for text controls Orca has already resolved ownership. Falling back
-  // to native paste after a stale-target rejection can paste into a new target.
+  // A stale-target rejection must not fall back to native paste into another control.
   return createAppMenuTextControlRejectedResult({
     reason: result.reason,
     redactedDiagnostic: result.redactedDiagnostic

@@ -4,6 +4,7 @@ import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-
 import type { RpcContext } from '../core'
 import { projectSessionTabAgentStatus } from './session-tab-agent-status-projection'
 import { projectSessionTabBrowserPlacements } from './session-tab-browser-placement-projection'
+import { projectSessionTabFileHosts } from './session-tab-file-host-projection'
 import { createSessionTabsRetirementProofDelta } from './session-tabs-retirement-proof-delta'
 import { restoreStructuredTabsIfSupported } from './structured-session-tab-restore'
 import { createSessionTabsTabDeltaEncoder } from '../../../../shared/session-tabs-tab-delta'
@@ -32,7 +33,10 @@ export function projectSessionTabsForClient(
   clientCapabilities: Parameters<typeof projectSessionTabAgentStatus>[2]
 ): RuntimeMobileSessionTabsResult {
   return projectSessionTabBrowserPlacements(
-    projectSessionTabAgentStatus(snapshot, clientKind, clientCapabilities),
+    projectSessionTabFileHosts(
+      projectSessionTabAgentStatus(snapshot, clientKind, clientCapabilities),
+      clientKind
+    ),
     clientCapabilities
   )
 }
@@ -59,8 +63,7 @@ async function collectSessionTabsInventory(
   changeSequence: number
 }> {
   const { runtime, pairedDeviceId, signal } = context
-  // Why: a failed census degrades inside the runtime to the same scan without
-  // the authoritative label, so no client ever pays a second full collection.
+  // Census failure reuses its scan without authority, never collecting twice.
   if (!includeChangeSequence) {
     const inventory = runtime.supportsAuthoritativeSessionTabsInventory()
       ? await runtime.listAllMobileSessionTabsInventory(pairedDeviceId, signal)
@@ -232,7 +235,7 @@ export async function subscribeSessionTabsInventory(
   }
   let collected: Awaited<ReturnType<typeof collectSessionTabsInventory>> | undefined
   try {
-    // Why: restore after registering, so an unsubscribe or socket close while it runs still finds the stream.
+    // Register before restore so unsubscribe/socket close can find the stream during its awaits.
     const restoring = restoreStructuredTabsIfSupported(context)
     if (restoring) {
       await restoring

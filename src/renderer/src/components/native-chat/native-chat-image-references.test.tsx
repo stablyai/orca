@@ -24,7 +24,7 @@ import { withNativeChatComposerDraftAddition } from './native-chat-composer-draf
 import { formatNativeChatFileReference } from '../../../../shared/agent-image-paste'
 import { promptEditor, promptValue } from './native-chat-prompt-editor.test-support'
 import { imageReferenceToken as chip } from '../../../../shared/native-chat-image-reference'
-import { imageReferencesToPromptMarkers } from '../../../../shared/native-chat-image-transcript-markers'
+import { imageReferencesToPromptMarkers } from '../../../../shared/native-chat/transcript/native-chat-image-transcript-markers'
 
 vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, fallback: string, values?: Record<string, unknown>) =>
@@ -124,6 +124,7 @@ function fileReferences(document: JSONContent | undefined): string[] {
 
 function transport(send: NativeChatStructuredComposerTransport['send']) {
   const value: NativeChatStructuredComposerTransport = {
+    capturePresentation: () => () => true,
     send,
     dispatchCommand: async () => ({ handled: false, accepted: false, error: null }),
     optionsSurface: {

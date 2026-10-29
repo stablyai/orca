@@ -1,7 +1,4 @@
-// Captured Claude permission hooks (claude-permission-approve-deny-hooks.jsonl) on an SSH pane: a
-// real relay-side listener forwards to a real desktop server, and the desktop can drop off while
-// the remote Claude keeps running. The relay caches one row per pane, so a hook that lands during
-// the gap overwrites the PostToolUse that ended the request the desktop is still showing.
+// Replay captured SSH permission hooks; single-row relay caching can hide the resolving event during disconnect.
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -124,7 +121,6 @@ describe('a relayed Claude permission wait across a reconnect (captured)', () =>
   it('clears on reconnect when the request ended while the desktop was away', async () => {
     const pane = await waitingOnFirstRequest()
     pane.connected = false
-    // The user approved on the remote terminal; Claude ran it and started its next tool.
     await postAll(pane, [firstToolDone, secondTool])
     reconnect(pane)
 

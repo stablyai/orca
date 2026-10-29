@@ -14,7 +14,7 @@ import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import { CHECK_COLOR, CHECK_ICON } from './check-presentation'
 import { CheckRunDetails } from './check-run-details'
-import { getCheckStatusLabel } from './check-details-model'
+import { getCheckStatusLabel } from '../../../../../shared/pr-check-status-label'
 import { type ChecksListProps, useChecksListState } from './use-checks-list-state'
 
 export function ChecksList(props: ChecksListProps): React.JSX.Element {
@@ -46,7 +46,6 @@ export function ChecksList(props: ChecksListProps): React.JSX.Element {
   } = useChecksListState(props)
   return (
     <>
-      {/* Checks Summary */}
       {checks.length > 0 && (
         <button
           type="button"
@@ -60,43 +59,66 @@ export function ChecksList(props: ChecksListProps): React.JSX.Element {
           {passingCount > 0 && (
             <span className="flex items-center gap-1">
               <CircleCheck className="size-3 text-emerald-500" />
-              {passingCount}{' '}
-              {translate(
-                'auto.components.right.sidebar.checks.panel.content.02ca4f9074',
-                'passing'
-              )}
+              {passingCount === 1
+                ? translate(
+                    'auto.components.right.sidebar.checks.panel.content.passingCount_one',
+                    '{{count}} passing',
+                    { count: passingCount }
+                  )
+                : translate(
+                    'auto.components.right.sidebar.checks.panel.content.passingCount_other',
+                    '{{count}} passing',
+                    { count: passingCount }
+                  )}
             </span>
           )}
           {failingCount > 0 && (
             <span className="flex items-center gap-1">
               <CircleX className="size-3 text-rose-500" />
-              {failingCount}{' '}
-              {translate(
-                'auto.components.right.sidebar.checks.panel.content.5e52f4ef7f',
-                'failing'
-              )}
+              {failingCount === 1
+                ? translate(
+                    'auto.components.right.sidebar.checks.panel.content.failingCount_one',
+                    '{{count}} failing',
+                    { count: failingCount }
+                  )
+                : translate(
+                    'auto.components.right.sidebar.checks.panel.content.failingCount_other',
+                    '{{count}} failing',
+                    { count: failingCount }
+                  )}
             </span>
           )}
           {pendingCount > 0 && (
             <span className="flex items-center gap-1">
               <LoaderCircle className="size-3 text-amber-500" />
-              {pendingCount}{' '}
-              {translate(
-                'auto.components.right.sidebar.checks.panel.content.9ad98f2a17',
-                'pending'
-              )}
+              {pendingCount === 1
+                ? translate(
+                    'auto.components.right.sidebar.checks.panel.content.pendingCount_one',
+                    '{{count}} pending',
+                    { count: pendingCount }
+                  )
+                : translate(
+                    'auto.components.right.sidebar.checks.panel.content.pendingCount_other',
+                    '{{count}} pending',
+                    { count: pendingCount }
+                  )}
             </span>
           )}
-          {/* Why: without this chip a list of only unresolved checks rendered a header with no
-              counts at all, so nothing said why the pill was grey. */}
+          {/* Name unresolved counts so an all-neutral list still explains its grey pill. */}
           {neutralCount > 0 && (
             <span className="flex items-center gap-1">
               <CircleDashed className="size-3 text-muted-foreground" />
-              {neutralCount}{' '}
-              {translate(
-                'auto.components.right.sidebar.checks.panel.content.checksUnresolvedChip',
-                'unresolved'
-              )}
+              {neutralCount === 1
+                ? translate(
+                    'auto.components.right.sidebar.checks.panel.content.unresolvedCount_one',
+                    '{{count}} unresolved',
+                    { count: neutralCount }
+                  )
+                : translate(
+                    'auto.components.right.sidebar.checks.panel.content.unresolvedCount_other',
+                    '{{count}} unresolved',
+                    { count: neutralCount }
+                  )}
             </span>
           )}
           <span className="flex-1" />
@@ -104,7 +126,6 @@ export function ChecksList(props: ChecksListProps): React.JSX.Element {
         </button>
       )}
 
-      {/* Checks List */}
       {checksLoading && checks.length === 0 ? (
         <div className="flex items-center justify-center py-8">
           <LoaderCircle className="size-5 animate-spin text-muted-foreground" />

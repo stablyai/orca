@@ -26,7 +26,6 @@ function mint(grants: RuntimeTerminalFileGrants, clientId?: string) {
     worktreeId: 'folder-1',
     absolutePath: artifactPath,
     clientId,
-    provenance: 'terminal-output',
     stats: { dev: 1, ino: 2, nlink: 1, size: 12, mtimeMs: 3 }
   })
 }

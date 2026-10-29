@@ -22,7 +22,6 @@ import type { RepoIcon } from '../../../../shared/repo-icon'
 import { translate } from '@/i18n/i18n'
 import { DashboardHostBadge } from './DashboardHostBadge'
 
-/** Compact "started N ago" (the card is glanceable — coarse units are fine). */
 function formatStartedAgo(startedAt: number, now: number): string {
   const seconds = Math.max(0, Math.floor((now - startedAt) / 1000))
   if (seconds < 60) {
@@ -41,8 +40,7 @@ function formatStartedAgo(startedAt: number, now: number): string {
   })
 }
 
-/** The timestamp the card's time column counts from: since it finished when the
- *  agent has completed, else since it started — parity with the worktree sidebar. */
+/** Count from completion when present, otherwise start, matching the worktree sidebar. */
 function displayTimestamp(card: DashboardCard): number {
   return card.finishedAt ?? card.startedAt
 }
@@ -88,6 +86,7 @@ function sameCard(a: DashboardCard, b: DashboardCard): boolean {
     a.bucket === b.bucket &&
     a.dotState === b.dotState &&
     a.workingMode === b.workingMode &&
+    a.verdict === b.verdict &&
     a.task === b.task &&
     a.lastUserMessage === b.lastUserMessage &&
     a.lastAgentMessage === b.lastAgentMessage &&
@@ -164,8 +163,7 @@ function ReviewPill({ card }: { card: DashboardCard }): React.JSX.Element | null
   )
 }
 
-/** Structural — the icon arrives inside a fresh structured clone each publish,
- *  so identity alone would re-render every card several times a second. */
+/** Compare icon values; fresh structured clones would otherwise re-render every card on each publish. */
 function sameRepoIcon(a: RepoIcon | null | undefined, b: RepoIcon | null | undefined): boolean {
   if (a === b) {
     return true
@@ -188,13 +186,10 @@ type AgentKanbanCardProps = {
   /** The card repo's icon. null renders the default folder glyph. */
   repoIcon?: RepoIcon | null
   now: number
-  /** Opens the board-level terminal dialog. The dialog is NOT owned by the
-   *  card: bucket moves remount the card, and an embedded dialog would close
-   *  the chat mid-conversation. */
+  /** Host dialogs on the board because bucket moves remount cards and would close an embedded conversation. */
   onOpenTerminal: (card: DashboardCard) => void
 }
 
-/** One agent on the kanban board. Clicking opens the board's live terminal dialog. */
 export const AgentKanbanCard = memo(
   function AgentKanbanCard({
     card,
@@ -204,23 +199,17 @@ export const AgentKanbanCard = memo(
   }: AgentKanbanCardProps): React.JSX.Element {
     useTranslation()
     const [subagentsOpen, setSubagentsOpen] = useState(false)
-    // Why: the two outcomes worth scanning for get a tinted card — the
-    // --agent-question accent for "answer me", green for "finished, look at
-    // it". Everything else stays neutral so the tint keeps meaning something.
+    // Tint only attention and done so scan-worthy outcomes retain distinct meaning.
     const needsYou = card.bucket === 'attention'
     const displayState = dashboardCardDisplayState(card)
     const isDone = displayState === 'done'
-    // Why: the session's own name heads the card. Without one the worktree is
-    // the best heading left — and then the footer drops it rather than say it
-    // twice.
+    // Prefer the conversation heading; otherwise use the worktree once and omit its duplicate footer.
     const heading = card.conversationName ?? card.worktreeName
     const worktreeInFooter = card.conversationName !== undefined
 
     return (
       <div
-        // Why: a stable per-agent view-transition-name lets the browser morph
-        // the card from its old column to its new one when its bucket changes.
-        // paneKey has ':'/'/' which aren't valid in a custom-ident, so slugify.
+        // Stable view-transition names animate bucket moves; escape paneKey characters forbidden in custom-ident.
         style={{ viewTransitionName: `agentcard-${card.paneKey.replace(/[^a-zA-Z0-9]/g, '-')}` }}
         className={cn(
           'group flex w-full flex-col gap-1.5 rounded-lg border p-2.5 text-left transition-colors',

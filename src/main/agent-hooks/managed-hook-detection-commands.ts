@@ -10,7 +10,13 @@ import type { TuiAgentDetectionCommand } from '../../shared/tui-agent-detection-
 import { parseClaudeCliVersion } from '../claude/claude-hook-event-versions'
 
 export type ManagedHookDetectionSettings = Partial<
-  Pick<GlobalSettings, 'agentCmdOverrides' | 'disabledTuiAgents' | 'agentStatusHooksEnabled'>
+  Pick<
+    GlobalSettings,
+    | 'agentCmdOverrides'
+    | 'disabledTuiAgents'
+    | 'agentStatusHooksEnabled'
+    | 'claudeSubagentNavigationEnabled'
+  >
 > | null
 
 export function buildManagedHookDetectionCommands(

@@ -109,12 +109,7 @@ async function mirroredPage(
   )
 }
 
-/**
- * What the host publishes for one browser row, taken over the same projection its pushed snapshots
- * are built from (`session.tabs.list` and `session.tabs.subscribe` both emit
- * projectSessionTabsForClient over listMobileSessionTabs), so this is the payload content — not a
- * re-derivation of it. Null once the host stops carrying the row at all.
- */
+// Read the host’s real session-tab projection used by list/subscribe; return null only once the row is gone.
 async function hostPublishedBrowserTitle(
   client: PairedElectronClient,
   worktreeId: string,
@@ -190,9 +185,7 @@ async function run(args: {
     const mirrored = await mirroredPage(page, worktreeId, fixture.first)
     expect(mirrored?.placementKind).toBe('client')
 
-    // Why assert the identity and not just the title: the title holds for two different reasons —
-    // because this client recognised its own guest, or because no host snapshot happened to land.
-    // Only the first is the behaviour under test, and it is the one an id mismatch would break.
+    // Require matching guest identity so a title hold cannot pass merely because no snapshot arrived.
     const rendererHostId = await page.evaluate(
       () => window.api.browser.readClientHostId?.() ?? null
     )
@@ -208,15 +201,10 @@ async function run(args: {
       { pageId, worktreeId }
     )
 
-    // Drive the guest somewhere the host was never told about, then sample every title the store
-    // publishes while the tab is toggled and the worktree is switched away and back.
+    // Navigate only the guest, then sample titles through tab/worktree switches.
     await waitForClientGuest(page, fixture.first, 'client-hosted guest never attached')
 
-    // Why the publish is held back, and only now that the guest owns the pane: a client-hosted page
-    // reports its navigations to the runtime, so the runtime normally catches up within a
-    // round-trip and the two never disagree long enough to sample. The carve-out under test covers
-    // that window and a publish that never lands at all; suppressing one holds the window open.
-    // Asserted rather than fired blind — an absent fault would leave the premise silently false.
+    // After guest attachment, assert that metadata publication is suppressed to hold the real host/guest disagreement window open.
     expect(
       await page.evaluate(() => {
         const fault = (window as MetadataPublishFaultWindow).__browserClientPageMetadataPublishFault
@@ -244,9 +232,7 @@ async function run(args: {
       })
       .toBe('Fixture Maps Two')
 
-    // The value a regression would land on this row is whatever the host publishes for it, so the
-    // oracle is read from the host rather than guessed at: the host never saw the local navigation,
-    // so its title is still the create-time one and disagrees with the guest's.
+    // Read the stale title from the host itself, which never saw the local navigation.
     const remotePageId = (await mirroredPage(page, worktreeId, fixture.second))
       ?.remotePageId as string
     expect(remotePageId).toBeTruthy()
@@ -268,8 +254,7 @@ async function run(args: {
       })
     }, pageId)
 
-    // A host republish is what rebuilds the row, so the sampling window has to contain one: each
-    // new browser tab makes the host publish a fresh session-tab snapshot carrying every row.
+    // Create tabs to force fresh whole-worktree snapshots inside the sampling window.
     let republishes = 0
     for (let round = 0; round < 3; round += 1) {
       const roundUrl = `${fixture.first}?round=${round}`
@@ -282,9 +267,7 @@ async function run(args: {
         },
         { url: roundUrl }
       )
-      // Why this stands in for a sleep: a placement reaches the store only where the sync applies a
-      // host snapshot, so the new row carrying one is proof a fresh republish of this worktree
-      // landed at the client — and one snapshot carries every row of the worktree, ours included.
+      // A new row’s placement proves the host snapshot carrying all rows actually reached this client.
       await expect
         .poll(async () => (await mirroredPage(page, worktreeId, roundUrl))?.placementKind ?? null, {
           timeout: 60_000,
@@ -310,13 +293,10 @@ async function run(args: {
     const titles = (await page.evaluate(
       () => (window as unknown as { __titles: string[] }).__titles
     )) as string[]
-    // Without a republish carrying the host's own title for this row inside the window, the
-    // not-toContain below passes on a test that exercised nothing. The per-round poll and title
-    // check are what enforce that; this counts the rounds that cleared them.
+    // Count only rounds that proved a republish and stale host title; otherwise title retention would be an empty pass.
     expect(republishes).toBeGreaterThan(0)
     expect(titles).not.toContain(hostTitle)
-    // Why the literal as well: the host publishes `title || url || 'Browser'`, so hostTitle would
-    // silently become the url if the registry ever learned one, leaving the default unguarded.
+    // Check Browser literally too: host title || url || Browser can otherwise silently replace the guarded fallback.
     expect(titles).not.toContain('Browser')
     expect((await mirroredPage(page, worktreeId, fixture.second))?.title).toBe('Fixture Maps Two')
   } finally {

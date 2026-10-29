@@ -234,8 +234,7 @@ describe('withNativeChatCutTurnNotices', () => {
     ])
   })
 
-  // A quit, then a resume that did not carry the chat on: the note says the cut was not continued,
-  // which is what the notice would say, so it stands alone.
+  // A failed restart continuation already explains the cut; avoid a duplicate notice.
   it.each([
     [AGENT_SESSION_RESTART_CONTINUATION_REFUSED_NOTE, 'error'],
     [AGENT_SESSION_RESTART_NOT_CONNECTED_NOTE, 'error'],
@@ -254,8 +253,7 @@ describe('withNativeChatCutTurnNotices', () => {
     }
   )
 
-  // The note of a continuation that went on lands after its own message and turn. The cut keeps its
-  // notice before and after it, so nothing flashes away under an automatic resume.
+  // Successful continuation notes must not briefly hide the original cut notice during automatic resume.
   it('keeps the notice once a continuation carries the chat on', () => {
     const cut = [user('u1'), turn('t1', 'u1', CUT), reply('a1', inTurn('t1'))]
     const continuing = [...cut, user('u2'), turn('t2', 'u2', { state: 'running' })]
@@ -269,8 +267,7 @@ describe('withNativeChatCutTurnNotices', () => {
     expect(notices(noteOnly)).toEqual([{ index: 3, text: NOTICE, scope: inTurn('t1') }])
   })
 
-  // An unconfirmed continuation whose turn opened before its warning: the warning is about that
-  // turn, so the cut keeps its own notice beside it.
+  // An unconfirmed restart’s warning concerns its own opened turn, leaving the original cut unexplained.
   it('keeps the notice when a restart note follows a turn the continuation opened', () => {
     const items = [
       user('u1'),
@@ -308,9 +305,7 @@ describe('withNativeChatCutTurnNotices', () => {
     expect(notices(items)).toEqual([{ index: 3, text: NOTICE, scope: inTurn('t1') }])
   })
 
-  // Read before the startup reconcile, the cut settled unverifiable; the user sent u2; the reconcile
-  // then proved the old owner dead and wrote its row about the conversation after u2. That row is
-  // about the cut, not the send, so it stays the one explanation.
+  // Startup reconcile may prove the old owner dead after a new send; its death row still explains the old cut.
   it("takes an owner's proven death as the explanation of the cut though a message was sent since", () => {
     const items = [
       user('u1'),
@@ -349,9 +344,7 @@ describe('withNativeChatCutTurnNotices', () => {
     expect(turnKeys[notice]).toBe('u1')
   })
 
-  // A message Orca accepted and then failed to deliver after the cut is drawn in place as not sent,
-  // in no turn; the cut keeps its notice in its own turn, and the exit row about that send does
-  // not stand in for it.
+  // A later accepted-but-undelivered send has its own exit row; it cannot explain the cut turn.
   it('keeps the notice in its turn beside a later message drawn as not sent', () => {
     const sent = agentJournalSubmissionKey('client-u2')
     const items = [

@@ -1,3 +1,4 @@
+import { translateMain } from '../i18n/main-i18n'
 import { BrowserWindow, dialog, ipcMain } from 'electron'
 import { copyFile, mkdir, readFile, rm, stat } from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
@@ -9,7 +10,7 @@ import { classifyFile } from './pet-image-formats'
 import { MAX_BYTES } from './pet-import-size-limits'
 import { getPetsDir, isSafeId, resolvePetFile } from './pet-storage-paths'
 
-// Why: renderer IPC inputs are untrusted — validate shape here; resolvePetFile still gates the actual filesystem path.
+// Validate untrusted IPC shape before resolvePetFile applies path constraints.
 const PetFileRequestSchema = z.object({
   id: z.string(),
   fileName: z.string(),
@@ -21,12 +22,12 @@ export function registerPetHandlers(): void {
     const senderWindow =
       BrowserWindow.fromWebContents(event.sender) ?? BrowserWindow.getFocusedWindow()
     const options: Electron.OpenDialogOptions = {
-      title: 'Pick pet',
+      title: translateMain('native.dialog.pickPet', 'Pick pet'),
       properties: ['openFile'],
-      // Why: omit `apng` — macOS maps dialog extensions to UTIs, and apng's missing UTI can drop siblings like webp (APNG uses .png anyway).
+      // APNG uses .png; its missing macOS UTI can hide other formats when listed separately.
       filters: [
         {
-          name: 'Pet image',
+          name: translateMain('native.dialog.petImage', 'Pet image'),
           extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg']
         }
       ]
@@ -60,7 +61,7 @@ export function registerPetHandlers(): void {
     const dir = getPetsDir()
     await mkdir(dir, { recursive: true })
     const id = randomUUID()
-    // Why: keep the original extension in the on-disk name so pet:read can rebuild the Blob MIME without a separate lookup.
+    // Keep the extension so pet:read can recover MIME type without another lookup.
     const fileName = `${id}${classified.ext}`
     const dest = join(dir, fileName)
     try {
@@ -93,14 +94,13 @@ export function registerPetHandlers(): void {
       fileName: string,
       kind?: 'image' | 'bundle'
     ): Promise<ArrayBuffer | null> => {
-      // Why: renderer inputs are untrusted; validate shape before any path logic.
       let parsed: z.infer<typeof PetFileRequestSchema>
       try {
         parsed = PetFileRequestSchema.parse({ id, fileName, kind })
       } catch {
         throw new Error('Invalid pet:read arguments')
       }
-      // Why: default 'image' for backwards compat with pre-bundle persisted state.
+      // Pre-bundle persisted pets omit kind.
       const filePath = resolvePetFile(parsed.id, parsed.fileName, parsed.kind ?? 'image')
       if (!filePath) {
         return null
@@ -118,7 +118,6 @@ export function registerPetHandlers(): void {
   ipcMain.handle(
     'pet:delete',
     async (_event, id: string, fileName: string, kind?: 'image' | 'bundle'): Promise<void> => {
-      // Why: validate IPC inputs before any path logic.
       let parsed: z.infer<typeof PetFileRequestSchema>
       try {
         parsed = PetFileRequestSchema.parse({ id, fileName, kind })
@@ -129,7 +128,7 @@ export function registerPetHandlers(): void {
         return
       }
       if ((parsed.kind ?? 'image') === 'bundle') {
-        // Why: defense in depth — verify path stays under pets root before recursive removal.
+        // Recheck containment before recursive removal.
         const root = normalize(getPetsDir())
         const target = normalize(join(root, parsed.id))
         if (!target.startsWith(root + sep)) {

@@ -67,8 +67,7 @@ describe('structured status owner address retention', () => {
     }
     const owner = new StructuredAgentSessionStatusOwnership(() => sink)
     expect(() => owner.publish(summary, location)).toThrow('store down')
-    // The feed skips an unchanged re-projection only when the location already matches. Reporting a
-    // match here would strand the row: the publish never landed and nothing else re-offers it.
+    // Failed publication must not establish location proof or suppress a later re-offer.
     expect(owner.matchesLocation(summary.sessionId, location)).toBe(false)
     owner.publish(summary, location)
     expect(sink.publish).toHaveBeenCalledTimes(2)
@@ -113,7 +112,6 @@ describe('structured status owner address retention', () => {
     owner.forget(summary.sessionId)
     owner.publishChildWork(summary.sessionId, evidence, 'claude')
     expect(sink.publishChildWork).toHaveBeenCalledOnce()
-    // An address held after a publish that threw is not a row that landed.
     const unlanded = new StructuredAgentSessionStatusOwnership(() => ({
       ...sink,
       publish: () => {
@@ -160,7 +158,6 @@ describe('child work the provider reported, recorded or not', () => {
     outcome: 'succeeded'
   })
 
-  /** An idle parent whose child records the store refuses until `admit`. */
   function refusingStore() {
     let refusing = true
     const { owner } = owners(() => refusing)
@@ -179,7 +176,6 @@ describe('child work the provider reported, recorded or not', () => {
 
     expect(owner.readChildWork(summary.sessionId)).toEqual([])
     expect(owner.childWorkIncomplete(summary.sessionId)).toBe(true)
-    // Refused again, still untracked.
     owner.publishChildWork(summary.sessionId, [agentLive('background-agent')], 'claude')
     expect(owner.childWorkIncomplete(summary.sessionId)).toBe(true)
     owner.publishChildWork(
@@ -210,7 +206,6 @@ describe('child work the provider reported, recorded or not', () => {
     expect(owner.childWorkOpen(summary.sessionId)).toBe(false)
   })
 
-  // Claude names the run a task ended on, and a resumed agent's earlier run may end late.
   it('holds recorded work open, never incomplete, through a late ending of its earlier run', () => {
     const { owner } = owners()
     owner.publish(summary, location)
@@ -286,7 +281,7 @@ describe('child work the provider reported, recorded or not', () => {
     captured.acknowledge([stop])
     owner.publishChildWork(summary.sessionId, [stop], 'claude')
     expect(owner.childWorkOpen(summary.sessionId)).toBe(false)
-    // The Stop did not take: the settled record lists nothing, so the work is open and unlisted.
+    // Failed Stop leaves live work outside the store’s settled display record.
     owner.publishChildWork(summary.sessionId, [agentLive('helper', 'new-run')], 'claude')
     expect(owner.childWorkOpen(summary.sessionId)).toBe(true)
     expect(owner.childWorkIncomplete(summary.sessionId)).toBe(true)

@@ -28,6 +28,10 @@ the validation required before rolling out the updated images and host pins.
 - `apps/push` and `packages/push-contract`: the mobile push gateway that holds
   the APNs key and sends to phones through APNs and FCM, and its wire contract.
   Deployment and operations are owned by the private `stablyai/orca-cloud` repository.
+- `apps/connector` and `packages/connector-contract`: the Slack connector service
+  (experimental). A signed-in Orca calls it with short-lived connector tokens
+  from the auth service, checked the way the relay checks relay tokens.
+  Deployed like push from the private repository.
 
 ## Mobile push gateway
 

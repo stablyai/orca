@@ -21,15 +21,11 @@ import {
 } from '../../../shared/agent-status-subject'
 import { AgentHookServerIngestStructured } from './server-ingest-structured'
 
-/** Refusals that are the fence doing its job (late or superseded evidence), not a fault. */
+// Superseded evidence is an expected refusal.
 const EXPECTED_REFUSALS: ReadonlySet<string> = new Set(['stale-invocation'])
 
 export abstract class AgentHookServerIngestStructuredChildren extends AgentHookServerIngestStructured {
-  /**
-   * Admit one structured session's child-work evidence. The parent publication owns the subject
-   * and lands first; this refuses to act on a subject the store does not already hold, so a
-   * child can never conjure a parent row.
-   */
+  /** Child evidence requires an already-published parent and cannot create one. */
   ingestStructuredChildWork(
     subject: AgentStatusStructuredSessionSubject,
     evidence: AgentChildWorkEvidence[],
@@ -60,13 +56,12 @@ export abstract class AgentHookServerIngestStructuredChildren extends AgentHookS
     return outcome
   }
 
-  /** Every child record this host holds for one structured session. */
   getStructuredChildWork(subject: AgentStatusStructuredSessionSubject): AgentChildWorkRecord[] {
     const parent = parseAgentStatusSubject(subject)
     return parent ? this.canonicalStatusStore.getChildren(parent) : []
   }
 
-  /** A record covers its current handles only while it answers to running work. */
+  /** Only running work retains its handles. */
   getStructuredChildWorkHandles(subject: AgentStatusStructuredSessionSubject): Set<string> {
     return new Set(
       this.getStructuredChildWork(subject).flatMap((child) =>

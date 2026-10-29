@@ -26,7 +26,6 @@ type ParserSessionOptions = {
   executionHostPlatform?: NodeJS.Platform | null
 }
 
-// CodeBuddy stores top-level message roles and input_text/output_text blocks, not Claude records.
 export type CodebuddySessionParseState = {
   accumulator: ReturnType<typeof createAccumulator>
   aiTitle: string | null
@@ -62,8 +61,7 @@ export function cloneCodebuddySessionParseState(
   }
 }
 
-// CodeBuddy conversation content is an array of typed text blocks; join the
-// text ones. Non-text blocks (tool calls, diffs) carry no preview copy.
+// Tool and diff blocks provide no text for previews.
 function codebuddyContentText(content: unknown): string | null {
   if (typeof content === 'string') {
     return content
@@ -96,8 +94,6 @@ export function consumeCodebuddySessionLine(state: CodebuddySessionParseState, l
   updateTimeline(accumulator, record.timestamp)
   updateLatestLocation(accumulator, record)
 
-  // The CLI's own session title; later summaries revise it, like Claude's
-  // custom-title.
   if (record.type === 'summary') {
     const summary = normalizeTitleText(extractString(record.summary) ?? '')
     if (summary) {
@@ -109,7 +105,6 @@ export function consumeCodebuddySessionLine(state: CodebuddySessionParseState, l
   if (record.type === 'ai-title') {
     const title = normalizeTitleText(extractString(record.aiTitle) ?? '')
     if (title) {
-      // CodeBuddy can revise generated names; AI Vault mirrors the current one.
       state.aiTitle = title
     }
     return
@@ -123,9 +118,7 @@ export function consumeCodebuddySessionLine(state: CodebuddySessionParseState, l
   const text = codebuddyContentText(record.content)
   accumulator.messageCount++
   if (role === 'user') {
-    // Meta prompts (injected context) only seed the last-resort title.
-    // `providerData.skipRun` marks machinery-injected turns that never reached
-    // the model as a user prompt.
+    // Injected context must not seed user prompts; skipRun marks turns never sent as user input.
     const isMetaUserTurn =
       asRecord(record.providerData)?.skipRun === true ||
       (text != null && isKnownHarnessInjectedUserTurnText(text))
@@ -154,11 +147,9 @@ export function finalizeCodebuddySessionParseState(
   platform: NodeJS.Platform,
   options: ParserSessionOptions = {}
 ): AiVaultSession | null {
-  // Finalize a snapshot: the live state (and its preview array) may keep
-  // accumulating appended lines after this session object is handed out.
+  // Detach previews so later appends cannot mutate a published session.
   const snapshot = cloneCodebuddySessionParseState(state)
-  // Why: the CLI's summary title wins via accumulator.title; the generated
-  // ai-title should outrank the raw first prompt when present.
+  // Prefer summary, then generated AI title, then the first user prompt.
   snapshot.accumulator.fallbackTitle = snapshot.aiTitle ?? snapshot.firstUserTitle
   return finalizeSession(snapshot.accumulator, platform, options)
 }

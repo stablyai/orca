@@ -1,3 +1,4 @@
+import { agentSessionConversationView } from '../../../shared/agent-session-conversation-view'
 import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
 import {
   adapterAtPublishFor,
@@ -36,7 +37,13 @@ it('omits an unverified stop superseded by a newer send while retaining a siblin
   const sibling = 'session-beta'
   const siblingRecord = { ...record, sessionId: sibling }
   const getRecord = store.getRecord.bind(store)
-  vi.spyOn(store, 'listRecords').mockReturnValue([record, siblingRecord])
+  vi.spyOn(store, 'listConversations').mockReturnValue(
+    [record, siblingRecord].map(agentSessionConversationView)
+  )
+  const getConversation = store.getConversation
+  vi.spyOn(store, 'getConversation').mockImplementation((id) =>
+    id === sibling ? agentSessionConversationView(siblingRecord) : getConversation(id)
+  )
   vi.spyOn(store, 'getRecord').mockImplementation((id) =>
     id === sibling ? siblingRecord : getRecord(id)
   )
@@ -182,7 +189,6 @@ it('keeps Sleep through history reopen and replay, and clears it atomically with
     expect(await host.send(CALLER, params)).toMatchObject({ ok: true })
     return params
   }
-  // A stop that did not ask (a project move) marks nothing.
   expect(await host.sleepWorkspace('workspace-1')).toEqual({ stoppedSessionIds: ['session-alpha'] })
   expect(store.getRecord('session-alpha')?.sleptAt).toBeUndefined()
   const previous = await send('after the move')
@@ -244,7 +250,7 @@ it('returns the receipt for a stopped child whose provider reports its own end',
   const { host, store } = hostTestState()
   await attach()
   await host['tasks'].drainAttaches()
-  // Like real adapters, the close reports its own end onto the chat's lane before it returns.
+  // Match adapters: report close onto the chat lane before returning.
   host.deps.adapter.closeSession = vi.fn(async (sessionId: string) => {
     const child = host['sessions'].get(sessionId)?.child
     if (child?.generation) {
@@ -254,7 +260,8 @@ it('returns the receipt for a stopped child whose provider reports its own end',
         cause: 'requested-close',
         sessionId,
         fence: child.fence,
-        acquisitionGeneration: child.generation
+        acquisitionGeneration: child.generation,
+        processExit: { root: 'exited', workload: 'unverifiable' }
       })
     }
     return true
@@ -263,7 +270,6 @@ it('returns the receipt for a stopped child whose provider reports its own end',
 
   expect(await host.sleepWorkspace('workspace-1')).toEqual({ stoppedSessionIds: [SESSION] })
   expect(reported).toHaveBeenCalledWith(expect.objectContaining({ cause: 'requested-close' }))
-  // History stays saved while the conversation handle closes.
   expect([store.getRecord(SESSION) !== null, host.hasSession(SESSION)]).toEqual([true, false])
   expect(await host.sleepWorkspace('other-workspace')).toEqual({ stoppedSessionIds: [] })
 })
@@ -293,7 +299,6 @@ it.each(['running', 'failed'] as const)('keeps a newer %s send awake', async (st
       acquire.mockRejectedValueOnce(new Error('provider unavailable'))
     }
     const body = hostTestMessage('newer send')
-    // The later work exists once the send is accepted, not merely once it is queued.
     const sent = host.send(CALLER, { envelope: envelope('agentSession.send', { body }), body })
     expect(await sent).toMatchObject({ ok: true })
     if (state === 'failed') {
@@ -310,7 +315,7 @@ it.each(['running', 'failed'] as const)('keeps a newer %s send awake', async (st
   expect(store.getRecord(SESSION)?.sleptAt).toBeUndefined()
 })
 
-// A start runs outside the chat's lane, so Sleep reaches it through the start's own abort.
+// Startup runs outside serialization; Sleep must reach it through its abort.
 it('stops an agent that is still starting', async () => {
   const { host, acquire } = hostTestState()
   await attach()
@@ -333,12 +338,11 @@ it('stops an agent that is still starting', async () => {
 
   expect(await host.sleepWorkspace('workspace-1')).toEqual({ stoppedSessionIds: [SESSION] })
   expect(acquire).toHaveBeenCalledTimes(2)
-  expect(closeSession).toHaveBeenCalledWith(SESSION)
+  expect(closeSession).toHaveBeenCalledWith(SESSION, undefined)
   expect(host['runtimeState'].startFlights.has(SESSION)).toBe(false)
   expect(host['sessions'].get(SESSION)?.child ?? null).toBeNull()
 })
 
-// Before the adapter owns a process, the aborted start leaves the chat at rest: that is stopped.
 it('stops an agent whose process is still being acquired', async () => {
   const { host, acquire, store } = hostTestState()
   await attach()
@@ -368,7 +372,7 @@ it('sleeps only proven ended chats after idle eviction or restart', async () => 
     await foundRestTestChat(rig)
     rig.clock.now += IDLE_MS + 1
     await vi.waitFor(() => {
-      expect(rig.adapter.closeSession).toHaveBeenCalledWith(SESSION)
+      expect(rig.adapter.closeSession).toHaveBeenCalledWith(SESSION, undefined)
       expect(rig.host.hasSession(SESSION)).toBe(false)
     })
     expect(rig.store.getRecord(SESSION)?.sleptAt).toBeUndefined()

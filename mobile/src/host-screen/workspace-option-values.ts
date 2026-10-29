@@ -1,4 +1,3 @@
-/** A checklist option's value on the main sheet: all, none, the one checked item, or "N of M". */
 export function summarizeChecklist(
   checkedLabels: readonly string[],
   total: number,
@@ -13,7 +12,6 @@ export function summarizeChecklist(
   return checkedLabels.length === 1 ? checkedLabels[0] : `${checkedLabels.length} of ${total}`
 }
 
-/** A pick-one option's value: the chosen choice's label. */
 export function choiceLabel<Id extends string>(
   choices: readonly { id: Id; label: string }[],
   selected: string

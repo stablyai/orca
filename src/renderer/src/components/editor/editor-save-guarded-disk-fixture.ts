@@ -1,5 +1,4 @@
-// Why: shared rig for guarded-save suites — a fake host that compares the precondition inside the
-// write like the real writer, and a dirty tab with a known disk baseline.
+// Compare preconditions inside the fake host write, matching the real guarded writer.
 import { vi } from 'vitest'
 import type { StoreApi } from 'zustand'
 import type { AppState } from '@/store'
@@ -17,7 +16,6 @@ export type GuardedWriteArgs = {
   diskPrecondition?: FileWriteDiskPrecondition
 }
 
-/** `beforeWrite` lets a test hold a write in flight. */
 export function stubGuardedDisk(
   initial: Record<string, string>,
   beforeWrite: () => Promise<void> = () => Promise.resolve()

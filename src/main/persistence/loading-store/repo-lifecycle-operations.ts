@@ -100,8 +100,7 @@ export class RepoLifecycleOperations {
       delete this[repoLifecycleOperationsContext].runtime.state.retiredWorktreeNamesByRepo?.[id]
     }
     syncProjectHostSetupCompatibilityState(this)
-    // Why host-scoped: a paired client never registers that host's repos, so `idStillPresent` is
-    // false even when another paired host (or a re-pairing of this one) holds rows under the same id.
+    // Paired repos may be absent locally while same-ID rows remain on another host; prune only this host.
     const pairedHost = parseExecutionHostId(hostId)?.kind === 'runtime'
     pruneWorktreeStateForRepo(this, id, idStillPresent || pairedHost ? hostId : null)
     if (!idStillPresent && !pairedHost) {
@@ -127,12 +126,7 @@ export class RepoLifecycleOperations {
     scheduleSave(this[repoLifecycleOperationsContext].scheduling)
   }
 
-  /**
-   * Drop every persisted row owned by a repo id that is no longer registered.
-   * Runs at load to reach leftover local rows after deregistration. Rows owned by a `runtime:*`
-   * host are exempt: this runs before pairing, so their absence from the local catalog cannot
-   * establish deletion. Only an explicit `removeProjectForHost` retires them.
-   */
+  /** Sweep unregistered local repos at load; unpaired remote absence cannot prove deletion. */
   sweepDeregisteredRepoResidue(): string[] {
     const state = this[repoLifecycleOperationsContext].runtime.state
     const orphanRepoIds = collectDeregisteredRepoIds(state)

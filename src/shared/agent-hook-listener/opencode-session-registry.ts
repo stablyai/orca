@@ -2,17 +2,7 @@ import { parsePaneKey } from '../stable-pane-id'
 import type { AgentHookSource } from '../agent-hook-relay'
 import type { HookListenerState } from './listener-state'
 
-/**
- * Which pane owns one OpenCode session, as observed from the client side.
- *
- * Why this exists: OpenCode 1 `opencode serve` serves every `opencode attach`
- * pane from one server process, so the status plugin's per-post stamp
- * (`process.env.ORCA_PANE_KEY`) is frozen to the pane that started it. The session id is the only
- * per-event truth that survives — every post carries it — but nothing maps it
- * back to a pane. This registry is that map, filled by the main-process binder
- * (client argv, then creation-correlation against the session store) and read
- * at ingest to reattribute posts before disposition.
- */
+/** Map OpenCode1 shared-server sessions to client-observed panes: the server's frozen env stamp cannot identify attach clients. Main binds from argv/creation evidence; ingest reattributes before disposition. */
 export type OpenCodeSessionBinding = {
   paneKey: string
   worktreeId?: string
@@ -33,10 +23,7 @@ function bindings(state: HookListenerState): Map<string, OpenCodeSessionBinding>
   return state.opencodeSessionPaneBySessionId
 }
 
-/**
- * Record a session owner. Ignores blank ids and malformed pane keys so a
- * corrupt binder observation can never poison ingest.
- */
+/** Reject blank IDs/malformed pane keys so corrupt observations cannot poison ingest. */
 export function bindOpenCodeSession(
   state: HookListenerState,
   sessionId: string,
@@ -47,9 +34,7 @@ export function bindOpenCodeSession(
     return false
   }
   const map = bindings(state)
-  // Why delete-then-set: Map evicts in insertion order, so a refreshed bind
-  // must move to the back or a hot session would evict as if it were the
-  // oldest one.
+  // Delete then set to refresh insertion-order eviction age.
   map.delete(id)
   map.set(id, binding)
   while (map.size > OPENCODE_SESSION_BINDINGS_MAX) {
@@ -125,16 +110,11 @@ export function suppressOpenCodeSharedServerPost(
   )
 }
 
-/**
- * Drop every binding owned by a pane: teardown, reuse and close must not let
- * a dead pane keep claiming a live session's dots.
- * @returns Number of bindings removed.
- */
+/** Remove a pane's bindings on teardown/reuse/close so it cannot keep claiming live sessions. */
 export function unbindOpenCodeSessionsOfPane(state: HookListenerState, paneKey: string): number {
   let removed = 0
   for (const [sessionId, binding] of bindings(state)) {
-    // Why exact match only: bindings store validated `tabId:uuid` pane keys,
-    // which cannot carry the `\0` subscopes the hierarchical pane caches use.
+    // Validated pane keys cannot contain hierarchical cache NUL subscopes; match exactly.
     if (binding.paneKey === paneKey) {
       bindings(state).delete(sessionId)
       removed += 1
@@ -159,12 +139,7 @@ export function moveOpenCodeSessionBindings(
   }
 }
 
-/**
- * Last launch token seen per pane, from any source's envelope. The shared
- * server's posts carry a frozen (usually empty) token, so a rewritten post
- * for a fenced pane would be suppressed without the bound pane's live token.
- * Updated on every tokened post; the fence comparison hashes it the same way.
- */
+/** Remember live pane tokens for reattributed posts; shared-server stamps carry frozen tokens that fail launch fences. */
 export function trackOpenCodePaneLaunchToken(
   state: HookListenerState,
   paneKey: string,
@@ -194,11 +169,7 @@ export function lookupOpenCodePaneLaunchToken(
   return state.lastLaunchTokenByPaneKey.get(paneKey)
 }
 
-/**
- * OpenCode-1-only: remove with OpenCode 1 support. OpenCode 2 posts declare `opencodeMajor: 2`
- * and always name their own pane; posts without it (OpenCode 1, mimo-code, older plugins) may
- * come from a shared server.
- */
+/** OpenCode1 compatibility: remove with OpenCode1 support. Major>=2 names its own pane; missing markers (OpenCode1/mimo-code/older plugins) may use shared servers. */
 export function isOpenCodeSharedServerPost(source: AgentHookSource, body: unknown): boolean {
   if ((source !== 'opencode' && source !== 'mimo-code') || typeof body !== 'object' || !body) {
     return false
@@ -215,13 +186,7 @@ export type OpenCodeStampedEnvelope = {
   launchToken?: string
 }
 
-/**
- * Reattribute one shared-server post to the bound pane (#21359). Reads
- * nothing but the registry: unbound sessions and other sources pass through
- * untouched, so this is a no-op everywhere the binder has said nothing. A
- * bound session always takes the stored pane token — which may be absent,
- * in which case the post carries no token rather than the frozen stamp.
- */
+/** Reattribute bound shared-server sessions; others pass through. Use the stored pane token or none, never a frozen-token fallback (#21359). */
 export function resolveOpenCodeSharedServerEnvelope(args: {
   state: HookListenerState
   source: AgentHookSource
@@ -249,18 +214,11 @@ export function resolveOpenCodeSharedServerEnvelope(args: {
   }
   return {
     paneKey: binding.paneKey,
-    // Why derive: the envelope rejects a tabId that disagrees with the pane
-    // key, so the substituted tab must come from the substituted pane.
+    // Derive tabId from the replacement pane or envelope validation rejects it.
     tabId: parsePaneKey(binding.paneKey)?.tabId ?? stamped.tabId,
-    // Why no stamped fallback: a binding without a worktree (its pane row
-    // carried none) combined with the stamped pane's worktree would file the
-    // row under the wrong worktree. Absent is honest; wrong is not.
+    // Use only the bound worktree; falling back to the frozen stamp would misfile the row.
     worktreeId: binding.worktreeId,
-    // Why the stored token or nothing: the frozen stamp carries the
-    // server-starter's (usually empty) token, which a fenced pane would
-    // suppress — and recording that stale token as live would poison the
-    // cache for the pane's real posts. The session is the authority here,
-    // not the posting process.
+    // Use the bound pane's live token or none; the server's frozen token would fail fences and poison cache.
     launchToken: lookupOpenCodePaneLaunchToken(state, binding.paneKey)
   }
 }

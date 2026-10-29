@@ -4,7 +4,7 @@ import {
   isAgentSessionProviderHandleInNamespace
 } from '../../shared/agent-session-provider-handle-encoding'
 import {
-  AgentSessionPreSpawnError,
+  launchPreparationFailure,
   type AgentSessionAcquisition,
   type StructuredAgentSessionAcquireInput
 } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
@@ -69,7 +69,7 @@ export async function acquireCodexStructuredSession(input: {
   const subagentExecutions = new CodexSubagentExecutions()
   const dispatchEchoes = createCodexDispatchEchoes(() => deps.onHeldSendsChanged?.({ sessionId }))
   let account: AgentSessionAccountKind | undefined
-  // Minted before the translator, which names this connection's frame rows with it.
+  // Frame row identities include this generation.
   const acquisitionGeneration = mintCodexAcquisitionGeneration(deps)
   const translator = createCodexSessionJournalTranslator({
     sink: acquireInput.events,
@@ -110,7 +110,7 @@ export async function acquireCodexStructuredSession(input: {
         ...(acquireInput.permissionMode ? { permissionMode: acquireInput.permissionMode } : {})
       })
       .catch((error: unknown) => {
-        throw new AgentSessionPreSpawnError(error)
+        throw launchPreparationFailure(error)
       })
     const { model: _savedNextModel, ...launchSettings } = resolvedLaunch
     const launch =
@@ -156,6 +156,7 @@ export async function acquireCodexStructuredSession(input: {
           ),
         onSpawned: spawnIdentity.onSpawned,
         onExit: (error, exit) => {
+          acquisition.appliedSettings.end()
           try {
             if (attempt.acquisitionGeneration && !sessions.has(sessionId)) {
               attempt.exitProven = true
@@ -189,7 +190,7 @@ export async function acquireCodexStructuredSession(input: {
               sessionId,
               connection: acquisition.connection,
               error,
-              // The end of a close Orca began, even one that came back unproven before it.
+              // A previously unproven Orca close still owns this exit.
               ...(exit?.expected ? { closedByOrca: true as const } : {}),
               ...(deps.logger ? { logger: deps.logger } : {}),
               prompts: acquisition.prompts,

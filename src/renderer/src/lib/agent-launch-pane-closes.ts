@@ -1,10 +1,4 @@
-/**
- * Launch panes the user closed while their agent was still starting. The host learns of the close
- * from its own commit of it; this session's record lets a spawn-time reveal that raced the close
- * stop the agent instead of bringing the tab back. A tab merely missing from the window (a reload
- * before the session saved it) is never read as a close. Store-free, so the store's close path can
- * note it without an import cycle.
- */
+/** Remember explicit user closes so a racing spawn reveal stops the agent instead of resurrecting its tab; absence after reload is not a close. Keep store-free for teardown callers. */
 
 import { settleAgentLaunchPaneStart } from './agent-launch-pane-start'
 

@@ -10,7 +10,7 @@ import {
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
 } from '../../../../shared/protocol-version'
 import { AGENT_SESSION_CURRENT_REQUESTS_CLIENT_CAPABILITY } from '../../../../shared/agent-session-current-requests-capability'
-import { remoteRuntimeClientCapabilities } from '../../../../shared/remote-runtime-client-capabilities'
+import { remoteRuntimeClientCapabilities } from '../../../../shared/remote-runtime/remote-runtime-client-capabilities'
 import { AcpStructuredOptions } from '../../../acp/acp-structured-options'
 import { NewSessionResponseSchema } from '../../../acp/generated/acp-protocol.generated'
 import { DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES } from '../../../ipc/desktop-renderer-runtime-capabilities'
@@ -81,6 +81,10 @@ it.each([
   await call('agentSession.subscribe', { sessionId: SESSION }, client)
   expect(input?.boundedFrames === true).toBe(bounded)
   expect(input?.snapshotCatchUp).toBe(snapshot)
+  const request = { sessionId: SESSION, direction: 'after', cursor: { epoch: 'e', sequence: 1 } }
+  await call('agentSession.history', request, client)
+  const replaceHistory = snapshot && input?.readsCurrentRequests === true
+  expect(hostCalls.history).toHaveBeenCalledWith(request, undefined, replaceHistory)
 })
 
 it('allows the local desktop renderer to replace a missed gap with a snapshot', async () => {

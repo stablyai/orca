@@ -1,3 +1,7 @@
+import {
+  assertStructuredAgentResolutionCurrent,
+  type StructuredAgentResolutionOperation
+} from '../native-chat/structured-agent-command-resolution'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import type { AgentCliVersionReader } from '../agent-cli-version-probe'
@@ -29,14 +33,13 @@ import {
 import { AcpStructuredOptions } from './acp-structured-options'
 import type { InitializeResponse } from './generated/acp-protocol.generated'
 
-/** The part of an ACP connection a session-free listing may use: no session method is reachable. */
+/** Session-free capability boundary: no session methods are exposed. */
 export type AcpModelCatalogConnection = {
   initialize(): Promise<InitializeResponse>
   requestSessionFreeExtension(method: string, params: unknown): Promise<unknown>
   close(): Promise<unknown>
 }
 
-/** A connection that may open one session, to read what a new chat offers, and delete it. */
 export type AcpModelCatalogSessionConnection = Omit<
   AcpModelCatalogConnection,
   'requestSessionFreeExtension'
@@ -46,45 +49,44 @@ export type AcpModelCatalogSessionConnection = Omit<
 }
 
 export type AcpModelCatalogProbeDeps = AcpLaunchInvocationDeps & {
-  /** Test seams; production spawns through the shared supervised runner and ACP connection. */
   probeVersion?: AgentCliVersionReader
   connect?: (launch: ProviderProcessLaunch) => AcpModelCatalogConnection
   connectSession?: (launch: ProviderProcessLaunch) => AcpModelCatalogSessionConnection
   runListing?: typeof runAgentModelCatalogListing
 }
 
-/**
- * Lists an ACP agent's models before a chat, under the binary, account and scrubbed environment its
- * chats launch with. A release that runs no structured chat lists nothing, nor does one its
- * discovery names no listing for.
- */
+/** Uses the same binary, account and scrubbed environment as chats. */
 export function createAcpModelCatalogProbe(
   spec: AcpLaunchSpec,
   deps: AcpModelCatalogProbeDeps
 ): AgentModelCatalogProbe {
   return async (accountHome, options): Promise<AgentModelCatalogSuccess> => {
+    const operation = options?.operation ?? { signal: options?.signal }
+    assertStructuredAgentResolutionCurrent(operation)
     const discovery = spec.modelDiscovery
-    // Registered as unavailable instead (`acpModelCatalogDiscovery`); never built for one.
     if (discovery.kind === 'unavailable') {
       throw new Error(discovery.reason)
     }
     const workspace = options?.workspacePath
-    // Known without spawning anything: a listing that may open a session needs a chat's folder.
+    // Reject folderless session discovery before spawning even a version probe.
     if (!workspace && acpListingNeedsChatFolder(discovery)) {
       throw folderlessListing(spec)
     }
-    // Spawned from home; a listing reads a project's config only in the chat folder it is asked for.
+    // Start in home; only explicit chat-folder discovery reads project config.
     const cwd = deps.homePath ?? homedir()
     const { command, env, envToDelete } = await resolveAcpLaunchInvocation(spec, accountHome, {
       ...deps,
+      operation,
       resolveWorkingDirectory: () => cwd
     })
+    assertStructuredAgentResolutionCurrent(operation)
     const release = await checkAcpLaunchVersion(
       spec,
       { command, cwd, env },
       discovery.kind === 'command' && discovery.supportsVersion !== undefined,
       deps.probeVersion
     )
+    assertStructuredAgentResolutionCurrent(operation)
     if (release.status === 'tooOld') {
       throw new Error(`${spec.agent} at ${command} does not run structured chats`)
     }
@@ -111,17 +113,18 @@ export function createAcpModelCatalogProbe(
       if (!workspace) {
         throw folderlessListing(spec)
       }
-      // Kept out of the agent's own store, and removed once `close` has ended the process.
+      // Remove disposable session storage after the process closes.
       const folderArgs = listing.sessionFolderArgs
       const folder = folderArgs
         ? await acpRunFolder(join(deps.dataDirectory, 'acp-listing-sessions', spec.agent))
         : null
       try {
+        assertStructuredAgentResolutionCurrent(operation)
         const args =
           folderArgs && folder ? [...launch.args, ...folderArgs(folder.path)] : launch.args
         models = await runAgentModelCatalogSession(
           () => (deps.connectSession ?? createAcpAgentConnection)({ ...launch, args }),
-          (connection) => readSessionModels(spec, listing, connection, workspace),
+          (connection) => readSessionModels(spec, listing, connection, workspace, operation),
           run
         )
       } finally {
@@ -130,7 +133,11 @@ export function createAcpModelCatalogProbe(
     } else {
       models = await runAgentModelCatalogSession(
         () => (deps.connect ?? createAcpAgentConnection)(launch),
-        async (connection) => listing.read(await connection.initialize(), connection),
+        async (connection) => {
+          const initialized = await connection.initialize()
+          assertStructuredAgentResolutionCurrent(operation)
+          return listing.read(initialized, connection)
+        },
         run
       )
     }
@@ -146,7 +153,6 @@ const folderlessListing = (spec: AcpLaunchSpec) =>
 
 type AcpModelListing = Exclude<AcpModelDiscovery, { kind: 'unavailable' }>
 
-/** How `version` lists: its discovery, unless that is a command this release has no listing for. */
 function listingFor(discovery: AcpModelListing, version: string | null): AcpModelListing | null {
   if (discovery.kind !== 'command' || !discovery.supportsVersion) {
     return discovery
@@ -159,21 +165,21 @@ function listingFor(discovery: AcpModelListing, version: string | null): AcpMode
     : null
 }
 
-/** What a new chat in `workspace` offers, read from a session opened only to be deleted, or kept
- *  in a folder the probe removes. */
 async function readSessionModels(
   spec: AcpLaunchSpec,
   listing: AcpSessionModelDiscovery,
   connection: AcpModelCatalogSessionConnection,
-  workspace: string
+  workspace: string,
+  operation?: StructuredAgentResolutionOperation
 ): Promise<AgentSessionModelOption[]> {
   const initialized = await connection.initialize()
+  assertStructuredAgentResolutionCurrent(operation)
   const deletes = Boolean(initialized.agentCapabilities?.sessionCapabilities?.delete)
   if (!deletes && !listing.sessionFolderArgs) {
     throw new Error(`${spec.agent} cannot delete a session, so it lists its models only in chats`)
   }
   const started = await connection.start({ cwd: workspace, mcpServers: [] })
-  // Best effort: a failed delete, or a listing stopped mid-create, leaves one empty conversation.
+  // A failed delete or interrupted create may leave an empty conversation.
   if (deletes) {
     await connection.deleteSession(started.sessionId).catch((error: unknown) => {
       console.warn(`[acp-model-catalog] ${spec.agent} kept its listing session:`, error)

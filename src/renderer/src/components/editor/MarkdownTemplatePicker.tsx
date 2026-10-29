@@ -73,7 +73,12 @@ export function MarkdownTemplatePicker(): JSX.Element {
             'No matching templates.'
           )}
         </CommandEmpty>
-        <CommandGroup heading="New Document">
+        <CommandGroup
+          heading={translate(
+            'auto.components.editor.MarkdownTemplatePicker.newDocumentHeading',
+            'New Document'
+          )}
+        >
           <CommandItem
             value="blank markdown document"
             className="items-start gap-3"

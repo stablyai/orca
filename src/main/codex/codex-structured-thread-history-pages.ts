@@ -1,6 +1,6 @@
 import { setImmediate } from 'node:timers/promises'
 import { waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
-import type { CodexAppServerConnection } from './codex-app-server-connection'
+import type { CodexAppServerConnection } from './app-server/codex-app-server-connection-types'
 import { CODEX_RESTORE_MAX_OPERATIONS } from './codex-structured-journal-translation-restore'
 import {
   readCodexJournalRecord,
@@ -62,7 +62,7 @@ async function readPage(
   }
 }
 
-/** Known identities exclude themselves, never the older gaps behind them. */
+/** Known turns do not stop discovery of older gaps. */
 export async function discoverCodexHistory(
   input: CodexHistoryRead,
   anchor: CodexHistoryJournalView
@@ -100,7 +100,7 @@ export async function discoverCodexHistory(
         }
       }
       selected.add(id)
-      // Every missing turn necessarily writes a lifecycle row, even without content.
+      // Even empty turns consume a lifecycle row in the restore budget.
       if (++count > CODEX_RESTORE_MAX_OPERATIONS) {
         throw new Error('too-large')
       }
@@ -114,7 +114,7 @@ export async function discoverCodexHistory(
   return { pages, rewound: anchor.latest !== null && !seen.has(anchor.latest) }
 }
 
-/** Same cursor semantics in both views; reject a provider that changed selection between reads. */
+/** Reject pages that changed between summary discovery and full reads. */
 export async function* loadCodexHistory(input: CodexHistoryRead, pages: readonly MissingPage[]) {
   for (const descriptor of pages.toReversed()) {
     const page = await readPage(input, descriptor.cursor, 'full')

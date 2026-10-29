@@ -4,13 +4,7 @@ import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { buildPaletteListEntryRenderKeys } from './palette-list-entry-render-keys'
 
-/**
- * Regression for the Cmd+J ghost rows: a windows-low-spec session persisted two
- * tab records under one id, so two rows shared a React key. When the query
- * narrowed and the rows stopped matching, React had one fiber for the two keys
- * and never unmounted the extra — it stayed above the section headers, frozen at
- * the highlight ranges of the keystroke that last matched it.
- */
+/** Duplicate persisted IDs can strand React rows after query narrowing; disambiguated render keys must unmount them. */
 type Row = { id: string; label: string }
 
 function PaletteList({ rows, uniqueKeys }: { rows: Row[]; uniqueKeys: boolean }) {
@@ -26,7 +20,6 @@ function PaletteList({ rows, uniqueKeys }: { rows: Row[]; uniqueKeys: boolean })
   )
 }
 
-// The duplicated pair, as persisted for the lungfish worktree.
 const DUPLICATE_TAB_ID = 'workspace-tab:editor:lungfish:FINAL-REPORT.md'
 
 function rowsForQuery(query: string): Row[] {
@@ -58,7 +51,6 @@ async function typeQuery(uniqueKeys: boolean): Promise<string> {
 
 describe('duplicate persisted tab ids in the Cmd+J list', () => {
   it('strands a ghost row when the render key repeats', async () => {
-    // Why assert the bug: it is the reason the disambiguated key exists.
     expect(await typeQuery(false)).toBe('[lungfish l-hit](OPEN TABS)')
   })
 

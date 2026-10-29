@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ORCHESTRATION_HANDLERS } from './orchestration'
 
-// worker_done carries a CLI-minted request id so its runtime_unavailable retries replay one mutation.
+// Reuse one mutation identity when retrying worker_done after runtime_unavailable.
 const WORKER_DONE_REQUEST = { orchestrationRequestId: expect.any(String) }
 
 const originalPaneKey = process.env.ORCA_PANE_KEY

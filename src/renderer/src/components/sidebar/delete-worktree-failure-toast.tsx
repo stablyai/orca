@@ -33,7 +33,7 @@ type DeleteWorktreeFailureToastOptions = {
   onNestedDeleted?: () => void
 }
 
-// Host-qualified: the same worktree id can exist on two hosts.
+// Qualify toast IDs by host because worktree IDs may repeat across machines.
 function deleteWorktreeFailureToastId(target: WorktreeRemovalTarget): string {
   return `delete-worktree-failure:${composeWorktreeHostIdentity(target.executionHostId ?? undefined, target.id)}`
 }
@@ -151,8 +151,7 @@ export function showDeleteWorktreeFailureToast({
       ? nestedRemovalTarget
       : undefined
 
-  // Why: Sonner's native action/cancel slots share the title row and squeeze
-  // multi-line delete errors. Custom content gives the copy its own line.
+  // Custom content gives multiline errors their own line instead of squeezing them into Sonner’s action/title row.
   showToast(toastCopy.title, {
     id,
     description: (

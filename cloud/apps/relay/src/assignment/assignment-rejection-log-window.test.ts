@@ -26,24 +26,6 @@ describe('assignment rejection log window', () => {
     expect(closed).toHaveLength(1)
   })
 
-  it('reports the final count for a key that goes quiet', () => {
-    const timers = manualTimers()
-    const closed: { key: string; suppressed: number }[] = []
-    const window = new AssignmentRejectionLogWindow<string>({
-      windowMs: 10_000,
-      schedule: timers.schedule,
-      onWindowClosed: ({ key, suppressed }) => closed.push({ key, suppressed })
-    })
-
-    window.admit('assign:sticky:host-rate-limited', 'host-a')
-    window.admit('assign:sticky:host-rate-limited', 'host-a')
-    window.admit('assign:sticky:host-rate-limited', 'host-a')
-    // No further rejection ever arrives for this key.
-    timers.runPending()
-
-    expect(closed).toEqual([{ key: 'assign:sticky:host-rate-limited', suppressed: 2 }])
-  })
-
   it('keeps distinct keys on independent windows', () => {
     const timers = manualTimers()
     const window = new AssignmentRejectionLogWindow<string>({

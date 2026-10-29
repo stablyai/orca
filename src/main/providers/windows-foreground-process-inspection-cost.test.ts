@@ -1,12 +1,4 @@
-// Regression guard on the per-inspection cost of Windows agent foreground
-// inspection — the Windows analogue of the POSIX index memo (#6288).
-//
-// The shared TTL cache already collapses N panes into one Toolhelp32 snapshot
-// (windows-agent-foreground-process-scan-volume.test.ts). What it never
-// collapsed is the work each pane does ON that snapshot: a full
-// `native.map(toProcessRow)` projection, a `childrenByPpid` Map rebuilt from
-// scratch, and two linear scans. This file counts that work at a realistic
-// table size and pane count, and pins the flag set the snapshot asks for.
+// Pin per-pane projection/index work as well as shared snapshot count at measured table/fan-out sizes (#6288).
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { __setWindowsProcessTreeLoaderForTests } from '../windows/windows-process-table'
@@ -15,8 +7,7 @@ import {
   resetWindowsProcessRowsSnapshotForTests
 } from './windows-foreground-process-rows'
 
-// 1050 processes is the host measured in windows-process-enumeration.md; 11
-// panes is the fan-out the shared snapshot exists to serve.
+// Measured host size and pane fan-out from windows-process-enumeration.md.
 const TABLE_SIZE = 1050
 const PANE_COUNT = 11
 
@@ -24,10 +15,9 @@ const SELF_ROW = { pid: process.pid, ppid: 0, name: 'vitest.exe', commandLine: '
 
 const shellPid = (pane: number): number => 10_000 + pane * 10
 const agentPid = (pane: number): number => shellPid(pane) + 1
-/** A row every pane can look up, so distinct results == distinct projections. */
+/** Shared row object identity distinguishes reused projection from per-pane copies. */
 const PROBE_PID = 900_000 + TABLE_SIZE - 1
 
-/** One shell + one agent child per pane, padded out to a real table size. */
 function buildNativeTable(): { pid: number; ppid: number; name: string; commandLine: string }[] {
   const rows = [SELF_ROW]
   for (let pane = 0; pane < PANE_COUNT; pane += 1) {
@@ -47,11 +37,7 @@ function buildNativeTable(): { pid: number; ppid: number; name: string; commandL
 
 const NATIVE_TABLE = buildNativeTable()
 
-/**
- * Count `Map.prototype.set` calls — the primitive both the old per-call
- * `childrenByPpid` rebuild and the shared index build are made of. Patched for
- * one awaited region and restored in `finally`, so nothing else observes it.
- */
+/** Count index insertions only inside this awaited region; restore the prototype in finally. */
 async function countMapInsertions(run: () => Promise<void>): Promise<number> {
   const original = Map.prototype.set
   let insertions = 0
@@ -113,8 +99,7 @@ describe('windows foreground inspection cost per pane', () => {
   it('never sets the Memory flag on the snapshot', async () => {
     await queryWindowsPaneProcessInventory(shellPid(0))
     expect(flagsSeen).toHaveLength(1)
-    // Memory is bit 0, and it costs the addon a second OpenProcess per process
-    // carrying PROCESS_VM_READ (process.cc `GetProcessMemoryUsage`).
+    // Memory flags add a second PROCESS_VM_READ OpenProcess per row; foreground inspection does not need it.
     expect(flagsSeen[0]! & 1).toBe(0)
     // CommandLine (2) | CreationTime (4).
     expect(flagsSeen[0]).toBe(6)
@@ -129,9 +114,7 @@ describe('windows foreground inspection cost per pane', () => {
       probeRows.push(inventory?.anchorRow)
     }
     expect(probeRows.filter(Boolean)).toHaveLength(PANE_COUNT)
-    // One projection produced every pane's row object. Pre-fix each pane ran
-    // its own `native.map(toProcessRow)` over all 1050 rows, so this set held
-    // PANE_COUNT distinct objects and the sweep allocated PANE_COUNT * 1050.
+    // Every pane must share the projected row object, not allocate its own whole-table copy.
     expect(new Set(probeRows).size).toBe(1)
   })
 
@@ -143,9 +126,7 @@ describe('windows foreground inspection cost per pane', () => {
       await sweepPanes()
     })
 
-    // Pre-fix every pane rebuilt a whole-table `childrenByPpid`, so this was
-    // >= PANE_COUNT * (rows with a distinct ppid). One shared index makes the
-    // whole sweep cost no table-sized Map build at all.
+    // A warm shared index must avoid a whole-table Map rebuild per pane.
     expect(insertions).toBeLessThan(TABLE_SIZE)
   })
 

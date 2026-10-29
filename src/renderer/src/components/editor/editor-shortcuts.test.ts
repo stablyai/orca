@@ -273,8 +273,7 @@ describe('installEditorAddReviewNoteShortcut', () => {
 
 describe('installOpenDraftAddReviewNoteGuard', () => {
   it('consumes the add-review-note chord including OS key-repeat (product B)', () => {
-    // Why: the guard is scoped to the composer subtree, so mirror that with a
-    // container wrapping the focused textarea rather than attaching to window.
+    // Scope the fixture to the focused composer subtree, matching the guard’s pane isolation.
     const container = document.createElement('div')
     const input = document.createElement('textarea')
     const onDownstreamKeyDown = vi.fn()

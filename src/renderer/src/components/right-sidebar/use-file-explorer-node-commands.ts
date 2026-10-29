@@ -57,7 +57,6 @@ type UseFileExplorerNodeCommandsResult = {
   handleOpenInTerminal: (node: TreeNode) => void
 }
 
-/** Command layer over a TreeNode, plus the keyboard binding of those same commands. */
 export function useFileExplorerNodeCommands({
   activeWorktreeId,
   worktreePath,
@@ -87,9 +86,7 @@ export function useFileExplorerNodeCommands({
     [rowProjection, selectedPaths]
   )
 
-  // Why: pass a stable activator so arrow-key navigation can hand the same
-  // activate-toggles-folder / open-file-preview behavior the click handler
-  // already uses, without the keyboard path re-implementing symlink handling.
+  // Share click activation with keyboard navigation, including symlink handling.
   const activateNode = useCallback(
     (node: TreeNode) => {
       void handleClick(node)
@@ -114,9 +111,7 @@ export function useFileExplorerNodeCommands({
     activeWorktreeId
   })
 
-  // Why: context-menu Delete should respect the multi-selection — if the
-  // right-clicked node is already part of a multi-selection, delete the whole
-  // set; otherwise fall through to single-node delete.
+  // Delete the multi-selection only when the context-menu target belongs to it.
   const handleContextMenuDelete = useCallback(
     (node: TreeNode) => {
       if (selectedPaths.has(node.path) && selectedNodes.length > 1) {

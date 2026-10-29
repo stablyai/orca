@@ -56,6 +56,8 @@ describe('RelayHostReachabilityLatch', () => {
     const latch = new RelayHostReachabilityLatch()
     latch.record(closed(OFFLINE))
     latch.record(closed(OFFLINE))
+    latch.record(closed(1006))
+    expect(latch.current()).toBe('host-offline')
     latch.record(closed(MOBILE_RELAY_CLOSE_CODE.DRAINING))
     expect(latch.current()).toBe('host-offline')
     latch.record(closed(1006))

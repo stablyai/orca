@@ -2,7 +2,8 @@
 
 import '@testing-library/jest-dom/vitest'
 
-import { act, cleanup, render, screen } from '@testing-library/react'
+import { act, cleanup, screen } from '@testing-library/react'
+import { render } from './native-chat-tooltip-test-harness'
 import { createRef } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
@@ -27,7 +28,6 @@ vi.mock('./use-native-chat-paced-text', async (importOriginal) =>
 
 afterEach(cleanup)
 
-/** A transcript of rows the journal placed, as a structured chat's are. */
 function chat(
   length: number,
   isVisible: boolean,
@@ -103,8 +103,7 @@ describe('the "New" marker in the transcript', () => {
   })
 
   describe('when the reader comes back to new rows', () => {
-    /** The pane is hidden and shown again; the read catches up after the reveal has put the
-     *  reader's place back. */
+    /** Catch up after restoring the hidden pane’s scroll position. */
     function returnToNewRows(rerender: (ui: React.JSX.Element) => void, count = 60): void {
       paneShown = false
       rerender(chat(TRANSCRIPT_LENGTH, false, { readCurrent: false }))
@@ -122,7 +121,6 @@ describe('the "New" marker in the transcript', () => {
       expect(scrollTop(container)).toBe(TRANSCRIPT_LENGTH * ROW_PITCH_PX)
     })
 
-    // A reply is drawn short and revealed over the frames after it arrives.
     it('keeps the reader where the new rows begin while a reply is still being drawn', async () => {
       const { container, rerender } = render(chat(TRANSCRIPT_LENGTH, true))
       returnToNewRows(rerender, 1)

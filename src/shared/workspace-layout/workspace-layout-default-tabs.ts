@@ -1,5 +1,4 @@
-// A workspace's default terminal tabs as one command: every tab, its title and colour, and the
-// mark that keeps them from being applied again, in one write and so one frame.
+// Apply ordered default terminal tabs and their one-time mark in one write/frame.
 
 import { applied, type Applied } from './workspace-layout-command-steps'
 import type {

@@ -1,4 +1,4 @@
-import { normalizeNativeChatUserText } from './native-chat-image-transcript-markers'
+import { normalizeNativeChatUserText } from './native-chat/transcript/native-chat-image-transcript-markers'
 
 // Agent TUIs may consume the final backslash and join the next send into this turn.
 export function nativeChatContinuationSendText(text: string): string | null {

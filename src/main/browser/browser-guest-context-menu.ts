@@ -8,6 +8,7 @@ import type { BrowserContextMenuRequestedEvent } from '../../shared/browser-gues
 import { readContextMenuSpelling } from '../window/editable-context-menu'
 import { readGuestNavigationState } from './browser-guest-navigation-state'
 import type { ResolveRenderer } from './browser-guest-renderer-target'
+import { buildBrowserExtensionPageContextMenu } from './extensions/browser-extension-context-menu-host'
 
 export function setupGuestContextMenu(args: {
   browserTabId: string
@@ -20,15 +21,15 @@ export function setupGuestContextMenu(args: {
     if (!renderer) {
       return
     }
-    // Why: redact the Kagi session token before pageUrl leaves main — the renderer pipes it into clipboard and shell.openExternal.
+    // The renderer may copy or open this URL externally; remove the Kagi token first.
     const pageUrl = redactKagiSessionToken(guest.getURL())
-    // Why: empty linkURL normalized would yield the truthy blank-page constant, showing "Open Link…" on every non-link right-click.
+    // Normalizing an empty link creates a truthy blank-page URL and a spurious Open Link item.
     const rawLinkUrl = params.linkURL || ''
     const linkUrl =
       rawLinkUrl.length > 0
         ? (normalizeExternalBrowserUrl(rawLinkUrl) ?? normalizeBrowserNavigationUrl(rawLinkUrl))
         : null
-    // Why: send both viewport and screen-cursor coords; screen cursor avoids coordinate-space mismatch, guest coords are the fallback.
+    // Prefer screen coordinates to avoid viewport mismatches; retain guest coordinates as fallback.
     const cursor = screen.getCursorScreenPoint()
     const navigationState = readGuestNavigationState(guest)
     renderer.send('browser:context-menu-requested', {
@@ -39,7 +40,7 @@ export function setupGuestContextMenu(args: {
       screenY: cursor.y,
       pageUrl,
       linkUrl,
-      // Why: forward the native selection so the renderer can Copy it directly, bypassing pages that suppress copy via oncopy handlers.
+      // Native selection lets Copy bypass page oncopy handlers.
       selectionText: params.selectionText ?? '',
       ...navigationState,
       editable: params.isEditable
@@ -56,11 +57,12 @@ export function setupGuestContextMenu(args: {
       image:
         params.mediaType === 'image' && params.srcURL
           ? { url: params.srcURL, canCopy: params.hasImageContents }
-          : null
+          : null,
+      extensionMenu: buildBrowserExtensionPageContextMenu(guest, params) ?? undefined
     } satisfies BrowserContextMenuRequestedEvent)
   }
 
-  // Why: before-mouse-event fires on every move/scroll; install the dismiss listener only while a menu is open to avoid per-event IPC.
+  // Listen only while the menu is open to avoid per-mouse-event IPC.
   let dismissHandler: ((_event: Electron.Event, mouse: Electron.MouseInputEvent) => void) | null =
     null
 
@@ -83,7 +85,7 @@ export function setupGuestContextMenu(args: {
       if (mouse.type !== 'mouseDown') {
         return
       }
-      // Why: a right-click mouseDown precedes a new context-menu event; dismissing here flashes the menu closed then reopens it at 0,0.
+      // Right-click precedes the next context-menu event; dismissal here would flash the menu.
       if (mouse.button === 'right') {
         return
       }
@@ -103,7 +105,7 @@ export function setupGuestContextMenu(args: {
       guest.off('context-menu', contextMenuHandler)
       removeDismissListener()
     } catch {
-      // Why: browser tabs can briefly outlive the guest webContents during teardown, so cleanup is best-effort.
+      // The guest may already be destroyed.
     }
   }
 }

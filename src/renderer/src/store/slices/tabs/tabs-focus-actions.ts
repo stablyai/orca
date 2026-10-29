@@ -53,7 +53,7 @@ export function tabActivationPatch(
           ? {
               ...group,
               activeTabId: tabId,
-              // Why: track every activation in the group's MRU so closeUnifiedTab returns to the previous tab; sanitize to prune removed ids.
+              // Track MRU for close-time selection, pruning removed IDs.
               recentTabIds: pushRecentTabId(
                 sanitizeRecentTabIds(group.recentTabIds, group.tabOrder),
                 tabId

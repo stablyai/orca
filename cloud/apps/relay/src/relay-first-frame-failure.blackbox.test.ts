@@ -98,9 +98,7 @@ describe('relay first-frame failures', () => {
       reservedConnectionUnits: 1,
       enforcedConnectionUnits: 2
     })
-    const closed = new Promise<number>((resolve) =>
-      socket.once('close', (code) => resolve(code))
-    )
+    const closed = new Promise<number>((resolve) => socket.once('close', (code) => resolve(code)))
     socket.send(
       JSON.stringify({
         type: 'relay-auth',
@@ -111,6 +109,7 @@ describe('relay first-frame failures', () => {
     )
 
     expect(await closed).toBe(RELAY_CLOSE_CODE.LIMIT_EXCEEDED)
+    expect(database.query).toHaveBeenCalled()
     await vi.waitFor(() =>
       expect(relay.connectionSnapshot()).toMatchObject({
         physicalConnections: 0,

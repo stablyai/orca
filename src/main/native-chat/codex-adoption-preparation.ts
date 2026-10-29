@@ -10,7 +10,6 @@ import type { StructuredAgentSessionAdoption } from './structured-agent-session-
 import { admitTranscriptPath } from './transcript-path-admission'
 import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
 
-/** Use the existing host preparation before pinning credentials and importing history. */
 export async function prepareCodexAdoption(
   source: StructuredAgentSessionAdoption,
   providerSessionId: string,

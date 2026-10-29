@@ -24,24 +24,26 @@ import {
   isAgentSessionPreSpawnError
 } from './structured-agent-session-adapter'
 import {
+  startupAcquisitionRefusal,
   providerExitObserved,
+  startFailureDiagnosticOf,
   structuredAgentSessionStartFailure
 } from './structured-agent-session-failure-text'
 import { structuredAgentSessionFailureWordsContext } from './structured-agent-session-send-preparation'
-import { providerExecutableMissing } from '../../provider-process/provider-executable-missing'
+import {
+  providerExecutableMissing,
+  providerLaunchFolderMissing
+} from '../../provider-process/provider-executable-missing'
 import { argumentProblemOf } from '../structured-agent-arguments-error'
 import { agentCliInstallationProblemOf } from '../agent-cli-installation-error'
 import { agentCliInstallationFacts } from '../../../shared/agent-cli-installation-problem'
-import { providerDiagnosticOf } from '../../../shared/agent-session-failure'
 
-/** Who a failed acquisition's sentence names, and whether it was the session's first start. */
 export type FailedAcquisitionWording = {
   record: AgentSessionRecord | null
   newSession: boolean
 }
 
-/** The refusal a failed acquisition answers with, worded as the start failure it records: its
- *  error text is Orca's or the provider's log wording, so it goes to the log, never the wire. */
+/** Use start-failure wording on the wire; raw host/provider errors stay in logs. */
 function failedAcquisitionWireRefusal(
   details: AgentSessionRefusalDetailsByCode['agent_session_operation_invalid'] | undefined,
   wording: FailedAcquisitionWording,
@@ -52,7 +54,7 @@ function failedAcquisitionWireRefusal(
   const { reason } = structuredAgentSessionStartFailure(
     {
       refusal,
-      diagnostic: providerDiagnosticOf(error),
+      diagnostic: startFailureDiagnosticOf(error),
       argumentProblem: argumentProblemOf(error),
       ...(wording.newSession ? { newSession: true as const } : {})
     },
@@ -61,7 +63,6 @@ function failedAcquisitionWireRefusal(
   return { ...refusal, message: reason }
 }
 
-/** What a failed acquisition proved about its process, and the outcome its operation settles to. */
 export function failedAcquisitionSettlement(
   error: unknown,
   wording: FailedAcquisitionWording
@@ -86,7 +87,7 @@ export function failedAcquisitionSettlement(
   const details = failedAcquisitionDetails(error)
   const message =
     failedAcquisitionRefusal(error, wording)?.refusal.message ??
-    // A store refusal's message is its code, which its replay has always carried.
+    // Preserve bare store codes for existing replay/routing behavior.
     (isAgentSessionWireRefusalCode(raw)
       ? raw
       : failedAcquisitionWireRefusal(details, wording, error).message)
@@ -101,7 +102,6 @@ export function failedAcquisitionSettlement(
   }
 }
 
-/** Cleanup proved the child gone after the start failed, whatever failed it. */
 function isExitProvenAcquisitionFailure(error: unknown): error is Error {
   return (
     error instanceof AgentSessionAcquisitionRootExitObservedError ||
@@ -109,9 +109,7 @@ function isExitProvenAcquisitionFailure(error: unknown): error is Error {
   )
 }
 
-/** The situation a failed acquisition stands for: what the adapter typed, or a provider the
- *  adapter saw exit while starting. A provider refusing a request, a timeout, a store refusal or
- *  Orca's own fault names none: the child being gone now says nothing about why. */
+/** Only typed refusal or observed provider exit identifies cause; cleanup absence alone cannot. */
 function failedAcquisitionDetails(
   error: unknown
 ): AgentSessionRefusalDetailsByCode['agent_session_operation_invalid'] | undefined {
@@ -123,8 +121,9 @@ function failedAcquisitionDetails(
   if (argumentProblem) {
     return { reason: 'attachFailed', argumentProblem }
   }
-  if (error instanceof AgentSessionAcquisitionRefusal) {
-    return { reason: error.reason, ...(error.account ? { account: error.account } : {}) }
+  const typed = startupAcquisitionRefusal(error)
+  if (typed) {
+    return { reason: typed.reason, ...(typed.account ? { account: typed.account } : {}) }
   }
   if (isAgentSessionPreSpawnError(error) && error.reason) {
     return { reason: error.reason }
@@ -132,19 +131,20 @@ function failedAcquisitionDetails(
   if (isExitProvenAcquisitionFailure(error) && providerExecutableMissing(error)) {
     return { reason: 'cliMissing' }
   }
+  if (isExitProvenAcquisitionFailure(error) && providerLaunchFolderMissing(error)) {
+    return { reason: 'launchFolderMissing' }
+  }
   if (isExitProvenAcquisitionFailure(error) && providerExitObserved(error)) {
     return { reason: 'providerStartFailed' }
   }
   return undefined
 }
 
-/** A failed acquisition answered as a refusal on the first call, in the shape its replay takes;
- *  null leaves the error to the store-failure classification. */
+/** Match replay refusal shape; null defers to store-failure classification. */
 export function failedAcquisitionRefusal(
   error: unknown,
   wording: FailedAcquisitionWording
 ): { ok: false; refusal: AgentSessionWireRefusal } | null {
-  // A proven exit is a settled failure, answered in the shape its ledger row replays.
   if (
     error instanceof AgentSessionAcquisitionRefusal ||
     isExitProvenAcquisitionFailure(error) ||
@@ -159,9 +159,7 @@ export function failedAcquisitionRefusal(
   return null
 }
 
-/** A start that failed before any process still throws, in the sentence its replay reads: the
- *  error's own text is Orca's or the refusing site's, so it goes to the log. A message that is
- *  itself a code keeps it, since the wire routes on it. */
+/** Word pre-spawn errors like their replays, retaining raw diagnostics in logs and routing codes unchanged. */
 export function preSpawnFailureInWords(error: unknown, wording: FailedAcquisitionWording): unknown {
   if (!isAgentSessionPreSpawnError(error) || /^[a-z0-9_]+$/.test(error.message)) {
     return error
@@ -171,7 +169,7 @@ export function preSpawnFailureInWords(error: unknown, wording: FailedAcquisitio
   })
 }
 
-/** Only a durably failed operation says anything about retrying under a new one. */
+/** New-operation retry requires a durably failed operation. */
 export function failedCreateRefusal(
   refusal: AgentSessionWireRefusal,
   status: AgentSessionOperationOutcome['status'],
@@ -187,8 +185,7 @@ export function failedCreateRefusal(
     : { ok: false, refusal }
 }
 
-/** The one place a create refusal learns its verdict: from the durable row this operation
- *  settled to, so every refusal shape answers the same fact and no site can forget the stamp. */
+/** Stamp all refusal shapes from the same durable operation verdict. */
 export function stampFailedCreateOwnerVerdict(
   store: {
     getOperationRow: (callerKey: string, operationId: string) => AgentSessionOperationRow | null

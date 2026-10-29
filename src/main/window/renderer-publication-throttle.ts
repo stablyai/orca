@@ -8,7 +8,7 @@ export type RendererPublicationThrottleTarget = {
   ) => Promise<unknown>
 }
 
-// Why: an empty rect sets no capture-size hint, which could resize a hidden view (DCHECKed for stayHidden).
+// Empty capture rect avoids a size hint that could resize hidden views (stayHidden DCHECK).
 const REHIDE_CAPTURE_RECT = { x: 0, y: 0, width: 0, height: 0 }
 
 export class RendererPublicationThrottle {
@@ -49,9 +49,9 @@ export class RendererPublicationThrottle {
             return
           }
           target.setBackgroundThrottling(true)
-          // Why: isFocused needs the (embedder's) window to be key, which a cover takes, so a focused target has no swallowed hide.
+          // Focused targets have no swallowed hide: embedder key status is lost under a cover.
           if (target.isFocused?.() !== true) {
-            // Why: re-throttling never replays a hide swallowed while leased; a stayHidden capture's completion does.
+            // Re-throttling cannot replay a swallowed hide; stayHidden capture completion can.
             target.capturePage(REHIDE_CAPTURE_RECT, { stayHidden: true }).catch(() => {})
           }
         } catch {
@@ -63,5 +63,5 @@ export class RendererPublicationThrottle {
   }
 }
 
-// Why: one instance per process, or two owners of the same window would re-throttle it under each other's lease.
+// Share one process-wide owner so independent leases cannot re-throttle each other.
 export const rendererPublicationThrottle = new RendererPublicationThrottle()

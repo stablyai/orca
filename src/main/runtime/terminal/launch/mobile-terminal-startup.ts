@@ -16,6 +16,10 @@ import {
 import { resolveResumeLaunchRecipe } from '../../../../shared/tui-agent-launch-defaults'
 import { resolveAgentStartupPlanInputs } from '../../../../shared/agent-startup-plan-inputs'
 import {
+  resolveWslHostAgentLaunchInputs,
+  resolveWslHostAgentResumeInputs
+} from '../../wsl-host-agent-terminal-launch'
+import {
   agentLaunchQuotingShell,
   type AgentLaunchRuntime
 } from '../../../../shared/agent-launch-runtime'
@@ -70,7 +74,7 @@ export abstract class OrcaRuntimeWithResolveMobileSessionTerminalCommand extends
     if (!this.store || !providerSession || !isResumableTuiAgent(record.agent)) {
       return null
     }
-    // Why: a session id names a transcript on the machine that captured it; elsewhere it cannot resume.
+    // Transcript ids belong to their capture host; another machine cannot resume them.
     if (
       record.connectionId !== undefined &&
       normalizeOriginConnectionId(record.connectionId) !==
@@ -84,15 +88,18 @@ export abstract class OrcaRuntimeWithResolveMobileSessionTerminalCommand extends
     }
     const launchRuntime = this.resolveAgentLaunchRuntime(workspace, record.agent)
     const { launchConfig } = record
-    const startupPlan = buildAgentResumeStartupPlan({
+    // Throws WslHostWindowsOnlyAgentError; callers choose refusal or a plain-shell restore.
+    const resumeInputs = resolveWslHostAgentResumeInputs({
       agent: record.agent,
       providerSession,
       cmdOverrides: settings.agentCmdOverrides ?? {},
       ...resolveResumeLaunchRecipe(launchConfig),
       platform: launchRuntime.platform,
       shell: agentLaunchQuotingShell(launchRuntime),
-      isRemote: Boolean(workspace.connectionId)
+      isRemote: Boolean(workspace.connectionId),
+      launchCwd: workspace.path
     })
+    const startupPlan = buildAgentResumeStartupPlan(resumeInputs)
     if (!startupPlan) {
       return null
     }
@@ -130,15 +137,17 @@ export abstract class OrcaRuntimeWithResolveMobileSessionTerminalCommand extends
     }
     const launchRuntime = this.resolveAgentLaunchRuntime(workspace, opts.agent)
     const startupPlan = buildAgentStartupPlan({
-      ...resolveAgentStartupPlanInputs({
-        agent: opts.agent,
-        settings,
-        // Why: mobile may be iOS while the shell host is Windows/macOS/Linux or SSH Linux; quote for the host shell.
-        platform: launchRuntime.platform,
-        shell: agentLaunchQuotingShell(launchRuntime),
-        // Why: SSH runs the CLI through the relay shim (plain `orca`), so the Linux-only `orca-ide` rename must not apply.
-        isRemote: Boolean(workspace.connectionId)
-      }),
+      ...resolveWslHostAgentLaunchInputs(
+        resolveAgentStartupPlanInputs({
+          agent: opts.agent,
+          settings,
+          // Quote for the execution host, even when the mobile client runs another OS.
+          platform: launchRuntime.platform,
+          shell: agentLaunchQuotingShell(launchRuntime),
+          // SSH uses relay-shim orca, never the local Linux orca-ide rename.
+          isRemote: Boolean(workspace.connectionId)
+        })
+      ),
       prompt: opts.agentPrompt ?? '',
       allowEmptyPromptLaunch: true
     })
@@ -151,8 +160,7 @@ export abstract class OrcaRuntimeWithResolveMobileSessionTerminalCommand extends
     return {
       command: startupPlan.launchCommand,
       env: startupPlan.env,
-      // Why: a real-home Codex resume strips inherited CODEX_HOME via
-      // envToDelete; dropping it here would resume against the wrong home.
+      // Codex real-home resumes need envToDelete to strip inherited CODEX_HOME.
       envToDelete: opts.envToDelete,
       launchConfig: startupPlan.launchConfig,
       launchAgent: opts.agent,

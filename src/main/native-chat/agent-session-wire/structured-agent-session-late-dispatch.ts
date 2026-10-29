@@ -8,9 +8,7 @@ import type { StructuredAgentSessionMutationContext } from './structured-agent-s
 import { structuredAgentSessionConversationFence } from './structured-agent-session-provider-child'
 import { whileStructuredAgentSessionHandingOver } from './structured-agent-session-handing-over'
 
-/** Settle a provider-proven outcome independently of an in-flight client mutation. `unknown` is
- *  released doubt: the provider let the send go unanswered, so nothing re-sends it. The send reads
- *  held until its row settles; a failed write leaves it unanswered, which clients learn at once. */
+/** Never resend unknown outcomes. Explicit unrun proof requeues cards; direct sends retain refusal. */
 export async function settleStructuredAgentSessionLateDispatch(
   context: StructuredAgentSessionMutationContext,
   input: {
@@ -21,6 +19,7 @@ export async function settleStructuredAgentSessionLateDispatch(
     | ({
         state: 'rejected'
         answeredInTurn?: AgentJournalAnsweredTurnIdentity
+        unrun?: true
       } & AgentJournalDispatchRejection)
     | { state: 'unknown'; reason: string }
   )
@@ -30,6 +29,11 @@ export async function settleStructuredAgentSessionLateDispatch(
     return
   }
   const fence = structuredAgentSessionConversationFence(context.deps.store, input.sessionId)
+  const unrunCard =
+    'state' in input &&
+    input.state === 'rejected' &&
+    input.unrun === true &&
+    session.journal.submission(input.clientMessageId)?.queuedMessageId !== undefined
   const settlement: ResolveDispatchInput =
     'providerIdentity' in input
       ? {
@@ -50,12 +54,14 @@ export async function settleStructuredAgentSessionLateDispatch(
             clientMessageId: input.clientMessageId,
             state: 'rejected',
             reason: input.reason,
-            rejection: input.rejection,
+            rejection: unrunCard
+              ? { ...input.rejection, neverReachedAgent: true }
+              : input.rejection,
             ...(input.answeredInTurn ? { answeredInTurn: input.answeredInTurn } : {}),
             fence
           }
   try {
-    // The journal queue drains before close; the host queue would defer this past teardown.
+    // Use the journal queue: it drains before close, while host serialization may run after teardown.
     await whileStructuredAgentSessionHandingOver(
       session.journal,
       input.clientMessageId,

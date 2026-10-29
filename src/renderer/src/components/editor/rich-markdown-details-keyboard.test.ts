@@ -276,8 +276,7 @@ import { normalizeEmptyListItems } from './rich-markdown-normalize'
 }
 
 {
-  // Crash report 0e46c048: Vietnamese prose with a soft line break, an inline code
-  // span and an inline image, which the markdown parser nests inside one paragraph.
+  // Crash 0e46c048 combined Vietnamese soft-wrapped prose, code and an image in one paragraph.
   const CRASH_SOURCE =
     'Trình duyệt chỉ cho phép cài từ Web Store.\nnh `.crx` (tham chiếu, KHÔNG chặn) ![ảnh](chrome.png) và tiếp tục\n'
 
@@ -315,8 +314,7 @@ import { normalizeEmptyListItems } from './rich-markdown-normalize'
       const editor = createRichMarkdownEditorFromSource(CRASH_SOURCE)
 
       try {
-        // Any ReplaceStep that rebuilds the paragraph runs NodeType.checkContent on
-        // the reassembled content — the exact frame the crash report bottoms out in.
+        // Rebuilding the paragraph invokes NodeType.checkContent, matching the crash frame.
         expect(() => editor.view.dispatch(editor.state.tr.insertText('X', 5, 8))).not.toThrow()
       } finally {
         editor.destroy()
@@ -327,8 +325,7 @@ import { normalizeEmptyListItems } from './rich-markdown-normalize'
       const editor = createRichMarkdownEditorFromSource(CRASH_SOURCE)
 
       try {
-        // Why: serialization never runs NodeType.checkContent, so the markdown
-        // matches byte-for-byte even when the document is schema-invalid.
+        // Serialization can match invalid documents; explicitly check schema validity too.
         expect(() => editor.state.doc.check()).not.toThrow()
         expect(editor.getMarkdown().trimEnd()).toBe(CRASH_SOURCE.trimEnd())
       } finally {
@@ -337,8 +334,7 @@ import { normalizeEmptyListItems } from './rich-markdown-normalize'
     })
 
     it('keeps a standalone image inside a paragraph rather than directly under the doc', () => {
-      // Upstream's paragraph parser hoists a lone image out of its paragraph, which
-      // leaves an inline node as a direct child of `doc` once images are inline.
+      // Hoisting a standalone inline image would leave it directly under doc, violating the schema.
       const editor = createRichMarkdownEditorFromSource('Intro\n\n![shot](shot.png)\n\nOutro\n')
 
       try {

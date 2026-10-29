@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { NativeChatBlock, NativeChatMessage } from '../../../../shared/native-chat-types'
-import { foldToolMessages } from './native-chat-tool-fold'
+import { foldToolMessages } from '../../../../shared/native-chat/tools/native-chat-tool-fold'
 import { nativeChatTaskListState } from './native-chat-task-list-state'
 
 function message(id: string, blocks: NativeChatBlock[]): NativeChatMessage {

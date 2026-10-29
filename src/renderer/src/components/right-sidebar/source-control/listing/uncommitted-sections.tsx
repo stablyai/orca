@@ -9,7 +9,7 @@ import {
   getUnstageAllPaths,
   isStageableStatusEntry,
   type DiscardAllArea
-} from '../commit/discard-all-sequence'
+} from '../../../../../../shared/source-control-discard-all-sequence'
 import { ActionButton } from './action-button'
 import { SectionHeader } from './section-header'
 import { SourceControlSectionFileList } from './section-file-list'
@@ -19,7 +19,7 @@ import {
   type SourceControlDisplaySectionId,
   type SourceControlDisplaySectionArea,
   type SourceControlSectionViewAction
-} from './section-order'
+} from '../../../../../../shared/source-control-section-order'
 import type {
   RenderableSourceControlNode,
   RenderableSubmoduleListItem
@@ -92,8 +92,7 @@ export function SourceControlUncommittedSections(props: {
       {props.displaySections.map((section) => {
         const { area, id, items } = section
         const isCollapsed = props.collapsedSections.has(id)
-        // Why: bulk stage/unstage act on the *unfiltered* group; the +/- hides while filtering to avoid acting on more than what's shown.
-        // Why: visibility and execution resolve paths via the same eligibility rules, so the button never shows for a set the handler would filter to empty.
+        // Bulk actions use unfiltered groups; hide them while filtering and share execution eligibility to avoid empty actions.
         const actionSection = props.unfilteredDisplaySectionsById.get(id) ?? section
         const actionItems = actionSection.items
         const stageAllPaths = actionItems.filter(isStageableStatusEntry).map((entry) => entry.path)

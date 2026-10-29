@@ -1,6 +1,4 @@
-// A published workspace read back into the layout model, so a window can build today's records
-// from a frame with the same Serializer main saves with. What the frame does not carry comes back
-// absent: a pane's incarnation and sleeping record, closed-tab records.
+// Rebuild compatible window records from published layout using main’s Serializer. Missing incarnation/sleeping/closed-tab facts remain absent.
 
 import type { LayoutEditorView } from './layout-editor-view'
 import { pickStoredFields } from './stored-record-fields'
@@ -86,10 +84,7 @@ export function workspaceLayoutFromPublished(published: PublishedWorkspaceLayout
   }
 }
 
-/**
- * Published workspaces as one model. `hostId` only names the host of tabs a frame does not stamp;
- * every published tab carries its own.
- */
+/** Published tabs carry their own host; hostId is only the fallback for unstamped tabs. */
 export function workspaceLayoutModelFromPublished(
   hostId: ExecutionHostId,
   layouts: Readonly<Record<string, PublishedWorkspaceLayout>>
@@ -100,7 +95,7 @@ export function workspaceLayoutModelFromPublished(
       Object.entries(layouts).map(([key, layout]) => [key, workspaceLayoutFromPublished(layout)])
     ),
     records: {},
-    // Today's window saves a row list for every workspace it shows, empty or not.
+    // Match window saves: every shown workspace retains a row list, even when empty.
     legacy: {
       terminalRowOwners: Object.fromEntries(Object.keys(layouts).map((key) => [key, true]))
     }

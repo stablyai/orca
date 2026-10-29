@@ -14,6 +14,7 @@ import {
   onRuntimeEnvironmentRevisionsChanged
 } from './runtime-environment-revision'
 import { createBrowserUuid } from '@/lib/browser-uuid'
+import { decodeBase64Bytes } from '@/lib/base64-bytes'
 
 const MAX_CACHE_BYTES = 24 * 1024 * 1024
 const MAX_CACHE_ENTRIES = 96
@@ -184,7 +185,7 @@ export function migrateLegacyJiraImages(content: string, target: RuntimeClientTa
         return `${prefix}${suffix}`
       }
       try {
-        const bytes = Uint8Array.from(atob(encoded), (char) => char.charCodeAt(0))
+        const bytes = decodeBase64Bytes(encoded)
         if (bytes.byteLength === 0 || bytes.byteLength > JIRA_IMAGE_MAX_BYTES) {
           return `${prefix}${suffix}`
         }

@@ -70,8 +70,7 @@ export abstract class OrcaRuntimeWithHasExactPersistedTerminalSurfaceIdentity ex
     tabId: string,
     leafId: string
   ): boolean {
-    // Why own partition: emptying a rotated runtime partition re-routes reads to an older copy
-    // that can still list a surface retirement just removed.
+    // Emptying a rotated partition reroutes reads to an older copy that may still list the retired surface.
     const layout = this.getPersistedSessionListingTerminalTab(
       worktreeId,
       tabId,

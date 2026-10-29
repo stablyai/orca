@@ -782,8 +782,7 @@ describe('worktree remote runtime mutations', () => {
     expect(mockApi.worktrees.resolvePrBase).not.toHaveBeenCalled()
     expect(mockApi.worktrees.updateMeta).not.toHaveBeenCalled()
 
-    // Drop the rival host row so the same lookup key now has one owner: a second call must run the
-    // lookup for real, not silently no-op on a stale in-flight marker left by the skipped first call.
+    // Remove twin ambiguity and retry; skipped lookups must not leave stale in-flight markers.
     store.setState({ worktreesByRepo: { 'repo-shared': [ownedWorktree] } } as Partial<AppState>)
 
     await store.getState().ensureHostedReviewPushTarget(worktreeId)

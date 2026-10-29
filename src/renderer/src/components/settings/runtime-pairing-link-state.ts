@@ -4,8 +4,7 @@ export const RUNTIME_PAIRING_LOOPBACK_ADDRESS = '127.0.0.1'
 
 export type RuntimePairingIntent = 'another' | 'local' | 'custom'
 
-// Why: only "This computer only" declines off-host reach. Custom is the SSH-tunnel/reverse-proxy field, so
-// even a loopback-looking custom address (`127.0.0.1:8443`) needs the listener open behind the tunnel.
+// Only explicit local intent forbids network reach; custom loopback addresses may front SSH/reverse-proxy tunnels.
 export function runtimePairingReachForIntent(intent: RuntimePairingIntent): RuntimePairingReach {
   return intent === 'local' ? 'this-computer' : 'network'
 }
@@ -16,8 +15,7 @@ export type RuntimePairingUrlGeneratorProps = {
   showGeneratorForm?: boolean
 }
 
-// Why: pairing tokens remain in the main-process registry, so the last link can
-// survive settings navigation without writing credential material to storage.
+// Main retains pairing tokens; cache navigation state without persisting credential material.
 export const runtimePairingLinkCache: {
   selectedAddress: string
   customAddress: string

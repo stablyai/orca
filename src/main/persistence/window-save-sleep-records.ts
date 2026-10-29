@@ -1,5 +1,4 @@
-// A window save in a build where the window still writes the session's resume records: main alone
-// writes and resumes a workspace sleep's records, so the save keeps main's and drops the window's.
+// Legacy renderer saves may author other resume state; workspace-sleep records remain main-owned.
 
 import type { SleepingAgentSessionRecord } from '../../shared/agent-session-resume'
 import { isWorkspaceSleepRecord } from '../../shared/workspace-sleep'
@@ -16,10 +15,7 @@ function withMainSleepRecords(stored: Records | undefined, saved: Records): Reco
   return Object.fromEntries([...kept, ...main])
 }
 
-/**
- * The window never writes or clears a workspace sleep's records: a full save that omits the field
- * and a patch that names it, even as undefined, both keep main's. A patch that omits it is left be.
- */
+/** Preserve main-owned sleep records even through omission/undefined; unrelated patches remain untouched. */
 export function windowSaveKeepingMainSleepRecords<
   T extends WorkspaceSessionState | WorkspaceSessionPatch
 >(stored: WorkspaceSessionState, save: T, kind: 'set' | 'patch'): T {

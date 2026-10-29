@@ -6,9 +6,7 @@ import type { WorkspacePort } from '../../../shared/workspace-ports'
 import { useAppStore } from '@/store'
 import { localhostWorktreeLabelRouteForPort } from './workspace-port-localhost-label'
 
-// Why: the port → repo → worktree → project resolution feeding
-// localhostWorktreeLabelRouteForPort was duplicated across every ports surface;
-// this is the single source for both reactive and imperative call sites.
+// Share port → repo → workspace → project routing across reactive and imperative surfaces.
 type LocalhostLabelLookupState = {
   settings?: Pick<GlobalSettings, 'localhostWorktreeLabelsEnabled'> | null
   repos?: readonly Repo[]

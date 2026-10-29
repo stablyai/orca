@@ -4,12 +4,7 @@ import {
   pruneClosedTerminalTabTombstones
 } from './closed-terminal-tab-tombstones'
 
-/** Main's record of a terminal pane its layout dropped, while the pane's terminal may still run.
- *
- *  Why it must exist: in a layout-owner build main's close removes the pane before its terminal
- *  exits, so the exit can no longer learn from the layout which pane's records it retires. Only
- *  main's layout write writes it; only exit cleanup reads it, by terminal id and incarnation both.
- *  It dies by TTL or the per-host cap, as closed-tab records do. Older builds ignore the field. */
+/** Remember layout-dropped panes until terminal exit can retire their records by PTY/incarnation. Main layout writes, exit cleanup reads; bound by TTL/per-host cap. Older builds ignore this. */
 export type ClosedTerminalPane = {
   ptyId: string
   incarnationId: string
@@ -38,7 +33,6 @@ export function recordClosedTerminalPanes(
   return pruneClosedTerminalTabTombstones(next, now)
 }
 
-/** The pane a terminal held when main's layout dropped it, within the TTL; null when none. */
 export function closedTerminalPaneOf(
   map: ClosedTerminalPanesByPaneKey | undefined,
   ptyId: string,

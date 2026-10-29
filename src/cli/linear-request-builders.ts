@@ -59,7 +59,7 @@ export function getLinearListFilter(
 }
 
 export function getPriorityFlag(flags: Map<string, string | boolean>, name: string): number {
-  const value = getRequiredStringFlag(flags, name).toLocaleLowerCase()
+  const value = getRequiredStringFlag(flags, name).toLowerCase()
   const priority = LINEAR_PRIORITY_VALUES.get(value)
   if (priority === undefined) {
     throw new RuntimeClientError(

@@ -53,7 +53,9 @@ describe('word selection uses the rendered xterm cell range', () => {
     ['🇰🇷 done', 0, '🇰🇷', 0, 2],
     ['가 나', 2, ' ', 2, 1],
     ['before /tmp/file.ts after', 10, '/tmp/file.ts', 7, 12],
-    ['', 6, ' ', 6, 1]
+    ['echo $HOME', 7, '$HOME', 5, 5],
+    ['see (a.ts)', 6, 'a.ts', 5, 4],
+    ['', 6, ' '.repeat(60), 0, 60]
   ] as const)('selects %s at cell %i', async (text, col, expected, start, length) => {
     const f = await fixture(text)
     seedWordSelection(f.scope, col, 0)

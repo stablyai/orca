@@ -1,0 +1,8 @@
+{
+  "ios": {
+    "NSCameraUsageDescription": "允许 Orca 使用相机扫描二维码。",
+    "NSLocalNetworkUsageDescription": "Orca 会连接到局域网内的桌面应用。",
+    "NSMicrophoneUsageDescription": "允许 Orca 使用麦克风进行语音听写，录音将发送到已配对的桌面进行转写。",
+    "NSPhotoLibraryUsageDescription": "允许 Orca 将图库中的照片附加到已配对桌面的终端会话。"
+  }
+}

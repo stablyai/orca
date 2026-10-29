@@ -58,8 +58,7 @@ function expectFloatingSelection(
   expect(floatingGroup?.activeTabId).toBe(floatingTab?.id)
 }
 
-// The global selection fields project the active workspace. Selecting in another workspace — the
-// floating panel is the one that is always on screen beside the active one — must not move them.
+// Only active workspace projects global selection; visible floating-panel selection stays workspace-local.
 describe('selection in a workspace other than the active one', () => {
   it('selects a created tab in its own workspace without moving the global tab', () => {
     const store = createAppStore()
@@ -91,7 +90,7 @@ describe('selection in a workspace other than the active one', () => {
     try {
       const mainFileId = openMarkdown(store, 'wt-1')
       const floatingFileId = openMarkdown(store, FLOATING_TERMINAL_WORKTREE_ID)
-      // A layout-owner build draws the tabs from main's frame before they can be selected.
+      // Layout-owner frames must draw tabs before selection.
       await main.settle()
       store.getState().setActiveFile(mainFileId)
 
@@ -130,7 +129,7 @@ describe('selection in a workspace other than the active one', () => {
   it('records a browser selection in its own workspace without moving the global surface', async () => {
     const store = createAppStore()
     seedStore(store, { activeWorktreeId: 'wt-1' })
-    // A layout-owner build draws the tabs from main's frame before they can be selected.
+    // Layout-owner frames must draw tabs before selection.
     const main = await drawTabsFromMain(store)
     const mainTab = store.getState().createBrowserTab('wt-1', 'https://main.example.com')
     const floatingTab = store

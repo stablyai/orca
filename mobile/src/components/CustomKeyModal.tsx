@@ -2,6 +2,7 @@ import { useCallback, useMemo, useState } from 'react'
 import { View, Text, Pressable, TextInput, Switch } from 'react-native'
 import { ChevronLeft } from 'lucide-react-native'
 import { colors } from '../theme/mobile-theme'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { BottomDrawer } from './BottomDrawer'
 import {
   buildTerminalShortcutKey,
@@ -15,18 +16,14 @@ import { updateStoredCustomKeys, type CustomKey } from '../terminal/terminal-cus
 
 type Step = 'choose-type' | 'shortcut-combo' | 'special-keys' | 'text-macro'
 
-// Why: Alt is rendered with the ⌥ glyph because on macOS hosts the Option key
-// is the only modifier that produces an ESC-prefixed byte sequence terminals
-// can read. Cmd is intentionally absent — macOS swallows it before keystrokes
-// reach the shell, so there's nothing to encode.
+// Alt/Option emits terminal-readable ESC prefix; Cmd is absent because macOS swallows it before shell. Render Alt as ⌥.
 const SHORTCUT_MODIFIERS: { id: TerminalShortcutModifier; label: string; glyph?: string }[] = [
   { id: 'ctrl', label: 'Ctrl' },
   { id: 'alt', label: 'Alt', glyph: '⌥' },
   { id: 'shift', label: 'Shift' }
 ]
 
-// Why: special keys are grouped by purpose so the picker reads as three small
-// fixed grids rather than one ragged wrap row that clipped F7-F12.
+// Group keys into three fixed grids; ragged wrapping clipped F7–F12.
 const SPECIAL_KEY_GROUPS: { title: string; ids: string[]; columns: number }[] = [
   {
     title: 'Editing',
@@ -57,6 +54,7 @@ type Props = {
 }
 
 export function CustomKeyModal({ visible, onClose, onKeysChanged, onManageShortcuts }: Props) {
+  useMobileColorScheme()
   const [step, setStep] = useState<Step>('choose-type')
   const [shortcutKey, setShortcutKey] = useState('c')
   const [shortcutModifiers, setShortcutModifiers] = useState<TerminalShortcutModifier[]>(['ctrl'])
@@ -65,8 +63,7 @@ export function CustomKeyModal({ visible, onClose, onKeysChanged, onManageShortc
   const [macroEnter, setMacroEnter] = useState(true)
   const [previousVisible, setPreviousVisible] = useState(visible)
 
-  // Why: reset before the opening commit so the drawer does not flash the last
-  // custom-key draft; keep close state unchanged for the slide-out animation.
+  // Reset draft before opening commit to avoid old-key flash; retain close state through slide-out.
   if (visible !== previousVisible) {
     setPreviousVisible(visible)
     if (visible) {
@@ -83,17 +80,12 @@ export function CustomKeyModal({ visible, onClose, onKeysChanged, onManageShortc
     async (key: Omit<CustomKey, 'id'>) => {
       const newKey: CustomKey = { ...key, id: `custom-${Date.now()}` }
       let updated: CustomKey[]
-      // Caught here because both callers are `void addKey(...)`, which leaves a rejection nowhere
-      // to go. On the page this key is allowlisted and its write rejects for size — the contract
-      // `page-async-storage` states, and the one ruling 33.6 extends to a key `init` could not
-      // carry at all — so an uncaught save here reaches the document's unhandled-rejection
-      // handler, which reports a page fault and drops the generation for a key nobody could add.
-      // Every other allowlisted writer in this closure already catches its own save.
+      // Catch both void addKey callers: page storage can refuse size/unseeded-key writes (ruling 33.6), and uncaught rejection would fault/drop generation.
+      // Other allowlisted writers in this closure already catch saves.
       try {
         updated = await updateStoredCustomKeys((keys) => [...keys, newKey])
       } catch (error) {
-        // Neither reported nor closed: a drawer that dismissed itself and announced the key would
-        // put a row on the accessory bar that no store holds and the next load would not have.
+        // Keep failed-save drawer open without announcing success; otherwise accessory row would lack persisted key.
         console.warn('[custom-keys] the store would not take this key', error)
         return
       }
@@ -131,8 +123,7 @@ export function CustomKeyModal({ visible, onClose, onKeysChanged, onManageShortc
 
   const handleShortcutKeyInput = useCallback((value: string) => {
     if (value === '') {
-      // Why: allow the field to go empty so backspace works; the Save button
-      // stays disabled until a valid key is entered.
+      // Allow empty field for backspace; Save still requires valid key.
       setShortcutKey('')
       return
     }

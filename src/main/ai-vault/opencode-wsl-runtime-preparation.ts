@@ -19,7 +19,8 @@ import {
 import { REMOTE_NODE_RUNTIME_READY } from '../ssh/orcad-remote-node-runtime-report'
 import { getRemoteHostPlatform } from '../ssh/ssh-remote-platform'
 import { runWslProcess, type WslSpec } from '../wsl/wsl-runner'
-import { filterPathsToRunningWslDistrosAsync } from '../wsl-running-path-filter'
+import { describeWslProcessFailure } from '../wsl/wsl-process-failure'
+import { admitWslTranscriptPath } from '../native-chat/wsl-transcript-running-admission'
 import type { OpenCodeWslRuntime } from './session-scanner-opencode-wsl-runtime'
 
 const preparation = new Map<string, { value: OpenCodeWslRuntime; expires: number }>()
@@ -27,7 +28,7 @@ const downloads = new Map<ServerTarget, Promise<string>>()
 const PREPARATION_TIMEOUT_MS = 180_000
 const SQLITE_PROBE = `const sqlite=require('node:sqlite');if(!(${NODE_SQLITE_READER_API_SOURCE})(sqlite))throw Error('SQLite reader API missing');const db=new sqlite.DatabaseSync(':memory:');db.prepare('SELECT 1').get();db.close();process.stdout.write(process.execPath)`
 
-/** Only running distro roots enter here; a slow first install must not hold up local history. */
+/** Prepare running distros without letting a slow first install block local history. */
 export async function prepareOpenCodeWslReaders(
   roots: readonly string[]
 ): Promise<OpenCodeWslRuntime[]> {
@@ -80,15 +81,8 @@ async function prepare(distro: string): Promise<OpenCodeWslRuntime> {
   const signal = AbortSignal.timeout(PREPARATION_TIMEOUT_MS)
   const run = async (spec: WslSpec, timeoutMs = 15_000): Promise<string> => {
     signal.throwIfAborted()
-    const running = await waitForPromiseWithSignal(
-      filterPathsToRunningWslDistrosAsync([toWindowsWslUncPath('/', distro)], {
-        requireConfirmed: true
-      }),
-      signal
-    )
-    if (running.length === 0) {
-      throw new Error(`WSL distro ${distro} is not running. Start it to read its history.`)
-    }
+    // Each `--exec` would boot a distro that stopped since the roots were listed.
+    await waitForPromiseWithSignal(admitWslTranscriptPath(toWindowsWslUncPath('/', distro)), signal)
     signal.throwIfAborted()
     const result = await runWslProcess({
       ...spec,
@@ -97,7 +91,7 @@ async function prepare(distro: string): Promise<OpenCodeWslRuntime> {
       maxOutputBytes: 16 * 1024
     })
     if (result.code !== 0 || result.timedOut) {
-      throw new Error(`WSL SQLite reader setup failed: ${result.stderr.trim() || 'command failed'}`)
+      throw new Error(`WSL SQLite reader setup failed: ${describeWslProcessFailure(result)}`)
     }
     return result.stdout.trim()
   }
@@ -148,7 +142,7 @@ async function prepare(distro: string): Promise<OpenCodeWslRuntime> {
     if (!home.startsWith('/')) {
       throw new Error('WSL did not provide an absolute home directory.')
     }
-    // Same layout and checks as an SSH host's store; a legacy vault-sqlite/ Bun is left alone.
+    // Reuse SSH runtime-store validation; leave legacy vault-sqlite Bun installations untouched.
     const host = getRemoteHostPlatform(arch === 'x86_64' ? 'linux-x64' : 'linux-arm64')
     const runtimeDir = nodeRuntimeStoreDir(host, `${home}/.cache/orca`, target)
     executable = posixNodeRuntimeExecutable(host, runtimeDir)

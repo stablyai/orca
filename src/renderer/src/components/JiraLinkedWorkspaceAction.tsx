@@ -8,7 +8,7 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { translate } from '@/i18n/i18n'
-import type { JiraIssue } from '../../../shared/jira-types'
+import type { JiraIssue } from '../../../shared/jira/jira-types'
 import type { Worktree } from '../../../shared/worktree/types'
 
 export function JiraLinkedWorkspaceAction({
@@ -24,8 +24,11 @@ export function JiraLinkedWorkspaceAction({
 }): React.JSX.Element {
   const label =
     workspaces.length === 1
-      ? translate('jira.workspace.single', '1 workspace linked to {{key}}', { key: issue.key })
-      : translate('jira.workspace.count', '{{count}} workspaces linked to {{key}}', {
+      ? translate('jira.workspace.linkedCount_one', '{{count}} workspace linked to {{key}}', {
+          count: workspaces.length,
+          key: issue.key
+        })
+      : translate('jira.workspace.linkedCount_other', '{{count}} workspaces linked to {{key}}', {
           count: workspaces.length,
           key: issue.key
         })

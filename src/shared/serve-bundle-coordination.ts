@@ -1,7 +1,4 @@
-/**
- * The record a desktop install and `orca serve --supervise` share to park a supervised server
- * while macOS replaces the app bundle both run from. Lives outside the bundle, keyed by its path.
- */
+/** Keep bundle-keyed coordination outside the macOS app being replaced so desktop installs can park supervised serve processes. */
 import { createHash } from 'node:crypto'
 import { join } from 'node:path'
 
@@ -142,10 +139,7 @@ export function isLiveRegistration(
   return now - registration.heartbeatAt < SERVE_SUPERVISOR_HEARTBEAT_STALE_MS
 }
 
-/**
- * Whether a supervisor must keep its server stopped. Every way out is evidence or a deadline, so
- * a crashed installer or supervisor never leaves the service parked for good.
- */
+/** Release only on evidence or deadline so crashed installers/supervisors cannot park services forever. */
 export function decideServeParkHold(
   record: ServeParkRecord | null,
   facts: { now: number; installerAlive: boolean; bundleNow: string }

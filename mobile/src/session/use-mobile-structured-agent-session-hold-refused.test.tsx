@@ -36,7 +36,7 @@ const SNAPSHOT: AgentSessionSubscribeEvent = {
     window: {
       oldest: { epoch: 'epoch-1', sequence: 1 },
       newest: { epoch: 'epoch-1', sequence: 1 },
-      nextCursor: { epoch: 'epoch-1', sequence: 2 }
+      nextCursor: { epoch: 'epoch-1', sequence: 1 }
     },
     liveCursor: { epoch: 'epoch-1', sequence: 1 },
     hasOlder: false,
@@ -71,8 +71,13 @@ it('subscribes when an older host refuses the hold, and shows the transcript (P2
     onData(SNAPSHOT)
     return () => undefined
   })
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: an RPC client stub with the two members the hook calls.
-  const client = { sendRequest, subscribe } as unknown as RpcClient
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the hook's request, subscription and connection members are provided.
+  const client = {
+    sendRequest,
+    subscribe,
+    getState: () => 'connected',
+    onStateChange: () => () => {}
+  } as unknown as RpcClient
   function Harness(): null {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the hook's options, of which this test supplies the ones it reads.
     hook = useMobileStructuredAgentSession({

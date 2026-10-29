@@ -19,8 +19,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@/lib/worktree-runtime-owner', () => ({
   getExecutionHostIdForWorktree: mocks.getExecutionHostIdForWorktree
 }))
-// Why the partial mock: only the worktree-owner answer is staged here; the repo fallback must be
-// the real resolver, since it is what this suite pins.
+// Stage only workspace ownership; repo fallback must use the real resolver.
 vi.mock('@/lib/connection-owner-resolution', async (importOriginal) => ({
   ...(await importOriginal<typeof ConnectionOwnerResolutionModule>()),
   getConnectionIdFromState: mocks.getConnectionIdFromState
@@ -35,7 +34,6 @@ vi.mock('@/lib/web-client-location', () => ({
 vi.mock('@/runtime/local-runtime-capabilities', () => ({
   readLocalRuntimeCapabilitiesOrUnknown: mocks.readLocalRuntimeCapabilitiesOrUnknown
 }))
-// Why: the planner is the only route consumer; its settle loop is out of scope here.
 vi.mock('@/lib/structured-agent-launch-settlement', () => ({
   settleStructuredAgentLaunch: vi.fn()
 }))
@@ -222,11 +220,9 @@ describe('buildAgentLaunchRouteInput', () => {
       workspace: { kind: 'floating', worktreeId: FLOATING_TERMINAL_WORKTREE_ID }
     })
     expect(input.workspaceKind).toBe('floating')
-    // Still skipped: floating has no project row, so there is no local runtime preference to read.
     expect(input.projectRuntime).toBeUndefined()
     expect(mocks.getLocalProjectExecutionRuntimeContext).not.toHaveBeenCalled()
-    // Feasible now: the workspace resolves to its configured directory, so a session can be
-    // filed under it. Skipping the project runtime is about the missing repo row, not a refusal.
+    // A folder workspace supplies its root without a repo row, so only project-runtime lookup is skipped.
     expect(
       structuredFeasibleFor(store(), {
         agent: 'codex',
@@ -256,7 +252,6 @@ describe('buildAgentLaunchRouteInput', () => {
     expect(input.startsOutsideWorkspaceRoot).toBe(true)
   })
 
-  // Command values never change the selected chat surface.
   it.each([
     ['claude', 'claude-wrapper'],
     ['codex', 'codex-nightly'],
@@ -275,9 +270,7 @@ describe('buildAgentLaunchRouteInput', () => {
     expect(structuredFeasibleFor(appStore, args)).toBe(true)
   })
 
-  // The reported P0: `--dangerously-skip-permissions --model Opus` matched no blessed string, so
-  // every new Claude tab was silently demoted to the terminal-backed chat. The Arguments field is
-  // a terminal concern and no longer reaches this decision.
+  // Custom CLI Arguments once silently demoted Claude chat; terminal flags must not decide the chat surface.
   it.each([
     ['claude', '--dangerously-skip-permissions --model Opus'],
     ['codex', '--dangerously-bypass-approvals-and-sandbox --model gpt-5.6-sol'],
@@ -305,8 +298,7 @@ describe('buildAgentLaunchRouteInput', () => {
   } as const
 
   it('falls back to the repo when the worktree row has not landed yet', () => {
-    // Why: "Use" on a PR plans the route in the window between creating the workspace and its row
-    // reaching the store; an unresolved owner there must not downgrade native chat to a terminal.
+    // During workspace creation, unresolved ownership must not demote chat before the new row reaches the store.
     mocks.getConnectionIdFromState.mockReturnValue(undefined)
     const appStore = {
       settings: NATIVE_CHAT_SETTINGS,
@@ -364,7 +356,6 @@ describe('buildAgentLaunchRouteInput', () => {
       agent: 'claude',
       workspace: { kind: 'git-worktree', worktreeId: 'wt-1' }
     }
-    // The store's host status is what a paired server last reported about itself.
     const pairedStore = (
       capabilities: readonly string[],
       settings: Record<string, unknown> = STRUCTURED_SETTINGS
@@ -392,26 +383,22 @@ describe('buildAgentLaunchRouteInput', () => {
       expect(routeFor(store(), args)).toBe('terminal-tui')
     })
 
-    // A released server advertises structured sessions but admits them only with its own chat
-    // setting on; a chat opened there could never start.
+    // Older servers require their own chat setting to admit structured sessions despite advertising capability.
     it('keeps the terminal on a server that predates client-chosen launch modes', () => {
       expect(routeFor(pairedStore([STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY]), args)).toBe(
         'terminal-tui'
       )
     })
 
-    // The browser client's handshake never says it reads structured sessions, so the server
-    // would refuse its chat.
-    it('keeps the host terminal for a browser client', () => {
+    it('opens a chat for a browser client too', () => {
       mocks.isWebClientLocation.mockReturnValue(true)
       try {
-        expect(routeFor(pairedStore(CURRENT_SERVER), args)).toBe('terminal-tui')
+        expect(routeFor(pairedStore(CURRENT_SERVER), args)).toBe('structured-native-chat')
       } finally {
         mocks.isWebClientLocation.mockReturnValue(false)
       }
     })
 
-    // A launch command override never decides the surface, here or on the server.
     it("does not route on this machine's launch command override for the server", () => {
       const settings = { ...STRUCTURED_SETTINGS, agentCmdOverrides: { claude: 'claude-wrapper' } }
       expect(

@@ -95,7 +95,7 @@ export function getOpenInEntryAvailability(
         capability.reason === 'local-only-editor'
           ? translate(
               'auto.components.sidebar.WorktreeOpenInMenu.remoteEditorHint',
-              'Only VS Code can open folders on an SSH host.'
+              'Only VS Code, Cursor, and Zed can open folders on an SSH host.'
             )
           : translate(
               'auto.components.sidebar.WorktreeOpenInMenu.remoteRuntimeEditorHint',
@@ -170,7 +170,6 @@ export async function openWorktreePath(args: {
       return
     }
   }
-  // Why: both checks above refuse an unresolved owner, so this is only a narrowing guard.
   if (owner === 'unresolved') {
     return
   }
@@ -275,7 +274,7 @@ export function WorktreeOpenInMenuItems({
             ) : null}
           </DropdownMenuItem>
         )
-        // Why a wrapper: a disabled item takes no pointer events, so its own title never shows.
+        // Disabled items ignore pointer events; put explanatory titles on a wrapper.
         return availability.disabledReason ? (
           <div key={entry.id} title={availability.disabledReason}>
             {item}

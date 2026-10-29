@@ -2,7 +2,6 @@ import { feedAgentSessionStats, type AgentStatusSource } from '../stats/agent-se
 import { initStatsPath, StatsCollector } from '../stats/collector'
 import type { OrcadRuntimeCleanup } from './orcad-runtime-lifetime'
 
-/** `stats.summary` and the mobile home totals read this; without it they answer zeros (#31112). */
 export function startOrcadStats(
   userDataPath: string,
   hooks: AgentStatusSource,
@@ -10,7 +9,7 @@ export function startOrcadStats(
 ): StatsCollector {
   initStatsPath(userDataPath)
   const stats = new StatsCollector()
-  // Registered first so it runs last: the feed and RPC stop before the final write.
+  // Reverse cleanup order stops feeds/RPC before the final stats flush.
   registerCleanup(() => stats.flushAsync())
   registerCleanup(feedAgentSessionStats(stats, hooks))
   return stats

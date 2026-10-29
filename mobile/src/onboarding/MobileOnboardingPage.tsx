@@ -5,6 +5,7 @@ import { mobileOnboardingStyles as styles } from './mobile-onboarding-styles'
 import { NotificationOnboardingPreview } from './NotificationOnboardingPreview'
 import type { MobileSessionView } from '../storage/session-view-preferences'
 import { colors } from '../theme/mobile-theme'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 
 export type NotificationOnboardingChoice = 'enable' | 'skip'
 export type MobileOnboardingBusyChoice = MobileSessionView | NotificationOnboardingChoice | null
@@ -28,6 +29,7 @@ export function MobileOnboardingPage({
   onSessionChoice,
   onNotificationChoice
 }: Props) {
+  useMobileColorScheme()
   const busy = busyChoice !== null
   const isSessionView = step === 'session-view'
 
@@ -158,6 +160,7 @@ function ChoiceButton({
   disabled: boolean
   onPress: () => void
 }) {
+  useMobileColorScheme()
   return (
     <Pressable
       accessibilityRole="button"

@@ -1,5 +1,3 @@
-// A structured chat's picker: the chat's own values, drawn under the controls of the model they apply to.
-
 import type {
   AgentSessionOptionCatalog,
   CatalogModel,
@@ -9,9 +7,12 @@ import {
   nativeChatSessionOptionDescriptors,
   withTrackedNativeChatModel,
   type NativeChatShownModel
-} from './native-chat-session-option-snapshot'
-import type { SessionOptionDescriptor, SessionOptionValue } from './native-chat-session-options'
-import type { TrackedNativeChatSessionOption } from './native-chat-session-option-state'
+} from './native-chat/input/native-chat-session-option-snapshot'
+import type {
+  SessionOptionDescriptor,
+  SessionOptionValue
+} from './native-chat/input/native-chat-session-options'
+import type { TrackedNativeChatSessionOption } from './native-chat/input/native-chat-session-option-state'
 import { effectiveServiceTier } from './structured-agent-session-effective-tier'
 import { serviceTierOption } from './structured-agent-session-discovered-model'
 import {
@@ -22,8 +23,7 @@ import { withUnlistedEffort } from './structured-agent-session-unlisted-effort'
 import { structuredAgentSessionPermissionDescriptor } from './structured-agent-session-permission-option'
 import type { StructuredAgentSessionOptionState } from './structured-agent-session-options'
 
-/** Before the host answers, or an agent with no list reports, the quiet model pill: never
- *  pickable, so displaying it can never become a launch pick. */
+/** Unpickable placeholder cannot become a launch selection before a real model answer. */
 const PROVIDER_DEFAULT_MODEL_PLACEHOLDER: SessionOptionDescriptor = {
   id: 'model',
   label: 'Model',
@@ -35,8 +35,7 @@ const PROVIDER_DEFAULT_MODEL_PLACEHOLDER: SessionOptionDescriptor = {
   disabledReason: 'available-after-session-start'
 }
 
-/** Which model the trigger names, and which model's controls apply. A catalog default is named
- *  only where the host says this launch runs it; otherwise it stands in for controls alone. */
+/** Name a catalog default only when the host says this launch runs it; otherwise use it solely for controls. */
 export function structuredAgentSessionShownModel(
   catalog: AgentSessionOptionCatalog,
   models: readonly CatalogModel[],
@@ -64,8 +63,7 @@ export function structuredAgentSessionShownModel(
   }
 }
 
-/** The row the list describes `modelId` by; none for a model it lacks, or one outside the rows the
- *  chat's own listing names, which says nothing about what it takes. */
+/** Only the chat’s verified listing describes a model; an unlisted chat model has no inferred capabilities. */
 export function structuredAgentSessionDescribedModel(
   state: Pick<StructuredAgentSessionOptionState, 'catalog' | 'verifiedModelIds'>,
   modelId: string
@@ -81,8 +79,7 @@ const tierChoices = (option: CatalogOption | undefined): string[] =>
     ? option.kind.choices.map((choice) => choice.value)
     : []
 
-/** The named model's speed as it runs (the host applies the same rule). An older host's Flex
- *  shows as it reports it, as that host sends it. */
+/** Apply host tier rules; older hosts retain their reported Flex behavior. */
 function valuesUnderControls(
   catalog: AgentSessionOptionCatalog,
   controls: readonly CatalogOption[],
@@ -91,7 +88,13 @@ function valuesUnderControls(
 ): Readonly<Record<string, TrackedNativeChatSessionOption>> {
   const tier = values.serviceTier?.value
   const control = controls.find((option) => option.id === 'serviceTier')
-  if (typeof tier !== 'string' || !control || (olderHost && tier === 'flex')) {
+  if (
+    typeof tier !== 'string' ||
+    !control ||
+    values.serviceTier?.source === 'applied' ||
+    values.model?.source === 'default' ||
+    (olderHost && tier === 'flex')
+  ) {
     return values
   }
   const effective = effectiveServiceTier({
@@ -106,14 +109,12 @@ function valuesUnderControls(
     : { ...values, serviceTier: { value: effective, source: 'default' } }
 }
 
-/** The values the picker draws, which a create carries for picks it holds. */
 export function structuredAgentSessionDrawnValues(
   state: StructuredAgentSessionOptionState
 ): Readonly<Record<string, TrackedNativeChatSessionOption>> {
   return drawnModelControls(state)?.values ?? state.record.values
 }
 
-/** The named model's controls and the values they draw; null before the host answers. */
 function drawnModelControls(state: StructuredAgentSessionOptionState) {
   const { catalog, record } = state
   if (!catalog || state.catalogSource === 'seed') {
@@ -125,8 +126,7 @@ function drawnModelControls(state: StructuredAgentSessionOptionState) {
   const controls = shown.controlsModelId
     ? (models.find((model) => model.id === shown.controlsModelId)?.options ?? [])
     : modellessControls(catalog, record)
-  // Only the named model's listed controls speak for its values; a stand-in's or an unlisted
-  // model's draw what the host holds.
+  // Normalize only under the named model’s listed controls; stand-ins/unlisted models preserve host values.
   const normalises =
     shown.shown.currentId !== null &&
     structuredAgentSessionDescribedModel(state, shown.shown.currentId) !== undefined
@@ -136,7 +136,7 @@ function drawnModelControls(state: StructuredAgentSessionOptionState) {
   return { catalog, models, ...shown, controls, values }
 }
 
-/** With no model known, a saved speed other than Standard still shows, and Standard turns it off. */
+/** Without model evidence, retain saved nonstandard speed and allow Standard to disable it. */
 function modellessControls(
   catalog: AgentSessionOptionCatalog,
   record: StructuredAgentSessionOptionRecord
@@ -159,7 +159,7 @@ function modelOptionSnapshot(state: StructuredAgentSessionOptionState): SessionO
     return []
   }
   const drawn = drawnModelControls(state)
-  // Until the host answers, the built-in list would paint a label its list may replace.
+  // Wait for host labels instead of flashing built-in names the answer may replace.
   if (!drawn) {
     return [PROVIDER_DEFAULT_MODEL_PLACEHOLDER]
   }
@@ -195,15 +195,15 @@ export function structuredAgentSessionOptionSnapshot(
 ): SessionOptionDescriptor[] {
   const permission = structuredAgentSessionPermissionDescriptor(state)
   const options = modelOptionSnapshot(state).map((option) =>
-    (state.listingInProgress && ['effort', 'serviceTier', 'fastMode'].includes(option.id)) ||
-    (state.fastModeRestricted && option.id === 'fastMode')
+    (state.fastModeRestricted && option.id === 'fastMode') ||
+    (state.listingInProgress && ['effort', 'serviceTier', 'fastMode'].includes(option.id))
       ? { ...option, settable: false }
       : option
   )
   return permission ? [...options, permission] : options
 }
 
-/** No launch holds a pick and no fence can carry one yet, so the picker only shows. */
+/** Presentation only until a launch or fence can carry picks. */
 export function lockedStructuredAgentSessionOptionSnapshot(
   snapshot: readonly SessionOptionDescriptor[],
   capabilitiesOnly = false
@@ -219,16 +219,28 @@ export function canSetStructuredAgentSessionOption(
   state: StructuredAgentSessionOptionState,
   id: string,
   value: SessionOptionValue,
-  snapshot = structuredAgentSessionOptionSnapshot(state)
+  snapshot = structuredAgentSessionOptionSnapshot(state),
+  interactionReady = true
 ): boolean {
-  const descriptor = snapshot.find((entry) => entry.id === id)
-  return Boolean(
-    state.catalog &&
-    descriptor?.settable &&
-    state.pendingId !== id &&
-    ((typeof value === 'string' &&
-      descriptor?.kind.type === 'select' &&
-      descriptor.kind.choices.some((choice) => choice.value === value)) ||
-      (typeof value === 'boolean' && descriptor?.kind.type === 'boolean'))
+  if (
+    !interactionReady ||
+    state.pendingId === id ||
+    (id === 'fastMode' && state.fastModeRestricted)
+  ) {
+    return false
+  }
+  if (id === 'permissionMode') {
+    const descriptor = snapshot.find((entry) => entry.id === id)
+    return (
+      descriptor?.settable === true &&
+      descriptor.kind.type === 'select' &&
+      descriptor.kind.choices.some((choice) => choice.value === value)
+    )
+  }
+  return (
+    (['model', 'effort', 'serviceTier', 'personality'].includes(id) &&
+      typeof value === 'string' &&
+      value.length > 0) ||
+    (id === 'fastMode' && typeof value === 'boolean')
   )
 }

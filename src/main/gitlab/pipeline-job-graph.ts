@@ -8,18 +8,12 @@ import {
   type ProjectRef
 } from './gl-utils'
 
-// ── Pipeline jobs ──────────────────────────────────────────────────
-// Why: GitLab's `/pipelines/:id/jobs` only returns jobs owned by that pipeline.
-// Trigger/include bridges live under `/bridges` and their real CI jobs live on
-// the child pipeline — Orca used to show only the parent (often just SAST), so
-// Checks looked empty next to gitlab.com's full graph.
+// Child CI jobs live under bridge pipelines, not the parent pipeline's jobs endpoint.
 
 const PIPELINE_JOB_PAGE_SIZE = 100
-/** Cap expanded child-pipeline fan-out so one MR details load stays bounded. */
+// Bound child-pipeline expansion per details load.
 const MAX_CHILD_PIPELINES_TO_EXPAND = 20
-// Why: every fetch spawns a `glab` binary (a remote exec over SSH), and this runs on
-// the Checks poll timer. Match gl-utils' MAX_CONCURRENT so a bridge-heavy MR trickles
-// its children instead of bursting 20 processes at once.
+// Each fetch launches glab; cap polling fan-out to match the shared CLI admission limit.
 const MAX_CONCURRENT_CHILD_FETCHES = 4
 
 type GitLabRawJob = {
@@ -61,14 +55,12 @@ function mapPipelineJob(raw: GitLabRawJob, pipelineId: number): GitLabPipelineJo
 function mapBridgeAsJob(raw: GitLabRawBridge, pipelineId: number): GitLabPipelineJob {
   const childStatus = raw.downstream_pipeline?.status
   return {
-    // Why: bridges are not real jobs — omit a positive id so Checks won't try
-    // job-trace/retry APIs on them. Rows still render via name + webUrl.
+    // Bridges have no real job ID; prevent Checks from calling trace/retry APIs on them.
     id: 0,
     pipelineId,
     name: raw.name ?? 'bridge',
     stage: raw.stage ?? '',
-    // Prefer the child pipeline's rollup when present — the bridge job itself
-    // often stays `success` while the downstream graph is still running/failed.
+    // Bridge status may remain successful while its downstream pipeline is running or failed.
     status: childStatus || raw.status || '',
     webUrl: raw.downstream_pipeline?.web_url ?? raw.web_url ?? '',
     duration: typeof raw.duration === 'number' ? raw.duration : null
@@ -124,14 +116,11 @@ function childPipelineTarget(
   if (typeof childId !== 'number') {
     return null
   }
-  // Why: prefer path from web_url so same- and cross-project children both work
-  // without a project-id lookup. If the URL is missing/unparseable, fall back to
-  // the parent project (same-project triggers); wrong-project calls fail soft.
+  // Derive cross-project child paths from web URLs; missing URLs fall back to same-project lookup.
   const webUrl = bridge.downstream_pipeline?.web_url
   if (webUrl) {
     try {
       const url = new URL(webUrl)
-      // web_url shape: https://host/group/project/-/pipelines/123
       const marker = url.pathname.indexOf('/-/pipelines/')
       if (marker > 0) {
         const path = url.pathname.slice(1, marker).replace(/\/$/, '')
@@ -143,7 +132,7 @@ function childPipelineTarget(
         }
       }
     } catch {
-      // fall through to parent project
+      // Fall back to the parent project.
     }
   }
   return { projectRef: parentProjectRef, pipelineId: childId }
@@ -211,8 +200,7 @@ export async function fetchPipelineJobs(
       ).catch(() => [] as GitLabPipelineJob[])
   )
 
-  // Parent jobs first, then each child's jobs. Bridge rollup rows last and only
-  // when no expanded child job already carries the same name (avoid duplicates).
+  // Keep parent/child job order, and add bridge rollups only when no expanded job shares their name.
   const seenJobIds = new Set<number>()
   const seenNames = new Set<string>()
   const out: GitLabPipelineJob[] = []

@@ -40,7 +40,12 @@ export async function insertRichMarkdownImageFromPath({
     const parsedWorkspace = worktreeId ? parseWorkspaceKey(worktreeId) : null
     const resolvedConnectionId = getConnectionId(worktreeId)
     if (parsedWorkspace?.type === 'folder' && resolvedConnectionId === undefined) {
-      throw new Error("Couldn't verify which host owns this file. Reopen the file and try again.")
+      throw new Error(
+        translate(
+          'auto.components.editor.richMarkdownImageInsert.hostUnverified',
+          "Couldn't verify which host owns this file. Reopen the file and try again."
+        )
+      )
     }
     const connectionId = resolvedConnectionId ?? undefined
     const fileContext =
@@ -68,9 +73,7 @@ export async function insertRichMarkdownImageFromPath({
       return
     }
 
-    // Why: image bytes should live beside the note instead of inside markdown;
-    // this keeps rich-mode size checks based on document text, not binary data.
-    // Why: a document opened outside every project still gets its image beside it.
+    // Save image bytes beside the note, including outside projects, so rich-mode size checks measure document text only.
     const openDocument = state.openFiles.find(
       (file) => file.filePath === filePath && file.worktreeId === worktreeId
     )
@@ -123,13 +126,17 @@ export async function insertRichMarkdownImageFromPath({
       )
     }
   } catch (err) {
-    toast.error(extractIpcErrorMessage(err, 'Failed to insert image.'))
+    toast.error(
+      extractIpcErrorMessage(
+        err,
+        translate('auto.components.editor.useLocalImagePick.175cb8b8ce', 'Failed to insert image.')
+      )
+    )
   }
 }
 
 function encodeMarkdownImageBasename(destPath: string): string {
-  // Why: unescaped spaces and delimiters in markdown image destinations make
-  // screenshot filenames render as literal text or broken partial paths.
+  // Escape filename spaces and delimiters or Markdown interprets them as broken destinations or literal text.
   return encodeURIComponent(basename(destPath))
 }
 

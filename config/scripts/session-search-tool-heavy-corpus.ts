@@ -2,12 +2,7 @@ import { mkdtemp, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-// The corpus the scope benchmark runs over. Written here rather than by
-// `session-search-synthetic-corpus.ts` because what it costs to answer a
-// conversation query out of the one FTS table turns on the property that
-// generator fixes: how much of a transcript is tool output.
-//
-// Synthetic, always. This must never be pointed at a real transcript.
+// Separate synthetic generator varies tool share, the property determining conversation-query filtering cost; never use real transcripts.
 
 const PROSE = [
   'terminal',
@@ -25,12 +20,7 @@ const PROSE = [
   'stale',
   'session'
 ]
-// Tool output is paths, hashes and log lines — and the same words the
-// conversation uses, because a `rg` over this repository prints them. That
-// overlap is what the benchmark turns on: it is what makes a conversation
-// term's posting list carry rows the column filter then has to discard. A tool
-// vocabulary disjoint from the prose would leave nothing to discard and measure
-// the wrong thing.
+// Overlap tool/prose vocabulary so posting lists include tool rows to discard; disjoint words would hide column-filter cost.
 const TOOL_ONLY = [
   'src/main/ai-vault/session-transcript-reader.ts',
   'node_modules/.pnpm/typescript@5.9.2',
@@ -45,9 +35,7 @@ const TOOL_ONLY = [
   'byteOffset',
   'MAX_RETRIES'
 ]
-// Half the tool tokens are conversation words. Deliberately pessimistic: the
-// more of a query term lives in `tool_text`, the more the column filter costs,
-// so a number measured here holds on a real transcript tree.
+// Pessimistically make half of tool tokens prose words to expose column-filter cost as tool share grows.
 const TOOL = [...PROSE, ...TOOL_ONLY]
 
 function mulberry32(seed: number): () => number {
@@ -76,11 +64,7 @@ export type ToolHeavyCorpus = {
   proseBytes: number
 }
 
-/**
- * Claude JSONL transcripts whose tool output is `toolShare` of the message text.
- * One turn is a user question, an assistant answer, a tool call and its output;
- * only the last one grows with the share.
- */
+// Emit Claude JSONL user/assistant/tool-call/output turns; toolShare scales only output bytes.
 export async function writeToolHeavyCorpus(args: {
   targetBytes: number
   toolShare: number

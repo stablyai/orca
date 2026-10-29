@@ -13,7 +13,8 @@ vi.mock('@/runtime/structured-agent-session-host-capability', async (original) =
 }))
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
 vi.mock('@/runtime/structured-agent-session-client', () => ({
-  callStructuredAgentSession: mocks.call
+  callStructuredAgentSession: mocks.call,
+  subscribeStructuredAgentSessionStatus: vi.fn(async () => ({ unsubscribe: vi.fn() }))
 }))
 vi.mock('./native-chat-session-option-settings-write', () => ({
   enqueueSessionOptionSettingsWrite: vi.fn()
@@ -28,13 +29,12 @@ import type {
   AgentSessionModelCatalogResult,
   AgentSessionOptionsResult
 } from '../../../../shared/agent-session-wire'
-import type { SessionOptionDescriptor } from '../../../../shared/native-chat-session-options'
+import type { SessionOptionDescriptor } from '../../../../shared/native-chat/input/native-chat-session-options'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import {
   preloadHostModelCatalogSnapshots,
   resetHostModelCatalogSnapshotsForTests
 } from '@/runtime/host-model-catalog-snapshots'
-import type { StructuredAgentSessionMutate } from './use-structured-agent-session-mutate'
 import { useStructuredAgentSessionOptions } from './use-structured-agent-session-options'
 
 const LOCAL_TARGET = { kind: 'local' } as const
@@ -67,7 +67,7 @@ const CLAUDE_LIST = listed([
   { id: 'opus[1m]', label: 'Opus (1M context)' },
   { id: 'sonnet', label: 'Sonnet' }
 ])
-// Labels the built-in list does not use, so a frame painted from it is told apart.
+// Distinct host labels expose accidental first paints from the built-in list.
 const CODEX_LIST = listed([
   { id: 'gpt-5.5', label: 'GPT-5.5 (host)' },
   { id: 'gpt-6.1-sol', label: 'GPT-6.1 Sol' }
@@ -94,11 +94,11 @@ function pill(snapshot: readonly SessionOptionDescriptor[]): Pill {
 
 const PLACEHOLDER: Pill = { model: null, label: null, effort: null, usable: false }
 
-/** Every frame the pane rendered, in order. */
 function renderNewChat(args: {
   agent: AgentType
   target?: RuntimeClientTarget
   seedOptions?: Record<string, string>
+  explicitOptions?: Record<string, string>
   sessionId?: string
 }) {
   const frames: Pill[] = []
@@ -113,12 +113,12 @@ function renderNewChat(args: {
       fence: null,
       turnId: null,
       unloadedTurnRevisions: undefined,
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: no pick is made, so mutate is never called.
-      mutate: vi.fn() as unknown as StructuredAgentSessionMutate,
+      mutate: vi.fn(),
       launch: {
         kind: 'new',
         heldOptions: {},
         worktree: 'id:wt-1',
+        ...(args.explicitOptions ? { explicitOptions: args.explicitOptions } : {}),
         ...(args.seedOptions ? { seedOptions: args.seedOptions } : {})
       }
     })
@@ -151,6 +151,21 @@ describe('a new chat picker’s first frame', () => {
     resetHostModelCatalogSnapshotsForTests()
   })
 
+  it('shows the unlisted action model rather than a saved or listed replacement on every pending frame', async () => {
+    catalogAnswers(() => Promise.resolve(CLAUDE_LIST))
+    await preloadHostModelCatalogSnapshots(LOCAL_TARGET, ['claude'])
+    const view = renderNewChat({
+      agent: 'claude',
+      seedOptions: { model: 'opus[1m]', effort: 'high' },
+      explicitOptions: { model: 'unlisted-action' }
+    })
+    await waitFor(() => expect(mocks.call).toHaveBeenCalledTimes(2))
+    expect(
+      view.frames.every((frame) => frame.model === 'unlisted-action' && frame.effort !== 'high')
+    ).toBe(true)
+    view.unmount()
+  })
+
   it('names a saved Claude pick and its effort from the saved list on the first frame', async () => {
     catalogAnswers(() => Promise.resolve(CLAUDE_LIST))
     await preloadHostModelCatalogSnapshots(LOCAL_TARGET, ['claude'])
@@ -161,7 +176,6 @@ describe('a new chat picker’s first frame', () => {
     await waitFor(() => expect(mocks.call).toHaveBeenCalledTimes(2))
     const final = { model: 'opus[1m]', label: 'Opus (1M context)', effort: 'high', usable: true }
     expect(frames[0]).toEqual(final)
-    // The pane's own read lands the same list: no frame ever showed anything else.
     expect(frames.every((frame) => JSON.stringify(frame) === JSON.stringify(final))).toBe(true)
     unmount()
   })
@@ -276,7 +290,6 @@ describe('a new chat picker’s first frame', () => {
       answer.resolve(list)
       await waitFor(() => expect(frames.at(-1)?.usable).toBe(true))
       const named = frames.filter((frame) => frame.model !== null)
-      // Only the host's label is ever painted: no built-in label, no raw id, no second change.
       expect(new Set(named.map((frame) => frame.label))).toEqual(new Set([first.label]))
       const beforeNamed = frames.slice(0, frames.indexOf(named[0]!))
       expect(beforeNamed).toEqual(beforeNamed.map(() => PLACEHOLDER))
@@ -331,9 +344,55 @@ describe('a new chat picker’s first frame', () => {
     })
     expect(second.frames[0]).toMatchObject({ label: 'GPT-6.1 Sol', usable: true })
     second.unmount()
-    // This machine's host never answered, so its chat waits for it rather than borrow the server's.
+    // A paired host’s cache must never name a model for the unanswered local host.
     const local = renderNewChat({ agent: 'codex', seedOptions: { model: 'gpt-5.5' } })
     expect(local.frames[0]).toEqual(PLACEHOLDER)
     local.unmount()
   })
+})
+
+it('refuses typed literals while the current fence awaits options, then accepts with an empty catalog', async () => {
+  const pending = deferred<AgentSessionOptionsResult>()
+  let reads = 0
+  mocks.call.mockImplementation((_target: unknown, method: string) =>
+    method === 'agentSession.options'
+      ? ++reads === 1
+        ? Promise.resolve({ models: [], current: {} })
+        : pending.promise
+      : Promise.resolve({ origin: 'unknown' })
+  )
+  const mutate = vi.fn().mockResolvedValue({
+    status: 'accepted',
+    sameFence: true,
+    value: { key: 'model', value: 'literal', options: { model: 'literal' } }
+  })
+  const view = renderHook(
+    ({ fence }) =>
+      useStructuredAgentSessionOptions({
+        agent: 'codex',
+        sessionId: 'locked-chat',
+        target: LOCAL_TARGET,
+        transportEnabled: true,
+        isVisible: true,
+        providerVisible: true,
+        fence,
+        turnId: null,
+        unloadedTurnRevisions: undefined,
+        mutate
+      }),
+    { initialProps: { fence: 1 } }
+  )
+  await waitFor(() => expect(reads).toBe(1))
+  view.rerender({ fence: 2 })
+  await waitFor(() => expect(reads).toBe(2))
+  await act(async () =>
+    expect(await view.result.current.setStructuredOption('model', 'literal')).toBe(false)
+  )
+  expect(mutate).not.toHaveBeenCalled()
+  await act(async () => pending.resolve({ models: [], current: {} }))
+  await act(async () =>
+    expect(await view.result.current.setStructuredOption('model', 'literal')).toBe(true)
+  )
+  expect(mutate).toHaveBeenCalledTimes(1)
+  view.unmount()
 })

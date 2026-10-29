@@ -1,11 +1,14 @@
-import { View, Text, StyleSheet, Pressable, ScrollView, Switch } from 'react-native'
+import { View, Text, Pressable, ScrollView, Switch } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import { ChevronLeft } from 'lucide-react-native'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileDefaultSessionViewPreference } from '../session/use-mobile-default-session-view-preference'
 
 export default function NativeChatSettingsScreen({ onBack }: { onBack?: () => void }) {
+  useMobileColorScheme()
   const router = useRouter()
   const insets = useSafeAreaInsets()
 
@@ -56,7 +59,7 @@ export default function NativeChatSettingsScreen({ onBack }: { onBack?: () => vo
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   container: {
     flex: 1,
     backgroundColor: colors.bgBase,
@@ -123,4 +126,4 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     marginTop: 2
   }
-})
+}))

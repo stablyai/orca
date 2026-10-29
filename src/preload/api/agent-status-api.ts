@@ -13,12 +13,12 @@ export type AgentStatusApi = {
   onSet: (callback: (data: AgentStatusIpcPayload) => void) => () => void
   /** Listen for main-process cleanup that evicted cached hook status. */
   onClear: (callback: (data: AgentStatusClearIpcPayload) => void) => () => void
-  /** Return the current main-process hook cache after renderer hydration. */
+  /** Read after hydration so startup hook replays can attach to restored tabs. */
   getSnapshot: () => Promise<AgentStatusIpcPayload[]>
   inferInterrupt: (request: AgentInterruptInferenceRequest) => Promise<boolean>
-  /** Guarded clear for an answered AskUserQuestion wait — the CLI emits no hook at answer time, so the renderer reports the submit keystroke. */
+  /** The CLI emits no answer hook, so the renderer reports the submit keystroke. */
   inferQuestionAnswered: (request: AgentQuestionAnsweredInferenceRequest) => Promise<boolean>
-  /** Whether the host can check this pane's agent process; without that, silence keeps today's cleanup. */
+  /** Without host process verification, retain the existing silence-based cleanup. */
   hasVerifiableAgentProcess?: (paneKey: string) => Promise<boolean>
   /** Listen for PTYs on a legacy numeric pane key that have registry-backed UUID pane proof. */
   onMigrationUnsupported: (callback: (entry: MigrationUnsupportedPtyEntry) => void) => () => void
@@ -35,10 +35,8 @@ export type AgentStatusApi = {
   drop: (paneKey: string) => void
   /** Evict a previously-cleared status only when its identity still matches the main-process cache. */
   dropPersisted: (identity: AgentStatusCacheIdentity) => void
-  /** Same as dropPersisted for many identities in one IPC message and one listener notification. */
   dropPersistedBatch?: (identities: readonly AgentStatusCacheIdentity[]) => void
-  /** Retire a pane whose agent process is proven gone — clears the row AND the per-pane caches a
-   *  dismissal deliberately keeps. Not `drop`: that one is a user dismissal of a live pane's row. */
+  /** Proven process exit also clears per-pane caches that a user dismissal retains. */
   reconcileEndedProcess: (paneKey: string) => void
   /** Drop every cached hook status under one terminal tab prefix. Fire-and-forget. */
   dropByTabPrefix: (tabId: string) => void
@@ -46,7 +44,6 @@ export type AgentStatusApi = {
   retirePaneAuthority: (paneKey: string, retirementId?: string) => void
   /** Lift one pane's retirement fence when a live PTY re-attaches to it. Closed tabs stay retired. */
   restorePaneAuthority: (paneKey: string) => void
-  /** Move hook authority when a live pane is detached into another tab. */
   transferPaneAuthority: (args: { fromPaneKey: string; toPaneKey: string; ptyId?: string }) => void
 }
 

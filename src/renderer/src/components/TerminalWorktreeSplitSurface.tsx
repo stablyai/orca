@@ -11,6 +11,7 @@ import {
 } from './browser-pane/host-guest/browser-worktree-surface-paintability'
 import TabGroupSplitLayout from './tab-group/TabGroupSplitLayout'
 import { WorkspacePaneOverlayLayers } from './WorkspacePaneOverlayLayers'
+import type { TerminalPrewarmStage } from './terminal/terminal-worktree-prewarm'
 
 export const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
   worktreeId,
@@ -19,6 +20,7 @@ export const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
   focusedGroupId,
   isVisible,
   shouldMeasureHiddenWorktree,
+  prewarmStage,
   shouldColdParkTerminalPanes,
   isForceParked,
   activityTerminalPortals,
@@ -31,6 +33,8 @@ export const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
   focusedGroupId?: string
   isVisible: boolean
   shouldMeasureHiddenWorktree: boolean
+  /** Hover intent: mount, then lay out, then render the revealable terminals while hidden. */
+  prewarmStage: TerminalPrewarmStage | null
   shouldColdParkTerminalPanes: boolean
   isForceParked: boolean
   activityTerminalPortals: ActivityTerminalPortalTarget[]
@@ -40,7 +44,8 @@ export const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
   const browserPageIds = useWorktreeBrowserPageIds(worktreeId)
   const needsBrowserGuestPaint = useBrowserGuestPaintRetention(browserPageIds)
   const shouldKeepPaintable = shouldKeepHiddenWorktreeSurfacePaintable({
-    shouldMeasureHiddenWorktree,
+    // A mount-stage prewarm stays display:none so its style/layout cost lands in a later task.
+    shouldMeasureHiddenWorktree: shouldMeasureHiddenWorktree && prewarmStage !== 'mount',
     needsBrowserGuestPaint
   })
 
@@ -55,6 +60,7 @@ export const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
       }
       inert={!isVisible}
       aria-hidden={!isVisible}
+      data-workspace-surface-id={worktreeId}
     >
       <TabGroupSplitLayout
         layout={layout}
@@ -67,6 +73,7 @@ export const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
         worktreePath={worktreePath}
         isVisible={isVisible}
         shouldMeasureHiddenWorktree={shouldMeasureHiddenWorktree}
+        hiddenTerminalPrewarm={prewarmStage === 'mount' ? null : prewarmStage}
         shouldColdParkTerminalPanes={shouldColdParkTerminalPanes}
         isForceParked={isForceParked}
         activityTerminalPortals={activityTerminalPortals}

@@ -24,8 +24,7 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-// Why: the order (and the late PostToolUse) is what codex-cli 0.159.3 posted live for Esc on an
-// approval prompt, then Esc while `sleep 40` ran; the shell finished 24s after the Interrupt.
+// Codex CLI 0.159.3 capture order: approval Esc, tool Esc, then PostToolUse 24 seconds after Interrupt.
 const TURN_1 = { session_id: 'session-1', turn_id: 'turn-1', model: 'gpt-5.5' }
 const TURN_2 = { session_id: 'session-1', turn_id: 'turn-2', model: 'gpt-5.5' }
 const BASH = { tool_name: 'Bash', tool_input: { command: 'sleep 40' }, tool_use_id: 'exec-2' }

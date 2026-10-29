@@ -9,7 +9,8 @@ import {
   formatCandidateSource,
   isSetupScriptPromptDismissed,
   ignoresSharedSetupScripts,
-  inspectSetupScriptPromptState
+  inspectSetupScriptPromptState,
+  isSilentSetupScriptPromptState
 } from '@/lib/setup-script-prompt'
 import { checkRuntimeHooks, inspectRuntimeSetupScriptImports } from '@/runtime/runtime-hooks-client'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
@@ -27,11 +28,13 @@ import {
 import { useSetupScriptPromptRevalidation } from './useSetupScriptPromptRevalidation'
 import { useRenderedSetupScriptPromptState } from './useRenderedSetupScriptPromptState'
 import { translate } from '@/i18n/i18n'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { getRepoHostIdentity } from '@/store/slices/repo-host-identity'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { useWorktreeById } from '@/store/selectors'
 
 function SetupScriptPromptCard(): React.JSX.Element | null {
+  useUiLanguageRevision()
   const sidebarOpen = useAppStore((s) => s.sidebarOpen)
   const repos = useAppStore((s) => s.repos)
   const activeRepoId = useAppStore((s) => s.activeRepoId)
@@ -75,7 +78,7 @@ function SetupScriptPromptCard(): React.JSX.Element | null {
       const hostId = getRepoExecutionHostId(repo)
       const inspection = await inspectSetupScriptPromptState({
         repo,
-        checkHooks: () => checkRuntimeHooks(hostId, repo.id),
+        checkHooks: () => checkRuntimeHooks(hostId, repo.id, { background: true }),
         inspectImports: () => inspectRuntimeSetupScriptImports(hostId, repo.id)
       })
       if (!cancelled) {
@@ -267,8 +270,21 @@ function SetupScriptPromptCard(): React.JSX.Element | null {
             onOpenSettings: () => openLocalCommandSettings(importedRepoId, importedHostId),
             description:
               skippedCount > 0
-                ? `${skippedCount} unsupported field${skippedCount === 1 ? '' : 's'} skipped. Saved the setup command.`
-                : 'Saved the setup command.'
+                ? skippedCount === 1
+                  ? translate(
+                      'auto.components.sidebar.SetupScriptPromptCard.savedWithSkippedFields_one',
+                      '{{count}} unsupported field skipped. Saved the setup command.',
+                      { count: skippedCount }
+                    )
+                  : translate(
+                      'auto.components.sidebar.SetupScriptPromptCard.savedWithSkippedFields_other',
+                      '{{count}} unsupported fields skipped. Saved the setup command.',
+                      { count: skippedCount }
+                    )
+                : translate(
+                    'auto.components.sidebar.SetupScriptPromptCard.savedSetupCommand',
+                    'Saved the setup command.'
+                  )
           })
         }
       } catch (error) {
@@ -363,15 +379,9 @@ function SetupScriptPromptCard(): React.JSX.Element | null {
     promptTargetHidden ||
     !activeRepo ||
     !renderedPromptState ||
-    (renderedPromptState.status === 'ok' && renderedPromptState.hasEffectiveSetup)
+    (renderedPromptState.status === 'ok' && renderedPromptState.hasEffectiveSetup) ||
+    isSilentSetupScriptPromptState(renderedPromptState)
   ) {
-    return null
-  }
-
-  // Why: a forbidden (mobile-scope) inspection is permanent, so suppress the
-  // retry-able card entirely — the global scope-mismatch banner explains it and
-  // a retry would just re-fire repo.hooksCheck on every repo focus.
-  if (renderedPromptState.status === 'forbidden') {
     return null
   }
 

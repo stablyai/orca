@@ -138,8 +138,6 @@ describe('WorktreeCard SSH reconnect prompt', () => {
     worktreeCardProperties = ['status']
   })
 
-  // Supersedes the old "does not auto-open the blocking reconnect dialog" assertion:
-  // the dialog is gone, so no card state can open one.
   it('offers an inline reconnect control and never a blocking dialog for a disconnected SSH worktree', () => {
     sshConnectionStates.set('ssh-target-1', { status: 'disconnected' })
     sshTargetLabels.set('ssh-target-1', 'Remote target')
@@ -151,8 +149,7 @@ describe('WorktreeCard SSH reconnect prompt', () => {
     expect(markup).toContain('Connect to SSH host Remote target')
     expect(markup).toContain('Connect')
     expect(markup).not.toContain('ssh-disconnected-dialog')
-    // Why: a card-root opacity composites the whole subtree, so it would dim the control's
-    // destructive tint and spinner in the exact state the control exists for.
+    // Root opacity would also dim the reconnect tint/spinner that must remain visible.
     expect(markup).not.toContain('opacity-60')
   })
 
@@ -180,8 +177,7 @@ describe('WorktreeCard SSH reconnect prompt', () => {
     expect(markup).not.toContain('Connect to SSH host')
   })
 
-  // Why: the control keys off repo.connectionId, which is orthogonal to workspace kind —
-  // a folder workspace on a disconnected SSH host must get the same affordance.
+  // connectionId is independent of workspace kind; SSH folders need the same reconnect control.
   it('offers the control for a folder workspace on a disconnected SSH host', () => {
     sshConnectionStates.set('ssh-target-1', { status: 'error' })
     sshTargetLabels.set('ssh-target-1', 'Remote target')
@@ -197,9 +193,7 @@ describe('WorktreeCard SSH reconnect prompt', () => {
     expect(markup).toContain('Retry SSH connection to Remote target')
   })
 
-  // Why: ssh:listTargets filters runtime-owned targets out, so "absent from the target list"
-  // is not evidence of removal — deriving targetRemoved from it would put every ephemeral-VM
-  // workspace card into the dead "host removed" state.
+  // Runtime-owned SSH targets are excluded from listTargets; absence cannot establish removal.
   it('never reports a runtime-owned SSH target as removed', () => {
     const markup = renderToStaticMarkup(
       <WorktreeCard
@@ -213,7 +207,6 @@ describe('WorktreeCard SSH reconnect prompt', () => {
     expect(markup).toContain('Project on SSH host')
   })
 
-  // Why: a removed host can never connect, so the card must not offer a Connect that only fails.
   it('reports a removed SSH host once the target list no longer carries it', () => {
     sshConnectionStates.set('ssh-target-1', { status: 'error' })
     removedSshTargetLabels.set('ssh-target-1', 'Remote target (removed)')
@@ -240,8 +233,7 @@ describe('WorktreeCard SSH reconnect prompt', () => {
     expect(markup).toContain('Remote Mac disconnected')
   })
 
-  // Why: "not probed yet" is not "probed and unreachable" — collapsing them painted every
-  // remote card destructive and dimmed between launch and the first probe answering.
+  // Unprobed hosts must not appear disconnected/dimmed during launch.
   it('leaves a runtime-host worktree undimmed before its first probe answers', () => {
     runtimeEnvironments = [{ id: 'env-1', name: 'Remote Mac' }]
     const runtimeRepo: Repo = {

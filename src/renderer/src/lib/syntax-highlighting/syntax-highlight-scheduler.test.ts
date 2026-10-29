@@ -16,7 +16,6 @@ describe('scheduleSyntaxHighlighting', () => {
       return (budgetMs: number) => {
         runs.push(name)
         budgets.push(budgetMs)
-        // Each step spends the whole slice.
         now += budgetMs
         left -= 1
         return left === 0

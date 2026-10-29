@@ -120,8 +120,7 @@ describe('structured agent session reducer', () => {
   })
 
   it("republishes when only a row's stoppability changes", () => {
-    // A row losing its stop is the whole difference between an honest control
-    // and a dead one, so it must not be dropped as an equal state.
+    // A lost Stop button changes behavior and must invalidate equality.
     const backgroundTasks = {
       state: 'monitoring' as const,
       supportsTaskStop: true,
@@ -499,8 +498,7 @@ describe('structured agent session reducer', () => {
     expect(withoutCapability.backgroundTasks).toBeUndefined()
   })
 
-  // An older host omits the roster only when its records hold no running child; a pane resuming
-  // from its cursor must not keep the one it held while away (#24227).
+  // Old hosts omit empty rosters; a cursor resume must clear the detached client’s stale roster (#24227).
   it("drops the held roster on a resumed subscription's first batch that omits it", () => {
     const monitoring = reduceStructuredAgentSession(EMPTY_STRUCTURED_AGENT_SESSION, {
       type: 'event',

@@ -29,7 +29,7 @@ export const ORCHESTRATION_ASK_METHODS = [
         orchestrationCompatibilityEvidence
       }
     ) => {
-      // Why: group addresses have no unambiguous first-answer authority.
+      // Group addresses cannot select an unambiguous first answerer.
       if (params.to && isGroupAddress(params.to)) {
         throw new OrchestrationError(
           'invalid_argument',
@@ -39,7 +39,7 @@ export const ORCHESTRATION_ASK_METHODS = [
 
       const db = runtime.getOrchestrationDb()
       const from = params.from ?? 'unknown'
-      // Why: echoed on every return so a clamped caller reports the budget actually waited, not the one it asked for.
+      // Echo the clamped budget on every return so callers report time actually waited.
       const timeoutMs = clampOrchestrationAskTimeoutMs(params.timeoutMs)
       const paneKey = runtime.getTerminalPaneKey(from) ?? undefined
       if (!orchestrationCaller) {
@@ -51,7 +51,7 @@ export const ORCHESTRATION_ASK_METHODS = [
       }
       const remoteAttachment = paneKey ? db.findActiveRemoteAttachmentForPane(paneKey) : undefined
       if (remoteAttachment && paneKey) {
-        rejectFederatedExplicitTarget(params)
+        rejectFederatedExplicitTarget(params, remoteAttachment.home_run_id)
         return askRemoteRunHome({
           params: { ...params, timeoutMs },
           runtime,

@@ -1,18 +1,17 @@
 import { useId, useState } from 'react'
 import { Check, ExternalLink } from 'lucide-react'
+import { Trans } from 'react-i18next'
 import { getAgentCatalog, AgentIcon, type AgentCatalogEntry } from '@/lib/agent-catalog'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Switch } from '@/components/ui/switch'
 import type { TuiAgent } from '../../../../shared/tui-agent'
-import { translate } from '@/i18n/i18n'
+import { i18n, translate } from '@/i18n/i18n'
 
 type AgentStepProps = {
   selectedAgent: TuiAgent | null
-  // `fromCollapsedSection` tells the controller whether the click happened
-  // under the `<details>` disclosure so `onboarding_agent_picked` can carry
-  // it without re-deriving from props at the emit site.
+  // Record whether the click came from the details disclosure for onboarding_agent_picked telemetry.
   onSelect: (agent: TuiAgent, fromCollapsedSection: boolean) => void
   detectedSet: Set<TuiAgent>
   isDetecting: boolean
@@ -38,14 +37,9 @@ export function AgentStep({
     selectedAgent && !detectedSet.has(selectedAgent)
       ? agentCatalog.find((a) => a.id === selectedAgent)
       : undefined
-  // Why: keep the collapsed bucket open when the selected agent lives there, so
-  // the active card is visible without forcing the user to expand the disclosure.
   const selectedEntryIsCollapsed =
     selectedAgent != null && fallbackRest.some((a) => a.id === selectedAgent)
-  // Why: one-way latch: auto-open when selection lands in the fallback bucket,
-  // but never force-close. The user can freely toggle via the native <details>
-  // disclosure once it's open; controlling `open` directly off the prop would
-  // slam it shut as soon as `selectedEntryIsCollapsed` flips back to false.
+  // Auto-open when selection enters the fallback bucket; never force-close a disclosure the user can toggle.
   const [openState, setOpenState] = useState(selectedEntryIsCollapsed)
   const [previousSelectedEntryIsCollapsed, setPreviousSelectedEntryIsCollapsed] =
     useState(selectedEntryIsCollapsed)
@@ -57,13 +51,17 @@ export function AgentStep({
   }
   const fallbackRestLabel = openState
     ? translate('auto.components.onboarding.AgentStep.hideAgents', 'Hide agents')
-    : translate(
-        'auto.components.onboarding.AgentStep.showMoreAgents',
-        'Show {{value0}} more agents →',
-        {
-          value0: fallbackRest.length
-        }
-      )
+    : fallbackRest.length === 1
+      ? translate(
+          'auto.components.onboarding.AgentStep.showMoreAgents_one',
+          'Show {{count}} more agent →',
+          { count: fallbackRest.length }
+        )
+      : translate(
+          'auto.components.onboarding.AgentStep.showMoreAgents_other',
+          'Show {{count}} more agents →',
+          { count: fallbackRest.length }
+        )
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-5">
@@ -78,11 +76,15 @@ export function AgentStep({
       {selectedEntry && (
         <div className="flex shrink-0 items-center justify-between gap-3 rounded-lg border border-status-warning-border px-4 py-2.5 text-xs text-muted-foreground">
           <span>
-            <span className="font-medium text-foreground">{selectedEntry.label}</span>{' '}
-            {translate(
-              'auto.components.onboarding.AgentStep.69af7e9c1c',
-              "isn't on your PATH yet. Orca will set it as your default and you can install it any time."
-            )}
+            <Trans
+              i18n={i18n}
+              defaults={translate(
+                'auto.components.onboarding.AgentStep.agentNotOnPath',
+                "<agent>{{agent}}</agent> isn't on your PATH yet. Orca will set it as your default and you can install it any time.",
+                { agent: selectedEntry.label }
+              )}
+              components={{ agent: <span className="font-medium text-foreground" /> }}
+            />
           </span>
           <Button
             type="button"

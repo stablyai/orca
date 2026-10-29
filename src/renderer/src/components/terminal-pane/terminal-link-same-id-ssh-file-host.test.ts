@@ -25,7 +25,7 @@ vi.mock('@/lib/worktree-activation', () => ({
 import { buildFileLinkActions } from './terminal-file-link-actions'
 import { getTerminalFileContext, openDetectedFilePath } from './terminal-file-open-routing'
 import { createNativeChatFileLinkExistence } from '../native-chat/native-chat-file-link-existence'
-import { extractTerminalFileLinks } from '@/lib/terminal-links'
+import { extractTerminalFileLinks } from '../../../../shared/terminal-links'
 
 const id = 'repo::/home/u/proj'
 const deps = { worktreeId: id, worktreePath: '/home/u/proj', runtimeEnvironmentId: null }

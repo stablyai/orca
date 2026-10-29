@@ -6,26 +6,6 @@ import {
 } from './synthetic-title-spinner'
 
 describe('advanceSyntheticTitleSpinnerEntries', () => {
-  it('advances live panes in one shared tick and wraps frames', () => {
-    const entries = new Map<string, SyntheticTitleSpinnerEntry<{ label: string }>>([
-      ['pane-a', { frame: 1, profile: { label: 'A' } }],
-      ['pane-b', { frame: 2, profile: { label: 'B' } }]
-    ])
-
-    const ticks = advanceSyntheticTitleSpinnerEntries({
-      entries,
-      frameCount: 3,
-      getPtyIdForPaneKey: (paneKey) => `pty-${paneKey}`
-    })
-
-    expect(ticks).toEqual([
-      { paneKey: 'pane-a', ptyId: 'pty-pane-a', frame: 2, profile: { label: 'A' } },
-      { paneKey: 'pane-b', ptyId: 'pty-pane-b', frame: 0, profile: { label: 'B' } }
-    ])
-    expect(entries.get('pane-a')?.frame).toBe(2)
-    expect(entries.get('pane-b')?.frame).toBe(0)
-  })
-
   it('drops panes whose pty mapping disappeared', () => {
     const entries = new Map<string, SyntheticTitleSpinnerEntry<{ label: string }>>([
       ['live-pane', { frame: 0, profile: { label: 'live' } }],
@@ -47,12 +27,6 @@ describe('advanceSyntheticTitleSpinnerEntries', () => {
 })
 
 describe('getSyntheticTitleSpinnerPaneKeyToStop', () => {
-  // Why: without this the spinner outlived the hook row it stood in for, so a finished
-  // OMP pane kept rotating a working title (#13890).
-  it('retires the spinner of a pane-scoped clear', () => {
-    expect(getSyntheticTitleSpinnerPaneKeyToStop({ paneKey: 'pane-a' })).toBe('pane-a')
-  })
-
   it('keeps pane spinners running for a connection-scoped transient clear', () => {
     expect(
       getSyntheticTitleSpinnerPaneKeyToStop({

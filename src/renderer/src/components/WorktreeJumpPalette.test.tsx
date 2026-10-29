@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as ReactI18Next from 'react-i18next'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
-import { encodePaletteIdentity } from '@/lib/palette-match/palette-ranking'
+import { encodePaletteIdentity } from '../../../shared/palette-match/palette-ranking'
 import type { activateAndRevealWorkspace as ActivateWorkspace } from '@/lib/worktree-activation'
 import type { WorkspaceTabPaletteActivationResult } from '@/lib/workspace-tab-palette-activation'
 import { toast } from 'sonner'
@@ -59,8 +59,7 @@ vi.mock('@/components/repo/RepoBadgeLabel', () => ({
   RepoBadgeMark: () => <span data-repo-badge-mark="true" />
 }))
 
-// Why: activation reaches into window.api and the whole worktree-reveal path; the palette's own
-// contract is which result it hands over, so stub the boundary and assert on that.
+// Stub activation at its boundary; the palette contract is which result it hands over.
 const { activateWorkspaceTabPaletteResult } = vi.hoisted(() => ({
   activateWorkspaceTabPaletteResult: vi.fn(
     (_result: unknown): WorkspaceTabPaletteActivationResult => ({ status: 'activated' })
@@ -73,8 +72,7 @@ vi.mock('@/lib/workspace-tab-palette-activation', () => ({
 vi.mock('@/components/ui/command', async () => {
   const React = await import('react')
   return {
-    // Why the commandProps passthrough: cmdk resolves Enter against its `value`, so the controlled
-    // value is the only honest stand-in for "what would Enter activate" without mounting real cmdk.
+    // Pass controlled cmdk value through so Enter-target assertions reflect actual selection.
     CommandDialog: ({
       children,
       open,
@@ -463,8 +461,7 @@ describe('WorktreeJumpPalette', () => {
 
     expect(testContainer.textContent).toContain('Default branch workspace')
     expect(testContainer.textContent).not.toContain('Feature workspace')
-    // Why kept: the exemption keys on isMainWorktree, not the branch name, so a
-    // branchless folder workspace is the project's entry point too.
+    // Main-checkout exemption includes branchless folder workspaces as project entry points.
     expect(testContainer.textContent).toContain('Folder workspace')
   })
 
@@ -519,7 +516,6 @@ describe('WorktreeJumpPalette', () => {
 
     expect(testContainer.textContent).toContain('Feature workspace')
     expect(testContainer.textContent).toContain('Default branch workspace')
-    // Why kept: same isMainWorktree exemption — folder workspaces are covered.
     expect(testContainer.textContent).toContain('Folder workspace')
   })
 
@@ -630,9 +626,7 @@ describe('WorktreeJumpPalette', () => {
     expect(testContainer.textContent).toContain('Second repository workspace')
   })
 
-  // STA-4343 closed: two workspaces sharing `repoId::path` across hosts are two distinct
-  // rows. The documents map and worktreeMap are keyed by host identity, so each row resolves
-  // to its OWN worktree, and render keys keep the two apart for React and cmdk.
+  // Host-qualified document/row/command keys must keep same-path workspaces on different hosts independently selectable (STA-4343).
   it('routes activation to each row own host when two same-id rows collide', async () => {
     const local = makeWorktree('shared', 'Local workspace', { hostId: 'local' })
     const ssh = makeWorktree('shared', 'SSH workspace', { hostId: 'ssh:box' })
@@ -653,7 +647,6 @@ describe('WorktreeJumpPalette', () => {
       encodePaletteIdentity(['worktree', 'ssh:box|shared'])
     ])
 
-    // The first row names ITS OWN host — the wrong-host open is gone.
     await act(async () => fireEvent.click(rows[0]!))
     expect(activateAndRevealWorkspace).toHaveBeenLastCalledWith('shared', {
       navigationIntent: 'user-open',
@@ -661,8 +654,7 @@ describe('WorktreeJumpPalette', () => {
     })
   })
 
-  // Why a separate render: activating closes the palette, so the sibling row is detached
-  // before a second click in the same test could reach it.
+  // Use a fresh render because activation closes the palette and detaches the sibling row.
   it('routes the second same-id row to the other host', async () => {
     const local = makeWorktree('shared', 'Local workspace', { hostId: 'local' })
     const ssh = makeWorktree('shared', 'SSH workspace', { hostId: 'ssh:box' })

@@ -1,6 +1,4 @@
-// A Claude child's close and its exit, on the shipping adapter and host. A Stop begins the child's
-// close; every later stop, start and provider write joins it; the exit, whenever it is proven, ends
-// the child's record; and a close still unverifiable fails what needed the child, holding nothing.
+// All provider operations join close; proven exit ends the child record, unproven close refuses dependent work.
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -94,7 +92,7 @@ beforeEach(async () => {
     claimKeyId: 'key-1',
     mintSpawnToken: () => 'spawn-a',
     logger: log.logger,
-    // Ticked by hand only, and with no idle window: a tick reaps whatever is at rest.
+    // Tick manually with no idle threshold to reap resting agents.
     idleSweep: { intervalMs: 3_600_000, idleMs: 0 },
     now: () => now
   })
@@ -126,7 +124,6 @@ function envelope(
     | 'agentSession.cancel'
     | 'agentSession.setOption'
     | 'agentSession.queuedMessageSend',
-  // The fingerprint's own field shape, as the sibling host tests type it.
   fields: Parameters<typeof computeAgentSessionPayloadFingerprint>[0]['fields']
 ) {
   return {
@@ -200,7 +197,7 @@ function laneDrained(): Promise<void> {
   return host['tasks'].serialize(SESSION, async () => {})
 }
 
-/** As the real connection: once a close begins it refuses every write, proven or not. */
+/** Refuse writes as soon as close starts, before exit proof. */
 function closeUnprovenFor(connection: FakeConnection, failures: number): void {
   const close = connection.close
   let left = failures
@@ -242,7 +239,6 @@ function lease() {
   return store.getRecord(SESSION)?.lease
 }
 
-/** Stops a running turn; its child's close cannot prove the exit `failures` times. */
 async function stopWithUnprovenClose(failures: number): Promise<FakeConnection> {
   const connection = claude.connections[0]!
   await openTurn(connection)
@@ -251,7 +247,6 @@ async function stopWithUnprovenClose(failures: number): Promise<FakeConnection> 
   frame(connection, INTERRUPTED_RESULT)
   await laneDrained()
   expect(connection.closeCount).toBe(1)
-  // The child stays on record with its close begun, never as a stored obligation beside it.
   expect(child()?.close).toMatchObject({ cause: 'user-stop' })
   return connection
 }
@@ -299,7 +294,6 @@ it('joins the close a Stop could not prove before the next message, then sends i
 it('has a second Stop join the close the first could not prove, retrying its kill', async () => {
   const connection = await stopWithUnprovenClose(1)
 
-  // Nothing was queued, so it withdrew nothing and records no event of its own.
   await expect(stop()).resolves.toMatchObject({ ok: true, value: { cancelled: false } })
   expect(connection.closeCount).toBe(2)
   expect(child()).toBeNull()
@@ -326,7 +320,6 @@ it('has a send made while the close still runs wait for that close, not start an
   await expect(stop()).resolves.toMatchObject({ ok: true, value: { cancelled: true } })
   frame(connection, INTERRUPTED_RESULT)
 
-  // Accepted on the chat's queue behind the Stop's close, which nothing abandons meanwhile.
   const sent = send('Carry on.')
   await eventually(() => expect(attempts).toBe(1))
   expect(claude.connections).toHaveLength(1)
@@ -334,12 +327,10 @@ it('has a send made while the close still runs wait for that close, not start an
   await sent
 
   await resumedWith(connection, 'Carry on.')
-  // One close of the old child, which the send waited on rather than starting its own.
   expect(attempts).toBe(1)
   expect(connection.closeCount).toBe(1)
 })
 
-// The verdict is the root's exit; the resume point written after it is bookkeeping.
 it('ends the record at the proven exit though the resume-point write after it never settles', async () => {
   const connection = claude.connections[0]!
   await openTurn(connection)
@@ -356,7 +347,6 @@ it('ends the record at the proven exit though the resume-point write after it ne
 
 it('ends the record when the root exits after its close gave up, with no one asking again', async () => {
   const connection = claude.connections[0]!
-  // A background task the old agent was running when the Stop's close came back unproven.
   frame(connection, {
     type: 'system',
     subtype: 'task_started',
@@ -368,7 +358,6 @@ it('ends the record when the root exits after its close gave up, with no one ask
   await stopWithUnprovenClose(1)
   childWork.length = 0
 
-  // The connection reports the root's exit as the end of the close Orca began.
   connection.handlers.onExit?.(new Error('claude exited'), { expected: true })
 
   await eventually(() => expect(child()).toBeNull())
@@ -376,7 +365,6 @@ it('ends the record when the root exits after its close gave up, with no one ask
   expect(host['sessions'].get(SESSION)?.lastEndedChild).toMatchObject({ cause: 'user-stop' })
   expect(connection.closeCount).toBe(2)
   expect(claude.connections).toHaveLength(1)
-  // The child work ends with the session, so nothing is left shown running for a dead agent.
   await eventually(() => expect(childWork).toContain('session-ended'))
 })
 
@@ -394,7 +382,6 @@ it('sends after a proven exit whose resume-point write and lease release both fa
   await expect(stop()).resolves.toMatchObject({ ok: true, value: { cancelled: true } })
   frame(connection, INTERRUPTED_RESULT)
   await eventually(() => expect(child()).toBeNull())
-  // Both reported; neither kept the dead child on record.
   await eventually(() =>
     expect(scopes()).toEqual(
       expect.arrayContaining(['claude-close-resume-point', 'exit-owner-release'])
@@ -402,12 +389,10 @@ it('sends after a proven exit whose resume-point write and lease release both fa
   )
   expect(lease()?.claimStatus).toBe('live')
 
-  // The start writes the release from this host's proof of that exit.
   await send('Carry on.')
   await resumedWith(connection, 'Carry on.')
 })
 
-// A crash's reason can carry kilobytes of stderr; the release a start re-derives must still land.
 it('sends after a crash with a long reason whose own lease release failed', async () => {
   const connection = claude.connections[0]!
   const transition = store.transitionHandoff.bind(store)
@@ -443,7 +428,6 @@ it('rejects a message whose start meets a close still unverifiable, and starts n
     kind: 'restartFailed',
     refusal: { details: { reason: 'previousExitUnverifiable' } }
   })
-  // Rejected, never held: no waiting note, and the old child still on record.
   const notes = (await host.journalSnapshot(SESSION)).items.filter(
     (item) => item.body.kind === 'status' && item.body.failure?.kind === 'previousExitUnverifiable'
   )
@@ -463,7 +447,7 @@ it('saves an option change while the close stays unverifiable without writing to
   expect(connection.closeCount).toBe(1)
   expect(connection.calls).toEqual(calls)
 
-  // The pick remains saved for a later start while the old child is still unverifiable.
+  // Keep the saved choice without touching the unverifiable child.
   await expect(setModel('claude-opus-5')).resolves.toMatchObject({ ok: true })
   expect(connection.calls).toEqual(calls)
   expect(child()?.close).toBeDefined()
@@ -473,7 +457,7 @@ it('saves an option change while the close stays unverifiable without writing to
 it('keeps an option change at rest when the Stop proved the exit and only its drain failed', async () => {
   const connection = claude.connections[0]!
   await openTurn(connection)
-  // The Stop reads the journal without a drain, so the exit's wind-down is the only drain to fail.
+  // Stop’s read does not drain; fail only exit wind-down’s barrier.
   vi.spyOn(host['runtimeState'].eventSinkFor(SESSION), 'lifecycleBarrier').mockResolvedValueOnce({
     ok: false,
     error: new Error('drain barrier lost')
@@ -557,7 +541,7 @@ it('retains exit ownership through kept reattach and final-tail failure recovery
     return result
   })
   const recovery = vi.spyOn(host['eventRecovery'], 'recoverAfterSinkFailure')
-  // A repeated attach replays its original operation; a new one cannot take a live lease.
+  // Replayed attach reuses its operation; fresh attach cannot steal a live lease.
   const reattaching = host.attach(CALLER, initialAttach)
   try {
     await eventually(() => expect(reserved).toHaveBeenCalledOnce())
@@ -602,7 +586,7 @@ it('delivers a message accepted after a tab close was asked for, when the late e
   const closing = child()!
   expect(closing.close).toMatchObject({ cause: 'user-close' })
 
-  // The message is accepted, then the exit report ends the child, before the delivery step runs.
+  // Accept before the exit report, then hold delivery until exit handling runs.
   const held = deferred<void>()
   const holding = host['tasks'].serialize(SESSION, () => held.promise)
   const sent = send('Carry on.')
@@ -617,7 +601,7 @@ it('delivers a message accepted after a tab close was asked for, when the late e
   const next = await sent
   await ended
 
-  // The close was asked for before the message, so its end closes nothing the message carries.
+  // The message postdates close, so that close cannot settle it.
   await resumedWith(connection, 'Carry on.')
   expect(await submission(next)).not.toMatchObject({ dispatchState: 'rejected' })
 })
@@ -625,7 +609,7 @@ it('delivers a message accepted after a tab close was asked for, when the late e
 it('fails only the message its own refusal is about, never one accepted while that start was refused', async () => {
   const connection = claude.connections[0]!
   await openTurn(connection)
-  // The Stop's close and the first send's join both come back unproven; the second's proves.
+  // Fail Stop/first join proof, then let the second join prove exit.
   const close = connection.close
   const joined = deferred<boolean>()
   let attempts = 0
@@ -645,7 +629,6 @@ it('fails only the message its own refusal is about, never one accepted while th
 
   const first = await send('First.')
   await eventually(() => expect(attempts).toBe(2))
-  // Accepted while the first send's join still runs, then that join comes back unproven.
   const second = send('Second.')
   joined.resolve(false)
 
@@ -665,7 +648,6 @@ it('runs the stop again for every ask after a close that came back unproven', as
   await eventually(() => expect(connection.closeCount).toBe(3))
   await laneDrained()
 
-  // Each ask asked again; the third proves the exit.
   await send('Third.')
   await resumedWith(connection, 'Third.')
   expect(connection.closeCount).toBe(4)

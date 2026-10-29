@@ -1,7 +1,3 @@
-// What a failed journal open means for the chat: its history is damaged, which no retry reads
-// past; a newer Orca wrote it, which only an update gets past; or the open failed in a way that can
-// clear (a lock, permissions, too many open files).
-
 import type { AgentSessionRefusalReason } from '../../../shared/agent-session-refusal-details'
 import { agentSessionWriteNoticeEnglish } from '../../../shared/agent-session-refusal-notice'
 import {
@@ -17,17 +13,13 @@ import type { StructuredAgentSessionLogger } from '../agent-session-wire/structu
 
 type JournalRefusalReason = AgentSessionRefusalReason<'agent_session_journal_unreadable'>
 
-/** Why an open failed, as the storage shows it; a newer Orca's journal is told apart first. */
 export type JournalOpenFailure = Exclude<JournalRefusalReason, 'journalWrittenByNewerOrca'>
 
-/** A history whose rows are not what they promise: a row no build wrote, a gap, no epoch row. */
 export class JournalDamageError extends Error {
   override readonly name = 'JournalDamageError'
 }
 
-/** The one way a chat's load fails on its rows, wherever they are read, and every row is left where
- *  it is. A newer Orca's row is refused as one only an update opens, and wins over damage beside
- *  it; damage is refused as history that cannot be loaded. */
+/** Newer content outranks adjacent damage; refuse unreadable history without deleting rows. */
 export function failLoadOnUnloadableJournal(sessionId: string, load: JournalLoad): void {
   if (load.newer) {
     throw journalOpenRefusalError(
@@ -46,16 +38,14 @@ export function failLoadOnUnloadableJournal(sessionId: string, load: JournalLoad
   )
 }
 
-/** A database only an unreleased development build wrote: left as found, never migrated. */
 export class JournalUnreleasedSchemaError extends Error {
   override readonly name = 'JournalUnreleasedSchemaError'
 }
 
-// Bounds a cause chain that loops back on itself.
+// Bound cyclic error-cause chains.
 const MAX_CAUSE_DEPTH = 8
 
-/** Unusable only where proven: damage the storage or the rows show, or a file only an unreleased
- *  build wrote. Anything unproven can clear. */
+/** Only proven corruption or unreleased schemas are permanent; unproven failures may clear. */
 export function classifyJournalOpenFailure(error: unknown): JournalOpenFailure {
   let current = error
   for (let depth = 0; depth < MAX_CAUSE_DEPTH && current !== undefined; depth += 1) {
@@ -71,7 +61,7 @@ export function classifyJournalOpenFailure(error: unknown): JournalOpenFailure {
   return 'journalUnavailable'
 }
 
-// Released clients print a refusal's message for a send; it fits a Stop too.
+// Released clients print these messages for sends and Stops.
 const JOURNAL_OPEN_MESSAGE: Record<JournalRefusalReason, string> = {
   journalCorrupt: agentSessionWriteNoticeEnglish(['historyUnusable']),
   journalUnavailable: agentSessionWriteNoticeEnglish(['historyUnavailable', 'tryAgain']),
@@ -83,20 +73,16 @@ const JOURNAL_OPEN_MESSAGE: Record<JournalRefusalReason, string> = {
 
 export const JOURNAL_NEWER_SCHEMA_MESSAGE = JOURNAL_OPEN_MESSAGE.journalWrittenByNewerOrca
 
-/** A newer Orca wrote the database, or one of this chat's rows: an update is what gets past it. */
 export function isJournalWrittenByNewerOrca(error: unknown): boolean {
   return error instanceof AgentSessionJournalError && error.code === 'journal_read_only'
 }
 
-/** Why a journal open failed. A newer Orca's journal clears when this Orca is updated, so it is
- *  not damage. */
 function journalRefusalReason(error: unknown): JournalRefusalReason {
   return isJournalWrittenByNewerOrca(error)
     ? 'journalWrittenByNewerOrca'
     : classifyJournalOpenFailure(error)
 }
 
-/** Why a journal open failed, and the words a released client prints for it. */
 function journalOpenFailureWords(error: unknown): {
   reason: JournalRefusalReason
   message: string
@@ -105,8 +91,7 @@ function journalOpenFailureWords(error: unknown): {
   return { reason, message: JOURNAL_OPEN_MESSAGE[reason] }
 }
 
-/** The refusal a failed journal open answers with, as the wire carries it. One already classified
- *  passes through as it is: its own cause is not on it to classify again. */
+/** Preserve preclassified refusals; their original cause is not available for reclassification. */
 export function journalOpenRefusal(error: unknown): AgentSessionWireRefusal {
   if (isAgentSessionRefusalError(error)) {
     return error.refusal
@@ -115,7 +100,6 @@ export function journalOpenRefusal(error: unknown): AgentSessionWireRefusal {
   return refuse('agent_session_journal_unreadable', { reason }, message)
 }
 
-/** A newer Orca's journal refuses a write with the words a send gets there. */
 export async function refusingNewerOrcaJournal<TOutcome>(
   run: Promise<TOutcome>
 ): Promise<TOutcome | { ok: false; refusal: AgentSessionWireRefusal }> {
@@ -129,8 +113,7 @@ export async function refusingNewerOrcaJournal<TOutcome>(
   }
 }
 
-/** The same refusal, thrown: for a host that could not open the journal at all. It keeps what
- *  failed as its cause, for the log. */
+/** Preserve the original storage failure as a loggable cause. */
 export function journalOpenRefusalError(error: unknown): AgentSessionRefusalError {
   if (isAgentSessionRefusalError(error)) {
     return error
@@ -142,11 +125,7 @@ export function journalOpenRefusalError(error: unknown): AgentSessionRefusalErro
   )
 }
 
-/**
- * What a read throws when the conversation it reaches cannot be opened. The storage's own text
- * (a path, "file is not a database") goes to the log only; the reader gets the classified refusal,
- * whose message stays the bare code.
- */
+/** Keep storage paths/details in logs; readers receive only classified refusal codes. */
 export function journalOpenReadRefusal(
   error: unknown,
   logger: StructuredAgentSessionLogger,
@@ -160,16 +139,12 @@ export function journalOpenReadRefusal(
 
 const MAX_LOGGED_SESSIONS = 256
 
-/**
- * The read door's refusals for one host. A reader reconnects on a timer while an open can clear,
- * so a session's failure is logged once until that session opens or the failure changes.
- */
+/** Reconnecting readers log once per session until failure changes or the session opens. */
 export function createJournalOpenReadRefusals(logger: StructuredAgentSessionLogger) {
   const logged = new Map<string, string>()
-  /** Whether this failure is news for the session, noting it if so. */
   const firstSeen = (sessionId: string, failure: string): boolean => {
     const repeat = logged.get(sessionId) === failure
-    // Past the cap a new session logs every failure rather than evict another's.
+    // At capacity, log new sessions repeatedly rather than evicting another session's failure.
     if (!repeat && (logged.has(sessionId) || logged.size < MAX_LOGGED_SESSIONS)) {
       logged.set(sessionId, failure)
     }
@@ -178,7 +153,6 @@ export function createJournalOpenReadRefusals(logger: StructuredAgentSessionLogg
   return {
     refusal: (sessionId: string, error: unknown): AgentSessionRefusalError => {
       if (isAgentSessionRefusalError(error)) {
-        // A load refused on its rows (damage, a newer Orca's chat) arrives classified.
         const { refusal } = error
         const cause = error.cause instanceof Error ? error.cause.message : String(error.cause)
         if (
@@ -194,7 +168,6 @@ export function createJournalOpenReadRefusals(logger: StructuredAgentSessionLogg
       const log = firstSeen(sessionId, failure) ? { logger, sessionId } : null
       return unreadableRefusal(error, reason, log)
     },
-    /** The session opened or closed: its next failure is news. */
     forget: (sessionId: string): void => {
       logged.delete(sessionId)
     }

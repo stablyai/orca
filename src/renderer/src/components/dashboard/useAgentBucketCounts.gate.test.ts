@@ -33,9 +33,7 @@ function storeState(): AppState {
   } as unknown as AppState
 }
 
-// What `useShallow` did before the gate, unwrapped from the hook so it can be
-// driven directly: allocate the 15-key object, then `shallow()` it against the
-// previous one. Kept here as the comparison baseline.
+// Baseline the prior useShallow path: allocate input slices and compare them on every write.
 let previousShallow: Record<string, unknown> | null = null
 const shallowInputs = (s: AppState): Record<string, unknown> => ({
   repos: s.repos,
@@ -113,8 +111,7 @@ describe('agent bucket count input gate', () => {
     })
 
     expect(gated).toEqual({ entries: 0, maps: 0 })
-    // zustand v5's shallow() takes the compareEntries path on a plain object:
-    // two Object.entries arrays and two Maps per write, to conclude nothing moved.
+    // Zustand v5 compares plain-object entries using two arrays and two Maps per unchanged write.
     expect(shallowBaseline.entries).toBe(STORE_WRITES * 2)
     expect(shallowBaseline.maps).toBe(STORE_WRITES * 2)
   })
@@ -136,10 +133,10 @@ describe('agent bucket count input gate', () => {
     expect(second.agentStatusEpoch).toBe(1)
   })
 
-  it('carries every slice the counts read, and settings pinned to null', () => {
+  it('carries canonical contexts and every row-owner input the counts read', () => {
     const state = storeState()
     const inputs = selectAgentBucketCountState(state)
-    expect(inputs.settings).toBeNull()
+    expect(inputs.settings).toBe(state.settings)
     for (const key of [
       'repos',
       'worktreesByRepo',

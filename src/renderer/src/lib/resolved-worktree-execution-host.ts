@@ -52,10 +52,7 @@ function getResolvedFolderHost(
   return folder && (group || preferredHostId) ? (preferredHostId ?? LOCAL_EXECUTION_HOST_ID) : null
 }
 
-/**
- * Resolves a host only when hydrated ownership proves it. Why: a restored SSH
- * worktree can temporarily collide with a local repo row during catalog load.
- */
+/** Require hydrated ownership: restored SSH worktrees can collide with local repo rows while catalogs load. */
 export function getResolvedExecutionHostIdForWorktree(
   state: WorktreeRuntimeOwnerState,
   worktreeId: string | null | undefined
@@ -100,7 +97,7 @@ export function getResolvedExecutionHostIdForWorktree(
 export function getActiveWorkspaceOwnerTarget(
   state: WorktreeRuntimeOwnerState
 ): RuntimeClientTarget | null {
-  // Why: with no paired server every RPC owner is this app; skip the owner-index build.
+  // Without paired servers all RPC owners are this app; skip building the owner index.
   if (state.runtimeEnvironmentCatalogHydrated && state.runtimeEnvironments?.length === 0) {
     return null
   }

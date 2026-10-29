@@ -148,8 +148,7 @@ export function statusPreviewForEntry(
 
 export type ActivityThreadStatusId = AgentDotState
 
-/** Single classifier behind grouping, labels, and clear-completed; the only place the
- *  verdict predicate is spelled. */
+/** Keep grouping, labels and clear-completed on one verdict classifier. */
 export function activityThreadStatusId(thread: AgentPaneThread): ActivityThreadStatusId {
   // Why: a failed main agent outranks the subagent work still holding its row live.
   if (thread.currentAgentEntry && agentVerdictDisplayMark(thread.currentAgentEntry) === 'failed') {
@@ -187,8 +186,7 @@ function threadCurrentState(
 }
 
 export function threadAgentStateLabel(thread: AgentPaneThread): string {
-  // Literal keys with literal fallbacks: a dynamic key registers no catalog reference
-  // and forces every state string into the boot bundle.
+  // Literal translation keys/fallbacks register catalog references and avoid bundling every state string at boot.
   switch (activityThreadStatusId(thread)) {
     case 'working':
       return translate('auto.components.activity.ActivityPrototypePage.state.working', 'Working')

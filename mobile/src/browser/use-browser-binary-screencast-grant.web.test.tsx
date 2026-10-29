@@ -1,13 +1,9 @@
-/**
- * The web half of ruling 5, driven through the real bridge handshake rather than a stubbed client:
- * what the pane reads is what `init` actually carried.
- */
+// Drive web grant negotiation through real init handshake rather than stubbed client (ruling 5).
 import type { ReactElement } from 'react'
 import { act, create } from 'react-test-renderer'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-// The provider module re-exports the screen hooks, and reaching the real ones imports the Expo
-// runtime this test does not have. Nothing below calls one.
+// Mock unused provider hook re-exports to avoid importing Expo runtime.
 vi.mock('../transport/host-client-hooks', () => ({
   useDisconnectHostClient: () => () => {},
   useForceReconnect: () => null,
@@ -17,14 +13,12 @@ vi.mock('../transport/host-client-hooks', () => ({
   useRefreshHostClient: () => () => {}
 }))
 
-import { MobileWebBundleRouteSchema } from '../../../src/shared/mobile-web-bundle/manifest-contract'
 import { RpcClientProvider } from '../transport/client-context.web'
 import {
   createFakeBridgePortPair,
   type BridgePortPair
 } from '../mobile-web-shell/bridge/bridge-port-pair-test-harness'
 import { useBrowserBinaryScreencastGrant } from './use-browser-binary-screencast-grant.web'
-import { useBrowserBinaryScreencastGrant as useBrowserBinaryScreencastGrantNatively } from './use-browser-binary-screencast-grant'
 
 /** C6.1's name, restated here so a rename has to change both sides of the seam. */
 const GRANT = 'screencastBinary'
@@ -70,21 +64,5 @@ describe('the binary screencast grant on the web', () => {
 
   it('is refused by a shell too old to have heard of it at all', async () => {
     expect(await mount(createFakeBridgePortPair({ routeGrants: [] }))).toBe(false)
-  })
-
-  it('is unconditional on native, where the socket carries the frame itself', () => {
-    expect(useBrowserBinaryScreencastGrantNatively()).toBe(true)
-  })
-
-  // Checked against the contract rather than by eye: a route naming a grant the manifest refuses
-  // never reaches a shell at all, so the pane would take its error branch for a reason no screen
-  // could report. The dotted spelling this name nearly had is the case that fails.
-  it('is a name the bundle manifest will carry', () => {
-    const route = (grant: string) => ({ pathname: '/h/[hostId]/session/[id]', grants: [grant] })
-
-    expect(MobileWebBundleRouteSchema.safeParse(route(GRANT)).success).toBe(true)
-    expect(MobileWebBundleRouteSchema.safeParse(route('browser.screencast.binary')).success).toBe(
-      false
-    )
   })
 })

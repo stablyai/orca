@@ -66,8 +66,7 @@ function claudeTranscript(rowCount: number, sessionId: string): string {
     const body = isUser
       ? `Question ${turn}: what does the rail do when I scroll a long reply?`
       : [
-          // Headings and code draw at heights the row estimate misses, so a jump
-          // crosses rows that resize under it.
+          // Vary heading/code heights so jumps cross rows that resize below their estimates.
           `## Answer for turn ${turn}`,
           `\`\`\`ts\n${Array.from({ length: 2 + (turn % 5) * 4 }, (_unused, line) => `const line${line} = ${turn}`).join('\n')}\n\`\`\``,
           ...Array.from(
@@ -150,9 +149,7 @@ test.describe('Native chat message rail', () => {
       const [box, viewport] = await Promise.all([row.boundingBox(), scroller.boundingBox()])
       return box && viewport ? Math.abs(box.y - viewport.y) : Number.POSITIVE_INFINITY
     }
-    // One click lands the message at the top and lights its tick: from the end to a
-    // message near it, then across the thread, with rows resizing under each jump.
-    // Animated and instant jumps take different paths through the list.
+    // Require top alignment and tick selection across resizing rows in both animated and instant jump paths.
     for (const reducedMotion of ['reduce', 'no-preference'] as const) {
       await orcaPage.emulateMedia({ reducedMotion })
       for (const turn of [22, 12, 5]) {

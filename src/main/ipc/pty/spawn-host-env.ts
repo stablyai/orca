@@ -1,13 +1,14 @@
-// The env a new PTY starts with and the Codex home it runs, for both the window and the host spawn lane.
-
+import { getClaudeAgentViewService } from '../../claude/agent-view-service'
 import type { AgentProviderSessionMetadata } from '../../../shared/agent-session-resume'
 import { getAppEnvironment } from '../../../shared/app-environment'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import { stampRuntimeSourceEnv } from '../../../shared/runtime-source-env'
+import { SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV } from '../../../shared/setup-agent-sequencing'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import { isTuiAgent } from '../../../shared/tui-agent-config'
+import { addWslEnvKeys } from '../../../shared/wsl-env'
 import { isAgentStatusHooksEnabled } from '../../agent-hooks/managed-agent-hook-controls'
-import { awaitExplicitPiOmpGuestReadiness } from '../../agent-hooks/wsl-pi-omp-guest-readiness'
+import { awaitExplicitAgentPluginGuestReadiness } from '../../agent-hooks/wsl-agent-plugin-readiness'
 import { ensureCodexStateDbBackfillRecoveryStarted } from '../../codex/codex-state-db-backfill-recovery'
 import type { CodexSessionResumePreparation } from '../../codex/codex-session-resume-home'
 import type { CodexAccountSelectionTarget } from '../../codex-accounts/runtime-selection'
@@ -34,7 +35,6 @@ import { promoteAgentTeamsShimPath } from './host-env/path'
 import type { GetSelectedCodexHomePath } from './host-env/types'
 import { clearProviderPtyState } from './provider/state-cleanup'
 
-/** The Codex resume steps both lanes are handed (bound in register-handlers). */
 export type PtySpawnCodexResumeDeps = {
   prepareCodexResumeHome: (args: PrepareCodexResumeHomeArgs) => PreparedCodexResumeHome | null
   resolveCodexResumeLaunch: (
@@ -55,7 +55,7 @@ export type PtySpawnCodexResumeDeps = {
 export type PtySpawnHostEnv = {
   codexResumeLaunch: CodexResumeLaunch
   launchCommand: string | undefined
-  /** Before Orca's host env; TEMPORARY (rows 14-18 remove it): the window reports this one at commit. */
+  /** Environment before host injection; window commits report this snapshot. */
   baseEnv: Record<string, string> | undefined
   env: Record<string, string> | undefined
   selectedCodexHomePath: string | null
@@ -84,7 +84,7 @@ type PtySpawnHostEnvArgs = {
   mintedSessionId: boolean
   /** An account-switch restart resumes onto the selected account; only the window has one. */
   resumeOnSelectedAccount: boolean
-  /** TEMPORARY (row 7 removes it): the host builds no host env for an empty id; the window refuses it. */
+  /** Host accepts empty IDs without host env; window rejects them. */
   emptySessionIdSkipsHostEnv: boolean
   requestedAgentTeamsPath: string | undefined
   provider: IPtyProvider
@@ -104,16 +104,14 @@ export async function resolvePtySpawnHostEnv(args: PtySpawnHostEnvArgs): Promise
         launchAgent: args.launchAgent,
         providerSession: args.resumeProviderSession,
         target,
-        // Why: a host runtime skips resume prep for a launch whose env names a client-sent CODEX_HOME.
+        // Client-supplied CODEX_HOME can bypass host resume preparation.
         launchEnv: args.env,
         ...(args.resumeOnSelectedAccount ? { useSelectedAccount: true } : {})
       })
   const codexResumeLaunch = codexResumePreparation
     ? await deps.resolveCodexResumeLaunch(args.command, codexResumePreparation)
     : deps.noCodexResumeLaunch(args.preAdopted ? undefined : args.command)
-  // Why: these three phases have unrelated costs (session provenance + hook
-  // repair, account/auth resolution, then the synchronous env build). One
-  // `host_env` label hid all of them behind the name of the cheapest.
+  // Time provenance/hook repair, auth selection and env assembly separately to attribute their different costs.
   args.mark?.('codex_resume')
   const codexResumeHome = codexResumeLaunch.codexResumeHome
   const launchCommand = codexResumeLaunch.command
@@ -188,15 +186,15 @@ export async function resolvePtySpawnHostEnv(args: PtySpawnHostEnvArgs): Promise
     return hostEnv
   }
   if (sessionId === undefined) {
-    // Should be unreachable: a daemon spawn always has an id; defense-in-depth.
+    // Daemon spawns require an ID before environment preparation.
     throw new Error('Invariant violation: daemon spawn without sessionId')
   }
-  // Why: this id reaches filesystem paths; reject traversal/separators so a crafted payload can't escape the expected roots.
+  // Session IDs reach filesystem paths; reject traversal before any writes.
   if (!isSafePtySessionId(sessionId, getAppEnvironment().getPath('userData'))) {
     throw new Error('Invalid PTY session id')
   }
   const wslDistro = target.runtime === 'wsl' ? args.expectedWslDistro : null
-  // Why: clone before mutating so injections don't leak back into the caller's env (renderer may reuse it).
+  // Preserve caller environment for reused renderer/split requests.
   const env = { ...baseEnv }
   try {
     await inheritOmpLaunchEnvironment(env, {
@@ -204,11 +202,18 @@ export async function resolvePtySpawnHostEnv(args: PtySpawnHostEnvArgs): Promise
       launchAgent: args.launchAgent,
       launchCommand
     })
-    await awaitExplicitPiOmpGuestReadiness({
+    await awaitExplicitAgentPluginGuestReadiness({
+      settings: ptySettings,
       isWsl,
       distro: wslDistro,
       codexHomePath: selectedCodexHomePath,
       launchAgent: isTuiAgent(args.launchAgent) ? args.launchAgent : undefined,
+      launchCommand
+    })
+    await getClaudeAgentViewService().readyForLaunch({
+      settings: ptySettings,
+      isWsl,
+      launchAgent: args.launchAgent,
       launchCommand
     })
     buildPtyHostEnv(sessionId, env, {
@@ -224,6 +229,7 @@ export async function resolvePtySpawnHostEnv(args: PtySpawnHostEnvArgs): Promise
       isWsl,
       wslDistro,
       agentStatusHooksEnabled: isAgentStatusHooksEnabled(ptySettings),
+      claudeSubagentNavigationEnabled: ptySettings?.claudeSubagentNavigationEnabled,
       terminalInlineImages: ptySettings?.terminalInlineImages,
       disabledTuiAgents: ptySettings?.disabledTuiAgents,
       networkProxySettings: ptySettings,
@@ -241,8 +247,12 @@ export async function resolvePtySpawnHostEnv(args: PtySpawnHostEnvArgs): Promise
       getRuntimeSourceStamp(deps.runtime, getAppEnvironment().getPath('userData'))
     )
     promoteAgentTeamsShimPath(env, args.requestedAgentTeamsPath)
+    if (process.platform === 'win32' && env[SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV]) {
+      // Why: same-protocol daemons from older builds don't add this WSLENV entry themselves.
+      addWslEnvKeys(env, [SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV])
+    }
   } catch (err) {
-    // Why: host-env setup has fs side-effects (hooks, Pi/OMP install); only a minted id's state is ours to clear.
+    // Host prep creates hook/extension state; only this request's minted ID is safe to sweep.
     if (args.mintedSessionId) {
       clearProviderPtyState(sessionId)
     }

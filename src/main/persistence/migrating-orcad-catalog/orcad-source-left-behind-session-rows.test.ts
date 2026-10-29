@@ -7,6 +7,7 @@ import type { OrcadMigrationSourceScope } from './orcad-source-scope'
 
 const WORKTREE = 'repo-0::/home/dev/src/project-0'
 const SCOPE: OrcadMigrationSourceScope = {
+  kind: 'ssh-relay',
   targetId: 'ssh-box',
   targetGeneration: 1,
   hostId: toSshExecutionHostId('ssh-box'),

@@ -36,6 +36,14 @@ export async function reportCliChatResumeFailure(
     )
     return
   }
+  // The chat's agent refused to start while the terminal may still write the conversation.
+  if (
+    refusal?.code === 'agent_session_operation_invalid' &&
+    refusal.details?.reason === 'conversationOpenInTerminal'
+  ) {
+    toast.error(cliConversationExitGuidance(source.agent, true))
+    return
+  }
   if (refusal?.code === 'agent_session_identity_required') {
     if (refusal.details?.reason === 'transcriptNotFound') {
       toast.error(

@@ -1,18 +1,12 @@
-// The transcript's projection of a conversation's messages into the rows it draws:
-// ordered, tool runs folded into the turn that made them, harness turns dropped.
-// Shared so the host's conversation outline asks "which user messages draw a row?"
-// of exactly what the renderer's transcript runs, not a second reading of it.
-//
-// A session's subagents write into its journal, but their rows are not part of its
-// conversation: each subagent's rows are that subagent's, kept apart and folded on
-// their own, for the surface that shows them beside the spawn that ran it.
+// Share ordered/filter/fold projection with the host conversation outline so visible user rows agree with renderers.
+// Journal subagent rows belong to separate agent transcripts and fold beside their spawn, never into the conversation.
 
 import { nativeChatSemanticRowId, type NativeChatMessage } from './native-chat-types'
 import { compareAgentJournalPositions } from './agent-session-journal-position'
 import { agentJournalItemSubagentId } from './agent-session-journal-producer'
 import { stripNoiseMessages } from './native-chat-noise'
-import { foldToolMessages } from './native-chat-tool-fold'
-import { foldSubagentItems } from './native-chat-subagent-items'
+import { foldToolMessages } from './native-chat/tools/native-chat-tool-fold'
+import { foldSubagentItems } from './native-chat/transcript/native-chat-subagent-items'
 import { nativeChatTurnMembership, type NativeChatTurnJournal } from './native-chat-turn-membership'
 
 /** Timestamp, then id. A null timestamp sorts first so a source that cannot supply
@@ -40,11 +34,8 @@ export function compareNativeChatMessagesByTime(
   return Number(bReasoning) - Number(aReasoning)
 }
 
-/** Rows the journal holds read in the journal's own order, never its clock: a
- *  batch shares one timestamp, and a row recovered after a crash carries an
- *  earlier one. A row not in the journal yet — a send still on its way — was
- *  made after everything the journal holds, so it follows them; only such rows,
- *  and terminal-backed transcripts, which have no journal, order by time. */
+/** Journal position outranks clocks: batches share timestamps and crash recovery can backdate rows.
+ * Unadmitted optimistic sends follow journal rows; only those and journal-less terminal transcripts sort by time. */
 export function compareNativeChatTranscriptMessages(
   a: NativeChatMessage,
   b: NativeChatMessage
@@ -89,31 +80,60 @@ function projectRows(messages: readonly NativeChatMessage[]): NativeChatMessage[
   return stripNoiseMessages(foldToolMessages(foldSubagentItems(messages)))
 }
 
-function sortedCopy(
-  messages: readonly NativeChatMessage[],
-  compare: NativeChatMessageCompare
-): NativeChatMessage[] {
-  // Not `toSorted`: mobile's Hermes lacks it, and src/shared must stay loadable there.
-  return Array.from(messages).sort(compare)
+/** Preserve canonical sequence, inserting ordinary supplemental rows by their actual clocks. */
+export function orderNativeChatTranscriptEntries<T>(
+  entries: readonly T[],
+  messageOf: (entry: T) => NativeChatMessage,
+  compare: NativeChatMessageCompare = compareNativeChatTranscriptMessages
+): T[] {
+  if (entries.some((entry) => messageOf(entry).journalPosition)) {
+    return Array.from(entries).sort((a, b) => compare(messageOf(a), messageOf(b)))
+  }
+  const canonical: T[] = []
+  const supplemental: T[] = []
+  for (const entry of entries) {
+    const message = messageOf(entry)
+    const target =
+      message.source !== 'transcript' && message.transcriptOrder === undefined
+        ? supplemental
+        : canonical
+    target.push(entry)
+  }
+  canonical.sort((a, b) => compare(messageOf(a), messageOf(b)))
+  supplemental.sort((a, b) => compareNativeChatMessagesByTime(messageOf(a), messageOf(b)))
+  const ordered: T[] = []
+  let next = 0
+  for (const entry of canonical) {
+    while (
+      next < supplemental.length &&
+      compareNativeChatMessagesByTime(messageOf(supplemental[next]!), messageOf(entry)) < 0
+    ) {
+      ordered.push(supplemental[next++]!)
+    }
+    ordered.push(entry)
+  }
+  return ordered.concat(supplemental.slice(next))
 }
 
 /** The conversation alone. `compare` lets the renderer order its own tail rows
  *  (streaming, optimistic sends), which never exist on the host. */
 export function projectNativeChatTranscriptMessages(
   messages: readonly NativeChatMessage[],
-  compare: NativeChatMessageCompare = compareNativeChatTranscriptMessages
+  compare: NativeChatMessageCompare = compareNativeChatTranscriptMessages,
+  order?: (messages: readonly NativeChatMessage[]) => NativeChatMessage[]
 ): NativeChatMessage[] {
-  return projectNativeChatTranscript(messages, compare).conversation
+  return projectNativeChatTranscript(messages, compare, undefined, order).conversation
 }
 
-/** `journal`: what places the conversation's rows in their turns
- *  (`nativeChatTurnMembership`), so a subagent's row sits in the turn a parent row there would. */
+/** Use conversation turn membership for each subagent row, as though it were a parent row at that position. */
 export function projectNativeChatTranscript(
   messages: readonly NativeChatMessage[],
   compare: NativeChatMessageCompare = compareNativeChatTranscriptMessages,
-  journal?: NativeChatTurnJournal | null
+  journal?: NativeChatTurnJournal | null,
+  order = (rows: readonly NativeChatMessage[]) =>
+    orderNativeChatTranscriptEntries(rows, (row) => row, compare)
 ): NativeChatTranscriptProjection {
-  const sorted = sortedCopy(messages, compare)
+  const sorted = order(messages)
   const own: NativeChatMessage[] = []
   const byAgent = new Map<string, NativeChatMessage[]>()
   for (const message of sorted) {
@@ -143,8 +163,7 @@ export function projectNativeChatTranscript(
   const turnOf = new Map(sorted.map((message, index) => [message, turnKeys[index]]))
   const subagentRows = new Map<string, NativeChatSubagentRow[]>()
   for (const [agentId, rows] of byAgent) {
-    // Folded one parent turn at a time: a run the subagent carries across a turn
-    // boundary splits there, so each of its edits counts in the turn it was made.
+    // Split subagent folds at parent turn boundaries so edits count in the turn that produced them.
     const projected: NativeChatSubagentRow[] = []
     let chunk: NativeChatMessage[] = []
     let chunkTurn: string | undefined

@@ -12,7 +12,7 @@ export type ProfileStateWriterDiagnosticRequest = {
   acknowledgedRevision: number
 }
 
-// Only codes, counters, and timings: never payloads, paths, or profile ids.
+// Exclude payloads, paths and profile IDs from diagnostic fields.
 function errorFields(error: unknown): CrashReportBreadcrumbData {
   const code =
     error instanceof Error && 'code' in error && typeof error.code === 'string'
@@ -23,14 +23,14 @@ function errorFields(error: unknown): CrashReportBreadcrumbData {
 
 export type ProfileStateWriterSlowPhase = 'awaiting-reply' | 'awaiting-exit'
 
-/** Elapsed is monotonic time without an observed completion, not CPU time. */
+/** Monotonic wait duration, including stalled loops, rather than CPU time. */
 export function recordProfileStateWriterSlow(
   request: ProfileStateWriterDiagnosticRequest & {
     phase: ProfileStateWriterSlowPhase
     elapsedMs: number
   }
 ): void {
-  // Coalesced: one stall can leave consecutive requests slow in a single burst.
+  // Coalesce consecutive slow requests from one stall.
   recordCoalescedDurableCrashBreadcrumb({
     name: 'profile_state_writer_slow',
     data: request,

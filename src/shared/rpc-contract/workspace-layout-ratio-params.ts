@@ -20,10 +20,7 @@ const SplitRatioIntents = z
   )
   .min(1)
 
-/**
- * A tab's new divider ratios: `ratios`, or from a window older than them, `root` (the tab's tree
- * with its new ratios). Main refuses either where its panes differ.
- */
+/** Use ratios, or legacy root trees; main refuses either if pane identities differ. */
 export const SetPaneRatiosCommand = z
   .object({
     type: z.literal('setPaneRatios'),

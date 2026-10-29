@@ -10,7 +10,6 @@ type AgentDashboardSidebarHostProps = {
   statusBarVisible: boolean
 }
 
-/** Opt-in dashboard coordination stays outside the normal sidebar path. */
 export default function AgentDashboardSidebarHost({
   sidebarOpen,
   workspaceBoardOpen,

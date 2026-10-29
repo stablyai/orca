@@ -29,8 +29,7 @@ export function snoozeLinearAgentSkillSetupReminderToast(localDismissStorageKey:
 
 export function dismissLinearAgentSkillSetupReminderToast(localDismissStorageKey: string): void {
   const state = getExistingLinearAgentSkillSetupReminderState(localDismissStorageKey)
-  // Why: the state may already be evicted, but the deterministic id still lets
-  // cleanup dismiss a visible toast without recreating a cache entry.
+  // Deterministic toast IDs allow cleanup after state eviction without recreating cache entries.
   toast.dismiss(getLinearAgentSkillSetupReminderToastId(localDismissStorageKey))
   if (state) {
     state.activeToastId = undefined
@@ -74,8 +73,7 @@ export function useLinearAgentSkillSetupReminderToast({
     }
     const state = getLinearAgentSkillSetupReminderState(localDismissStorageKey)
     if (!state.modalShown) {
-      // Why: first eligible Linear activation gets the full setup flow; casual
-      // closes only change later activations for the same runtime target.
+      // Show the full setup flow once per target, then use reminders on later activations.
       state.modalShown = true
       state.lastToastActivationId = activationIdRef.current
       openSetupDialog()

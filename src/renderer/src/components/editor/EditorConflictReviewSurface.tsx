@@ -12,6 +12,9 @@ import type { FileContent } from './editor-panel-content-types'
 import { translate } from '@/i18n/i18n'
 import type { EditorConflictNavigation } from './useEditorConflictNavigation'
 
+// Retry is a user act: it may start a stopped WSL distro.
+const USER_RETRY = { wakeWslDistro: true }
+
 export function EditorConflictReviewSurface({
   activeFile,
   viewStateScopeId,
@@ -32,15 +35,19 @@ export function EditorConflictReviewSurface({
   openFiles: OpenFile[]
   worktreeEntries: GitStatusEntry[]
   pendingEditorReveal: PendingEditorReveal | null
-  getConflictNavigation: (file: OpenFile, content: string) => EditorConflictNavigation | undefined
+  getConflictNavigation: (
+    file: OpenFile,
+    content: string,
+    viewStateId: string
+  ) => EditorConflictNavigation | undefined
   handleContentChangeForFile: (file: OpenFile, content: string) => void
   handleSaveForFile: (file: OpenFile, content: string) => Promise<boolean>
-  reloadContent: (file: OpenFile) => void
+  reloadContent: (file: OpenFile, options?: { wakeWslDistro?: boolean }) => void
 }): React.JSX.Element {
   const openConflictReviewFile = useAppStore((s) => s.openConflictReviewFile)
   const openConflictReview = useAppStore((s) => s.openConflictReview)
   const closeFile = useAppStore((s) => s.closeFile)
-  // Why: re-render when a record gains or loses views, so the overview follows the record.
+  // Follow shared-record view ownership changes even when no other selector updates.
   useAppStore((s) => s.editorBufferViews)
   const setRightSidebarTab = useAppStore((s) => s.setRightSidebarTab)
   const selectedConflictReviewFile = activeFile.conflictReview?.selectedFileId
@@ -64,7 +71,7 @@ export function EditorConflictReviewSurface({
     entry: GitStatusEntry
   ): { contentFile: OpenFile; recordView: OpenFile | null } => {
     const absolutePath = joinPath(activeFile.filePath, entry.path)
-    // Why: an open view of the file lends its id, so the overview mounts its record's model and draft.
+    // Borrow the open view’s ID to share its model and draft.
     const recordView = conflictOverviewView(
       useAppStore.getState(),
       activeFile.worktreeId,
@@ -82,7 +89,10 @@ export function EditorConflictReviewSurface({
                 'auto.components.editor.EditorContent.8b1a605bae',
                 'This file is in a conflict state, but no working-tree file is available to edit.'
               ),
-              guidance: 'Resolve the conflict in Git or restore one side before reopening it.'
+              guidance: translate(
+                'auto.components.editor.EditorContent.resolveConflictGuidance',
+                'Resolve the conflict in Git or restore one side before reopening it.'
+              )
             }
           : {
               kind: 'conflict-editable' as const,
@@ -148,8 +158,8 @@ export function EditorConflictReviewSurface({
           <EditorFileLoadErrorView
             message={fileContent.loadError}
             code={fileContent.loadErrorCode}
-            // Why: a borrowed view reloads through its own workspace, never re-owned by this one.
-            onRetry={() => reloadContent(recordView ?? contentFile)}
+            // Borrowed views reload through their owning workspace.
+            onRetry={() => reloadContent(recordView ?? contentFile, USER_RETRY)}
           />
         </div>
       )
@@ -160,6 +170,8 @@ export function EditorConflictReviewSurface({
           <div className={className}>
             <ImageViewer
               content={fileContent.content}
+              src={fileContent.mediaUrl}
+              byteSize={fileContent.size}
               filePath={contentFile.filePath}
               mimeType={fileContent.mimeType}
             />
@@ -182,9 +194,13 @@ export function EditorConflictReviewSurface({
     const monacoLanguage = selectedLanguage === 'notebook' ? 'json' : selectedLanguage
     const selectedViewStateKey = `${contentFile.filePath}::${viewStateScopeId}:${viewStateKeySuffix}`
     const selectedContent = editBuffers[contentFile.id] ?? fileContent.content
-    // Why: a read-only overview borrows another tab's id; it must not take that tab's reveal.
+    const editorViewStateId = readOnly
+      ? `${viewStateScopeId}:${viewStateKeySuffix}`
+      : viewStateScopeId
+    // Overview navigation stays in its own mirror; borrowed-tab reveals belong to that tab.
     const reveal =
-      !readOnly && matchesPendingEditorReveal(pendingEditorReveal, contentFile)
+      matchesPendingEditorReveal(pendingEditorReveal, contentFile, editorViewStateId) &&
+      (!readOnly || pendingEditorReveal.viewStateId === editorViewStateId)
         ? pendingEditorReveal
         : null
 
@@ -194,7 +210,11 @@ export function EditorConflictReviewSurface({
           <ConflictBanner
             file={contentFile}
             entry={entry}
-            conflictNavigation={getConflictNavigation(contentFile, selectedContent)}
+            conflictNavigation={getConflictNavigation(
+              contentFile,
+              selectedContent,
+              editorViewStateId
+            )}
           />
         )}
         <div className={autoHeight ? 'shrink-0' : 'min-h-0 flex-1'}>
@@ -203,6 +223,7 @@ export function EditorConflictReviewSurface({
             fileId={contentFile.id}
             filePath={contentFile.filePath}
             viewStateKey={selectedViewStateKey}
+            viewStateId={editorViewStateId}
             relativePath={contentFile.relativePath}
             content={selectedContent}
             language={monacoLanguage}
@@ -292,9 +313,10 @@ export function EditorConflictReviewSurface({
 
 function matchesPendingEditorReveal(
   reveal: PendingEditorReveal | null,
-  file: Pick<OpenFile, 'id' | 'filePath'>
+  file: Pick<OpenFile, 'id' | 'filePath'>,
+  viewStateId: string
 ): reveal is PendingEditorReveal {
-  if (!reveal) {
+  if (!reveal || (reveal.viewStateId && reveal.viewStateId !== viewStateId)) {
     return false
   }
   return reveal.fileId ? reveal.fileId === file.id : reveal.filePath === file.filePath

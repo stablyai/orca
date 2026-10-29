@@ -4,9 +4,7 @@ import { OrchestrationDb } from '../../../../orchestration/db'
 import { ORCHESTRATION_METHODS } from '../../orchestration'
 import { eraseRpcMethods } from '../../../core'
 
-// The aggregate terminal inventory only iterates registered providers, so a
-// dropped relay clears `connected` for every remote PTY at once. That is lost
-// contact, not a death certificate.
+// Dropped relays clear connected across remote PTYs; use host verdicts to distinguish lost contact from death.
 describe('worker-stop against a terminal we lost contact with', () => {
   let db: OrchestrationDb
   let runtime: OrcaRuntimeService
@@ -96,7 +94,6 @@ describe('worker-stop against a terminal we lost contact with', () => {
       processAction: string
       lastError: string
     }
-    // Losing contact is a reason to report honestly, never to stop trying.
     expect(closeTerminal).toHaveBeenCalledWith('term_worker')
     expect(stopped.processAction).toBe('closed_agent_terminal')
     expect(stopped.state).toBe('stop_unknown')

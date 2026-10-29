@@ -1,3 +1,4 @@
+import { setTimeout as delay } from 'node:timers/promises'
 import { OrcaRuntimeWithSleepResolvedWorktreeTerminals } from './worktree-terminal-sleep'
 import { setsEqual } from '../../runtime-worktree-binding-index'
 import type { RuntimeLeafRecord } from '../../runtime-terminal-state-records'
@@ -5,6 +6,12 @@ import { worktreeIdsEqual } from '../../../../shared/worktree/id'
 import { worktreePtyBelongsToHost, type WorktreePtyHostFence } from '../../worktree-pty-host-fence'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { mainHoldsTerminal } from '../surface/main-pane-verdict'
+import type { ResolvedWorktree } from '../../runtime-worktree-path-identity'
+import { PTY_CONTROLLER_LIST_TIMEOUT_MS } from '../../orca-runtime-postlude'
+
+// Overlapping inventories can invalidate post-stop checks; retry within a fresh list budget before calling confirmed exits unverifiable.
+const POST_STOP_LIVENESS_RETRY_MS = PTY_CONTROLLER_LIST_TIMEOUT_MS
+const POST_STOP_LIVENESS_RETRY_DELAY_MS = 100
 
 export abstract class OrcaRuntimeWithStopExactTerminalsForWorktree extends OrcaRuntimeWithSleepResolvedWorktreeTerminals {
   protected abstract issueHandle(leaf: RuntimeLeafRecord): string
@@ -23,7 +30,7 @@ export abstract class OrcaRuntimeWithStopExactTerminalsForWorktree extends OrcaR
   }> {
     // Why: exact stop hibernates one known pane; worktree sleep discovers its complete host-owned set separately.
     const graphEpoch = this.captureReadyGraphEpoch()
-    const worktree = await this.resolveWorktreeSelector(worktreeSelector)
+    const worktree = await this.resolveWorkspaceSelector(worktreeSelector)
     this.assertStableReadyGraph(graphEpoch)
     const expected = new Set(expectedPtyIds.filter((ptyId) => ptyId.length > 0))
     if (expected.size !== 1) {
@@ -71,7 +78,7 @@ export abstract class OrcaRuntimeWithStopExactTerminalsForWorktree extends OrcaR
       }
       stoppedPtyIds.push(ptyId)
     }
-    const postStopLiveness = await this.refreshPtyWorktreeRecordsFromController(resolvedWorktrees)
+    const postStopLiveness = await this.refreshPostStopPtyLiveness(resolvedWorktrees)
     if (!postStopLiveness) {
       return {
         stopped: stoppedPtyIds.length,
@@ -104,6 +111,23 @@ export abstract class OrcaRuntimeWithStopExactTerminalsForWorktree extends OrcaR
     }
   }
 
+  private async refreshPostStopPtyLiveness(
+    resolvedWorktrees: ResolvedWorktree[]
+  ): Promise<Set<string> | null> {
+    const deadline = Date.now() + POST_STOP_LIVENESS_RETRY_MS
+    for (;;) {
+      const liveness = await this.refreshPtyWorktreeRecordsFromController(
+        resolvedWorktrees,
+        null,
+        deadline
+      )
+      if (liveness || Date.now() + POST_STOP_LIVENESS_RETRY_DELAY_MS >= deadline) {
+        return liveness
+      }
+      await delay(POST_STOP_LIVENESS_RETRY_DELAY_MS)
+    }
+  }
+
   /** With `hostFence`, only that host's copy: a same-id twin's PTYs are another host's. */
   protected getLivePtyIdsForWorktree(
     worktreeId: string,
@@ -130,8 +154,7 @@ export abstract class OrcaRuntimeWithStopExactTerminalsForWorktree extends OrcaR
         ptyIds.add(pty.ptyId)
       }
     }
-    // Switch point: a registered terminal main's layout binds may run through a host's listing gap,
-    // as the window kept it connected; only a certified exit, or a fresh inventory, drops it.
+    // Main-bound terminals can survive listing gaps; only certified exits or fresh inventory remove them.
     for (const pty of ORCA_LAYOUT_OWNER_IS_MAIN ? this.ptysById.values() : []) {
       if (
         worktreeIdsEqual(pty.worktreeId, worktreeId) &&

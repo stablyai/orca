@@ -27,8 +27,6 @@ function renderPicker(props: {
 }
 
 describe('NetworkInterfacePicker', () => {
-  // Why: a bridge-only host auto-advertises nothing, so the trigger has no selection to show while the
-  // bridge is still listed inside. Claiming "No interfaces found" there contradicts the list itself.
   it('does not claim there are no interfaces when unselected options exist', () => {
     renderPicker({ networkInterfaces: [{ name: 'docker0', address: '172.17.0.1' }] })
 

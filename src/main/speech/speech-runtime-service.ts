@@ -2,13 +2,7 @@ import type { ModelManager } from './model-manager'
 import type { SttService } from './stt-service'
 import type { VoiceSettings } from '../../shared/speech-types'
 
-/**
- * Lazy accessors for the speech services.
- *
- * Why the construction is injected: each host picks how `ModelManager` downloads (Chromium's
- * `net` on the desktop, Node's `https` on orcad). Both the desktop and orcad install factories;
- * a host without them rejects per call rather than returning a stub that appears to transcribe.
- */
+/** Hosts inject Chromium/Node download factories; missing services reject per call rather than appearing to transcribe. */
 
 type SpeechSettingsStore = {
   getSettings(): {

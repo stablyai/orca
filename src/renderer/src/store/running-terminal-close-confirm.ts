@@ -15,14 +15,12 @@ export type RunningTerminalCloseConfirmState = {
   runningTerminalCloseConfirm: RunningTerminalCloseConfirmRequest | null
   requestRunningTerminalCloseConfirm: (request: RunningTerminalCloseConfirmRequest) => void
   confirmRunningTerminalClose: () => void
-  /** Accepts the visible request and every queued one. Used when the user ticks "don't ask
-   *  again": a prompt they just opted out of must not still be waiting behind this one. */
+  /** Opting out accepts visible and queued requests; no disabled confirmation may remain waiting. */
   confirmAllRunningTerminalCloses: () => void
   dismissRunningTerminalClose: () => void
 }
 
-/** Folds a duplicate request for the same tab into the pending one instead of dropping it,
- *  so two surfaces closing the same tab both get their callback. */
+/** Merge duplicate tab requests so both initiating surfaces receive callbacks. */
 function mergeRequests(
   pending: RunningTerminalCloseConfirmRequest,
   duplicate: RunningTerminalCloseConfirmRequest
@@ -40,19 +38,13 @@ function mergeRequests(
   }
 }
 
-// Why a standalone store instead of an AppState slice (which is what the sibling
-// pinned-tab confirmation uses): the request is raised from closeTerminalTab, a plain
-// module whose unit fixtures build partial app-state objects, so dispatching through
-// useAppStore.getState() would throw there. Nothing outside the dialog reads this state,
-// so the AppState coupling would buy nothing.
+// Keep dialog-only state outside AppState: closeTerminalTab fixtures use partial stores and cannot safely dispatch through the app singleton.
 export const useRunningTerminalCloseConfirmStore = create<RunningTerminalCloseConfirmState>()((
   set,
   get
 ) => {
   const queuedRequests: RunningTerminalCloseConfirmRequest[] = []
-  // Why: a queued request replaces the visible one in place, so a double-click or held
-  // Enter meant for the tab the user was looking at would land on the next tab's prompt and
-  // kill a second running process unseen. Matches the sibling pinned-tab confirmation.
+  // Guard dialog replacement against held Enter/double-click closing an unseen second tab, like pin confirmation.
   const INTER_REQUEST_ACTION_GUARD_MS = 350
   let nextRequestActionAllowedAt = 0
 
@@ -74,8 +66,7 @@ export const useRunningTerminalCloseConfirmStore = create<RunningTerminalCloseCo
 
     requestRunningTerminalCloseConfirm: (request) => {
       const visible = get().runningTerminalCloseConfirm
-      // Why: the probe is async, so a second click on the same tab arrives before the
-      // dialog opens. One prompt, but both closes still resolve.
+      // Async process probes allow duplicate clicks before opening; share one prompt while resolving both closes.
       if (visible?.terminalTabId === request.terminalTabId) {
         set({ runningTerminalCloseConfirm: mergeRequests(visible, request) })
         return
@@ -88,8 +79,7 @@ export const useRunningTerminalCloseConfirmStore = create<RunningTerminalCloseCo
         return
       }
       if (visible) {
-        // Why: closing two busy tabs in quick succession must not strand the second
-        // tab's close callback behind a replaced request.
+        // Queue rapid busy-tab closes or replacing the request strands its callback.
         queuedRequests.push(request)
         return
       }
@@ -101,8 +91,7 @@ export const useRunningTerminalCloseConfirmStore = create<RunningTerminalCloseCo
       if (!request || Date.now() < nextRequestActionAllowedAt) {
         return
       }
-      // Why: advance before running onConfirm so a re-entrant close queues behind the
-      // next real request instead of seeing the stale one.
+      // Advance before onConfirm so reentrant closes cannot see the stale request.
       guardNextAction(advanceRequest())
       request.onConfirm()
     },

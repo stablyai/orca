@@ -10,7 +10,6 @@ type PluginCatalogEmptyStateProps = {
   tone?: 'default' | 'destructive'
 }
 
-/** Centered empty / error surface used across the plugin catalog. */
 export function PluginCatalogEmptyState({
   icon: Icon,
   title,

@@ -1,14 +1,9 @@
 import { Pressable, Text } from 'react-native'
 import { colors } from '../theme/mobile-theme'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { authFailedBannerStyles as styles } from './auth-failed-banner-styles'
 
-/**
- * What the banner offers once authentication has failed: reconnect, re-pair, or drop the pairing.
- *
- * Its own file because its `.web` sibling offers Re-pair alone: the page hands `/pair-scan` to the
- * shell, but its `forceReconnect` is null (`client-context.web.tsx`) and removal refuses
- * (`page-host-removal-refusal.ts`).
- */
+// Native offers reconnect/re-pair/remove; web sibling offers only shell-routed re-pair because reconnect is null and removal refuses.
 export function AuthFailedBannerActions({
   canRetry,
   onRetry,
@@ -20,6 +15,7 @@ export function AuthFailedBannerActions({
   onRepair: () => void
   onRemove: () => void
 }) {
+  useMobileColorScheme()
   return (
     <>
       {canRetry && (

@@ -1,7 +1,6 @@
 import type { RuntimeTerminalListResult } from '../../../src/shared/runtime-types'
 
-// The host's "can't answer yet" refusals: liveness still probing, or a live PTY whose pane binding
-// is mid-mount (pty-terminal-summary.ts). A poll must retry them, not end on them.
+// Retry host liveness and mid-mount binding refusals instead of ending the observation poll.
 const TRANSIENT_INVENTORY_REFUSALS = [
   'terminal_liveness_unavailable',
   'terminal_surface_ownership_unavailable'

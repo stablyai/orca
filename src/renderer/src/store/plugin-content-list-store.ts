@@ -8,13 +8,7 @@ type PluginContentListState<Entry> = {
   fetchEntries: () => Promise<void>
 }
 
-/**
- * Joining the startup request saves a duplicate IPC round trip, but its handler awaits plugin
- * discovery — a wedged one must not turn `ensureLoaded` into a no-op for the session, which would
- * pin every consumer on built-in content. Past this bound the pending request is wedged rather than
- * slow, so a later consumer starts its own (mirrors the reasoning in
- * `src/main/git/coalesced-probe.ts`).
- */
+// Share startup discovery only within a bound; wedged requests must not pin ensureLoaded consumers to built-ins forever. Later consumers retry independently (main/git/coalesced-probe.ts).
 const STARTUP_REQUEST_JOIN_WINDOW_MS = 10_000
 
 /** One renderer list of a plugin content family, refetched whenever plugin content changes. */

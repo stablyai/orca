@@ -140,19 +140,27 @@ export function useWorkspaceSpaceManagerPanel() {
               'Workspaces deleted'
             ),
         {
-          description: translate(
-            'auto.components.status.bar.WorkspaceSpaceManagerPanel.63efebe0e6',
-            '{{value0}} {{value1}} removed from Space.',
-            {
-              value0: deletedTargets.length,
-              value1: deletedTargets.length === 1 ? 'workspace' : 'workspaces'
-            }
-          )
+          description:
+            deletedTargets.length === 1
+              ? translate(
+                  'auto.components.status.bar.WorkspaceSpaceManagerPanel.removedFromSpace_one',
+                  '{{count}} workspace removed from Space.',
+                  { count: deletedTargets.length }
+                )
+              : translate(
+                  'auto.components.status.bar.WorkspaceSpaceManagerPanel.removedFromSpace_other',
+                  '{{count}} workspaces removed from Space.',
+                  { count: deletedTargets.length }
+                )
         }
       )
     },
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- Extracted state setters keep their original stable identities.
-    [removeWorkspaceSpaceWorktrees]
+    [
+      removeWorkspaceSpaceWorktrees,
+      setInspectedWorktreeId,
+      setSelectedIds,
+      setTreemapZoomWorktreeId
+    ]
   )
 
   const deleteWorktrees = useCallback(
@@ -163,9 +171,7 @@ export function useWorkspaceSpaceManagerPanel() {
       if (targets.length === 0) {
         return
       }
-      // Why (STA-4343): the Space scan lists one row per host, so a bare id would
-      // route the delete at whichever host the id-keyed lookup happens to hold.
-      // Resolve each row on ITS host and hand over the store row's own identity.
+      // Resolve each scan row on its host and use the store’s instance identity so deletion cannot target a same-ID checkout elsewhere.
       const state = useAppStore.getState()
       const identities = toWorktreeDeleteIdentities(
         targets.flatMap((target) => {
@@ -192,8 +198,7 @@ export function useWorkspaceSpaceManagerPanel() {
 
   const forceDeleteWorktree = useCallback(
     (worktree: WorkspaceSpaceWorktree): void => {
-      // Bulk deletion stays non-force; failed rows retain an explicit recovery path.
-      // The failure toast is keyed by the store row's host, which a host-less saved Space row lacks.
+      // Keep bulk deletion non-force; resolve retry toast identity through the store row’s host.
       const storeRow = getWorktreeOnHostFromState(
         useAppStore.getState(),
         worktree.worktreeId,

@@ -1,13 +1,12 @@
 import type { RateLimitWindow } from '../../shared/rate-limit-types'
 
-// Why: shared by the OAuth usage fetcher and the statusline live feed, whose window payloads share this shape.
 export type ClaudeUsageWindowInput = {
   utilization?: number
   used_percentage?: number
   resets_at?: string | number
 }
 
-// Why: 1e10 sits between any plausible seconds epoch (<2286) and any millisecond epoch (>2001), so it distinguishes the two units without extra metadata.
+// 1e10 separates plausible epoch seconds (before 2286) from milliseconds (after 2001).
 export function parseClaudeUsageResetTimestamp(value: string | number | undefined): number | null {
   if (typeof value === 'number') {
     if (!Number.isFinite(value)) {
@@ -73,4 +72,41 @@ export function mapClaudeUsageWindow(
     resetsAt: parseClaudeUsageResetTimestamp(raw.resets_at),
     resetDescription: parseClaudeUsageResetDescription(raw.resets_at)
   }
+}
+
+// Same-window statusline/OAuth reset precision differs; separate windows are hours apart.
+const SAME_WINDOW_TOLERANCE_MS = 60 * 1000
+
+function isSameClaudeUsageReset(a: number | null, b: number | null): boolean {
+  return a === null || b === null ? a === b : Math.abs(a - b) <= SAME_WINDOW_TOLERANCE_MS
+}
+
+export function isSameClaudeUsageWindow(
+  a: RateLimitWindow | null,
+  b: RateLimitWindow | null
+): boolean {
+  return a && b
+    ? a.usedPercent === b.usedPercent && isSameClaudeUsageReset(a.resetsAt, b.resetsAt)
+    : a === b
+}
+
+// Within one window usage grows; a lower value or older reset is an idle session's stale snapshot.
+export function isStaleClaudeUsageWindow(
+  previous: RateLimitWindow | null | undefined,
+  incoming: RateLimitWindow,
+  now: number
+): boolean {
+  if (!previous || previous.resetsAt === null || incoming.resetsAt === null) {
+    return false
+  }
+  if (previous.resetsAt <= now) {
+    return false
+  }
+  if (incoming.resetsAt < previous.resetsAt - SAME_WINDOW_TOLERANCE_MS) {
+    return true
+  }
+  return (
+    isSameClaudeUsageReset(incoming.resetsAt, previous.resetsAt) &&
+    incoming.usedPercent < previous.usedPercent
+  )
 }

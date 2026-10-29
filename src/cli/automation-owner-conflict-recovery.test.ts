@@ -25,8 +25,6 @@ describe('automation owner conflicts read as CLI outcomes', () => {
     expect(output).toContain('Next step: Run the command again')
   })
 
-  // A removed SSH host fails identically forever, so proposing a retry would send
-  // the user in a loop instead of to the two things that actually resolve it.
   it('never proposes a retry for a removed target', () => {
     const output = formatCliError(
       conflict(AUTOMATION_OWNER_CONFLICT_CODES.targetRemoved, 'Host removed.')
@@ -58,9 +56,6 @@ describe('automation owner conflicts read as CLI outcomes', () => {
     expect(output).toBe('Something else: runtime_error')
   })
 
-  // The trailing token is the convention precisely because a hop can flatten the
-  // error class. Classifying on `.code` alone reads only the hop that preserved it,
-  // and the user loses the recovery on every other one.
   it('recovers the conflict from the message when a hop flattened the code', () => {
     const flattened = new RuntimeRpcFailureError({
       id: 'request-1',
@@ -100,7 +95,6 @@ describe('automation owner conflicts read as CLI outcomes', () => {
     expect(payload.error.data.nextSteps[0]).toContain('no longer registered')
   })
 
-  // A local throw never reaches the envelope, so the token is all the CLI has.
   it('classifies a locally thrown conflict the same way', () => {
     const output = formatCliError(
       new Error(

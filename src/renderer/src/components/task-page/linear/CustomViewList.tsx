@@ -1,4 +1,4 @@
-import type { TaskPageComposerActionsModel } from '../../use-task-page-composer-actions'
+import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
 import { translate } from '@/i18n/i18n'
 import {
   LinearCustomViewTable,
@@ -49,7 +49,7 @@ export function TaskPageLinearCustomViewList({
         errors={linearCustomViewsResult.errors}
         hasMore={linearCustomViewsResult.hasMore}
         count={linearCustomViewsResult.items.length}
-        label={translate('auto.components.TaskPage.3cb855080f', 'views')}
+        kind="views"
       />
     </div>
   )

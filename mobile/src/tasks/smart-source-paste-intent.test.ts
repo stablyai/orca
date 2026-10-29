@@ -123,7 +123,7 @@ describe('findRepoMatchingSlug', () => {
     expect(calls).toEqual(['id:a', 'id:b'])
   })
 
-  it('keeps local matching usable when an older desktop lacks the repo slug RPC', async () => {
+  it('caches an unsupported repo slug probe across unmatched pastes', async () => {
     let calls = 0
     const client = {
       sendRequest: async () => {
@@ -145,7 +145,7 @@ describe('findRepoMatchingSlug', () => {
     expect(calls).toBe(1)
   })
 
-  it('keeps local matching usable when the optional repo slug lookup rejects', async () => {
+  it('caches a rejected optional repo slug probe as no match', async () => {
     const client = {
       sendRequest: async () => {
         throw new Error('connection closed')

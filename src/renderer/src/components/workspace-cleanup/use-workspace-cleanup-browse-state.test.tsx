@@ -67,9 +67,7 @@ describe('useWorkspaceCleanupBrowseState', () => {
   it('keeps both patches when two groups are written in one tick', () => {
     const controller = mountController()
 
-    // Why one act(): a checkbox toggle writes several groups at once. Reading the
-    // rendered `browse` snapshot per call would make the second patch overwrite
-    // the first, which is what this asserts against.
+    // Batch patches in one act so stale rendered-state reads would overwrite the first patch.
     act(() => {
       controller.current!.patchFilters('activity', { idleMinDays: 20 })
       controller.current!.patchFilters('size', { maxBytes: 500 })

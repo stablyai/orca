@@ -1,23 +1,16 @@
-/**
- * The shape of xterm, as the document uses it.
- *
- * Only the members the document's own code reaches: the terminal, its buffer, the internals the
- * OSC 8 lookup and the cell-geometry walk go through, and its two addons. This describes the
- * engine rather than the document, which is why it is not in the scope's own file: the WebView's
- * engine is a bundle on `window` and the page's is an import, and both answer exactly this.
- */
+import type { IUnicodeHandling } from '@xterm/xterm'
+import type { XtermUnicodeServiceCore } from '../../../../src/shared/terminal-unicode-provider'
 
-/** xterm's OSC 8 link service, reached through internals and always guarded. */
+// Describe only xterm members the document consumes; native globals and embedded imports satisfy the same seam.
+
 export type TerminalOscLinkService = { getLinkData?: (id: number) => { uri?: string } | undefined }
 
-/** The xterm internals the OSC 8 lookup walks. */
-export type TerminalDocumentCore = {
+export type TerminalDocumentCore = XtermUnicodeServiceCore & {
   _renderService?: { dimensions?: { css: { cell: { height: number; width: number } } } }
   _oscLinkService?: TerminalOscLinkService
   _inputHandler?: { _oscLinkService?: TerminalOscLinkService }
 }
 
-/** An OSC 8 link the host captured from scrollback before xterm replayed it. */
 export type TerminalInitialOscLink = {
   uri?: string
   row: number
@@ -26,12 +19,7 @@ export type TerminalInitialOscLink = {
   text?: string
 }
 
-/**
- * One cell of a buffer line, as the document inspects it.
- *
- * The attribute getters answer numbers, which is xterm's own signature for them and the reason
- * every reader here is a truthiness test rather than a comparison.
- */
+// xterm attribute getters return numbers, so consumers test truthiness rather than boolean equality.
 export type TerminalDocumentCell = {
   getChars?: () => string
   getWidth?: () => number
@@ -45,14 +33,13 @@ export type TerminalDocumentCell = {
   isOverline?: () => number
 }
 
-/** One buffer line, as the document inspects it. */
 export type TerminalDocumentLine = {
   readonly length: number
+  readonly isWrapped: boolean
   translateToString: (trimRight: boolean, startColumn?: number, endColumn?: number) => string
   getCell?: (x: number, cell?: TerminalDocumentCell) => TerminalDocumentCell | undefined
 }
 
-/** One side of xterm's buffer, as the document reads it. */
 export type TerminalDocumentBuffer = {
   readonly length: number
   readonly viewportY: number
@@ -63,11 +50,8 @@ export type TerminalDocumentBuffer = {
   getLine: (index: number) => TerminalDocumentLine | undefined
 }
 
-/** As much of xterm's terminal as the document's own code touches. */
-/** A terminal colour theme: xterm reads it as a flat map of slot to CSS colour. */
 export type TerminalDocumentTheme = Record<string, string>
 
-/** The xterm options the document writes; each field is owned by the group that sets it. */
 export type TerminalDocumentTerminalOptions = {
   theme: TerminalDocumentTheme
   minimumContrastRatio: number
@@ -88,14 +72,14 @@ export type TerminalDocumentTerminal = {
   getSelection?: () => string
   select: (col: number, row: number, length: number) => void
   clearSelection: () => void
-  readonly unicode: { activeVersion: string }
+  readonly unicode: IUnicodeHandling
   attachCustomKeyEventHandler: (handler: () => boolean) => void
   onData: (listener: (data: string) => void) => TerminalDocumentDisposable
   readonly parser?: {
     registerOscHandler: (
       ident: number,
       callback: (data: string) => boolean
-    ) => TerminalDocumentDisposable
+    ) => { dispose: () => void }
   }
   readonly textarea?: {
     readOnly: boolean
@@ -121,10 +105,8 @@ export type TerminalDocumentTerminal = {
   scrollLines: (amount: number) => void
 }
 
-/** An xterm listener handle, as the document disposes of one. */
 export type TerminalDocumentDisposable = { dispose?: () => void }
 
-/** xterm's WebGL addon, as the document loads, repaints and disposes of it. */
 export type TerminalDocumentWebglAddon = {
   onContextLoss?: (listener: () => void) => void
   clearTextureAtlas?: () => void

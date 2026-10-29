@@ -90,7 +90,6 @@ describe('persistence.pty-binding span', () => {
     }
     expect(records).toHaveLength(PTY_BINDING_FAST_LANE_SPAN_BUDGET_PER_WINDOW)
 
-    // Flushed spans are never dropped, even inside a saturated window.
     const span = startPtyBindingSpan({
       hostKind: 'local',
       origin: 'reattach',

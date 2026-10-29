@@ -1,8 +1,5 @@
 // @vitest-environment happy-dom
-// The release oracle: exact outbound bytes from the REAL shared
-// forwarder behind installPreviewImeBridge. A wiring-only mock cannot show that
-// a Preview opened on a bit-3 TUI commits CSI-u, nor that exactly one release
-// leaves the forwarder in either macOS event order.
+// Exercise the real forwarder’s exact commit/release bytes; wiring mocks cannot verify negotiated CSI-u or macOS event ordering.
 import { Terminal } from '@xterm/xterm'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { installPreviewImeBridge } from './preview-terminal-ime-bridge'
@@ -105,8 +102,6 @@ describe('preview IME bridge outbound bytes', () => {
     document.body.replaceChildren()
   })
 
-  // The bug: the bridge omitted getKittyKeyboardFlags entirely, so every commit
-  // was evaluated at flags 0 and a bit-3 TUI received the legacy text it declined.
   it('encodes the commit from the flags proven before any live output', () => {
     const session = open(8)
     session.keydown()
@@ -118,8 +113,7 @@ describe('preview IME bridge outbound bytes', () => {
 
   describe.each([
     ['keydown -> insertText -> keyup', false],
-    // An ordering some macOS input sources use; the earlier design cleared the
-    // claimed press here, so the later commit could never be encoded as CSI-u.
+    // Some macOS input sources commit after keyup; preserve press ownership until then.
     ['keydown -> keyup -> insertText', true]
   ])('in %s order', (_name, keyupFirst) => {
     const type = (session: Session): void => {
@@ -148,8 +142,7 @@ describe('preview IME bridge outbound bytes', () => {
 
     it('owns the release even though xterm holds no kitty state', () => {
       const session = open(10)
-      // The forwarder must not delegate the keyup: Preview deliberately never
-      // restores kitty flags into xterm, so xterm would emit nothing here.
+      // Keep this harness’s xterm flags at zero to prove the forwarder emits releases without xterm’s help.
       expect(session.xtermKittyFlags()).toBe(0)
       type(session)
       expect(session.emitted.join('')).toBe('\x1b[44u\x1b[44;1:3u')
@@ -223,18 +216,13 @@ describe('preview IME bridge outbound bytes', () => {
     session.commit('，')
     session.setFlags(10)
     session.keyup()
-    // The repeat requested no event types, but its commit must not erase the
-    // release the delivered first press still owes under the flags it was
-    // sent with.
+    // A repeat’s new flags cannot erase the release owed by the originally delivered press.
     expect(session.emitted.join('')).toBe('\x1b[44u\x1b[44u\x1b[44;1:3u')
     session.dispose()
   })
 
   it('suppresses the owed release when event types are no longer negotiated at keyup', () => {
-    // xterm parity: KittyKeyboard.evaluate drops RELEASE reports the moment
-    // report_event_types is gone, so an app that popped the mode — or the
-    // successor shell of a TUI that quit on this very key — never receives
-    // CSI-u bytes it did not negotiate.
+    // Match xterm: once event reporting is popped, do not send CSI-u releases to an app or successor shell that no longer negotiates them.
     const session = open(10)
     session.keydown()
     session.commit('，')

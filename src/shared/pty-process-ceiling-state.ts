@@ -75,10 +75,7 @@ export function describePtyProcessCeiling(state: PtyProcessCeilingState | null):
     : `off (${state.reason.replace(/_/g, ' ')})`
 }
 
-/**
- * A report read later: a restarted user manager drops the transient slice, after which new
- * terminals run without a limit, so a slice that is gone is reported as lost, never as on.
- */
+/** Restarted user managers drop transient slices; confirm existence before reporting ceilings on, otherwise report lost. */
 export function confirmPtyProcessCeiling(
   state: PtyProcessCeilingState | null,
   exists: (path: string) => boolean = existsSync

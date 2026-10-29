@@ -16,6 +16,7 @@ const KNOWN_NON_GITEA_HOSTS = new Set([
   'github.com',
   'gitlab.com',
   'bitbucket.org',
+  'ssh.bitbucket.org',
   'dev.azure.com',
   'ssh.dev.azure.com'
 ])
@@ -81,8 +82,7 @@ function makeRepoRef(host: string, path: string, webOrigin: string): GiteaRepoRe
     return null
   }
 
-  // Why: Gitea/Forgejo can be hosted below a URL subpath. SSH-style remotes
-  // carry that base path in the repo path, so derive the web/API base here.
+  // Self-hosted Gitea/Forgejo SSH paths can include the web/API base subpath.
   const webBaseUrl = parsed.basePath
     ? `${webOrigin.replace(/\/+$/, '')}/${parsed.basePath}`
     : webOrigin

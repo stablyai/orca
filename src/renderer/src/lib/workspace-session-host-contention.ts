@@ -17,28 +17,7 @@ import {
   type HostSessionSlices
 } from './workspace-session-host-split'
 
-/**
- * Which execution hosts publish each workspace id, and what persistence does when two of them
- * publish the same one.
- *
- * A worktree id is `repoId::path` with no host component, so one repo registered on two hosts
- * publishes the SAME id for two different workspaces (STA-4343). Session state is keyed by that
- * bare id, so without this the two workspaces share one `tabsByWorktree` bucket and whichever host
- * writes last erases the other's tabs for good.
- *
- * The contested id gets one primary host, whose entries keep the normal bare key in the unified
- * renderer session. Every other claimant's entries are parked in a shadow that never reaches
- * renderer state and is written straight back to that host's own partition, so no host's session is
- * destroyed by another's write.
- *
- * The primary is decided ONCE, at read time, from the partition each row actually came from, and
- * that decision is carried back to the write path. Re-deriving it from the catalog at write time
- * would let the two disagree — the catalog names `ssh:*` hosts that own no partition — and the
- * write would then copy one host's workspace into another host's partition.
- *
- * Known gap: the unified renderer session still holds one bucket per bare id, so both workspaces
- * display the primary's tabs. Closing it needs host-qualified keys through the whole tab store.
- */
+/** Bare workspace IDs collide across hosts (STA-4343). Choose one primary from actual read partitions; park other claimants outside renderer state and write them back unchanged. Preserve that read decision on writes rather than rederive from catalog-only SSH claims. Known gap: unified bare-key renderer state shows primary tabs for both; full repair needs host-qualified tab keys. */
 
 export type WorktreeHostClaims = ReadonlyMap<string, ReadonlySet<ExecutionHostId>>
 
@@ -46,8 +25,7 @@ const WORKTREE_KEYED_FIELDS = (
   Object.keys(WORKSPACE_SESSION_FIELD_OWNERSHIP) as (keyof WorkspaceSessionState)[]
 ).filter((field) => WORKSPACE_SESSION_FIELD_OWNERSHIP[field] === 'worktreeKeyed')
 
-/** Bare worktree id behind a session key. Lives in shared because the partition adoption read needs
- *  the same normalization, and two implementations of it would drift. */
+/** Share session-key normalization with partition adoption so read and write cannot drift. */
 export const normalizeWorkspaceSessionKeyToWorktreeId = normalizeWorkspaceSessionKeyToWorkspaceId
 
 function resolveClaimedHostId(
@@ -62,8 +40,7 @@ function resolveClaimedHostId(
   if (parsed) {
     return parsed.id
   }
-  // Why: an unqualified row is attributable only when its repo id names exactly one host —
-  // guessing would invent a contest that is not there, or hide one that is.
+  // Attribute unqualified rows only to unique repo owners; guessing invents or hides host contests.
   return repoHostById.get(worktree.repoId) ?? null
 }
 
@@ -150,13 +127,7 @@ function shadowHostEntries(
   return { slice: nextSlice ?? slice, shadow }
 }
 
-/** Split contested worktree-keyed entries out of the read partitions: the primary host's rows stay
- *  in the slices the renderer merges, every other claimant's rows move to the shadow.
- *
- *  `primaryHostBySessionKey` records where each key's live row came from — including the
- *  uncontested single-partition case, so the write path can put every row back in its own
- *  partition instead of re-deriving an owner that may not match. It is therefore NOT the contested
- *  set; `contestedSessionKeys` is, and only it says a bare id names more than one workspace. */
+/** Keep primary rows in merged slices and park other claimants. Record source partition for every live key, including uncontested ones, so write returns it there; contestedSessionKeys alone identifies collisions. */
 export function extractContestedHostSessionEntries(slices: HostSessionSlices): {
   slices: HostSessionSlices
   shadow: HostSessionSlices
@@ -224,16 +195,14 @@ function hostStillClaimsKey(
   hostId: ExecutionHostId
 ): boolean {
   const claimed = claims.get(normalizeWorkspaceSessionKeyToWorktreeId(key))
-  // Why: a missing catalog row is not evidence the host lost the workspace — the catalog may not
-  // have hydrated, or the key may be a folder workspace. Only a positive re-attribution drops a row.
+  // Missing/unhydrated/folder catalog rows prove no ownership loss; drop only on positive reattribution.
   return !claimed || claimed.has(hostId)
 }
 
 /** Whether the slices will be applied as a merge-by-field patch or a full partition replace. */
 export type HostSessionWriteMode = 'patch' | 'replace'
 
-/** Write parked entries back into their own host's slice so a write for the primary host cannot
- *  erase a co-claimant's persisted session. Mutates the slices produced by the split. */
+/** Restore parked co-claimant rows to their own split slices before writing so primary updates cannot erase them. */
 export function attachHostSessionShadow(
   slices: HostSessionSlices,
   shadow: HostSessionSlices | undefined,
@@ -258,8 +227,7 @@ export function attachHostSessionShadow(
       }
       let target = slice[field]
       if (!isWorkspaceSessionRecord(target)) {
-        // Why the mode split: a patch that omits the field leaves the partition's own copy
-        // untouched, but a full set erases omitted fields, so the parked rows must ride along.
+        // Omitted patch fields remain untouched, but full partition replacement erases them; include parked fields for full writes.
         if (mode === 'patch') {
           continue
         }

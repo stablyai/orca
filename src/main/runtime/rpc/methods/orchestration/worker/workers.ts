@@ -69,8 +69,7 @@ export const ORCHESTRATION_WORKER_START_METHODS = [
         )
       }
       if (params.on) {
-        // A remote worker is always a terminal agent; the mode receipt rides along so the
-        // coordinator still learns why its structured default did not apply.
+        // Remote workers are terminal-only; carry the mode receipt to explain structured-preference fallback.
         const receipt = await startFederatedWorker({
           params,
           runtime,

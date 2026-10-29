@@ -1,14 +1,4 @@
-/**
- * A CLI-started agent in a workspace the window never opened resumes after a quit and relaunch.
- *
- * Its status reaches only the app's own agent-status server; the window never shows its tab. The
- * quit must still leave the agent's resume record on disk, and showing the tab after a relaunch
- * (with the terminal daemon gone, as after a reboot) must resume the agent.
- *
- * Run:
- *   pnpm exec playwright test tests/e2e/cli-agent-unopened-workspace-resume.spec.ts \
- *     --config tests/playwright.config.ts --project electron-headless --workers=1
- */
+// Persist a CLI-started agent the window never opened, then cold-resume it after relaunch with the daemon gone.
 import { chmodSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { RuntimeClient } from '../../src/cli/runtime-client'

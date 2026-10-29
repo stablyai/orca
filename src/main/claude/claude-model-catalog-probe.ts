@@ -1,3 +1,8 @@
+import { waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
+import {
+  assertStructuredAgentResolutionCurrent,
+  type StructuredAgentResolutionOperation
+} from '../native-chat/structured-agent-command-resolution'
 import {
   buildClaudeModelListArgs,
   CLAUDE_MODEL_LIST_STDIN
@@ -40,8 +45,7 @@ export type ClaudeModelCatalogProbeDeps = ClaudeEnvDeps &
     runListing?: typeof runAgentModelCatalogListing
   }
 
-/** Asks Claude one control request without a session, under the SAME binary and environment the
- *  structured session launch resolves, pinned to the chat's account. */
+// Use the session's binary, environment and account for one-shot control requests.
 export async function runClaudeListing(
   deps: ClaudeModelCatalogProbeDeps,
   request: {
@@ -53,13 +57,16 @@ export async function runClaudeListing(
     isCurrent?: () => boolean
   }
 ): Promise<string> {
-  // Same pin rule as the session spawn: naming the CLI's default dir would move
-  // it off the default Keychain item and list under another identity.
-  const { command, env } = await resolveClaudeStructuredInvocation(deps, (base) => ({
-    ...base,
-    ...claudeConfigDirEnvPatch(request.accountHomePath, { env: base })
-  }))
+  // Explicitly pinning the default directory changes the CLI's Keychain identity.
+  const { command, env } = await waitForPromiseWithSignal(
+    resolveClaudeStructuredInvocation({ ...deps, signal: request.signal }, (base) => ({
+      ...base,
+      ...claudeConfigDirEnvPatch(request.accountHomePath, { env: base })
+    })),
+    request.signal
+  )
   const run = (args: readonly string[]) => {
+    request.signal?.throwIfAborted()
     if (request.isCurrent && !request.isCurrent()) {
       throw new Error('Listing context retired')
     }
@@ -93,22 +100,21 @@ export async function runClaudeListing(
   return result
 }
 
-/**
- * Lists models without a live session: one `list_models` control request, under the SAME binary
- * and environment the structured session launch resolves, so a probe can never list under a
- * different install or shell env than the sessions it stands in for.
- */
+// List models and settings with the same resolved executable, environment and account as sessions.
 export function createClaudeModelCatalogProbe(
   deps: ClaudeModelCatalogProbeDeps
 ): AgentModelCatalogProbe {
   const resolve = async (
     accountHome: Parameters<AgentModelCatalogProbe>[0],
     cwd?: string,
-    lookup: AgentModelCatalogLookup = 'recover'
+    lookup: AgentModelCatalogLookup = 'recover',
+    operation?: StructuredAgentResolutionOperation
   ) => {
+    assertStructuredAgentResolutionCurrent(operation)
     const configuredArgs = claudeStructuredLaunchArgs(
       cwd ? ((await deps.resolveLaunchArgs?.()) ?? []) : []
     )
+    assertStructuredAgentResolutionCurrent(operation)
     const userArgs = [
       ...Object.entries(configuredArgs.extraArgs).flatMap(([key, value]) =>
         value === null ? [`--${key}`] : [`--${key}`, value]
@@ -123,11 +129,13 @@ export function createClaudeModelCatalogProbe(
     const args = argsFor(true)
     const launchDeps = {
       ...deps,
+      operation,
       ...(lookup === 'saved' ? { resolveInheritedEnv: deps.resolveSavedEnvironment } : {}),
       ...(lookup === 'recover' ? {} : { refreshEnvironmentAfterMiss: undefined }),
       ...(cwd ? { resolveWorkingDirectory: () => cwd } : {})
     }
     const sources = await resolveClaudeChildEnvSources(launchDeps)
+    assertStructuredAgentResolutionCurrent(operation)
     const { command, env } = await resolveClaudeStructuredInvocation(
       launchDeps,
       (base) => ({
@@ -138,13 +146,18 @@ export function createClaudeModelCatalogProbe(
       }),
       sources
     )
+    assertStructuredAgentResolutionCurrent(operation)
     return {
       identity: { command, args, cwd, overlay: Object.entries(sources.overlay ?? {}).sort() },
       run: async (signal?: AbortSignal): Promise<AgentModelCatalogSuccess> => {
+        assertStructuredAgentResolutionCurrent(operation)
+        signal?.throwIfAborted()
         const outcome = await runClaudeBackgroundAttempts({
           agentId: 'claude',
-          run: (strictMcp) =>
-            (deps.runListing ?? runAgentModelCatalogListing)(
+          run: (strictMcp) => {
+            assertStructuredAgentResolutionCurrent(operation)
+            signal?.throwIfAborted()
+            return (deps.runListing ?? runAgentModelCatalogListing)(
               {
                 command,
                 args: argsFor(strictMcp),
@@ -157,7 +170,8 @@ export function createClaudeModelCatalogProbe(
                 return error
               }
               throw error
-            }),
+            })
+          },
           failedExit: (outcome) =>
             outcome instanceof AgentModelCatalogProbeError && outcome.reason === 'exit'
               ? outcome.failedExit
@@ -220,9 +234,14 @@ export function createClaudeModelCatalogProbe(
     Pick<AgentModelCatalogProbe, 'resolve' | 'resolveLegacy'>
   >(
     async (home, options) =>
-      (await resolve(home, options?.cwd ?? options?.workspacePath ?? process.cwd())).run(
-        options?.signal
-      ),
-    { resolve, resolveLegacy: (home) => resolve(home) }
+      (
+        await resolve(
+          home,
+          options?.cwd ?? options?.workspacePath ?? process.cwd(),
+          'recover',
+          options?.operation
+        )
+      ).run(options?.signal),
+    { resolve, resolveLegacy: (home, operation) => resolve(home, undefined, 'recover', operation) }
   )
 }

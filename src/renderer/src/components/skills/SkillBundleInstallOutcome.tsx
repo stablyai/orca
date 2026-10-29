@@ -54,11 +54,17 @@ export function SkillBundleInstallOutcome({
                 )}
           </p>
           <p className="text-xs text-muted-foreground">
-            {translate(
-              'auto.components.skills.SkillBundleInstallOutcome.01c5a12e09',
-              '{{value0}} selected skills checked.',
-              { value0: result.skills.length }
-            )}
+            {result.skills.length === 1
+              ? translate(
+                  'auto.components.skills.SkillBundleInstallOutcome.selectedChecked_one',
+                  '{{count}} selected skill checked.',
+                  { count: result.skills.length }
+                )
+              : translate(
+                  'auto.components.skills.SkillBundleInstallOutcome.selectedChecked_other',
+                  '{{count}} selected skills checked.',
+                  { count: result.skills.length }
+                )}
           </p>
         </div>
       </div>

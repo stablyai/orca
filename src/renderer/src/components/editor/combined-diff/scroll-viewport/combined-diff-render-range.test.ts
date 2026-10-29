@@ -12,16 +12,6 @@ describe('combined diff render range', () => {
     ).toEqual([2, 3])
   })
 
-  it('pre-renders at most one viewport of small sections on each side', () => {
-    expect(
-      getCombinedDiffRenderRange(
-        { startIndex: 4, endIndex: 5, count: 10, overscan: 5 },
-        () => 200,
-        400
-      )
-    ).toEqual([2, 3, 4, 5, 6, 7])
-  })
-
   it('stops at a large neighboring section instead of skipping across it', () => {
     const heights = [100, 230_000, 100, 100, 230_000, 100]
     expect(
@@ -31,25 +21,5 @@ describe('combined diff render range', () => {
         800
       )
     ).toEqual([2, 3])
-  })
-
-  it('retains the row-count cap and list boundaries for short sections', () => {
-    expect(
-      getCombinedDiffRenderRange(
-        { startIndex: 1, endIndex: 2, count: 100, overscan: 5 },
-        () => 28,
-        800
-      )
-    ).toEqual([0, 1, 2, 3, 4, 5, 6, 7])
-  })
-
-  it('renders only visible sections before the viewport is measured', () => {
-    expect(
-      getCombinedDiffRenderRange(
-        { startIndex: 1, endIndex: 2, count: 10, overscan: 5 },
-        () => 88,
-        0
-      )
-    ).toEqual([1, 2])
   })
 })

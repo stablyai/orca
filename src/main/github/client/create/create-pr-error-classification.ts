@@ -18,21 +18,24 @@ export function classifyCreatePRError(error: unknown): CreateHostedReviewResult 
       ok: false,
       code: 'auth_required',
       error:
-        'Create PR failed: GitHub is not authenticated. Next step: run gh auth login in this environment.'
+        'Create PR failed: GitHub is not authenticated. Next step: run gh auth login in this environment.',
+      reason: 'auth_required'
     }
   }
   if (lower.includes('already exists') || lower.includes('a pull request already exists')) {
     return {
       ok: false,
       code: 'already_exists',
-      error: 'A pull request already exists for this branch.'
+      error: 'A pull request already exists for this branch.',
+      reason: 'existing_review'
     }
   }
   if (lower.includes('timed out') || lower.includes('timeout')) {
     return {
       ok: false,
       code: 'unknown_completion',
-      error: 'PR creation may have completed. Refreshing branch review state...'
+      error: 'PR creation may have completed. Refreshing branch review state...',
+      reason: 'creation_unconfirmed'
     }
   }
   if (lower.includes('validation failed') || lower.includes('http 422')) {
@@ -40,13 +43,15 @@ export function classifyCreatePRError(error: unknown): CreateHostedReviewResult 
       ok: false,
       code: 'validation',
       error:
-        'Create PR failed: GitHub rejected the pull request. Check the base branch and branch state, then try again.'
+        'Create PR failed: GitHub rejected the pull request. Check the base branch and branch state, then try again.',
+      reason: 'rejected'
     }
   }
   return {
     ok: false,
     code: 'unknown',
-    error: 'Create PR failed: GitHub could not create the pull request. Try again in a moment.'
+    error: 'Create PR failed: GitHub could not create the pull request. Try again in a moment.',
+    reason: 'create_failed'
   }
 }
 
@@ -65,7 +70,7 @@ export function parseCreatePRPayload(stdout: string): { number: number; url: str
   } catch {
     // Fall through to URL parsing for older gh versions without --json support.
   }
-  // Why: match any host (not just github.com) so a GHES PR URL still parses (#8312).
+  // Enterprise PR URLs use the same path shape on custom hosts.
   const urlMatch = trimmed.match(/https?:\/\/[^\s/]+\/[^\s/]+\/[^\s/]+\/pull\/(\d+)/)
   if (!urlMatch) {
     return null

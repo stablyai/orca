@@ -3,8 +3,8 @@ import { describe, expect, it, vi } from 'vitest'
 const recordFeatureInteractionMock = vi.fn()
 const usagePercentageDisplayMock = 'used'
 
-vi.mock('react', async () => {
-  const actual = await vi.importActual<typeof import('react')>('react') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
+vi.mock(import('react'), async (importOriginal) => {
+  const actual = await importOriginal()
   return {
     ...actual,
     memo: function memo<T>(component: T): T {

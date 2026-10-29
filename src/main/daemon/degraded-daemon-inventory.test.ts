@@ -54,6 +54,19 @@ describe('degraded daemon inventory ownership', () => {
     expect(legacy.write).not.toHaveBeenCalled()
   })
 
+  it('does not replace a fallback input route while indexing daemon liveness', async () => {
+    const { current, fallback, provider } = setup()
+    vi.mocked(fallback.listProcesses).mockResolvedValue([process('fallback')])
+    await provider.discoverDaemonSessions()
+    vi.mocked(current.listProcesses).mockResolvedValue([process('current')])
+
+    await expect(provider.probePtyLiveness('unknown')).resolves.toBe(false)
+    provider.write('session', 'still fallback')
+
+    expect(fallback.write).toHaveBeenCalledExactlyOnceWith('session', 'still fallback')
+    expect(current.write).not.toHaveBeenCalled()
+  })
+
   it('shares routed, diagnostic and exact reattach observations in degraded mode', async () => {
     const { current, legacy, fallback, provider } = setup()
     vi.mocked(current.listProcesses).mockResolvedValue([process('current')])

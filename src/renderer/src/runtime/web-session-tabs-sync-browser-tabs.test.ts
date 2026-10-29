@@ -112,8 +112,7 @@ describe('applyWebSessionTabsSnapshot', () => {
         pageHostGeneration: 9
       }
     })
-    // Why: the host publishes neither loadError nor certificateFailure for a client-hosted page —
-    // both records belong to the local guest webview (see the mirror-identity carve-out tests).
+    // Client-hosted load/certificate errors belong to the guest; host snapshots omit them (mirror-identity tests).
     expect(patch.browserCertificateFailuresByPageId?.['host-browser-page']).toBeUndefined()
     expect(patch.unifiedTabsByWorktree?.[WT]).toEqual(
       expect.arrayContaining([

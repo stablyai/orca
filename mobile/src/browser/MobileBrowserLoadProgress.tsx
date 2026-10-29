@@ -2,9 +2,10 @@ import { useEffect, useRef } from 'react'
 import { Animated, Easing, Platform, StyleSheet, View } from 'react-native'
 import { useReducedMotionEnabled } from '../platform/use-reduced-motion'
 import { colors, radii } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 
-// Same curve as the desktop line (browser-load-progress.tsx): hidden for fast loads, then it eases
-// toward 90% and the real stop finishes it.
+// Match desktop progress: delay fast loads, ease toward 90%, finish on real stop.
 const SHOW_DELAY_MS = 200
 const TRICKLE_STEPS: [atMs: number, scale: number][] = [
   [300, 0.15],
@@ -34,6 +35,7 @@ export function MobileBrowserLoadProgress({
   loading: boolean
   failed: boolean
 }): React.JSX.Element {
+  useMobileColorScheme()
   const scale = useRef(new Animated.Value(0)).current
   const opacity = useRef(new Animated.Value(0)).current
   const runningRef = useRef<{
@@ -116,7 +118,7 @@ export function MobileBrowserLoadProgress({
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   clip: {
     ...StyleSheet.absoluteFillObject,
     borderRadius: radii.input,
@@ -131,4 +133,4 @@ const styles = StyleSheet.create({
     backgroundColor: colors.accentBlue,
     transformOrigin: 'left'
   }
-})
+}))

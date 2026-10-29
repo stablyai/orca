@@ -51,23 +51,20 @@ const WRITES: AgentSessionWriteKind[] = [
 ]
 const HOST_TEXT = 'Expected runtime fence 1; the session is at 3.'
 
-// A cause is named only where every host emitter of the code means it; any other code says only
-// what did not happen, because one code covers owner states or reasons the client cannot tell apart.
+// Name a cause only when every code emitter means it; other codes cover states the client cannot distinguish.
 const CAUSES: Partial<Record<AgentSessionWireRefusalCode, AgentSessionWriteNoticeSentence>> = {
   // Only send preparation, when the owner it restarted for this send failed to start.
   agent_session_owner_restart_failed: 'restartFailed',
   // Only an older host's ledger, when a day's retained operation ids filled its quota.
   agent_session_operation_capacity: 'capacity',
-  // A replayed operation with no recorded outcome, or a send behind a rewind whose outcome is
-  // unrecorded: either way Orca cannot say what happened.
+  // Neither an unrecorded replay outcome nor unconfirmed rewind proves what happened.
   agent_session_operation_unknown: 'outcomeUnknown',
   // Only the pending-prompt check.
   agent_session_item_revision_stale: 'questionChanged',
   agent_session_already_resolved: 'questionChanged',
   // Send preparation, for any failed open; the code names nothing else.
   agent_session_journal_unreadable: 'historyUnreadable',
-  // With no reason: a method the host doesn't know, or a host from before reasons. Either way an
-  // older Orca runs the chat.
+  // An unknown method or absent reason can both mean an older chat host.
   structured_agent_session_unsupported: 'unsupported'
 }
 
@@ -97,7 +94,7 @@ const NOT_DONE: Record<AgentSessionWriteKind, AgentSessionWriteNoticeSentence> =
   command: 'notDoneCommand',
   clear: 'notDoneCommand',
   compact: 'notDoneCommand',
-  goal: 'notDoneGoal',
+  goal: 'notDoneGoalChangeIncomplete',
   'queued-edit': 'notDoneQueuedEdit'
 }
 
@@ -124,8 +121,7 @@ function causeSaysNotDone(
   )
 }
 
-// The phone resends under the same id. These record nothing under it (the lease refusals drop the
-// row they admitted), so a resend can go through; every other code can be refused again.
+// Only refusals leaving no operation row allow the phone's same-id resend; other codes may refuse it again.
 const RESEND_CAN_WORK = new Set([
   'failed',
   'agent_session_checkpoint_stale',
@@ -235,8 +231,7 @@ describe('structuredAgentSessionRejectionParts', () => {
 })
 
 describe('agentSessionRefusalNotice', () => {
-  // The phone resends under the same operation id. Owner refusals and failed requests record
-  // nothing under it, so a resend can go through; a conflicting or expired id is refused again.
+  // Owner refusals/failed requests record no operation row, permitting same-id resend; conflicts/expired IDs stay refused.
   it.each([
     ['agent_session_checkpoint_stale', 'Your message was not sent. Send it again.'],
     ['execution_owner_reconciling', 'Your message was not sent. Send it again.'],
@@ -350,9 +345,7 @@ describe('the notice for every reason a host names', () => {
     }))
   )
 
-  // An unsupported location or agent, or no chat host, is not fixed by updating Orca. Only an
-  // agent or location the host can't run names its cause; a read otherwise asked for nothing
-  // "this" could name, so it says only that the history didn't load.
+  // Updates cannot fix unsupported agents/locations or missing chat hosts. Name causes only for unsupported agent/location; generic reads say history did not load.
   it('says an unsupported write never asks for an update when the host names why', () => {
     for (const { failure, write, parts, cell } of cells) {
       if (failure.code !== 'structured_agent_session_unsupported') {
@@ -720,8 +713,7 @@ describe('a /clear or /compact refused while the agent works', () => {
   })
 })
 
-// For a line that already says what did not happen and shows its own Retry, such as a chat that
-// could not start: the Retry is the step for retrying and for sending again, and only for those.
+// A visible Retry replaces retry/send-again advice only, retaining any different next step.
 describe('agentSessionRefusalCauseParts', () => {
   it('keeps a step other than retrying, beside the cause', () => {
     expect(

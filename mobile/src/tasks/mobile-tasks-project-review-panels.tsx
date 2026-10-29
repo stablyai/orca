@@ -1,11 +1,11 @@
 import type { ConnectionPresentationModel } from './use-mobile-tasks-connection-presentation'
+import { isBrokenCheck } from '../../../src/shared/pr-checks-fix-prompt'
 import {
   SHOW_MOBILE_PROJECT_REVIEW_PANELS,
   getGitHubReviewSummary,
   getGitHubReviewerRows,
   splitReviewerList,
   projectRowType,
-  isFailedGitHubCheck,
   GitHubPrFileDiff
 } from './mobile-tasks-legacy-foundation'
 import {
@@ -142,7 +142,7 @@ export function renderMobileTasksProjectReviewPanels(model: ConnectionPresentati
               </Pressable>
               <Pressable
                 style={styles.inlineSaveButtonCompact}
-                disabled={projectMutating || !projectRowDetail.checks.some(isFailedGitHubCheck)}
+                disabled={projectMutating || !projectRowDetail.checks.some(isBrokenCheck)}
                 onPress={() => void rerunProjectGitHubChecks(projectRowItem, true)}
               >
                 <Text style={styles.inlineSaveText}>Rerun failed</Text>

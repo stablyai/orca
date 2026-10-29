@@ -214,14 +214,14 @@ export class SkillSharePreparationService {
     }
   }
 
-  // Why: the cloud keeps one live package per name, and the id is baked into the archive.
+  // Cloud names have one live package; its id is part of archive identity.
   private async packageIdForName(bundleName: string): Promise<string> {
     const owned = await this.cloud.findOwnedPackageId(bundleName, {}).catch((error: unknown) => {
       throw error instanceof SkillCloudRequestError && error.code === 'skill_package_name_taken'
         ? new Error(SKILL_SHARE_NAME_TAKEN_ERROR, { cause: error })
         : error
     })
-    // Why: signed out, the preview still works without an account; publish asks for sign-in.
+    // Preview works signed out; publish handles authentication.
     return (owned.status === 'ok' && owned.value) || randomUUID()
   }
 

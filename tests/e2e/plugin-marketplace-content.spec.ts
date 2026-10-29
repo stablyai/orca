@@ -1,28 +1,36 @@
-/**
- * Invariant: a fresh profile discovers the managed official marketplace and
- * completes the Phase 1 language, VM-recipe, and keybinding journey through
- * production Git paths.
- */
+// Use production Git paths from a fresh profile for official marketplace discovery and Phase 1 language/VM/keybinding setup.
 
 import { execFile } from 'node:child_process'
 import { cp, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join, sep } from 'node:path'
-import { pathToFileURL } from 'node:url'
+import { join } from 'node:path'
 import { promisify } from 'node:util'
 import type { Page, TestInfo } from '@stablyai/playwright-test'
 import { expect, test } from '@stablyai/playwright-test'
 import { createRestartSession } from './helpers/orca-restart'
 
 const execFileAsync = promisify(execFile)
+const SSH_SHIM = join(
+  process.cwd(),
+  'src',
+  'main',
+  'plugins',
+  'plugin-private-marketplace-ssh-shim.cjs'
+)
+const FIXTURE_REPOSITORIES = [
+  'orca-plugins',
+  'orca-portuguese',
+  'orca-multipass-recipes',
+  'orca-navigation-shortcuts'
+]
 
 type MarketplaceFixture = {
   root: string
   home: string
-  gitEnvironment: NodeJS.ProcessEnv
+  gitEnvironment: Record<string, string>
 }
 
-function isolatedGitProcessEnv(gitEnvironment: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+function isolatedGitProcessEnv(gitEnvironment: Record<string, string>): NodeJS.ProcessEnv {
   return {
     ...Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith('GIT_'))),
     ...gitEnvironment
@@ -32,14 +40,14 @@ function isolatedGitProcessEnv(gitEnvironment: NodeJS.ProcessEnv): NodeJS.Proces
 async function runGit(
   cwd: string,
   args: string[],
-  gitEnvironment: NodeJS.ProcessEnv
+  gitEnvironment: Record<string, string>
 ): Promise<void> {
   await execFileAsync('git', args, { cwd, env: isolatedGitProcessEnv(gitEnvironment) })
 }
 
 async function commitRepository(
   repository: string,
-  gitEnvironment: NodeJS.ProcessEnv
+  gitEnvironment: Record<string, string>
 ): Promise<void> {
   await runGit(repository, ['init', '--quiet'], gitEnvironment)
   await runGit(repository, ['checkout', '--quiet', '-b', 'main'], gitEnvironment)
@@ -65,7 +73,7 @@ async function copyLaunchPlugin(
   repositories: string,
   repositoryName: string,
   launchDirectory: string,
-  gitEnvironment: NodeJS.ProcessEnv
+  gitEnvironment: Record<string, string>
 ): Promise<void> {
   const repository = join(repositories, `${repositoryName}.git`)
   await cp(join(process.cwd(), 'resources', 'plugins', 'launch', launchDirectory), repository, {
@@ -74,19 +82,29 @@ async function copyLaunchPlugin(
   await commitRepository(repository, gitEnvironment)
 }
 
-async function configureFixtureGit(home: string, repositories: string): Promise<NodeJS.ProcessEnv> {
+async function configureFixtureGit(
+  home: string,
+  repositories: string
+): Promise<Record<string, string>> {
   const hooksDirectory = join(home, 'hooks')
   const configPath = join(home, '.gitconfig')
   await mkdir(hooksDirectory, { recursive: true })
-  const gitEnvironment: NodeJS.ProcessEnv = {
+  const gitEnvironment: Record<string, string> = {
     GIT_CONFIG_GLOBAL: configPath,
     GIT_CONFIG_NOSYSTEM: '1',
     GIT_TERMINAL_PROMPT: '0'
   }
-  const repositoryBaseUrl = pathToFileURL(`${repositories}${sep}`).href
+  // Why SSH: plugin downloads refuse the file transport even behind an insteadOf rewrite, so the
+  // fixture repositories are served through the same GIT_SSH_COMMAND shim the unit tests use.
+  gitEnvironment.GIT_SSH_COMMAND = `"${process.execPath.replaceAll('\\', '/')}" "${SSH_SHIM.replaceAll('\\', '/')}"`
+  gitEnvironment.GIT_SSH_VARIANT = 'ssh'
+  gitEnvironment.ORCA_TEST_SSH_REPOSITORIES = JSON.stringify(
+    Object.fromEntries(
+      FIXTURE_REPOSITORIES.map((name) => [`/${name}.git`, join(repositories, `${name}.git`)])
+    )
+  )
   const entries = [
-    [`url.${repositoryBaseUrl}.insteadOf`, 'https://github.com/stablyai/'],
-    ['protocol.file.allow', 'always'],
+    ['url.ssh://git@fixtures.invalid/.insteadOf', 'https://github.com/stablyai/'],
     ['commit.gpgSign', 'false'],
     ['tag.gpgSign', 'false'],
     ['core.hooksPath', hooksDirectory]

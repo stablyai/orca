@@ -1,6 +1,4 @@
-// Why: releases before worktree removal ran inline renamed checkouts into a sibling trash root and
-// deleted them in the background; a quit mid-delete left entries behind. Nothing creates trash now,
-// so this sweep only drains those legacy entries.
+// Drain legacy trash left by interrupted background deletion; current releases create none.
 
 import { lstat, readdir, rmdir } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -14,13 +12,12 @@ import { getRepoRoutingConnectionId } from '../shared/execution-host'
 
 export const WORKTREE_TRASH_DIR_NAME = '.orca-worktree-trash'
 
-// `<epoch-ms>-<nonce>`: the only names the retired rename ever generated.
+// Only names produced by the retired rename scheme qualify for cleanup.
 const TRASH_ENTRY_PATTERN = /^wt-\d+-[0-9a-f]{8}$/
 
-// Why: the sweep must stay cheap on a workspace root holding many repo containers.
 const TRASH_SWEEP_MAX_CONTAINERS = 200
 
-/** Delete legacy trash entries. Only entries matching the generated name pattern inside a trash root are removed. */
+/** Delete only legacy generated entries inside known trash roots. */
 export async function sweepStaleWorktreeTrash(
   workspaceRoots: readonly string[]
 ): Promise<{ removed: number }> {
@@ -50,7 +47,6 @@ export async function sweepStaleWorktreeTrash(
         )
       }
     }
-    // Why: nothing refills the root, so drop it once empty; rmdir keeps anything still inside.
     await rmdir(trashRoot).catch(() => {})
   }
   if (removed > 0) {
@@ -59,7 +55,7 @@ export async function sweepStaleWorktreeTrash(
   return { removed }
 }
 
-/** Trash roots live beside worktrees, so they sit at the workspace root (flat) or one level in (nested). */
+/** Trash roots are beside worktrees: flat at the root, or one level down for nested layout. */
 async function collectExistingTrashRoots(workspaceRoots: readonly string[]): Promise<string[]> {
   const trashRoots = new Set<string>()
   for (const workspaceRoot of new Set(workspaceRoots)) {

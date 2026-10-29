@@ -29,14 +29,10 @@ export function navigateResourceSessionToTab(
     }
   }
 
-  // Why: stale tabsByWorktree mappings skip activateAndRevealWorktree (which
-  // owns the view flip), so flip to terminal here too — otherwise a click
-  // from Space/Tasks/Settings updates activeTab but leaves the user on the
-  // non-terminal view and the click appears to do nothing.
+  // Always reveal terminal view because stale tab mappings can bypass the workspace navigation that normally switches it.
   deps.setActiveView('terminal')
 
-  // Why: paneKey suffixes are stable UUID leaf ids after replay/reload.
-  // Legacy numeric keys degrade to tab-only activation instead of guessing.
+  // Stable leaf UUIDs identify panes; legacy numeric keys fall back to tab activation instead of guessing.
   const parsed = paneKey ? parsePaneKey(paneKey) : null
   deps.activateTabAndFocusPane(tabId, parsed?.tabId === tabId ? parsed.leafId : null, {
     flashFocusedPane: true,

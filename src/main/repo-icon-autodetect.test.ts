@@ -161,8 +161,7 @@ describe('detectRepoIcon', () => {
   })
 
   it('returns no icon for an SSH-hosted repo whose filesystem provider is missing', async () => {
-    // Why: the same path exists on the client machine — reading it would hand
-    // back the local repository's icon for a remote repo.
+    // A real local icon at this path exposes accidental fallback reads.
     const repoPath = await makeTempRepoDir()
     await writeFile(join(repoPath, 'favicon.png'), Buffer.from(PNG_1X1_BASE64, 'base64'))
     await writeFile(
@@ -185,9 +184,6 @@ describe('detectRepoIcon', () => {
   })
 
   it('reads nothing for a runtime host', async () => {
-    // Why: a `runtime:` repo row's `connectionId` names a target in that server's namespace. Both
-    // spellings of the incumbent shape are wrong here — a null one reads this machine's copy of
-    // the path, and the nested id dials a same-named box of ours.
     const repoPath = await makeTempRepoDir()
     await writeFile(join(repoPath, 'favicon.png'), Buffer.from(PNG_1X1_BASE64, 'base64'))
 
@@ -269,7 +265,6 @@ describe('detectRepoIcon', () => {
         source: 'github',
         label: 'stablyai/orca'
       },
-      // Why: fork parents resolve host-qualified so avatars/links stay on the fork's server.
       upstream: { owner: 'stablyai', repo: 'orca', host: 'github.com' }
     })
   })
@@ -295,7 +290,6 @@ describe('detectRepoIcon', () => {
         remoteName: 'upstream',
         remoteUrl: 'git@github.com:upstream-org/rocket.git'
       },
-      // Why: a renamed fork is its own project, so the avatar stays on the origin owner.
       repoIcon: {
         type: 'image',
         src: 'https://github.com/acme.png?size=64',

@@ -1,12 +1,5 @@
-/**
- * One-shot launcher mode of `relay.js` and `orcad.js` on Windows SSH hosts: start the detached
- * program outside the SSH session's job object, then exit.
- *
- * Win32-OpenSSH kills a session's job when the session ends. The job allows breakaway, but libuv
- * never asks for it, so the staged process-tree addon does the CreateProcessW. WMI, the old
- * route, is refused to a standard user's network logon, so it is only the relay script's
- * fallback for hosts whose relay predates this addon; orcad has no fallback.
- */
+/** Escape Win32-OpenSSH’s session job so detached children survive disconnect. libuv does not request breakaway; the staged addon uses CreateProcessW.
+ * Legacy relay scripts alone may fall back to WMI, which standard-user network logons deny; orcad has no fallback. */
 import { closeSync, openSync, readSync, renameSync, statSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { quoteWindowsArgument } from '@orca/process-host/windows-command-line'
@@ -151,7 +144,6 @@ function readSpawnOutsideJobResult(value: unknown): SpawnOutsideJobResult {
   }
 }
 
-/** Moves the last run's log to `<path>.1` (its tail when over the cap); best-effort. */
 export function keepPreviousStderrLog(
   path: string,
   maxBytes: number = PREVIOUS_STDERR_LOG_MAX_BYTES
@@ -175,7 +167,6 @@ export function keepPreviousStderrLog(
   }
 }
 
-/** Atomic so a reader never sees half a record. */
 function writeProcessFile(path: string, contents: string): void {
   const partial = `${path}.partial-${process.pid}`
   writeFileSync(partial, contents)
@@ -220,7 +211,7 @@ export function launchOutsideJob(
     try {
       writeFile(request.processFilePath, JSON.stringify({ pid: result.pid, creationTimeMs }))
     } catch (error) {
-      // Unrecorded, the process could never be proven stopped, so stop it now rather than orphan it.
+      // Without a process record, later cleanup cannot prove this identity; terminate now rather than orphan it.
       try {
         terminate(result.pid)
       } catch {

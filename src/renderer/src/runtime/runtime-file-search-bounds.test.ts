@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import {
-  createEmptyRuntimeFileSearchResult,
   getRuntimeFileSearchRejectedField,
   isRuntimeFileSearchTextWithinLimit
 } from './runtime-file-search-bounds'
@@ -25,12 +24,5 @@ describe('runtime file search bounds', () => {
         query: 'x'.repeat(9 * 1024)
       })
     ).toBe('query')
-  })
-
-  it('returns metadata-only empty results for rejected searches', () => {
-    const result = createEmptyRuntimeFileSearchResult()
-
-    expect(result).toEqual({ files: [], totalMatches: 0, truncated: false })
-    expect(JSON.stringify(result)).not.toContain('secret')
   })
 })

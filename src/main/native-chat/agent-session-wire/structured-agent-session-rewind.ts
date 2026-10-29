@@ -42,7 +42,7 @@ export async function rewindStructuredAgentSession(
   const fields = { itemId: params.itemId, expectedEpoch: params.expectedEpoch }
   const operation = { method: 'agentSession.rewind', fields }
   // A fork can be saved without a running agent; other rewinds require the provider itself.
-  const agent = store.getRecord(sessionId)?.provider
+  const agent = store.getConversation(sessionId)?.provider
   const rewindsByFork =
     agent !== undefined &&
     context.deps.agents.registration(agent)?.adapter.forkForRewind !== undefined
@@ -55,7 +55,6 @@ export async function rewindStructuredAgentSession(
       logger: context.deps.logger,
       callerKey: caller.callerKey,
       envelope: params.envelope,
-      // A provider's own rewind needs it running, so an agent at rest is started first.
       prepareSession: rewindsByFork
         ? sendPreparation(context, params.envelope, { refusesInRun: true }, selection)
         : openWithReadyStructuredAgentSessionChild(context, params.envelope, selection),
@@ -66,7 +65,6 @@ export async function rewindStructuredAgentSession(
       now: context.now,
       plan: {
         ...operation,
-        // A fork is written to the conversation, not the agent, so whoever owns the agent does not matter.
         ...(rewindsByFork ? { conversationWrite: true } : {}),
         recoverUnknownFromDurableState: true,
         settledOutcome: (rewind: AgentSessionRewindResult) => ({
@@ -84,14 +82,14 @@ export async function rewindStructuredAgentSession(
             return outcome.rewind
           }
           return completedStructuredRewind(
-            store.getRecord(sessionId)?.rewind,
+            store.getConversation(sessionId)?.rewind,
             caller.callerKey,
             clientOperationId
           )
         },
         run: async (ctx) => {
           await attachContext.runtimeState.flushEventSink(sessionId)
-          const record = store.getRecord(sessionId)!
+          const record = store.requireWritableRecord(sessionId)
           const support = ctx.adapter.rewindSupport?.(sessionId, ctx.agent)
           if (!support?.supported) {
             return rewindRefusal(support?.reason ?? 'unsupported')
@@ -109,7 +107,6 @@ export async function rewindStructuredAgentSession(
           if (!isStructuredRewindTarget(ctx.journal, params.itemId)) {
             return rewindRefusal('invalid-target')
           }
-          // The head belongs to the record's provider: the record store refuses any other.
           const head = agentSessionProviderHandleChainHead(record.providerHandleChain)?.handle
           const cut = head
             ? structuredRewindCut(ctx.journal, {
@@ -150,6 +147,7 @@ export async function rewindStructuredAgentSession(
           }
           await persistRewindRecord(store, sessionId, ctx.fence, prepared)
           ctx.publish()
+          store.requireWritableRecord(sessionId)
           const provider =
             'beforeTurnId' in cut
               ? await ctx.adapter.rewind!({
@@ -158,7 +156,7 @@ export async function rewindStructuredAgentSession(
                   beforeTurnId: cut.beforeTurnId
                 })
               : await stopForFork(context, sessionId)
-          const fence = store.getRecord(sessionId)!.lease.runtimeFence
+          const fence = store.requireWritableRecord(sessionId).lease.runtimeFence
           if (!provider.ok) {
             const reason = provider.reason
             if (reason !== 'outcome-unknown') {
@@ -211,7 +209,7 @@ export async function rewindStructuredAgentSession(
     return result.ok
       ? {
           ...result,
-          fence: store.getRecord(sessionId)!.lease.runtimeFence,
+          fence: store.getConversation(sessionId)?.currentFence ?? result.fence,
           cursor: context.sessions.get(sessionId)!.journal.cursor()
         }
       : result
@@ -229,7 +227,7 @@ export async function rewindStructuredAgentSession(
   )
 }
 
-/** The rewound conversation must not keep running: the next launch continues in the fork. */
+/** Stop the old child so the next start resumes the fork. */
 async function stopForFork(
   context: StructuredAgentSessionMutationContext,
   sessionId: string

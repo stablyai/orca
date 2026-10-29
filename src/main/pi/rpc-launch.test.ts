@@ -103,7 +103,7 @@ describe('Pi RPC launch', () => {
         inherited
       )
     ).toEqual({})
-    // As a structured launch seals it: no caller of its own env, then this session's identity.
+    // Seal inherited caller identity with this structured session's identity.
     const childEnv = resolveProviderChildEnv(
       buildPiRpcLaunch({
         ...options,

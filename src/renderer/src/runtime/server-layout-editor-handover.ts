@@ -1,6 +1,4 @@
-// Editor tabs this desktop opened in a paired server's workspace while it mirrored it (the 3a list)
-// go to that server's main before its frames draw the workspace (H5d): frames list only the
-// server's tabs, so gating first would drop these with their open files and drafts.
+// Hand desktop-only editors to server main before gating frame drawing (H5d); server-only frames would otherwise drop local open files/drafts.
 
 import type { AppState } from '@/store/types'
 import { editorTabContent } from '@/store/slices/editor/tabs/editor-tab-open-through-layout-owner'
@@ -71,13 +69,7 @@ function showsDesktopTab(
   )
 }
 
-/**
- * Hands a workspace's desktop-only editor tabs to the server's main, then reports when all have
- * answered. A resent open the server already applied answers ok (drawnTabOpen); any refusal, even
- * `tab_exists` (the id is another tab's there), or a failed call, keeps the workspace mirror-drawn
- * for the rest of this stream. A tab the user closed after its open was sent is closed on the server
- * before the workspace gates, so its frames never draw it back.
- */
+/** Hand over desktop-only editors before gating. Idempotent reopen succeeds; any refusal (including tab_exists) or failed call retains mirror drawing for this stream. Tabs closed meanwhile must close on server before gating or frames resurrect them. */
 export function createServerEditorHandover(options: {
   environmentId: string
   getState: () => AppState

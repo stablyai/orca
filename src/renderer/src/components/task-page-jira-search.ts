@@ -1,4 +1,4 @@
-import type { JiraIssue } from '../../../shared/jira-types'
+import type { JiraIssue } from '../../../shared/jira/jira-types'
 import { buildJiraTextMatchJql, mayBeJql } from '../../../shared/jira/jira-search-input-jql'
 import { searchJiraIssuesByKeyOrText } from './jira-key-or-text-search'
 import { getJiraBadRequestReason } from './task-page-jira-load-state'

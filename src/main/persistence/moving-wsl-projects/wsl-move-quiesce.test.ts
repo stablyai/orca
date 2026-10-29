@@ -51,6 +51,7 @@ function harness(overrides: Partial<WslMoveQuiesceDeps> = {}) {
       removed.push(migrationId)
     },
     now: () => new Date('2026-10-14T00:00:00.000Z'),
+    wait: async () => {},
     ...overrides
   }
   return { deps, journal, removed, steps }
@@ -72,7 +73,11 @@ describe('quiesceWslMove', () => {
     expect(removed).toEqual([])
     expect(result).toMatchObject({
       outcome: 'quiesced',
-      cutover: { phase: 'quiesced', provenExitedSessionIds: ['session-1'] },
+      cutover: {
+        phase: 'quiesced',
+        provenExitedSessionIds: ['session-1'],
+        terminalRestoreHints: hints.hints
+      },
       restoreHints: hints
     })
   })
@@ -126,14 +131,20 @@ describe('quiesceWslMove', () => {
 
   it('refuses a second quiesce of the same distro while the first runs', async () => {
     let releaseSleep: () => void = () => undefined
+    let signalSleepStarted: () => void = () => undefined
+    const sleepStarted = new Promise<void>((resolve) => {
+      signalSleepStarted = resolve
+    })
     const first = harness({
       sleepWorkspaces: () =>
         new Promise((resolve) => {
           releaseSleep = () => resolve({ failedWorktreeIds: [] })
+          signalSleepStarted()
         })
     })
     const running = quiesceWslMove(cutover(), scope, first.deps)
-    await vi.waitFor(() => expect(first.journal).toEqual(['source-fenced']))
+    await sleepStarted
+    expect(first.journal).toEqual(['source-fenced'])
 
     const second = harness()
     await expect(quiesceWslMove(cutover('move-2'), scope, second.deps)).resolves.toEqual({
@@ -167,10 +178,25 @@ describe('quiesceWslMove', () => {
     expect(removed).toEqual(['move-1'])
   })
 
-  it('lifts the fence and names the workspaces whose Sleep failed', async () => {
-    const { deps, removed } = harness({
-      sleepWorkspaces: async () => ({ failedWorktreeIds: [WORKTREE] })
+  // A just-slept workspace's first stop failed once and the move refused.
+  it('sleeps a workspace again when its first Sleep left a pane awake', async () => {
+    const asked: string[][] = []
+    const { deps, journal } = harness({
+      sleepWorkspaces: async (ids) => {
+        asked.push([...ids])
+        return { failedWorktreeIds: asked.length === 1 ? [WORKTREE] : [] }
+      }
     })
+    const result = await quiesceWslMove(cutover(), scope, deps)
+
+    expect(result).toMatchObject({ outcome: 'quiesced' })
+    expect(asked).toEqual([[...scope.workspaceIds], [WORKTREE]])
+    expect(journal.at(-1)).toBe('quiesced')
+  })
+
+  it('lifts the fence and names the workspaces whose Sleep keeps failing', async () => {
+    const sleepWorkspaces = vi.fn(async () => ({ failedWorktreeIds: [WORKTREE] }))
+    const { deps, removed } = harness({ sleepWorkspaces })
     const result = await quiesceWslMove(cutover(), scope, deps)
 
     expect(result).toMatchObject({
@@ -178,6 +204,7 @@ describe('quiesceWslMove', () => {
       reason: 'sleep-failed',
       failedWorktreeIds: [WORKTREE]
     })
+    expect(sleepWorkspaces).toHaveBeenCalledTimes(3)
     expect(removed).toEqual(['move-1'])
   })
 

@@ -16,11 +16,11 @@ import {
   type AutomationListResult
 } from '../../../../shared/automation-list-scope'
 import { OrchestrationDb } from '../../orchestration/db'
+import { orchestrationDbFile } from '../../orchestration/db/orchestration-db-file'
 import {
   committedHandBackTypes,
   type MailHandBack
 } from '../../orchestration/db/messages/helper-mailbox-hand-back'
-import { join } from 'node:path'
 import { existsSync } from 'node:fs'
 import { getAppEnvironment } from '../../../../shared/app-environment'
 import type { LegacyWorkerTerminalRecoveryPlan } from '../../orchestration/orchestration-legacy-worker-terminal-recovery'
@@ -148,9 +148,7 @@ export abstract class OrcaRuntimeWithAutomationOperations extends OrcaRuntimeWit
     return this.automation.ownerPrecondition(id)
   }
 
-  // Why: lazy initialization — the DB path depends on Electron's userData
-  // which may not be finalized until after app.ready. Also allows unit tests
-  // to inject an in-memory DB without touching the filesystem.
+  // Defer until userData is final; tests can inject an in-memory DB.
   getOrchestrationDb(): OrchestrationDb {
     if (!this._orchestrationDb) {
       this._orchestrationDb = new OrchestrationDb(this.orchestrationDbPath())
@@ -169,7 +167,7 @@ export abstract class OrcaRuntimeWithAutomationOperations extends OrcaRuntimeWit
   }
 
   private orchestrationDbPath(): string {
-    return join(getAppEnvironment().getPath('userData'), 'orchestration.db')
+    return orchestrationDbFile(getAppEnvironment().getPath('userData'))
   }
 
   setOrchestrationDb(db: OrchestrationDb): void {
@@ -187,7 +185,7 @@ export abstract class OrcaRuntimeWithAutomationOperations extends OrcaRuntimeWit
 
   /** Wakes the Run for helper mail its creator's settlement moved there, once that committed. */
   private offerHandedBackMail(db: OrchestrationDb, handBack: MailHandBack): void {
-    // Why: a replaced database's consumers are not this runtime's to wake.
+    // A replaced database's consumers belong to another runtime.
     if (this._orchestrationDb !== db) {
       return
     }
@@ -196,7 +194,7 @@ export abstract class OrcaRuntimeWithAutomationOperations extends OrcaRuntimeWit
         this.mailPointerRepointScheduler.schedule(handBack.mailbox)
         return
       }
-      // Why: re-reading the moved rows means a rolled-back settlement wakes no one.
+      // Re-read committed rows so rolled-back settlements wake nobody.
       for (const type of committedHandBackTypes(db, handBack)) {
         this.notifyMessageArrived(handBack.mailbox, type)
       }

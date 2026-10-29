@@ -1,3 +1,4 @@
+import { agentSessionConversationView } from '../../shared/agent-session-conversation-view'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { FleetAgentStatusEvidence } from '../../shared/orchestration-fleet-agent-status-evidence'
 import { agentSessionRecordFixture } from '../../shared/agent-session-record.test-fixture'
@@ -64,8 +65,11 @@ function runtime(rows: FleetAgentStatusEvidence[]): ReferenceAgentSource {
 
 function sessionStore(records: AgentSessionRecord[]) {
   return {
-    listRecords: () => records,
-    getRecord: (id: string) => records.find((record) => record.sessionId === id) ?? null
+    listRecords: () => records.map(agentSessionConversationView),
+    getRecord: (id: string) => {
+      const record = records.find((record) => record.sessionId === id)
+      return record ? agentSessionConversationView(record) : null
+    }
   }
 }
 

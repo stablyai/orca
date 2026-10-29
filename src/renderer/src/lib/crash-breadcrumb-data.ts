@@ -1,7 +1,4 @@
-/**
- * Breadcrumb payload shaping shared by the renderer's crash and memory
- * samplers. Kept as a leaf so neither importer pulls the other's dependencies.
- */
+/** Keep payload shaping dependency-free so crash and memory samplers do not import each other. */
 import type {
   CrashReportBreadcrumbData,
   CrashReportDetailValue

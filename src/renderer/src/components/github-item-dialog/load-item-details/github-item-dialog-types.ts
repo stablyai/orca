@@ -6,7 +6,6 @@ import type {
   ItemDialogTab
 } from '@/components/github/github-work-item-identity'
 
-/** Re-exported so Project-view callers keep a stable import path. */
 export type GitHubItemDialogProjectOrigin = GitHubWorkItemProjectOrigin
 
 export type GitHubItemDialogProps = {
@@ -16,7 +15,6 @@ export type GitHubItemDialogProps = {
   sourceContext?: TaskSourceContext | null
   initialTab?: ItemDialogTab
   backLabel?: string
-  /** Called when the user clicks the primary CTA to start work from this item. */
   onUse: (item: GitHubWorkItem) => void
   onReviewRequestsChange?: (
     itemKey: { id: string; repoId: string },
@@ -37,7 +35,7 @@ export type GitHubItemDialogEditSectionProps = {
   localLabels: string[]
   onStateChange: (state: GitHubWorkItem['state']) => void
   onLabelsChange: (labels: string[]) => void
-  /** Why: lets the parent invalidate its details cache after a mutation, else a reopen within FRESH_MS paints pre-mutation data. */
+  /** Invalidate the parent’s detail cache after mutation so reopening cannot show stale data during FRESH_MS. */
   onMutated: () => void
   assignees: string[]
   onUse: (item: GitHubWorkItem) => void

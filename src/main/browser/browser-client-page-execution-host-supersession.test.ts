@@ -55,7 +55,7 @@ function createHarness() {
   }
 
   const routeSessions = new BrowserRouteSessionRegistry({
-    // Storage identity, not the route key, names the partition: it survives an SSH reconnect.
+    // Storage identity survives SSH reconnects; route keys do not.
     derivePartition: (identity) => ({
       partition: `persist:${identity.executionHostIdentity}`,
       bindingFingerprint: `${identity.executionHostIdentity}`.padEnd(64, 'f')

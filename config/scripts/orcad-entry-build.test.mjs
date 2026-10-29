@@ -4,10 +4,10 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, expect, it } from 'vitest'
 import {
+  buildOrcadCli,
   buildOrcadEntry,
   escapeLegalCommentTail,
   findNonAsciiSource,
-  moduleAtOffset,
   ORCAD_COMMONJS_MODULE_OPTIONS
 } from './orcad-entry-build.mjs'
 import { runProcessSync } from '@orca/process-host'
@@ -33,6 +33,28 @@ it('loads the structured Claude SDK through the packaged server under plain Node
   })
   expect(loaded.code, loaded.stderr.slice(-2_000)).toBe(0)
 }, 40_000)
+
+// #33592: the shipped CLI once bundled jsonc-parser's UMD build, whose relative requires fail.
+it('runs a jsonc-parser-backed command from the packaged CLI under plain Node', async () => {
+  const cli = join(directory, 'cli', 'index.js')
+  await buildOrcadCli(cli)
+  const home = join(directory, 'home')
+  mkdirSync(home)
+  const status = runProcessSync({
+    program: process.execPath,
+    args: [cli, 'agent', 'hooks', 'status', '--json'],
+    cwd: home,
+    env: {
+      ORCA_BACKGROUND_LAUNCH: '1',
+      HOME: home,
+      USERPROFILE: home,
+      ORCA_USER_DATA_PATH: join(home, 'user-data')
+    },
+    timeoutMs: 30_000
+  })
+  expect(status.code, status.stdout + status.stderr).toBe(0)
+  expect(JSON.parse(status.stdout).ok).toBe(true)
+}, 60_000)
 
 it('resolves bundle-relative requires after deployment to a path with URL-special characters', async () => {
   const buildDirectory = join(directory, 'build')
@@ -88,11 +110,6 @@ it('keeps the server bundle ASCII, so V8 stores its source one byte per characte
   expect(findNonAsciiSource(readFileSync(bundle, 'utf8'))).toBeNull()
 })
 
-it('names the line of a non-ASCII character a regex literal or tagged template left', () => {
-  expect(findNonAsciiSource('a=1\nb=/[\\u2726]/')).toBeNull()
-  expect(findNonAsciiSource('a=1\nb=/[\u2726]/')).toMatchObject({ offset: 8, line: 2 })
-})
-
 it('escapes only the trailing license comment, never code', () => {
   const code = 'a=/[\u2726]/;'
   const escaped = escapeLegalCommentTail(
@@ -102,12 +119,6 @@ it('escapes only the trailing license comment, never code', () => {
   expect(escaped).toContain('(c) Jos\\u{e9} \\u{1f600}')
   expect(findNonAsciiSource(escaped.slice(code.length))).toBeNull()
   expect(escapeLegalCommentTail(code)).toBe(code)
-})
-
-it('names the module an unminified build placed an offset in', () => {
-  const source = 'x\n// src/a.ts\nvar a = 1;\n// node_modules/b/index.js\nvar b = /\u2726/;\n'
-  expect(moduleAtOffset(source, source.indexOf('\u2726'))).toBe('node_modules/b/index.js')
-  expect(moduleAtOffset(source, source.indexOf('var a'))).toBe('src/a.ts')
 })
 
 it('keeps a build with every dark switch turned on ASCII', () => {

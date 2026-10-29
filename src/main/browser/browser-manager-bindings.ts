@@ -3,6 +3,7 @@ import { setupGuestContextMenu } from './browser-guest-context-menu'
 import { setupGrabShortcutForwarding } from './browser-guest-grab-shortcuts'
 import { setupGuestMouseWheelZoomForwarding } from './browser-guest-wheel-zoom'
 import { setupGuestShortcutForwarding } from './browser-guest-shortcut-forwarding'
+import { setupGuestTargetUrlForwarding } from './browser-guest-target-url'
 import { BrowserManagerGrab } from './browser-manager-grab'
 
 export abstract class BrowserManagerBindings extends BrowserManagerGrab {
@@ -17,7 +18,6 @@ export abstract class BrowserManagerBindings extends BrowserManagerGrab {
     )
   }
 
-  // Why: forward grab's Cmd/Ctrl+C from a focused guest only when no edit field/selection is active, so native copy still works.
   protected setupGrabShortcut(browserTabId: string, guest: Electron.WebContents): void {
     const previousCleanup = this.grabShortcutCleanupByTabId.get(browserTabId)
     if (previousCleanup) {
@@ -38,7 +38,6 @@ export abstract class BrowserManagerBindings extends BrowserManagerGrab {
     )
   }
 
-  // Why: a focused webview guest is a separate process, so its key events never reach the renderer; intercept and forward app shortcuts.
   protected setupShortcutForwarding(browserTabId: string, guest: Electron.WebContents): void {
     const previousCleanup = this.shortcutForwardingCleanupByTabId.get(browserTabId)
     if (previousCleanup) {
@@ -80,6 +79,18 @@ export abstract class BrowserManagerBindings extends BrowserManagerGrab {
         canViewportScroll: (mouse) => this.canViewportScroll(browserTabId, mouse),
         onViewportWheelConsumed: (deltaX, deltaY) =>
           this.recordViewportScrollDelta(browserTabId, deltaX, deltaY)
+      })
+    )
+  }
+
+  protected setupTargetUrlForwarding(browserTabId: string, guest: Electron.WebContents): void {
+    this.targetUrlCleanupByTabId.get(browserTabId)?.()
+    this.targetUrlCleanupByTabId.set(
+      browserTabId,
+      setupGuestTargetUrlForwarding({
+        browserTabId,
+        guest,
+        resolveRenderer: (tabId) => this.resolveRendererForBrowserTab(tabId)
       })
     )
   }

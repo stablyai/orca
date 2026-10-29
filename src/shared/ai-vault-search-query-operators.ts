@@ -11,10 +11,7 @@ export type AiVaultSearchQuerySplit = {
   pathTerms: readonly string[]
 }
 
-/**
- * The one reading of `repo:` / `path:` in the product: the sessions panel and the
- * search index must agree on what is an operator and what is ordinary text.
- */
+/** Share repo/path parsing between panel filtering and indexed search so operators retain one meaning. */
 export function splitAiVaultSearchQuery(query: string): AiVaultSearchQuerySplit {
   const spans: string[] = []
   const terms: string[] = []
@@ -33,9 +30,7 @@ export function splitAiVaultSearchQuery(query: string): AiVaultSearchQuerySplit 
       const quoted = readQuoted(query, at)
       const value = quoted?.value ?? readBare(query, at)
       index = quoted ? quoted.end : at + value.length
-      // Trimmed for the same reason an empty value is dropped: `repo:"  "` is
-      // not a narrowing anyone typed on purpose, and an untrimmed one matches
-      // no label at all, which silently empties the list.
+      // Trim whitespace-only operators like empty values; matching spaces as a label silently empties results.
       const operand = value.trim()
       if (operand) {
         ;(operator[1]!.toLowerCase() === 'repo' ? repoTerms : pathTerms).push(operand)
@@ -46,9 +41,7 @@ export function splitAiVaultSearchQuery(query: string): AiVaultSearchQuerySplit 
     const value = quoted?.value ?? readBare(query, index)
     const end = quoted ? quoted.end : index + value.length
     spans.push(query.slice(index, end))
-    // The span keeps the query verbatim for FTS; only the substring matcher's
-    // copy is trimmed, so `"  "` reads as the empty term `""` already does
-    // rather than as a term no session's text contains.
+    // Preserve verbatim spans for FTS; trim substring tokens so whitespace-only quotes behave as empty terms.
     terms.push(value.trim())
     index = end
   }
@@ -63,15 +56,7 @@ function isBoundary(char: string | undefined): boolean {
   return char === undefined || /\s/.test(char)
 }
 
-/**
- * A quoted span, or null when this is not one.
- *
- * What keeps the apostrophes in `it's a repo:orca thing's` from opening a span
- * that swallows the operator is the caller: this only ever runs at a token
- * start, and the quote in `it's` is not at one. The closing quote is then just
- * the next one, wherever it falls, so `"a b"c` reads as the panel has always
- * read it — the span, then the rest as its own token.
- */
+/** Called only at token starts so interior apostrophes cannot swallow operators. Close at the next quote, even mid-word; the remainder becomes its own token. */
 function readQuoted(query: string, at: number): { value: string; end: number } | null {
   const quote = query[at]
   if (quote !== '"' && quote !== "'") {

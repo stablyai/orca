@@ -6,6 +6,7 @@ import { ChevronLeft, Check, RefreshCw, User } from 'lucide-react-native'
 import { loadHosts } from '../transport/host-store'
 import { useHostClient } from '../transport/host-client-hooks'
 import { colors, spacing } from '../theme/mobile-theme'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { styles } from './mobile-accounts-screen-styles'
 import { useNow } from '../hooks/use-now'
 import { ClaudeIcon, OpenAIIcon } from '../components/AgentIcons'
@@ -31,11 +32,9 @@ import { useRouteHandoff } from '../navigation/route-handoff'
 
 type AccountsNotice = { title: string; message: string }
 
-/**
- * The host's agent accounts. Drawn by the page, so prompts are `ConfirmModal`s rather than
- * `Alert.alert` (a no-op on React Native Web) and Back is the handoff's, which pops the shell.
- */
+// Use page ConfirmModal because RN Web Alert.alert is a no-op; Back must hand off to shell’s native stack.
 export function MobileAccountsScreen() {
+  useMobileColorScheme()
   const router = useRouteHandoff()
   const insets = useSafeAreaInsets()
   const { hostId } = useLocalSearchParams<{ hostId: string }>()
@@ -55,8 +54,7 @@ export function MobileAccountsScreen() {
     setError(null)
   }, [])
   const rejectInvalidSnapshot = useCallback(() => {
-    // Why: a stale snapshot can expose a finite reset action for the wrong
-    // account; fail closed if a host sends a shape this mobile cannot prove.
+    // Fail closed on unrecognized snapshot: stale data can expose finite reset for wrong account.
     setSnapshot(null)
     setError('Invalid accounts snapshot from host')
   }, [])
@@ -108,10 +106,7 @@ export function MobileAccountsScreen() {
     }
   }, [hostId])
 
-  // Why: subscribe to streaming snapshot updates so usage bars refresh in
-  // place when the desktop's rate-limit poll completes (every 5 min) or
-  // when the user switches accounts. Falls back to a one-shot accounts.list
-  // if the subscription stream errors.
+  // Stream desktop poll/account-switch updates, falling back to one-shot accounts.list on subscription error.
   useEffect(() => {
     if (!client || connState !== 'connected') {
       return
@@ -172,17 +167,14 @@ export function MobileAccountsScreen() {
             ? 'accounts.selectCodexForTarget'
             : 'accounts.selectCodex'
       try {
-        // Why: old hosts silently strip unknown target fields. Use the distinct
-        // targeted RPC for WSL so version skew fails before mutating host state.
+        // Use distinct WSL-targeted RPC: older hosts silently strip unknown fields, so version skew must fail before mutation.
         const params =
           codexTarget?.runtime === 'wsl' ? { accountId, target: codexTarget } : { accountId }
         const res = await client.sendRequest(method, params)
         if (!res.ok) {
           setNotice({ title: 'Could not switch account', message: res.error.message })
         } else {
-          // Why: optimistic refresh — the streaming subscription will also
-          // emit, but a one-shot keeps the UI responsive even if the stream
-          // is temporarily disconnected.
+          // Refresh optimistically so disconnected subscription cannot delay feedback.
           await refresh()
         }
       } catch (e) {
@@ -227,9 +219,7 @@ export function MobileAccountsScreen() {
             <View style={styles.rowMain}>
               <Text style={styles.rowTitle}>System default</Text>
               <Text style={styles.rowSubtitle}>Use the agent&apos;s own login</Text>
-              {/* Why: when system default is the active selection, activeUsage
-                  holds the system-default login's rate limits — surface them
-                  here so non-managed users still see their usage. */}
+              {/* Show system-default login usage for users without managed accounts. */}
               {activeAccountId === null && hasActiveProviderUsage(activeUsage) ? (
                 <View style={styles.usageRow}>
                   <UsageBar

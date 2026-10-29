@@ -3,10 +3,12 @@ import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { useAllHostClients } from '../transport/use-all-host-clients'
 import { loadHostCatalog } from '../transport/host-store'
 import { pushDeliveryTest } from '../notifications/mobile-push-delivery-test-operations'
-import type { RpcFailure } from '../transport/types'
 import { colors, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 
 export function NotificationDisplayTest({ onTroubleshoot }: { onTroubleshoot: () => void }) {
+  useMobileColorScheme()
   const busy = useRef(false)
   const [hostIds, setHostIds] = useState<string[]>([])
   const [sending, setSending] = useState(false)
@@ -40,8 +42,7 @@ export function NotificationDisplayTest({ onTroubleshoot }: { onTroubleshoot: ()
         })
         const delivered = pushDeliveryTest.interpret(reply)
         if (!delivered.accepted) {
-          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this policy skips only a refusal, so an unaccepted reply is a failure envelope.
-          const code = (reply as RpcFailure).error?.code
+          const code = reply.ok ? undefined : reply.error?.code
           if (code === 'forbidden' || code === 'method_not_found') {
             continue
           }
@@ -104,7 +105,7 @@ export function NotificationDisplayTest({ onTroubleshoot }: { onTroubleshoot: ()
     </View>
   )
 }
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   container: { marginTop: spacing.xl, gap: spacing.sm },
   label: { color: colors.textPrimary, fontSize: typography.bodySize, fontWeight: '600' },
   detail: { color: colors.textMuted, fontSize: typography.metaSize, lineHeight: 18 },
@@ -116,7 +117,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md
   },
   sizingLabel: { opacity: 0 },
-  buttonLabel: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center' },
+  buttonLabel: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
   troubleshootLink: { alignSelf: 'flex-start', paddingVertical: spacing.sm },
   linkText: {
     color: colors.textSecondary,
@@ -125,4 +130,4 @@ const styles = StyleSheet.create({
   },
   pressed: { opacity: 0.6 },
   buttonText: { color: colors.textPrimary, fontSize: typography.metaSize, fontWeight: '600' }
-})
+}))

@@ -50,9 +50,7 @@ describe('pane launch-agent candidate', () => {
   )
 
   it('survives a launch config registered before its identity lands', () => {
-    // Why: the OSC color-reply skip made this ladder run on EVERY pane connect, and
-    // reading through a missing `identity` threw "Cannot read properties of undefined
-    // (reading 'agentType')" — 24 failures across 8 connectPanePty suites.
+    // Missing identity must be safe because color-reply classification runs this ladder for every pane connect.
     const state = store({ agentLaunchConfigByPaneKey: { 'tab-1:leaf-1': {} } })
     expect(resolvePaneLaunchAgentCandidate(state, PANE)).toBeUndefined()
     expect(resolvePaneLaunchTuiAgent(state, PANE)).toBeNull()

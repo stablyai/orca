@@ -70,9 +70,8 @@ const MINIMAL_SESSION = {
 
 describe('workspaceSessionStateSchema field coverage', () => {
   it('parses every field declared on WorkspaceSessionState', () => {
-    // The runtime half. `satisfies` above already makes a forgotten field a compile error; this
-    // reports it by name, and catches the reverse case where the list is updated but the schema
-    // is not.
+    // `satisfies` above already makes a forgotten field a compile error; this reports it by name,
+    // and catches the reverse case where the list is updated but the schema is not.
     // Why the cast: the export is annotated `z.ZodType<WorkspaceSessionState>`, which hides
     // `.shape`. The value is a z.object; this reads its keys without widening the public type.
     const schemaKeys = new Set(
@@ -88,9 +87,7 @@ describe('workspaceSessionStateSchema field coverage', () => {
   })
 
   it('round-trips the closed-tab tombstone map through parseWorkspaceSession', () => {
-    // The regression this file exists for. Recorded on close, written to disk, stripped on the next
-    // launch — so a close the transport never delivered resurrected after a quit-and-relaunch,
-    // which is precisely the reported shape ("every day I open orca and it opens more tabs").
+    // A persisted close must survive relaunch or disconnected tabs reappear despite every single-process test passing.
     const parsed = parseWorkspaceSession({
       ...MINIMAL_SESSION,
       closedTerminalTabTombstonesByTabId: {

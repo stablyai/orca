@@ -4,6 +4,16 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as AttachmentUploadModule from './native-chat-attachment-upload'
 import type { NativeChatAttachmentOwner } from './native-chat-attachment-upload'
+import {
+  createNativeChatQueuedEditDraft,
+  handBackNativeChatQueuedEdit,
+  discardNativeChatQueuedEdit
+} from './native-chat-queued-edit-draft'
+import {
+  readNativeChatComposerDraft,
+  clearNativeChatComposerDraftsForTests
+} from './native-chat-composer-draft-store'
+import { useNativeChatFileAttachmentActions } from './use-native-chat-file-attachment-actions'
 import { nativeChatPendingAttachmentSnapshot } from './native-chat-pending-attachment-cache'
 import { nativeChatImagesHoldSend } from './native-chat-image-reattach'
 import { readNativeChatDraftCache } from './native-chat-draft-cache'
@@ -13,7 +23,7 @@ import {
   clearNativeChatAttachmentCacheForTests,
   useNativeChatComposerAttachments
 } from './use-native-chat-composer-attachments'
-import type * as RemoteRuntimePtyIdModule from '../../../../shared/remote-runtime-pty-id'
+import type * as RemoteRuntimePtyIdModule from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 
 const mocks = vi.hoisted(() => {
   const state: {
@@ -39,7 +49,7 @@ vi.mock('@/store', () => ({
   })
 }))
 vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => fallback }))
-vi.mock('../../../../shared/remote-runtime-pty-id', async (importOriginal) => ({
+vi.mock('../../../../shared/remote-runtime/remote-runtime-pty-id', async (importOriginal) => ({
   ...(await importOriginal<typeof RemoteRuntimePtyIdModule>()),
   isRemoteRuntimePtyId: () => mocks.remoteTarget
 }))
@@ -52,7 +62,8 @@ vi.mock('./native-chat-attachment-upload', async (importOriginal) => ({
 
 type Api = ReturnType<typeof useNativeChatExternalAttachments> &
   ReturnType<typeof useNativeChatComposerAttachments> &
-  ReturnType<typeof useNativeChatComposerPaste>
+  ReturnType<typeof useNativeChatComposerPaste> &
+  ReturnType<typeof useNativeChatFileAttachmentActions>
 let api: Api | undefined
 let root: Root
 let container: HTMLDivElement
@@ -61,18 +72,20 @@ let composing = true
 function Probe({
   worktreeId,
   acceptsImages = true,
-  disabled = false
+  disabled = false,
+  scope = 'drop-test'
 }: {
   worktreeId?: string
   acceptsImages?: boolean
   disabled?: boolean
+  scope?: string
 }): React.JSX.Element {
   const [draft, setDraft] = useState('')
   const [caret, setCaret] = useState(0)
   const [notice, setNotice] = useState<string | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const attachments = useNativeChatComposerAttachments({
-    attachmentScopeKey: 'drop-test',
+    attachmentScopeKey: scope,
     acceptsImages,
     caret,
     disabled,
@@ -85,6 +98,7 @@ function Probe({
   })
   const external = useNativeChatExternalAttachments({
     terminalTabId: 'tab-1',
+    draftScopeKey: scope,
     structuredWorktreeId: worktreeId,
     disabled,
     attachResolvedPaths: attachments.attachResolvedPaths,
@@ -92,7 +106,7 @@ function Probe({
     setNotice
   })
   const paste = useNativeChatComposerPaste({
-    attachmentScopeKey: 'drop-test',
+    attachmentScopeKey: scope,
     agent: 'claude',
     disabled,
     caret,
@@ -100,6 +114,7 @@ function Probe({
     resolveAttachmentOwner: external.resolveAttachmentOwner,
     attachResolvedPaths: attachments.attachResolvedPaths,
     attachCopiedFiles: external.attachExternalPaths,
+    captureExternalPaths: () => external.captureExternalDrop(undefined, { focus: false }),
     captureCopiedFiles: (options) => external.captureReservedAttachments(undefined, options),
     beginPendingImageAttachment: attachments.beginPendingImageAttachment,
     resolvePendingImageAttachment: attachments.pendingChips.resolve,
@@ -108,7 +123,8 @@ function Probe({
     insertTypedText: () => true,
     setNotice
   })
-  api = { ...attachments, ...external, ...paste }
+  const picker = useNativeChatFileAttachmentActions(() => external.captureExternalDrop())
+  api = { ...attachments, ...external, ...paste, ...picker }
   return (
     <>
       <textarea ref={textareaRef} />
@@ -155,6 +171,7 @@ afterEach(() => {
   act(() => root.unmount())
   container.remove()
   clearNativeChatAttachmentCacheForTests()
+  clearNativeChatComposerDraftsForTests()
   vi.unstubAllGlobals()
 })
 
@@ -444,3 +461,83 @@ describe('a macOS paste the clipboard shows is Finder files', () => {
     expect(mocks.stat).not.toHaveBeenCalled()
   })
 })
+
+describe('captured edit picker and menu destination', () => {
+  it.each(['picker', 'menu'] as const)(
+    'keeps a deferred %s result with the original bottom after hand-back, and retires it on Cancel',
+    async (route) => {
+      for (const cancel of [false, true]) {
+        const edit = createNativeChatQueuedEditDraft(
+          { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'original' }] },
+          'original-bottom'
+        )
+        let pickerAnswer = (_paths: string[]) => {}
+        let clipboardAnswer = (_read: string) => {}
+        window.api.shell = {
+          ...window.api.shell,
+          pickAttachments: () =>
+            new Promise<string[]>((resolve) => {
+              pickerAnswer = resolve
+            })
+        }
+        window.api.ui.readClipboardFilePaths = async () => ['/late.txt', '/late.png']
+        window.api.ui.clipboardHasImage = async () => false
+        window.api.ui.readClipboardText = () =>
+          new Promise((resolve) => {
+            clipboardAnswer = resolve
+          })
+        composing = false
+        await act(async () => root.render(<Probe worktreeId="workspace-1" scope={edit.scopeKey} />))
+        act(() => (route === 'picker' ? latest().pickAttachments() : latest().pasteFromClipboard()))
+        if (cancel) {
+          discardNativeChatQueuedEdit(edit)
+        } else {
+          handBackNativeChatQueuedEdit(edit)
+        }
+        act(() => root.unmount())
+        await act(async () => {
+          pickerAnswer(['/late.txt', '/late.png'])
+          clipboardAnswer('/late.txt\n/late.png')
+          await new Promise((resolve) => setTimeout(resolve, 0))
+        })
+        const bottom = readNativeChatComposerDraft('original-bottom')
+        expect(bottom.text).toBe(cancel ? '' : '@/late.txt')
+        expect(bottom.images.map(({ path }) => path)).toEqual(cancel ? [] : ['/late.png'])
+        expect(nativeChatPendingAttachmentSnapshot('original-bottom')).toEqual([])
+        root = createRoot(container)
+        clearNativeChatComposerDraftsForTests()
+      }
+    }
+  )
+})
+
+it.each(['ordinary', 'edit'] as const)(
+  'keeps unreadable-picker failure outcome on the moved %s entry point',
+  async (kind) => {
+    const edit =
+      kind === 'edit'
+        ? createNativeChatQueuedEditDraft(
+            { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'original' }] },
+            'bottom'
+          )
+        : undefined
+    const scope = edit?.scopeKey ?? 'drop-test'
+    composing = false
+    mocks.stat.mockRejectedValue(new Error('unreadable'))
+    window.api.shell = { ...window.api.shell, pickAttachments: async () => ['/unreadable.png'] }
+    await act(async () => root.render(<Probe worktreeId="workspace-1" scope={scope} />))
+    await act(async () => {
+      latest().pickAttachments()
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+    expect(nativeChatPendingAttachmentSnapshot(scope)).toEqual([])
+    expect(latest().imageAttachments).toEqual([])
+    expect(readNativeChatComposerDraft(scope).text).toBe(edit ? 'original' : '')
+    expect(container.querySelector('[data-notice]')?.textContent).toBe(
+      "Couldn't read the dropped files."
+    )
+    if (edit) {
+      discardNativeChatQueuedEdit(edit)
+    }
+  }
+)

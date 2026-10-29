@@ -18,7 +18,6 @@ import {
   spawnedPtyEnv,
   store
 } from '../orca-runtime-test-fixtures.spec'
-import type { RuntimeStore } from '../runtime-store-contract'
 import { wireHeadlessServeRuntime } from '../orca-runtime-test-scenario-builders.spec'
 
 describe('OrcaRuntimeService', () => {
@@ -256,12 +255,7 @@ describe('OrcaRuntimeService', () => {
     )
   })
 
-  // Why (flipped by the aug20 "windows 2" incident): #8646 scoped the persisted
-  // binding to windowless promotion, which left a host-initiated terminal on a
-  // host running the full app with neither a persisted tab nor runtime
-  // ownership — unclassifiable, so graph sync pruned the tab off a live agent.
-  // The renderer adopts under the pre-minted tabId, so persisting early cannot
-  // fork a second tab; it only makes the host's own create durable.
+  // Persist host-created bindings before adoption so graph sync cannot prune live tabs; pre-minted ids prevent duplicates.
   it('persists the host session binding even when a window is attached', async () => {
     const spawn = vi.fn().mockResolvedValue({ id: 'pty-bg' })
     const runtime = new OrcaRuntimeService(store)
@@ -312,7 +306,6 @@ describe('OrcaRuntimeService', () => {
       getForegroundProcess: async () => null
     })
 
-    // `orca terminal create --worktree <wt> --command "echo test" --focus`
     await expect(
       runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
         command: 'echo test',
@@ -330,8 +323,6 @@ describe('OrcaRuntimeService', () => {
         persistHostSessionBinding: true
       })
     )
-    // Why: degrading the create must not silently drop the focus request — the
-    // host still asks whatever surface exists to activate the new pane.
     expect(revealTerminalSession).toHaveBeenCalledWith(
       TEST_WORKTREE_ID,
       expect.objectContaining({ activate: true, presentation: 'focused' })
@@ -348,7 +339,7 @@ describe('OrcaRuntimeService', () => {
       getForegroundProcess: async () => null
     })
 
-    // Paired desktop `+` button: clients send presentation:'focused', not focus.
+    // Paired desktop clients request focus through presentation.
     await expect(
       runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
         command: 'codex',
@@ -363,8 +354,7 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('spawns focused agent-session creates in background on headless serve', async () => {
-    // Why: RPC only downgrades `focused` for clients that report a clientKind
-    // (#10193), so loopback/CLI callers still reach the runtime asking for focus.
+    // Clients without clientKind retain focused presentation (#10193).
     const spawn = vi.fn().mockResolvedValue({ id: 'pty-agent-headless' })
     const runtime = wireHeadlessServeRuntime()
     runtime.setPtyController({
@@ -407,9 +397,7 @@ describe('OrcaRuntimeService', () => {
       focus: true
     })
 
-    // Why: with no renderer notifier on a serve host, the session-tab publish is
-    // the only channel a paired client learns about the terminal on — a degraded
-    // focused create must still land there selected, or focus is silently lost.
+    // Without a renderer notifier, the selected session-tab publication is the only focus signal to paired clients.
     const tabs = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
     const published = tabs.tabs.find(
       (tab) => tab.type === 'terminal' && tab.parentTabId === created.tabId
@@ -419,11 +407,9 @@ describe('OrcaRuntimeService', () => {
     expect(tabs.activeTabId).toBe(published?.id)
   })
 
-  // `orca terminal create` used to ask the window to make the terminal and report failure after
-  // 10 s, while the window still made it later; a retry then duplicated the terminal.
+  // A timed-out renderer create could finish later and duplicate a retried terminal.
   it.each([
     ['--focus', { command: 'echo hi', focus: true, presentation: 'focused' }],
-    // What the CLI sent for an interactive agent before this host ignored `rendererBacked`.
     ['interactive agent', { command: 'codex', focus: false, rendererBacked: true, activate: false }]
   ])(
     'reports the running CLI terminal, not a failure, when the window is slow (%s)',
@@ -434,7 +420,7 @@ describe('OrcaRuntimeService', () => {
       })
       const spawn = vi.fn().mockResolvedValue({ id: 'pty-cli' })
       const windowSend = vi.fn()
-      // The window answers nothing, so the real reveal times out after 10 s.
+      // Leave reveal unresolved to exercise its 10s timeout.
       const revealTerminalSession = vi.fn(
         () =>
           new Promise<never>((_resolve, reject) => {
@@ -475,7 +461,7 @@ describe('OrcaRuntimeService', () => {
         method: 'terminal.create',
         params: { worktree: `id:${TEST_WORKTREE_ID}`, ...params }
       })
-      // Agent launch resolution does real I/O, so wait for the window to be asked first.
+      // Launch resolution performs real I/O; wait for reveal before advancing timers.
       await vi.waitFor(() =>
         expect(revealTerminalSession.mock.calls.length + windowSend.mock.calls.length).toBe(1)
       )
@@ -500,7 +486,6 @@ describe('OrcaRuntimeService', () => {
   it.each([
     ['the named group', { targetGroupId: 'group-named' }, { cols: 90, rows: 30 }],
     ['the active group when none is named', {}, { cols: 63, rows: 60 }],
-    // A caller that measured its own pane beats any group size.
     ["the caller's own pane", { initialSize: { cols: 101, rows: 33 } }, { cols: 101, rows: 33 }]
   ])('starts a host terminal at the measured size of %s', async (_case, opts, expected) => {
     const spawn = vi.fn().mockResolvedValue({ id: 'pty-cli' })
@@ -523,7 +508,6 @@ describe('OrcaRuntimeService', () => {
         'group-active': { cols: 63, rows: 60 },
         'group-named': { cols: 90, rows: 30 }
       },
-      // A measured group beats the single-group size.
       singleGroupWorkspaceGridSize: { cols: 238, rows: 80 }
     })
 
@@ -716,8 +700,7 @@ function titledHeadlessRuntime() {
     activeRepoId: TEST_REPO_ID,
     activeWorktreeId: TEST_WORKTREE_ID
   })
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The shared fixture supplies RuntimeStore methods; its legacy Mock return type loses callable signatures.
-  const runtime = new OrcaRuntimeService(runtimeStore as RuntimeStore)
+  const runtime = new OrcaRuntimeService(runtimeStore)
   runtime.setPtyController({
     spawn: vi.fn(async () => ({ id: 'titled-pty' })),
     write: () => true,
@@ -739,8 +722,7 @@ describe('a titled terminal on a host with no window', () => {
     expect(saved?.find((tab) => tab.id === created.tabId)?.customTitle).toBe('cli-created')
   })
 
-  // A window reads a saved name on hydration and shows it over the agent's live title, so a tab
-  // the window never revealed (a background worker) must not get one.
+  // Background workers must not persist a name that hides their later live title.
   it('saves no name for a background terminal', async () => {
     const { runtime, getSession } = titledHeadlessRuntime()
 
@@ -761,7 +743,6 @@ describe('a titled terminal on a host with no window', () => {
     const created = await runtime.createTerminal(`id:${TEST_WORKTREE_ID}`, {
       title: 'cli-created'
     })
-    // A restarted host rebuilds the terminal's record from the process list, without a title.
     const pty = runtime['ptysById'].get('titled-pty')!
     pty.title = null
     pty.titleUpdatedAt = null

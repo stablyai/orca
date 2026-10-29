@@ -1,5 +1,4 @@
-// Why: catalog refreshes re-filter this on every fetch; six identity-sensitive subscribers
-// (App.tsx at the root among them) re-render on a new array even when nothing was pruned.
+// Preserve equal filter arrays on catalog refresh or six identity-sensitive subscribers, including App root, rerender.
 export function retainValidFilterRepoIds(
   filterRepoIds: readonly string[],
   validRepoIds: ReadonlySet<string>

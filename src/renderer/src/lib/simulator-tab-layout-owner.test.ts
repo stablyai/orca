@@ -167,10 +167,6 @@ function sentTypes(): string[] {
 }
 
 describe('simulator tabs in a layout-owner build', () => {
-  it('starts with main holding the window’s layout', () => {
-    expectSaveTeachesMainNothing()
-  })
-
   it('opens a simulator tab in the active group through main, and closes it there', async () => {
     const tabId = ensureSimulatorTab(WORKTREE, { placement: 'activeGroup' })
     expect(tabId).toBeTruthy()

@@ -1,0 +1,29 @@
+# Native-chat class strings stay on the chat design tokens, including variant-prefixed classes.
+# The TSX document below mirrors the TypeScript one; keep them in sync.
+id: native-chat-no-arbitrary-font-size
+language: typescript
+severity: error
+message: 'Use a chat type step (text-sm, text-xs, text-2xs, text-3xs, text-chat-code), not an arbitrary size. See docs/styleguide/native-chat.md.'
+files:
+  - '**/src/renderer/src/components/native-chat/**'
+ignores:
+  - '**/*.test.*'
+  - '**/*.spec.*'
+  - '**/*-benchmark.*'
+rule:
+  kind: string_fragment
+  regex: '(?:^|\s)!?(?:(?:\[[^\]\s]*\]|[^\s:\[\]])+:)*!?text-\[(?:length:)?[\d.]+(?:px|rem|em)\]!?(?:\s|$)'
+---
+id: native-chat-no-arbitrary-font-size-tsx
+language: tsx
+severity: error
+message: 'Use a chat type step (text-sm, text-xs, text-2xs, text-3xs, text-chat-code), not an arbitrary size. See docs/styleguide/native-chat.md.'
+files:
+  - '**/src/renderer/src/components/native-chat/**'
+ignores:
+  - '**/*.test.*'
+  - '**/*.spec.*'
+  - '**/*-benchmark.*'
+rule:
+  kind: string_fragment
+  regex: '(?:^|\s)!?(?:(?:\[[^\]\s]*\]|[^\s:\[\]])+:)*!?text-\[(?:length:)?[\d.]+(?:px|rem|em)\]!?(?:\s|$)'

@@ -42,15 +42,14 @@ export function CommitMessageComposer({
           'Commit message'
         )}
         aria-describedby={describedBy || undefined}
-        // Why: reserve right padding so text doesn't slide under the absolute-positioned Generate icon.
-        // Why: pin disabled:border-input so Chromium's UA disabled styles don't wash out the field outline.
+        // Reserve Generate icon space and pin disabled borders so Chromium cannot wash out the field outline.
         className={`mt-0.5 min-h-14 w-full resize-none appearance-none rounded-md border border-input bg-background shadow-xs px-2 py-1.5 text-xs text-foreground outline-none placeholder:text-muted-foreground/70 focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:border-input disabled:bg-background disabled:text-foreground disabled:shadow-xs dark:bg-input/30 dark:disabled:bg-input/30 ${
           showGenerate ? 'pr-8' : ''
         }`}
       />
       {showGenerate &&
         (isGenerating ? (
-          // Why: while generating, the icon doubles as cancel — hover/focus swaps the spinner to a destructive Square via CSS group toggles (stateless in React).
+          // CSS hover/focus swaps the generation spinner for a cancel square without React state.
           <Tooltip>
             <TooltipTrigger asChild>
               <button

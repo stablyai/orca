@@ -82,7 +82,11 @@ describe('getPRForBranch', () => {
     expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(2)
     expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
       1,
-      ['api', 'repos/acme/widgets/pulls?head=acme%3Afeature%2Ftest&state=all&per_page=1'],
+      [
+        'api',
+        'repos/acme/widgets/pulls?head=acme%3Afeature%2Ftest&state=all&per_page=1',
+        '--include'
+      ],
       { cwd: '/repo-root' }
     )
     expect(pr).toMatchObject({ number: 43, title: 'Hydrated branch PR wins' })
@@ -113,7 +117,11 @@ describe('getPRForBranch', () => {
 
     expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
       1,
-      ['api', 'repos/acme/widgets/pulls?head=acme%3Afeature%2Ftest&state=all&per_page=1'],
+      [
+        'api',
+        'repos/acme/widgets/pulls?head=acme%3Afeature%2Ftest&state=all&per_page=1',
+        '--include'
+      ],
       { cwd: '/repo-root' }
     )
     expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
@@ -167,7 +175,11 @@ describe('getPRForBranch', () => {
     )
     expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
       2,
-      ['api', 'repos/stablyai/orca/pulls?head=stablyai%3Afeature%2Ftest&state=all&per_page=1'],
+      [
+        'api',
+        'repos/stablyai/orca/pulls?head=stablyai%3Afeature%2Ftest&state=all&per_page=1',
+        '--include'
+      ],
       { cwd: '/repo-root' }
     )
   })
@@ -193,7 +205,6 @@ describe('getPRForBranch', () => {
       throw new Error('expected upstream-error')
     }
     expect(outcome.errorType).toBe('rate_limited')
-    // ~120s cooldown surfaced as both the manual gate and the auto-retry time.
     expect(outcome.retryDisabledUntil).toBeDefined()
     expect(outcome.nextAutoRetryAt).toBe(outcome.retryDisabledUntil)
     expect(outcome.retryDisabledUntil ?? 0).toBeGreaterThanOrEqual(before + 119_000)

@@ -22,11 +22,11 @@ const refs = {
   published: 'b1e44269d655608447dc535f0a4d7d05c37c80b7',
   current: null
 }
-const entry = `
-  export { foldToolMessages as fold } from './src/shared/native-chat-tool-fold'
+const entry = (ref) => `
+  export { foldToolMessages as fold } from '${ref ? './src/shared/native-chat-tool-fold' : './src/shared/native-chat/tools/native-chat-tool-fold'}'
   import { createNativeChatMessageListProjection } from './src/renderer/src/components/native-chat/native-chat-message-list-projection'
   import { deriveNativeChatRowContent } from './src/shared/native-chat-row-content'
-  import { pairNativeChatToolResults } from './src/shared/native-chat-tool-pairing'
+  import { pairNativeChatToolResults } from '${ref ? './src/shared/native-chat-tool-pairing' : './src/shared/native-chat/tools/native-chat-tool-pairing'}'
   export function createPipeline() {
     const project = createNativeChatMessageListProjection()
     return (messages) => {
@@ -74,10 +74,25 @@ if (process.argv.includes('--memory-control')) {
 }
 
 async function load(ref) {
+  let snapshotFiles
+  if (ref) {
+    const listed = runProcessSync({
+      program: 'git',
+      args: ['ls-tree', '-r', '--name-only', ref, '--', 'src'],
+      cwd: root,
+      env: { ...process.env, ORCA_BACKGROUND_LAUNCH: '1' },
+      timeoutMs: 30_000,
+      maxOutputBytes: 2 * 1024 * 1024
+    })
+    if (listed.code !== 0 || listed.timedOut || listed.outputTruncated) {
+      throw new Error(describeProcessFailure(listed))
+    }
+    snapshotFiles = new Set(listed.stdout.trim().split('\n'))
+  }
   const modules = new Map()
   const built = await build({
     stdin: {
-      contents: entry,
+      contents: entry(ref),
       resolveDir: root,
       sourcefile: 'fold-benchmark-entry.ts',
       loader: 'ts'
@@ -90,6 +105,32 @@ async function load(ref) {
       {
         name: 'exact-chat-source-snapshot',
         setup(builder) {
+          builder.onResolve({ filter: /^\./ }, (args) => {
+            if (!ref) {
+              return undefined
+            }
+            const target = path
+              .relative(root, path.resolve(args.resolveDir, args.path))
+              .split(path.sep)
+              .join('/')
+            if (!target.startsWith('src/')) {
+              return undefined
+            }
+            const candidates = [
+              target,
+              ...['.tsx', '.ts', '.jsx', '.js', '.css', '.json'].map(
+                (extension) => target + extension
+              ),
+              ...['.tsx', '.ts', '.jsx', '.js', '.css', '.json'].map(
+                (extension) => `${target}/index${extension}`
+              )
+            ]
+            const file = candidates.find((candidate) => snapshotFiles.has(candidate))
+            if (!file) {
+              throw new Error(`Missing snapshot source: ${ref}:${target}`)
+            }
+            return { path: path.join(root, file) }
+          })
           builder.onLoad({ filter: /\.[cm]?[jt]sx?$/ }, ({ path: file }) => {
             const relative = path.relative(root, file).split(path.sep).join('/')
             if (!relative.startsWith('src/')) {

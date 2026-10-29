@@ -25,6 +25,7 @@ function fakeWatch(signal: WslOrcadWatch['signal']) {
       exit = listener
     }),
     close: vi.fn(),
+    proving: () => signal === 'ready',
     exit: (code: number | null) => exit?.(code)
   }
   return watch
@@ -100,7 +101,8 @@ describe('WSL orcad liveness building blocks', () => {
       busy: false,
       pending: null,
       state: null,
-      lastBeatMs: 42
+      lastBeatMs: 42,
+      lastExitMs: null
     })
   })
 

@@ -1,5 +1,5 @@
 import React from 'react'
-import { getPageNumbers } from '@/components/task-page-pagination-page-numbers'
+import { getPageNumbers } from '@/components/task-page/task-page-pagination-page-numbers'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import { ChevronLeft, LoaderCircle, ChevronRight } from 'lucide-react'
@@ -83,5 +83,3 @@ export function PaginationBar({
     </nav>
   )
 }
-
-// Why: hoisted to module scope so the type-guard predicate isn't re-allocated on every TaskPage render.

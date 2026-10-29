@@ -46,7 +46,8 @@ export function BrowserPageContextMenu({
         pageUrl: event.pageUrl,
         selectionText: event.selectionText ?? '',
         editable: event.editable,
-        image: event.image
+        image: event.image,
+        extensionMenu: event.extensionMenu
       })
     })
   }, [browserPageId])
@@ -60,8 +61,7 @@ export function BrowserPageContextMenu({
     })
   }, [browserPageId])
 
-  // Why: the guest owns focus while the menu is open, so hand it back on close —
-  // otherwise dismissing leaves the page unable to receive keystrokes.
+  // Return focus to the guest on dismissal so the page can receive keystrokes.
   const closeMenu = useCallback((): void => {
     setContextMenu(null)
     try {
@@ -76,7 +76,12 @@ export function BrowserPageContextMenu({
     if (!el) {
       return []
     }
-    return [...el.querySelectorAll<HTMLButtonElement>('[role="menuitem"]:not(:disabled)')]
+    // Why :scope chain: items inside an extension's submenu navigate within that submenu.
+    return [
+      ...el.querySelectorAll<HTMLButtonElement>(
+        ':scope > [role^="menuitem"]:not(:disabled), :scope > div:not([role]) > [role^="menuitem"]:not(:disabled)'
+      )
+    ]
   }, [])
 
   useEffect(() => {

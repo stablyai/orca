@@ -3,8 +3,7 @@ import path from 'node:path'
 import { readFile, stat } from 'node:fs/promises'
 import { parseGhosttyConfig } from './parser'
 
-// Why: theme files ship a few dozen short lines; anything larger is not a
-// Ghostty theme and should not be read into the main process.
+// Bound theme reads to keep large or misidentified files out of main-process memory.
 const MAX_THEME_BYTES = 262_144
 type ThemeColors = Record<string, string | string[]>
 type ThemeReadResult =
@@ -12,8 +11,7 @@ type ThemeReadResult =
   | { status: 'missing' }
   | { status: 'invalid' }
 
-// Why: only color-bearing keys may flow from a theme into the import — a theme
-// file must not be able to smuggle font/window settings past the user's config.
+// Themes may supply colors only; font and window settings must come from explicit config.
 const THEME_COLOR_KEYS = new Set([
   'palette',
   'background',
@@ -44,13 +42,11 @@ function resourceThemeDirs(plat: 'darwin' | 'linux'): string[] {
   return ['/usr/share/ghostty/themes', '/usr/local/share/ghostty/themes']
 }
 
-// Why: mirrors Ghostty's lookup — user themes shadow the bundled themes shipped
-// inside the Ghostty resources directory.
+// User themes shadow bundled themes, matching Ghostty lookup order.
 export function getGhosttyThemeSearchDirs(): string[] {
   const home = homedir()
   const plat = platform()
   if (plat !== 'darwin' && plat !== 'linux') {
-    // Why: Ghostty has no Windows build, so there are no named theme dirs to probe.
     return []
   }
   return [...xdgThemeDirs(home), ...resourceThemeDirs(plat)]
@@ -100,8 +96,7 @@ export async function resolveGhosttyThemeColors(name: string): Promise<ThemeColo
     return result.status === 'found' ? result.colors : null
   }
 
-  // Why: relative theme names become filenames below; only absolute paths may
-  // contain separators, matching Ghostty's traversal guard.
+  // Relative theme names cannot contain path separators; absolute paths remain supported.
   if (!isRelativeThemeName(name)) {
     return null
   }

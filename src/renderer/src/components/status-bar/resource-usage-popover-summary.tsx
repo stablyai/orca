@@ -205,14 +205,14 @@ export function renderResourceUsageSummary({
         <span className="shrink-0 text-yellow-500" aria-live="polite">
           {orphanCount === 1
             ? translate(
-                'auto.components.status.bar.ResourceUsageStatusSegment.30ff2c3c31',
-                '{{value0}} orphan',
-                { value0: orphanCount }
+                'auto.components.status.bar.ResourceUsageStatusSegment.orphanCount_one',
+                '{{count}} orphan',
+                { count: orphanCount }
               )
             : translate(
-                'auto.components.status.bar.ResourceUsageStatusSegment.b8f4a2c1d0e3',
-                '{{value0}} orphans',
-                { value0: orphanCount }
+                'auto.components.status.bar.ResourceUsageStatusSegment.orphanCount_other',
+                '{{count}} orphans',
+                { count: orphanCount }
               )}
         </span>
       )}

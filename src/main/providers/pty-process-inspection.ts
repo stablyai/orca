@@ -15,20 +15,17 @@ type CompletionSensitivePtyProvider = IPtyProvider & {
   ) => Promise<PtyProcessInspection>
 }
 
-/**
- * `scanChildProcesses` marks a read whose answer decides something once, rather than a poll that
- * self-corrects on its next tick. Only hosts where the child answer costs a process-table read
- * act on it; everywhere else the answer was already captured.
- */
+/** scanChildProcesses requests decision-time evidence; steady polls may rely on the next tick to correct stale reads. */
 export type PtyProcessInspectionOptions = {
   expectedIncarnationId?: PtyIncarnationId
   scanChildProcesses?: boolean
-  /** Adoption only: on Windows, a job member that left both the shell's tree and its console no
-   *  longer counts. Never for close checks: closing a Windows pane kills its whole job. */
+  /** Adoption only: ignore members outside both shell ancestry and console; close still reaches the whole job. */
   ignoreDetached?: boolean
-  /** A self-correcting cadence poll that reads only the process name: licenses a host to answer
-   *  from a cheap capture and OMIT evidence. Never set by a caller that consumes evidence. */
+  /** Name-only cadence polls may use cheap captures and omit evidence; evidence consumers must never set this. */
   steadyState?: boolean
+  /** Also reach a session the daemon still runs that no window has reattached since a relaunch.
+   *  WSL move gate only: other callers keep reading such a session as gone. */
+  includeUnattached?: boolean
 }
 
 export async function inspectPtyProviderProcess(
@@ -36,7 +33,8 @@ export async function inspectPtyProviderProcess(
   ptyId: string,
   options?: PtyProcessInspectionOptions
 ): Promise<PtyProcessInspection> {
-  if (provider.hasPty?.(ptyId) === false) {
+  // The daemon's own inspect still refuses a session it no longer runs.
+  if (options?.includeUnattached !== true && provider.hasPty?.(ptyId) === false) {
     throw new Error('terminal_gone')
   }
   const inspectProcess = (provider as CompletionSensitivePtyProvider).inspectProcess

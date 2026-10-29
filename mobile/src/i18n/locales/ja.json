@@ -1,0 +1,22 @@
+{
+  "common": {
+    "back": "戻る"
+  },
+  "settings": {
+    "appearance": {
+      "language": {
+        "description": "「システム」はこのデバイスの言語に従います。権限の確認画面には常にデバイスの言語が使われます。",
+        "heading": "言語",
+        "systemWithCurrent": "システム（{{language}}）"
+      },
+      "theme": {
+        "dark": "ダーク",
+        "description": "「システム」はこのデバイスのライト／ダーク設定に従います。",
+        "heading": "テーマ",
+        "light": "ライト",
+        "system": "システム"
+      },
+      "title": "外観"
+    }
+  }
+}

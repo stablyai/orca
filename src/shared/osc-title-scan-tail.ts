@@ -31,8 +31,7 @@ function trimOscTitleScanTail(value: string): string {
   if (value.length <= OSC_TITLE_SCAN_TAIL_LIMIT) {
     return value
   }
-  // Preserve the OSC introducer while keeping the newest payload bytes, so
-  // bounded tails can still reconstruct a split title terminator.
+  // Keep the OSC introducer plus newest payload to reconstruct split terminators within the tail cap.
   const prefix = value.slice(0, Math.min(OSC_TITLE_PREFIX_LENGTH, value.length))
   const suffixBudget = Math.max(0, OSC_TITLE_SCAN_TAIL_LIMIT - prefix.length)
   return `${prefix}${value.slice(-suffixBudget)}`

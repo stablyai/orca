@@ -14,7 +14,7 @@ import {
   getLocalRepoForRegisteredWorktree
 } from '../local-worktree-runtime-options'
 import { getWorktreeSharedLinkPaths } from '../../git/worktree-shared-directories'
-import { validateGitRelativeFilePath } from '../filesystem-path-containment'
+import { validateGitRelativeFilePath } from './filesystem-path-containment'
 import type { FilesystemHandlerContext } from './filesystem-handler-context'
 import { parseGitStageWorktreeScope } from '../../../shared/git-stage-worktree-scope'
 import { requireReachableGitRoute } from '../../providers/execution-host-provider-dispatch'

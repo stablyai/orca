@@ -2,11 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { mobileRelayMintFailureFromUnknown } from '../../../shared/mobile-relay-mint-failure'
 import { RelayControlRequests } from './relay-control-requests'
 
-// A control-request rejection is a classification key, not prose: the pairing
-// flow feeds error.message through an anchored /^relay_[a-z0-9_]{1,74}$/ and
-// falls back to a generic code on any mismatch. Appending diagnostics to that
-// message once turned every pairing timeout into relay_mint_failed, losing the
-// one signal that identified STA-7672 — so pin the contract end to end.
+// Anchored relay_* classification rejects diagnostic suffixes; keep timeout codes precise end to end (STA-7672).
 describe('control request timeout classification', () => {
   it('keeps a timed-out request classifiable by the mobile pairing flow', async () => {
     vi.useFakeTimers()

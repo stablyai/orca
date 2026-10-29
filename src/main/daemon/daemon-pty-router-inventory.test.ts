@@ -105,8 +105,7 @@ describe('DaemonPtyRouter inventory identity', () => {
       ])
       const router = new DaemonPtyRouter({ current, legacy: [legacy] })
 
-      // Why reject rather than drop the row: worktree removal treats a completed empty list
-      // as exit proof; renderer bare-id deduplication would instead invent one row's authority.
+      // Dropping ambiguous rows would falsely prove absence; deduplicating them would invent an owner.
       await expect(router.listProcesses()).rejects.toBeInstanceOf(
         TerminalSessionOwnerUnverifiedError
       )

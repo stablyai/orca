@@ -20,6 +20,7 @@ const state = vi.hoisted(() => ({
   onSettingsChanged: vi.fn<ProfilePreferences['onSettingsChanged']>(),
   removeSettingsListener: vi.fn(),
   startDaemon: vi.fn(async () => {}),
+  stopDaemon: vi.fn(async () => {}),
   browserProvider: vi.fn(async () => null),
   register: vi.fn(async () => ({ ok: true, registrationId: 'headless-registration' })),
   send: vi.fn(async () => ({ ok: true, results: [] })),
@@ -32,7 +33,7 @@ const profile = vi.hoisted(() => {
   const value: { settings: Partial<GlobalSettings> } = { settings: {} }
   return value
 })
-// Why: startup reconciles the user-global agent configs; keep it off this machine's real home.
+// Reconciliation writes user-global agent configs; isolate it from the real home.
 vi.mock('../codex/codex-hook-reconcile', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   startCodexHooks: state.startCodexHooks
@@ -48,6 +49,9 @@ vi.mock('../agent-hooks/local-agent-cli-presence', async (importOriginal) => ({
 vi.mock('../agent-hooks/agent-home-login-shell', () => ({
   adoptLoginShellAgentHomes: state.adoptLoginShellAgentHomes
 }))
+vi.mock('../claude/agent-view-service', () => ({
+  getClaudeAgentViewService: () => ({ reconcile: async () => {} })
+}))
 vi.mock('../opencode/opencode-status-plugin-startup-refresh', () => ({
   refreshInstalledOpenCodeStatusPlugins: state.refreshOpenCodePlugins
 }))
@@ -56,8 +60,7 @@ vi.mock('./orcad-app-paths', () => ({
   resolveOrcadPath: () => state.root,
   resolveUserDataPath: () => state.root
 }))
-// The fake store has no account settings; orcad-account-services.test.ts covers the real services.
-// Migration targets the real ~/.orca, which these fixtures do not redirect.
+// Migration otherwise targets the real credential directory.
 vi.mock('./orcad-plaintext-credential-migration', () => ({
   orcadCredentialRoot: () => state.root,
   migratePlaintextCredentials: () => ({ sealed: 0, failed: 0 })
@@ -73,16 +76,15 @@ vi.mock('./orcad-instance-lock', () => ({
 }))
 vi.mock('./orcad-daemon-supervision', () => ({
   startOrcadDaemon: state.startDaemon,
-  stopOrcadDaemon: async () => {}
+  stopOrcadDaemon: state.stopDaemon
 }))
 vi.mock('./orcad-health', () => ({ collectOrcadHealth: async () => ({}) }))
-// The runtime stub has no automation surface; orcad-automations.test.ts covers that wiring.
 vi.mock('./orcad-automations', () => ({
   startOrcadAutomations: () => {},
   stopOrcadAutomationScheduler: () => {},
   orcadAutomationsKeepHostBusy: () => false
 }))
-// Why: the real updater would fetch rules from GitHub inside a unit test.
+// Prevent network rule downloads in this unit test.
 vi.mock('../runtime/agent-state-rules/agent-state-rules-live-update', () => ({
   startAgentStateRulesLiveUpdates: () => {}
 }))
@@ -135,6 +137,7 @@ vi.mock('../runtime/orca-runtime', () => ({
     attachAgentStatusStore() {
       return () => {}
     }
+    setEmulatorBridge() {}
     getRuntimeId() {
       return 'headless-runtime'
     }
@@ -196,7 +199,7 @@ vi.mock('../runtime/push/push-gateway-client', () => ({
 }))
 
 beforeEach(() => {
-  // startOrcad canonicalizes this; stubbing restores the prior value after each test.
+  // Restore the prior data-root env after startOrcad canonicalizes it.
   vi.stubEnv('ORCA_USER_DATA_PATH', '')
   state.onSettingsChanged.mockReturnValue(state.removeSettingsListener)
 })
@@ -307,14 +310,62 @@ it('unsubscribes settings when daemon startup fails after hook setup', async () 
   acquireProfileStateMaintenance(state.root).release()
 })
 
-// Why: a freshly managed SSH host starts orcad on connect; without this its agents never report status.
+it('spawns the daemon while the hook server is still starting', async () => {
+  state.root = mkdtempSync(join(tmpdir(), 'orca-headless-daemon-parallel-'))
+  const { agentHookServer } = await import('../agent-hooks/server')
+  const hookStart = Promise.withResolvers<void>()
+  const start = vi.spyOn(agentHookServer, 'start').mockReturnValue(hookStart.promise)
+  const { startOrcad } = await import('./orcad-entry')
+  const starting = startOrcad({ noPairing: true, json: true })
+
+  await vi.waitFor(() => expect(start).toHaveBeenCalledOnce())
+  await vi.waitFor(() => expect(state.startDaemon).toHaveBeenCalledOnce())
+  hookStart.resolve()
+
+  const host = await starting
+  await host.stop()
+})
+
+it('disconnects a daemon still spawning only after it settles, when the hook server fails', async () => {
+  state.root = mkdtempSync(join(tmpdir(), 'orca-headless-hook-failure-'))
+  const daemonSpawn = Promise.withResolvers<void>()
+  state.startDaemon.mockReturnValueOnce(daemonSpawn.promise)
+  const { agentHookServer } = await import('../agent-hooks/server')
+  vi.spyOn(agentHookServer, 'start').mockRejectedValueOnce(new Error('hook port taken'))
+  const { startOrcad } = await import('./orcad-entry')
+
+  const starting = startOrcad()
+  await vi.waitFor(() => expect(state.startDaemon).toHaveBeenCalledOnce())
+  // The cleanup waits on the in-flight spawn rather than disconnecting a half-started provider.
+  await new Promise((resolve) => setImmediate(resolve))
+  expect(state.stopDaemon).not.toHaveBeenCalled()
+  daemonSpawn.resolve()
+
+  await expect(starting).rejects.toThrow('hook port taken')
+  expect(state.stopDaemon).toHaveBeenCalledOnce()
+  acquireProfileStateMaintenance(state.root).release()
+})
+
+it('disconnects the daemon when startup throws between its spawn and the stores', async () => {
+  state.root = mkdtempSync(join(tmpdir(), 'orca-headless-early-throw-'))
+  const observability = await import('./orcad-observability')
+  vi.spyOn(observability, 'installOrcadObservability').mockImplementationOnce(() => {
+    throw new Error('observability init failed')
+  })
+  const { startOrcad } = await import('./orcad-entry')
+
+  await expect(startOrcad()).rejects.toThrow('observability init failed')
+
+  expect(state.startDaemon).toHaveBeenCalledOnce()
+  expect(state.stopDaemon).toHaveBeenCalledOnce()
+})
+
 it('installs agent status hooks on the host when it starts', async () => {
   state.root = mkdtempSync(join(tmpdir(), 'orca-headless-hooks-'))
   const { startOrcad } = await import('./orcad-entry')
   const host = await startOrcad({ noPairing: true, json: true })
   try {
     expect(state.startCodexHooks).toHaveBeenCalledOnce()
-    // orcad launches Codex on the real ~/.codex; it has no Orca-managed account homes.
     expect(state.startCodexHooks.mock.calls[0]![0].resolveLaunchHome()).toBeNull()
     await vi.waitFor(() =>
       expect(state.installManagedAgentHooks).toHaveBeenCalledWith(
@@ -323,7 +374,6 @@ it('installs agent status hooks on the host when it starts', async () => {
       )
     )
     expect(state.refreshOpenCodePlugins).toHaveBeenCalledWith(profile.settings)
-    // Grok/Kiro homes set only in login profiles must be known before their installers run.
     expect(state.adoptLoginShellAgentHomes.mock.invocationCallOrder[0]).toBeLessThan(
       state.installManagedAgentHooks.mock.invocationCallOrder[0]!
     )

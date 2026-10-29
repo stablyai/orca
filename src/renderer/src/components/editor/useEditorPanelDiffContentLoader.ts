@@ -13,6 +13,7 @@ import type { DiffContent, InFlightContentRead } from './editor-panel-content-ty
 import { canUseChangesModeForFile } from './editor-panel-file-mode'
 import type { EditorPanelContentLoadOptions } from './useEditorPanelExternalContentEvents'
 import { stampCleanTabDiskBaseline } from './editor-clean-tab-disk-baseline'
+import { translate } from '@/i18n/i18n'
 
 const inFlightDiffReads = new Map<string, InFlightContentRead<DiffContent>>()
 
@@ -90,14 +91,12 @@ export function useEditorPanelDiffContentLoader({
           (options.externalEventGeneration === undefined ||
             registeredRead?.externalEventGeneration !== options.externalEventGeneration)
         ) {
-          // Why: forced diff reloads must not attach to a read started before
-          // the external change landed.
+          // Forced reloads must bypass deduped reads that predate external changes.
           inFlightDiffReads.delete(key)
         }
         let pending = inFlightDiffReads.get(key)
         if (!pending) {
-          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: every branch resolves a git diff result, which DiffContent mirrors.
-          const promise = (
+          const promise: Promise<DiffContent> =
             effectiveDiffSource === 'commit'
               ? commitCompare
                 ? getRuntimeGitCommitDiff(
@@ -147,7 +146,6 @@ export function useEditorPanelDiffContentLoader({
                       compareAgainstHead
                     }
                   )
-          ) as Promise<DiffContent>
           pending = { externalEventGeneration: options?.externalEventGeneration, promise }
           inFlightDiffReads.set(key, pending)
           queueMicrotask(() => {
@@ -178,7 +176,13 @@ export function useEditorPanelDiffContentLoader({
           [file.id]: {
             kind: 'text',
             originalContent: '',
-            modifiedContent: `Error loading diff: ${String(err)}`,
+            modifiedContent: translate(
+              'auto.components.editor.EditorPanel.diffLoadError',
+              'Error loading diff: {{error}}',
+              {
+                error: String(err)
+              }
+            ),
             originalIsBinary: false,
             modifiedIsBinary: false
           }

@@ -1,19 +1,11 @@
-// Bounds-checked primitives for walking a minidump.
-//
-// Split from minidump-crash-signature so the byte-level layout knowledge
-// (header, stream directory, MINIDUMP_LOCATION_DESCRIPTOR, the two string
-// encodings) stays separate from what Crashpad puts in those structures.
-//
-// Every accessor returns null past the end of the buffer: a truncated or
-// corrupt dump must degrade, not throw, or it takes crash reporting down with it.
+// Bounds checks let truncated minidump fields degrade to null.
 
 export const MINIDUMP_SIGNATURE = 0x504d444d // 'MDMP' little-endian
 export const MINIDUMP_HEADER_SIZE = 32
 const DIRECTORY_ENTRY_SIZE = 12
-// A dump claiming an absurd stream count is corrupt; cap before iterating.
 const MAX_STREAMS = 4_096
 export const MAX_ANNOTATION_VALUE_BYTES = 8_192
-// Cap for Crashpad's per-module info list; the MINIDUMP_MODULE_LIST is capped separately.
+// This Crashpad module-info cap is separate from the loaded-module-list cap.
 export const MAX_MODULES = 1_024
 
 export type LocationDescriptor = {
@@ -63,14 +55,14 @@ export class MinidumpView {
     if (size === null || rva === null) {
       return null
     }
-    // A zero rva means "absent", which is normal for optional sub-structures.
+    // Zero RVA marks an absent optional structure.
     if (rva === 0 || rva >= this.source.byteLength) {
       return null
     }
     return { size, rva }
   }
 
-  /** MinidumpUTF8String: u32 byte length, then NUL-terminated UTF-8. */
+  /** MinidumpUTF8String: u32 byte length, then UTF-8 bytes excluding the trailing NUL. */
   async utf8String(rva: number, maxBytes = MAX_ANNOTATION_VALUE_BYTES): Promise<string | null> {
     return (await this.byteArray(rva, maxBytes))?.toString('utf8') ?? null
   }
@@ -114,7 +106,6 @@ export function isMinidump(dump: Buffer): boolean {
   return dump.length >= MINIDUMP_HEADER_SIZE && dump.readUInt32LE(0) === MINIDUMP_SIGNATURE
 }
 
-/** Locates a stream by type in the header's directory, or null if absent. */
 export async function findStream(
   view: MinidumpView,
   streamType: number

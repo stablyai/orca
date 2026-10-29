@@ -18,7 +18,7 @@ describe('OMP Source Control AI', () => {
       })
     }
   )
-  it('delivers large diffs on stdin and keeps generation isolated from tools and extensions', () => {
+  it('plans stdin delivery with tools and extensions disabled', () => {
     const spec = getCommitMessageAgentSpec('omp')
     expect(spec?.promptDelivery).toBe('stdin')
     if (!spec) {

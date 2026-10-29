@@ -1,13 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
   createAutoSaveDelayDraftState,
-  getDesktopPlatformFromUserAgent,
-  getGeneralPaneSearchEntries,
-  getTabOrderControlSearchKeywords,
   shouldShowProjectRuntimeSection,
   updateAutoSaveDelayDraftState
 } from './GeneralPane'
-import { matchesSettingsSearch } from './settings-search'
 
 vi.mock('@/store', () => ({
   useAppStore: () => {
@@ -41,86 +37,10 @@ describe('GeneralPane auto-save delay drafts', () => {
   })
 })
 
-describe('GeneralPane desktop platform detection', () => {
-  it('keeps Windows available for Windows-only CLI settings', () => {
-    expect(
-      getDesktopPlatformFromUserAgent(
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-      )
-    ).toBe('win32')
-    expect(getDesktopPlatformFromUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)')).toBe(
-      'darwin'
-    )
-    expect(getDesktopPlatformFromUserAgent('Mozilla/5.0 (X11; Linux x86_64)')).toBe('other')
-  })
-})
-
-describe('GeneralPane navigation search keywords', () => {
-  it('keeps pinned-tab keywords out of the Tab Order control', () => {
-    const keywords = getTabOrderControlSearchKeywords()
-
-    expect(keywords).toContain('Tab Order')
-    expect(keywords).toContain('recent')
-    expect(keywords).not.toContain('pinned')
-    expect(keywords).not.toContain('confirm')
-    expect(keywords).not.toContain('close')
-  })
-})
-
-describe('GeneralPane search entries', () => {
-  it('includes the default project runtime setting', () => {
-    const entries = getGeneralPaneSearchEntries()
-
-    expect(matchesSettingsSearch('default project runtime', entries)).toBe(true)
-    expect(matchesSettingsSearch('windows host', entries)).toBe(true)
-    expect(matchesSettingsSearch('wsl', entries)).toBe(true)
-  })
-
-  it('includes file-editor word-wrap and horizontal-scroll keywords', () => {
-    const entries = getGeneralPaneSearchEntries()
-
-    expect(matchesSettingsSearch('editor word wrap', entries)).toBe(true)
-    expect(matchesSettingsSearch('horizontal scroll', entries)).toBe(true)
-  })
-
-  it('includes rich Markdown spellcheck keywords', () => {
-    const entries = getGeneralPaneSearchEntries()
-
-    expect(matchesSettingsSearch('spellcheck', entries)).toBe(true)
-    expect(matchesSettingsSearch('red underline', entries)).toBe(true)
-  })
-
-  it('makes the running-terminal confirmation setting searchable', () => {
-    const entries = getGeneralPaneSearchEntries()
-
-    expect(matchesSettingsSearch('running', entries)).toBe(true)
-  })
-
-  it('omits the default project runtime setting when Windows runtimes are unsupported', () => {
-    const entries = getGeneralPaneSearchEntries({ includeProjectRuntime: false })
-
-    expect(matchesSettingsSearch('default project runtime', entries)).toBe(false)
-    expect(matchesSettingsSearch('windows host', entries)).toBe(false)
-    expect(matchesSettingsSearch('wsl', entries)).toBe(false)
-  })
-})
-
 describe('GeneralPane project runtime section visibility', () => {
-  const entries = getGeneralPaneSearchEntries()
-
   it('hides the section on non-Windows hosts even with an empty search query', () => {
-    // Regression: matchesSettingsSearch returns true for an empty query, so the
-    // platform gate is what keeps the orphaned header off macOS/Linux.
+    // Empty searches match empty entries; the platform gate must suppress orphaned non-Windows headers.
     expect(shouldShowProjectRuntimeSection(false, '', [])).toBe(false)
     expect(shouldShowProjectRuntimeSection(undefined, '', [])).toBe(false)
-  })
-
-  it('shows the section on Windows-capable hosts when entries match', () => {
-    expect(shouldShowProjectRuntimeSection(true, '', entries)).toBe(true)
-    expect(shouldShowProjectRuntimeSection(true, 'wsl', entries)).toBe(true)
-  })
-
-  it('hides the section when a search query excludes the runtime entries', () => {
-    expect(shouldShowProjectRuntimeSection(true, 'zzz-no-match', entries)).toBe(false)
   })
 })

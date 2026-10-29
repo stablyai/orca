@@ -1,13 +1,13 @@
 import { app } from 'electron'
 import { basename, join, normalize, sep } from 'node:path'
 
-// Why: keep the legacy `sidekicks` folder so existing user-uploaded pets keep rendering after the product rename.
+// Preserve uploaded pets across the sidekicks-to-pets rename.
 export function getPetsDir(): string {
   return join(app.getPath('userData'), 'sidekicks', 'custom')
 }
 
 export function isSafeId(id: string): boolean {
-  // UUIDs only — canonical path-traversal gate; storage ids are always main-generated, never from manifest.id.
+  // Storage IDs are main-generated UUIDs, never manifest IDs.
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)
 }
 
@@ -23,7 +23,7 @@ export function resolvePetFile(
   const root = normalize(getPetsDir())
   let filePath: string
   if (kind === 'bundle') {
-    // Bundle layout custom/<id>/<fileName>; fileName is the spritesheet basename — pet.json is main-only, never served.
+    // Serve only the spritesheet from bundle storage; pet.json remains main-only.
     filePath = normalize(join(root, id, safeName))
     const bundleDir = normalize(join(root, id)) + sep
     if (!filePath.startsWith(bundleDir)) {
@@ -31,7 +31,7 @@ export function resolvePetFile(
     }
     return filePath
   }
-  // Legacy image layout custom/<id>.<ext>; filename must start with the id so the prefix check backstops the regex.
+  // Legacy images use custom/<id>.<ext>; the prefix check reinforces filename validation.
   if (!safeName.startsWith(`${id}.`)) {
     return null
   }

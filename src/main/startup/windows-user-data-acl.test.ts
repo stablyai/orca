@@ -53,7 +53,6 @@ describe('ensureWindowsUserDataAclGrant', () => {
   it('grants each child directory, then the root, then writes the marker', async () => {
     mkdirSync(join(userDataPath, 'agent-hooks'))
     mkdirSync(join(userDataPath, 'codex-runtime-home'))
-    // Files carry no inheritable rule to fix, so they are not touched.
     writeFileSync(join(userDataPath, 'orca-runtime.json'), '{}')
 
     expect(await awaitResult(userDataPath)).toEqual({ mode: 'granted' })
@@ -81,7 +80,7 @@ describe('ensureWindowsUserDataAclGrant', () => {
     expect(granted()).toEqual([])
   })
 
-  // An upgrade must not re-walk the whole userData tree just because the identity's spelling changed.
+  // Accept legacy identity spelling without a redundant whole-tree regrant.
   it('accepts a marker written under the pre-native USERNAME identity', async () => {
     vi.stubEnv('USERNAME', 'alice')
     writeMarker(userDataPath, 'alice')
@@ -112,7 +111,7 @@ describe('ensureWindowsUserDataAclGrant', () => {
   })
 
   it('still grants the root when its children cannot be listed, and reports the failure', async () => {
-    // A file stands in for a userData whose listing is refused: readdir throws, the grant does not.
+    // Model refused child listing while the root grant remains possible.
     const unlistable = join(userDataPath, 'unlistable')
     writeFileSync(unlistable, '')
 

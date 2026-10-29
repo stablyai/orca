@@ -14,9 +14,7 @@ describe('canManuallyParkTerminalWorktreeRenderers', () => {
     expect(canManuallyParkTerminalWorktreeRenderers(base)).toBe(true)
   })
 
-  // Why: first activation stamps pendingActivationSpawn on every tab and only a
-  // fresh updateTabPtyId consumes it, so a reattached tab keeps it forever —
-  // that residue must not permanently refuse a manual park.
+  // Reattach never consumes pendingActivationSpawn, so its residue must not permanently block manual parking.
   it('ignores a settled activation-spawn tag once the tab has a live PTY', () => {
     const terminalTabs = [
       { id: 'tab-1', ptyId: 'repo::/worktree@@session-1', pendingActivationSpawn: true as const }

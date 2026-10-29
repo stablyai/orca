@@ -20,9 +20,7 @@ export type MobileAgentHistoryResumeActionState = {
   loading: boolean
 }
 
-// Why: a session belongs to the active worktree when its recorded cwd is inside
-// (or equal to) the worktree path; session rows carry no host id, so this is a
-// path-prefix check (same logic the desktop badge uses).
+// No host id in session rows; current-worktree membership uses equal/descendant cwd prefix, matching desktop.
 export function isSessionInActiveWorktree(
   session: Pick<AiVaultSession, 'cwd'>,
   activeWorktreePath: string | null

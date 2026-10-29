@@ -1,19 +1,18 @@
-/**
- * View-attribute bridge publication (terminal-query-authority.md §View-
- * attribute bridge): the composed snapshot must mirror xterm ThemeService
- * resolution (defaults, cursor blend, 256-entry palette), and pushes must
- * happen once per actual change — not per pane, not per font tweak.
- */
+/** Match xterm ThemeService defaults, cursor blend and palette while publishing app-global changes only once (terminal-query-authority.md). */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PaneManager, ManagedPane } from '@/lib/pane-manager/pane-manager'
 import { getDefaultSettings } from '../../../../shared/constants'
-import type { TerminalViewAttributes } from '../../../../shared/terminal-view-attributes'
+import {
+  terminalViewColorQueryReplyColors,
+  type TerminalViewAttributes
+} from '../../../../shared/terminal-view-attributes'
 import { applyTerminalAppearance } from './terminal-appearance'
 import {
   _resetTerminalViewAttributesPublisherForTest,
   composeTerminalViewAttributes,
   publishTerminalViewAttributes,
-  subscribeToPublishedTerminalViewColors
+  subscribeToPublishedTerminalViewAttributes,
+  terminalCreateThemeParams
 } from './terminal-view-attributes-publisher'
 
 const cursorSettings = {
@@ -49,9 +48,7 @@ describe('composeTerminalViewAttributes', () => {
   it('parses composed theme colors including rgba() opacity forms', () => {
     const attrs = composeTerminalViewAttributes(
       {
-        // composeActiveTerminalTheme emits rgba() when terminalBackgroundOpacity
-        // or terminalCursorOpacity apply; the reply drops alpha like xterm's
-        // toColorRGB, except the cursor which blends over the background.
+        // Drop foreground/background alpha like xterm toColorRGB, but blend cursor alpha over the background.
         background: 'rgba(30, 30, 46, 0.9)',
         foreground: '#d0d0d0',
         cursor: 'rgba(255, 0, 0, 0.5)',
@@ -94,13 +91,11 @@ describe('composeTerminalViewAttributes', () => {
       cursorSettings
     )
     expect(attrs.ansi[16]).toEqual([0x10, 0x20, 0x30])
-    // Untouched tail entries stay on the generated cube.
     expect(attrs.ansi[17]).toEqual([0x00, 0x00, 0x5f])
   })
 
   it('falls back to slot defaults for named colors (hand-edited settings divergence)', () => {
-    // A visible pane resolves named CSS via canvas; the composer cannot, so
-    // hand-edited values fall back — the documented divergence boundary.
+    // Named CSS needs a canvas; hidden composer intentionally falls back where visible xterm resolves it.
     const attrs = composeTerminalViewAttributes(
       { red: 'darkred', foreground: 'hotpink' },
       'dark',
@@ -118,7 +113,6 @@ describe('publishTerminalViewAttributes dedupe', () => {
     expect(publishTerminalViewAttributes(null, 'dark', cursorSettings, send)).toBe(false)
     expect(send).toHaveBeenCalledTimes(1)
 
-    // A real attribute change (theme flip) publishes again.
     expect(publishTerminalViewAttributes(null, 'light', cursorSettings, send)).toBe(true)
     expect(send).toHaveBeenCalledTimes(2)
   })
@@ -132,16 +126,17 @@ describe('publishTerminalViewAttributes dedupe', () => {
   })
 
   it('skips silently when the preload bridge is unavailable (web client, tests)', () => {
-    // No window stub: default send must be a safe no-op.
     expect(publishTerminalViewAttributes(null, 'dark', cursorSettings)).toBe(false)
   })
 
-  it('hands each published fg/bg to subscribers, starting with the current one', () => {
+  it('hands each published appearance to subscribers, starting with the current one', () => {
     const send = vi.fn(() => true)
     publishTerminalViewAttributes({ foreground: '#111111' }, 'dark', cursorSettings, send)
     const heard: unknown[] = []
 
-    const unsubscribe = subscribeToPublishedTerminalViewColors((colors) => heard.push(colors))
+    const unsubscribe = subscribeToPublishedTerminalViewAttributes((attributes) =>
+      heard.push(terminalViewColorQueryReplyColors(attributes))
+    )
     publishTerminalViewAttributes({ foreground: '#222222' }, 'dark', cursorSettings, send)
     unsubscribe()
     publishTerminalViewAttributes({ foreground: '#333333' }, 'dark', cursorSettings, send)
@@ -151,6 +146,19 @@ describe('publishTerminalViewAttributes dedupe', () => {
       { foreground: '#222222', background: '#000000' }
     ])
   })
+})
+
+it("sends this window's palette with a terminal's create colours, once one is published", () => {
+  const colors = { foreground: '#ffffff', background: '#000000' }
+  expect(terminalCreateThemeParams(colors)).toEqual({ terminalColorQueryReplies: colors })
+
+  publishTerminalViewAttributes(null, 'dark', cursorSettings, () => true)
+
+  expect(terminalCreateThemeParams(colors)).toEqual({
+    terminalColorQueryReplies: colors,
+    terminalViewAttributes: composeTerminalViewAttributes(null, 'dark', cursorSettings)
+  })
+  expect(terminalCreateThemeParams(undefined)).toEqual({})
 })
 
 describe('applyTerminalAppearance publication', () => {
@@ -182,8 +190,7 @@ describe('applyTerminalAppearance publication', () => {
     const publish = stubPublishBridge()
     const settings = getDefaultSettings('/tmp')
 
-    // Two panes in one manager plus a second manager (another tab): the
-    // attributes are app-global, so identical applies publish exactly once.
+    // App-global snapshots dedupe across panes and managers.
     applyTerminalAppearance(
       makeManager([makePane(1), makePane(2)]),
       settings,
@@ -209,7 +216,6 @@ describe('applyTerminalAppearance publication', () => {
     expect(attributes.ansi).toHaveLength(256)
     expect(attributes.cursorStyle).toBe(settings.terminalCursorStyle)
 
-    // Attribute-neutral tweak (font size) must not re-push…
     applyTerminalAppearance(
       makeManager([makePane(1)]),
       { ...settings, terminalFontSize: settings.terminalFontSize + 2 },
@@ -222,7 +228,6 @@ describe('applyTerminalAppearance publication', () => {
     )
     expect(publish).toHaveBeenCalledTimes(1)
 
-    // …while a cursor-style change is a real attribute change.
     applyTerminalAppearance(
       makeManager([makePane(1)]),
       { ...settings, terminalCursorStyle: 'underline' },

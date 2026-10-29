@@ -4,10 +4,7 @@ import { ALL_EXECUTION_HOSTS_SCOPE, type ExecutionHostId } from '../../../../sha
 import { widenSavedExecutionHostIds } from '../../../../shared/managed-orcad-execution-host'
 import { useSidebarHostScopeOptions } from './use-sidebar-host-scope-options'
 
-/**
- * Widens the saved sidebar and agents host scopes to both ids of a merged SSH host, so the exact-id
- * filters behind a checked merged row match either owner.
- */
+/** Merged SSH rows represent two owner IDs; widen saved filters so selecting the row includes both. */
 export function SavedHostScopeWidenGate(): null {
   const { hostOptions } = useSidebarHostScopeOptions()
   const visibleWorkspaceHostIds = useAppStore((s) => s.visibleWorkspaceHostIds)

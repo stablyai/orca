@@ -1,3 +1,4 @@
+import { StructuredAgentSessionInputNotAdmitted } from '../native-chat/agent-session-wire/structured-agent-session-input-admission'
 import { expect, it, vi } from 'vitest'
 import { AgentSessionPreDispatchError } from '../native-chat/agent-session-wire/structured-agent-session-operation-settlement'
 import {
@@ -60,10 +61,16 @@ it('stops a refused steer before its fallback write', async () => {
   } catch (error) {
     refused.reject(error)
   }
-  await expect(sending).rejects.toBe(reason)
+  await expect(sending).rejects.toBeInstanceOf(StructuredAgentSessionInputNotAdmitted)
+  await expect(sending).rejects.toMatchObject({
+    outcome: {
+      state: 'rejected',
+      rejection: { kind: 'cancelled' },
+      reason: 'provider_cancelled_before_start'
+    }
+  })
   expect(connection.calls.some((call) => call.method === 'turn/start')).toBe(false)
-  // An exact echo is passed on; the journal keeps the stopped send rejected (see
-  // structured-agent-session-late-settlement.test.ts).
+  // The journal keeps stopped sends rejected even if an exact echo arrives.
   echoUserMessage(connection, { turnId: 'running', itemId: 'stopped', clientId: 'stopped' })
   expect(settlements.map((entry) => entry.clientMessageId)).toEqual(['stopped'])
   await adapter.closeAll()
@@ -88,11 +95,17 @@ it('abandons only the stopped message while waiting for a previous turn to open'
   await new Promise<void>((resolve) => setTimeout(resolve, 10))
   const reason = new Error('Stopped local wait')
   controller.abort(reason)
-  await expect(stopped).rejects.toBe(reason)
+  await expect(stopped).rejects.toBeInstanceOf(StructuredAgentSessionInputNotAdmitted)
+  await expect(stopped).rejects.toMatchObject({
+    outcome: {
+      state: 'rejected',
+      rejection: { kind: 'cancelled' },
+      reason: 'provider_cancelled_before_start'
+    }
+  })
   expect(connection.calls.filter((call) => call.method === 'turn/start')).toHaveLength(1)
   startTurn(connection, 'opening')
   echoUserMessage(connection, { turnId: 'opening', itemId: 'first', clientId: 'first' })
-  // The abandoned wait leaves the earlier send's receipt intact.
   expect(settlements.map((entry) => entry.clientMessageId)).toEqual(['first'])
   await adapter.closeAll()
 })

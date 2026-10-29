@@ -1,6 +1,5 @@
 import { getCellHeight, getTotalScale } from './cell-metrics'
 import { routeScrollLines, shouldRouteScrollToTerminalInput } from './mouse-input-encoding'
-import { dispatcherShouldBlockSurface } from './tap-dispatch'
 import {
   enqueueNormalBufferScrollDelta,
   resetSmoothScrollOffset
@@ -12,8 +11,7 @@ export function wheelEventPixelDeltaY(scope: TerminalDocumentScope, e: WheelEven
   if (typeof delta !== 'number' || !Number.isFinite(delta) || delta === 0) {
     return 0
   }
-  // DOM_DELTA_LINE / DOM_DELTA_PAGE: Android WebView reports line-mode deltas
-  // for external mouse wheels, iOS trackpads report pixels.
+  // Android external wheels may use lines/pages; iOS trackpads report pixel deltas.
   if (e.deltaMode === 1) {
     return delta * getCellHeight(scope) * getTotalScale(scope)
   }
@@ -30,20 +28,17 @@ export function attachSurfaceWheelHandler(
   targetSurface.addEventListener(
     'wheel',
     function (e) {
-      if (dispatcherShouldBlockSurface(scope)) {
+      if (scope.touchDispatch.mode === 'select-drag' || !scope.term) {
         return
       }
-      if (!scope.term) {
-        return
-      }
-      // Why: xterm's own wheel handler scrolls its hidden viewport or emits
-      // cursor keys through onData, which the mobile query-reply gate drops.
-      // Claim the event so indirect pointers share the touch scroll router.
+      // Claim wheels before xterm can emit query-gated cursor keys or scroll its hidden viewport; use the touch router instead.
       e.preventDefault()
       e.stopPropagation()
+      if (!scope.interactionActive) {
+        return
+      }
 
-      // Why: a trackpad pinch arrives as ctrl+wheel. Swallow it rather than
-      // firing cursor keys at the TUI; two-finger pinch still drives text size.
+      // Swallow ctrl+wheel trackpad pinch so it cannot send cursor keys to the TUI.
       if (e.ctrlKey) {
         return
       }

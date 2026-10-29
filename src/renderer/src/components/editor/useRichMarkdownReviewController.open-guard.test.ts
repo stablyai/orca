@@ -95,8 +95,7 @@ describe('useRichMarkdownReviewController openAnnotationPopover draft guard', ()
   it('flushes the pending ProseMirror selection before reading the target', () => {
     const flush = vi.fn()
     const setSelection = vi.fn()
-    // Why: an empty selection makes getRichMarkdownAnnotationTarget return null,
-    // so the open no-ops; we only assert the flush ran first (drag-race fix).
+    // An empty target makes opening no-op, isolating the requirement to flush native selection first.
     const editorRef = {
       current: {
         view: {

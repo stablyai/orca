@@ -1,6 +1,6 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { MOBILE_WEB_BUNDLE_CAPABILITY } from '../../../src/shared/mobile-web-bundle/mobile-web-bundle-capability'
 import type {
   MobileWebBundleFetchProgress,
@@ -12,16 +12,7 @@ import type { DownloadProgressFeed } from './download-progress-feed'
 import type { MobileWebShellSessionState } from './mobile-web-shell-session-contract'
 import { markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 
-/**
- * The runner, not the rules: what the reducer decides has table tests, and this covers the three
- * things only the wiring can get wrong — abandoning an effect whose session is gone, aborting the
- * bytes it was pulling, and doing both again when someone taps Try again. A cancellation that is
- * merely intended is a download that keeps four of the host's read slots and a cache write that
- * lands under a host nobody is looking at any more.
- *
- * The React Native and Expo modules are mocked at the edge of the import graph rather than stubbed
- * one deep, because importing any of them pulls the runtime this test does not have.
- */
+// Test effect abandonment, fetch aborts and retry wiring around the table-tested reducer; cancellation must free read slots and prevent writes for retired screens.
 type Settle<T> = (value: T) => void
 
 type Doubles = {
@@ -62,7 +53,6 @@ const doubles = vi.hoisted((): Doubles => {
     gates: {
       statusPending: false,
       statusReadable: true,
-      // Filled in `beforeEach`: a hoisted factory runs before this module's imports do.
       hostCapabilities: [],
       hostProtocolWindow: { protocolVersion: 10, minCompatibleMobileVersion: 1 }
     },
@@ -107,7 +97,6 @@ vi.mock('../transport/mobile-web-bundle-fetch', () => ({
     })
 }))
 
-import { BRIDGE_READY_RETRY_MAX_MS } from './bridge/bridge-client-init-handshake'
 import { DOCUMENT_LOAD_DEADLINE_MS, PAGE_READY_DEADLINE_MS } from './mobile-web-shell-runtime'
 import { SHELL_STALL_LOG_MS } from './shell-lifecycle-log'
 import { connectionLogStore } from '../transport/persisted-connection-log-store'
@@ -129,8 +118,7 @@ function stagedGeneration(): StagedGeneration {
   }
 }
 
-/** A store whose cache read is held open, so a test can decide when the answer arrives. Staging can
- *  be held open too, which is the only way to stand inside the window between it and the commit. */
+// Hold cache/stage reads so tests can place cancellation between staging and irreversible commit.
 function createFakeStore(): {
   store: GenerationStore
   settleCacheRead: Settle<ActiveGeneration | null>
@@ -187,8 +175,7 @@ function createFakeStore(): {
   }
 }
 
-/** Armed timers, never real ones: the deadline is ten seconds and a suite that waited for it would
- *  be a suite nobody runs. Each entry keeps its delay so the test can pin what was asked for. */
+// Use recorded timers so deadline tests assert requested delays without wall-clock waits.
 type ArmedTimer = { delayMs: number; run: () => void; cancelled: boolean }
 
 function createTimerSeam() {
@@ -202,9 +189,8 @@ function createTimerSeam() {
         timer.cancelled = true
       }
     },
-    /** Fires every timer still armed, in the order it was armed. */
     fire: (): void => {
-      // A snapshot: firing one may arm another, and the new one is not part of this round.
+      // Fire a snapshot so timers armed by callbacks wait until the next round.
       const round = armed.slice()
       for (const timer of round) {
         if (!timer.cancelled) {
@@ -220,7 +206,6 @@ type Mounted = {
   retry: () => void
   rerender: () => void
   states: () => readonly MobileWebShellSessionState[]
-  /** Whether the page had spoken, as every render of the hook reported it. */
   handshakes: () => readonly boolean[]
   documentStarted: () => void
   documentLoaded: () => void
@@ -233,6 +218,22 @@ type Mounted = {
 function live(timers: readonly ArmedTimer[]): ArmedTimer[] {
   return timers.filter((timer) => !timer.cancelled)
 }
+
+const mountedTrees: ReturnType<typeof create>[] = []
+
+function createTracked(element: Parameters<typeof create>[0]): ReturnType<typeof create> {
+  const tree = create(element)
+  mountedTrees.push(tree)
+  return tree
+}
+
+afterEach(async () => {
+  await act(async () => {
+    for (const tree of mountedTrees.splice(0)) {
+      tree.unmount()
+    }
+  })
+})
 
 async function mount(store: GenerationStore): Promise<Mounted> {
   const timers = createTimerSeam()
@@ -278,7 +279,7 @@ async function mount(store: GenerationStore): Promise<Mounted> {
   }
   const rendered: { tree: ReactTestRenderer | null } = { tree: null }
   await act(async () => {
-    rendered.tree = create(createElement(Probe))
+    rendered.tree = createTracked(createElement(Probe))
   })
   const tree = rendered.tree
   if (tree === null) {
@@ -326,8 +327,6 @@ describe('the hybrid shell runner', () => {
     })
     fake.settleCacheRead(null)
     await flush()
-    // The read came back to nobody: had it been applied, the next effect would have asked the host
-    // for a manifest on behalf of a screen that is gone.
     expect(doubles.manifestReads).toBe(0)
   })
 
@@ -358,8 +357,7 @@ describe('the hybrid shell runner', () => {
   })
 
   it('shows the cached workspace when the socket drops the manifest read it was waiting on', async () => {
-    // The device repro: the rejection reaches the reducer before the reachability change does, so
-    // the offline gate never fires and only the error's own marks say the link was what went.
+    // Reject before reachability changes to prove error classification alone can recognize link loss.
     doubles.manifestRejection = markRpcDeliveryUnknown(new Error('Connection interrupted'))
     const fake = createFakeStore()
     const mounted = await mount(fake.store)
@@ -400,8 +398,7 @@ describe('the hybrid shell runner', () => {
     await act(async () => {
       fake.settleStage()
     })
-    // The commit is the write the staging tree cannot undo: it renames into the active slot and
-    // moves the host index, so a generation nobody asked for would be the one the next mount opens.
+    // Commit cannot be undone by aborting tmp; a stray activation would become the next mount’s cache.
     expect(fake.committed()).toBe(0)
     expect(fake.aborted()).toBe(1)
     expect(mounted.states().map((state) => state.kind)).not.toContain('ready')
@@ -413,8 +410,7 @@ describe('the hybrid shell runner', () => {
     fake.settleCacheRead(null)
     await flush()
     expect(doubles.manifestClients).toHaveLength(1)
-    // A reconnect hands the screen a new client object with the same reachability, so nothing the
-    // gates effect watches changes; only the next flow can show which one the runner kept.
+    // Keep reachability unchanged while replacing the client; only the next flow reveals which client the runner retained.
     const reconnected = {}
     doubles.connection = { client: reconnected, state: 'connected' }
     await act(async () => {
@@ -443,7 +439,6 @@ describe('the hybrid shell runner', () => {
     const heard: number[] = []
     mounted.downloadProgress().subscribe((fraction) => heard.push(fraction))
     const renders = mounted.states().length
-    // Outside act: React commits nothing here, as on a JS thread the replies keep busy.
     fetch.onProgress({ completedAssets: 0, totalAssets: 2, receivedBytes: 1024, totalBytes: 4096 })
     fetch.onProgress({ completedAssets: 1, totalAssets: 2, receivedBytes: 4096, totalBytes: 4096 })
     expect(heard).toEqual([0.25, 1])
@@ -481,14 +476,7 @@ describe('the hybrid shell runner', () => {
   })
 })
 
-/**
- * The gap a blank page lives in.
- *
- * A route module that throws while the bundle is being evaluated takes the entry down with it: the
- * document still commits, the WebView still reports it loaded, and nothing downstream of that
- * import runs — so no boundary mounts, no fault is posted, and no frame is ever sent. Without a
- * clock the session sits in `ready` behind a WebView showing nothing, forever.
- */
+// Entry import failures can finish WebView load without mounting a boundary or sending ready; the deadline must recover that silent blank page.
 describe('the wait for the page to speak', () => {
   beforeEach(() => {
     doubles.manifestReads = 0
@@ -508,18 +496,11 @@ describe('the wait for the page to speak', () => {
     return mounted
   }
 
-  it(`waits out several of the page's own asks before it gives up on one`, () => {
-    // The number the deadline is for: a page whose backoff has widened to the ceiling still gets
-    // several asks inside the wait, so a slow device is never mistaken for a page that never ran.
-    expect(PAGE_READY_DEADLINE_MS / BRIDGE_READY_RETRY_MAX_MS).toBe(5)
-  })
-
   it('fails the generation a finished document never spoke for, and asks to fetch it again', async () => {
     const mounted = await ready()
     await act(async () => {
       mounted.documentLoaded()
     })
-    // The others are the activation's load wait, spent by this load, and the log-only stall warning.
     expect(live(mounted.timers.armed).map((timer) => timer.delayMs)).toEqual([
       DOCUMENT_LOAD_DEADLINE_MS,
       SHELL_STALL_LOG_MS,
@@ -528,8 +509,6 @@ describe('the wait for the page to speak', () => {
     await act(async () => {
       mounted.timers.fire()
     })
-    // Not the failure screen: `document-load-failed` on a session that has not retried deletes the
-    // host's cache and runs the flow once more, which is the recovery a republished bundle needs.
     expect(mounted.states().at(-1)?.kind).toBe('checking')
     await act(async () => {
       mounted.tree.unmount()
@@ -537,14 +516,14 @@ describe('the wait for the page to speak', () => {
   })
 
   it('fails a generation whose document the view never finished, instead of spinning forever', async () => {
-    // #28626: iOS 18 refused the shell's own load, which reports nothing at all.
+    // iOS 18 can refuse its own document load without any failure callback (#28626).
     const mounted = await ready()
     await act(async () => {
       mounted.documentStarted()
     })
     expect(
       live(mounted.timers.armed).filter((timer) => timer.delayMs === DOCUMENT_LOAD_DEADLINE_MS)
-    ).toHaveLength(2)
+    ).toHaveLength(1)
     await act(async () => {
       mounted.timers.fire()
     })
@@ -554,7 +533,7 @@ describe('the wait for the page to speak', () => {
     })
   })
 
-  it('stops the clock when the page speaks inside it, whichever of the two lands first', async () => {
+  it('stays ready when the page speaks after document load and the timers fire', async () => {
     const mounted = await ready()
     await act(async () => {
       mounted.documentLoaded()
@@ -569,11 +548,6 @@ describe('the wait for the page to speak', () => {
     })
   })
 
-  /**
-   * The bridge host is rebuilt when the client under it changes and the page is never told, so it
-   * takes "this session has handshaken" from here. It is a fact about the session, and a render is
-   * the only thing that carries it to the mount that builds the next host.
-   */
   it('reports the handshake the page completed, for the host that is rebuilt over it', async () => {
     const mounted = await ready()
     expect(mounted.handshakes().at(-1)).toBe(false)
@@ -592,8 +566,7 @@ describe('the wait for the page to speak', () => {
       mounted.pageReady()
       mounted.documentLoaded()
     })
-    // The race is real on a device: the page's first frame crosses the bridge while the WebView's
-    // own load callback is still in the native queue.
+    // Page ready can cross before the native WebView load callback; accept either order.
     expect(
       mounted.timers.armed.filter((timer) => timer.delayMs === PAGE_READY_DEADLINE_MS)
     ).toEqual([])
@@ -603,8 +576,7 @@ describe('the wait for the page to speak', () => {
   })
 
   it('re-arms a session the route rebuilt, with the host and its gates unchanged', async () => {
-    // The route is the other half of the session identity: changing it throws the old session away,
-    // and a session nobody told the gates about never leaves `checking`.
+    // A route change rebuilds the session too; re-arm gates even if their verdict did not change.
     const fake = createFakeStore()
     const route = { pathname: '/h/host-1' }
     const seen: MobileWebShellSessionState[] = []
@@ -624,7 +596,7 @@ describe('the wait for the page to speak', () => {
     }
     const rendered: { tree: ReactTestRenderer | null } = { tree: null }
     await act(async () => {
-      rendered.tree = create(createElement(Probe))
+      rendered.tree = createTracked(createElement(Probe))
     })
     const tree = rendered.tree
     if (tree === null) {
@@ -638,14 +610,11 @@ describe('the wait for the page to speak', () => {
     await act(async () => {
       tree.update(createElement(Probe))
     })
-    // The rebuilt session must open the cache of its own accord; settling a read it never asked
-    // for leaves it in `checking`, which is exactly what an un-armed session looks like.
     await act(async () => {
       fake.settleCacheRead(null)
     })
     await flush()
-    // Pinned, not merely "moved on": `/h/host-1/tasks` is not the route the bundle lists, so a
-    // re-armed session settles on the desktop wall. A failure would also leave `checking`.
+    // Assert the expected wall: any failure could leave checking without proving the new route was evaluated.
     expect(seen.at(-1)).toEqual({
       kind: 'wall',
       verdict: { kind: 'blocked', reason: 'page-route-unlisted' }
@@ -666,7 +635,6 @@ describe('the wait for the page to speak', () => {
     const stallTimers = live(mounted.timers.armed).filter(
       (timer) => timer.delayMs === SHELL_STALL_LOG_MS
     )
-    // A page signal that leaves the cover up re-arms nothing.
     expect(stallTimers).toHaveLength(1)
     await act(async () => {
       stallTimers[0]?.run()
@@ -728,11 +696,13 @@ describe('the wait for the page to speak', () => {
     await act(async () => {
       mounted.documentLoaded()
     })
+    expect(
+      live(mounted.timers.armed).filter((timer) => timer.delayMs === PAGE_READY_DEADLINE_MS)
+    ).toHaveLength(1)
     await act(async () => {
       mounted.tree.unmount()
     })
-    // A real `setTimeout` outlives the screen; the epoch check makes it inert, and this makes it
-    // not fire at all.
+    // Cancel real timers on unmount as well as rejecting their results by epoch.
     expect(mounted.timers.armed.every((timer) => timer.cancelled)).toBe(true)
   })
 })

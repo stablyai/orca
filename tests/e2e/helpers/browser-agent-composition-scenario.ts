@@ -1,8 +1,4 @@
-/**
- * An agent press while the user is mid-IME-composition in the terminal (#28700).
- * Blurring the terminal then would commit the unfinished text to the shell, so the press is refused.
- * See docs/reference/agent-browser-focus-isolation.md.
- */
+// Refuse agent presses during terminal IME composition: blur would commit unfinished text to the shell (#28700).
 
 import type { Page } from '@stablyai/playwright-test'
 import { expect } from './orca-app'

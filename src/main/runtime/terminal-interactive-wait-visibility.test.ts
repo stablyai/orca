@@ -28,14 +28,10 @@ vi.mock('electron', () => ({
 }))
 
 describe('Interactive wait visibility and terminal admission', () => {
-  // A worker parked on an interactive prompt must be distinguishable from one that is thinking
-  // or inside a long tool call (STA-4513, STA-3714).
+  // Distinguish interactive waits from thinking/tool calls (STA-4513, STA-3714).
 
-  // cursor-agent 2026.08.11-e8db854's screens, but NOT raw PTY output: these files contain no
-  // escape bytes and no carriage returns, so they came through a terminal's renderer and a
-  // clipboard. They evidence wording, ordering and glyphs — which is all the rules below key on —
-  // and evidence nothing about the caret, cursor moves, repaints or the alternate screen buffer.
-  // Record new fixtures with config/scripts/capture-agent-pty-transcript.mjs, which keeps the bytes.
+  // Cursor 2026.08.11-e8db854 fixtures are rendered clipboard text, not PTY captures; they prove wording/order/glyphs, not cursor/repaint/alternate-buffer behavior.
+  // New captures use config/scripts/capture-agent-pty-transcript.mjs to retain bytes.
   function fixture(name: string): string {
     return readFileSync(join(__dirname, '__fixtures__', `${name}.txt`), 'utf8')
   }
@@ -59,14 +55,12 @@ describe('Interactive wait visibility and terminal admission', () => {
   async function createPane(
     options: TranscriptPaneOptions
   ): Promise<Awaited<ReturnType<typeof createTranscriptPane>>> {
-    // Compose the same central hook-store wiring as desktop and orcad so OSC rows exercise the
-    // production status path rather than silently disappearing in a bare runtime fixture.
+    // Use production status wiring so OSC rows reach the real hook store.
     const statusWiring = makeAgentStatusStoreWiring()
     return createTranscriptPane(options, statusWiring.deps)
   }
 
-  // cursor-agent renders a braille spinner in its OSC title while it works, and Orca reads
-  // that as `working`; the title is identical whether it is running a command or waiting.
+  // Cursor uses the same spinner title for working and waiting, so title alone cannot distinguish them.
   const CURSOR_TITLE = '⠇ Cursor Agent'
 
   afterEach(() => vi.useRealTimers())
@@ -91,9 +85,7 @@ describe('Interactive wait visibility and terminal admission', () => {
       })
 
       it('refuses a guarded send and a dispatch preamble while the approval is up', async () => {
-        // Why this matters beyond reporting: the coordinator's preamble was typed straight into
-        // the approval dialog instead of being refused (the STA-2631 shape). Both refusal paths
-        // are asserted here, not just the `permission` verdict they read.
+        // Refuse both injection paths so coordinator preambles cannot land in approval dialogs (STA-2631).
         const { runtime, handle } = await createPane({
           paneTitle: CURSOR_TITLE,
           foregroundProcess: 'cursor-agent',
@@ -159,8 +151,7 @@ describe('Interactive wait visibility and terminal admission', () => {
       })
 
       it('treats an answered menu still in scrollback as scrollback', async () => {
-        // Why: the menu is not erased on every terminal, so a live dialog is one that still owns
-        // the bottom of the screen rather than one that merely appears somewhere in the tail.
+        // A live dialog must still own the screen bottom; stale menu text can remain in scrollback.
         const { runtime, handle } = await createPane({
           paneTitle: CURSOR_TITLE,
           foregroundProcess: 'cursor-agent',
@@ -171,8 +162,7 @@ describe('Interactive wait visibility and terminal admission', () => {
       })
 
       it('treats an answered menu followed by any later output as scrollback', async () => {
-        // Why not keyed on cursor's own follow-up line: output after the menu can be anything,
-        // and a stale hit here fails tui-idle and refuses prompt injection on a healthy lane.
+        // Any output after a menu can disprove it; matching only Cursor's follow-up text would block healthy prompt injection.
         const { runtime, handle } = await createPane({
           paneTitle: CURSOR_TITLE,
           foregroundProcess: 'cursor-agent',
@@ -190,8 +180,7 @@ describe('Interactive wait visibility and terminal admission', () => {
       })
 
       it('is not anchored by the agent narrating a choice after the menu', async () => {
-        // Why: matching each marker independently let prose below the answered menu carry the
-        // anchor down to the bottom of the screen and revive it.
+        // Independent marker matches can let later prose revive an answered menu at screen bottom.
         const { runtime, handle } = await createPane({
           paneTitle: CURSOR_TITLE,
           foregroundProcess: 'cursor-agent',
@@ -212,8 +201,7 @@ describe('Interactive wait visibility and terminal admission', () => {
       })
 
       it('requires the dialog to be the last thing on the screen', async () => {
-        // Not a tolerance question: one line of slack is exactly enough for the agent's own
-        // narration to revive an answered menu, and every capture of a live dialog ends on it.
+        // One line of slack revives answered menus; live captures end exactly at the dialog.
         const { runtime, handle } = await createPane({
           paneTitle: CURSOR_TITLE,
           foregroundProcess: 'cursor-agent',
@@ -265,9 +253,7 @@ describe('Interactive wait visibility and terminal admission', () => {
       })
 
       it('still lets a live working title clear a stale startup prompt', async () => {
-        // Pins the shared authority getTerminalAgentStatus and the agent-prompt send guard
-        // already use: for the startup modals, a live non-permission title is the staleness
-        // proof, because their text survives in scrollback with no self-dismissal marker.
+        // Startup prompt text lacks dismissal markers; a live non-permission title proves staleness for both status and send guards.
         const { runtime, handle } = await createPane({
           paneTitle: '✻ Claude Code',
           foregroundProcess: 'claude',
@@ -306,9 +292,7 @@ describe('Interactive wait visibility and terminal admission', () => {
       })
 
       it('drops a retained permission row once the agent stops owning the pane', async () => {
-        // Why not the title alone: a shell that takes the pane back usually sets something like
-        // `user@host: ~/repo`, which no title rule recognizes, and a hook row stays fresh for
-        // AGENT_STATUS_STALE_AFTER_MS — half an hour of reporting a dead agent as waiting.
+        // Shell titles may match no rule; a fresh hook row could otherwise report a dead agent waiting for 30 minutes.
         const { runtime, handle } = await createPane({
           paneTitle: 'jinwoo@host: ~/repo',
           foregroundProcess: 'zsh',
@@ -330,10 +314,7 @@ describe('Interactive wait visibility and terminal admission', () => {
     })
 
     it('still reports a live dialog restored from terminal history', async () => {
-      // Why this case exists: a lane parked on a prompt emits no bytes, so an Orca restart is
-      // exactly when it would go quiet forever. A restored tail carries no waitBlockedAt, and
-      // the approval menu does not need one — being at the bottom of the restored screen is
-      // itself the proof that this is where the pane stopped.
+      // Restored bottom-of-screen menus prove wait even without waitBlockedAt; parked agents emit no new bytes after restart.
       const { runtime, handle } = await createPane({
         paneTitle: CURSOR_TITLE,
         foregroundProcess: 'cursor-agent',
@@ -348,8 +329,7 @@ describe('Interactive wait visibility and terminal admission', () => {
     })
 
     it('does not resurrect a startup modal from a restored tail', async () => {
-      // The startup prompts keep the timestamp rule: their text lingers in scrollback with no
-      // marker for whether it was answered, so restored bytes alone must not mint a wait.
+      // Startup prompts retain timestamp gating because their scrollback text cannot prove they remain unanswered.
       const { runtime, handle } = await createPane({
         paneTitle: 'sta4513-claude',
         foregroundProcess: 'claude',
@@ -361,8 +341,7 @@ describe('Interactive wait visibility and terminal admission', () => {
     })
 
     it('stops reporting a wait once the pane is no longer running', async () => {
-      // Why: the menu stays at the bottom of a dead pane's tail forever. A worker whose process
-      // is gone needs intervention, not an answer, so it must not read as blocked on a human.
+      // Dead panes retain menu text indefinitely; lost processes need intervention, not a prompt answer.
       const { runtime, handle } = await createPane({
         paneTitle: CURSOR_TITLE,
         foregroundProcess: 'cursor-agent',
@@ -376,8 +355,7 @@ describe('Interactive wait visibility and terminal admission', () => {
     })
 
     it('does not accrue a probe per poll while the foreground probe wedges', async () => {
-      // Why: the timeout abandons the wait, not the request. Without single-flighting, a
-      // coordinator watching a wedged remote host adds one live probe on every poll.
+      // Timeout abandons the wait, not the request; single-flight prevents one stranded remote probe per poll.
       let probes = 0
       const { runtime, handle } = await createPane({
         paneTitle: '✻ Claude Code',
@@ -433,8 +411,7 @@ describe('Interactive wait visibility and terminal admission', () => {
     })
 
     it('leaves the wait unevaluated when the foreground probe wedges', async () => {
-      // Why bounded: this probe reaches a PTY controller that can be a remote host. A wedged
-      // one must leave the wait unknown, not stall every caller of showTerminal.
+      // Bound remote PTY probes; a wedged host must leave wait unknown without stalling showTerminal.
       const { runtime, handle } = await createPane({
         paneTitle: '✻ Claude Code',
         foregroundProcess: 'claude',

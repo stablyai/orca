@@ -1,4 +1,4 @@
-import { afterAll, describe, expect, it } from 'vitest'
+import { afterAll, describe, expect, it, vi } from 'vitest'
 import type { PostgresDatabase } from './database.js'
 import { isPostgresPoolConnectTimeout } from './postgres-pool-pressure.js'
 import { openDelayedPostgresDatabase } from './test-fixtures/delayed-postgres-database.js'
@@ -27,22 +27,33 @@ describePostgres('PostgreSQL priority lane under a reconnect herd', () => {
         (error: unknown) => (isPostgresPoolConnectTimeout(error) ? 'timeout' : 'other')
       )
     )
-    await new Promise((resolve) => setTimeout(resolve, 50))
+    await vi.waitFor(() =>
+      expect(database.peekPoolPressure().databasePoolWaiting).toBeGreaterThan(0)
+    )
     const startedAt = performance.now()
-    const general = database
-      .query('SELECT 1 AS renewed')
-      .catch(() => undefined)
-      .then(() => performance.now() - startedAt)
-    const renewed = await database.queryPriority('SELECT 1 AS renewed')
-    const renewedMs = performance.now() - startedAt
+    const general = database.query('SELECT 1 AS renewed').then(
+      () => ({ outcome: 'ok', elapsedMs: performance.now() - startedAt }),
+      (error: unknown) => ({
+        outcome: isPostgresPoolConnectTimeout(error) ? 'timeout' : 'other',
+        elapsedMs: performance.now() - startedAt
+      })
+    )
+    try {
+      const renewed = await database.queryPriority('SELECT 1 AS renewed')
+      const renewedMs = performance.now() - startedAt
 
-    expect(renewed).toEqual([{ renewed: 1 }])
-    // The next released connection plus one statement, never a turn in the herd's queue.
-    expect(renewedMs).toBeLessThan(1_500)
-    // The same statement on the general lane waits out the herd's acquire timeout.
-    expect(await general).toBeGreaterThan(1_900)
-    const outcomes = await Promise.all(herd)
-    expect(outcomes.filter((outcome) => outcome === 'timeout').length).toBeGreaterThan(20)
-    expect(outcomes).not.toContain('other')
+      expect(renewed).toEqual([{ renewed: 1 }])
+      // The next released connection plus one statement, never a turn in the herd's queue.
+      expect(renewedMs).toBeLessThan(1_500)
+      // The same statement on the general lane waits out the herd's acquire timeout.
+      const queued = await general
+      expect(queued.outcome).toBe('timeout')
+      expect(queued.elapsedMs).toBeGreaterThan(1_900)
+      const outcomes = await Promise.all(herd)
+      expect(outcomes.filter((outcome) => outcome === 'timeout').length).toBeGreaterThan(20)
+      expect(outcomes).not.toContain('other')
+    } finally {
+      await Promise.all([...herd, general])
+    }
   }, 15_000)
 })

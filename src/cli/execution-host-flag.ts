@@ -23,21 +23,16 @@ import type { RuntimeClient } from './runtime-client'
 import { RuntimeClientError } from './runtime/types'
 
 export type HostFlagRoutingSelection = {
-  // Why: SSH targets live in the running Orca host, not on disk, so enumerating them needs a
-  // client. Injected as a thunk so the lookup only happens on the error path we are explaining.
+  // Enumerating SSH targets needs the running host; defer lookup until error recovery.
   listSshTargets: () => Promise<SshTargetSummary[]>
-  // Why: unlike the suggestion listing, this throws when the targets cannot be read. A bare name
-  // may only route to a paired server once no SSH target is known to share it.
+  // Fail on unreadable targets: routing a bare name requires ruling out SSH collisions.
   verifySshTargets: () => Promise<SshTargetSummary[]>
   pairingCode: string | null
-  // Why: an ambient ORCA_ENVIRONMENT counts as a selection too, so carry the label to
-  // name the real source in the conflict message.
+  // Preserve the selection source, including ORCA_ENVIRONMENT, for conflict messages.
   environmentSelector: { value: string; label: string } | null
 }
 
-// Why: `orca host list` prints the alias a caller actually knows (`trader-local`), so that is what
-// they type — but which machine it names needs the host listings, which only the async resolvers
-// below can read. Carry the alias unresolved rather than rejecting the obvious spelling.
+// Host labels need async catalog lookup before they can resolve to a machine.
 export type HostFlagAlias = { kind: 'alias'; alias: string }
 export type HostFlagSelection = ParsedExecutionHost | HostFlagAlias
 
@@ -59,8 +54,7 @@ export function parseHostFlag(flags: Map<string, string | boolean>): HostFlagSel
     return parsed
   }
   const alias = value.trim()
-  // A value that claims a kind but does not parse is malformed, not an alias: `ssh:` names no
-  // target, and a `|` would rebind the id downstream. Only an unprefixed name can be a label.
+  // Prefixed values must parse as IDs, never aliases; malformed IDs could rebind downstream.
   if (!alias || alias.startsWith('ssh:') || alias.startsWith('runtime:')) {
     throw new RuntimeClientError(
       'invalid_argument',
@@ -70,10 +64,7 @@ export function parseHostFlag(flags: Map<string, string | boolean>): HostFlagSel
   return { kind: 'alias', alias }
 }
 
-// Why: `runtime:<environment-id>` ids are minted by this machine's pairing store, so they
-// only name a machine relative to it. Filtering or mutating the locally connected runtime
-// with one answers for the wrong host, and an id that matches nothing is indistinguishable
-// from a real host with no rows — so resolve the id here and send the command to it.
+// Pairing IDs are local to this machine; route to the paired host before applying its filters.
 export async function resolveHostFlagEnvironmentId(
   flags: Map<string, string | boolean>,
   selection: HostFlagRoutingSelection
@@ -93,25 +84,18 @@ export async function resolveHostFlagEnvironmentId(
   }))
   const wanted = host.kind === 'runtime' ? host.environmentId : host.alias
   const flagSpelling = host.kind === 'runtime' ? `--host ${host.id}` : `--host ${host.alias}`
-  // Why: with --environment or --pairing-code the command already runs on a chosen server, so a
-  // bare name is this machine or an SSH target that server reaches, never a second server.
+  // An explicit server selection scopes bare aliases to that server's local/SSH hosts.
   if (host.kind === 'alias' && (selection.environmentSelector || selection.pairingCode)) {
     return null
   }
-  // Why: --environment has always taken a name or an id, and the name is what people and agents
-  // actually know. Requiring the raw uuid here made the obvious spelling fail; accept either and
-  // canonicalize to the id so stored host ids still compare correctly downstream.
+  // Accept environment names but canonicalize them to IDs for stored-host comparisons.
   const environment = findEnvironmentByName(environments, wanted)
   if (!environment) {
     assertEnvironmentNameUnambiguous(environments, wanted, flagSpelling)
-    // A bare alias has axes left to try: this machine, and SSH targets on the connected runtime,
-    // which resolveHostFlagTarget answers once a client exists. Missing here is not a failure.
+    // A missing server alias may still name the local machine or one of its SSH targets.
     if (host.kind === 'alias') {
       return null
     }
-    // Why: `runtime:<id>` is a host id that also appears in stored rows, so it resolves by id
-    // only — unlike --environment, which also accepts a name. Say so, and hand back the ids an
-    // agent can retry with instead of making it scrape the sentence.
     const sshTargets = await selection.listSshTargets()
     throw new RuntimeClientError(
       'invalid_argument',
@@ -163,9 +147,7 @@ export async function resolveHostFlagEnvironmentId(
   return environment.id
 }
 
-// Why: a paired server and an SSH target are different machines, and one alias can name both.
-// Picking either would send the command to a machine the caller did not choose — the failure the
-// prefixed spellings exist to prevent — so hand back both flags and let them say which.
+// An alias naming both a paired server and an SSH target must not choose either silently.
 async function assertAliasNamesOneHost(
   alias: string,
   environment: EnvironmentSummary,
@@ -186,9 +168,7 @@ async function assertAliasNamesOneHost(
       }
     )
   }
-  // Why: findSshTargetByName collapses a duplicated label to undefined, which reads here as "no
-  // SSH target by that name" — so two colliding targets would have looked like no conflict at all
-  // and resolved to the server. Duplicates are more ambiguity, not less.
+  // Duplicate SSH labels are ambiguous, not evidence that no target matches.
   const matched = findSshTargetByName(sshTargets, alias)
   const conflicts = matched ? [matched] : ambiguousSshTargets(sshTargets, alias)
   if (conflicts.length === 0) {
@@ -212,9 +192,7 @@ async function assertAliasNamesOneHost(
   )
 }
 
-// Why: a runtime stamps its own setups `local` when they were made on the box and
-// `runtime:<id>` when a paired client made them. Once --host routed the command to that
-// runtime both spellings mean the same machine, so a host filter has to accept both.
+// After routing, local and runtime:<id> setups both belong to the selected server.
 export function hostFilterMatchesHostId(
   filter: ParsedExecutionHost,
   candidateHostId: string | null | undefined
@@ -226,10 +204,7 @@ export function hostFilterMatchesHostId(
   return filter.kind === 'runtime' && candidate === LOCAL_EXECUTION_HOST_ID
 }
 
-// Why: `ssh:` reaches a machine the connected runtime owns, so it can only be checked against
-// that runtime — unlike `runtime:`, which is resolved from this machine's pairing store before a
-// client exists. Callers that act on a --host value run this so an unknown target fails loudly
-// instead of quietly filtering to nothing.
+// Validate SSH IDs against the connected runtime, not this machine's pairing store.
 export async function resolveHostFlagTarget(
   flags: Map<string, string | boolean>,
   client: RuntimeClient
@@ -249,8 +224,7 @@ export async function resolveHostFlagTarget(
   if (host.kind === 'alias' && isLocalHostListName(host.alias)) {
     return resolveLocalHostListName(host.alias, client)
   }
-  // A bare alias reaches here only after resolveHostFlagEnvironmentId found no paired server by
-  // that name, so SSH is the one axis left and an unknown name is a real failure.
+  // Server lookup already missed; SSH is the remaining alias scope.
   const wanted = host.kind === 'ssh' ? host.targetId : host.alias
   const flagSpelling = host.kind === 'ssh' ? `--host ${host.id}` : `--host ${host.alias}`
   const targetId = await resolveSshHostTargetId(
@@ -289,9 +263,7 @@ async function resolveLocalHostListName(
   return { kind: 'local', id: LOCAL_EXECUTION_HOST_ID }
 }
 
-// Why: the store refuses an ambiguous environment name rather than guessing which server was
-// meant. Resolving one here would put the guess back, in the flag whose whole purpose is to stop
-// a command reaching a machine the caller did not choose.
+// Preserve the store's refusal to guess between duplicate environment names.
 function assertEnvironmentNameUnambiguous(
   environments: readonly { id: string; name: string }[],
   name: string,
@@ -313,11 +285,7 @@ function assertEnvironmentNameUnambiguous(
   )
 }
 
-// Why: the inverse of the --host case. `--environment openclaw` failed with a bare "Unknown
-// environment", when openclaw is very often an SSH target — a different axis, not a typo. The
-// store's own error cannot carry the hint (translateStoreError forwards code and message only,
-// dropping data), so resolve the selector here where the payload survives. Returns what the store
-// resolves to the same server: the store matches names exactly, so a loose match leaves as the id.
+// Resolve here so cross-host suggestions survive store errors that discard structured data.
 export async function resolveEnvironmentSelectorForStore(
   selector: string,
   listSshTargetsForSuggestion: () => Promise<SshTargetSummary[]>

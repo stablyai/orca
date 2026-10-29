@@ -50,7 +50,6 @@ vi.mock('./browser-session-ua', () => ({
 }))
 vi.mock('./browser-process-user-agent', () => ({
   getBrowserProcessUserAgentIdentity: () => {
-    // The real one throws when the process identity was never initialized.
     if (identityState.unavailable) {
       throw new Error('Browser process user agent is not initialized')
     }
@@ -93,7 +92,7 @@ function nextProfile() {
 describe('installBrowserSessionPartitionPolicies proxy wiring', () => {
   beforeEach(() => {
     setBrowserNetworkProxySettingsResolver(null)
-    // Why: the host shell may export proxy vars, which would otherwise stand in for the setting.
+    // Ignore host-shell proxy variables when testing settings.
     for (const key of [
       'HTTP_PROXY',
       'http_proxy',
@@ -111,11 +110,6 @@ describe('installBrowserSessionPartitionPolicies proxy wiring', () => {
     identityState.unavailable = false
   })
 
-  // The installer returns Promise<void>, so every caller reports failure through the promise —
-  // `void install(...).catch(...)` at browser-session-registry.ts:136 and :336, and a bare
-  // `void install(...)` at browser-session-route-policies.ts:16. The user agent policy is
-  // configured synchronously before the first await, so a throw from there escapes all of them
-  // and takes down browser-session startup instead of being reported.
   it('reports an unavailable process identity through the promise, not a synchronous throw', async () => {
     const profile = nextProfile()
     identityState.unavailable = true
@@ -127,8 +121,6 @@ describe('installBrowserSessionPartitionPolicies proxy wiring', () => {
     await expect(installation).rejects.toThrow('Browser process user agent is not initialized')
   })
 
-  // Why (STA-4779): the installer is the single funnel every browser partition passes through.
-  // If it stops applying the proxy, embedded tabs silently go direct again.
   it('applies the app-wide proxy to a newly configured partition', async () => {
     setBrowserNetworkProxySettingsResolver(() => ({
       httpProxyUrl: 'socks5://127.0.0.1:1080',

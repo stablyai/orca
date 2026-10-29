@@ -6,8 +6,14 @@ import type {
   AgentJournalSubmission,
   AgentJournalTurnScope
 } from './agent-session-journal-types'
-import { nativeChatRowsInDrawOrder } from './native-chat-turn-grouping'
-import { nativeChatTurnMembership, structuredAgentTurnAnchors } from './native-chat-turn-membership'
+import { nativeChatRowsInDrawOrder } from './native-chat/transcript/native-chat-turn-grouping'
+import {
+  nativeChatTurnMembership,
+  structuredAgentTurnAnchors,
+  isNativeChatRowInLiveWorkingTurn
+} from './native-chat-turn-membership'
+import { isAgentSessionRewindTarget } from './agent-session-rewind'
+import { readAgentJournalTurn } from './agent-session-turn-record'
 import type { NativeChatRole } from './native-chat-types'
 
 const THREAD: AgentJournalTurnScope = { kind: 'thread' }
@@ -80,6 +86,36 @@ function liveTurnKey(items: readonly AgentJournalRenderItem[]) {
 }
 
 describe('nativeChatTurnMembership', () => {
+  it('does not anchor unresolved input or assign it to unanchored live work', () => {
+    const unknown = user('follow-up', { kind: 'unknown' })
+    const items = [
+      user('u1'),
+      turn('t1', 'u1'),
+      unknown,
+      turn('wake', undefined, THREAD, 'running'),
+      assistant('a', inTurn('wake'))
+    ]
+    const membership = nativeChatTurnMembership(rows(items), { items, submissions: [] })
+    expect(membership.turnKeys).toEqual(['u1', undefined, 'wake'])
+    expect(membership.liveTurnKey).toBe('wake')
+    expect(structuredAgentTurnAnchors(items).get('wake')).toBe('wake')
+    const opener = (id: string) =>
+      readAgentJournalTurn(items.find((row) => row.itemId === id)?.body)?.userItemId
+    expect(isAgentSessionRewindTarget(unknown, opener)).toBe(false)
+    expect(isAgentSessionRewindTarget(items[0]!, opener)).toBe(true)
+    const alone = nativeChatTurnMembership(rows([unknown]), { items: [unknown], submissions: [] })
+    expect(alone.turnKeys).toEqual([undefined])
+    expect(alone.liveTurnKey).toBeUndefined()
+    expect(
+      isNativeChatRowInLiveWorkingTurn(
+        undefined,
+        undefined,
+        true,
+        alone.unresolvedRowIds?.has('follow-up')
+      )
+    ).toBe(false)
+    expect(isNativeChatRowInLiveWorkingTurn(undefined, undefined, true)).toBe(true)
+  })
   it('groups rows by the turn their scope names, and a steer into the turn it joined', () => {
     const items = [
       user('u1'),

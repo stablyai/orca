@@ -1,3 +1,7 @@
+import {
+  assertStructuredAgentResolutionCurrent,
+  type StructuredAgentResolutionOperation
+} from '../native-chat/structured-agent-command-resolution'
 import { codexStructuredLaunchArgs } from './codex-structured-launch-args'
 import type { AgentSessionAccountKind } from '../../shared/agent-session-availability'
 import { AgentModelCatalogUnavailableError } from '../native-chat/agent-model-catalog/agent-model-catalog-unavailable'
@@ -19,14 +23,13 @@ import type {
 import type { AgentModelCatalogLookup } from '../native-chat/agent-model-catalog/agent-model-catalog-discovery'
 
 export type CodexModelCatalogProbeDeps = CodexStructuredInvocationDeps & {
-  /** Existing captured environment only: saved preference reads never recover a missing CLI. */
+  /** Saved preference reads must not attempt CLI recovery. */
   resolveSavedEnvironment?: () => Promise<NodeJS.ProcessEnv>
   resolveEnv?: () => Record<string, string>
   resolveLaunchArgs?: () => Promise<string[]> | string[]
   resolveAccountKind?: (home: string) => AgentSessionAccountKind | undefined
-  /** The sync a launch runs on this home first, so the probe reads the login a launch would. */
+  /** Match launch-time home sync so probes use the same login. */
   prepareHome?: (home: string) => void
-  /** Test seam; production runs the shared short-lived app-server session. */
   runSession?: typeof runCodexAppServerSession
 }
 
@@ -40,39 +43,40 @@ function definedEnv(env: NodeJS.ProcessEnv | undefined): Record<string, string> 
   return next
 }
 
-/**
- * Lists models without a live session: one short-lived read-only app-server under the given
- * account home and the shared probe budget, spawned through the SAME invocation resolver a
- * structured session launch uses — a probe that resolved a different binary or env could list
- * models the user's sessions cannot see, under their key. Its supervised session runner is the
- * one every Codex app-server RPC consumer shares.
- */
+// Share launch invocation resolution so probes list models with the session's binary, environment and account.
 export function createCodexModelCatalogProbe(
   deps: CodexModelCatalogProbeDeps
 ): AgentModelCatalogProbe {
   const resolve = async (
     accountHome: Parameters<AgentModelCatalogProbe>[0],
     cwd?: string,
-    lookup: AgentModelCatalogLookup = 'recover'
+    lookup: AgentModelCatalogLookup = 'recover',
+    operation?: StructuredAgentResolutionOperation
   ) => {
+    assertStructuredAgentResolutionCurrent(operation)
     const accountHomePath = requireLegacyAgentSessionAccountHome(accountHome).path
     const overlay = { ...deps.resolveEnv?.() }
     const readEnvironment =
       lookup === 'saved' ? deps.resolveSavedEnvironment : deps.resolveEnvironment
     const { command, environment } = await resolveCodexStructuredInvocation({
       ...deps,
+      operation,
       resolveEnvironment: async () => ({ ...(await readEnvironment?.()), ...overlay }),
       ...(lookup === 'recover' ? {} : { refreshEnvironmentAfterMiss: undefined }),
       ...(cwd ? { resolveWorkingDirectory: () => cwd } : {})
     })
+    assertStructuredAgentResolutionCurrent(operation)
     const args = [
       ...(cwd ? codexStructuredLaunchArgs((await deps.resolveLaunchArgs?.()) ?? []) : []),
       ...CODEX_SHORT_LIVED_PROBE_APP_SERVER_ARGS
     ]
+    assertStructuredAgentResolutionCurrent(operation)
     const env = { ...definedEnv(environment), CODEX_HOME: accountHomePath }
     return {
       identity: { command, args, cwd, overlay: Object.entries(overlay).sort() },
       run: async (signal?: AbortSignal): Promise<AgentModelCatalogSuccess> => {
+        assertStructuredAgentResolutionCurrent(operation)
+        signal?.throwIfAborted()
         deps.prepareHome?.(accountHomePath)
         const run = deps.runSession ?? runCodexAppServerSession
         const { listing, unavailable } = await run(
@@ -86,13 +90,16 @@ export function createCodexModelCatalogProbe(
             ...(signal ? { signal } : {})
           },
           async (rpc) => {
-            // Both at once, so the account check adds no latency.
-            const listed = fetchCodexModelCatalogListing({ connection: rpc, cwd })
+            assertStructuredAgentResolutionCurrent(operation)
+            // Overlap model and account reads to avoid serial probe latency.
+            const listed = fetchCodexModelCatalogListing({ connection: rpc, cwd, operation })
             void listed.catch(() => {})
+            assertStructuredAgentResolutionCurrent(operation)
             const response: unknown = await rpc
               .request('account/read', { refreshToken: false }, { timeoutMs: 2_000 })
-              // Unknown account status says nothing.
+              // Failed account reads do not establish sign-out.
               .catch(() => undefined)
+            assertStructuredAgentResolutionCurrent(operation)
             if (
               typeof response !== 'object' ||
               response === null ||
@@ -106,8 +113,9 @@ export function createCodexModelCatalogProbe(
             }
             const account = deps.resolveAccountKind?.(accountHomePath)
             const signedOut = { reason: 'notSignedIn' as const, ...(account ? { account } : {}) }
-            // The verdict can be wrong (a gateway in Arguments), so a list in hand still fills the picker.
+            // Gateways may misreport sign-out; keep models that were successfully listed.
             const inHand = await listed.catch(() => null)
+            assertStructuredAgentResolutionCurrent(operation)
             if (!inHand?.models.length) {
               throw new AgentModelCatalogUnavailableError(signedOut)
             }
@@ -119,6 +127,7 @@ export function createCodexModelCatalogProbe(
           }
           throw error
         })
+        assertStructuredAgentResolutionCurrent(operation)
         if (listing.models.length === 0) {
           throw new Error('codex app-server listed no models')
         }
@@ -142,7 +151,9 @@ export function createCodexModelCatalogProbe(
     Pick<AgentModelCatalogProbe, 'resolve' | 'resolveLegacy'>
   >(
     async (home, options) =>
-      (await resolve(home, options?.cwd ?? process.cwd())).run(options?.signal),
-    { resolve, resolveLegacy: (home) => resolve(home) }
+      (await resolve(home, options?.cwd ?? process.cwd(), 'recover', options?.operation)).run(
+        options?.signal
+      ),
+    { resolve, resolveLegacy: (home, operation) => resolve(home, undefined, 'recover', operation) }
   )
 }

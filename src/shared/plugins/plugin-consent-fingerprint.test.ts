@@ -1,6 +1,5 @@
-import { createHash } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
-import { canonicalizeCapabilitySet, type PluginCapability } from './plugin-capabilities'
+import type { PluginCapability } from './plugin-capabilities'
 import { fingerprintPluginConsent } from './plugin-consent-fingerprint'
 import {
   getPluginActivationState,
@@ -55,15 +54,6 @@ describe('fingerprintPluginConsent', () => {
     expect(needsReconsent('orca-samples.demo', withWorker, lists)).toBe(true)
   })
 
-  it('preserves capability-only fingerprints for existing panel plugins', () => {
-    const capabilities = [workspaceRead, storage]
-    const legacy = `sha256-${createHash('sha256')
-      .update(canonicalizeCapabilitySet(capabilities))
-      .digest('base64')}`
-
-    expect(fingerprintPluginConsent({ main: undefined, capabilities })).toBe(legacy)
-  })
-
   it('requires re-consent when instructional content bytes change', () => {
     const subject = {
       main: undefined,
@@ -84,6 +74,34 @@ describe('fingerprintPluginConsent', () => {
         disabledPlugins: []
       })
     ).toBe('pending')
+  })
+
+  it.each([
+    ['a v2 panel', { execution: 'sandboxed-ui' as const, capabilities: [] }],
+    ['a v2 worker', { execution: 'trusted-worker' as const, main: 'worker.js', capabilities: [] }],
+    ['a v1 worker', { main: 'worker.js', capabilities: [] }],
+    [
+      'a v1 panel',
+      { capabilities: [], contributes: { panels: [{ id: 'p', title: 'P', entry: 'p.html' }] } }
+    ]
+  ])('binds %s approval to exact package bytes', (_label, subject) => {
+    const approved = fingerprintPluginConsent(subject, 'a'.repeat(64))
+    const updated = fingerprintPluginConsent(subject, 'b'.repeat(64))
+
+    expect(updated).not.toBe(approved)
+    expect(
+      needsReconsent('orca-samples.demo', updated, {
+        pluginConsents: { 'orca-samples.demo': approved },
+        disabledPlugins: []
+      })
+    ).toBe(true)
+  })
+
+  it('keeps data pack consent stable across byte changes', () => {
+    const subject = { execution: 'data' as const, capabilities: [] }
+    expect(fingerprintPluginConsent(subject, 'a'.repeat(64))).toBe(
+      fingerprintPluginConsent(subject, 'b'.repeat(64))
+    )
   })
 
   it('does not invalidate inert content consent when only its content hash changes', () => {

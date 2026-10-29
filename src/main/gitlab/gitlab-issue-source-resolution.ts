@@ -37,7 +37,7 @@ export async function getIssueProjectRef(
   )
 }
 
-// Why: glab infers a project from any GitLab remote, e.g. one named `gitlab`; the issue source should too.
+// Match glab project inference even when remotes use nonstandard names.
 async function getProjectRefForOtherRemote(
   repoPath: string,
   knownHosts?: readonly string[],
@@ -46,7 +46,7 @@ async function getProjectRefForOtherRemote(
 ): Promise<ProjectRef | null> {
   const remotes = await listCachedRemoteNames(repoPath, connectionId, localGitOptions)
   const otherRemotes = (remotes ?? []).filter((name) => name !== 'origin' && name !== 'upstream')
-  // Why: glab ranks a remote named `gitlab` above the rest.
+  // glab prioritizes a remote named gitlab.
   otherRemotes.sort((a, b) => Number(b === 'gitlab') - Number(a === 'gitlab'))
   for (const remoteName of otherRemotes) {
     const projectRef = await getProjectRefForRemote(

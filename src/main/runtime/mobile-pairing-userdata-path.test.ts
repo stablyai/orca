@@ -3,22 +3,13 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import type * as NodeFs from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-// Import from the production source of truth so a filename rename can't silently
-// pass these tests against stale names.
 import { DEVICE_REGISTRY_FILENAME, E2EE_KEYPAIR_FILENAME } from './mobile-pairing-files'
 import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
 
-// Mutable userData the electron mock resolves. We flip it mid-test to simulate
-// app.setName('Orca') changing how app.getPath('userData') resolves (e.g. from
-// lowercase 'orca' to uppercase 'Orca' on a case-sensitive filesystem) — the
-// divergence that drops paired devices. We use two genuinely distinct directory
-// names rather than case variants so the assertion is deterministic regardless
-// of whether the test host's filesystem is case-sensitive.
+// Simulate app.setName changing userData; distinct directories work even on case-insensitive filesystems.
 const appState = { userData: '' }
 
-// Why the port for getPath: userData now resolves through AppEnvironment, so an
-// electron mock would be inert here. safeStorage is still mocked because the modules
-// under test seal through it directly.
+// getPath uses AppEnvironment; safeStorage still calls Electron directly.
 installFakeAppEnvironment({ getPath: () => appState.userData })
 
 vi.mock('electron', () => ({
@@ -31,10 +22,7 @@ vi.mock('electron', () => ({
 
 describe('mobile pairing userData path stability', () => {
   let root: string
-  // The path persistence captures early, before app.setName().
   let canonicalDir: string
-  // The path app.getPath('userData') resolves to after app.setName() — a
-  // distinct directory standing in for the post-rename resolution.
   let lateDir: string
 
   beforeEach(() => {
@@ -43,7 +31,7 @@ describe('mobile pairing userData path stability', () => {
     lateDir = join(root, 'userdata-late')
     mkdirSync(canonicalDir, { recursive: true })
     mkdirSync(lateDir, { recursive: true })
-    // Why re-install: the global setup's beforeEach reinstates its own fake.
+    // Global beforeEach reinstalls its own environment.
     installFakeAppEnvironment({ getPath: () => appState.userData })
     vi.resetModules()
   })
@@ -58,11 +46,9 @@ describe('mobile pairing userData path stability', () => {
     const { initDataPath, getCanonicalUserDataPath } = await import('../persistence')
     initDataPath()
 
-    // app.setName('Orca') happens later in startup, changing late resolution.
     appState.userData = lateDir
 
     expect(getCanonicalUserDataPath()).toBe(canonicalDir)
-    // Why the port: this is the "resolve late" path the captured value must differ from.
     const { getAppEnvironment } = await import('../../shared/app-environment')
     expect(getCanonicalUserDataPath()).not.toBe(getAppEnvironment().getPath('userData'))
   })
@@ -72,20 +58,18 @@ describe('mobile pairing userData path stability', () => {
     const { initDataPath, getCanonicalUserDataPath } = await import('../persistence')
     initDataPath()
 
-    appState.userData = lateDir // app.setName('Orca') has run by the time the runtime starts
+    appState.userData = lateDir
 
     const { DeviceRegistry } = await import('./device-registry')
     const { loadOrCreateE2EEKeypair } = await import('./e2ee-keypair')
 
-    // Mirrors OrcaRuntimeRpcServer.start(): both read from the same userDataPath.
+    // Mirror runtime startup: registry and E2EE keys share one canonical path.
     const registry = new DeviceRegistry(getCanonicalUserDataPath())
     registry.addDevice('iPhone')
     loadOrCreateE2EEKeypair(getCanonicalUserDataPath())
 
-    // Pairing credentials land beside orca-data.json so they survive restarts/updates.
     expect(existsSync(join(canonicalDir, DEVICE_REGISTRY_FILENAME))).toBe(true)
     expect(existsSync(join(canonicalDir, E2EE_KEYPAIR_FILENAME))).toBe(true)
-    // The bug being guarded: the late path would have captured these instead.
     expect(existsSync(join(lateDir, DEVICE_REGISTRY_FILENAME))).toBe(false)
     expect(existsSync(join(lateDir, E2EE_KEYPAIR_FILENAME))).toBe(false)
   })
@@ -170,8 +154,7 @@ describe('mobile pairing userData path stability', () => {
   })
 
   it('rolls back the first copy when the second file fails to migrate', async () => {
-    // A half-copied pair would leave the registry without its E2EE key and, worse,
-    // trip the existing-target guard so the next launch never retries.
+    // Partial copy splits registry/key and blocks migration retries via the existing-target guard.
     vi.doMock('node:fs', async () => {
       const actual = await vi.importActual<typeof NodeFs>('node:fs')
       let copies = 0
@@ -210,8 +193,7 @@ describe('mobile pairing userData path stability', () => {
   })
 
   it('no-ops when the source path equals the canonical path (no rename happened)', async () => {
-    // Case-insensitive filesystems (macOS/Windows) resolve both paths to the same
-    // dir, so migration must be a clean no-op rather than copy a file onto itself.
+    // Case-insensitive filesystems can resolve both paths identically; never copy a file onto itself.
     appState.userData = canonicalDir
     const { initDataPath, migrateMobilePairingDataToCanonicalUserDataPath } =
       await import('../persistence')
@@ -239,7 +221,6 @@ describe('mobile pairing userData path stability', () => {
   })
 
   it('a previously paired device is still found after a restart on the canonical path', async () => {
-    // First launch: pair a device while userData resolves to the canonical path.
     appState.userData = canonicalDir
     {
       const { initDataPath, getCanonicalUserDataPath } = await import('../persistence')
@@ -249,7 +230,6 @@ describe('mobile pairing userData path stability', () => {
       new DeviceRegistry(getCanonicalUserDataPath()).addDevice('iPhone')
     }
 
-    // Second launch (e.g. after an update): fresh module state, path captured again.
     vi.resetModules()
     appState.userData = canonicalDir
     const { initDataPath, getCanonicalUserDataPath } = await import('../persistence')

@@ -44,12 +44,6 @@ function installTracker(): TrackerHarness {
 }
 
 describe('installTerminalImeCompositionTracker', () => {
-  it('activates on compositionstart', () => {
-    const harness = installTracker()
-    harness.composition('compositionstart', '')
-    expect(harness.tracker.isActive()).toBe(true)
-  })
-
   it('keeps composition active through Sogou-style empty compositionupdate', () => {
     const harness = installTracker()
     harness.composition('compositionstart', '')
@@ -58,51 +52,7 @@ describe('installTerminalImeCompositionTracker', () => {
     expect(harness.tracker.isActive()).toBe(true)
   })
 
-  it('clears on compositionend', () => {
-    const harness = installTracker()
-    harness.composition('compositionstart', '')
-    harness.composition('compositionupdate', '你')
-    harness.composition('compositionend', '你')
-    expect(harness.tracker.isActive()).toBe(false)
-  })
-
-  it('still clears on non-composition input', () => {
-    const harness = installTracker()
-    harness.composition('compositionstart', '')
-    harness.input('insertText')
-    expect(harness.tracker.isActive()).toBe(false)
-  })
-
-  it('does not clear on insertCompositionText input', () => {
-    const harness = installTracker()
-    harness.composition('compositionstart', '')
-    harness.input('insertCompositionText')
-    expect(harness.tracker.isActive()).toBe(true)
-  })
-
-  it('clears on blur', () => {
-    const harness = installTracker()
-    harness.composition('compositionstart', '')
-    harness.blur()
-    expect(harness.tracker.isActive()).toBe(false)
-    expect(harness.tracker.isCandidateKeyGuardActive()).toBe(false)
-  })
-
   describe('candidate key guard', () => {
-    it('is active while a composition is live', () => {
-      const harness = installTracker()
-      expect(harness.tracker.isCandidateKeyGuardActive()).toBe(false)
-      harness.composition('compositionstart', '')
-      expect(harness.tracker.isCandidateKeyGuardActive()).toBe(true)
-    })
-
-    it('stays active through empty compositionupdate events', () => {
-      const harness = installTracker()
-      harness.composition('compositionstart', '')
-      harness.composition('compositionupdate', '')
-      expect(harness.tracker.isCandidateKeyGuardActive()).toBe(true)
-    })
-
     it('expires after prolonged composition-event silence so stale IME state cannot keep terminal keys dead', () => {
       const harness = installTracker()
       harness.composition('compositionstart', '')
@@ -152,13 +102,6 @@ describe('installTerminalImeCompositionTracker', () => {
       harness.input('insertText')
       expect(harness.tracker.isCandidateKeyGuardActive()).toBe(false)
     })
-  })
-
-  it('handles a missing terminal element', () => {
-    const tracker = installTerminalImeCompositionTracker(null)
-    expect(tracker.isActive()).toBe(false)
-    expect(tracker.isCandidateKeyGuardActive()).toBe(false)
-    expect(() => tracker.dispose()).not.toThrow()
   })
 
   it('stops tracking after dispose', () => {

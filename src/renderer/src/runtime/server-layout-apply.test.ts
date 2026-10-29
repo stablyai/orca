@@ -257,8 +257,7 @@ describe('a layout intent for a workspace a server’s frames draw', () => {
     )
   })
 
-  // A window's close tells main the window already stopped its terminals, which this desktop cannot
-  // do for a server's; closes, starts, sleeps and terminal names keep the RPCs that main applies.
+  // Local-window close assumes terminals already stopped; desktop cannot stop server PTYs, so retain server close/start/sleep/name RPCs.
   it('keeps today’s path for closes, starts, sleeps and a terminal’s own name', async () => {
     const { store } = await drawnByServer()
     const offList: WindowLayoutCommand[] = [

@@ -42,12 +42,10 @@ function terminalTabLivenessMatches(
     return false
   }
 
-  // Indexed loops, not .entries(): this runs on every tab write including title frames, and the
-  // iterator allocated a [index, value] tuple per worktree and per tab in each changed bucket.
+  // Indexed loops avoid per-entry tuple allocation on every tab/title write.
   for (let worktreeIndex = 0; worktreeIndex < currentWorktreeIds.length; worktreeIndex += 1) {
     const worktreeId = currentWorktreeIds[worktreeIndex]
-    // Why: duplicate tab ids use first-worktree-wins lookup semantics, so a
-    // worktree-key reorder is a liveness change even when every array is reused.
+    // First-worktree-wins IDs make worktree-key reorder a liveness change even with reused arrays.
     if (previousWorktreeIds[worktreeIndex] !== worktreeId) {
       return false
     }

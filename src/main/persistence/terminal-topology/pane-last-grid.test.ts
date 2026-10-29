@@ -131,7 +131,7 @@ describe("a pane's last grid (layout-owner build)", () => {
     })
     const runtime = new OrcaRuntimeService(store)
 
-    // Inside the write burst: nothing written yet when the quit starts.
+    // Queue resize inside the write burst before flushing.
     runtime.onExternalPtyResize('pty-b', 91, 33)
     await runtime.flushPaneGrids()
     const relaunched = await reopenTopologyStore(store, directory)

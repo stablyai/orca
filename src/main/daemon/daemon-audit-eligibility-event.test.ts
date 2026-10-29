@@ -128,7 +128,6 @@ describe('daemon audit eligibility telemetry', () => {
       trackDaemonAuditEligibility(recordAuthenticatedInventory(context, null))
     ).not.toThrow()
 
-    // The rate-limited tracker is the production call site, so it carries the same guarantee.
     const trackEligibility = createDaemonAuditEligibilityTracker()
     expect(() => trackEligibility(recordAuthenticatedInventory(context, null))).not.toThrow()
   })
@@ -140,7 +139,6 @@ describe('daemon audit eligibility telemetry', () => {
 
     expect(() => trackEligibility(recordAuthenticatedInventory(context, null))).not.toThrow()
 
-    // A malformed observation must not escape the guard either.
     const malformed = recordAuthenticatedInventory(context, null)
     expect(() =>
       trackEligibility({ ...malformed, evidenceSources: undefined as never })
@@ -171,12 +169,10 @@ describe('daemon audit eligibility telemetry', () => {
     trackEligibility(recordAuthenticatedInventory(context, null))
     expect(trackMock).toHaveBeenCalledOnce()
 
-    // An NTP correction / VM resume rewinds the clock by an hour.
     nowMs -= 60 * 60_000
     trackEligibility(recordAuthenticatedInventory(context, null))
     expect(trackMock).toHaveBeenCalledTimes(2)
 
-    // The window re-anchors on the rewound clock instead of emitting on every call.
     for (let index = 0; index < 60; index += 1) {
       nowMs += 1_000
       trackEligibility(recordAuthenticatedInventory(context, null))
@@ -196,7 +192,6 @@ describe('daemon audit eligibility telemetry', () => {
       trackEligibility(recordAuthenticatedInventory(context, null))
       expect(trackMock).toHaveBeenCalledOnce()
 
-      // Wall time alone must not open the window: no real time has elapsed.
       wallClock.mockReturnValue(1_700_000_000_000 + 6 * 60_000)
       trackEligibility(recordAuthenticatedInventory(context, null))
       expect(trackMock).toHaveBeenCalledOnce()

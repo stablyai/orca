@@ -29,6 +29,7 @@ export async function buildCodexRolloutResumeState(
         sessionCwd: context.sessionCwd,
         currentCwd: context.currentCwd,
         currentModel: context.currentModel,
+        currentTurnId: context.currentTurnId,
         previousTotals: context.previousTotals
       }
 }

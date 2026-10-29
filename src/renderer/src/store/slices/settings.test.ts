@@ -706,9 +706,7 @@ describe('createSettingsSlice runtime switching', () => {
 })
 
 describe('fetchSettings runtime catalog probe', () => {
-  // Why: skill discovery waits for the runtime catalog to settle. If a rejected
-  // settings read skipped the probe, every skill badge would sit on a spinner
-  // for the whole session with no retry affordance.
+  // A failed settings read must still settle runtime catalog discovery or skill badges spin forever without retry.
   it('still probes the runtime catalog when the settings read fails', async () => {
     settingsGet.mockRejectedValueOnce(new Error('unreadable settings.json'))
     const store = createTestStore()

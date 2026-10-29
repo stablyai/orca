@@ -4,8 +4,6 @@ import { Badge } from '../ui/badge'
 import { Button } from '../ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover'
 
-/** Review dialogs lead with trust, not a metadata table: badge up front, details on demand. */
-
 export type PluginConsentSource = {
   kind: 'local-path' | 'git' | 'marketplace' | 'bundled'
   reference: string

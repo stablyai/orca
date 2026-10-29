@@ -6,14 +6,7 @@ import type { StructuredWorkerIdentity } from '../../../../structured-worker-ide
 import { archiveSummary } from './worker-terminal-resource-presentation'
 import { releaseUnknownRecovery, type WorkerReleaseReceipt } from './worker-release-completion'
 
-/**
- * The close half of a release for a worker that IS a structured session.
- *
- * Separate from the PTY close for the same reason the delivery lane is: there is no terminal to
- * close and no exit to observe, so the host's own settlement is the only proof available. Only a
- * proven close may settle; an unproven one reports `release_unknown` and stays retryable, but only
- * under a fresh request id — replaying the prior one just returns this same receipt.
- */
+/** Use host settlement to prove structured close; unproven closes remain release_unknown. Retry with a fresh request id because replay returns the old receipt. */
 export async function stopStructuredWorkerForRelease(args: {
   structured: StructuredWorkerIdentity
   dispatchId: string

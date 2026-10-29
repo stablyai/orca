@@ -1,0 +1,22 @@
+{
+  "common": {
+    "back": "Geri"
+  },
+  "settings": {
+    "appearance": {
+      "language": {
+        "description": "Sistem seçeneği bu cihazın dilini kullanır. İzin istekleri her zaman cihazın dilinde gösterilir.",
+        "heading": "DİL",
+        "systemWithCurrent": "Sistem ({{language}})"
+      },
+      "theme": {
+        "dark": "Koyu",
+        "description": "Sistem seçeneği bu cihazın açık veya koyu tema ayarını kullanır.",
+        "heading": "TEMA",
+        "light": "Açık",
+        "system": "Sistem"
+      },
+      "title": "Görünüm"
+    }
+  }
+}

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { isEditorContentUnchanged } from './editor-content-dirty-state'
 
-// Why: the exact expression the editor used before, kept as the equivalence oracle.
+// Keep the original editor comparison as the equivalence oracle.
 function referenceUnchanged(
   content: string,
   original: string,

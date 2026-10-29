@@ -59,6 +59,15 @@ export const uiClipboardAndWindowControlsApi = {
     ipcRenderer.on('ui:workspaceSleep', listener)
     return () => ipcRenderer.removeListener('ui:workspaceSleep', listener)
   },
+  onProjectMovePause: (callback) => {
+    const listener = (_event: Electron.IpcRendererEvent, request: Parameters<typeof callback>[0]) =>
+      callback(request)
+    ipcRenderer.on('ui:projectMovePause', listener)
+    return () => ipcRenderer.removeListener('ui:projectMovePause', listener)
+  },
+  respondProjectMovePause: (response) => {
+    ipcRenderer.send('ui:projectMovePauseResponse', response)
+  },
   onResumeSleepingAgents: (callback: (data: { worktreeId: string }) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, data: { worktreeId: string }) =>
       callback(data)
@@ -79,9 +88,7 @@ export const uiClipboardAndWindowControlsApi = {
     connectionId?: string | null
     runtimeEnvironmentId?: string | null
     agentSessionAttachment?: AgentSessionAttachmentClipboardTarget
-    /** A native-chat composer paste, kept where its draft can bring it back. */
     forNativeChatDraft?: boolean
-    /** With `forNativeChatDraft`: a structured chat on this machine, whose sends claim its pastes. */
     forStructuredChat?: boolean
   }): Promise<string | null> => ipcRenderer.invoke('clipboard:saveImageAsTempFile', args),
   savePastedTextAsFile: (args: {
@@ -194,7 +201,7 @@ export const uiClipboardAndWindowControlsApi = {
       _event: Electron.IpcRendererEvent,
       data: { isQuitting: boolean; requestId?: number }
     ): void => {
-      // Why: main cannot reach will-quit while a frozen renderer owns the window close handshake.
+      // Acknowledge before callbacks: a frozen renderer can block main from reaching will-quit.
       ipcRenderer.send('window:close-request-received', data?.requestId)
       callback({ isQuitting: data?.isQuitting ?? false })
     }

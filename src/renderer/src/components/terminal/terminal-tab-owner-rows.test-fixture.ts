@@ -1,4 +1,3 @@
-/** Catalog rows placing worktree `wt-1` on a paired server, or on this app for `null`. */
 export function terminalOwnerRows(environmentId: string | null) {
   return {
     repos: [

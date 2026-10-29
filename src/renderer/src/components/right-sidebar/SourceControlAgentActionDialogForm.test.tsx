@@ -58,9 +58,19 @@ function renderForm(
       selectedAgent: 'codex',
       hasEnabledAgents: true,
       detecting: false,
+      surfaceRows: {
+        model: { state: 'loading', placeholderCount: 0 },
+        selection: { ready: true, cli: false },
+        onPick: () => {}
+      },
       statusCopy: null,
       agentArgs: '',
       agentArgsApply: true,
+      recipe: {
+        agentId: overrides.selectedAgent ?? 'codex',
+        commandInputTemplate: overrides.commandTemplate ?? '{basePrompt}',
+        ...(overrides.agentArgs !== undefined ? { agentArgs: overrides.agentArgs } : {})
+      },
       commandTemplate: '{basePrompt}',
       savedCommandInputTemplate: '{basePrompt}',
       saveLaunchRecipe: true,
@@ -76,7 +86,7 @@ function renderForm(
       canStart: true,
       isStarting: false,
       startLabel: 'Start agent',
-      onSelectedAgentChange: () => {},
+      onAgentPick: () => {},
       onAgentArgsChange: () => {},
       onCommandTemplateChange: () => {},
       onSaveLaunchRecipeChange: () => {},
@@ -119,6 +129,35 @@ describe('SourceControlAgentActionDialogForm', () => {
     expect(markup).toContain('Resolve the merge conflicts reported for this pull request.')
   })
 
+  it('names the saved choice on chat and terminal launches alike', () => {
+    const recipe = {
+      agentId: 'codex' as const,
+      launchPreferences: {
+        agentId: 'codex' as const,
+        model: 'saved',
+        permissionMode: 'ask' as const
+      }
+    }
+    expect(renderForm({ recipe, agentArgsApply: true })).toContain(
+      'Older servers use their own permission settings.'
+    )
+    expect(
+      renderForm({
+        recipe: { ...recipe, launchPreferences: { agentId: 'codex', model: 'saved' } },
+        agentArgsApply: false
+      })
+    ).toContain('Model from Settings: saved')
+    expect(
+      renderForm({
+        selectedAgent: 'antigravity',
+        recipe: {
+          agentId: 'antigravity',
+          launchPreferences: { agentId: 'antigravity', permissionMode: 'ask' }
+        }
+      })
+    ).toContain('Applies to chats only')
+  })
+
   it('offers agents only, since an action cannot start without one', () => {
     expect(renderForm()).toContain('data-allow-blank="false"')
   })
@@ -133,6 +172,7 @@ describe('SourceControlAgentActionDialogForm', () => {
 
     const globalMarkup = renderForm({
       settings,
+      recipe: { agentId: 'codex', commandInputTemplate: '{basePrompt}' },
       repo: repoWithoutSavedRecipe,
       saveTargets,
       saveTargetValue: 'global'
@@ -143,11 +183,14 @@ describe('SourceControlAgentActionDialogForm', () => {
       saveTargets,
       saveTargetValue: 'repo'
     })
+    const clearedArgsMarkup = renderForm({ settings, agentArgs: '' })
 
     expect(globalMarkup).toContain('Launch recipe already saved')
     expect(globalMarkup).not.toContain('Save &amp; start agent')
     expect(repoMarkup).not.toContain('Launch recipe already saved')
     expect(repoMarkup).toContain('Save &amp; start agent')
+    expect(clearedArgsMarkup).not.toContain('Launch recipe already saved')
+    expect(clearedArgsMarkup).toContain('Save &amp; start agent')
   })
 
   it('surfaces a diverging repo override alongside the save controls', () => {
@@ -183,8 +226,7 @@ describe('CLI arguments field applicability', () => {
     expect(markup).toContain('CLI arguments')
   })
 
-  // Why: absent, not disabled — a structured native chat session reads no CLI arguments,
-  // so the dialog must not show a control that launch would drop.
+  // Native chat launches ignore CLI arguments, so omit the field.
   it('leaves the field out entirely when they would not apply', () => {
     const markup = renderForm({ agentArgsApply: false })
 

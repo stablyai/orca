@@ -1,8 +1,4 @@
-// Why: deriving a virtual key code from a character's own char code collides with editing
-// keys — '&' (38) arrives as VK_UP and '.' (46) as VK_DELETE, so Blink runs the caret
-// command and silently drops the character. This table maps Orca key names ("a", "&",
-// "Ctrl+Shift+K", "Alt+ArrowDown", "F5") to the CDP key event a US-layout keyboard
-// would produce; anything it cannot express returns null so the caller can fall back.
+// Character codes for '&' and '.' collide with VK_UP/VK_DELETE; use US virtual key codes.
 
 const CDP_MODIFIER_BITS: Record<string, number> = {
   alt: 1,
@@ -63,7 +59,6 @@ const CDP_NAMED_KEYS: Record<string, [number, string, string, string | null]> = 
   command: [91, 'Meta', 'MetaLeft', null]
 }
 
-// Characters a US keyboard produces with shift held, and the base key they share.
 const US_SHIFTED_CHARS: Record<string, string> = {
   '~': '`',
   '!': '1',
@@ -93,7 +88,7 @@ for (const shifted of Object.keys(US_SHIFTED_CHARS)) {
   US_SHIFT_OF[US_SHIFTED_CHARS[shifted]] = shifted
 }
 
-// char -> [windowsVirtualKeyCode, code], for the keys that are not letters or digits.
+// char -> [windowsVirtualKeyCode, code]
 const US_PUNCTUATION_KEYS: Record<string, [number, string]> = {
   ' ': [32, 'Space'],
   ';': [186, 'Semicolon'],
@@ -140,18 +135,15 @@ export type CdpKeyEvent = {
   key: string
   code: string
   modifiers: number
-  // Why: 1 = left-side key -- the table pins bare modifiers to ShiftLeft/ControlLeft/etc.
+  // 1 denotes the left-side modifiers used by the table.
   location: number
-  // Why: a modifier key's own bit is set during its keydown but already cleared on its keyup.
+  // A modifier's own bit is set on keydown and cleared on keyup.
   selfModifier: number
-  // Why: null means the key produces no character (a rawKeyDown, not a keyDown with text).
+  // Null requires rawKeyDown, without character text.
   text: string | null
 }
 
-// Why: printable characters outside the table (accented letters, non-latin scripts)
-// still have an in-process form -- the IME convention, keyCode 229 with the text,
-// which is how composed input already reaches pages. One BMP code point only:
-// surrogate pairs and combining sequences keep the helper's behavior.
+// Use IME keyCode 229 for single BMP characters; pairs and sequences retain helper behavior.
 export function imeFallbackKeyEvent(raw: string): CdpKeyEvent | null {
   if (raw.length !== 1) {
     return null
@@ -200,9 +192,7 @@ export function parseCdpKeyEvent(raw: string): CdpKeyEvent | null {
     key = rest
     code = mapped.code
     text = rest
-    // Why: a capital letter in a shortcut is how people write the key, not a request for
-    // shift — Ctrl+A means select-all (key 'a'), never Ctrl+Shift+A. Shifted punctuation
-    // is different: on a US keyboard shift is the only way to produce the character.
+    // Ctrl+A denotes a lowercase key without Shift; shifted punctuation still needs Shift.
     const capitalShortcut = rest >= 'A' && rest <= 'Z' && (modifiers & ~8) !== 0
     if (capitalShortcut) {
       key = rest.toLowerCase()
@@ -217,8 +207,7 @@ export function parseCdpKeyEvent(raw: string): CdpKeyEvent | null {
     key = named[1]
     code = named[2]
     text = named[3]
-    // Why: Blink reports a modifier's own bit during its keydown (shiftKey is true while
-    // Shift goes down), and the table's modifier entries are the left-side keys.
+    // Blink includes a modifier's own bit on keydown; the table uses left-side keys.
     selfModifier = CDP_MODIFIER_BITS[name] ?? 0
     if (selfModifier !== 0) {
       modifiers |= selfModifier
@@ -237,12 +226,11 @@ export function parseCdpKeyEvent(raw: string): CdpKeyEvent | null {
 
   if (text !== null && (modifiers & 8) !== 0) {
     text = Object.hasOwn(US_SHIFT_OF, text) ? US_SHIFT_OF[text] : text.toUpperCase()
-    // Why: Shift+a is the "A" key as far as the page is concerned.
     if (rest.length === 1) {
       key = text
     }
   }
-  // Why: with ctrl, alt or meta held the press is a shortcut and produces no character.
+  // Ctrl, Alt, and Meta shortcuts produce no character text.
   if ((modifiers & ~8) !== 0) {
     text = null
   }

@@ -21,14 +21,7 @@ function terminalWebViewHandle(
   }
 }
 
-/**
- * Terminal input, the worker-takeover report it triggers, and the in-place viewport refit.
- *
- * Every send here is a request/response call; the `subscribe` and `sendUnsubscribe` ports these
- * files sit next to are a separate boundary and are not driven. The refit hook's resubscribe
- * fallback is recorded as an effect for the same reason — what the recording observes is that the
- * hook chose it, not what resubscribing does.
- */
+// Record request/reply input and refit; resubscribe is an observed choice, with stream execution outside this adapter.
 export function terminalMountAdapters(
   modules: ReturnType<typeof operationModuleLoader>
 ): Record<string, MountAdapter> {
@@ -48,6 +41,7 @@ export function terminalMountAdapters(
             connected: args.connected !== false,
             handle: String(args.handle ?? HANDLE),
             hostSupportsQueryReplyInput: args.supported !== false,
+            hostSupportsProgramStatus: true,
             subscribedTerminals: { has: (handle: string) => subscribed.has(handle) }
           }).then((value: unknown) => {
             accepted = value

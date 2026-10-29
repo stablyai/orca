@@ -19,15 +19,8 @@ vi.mock('./AgentSkillSetupPanel', () => ({
   }
 }))
 
-vi.mock('./CliSkillRuntimeSetup', () => ({
-  buildSkillCommandForRuntime: (command: string) => command,
-  ensureWslCliAvailableForAgentSkillTerminal: vi.fn(),
-  getWslCliDistroRequest: () => undefined
-}))
-
-vi.mock('@/lib/linear-agent-skill-update-command', () => ({
+vi.mock('@/lib/linear-agent-skill-update-target', () => ({
   getLinearAgentSkillUpdateTarget: () => ({
-    command: 'npx skills update orca-linear --global',
     skillName: 'orca-linear'
   })
 }))
@@ -47,9 +40,8 @@ vi.mock('@/hooks/useActiveProjectSkillRuntime', () => ({
   useActiveProjectSkillRuntime: () => ({
     discoveryTarget: undefined,
     agentRuntime: { runtime: 'native' },
-    terminalShellOverride: undefined,
     installDisabledReason: null,
-    canUseLocalSkillFreshness: true
+    canUseSkillFreshness: true
   })
 }))
 

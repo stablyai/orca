@@ -19,13 +19,11 @@ export type AgentSessionCreatePhaseTiming = {
 
 export type AgentSessionCreatePhaseRecorder = (timing: AgentSessionCreatePhaseTiming) => void
 
-/** Wrap the rare user-created structured session; no sampling is needed for this event. */
 export async function withAgentSessionSpan<T>(fn: (span: ActiveSpan) => Promise<T>): Promise<T> {
   return withSpan('agentSession.create', fn, { attributes: { kind: 'agent-session' } })
 }
 
-/** One spawned start's outcome and its spawn-to-outcome time, so the startup limits are tuned from
- *  what each agent really takes. Agent id and numbers only. */
+/** Record startup timing with only agent ID and numeric measurements. */
 export function recordAgentSessionStartup(startup: {
   agent: string
   outcome: string
@@ -54,7 +52,7 @@ export async function withAgentSessionCreatePhase<T>(
   }
 }
 
-/** Records the closed create vocabulary without copying branch, path, prompt, or session content. */
+/** Closed phase vocabulary excludes branch, path, prompt and session content. */
 export function addAgentSessionCreatePhaseAttributes(
   span: ActiveSpan,
   timing: {

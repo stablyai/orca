@@ -98,8 +98,7 @@ describe('getCachedMarkdownRichModeEligibility', () => {
     try {
       const japanese = getCachedMarkdownRichModeEligibility({ content, sizeOverridden: false })
       expect(japanese.unsupportedMessage).not.toBeNull()
-      // Why: the decision is cached but the localized string is not, so a cache
-      // hit still follows the language active at read time.
+      // Cache decisions only so every read resolves the active UI language.
       expect(japanese.unsupportedMessage).not.toBe(english.unsupportedMessage)
       expect(japanese.exceedsSizeLimit).toBe(english.exceedsSizeLimit)
     } finally {

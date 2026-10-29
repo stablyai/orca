@@ -28,7 +28,7 @@ class ThrowingSocket {
   onmessage: ((event: { data: unknown }) => void) | null = null
   onerror: (() => void) | null = null
   onclose: ((event: { code: number; reason?: string }) => void) | null = null
-  send = vi.fn(() => {
+  send = vi.fn((_frame: string): void => {
     throw new Error('relay auth write failed')
   })
   close = vi.fn()
@@ -51,7 +51,7 @@ describe('MobileRelayE2eeLink', () => {
       onText: vi.fn(),
       onBinary: vi.fn(),
       onError,
-      createSocket: () => socket as unknown as WebSocket
+      createSocket: () => relayWebSocket(socket)
     })
 
     expect(() => socket.onopen?.()).not.toThrow()
@@ -82,13 +82,18 @@ describe('MobileRelayE2eeLink', () => {
       onBinary: vi.fn(),
       onOpen,
       onError: vi.fn(),
-      createSocket: () => socket as unknown as WebSocket
+      createSocket: () => relayWebSocket(socket)
     })
 
     expect(onOpen).not.toHaveBeenCalled()
     socket.onopen?.()
     expect(sent).toHaveLength(1)
-    expect(JSON.parse(sent[0]!)).toMatchObject({ type: 'relay-auth', mode: 'connect' })
+    expect(JSON.parse(sent[0]!)).toEqual({
+      type: 'relay-auth',
+      v: 1,
+      mode: 'connect',
+      credential: 'credential'
+    })
     expect(onOpen).toHaveBeenCalledOnce()
   })
 
@@ -109,7 +114,7 @@ describe('MobileRelayE2eeLink', () => {
       onBinary: vi.fn(),
       onOpen,
       onError: vi.fn(),
-      createSocket: () => socket as unknown as WebSocket
+      createSocket: () => relayWebSocket(socket)
     })
 
     socket.onopen?.()
@@ -132,7 +137,7 @@ describe('MobileRelayE2eeLink', () => {
       onText: vi.fn(),
       onBinary: vi.fn(),
       onError,
-      createSocket: () => socket as unknown as WebSocket
+      createSocket: () => relayWebSocket(socket)
     })
 
     socket.onerror?.()
@@ -157,7 +162,7 @@ describe('MobileRelayE2eeLink', () => {
       onText: vi.fn(),
       onBinary: vi.fn(),
       onError,
-      createSocket: () => socket as unknown as WebSocket
+      createSocket: () => relayWebSocket(socket)
     })
 
     socket.onerror?.()
@@ -184,7 +189,7 @@ describe('MobileRelayE2eeLink', () => {
         onText: vi.fn(),
         onBinary: vi.fn(),
         onError,
-        createSocket: () => socket as unknown as WebSocket
+        createSocket: () => relayWebSocket(socket)
       })
       socket.onerror?.()
       await vi.advanceTimersByTimeAsync(250)
@@ -214,10 +219,12 @@ describe('MobileRelayE2eeLink', () => {
         onText: vi.fn(),
         onBinary: vi.fn(),
         onError,
-        createSocket: () => socket as unknown as WebSocket
+        createSocket: () => relayWebSocket(socket)
       })
       socket.onerror?.()
+      expect(vi.getTimerCount()).toBe(1)
       link.close()
+      expect(vi.getTimerCount()).toBe(0)
       await vi.advanceTimersByTimeAsync(250)
 
       expect(onError).not.toHaveBeenCalled()
@@ -288,7 +295,11 @@ function openLink(socket: ThrowingSocket, onError: (error: Error) => void): Mobi
     onText: vi.fn(),
     onBinary: vi.fn(),
     onError,
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the link only calls send/close and assigns handlers on this stub.
-    createSocket: () => socket as unknown as WebSocket
+    createSocket: () => relayWebSocket(socket)
   })
+}
+
+function relayWebSocket(socket: ThrowingSocket): WebSocket {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The link and mocked channel only send/close and assign event handlers on this socket.
+  return socket as unknown as WebSocket
 }

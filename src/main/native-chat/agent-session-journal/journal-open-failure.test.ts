@@ -28,7 +28,6 @@ afterEach(async () => {
   await rm(root, { recursive: true, force: true })
 })
 
-/** What the journal's own open, then a chat's replay, throws for the file as it stands. */
 function openFailure(): unknown {
   try {
     const db = openJournalDatabase(journalDatabasePath(root)).db
@@ -43,7 +42,6 @@ function openFailure(): unknown {
   throw new Error('the journal opened')
 }
 
-/** A thrown value shaped as node:sqlite shapes one, with the result code it reports. */
 function nodeSqliteError(errcode: number): Error {
   return Object.assign(new Error('sqlite'), { code: 'ERR_SQLITE_ERROR', errcode })
 }
@@ -66,7 +64,7 @@ describe('classifyJournalOpenFailure', () => {
     opened.exec('PRAGMA journal_mode = DELETE')
     opened.close()
     const bytes = await readFile(path)
-    // Page 1 holds the header and schema; every table's root page follows it.
+    // Preserve header/schema while corrupting table root pages.
     bytes.fill(0xab, 4096)
     await writeFile(path, bytes)
     const error = openFailure()
@@ -172,8 +170,6 @@ describe('createJournalOpenReadRefusals', () => {
     ])
   })
 
-  // Where it failed rides as the refusal's cause, so a chat whose reason changes is logged again
-  // and the log names the row.
   it('logs a chat again when its load fails for another reason, naming where each failed', () => {
     const log = recordingStructuredAgentSessionLogger()
     const refusals = createJournalOpenReadRefusals(log.logger)
@@ -207,7 +203,6 @@ describe('createJournalOpenReadRefusals', () => {
     ])
   })
 
-  // A load refused on its rows arrives already classified, and is logged once per session too.
   it("logs a load refused as a newer Orca's chat, or as damage, once per session until it opens", () => {
     const log = recordingStructuredAgentSessionLogger()
     const refusals = createJournalOpenReadRefusals(log.logger)
@@ -226,7 +221,6 @@ describe('createJournalOpenReadRefusals', () => {
       'session-2',
       'session-1'
     ])
-    // A refusal that is not about loading the history is not this door's to log.
     refusals.refusal(
       'session-3',
       agentSessionRefusalError('agent_session_identity_required', { reason: 'recordMissing' })
@@ -235,14 +229,11 @@ describe('createJournalOpenReadRefusals', () => {
   })
 })
 
-// Only an update gets past a journal a newer Orca wrote, so it has a reason of its own: a client
-// that chose words by `journalUnavailable` said to try again, and retrying never cleared it.
 describe('a journal a newer Orca wrote', () => {
   const readOnly = () =>
     new AgentSessionJournalError('journal_read_only', 'the journal uses a newer schema')
 
   it('refuses a write with its own reason, and the words released clients print', () => {
-    // As the wire carries it (the mobile and older-client tests read this shape).
     expect(JSON.parse(JSON.stringify(journalOpenRefusal(readOnly())))).toEqual({
       code: 'agent_session_journal_unreadable',
       message: 'Chats were saved by a newer Orca. Update Orca to keep using them.',

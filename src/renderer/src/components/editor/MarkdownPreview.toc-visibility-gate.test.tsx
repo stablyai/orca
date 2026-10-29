@@ -1,11 +1,6 @@
 // @vitest-environment happy-dom
 //
-// Regression guard for the follow-up to #6695: MarkdownPreview must route its
-// Table-of-Contents build through the visibility gate, so the full-document
-// remark parse only runs while the panel is open (closed by default). This
-// renders the real MarkdownPreview and asserts the parse is skipped when closed
-// and a real outline reaches the panel when open. The gate's own semantics are
-// unit-tested in markdown-toc-visibility-gate.test.ts; this proves the wiring.
+// Use the real preview and TOC builder to verify closed panels skip parsing while open panels receive the outline.
 
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
@@ -83,14 +78,12 @@ vi.mock('./CodeBlockCopyButton', () => ({
 }))
 vi.mock('../diff-comments/DiffCommentCard', () => ({ DiffCommentCard: () => null }))
 vi.mock('./NotesSendMenu', () => ({ NotesSendMenu: () => null }))
-// Render the items the gate produced so the test can read the outline from the DOM.
 vi.mock('./MarkdownTableOfContentsPanel', () => ({
   MarkdownTableOfContentsPanel: ({ items }: { items: MarkdownTocItem[] }) => (
     <nav aria-label="toc-spy">{items.map((item) => item.title).join('|')}</nav>
   )
 }))
-// Spy on the expensive parse without changing its behavior, so the test can
-// assert it is never invoked while the panel is closed.
+// Spy without replacing the parser so closed-panel assertions prove the expensive work is skipped.
 vi.mock('./markdown-table-of-contents', async (importOriginal) => {
   const actual = await importOriginal<typeof MarkdownTableOfContentsModule>()
   buildMarkdownTableOfContentsSpy.mockImplementation(actual.buildMarkdownTableOfContents)

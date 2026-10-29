@@ -377,8 +377,7 @@ describe('codex goal lifecycle resume', () => {
         prefix === 'Goal cleared' ? prefix : `${prefix}: Keep the current scratch directory tidy.`
       )
     )
-    // A resumed goal's fresh accounting revises the row it already has: no new
-    // row, and the text a reader sees is unchanged. A cleared goal has no accounting.
+    // Fresh resume accounting revises the existing row; cleared goals carry none.
     const cleared = scenario.resumed.method === 'thread/goal/cleared'
     expect(journal.writes).toHaveLength(writesBeforeResume + (cleared ? 0 : 1))
     expect(journal.publishes()).toBe(publishesBeforeResume + (cleared ? 0 : 1))

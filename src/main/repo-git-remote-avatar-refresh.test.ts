@@ -256,10 +256,7 @@ it('keeps local metadata writes scoped when a same-id ssh:build row comes first'
   })
 })
 
-// Why this row is repaired where the `ssh:build` one above is not: a `runtime:` stamp reaches this
-// store only from a client addressing *this* host, so the files are here and `local` is the only
-// host that can answer for them (`getStoredRepoExecutionHostId`). Both rows are written, each
-// addressed by its own stamp, because that is what the store matches a write against.
+// A runtime stamp addresses files here, but store writes must still use that stamp.
 it('repairs a same-id runtime-addressed row under its own stamp', async () => {
   const runtimeRow = repo({
     executionHostId: 'runtime:env-a',

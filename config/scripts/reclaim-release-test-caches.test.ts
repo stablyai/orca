@@ -91,19 +91,24 @@ it('removes old generated trees and retains recent, future, malformed and mutabl
 
 it('does not follow cache, label, entry or shared-format symlinks', async () => {
   const options = await fixture()
-  const outside = await stamped(join(options.root, 'outside', `${commit}-format-4`), 4)
+  const outsideCache = join(options.root, 'outside-cache')
+  const outsideLabel = join(options.root, 'outside-label')
+  const outsideEntry = join(options.root, 'outside-entry', `${commit}-format-4`)
+  const outsideFormat = join(options.root, 'outside-format')
+  const sentinels = [
+    await stamped(join(outsideCache, 'v-old', `${commit}-format-4`), 4),
+    await stamped(join(outsideLabel, `${commit}-format-4`), 4),
+    await stamped(outsideEntry, 4),
+    await stamped(join(outsideFormat, commit), CHECKOUT_FORMAT)
+  ]
   const second = join(options.root, 'linked-worktree')
   await mkdir(join(second, 'tests', 'e2e'), { recursive: true })
-  await symlink(
-    join(outside, '..'),
-    join(second, 'tests', 'e2e', '.cross-version-checkouts'),
-    'junction'
-  )
+  await symlink(outsideCache, join(second, 'tests', 'e2e', '.cross-version-checkouts'), 'junction')
   options.targets.worktrees.push(second)
-  await symlink(join(outside, '..'), join(options.cache, 'linked-label'), 'junction')
+  await symlink(outsideLabel, join(options.cache, 'linked-label'), 'junction')
   await mkdir(join(options.cache, 'linked-entry'))
-  await symlink(outside, join(options.cache, 'linked-entry', `${commit}-format-4`), 'junction')
-  await symlink(join(outside, '..'), join(options.shared, 'format-4'), 'junction')
+  await symlink(outsideEntry, join(options.cache, 'linked-entry', `${commit}-format-4`), 'junction')
+  await symlink(outsideFormat, join(options.shared, `format-${CHECKOUT_FORMAT}`), 'junction')
   const result = await reclaimReleaseTestCaches({
     ...options,
     apply: true,
@@ -111,7 +116,11 @@ it('does not follow cache, label, entry or shared-format symlinks', async () => 
     minAgeDays: 0
   })
   expect(result.entries).toBe(0)
-  expect(await readFile(join(outside, 'source.ts'), 'utf8')).toContain('historical')
+  for (const sentinel of sentinels) {
+    expect(await readFile(join(sentinel, 'source.ts'), 'utf8')).toBe(
+      'export const historical = true\n'
+    )
+  }
 })
 
 it('skips publication locks and a shared source copy lease', async () => {

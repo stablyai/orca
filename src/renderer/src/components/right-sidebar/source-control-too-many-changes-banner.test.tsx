@@ -62,7 +62,7 @@ describe('TooManyChangesBanner', () => {
   })
 
   it('offers a whole-worktree Stage All while the listing is capped', () => {
-    // Why: once the capped prefix is all staged, no section or primary Stage All can reach the rest.
+    // Once the capped prefix is staged, existing section/primary actions cannot reach hidden changes.
     const onStageAllChanges = vi.fn().mockResolvedValue(undefined)
     const props = {
       unresolvedConflictCount: 0,

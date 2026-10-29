@@ -10,6 +10,7 @@ export type HeadlessServerBrowserTabSource = {
   browserPageId: string
   title?: string | null
   url?: string | null
+  profileId?: string | null
   loadError?: BrowserLoadError | null
   certificateFailure?: BrowserCertificateFailure | null
   active?: boolean
@@ -25,6 +26,7 @@ export function projectHeadlessServerBrowserTab(
     title: tab.title || tab.url || 'Browser',
     browserWorkspaceId: tab.browserPageId,
     browserPageId: tab.browserPageId,
+    browserProfileId: tab.profileId ?? undefined,
     url: tab.url || 'about:blank',
     loading: false,
     canGoBack: false,

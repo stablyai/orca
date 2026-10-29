@@ -2,7 +2,6 @@ import type { AiVaultAgent } from '../../shared/ai-vault-types'
 import { isCollapsibleContentHash } from './session-search-content-hash'
 import type { SessionSearchSort } from './session-search-engine-types'
 
-// Subtracted per session: `0.02 · ln(1 + messages)`; slightly positive on both eval sets.
 const LENGTH_PRIOR = 0.02
 
 export type SessionRow = {
@@ -21,7 +20,6 @@ export type SessionRow = {
   content_hash_count: number
 }
 
-/** The one message that stands for a session: its best-scoring match. */
 export type MessageRow = {
   rowid: number
   score: number
@@ -38,15 +36,7 @@ export type RankedSession = {
   duplicateCount: number
 }
 
-/**
- * Everything between "these sessions matched" and "this is the ranked list":
- * the length prior, fork folding and the caller's order. Retrieval stays in SQL
- * and nothing here touches the database.
- *
- * The whole list is returned, not a page: a cursor indexes into it, and slicing
- * here would make page two a different ranking from page one. The engine cuts
- * the page and only then pays for a snippet.
- */
+/** Rank and fold forks across the full candidate list before the engine slices cursor pages. */
 export function rankSessionHits(
   sessions: readonly SessionRow[],
   matches: ReadonlyMap<number, MessageRow>,
@@ -63,9 +53,7 @@ export function rankSessionHits(
       }
     })
   )
-  // Why a total order and not just the key: a cursor is an offset into this
-  // list, so two entries that tie must not be free to swap between pages.
-  // Newer first among equal scores, so relevance never hands ties to whichever id is lower.
+  // Newer sessions win score ties; row ids make cursor ordering deterministic.
   scored.sort(
     (left, right) =>
       (sort === 'newest' ? 0 : right.score - left.score) ||
@@ -75,11 +63,7 @@ export function rankSessionHits(
   return scored
 }
 
-/**
- * Folds forked copies of one conversation into a single entry: same opening
- * prefix, newest `updated_at` wins, the rest become `duplicateCount`. Done here
- * and not at write time so index rows stay per file (cursors and deletes).
- */
+/** Fold matching prefixes at query time so per-file indexing cursors and deletion remain independent. */
 function collapseForks(scored: RankedSession[]): RankedSession[] {
   const groups = new Map<string, RankedSession[]>()
   for (const entry of scored) {

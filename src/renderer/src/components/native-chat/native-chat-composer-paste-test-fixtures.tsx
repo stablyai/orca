@@ -6,7 +6,6 @@ import { useNativeChatComposerPaste } from './use-native-chat-composer-paste'
 
 type HookApi = ReturnType<typeof useNativeChatComposerPaste>
 
-/** Mirrors the composer's attachment list so tests can assert what the user sees. */
 type FakeChip = { id: string; path: string; previewUrl?: string; pending: boolean }
 
 export function createChipStore(): {

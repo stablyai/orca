@@ -1,7 +1,6 @@
 import type * as React from 'react'
 
-/** A dismissed menu stays mounted while it animates out; pointer handlers on its items must not
- *  pull focus back from what the chosen item opened. Cancelling skips Radix's own focus handling. */
+/** Items remain mounted during dismissal animation; cancel Radix focus handling so they cannot steal focus from the opened surface. */
 export function keepFocusWhileMenuCloses(
   handler: React.PointerEventHandler<HTMLDivElement> | undefined
 ): React.PointerEventHandler<HTMLDivElement> {

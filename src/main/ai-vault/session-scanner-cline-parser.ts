@@ -50,7 +50,6 @@ export async function parseClineSessionFile(
   )
 }
 
-/** The session's cwd from its manifest alone; null when the manifest lists no session. */
 export function clineManifestCwd(metadataContent: string): string | null {
   const metadata = parseJsonRecord(metadataContent)
   return metadata ? clineMetadataCwd(metadata) : null

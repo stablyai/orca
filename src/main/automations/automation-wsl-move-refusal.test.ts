@@ -1,7 +1,3 @@
-/**
- * A move in flight skips each run with a reason that promises a resume; once the WSL host owns the
- * project, the retained local copy goes quiet instead of writing a skip every tick.
- */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdtempSync } from 'node:fs'
 import { join } from 'node:path'
@@ -10,13 +6,21 @@ import type { Repo } from '../../shared/repo-types'
 import type { Automation } from '../../shared/automations-types'
 import { removeTreeSync } from '../../shared/windows-transient-lock-removal'
 import type { Store } from '../persistence'
-import { closeTestStores, createStore, testState } from '../persistence-test-harness'
+import { closeTestStores, createStore, testState } from '../persistence/persistence-test-harness'
 import { wslMoveCutoverFixture as cutover } from '../persistence/__fixtures__/wsl-mover/wsl-move-cutover-fixture'
 import { seedWslMoveCutover } from '../persistence/__fixtures__/wsl-mover/wsl-move-journal-seeding'
 import {
   loadWslMoveFence,
   resetWslMoveFenceForTests
 } from '../persistence/moving-wsl-projects/wsl-move-scope-guard'
+import { runWslMoveDesktopRewritePass } from '../persistence/moving-wsl-projects/wsl-move-desktop-rewrite'
+import { resetWslMoveDesktopRewriteStoresForTests } from '../persistence/moving-wsl-projects/wsl-move-desktop-rewrite-stores'
+import { registerWslMoveMainRewriteStores } from '../persistence/moving-wsl-projects/wsl-move-main-rewrite-stores'
+import { registerWslMoveOrchestrationHistoryStore } from '../persistence/moving-wsl-projects/wsl-move-orchestration-history-rewrite'
+import { orchestrationDbFile } from '../runtime/orchestration/db/orchestration-db-file'
+import { WSL_HOSTS_INTERNAL_GATE_ENV } from '../../shared/wsl-host-internal-gate'
+import { OrchestrationDb } from '../runtime/orchestration/db'
+import Database from '../sqlite/sync-database'
 import { AutomationService } from './service'
 import { WSL_MOVE_IN_PROGRESS, WSL_MOVE_OWNED_BY_HOST } from './dispatch-refusal'
 import type * as PrecheckRunner from './precheck-runner'
@@ -71,7 +75,6 @@ function attachedService(store: Store, publish = vi.fn()): AutomationService {
   return service
 }
 
-/** One scheduler pass. `nextRunAt` advancing is the signal that it finished. */
 async function evaluateAt(
   store: Store,
   service: AutomationService,
@@ -82,7 +85,7 @@ async function evaluateAt(
     store.listAutomations().find((entry) => entry.id === automationId)?.nextRunAt
   const before = nextRunAt()
   vi.setSystemTime(new Date(when))
-  // Re-poked each try: the previous pass may still hold the re-entrancy guard while it flushes.
+  // Retry while the previous scheduler pass finishes flushing.
   await vi.waitFor(() => {
     service.setRendererReady()
     expect(nextRunAt()).toBeGreaterThan(before ?? 0)
@@ -149,6 +152,45 @@ describe('scheduled automations under a WSL move', () => {
     expect(WSL_MOVE_OWNED_BY_HOST).toBe(
       "This automation's project now runs on its WSL host, which runs this automation there. Orca no longer runs this local copy."
     )
+  })
+
+  it('keeps the local copy unchanged through the desktop rewrite, so it neither runs nor loses its next run', async () => {
+    vi.setSystemTime(new Date('2026-05-13T08:00:00'))
+    vi.stubEnv(WSL_HOSTS_INTERNAL_GATE_ENV, '1')
+    const store = await createStore()
+    const automation = seedAutomation(store)
+    seedWslMoveCutover(
+      fenceDir,
+      cutover('move-1', 'destination-committed', {}, { repoIds: ['r1'] })
+    )
+    const databasePath = orchestrationDbFile(fenceDir)
+    // A dispatch in the moved repo, so the orchestration store has real work to do.
+    new OrchestrationDb(databasePath).close()
+    const seed = new Database(databasePath)
+    seed
+      .prepare(`INSERT INTO worker_dispatches (dispatch_id, state, worktree_id) VALUES (?, ?, ?)`)
+      .run('d-1', 'succeeded', 'r1::\\\\wsl.localhost\\Ubuntu\\home\\dev\\r1')
+    seed.close()
+    registerWslMoveMainRewriteStores(store)
+    registerWslMoveOrchestrationHistoryStore(databasePath)
+    try {
+      await runWslMoveDesktopRewritePass({ userDataPath: fenceDir })
+      const read = new Database(databasePath)
+      expect(read.prepare(`SELECT worktree_id FROM worker_dispatches`).get()).toEqual({
+        worktree_id: 'r1::/home/dev/r1'
+      })
+      read.close()
+      expect(store.listAutomations()).toEqual([automation])
+      const service = attachedService(store)
+
+      await evaluateAt(store, service, automation.id, '2026-05-13T09:01:00')
+
+      expect(store.listAutomationRuns(automation.id)).toEqual([])
+      expect(store.listAutomations()[0]?.nextRunAt).toBe(new Date('2026-05-14T09:00:00').getTime())
+    } finally {
+      resetWslMoveDesktopRewriteStoresForTests()
+      vi.unstubAllEnvs()
+    }
   })
 
   it('skips, not fails, a headless run whose move starts during the precheck', async () => {

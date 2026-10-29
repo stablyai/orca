@@ -17,7 +17,7 @@ import { toastWorkspaceSleepOutcome } from './sleep-worktree-flow'
 type FollowedSleep = {
   settle: (stop: HostTerminalStop) => void
   stopWatchingReopen: () => void
-  teardown: Promise<void>
+  teardown: Promise<Error | null>
   /** The selection to put back if the sleep fails and the user picked nothing meanwhile. */
   selectionBeforeSleep: WorkspaceSelection | null
 }
@@ -38,19 +38,17 @@ function watchReopenDuringSleep(worktreeId: string): () => void {
   return unsubscribe
 }
 
-/**
- * The window's side of a sleep main runs, whoever asked: on `started` it hides the workspace and
- * guards its panes before any terminal exits (the notice arrives ahead of every exit), and on
- * `ended` it commits or rolls back those panes and wakes the workspace if the sleep failed.
- */
-export function followWorkspaceSleep(notice: WorkspaceSleepNotice): void {
+/** On main’s started notice, guard panes before exits; on ended, commit teardown or restore failed sleeps. */
+export function followWorkspaceSleep(
+  notice: WorkspaceSleepNotice,
+  options: { keepBrowserTabs?: boolean; reportTeardownFailure?: boolean } = {}
+): Promise<void> | void {
   const { worktreeId } = notice
   if (notice.phase === 'failed') {
     toastWorkspaceSleepOutcome(notice.outcome)
     return
   }
   if (notice.phase === 'started') {
-    // A newer sleep of the same workspace replaces an unfinished one.
     const previous = followed.get(worktreeId)
     previous?.stopWatchingReopen()
     previous?.settle({ failed: true, stoppedPtyIds: [] })
@@ -64,7 +62,9 @@ export function followWorkspaceSleep(notice: WorkspaceSleepNotice): void {
       state.setActiveWorktree(null)
       restoreSidebarPosition()
     }
-    state.shutdownWorktreeBrowsers(worktreeId)
+    if (!options.keepBrowserTabs) {
+      state.shutdownWorktreeBrowsers(worktreeId)
+    }
     let settle!: (stop: HostTerminalStop) => void
     const hostStop = new Promise<HostTerminalStop>((resolve) => (settle = resolve))
     const teardown = withWorktreeSleepTeardown(worktreeId, () =>
@@ -72,9 +72,13 @@ export function followWorkspaceSleep(notice: WorkspaceSleepNotice): void {
         keepIdentifiers: true,
         hostStop
       })
-    ).catch((error: unknown) => {
-      console.warn('[sleep-worktree] panes kept awake', { worktreeId, error })
-    })
+    ).then(
+      () => null,
+      (error: unknown) => {
+        console.warn('[sleep-worktree] panes kept awake', { worktreeId, error })
+        return error instanceof Error ? error : new Error(String(error))
+      }
+    )
     followed.set(worktreeId, {
       settle,
       teardown,
@@ -91,7 +95,7 @@ export function followWorkspaceSleep(notice: WorkspaceSleepNotice): void {
       ? { failed: false, records: notice.records }
       : { failed: true, stoppedPtyIds: notice.stoppedPtyIds ?? [] }
   )
-  void (entry?.teardown ?? Promise.resolve()).then(() => {
+  return (entry?.teardown ?? Promise.resolve(null)).then((error) => {
     const state = useAppStore.getState()
     // A failed sleep leaves the workspace awake and retryable; one the user reopened is theirs.
     if (!notice.slept || state.activeWorktreeId === worktreeId) {
@@ -99,6 +103,9 @@ export function followWorkspaceSleep(notice: WorkspaceSleepNotice): void {
     }
     if (!notice.slept && entry?.selectionBeforeSleep && state.activeWorktreeId === null) {
       restoreWorkspaceSelection(state, entry.selectionBeforeSleep)
+    }
+    if (error && options.reportTeardownFailure) {
+      throw error
     }
   })
 }

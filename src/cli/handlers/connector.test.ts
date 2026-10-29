@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { RuntimeClientError } from '../runtime-client'
-import { callConnector, formatConnectorStart, formatDelivery } from './connector'
+import {
+  callConnector,
+  formatConnectorStart,
+  formatDelivery,
+  formatPendingPrompt
+} from './connector'
 
 function refusingClient(code: string) {
   return {
@@ -40,5 +45,24 @@ describe('orca connector', () => {
     expect(formatDelivery({ outcome: 'refused', reason: 'agent_asleep_in_window' })).toBe(
       'refused: agent_asleep_in_window'
     )
+  })
+
+  it('prints a prompt with its id and options, and an unknown kind as one to answer in Orca', () => {
+    expect(
+      formatPendingPrompt({
+        kind: 'approval',
+        promptId: 'p_1',
+        tool: 'Bash',
+        summary: 'ls',
+        options: [
+          { id: 'allow_once', label: 'Allow once' },
+          { id: 'reject_once', label: 'Reject' }
+        ]
+      })
+    ).toBe('approval Bash: ls\n  prompt id: p_1\n  allow_once: Allow once\n  reject_once: Reject')
+    expect(formatPendingPrompt({ kind: 'free-text', promptId: 'p_2' })).toBe(
+      'unsupported (answer in Orca)\n  prompt id: p_2'
+    )
+    expect(formatPendingPrompt(null)).toBe('no pending prompt')
   })
 })

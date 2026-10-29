@@ -32,11 +32,10 @@ export async function downloadRemoteFile(
               connectionId: connectionIdOrRuntimeContext
             })
         : await downloadRuntimeFile(connectionIdOrRuntimeContext, node.path, node.name)
-    // Why: Suppress toasts when the user cancels the native save dialog per design.
     if (result.canceled) {
       return
     }
-    // Why: POSIX permits backslashes in saved names; only Windows treats them as separators.
+    // POSIX allows backslashes in filenames; only Windows treats them as separators.
     const savedName = getLocalDownloadName(
       result.destinationPath,
       window.api.platform.get().platform

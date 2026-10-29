@@ -1,7 +1,5 @@
 import './rpc/unused-default-rpc-methods.test-fixture'
-// A dispatched chat starting helper workers on the Run it works for, on the coordinator-mail rig:
-// the helpers report to it, its own mailbox never moves, and whatever it never handled goes back
-// to the Run's coordinator once it settles.
+// Dispatched chats retain their mailbox while starting nested helpers; unhandled mail returns to the Run coordinator on settlement.
 
 import { describe, expect, it, vi } from 'vitest'
 import { formatOrcaSessionAddress } from '../../shared/orca-session-address'

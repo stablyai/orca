@@ -5,33 +5,14 @@ import { identifierShadowText } from './session-search-identifier-split'
 
 const CHUNK_TARGET_CHARS = 8000
 
-/**
- * How much of one tool output is indexed. Its head: a command, its arguments and
- * the first lines of what it printed are what a user searches for, while the
- * tail is the padding that makes these messages large in the first place.
- *
- * Tool output is 80-97 % of a transcript's bytes, and a single one can be a
- * quarter of a megabyte (the reader's own per-message bound). Without this the
- * index, the in-memory buffer a read holds and the transaction it commits are
- * all sized by how much a tool printed rather than by how much is worth
- * searching. 3 KB was the accuracy/size sweet spot in the original design
- * measurement. User and assistant text is never capped: it is the conversation,
- * and it is small.
- */
+// Cap tool-output prefixes to keep logs from dominating index size; retain all conversation text.
 const TOOL_ROW_CHARS = 3072
 
-// Keep unicode61's tokenchars intact, including before an available space.
-// SQLite ext/fts5/fts5_unicode2.c: sqlite3Fts5UnicodeIsdiacritic, with remove_diacritics=1.
+// Folded diacritics remain inside tokens; see sqlite3Fts5UnicodeIsdiacritic in fts5_unicode2.c.
 const FOLDED_DIACRITIC =
   /[\u0300-\u0304\u0306-\u030c\u030f\u0311\u031b\u0323-\u0328\u032d-\u032e\u0330-\u0331]/
 const TOKEN_BOUNDARY = /[^\p{L}\p{N}\p{Co}_.\-/+\uD800-\uDFFF]/u
 
-/**
- * Index just past the last token boundary in `[floor, end)`, or -1 when the
- * window holds none. Not only a newline: a wrapped paragraph, a CJK transcript
- * separated by ideographic spaces and a minified log all chunk on a boundary a
- * tokenizer would have picked anyway.
- */
 function lastTokenBoundaryEnd(text: string, floor: number, end: number): number {
   for (let at = end - 1; at >= floor; at--) {
     if (TOKEN_BOUNDARY.test(text[at]!) && !FOLDED_DIACRITIC.test(text[at]!)) {
@@ -41,12 +22,7 @@ function lastTokenBoundaryEnd(text: string, floor: number, end: number): number 
   return -1
 }
 
-/**
- * Splits an oversized message into rows of at most `CHUNK_TARGET_CHARS`, cutting
- * on a token boundary so no token is torn in half and every word stays
- * searchable. A phrase that straddles two chunks is not matched: chunks are
- * separate FTS rows and FTS5 cannot span them.
- */
+/** Prefer token boundaries; phrases spanning separate FTS rows cannot match. */
 function* textChunks(text: string): Generator<string> {
   if (text.length <= CHUNK_TARGET_CHARS) {
     yield text
@@ -56,9 +32,7 @@ function* textChunks(text: string): Generator<string> {
   while (start < text.length) {
     let end = Math.min(text.length, start + CHUNK_TARGET_CHARS)
     if (end < text.length) {
-      // Only the second half of the window: backing up further would trade a
-      // torn token for chunks half the size. No boundary at all in 4,000
-      // characters is not a word, so the target itself is the honest cut.
+      // Search only the latter half to avoid tiny chunks; hard-cut if no boundary exists there.
       const split = lastTokenBoundaryEnd(text, start + CHUNK_TARGET_CHARS / 2, end)
       if (split > start) {
         end = split
@@ -69,11 +43,7 @@ function* textChunks(text: string): Generator<string> {
   }
 }
 
-/**
- * The row policy for one message: a `tool` message becomes one capped row, and
- * anything else becomes N chunks, because FTS5 ranks a short row far better
- * than a huge one.
- */
+/** Chunk conversation text for FTS ranking; tool output gets one capped row. */
 export function* searchMessageRows(
   messages: Iterable<TranscriptMessage>
 ): Generator<TranscriptMessage> {
@@ -93,12 +63,7 @@ export function* searchMessageRows(
   }
 }
 
-/**
- * Writes one row into `messages` and `messages_fts` in the caller's
- * transaction, so a message is never present in one and absent from the other.
- * A conversation-scoped query filters the columns rather than reading a second
- * table (see the schema).
- */
+/** Insert metadata and FTS content together in the caller’s transaction. */
 export function insertSearchMessage(
   db: SyncDatabase,
   sessionId: number,
@@ -116,13 +81,7 @@ export function insertSearchMessage(
   ).run(id, user, assistant, tool, identifierShadowText(text))
 }
 
-/**
- * Deletes up to `limit` of a session's rows from `messages` and `messages_fts`,
- * in the caller's transaction, and reports how many went. Bounded
- * because a retention sweep must not hold one transaction over a whole
- * session; a replace passes no limit, since its rows and their replacements
- * have to land together.
- */
+/** Delete matching metadata and FTS rows in the caller’s transaction; limit retention work per step. */
 export function deleteSearchMessages(db: SyncDatabase, sessionId: number, limit = -1): number {
   const ids = db
     .prepare('SELECT id FROM messages WHERE session_row_id = ? LIMIT ?')

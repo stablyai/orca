@@ -1,6 +1,7 @@
-import { useCallback } from 'react'
+import { useCallback, useContext } from 'react'
 import type { OpenFile } from '@/store/slices/editor'
-import { attemptEditorFileSave } from './editor-file-save-attempt'
+import { ConfirmationDialogContext } from '@/components/confirmation-dialog-context'
+import { attemptEditorFileSave, confirmEditorUtf8Conversion } from './editor-file-save-attempt'
 import { getEditorSaveTargetFile } from './editor-save-target'
 
 type UseEditorPanelSaveParams = {
@@ -14,6 +15,8 @@ export function useEditorPanelSave({
   openFiles,
   requestRenameForFile
 }: UseEditorPanelSaveParams) {
+  // Why the bare context: panels rendered outside the provider (tests, isolated surfaces) just refuse.
+  const confirm = useContext(ConfirmationDialogContext)
   const handleSaveForFile = useCallback(
     async (file: OpenFile | null, content: string): Promise<boolean> => {
       if (!file) {
@@ -27,9 +30,12 @@ export function useEditorPanelSave({
         requestRenameForFile(saveTargetFile.id)
         return false
       }
-      return attemptEditorFileSave({ fileId: saveTargetFile.id, fallbackContent: content })
+      return attemptEditorFileSave(
+        { fileId: saveTargetFile.id, fallbackContent: content },
+        confirm ? () => confirmEditorUtf8Conversion(confirm, saveTargetFile.filePath) : undefined
+      )
     },
-    [openFiles, requestRenameForFile]
+    [confirm, openFiles, requestRenameForFile]
   )
   const handleSave = useCallback(
     (content: string): Promise<boolean> => handleSaveForFile(activeFile, content),

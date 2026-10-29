@@ -65,7 +65,10 @@ describe('statUserOpenedPath', () => {
       escapesWorktree: false
     })
     expect(mocks.statRuntimePath).toHaveBeenCalledTimes(1)
-    expect(mocks.statRuntimePath).toHaveBeenCalledWith(project, '/repo/src/a.ts')
+    // Opening a path is a user act, so its stat may start a stopped WSL distro.
+    expect(mocks.statRuntimePath).toHaveBeenCalledWith(project, '/repo/src/a.ts', undefined, {
+      wakeWslDistro: true
+    })
   })
 
   it.each([false, true])(
@@ -77,9 +80,12 @@ describe('statUserOpenedPath', () => {
         isDirectory,
         escapesWorktree: true
       })
-      expect(mocks.statRuntimePath).toHaveBeenLastCalledWith(project, '/repo/link', {
-        kind: 'user-file'
-      })
+      expect(mocks.statRuntimePath).toHaveBeenLastCalledWith(
+        project,
+        '/repo/link',
+        { kind: 'user-file' },
+        { wakeWslDistro: true }
+      )
     }
   )
 
@@ -113,8 +119,11 @@ describe('statUserOpenedPath', () => {
       isDirectory: false,
       escapesWorktree: false
     })
-    expect(mocks.statRuntimePath).toHaveBeenCalledExactlyOnceWith(context, filePath, {
-      kind: 'user-file'
-    })
+    expect(mocks.statRuntimePath).toHaveBeenCalledExactlyOnceWith(
+      context,
+      filePath,
+      { kind: 'user-file' },
+      { wakeWslDistro: true }
+    )
   })
 })

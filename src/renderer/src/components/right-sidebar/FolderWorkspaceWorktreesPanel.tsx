@@ -119,13 +119,14 @@ export default function FolderWorkspaceWorktreesPanel(): React.JSX.Element {
         <div className="mt-1 text-xs text-muted-foreground">
           {childWorktrees.length === 1
             ? translate(
-                'auto.components.rightSidebar.FolderWorkspaceWorktreesPanel.countOne',
-                '1 attached worktree'
+                'auto.components.rightSidebar.FolderWorkspaceWorktreesPanel.attachedCount_one',
+                '{{count}} attached worktree',
+                { count: childWorktrees.length }
               )
             : translate(
-                'auto.components.rightSidebar.FolderWorkspaceWorktreesPanel.countMany',
-                '{{value0}} attached worktrees',
-                { value0: childWorktrees.length }
+                'auto.components.rightSidebar.FolderWorkspaceWorktreesPanel.attachedCount_other',
+                '{{count}} attached worktrees',
+                { count: childWorktrees.length }
               )}
         </div>
       </div>

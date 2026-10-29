@@ -27,8 +27,7 @@ function FadeIn({ delay, children }: { delay: number; children: ReactNode }): Re
   return <Animated.View style={{ opacity }}>{children}</Animated.View>
 }
 
-/** The top of a chat with older history. It loads on its own as the reader nears it, so this is a
- *  quiet spinner, a retry only after a failure, and nothing once history ends. */
+// Delay fast-page spinners and require explicit retry after failure; near-top scrolling must not loop retries.
 export function mobileNativeChatListHeader(
   hasMore: boolean | undefined,
   olderPages: OlderPagePhase | undefined,

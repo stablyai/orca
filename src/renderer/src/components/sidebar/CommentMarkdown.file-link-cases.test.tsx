@@ -5,7 +5,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { routeNativeChatHref } from '../../../../shared/native-chat-href-routing'
 import CommentMarkdown from './CommentMarkdown'
 
-// These fixtures exercise markdown without rendering diagrams.
 const boundaryMocks = vi.hoisted(() => ({
   mermaid: vi.fn(() => {
     throw new Error('These fixtures must not render Mermaid diagrams')

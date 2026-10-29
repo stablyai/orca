@@ -1,7 +1,5 @@
-// Inside a row of a known kind, what a newer build wrote is never damage. A body of a kind this
-// build does not know (or a plan subject of one) is kept and the chat stays writable; a mutation or
-// sent message of a newer kind fails the load as a newer Orca's chat with every row kept as it was,
-// even beside damage. Anything else that fails is damage: the chat fails to load, every row kept.
+// Unknown body kinds remain writable; unsupported mutations/sends require a newer reader.
+// Preserve all stored rows on either unsupported content or damage.
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -59,8 +57,7 @@ export function registerJournalUnknownContentTests(): void {
     )
   }
 
-  /** An anchor, two items, then `rows` as a newer build (or damage) wrote them, then one more item
-   *  of this build's: closed, so the next open replays all of it. */
+  /** Close after injecting rows so the next open replays them. */
   async function journalWith(rows: (epoch: string) => Record<string, unknown>[]) {
     const first = await open()
     await first.appendItem(item(0), { kind: 'status', text: 'one' }, SCOPE)
@@ -113,15 +110,13 @@ export function registerJournalUnknownContentTests(): void {
     subject: { kind: 'plan', text: 'Step one' }
   }
 
-  /** Refused as a newer Orca's chat on every open, with every row left as it was. */
   async function expectNewerAndKept(written: { seq: number; rowJson: string }[]) {
     await expect(open()).rejects.toMatchObject(SAVED_BY_NEWER_ORCA)
     await expect(open()).rejects.toMatchObject(SAVED_BY_NEWER_ORCA)
     expect(stored()).toEqual(written)
   }
 
-  /** Opens writable, keeps the newer item in the snapshot, takes a write, and leaves every earlier
-   *  row byte-identical. */
+  /** Verify writable downgrade compatibility without rewriting stored rows. */
   async function expectWritableAndKept(
     written: { seq: number; rowJson: string }[],
     itemId: string

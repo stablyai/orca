@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { MAX_JIRA_SAVED_FILTER_JQL_LENGTH } from '../jira-saved-filters'
+import { MAX_JIRA_SAVED_FILTER_JQL_LENGTH } from './jira-saved-filters'
 import { getUtf8ByteLength, isUtf8ByteLengthWithinLimit } from '../utf8-byte-limits'
 
 export const MAX_JIRA_FAVOURITE_FILTERS = 100

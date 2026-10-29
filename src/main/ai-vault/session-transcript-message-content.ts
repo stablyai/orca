@@ -8,15 +8,13 @@ import { sliceAtCodeUnitLimit } from './session-scanner-text-normalization'
 import type { AiVaultSessionPreviewMessage } from '../../shared/ai-vault-types'
 import type { TranscriptMessage, TranscriptMessageRole } from './session-transcript-consumers'
 
-// Safety bound only: a consumer applies its own caps. Matches the first-prompt
-// copy path's ceiling so one pathological paste cannot dominate a scan.
+// Bound pathological messages; consumers may impose tighter limits.
 const TRANSCRIPT_MESSAGE_TEXT_LIMIT = 256 * 1024
 const TOOL_ARGUMENT_SCAN_LIMIT = 2000
 
 type PreviewRole = AiVaultSessionPreviewMessage['role']
 type TranscriptText = { text: string | null; textTruncated: boolean }
 
-/** Only conversational roles reach consumers; system/unknown turns are noise. */
 export function transcriptMessageRole(role: PreviewRole): TranscriptMessageRole | null {
   return role === 'user' || role === 'assistant' || role === 'tool' ? role : null
 }

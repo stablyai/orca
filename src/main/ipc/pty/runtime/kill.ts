@@ -24,9 +24,7 @@ import {
 // Bounds the wait for an observed exit to reach the runtime record when the caller set no deadline.
 const OBSERVED_EXIT_RECORD_WAIT_MS = 10_000
 
-/** Tells the runtime and renderer a PTY ended that no provider exit reported. Without proof its
- *  liveness reads `unverifiable`, never `exited`. A `null` incarnation (a proof
- *  `finishPtyShutdown` refused) publishes nothing: the id belongs to a respawn now. */
+/** Unproved synthetic exit stays unverifiable; rejected incarnation proof publishes nothing for a same-ID respawn. */
 export function publishSyntheticExit(
   deps: Pick<PtyRuntimeControllerDeps, 'rememberSyntheticKillExit' | 'sendPtyExitToRenderer'> & {
     runtime?: Pick<OrcaRuntimeService, 'onPtyExit' | 'markPtyLivenessUnverifiable'>
@@ -83,8 +81,7 @@ export function killPtyFromRuntimeController(
   if (stopLegacyRelayBridgedPty(ptyId, connectionId)) {
     return true
   }
-  // Why: close runtime tails without clearing provider ownership, so
-  // a retry can still target a PTY that survived the failed shutdown.
+  // Close runtime tails but retain provider ownership so failed shutdown can be retried.
   const reportStopFailure = (err: unknown, incarnationId: string | undefined): void => {
     const msg = errorMessage(err)
     console.warn(`[pty] Failed to stop PTY ${ptyId}: ${msg}`)
@@ -99,9 +96,7 @@ export function killPtyFromRuntimeController(
       provider = getProviderForPty(ptyId)
     } catch {
       if (connectionId) {
-        // Why: runtime/CLI close can target a detached SSH PTY after its
-        // provider was unregistered. Tombstone the lease so reconnect does
-        // not revive a terminal the user explicitly closed.
+        // Detached SSH close must tombstone the lease so reconnect cannot revive a user-closed pane.
         const unproven = PtyRetirementWithoutProof.because(SSH_PROVIDER_UNREGISTERED_REASON)
         const incarnationId = finishPtyShutdown(ptyId, connectionId, store, unproven)
         publishSyntheticExit(deps, ptyId, -1, incarnationId, unproven)
@@ -109,7 +104,7 @@ export function killPtyFromRuntimeController(
       return false
     }
     const stoppingIncarnationId = ptyIncarnationById.get(ptyId)
-    // Why: controller is synchronous, but keep ownership until async shutdown proves whether the provider emitted an exit.
+    // The synchronous controller retains ownership until asynchronous shutdown settles.
     void shutdownProviderAndDetectExit(provider, ptyId, { immediate: false })
       .then((providerExitObserved) => {
         const retired = retiredRejectedPtyIds.has(ptyId)
@@ -139,7 +134,7 @@ export function killPtyFromRuntimeController(
   const killedIncarnationId = ptyIncarnationById.get(ptyId)
   const startupPromise = getLocalPtyProviderStartupPromise(resolvePtyExecutionHost(ptyId))
   if (startupPromise) {
-    // Why: select the provider after the daemon swap; the fallback first can report success while orphaning a daemon PTY.
+    // Select after daemon handoff; fallback shutdown can falsely succeed while orphaning a daemon PTY.
     void startupPromise
       .then(killWithCurrentProvider)
       .catch((err) => reportStopFailure(err, killedIncarnationId))
@@ -171,9 +166,7 @@ export function retireRejectedPtyFromRuntimeController(
     publishSyntheticExit(deps, ptyId, -1, incarnationId, unproven)
     return
   }
-  // Why: a completed stop already cleared provider state, tombstoned the lease and told the
-  // renderer; repeating that double-fires the exit IPC. The runtime still needs code 0 so an
-  // SSH pane retires for good instead of staying preserved by the stop's negative exit.
+  // Avoid duplicate renderer exits, but finalize runtime exit so a permanently closed SSH pane is not preserved.
   if (!ptyOwnership.has(ptyId)) {
     runtime?.onPtyExit(ptyId, 0, incarnationId)
     return
@@ -183,15 +176,7 @@ export function retireRejectedPtyFromRuntimeController(
   publishSyntheticExit(deps, ptyId, 0, finishPtyShutdown(ptyId, connectionId, store, proof), proof)
 }
 
-/**
- * Deliberately records no undelivered-stop intent, unlike `killPtyFromRuntimeController`, except
- * the legacy relay bridge's for a non-reversible stop (the tab is given up for good).
- *
- * Only a caller that gives the PTY up for good may leave a replayable kill order behind. This one
- * hands its failures back instead: worktree sleep marks these stops reversible and leaves the pane
- * live and usable when one does not land, so a durable order recorded here would come back on a
- * later handshake and destroy a terminal the user had gone back to using.
- */
+/** Reversible stops must not leave durable kill orders that could destroy a later-woken pane; return failure for retry. */
 export async function stopAndWaitPtyFromRuntimeController(
   deps: PtyRuntimeControllerDeps,
   ptyId: string,
@@ -245,20 +230,15 @@ async function stopAndWaitPty(
     }
     return stopped !== null
   }
-  // Why: destructive teardown threads one absolute deadline through every await
-  // below; each RPC leaf converts it to the remaining time when it issues, so
-  // sequential RPCs share the budget and cannot overrun the sweep deadline.
+  // Share one absolute teardown deadline across sequential awaits and RPC leaves.
   const deadlineMs = opts?.deadlineMs
   const startupPromise = getLocalPtyProviderStartupPromise(resolvePtyExecutionHost(ptyId))
   if (startupPromise) {
-    // Why: exact-stop must resolve the provider after daemon startup just
-    // like renderer kills, or the fallback can falsely confirm teardown.
+    // Resolve the provider only after startup; fallback cannot prove daemon teardown.
     if (deadlineMs !== undefined) {
-      // Why: bound the cold-start await by the teardown deadline instead of the
-      // 60s startup fail-open cap; fail closed so the sweep records the miss.
+      // Bound startup by teardown budget rather than the longer fail-open startup cap.
       const won = await Promise.race([
-        // Why: () => false on rejection both fails closed on a startup error and
-        // keeps the losing branch's rejection from surfacing as unhandled.
+        // Rejected startup fails closed and must not leave an unhandled losing promise.
         startupPromise.then(
           () => true,
           () => false
@@ -277,8 +257,7 @@ async function stopAndWaitPty(
     provider = getProviderForPty(ptyId)
   } catch {
     if (connectionId) {
-      // Why: an absent SSH provider means there is no live target left to
-      // await, but the relay lease must still be tombstoned.
+      // Missing SSH provider cannot confirm remote exit; retain its tombstoned lease.
       const unproven = PtyRetirementWithoutProof.because(SSH_PROVIDER_UNREGISTERED_REASON)
       const incarnationId = finishPtyShutdown(ptyId, connectionId, store, unproven)
       publishSyntheticExit(deps, ptyId, -1, incarnationId, unproven)
@@ -314,12 +293,10 @@ async function stopAndWaitPty(
   )
   const incarnationId = finishPtyShutdown(ptyId, connectionId, store, proof)
   if (!providerExitObserved) {
-    // The owning provider's fresh inventory observed absence, so this is a
-    // death certificate even when its exit event was missed.
+    // Fresh owning-provider absence proves exit even if its event was missed.
     publishSyntheticExit(deps, ptyId, 0, incarnationId, proof)
   } else {
-    // Why: an SSH exit frame reaches the runtime only after its output intake drains, so callers
-    // reading the verdict right after this stop would otherwise see a still-connected PTY.
+    // SSH exit records follow output drain; wait before returning a verdict consumers can read.
     const waitUntil = Math.min(deadlineMs ?? Infinity, Date.now() + OBSERVED_EXIT_RECORD_WAIT_MS)
     await runtime?.waitForPtyExitRecord?.(ptyId, waitUntil - Date.now())
   }

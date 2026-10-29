@@ -19,8 +19,7 @@ export type ResolvePluginHostCallPolicy = (
   pluginKey: string
 ) => PluginHostCallPolicy | Promise<PluginHostCallPolicy>
 
-/** Validates the transport envelope, resolves all authority host-side, then
- *  enters the one capability/schema/audit execution chokepoint. */
+/** Authenticate transport input and resolve host policy before capability/schema/audit checks. */
 export async function executePluginHostCallRequest(input: {
   /** Qualified identity already authenticated by the owning transport. */
   pluginKey: string

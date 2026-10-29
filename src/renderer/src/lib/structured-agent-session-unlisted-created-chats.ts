@@ -1,7 +1,6 @@
 import type { ExecutionHostId } from '../../../shared/execution-host'
 
-// Why: a host list built before a create landed can arrive after its reply; until a list shows
-// the chat, omission is no evidence it closed. Expiry ends protection; the next list decides.
+// Lists built before create can arrive after its reply; omission proves no close until a list actually shows the chat or protection expires.
 const UNLISTED_CREATED_CHAT_TTL_MS = 30_000
 
 type UnlistedCreatedChat = {

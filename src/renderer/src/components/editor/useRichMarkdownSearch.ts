@@ -38,16 +38,13 @@ export function useRichMarkdownSearch({
   const [isReplaceMode, setIsReplaceMode] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [replaceQuery, setReplaceQuery] = useState('')
-  // Why: match-case / whole-word persist across find sessions (matching the
-  // source editor's find widget), so they live outside the close-reset path.
+  // Persist match options across find sessions, matching the source editor.
   const [matchCase, setMatchCase] = useState(false)
   const [wholeWord, setWholeWord] = useState(false)
   const [rawActiveMatchIndex, setRawActiveMatchIndex] = useState(-1)
   const [navigationRequest, setNavigationRequest] = useState({ revision: 0, selectMatch: false })
   const [, setSearchRevision] = useState(0)
-  // Why: debouncing the query that drives match computation prevents the
-  // expensive full-doc walk from running on every keystroke — the old
-  // un-debounced path froze the main thread on large documents.
+  // Debounce full-document match scans to keep typing from freezing large documents.
   const [debouncedQuery, setDebouncedQuery] = useState('')
 
   useEffect(() => {
@@ -85,21 +82,16 @@ export function useRichMarkdownSearch({
     ) {
       return []
     }
-    // Why: replace mutates document ranges immediately, so it must use the
-    // current input value instead of the debounced highlight match set.
+    // Replacement mutates ranges immediately, so use the live query rather than stale debounced highlights.
     return findMatches(editor.state.doc, searchQuery, {
       matchCase,
       wholeWord
     })
   }, [editor, findMatches, isSearchOpen, matchCase, searchQuery, wholeWord])
 
-  // Why: mirror the guard used by replaceCurrentMatch/replaceAllMatches so the
-  // disabled state never disagrees with what a click will actually do during the
-  // debounce window when live matches diverge from the highlight set.
+  // Derive disabled state from the same live atom guards as replacement, including during the highlight debounce.
   const replaceDisabled = getLiveMatches().some((match) => match.touchesReadOnlyAtom)
 
-  // Clamp the user-controlled index to the valid range on every render.
-  // No state update needed — this is a pure derivation.
   const activeMatchIndex =
     !isSearchOpen || matchCount === 0
       ? -1
@@ -136,11 +128,7 @@ export function useRichMarkdownSearch({
     setReplaceQuery('')
     setDebouncedQuery('')
     setRawActiveMatchIndex(-1)
-    // Why: closing the bar unmounts the focused search input, dropping focus to
-    // <body> — outside the editor root — so the find/replace shortcut's
-    // targetInsideEditor guard would ignore the next keypress until the user
-    // re-clicks the editor. Returning focus to the editor keeps reopening via
-    // keyboard working and restores the caret to the document.
+    // Return focus after search unmounts its input so editor-scoped shortcuts can reopen it without a click.
     editor?.commands.focus()
   }, [editor])
 
@@ -154,8 +142,7 @@ export function useRichMarkdownSearch({
         return
       }
       const tr = editor.state.tr
-      // Why: empty replacement must delete the range — ProseMirror text nodes
-      // can't hold an empty string, so insertText('') would be a no-op.
+      // Empty replacements must delete explicitly because ProseMirror text nodes cannot hold an empty string.
       if (replaceQuery) {
         tr.insertText(replaceQuery, from, to)
       } else {
@@ -198,8 +185,7 @@ export function useRichMarkdownSearch({
       return
     }
     const tr = editor.state.tr
-    // Why: process matches last-to-first so each edit can't invalidate the
-    // positions of matches we haven't replaced yet, keeping it a single undo.
+    // Replace from the end to preserve remaining offsets and keep all edits in one undo step.
     for (let index = liveMatches.length - 1; index >= 0; index -= 1) {
       const match = liveMatches[index]
       if (replaceQuery) {

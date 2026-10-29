@@ -92,10 +92,20 @@ export function NativeChatTurnDiffRollup({
         <Button variant="ghost" size="xs" className="group w-full min-w-0 justify-start gap-1.5">
           <span className="min-w-0 truncate">
             {diff.files.length === 1
-              ? translate('components.native-chat.turnDiff.one', '1 changed file')
-              : translate('components.native-chat.turnDiff.many', '{{count}} changed files', {
-                  count: diff.files.length
-                })}
+              ? translate(
+                  'components.native-chat.turnDiff.changedFiles_one',
+                  '{{count}} changed file',
+                  {
+                    count: diff.files.length
+                  }
+                )
+              : translate(
+                  'components.native-chat.turnDiff.changedFiles_other',
+                  '{{count}} changed files',
+                  {
+                    count: diff.files.length
+                  }
+                )}
           </span>
           <DiffLineCounts added={diff.added} removed={diff.removed} />
           {diff.truncated ? (

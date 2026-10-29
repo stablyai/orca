@@ -3,11 +3,9 @@ export type E2EConfig = {
   headless: boolean
   exposeStore: boolean
   userDataDir: string | null
-  /** Test-only override (ORCA_E2E_TERMINAL_PARKING_DELAY_MS) shrinking the
-   *  terminal hidden-view parking delays. null means use production timing. */
+  /** ORCA_E2E_TERMINAL_PARKING_DELAY_MS shortens hidden-view parking delays; null retains production timing. */
   terminalParkingDelayMs: number | null
-  /** Test-only override (ORCA_E2E_TERMINAL_RETENTION_LIMIT) shrinking the
-   *  hidden un-parkable worktree force-park budget. null means production (12). */
+  /** ORCA_E2E_TERMINAL_RETENTION_LIMIT shrinks hidden unparkable retention; null retains production budget (12). */
   terminalRetentionLimit: number | null
 }
 

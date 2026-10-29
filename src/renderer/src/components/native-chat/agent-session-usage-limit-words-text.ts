@@ -1,5 +1,3 @@
-// Desktop words for a usage limit an agent hit, kept beside the other failure pieces' translations.
-
 import { translate } from '@/i18n/i18n'
 import {
   AGENT_SESSION_FAILURE_COPY as COPY,

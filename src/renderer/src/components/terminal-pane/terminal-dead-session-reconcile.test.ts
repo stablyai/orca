@@ -67,8 +67,7 @@ describe('shouldReconcileDeadSession', () => {
   })
 
   it('does NOT reconcile a newborn pane bound after the snapshot was requested', () => {
-    // Why (regression): the snapshot predates this binding (boundAt >= requestedAt),
-    // so the fresh ptyId's absence from it is meaningless — it cannot prove death.
+    // A snapshot requested before this bind cannot prove the newborn PTY dead.
     expect(
       shouldReconcileDeadSession({
         ptyId: 'wt@@newborn',
@@ -81,8 +80,7 @@ describe('shouldReconcileDeadSession', () => {
   })
 
   it('does NOT reconcile when the binding and snapshot request share a tick (boundAt === requestedAt)', () => {
-    // Why: the guard is inclusive (>=) — a coarse/clamped performance.now() can
-    // land a same-tick bind and request, and that newborn must still be kept.
+    // Coarse performance.now can tie request and bind; inclusive comparison must retain that newborn.
     expect(
       shouldReconcileDeadSession({
         ptyId: 'wt@@newborn',
@@ -107,7 +105,6 @@ describe('shouldReconcileDeadSession', () => {
   })
 
   it('ignores the freshness guard when either timestamp is omitted (back-compat)', () => {
-    // Omitted snapshotRequestedAt: behave exactly as today.
     expect(
       shouldReconcileDeadSession({
         ptyId: 'wt@@dead',
@@ -116,7 +113,6 @@ describe('shouldReconcileDeadSession', () => {
         ptyBoundAt: 1000
       })
     ).toBe(true)
-    // Omitted ptyBoundAt (null): behave exactly as today.
     expect(
       shouldReconcileDeadSession({
         ptyId: 'wt@@dead',

@@ -1,6 +1,7 @@
 import type { AgentStatusEntry, AgentStatusIpcPayload } from '../../shared/agent-status-types'
 import type {
   BrowserTabInfo,
+  RuntimeMobileSessionBrowserTab,
   RuntimeMobileSessionClientTab,
   RuntimeMobileSessionTabGroup,
   RuntimeMobileSessionTabsSnapshot,
@@ -17,6 +18,10 @@ export type RuntimeMobileSessionProjectionHost = {
   leaves: ReadonlyMap<string, RuntimeLeafRecord>
   ptysById: ReadonlyMap<string, RuntimePtyWorktreeRecord>
   getLiveBrowserTabs(worktreeId: string): Map<string, BrowserTabInfo>
+  isRendererOwnedMobileBrowserTab(
+    snapshot: RuntimeMobileSessionTabsSnapshot,
+    tab: RuntimeMobileSessionBrowserTab
+  ): boolean
   getProviderSessionRows(paneKey: string): AgentStatusIpcPayload[] | undefined
   getProviderSessionSnapshot(): AgentStatusIpcPayload[]
   getStatusSnapshot(): AgentStatusIpcPayload[]
@@ -33,6 +38,7 @@ export type RuntimeMobileSessionProjectionHost = {
     getRows: (paneKey: string, terminalHandle: string | null) => AgentStatusIpcPayload[]
   ): RuntimeAgentRowSnapshot | null
   getTrackedTitle(ptyId: string | null): string | null
+  getSessionCustomTitle?(sessionId: string): string | null
   /** Display-only clear of a PTY's native title; every title/status read here is display. */
   getTitleDisplayClear(ptyId: string | null): TitleDisplayClear | null
   issuePtyHandle(pty: RuntimePtyWorktreeRecord): string

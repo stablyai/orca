@@ -14,8 +14,7 @@ import {
 } from '../resolve-changes/combined-diff-section-identity'
 import type { CombinedDiffSectionLoadRegistry } from './combined-diff-section-load-registry'
 
-// Why: git status and on-disk writes both revalidate loaded rows; one hook owns both watches so
-// they cannot disagree about which sections are eligible.
+// Share status and disk-write watches so both apply identical eligibility rules.
 export function useCombinedDiffSectionRevalidation({
   file,
   gitStatusEntries,
@@ -31,8 +30,7 @@ export function useCombinedDiffSectionRevalidation({
   registry: Pick<CombinedDiffSectionLoadRegistry, 'loadedIndicesRef' | 'loadingIndicesRef'>
   requestSectionReload: (index: number) => void
   sectionIndexByKeyRef: React.RefObject<ReadonlyMap<string, number>>
-  // The entry set is structurally stable while individual section content/loading state changes.
-  // Use it for the status signature so progressive loads do not rescan the section array.
+  // Use stable entry paths for status signatures so progressive content loads cannot trigger full rescans.
   sectionEntries: readonly { path: string }[]
   shouldAutoReloadFromGitStatus: boolean
   treeMode: CombinedDiffFileTreeMode
@@ -111,9 +109,7 @@ export function useCombinedDiffSectionRevalidation({
     if (treeMode !== 'all' && treeMode !== 'uncommitted') {
       return
     }
-    // Why: a resync (the watch was down) names no paths, and snapshot-backed reviews skip
-    // status-driven reloads, so re-read every loaded working-tree section of this workspace.
-    // A storm overflow only refreshes git status, so it never re-reads every section.
+    // Watch-gap resync has no paths and must refresh loaded snapshot-backed sections too; storm overflow only refreshes status.
     const handler = (event: WindowEventMap[typeof ORCA_WORKTREE_FILE_CHANGE_EVENT]): void => {
       const { payload, runtimeEnvironmentId } = event.detail
       if (
@@ -124,7 +120,7 @@ export function useCombinedDiffSectionRevalidation({
       ) {
         return
       }
-      // Why: an in-flight read may have started before the missed write, so retry it too.
+      // Retry in-flight reads too; they may have started before the missed write.
       for (const index of new Set([...loadedIndicesRef.current, ...loadingIndicesRef.current])) {
         requestSectionReload(index)
       }

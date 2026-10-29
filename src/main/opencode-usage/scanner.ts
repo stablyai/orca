@@ -76,8 +76,7 @@ export async function parseOpenCodeUsageDatabase(
       if (!parsed) {
         continue
       }
-      // Why: a stale sibling copy of opencode.db carries the same sessions, so
-      // each session must be counted from exactly one database (#8006).
+      // Sibling backups duplicate sessions; count each from one owner.
       let owned = claimedBySessionId.get(parsed.sessionId)
       if (owned === undefined) {
         owned = options.claimSession ? options.claimSession(parsed.sessionId) : true
@@ -118,13 +117,11 @@ export async function scanOpenCodeUsageDatabases(
   const previousByPath = new Map(
     previousProcessedDatabases.map((database) => [database.path, database])
   )
-  // Why: one resolver for the whole scan so every database shares the per-cwd memo.
+  // Share per-cwd resolution memoization across databases.
   const resolveWorktree = await createUsageWorktreeResolver(worktrees)
 
   const currentPaths = new Set(dbPaths)
-  // Why: when a database that owned sessions is deleted, remaining siblings
-  // still contain those sessions but their caches record them as unowned.
-  // Only databases that previously deferred claims can reclaim.
+  // When an owner disappears, only caches with deferred claims can reclaim its sessions.
   const lostOwnerPath = previousProcessedDatabases.some(
     (database) =>
       !currentPaths.has(database.path) &&
@@ -137,7 +134,6 @@ export async function scanOpenCodeUsageDatabases(
   for (const dbPath of dbPaths) {
     const databaseInfo = await getProcessedDatabaseInfo(dbPath)
     const previous = previousByPath.get(dbPath)
-    // When an owner disappears, only deferred-claim databases need reparse.
     const mustReclaimDeferred = lostOwnerPath && previous?.hasDeferredClaims !== false
     const canReuse =
       !mustReclaimDeferred &&
@@ -153,13 +149,8 @@ export async function scanOpenCodeUsageDatabases(
     }
   }
 
-  // Why: a sticky backup claim from a scan where opencode.db was missing would
-  // otherwise freeze a still-growing session at the backup snapshot when the
-  // live db reappears. Reparse a lower-priority sibling only when it still owns
-  // sessions a higher-priority path could reclaim; a sibling that owns nothing
-  // (the common case once the live db has claimed every shared session) has no
-  // claim to give back, so reparsing it every time the live db changes is pure
-  // work.
+  // A returning live database must reclaim sticky backup ownership; backups owning nothing
+  // need no reparse when live data changes.
   const demotedReusePaths: string[] = []
   for (const [dbPath, reused] of reusedByPath) {
     if ((reused.ownedSessionIds?.length ?? 0) === 0) {
@@ -177,11 +168,7 @@ export async function scanOpenCodeUsageDatabases(
     pathsToParse.push(dbPath)
   }
 
-  // Why: `opencode-*.db` siblings are typically stale copies of `opencode.db`
-  // (backups), so mergeSessions would double every duplicated session (#8006).
-  // Each session is counted from exactly one database. The canonical live db
-  // claims first so a stale backup cannot freeze a still-growing session at
-  // its snapshot totals; cached databases keep the claims they persisted.
+  // The live database claims before stale backups; reused caches retain persisted ownership.
   const sessionOwnerById = new Map<string, string>()
   for (const dbPath of [...reusedByPath.keys()].sort(compareOpenCodeClaimPriority)) {
     const previous = reusedByPath.get(dbPath)

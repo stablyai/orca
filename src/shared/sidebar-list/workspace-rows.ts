@@ -20,10 +20,7 @@ import type { Worktree } from '../worktree/types'
 import { getWorkspaceRowKindFacts } from '../worktree/workspace-kinds'
 import { SMART_TIERS } from './sort-stamps'
 
-/**
- * One workspace this host lists, as the sidebar reads it: catalog, metadata and the host's sort
- * stamps. Activity and PR state are their own domains, so plain terminal output never changes a row.
- */
+/** Catalog/metadata/sort stamps only; separate activity and review domains keep terminal output from invalidating rows. */
 export const WorkspaceRowSchema = z.object({
   id: z.string(),
   hostId: z.string(),
@@ -34,7 +31,7 @@ export const WorkspaceRowSchema = z.object({
   displayName: z.string(),
   isMainWorktree: z.boolean(),
   instanceId: z.string().optional(),
-  /** The stored lineage record's edge; the builder decides whether it is valid. */
+  /** Stored lineage edge; the builder validates it. */
   lineage: z
     .object({
       parentWorktreeId: z.string(),
@@ -48,7 +45,7 @@ export const WorkspaceRowSchema = z.object({
   workspaceStatus: z.string(),
   comment: z.string(),
   manualOrder: z.number().optional(),
-  /** The saved order Manual falls back to where a row has no manualOrder; older hosts omit it. */
+  /** Manual fallback for rows lacking manualOrder; old hosts omit it. */
   sortOrder: z.number().optional(),
   createdAt: z.number().optional(),
   creatorProvenance: z
@@ -58,7 +55,7 @@ export const WorkspaceRowSchema = z.object({
     ])
     .optional(),
   linkedIssue: z.number().nullable(),
-  /** The linked PR number from metadata; a branch's PR from the cache is the review domain. */
+  /** Metadata link only; cached branch PR belongs to the review domain. */
   linkedPR: z.number().nullable(),
   linkedLinearIssue: z.string().nullable(),
   linkedGitLabMR: z.number().nullable(),
@@ -69,16 +66,15 @@ export const WorkspaceRowSchema = z.object({
   automationName: z.string().optional(),
   cliCreated: z.literal(true).optional(),
   detachedHead: z.literal(true).optional(),
-  /** Main's alone: the platform a terminal in the workspace runs on. */
+  /** Main-owned terminal platform. */
   terminalPlatform: z.string().optional(),
-  /** The owning host's sort stamps (sort-stamps.ts); optional, as older hosts write no tier. */
+  /** Host-owned sort stamps (sort-stamps.ts); old hosts omit tiers. */
   recentAt: z.number().optional(),
   smartTier: z.enum(SMART_TIERS).optional(),
   smartAt: z.number().optional()
 })
 
-/** Keyed by the row's identity as every client keys it: a local row whose metadata names no host
- *  keeps `|id`, while `hostId` still says which host owns it. */
+/** Legacy local rows without metadata host retain `|id` keys even when hostId names their owner. */
 export const WorkspaceRowsSnapshotSchema = z.object({
   revision: z.number(),
   rows: z.record(z.string(), WorkspaceRowSchema)
@@ -140,20 +136,19 @@ type ListedRow = { identity: HostScopedWorktreeKey; hostId: ExecutionHostId }
 type ListedWorktree = Pick<Worktree, 'id' | 'repoId' | 'hostId'>
 type ListedRepo = Pick<Repo, 'id' | 'connectionId' | 'executionHostId'>
 
-/** Where this host lists a workspace, or null for one it does not (a paired server's). */
+/** Null for rows this host does not list, such as paired-server workspaces. */
 function listedRow(worktree: ListedWorktree, repo: ListedRepo | undefined): ListedRow | null {
   const hostId = worktree.hostId ?? (repo ? getRepoExecutionHostId(repo) : undefined)
   if (!hostId || parseExecutionHostId(hostId)?.kind === 'runtime') {
     return null
   }
-  // As the window stamps rows (worktree-host-ownership.ts): a remote repo's host always, a local
-  // row only the host its metadata names.
+  // Match window ownership: stamp remote hosts always, local hosts only when metadata names one.
   const identityHostId = hostId === LOCAL_EXECUTION_HOST_ID ? worktree.hostId : hostId
   return { identity: composeWorktreeHostIdentity(identityHostId, worktree.id), hostId }
 }
 
-/** Each git worktree with the repo it belongs to; the same repo id can be registered on two hosts. */
-function withOwnerRepos<W extends ListedWorktree, R extends ListedRepo>(
+/** Resolve each row’s own repo; repo IDs can collide across hosts. */
+export function withOwnerRepos<W extends ListedWorktree, R extends ListedRepo>(
   worktrees: readonly W[],
   repos: readonly R[]
 ): { worktree: W; repo: R | undefined }[] {
@@ -170,7 +165,7 @@ function withOwnerRepos<W extends ListedWorktree, R extends ListedRepo>(
   })
 }
 
-/** Each git worktree this host lists, under the key `buildWorkspaceRows` lists it and with its own repo. */
+/** Listed git worktrees with their own repos and buildWorkspaceRows keys. */
 export function listGitWorkspaceRows<W extends ListedWorktree, R extends ListedRepo>(
   worktrees: readonly W[],
   repos: readonly R[]
@@ -181,7 +176,6 @@ export function listGitWorkspaceRows<W extends ListedWorktree, R extends ListedR
   })
 }
 
-/** The keys `buildWorkspaceRows` lists these git worktrees under. */
 export function listGitWorkspaceRowKeys(
   worktrees: readonly Worktree[],
   repos: readonly Repo[]
@@ -189,10 +183,7 @@ export function listGitWorkspaceRowKeys(
   return listGitWorkspaceRows(worktrees, repos).map(({ identity }) => identity)
 }
 
-/**
- * Every workspace this host lists, from its own catalog: git worktrees (folder projects included)
- * and folder workspaces. A paired server's rows are another domain, so they are left out.
- */
+/** Own catalog only, including folder projects/workspaces; paired-server rows use another domain. */
 export function buildWorkspaceRows(catalog: {
   worktrees: readonly Worktree[]
   folderWorkspaces: readonly FolderWorkspace[]

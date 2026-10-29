@@ -1,6 +1,4 @@
-// Mirrors Codex's own opt-outs (tui/src/daemon_startup.rs `exclusion`). Every
-// `-c`/`--enable`/`--disable` counts, although Codex allows a few: skipping one
-// only costs a warning, never a false one.
+// Mirror tui/src/daemon_startup.rs exclusion conservatively: all -c/--enable/--disable skip warnings, avoiding false positives.
 const EMBEDDED_FLAGS: ReadonlySet<string> = new Set([
   '--no-daemon',
   '--oss',
@@ -18,8 +16,7 @@ const EMBEDDED_FLAGS: ReadonlySet<string> = new Set([
   '-c'
 ])
 
-// Every subcommand in codex-rs/cli/src/main.rs except the ones that open the TUI
-// on the shared server: `resume`, `fork` and `agents`.
+// All cli/src/main.rs subcommands except shared-server TUI resume/fork/agents.
 const NON_TUI_SUBCOMMANDS: ReadonlySet<string> = new Set([
   'exec',
   'e',
@@ -71,14 +68,7 @@ function isEmbeddedFlag(word: string): boolean {
   return EMBEDDED_FLAGS.has(name) || /^-[pc][^-]/.test(word)
 }
 
-/**
- * True when a Codex process-table command line is an interactive Codex that
- * joins its shared server when one is running. Process tables may join argv
- * with spaces, so words are split on whitespace (double quotes group, as
- * Windows quotes paths); apostrophes never group because a prompt's `don't`
- * would swallow the rest. Opt-outs set through env (`CODEX_EXEC_SERVER_URL`,
- * workload identity) are invisible here, so those rare panes get a false banner.
- */
+/** Detect interactive shared-server clients from process text. Group double-quoted paths, never apostrophes in prompts (don't). Invisible env opt-outs may cause rare false banners. */
 export function codexCommandLineJoinsSharedServer(commandLine: string): boolean {
   const words = (commandLine.match(/"[^"]*"|\S+/g) ?? []).map((word) =>
     word.replace(/^["']+|["']+$/g, '')

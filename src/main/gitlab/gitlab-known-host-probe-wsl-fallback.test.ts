@@ -63,9 +63,7 @@ describe('glab known-hosts probe on Windows', () => {
     )
   })
 
-  // Why: glab has no SSH/relay dispatch, so a connection-keyed probe and the
-  // `glab api` calls it gates both run the local CLI with no cwd. Suppressing the
-  // fallback here would make the probe disagree with those calls.
+  // Connection-keyed auth and API calls both use local glab, including its default-distro fallback.
   it('keeps the default-distro fallback for a connection execution key', async () => {
     hostGlabMissingWslLoggedIn()
 
@@ -74,10 +72,7 @@ describe('glab known-hosts probe on Windows', () => {
     expect(spawnMock).toHaveBeenCalledWith(
       'wsl.exe',
       ['-d', 'Ubuntu', '--exec', 'bash', '-c', "'glab' 'auth' 'status'"],
-      // Why a concrete directory (#16463): `undefined` makes CreateProcessW inherit
-      // Orca's own cwd, a deletable WSL UNC path when it was launched from a
-      // worktree. This probe has no repo directory at all, so nothing about where
-      // it runs changes. The native `glab` assertion above keeps `undefined`.
+      // A concrete safe cwd avoids inheriting a deletable worktree's UNC directory during Windows spawn.
       expect.objectContaining({ cwd: expect.any(String) })
     )
   })

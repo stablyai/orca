@@ -1,5 +1,4 @@
-// Captured prompt-hook blocks through each agent's translator, the journal, a reopen and the fold:
-// one warning row stays on screen, nothing else explains the turn, and the send on record stays.
+// Exercise captured hook failures through translators, persistence and folding without duplicating warnings.
 
 import { readFile } from 'node:fs/promises'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -17,8 +16,11 @@ import { withNativeChatCutTurnNotices } from '../../../shared/native-chat-cut-tu
 import {
   nativeChatRowTurnKeys,
   nativeChatTurnBarRows
-} from '../../../shared/native-chat-turn-grouping'
-import { nativeChatTurnFold, nativeChatTurnFoldRow } from '../../../shared/native-chat-turn-fold'
+} from '../../../shared/native-chat/transcript/native-chat-turn-grouping'
+import {
+  nativeChatTurnFold,
+  nativeChatTurnFoldRow
+} from '../../../shared/native-chat/transcript/native-chat-turn-fold'
 import { nativeChatTurnMembership } from '../../../shared/native-chat-turn-membership'
 import { projectStructuredItemsToNativeChat } from '../../../shared/structured-agent-session-projection'
 import { GROK_ACP_DIALECT } from '../../acp/acp-dialects/grok-dialect'
@@ -56,7 +58,6 @@ async function captured<T>(agent: 'codex' | 'claude', scenario: string): Promise
   return lines.map((line) => JSON.parse(line)).filter((line) => line.case === scenario)
 }
 
-/** The system rows a settled chat draws, every turn folded. */
 function settledRows(items: readonly AgentJournalRenderItem[]) {
   expect(withNativeChatCutTurnNotices(items, { agentName: 'Agent' })).toBe(items)
   const messages = projectStructuredItemsToNativeChat(items)
@@ -71,7 +72,6 @@ function settledRows(items: readonly AgentJournalRenderItem[]) {
   )
 }
 
-/** A chat whose send is on record, written by `write`, then read back by a fresh journal. */
 async function blockedChat(
   identity: Parameters<typeof openProviderTimelineRig>[1],
   write: (rig: ProviderTimelineRig) => void
@@ -89,7 +89,6 @@ async function blockedChat(
 }
 
 describe('a prompt hook that blocked the message', () => {
-  // A blocked tool call reaches the model as the tool's result, and writes no row of its own.
   it.each([
     ['blocked-prompt', [DEPLOYS_FROZEN], 'blocked'],
     ['blocked-prompt', [row('Hook stopped: Deploys are frozen')], 'stopped'],

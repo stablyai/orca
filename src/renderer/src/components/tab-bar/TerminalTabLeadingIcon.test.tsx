@@ -4,7 +4,6 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import { TerminalTabLeadingIcon } from './TerminalTabLeadingIcon'
 import type { TerminalTabActivityStatus } from './terminal-tab-activity-status'
 
-/** Render one activity status through the production leading-icon component. */
 function renderStatus(status: TerminalTabActivityStatus): string {
   return renderToStaticMarkup(
     <TooltipProvider>

@@ -1,11 +1,6 @@
 import { isQualifiedPluginKey } from './plugin-manifest'
 
-/**
- * Consent + enablement state derivation. Consent is recorded against the
- * (qualified plugin key → consent fingerprint) pair, never the bare id. The
- * fingerprint covers capabilities and the trusted-worker execution tier, so
- * crossing either trust boundary requires approval before plugin code runs.
- */
+/** Consent binds qualified key and fingerprint (capabilities plus trusted worker tier); either trust change requires reapproval. */
 
 export type PluginActivationState = 'approved' | 'pending' | 'disabled'
 
@@ -26,8 +21,7 @@ export function getPluginActivationState(
   return lists.pluginConsents[qualifiedKey] === currentConsentFingerprint ? 'approved' : 'pending'
 }
 
-/** True when the plugin was consented before but its capability set changed —
- *  the UI shows "needs re-approval" instead of a first-install prompt. */
+/** Prior consent with changed capabilities needs reapproval rather than first-install prompting. */
 export function needsReconsent(
   qualifiedKey: string,
   currentConsentFingerprint: string,

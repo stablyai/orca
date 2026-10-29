@@ -60,9 +60,7 @@ describe('getBranchCompare', () => {
     readFileMock.mockReset()
   })
 
-  // Why dispatch on args instead of mockResolvedValueOnce chains: getBranchCompare now
-  // issues its head-of-chain reads concurrently, so a positional mock would encode call
-  // order rather than behaviour and break on any safe reordering.
+  // Route by argv so independent concurrent reads can reorder safely.
   type BranchCompareGitResponses = {
     branch?: string | Error
     probe?: Record<string, string | Error>
@@ -219,8 +217,6 @@ describe('getBranchCompare', () => {
     ])
   })
 
-  // Why: a rebased branch is ahead AND behind; the symmetric --left-right range is the
-  // only form that reports both, and its columns are left=behind, right=ahead.
   it('counts both divergence directions from one symmetric rev-list', async () => {
     mockBranchCompareGit({
       branch: 'main\n',
@@ -264,7 +260,6 @@ describe('getBranchCompare', () => {
   it('returns unborn-head when HEAD cannot be resolved', async () => {
     mockBranchCompareGit({
       branch: 'main\n',
-      // Why the probe fails here: a proven base ref would resolve, giving 'ready'.
       probe: { 'refs/remotes/origin/main^{commit}': new Error('missing base') },
       headOid: new Error('unborn'),
       baseOid: new Error('missing base')
@@ -340,8 +335,6 @@ describe('getBranchCompare', () => {
     ])
   })
 
-  // Why: the base oid now comes from the probe, so the probe must never report a ref it
-  // did not actually resolve -- an empty rev-parse --quiet stdout means "not found".
   it('treats an empty probe result as an unresolved base ref', async () => {
     mockBranchCompareGit({
       branch: 'main\n',
@@ -358,8 +351,7 @@ describe('getBranchCompare', () => {
     expect(result.summary.status).toBe('invalid-base')
   })
 
-  // Why: the probe tries refs/remotes first, then refs/heads. Reusing "the last probed
-  // oid" rather than the oid for the ref that won would return the wrong commit.
+  // Keep distinct probe results to catch accidental reuse of the losing ref's OID.
   it('reuses only the oid of the ref the probe actually resolved', async () => {
     mockBranchCompareGit({
       branch: 'feature\n',
@@ -382,8 +374,6 @@ describe('getBranchCompare', () => {
     })
   })
 
-  // Why: an already-qualified base ref skips the probe entirely, so its oid must still
-  // come from rev-parse rather than from a stale or absent probe entry.
   it('resolves an already-qualified base ref without a probe', async () => {
     mockBranchCompareGit({
       branch: 'main\n',

@@ -9,13 +9,9 @@ import {
   type SessionSearchIndexFile
 } from './session-search-index-test-fixture'
 
-// Synthetic index rows for the query tests. The write path has its own tests;
-// driving it here would make every retrieval assertion depend on the parser.
-
 export type SessionSearchHarness = {
-  /** The engine's own connection; the store next to it keeps a second, private one. */
+  /** Engine connection; store writes through a separate connection to the same file. */
   db: SyncDatabase
-  /** A real writer on the same file, so a test can move the index under the engine. */
   store: SessionSearchStore
   engine: SessionSearchEngine
   close: () => Promise<void>
@@ -29,8 +25,7 @@ export async function openSessionSearchHarness(
   const store = new SessionSearchStore(index.path, (error) => {
     throw error
   })
-  // Constructed before any row is planted, because constructing it is what
-  // installs the generation triggers the planted rows have to move.
+  // Install generation triggers before inserting fixtures.
   const engine = new SessionSearchEngine(index.db, options)
   return {
     db: index.db,
@@ -47,24 +42,18 @@ export type SyntheticSession = {
   id: number
   cwd?: string | null
   text?: string
-  /** Rows of `text` to write; one session with many rows is one hit. */
   rows?: number
   role?: TranscriptMessageRole
-  /**
-   * Written into `tool_text` alongside `text`, which is the one row shape the
-   * conversation scope has to exclude while the `all` scope keeps it.
-   */
+  /** Tool-column text excluded by conversation scope but included by all scope. */
   toolText?: string
   agent?: string
   updatedAt?: string
   messageCount?: number
-  /** Written into `files`, which is what makes the source `present`. */
   filePath?: string | null
-  /** `sessions.file_path`: the transcript `path:` searches alongside cwd. */
+  /** Session path searched alongside cwd; independent of the files-table presence record. */
   sessionFilePath?: string
 }
 
-/** One session and its message rows, in both FTS tables the way the writer does. */
 export function addSyntheticSession(db: SyncDatabase, session: SyntheticSession): void {
   const {
     id,

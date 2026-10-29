@@ -1,8 +1,9 @@
 import { Platform, StyleSheet } from 'react-native'
 
 import { colors, spacing, radii, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
 
-export const mobileSessionReaderStyles = StyleSheet.create({
+export const mobileSessionReaderStyles = themedStyleSheet(() => ({
   markdownTextInput: {
     flex: 1,
     minHeight: 0,
@@ -137,4 +138,4 @@ export const mobileSessionReaderStyles = StyleSheet.create({
   diffPrefixDeleted: {
     color: colors.gitDecorationDeleted
   }
-})
+}))

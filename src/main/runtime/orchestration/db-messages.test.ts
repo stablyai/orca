@@ -78,12 +78,10 @@ describe('OrchestrationDb', () => {
 
       d.markAsDelivered([m1.id], 'b')
 
-      // Push delivery query: only undelivered, unread.
       const pending = d.getUndeliveredUnreadMessages('b')
       expect(pending).toHaveLength(1)
       expect(pending[0].id).toBe(m2.id)
 
-      // Explicit `check` still sees both (they are still unread).
       const unread = d.getUnreadMessages('b')
       expect(unread).toHaveLength(2)
     })

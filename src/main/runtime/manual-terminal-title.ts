@@ -1,3 +1,27 @@
+import { normalizeCompatibleAgentTitleForOwner } from '../../shared/agent-title-owner'
+import { resolveTerminalTabTitle } from '../../shared/tab-title-resolution'
+
+/** Rank a user's rename ahead of the live title agents keep repainting. */
+export function resolveProjectedMobileTerminalTitle<T extends { title?: string | null }>(
+  sources: Parameters<typeof resolveManualTerminalTitle>,
+  liveTitle: string | null | undefined,
+  tab: T,
+  ownerAgent: Parameters<typeof normalizeCompatibleAgentTitleForOwner>[1],
+  ownerOptions: Parameters<typeof normalizeCompatibleAgentTitleForOwner>[2]
+): { manualTitle: string | null; normalizedLiveTitle: string; title: string } {
+  const manualTitle = resolveManualTerminalTitle(...sources)
+  const normalizedLiveTitle = normalizeCompatibleAgentTitleForOwner(
+    liveTitle ?? '',
+    ownerAgent,
+    ownerOptions
+  )
+  // Desktop ranking beats a fresher main title; windows emit generated names only while shown.
+  const title =
+    manualTitle ??
+    resolveTerminalTabTitle({ ...tab, title: normalizedLiveTitle }, true, normalizedLiveTitle)
+  return { manualTitle, normalizedLiveTitle, title }
+}
+
 /** A user's rename, from the first source that has one. Live OSC titles are not manual. */
 export function resolveManualTerminalTitle(
   ...sources: ({ customTitle?: string | null; manualTitle?: string | null } | null | undefined)[]

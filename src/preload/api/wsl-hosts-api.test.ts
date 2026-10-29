@@ -6,9 +6,9 @@ import { getWslHostsApi } from './wsl-hosts-api'
 
 describe('WSL hosts preload API', () => {
   it('is absent on Windows and under the e2e fake while the internal gate is closed', () => {
-    expect(getWslHostsApi({}, 'win32')).toBeUndefined()
-    expect(getWslHostsApi({ ORCA_INTERNAL_WSL_HOSTS: 'true' }, 'win32')).toBeUndefined()
-    expect(getWslHostsApi({ ORCA_E2E_FAKE_WSL_HOSTS: '{}' }, 'darwin')).toBeUndefined()
+    expect(getWslHostsApi({}, 'win32', [])).toBeUndefined()
+    expect(getWslHostsApi({ ORCA_INTERNAL_WSL_HOSTS: 'true' }, 'win32', [])).toBeUndefined()
+    expect(getWslHostsApi({ ORCA_E2E_FAKE_WSL_HOSTS: '{}' }, 'darwin', [])).toBeUndefined()
   })
 
   it('is present behind the open gate only where WSL hosts can run', () => {
@@ -17,5 +17,13 @@ describe('WSL hosts preload API', () => {
       getWslHostsApi({ ORCA_INTERNAL_WSL_HOSTS: '1', ORCA_E2E_FAKE_WSL_HOSTS: '{}' }, 'linux')
     ).toBeDefined()
     expect(getWslHostsApi({ ORCA_INTERNAL_WSL_HOSTS: '1' }, 'darwin')).toBeUndefined()
+  })
+
+  it('is present behind a closed gate when main stamped serve-only, still only where hosts run', () => {
+    const argv = ['--orca-wsl-hosts-serve-only']
+    expect(getWslHostsApi({}, 'win32', argv)).toBeDefined()
+    expect(getWslHostsApi({ ORCA_E2E_FAKE_WSL_HOSTS: '{}' }, 'linux', argv)).toBeDefined()
+    expect(getWslHostsApi({}, 'darwin', argv)).toBeUndefined()
+    expect(getWslHostsApi({}, 'win32', [])).toBeUndefined()
   })
 })

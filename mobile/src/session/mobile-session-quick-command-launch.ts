@@ -5,7 +5,6 @@ import type { TerminalQuickCommand } from '../../../src/shared/terminal-quick-co
 import type { MobileNewTabAgentOption } from './mobile-new-tab-agent-options'
 import type { MobileSessionAttachmentsModel } from './use-mobile-session-attachments'
 
-/** Runs a saved quick command through the session's ordinary terminal creator. */
 export function launchMobileSessionQuickCommand(
   scope: Pick<
     MobileSessionAttachmentsModel,

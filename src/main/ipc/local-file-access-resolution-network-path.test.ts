@@ -3,8 +3,7 @@ import type * as NodeFs from 'node:fs'
 import type * as NodePath from 'node:path'
 import type { Store } from '../persistence'
 
-// Why win32 paths on every host: a UNC image in a document is a Windows credential leak, and the
-// guarantee is that its path text is refused before any filesystem call can reach the network.
+// Use Windows paths on every host to prove UNC credential-leak rejection happens before filesystem access.
 vi.mock('node:path', async () => {
   const actual = await vi.importActual<typeof NodePath>('node:path')
   return { ...actual.win32, default: actual.win32 }
@@ -22,9 +21,9 @@ vi.mock('node:fs/promises', () => {
       if (name !== 'realpath') {
         return { isFile: () => true, isDirectory: () => false }
       }
-      // A project image that is really a link to a device name.
+      // A project-local name resolving to a device.
       if (String(target).endsWith('share-link.png')) {
-        // A local image that is really a link onto a network share.
+        // A local image resolving to a network share.
         return '\\\\nas\\pics\\shot.png'
       }
       return String(target).endsWith('dev-link.png') ? 'C:\\repo\\CON.png' : target
@@ -338,8 +337,7 @@ describe('automatic image loads on a network share', () => {
     expect(fsCalls.filter((call) => call.includes('other'))).toEqual([])
   })
 
-  // Why beside a share document too: a host spelled with a look-alike (U+212A KELVIN SIGN, an NFD
-  // accent) can pass a case-folded folder comparison, so no share is loaded outside a project.
+  // Unicode look-alike hosts must not bypass path-text rejection beside share documents.
   it.each([
     '\\\\nas\\notes\\x.png',
     '\\\\NAS\\Notes\\img\\y.png',

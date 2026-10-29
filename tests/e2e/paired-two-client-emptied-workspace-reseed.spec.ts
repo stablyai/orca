@@ -1,45 +1,7 @@
-/**
- * JOURNEY: two desktop clients paired to one Orca server, working in the same workspace.
- *
- * TOPOLOGY: the `orcaPage` app is the host (orca server). Two separate real Orca desktop
- * clients pair to it, exactly as two of the user's machines would. Nothing is faulted — this
- * is the ordinary shape of using Orca from a laptop and a desktop at the same time.
- *
- * The emptied-workspace tombstone is an explicit `tabsByWorktree[worktreeId] = []` row and it
- * is client-local on the runtime path: it never crosses the wire, so the second client cannot
- * know the first emptied the workspace on purpose and still seeds into it. That asymmetry is
- * by design. What is NOT by design is a client falling out of step with the host and staying
- * there, which is what this spec measures.
- *
- * Phase 0 is the control: with both clients attached, does a terminal created on one reach the
- * other at all? Without it a later divergence cannot be attributed to the emptying.
- *
- * WAS RED, NOW GREEN, AND THE MEASUREMENT IS THE POINT. This spec was written to pin a defect
- * rather than to assert a fix. Across 8 runs on a branch that carried neither of this PR's
- * publish-side changes, the close phases were all-or-nothing: either every retraction reached both
- * clients in single-digit milliseconds, or none reached either client within 90 seconds. Phase 1a,
- * which closes a terminal while others remain open, failed alongside phase 1b, so it was never
- * about the workspace going empty. Creates always propagated, including the phase 2 create landing
- * in ~3ms on the very clients that had just missed a close for 90s, so the subscription was
- * demonstrably alive. Both clients failing together while the host's own window showed the correct
- * count put the fault on the host's publish-after-close, not on any client's mirror.
- *
- * That diagnosis named exactly what this PR changes: `publish a terminal retirement proof on the
- * exit's own evidence` and `a removal retraction is not a publisher handover`. Measured on this
- * branch with both of them present, all phases pass and the close retractions arrive in
- * single-digit to low-hundreds of milliseconds (phase1a A=9ms B=158ms, phase1b A=1ms B=192ms).
- * So this is no longer a pinned defect; it is the end-to-end proof that the unit-level retirement
- * proof actually reaches the wire.
- *
- * If it goes red again, that is a regression in the publish-after-close path and the numbers above
- * are the baseline to compare against — do not skip-tag it. The failure shape to expect is the
- * all-or-nothing one: a 90s timeout on both clients at once, with creates still propagating.
- *
- * Run:
- *   pnpm exec playwright test \
- *     tests/e2e/paired-two-client-emptied-workspace-reseed.spec.ts \
- *     --config tests/playwright.config.ts --project electron-headless --workers=1
- */
+// Keep two paired desktop mirrors aligned with one desktop host across create, partial close, emptying and reseed.
+// Empty tombstones are client-local; Phase 0 proves create propagation, Phase 1a separates general close retractions from empty-workspace handling.
+// Earlier runs lost all close retractions on both clients for 90s while creates still propagated; host retirement publication fixed that shape.
+// Treat recurrence as a publish-after-close regression, not an exclusion.
 import type { Page } from '@stablyai/playwright-test'
 import { expect, test } from './helpers/orca-app'
 import {
@@ -191,7 +153,6 @@ test('two paired clients stay in step with the host across an emptied workspace'
       await focusWorkspace(client.page, worktreeId)
     }
 
-    // ── Phase 0: the control. A creates a terminal; B must see it. ──
     await callEnvironment(clientA.page, clientA.environmentId, 'session.tabs.createTerminal', {
       worktree: `id:${worktreeId}`,
       activate: true,
@@ -218,10 +179,7 @@ test('two paired clients stay in step with the host across an emptied workspace'
       )
     }
 
-    // ── Phase 1a: A closes one terminal, but not the last one. ──
-    // Separated from the emptying below on purpose: it is the control that says whether a
-    // retraction propagates at all, so a failure in 1b can be attributed to the workspace going
-    // empty rather than to close retractions being broken in general.
+    // Close while other terminals remain, separating general retraction failure from empty-workspace handling.
     const beforePartialClose = await readHostTerminalTabIds(clientA, worktreeId)
     if (beforePartialClose.length > 1) {
       await callEnvironment(clientA.page, clientA.environmentId, 'session.tabs.close', {
@@ -256,7 +214,6 @@ test('two paired clients stay in step with the host across an emptied workspace'
       )
     }
 
-    // ── Phase 1b: A empties the workspace by hand. ──
     for (const hostTabId of await readHostTerminalTabIds(clientA, worktreeId)) {
       await callEnvironment(clientA.page, clientA.environmentId, 'session.tabs.close', {
         worktree: `id:${worktreeId}`,
@@ -271,9 +228,7 @@ test('two paired clients stay in step with the host across an emptied workspace'
         message: 'host still held terminals after client A closed them all'
       })
       .toBe(0)
-    // Deliberately generous: the question is whether the retraction ever arrives, not whether
-    // it is prompt. A client still showing a terminal the host has destroyed is a dead pane the
-    // user will click.
+    // Wait generously for any retraction; a never-removed mirror is still a dead pane.
     const emptyA = await waitForClientToMatchHost(clientA, 0, worktreeId, RETRACTION_BUDGET_MS)
     const emptyB = await waitForClientToMatchHost(clientB, 0, worktreeId, RETRACTION_BUDGET_MS)
     const hostOwnView = await readMirroredTabCount(orcaPage, worktreeId)
@@ -288,8 +243,7 @@ test('two paired clients stay in step with the host across an emptied workspace'
       )
     }
 
-    // Neither client may seed a replacement into a workspace the user deliberately emptied:
-    // both hold a row for it, so both know it was emptied rather than never initialized.
+    // Both clients hold explicit empty rows and must not automatically seed replacements.
     await orcaPage.waitForTimeout(10_000)
     const hostAfterSettle = (await readHostTerminalTabIds(clientA, worktreeId)).length
     console.error(`[two-client] phase1b-settled host=${hostAfterSettle}`)
@@ -299,7 +253,6 @@ test('two paired clients stay in step with the host across an emptied workspace'
       )
     }
 
-    // ── Phase 2: B creates a terminal again. Both clients must follow the host. ──
     await callEnvironment(clientB.page, clientB.environmentId, 'session.tabs.createTerminal', {
       worktree: `id:${worktreeId}`,
       activate: true,
@@ -333,15 +286,7 @@ test('two paired clients stay in step with the host across an emptied workspace'
   expect(failures, failures.join('\n')).toEqual([])
 })
 
-/**
- * The same workspace, driven by a client that starts working the moment it finishes pairing —
- * which is what a user does on a machine they have just added.
- *
- * Isolated from the two-client test above because the failure it hunts is a startup race, not a
- * multi-client one: the earlier form of that test drove the close seconds after the pairing
- * completed and repeatedly left the client's mirror stuck — sometimes still showing the terminal
- * the host had closed, sometimes stuck empty afterwards — with the link demonstrably alive.
- */
+// Exercise immediate post-pairing close separately: it is a startup race, unlike the settled two-client journey.
 test('a client that works immediately after pairing stays in step with the host', async ({
   orcaPage
 }, testInfo) => {

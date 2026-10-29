@@ -5,8 +5,6 @@ import type { OrchestrationDb } from '../orchestration-db'
 import { runLifecycleWriteTransaction } from '../lifecycle-write-transaction-runner'
 import { UNBOUND_RUN_ID } from '../contract-constants'
 
-// ── Messages ──
-
 const MESSAGE_INSERT_SAVEPOINT = 'message_insert_batch'
 const WORKER_DONE_MESSAGE_SAVEPOINT = 'worker_done_message_commit'
 
@@ -26,9 +24,7 @@ export type MessageInsert = {
 }
 
 export function insertMessage(this: OrchestrationDb, msg: MessageInsert): MessageRow {
-  // A sender in no Run (two plain terminals, `send --to <handle>`) still gets durable mail. It is
-  // filed under the unbound Run, never the legacy one, which the schema-skew probe reads as pre-Runs.
-  // Created on first use so `run list` shows it only to a user who has such mail.
+  // Unbound senders get a lazily created unbound Run; the legacy Run denotes pre-Runs data to skew probes.
   const runId = msg.runId ?? UNBOUND_RUN_ID
   if (msg.runId == null) {
     this.db

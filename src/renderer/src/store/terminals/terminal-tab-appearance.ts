@@ -5,6 +5,7 @@ import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import type { AgentType } from '../../../../shared/agent-status-types'
 import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './terminal-state'
 import { findRenamableUnifiedTab } from './renamable-unified-tab'
+import { captureStructuredChatRename } from '@/runtime/structured-chat-rename-action'
 
 export function createTerminalTabAppearanceActions(
   set: TerminalStoreSet,
@@ -27,7 +28,21 @@ export function createTerminalTabAppearanceActions(
       })
       const currentState = get()
       const item = findRenamableUnifiedTab(currentState.unifiedTabsByWorktree, tabId)
-      if (item) {
+      if (item?.contentType === 'agent-session') {
+        const action = captureStructuredChatRename(get, item)
+        void import('@/runtime/structured-chat-rename')
+          .then(({ renameStructuredChatTab }) =>
+            renameStructuredChatTab(
+              get,
+              item,
+              title,
+              opts,
+              () => get().setTabCustomLabel(item.id, title, opts),
+              action
+            )
+          )
+          .finally(action.finish)
+      } else if (item) {
         currentState.setTabCustomLabel(item.id, title, opts)
       }
       const sessionId =
@@ -36,9 +51,8 @@ export function createTerminalTabAppearanceActions(
         Object.values(currentState.tabsByWorktree)
           .flat()
           .find((t) => t.id === tabId)?.aiVaultTitle?.sessionId ??
-        collectAgentPaneConversations(
-          currentState,
-          (agent): agent is AgentType => Boolean(agent)
+        collectAgentPaneConversations(currentState, (agent): agent is AgentType =>
+          Boolean(agent)
         ).find((c) => c.tabId === tabId)?.providerSession.id
       if (sessionId) {
         callRuntimeRpc({ kind: 'local' }, 'aiVault.renameSession', { sessionId, title }).catch(

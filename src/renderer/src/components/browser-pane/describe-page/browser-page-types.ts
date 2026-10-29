@@ -25,7 +25,7 @@ export type { GrabIntent } from '../../../../../shared/browser-grab-types'
 
 export type BrowserPageContextMenuState = Pick<
   BrowserContextMenuRequestedEvent,
-  'linkUrl' | 'pageUrl' | 'selectionText' | 'editable' | 'image'
+  'linkUrl' | 'pageUrl' | 'selectionText' | 'editable' | 'image' | 'extensionMenu'
 > & {
   x: number
   y: number
@@ -45,11 +45,7 @@ export type BrowserPageGrabToastState = {
 export type BrowserPageGrabAnnotationsOptions = {
   /** Scopes the stored annotations. Stable for the life of the surface. */
   browserTabId: string
-  /**
-   * The id main resolves to a guest. Defaults to the annotation scope, which is the same string
-   * for a browser page — a preview re-mints this on recovery, and its annotations must not be
-   * orphaned when it does.
-   */
+  /** Guest target ID defaults to the annotation scope; previews may remint it during recovery without orphaning stored annotations. */
   toolTargetId?: string
   isActive: boolean
   grab: GrabModeHook

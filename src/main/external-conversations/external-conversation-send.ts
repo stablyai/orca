@@ -21,7 +21,6 @@ const UNREACHABLE = new Set([
   'agent_not_in_foreground'
 ])
 
-/** The linked pane's handle and the process it is bound to now; null once nothing is. */
 export function bindPane(
   terminal: Pick<
     FollowUpTerminal,
@@ -41,11 +40,11 @@ export function bindPane(
   }
 }
 
-/**
- * One follow-up through the shared writer: it waits out an approval on its own predicate, refuses
- * a process other than `expectedBinding`, and stops on `signal`. A throw before
- * any guarded write passed wrote nothing; after that it may have, so it is `unknown`.
- */
+export function sameBinding(a: AgentPromptExpectedBinding, b: AgentPromptExpectedBinding): boolean {
+  return a.ptyId === b.ptyId && a.processIncarnation === b.processIncarnation
+}
+
+/** Failures after a write guard passes may have written bytes, so report unknown instead of allowing retry. */
 export async function deliverFollowUp(
   terminal: FollowUpTerminal,
   followUp: {
@@ -70,7 +69,7 @@ export async function deliverFollowUp(
       turn: { purpose: 'external-message', body: followUp.text, operationId: followUp.requestId },
       beforeWrite: async (ptyId) => {
         await guard.beforeWrite(ptyId)
-        // The writer's own checks after this are synchronous, so an abort cannot land between.
+        // The writer checks synchronously afterward, so an abort cannot interleave before the write.
         if (!signal.aborted) {
           passes++
         }

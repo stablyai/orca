@@ -1,9 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { PANEL_PONG_TYPE, panelPongSchema, readPanelPongId } from './plugin-panel-bridge'
 
-/** `readPanelPongId` is hand-rolled to avoid zod's ~90x rejected-parse
- *  allocation cost on the guest-controlled bridge path. It must therefore
- *  accept exactly what `panelPongSchema` accepts, forever. */
+/** Hand-rolled pong reading avoids Zod’s ~90x rejection cost; pin exact schema acceptance parity. */
 
 const CASES: unknown[] = [
   { type: PANEL_PONG_TYPE, pingId: 0 },

@@ -85,14 +85,11 @@ if (process.platform === 'win32') {
 }
 
 const test = base.extend({
-  launchEnv: [
-    {
-      PATH: `${fakeCliDir}${path.delimiter}${process.env.PATH ?? ''}`,
-      ORCA_E2E_CLI_ENTRY: cliEntry,
-      ORCA_E2E_CLI_LEDGER: cliLedgerPath
-    },
-    { option: true }
-  ]
+  launchEnv: {
+    PATH: `${fakeCliDir}${path.delimiter}${process.env.PATH ?? ''}`,
+    ORCA_E2E_CLI_ENTRY: cliEntry,
+    ORCA_E2E_CLI_LEDGER: cliLedgerPath
+  }
 })
 
 type CliLedgerEntry = {

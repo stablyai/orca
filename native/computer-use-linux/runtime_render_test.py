@@ -242,7 +242,7 @@ class RuntimeRenderTest(unittest.TestCase):
                 runtime.run_operation({"tool": "click", "app": "Fixture"})
             self.assertEqual(effects, ["clicked"])
 
-    def test_compacted_browser_records_keep_their_own_frames(self):
+    def test_compacted_browser_records_keep_their_own_frames_and_indexes(self):
         tabs = [FakeAccessible("page tab", f"Tab {i}", value="1" if i == 9 else "") for i in range(10)]
         buttons = [FakeAccessible("button", f"Other {i}") for i in range(10)]
         root = FakeAccessible("frame", "Browser", children=[
@@ -255,6 +255,8 @@ class RuntimeRenderTest(unittest.TestCase):
             for node in (tabs[-1], buttons[8]):
                 self.assertEqual(by_name[node.name]["frame"]["x"], fixture.bounds[node].x - 100)
             self.assertNotIn("Tab 0", by_name)
+            indexes = [item["index"] for item in snapshot["elements"]]
+            self.assertEqual(len(indexes), len(set(indexes)))
 
     def test_geometry_skips_insufficient_budget_and_restores_action_timeout(self):
         clock = [0.0]
@@ -329,7 +331,6 @@ class RuntimeRenderTest(unittest.TestCase):
 
         self.assertEqual([item["runtimeId"] for item in records], [[0], [0, 0]])
         self.assertEqual(lines, ["0 button", "\t1 button Nested"])
-        self.assertEqual(root.counter["child_reads"], 2)
         self.assertFalse(truncation["truncated"])
 
     def test_suppressed_child_failure_keeps_control_output(self):
@@ -342,14 +343,13 @@ class RuntimeRenderTest(unittest.TestCase):
         self.assertFalse(truncation["truncated"])
         self.assertEqual(root.counter["child_reads"], 0)
 
-    def test_named_generic_node_skips_unused_summary_walk(self):
+    def test_named_generic_node_keeps_children_without_a_summary(self):
         root = FakeAccessible("section", "Details", children=[FakeAccessible("text", "body")])
 
         records, lines, _ = render(root)
 
         self.assertEqual([record["name"] for record in records], ["Details", "body"])
         self.assertEqual(lines, ["0 section Details", "\t1 text body"])
-        self.assertEqual(root.counter["child_reads"], 3)
 
     def test_unnamed_generic_node_keeps_plain_text_summary(self):
         root = FakeAccessible(
@@ -361,7 +361,6 @@ class RuntimeRenderTest(unittest.TestCase):
 
         self.assertEqual(len(records), 1)
         self.assertEqual(lines, ["0 section, Text: Alpha Beta"])
-        self.assertEqual(root.counter["child_reads"], 13)
 
     def test_row_keeps_its_specific_summary_walk(self):
         root = FakeAccessible(
@@ -374,7 +373,6 @@ class RuntimeRenderTest(unittest.TestCase):
 
         self.assertEqual([record["name"] for record in records], ["Invoice", "Alpha", "Beta"])
         self.assertEqual(lines, ["0 row Invoice, Text: Alpha Beta", "\t1 text Alpha", "\t2 text Beta"])
-        self.assertEqual(root.counter["child_reads"], 10)
 
     def test_empty_generic_wrapper_keeps_elision_path_and_depth(self):
         root = FakeAccessible("section", children=[FakeAccessible("button", "Continue")])

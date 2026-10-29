@@ -1,4 +1,5 @@
 import { useAppStore } from '@/store'
+import { translate } from '@/i18n/i18n'
 import {
   findWorkspaceFileRoute,
   type RuntimeWorkspaceFileRoute
@@ -15,6 +16,20 @@ import { afterPendingEntityTabs } from '@/runtime/layout-owner-pending-tabs'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 
 export type RestoredEditorOwnerMigrationResult = RestoredEditorOwnerResult
+
+export function restoredOwnerMigrationErrorMessage(
+  reason: Extract<RestoredEditorOwnerMigrationResult, { ok: false }>['reason']
+): string {
+  return reason === 'collision'
+    ? translate(
+        'auto.components.editor.EditorPanel.siblingFileAlreadyOpen',
+        'The sibling file is already open; close one tab before restoring it.'
+      )
+    : translate(
+        'auto.components.editor.EditorPanel.siblingFileOwnerChanged',
+        'The sibling file owner changed while the tab was restoring.'
+      )
+}
 
 export async function migrateRestoredEditorFileOwner(
   fileId: string,
@@ -50,7 +65,7 @@ export async function migrateRestoredEditorFileOwner(
     useAppStore.getState().setRestoredEditorOwnerMigrationPending(fileId, false)
     throw error
   }
-  // Switch point: main moves only the tabs it drew; one it has yet to draw would keep the old id.
+  // Wait for pending opens so main rekeys every tab instead of leaving undrawn tabs on the old ID.
   if (ORCA_LAYOUT_OWNER_IS_MAIN) {
     await pendingTabsOfFileAnswered(source.worktreeId, fileId)
   }
@@ -80,7 +95,7 @@ export async function migrateRestoredEditorFileOwner(
     targetRuntimeEnvironmentId: runtimeEnvironmentId,
     targetOperationProvenance
   })
-  // Switch point: the move is main's; its frame moves the file, or main refused it.
+  // A successful main-owned move must arrive in its frame before callers use the rekeyed file.
   if (ORCA_LAYOUT_OWNER_IS_MAIN && result.ok && !(await contentRekeyOutcome([result.fileId]))) {
     return { ok: false, reason: 'owner-changed' }
   }

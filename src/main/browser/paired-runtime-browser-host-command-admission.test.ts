@@ -4,13 +4,13 @@ import type { PairingOffer } from '../../shared/pairing'
 import type {
   RemoteRuntimeSubscription,
   RemoteRuntimeSubscriptionCallbacks
-} from '../../shared/remote-runtime-client'
+} from '../../shared/remote-runtime/remote-runtime-client'
 
 const { subscribeRemoteRuntimeRequestMock } = vi.hoisted(() => ({
   subscribeRemoteRuntimeRequestMock: vi.fn()
 }))
 
-vi.mock('../../shared/remote-runtime-client', () => ({
+vi.mock('../../shared/remote-runtime/remote-runtime-client', () => ({
   subscribeRemoteRuntimeRequest: subscribeRemoteRuntimeRequestMock
 }))
 
@@ -173,7 +173,6 @@ describe('paired runtime browser host command admission', () => {
     })
     await starting
 
-    // Why: the refresh is a deliberate transport failure, which without reconnect fences every page.
     await expect(lease.refreshPageInventory()).rejects.toThrow(
       'Browser host inventory refresh is unavailable'
     )

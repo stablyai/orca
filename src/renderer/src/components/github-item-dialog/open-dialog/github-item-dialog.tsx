@@ -254,7 +254,6 @@ export default function GitHubItemDialog({
   ) : null
 
   return (
-    // Why: rendered inline (not a Radix dialog), so e2e needs a stable hook to scope assertions to this detail surface.
     <div
       data-testid="github-item-detail"
       className="flex h-full min-h-0 flex-col overflow-hidden rounded-md border border-border/50 bg-background shadow-sm"

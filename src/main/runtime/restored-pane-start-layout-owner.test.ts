@@ -1,5 +1,4 @@
-// Layout-owner build: main's one start of a restored pane, shared by a client's first view and a
-// CLI or orchestration trigger.
+// Restored panes share main's starter across first-view, CLI and orchestration triggers.
 import { describe, expect, it, vi } from 'vitest'
 
 vi.mock('../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
@@ -19,7 +18,6 @@ const { committingSpawn } = await import('./bind-first-pane.test-fixture')
 const PANE = { worktreeId: TEST_WORKTREE_ID, tabId: 'host-tab', leafId: HEADLESS_LEAF_ID }
 
 function windowlessRuntime() {
-  // The pane's stored terminal is gone: the host lists no live terminal.
   const { runtimeStore, getSession, setSession } = makeRuntimeStoreWithWorkspaceSession(
     makeWorkspaceSessionWithHeadlessTerminal()
   )
@@ -60,7 +58,6 @@ describe('a restored pane with no live terminal, on a host with no window (layou
     expect(spawn).toHaveBeenCalledWith(
       expect.objectContaining({ sessionId: 'persisted-pty', tabId: 'host-tab' })
     )
-    // Live now: a later trigger starts nothing.
     await expect(runtime.ensureRestoredPaneStarted(PANE)).resolves.toEqual({ id: 'persisted-pty' })
     expect(spawn).toHaveBeenCalledOnce()
   })

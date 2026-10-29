@@ -2,6 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, test } from 'vitest'
+import { codexProviderHandle } from '../../../src/shared/agent-session-provider-handle-encoding'
 import { agentSessionFailureFact } from '../../../src/shared/agent-session-failure'
 import { agentSessionFailureWords } from '../../../src/shared/agent-session-failure-words'
 import type {
@@ -15,11 +16,13 @@ import {
 } from '../../../src/main/native-chat/agent-session-journal/journal-host-database-test-support'
 import { projectJournalBatch } from '../../../src/main/native-chat/agent-session-wire/agent-session-journal-batch'
 import { readAgentSessionHydrationPage } from '../../../src/main/native-chat/agent-session-wire/agent-session-history-page'
-import { importReleaseCheckoutModule, materializeReleaseCheckout } from './release-checkout'
+import {
+  importReleaseCheckoutModule,
+  materializeReleaseCheckout,
+  releaseModuleExport
+} from './release-checkout'
 
-// Released clients that predate the published submission position and answered turn: each must
-// fold and draw a history page and an incremental batch carrying them exactly as it draws the same
-// without them, whether the turn is named or stated as none.
+// Pin readers before submission position/answered turn; new fields must not change their page or incremental rendering.
 const BASELINE_REFS = ['v1.4.219', 'v1.4.220'] as const
 
 const IDENTITY: AgentSessionJournalIdentity = {
@@ -27,17 +30,7 @@ const IDENTITY: AgentSessionJournalIdentity = {
   workspaceId: 'ws-1',
   hostId: 'host-1',
   agent: 'codex',
-  providerHandle: { kind: 'codex', threadId: 'thread-1' }
-}
-
-/** A function the pinned release exports, typed as the caller calls it. */
-function releaseExport<T>(module: Record<string, unknown>, name: string): T {
-  const value = module[name]
-  if (typeof value !== 'function' && (typeof value !== 'object' || value === null)) {
-    throw new Error(`the pinned release exports no ${name}`)
-  }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a value the pinned release exports; each caller names the shape it uses, and a changed one fails the test.
-  return value as T
+  providerHandle: codexProviderHandle('thread-1')
 }
 
 type OldState = { submissions: Record<string, unknown>[]; items: unknown[] }
@@ -155,12 +148,12 @@ test.each(BASELINE_REFS)(
         checkout,
         'src/shared/structured-agent-session-message-projection.ts'
       )
-      const reduce = releaseExport<(state: unknown, action: unknown) => OldState>(
+      const reduce = releaseModuleExport<(state: unknown, action: unknown) => OldState>(
         reducer,
         'reduceStructuredAgentSession'
       )
-      const empty = releaseExport<unknown>(reducer, 'EMPTY_STRUCTURED_AGENT_SESSION')
-      const project = releaseExport<
+      const empty = releaseModuleExport<unknown>(reducer, 'EMPTY_STRUCTURED_AGENT_SESSION')
+      const project = releaseModuleExport<
         (items: unknown[], outbox: unknown[], submissions: unknown[]) => unknown[]
       >(projection, 'projectStructuredAgentSessionMessages')
       const draw = (state: OldState) => ({

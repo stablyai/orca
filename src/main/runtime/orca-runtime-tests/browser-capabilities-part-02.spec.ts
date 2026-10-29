@@ -43,7 +43,7 @@ describe('OrcaRuntimeService', () => {
     expect(internals.listResolvedWorktrees).not.toHaveBeenCalled()
   })
 
-  // #30731: orcad with no engine still hosts pages on a paired desktop, and says why it can't itself.
+  // #30731: engine-free orcad can host client-rendered pages while reporting its local engine failure.
   it('advertises client hosting from an engine-free factory while reporting the engine cause', () => {
     setRuntimeBrowserCommandsFactory((host) => new RuntimeBrowserCommands(host), {
       headless: true,

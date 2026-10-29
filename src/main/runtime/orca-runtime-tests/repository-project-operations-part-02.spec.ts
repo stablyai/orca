@@ -676,7 +676,7 @@ describe('OrcaRuntimeService', () => {
     const getReposSpy = vi.spyOn(store, 'getRepos').mockReturnValue([sshProject])
 
     try {
-      // The SSH project's folder is on another machine, so git runs here; this source doesn't exist.
+      // The SSH project's same path must not block a local clone; a missing source makes the attempted clone fail.
       await expect(
         createRuntime().cloneRepo(join(destination, 'missing', 'orca'), destination)
       ).rejects.toThrow('Clone failed')

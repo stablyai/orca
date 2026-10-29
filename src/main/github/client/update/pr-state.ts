@@ -29,7 +29,7 @@ export async function updatePRState(
   await acquire()
   try {
     const cmd = updates.state === 'closed' ? 'close' : 'reopen'
-    // Why: gh's PR commands use GitHub's supported reopen flow; REST state PATCH can 422 on reopen.
+    // Use GitHub's supported CLI reopen flow; REST state PATCH can reject reopening.
     await ghExecFileAsync(
       ['pr', cmd, String(prNumber), '--repo', `${ownerRepo.owner}/${ownerRepo.repo}`],
       {

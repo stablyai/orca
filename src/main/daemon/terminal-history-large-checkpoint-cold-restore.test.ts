@@ -8,25 +8,14 @@ import { HeadlessEmulator } from './headless-emulator'
 import { LOG_HEADER_BYTES } from './terminal-history-log'
 import { getHistorySessionDirName } from './history-paths'
 
-// Guards checkpoint-only cold restore: the route taken when the daemon dies right after a
-// checkpoint, so output.log is header-only and checkpoint.json is the sole recovery source.
-// #10179 shipped a read cap (16MiB) under what the unbounded checkpoint writer can emit; past it
-// the read threw, the catch swallowed it to checkpoint=null, and the pane reopened empty (#10479
-// raised the cap; nothing pinned the round trip that the cap silently broke). The
-// reader-level bound is covered in history-reader-memory.test.ts — this asserts the round trip
-// through the real writer, which is what actually decides whether a user sees their scrollback.
+// Exercise real writer-to-reader recovery above the retired 16 MiB cap with a header-only log.
 
 const MARKERS = 300
 const SESSION_ID = 'repo-1::/Users/dev/large-scrollback'
 const COLS = 800
 const ROWS = 40
 
-// Why per-cell color: the restore seed must clear 16MiB to cover the pre-#10479 cap, and
-// SGR-per-cell is how real agent/build output inflates a snapshot well past its plain-text size.
-// It is also what keeps the fixture affordable — the xterm buffer costs rows x cols, so carrying
-// the bytes in SGR runs instead of rows reaches 25MiB of seed from 5.5k rows rather than 26k,
-// cutting this file's peak RSS from ~1.2GiB to ~800MiB. Only 8 distinct rows exist under
-// (row + col) % 8, so build them once rather than per line.
+// Per-cell SGR crosses the retired byte cap with fewer buffer rows; cache the eight repeated row variants.
 const FILLER_ROWS = Array.from(
   { length: 8 },
   (_unused, row) =>
@@ -41,9 +30,7 @@ function writeLargeScrollback(emulator: HeadlessEmulator, fillerLines: number): 
   for (let index = 0; index < MARKERS; index += 1) {
     written = emulator.writeSync(`MARKER-${index}\r\n`) && written
   }
-  // Why assert: writeSync returns false if xterm's private _core.writeSync ever goes away, which
-  // would leave an empty snapshot. The size assertions below catch that, but the endedAt gate is
-  // size-independent and would still pass — pinning the gate over no scrollback at all.
+  // A missing private sync API would otherwise let the clean-end test pass with an empty snapshot.
   expect(written).toBe(true)
 }
 
@@ -69,20 +56,18 @@ describe('checkpoint-only cold restore of a large checkpoint', () => {
       cols: COLS,
       rows: ROWS
     })
-    // Why dispose first: a throwing checkpoint() must not leak the buffer for the worker's life.
+    // Release the large buffer even if checkpointing later fails.
     const snapshot = emulator.getSnapshot()
     emulator.dispose()
     await manager.checkpoint(SESSION_ID, snapshot)
 
     const sessionDir = join(dir, getHistorySessionDirName(SESSION_ID))
-    // checkpoint() resets the log to its header, so this is genuinely checkpoint-only: any
-    // recovered content had to come through the checkpoint read, not incremental log replay.
+    // Require checkpoint-only recovery, with no incremental output available.
     expect(statSync(join(sessionDir, 'output.log')).size).toBe(LOG_HEADER_BYTES)
     expect(statSync(join(sessionDir, 'checkpoint.json')).size).toBeGreaterThan(16 * 1024 * 1024)
 
     const info = await reader.detectColdRestore(SESSION_ID)
     expect(info).not.toBeNull()
-    // The adapter seeds a non-alt-screen restore with rehydrateSequences + snapshotAnsi.
     const seed = info!.rehydrateSequences + info!.snapshotAnsi
     expect(info!.modes.alternateScreen).toBe(false)
     for (const index of [0, MARKERS - 1]) {
@@ -91,8 +76,7 @@ describe('checkpoint-only cold restore of a large checkpoint', () => {
     expect(seed.length).toBeGreaterThan(16 * 1024 * 1024)
   }, 60_000)
 
-  // Why pinned: this gate, not any size cap, is what makes a checkpoint-only restore come back
-  // blank. Two separate investigations mistook a cleanly-ended session for a size regression.
+  // Keep clean-end gating distinct from checkpoint size regressions.
   it('restores after an unclean exit but not after a clean one, at the same checkpoint size', async () => {
     const restoreAfter = async (endCleanly: boolean): Promise<boolean> => {
       const manager = new HistoryManager(dir)
