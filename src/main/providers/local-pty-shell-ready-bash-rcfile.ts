@@ -94,11 +94,14 @@ __orca_osc133_preexec() {
       return 0
     fi
   fi
-  case "\${FUNCNAME[1]:-}" in __orca_osc133_*|__orca_prompt_mark|__orca_restore_prompt_status) return 0 ;; esac
+  # functrace also runs this trap inside the trap-adoption helpers.
+  case "\${FUNCNAME[1]:-}" in __orca_osc133_*|__orca_prompt_mark|__orca_restore_prompt_status|__orca_adopt_outer_debug_trap|__orca_update_user_debug_trap) return 0 ;; esac
   case "$BASH_COMMAND" in __orca_osc133_precmd|__orca_osc133_prompt_done|__orca_prompt_mark) return 0 ;; esac
   __orca_run_user_debug_trap
   [[ -z "\${__orca_in_prompt_command:-}" ]] || return 0
   [[ -z "\${__orca_in_command:-}" ]] || return 0
+  # functrace subshells (e.g. PS0 $(...)) inherit this trap but cannot set __orca_in_command here.
+  (( BASH_SUBSHELL == 0 )) || return 0
   # DEBUG runs per simple command; chained traps may reenter for the same foreground command.
   printf "\\033]133;C\\007"
   __orca_in_command=1
