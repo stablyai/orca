@@ -28,6 +28,7 @@ import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { resolvePaneAgentSessionId } from './pane-agent-session-id'
 import { resetTerminalInputModes } from './terminal-input-mode-reset'
 import { equalizeTerminalPanes } from './terminal-pane-layout-owner-commands'
+import { claudeSideChatMenuActions } from './claude-side-chat-actions'
 
 type UseTerminalPaneContextMenuDeps = {
   managerRef: React.RefObject<PaneManager | null>
@@ -80,7 +81,7 @@ type TerminalMenuState = {
   onSetTitle: () => void
   onClearPaneTitle: () => void
   runForPane: <Result>(paneId: number, action: () => Result) => Result
-}
+} & ReturnType<typeof claudeSideChatMenuActions>
 
 export function useTerminalPaneContextMenu({
   managerRef,
@@ -296,6 +297,7 @@ export function useTerminalPaneContextMenu({
   const menuPaneId = open ? (resolveMenuPane()?.id ?? null) : null
 
   return {
+    ...claudeSideChatMenuActions({ open, managerRef, resolveMenuPane, tabId, worktreeId }),
     open,
     setOpen,
     point,

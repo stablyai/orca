@@ -40,6 +40,7 @@ import { useWindowVisibilityEffects } from './app-shell/use-window-visibility-ef
 import { SpaceWindowStatePublisher } from './components/workspace-space/SpaceWindowStatePublisher'
 import { PlainSshTerminalPanels } from './components/plain-ssh-terminal/PlainSshTerminalPanels'
 import { installActiveWorktreeRemovalSuccessor } from './lib/active-worktree-removal-successor'
+import { installClaudeSideChatTracking } from './lib/claude-side-chat-registry'
 
 function App(): React.JSX.Element {
   const layout = useAppChromeLayout()
@@ -63,6 +64,7 @@ function App(): React.JSX.Element {
   useGlobalKeybindings({ layout, floatingWorkspace })
   // App owns active-selection removal; the Space window only mirrors selection.
   useEffect(() => installActiveWorktreeRemovalSuccessor(), [])
+  useEffect(() => installClaudeSideChatTracking(), [])
 
   // Portaled sheets/dialogs live outside .app-layout and need root offsets to clear Windows/Linux controls.
   useEffect(() => {

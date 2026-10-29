@@ -143,6 +143,8 @@ const STATIC_TITLE_COPY = {
   'chat.find': () => translate('keybindings.title.chatFind', 'Find in chat'),
   'terminal.toggleNativeChat': () =>
     translate('keybindings.title.terminalToggleNativeChat', 'Switch between Chat UI and terminal'),
+  'terminal.toggleSideChat': () =>
+    translate('keybindings.title.terminalToggleSideChat', 'Open or switch to Claude side chat'),
   'sidebar.childWorkspaces.toggle': () =>
     translate('keybindings.title.sidebarChildWorkspacesToggle', 'Toggle Child Workspaces'),
   'terminal.clearPaneTitle': () =>

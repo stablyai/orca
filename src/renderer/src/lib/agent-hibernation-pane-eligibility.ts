@@ -1,5 +1,6 @@
 import type { AgentStatusEntry } from '../../../shared/agent-status-types'
 import { getAgentResumeArgv, isResumableTuiAgent } from '../../../shared/agent-session-resume'
+import { isClaudeSideChatSessionId } from '../../../shared/claude-side-chat-session-id'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../shared/terminal-tab-types'
 import { parseRemoteRuntimePtyId } from '../../../shared/remote-runtime/remote-runtime-pty-id'
@@ -104,7 +105,10 @@ export function getEligiblePane(args: {
   if (!entry.agentType || !isResumableTuiAgent(entry.agentType) || !entry.providerSession) {
     return null
   }
-  if (!getAgentResumeArgv(entry.agentType, entry.providerSession)) {
+  if (
+    !getAgentResumeArgv(entry.agentType, entry.providerSession) ||
+    isClaudeSideChatSessionId(entry.providerSession.id)
+  ) {
     return null
   }
   // Anchor on first done, not repaint/replay updatedAt; floor by last foreground visit, fresh PTY binding and real completion boundary.

@@ -10,6 +10,8 @@ import {
 } from '@/lib/pane-manager/terminal-scroll-intent'
 import type { resolveTerminalKeyboardShortcutAction } from './terminal-keyboard-shortcut-matching'
 import { equalizeTerminalPanes } from './terminal-pane-layout-owner-commands'
+import { useAppStore } from '@/store'
+import { claudeSideChatMenuMode, toggleClaudeSideChatFromPane } from './claude-side-chat-actions'
 
 type TerminalShortcutAction = NonNullable<ReturnType<typeof resolveTerminalKeyboardShortcutAction>>
 
@@ -187,6 +189,17 @@ export function dispatchTerminalShortcutAction(
     if (pane) {
       onSetTitle(pane.id)
     }
+    return
+  }
+  if (action.type === 'toggleClaudeSideChat') {
+    const pane = manager.getActivePane() ?? manager.getPanes()[0]
+    // Non-Claude panes keep the chord for the program running in them.
+    if (!pane || !claudeSideChatMenuMode(useAppStore.getState(), tabId, pane.leafId)) {
+      return
+    }
+    event.preventDefault()
+    event.stopImmediatePropagation()
+    toggleClaudeSideChatFromPane({ manager, pane, tabId, worktreeId })
     return
   }
   if (action.type === 'clearPaneTitle') {

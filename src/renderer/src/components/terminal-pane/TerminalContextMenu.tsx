@@ -2,10 +2,13 @@ import { useMemo } from 'react'
 import {
   Clipboard,
   Copy,
+  CornerUpLeft,
   Eraser,
   GitFork,
   Maximize2,
   MessageSquare,
+  MessageSquarePlus,
+  MessageSquareQuote,
   Minimize2,
   PanelBottomClose,
   PanelsTopLeft,
@@ -24,6 +27,7 @@ import {
   DropdownMenuShortcut,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
+import type { ClaudeSideChatMenuMode } from './claude-side-chat-actions'
 import { shouldIgnoreTerminalMenuPointerDownOutside } from './terminal-context-menu-dismiss'
 import type { TerminalQuickCommand } from '../../../../shared/terminal-quick-command-types'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
@@ -68,6 +72,10 @@ type TerminalContextMenuProps = {
   isNativeChatView: boolean
   onToggleNativeChat: () => void
   onCopyAgentSessionContext: () => void
+  claudeSideChatMode?: ClaudeSideChatMenuMode
+  canAskInClaudeSideChat?: boolean
+  onToggleClaudeSideChat?: () => void
+  onAskInClaudeSideChat?: () => void
   quickCommandHosts: TerminalQuickCommandMenuHost[]
   quickCommandHostLoadFailed: boolean
   quickCommandHostOwnershipPending: boolean
@@ -159,6 +167,10 @@ function TerminalContextMenuItems({
   isNativeChatView,
   onToggleNativeChat,
   onCopyAgentSessionContext,
+  claudeSideChatMode = null,
+  canAskInClaudeSideChat = false,
+  onToggleClaudeSideChat,
+  onAskInClaudeSideChat,
   quickCommandHosts,
   quickCommandHostLoadFailed,
   quickCommandHostOwnershipPending,
@@ -187,7 +199,8 @@ function TerminalContextMenuItems({
       setTitle: formatPrimaryShortcutLabel('terminal.setTitle', keybindings),
       clearPaneTitle: formatPrimaryShortcutLabel('terminal.clearPaneTitle', keybindings),
       close: formatPrimaryShortcutLabel('terminal.closePane', keybindings),
-      nativeChat: formatOptionalPrimaryShortcutLabel('terminal.toggleNativeChat', keybindings)
+      nativeChat: formatOptionalPrimaryShortcutLabel('terminal.toggleNativeChat', keybindings),
+      sideChat: formatOptionalPrimaryShortcutLabel('terminal.toggleSideChat', keybindings)
     }),
     [keybindings]
   )
@@ -222,6 +235,30 @@ function TerminalContextMenuItems({
       />
       {canContinueAgentSessionInNewSession ? (
         <AgentSessionContinuationMenuItem onSelect={onContinueAgentSessionInNewSession} />
+      ) : null}
+      {claudeSideChatMode === 'open' && onToggleClaudeSideChat ? (
+        <DropdownMenuItem onSelect={onToggleClaudeSideChat}>
+          <MessageSquarePlus />
+          {translate('components.claudeSideChat.open', 'Open Side Chat')}
+          {shortcuts.sideChat ? (
+            <DropdownMenuShortcut>{shortcuts.sideChat}</DropdownMenuShortcut>
+          ) : null}
+        </DropdownMenuItem>
+      ) : null}
+      {claudeSideChatMode === 'open' && canAskInClaudeSideChat && onAskInClaudeSideChat ? (
+        <DropdownMenuItem onSelect={onAskInClaudeSideChat}>
+          <MessageSquareQuote />
+          {translate('components.claudeSideChat.askSelection', 'Ask in Side Chat')}
+        </DropdownMenuItem>
+      ) : null}
+      {claudeSideChatMode === 'return' && onToggleClaudeSideChat ? (
+        <DropdownMenuItem onSelect={onToggleClaudeSideChat}>
+          <CornerUpLeft />
+          {translate('components.claudeSideChat.returnToMain', 'Back to Main Chat')}
+          {shortcuts.sideChat ? (
+            <DropdownMenuShortcut>{shortcuts.sideChat}</DropdownMenuShortcut>
+          ) : null}
+        </DropdownMenuItem>
       ) : null}
       <DropdownMenuItem onSelect={onForkAgentSession}>
         <GitFork />

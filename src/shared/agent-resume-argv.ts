@@ -1,4 +1,5 @@
 import type { AgentProviderSessionMetadata, ResumableTuiAgent } from './agent-session-resume'
+import { isClaudeSideChatSessionId } from './claude-side-chat-session-id'
 
 /** Keep per-agent resume argv separate from session metadata; type-only imports avoid runtime cycles. */
 export function getAgentResumeArgv(
@@ -91,7 +92,9 @@ export function getAgentResumeArgv(
 const FORK_ARGV: Partial<
   Record<ResumableTuiAgent, (providerSession: AgentProviderSessionMetadata) => string[] | null>
 > = {
-  claude: ({ id }) => ['claude', '--resume', id, '--fork-session'],
+  // A side chat has no transcript to fork, so it cannot nest another.
+  claude: ({ id }) =>
+    isClaudeSideChatSessionId(id) ? null : ['claude', '--resume', id, '--fork-session'],
   codex: ({ id }) => ['codex', 'fork', id],
   grok: ({ id }) => ['grok', '--resume', id, '--fork-session'],
   pi: ({ transcriptPath }) => (transcriptPath ? ['pi', '--fork', transcriptPath] : null)

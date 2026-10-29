@@ -17,6 +17,7 @@ import type { NativeChatTabSession } from './tab-session-history-switch'
 import { TAB_CONTEXT_MENU_CONTENT_CLASS } from './tab-context-menu-sizing'
 import { CopyTabIdMenuItem } from './CopyTabIdMenuItem'
 import { CloseSplitPaneMenuItem } from './CloseSplitPaneMenuItem'
+import { ClaudeSideChatTabMenuItem } from './ClaudeSideChatTabMenuItem'
 
 const TAB_COLORS = [
   {
@@ -180,6 +181,7 @@ export function SortableTabContextMenu({
             </DropdownMenuItem>
           </>
         ) : null}
+        <ClaudeSideChatTabMenuItem tabId={tab.id} isActive={isActive} onActivate={onActivate} />
         <TabSessionSurfaceSwitchMenuItems
           key={sessionSwitchOpening}
           tab={tab}

@@ -1,5 +1,6 @@
 // Share status-to-resume rules with main so accepted hook statuses can checkpoint panes no window opened.
 
+import { isClaudeSideChatSessionId } from './claude-side-chat-session-id'
 import { agentVerdictFields } from './agent-main-agent-verdict'
 import {
   agentProviderSessionsEqual,
@@ -58,7 +59,9 @@ export function resumeRecordFromStatus(args: {
   if (
     args.entry.terminalResumeEligible === false ||
     !isResumableTuiAgent(agent) ||
-    !args.entry.providerSession
+    !args.entry.providerSession ||
+    // Side chats write no transcript, so a restart must not try to resume one.
+    isClaudeSideChatSessionId(args.entry.providerSession.id)
   ) {
     return null
   }

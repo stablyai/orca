@@ -207,6 +207,9 @@ export function installPreviewTerminalKeyHandler(args: {
       case 'toggleExpandActivePane':
       case 'toggleSearch':
         return consumeEvent(event)
+      // Previews cannot open a side chat; the chord stays the program's, as on non-Claude panes.
+      case 'toggleClaudeSideChat':
+        return true
     }
   })
 

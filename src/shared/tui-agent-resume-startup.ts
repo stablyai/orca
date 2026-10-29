@@ -36,9 +36,12 @@ export function buildAgentResumeStartupPlan(args: {
   launchCwd?: string | null
   /** Open a copy of the conversation instead of re-entering it; null for agents that cannot. */
   fork?: boolean
+  /** Extra provider args appended after the fork selector. */
+  forkArgs?: readonly string[]
 }): AgentStartupPlan | null {
+  const forkArgv = args.fork ? getAgentForkArgv(args.agent, args.providerSession) : null
   const resumeArgv = args.fork
-    ? getAgentForkArgv(args.agent, args.providerSession)
+    ? forkArgv && [...forkArgv, ...(args.forkArgs ?? [])]
     : getAgentResumeArgv(args.agent, args.providerSession, args.ompResumeFilePath)
   if (!resumeArgv) {
     return null

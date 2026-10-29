@@ -2,6 +2,8 @@ import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import {
   CLOSE_TERMINAL_PANE_EVENT,
   SET_TERMINAL_PANE_TITLE_EVENT,
+  TOGGLE_CLAUDE_SIDE_CHAT_EVENT,
+  type ToggleClaudeSideChatDetail,
   type CloseTerminalPaneDetail,
   type SetTerminalPaneTitleDetail
 } from '@/constants/terminal'
@@ -21,6 +23,7 @@ import {
   resolveTerminalPaneSplitSourceId
 } from './terminal-pane-split-request-routing'
 import type { PtyConnectionDeps } from './pty-connection-types'
+import { toggleClaudeSideChatInTab } from './claude-side-chat-actions'
 
 export function installTerminalPaneMountEvents(args: {
   manager: PaneManager
@@ -59,7 +62,8 @@ export function installTerminalPaneMountEvents(args: {
         ...(detail.ptyId ? { ptyId: detail.ptyId } : {})
       }
       if (detail.command) {
-        const createdPane = splitPaneWithOneShotStartup(ptyDeps, { command: detail.command }, () =>
+        const startup = { command: detail.command, ...(detail.env ? { env: detail.env } : {}) }
+        const createdPane = splitPaneWithOneShotStartup(ptyDeps, startup, () =>
           mgr.splitPane(sourcePaneId, detail.direction, splitOptions)
         )
         recordRuntimeCreatedTerminalPaneSplit(createdPane, {
@@ -131,10 +135,21 @@ export function installTerminalPaneMountEvents(args: {
     }
   }
 
+  const onToggleClaudeSideChat = (event: Event): void => {
+    const detail: ToggleClaudeSideChatDetail | null =
+      event instanceof CustomEvent ? event.detail : null
+    const manager = deps.managerRef.current
+    if (detail?.tabId === deps.tabId && manager) {
+      toggleClaudeSideChatInTab({ manager, tabId: deps.tabId, worktreeId: deps.worktreeId })
+    }
+  }
+
   window.addEventListener(SET_TERMINAL_PANE_TITLE_EVENT, onSetPaneTitle)
+  window.addEventListener(TOGGLE_CLAUDE_SIDE_CHAT_EVENT, onToggleClaudeSideChat)
   window.addEventListener(CLOSE_TERMINAL_PANE_EVENT, onCliClosePane)
   return () => {
     window.removeEventListener(SET_TERMINAL_PANE_TITLE_EVENT, onSetPaneTitle)
+    window.removeEventListener(TOGGLE_CLAUDE_SIDE_CHAT_EVENT, onToggleClaudeSideChat)
     unregisterTerminalPaneSplitRequestHandler()
     window.removeEventListener(CLOSE_TERMINAL_PANE_EVENT, onCliClosePane)
   }

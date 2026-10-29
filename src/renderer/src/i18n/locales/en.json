@@ -20337,6 +20337,20 @@
       "stepDownload": "Download",
       "stepUnpack": "Unpack",
       "stepCheck": "Check"
+    },
+    "claudeSideChat": {
+      "title": "Side chat · from main",
+      "mainWorking": "main working",
+      "mainNeedsApproval": "main needs approval",
+      "mainNeedsInput": "main needs input",
+      "mainInterrupted": "main interrupted",
+      "mainFinished": "main finished",
+      "nested": "A side chat cannot open another side chat. Return to the main chat first.",
+      "notStarted": "Side chat is available once this Claude conversation has started. Send a message first, then try again.",
+      "unavailable": "This conversation cannot open a side chat.",
+      "open": "Open Side Chat",
+      "askSelection": "Ask in Side Chat",
+      "returnToMain": "Back to Main Chat"
     }
   },
   "dashboardPopout": {
@@ -22033,7 +22047,8 @@
       "terminalSplitRight": "Split terminal right",
       "terminalSplitDown": "Split terminal down",
       "terminalSwitchInputSource": "Switch input source / language (native)",
-      "newAgentTab": "New {{agent}} tab"
+      "newAgentTab": "New {{agent}} tab",
+      "terminalToggleSideChat": "Open or switch to Claude side chat"
     },
     "group": {
       "global": "Global",

@@ -7,6 +7,7 @@ export const SPLIT_TERMINAL_PANE_EVENT = 'orca-split-terminal-pane'
 export const REQUEST_ACTIVE_TERMINAL_PANE_SPLIT_EVENT = 'orca-request-active-terminal-pane-split'
 export const CLOSE_TERMINAL_PANE_EVENT = 'orca-close-terminal-pane'
 export const SET_TERMINAL_PANE_TITLE_EVENT = 'orca-set-terminal-pane-title'
+export const TOGGLE_CLAUDE_SIDE_CHAT_EVENT = 'orca-toggle-claude-side-chat'
 export const REQUEST_ACTIVE_TERMINAL_PANE_CLOSE_EVENT = 'orca-request-active-terminal-pane-close'
 export const BACKGROUND_MOUNT_TERMINAL_WORKTREE_EVENT = 'orca-background-mount-terminal-worktree'
 
@@ -40,6 +41,8 @@ export type SplitTerminalPaneDetail = {
   paneRuntimeId: number
   direction: 'horizontal' | 'vertical'
   command?: string
+  /** Startup env for `command`; ignored without one. */
+  env?: Record<string, string>
   sourceLeafId?: string
   sourcePtyId?: string
   telemetrySource?: TerminalPaneSplitSource
@@ -65,6 +68,8 @@ export type CloseTerminalPaneDetail = {
   retireSurface?: boolean
   expectedPtyId?: string
 }
+
+export type ToggleClaudeSideChatDetail = { tabId: string }
 
 export type SetTerminalPaneTitleDetail = {
   tabId: string

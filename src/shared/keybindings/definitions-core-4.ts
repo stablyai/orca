@@ -21,6 +21,25 @@ export const KEYBINDING_DEFINITION_CORE_4: readonly KeybindingDefinition[] = [
     defaultBindings: platformBindings(['Mod+Shift+J'])
   },
   {
+    id: 'terminal.toggleSideChat',
+    title: 'Open or switch to Claude side chat',
+    group: 'Chat',
+    scope: 'terminal',
+    implicitDefaultYields: true,
+    searchKeywords: [
+      'shortcut',
+      'claude',
+      'side chat',
+      'side',
+      'btw',
+      'fork',
+      'question',
+      'toggle'
+    ],
+    // Matches Codex's Open side chat chord on every platform.
+    defaultBindings: platformBindings(['Mod+Alt+S'])
+  },
+  {
     id: 'sidebar.childWorkspaces.toggle',
     title: 'Toggle Child Workspaces',
     group: 'Global',

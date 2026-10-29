@@ -1,3 +1,4 @@
+import { claudeSideChatMenuMode } from './claude-side-chat-actions'
 import { useCallback, useEffect } from 'react'
 import type { CSSProperties } from 'react'
 import {
@@ -175,11 +176,19 @@ export function useTerminalPaneProjection(controller: TerminalPaneMobileControll
   const contextMenuCanToggleChat = canToggleChatForLeaf(contextMenuLeafId)
   const activeLeafId = activePane?.leafId ?? null
   // One subscription for both reads keeps the pane inside its store listener budget.
-  const { menuAgentSessionId, activePaneCanResumeInChat } = useAppStore(
+  const {
+    menuAgentSessionId,
+    menuClaudeSideChatMode: menuSideChatModeFromStatus,
+    activePaneCanResumeInChat
+  } = useAppStore(
     useShallow((state) => ({
       menuAgentSessionId:
         contextMenu.open && contextMenuLeafId
           ? resolvePaneAgentSessionId(state, makePaneKey(tabId, contextMenuLeafId))
+          : null,
+      menuClaudeSideChatMode:
+        contextMenu.open && contextMenuLeafId
+          ? claudeSideChatMenuMode(state, tabId, contextMenuLeafId)
           : null,
       // Cheap stand-in for the tab menu's gate, on this pane's own conversation; the click looks it up.
       activePaneCanResumeInChat:
@@ -191,6 +200,10 @@ export function useTerminalPaneProjection(controller: TerminalPaneMobileControll
         })
     }))
   )
+  // Before Claude's first hook the launch agent still names it; the action explains the wait.
+  const menuClaudeSideChatMode =
+    menuSideChatModeFromStatus ??
+    (contextMenuLeafId && resolveAgentForLeaf(contextMenuLeafId) === 'claude' ? 'open' : null)
   const contextMenuIsChatView = effectiveChatViewMode && contextMenuLeafId === chatLeafId
   const handleContextMenuToggleNativeChat = useCallback(() => {
     const leafId = getContextMenuLeafId()
@@ -214,6 +227,7 @@ export function useTerminalPaneProjection(controller: TerminalPaneMobileControll
     visibleTerminalError,
     menuPaneHasCustomTitle,
     menuAgentSessionId,
+    menuClaudeSideChatMode,
     chatLeafStillMounted,
     chatPane,
     chatPanePtyId,
