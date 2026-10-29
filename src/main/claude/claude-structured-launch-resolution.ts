@@ -74,7 +74,7 @@ export const CLAUDE_STRUCTURED_BASE_OPTIONS: ClaudeStructuredSdkOptions = {
   extraArgs: { 'replay-user-messages': null }
 }
 
-const CLAUDE_PERMISSION_MODES = {
+export const CLAUDE_PERMISSION_MODES = {
   // Override settings defaultMode so the chat runs with its selected permission mode.
   ask: 'default',
   'accept-edits': 'acceptEdits',

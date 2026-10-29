@@ -156,7 +156,7 @@ export function useStructuredAgentSessionOptions(args: StructuredAgentSessionOpt
         return Boolean(result)
       } finally {
         if (sameRecord()) {
-          settleStructuredOptionPick(optionPicks.current, pick)
+          settleStructuredOptionPick(optionPicks.current, pick, Boolean(result))
         }
         if (isCurrent()) {
           updateOptionState((current) =>

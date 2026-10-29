@@ -548,7 +548,8 @@ it('publishes accepted Codex fresh policy to desktop and phone without stale sta
       turn: { id: 'applied-ask' }
     })
     expect(host.readStatusSummary(sessionId)?.runtimePermission).toEqual({ fence, mode: 'auto' })
-    expect(descriptions()).toEqual(['Approve for me', 'Approve for me'])
+    // The picking device shows its pick over the agent's older report; the other shows the report.
+    expect(descriptions()).toEqual(['Ask for approval', 'Approve for me'])
     await act(async () => {
       answer.resolve({ turn: { id: 'applied-ask' } })
       expect(await finished).toMatchObject({ value: { state: 'admitted' } })

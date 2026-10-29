@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  useSyncExternalStore
+} from 'react'
 import { mobileStructuredSessionStatusFeed } from './mobile-structured-session-status-feed'
 import { projectRuntimePermission } from '../../../src/shared/structured-agent-session-permission-option'
 import type { AgentSessionConversationCommand } from '../../../src/shared/agent-session/agent-session-conversation-command'
@@ -15,6 +22,8 @@ import { usesInstalledAgentModelCatalog } from '../../../src/shared/agent-model-
 import { cloneStructuredAgentSessionOptionRecord } from '../../../src/shared/structured-agent-session-option-state'
 import {
   createStructuredOptionPickBook,
+  observeStructuredPermissionReport,
+  structuredPermissionPickStands,
   resetStructuredOptionPickBook
 } from '../../../src/shared/structured-agent-session-option-pick-book'
 import {
@@ -66,8 +75,6 @@ export function useMobileStructuredOptionState(args: {
   )
   // As on desktop, a host still starting the provider holds option writes; picks show at once.
   const providerStarting = summary?.hostExecutionPhase === 'starting'
-  const projectPermission = <T extends { reportedPermissionMode?: string | null }>(state: T): T =>
-    projectRuntimePermission(state, summary, fence)
   const coherentCatalog = usesInstalledAgentModelCatalog(agent ?? '', hostCoherentCatalog)
   const [optionState, setOptionState] = useState(() =>
     createStructuredAgentSessionOptionState(agent ?? 'codex', optionCatalog)
@@ -75,6 +82,20 @@ export function useMobileStructuredOptionState(args: {
   const optionStateRef = useRef(optionState)
   const activeOptionRecordRef = useRef(optionState.record)
   const optionPicks = useRef(createStructuredOptionPickBook())
+  useLayoutEffect(() => {
+    observeStructuredPermissionReport(optionPicks.current, summary, fence)
+  }, [summary, fence])
+  const projectPermission = <
+    T extends { reportedPermissionMode?: string | null; permissionMode?: string | null }
+  >(
+    state: T
+  ): T =>
+    projectRuntimePermission(
+      state,
+      summary,
+      fence,
+      structuredPermissionPickStands(optionPicks.current, summary, fence)
+    )
   const updateOptionState = useCallback(
     (update: (current: StructuredAgentSessionOptionState) => StructuredAgentSessionOptionState) => {
       const next = update(optionStateRef.current)

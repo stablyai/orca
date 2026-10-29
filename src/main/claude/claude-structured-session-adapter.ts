@@ -10,6 +10,7 @@ import { claudeHeldSends, claudeHoldsDispatch } from './claude-command-lifecycle
 import { releaseClaudeAcquisition } from './structured/claude-structured-acquisition-release'
 import { acquireClaudeSession } from './structured/claude-structured-session-acquisition'
 import { supportsClaudeStructuredLocation } from './claude-structured-location-support'
+import { applyClaudeLivePermissionMode } from './claude-structured-live-permission'
 import * as claudeOptions from './claude-structured-options'
 import { dispatchClaudeMessage } from './claude-structured-message-options'
 import { readClaudeStructuredSessionOptions } from './claude-structured-session-options'
@@ -203,6 +204,10 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
   }
   answerPrompt: StructuredAgentSessionAdapter['answerPrompt'] = (request) =>
     settleClaudePromptFreeingChild(this.asker(request), answerClaudeStructuredPrompt)
+  applyPermissionMode: NonNullable<StructuredAgentSessionAdapter['applyPermissionMode']> = (
+    sessionId,
+    mode
+  ) => applyClaudeLivePermissionMode(this.sessions.get(sessionId), mode)
   setOption: StructuredAgentSessionAdapter['setOption'] = (input) =>
     claudeOptions.setClaudeStructuredSessionOption(
       this.session(input.sessionId),

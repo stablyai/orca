@@ -88,8 +88,8 @@ export type StructuredAgentSessionProviderChild = StructuredAgentSessionProvider
   phase: StructuredAgentSessionProviderChildPhase
   /** Immutable, memory-only opening send ID; distinguishes its restart from another start. */
   readonly startedFor?: string
-  /** Launch-time permission mode, memory-only. */
-  readonly permissionMode?: AgentChatPermissionChoice
+  /** The mode it runs: its launch mode, or one applied live since. Memory-only. */
+  permissionMode?: AgentChatPermissionChoice
   /** The launch source that may publish observations for this child. */
   readonly catalogSource?: AgentModelCatalogSource
   readonly heldSends?: () => ReadonlySet<string> | undefined

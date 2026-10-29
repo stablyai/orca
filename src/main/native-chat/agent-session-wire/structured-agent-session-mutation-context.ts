@@ -51,6 +51,8 @@ export type StructuredAgentSessionMutationContext = {
   /** Join without starting a child, inside existing serialization. */
   joinChildClose: (sessionId: string) => Promise<AgentSessionMutationSessionPreparation>
   wakeDelivery: (sessionId: string) => void
+  /** A saved permission mode may reach the running agent before the next send. */
+  afterPermissionSaved?: (sessionId: string) => void
   /** Stop the provider child inside serialization, retaining the conversation. */
   stopAgent: (sessionId: string, ending: StructuredAgentSessionStopEnding) => Promise<void>
   /** Wake for row-free record-store gates; draft writes already notify through journal commits. */

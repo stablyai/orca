@@ -57,6 +57,12 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
   ): boolean | undefined =>
     this.liveOwnerOrNull(sessionId)?.permissionModeRequiresAcquisition?.(sessionId, mode)
 
+  applyPermissionMode = async (
+    sessionId: string,
+    mode: AgentChatPermissionChoice
+  ): Promise<boolean> =>
+    (await this.liveOwnerOrNull(sessionId)?.applyPermissionMode?.(sessionId, mode)) ?? false
+
   /** Session support may narrow the owner’s declared rewind, never widen it. */
   rewindSupport: NonNullable<StructuredAgentSessionAdapter['rewindSupport']> = (
     sessionId,

@@ -29,7 +29,8 @@ import { structuredAgentSessionFailureWordsContext } from './structured-agent-se
 import { recoverStructuredRewind } from './structured-rewind-recovery'
 import {
   retireOutgrownStructuredAgentSessionChild,
-  structuredAgentSessionChildOwesWork
+  structuredAgentSessionChildOwesWork,
+  structuredAgentSessionRetainedWork
 } from './structured-agent-session-outgrown-child'
 import {
   structuredAgentSessionLaunchPermission,
@@ -40,6 +41,7 @@ import { acceptedNoLaterThan } from './structured-agent-session-start-failure-ro
 import type { StructuredAgentSessionAcquireAborts } from './structured-agent-session-acquire-aborts'
 import { settleStructuredAgentSessionLeftovers } from './structured-agent-session-leftover-settlement'
 import { createStructuredAgentSessionRanRecorder } from './structured-agent-session-ran-options'
+import { applyStructuredAgentSessionPermissionLive } from './structured-agent-session-live-permission'
 
 export type StructuredAgentSessionConversationDelivery = {
   loop: StructuredAgentSessionDeliveryLoop
@@ -47,6 +49,8 @@ export type StructuredAgentSessionConversationDelivery = {
     sessionId: string,
     options?: StructuredAgentSessionConversationOpenOptions
   ) => Promise<StructuredAgentSessionHostSession | null>
+  /** After a saved mode change; an idle warm agent switches now instead of at the next send. */
+  applyPermissionLive: (sessionId: string) => Promise<void>
   /** Queue commit wakes under serialization so they cannot race a loop’s stopping decision. */
   afterCommit: (sessionId: string, journal: AgentSessionJournal) => void
   /** Settle edges affect status/steer holds without rows or renewed idle activity. */
@@ -84,19 +88,7 @@ export function createStructuredAgentSessionConversationDelivery(input: {
   >
 }): StructuredAgentSessionConversationDelivery {
   const { deps, sessions } = input
-  const retainedWork = (sessionId: string, continuingId?: string) => ({
-    currentWork: () =>
-      hostStructuredAgentSessionCurrentWork({ store: deps.store, sessions }, sessionId),
-    childWork: () => input.clientDelivery.readChildWork(sessionId),
-    childWorkOpen: () => input.clientDelivery.childWorkOpen(sessionId),
-    hasOpenDispatch: () => {
-      const record = deps.store.getConversation(sessionId)
-      return record !== null && deps.hasOpenDispatch?.(record) === true
-    },
-    providerHoldsDispatch: () =>
-      deps.adapter.holdsDispatch?.(sessionId) === true ||
-      [...(sessions.get(sessionId)?.child?.heldSends?.() ?? [])].some((id) => id !== continuingId)
-  })
+  const retainedWork = structuredAgentSessionRetainedWork(deps, sessions, input.clientDelivery)
   const loop = new StructuredAgentSessionDeliveryLoop({
     sessions,
     adapter: deps.adapter,
@@ -277,6 +269,15 @@ export function createStructuredAgentSessionConversationDelivery(input: {
   })
   return {
     loop,
+    applyPermissionLive: (sessionId) =>
+      input.serialize(sessionId, () =>
+        applyStructuredAgentSessionPermissionLive(
+          deps,
+          sessionId,
+          input.clientDelivery.readStopping(sessionId) ? undefined : sessions.get(sessionId),
+          retainedWork(sessionId)
+        )
+      ),
     afterCommit,
     afterSettleEdge: (sessionId, journal) => {
       input.clientDelivery.publishStatus(sessionId)

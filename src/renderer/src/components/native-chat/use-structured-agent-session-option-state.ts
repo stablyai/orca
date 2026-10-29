@@ -3,7 +3,7 @@ import {
   resetStructuredOptionPickBook,
   structuredOptionPickIsPending
 } from '../../../../shared/structured-agent-session-option-pick-book'
-import { projectRuntimePermission } from '../../../../shared/structured-agent-session-permission-option'
+import { useRuntimePermissionProjection } from './use-runtime-permission-projection'
 import { useStructuredAgentSessionStatusSummary } from './StructuredAgentSessionStatusBridge'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { AgentSessionConversationCommand } from '../../../../shared/agent-session/agent-session-conversation-command'
@@ -119,6 +119,7 @@ export function useStructuredAgentSessionOptionState(args: {
   const activeOptionRecordRef = useRef(optionState.record)
   // Picks on their way to the host, which every send carries too.
   const optionPicks = useRef(createStructuredOptionPickBook())
+  const projectPermission = useRuntimePermissionProjection(summary, fence, optionPicks)
   const updateOptionState = useCallback(
     (update: (current: StructuredAgentSessionOptionState) => StructuredAgentSessionOptionState) => {
       const next = update(optionStateRef.current)
@@ -292,7 +293,7 @@ export function useStructuredAgentSessionOptionState(args: {
       ...args: Parameters<typeof structuredAgentSessionOptionView>
     ): StructuredAgentSessionOptionState => {
       const view = {
-        ...projectRuntimePermission(structuredAgentSessionOptionView(...args), summary, fence),
+        ...projectPermission(structuredAgentSessionOptionView(...args)),
         permissionOwnSupported
       }
       return structuredOptionPickIsPending(optionPicks.current, 'model')

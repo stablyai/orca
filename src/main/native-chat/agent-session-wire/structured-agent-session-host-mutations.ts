@@ -1,6 +1,7 @@
 // Share mutation admission/planning/publication. Conversation writes need no child lease;
 // provider-only effects start their child before admission, sends start through delivery.
 
+import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../../shared/agent-chat-permission-mode'
 import { latestNativeChatUsageLimitCut } from '../../../shared/native-chat/native-chat-usage-limit-cut'
 import { refuse } from '../../../shared/agent-session-wire'
 import { contextStructuredAgentSessionCurrentWork } from './structured-agent-session-current-work'
@@ -225,7 +226,7 @@ export async function setStructuredAgentSessionOption(
   params: { envelope: AgentSessionMutationEnvelope; key: string; value: string }
 ): Promise<AgentSessionMutationResult<AgentSessionOptionResult>> {
   const plan = setOptionPlan(params)
-  return mutateStructuredAgentSession(
+  const result = await mutateStructuredAgentSession(
     context,
     caller,
     params.envelope,
@@ -236,6 +237,10 @@ export async function setStructuredAgentSessionOption(
     },
     openForWrite(context, params.envelope)
   )
+  if (result.ok && params.key === AGENT_CHAT_PERMISSION_MODE_OPTION_ID) {
+    context.afterPermissionSaved?.(params.envelope.sessionId)
+  }
+  return result
 }
 
 export async function changeStructuredAgentSessionThreadGoal(

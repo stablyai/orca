@@ -181,6 +181,8 @@ export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & 
     sessionId: string,
     mode: AgentChatPermissionChoice
   ): boolean | undefined
+  /** Switch the running agent to `mode` now; false when it can only start in that mode. */
+  applyPermissionMode?(sessionId: string, mode: AgentChatPermissionChoice): Promise<boolean>
   dispatch(input: {
     sessionId: string
     clientMessageId: string

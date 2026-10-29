@@ -1,5 +1,6 @@
 // Match child endings by generation/fence so stale exits cannot end newer children; conversation state outlives them.
 
+import type { AgentChatPermissionChoice } from '../../../shared/agent-chat-permission-mode'
 import type { AgentJournalCursor } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
@@ -43,6 +44,18 @@ export function markProviderChildStarted(
     child.phase = 'ready'
   }
   return child !== null
+}
+
+/** The agent took a new mode live, so the next send need not relaunch it to apply that mode. */
+export function markProviderChildPermission(
+  session: ChildBearer,
+  identity: StructuredAgentSessionProviderChildIdentity,
+  mode: AgentChatPermissionChoice
+): void {
+  const child = matchingChild(session, identity)
+  if (child) {
+    child.permissionMode = mode
+  }
 }
 
 /** Current adapter-held children prove life without PID probes; previous runtimes prove nothing here. */

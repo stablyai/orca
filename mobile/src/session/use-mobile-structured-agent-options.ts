@@ -184,6 +184,7 @@ export function useMobileStructuredAgentOptions(args: {
         updateOptionState((current) => ({ ...current, pendingId: id }))
       }
       let readsBack = shownAtOnce
+      let accepted = false
       try {
         const result = await mutate<AgentSessionOptionResult>(
           'agentSession.setOption',
@@ -194,6 +195,7 @@ export function useMobileStructuredAgentOptions(args: {
         if (result.status !== 'accepted') {
           return false
         }
+        accepted = true
         const committed =
           sameRecord() && result.sameFence
             ? structuredOptionPickCommit(optionPicks.current, pick, result.value.options)
@@ -217,7 +219,7 @@ export function useMobileStructuredAgentOptions(args: {
         return true
       } finally {
         if (sameRecord()) {
-          settleStructuredOptionPick(optionPicks.current, pick)
+          settleStructuredOptionPick(optionPicks.current, pick, accepted)
         }
         if (isCurrent()) {
           updateOptionState((current) =>

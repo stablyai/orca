@@ -13,6 +13,7 @@ import {
   createStructuredAgentSessionOptionState
 } from '../../../../shared/structured-agent-session-options'
 import { structuredAgentSessionOptionView } from '../../../../shared/structured-agent-session-option-view'
+import { createStructuredOptionPickBook } from '../../../../shared/structured-agent-session-option-pick-book'
 import { useStructuredAgentSessionSendOptions } from './use-structured-agent-session-send-options'
 
 const levels = (...values: string[]) => values.map((value) => ({ value, label: value }))
@@ -43,7 +44,7 @@ function sendOptionsFor(
       { kind: 'new', seedOptions, heldOptions: {} },
       {
         optionStateRef,
-        optionPicks: { current: { pending, generation: 0 } },
+        optionPicks: { current: { ...createStructuredOptionPickBook(), pending } },
         optionView: structuredAgentSessionOptionView,
         takesSendOptions
       }

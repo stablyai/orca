@@ -9,6 +9,10 @@ import {
 } from './structured-agent-session-options'
 import { structuredAgentSessionOptionView } from './structured-agent-session-option-view'
 import { structuredAgentSessionSeedCatalog } from './structured-agent-session-seed-catalog'
+import {
+  projectRuntimePermission,
+  runtimePermissionReportKey
+} from './structured-agent-session-permission-option'
 
 const permission = (state: Parameters<typeof structuredAgentSessionOptionSnapshot>[0]) =>
   structuredAgentSessionOptionSnapshot(state).find(
@@ -100,5 +104,30 @@ describe('the permission mode picker', () => {
       )
     ).not.toContain('permissionMode')
     expect(structuredAgentSessionOptionPicks(state, { permissionMode: 'full-access' })).toEqual([])
+  })
+})
+
+describe('the reported permission mode after a pick', () => {
+  const reporting = (mode: string | null) => ({ runtimePermission: { fence: 1, mode } })
+  const picked = { permissionMode: 'full-access', reportedPermissionMode: undefined }
+
+  it('shows a standing pick over the report, and the report otherwise', () => {
+    expect(projectRuntimePermission(picked, reporting('ask'), 1, true)).toMatchObject({
+      reportedPermissionMode: 'full-access'
+    })
+    expect(projectRuntimePermission(picked, reporting('ask'), 1)).toMatchObject({
+      reportedPermissionMode: 'ask'
+    })
+    expect(
+      projectRuntimePermission(picked, { runtimePermission: null }, 1).reportedPermissionMode
+    ).toBeUndefined()
+  })
+
+  it('never shows own settings as a running mode', () => {
+    expect(
+      projectRuntimePermission({ ...picked, permissionMode: 'own' }, reporting('ask'), 1, true)
+    ).toMatchObject({ reportedPermissionMode: 'ask' })
+    expect(runtimePermissionReportKey({ runtimePermission: null }, 1)).toBeNull()
+    expect(runtimePermissionReportKey({}, 1)).toBeNull()
   })
 })

@@ -54,6 +54,15 @@ export function createStructuredAgentSessionHostMutationContext(
     joinChildClose: (sessionId) =>
       agentStart.joinClosingStructuredAgentSessionChild(input.attachContext(), sessionId),
     wakeDelivery: (sessionId) => input.conversationDelivery.loop.wake(sessionId),
+    afterPermissionSaved: (sessionId) => {
+      input.conversationDelivery.applyPermissionLive(sessionId).catch((error: unknown) =>
+        input.deps.logger.warn('switching a running agent to a saved permission mode failed', {
+          scope: 'live-permission',
+          sessionId,
+          error
+        })
+      )
+    },
     stopAgent: (sessionId, ending) => input.lifetime.stopAgent(sessionId, ending),
     wakeQueuedDrain: (sessionId) => input.queued.drain.schedule(sessionId),
     acquireAborts: input.runtimeState.acquireAborts,
