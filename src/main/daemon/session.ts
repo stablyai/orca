@@ -128,6 +128,9 @@ export class Session {
     return this.termination.beginTermination()
   }
 
+  // oxfmt-ignore
+  get shellPath(): string | undefined { return this.subprocess.shellPath }
+
   get pid(): number {
     return this.subprocess.pid
   }
@@ -364,9 +367,5 @@ export class Session {
 
     // Let the host release the emulator and remove the exited session from its map.
     this.onSessionExit?.(code)
-  }
-
-  closeStartupQueryAuthority(): number {
-    return this.startupIngress.closeQueryAuthority()
   }
 }

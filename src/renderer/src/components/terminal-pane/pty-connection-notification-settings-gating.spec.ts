@@ -200,6 +200,11 @@ export function registerPtyConnectionNotificationSettingsGatingTests(): void {
 
     it('shares one raw store subscriber for agent-complete notification settings across panes', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const { subscribeAgentTaskCompleteTrackingEnabled } =
+        await import('./pty-connection/agent-task-complete-settings')
+      const unsubscribeSettings = subscribeAgentTaskCompleteTrackingEnabled(vi.fn())
+      const [settingsSubscriber] = storeSubscribers
+      expect(storeSubscribers).toHaveLength(1)
       transportFactoryQueue.push(createMockTransport('pty-1'), createMockTransport('pty-2'))
 
       vi.useFakeTimers()
@@ -215,11 +220,15 @@ export function registerPtyConnectionNotificationSettingsGatingTests(): void {
       )
       await flushAsyncTicks()
 
-      expect(storeSubscribers).toHaveLength(1)
+      expect(storeSubscribers).toHaveLength(3)
+      expect(storeSubscribers).toContain(settingsSubscriber)
 
       firstBinding.dispose()
-      expect(storeSubscribers).toHaveLength(1)
+      expect(storeSubscribers).toHaveLength(2)
+      expect(storeSubscribers).toContain(settingsSubscriber)
       secondBinding.dispose()
+      expect(storeSubscribers).toEqual([settingsSubscriber])
+      unsubscribeSettings()
       expect(storeSubscribers).toHaveLength(0)
     })
 

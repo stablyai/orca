@@ -59,7 +59,10 @@ for (const runtime of ['native', 'wsl'] as const) {
       })
       await expect(
         orcaPage.locator(`[data-tab-id="${tabId}"] [data-shell-icon]`).first()
-      ).toHaveAttribute('data-shell-icon', runtime === 'wsl' ? 'wsl.exe' : 'powershell.exe')
+      ).toHaveAttribute(
+        'data-shell-icon',
+        runtime === 'wsl' ? 'wsl.exe' : /(?:^|[\\/])(?:powershell|pwsh)\.exe$/i
+      )
       await waitForActiveTerminalManager(orcaPage, 30_000)
       await enableInlineImages(orcaPage)
       await expect

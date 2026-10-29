@@ -1,3 +1,4 @@
+import { getStructuredChatTabNames } from '@/runtime/structured-chat-name-observation'
 import { getDefaultSettings } from '../../../../shared/constants'
 import {
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY as CHAT,
@@ -12,7 +13,7 @@ vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: transport.call 
 vi.mock('@/runtime/runtime-rpc-subscribe', () => ({ subscribeRuntimeRpc: transport.subscribe }))
 // @vitest-environment happy-dom
 import { act, cleanup, renderHook } from '@testing-library/react'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, expectTypeOf, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
@@ -20,6 +21,8 @@ import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { Worktree } from '../../../../shared/worktree/types'
+import { buildDashboardSnapshot } from './build-dashboard-snapshot'
+import { createWorktreeAgentRowsCache } from './worktree-agent-rows-cache'
 import { useLiveDashboardSnapshot } from './useLiveDashboardSnapshot'
 
 const NOW = 1_000_000_000
@@ -122,6 +125,73 @@ function seed(settings: Partial<GlobalSettings> | null): void {
 
 // The drawer feeds builder slices directly; omission silently loses fields instead of failing validation.
 describe('useLiveDashboardSnapshot', () => {
+  it('keeps a mounted card aligned with popout process facts without refreshing agent rows', () => {
+    expectTypeOf<
+      Omit<Parameters<typeof buildDashboardSnapshot>[0], 'ptyProcessMetadataById'>
+    >().not.toExtend<Parameters<typeof buildDashboardSnapshot>[0]>()
+    vi.stubGlobal('navigator', { userAgent: 'Windows' })
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(NOW)
+    try {
+      seed({ tabAutoGenerateTitle: false })
+      useAppStore.setState({
+        tabsByWorktree: { 'wt-1': [{ ...tab(), shellOverride: 'wsl.exe' }] },
+        ptyProcessMetadataById: {
+          ['local\0pty-1']: { shellPath: 'cmd.exe', wslDistro: null, observationRevision: 1 }
+        }
+      })
+      const before = useAppStore.getState()
+      const rowsCache = createWorktreeAgentRowsCache()
+      const options = { rowsCache, rowsGeneration: before.agentStatusEpoch }
+      const popoutBefore = buildDashboardSnapshot(
+        { ...before, chatNames: getStructuredChatTabNames() },
+        NOW,
+        options
+      )
+      const { result } = renderHook(() => useLiveDashboardSnapshot())
+      expect(result.current.cards).toHaveLength(1)
+      expect(result.current.cards[0].ptyId).toBe('pty-1')
+      const nativeProfile = result.current.cards[0].terminalInput
+      expect(nativeProfile).toMatchObject({ hostPlatform: 'win32', localWindowsConpty: true })
+      expect(nativeProfile).toEqual(popoutBefore.cards[0].terminalInput)
+      const computes = rowsCache.computeCount
+      const cachedRows = rowsCache.byWorktree.get('wt-1')
+      expect(computes).toBeGreaterThan(0)
+
+      act(() => {
+        useAppStore.setState({
+          ptyProcessMetadataById: {
+            ['local\0pty-1']: {
+              shellPath: 'wsl.exe',
+              wslDistro: 'Ubuntu',
+              observationRevision: 2
+            }
+          }
+        })
+      })
+
+      const after = useAppStore.getState()
+      expect(after.agentStatusEpoch).toBe(before.agentStatusEpoch)
+      const popoutAfter = buildDashboardSnapshot(
+        { ...after, chatNames: getStructuredChatTabNames() },
+        NOW,
+        options
+      )
+      expect(result.current.cards).toHaveLength(1)
+      expect(result.current.cards[0].ptyId).toBe('pty-1')
+      expect(result.current.cards[0].terminalInput).toMatchObject({
+        hostPlatform: 'linux',
+        localWindowsConpty: false
+      })
+      expect(result.current.cards[0].terminalInput).not.toEqual(nativeProfile)
+      expect(result.current.cards[0].terminalInput).toEqual(popoutAfter.cards[0].terminalInput)
+      expect(rowsCache.computeCount).toBe(computes)
+      expect(rowsCache.byWorktree.get('wt-1')).toBe(cachedRows)
+    } finally {
+      clock.mockRestore()
+      vi.unstubAllGlobals()
+    }
+  })
+
   it('feeds the builder the settings that gate generated conversation names', () => {
     seed({ tabAutoGenerateTitle: true })
     const withTitles = renderHook(() => useLiveDashboardSnapshot())

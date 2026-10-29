@@ -31,6 +31,8 @@ export type PtyListedSession = {
   foregroundProcess?: string
   cwd: string
   title: string
+  wslDistro?: string | null
+  shellPath?: string
   worktreeId?: string
   /** Pane key the PTY was spawned with; reattaching from another pane never changes it. */
   paneKey?: string

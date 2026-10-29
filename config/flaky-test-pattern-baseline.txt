@@ -1098,7 +1098,6 @@
 1 test-no-wall-clock:src/renderer/src/components/browser-pane/assemble-chrome/browser-workspace-pane.adoption-chrome.test.tsx
 1 test-no-wall-clock:src/renderer/src/components/browser-pane/stream-remote/remote-browser-page-pane.address-bar.test.tsx
 4 test-no-wall-clock:src/renderer/src/components/cmd-j/palette-live-status.test.tsx
-2 test-no-wall-clock:src/renderer/src/components/dashboard/useLiveDashboardSnapshot.test.ts
 1 test-no-wall-clock:src/renderer/src/components/native-chat/NativeChatMessageList.opening-send.test.tsx
 1 test-no-wall-clock:src/renderer/src/components/native-chat/NativeChatMessageList.queued-turn-order.test.tsx
 13 test-no-wall-clock:src/renderer/src/components/native-chat/NativeChatMessageList.test.tsx

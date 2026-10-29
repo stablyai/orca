@@ -31,7 +31,8 @@ type IpcPtyConnectContext = {
   isExpectedExitCurrent: () => boolean
   ownsPtyId: (id: string) => boolean
   handleExplicitlyClosedConnect?: (id: string) => boolean
-  bind: (id: string) => void
+  adoptMetadata?: (result: PtyConnectResult) => void
+  bind: (id: string, incarnationId?: string) => void
   isCurrent: (id: string) => boolean
   setCallbacks: (callbacks: PtyConnectOptions['callbacks']) => void
   getCallbacks: () => PtyConnectOptions['callbacks']
@@ -89,6 +90,9 @@ export async function connectIpcPty(
       if (context.handleExplicitlyClosedConnect?.(spawnResult.id)) {
         return
       }
+      if (retainDisposedSpawn?.() === true) {
+        context.adoptMetadata?.(spawnResult)
+      }
       // A newer generation may already own a recycled id; an id-only kill would retire its PTY.
       if (spawnResult.isReattach || spawnResult.coldRestore || context.ownsPtyId(spawnResult.id)) {
         return
@@ -117,7 +121,8 @@ export async function connectIpcPty(
       // Only fresh spawns discard pre-request state; reattach deliberately re-owns a pre-existing ID and needs its real buffered exit.
       discardPreHandlerPtyStateFromPriorIncarnation(spawnResult.id, priorIncarnationFence)
     }
-    context.bind(spawnResult.id)
+    context.adoptMetadata?.(spawnResult)
+    context.bind(spawnResult.id, spawnResult.incarnationId)
     if (!spawnResult.isReattach && !spawnResult.coldRestore) {
       onPtySpawn?.(spawnResult.id)
       if (context.isDestroyed()) {

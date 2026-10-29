@@ -1,4 +1,8 @@
 import {
+  readTerminalProcessMetadata,
+  retireTerminalProcessMetadata
+} from './terminal-process-metadata'
+import {
   isRemoteRuntimePtyId,
   parseRemoteRuntimePtyId,
   toRemoteRuntimePtyId
@@ -175,6 +179,13 @@ export function createTerminalPtyBindingActions(
           }
         }
         return {
+          ...(boundReplacementPtyId
+            ? retireTerminalProcessMetadata(
+                s,
+                boundReplacementPtyId,
+                readTerminalProcessMetadata(s, 'local', boundReplacementPtyId)
+              )
+            : {}),
           ...(nextTabsByWorktree !== s.tabsByWorktree
             ? { tabsByWorktree: nextTabsByWorktree }
             : {}),

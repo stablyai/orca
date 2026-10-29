@@ -12,6 +12,8 @@ export type SessionInfo = {
   /** ORCA_PANE_KEY the PTY was spawned with; absent from daemons that predate it. */
   paneKey?: string
   wslDistro?: string | null
+  /** Actual top-level executable reported by the process owner; absent on older hosts. */
+  shellPath?: string
   pid: number | null
   cwd: string | null
   cols: number

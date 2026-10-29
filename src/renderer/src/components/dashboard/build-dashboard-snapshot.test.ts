@@ -107,7 +107,9 @@ function worktree(id = 'w1', displayName = 'wt-one'): Worktree {
   }
 }
 
-function baseState(overrides: Partial<DashboardSnapshotState>): DashboardSnapshotState {
+function baseState(
+  overrides: Partial<Parameters<typeof buildDashboardSnapshot>[0]>
+): Parameters<typeof buildDashboardSnapshot>[0] {
   return {
     chatNames: new Map(),
     repos: [{ id: 'r1', path: '/r1', displayName: 'Repo One', badgeColor: '#000', addedAt: NOW }],
@@ -128,6 +130,7 @@ function baseState(overrides: Partial<DashboardSnapshotState>): DashboardSnapsho
     ptyIdsByTabId: { [TAB_ID]: ['pty1'] },
     runtimePaneTitlesByTabId: {},
     acknowledgedAgentsByPaneKey: {},
+    ptyProcessMetadataById: {},
     settings: null,
     ...overrides
   }

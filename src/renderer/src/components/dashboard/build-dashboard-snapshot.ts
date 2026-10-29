@@ -84,7 +84,7 @@ export type DashboardSnapshotInput = DashboardSnapshotState & { chatNames: Struc
 
 /** Reuse sidebar row/index derivation for serializable cards; fold terminal-less subagents into their spawning card. */
 export function buildDashboardSnapshot(
-  state: DashboardSnapshotInput,
+  state: DashboardSnapshotInput & Pick<AppState, 'ptyProcessMetadataById'>,
   now: number,
   options: {
     launchRouteStore?: AgentLaunchRouteView

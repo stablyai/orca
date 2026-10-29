@@ -24,6 +24,8 @@ export type PtySpawnResult = TerminalLaunchResult & {
   launchAgent?: TuiAgent
   /** Local WSL context: null is native; undefined is unavailable/legacy. */
   wslDistro?: string | null
+  /** Actual top-level executable reported by the process owner; absent on older hosts. */
+  shellPath?: string
   /** Daemon reattach ANSI screen restore for xterm. */
   snapshot?: string
   /** Restore xterm size before snapshot replay so cursor coordinates match. */

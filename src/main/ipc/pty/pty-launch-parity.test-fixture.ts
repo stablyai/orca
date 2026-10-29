@@ -1,6 +1,8 @@
 import { createPaneBindingStore } from './pty-launch-race-test-fixture'
 // Real runtime and IPC handlers share one fake provider; suites declare their own hoisted module mocks.
 import { vi } from 'vitest'
+import type { Project } from '../../../shared/project-types'
+import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { Mock } from 'vitest'
 import { registerPtyHandlers } from './register-handlers'
 import { existsSyncMock, statSyncMock } from './pty-ipc-mock-registry'
@@ -17,7 +19,8 @@ import { HOST_TAB_ID } from './pty-launch-parity-host.test-cases'
 import {
   partialRuntimeStore,
   storeProject,
-  storeProjectGroup
+  storeProjectGroup,
+  storeWorktreeMeta
 } from '../../runtime/runtime-store-partial-fixture'
 
 const WINDOWS_ENV = {
@@ -144,6 +147,9 @@ export function startParityLanes(
     workspace: LaunchWorkspace
     settings?: Record<string, unknown>
     spawnError?: Error
+    projects?: Pick<Project, 'id' | 'sourceRepoIds' | 'localWindowsRuntimePreference'>[]
+    legacyMeta?: { projectId: string; hostId: ExecutionHostId }
+    localMeta?: { projectId: string; hostId: ExecutionHostId }
   }
 ): ParityLanes {
   const settings = parityMainSettings(args.settings)
@@ -159,19 +165,22 @@ export function startParityLanes(
   const store = {
     ...bindingStore,
     getSettings: () => settings,
-    getProjects: () => [
-      storeProject({
-        id: 'project-1',
-        sourceRepoIds: ['repo-1'],
-        ...(args.workspace.projectRuntime
-          ? { localWindowsRuntimePreference: args.workspace.projectRuntime }
-          : {})
-      })
-    ],
+    getProjects: () =>
+      args.projects?.map((project) => storeProject(project)) ?? [
+        storeProject({
+          id: 'project-1',
+          sourceRepoIds: ['repo-1'],
+          ...(args.workspace.projectRuntime
+            ? { localWindowsRuntimePreference: args.workspace.projectRuntime }
+            : {})
+        })
+      ],
     getRepo: (id: string) => (repo && id === repo.id ? repo : undefined),
     getRepos: () => (repo ? [repo] : []),
     getAllWorktreeMeta: () => ({}),
-    getWorktreeMeta: () => undefined,
+    getWorktreeMeta: () => (args.legacyMeta ? storeWorktreeMeta(args.legacyMeta) : undefined),
+    getWorktreeMetaForHost: (_id: string, host: ExecutionHostId) =>
+      host === 'local' && args.localMeta ? storeWorktreeMeta(args.localMeta) : undefined,
     getFolderWorkspace: () => folderWorkspace ?? undefined,
     getFolderWorkspaces: () => (folderWorkspace ? [folderWorkspace] : []),
     getProjectGroups: () => [

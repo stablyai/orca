@@ -63,6 +63,8 @@ export const terminalTabSchema = z.object({
   createdAt: z.number(),
   generation: z.number().optional(),
   startupCwd: z.string().min(1).optional(),
+  shellOverride: z.string().optional().catch(undefined),
+  forceHostRuntime: z.boolean().optional().catch(undefined),
   // Retain the idle agent icon before hooks fire; unknown IDs degrade to absent without resetting the session.
   launchAgent: z
     .custom<TuiAgent>((v) => isTuiAgent(v))

@@ -15,10 +15,7 @@ vi.mock('../sidebar/worktree-agent-orchestration-batch', () => ({
   selectRuntimeAgentOrchestrationBatch: batchMocks.select
 }))
 
-import {
-  buildDashboardSnapshot,
-  type DashboardSnapshotInput as DashboardSnapshotState
-} from './build-dashboard-snapshot'
+import { buildDashboardSnapshot } from './build-dashboard-snapshot'
 
 function worktree(index: number): Worktree {
   return {
@@ -58,7 +55,7 @@ function tab(index: number): TerminalTab {
 function state(
   worktreeCount: number,
   runtimeAgentOrchestrationByPaneKey: Record<string, AgentStatusOrchestrationContext>
-): DashboardSnapshotState {
+): Parameters<typeof buildDashboardSnapshot>[0] {
   const worktrees = Array.from({ length: worktreeCount }, (_, index) => worktree(index))
   return {
     chatNames: new Map(),
@@ -75,6 +72,7 @@ function state(
     ptyIdsByTabId: {},
     runtimePaneTitlesByTabId: {},
     acknowledgedAgentsByPaneKey: {},
+    ptyProcessMetadataById: {},
     settings: null
   }
 }

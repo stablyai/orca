@@ -1,3 +1,4 @@
+import { isWslShellName } from '../../../../shared/local-windows-terminal-runtime'
 import type { TerminalPasteRuntime } from './terminal-paste-model'
 import { parseWslUncPath } from '../../../../shared/wsl-paths'
 import {
@@ -12,7 +13,9 @@ type TerminalPasteRuntimeTransport = {
   getLocalSessionMetadata?: () =>
     | {
         cwd?: string
+        shellPath?: string
         shellOverride?: string
+        wslDistro?: string | null
       }
     | null
     | undefined
@@ -49,11 +52,22 @@ function resolveWslRuntimeKey(
   metadata:
     | {
         cwd?: string
+        shellPath?: string
         shellOverride?: string
+        wslDistro?: string | null
       }
     | null
     | undefined
 ): string | null {
+  if (metadata?.wslDistro === null) {
+    return null
+  }
+  if (metadata?.wslDistro) {
+    return `wsl:${metadata.wslDistro}`
+  }
+  if (isWslShellName(metadata?.shellPath)) {
+    return 'wsl:default'
+  }
   const parsedCwd = metadata?.cwd ? parseWslUncPath(metadata.cwd) : null
   if (parsedCwd?.distro) {
     return `wsl:${parsedCwd.distro}`

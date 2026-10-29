@@ -45,6 +45,7 @@ export type CreateOrAttachOptions = {
 }
 
 export type CreateOrAttachResult = {
+  shellPath?: string
   isNew: boolean
   snapshot: TerminalSnapshot | null
   pid: number | null

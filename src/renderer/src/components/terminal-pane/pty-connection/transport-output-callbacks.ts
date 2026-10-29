@@ -1,3 +1,4 @@
+import { refreshPaneProcessCapabilities } from './pane-host-capability-flags'
 import {
   applyTerminalLaunchResult,
   captureTerminalLaunchContext
@@ -56,6 +57,11 @@ export function bindCaptureTransportOutputCallbacks(session: ConnectPanePtySessi
           ) {
             session.remotePtyIncarnationId = result.incarnationId
             applyTerminalLaunchResult(session, result, launchContext, 'observer')
+          }
+        },
+        onSessionMetadataChanged: (): void => {
+          if (isCurrent()) {
+            refreshPaneProcessCapabilities(session)
           }
         },
         onReattachDetermined: (): void => {

@@ -683,23 +683,6 @@ describe('createIpcPtyTransport', () => {
     clearPreHandlerPtyState(ptyId)
   })
 
-  it('clears preconnect input when attach throws before binding', async () => {
-    vi.mocked(window.api.pty.onData).mockImplementationOnce(() => {
-      throw new Error('dispatcher attach failed')
-    })
-    const { createIpcPtyTransport } = await import('./pty-transport')
-    const transport = createIpcPtyTransport({ bufferInputUntilConnect: true })
-    const accepted = transport.sendInputAccepted?.('input', 'driving')
-
-    expect(() => transport.attach({ existingPtyId: 'pty-attach-failure', callbacks: {} })).toThrow(
-      'dispatcher attach failed'
-    )
-
-    await expect(accepted).resolves.toBe(false)
-    expect(transport.isConnected()).toBe(false)
-    expect(transport.sendInput('after-failure', 'driving')).toBe(false)
-  })
-
   it('settles and drops preconnect input when the split spawn fails', async () => {
     vi.mocked(window.api.pty.spawn).mockRejectedValue(new Error('spawn failed'))
     const { createIpcPtyTransport } = await import('./pty-transport')

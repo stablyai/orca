@@ -1,7 +1,15 @@
+import {
+  readTerminalProcessMetadata,
+  resolveTerminalProcessContext
+} from '@/store/terminals/terminal-process-metadata'
 import type { AppState } from '@/store/types'
 import type { DashboardCardTerminalInput } from '../../../../shared/dashboard-snapshot'
 import type { TuiAgent } from '../../../../shared/tui-agent'
-import { toRuntimeExecutionHostId, toSshExecutionHostId } from '../../../../shared/execution-host'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  toRuntimeExecutionHostId,
+  toSshExecutionHostId
+} from '../../../../shared/execution-host'
 import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
 import { getConnectionIdFromState } from '@/lib/connection-context'
 import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
@@ -15,6 +23,7 @@ import { resolveProtectedMultilinePasteOptionsForAgentEvidence } from '@/compone
 
 export type DashboardCardTerminalInputState = Pick<
   AppState,
+  | 'ptyProcessMetadataById'
   | 'repos'
   | 'worktreesByRepo'
   | 'detectedWorktreesByRepo'
@@ -40,6 +49,7 @@ function withHydratedSlices(
   state: Partial<DashboardCardTerminalInputState>
 ): DashboardCardTerminalInputState {
   return {
+    ptyProcessMetadataById: state.ptyProcessMetadataById ?? EMPTY_RECORD,
     repos: state.repos ?? [],
     worktreesByRepo: state.worktreesByRepo ?? EMPTY_RECORD,
     detectedWorktreesByRepo: state.detectedWorktreesByRepo ?? EMPTY_RECORD,
@@ -79,20 +89,30 @@ export function resolveDashboardCardTerminalInput(
   const state = withHydratedSlices(partialState)
   const sshPty = parseAppSshPtyId(args.ptyId)
   const runtimeEnvironmentId = getRemoteRuntimePtyEnvironmentId(args.ptyId)
-  const connectionId =
-    sshPty?.connectionId ??
-    (runtimeEnvironmentId ? null : getConnectionIdFromState(state, args.worktreeId))
-  const executionHostId = sshPty
-    ? toSshExecutionHostId(sshPty.connectionId)
-    : runtimeEnvironmentId
-      ? toRuntimeExecutionHostId(runtimeEnvironmentId)
-      : getExecutionHostIdForWorktree(state, args.worktreeId)
+  const localProcess =
+    !sshPty && !runtimeEnvironmentId
+      ? readTerminalProcessMetadata(state, LOCAL_EXECUTION_HOST_ID, args.ptyId)
+      : undefined
+  const connectionId = localProcess
+    ? null
+    : (sshPty?.connectionId ??
+      (runtimeEnvironmentId ? null : getConnectionIdFromState(state, args.worktreeId)))
+  const executionHostId = localProcess
+    ? LOCAL_EXECUTION_HOST_ID
+    : sshPty
+      ? toSshExecutionHostId(sshPty.connectionId)
+      : runtimeEnvironmentId
+        ? toRuntimeExecutionHostId(runtimeEnvironmentId)
+        : getExecutionHostIdForWorktree(state, args.worktreeId)
+  const metadata = resolveTerminalProcessContext(
+    readTerminalProcessMetadata(state, executionHostId, args.ptyId),
+    args
+  )
   const windowsPtyContext = {
     userAgent: args.userAgent,
     osRelease: args.osRelease,
     connectionId,
-    cwd: args.cwd,
-    shellOverride: args.shellOverride,
+    ...metadata,
     executionHostId
   }
   const hostPlatform = resolveTerminalInputHostPlatform({
@@ -104,13 +124,7 @@ export function resolveDashboardCardTerminalInput(
       getPtyId: () => args.ptyId,
       getExecutionHostId: () => executionHostId,
       // Match the pane metadata gate so WSL resolves Linux protocols instead of inheriting Windows CSI-u behavior.
-      getLocalSessionMetadata: () =>
-        connectionId
-          ? null
-          : {
-              ...(args.cwd ? { cwd: args.cwd } : {}),
-              ...(args.shellOverride ? { shellOverride: args.shellOverride } : {})
-            }
+      getLocalSessionMetadata: () => (connectionId ? null : metadata)
     }
   })
   const protectedPaste = resolveProtectedMultilinePasteOptionsForAgentEvidence({

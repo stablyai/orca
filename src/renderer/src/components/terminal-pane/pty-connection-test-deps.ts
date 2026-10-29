@@ -1,6 +1,11 @@
 import { vi } from 'vitest'
 import type { Mock } from 'vitest'
-import { leafIdForPane } from './pty-connection-test-pane-fixtures'
+import type { ManagedPane } from '@/lib/pane-manager/pane-manager'
+import { isTerminalLeafId } from '../../../../shared/stable-pane-id'
+import type { PtyConnectionDeps } from './pty-connection-types'
+import type { PtyTransport } from './pty-transport-types'
+import type { TerminalColorSchemeMode } from '../../../../shared/terminal-color-scheme-protocol'
+import { createPane, leafIdForPane } from './pty-connection-test-pane-fixtures'
 import type { StoreState } from './pty-connection-test-store-state'
 import type { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal-kitty-keyboard-mode-tracker'
 
@@ -92,4 +97,65 @@ export function buildPaneConnectionDeps(
     clearExitedPanePtyLayoutBinding: vi.fn(),
     ...overrides
   }
+}
+
+export async function createTypedPaneConnectionFixture(getState: () => StoreState) {
+  const [{ Terminal }, { PaneManager }, { FitAddon }, { SearchAddon }, { SerializeAddon }] =
+    await Promise.all([
+      import('@xterm/xterm'),
+      import('@/lib/pane-manager/pane-manager'),
+      import('@xterm/addon-fit'),
+      import('@xterm/addon-search'),
+      import('@xterm/addon-serialize')
+    ])
+  const originalPane = createPane(1)
+  const leafId = originalPane.leafId
+  if (!isTerminalLeafId(leafId)) {
+    throw new Error('Expected a terminal leaf UUID')
+  }
+  const terminal = new Terminal({ cols: 120, rows: 40, ...originalPane.terminal.options })
+  vi.spyOn(terminal, 'element', 'get').mockReturnValue(originalPane.container)
+  vi.spyOn(terminal, 'write').mockImplementation(function write(data, callback) {
+    if (data === '' || callback?.name === 'runParsedSteps') {
+      callback?.()
+    }
+  })
+  const fitAddon = vi.mockObject(FitAddon.prototype)
+  fitAddon.proposeDimensions.mockReturnValue({ cols: terminal.cols, rows: terminal.rows })
+  const pane: ManagedPane = {
+    id: 1,
+    leafId,
+    stablePaneId: leafId,
+    terminal,
+    container: originalPane.container,
+    linkTooltip: originalPane.container,
+    fitAddon,
+    searchAddon: vi.mockObject(SearchAddon.prototype),
+    serializeAddon: vi.mockObject(SerializeAddon.prototype)
+  }
+  const manager = vi.mockObject(PaneManager.prototype)
+  manager.getPanes.mockReturnValue([pane])
+  manager.getActivePane.mockReturnValue(null)
+  manager.hasWebglRenderer.mockReturnValue(false)
+  manager.getNumericIdForLeaf.mockImplementation((candidate) => (candidate === leafId ? 1 : null))
+  manager.getLeafId.mockImplementation((id) => (id === 1 ? leafId : null))
+  const originalDeps = buildPaneConnectionDeps(getState)
+  const deps = {
+    ...originalDeps,
+    paneTransportsRef: { current: new Map<number, PtyTransport>() },
+    paneMode2031Ref: { current: new Map<number, boolean>() },
+    paneLastThemeModeRef: {
+      current: new Map<number, TerminalColorSchemeMode>()
+    },
+    replayingPanesRef: { current: new Map<number, number>() },
+    syncPanePtyLayoutBinding: vi.fn((paneId: number, ptyId: string | null) => {
+      const layout = getState().terminalLayoutsByTabId?.['tab-1']
+      if (layout?.ptyIdsByLeafId && ptyId === null) {
+        delete layout.ptyIdsByLeafId[leafIdForPane(paneId)]
+      } else if (ptyId !== null) {
+        originalDeps.syncPanePtyLayoutBinding(paneId, ptyId)
+      }
+    })
+  } satisfies PtyConnectionDeps
+  return { pane, manager, deps }
 }

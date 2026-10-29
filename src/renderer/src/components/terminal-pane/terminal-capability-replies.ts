@@ -19,7 +19,7 @@ type TerminalCapabilityRepliesDeps = {
   parser: Pick<IParser, 'registerCsiHandler' | 'registerOscHandler'>
   sendInput: (data: string) => boolean | void
   isReplaying: () => boolean
-  da1Response?: string
+  da1Response?: string | (() => string | undefined)
   // Resolved per query so a live inline-images toggle changes what the next DA1 advertises.
   sixelSupported?: () => boolean
   /** Resolve lazily because agent registration may follow handler installation; suppress jcode’s self-theming query burst before replies can land as composer text. */
@@ -145,7 +145,8 @@ export function installTerminalCapabilityReplyHandlers(
   deps: TerminalCapabilityRepliesDeps
 ): IDisposable & { replyPrimaryDeviceAttributesQuery: () => boolean } {
   const replyPrimaryDeviceAttributesQuery = (): boolean => {
-    const base = deps.da1Response ?? DEFAULT_DA1_RESPONSE
+    const response = typeof deps.da1Response === 'function' ? deps.da1Response() : deps.da1Response
+    const base = response ?? DEFAULT_DA1_RESPONSE
     return deps.sendInput(deps.sixelSupported?.() ? withSixelDa1Attribute(base) : base) !== false
   }
   const disposables = [

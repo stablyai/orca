@@ -14,6 +14,9 @@ export function projectIpcPtyConnectResult(
       ...facts,
       ...(spawnResult.incarnationId ? { incarnationId: spawnResult.incarnationId } : {}),
       id: spawnResult.id,
+      ...(spawnResult.incarnationId ? { incarnationId: spawnResult.incarnationId } : {}),
+      ...(spawnResult.shellPath ? { shellPath: spawnResult.shellPath } : {}),
+      ...(spawnResult.wslDistro !== undefined ? { wslDistro: spawnResult.wslDistro } : {}),
       ...(spawnResult.isReattach ? { isReattach: true } : {}),
       ...(launchAgent ? { launchAgent } : {}),
       ...(spawnResult.launchConfig ? { launchConfig: spawnResult.launchConfig } : {}),
@@ -51,6 +54,9 @@ export function projectIpcPtyConnectResult(
     }
   }
   if (
+    spawnResult.incarnationId ||
+    spawnResult.shellPath ||
+    spawnResult.wslDistro !== undefined ||
     launchAgent ||
     spawnResult.launchConfig ||
     spawnResult.startupCwdFallback ||
@@ -63,6 +69,9 @@ export function projectIpcPtyConnectResult(
       ...facts,
       ...(spawnResult.incarnationId ? { incarnationId: spawnResult.incarnationId } : {}),
       id: spawnResult.id,
+      ...(spawnResult.incarnationId ? { incarnationId: spawnResult.incarnationId } : {}),
+      ...(spawnResult.shellPath ? { shellPath: spawnResult.shellPath } : {}),
+      ...(spawnResult.wslDistro !== undefined ? { wslDistro: spawnResult.wslDistro } : {}),
       ...(launchAgent ? { launchAgent } : {}),
       ...(spawnResult.launchConfig ? { launchConfig: spawnResult.launchConfig } : {}),
       ...(spawnResult.startupCwdFallback

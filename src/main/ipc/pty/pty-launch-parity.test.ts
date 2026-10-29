@@ -1,3 +1,4 @@
+import { registerWorkspaceRuntimeParityTests } from '../pty-workspace-runtime-parity.spec'
 import * as spawnRouting from './host-env/fresh-spawn-routing'
 import * as teamsShim from '../../runtime/claude-agent-teams-shim-env'
 import { WorktreeTerminalMutationLock } from '../../runtime/worktree-terminal-mutation-lock'
@@ -5,26 +6,20 @@ import * as teamsPlan from '../../runtime/terminal/launch/agent-teams-launch-pla
 import { SessionNotFoundError } from '../../daemon/daemon-errors'
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
-import { classifyErrorMock, statSyncMock, trackMock } from './pty-ipc-mock-registry'
+import { classifyErrorMock, trackMock } from './pty-ipc-mock-registry'
 import {
   providerFacts,
   recordOf,
   restoreMainPlatform,
   setMainPlatform,
   startParityLanes,
-  type ParityLanes,
-  spawnBoth
+  type ParityLanes
 } from './pty-launch-parity.test-fixture'
-import {
-  POSIX_PATH,
-  WIN_PATH,
-  WSL_PATH
-} from '../../../shared/launch-parity-window-cases.test-fixture'
+import { POSIX_PATH } from '../../../shared/launch-parity-window-cases.test-fixture'
 
 import {
   expectedWindowProvider,
-  launchWorkspaceId,
-  type LaunchWorkspace
+  launchWorkspaceId
 } from '../../../shared/launch-parity-window-request.test-fixture'
 
 import {
@@ -53,7 +48,6 @@ import { applyManagedDataAccountEnvironment } from '../../managed-data-accounts/
 import { probeOpenCodeLaunchCapabilities } from '../../opencode/opencode-launch-capabilities'
 import { resolveOpenCodeDirectModelExecutable } from '../../opencode/opencode-model-executable'
 import { probeOpenCodeLaunchModelContext } from '../../opencode/opencode-launch-model-context'
-import { readOpenSshDefaultShell } from '../../../shared/openssh-default-shell'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
@@ -709,103 +703,4 @@ describe('launch facts outside the tables', () => {
   })
 })
 
-const WSL_UBUNTU = { kind: 'wsl', distro: 'Ubuntu' } as const
-const WSL_PROJECT_SENT = {
-  status: 'resolved',
-  runtime: {
-    kind: 'wsl',
-    hostPlatform: 'wsl',
-    projectId: 'repo-1',
-    distro: 'Ubuntu',
-    reason: 'project-override',
-    cacheKey: 'repo-1:wsl:Ubuntu'
-  }
-}
-const LOGIN_SHELL = String.raw`C:\Program Files\PowerShell\7\pwsh.exe`
-
-describe('spawn preflight: where the lanes differ today', () => {
-  const suite = setupPtyIpcSuite()
-  afterEach(() => {
-    restoreMainPlatform()
-    vi.unstubAllEnvs()
-  })
-
-  // A caller-named session the host no longer has is created too, so it falls back like a fresh one.
-  it.each([
-    { name: 'a fresh start', window: {}, host: {} },
-    {
-      name: 'a dead caller-named session',
-      window: { sessionId: 'pty-gone-window' },
-      host: { sessionId: 'pty-gone-host' }
-    }
-  ])('a deleted folder, $name: both lanes start in the workspace root and say so', async (c) => {
-    setMainPlatform('darwin')
-    const missing = `${POSIX_PATH}/deleted`
-    statSyncMock.mockImplementation((target: string) => {
-      if (target === missing) {
-        throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
-      }
-      return { isDirectory: () => true, mode: 0o755 }
-    })
-    const lanes = startParityLanes(suite, { workspace: POSIX_REPO })
-    const facts = await spawnBoth(
-      lanes,
-      POSIX_REPO,
-      { cwd: missing, ...c.window },
-      { cwd: missing, ...c.host }
-    )
-
-    const fallback = { kind: 'worktree', cwd: POSIX_PATH }
-    expect(facts.window).toMatchObject({
-      cwd: POSIX_PATH,
-      result: { startupCwdFallback: fallback }
-    })
-    expect(facts.host).toMatchObject({ cwd: POSIX_PATH, created: { startupCwdFallback: fallback } })
-    expect(lanes.reveal).toHaveBeenLastCalledWith(
-      expect.anything(),
-      expect.not.objectContaining({ startupCwdFallback: expect.anything() })
-    )
-  })
-
-  it.each([
-    {
-      name: 'a folder containing a WSL-project repo',
-      workspace: {
-        kind: 'folder',
-        path: String.raw`C:\Users\alice`,
-        repoPath: WIN_PATH,
-        projectRuntime: WSL_UBUNTU
-      } satisfies LaunchWorkspace,
-      host: { shellOverride: 'powershell.exe', terminalWindowsWslDistro: null }
-    },
-    {
-      name: 'a \\wsl$ repo with no saved runtime',
-      workspace: { kind: 'repo', path: WSL_PATH } satisfies LaunchWorkspace,
-      // The distro comes from the path, but the shell stays the settings' PowerShell.
-      host: { shellOverride: 'powershell.exe', terminalWindowsWslDistro: 'Ubuntu' }
-    }
-  ])('Windows plain terminal, $name: the window uses the sent runtime', async (c) => {
-    setMainPlatform('win32')
-    const lanes = startParityLanes(suite, { workspace: c.workspace })
-    const facts = await spawnBoth(lanes, c.workspace, { projectRuntime: WSL_PROJECT_SENT })
-
-    expect(facts.window).toMatchObject({
-      shellOverride: 'wsl.exe',
-      terminalWindowsWslDistro: 'Ubuntu'
-    })
-    expect(facts.host).toMatchObject(c.host)
-  })
-
-  // Managed SSH hosts expose this shell environment; the shared resolver serves both lanes.
-  it('Windows managed SSH host: both lanes open the OpenSSH login shell', async () => {
-    setMainPlatform('win32')
-    vi.stubEnv('ORCA_ORCAD_MANAGED_ACTIVATION_ROOT', '/activation')
-    vi.mocked(readOpenSshDefaultShell).mockReturnValue(LOGIN_SHELL)
-    const workspace = { kind: 'repo', path: WIN_PATH } satisfies LaunchWorkspace
-    const lanes = startParityLanes(suite, { workspace })
-    const facts = await spawnBoth(lanes, workspace, {})
-
-    expect(facts.window).toMatchObject({ shellOverride: LOGIN_SHELL })
-    expect(facts.host).toMatchObject({ shellOverride: LOGIN_SHELL })
-  })
-})
+registerWorkspaceRuntimeParityTests()

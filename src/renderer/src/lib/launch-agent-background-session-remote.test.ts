@@ -68,6 +68,7 @@ vi.mock('@/lib/execution-host-facts', async (importOriginal) => {
 })
 
 vi.mock('@/components/terminal-pane/pty-dispatcher', () => ({
+  ensurePtyDispatcher: vi.fn(),
   registerEagerPtyBuffer: mockRegisterEagerPtyBuffer,
   subscribeToPtyExit: mockSubscribeToPtyExit
 }))

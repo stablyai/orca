@@ -1,3 +1,4 @@
+import { captureLocalPtyProcessDescription } from '@/components/terminal-pane/ipc-pty-process-description'
 import { useAppStore } from '@/store'
 import { runtimeTargetForOwnerEnvironment } from '@/runtime/runtime-client-target'
 import { buildAgentStartupPlan } from '@/lib/tui-agent-startup'
@@ -168,6 +169,7 @@ export async function launchAgentBackgroundSession(
       runtimeTerminalHandle = created.terminal.handle
       ptyId = toRemoteRuntimePtyId(runtimeTerminalHandle, runtimeTarget.environmentId)
     } else {
+      const publish = captureLocalPtyProcessDescription(launchHost.isLocalHost === true)
       const result = await window.api.pty.spawn({
         cols: 120,
         rows: 40,
@@ -198,6 +200,7 @@ export async function launchAgentBackgroundSession(
       })
       ptyId = result.id
       spawned = result
+      publish(result)
     }
     const adopted = await adoptAgentBackgroundSessionTab({
       store,

@@ -59,7 +59,7 @@ describe('createIpcPtyTransport against a relay-recycled PTY id', () => {
     )
 
     // Require the PTY ID too; negative dead-result matching alone could pass a connect that bailed out.
-    expect(result).toBe(RECYCLED_PTY_ID)
+    expect(result).toMatchObject({ id: RECYCLED_PTY_ID, incarnationId: FRESH_INCARNATION_ID })
     expect(paneExit).not.toHaveBeenCalled()
   })
 

@@ -80,7 +80,7 @@ function entry(): AgentStatusEntry {
   }
 }
 
-function state(): DashboardSnapshotState {
+function state(): Parameters<typeof buildDashboardSnapshot>[0] {
   return {
     chatNames: new Map(),
     repos: [],
@@ -103,6 +103,7 @@ function state(): DashboardSnapshotState {
     ptyIdsByTabId: { [TAB_ID]: ['pty-folder'] },
     runtimePaneTitlesByTabId: {},
     acknowledgedAgentsByPaneKey: {},
+    ptyProcessMetadataById: {},
     settings: null
   }
 }

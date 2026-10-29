@@ -64,14 +64,15 @@ export async function prepareRuntimePtySpawn(
     !ctx.preAdoptedStablePane &&
     ctx.isDaemonHostSpawn &&
     (ctx.callerRequestedSessionId === undefined || args.isNewSession === true)
-  // Runtime requests use planned command runtime, or project runtime plus explicit --shell; they have no renderer runtime.
+  // A planned command keeps its quoted PTY; plain terminals resolve their workspace on this host.
   const target = await resolvePtySpawnStartupTarget({
     worktreeId: args.worktreeId,
     cwd: args.cwd,
     sessionId: ctx.sessionId,
     shellOverride: args.shellOverride,
     plannedPty: args.launchRuntime?.pty,
-    projectRuntimeSource: { kind: 'store', store: ctx.deps.store },
+    store: ctx.deps.store,
+    tabId: args.tabId,
     preAdopted: ctx.preAdoptedStablePane !== null,
     getSettings: ctx.deps.getSettings,
     resolveStartupCwd: ctx.deps.resolvePtySpawnStartupCwd

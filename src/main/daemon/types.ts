@@ -311,9 +311,7 @@ export type ListSessionsResult = {
   sessions: SessionInfo[]
 }
 
-export type ShutdownIfIdleResult = {
-  retiring: boolean
-}
+export type { ShutdownIfIdleResult } from './daemon-shutdown-if-idle-result'
 
 export type SystemResolverHealth = 'healthy' | 'unhealthy' | 'unknown'
 
