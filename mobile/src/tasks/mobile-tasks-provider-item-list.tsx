@@ -178,6 +178,11 @@ export function renderMobileTasksProviderItemList(
         const isGitLabMr = item.provider === 'gitlab' && item.source.type === 'mr'
         const githubPrDelta = isGitHubPr ? formatGitHubPRDelta(item.source) : null
         const branchSummary = hostedBranchSummary(item)
+        const mergeLabel = isGitHubPr
+          ? getGitHubMergeLabel(item.source)
+          : isGitLabMr
+            ? getHostedMergeLabel(item.source)
+            : null
         return (
           <Pressable
             style={({ pressed }) => [styles.taskRow, pressed && styles.taskRowPressed]}
@@ -256,7 +261,7 @@ export function renderMobileTasksProviderItemList(
                       {getHostedChecksLabel(item.source)}
                     </Text>
                   </View>
-                  {isGitHubPr || isGitLabMr ? (
+                  {mergeLabel ? (
                     <View
                       style={[
                         styles.prSignalChip,
@@ -264,9 +269,7 @@ export function renderMobileTasksProviderItemList(
                       ]}
                     >
                       <Text style={styles.prSignalText} numberOfLines={1}>
-                        {isGitHubPr
-                          ? getGitHubMergeLabel(item.source)
-                          : getHostedMergeLabel(item.source)}
+                        {mergeLabel}
                       </Text>
                     </View>
                   ) : null}

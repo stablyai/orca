@@ -95,8 +95,24 @@ printf '%s' "$TEXT" | ORCA computer set-value --app <app> --element-index <index
 - Use `type-text` only after focusing a field and confirming the app has a focused text receiver; synthetic keyboard delivery is reported as unverified, so inspect the returned state before assuming text landed.
 - Use `press-key` for single/navigation keys such as Return, Escape, Tab, and arrows. Use `hotkey` only for one modifier chord plus one key, such as `CmdOrCtrl+A` or `CmdOrCtrl+Shift+P`; prefer `CmdOrCtrl+...` for cross-platform combos.
 - Use `click --modifiers <chord>` for modifier-clicks. Never synthesize separate modifier-down and modifier-up commands around a click; interruption can leave a modifier logically held.
-- Some actions work in background apps, but this is app-dependent. If success does not change the UI, refresh state and choose a more semantic action or restore/focus the window.
 - Coordinates are window-local; use coordinates from the latest screenshot/state for the same target window.
+
+## Background and Foreground Input
+
+On macOS, every action runs in the background by default: the target app is not brought forward, the user's frontmost app and key window stay put, and the real pointer does not move. The user can keep working while you act. `capabilities` reports this as `supports.input.background`, and each action result reports `action.delivery` as `background` or `foreground`.
+
+On Linux and Windows, keyboard and pointer input still need the target window in front; a `window_not_focused` refusal there means retry with `--restore-window`.
+
+Do not pass `--restore-window` by default. Use it only when foreground input is needed, and tell the user first because it takes over their screen, keyboard focus and pointer:
+
+- An action fails with `background_unavailable` that does not name a popup.
+- A background action reports success but the UI does not change, and a semantic action (`set-value`, `perform-secondary-action`) cannot do the job.
+- Drags in Chromium or Electron apps, and apps that read the hardware pointer (games, OpenGL/Metal views, Java/Tk), which ignore background pointer events.
+- The window is minimized or hidden. Accessibility actions still work there; pointer and keyboard events do not.
+
+Popup menus and web `<select>` controls: set the option with `set-value` on the popup element. Background clicks on them are refused because they open the menu off screen or wedge the app's input.
+
+On Linux and Windows, clicks, scrolling, drags and keyboard input still bring the target window forward.
 
 ## Screenshots
 
@@ -120,12 +136,12 @@ On Linux and Windows, screenshots may come from the visible desktop region for t
 
 ## App Notes
 
-Browsers: for Edge, Chrome, Safari, and similar browser windows, set the address/search field directly, then press Return. Do not assume raw typing went to the address bar. Use `--restore-window` when the browser is not already frontmost. Large tab strips may show only the active tab plus an "inactive browser tabs omitted" marker; treat that as intentional noise reduction and operate on the current page/address bar unless the user asked to manage tabs.
+Browsers: for Edge, Chrome, Safari, and similar browser windows, set the address/search field directly, then press Return. Do not assume raw typing went to the address bar. On Linux and Windows, use `--restore-window` when the browser is not already frontmost; on macOS this works in the background. Large tab strips may show only the active tab plus an "inactive browser tabs omitted" marker; treat that as intentional noise reduction and operate on the current page/address bar unless the user asked to manage tabs.
 
 For browser-hosted forms such as Gmail compose, verify the focused UI element after each field action. Page text fields can expose accessibility actions without moving DOM focus; if a click or `set-value` does not change the focused receiver, use `Tab` / `Shift+Tab` from a known focused field or window-local coordinates from a fresh screenshot. Prefer `paste-text` into the verified focused field for draft bodies, then inspect the returned state before continuing.
 
 ```text
-ORCA computer get-app-state --app com.microsoft.edgemac --restore-window --json
+ORCA computer get-app-state --app com.microsoft.edgemac --json
 ORCA computer set-value --app com.microsoft.edgemac --element-index <addressBarIndex> --value "test123" --json
 ORCA computer press-key --app com.microsoft.edgemac --key Return --json
 ```
@@ -139,6 +155,7 @@ Slack: the accessibility tree may be shallow while the screenshot contains usefu
 - `app_not_found`: run `list-apps` and retry with the bundle ID. If the target is a web app such as Gmail, choose the desktop browser app/window that contains it; do not retry `ORCA computer ... --app Gmail` unchanged because `orca computer` app selectors refer to desktop apps, not website names.
 - `app_blocked`: stop; the target is intentionally blocked from computer-use.
 - `window_not_found` / `window_stale`: run `list-windows`, choose a current selector, then rerun `get-app-state`.
+- `background_unavailable`: for a popup or `<select>`, use `set-value` on it; otherwise retry once with `--restore-window` after telling the user it will take over their screen.
 - `window_not_focused`: retry once with `--restore-window`; if the message says restore was already requested, stop retrying restore and bring the app forward manually or check permissions. For editable fields prefer `set-value`, then inspect before assuming keyboard input worked.
 - `element_not_found`: index is stale; run `get-app-state` again.
 - `unsupported_capability`: the provider or desktop environment cannot do that action; use a semantic alternative or install the missing dependency if the message names one.

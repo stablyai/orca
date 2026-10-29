@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 
 import {
-  compareJiraProjectsByDisplayLabel,
-  getJiraProjectSelectionKey
+  getJiraProjectSelectionKey,
+  jiraProjectDisplayLabelComparator
 } from './task-page-jira-project-selection'
 import type { JiraProject } from '../../../../../shared/jira/jira-types'
 
@@ -24,10 +24,10 @@ describe('getJiraProjectSelectionKey', () => {
   })
 })
 
-describe('compareJiraProjectsByDisplayLabel', () => {
+describe('jiraProjectDisplayLabelComparator', () => {
   const sortOf = (projects: JiraProject[], includeSiteName: boolean): string[] =>
     [...projects]
-      .sort((a, b) => compareJiraProjectsByDisplayLabel(a, b, includeSiteName))
+      .sort(jiraProjectDisplayLabelComparator(includeSiteName))
       .map((entry) => `${entry.siteName ?? ''}/${entry.name}/${entry.key}`)
 
   it('orders by site name first when site names are included', () => {
@@ -61,7 +61,7 @@ describe('compareJiraProjectsByDisplayLabel', () => {
   })
 
   it('returns 0 for projects with identical display labels', () => {
-    expect(compareJiraProjectsByDisplayLabel(project(), project({ id: '2' }), true)).toBe(0)
+    expect(jiraProjectDisplayLabelComparator(true)(project(), project({ id: '2' }))).toBe(0)
   })
 
   it('treats a missing site name as an empty string when comparing sites', () => {

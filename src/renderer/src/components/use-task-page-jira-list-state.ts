@@ -1,5 +1,5 @@
-import { useTaskPageJiraQuickFilters } from './use-task-page-jira-quick-filters'
-import type { JiraStatusCatalogItem } from './task-page-jira-status-catalog'
+import { useTaskPageJiraQuickFilters } from './task-page/jira/use-task-page-jira-quick-filters'
+import type { JiraStatusCatalogItem } from './task-page/jira/task-page-jira-status-catalog'
 import { useTaskPageJiraSavedFilters } from './use-task-page-jira-saved-filters'
 import { useTaskPageJiraFavouriteFilters } from './use-task-page-jira-favourite-filters'
 import type { JiraFavouriteFilter } from '../../../shared/jira/jira-favourite-filters'

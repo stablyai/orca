@@ -215,6 +215,7 @@ export function ClientHostedBrowserPagePane({
       // A commit is a successful load; did-stop-loading must preserve the preceding did-fail-load overlay.
       if (event?.type === 'did-navigate') {
         activeLoadFailureRef.current = null
+        setFindOpen(false)
       }
       const activeLoadFailure = activeLoadFailureRef.current
       // URL writes clear certificate challenges, so preserve them while a failure stands.

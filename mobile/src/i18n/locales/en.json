@@ -3869,6 +3869,21 @@
     },
     "worktreeCreateRetry": {
       "createFailed": "Failed to create workspace"
+    },
+    "hostedMerge": {
+      "merged": "Merged",
+      "closed": "Closed",
+      "conflicts": "Conflicts",
+      "behind": "Behind",
+      "blocked": "Blocked",
+      "checksPending": "Checks pending",
+      "ableToMerge": "Able to merge",
+      "unknown": "Unknown"
+    },
+    "pagination": {
+      "pageUnreachable": "Page {{page}} is beyond what GitHub search can return.",
+      "loadPageFailed": "Page {{page}} could not be loaded from GitHub.",
+      "noMoreResults": "No more results on page {{page}}."
     }
   },
   "terminal": {
