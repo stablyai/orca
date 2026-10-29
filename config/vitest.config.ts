@@ -88,7 +88,7 @@ const testOptions = {
   environment: 'node',
   clearMocks: false,
   ...(balancedShards ? { silent: 'passed-only' as const } : {}),
-  // Persistent transforms are CI-keyed (ci-unit-module-cache.mjs); local runs stay cold.
+  // Keyed by ci-unit-module-cache.mjs in CI and vitest-local-module-cache.mjs locally.
   fsModuleCache: Boolean(moduleCachePath),
   ...(moduleCachePath ? { fsModuleCachePath: moduleCachePath } : {}),
   env: { ORCA_VITEST_RUNTIME: 'node' },
