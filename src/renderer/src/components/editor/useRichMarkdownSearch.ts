@@ -15,6 +15,7 @@ import {
 import { createRichMarkdownSearchMatchesCache } from './rich-markdown-search-matches-cache'
 import { useRichMarkdownSearchHighlights } from './useRichMarkdownSearchHighlights'
 import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
+import { isImeOwnedKeyboardEvent } from '@/lib/ime-composition-keyboard-event'
 
 export function useRichMarkdownSearch({
   editor,
@@ -269,7 +270,7 @@ export function useRichMarkdownSearch({
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent): void => {
       const root = rootRef.current
-      if (!root) {
+      if (!root || isImeOwnedKeyboardEvent(event)) {
         return
       }
 

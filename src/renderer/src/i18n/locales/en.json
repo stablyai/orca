@@ -15418,6 +15418,9 @@
           "reconnectBody": "Sign in again to use Orca Relay, or use LAN to pair over Tailscale or the same Wi‑Fi.",
           "notEntitledTitle": "Orca Relay isn’t included with this Orca account.",
           "rateLimitedBody": "Orca Relay is busy. Wait a minute and retry, or use LAN to pair over Tailscale or the same Wi‑Fi."
+        },
+        "relayClockSkewMessage": {
+          "message": "Your computer's clock is off by about {{seconds}} seconds. Turn on automatic time, then retry."
         }
       },
       "gitlab": {

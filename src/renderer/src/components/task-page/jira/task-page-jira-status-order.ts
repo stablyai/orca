@@ -1,8 +1,9 @@
-import type { JiraIssue, JiraProjectStatusOrder } from '../../../shared/jira/jira-types'
-import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
+import type { JiraIssue, JiraProjectStatusOrder } from '../../../../../shared/jira/jira-types'
+import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
 import { runtimeTargetEnvironmentId } from '@/runtime/runtime-client-target'
 import { getEnvironmentRuntimeContextKey } from '@/lib/provider-runtime-context'
-import { jiraGetProjectStatusOrder, type RuntimeJiraSettings } from '@/runtime/runtime-jira-client'
+import { jiraGetProjectStatusOrder } from '@/runtime/runtime-jira-client'
+import type { RuntimeJiraSettings } from '@/runtime/runtime-jira-target'
 import { createMetadataRequestStore, loadMetadata } from '@/hooks/metadata-request-cache'
 
 export type TaskPageJiraProjectScope = {

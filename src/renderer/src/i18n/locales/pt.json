@@ -16440,6 +16440,9 @@
           "96d651cb87": "Sessão de terminal",
           "93217b41c1": "Lista de worktrees",
           "89c7713645": "Tela inicial do Orca Mobile"
+        },
+        "relayClockSkewMessage": {
+          "message": "O relógio do seu computador está com uma diferença de cerca de {{seconds}} segundos. Ative a hora automática e tente novamente."
         }
       },
       "PullRequestConfirmation": {

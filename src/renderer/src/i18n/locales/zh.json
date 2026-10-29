@@ -14640,6 +14640,9 @@
           "reconnectBody": "再次登录以使用 Orca Relay，或使用 LAN 通过 Tailscale 或同一 Wi-Fi 进行配对。",
           "notEntitledTitle": "此 Orca 账户不包含 Orca Relay。",
           "rateLimitedBody": "Orca Relay 正忙。请等待一分钟再重试，或使用 LAN 通过 Tailscale 或同一 Wi‑Fi 配对。"
+        },
+        "relayClockSkewMessage": {
+          "message": "你的电脑时钟偏差约 {{seconds}} 秒。请开启自动设置时间，然后重试。"
         }
       },
       "gitlab": {

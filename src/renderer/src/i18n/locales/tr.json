@@ -14999,6 +14999,9 @@
           "reconnectBody": "Orca Relay'i kullanmak için tekrar oturum açın veya Tailscale ya da aynı Wi-Fi üzerinden eşleştirmek için Yerel Ağı kullanın.",
           "notEntitledTitle": "Orca Relay bu Orca hesabına dahil değil.",
           "rateLimitedBody": "Orca Relay meşgul. Bir dakika bekleyip yeniden deneyin veya Tailscale ya da aynı Wi‑Fi üzerinden eşleştirmek için LAN kullanın."
+        },
+        "relayClockSkewMessage": {
+          "message": "Bilgisayarınızın saati yaklaşık {{seconds}} saniye farklı. Otomatik saat ayarını açıp yeniden deneyin."
         }
       },
       "gitlab": {

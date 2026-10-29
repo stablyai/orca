@@ -328,14 +328,14 @@ describe('loadLocalImageSrc', () => {
     }
   })
 
-  it('fails closed when pinned previews already consume the entry or byte budget', () => {
+  it('refuses unleased overflow and oversized payloads when pinned previews fill the entry target', () => {
     for (let index = 0; index < 100; index += 1) {
       const key = `pinned-${index}`
       pinLocalImageCache(key)
       expect(cacheLocalImageBlob(key, `blob:${index}`, 1)).toBe(true)
     }
 
-    expect(cacheLocalImageBlob('pinned-overflow', 'blob:overflow', 1)).toBe(false)
+    expect(cacheLocalImageBlob('unleased-overflow', 'blob:overflow', 1)).toBe(false)
     expect(blobUrlCache.size).toBe(100)
     expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:overflow')
 

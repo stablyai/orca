@@ -15237,6 +15237,9 @@
           "reconnectBody": "Connectez-vous à nouveau pour utiliser Orca Relay, ou utilisez le réseau local pour effectuer le couplage via Tailscale ou le même Wi‑Fi.",
           "notEntitledTitle": "Orca Relay n'est pas inclus avec ce compte Orca.",
           "rateLimitedBody": "Orca Relay est occupé. Attendez une minute et réessayez, ou utilisez le LAN pour appairer via Tailscale ou le même Wi‑Fi."
+        },
+        "relayClockSkewMessage": {
+          "message": "L’horloge de votre ordinateur est décalée d’environ {{seconds}} secondes. Activez le réglage automatique de l’heure, puis réessayez."
         }
       },
       "gitlab": {

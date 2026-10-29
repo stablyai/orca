@@ -14640,6 +14640,9 @@
           "reconnectBody": "Orca Relay를 사용하려면 다시 로그인하거나 LAN을 사용하여 Tailscale 또는 동일한 Wi-Fi를 통해 페어링하세요.",
           "notEntitledTitle": "이 Orca 계정에는 Orca Relay가 포함되어 있지 않습니다.",
           "rateLimitedBody": "Orca Relay가 사용 중입니다. 1분 정도 기다렸다가 다시 시도하거나, LAN을 사용해 Tailscale 또는 동일한 Wi‑Fi로 페어링하세요."
+        },
+        "relayClockSkewMessage": {
+          "message": "컴퓨터 시계가 약 {{seconds}}초 어긋나 있습니다. 자동 시간 설정을 켠 다음 다시 시도하세요."
         }
       },
       "gitlab": {
