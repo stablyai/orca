@@ -48,6 +48,10 @@ describe('createProjectGroupHeaderDragSession', () => {
       groupId: 'group-a',
       projectGroupById,
       sidebarProjectGroupHeaderIdsByBucket,
+      sidebarRootSlots: [
+        { kind: 'project-group', id: 'group-a' },
+        { kind: 'project-group', id: 'group-b' }
+      ],
       getScrollContainer: () => scrollContainer
     })
 
@@ -82,6 +86,10 @@ describe('createProjectGroupHeaderDragSession', () => {
       groupId: 'group-a',
       projectGroupById,
       sidebarProjectGroupHeaderIdsByBucket,
+      sidebarRootSlots: [
+        { kind: 'project-group', id: 'group-a' },
+        { kind: 'project-group', id: 'group-b' }
+      ],
       getScrollContainer: () => scrollContainer
     })
 

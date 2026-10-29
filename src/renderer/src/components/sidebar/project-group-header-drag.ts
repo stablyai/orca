@@ -4,6 +4,7 @@ import {
   computeProjectGroupHeaderDropPreview,
   measureProjectGroupHeaderDragRects
 } from './project-group-header-drop'
+import { measureSidebarRootSlotDragRects } from './sidebar-root-slot-order'
 import { commitProjectGroupHeaderDragDrop } from './project-group-header-drag-commit'
 import {
   INITIAL_PROJECT_GROUP_DRAG_STATE,
@@ -22,8 +23,11 @@ import { swallowNextClickOnDragHandle } from './header-drag-click-swallow'
 
 export function useProjectGroupHeaderDrag({
   sidebarProjectGroupHeaderIdsByBucket,
+  sidebarRootSlots = [],
   projectGroupById,
+  repoById,
   onCommitProjectGroupTabOrder,
+  onCommitProjectGroupOrder,
   getScrollContainer
 }: UseProjectGroupHeaderDragArgs): ProjectGroupHeaderDragController {
   const [state, setState] = useState<ProjectGroupDragState>(INITIAL_PROJECT_GROUP_DRAG_STATE)
@@ -32,10 +36,16 @@ export function useProjectGroupHeaderDrag({
   latestDropIndexRef.current = state.dropIndex
   const sidebarProjectGroupHeaderIdsByBucketRef = useRef(sidebarProjectGroupHeaderIdsByBucket)
   sidebarProjectGroupHeaderIdsByBucketRef.current = sidebarProjectGroupHeaderIdsByBucket
+  const sidebarRootSlotsRef = useRef(sidebarRootSlots)
+  sidebarRootSlotsRef.current = sidebarRootSlots
   const projectGroupByIdRef = useRef(projectGroupById)
   projectGroupByIdRef.current = projectGroupById
+  const repoByIdRef = useRef(repoById)
+  repoByIdRef.current = repoById
   const onCommitProjectGroupTabOrderRef = useRef(onCommitProjectGroupTabOrder)
   onCommitProjectGroupTabOrderRef.current = onCommitProjectGroupTabOrder
+  const onCommitProjectGroupOrderRef = useRef(onCommitProjectGroupOrder)
+  onCommitProjectGroupOrderRef.current = onCommitProjectGroupOrder
   const getContainerRef = useRef(getScrollContainer)
   getContainerRef.current = getScrollContainer
   const autoscrollLastFrameTimeRef = useRef<number | null>(null)
@@ -50,7 +60,9 @@ export function useProjectGroupHeaderDrag({
     if (!container || !session) {
       return []
     }
-    const rects = measureProjectGroupHeaderDragRects(container, session.bucketKey)
+    const rects = session.orderedRootSlots
+      ? measureSidebarRootSlotDragRects(container)
+      : measureProjectGroupHeaderDragRects(container, session.bucketKey)
     session.headerRects = rects
     return rects
   }, [])
@@ -132,7 +144,9 @@ export function useProjectGroupHeaderDrag({
         session,
         sidebarDropIndex,
         projectGroupById: projectGroupByIdRef.current,
-        onCommitProjectGroupTabOrder: onCommitProjectGroupTabOrderRef.current
+        repoById: repoByIdRef.current,
+        onCommitProjectGroupTabOrder: onCommitProjectGroupTabOrderRef.current,
+        onCommitProjectGroupOrder: onCommitProjectGroupOrderRef.current
       })
     },
     [cancelAutoscroll]
@@ -285,6 +299,7 @@ export function useProjectGroupHeaderDrag({
         groupId,
         projectGroupById: projectGroupByIdRef.current,
         sidebarProjectGroupHeaderIdsByBucket: sidebarProjectGroupHeaderIdsByBucketRef.current,
+        sidebarRootSlots: sidebarRootSlotsRef.current,
         getScrollContainer: getContainerRef.current
       })
       if (!session) {
