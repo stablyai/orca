@@ -144,12 +144,14 @@ function createSession(pane: number): Session {
     startupAgentRecognition: null,
     isDead: () => false
   })
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This scan-volume fixture supplies the Session members inspection uses; daemon lifecycle is outside its scope.
   return {
     pid: shellPid(pane),
     incarnationId: `inc-${pane}`,
     isAlive: true,
     getForegroundProcess: (options?: { rawFallback?: boolean }) =>
-      tracker.getForegroundProcess(options)
+      tracker.getForegroundProcess(options),
+    readClaudePeerIdentity: () => undefined
   } as unknown as Session
 }
 

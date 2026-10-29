@@ -52,6 +52,44 @@ function createSubprocess(): SubprocessHandle {
 }
 
 describe('TerminalHost process inspection', () => {
+  it('returns host peer metadata and drops it when the session exits during the read', async () => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
+    const subprocess = createSubprocess()
+    let exitDuringRead = false
+    const readClaudePeerIdentity = vi.fn(async () => {
+      if (exitDuringRead) {
+        subprocess.kill()
+      }
+      return { agentName: 'remote-main-fc', agentPid: 123 }
+    })
+    const host = new TerminalHost({
+      spawnSubprocess: () => ({
+        ...subprocess,
+        getForegroundProcess: () => 'claude',
+        readClaudePeerIdentity
+      })
+    })
+    try {
+      const created = await host.createOrAttach({
+        sessionId: 'peer',
+        cols: 80,
+        rows: 24,
+        streamClient: { onData: vi.fn(), onExit: vi.fn() }
+      })
+      expect(
+        await host.inspectProcess('peer', { expectedIncarnationId: created.incarnationId })
+      ).toMatchObject({ agentName: 'remote-main-fc', agentPid: 123 })
+      expect(readClaudePeerIdentity).toHaveBeenCalledWith('claude', undefined)
+      exitDuringRead = true
+      const expired = await host.inspectProcess('peer')
+      expect(expired.agentName).toBeUndefined()
+      expect(expired.agentPid).toBeUndefined()
+    } finally {
+      await host.dispose()
+      vi.restoreAllMocks()
+    }
+  })
+
   it('proves ordinary Windows shell children and withholds proof if its original Session exits', async () => {
     vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
     const subprocess = createSubprocess()

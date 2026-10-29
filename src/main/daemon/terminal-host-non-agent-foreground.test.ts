@@ -49,7 +49,8 @@ async function inspect(rawName: string, command: string | null) {
       isAlive: true,
       confirmForegroundProcess: async () => rawName,
       inspectChildProcesses: () => 'unverifiable' as const,
-      getForegroundProcess: () => rawName
+      getForegroundProcess: () => rawName,
+      readClaudePeerIdentity: () => undefined
     } as unknown as Session,
     authorityGeneration: 'generation-1',
     nextObservationEpoch: () => 1

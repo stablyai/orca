@@ -1,3 +1,6 @@
+import { homedir } from 'node:os'
+import { join } from 'node:path'
+import { ClaudePeerIdentityReader } from '../../claude/claude-peer-identity'
 import type * as pty from 'node-pty'
 import type { RecognizedAgentProcess } from '../../../shared/agent-process-recognition'
 import { readPtySlavePath } from '../../../shared/pty-slave-line-discipline-echo'
@@ -39,6 +42,9 @@ export function createDaemonPtySubprocessHandle(args: {
   /** Output and exit buffered before this handle subscribed; replayed ahead of live events. */
   startupEvents?: ConptyStartupEvents
 }): SubprocessHandle {
+  const peerIdentity = new ClaudePeerIdentityReader(
+    args.env.CLAUDE_CONFIG_DIR || join(homedir(), '.claude')
+  )
   const reportsChildExitStatus = args.reportsChildExitStatus
   const shellPath = args.shellPath
   const proc = args.process
@@ -190,6 +196,8 @@ export function createDaemonPtySubprocessHandle(args: {
     shellPath: args.shellPath,
     shellCwd: args.spawnCwd,
     shellPathEnv: args.env.PATH,
+    readClaudePeerIdentity: (processName, pid) =>
+      peerIdentity.read(processName, pid ?? foreground.getForegroundProcessId()),
     ...(slavePath ? { slavePath } : {}),
     ...(args.startupCommandDeliveredInShellArgs
       ? { startupCommandDeliveredInShellArgs: true }

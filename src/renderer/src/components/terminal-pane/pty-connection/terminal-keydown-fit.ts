@@ -169,6 +169,19 @@ export function installTerminalKeydownFit(session: ConnectPanePtySession): void 
     isRemotePtyId: isRemoteExecutionHostPtyId,
     getExpectedIncarnationId: () => session.remotePtyIncarnationId ?? null,
     inspectProcess: inspectRuntimeTerminalProcess,
+    onProcessMetadata: (inspection) => {
+      const store = useAppStore.getState()
+      const current = store.paneForegroundAgentByPaneKey[session.cacheKey]
+      if (!current && !inspection.agentName) {
+        return
+      }
+      store.setPaneForegroundAgent(session.cacheKey, {
+        ...(current ?? { agent: null, shellForeground: false }),
+        agentName: inspection.agentName,
+        agentPid: inspection.agentPid,
+        permissionMode: inspection.permissionMode
+      })
+    },
     confirmForegroundProcess: confirmRuntimeTerminalForegroundProcess,
     dispatchHookLifecycle: (payload) =>
       dispatchAgentHookTerminalLifecycle(session.cacheKey, payload),

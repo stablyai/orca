@@ -328,3 +328,17 @@ it('keeps the Windows close guard live when a shell descendant is selected above
   const inspection = await inspect(createHandle())
   expect(inspection).toMatchObject({ hasChildProcesses: true, childProcessEvidence: 'children' })
 })
+
+it('keeps the outer wrapper PID with its reported identity in spawn-file snapshots', () => {
+  const rows = table('omp')
+  const wrapper = rows.find((row) => row.pid === 102)
+  if (!wrapper) {
+    throw new Error('wrapper fixture is missing')
+  }
+  rows.push({ ...wrapper, pid: 103, ppid: 102, command: 'pi', stat: 'S+' })
+  expect(resolveSpawnFileForegroundFromRows(rows, 100)).toEqual({
+    available: true,
+    processName: 'omp',
+    processId: 102
+  })
+})

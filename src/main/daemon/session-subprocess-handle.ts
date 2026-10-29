@@ -1,4 +1,7 @@
-import type { PtyChildProcessVerdict } from '../../shared/terminal-process-inspection'
+import type {
+  ClaudePeerIdentity,
+  PtyChildProcessVerdict
+} from '../../shared/terminal-process-inspection'
 import type { TerminalExitCause } from '../../shared/terminal-exit-cause'
 
 import type { JobTerminationOutcome } from '../windows/windows-pty-job'
@@ -6,6 +9,10 @@ import type { JobTerminationOutcome } from '../windows/windows-pty-job'
 export type ChildProcessVerdictRead = PtyChildProcessVerdict | Promise<PtyChildProcessVerdict>
 
 export type SubprocessHandle = {
+  readClaudePeerIdentity?(
+    processName: string | null,
+    pid?: number
+  ): Promise<ClaudePeerIdentity | undefined>
   pid: number
   processNameIsSpawnFile?: boolean
   /** The job-control shell is the root's only child (macOS login(1) wrapper), not the root itself. */

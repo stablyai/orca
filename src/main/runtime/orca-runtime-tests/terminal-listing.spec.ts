@@ -16,6 +16,47 @@ import {
 } from '../orca-runtime-test-fixtures.spec'
 
 describe('OrcaRuntimeService', () => {
+  it('adds Claude peer metadata only to listed Claude terminals and tolerates unavailable inspection', async () => {
+    const runtime = new (class extends OrcaRuntimeService {
+      seedClaudePeer(): void {
+        this.recordPtyWorktree('claude-peer', TEST_WORKTREE_ID, {
+          connected: true
+        }).foregroundAgent = 'claude'
+      }
+    })(store)
+    runtime.seedClaudePeer()
+    const inspectProcess = vi.fn(async () => ({
+      foregroundProcess: 'claude',
+      hasChildProcesses: true,
+      agentName: 'Amber Harbor',
+      agentPid: 1234,
+      permissionMode: 'default'
+    }))
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null,
+      inspectProcess,
+      listProcesses: async () => [
+        { id: 'claude-peer', cwd: TEST_WORKTREE_PATH, title: 'Claude Code' },
+        { id: 'ordinary-shell', cwd: TEST_WORKTREE_PATH, title: 'zsh' }
+      ]
+    })
+    runtime.attachWindow(1)
+    runtime.markGraphReady(1)
+    const listed = await runtime.listTerminals(`id:${TEST_WORKTREE_ID}`)
+    expect(listed.terminals.find((terminal) => terminal.ptyId === 'claude-peer')).toMatchObject({
+      agentName: 'Amber Harbor',
+      agentPid: 1234,
+      permissionMode: 'default'
+    })
+    expect(inspectProcess).toHaveBeenCalledExactlyOnceWith('claude-peer', { steadyState: true })
+    inspectProcess.mockRejectedValueOnce(new Error('terminal_gone'))
+    const unavailable = await runtime.listTerminals(`id:${TEST_WORKTREE_ID}`)
+    expect(unavailable.terminals).toHaveLength(2)
+    expect(unavailable.terminals.every((terminal) => terminal.agentName === undefined)).toBe(true)
+  })
+
   it('emits one mobile session terminal tab per live PTY even if two tabs resolve to it', () => {
     const runtime = createRuntime()
     const internals = runtime as unknown as {

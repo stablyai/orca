@@ -11,6 +11,40 @@ const WRAPPER_RESOLVE_RETRY_MS = 1200
 const SECOND_WRAPPER_RETRY_MS = 6000
 
 describe('createPaneForegroundAgentTracker', () => {
+  it('retains a named peer through a same-agent foreground refresh and drops it on shell return', async () => {
+    vi.useFakeTimers()
+    let foreground = 'claude'
+    let published: PaneForegroundAgentEntry = {
+      agent: 'claude',
+      agentEvidence: 'process-read',
+      shellForeground: false,
+      agentName: 'Amber Harbor',
+      agentPid: 123,
+      permissionMode: 'plan'
+    }
+    const tracker = createPaneForegroundAgentTracker({
+      getPtyId: () => 'peer-pty',
+      isTrackablePtyId: () => true,
+      readForegroundProcess: async () => foreground,
+      getPublishedEntry: () => published,
+      publish: (entry) => {
+        published = entry
+      }
+    })
+    tracker.onVisiblePtyBound()
+    await vi.advanceTimersByTimeAsync(350)
+    expect(published).toMatchObject({
+      agentName: 'Amber Harbor',
+      agentPid: 123,
+      permissionMode: 'plan'
+    })
+    foreground = 'zsh'
+    tracker.onCommandFinished()
+    await vi.advanceTimersByTimeAsync(350)
+    expect(published).toEqual({ agent: null, shellForeground: true })
+    tracker.dispose()
+  })
+
   const readForegroundProcess = vi.fn<(ptyId: string) => Promise<string | null>>()
   const confirmForegroundProcess = vi.fn<(ptyId: string) => Promise<string | null>>()
   const publish = vi.fn<(entry: PaneForegroundAgentEntry) => void>()

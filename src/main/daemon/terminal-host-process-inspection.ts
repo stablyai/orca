@@ -2,7 +2,10 @@ import { pruneRetiredPtyIncarnations } from '../../shared/retired-pty-incarnatio
 import { getInspectableTerminalHostSession } from './terminal-host-session-access'
 import { isShellProcess } from '../../shared/agent-detection'
 import { recognizeAgentProcess } from '../../shared/agent-process-recognition'
-import type { PtyChildProcessVerdict } from '../../shared/terminal-process-inspection'
+import type {
+  ClaudePeerIdentity,
+  PtyChildProcessVerdict
+} from '../../shared/terminal-process-inspection'
 import type { RemoteForegroundEvidence } from '../../shared/foreground-process-evidence'
 import { getCheapProcessTableSnapshot } from '../../shared/cheap-process-table-snapshot-reader'
 import { getStrictProcessTableSnapshotWithAge } from '../../shared/process-table-snapshot-reader'
@@ -19,7 +22,7 @@ import {
 import { SessionNotFoundError } from './types'
 import type { PtyProcessInspectionOptions } from '../providers/pty-process-inspection'
 
-export type TerminalHostProcessInspection = {
+export type TerminalHostProcessInspection = ClaudePeerIdentity & {
   foregroundProcess: string | null
   hasChildProcesses: boolean
   childProcessEvidence?: PtyChildProcessVerdict
@@ -31,6 +34,7 @@ type RetiredIncarnation = { incarnationId: string; code: number; expiresAt: numb
 /** Cheap POSIX polls reuse anchored identity; unresolved reads escalate to full evidence capture. */
 export type TerminalHostInspectionTier = 'full' | 'cheap'
 
+/** Inspects a hosted session's foreground and children, attaching Claude peer data only if the session is unchanged. */
 export async function inspectTerminalHostProcess(args: {
   sessionId: string
   session: Session | null
@@ -75,7 +79,18 @@ export async function inspectTerminalHostProcess(args: {
     if (anchored !== null) {
       args.onTier?.('cheap')
       // A tty-less capture cannot supply fencing evidence to remote or restore consumers.
-      return { foregroundProcess: anchored, hasChildProcesses: true }
+      const identity = await session.readClaudePeerIdentity(
+        anchored,
+        getSteadyStateAnchor(session)?.processId
+      )
+      if (!session.isAlive || (args.currentSession && args.currentSession() !== session)) {
+        return {
+          foregroundProcess: null,
+          hasChildProcesses: true,
+          childProcessEvidence: 'unverifiable'
+        }
+      }
+      return { foregroundProcess: anchored, hasChildProcesses: true, ...identity }
     }
   }
   args.onTier?.('full')
@@ -138,6 +153,19 @@ export async function inspectTerminalHostProcess(args: {
     childProcessEvidence = 'unverifiable'
     evidence = unverifiableEvidence(args, session, 'session_changed')
   }
+  const peerIdentity =
+    incarnationMatches && session.isAlive
+      ? await session.readClaudePeerIdentity(
+          evidence.verdict === 'live' ? evidence.processName : foregroundProcess,
+          evidence.verdict === 'live' ? evidence.fence.process?.pid : undefined
+        )
+      : undefined
+  const sessionUnchanged =
+    session.isAlive && (!args.currentSession || args.currentSession() === session)
+  if (!sessionUnchanged) {
+    childProcessEvidence = 'unverifiable'
+    evidence = unverifiableEvidence(args, session, 'session_changed')
+  }
   const nonShellForeground = foregroundProcess !== null && !isShellProcess(foregroundProcess)
   // Agent-only evidence must not erase an ordinary foreground command.
   const ordinaryForeground =
@@ -152,7 +180,8 @@ export async function inspectTerminalHostProcess(args: {
         ? nonShellForeground
         : childProcessEvidence !== 'no-children',
     ...(childProcessEvidence === undefined ? {} : { childProcessEvidence }),
-    foregroundProcessEvidence: evidence
+    foregroundProcessEvidence: evidence,
+    ...(sessionUnchanged ? peerIdentity : {})
   }
 }
 

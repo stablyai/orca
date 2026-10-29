@@ -161,6 +161,7 @@ function createSession(processName: () => string): Session {
     startupAgentRecognition: null,
     isDead: () => dead
   })
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This inspection fixture supplies the Session members under test; daemon lifecycle is outside its scope.
   return {
     pid: SHELL_PID,
     incarnationId: 'inc-1',
@@ -169,6 +170,7 @@ function createSession(processName: () => string): Session {
     },
     getForegroundProcess: (options?: { rawFallback?: boolean }) =>
       tracker.getForegroundProcess(options),
+    readClaudePeerIdentity: () => undefined,
     markDead: () => {
       dead = true
       tracker.markDead()

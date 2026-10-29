@@ -39,6 +39,7 @@ const STARTUP_AGENT_FOREGROUND_BOOTSTRAP_MS = 5_000
 type CachedAgentForeground = { processName: string; pid: number | null; refreshedAt: number }
 
 export type PtyForegroundProcessTracker = {
+  getForegroundProcessId(): number | null
   recordOutput(data: string): void
   markDead(): void
   /** rawFallback bypasses cached identity and process-table refreshes for cheap polling. */
@@ -207,6 +208,7 @@ export function createPtyForegroundProcessTracker(args: {
   }
 
   return {
+    getForegroundProcessId: () => (args.isDead() ? null : (cachedAgentForeground?.pid ?? null)),
     recordOutput: (data) => {
       if (data.length > 0) {
         lastOutputAt = Date.now()

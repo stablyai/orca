@@ -1,3 +1,6 @@
+import { homedir } from 'node:os'
+import { join } from 'node:path'
+import { ClaudePeerIdentityReader } from '../claude/claude-peer-identity'
 import type * as pty from 'node-pty'
 import { isBracketedPasteSafeShell } from '../../shared/startup-command-submission'
 import {
@@ -19,6 +22,7 @@ import {
   dataListeners,
   exitListeners,
   getLoadGeneration,
+  ptyClaudePeerReaders,
   ptyAgentForegroundContextPaths,
   ptyAgentSessionIds,
   ptyDisposables,
@@ -41,6 +45,7 @@ import { destroyPtyProcess, createPtyPhysicalExit } from './local-pty-terminatio
 import { writeStartupCommandWhenShellReady } from './local-pty-shell-ready-startup-command'
 import type { PtySpawnOptions, PtySpawnResult } from './pty-provider-contract'
 
+/** Registers a spawned PTY's state; WSL PTYs get no peer reader because the Windows side cannot read their session files. */
 export function activateLocalPtySession(args: {
   id: string
   incarnationId: string
@@ -56,6 +61,12 @@ export function activateLocalPtySession(args: {
   createPtyPhysicalExit(id)
   ptyReportsChildExitStatus.set(id, args.reportsChildExitStatus)
   ptyProcesses.set(id, proc)
+  if (!spawnedWslDistro) {
+    ptyClaudePeerReaders.set(
+      id,
+      new ClaudePeerIdentityReader(env.CLAUDE_CONFIG_DIR || join(homedir(), '.claude'))
+    )
+  }
   ptyInitialCwd.set(id, plan.cwd)
   if (spawnedWslDistro !== undefined) {
     ptyWslDistroById.set(id, spawnedWslDistro)

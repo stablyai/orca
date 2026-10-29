@@ -1,3 +1,4 @@
+import { enrichTerminalPeerMetadata } from '../terminal-peer-metadata'
 import { OrchestrationStructuredMailboxPointerDelivery } from '../orchestration/structured-mailbox-pointer-delivery'
 
 import { createStructuredMailboxPointerHost } from '../orchestration/structured-mailbox-pointer-host'
@@ -152,6 +153,11 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
     buildLeafSummary: (leaf, worktrees, livePtyIds) =>
       this.buildTerminalSummary(leaf, worktrees, livePtyIds),
     buildPtySummary: (pty, worktrees) => this.buildPtyTerminalSummary(pty, worktrees),
+    enrichTerminal: (terminal) =>
+      enrichTerminalPeerMetadata(terminal, {
+        getController: () => this.ptyController,
+        getPty: (ptyId) => this.ptysById.get(ptyId)
+      }),
     getSnapshots: () => this.mobileSessionTabsByWorktree,
     getTabTitle: (tabId) => this.tabs.get(tabId)?.title ?? null,
     getTopologyRevision: (worktreeId) => this.getTerminalTopologyRevision(worktreeId),

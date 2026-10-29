@@ -15,7 +15,7 @@ import {
   getProcessTableSnapshot
 } from '../../../shared/process-table-snapshot-reader'
 import { selectForegroundProcessCandidate } from '../../../shared/foreground-process-selection'
-import { resolveOuterWrapperForegroundProcess } from '../../../shared/foreground-wrapper-agent'
+import { resolveOuterWrapperForegroundIdentity } from '../../../shared/foreground-wrapper-agent'
 import { recognizeAgentProcess } from '../../../shared/agent-process-recognition'
 import {
   resolveAgentForegroundProcessWithAvailability,
@@ -47,6 +47,7 @@ export function shouldCachePtyForeground(name: string | null, staticName: boolea
   )
 }
 
+/** Picks the tty foreground process and pairs a recognized agent with its own PID. */
 export function resolveSpawnFileForegroundFromRows(
   rows: readonly ProcessTableRow[],
   rootPid: number
@@ -69,14 +70,15 @@ export function resolveSpawnFileForegroundFromRows(
     ''
   )
   const selected = selectForegroundProcessCandidate(candidates, tree)
-  return {
-    available: name.length > 0,
-    processName: selected
-      ? resolveOuterWrapperForegroundProcess(selected.recognized, selected.candidate, tree)
-      : recognizeAgentProcess(name)
-        ? null
-        : name || null
-  }
+  return selected
+    ? {
+        available: true,
+        ...resolveOuterWrapperForegroundIdentity(selected.recognized, selected.candidate, tree)
+      }
+    : {
+        available: name.length > 0,
+        processName: recognizeAgentProcess(name) ? null : name || null
+      }
 }
 
 export async function resolveSpawnFileForegroundProcess(

@@ -1,8 +1,12 @@
+import { recognizeAgentProcess } from '../../../../shared/agent-process-recognition'
 import type { RuntimeTerminalProcessInspection } from '@/runtime/runtime-terminal-inspection'
 import { getRemoteRuntimeTerminalHandle } from '@/runtime/runtime-terminal-stream'
 import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
 import { admitRemoteForegroundEvidence } from '../../../../shared/remote-foreground-evidence-admission'
-import { isClientOnlyUnverifiableInspection } from '../../../../shared/terminal-process-inspection'
+import {
+  isClientOnlyUnverifiableInspection,
+  type ClaudePeerIdentity
+} from '../../../../shared/terminal-process-inspection'
 
 type ForegroundReader = (
   ptyId: string,
@@ -22,6 +26,7 @@ export function createPaneForegroundProcessReader(deps: {
 
   return async (ptyId: string, requiresConfirmation: boolean) => {
     let processName: string | null = null
+    let peerIdentity: ClaudePeerIdentity | undefined
     let remoteEvidenceVerdict: 'live' | 'unverifiable' | 'exited' | null = null
     const expectedIncarnationId = deps.getExpectedIncarnationId?.() ?? null
     const options = expectedIncarnationId ? { expectedIncarnationId } : undefined
@@ -66,9 +71,12 @@ export function createPaneForegroundProcessReader(deps: {
         remoteEvidenceVerdict = admitted?.verdict ?? 'unverifiable'
         if (admitted?.verdict === 'live') {
           processName = admitted.processName
+          // Remote panes have no cadence poll; carry peer data with the admitted foreground sample.
+          peerIdentity = inspection
         }
       } else {
         processName = inspection.foregroundProcess
+        peerIdentity = inspection
       }
     } catch {
       // Missing legacy/injected-provider answers remain unverifiable remote verdicts.
@@ -76,6 +84,8 @@ export function createPaneForegroundProcessReader(deps: {
     }
     return {
       processName,
+      peerIdentity:
+        recognizeAgentProcess(processName)?.agent === 'claude' ? peerIdentity : undefined,
       remoteEvidenceVerdict,
       expectedIncarnationId,
       remote

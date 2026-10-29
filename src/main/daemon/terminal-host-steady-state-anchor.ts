@@ -5,6 +5,7 @@ import type { Session } from './session'
 
 /** Full-capture identity may be reused only while its pane fingerprint and raw foreground name match. */
 export type SteadyStateAnchor = {
+  processId?: number
   agentName: string
   fingerprint: string
   rawFallback: string | null
@@ -42,6 +43,7 @@ export async function rememberSteadyStateAnchor(
     return
   }
   anchors.set(session, {
+    processId: evidence.fence.process?.pid,
     agentName: evidence.processName,
     fingerprint,
     rawFallback: session.getForegroundProcess({ rawFallback: true })

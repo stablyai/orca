@@ -38,6 +38,7 @@ type RuntimeTerminalListDependencies = {
     pty: RuntimePtyWorktreeRecord,
     worktrees: Map<string, ResolvedWorktree>
   ): RuntimeTerminalSummary
+  enrichTerminal?: (terminal: RuntimeTerminalSummary) => Promise<RuntimeTerminalSummary>
   getSnapshots(): ReadonlyMap<string, RuntimeMobileSessionTabsSnapshot>
   getTabTitle(tabId: string): string | null
   getTopologyRevision(worktreeId: string): number
@@ -54,6 +55,7 @@ type RuntimeTerminalListDependencies = {
 export class RuntimeTerminalList {
   constructor(private readonly deps: RuntimeTerminalListDependencies) {}
 
+  /** Lists terminals, enriching them in small batches so peer inspection cannot flood the host. */
   async list(
     worktreeSelector: string | undefined,
     limit: number,
@@ -156,6 +158,16 @@ export class RuntimeTerminalList {
       ? terminals.filter((terminal) => requestedHandles.has(terminal.handle))
       : terminals
     const listed = matching.slice(0, limit)
+    if (this.deps.enrichTerminal) {
+      const enrich = this.deps.enrichTerminal
+      for (let index = 0; index < listed.length; index += 4) {
+        const enriched = await Promise.all(listed.slice(index, index + 4).map(enrich))
+        listed.splice(index, enriched.length, ...enriched)
+      }
+    }
+    if (graphEpoch !== null) {
+      this.deps.assertGraphEpoch(graphEpoch)
+    }
     const snapshots = this.deps.getSnapshots()
     const visualLayouts =
       opts.includeVisualLayouts === false

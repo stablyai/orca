@@ -12,6 +12,9 @@ export type ClientOnlyUnverifiableReason =
 
 /** Forbid host identity on renderer-only verdicts so transport failures cannot masquerade as host observations. */
 export type ClientOnlyUnverifiableInspection = {
+  agentName?: never
+  agentPid?: never
+  permissionMode?: never
   foregroundProcess: null
   hasChildProcesses: false
   verdict: 'unverifiable'
@@ -25,8 +28,15 @@ export type ClientOnlyUnverifiableInspection = {
   ptyIncarnationId?: never
 }
 
+/** Optional public session metadata; omission keeps older execution hosts compatible. */
+export type ClaudePeerIdentity = {
+  agentName?: string
+  agentPid?: number
+  permissionMode?: string
+}
+
 /** Compatibility-shaped host/local inspection returned by the inspect RPC. */
-export type HostProcessInspection = {
+export type HostProcessInspection = ClaudePeerIdentity & {
   foregroundProcess: string | null
   hasChildProcesses: boolean
   /** Optional on old hosts; the renderer treats an omitted field as old-host unverifiable. */

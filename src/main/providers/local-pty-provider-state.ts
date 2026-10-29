@@ -1,3 +1,4 @@
+import type { ClaudePeerIdentityReader } from '../claude/claude-peer-identity'
 import type * as pty from 'node-pty'
 import type { PhysicalExitTracker } from '../../shared/physical-exit-tracker'
 import type { PtyStartupIngress } from '../../shared/pty-startup-ingress'
@@ -21,6 +22,7 @@ export type DataCallback = (payload: PtyDataEvent) => void
 export type ExitCallback = Parameters<IPtyProvider['onExit']>[0]
 
 let ptyCounter = 0
+export const ptyClaudePeerReaders = new Map<string, ClaudePeerIdentityReader>()
 export const ptyProcesses = new Map<string, pty.IPty>()
 export const ptyIncarnations = new Map<string, string>()
 // Why: agent sessions always sweep descendant trees; plain terminals preserve nohup children except on immediate win32 shutdown.
@@ -110,6 +112,7 @@ export function clearPtyState(id: string): void {
   ptyIncarnations.delete(id)
   ptyAgentSessionIds.delete(id)
   ptyShellPath.delete(id)
+  ptyClaudePeerReaders.delete(id)
   ptyAgentForegroundContextPaths.delete(id)
   ptyLastRecognizedForeground.delete(id)
   ptyTerminalHandle.delete(id)

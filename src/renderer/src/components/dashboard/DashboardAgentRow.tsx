@@ -1,3 +1,4 @@
+import { AgentPeerName } from '@/components/AgentPeerName'
 import React, { useState, useCallback } from 'react'
 import { cn } from '@/lib/utils'
 import { viewClaudeAgentFromRow } from '@/lib/claude-agent-row-view'
@@ -301,6 +302,9 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
           <span className="inline-flex shrink-0" title={identityTitle}>
             <AgentTypeIcon agentType={agent.agentType} size={14} />
           </span>
+        )}
+        {agent.rowSource !== 'subagent' && (
+          <AgentPeerName paneKey={agent.paneKey} agentType={agent.agentType} />
         )}
         {/* Why: interpolate-size:allow-keywords is the only way to animate height to/from auto without measuring in JS; falls back to an instant swap where unsupported. */}
         <span

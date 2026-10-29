@@ -3,6 +3,7 @@ import type {
   TurnEndDisposition
 } from '../../../../shared/agent-status-types'
 import type { RecognizedAgentProcess } from '../../../../shared/agent-process-recognition'
+import type { HostProcessInspection } from '../../../../shared/terminal-process-inspection'
 import type { RuntimeTerminalProcessInspection } from '@/runtime/runtime-terminal-inspection'
 
 export type AgentCompletionStatusSnapshot = ParsedAgentStatusPayload & {
@@ -38,6 +39,7 @@ export type AgentCompletionCoordinatorOptions = {
     ptyId: string,
     options?: { expectedIncarnationId?: string; steadyState?: boolean }
   ) => Promise<RuntimeTerminalProcessInspection>
+  onProcessMetadata?: (inspection: HostProcessInspection) => void
   /** Rechecks a local exit candidate without trusting the inspection's cached process name. */
   confirmForegroundProcess?: (ptyId: string) => Promise<string | null>
   dispatchCompletion: (title: string, meta?: AgentCompletionDispatchMeta) => void

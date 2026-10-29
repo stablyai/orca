@@ -1,3 +1,4 @@
+import { AgentPeerName } from '@/components/AgentPeerName'
 import React, { useCallback, useEffect, useRef } from 'react'
 import { DashboardAgentChildDisclosure } from '@/components/dashboard/DashboardAgentChildDisclosure'
 import { AgentStateDot, agentStateLabel } from '@/components/AgentStateDot'
@@ -234,6 +235,7 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
               <AgentTypeIcon agentType={agent.agentType} size={13} />
             </span>
           )}
+          <AgentPeerName paneKey={agent.paneKey} agentType={agent.agentType} />
           <span
             className="min-w-0 flex-1 truncate"
             title={sendTargetDisabledReason ? undefined : rowTitle}

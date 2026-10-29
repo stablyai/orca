@@ -239,6 +239,11 @@ export class Session {
     return this.subprocess.inspectChildProcesses?.(fresh, ignoreDetached) ?? 'unverifiable'
   }
 
+  readClaudePeerIdentity(processName: string | null, pid?: number) {
+    // A Windows wrapper PID cannot identify the Claude process inside its WSL guest.
+    return this.wslDistro ? undefined : this.subprocess.readClaudePeerIdentity?.(processName, pid)
+  }
+
   getForegroundProcess(options?: { rawFallback?: boolean; cachedOnly?: boolean }): string | null {
     return this.subprocess.getForegroundProcess(options)
   }
