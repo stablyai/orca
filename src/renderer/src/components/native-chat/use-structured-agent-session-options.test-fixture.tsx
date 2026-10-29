@@ -12,7 +12,7 @@ type OptionsFixtureMocks = {
   enqueue: Mock
   pick: Mock
   target: RuntimeClientTarget
-  agent: 'codex' | 'claude'
+  agent: 'codex' | 'claude' | 'antigravity'
   hold: Mock<
     (
       sessionId: string,
@@ -159,7 +159,7 @@ type RenderProps = {
   hidden?: boolean
   launchSeedOptions?: Record<string, string>
   worktree?: string
-  agent?: 'claude' | 'codex'
+  agent?: 'claude' | 'codex' | 'antigravity'
   providerStarting?: boolean
   paired?: boolean
 }
