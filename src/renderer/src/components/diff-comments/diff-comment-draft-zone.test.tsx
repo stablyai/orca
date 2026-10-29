@@ -24,6 +24,16 @@ function renderDraftZone(fake: FakeDiffCommentEditor, onCreateComment: CreateCom
   )
 }
 
+function renderRetainedDraftZone(
+  fake: FakeDiffCommentEditor,
+  draftRetentionKey: string,
+  onCreateComment: CreateComment
+) {
+  return renderHook(() =>
+    useDiffCommentDraftZone({ editor: fake.editor, draftRetentionKey, onCreateComment })
+  )
+}
+
 function openDraftAt(hook: ReturnType<typeof renderDraftZone>, lineNumber: number): void {
   act(() => {
     hook.result.current.onAddCommentClickRef.current({ lineNumber, top: 0 })
@@ -295,6 +305,62 @@ describe('useDiffCommentDraftZone open state', () => {
 })
 
 describe('useDiffCommentDraftZone teardown', () => {
+  it('restores an unsent draft after switching away from and back to its file', () => {
+    const firstFile = createFakeDiffCommentEditor()
+    const otherFile = createFakeDiffCommentEditor()
+    const replacement = createFakeDiffCommentEditor()
+    const onCreateComment = vi.fn().mockResolvedValue(true)
+    const first = renderRetainedDraftZone(firstFile, 'file-a', onCreateComment)
+    openDraftAt(first, DRAFT_LINE)
+    typeDraft(firstFile, BODY)
+
+    first.unmount()
+    const other = renderRetainedDraftZone(otherFile, 'file-b', onCreateComment)
+    other.unmount()
+    const returned = renderRetainedDraftZone(replacement, 'file-a', onCreateComment)
+    pumpFrames()
+
+    expect(draftCard(replacement).textarea.value).toBe(BODY)
+    expect([...replacement.zones.values()][0].afterLineNumber).toBe(DRAFT_LINE)
+    returned.unmount()
+  })
+
+  it('does not retain a cancelled or successfully submitted draft across file switches', async () => {
+    const cancelled = createFakeDiffCommentEditor()
+    const cancelledReturn = createFakeDiffCommentEditor()
+    const submitted = createFakeDiffCommentEditor()
+    const submittedReturn = createFakeDiffCommentEditor()
+    const onCreateComment = vi.fn().mockResolvedValue(true)
+    const cancelledHook = renderRetainedDraftZone(cancelled, 'cancelled-file', onCreateComment)
+    openDraftAt(cancelledHook, DRAFT_LINE)
+    typeDraft(cancelled, BODY)
+    fireEvent.click(within(draftCard(cancelled).dom).getByRole('button', { name: 'Cancel' }))
+    cancelledHook.unmount()
+    const cancelledFileReturn = renderRetainedDraftZone(
+      cancelledReturn,
+      'cancelled-file',
+      onCreateComment
+    )
+    pumpFrames()
+    expect(cancelledReturn.zones.size).toBe(0)
+    cancelledFileReturn.unmount()
+
+    const submittedHook = renderRetainedDraftZone(submitted, 'submitted-file', onCreateComment)
+    openDraftAt(submittedHook, DRAFT_LINE)
+    submitDraft(submitted, BODY)
+    await act(async () => {})
+    submittedHook.unmount()
+    const submittedFileReturn = renderRetainedDraftZone(
+      submittedReturn,
+      'submitted-file',
+      onCreateComment
+    )
+    pumpFrames()
+    expect(submittedReturn.zones.size).toBe(0)
+    expect(onCreateComment).toHaveBeenCalledTimes(1)
+    submittedFileReturn.unmount()
+  })
+
   it('does not resurrect a card when a failed save settles after unmount', async () => {
     const fake = createFakeDiffCommentEditor()
     const { onCreateComment, settle } = deferredCreateComment()
