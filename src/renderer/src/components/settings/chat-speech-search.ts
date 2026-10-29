@@ -23,7 +23,7 @@ export const getChatSpeechEntriesByKey = createLocalizedCatalog(() => ({
     title: translate('components.settings.nativeChat.speechEngineTitle', 'Voice engine'),
     description: translate(
       'components.settings.nativeChat.speechEngineCopy',
-      'Neural voices need the internet and speak English words inside Russian.'
+      'Neural voices need the internet and send the reply text to Microsoft\'s speech service. They speak English words inside Russian.'
     ),
     keywords: [
       translate('components.settings.nativeChat.speechSearchNeural', 'neural'),

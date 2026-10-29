@@ -166,7 +166,10 @@ function synthesizeChunk(text: string, voice: string, rate: number): Promise<Buf
         fail(new Error('Edge speech was cancelled'))
       }
     })
-    socket.on('unexpected-response', (_request, response) => {
+    socket.on('unexpected-response', (request, response) => {
+      // ws keeps the handshake open once this listener exists. Drain it or each refusal leaks.
+      response.resume()
+      request.destroy()
       fail(new Error(`Edge speech refused the connection (${response.statusCode ?? 'unknown'})`))
     })
     socket.on('open', () => {

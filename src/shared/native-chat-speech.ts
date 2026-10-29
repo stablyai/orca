@@ -78,9 +78,28 @@ export function resolveNativeChatSpeechSettings(value: unknown): ResolvedNativeC
   }
 }
 
+const HTML_TAG = /<\/?[A-Za-z][^<>\n]*>/g
+
+/**
+ * Holds fenced and inline code so a later HTML strip cannot eat generics such as `Promise<void>`.
+ * The held spans go back before markdown is unwrapped, so the code words are still spoken.
+ */
+function holdSpeechCode(markdown: string): { text: string; held: string[] } {
+  const held: string[] = []
+  const text = markdown.replace(/```[\w-]*[ \t]*\n?[\s\S]*?```|`[^`]+`/g, (span) => {
+    const token = `\uE000${held.length}\uE001`
+    held.push(span)
+    return token
+  })
+  return { text, held }
+}
+
 /** Words to speak: markdown markers go, the words under them stay, including code. */
 export function nativeChatTextForSpeech(markdown: string): string {
-  return markdown
+  const { text, held } = holdSpeechCode(markdown)
+  return text
+    .replace(HTML_TAG, ' ')
+    .replace(/\uE000(\d+)\uE001/g, (_match, index: string) => held[Number(index)] ?? '')
     .replace(/```[\w-]*[ \t]*\n?([\s\S]*?)```/g, (_match, code: string) => `\n${code}\n`)
     .replace(/`([^`]+)`/g, '$1')
     .replace(/!\[[^\]]*]\([^)]*\)/g, ' ')
@@ -92,7 +111,6 @@ export function nativeChatTextForSpeech(markdown: string): string {
     .replace(/\*\*([^*]+)\*\*/g, '$1')
     .replace(/(^|[\s])\*([^*\n]+)\*(?=[\s.,!?]|$)/g, '$1$2')
     .replace(/~~([^~]+)~~/g, '$1')
-    .replace(/<[^>\n]+>/g, ' ')
     .replace(/[ \t]+\n/g, '\n')
     .replace(/\n{3,}/g, '\n\n')
     .trim()
@@ -164,6 +182,10 @@ export function segmentNativeChatSpeech(text: string): NativeChatSpeechSegment[]
     buffer += character
   }
   push()
+  if (chunks.length === 0) {
+    const spoken = text.trim()
+    return spoken ? [{ text: spoken, lang: 'en-US' }] : []
+  }
   return chunks.map((chunk) => ({
     text: chunk.text,
     lang: chunk.lang === 'ru' ? 'ru-RU' : 'en-US'

@@ -62,6 +62,14 @@ describe('native chat speech text', () => {
     ).toBe('Заголовок\n\nВызови useState и запусти:\n\nnpm install\n\nдокументация')
   })
 
+  it('keeps comparisons and generics, and drops real tags', () => {
+    expect(nativeChatTextForSpeech('if x < 5 and y > 3')).toBe('if x < 5 and y > 3')
+    expect(nativeChatTextForSpeech('Тип `Promise<void>`.\n\n```ts\nArray<string>\n```')).toBe(
+      'Тип Promise<void>.\n\nArray<string>'
+    )
+    expect(nativeChatTextForSpeech('Жирный <strong>текст</strong>')).toBe('Жирный  текст')
+  })
+
   it('splits English words out of a Russian sentence and keeps English phrases together', () => {
     expect(
       segmentNativeChatSpeech('Функция useState возвращает значение из API.').map((segment) => [
@@ -77,6 +85,12 @@ describe('native chat speech text', () => {
     expect(
       segmentNativeChatSpeech('Сделай git pull request.').map((segment) => segment.text.trim())
     ).toEqual(['Сделай', 'git pull request.'])
+  })
+
+  it('speaks a reply that has no Russian or English letters', () => {
+    expect(segmentNativeChatSpeech('42')).toEqual([{ text: '42', lang: 'en-US' }])
+    expect(segmentNativeChatSpeech('100%')).toEqual([{ text: '100%', lang: 'en-US' }])
+    expect(segmentNativeChatSpeech('   ')).toEqual([])
   })
 
   it('chunks a long reply on a space', () => {
