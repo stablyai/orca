@@ -286,7 +286,7 @@ function HostRemoveDialogBody({
           <Button
             type="button"
             variant="destructive"
-            disabled={busy}
+            disabled={busy || !open}
             onClick={() => void runSshRemoval()}
           >
             {busy ? <Loader2 className="size-3.5 animate-spin" /> : null}

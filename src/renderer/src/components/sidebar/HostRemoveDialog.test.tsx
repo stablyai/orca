@@ -106,11 +106,14 @@ it('keeps workspace details through the closing animation', () => {
   })
   const view = render(dialogs('one'))
   const dialog = screen.getByRole('dialog')
+  const removeButton = screen.getByRole('button', { name: 'Remove host' })
+  expect(removeButton).toBeEnabled()
   expect(dialog).toHaveTextContent('Its 2 workspaces stay in Orca')
 
   view.rerender(dialogs(null))
   expect(dialog).toBeInTheDocument()
   expect(dialog).toHaveAttribute('data-state', 'closed')
+  expect(removeButton).toBeDisabled()
   expect(dialog).toHaveTextContent('Its 2 workspaces stay in Orca')
 
   const event = new Event('animationend', { bubbles: true })
