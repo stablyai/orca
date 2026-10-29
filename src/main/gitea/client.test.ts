@@ -365,10 +365,11 @@ describe('Gitea client', () => {
     vi.stubGlobal('fetch', fetchMock)
 
     await getGiteaPullRequestForBranch('/repo', 'feature/gitea')
-    // A different host on the same repo path has its own verdict.
+    // A different host on the same repo path has its own verdict. No cache
+    // reset in between: this only passes if the first host's verdict did not
+    // leak into the second host.
     process.env.ORCA_GITEA_API_BASE_URL = 'https://other.example.com'
     _resetGiteaRepoRefCache()
-    _resetGiteaPullRequestScanCache()
     await getGiteaPullRequestForBranch('/repo', 'feature/gitea')
 
     expect(probesForOtherHost).toBe(2)
@@ -417,6 +418,41 @@ describe('Gitea client', () => {
     await expect(getGiteaPullRequestForBranchOrThrow('/repo', 'feature/gitea')).rejects.toThrow(
       /Gitea request failed/
     )
+  })
+
+  it('keeps a failed in-flight head= probe from rejecting lenient lookups that join it (#36049)', async () => {
+    let releaseProbe!: () => void
+    const probeGate = new Promise<void>((resolve) => {
+      releaseProbe = resolve
+    })
+    let probeStarted!: () => void
+    const probeInFlight = new Promise<void>((resolve) => {
+      probeStarted = resolve
+    })
+    const fetchMock = vi.fn(async (url: string | URL) => {
+      const parsed = new URL(String(url))
+      if (parsed.pathname.endsWith('/status')) {
+        return Response.json({ state: 'success' })
+      }
+      if (parsed.searchParams.has('head')) {
+        // The strict lookup starts the probe; the lenient one joins it in flight.
+        probeStarted()
+        await probeGate
+      }
+      return Response.json({ message: 'temporary failure' }, { status: 503 })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const strict = getGiteaPullRequestForBranchOrThrow('/repo', 'feature/gitea')
+    await probeInFlight
+    const lenient = getGiteaPullRequestForBranch('/repo', 'feature/gitea')
+    releaseProbe()
+
+    // The lenient contract reads transport failure as absence, never a throw,
+    // even when the shared probe was started by a strict lookup.
+    await expect(lenient).resolves.toBeNull()
+    // The strict lookup still surfaces the failure itself.
+    await expect(strict).rejects.toThrow(/Gitea request failed/)
   })
 
   it('treats a 404 on the linked PR as "no PR" rather than a lookup failure', async () => {

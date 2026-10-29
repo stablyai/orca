@@ -178,14 +178,26 @@ export async function scanGiteaPullRequests(
 /**
  * One-shot probe cache for the Forgejo `head=` fast path. Entries only ever
  * hold a verified match or an unambiguous empty page, so the strict and
- * lenient lookups can share one key without inheriting a failed scan.
+ * lenient lookups can share one key without inheriting a failed scan. A probe
+ * failure is likewise never shared as a rejection: the shared promise resolves
+ * to a miss and each caller falls back to its own bounded scan, whose
+ * throwOnFailure mode decides the final outcome (absence for lenient, a thrown
+ * error for strict).
  */
 export async function cachedGiteaHeadFilteredScan(
   repoKey: string,
   probe: () => Promise<RawGiteaPullRequest[] | null>
 ): Promise<RawGiteaPullRequest[] | null> {
   return cachedGiteaPullRequestScan(repoKey, async () => {
-    const pullRequests = await probe()
+    let pullRequests: RawGiteaPullRequest[] | null
+    try {
+      pullRequests = await probe()
+    } catch {
+      // The fast path is an optimisation: its failure says nothing about the
+      // answer, and the probe key is shared by strict and lenient lookups, so
+      // a rejection here would leak into whichever caller joined second.
+      return null
+    }
     return pullRequests === null ? null : { pullRequests, completed: true }
   })
 }
