@@ -232,6 +232,13 @@ describe('isSameGitRepository', () => {
         'git@gitlab.com:Acme/Team-A/Tool'
       )
     ).toBe(true)
+    // A self-hosted server may serve these as two repositories, so an approval must not carry.
+    expect(
+      isSameGitRepository(
+        'https://git.example.com/team/Plugin.git',
+        'https://git.example.com/team/plugin.git'
+      )
+    ).toBe(false)
     expect(
       isSameGitRepository(
         'https://gitlab.com/acme/team-a/tool',

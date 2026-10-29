@@ -270,6 +270,9 @@ type GitRepositoryIdentity = {
   path: string
 }
 
+// Why only these: a self-hosted server may serve `team/Plugin` and `team/plugin` as two repositories.
+const CASE_INSENSITIVE_GIT_HOSTS = new Set(['github.com', 'gitlab.com', 'bitbucket.org'])
+
 /** Extracts the host and first owner segment from the HTTPS/SSH Git forms the
  * installer accepts. It is intentionally only a provenance parser. */
 export function parseGitRepositoryIdentity(url: string): GitRepositoryIdentity | null {
@@ -302,17 +305,25 @@ function repositoryIdentity(host: string, repositoryPath: string): GitRepository
   if (!repository) {
     return null
   }
-  const path = [...segments.slice(0, -1), repository].join('/').toLowerCase()
-  return { host: host.toLowerCase(), owner: segments[0]!, repository, path }
+  const normalizedHost = host.toLowerCase()
+  const path = [...segments.slice(0, -1), repository].join('/')
+  return {
+    host: normalizedHost,
+    owner: segments[0]!,
+    repository,
+    path: CASE_INSENSITIVE_GIT_HOSTS.has(normalizedHost) ? path.toLowerCase() : path
+  }
 }
 
 /** `host/owner` of a repository, with every GitLab subgroup (`gitlab.com/acme/tools`). */
 export function gitRepositoryOwnerLabel(url: string): string | null {
   const identity = parseGitRepositoryIdentity(url)
-  return identity ? [identity.host, ...identity.path.split('/').slice(0, -1)].join('/') : null
+  return identity
+    ? [identity.host, ...identity.path.split('/').slice(0, -1)].join('/').toLowerCase()
+    : null
 }
 
-/** Same repository regardless of URL spelling (https vs scp, `.git`, case). */
+/** Same repository regardless of URL spelling (https vs scp, `.git`, case where the host ignores it). */
 export function isSameGitRepository(left: string, right: string): boolean {
   const a = parseGitRepositoryIdentity(left)
   const b = parseGitRepositoryIdentity(right)
