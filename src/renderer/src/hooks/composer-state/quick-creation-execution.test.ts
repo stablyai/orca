@@ -38,6 +38,8 @@ it('carries the accepted route across preparation and retains CLI startup/prompt
     linkedLinearIssue: undefined,
     linkedLinearIssueWorkspaceId: undefined,
     linkedLinearIssueOrganizationUrlKey: undefined,
+    linkedClickUpTaskId: undefined,
+    linkedClickUpWorkspaceId: undefined,
     effectiveBranchNameOverride: 'feature/test',
     branchIntent: 'open-existing-v2',
     submitBaseBranch: undefined,

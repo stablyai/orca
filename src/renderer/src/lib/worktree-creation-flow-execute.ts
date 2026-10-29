@@ -13,7 +13,10 @@ import {
   formatWorkspaceCreateError,
   getWorkspaceCreateErrorToastMessage
 } from '@/lib/workspace-create-error-format'
-import type { CreatedWorktreeResult } from '@/store/slices/worktrees/create/worktree-create-payload'
+import {
+  optionalCreateWorktreeLinkOptions,
+  type CreatedWorktreeResult
+} from '@/store/slices/worktrees/create/worktree-create-payload'
 import type { WorktreeCreationRequest } from '@/lib/pending-worktree-creation'
 import { resolveBackendDraftStartup } from '@/lib/worktree-draft-startup-view-mode'
 import {
@@ -109,12 +112,7 @@ export async function executeWorktreeCreation(
           ...(preparedRequest.displayNameKind
             ? { displayNameKind: preparedRequest.displayNameKind }
             : {}),
-          ...(preparedRequest.linkedWorkItem !== undefined
-            ? { linkedWorkItem: preparedRequest.linkedWorkItem }
-            : {}),
-          ...(preparedRequest.linkedTaskSourceContext !== undefined
-            ? { linkedTaskSourceContext: preparedRequest.linkedTaskSourceContext }
-            : {}),
+          ...optionalCreateWorktreeLinkOptions(preparedRequest),
           // Why: the remote host must own task-draft startup so its initial terminal is the agent, not an idle fallback shell.
           ...(!structuredLaunch &&
           !backendStartup &&

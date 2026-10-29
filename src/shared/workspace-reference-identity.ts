@@ -162,7 +162,7 @@ function parseReferenceRoute(
 }
 
 export function getWorkspaceReferenceIdentifier(item: WorkspaceAttachment): string | undefined {
-  return item.identifier ?? item.linearIdentifier ?? item.jiraIdentifier
+  return item.identifier ?? item.linearIdentifier ?? item.jiraIdentifier ?? item.clickupIdentifier
 }
 
 function externalUrl(item: WorkspaceAttachment): string | undefined {
@@ -190,6 +190,10 @@ function externalUrl(item: WorkspaceAttachment): string | undefined {
         : undefined
     case 'linear':
       return undefined
+    case 'clickup':
+      // Why: a ClickUp task URL is https://app.clickup.com/t/<id>, which the
+      // stored id alone can rebuild without the Workspace.
+      return identifier ? `https://app.clickup.com/t/${encodeURIComponent(identifier)}` : undefined
   }
 }
 

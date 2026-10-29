@@ -1,4 +1,5 @@
 import type { GlobalSettings } from '../../../shared/global-settings-types'
+import { parseExecutionHostId } from '../../../shared/execution-host'
 
 export function getProviderRuntimeContextKey(
   settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
@@ -10,6 +11,12 @@ export function getProviderRuntimeContextKey(
 export function getEnvironmentRuntimeContextKey(environmentId: string | null): string {
   const baseKey = environmentId ? `runtime:${environmentId}` : 'local'
   return `${baseKey}#${providerRuntimeSessionGeneration}`
+}
+
+/** Context key for the owner named by an execution host id, such as a task source's host. */
+export function getHostRuntimeContextKey(hostId: string | null | undefined): string {
+  const parsed = parseExecutionHostId(hostId)
+  return getEnvironmentRuntimeContextKey(parsed?.kind === 'runtime' ? parsed.environmentId : null)
 }
 
 /** Whether a context key from {@link getEnvironmentRuntimeContextKey} names a paired server. */

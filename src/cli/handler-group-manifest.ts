@@ -1,6 +1,6 @@
 import type { CommandHandler } from './dispatch'
 import { BROWSER_HANDLER_GROUPS } from './browser-handler-groups'
-import { JIRA_HANDLER_GROUP } from './jira-handler-group'
+import { TASK_TRACKER_HANDLER_GROUPS } from './task-tracker-handler-groups'
 import { LINEAR_HANDLER_GROUP } from './linear-handler-group'
 import { REFERENCE_HANDLER_GROUP } from './reference-handler-group'
 
@@ -13,7 +13,7 @@ export type HandlerGroup = {
 
 // handler-group-manifest.test.ts checks keys against the real exports to prevent drift.
 export const HANDLER_GROUPS: readonly HandlerGroup[] = [
-  JIRA_HANDLER_GROUP,
+  ...TASK_TRACKER_HANDLER_GROUPS,
   LINEAR_HANDLER_GROUP,
   REFERENCE_HANDLER_GROUP,
   {

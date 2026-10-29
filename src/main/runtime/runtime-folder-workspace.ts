@@ -52,6 +52,8 @@ export function mergeRuntimeFolderWorkspace(
     linkedLinearIssue: meta.linkedLinearIssue ?? null,
     linkedLinearIssueWorkspaceId: meta.linkedLinearIssueWorkspaceId ?? null,
     linkedLinearIssueOrganizationUrlKey: meta.linkedLinearIssueOrganizationUrlKey ?? null,
+    linkedClickUpTaskId: meta.linkedClickUpTaskId ?? null,
+    linkedClickUpWorkspaceId: meta.linkedClickUpWorkspaceId ?? null,
     linkedGitLabMR: meta.linkedGitLabMR ?? null,
     linkedGitLabIssue: meta.linkedGitLabIssue ?? null,
     linkedBitbucketPR: meta.linkedBitbucketPR ?? null,

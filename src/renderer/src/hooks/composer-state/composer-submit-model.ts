@@ -36,6 +36,8 @@ export type PreparedQuickSubmit = QuickSubmitSource & {
   linkedLinearIssue: string | undefined
   linkedLinearIssueWorkspaceId: string | undefined
   linkedLinearIssueOrganizationUrlKey: string | undefined
+  linkedClickUpTaskId: string | undefined
+  linkedClickUpWorkspaceId: string | undefined
   effectiveBranchNameOverride: string | undefined
   submitBaseBranch: string | undefined
   createDisplayName: string | undefined

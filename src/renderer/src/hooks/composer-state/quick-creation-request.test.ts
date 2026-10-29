@@ -28,6 +28,8 @@ function createInput(
     linkedLinearIssue: undefined,
     linkedLinearIssueWorkspaceId: undefined,
     linkedLinearIssueOrganizationUrlKey: undefined,
+    linkedClickUpTaskId: undefined,
+    linkedClickUpWorkspaceId: undefined,
     branchNameOverride: undefined,
     parentWorktreeId: null,
     workspaceStatus: undefined,

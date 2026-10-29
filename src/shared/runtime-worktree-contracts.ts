@@ -97,6 +97,8 @@ export type RuntimeWorktreePsSummary = {
     checksStatus?: CheckStatus
   } | null
   linkedLinearIssue: string | null
+  linkedClickUpTaskId?: string | null
+  linkedClickUpWorkspaceId?: string | null
   linkedGitLabMR: number | null
   linkedGitLabIssue: number | null
   linkedItems?: Worktree['linkedItems']

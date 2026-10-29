@@ -34,6 +34,7 @@ export function useWorkItemSourceFoundation(props: NormalizedWorkItemSourceSearc
     getCachedWorkItems,
     linearStatus: defaultLinearStatus,
     linearStatusChecked: defaultLinearStatusChecked,
+    clickUpConnected,
     listLinearIssues,
     preflightStatus,
     preflightStatusChecked,
@@ -51,6 +52,7 @@ export function useWorkItemSourceFoundation(props: NormalizedWorkItemSourceSearc
       getCachedWorkItems: s.getCachedWorkItems,
       linearStatus: s.linearStatus,
       linearStatusChecked: s.linearStatusChecked,
+      clickUpConnected: s.clickUpStatus.connected === true,
       listLinearIssues: s.listLinearIssues,
       preflightStatus: s.preflightStatus,
       preflightStatusChecked: s.preflightStatusChecked,
@@ -186,7 +188,8 @@ export function useWorkItemSourceFoundation(props: NormalizedWorkItemSourceSearc
     linearStatusChecked: hasLinearSearchSource || linearStatusChecked,
     linearStatusPending: hasLinearSearchSource && !linearConnection.loaded,
     checkLinearConnection,
-    jiraSourceConnected
+    jiraSourceConnected,
+    clickUpModeAvailable: props.clickUpEnabled === true && clickUpConnected
   })
 
   return {

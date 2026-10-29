@@ -6304,8 +6304,7 @@
           "395e541d5d": "Durumlar",
           "34f03eb0de": "Pano ayarları",
           "26cbc92150": "Çalışma alanı panosu ayarları",
-          "87d24a0c2f": "Panoyu ve sorun durumunu senkronize et",
-          "4c2eaa78cc": "Bağlı bir çalışma alanını taşımak, eşleşen bir iş akışı durumu varsa ilgili Linear sorununun durumunu günceller."
+          "87d24a0c2f": "Panoyu ve sorun durumunu senkronize et"
         },
         "WorkspaceKanbanStatusLane": {
           "8ad104642b": "Boş",

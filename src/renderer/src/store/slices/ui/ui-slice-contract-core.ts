@@ -85,7 +85,7 @@ export type NewWorkspaceDraft = {
   note: string
   attachments: string[]
   linkedWorkItem: {
-    provider?: 'github' | 'gitlab' | 'linear' | 'jira'
+    provider?: 'github' | 'gitlab' | 'linear' | 'jira' | 'clickup'
     type: 'issue' | 'pr' | 'mr'
     number: number
     title: string
@@ -93,6 +93,8 @@ export type NewWorkspaceDraft = {
     linearIdentifier?: string
     linearBranchName?: string
     jiraIdentifier?: string
+    clickupIdentifier?: string
+    clickupWorkspaceId?: string
     repoId?: string
   } | null
   /** Preserve where provider data came from, separately from the host chosen to run the workspace. */

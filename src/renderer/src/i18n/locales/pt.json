@@ -11823,8 +11823,7 @@
           "395e541d5d": "Status",
           "34f03eb0de": "Configurações do quadro",
           "26cbc92150": "Configurações do quadro do espaço de trabalho",
-          "87d24a0c2f": "Sincronizar quadro e status da issue",
-          "4c2eaa78cc": "Mover um espaço de trabalho vinculado atualiza o status da sua issue do Linear quando existe um estado de workflow correspondente."
+          "87d24a0c2f": "Sincronizar quadro e status da issue"
         },
         "worktree": {
           "card": {

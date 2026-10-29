@@ -2,6 +2,7 @@ import React from 'react'
 import { EyeOff, Github, Gitlab, List } from 'lucide-react'
 import { JiraIcon } from '@/components/icons/JiraIcon'
 import { LinearIcon } from '@/components/icons/LinearIcon'
+import { ClickUpIcon } from '@/components/icons/ClickUpIcon'
 import {
   ContextMenu,
   ContextMenuContent,
@@ -226,6 +227,17 @@ export function SidebarTaskNavButton(): React.JSX.Element | null {
                 onOpen={() => openTaskPage({ taskSource: 'jira' })}
               >
                 <JiraIcon className="size-3.5" />
+              </TaskProviderShortcut>
+            ) : null}
+            {visibleTaskProviders.includes('clickup') ? (
+              <TaskProviderShortcut
+                label={translate(
+                  'auto.components.sidebar.SidebarNav.openClickUpTasks',
+                  'Open ClickUp tasks'
+                )}
+                onOpen={() => openTaskPage({ taskSource: 'clickup' })}
+              >
+                <ClickUpIcon className="size-3.5" />
               </TaskProviderShortcut>
             ) : null}
           </span>

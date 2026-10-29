@@ -586,6 +586,8 @@ describe('mergeWorktree', () => {
       linkedLinearIssue: null,
       linkedLinearIssueWorkspaceId: null,
       linkedLinearIssueOrganizationUrlKey: null,
+      linkedClickUpTaskId: null,
+      linkedClickUpWorkspaceId: null,
       linkedGitLabMR: null,
       linkedGitLabIssue: null,
       linkedBitbucketPR: null,

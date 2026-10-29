@@ -181,7 +181,7 @@ describe('ConnectIntegrationsList', () => {
 
     expect(markup).toContain('GitHub')
     expect(markup).toContain('issues available as tasks')
-    expect(markup).toContain('add Linear or Jira if your team plans work there')
+    expect(markup).toContain('add Linear, ClickUp, or Jira if your team plans work there')
     expect(markup).not.toContain('Use GitHub issues')
     // Keep dedicated trackers discoverable even when code-host issues already satisfy tasks.
     expect(markup).toContain('Add Linear access')

@@ -52,6 +52,8 @@ export function useSmartWorkspaceNameFieldActions(
     onGitHubItemSelect,
     onGitLabItemSelect,
     onJiraIssueSelect,
+    onClickUpTaskSelect,
+    clickUpSourceContext,
     onLinearIssueSelect,
     onValueChange,
     setOpen,
@@ -101,6 +103,18 @@ export function useSmartWorkspaceNameFieldActions(
           return
         }
         onJiraIssueSelect?.(row.issue, sourceContext)
+      } else if (row.kind === 'clickup') {
+        if (!clickUpSourceContext) {
+          // Why: closing without accept left users thinking the task was linked.
+          toast.error(
+            translate(
+              'auto.components.new.workspace.SmartWorkspaceNameField.clickUpSelectBindFailed',
+              'Couldn’t link this ClickUp task. Reconnect ClickUp, then try again.'
+            )
+          )
+          return
+        }
+        onClickUpTaskSelect?.(row.task, clickUpSourceContext)
       } else {
         onLinearIssueSelect(row.issue)
       }
@@ -112,6 +126,8 @@ export function useSmartWorkspaceNameFieldActions(
       onGitHubItemSelect,
       onGitLabItemSelect,
       onJiraIssueSelect,
+      onClickUpTaskSelect,
+      clickUpSourceContext,
       onLinearIssueSelect,
       onValueChange,
       setOpen,

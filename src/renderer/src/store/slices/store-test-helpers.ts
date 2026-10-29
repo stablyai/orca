@@ -12,6 +12,7 @@ import { createKeybindingsSlice } from './keybindings'
 import { createGitHubSlice } from './github'
 import { createHostedReviewSlice } from './hosted-review'
 import { createLinearSlice } from './linear'
+import { createClickUpSlice } from './clickup'
 import { createPreflightSlice } from './preflight'
 import { createJiraSlice } from './jira'
 import { createEditorSlice } from './editor'
@@ -65,7 +66,6 @@ export {
 } from './store-session-test-harness'
 
 export function createTestStore() {
-  // Why the record middleware: views of one file share a record only through it, as in the app.
   return create<AppState>()(
     withEditorBufferRecords<AppState>(
       (...a) => ({
@@ -82,6 +82,7 @@ export function createTestStore() {
         ...createLinearSlice(...a),
         ...createPreflightSlice(...a),
         ...createJiraSlice(...a),
+        ...createClickUpSlice(...a),
         ...createEditorSlice(...a),
         ...createStatsSlice(...a),
         ...createMemorySlice(...a),

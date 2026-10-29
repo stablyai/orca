@@ -21,6 +21,7 @@ export const HOST_OPERATION_OWNERSHIP = {
   artifacts: 'host',
   automation: 'host',
   browser: 'host',
+  clickup: 'scope-picked',
   clipboard: 'host',
   computer: 'host',
   connector: 'host',

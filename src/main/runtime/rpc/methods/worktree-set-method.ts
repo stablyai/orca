@@ -2,6 +2,7 @@ import { WorktreeSet } from '../../../../shared/rpc-contract/worktree-params'
 import { displayNameUpdatePinsLabel } from '../../../../shared/worktree/display-name-provenance'
 import { getWorkspaceStatusWarning } from '../../../../shared/workspace-status-warning'
 import { defineMethod } from '../core'
+import { pickWorktreeSetTrackerLinks } from './worktree-set-tracker-links'
 
 export const WORKTREE_SET_METHOD = defineMethod({
   name: 'worktree.set',
@@ -19,9 +20,7 @@ export const WORKTREE_SET_METHOD = defineMethod({
       linkedIssue: params.linkedIssue,
       linkedPR: params.linkedPR,
       suppressedGitHubPR: params.suppressedGitHubPR,
-      linkedLinearIssue: params.linkedLinearIssue,
-      linkedLinearIssueWorkspaceId: params.linkedLinearIssueWorkspaceId,
-      linkedLinearIssueOrganizationUrlKey: params.linkedLinearIssueOrganizationUrlKey,
+      ...pickWorktreeSetTrackerLinks(params),
       linkedGitLabMR: params.linkedGitLabMR,
       linkedGitLabIssue: params.linkedGitLabIssue,
       linkedBitbucketPR: params.linkedBitbucketPR,

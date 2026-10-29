@@ -23,6 +23,7 @@ export function normalizeWorkspaceAttachment(value: unknown): WorkspaceAttachmen
     provider !== 'gitlab' &&
     provider !== 'linear' &&
     provider !== 'jira' &&
+    provider !== 'clickup' &&
     provider !== 'bitbucket' &&
     provider !== 'azure-devops' &&
     provider !== 'gitea'
@@ -33,7 +34,7 @@ export function normalizeWorkspaceAttachment(value: unknown): WorkspaceAttachmen
   if (type !== 'issue' && type !== 'pr' && type !== 'mr') {
     return null
   }
-  if ((provider === 'linear' || provider === 'jira') && type !== 'issue') {
+  if (isIdentifierTracker(provider) && type !== 'issue') {
     return null
   }
   if (type === 'mr' && provider !== 'gitlab') {
@@ -43,8 +44,11 @@ export function normalizeWorkspaceAttachment(value: unknown): WorkspaceAttachmen
     return null
   }
   const identifier =
-    nonEmpty(raw.identifier) ?? nonEmpty(raw.linearIdentifier) ?? nonEmpty(raw.jiraIdentifier)
-  if (raw.number === 0 && (!identifier || (provider !== 'linear' && provider !== 'jira'))) {
+    nonEmpty(raw.identifier) ??
+    nonEmpty(raw.linearIdentifier) ??
+    nonEmpty(raw.jiraIdentifier) ??
+    nonEmpty(raw.clickupIdentifier)
+  if (raw.number === 0 && (!identifier || !isIdentifierTracker(provider))) {
     return null
   }
   if (raw.url !== undefined) {
@@ -70,6 +74,12 @@ export function normalizeWorkspaceAttachment(value: unknown): WorkspaceAttachmen
     ...(nonEmpty(raw.repoId) ? { repoId: nonEmpty(raw.repoId) } : {}),
     ...(nonEmpty(raw.linearIdentifier) ? { linearIdentifier: nonEmpty(raw.linearIdentifier) } : {}),
     ...(nonEmpty(raw.jiraIdentifier) ? { jiraIdentifier: nonEmpty(raw.jiraIdentifier) } : {}),
+    ...(nonEmpty(raw.clickupIdentifier)
+      ? { clickupIdentifier: nonEmpty(raw.clickupIdentifier) }
+      : {}),
+    ...(nonEmpty(raw.clickupWorkspaceId)
+      ? { clickupWorkspaceId: nonEmpty(raw.clickupWorkspaceId) }
+      : {}),
     ...(nonEmpty(raw.linearWorkspaceId)
       ? { linearWorkspaceId: nonEmpty(raw.linearWorkspaceId) }
       : {}),
@@ -81,7 +91,8 @@ export function normalizeWorkspaceAttachment(value: unknown): WorkspaceAttachmen
   const linkedItem = normalizeWorkspaceLinkedItem({
     ...item,
     title: item.title ?? identifier ?? String(item.number),
-    jiraIdentifier: item.jiraIdentifier ?? (provider === 'jira' ? identifier : undefined)
+    jiraIdentifier: item.jiraIdentifier ?? (provider === 'jira' ? identifier : undefined),
+    clickupIdentifier: item.clickupIdentifier ?? (provider === 'clickup' ? identifier : undefined)
   })
   if (
     context &&
@@ -94,12 +105,21 @@ export function normalizeWorkspaceAttachment(value: unknown): WorkspaceAttachmen
   return item
 }
 
+// Why: Linear, Jira, and ClickUp items are issue-only and keyed by tracker identifier, not number.
+function isIdentifierTracker(provider: unknown): boolean {
+  return provider === 'linear' || provider === 'jira' || provider === 'clickup'
+}
+
 function attachmentIdentity(item: WorkspaceAttachment): string {
   return JSON.stringify([
     item.provider,
     item.type,
-    item.provider === 'linear' || item.provider === 'jira'
-      ? (item.identifier ?? item.linearIdentifier ?? item.jiraIdentifier ?? item.number)
+    isIdentifierTracker(item.provider)
+      ? (item.identifier ??
+        item.linearIdentifier ??
+        item.jiraIdentifier ??
+        item.clickupIdentifier ??
+        item.number)
       : item.number
   ])
 }
@@ -291,6 +311,8 @@ export function toWorkspaceLinkedItem(
     ...item,
     linearIdentifier:
       item.linearIdentifier ?? (item.provider === 'linear' ? item.identifier : undefined),
-    jiraIdentifier: item.jiraIdentifier ?? (item.provider === 'jira' ? item.identifier : undefined)
+    jiraIdentifier: item.jiraIdentifier ?? (item.provider === 'jira' ? item.identifier : undefined),
+    clickupIdentifier:
+      item.clickupIdentifier ?? (item.provider === 'clickup' ? item.identifier : undefined)
   })
 }
