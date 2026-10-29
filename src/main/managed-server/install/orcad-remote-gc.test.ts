@@ -45,6 +45,8 @@ function scriptHost(options: {
   fenceHeld?: boolean
   /** Builds staged within the keep window; undefined leaves the answer incomplete. */
   recentlyStaged?: string[]
+  /** The host could not date some build. */
+  ageUnknown?: boolean
 }): void {
   mockExec.mockImplementation(async (_conn, command: string) => {
     if (command.includes('ORCAD_RECENT_STAGED_DONE')) {
@@ -52,6 +54,7 @@ function scriptHost(options: {
         ? ''
         : [
             ...options.recentlyStaged.map((name) => `RECENT ${name}`),
+            ...(options.ageUnknown ? ['ERR'] : []),
             'ORCAD_RECENT_STAGED_DONE'
           ].join('\n')
     }
@@ -275,6 +278,12 @@ describe('orcad GC', () => {
     scriptHost({ listing, removed: kept })
     await gcOldOrcadVersions(args)
     expect(kept).toEqual([])
+
+    // An undatable build may be another desktop's fresh candidate.
+    const undated: string[] = []
+    scriptHost({ listing, removed: undated, recentlyStaged: [], ageUnknown: true })
+    await gcOldOrcadVersions(args)
+    expect(undated).toEqual([])
   })
 
   describe('with an activation transaction in flight', () => {
