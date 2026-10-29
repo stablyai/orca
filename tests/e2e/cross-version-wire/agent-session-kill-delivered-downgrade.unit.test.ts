@@ -38,6 +38,7 @@ function storeMaps(value: unknown): OldStoreMaps {
   return { records: value.records, unreadableRecords: value.unreadableRecords }
 }
 
+// Materializing the historical source checkout and importing its modules can exceed the default timeout.
 test(`${RELEASE_REF} keeps a chat stopped by a delivered kill readable, and the kill survives its rewrite`, async () => {
   const evidence = { detail: 'killed', observedAt: 40_000, ownerFence: 7 } as const
   const killed = agentSessionRecordFixture(
