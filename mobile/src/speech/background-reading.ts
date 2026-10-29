@@ -82,7 +82,7 @@ export function useBackgroundReadingService(wanted: boolean, onTick: () => void)
         setBackgroundReadingActive(false)
         return
       }
-      const started = native.start('Orca', 'Reading agent replies aloud', TICK_MS)
+      const started = native.start(TICK_MS)
       startRequested = started
       setBackgroundReadingActive(started)
       if (!started) {

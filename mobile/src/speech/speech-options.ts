@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import type { LinkReading, TableReading } from '../storage/speech-preferences'
 import { readerWords } from './reader-words'
 import { speakSample } from './reply-speaker'
+import { setLinkReading, setTableReading } from './speech-text'
 import { voiceNativeModule, type NativeVoiceList, type SpeechOptions } from './voice-native-module'
 
 // Why: a few taps on the speed buttons read one sample at the final speed, not one per tap.
@@ -8,6 +10,17 @@ const SAMPLE_DELAY_MS = 600
 
 export function speakVoiceSample(): void {
   speakSample(readerWords().sample)
+}
+
+// Set here too: the reader learns of the new choice only after the settings screen re-renders.
+export function speakLinkSample(mode: LinkReading): void {
+  setLinkReading(mode)
+  speakSample(readerWords().linkSample)
+}
+
+export function speakTableSample(mode: TableReading): void {
+  setTableReading(mode)
+  speakSample(readerWords().tableSample)
 }
 
 /** Kept by the native module so the first reading after a restart already uses them. */

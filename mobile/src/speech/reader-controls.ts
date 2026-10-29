@@ -1,5 +1,10 @@
 import { useEffect } from 'react'
-import { useHeadphonesOnly, useLanguageVoices, useLinkReading } from './reading-preferences'
+import {
+  useHeadphonesOnly,
+  useLanguageVoices,
+  useLinkReading,
+  useTableReading
+} from './reading-preferences'
 import {
   nextMessage,
   pauseReading,
@@ -9,7 +14,7 @@ import {
   stopSpeaking
 } from './reply-speaker'
 import { setLanguageVoices } from './language-segments'
-import { setLinkReading } from './speech-text'
+import { setLinkReading, setTableReading } from './speech-text'
 import { voiceNativeModule, type ReaderControl } from './voice-native-module'
 
 function handleControl(action: ReaderControl): void {
@@ -34,9 +39,11 @@ function handleControl(action: ReaderControl): void {
 /** Mounted once, with the reader overlay, so notification and headset buttons work anywhere. */
 export function useReaderControls(): void {
   const links = useLinkReading().value
+  const tables = useTableReading().value
   const headphonesOnly = useHeadphonesOnly().value
   const languageVoices = useLanguageVoices().value
   useEffect(() => setLinkReading(links), [links])
+  useEffect(() => setTableReading(tables), [tables])
   useEffect(() => setAutoReadNeedsHeadphones(headphonesOnly === 'on'), [headphonesOnly])
   useEffect(() => setLanguageVoices(languageVoices === 'on'), [languageVoices])
   useEffect(() => {

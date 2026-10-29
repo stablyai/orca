@@ -295,7 +295,7 @@ describe('auto-read paused', () => {
     speakReply('second', 'Second.', 'queue')
     speakReply('third', 'Third.', 'queue')
     expect(spoken.map(({ text }) => text)).toEqual(['First.'])
-    expect(native.setReaderState.mock.calls.at(-1)?.[2]).toBe('Auto-read paused · 2 more waiting')
+    expect(native.setReaderState.mock.calls.at(-1)?.[2]).toBe('Paused · 2 more waiting')
   })
 
   it('reads one message for each Play, and goes through the rest when resumed', () => {
@@ -307,7 +307,7 @@ describe('auto-read paused', () => {
     expect(last().text).toBe('First.')
     finishPiece()
     expect(lastState()).toBe('paused')
-    expect(native.setReaderState.mock.calls.at(-1)?.[2]).toBe('Auto-read paused · 2 waiting')
+    expect(native.setReaderState.mock.calls.at(-1)?.[2]).toBe('2 waiting')
     playReading('test')
     expect(last().text).toBe('Second.')
     setAutoPlay(true)

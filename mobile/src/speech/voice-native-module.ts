@@ -21,10 +21,8 @@ export type ReaderState = 'idle' | 'reading' | 'paused'
 /** Mirrors `ReadAloudControls` in the native module. */
 export type ReaderControl = 'stop' | 'previous' | 'pause' | 'play' | 'next'
 
-export type TileAddResult = 'added' | 'already-added' | 'not-added' | 'unsupported' | 'error'
-
 export type VoiceNativeModule = {
-  start(title: string, text: string, tickMs: number): boolean
+  start(tickMs: number): boolean
   stop(): boolean
   isRunning(): boolean
   /** `language`: primary subtag of a voice to read this in; null for the reading voice. */
@@ -45,7 +43,7 @@ export type VoiceNativeModule = {
   /** Null when the engine did not start. */
   getVoices(): Promise<NativeVoiceList | null>
   openTtsSettings(): boolean
-  /** What the notification's auto-read button and the Quick Settings tile show. */
+  /** What the notification's title and auto-read button show. */
   setAutoReadPaused(paused: boolean): void
   /**
    * Picks the notification's buttons and text (`status`) and holds the headset and steering-wheel
@@ -61,8 +59,6 @@ export type VoiceNativeModule = {
   ): void
   /** Whether sound goes to headphones, a car or the like rather than the phone's own speaker. */
   isPrivateOutput(): boolean
-  /** Android's "Add tile to Quick Settings?" prompt (Android 13+). */
-  requestAddTile(): Promise<TileAddResult>
   addListener(event: 'onTick' | 'onAutoReadToggle', listener: () => void): { remove(): void }
   addListener(
     event: 'onReaderControl',

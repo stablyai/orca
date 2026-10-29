@@ -30,26 +30,27 @@ const HOLD_STATUS: Record<Hold['reason'], string> = {
   unplugged: 'Paused until headphones are back'
 }
 
-/** The notification's text, e.g. "Reading · MobileApp · 2 more waiting"; null while idle. */
+/**
+ * The notification's second line, under "Auto-read active" or "paused", e.g. "Reading · MobileApp
+ * · 2 more waiting" or "2 waiting"; null while idle.
+ */
 export function readerStatus(
   state: ReaderState,
   hold: Hold | null,
   current: Utterance | null,
-  waiting: number,
-  autoPlay = true
+  waiting: number
 ): string | null {
   if (state === 'idle') {
     return null
   }
-  const autoReadHeld = !autoPlay && (current === null || hold?.reason === 'paused')
-  const parts = [autoReadHeld ? 'Auto-read paused' : hold ? HOLD_STATUS[hold.reason] : 'Reading']
+  const parts = hold ? [HOLD_STATUS[hold.reason]] : current ? ['Reading'] : []
   if (current?.title) {
     parts.push(current.title)
   }
   if (waiting > 0) {
     parts.push(current ? `${waiting} more waiting` : `${waiting} waiting`)
   }
-  return parts.join(' · ')
+  return parts.join(' · ') || null
 }
 
 /** A message read again keeps its place in the history. */

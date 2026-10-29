@@ -48,7 +48,7 @@ function emit(): void {
   // Why: pushed synchronously, not from a render, so the notification stays current off screen.
   const state = readerState()
   const title = current?.title ?? null
-  const status = readerStatus(state, hold, current, queue.length, autoPlay)
+  const status = readerStatus(state, hold, current, queue.length)
   const canRepeat = history.length > 0
   const canPrevious = canGoPrevious(history, current, queue.length)
   const canNext = queue.length > 0

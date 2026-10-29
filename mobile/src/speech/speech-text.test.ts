@@ -4,7 +4,7 @@ import { splitForSpeech, toSpeechText } from './speech-text'
 const placeholders = { code: 'Code skipped.', table: 'Table skipped.', link: 'link' }
 
 describe('toSpeechText', () => {
-  it('replaces code blocks and tables with short cues', () => {
+  it('replaces code blocks, and tables when asked, with short cues', () => {
     const markdown = [
       'Before.',
       '',
@@ -17,7 +17,46 @@ describe('toSpeechText', () => {
       '```',
       'After.'
     ].join('\n')
-    expect(toSpeechText(markdown, placeholders)).toBe('Before. Table skipped. Code skipped. After.')
+    expect(toSpeechText(markdown, placeholders, 'word-and-text', 'skip')).toBe(
+      'Before. Table skipped. Code skipped. After.'
+    )
+  })
+
+  describe('tables', () => {
+    const markdown = [
+      'Plan:',
+      '| Day | Run |',
+      '|:---|---:|',
+      '| **Tue** | Intervals. |',
+      '| Thu | [Easy](https://x.com/e) |',
+      '',
+      'After.'
+    ].join('\n')
+    const read = (mode: Parameters<typeof toSpeechText>[3], text = markdown) =>
+      toSpeechText(text, placeholders, 'text', mode)
+
+    it('reads each row with its column names', () => {
+      expect(read('with-headers')).toBe(
+        'Plan: Day: Tue, Run: Intervals. Day: Thu, Run: Easy. After.'
+      )
+    })
+
+    it('can read the column names once and then only the values', () => {
+      expect(read('values')).toBe('Plan: Day, Run. Tue, Intervals. Thu, Easy. After.')
+    })
+
+    it('leaves out empty cells and keeps escaped pipes in a cell', () => {
+      const table = ['|  | A \\| B |', '|---|---|', '| x |  |', '| y | z |'].join('\n')
+      expect(read('with-headers', table)).toBe('x. y, A | B: z.')
+    })
+
+    it('reads pipe rows without a delimiter row as values', () => {
+      expect(read('with-headers', '| a | b |\n| c | d |')).toBe('a, b. c, d.')
+    })
+
+    it('does not take a line with a pipe over a rule for a table', () => {
+      expect(read('with-headers', 'One | two\n---')).toBe('One | two. ---.')
+    })
   })
 
   it('strips formatting, links and paths but keeps the words', () => {
