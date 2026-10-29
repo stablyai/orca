@@ -46,7 +46,10 @@ type WorkspaceReadArgs = WorkspaceLoadArgs & {
  * as today's window restores it; the pane reuses the leaf the records name, else a new one.
  */
 function legacyLayout(row: TerminalTab, args: WorkspaceReadArgs): TerminalLayoutSnapshot {
-  const leafId = args.recordedLeafId(row.id) ?? args.context.mintLeafId(`leaf:${row.id}`)
+  const leafId =
+    row.hostTerminalAlias?.leafId ??
+    args.recordedLeafId(row.id) ??
+    args.context.mintLeafId(`leaf:${row.id}`)
   return {
     root: { type: 'leaf', leafId },
     activeLeafId: leafId,

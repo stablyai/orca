@@ -81,6 +81,12 @@ export function closeTerminalTab(
     return
   }
   const { worktreeId: owningWorktreeId, terminalTabId } = target
+  const hostAlias = Object.values(state.tabsByWorktree)
+    .flat()
+    .find((row) => row.id === terminalTabId && row.hostTerminalAlias)
+  if (hostAlias && (options?.reason ?? options?.hostCloseReason ?? 'user') !== 'user') {
+    return
+  }
   // Unrouted closes still prune and record locally; unproven-host PTY teardown fails closed independently.
   const worktreeRoute = resolveTerminalCloseRoute(state, owningWorktreeId, terminalTabId)
 
@@ -128,6 +134,11 @@ export function closeTerminalTab(
     return
   }
 
+  if (hostAlias) {
+    state.closeTab(terminalTabId, { reason: 'user', force: options?.force || pinnedCloseConsented })
+    options?.onClosed?.()
+    return
+  }
   const runtimeEnvironmentId = worktreeRoute?.runtimeEnvironmentId ?? null
   if (runtimeEnvironmentId && isWebRuntimeSessionActive(runtimeEnvironmentId)) {
     if (options?.reason === 'pty-exit') {

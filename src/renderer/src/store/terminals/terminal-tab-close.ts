@@ -12,7 +12,10 @@ import {
   removeSleepingAgentSessionsForTab
 } from '../slices/terminal-tab-retirement'
 import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './terminal-state'
-import { startTerminalTabProviderRetirement } from './terminal-tab-close-providers'
+import {
+  startTerminalTabProviderRetirement,
+  startTerminalHostAliasRetirement
+} from './terminal-tab-close-providers'
 import { stopLegacyRelayBridgedShellsForTab } from './legacy-relay-bridged-tab-close'
 import { commitTerminalSurfaceClose } from './terminal-surface-close-intent'
 import { recordTerminalTabCloseThroughLayoutOwner } from './terminal-tab-close-layout-owner'
@@ -35,6 +38,17 @@ export function createTerminalTabCloseActions(
   return {
     closeTab: (tabId, opts) => {
       const closeReason = opts?.reason ?? 'user'
+      const aliasRow = Object.values(get().tabsByWorktree)
+        .flat()
+        .find((row) => row.id === tabId && row.hostTerminalAlias)
+      const alias = aliasRow?.hostTerminalAlias
+      if (aliasRow && alias && !opts?.hostAliasCloseConfirmed) {
+        if (closeReason !== 'user') {
+          return
+        }
+        startTerminalHostAliasRetirement(aliasRow, get, opts)
+        return
+      }
       // Why narrowed separately: main alone records a close for a process exit.
       const intentReason = closeReason === 'pty-exit' ? null : closeReason
       const retiresSession = intentReason !== null
@@ -71,7 +85,7 @@ export function createTerminalTabCloseActions(
             const before = next[wId]
             const closing = before.find((t) => t.id === tabId)
             if (closing) {
-              closingWorktreeId = wId
+              closingWorktreeId = aliasRow?.worktreeId ?? wId
               // User close cancels pending agent launch; every close settles its startup wait to prevent delivery into a vanished tab.
               if (closing.agentLaunchPane && !closing.agentLaunchPane.outcome) {
                 if (closeReason === 'user') {
@@ -82,8 +96,8 @@ export function createTerminalTabCloseActions(
               }
               // Why: capture the first-matched tab's snapshot for the Cmd+Shift+T reopen stack (see capturedSnapshot below).
               if (!closedTab) {
-                closedTab = closing
-                closedWorktreeId = wId
+                closedTab = aliasRow ?? closing
+                closedWorktreeId = aliasRow?.worktreeId ?? wId
               }
             }
             const after = before.filter((t) => t.id !== tabId)
@@ -93,7 +107,9 @@ export function createTerminalTabCloseActions(
           }
           // Session-only tombstone fences synchronous SSH pulls before main acknowledges close; retire once merge moves to main.
           const nextClosedTombstones =
-            intentReason && closedWorktreeId && opts?.remoteCloseOwnedByHost !== true
+            intentReason &&
+            closedWorktreeId &&
+            (opts?.remoteCloseOwnedByHost !== true || opts?.hostAliasCloseConfirmed)
               ? {
                   ...s.closedTerminalTabTombstonesByTabId,
                   [tabId]: {
@@ -246,7 +262,11 @@ export function createTerminalTabCloseActions(
           }
         })
       )
-      if (intentReason && closingWorktreeId && opts?.remoteCloseOwnedByHost !== true) {
+      if (
+        intentReason &&
+        closingWorktreeId &&
+        (opts?.remoteCloseOwnedByHost !== true || opts?.hostAliasCloseConfirmed)
+      ) {
         // Switch point: main records the close through layout.apply.
         if (
           !ORCA_LAYOUT_OWNER_IS_MAIN ||

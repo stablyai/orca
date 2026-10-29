@@ -95,13 +95,15 @@ export type TerminalActions = {
     }
   ) => TerminalTab
   openNewTerminalTabInActiveWorkspace: (groupId: string) => Promise<void>
-  /** Synchronous retirement: provider teardown starts before state removal but is never awaited. */
+  /** Alias retirement waits for HOST close; ordinary provider teardown starts synchronously. */
   closeTab: (
     tabId: string,
     opts?: {
       recordInteraction?: boolean
       reason?: TerminalTabCloseReason
       captureRecentlyClosed?: boolean
+      force?: boolean
+      hostAliasCloseConfirmed?: true
       remoteCloseOwnedByHost?: boolean
       /** See closeUnifiedTab. */
       preserveWorktreeSelection?: boolean
