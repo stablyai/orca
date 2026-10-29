@@ -30,6 +30,7 @@ export const ROOT_HELP_TEXT_PRIMARY = [
   '  account rm                Remove a managed agent account and its private data',
   '  account auto-switch       Turn Claude account switching before a usage limit on or off',
   '  account auth-proxy        Bill Claude through a local auth proxy so a session can change accounts without restarting',
+  '  account session-mover     Move running Claude sessions to another account before a usage limit',
   '',
   'Skills:',
   '  skills installed          List installed skill selectors',
