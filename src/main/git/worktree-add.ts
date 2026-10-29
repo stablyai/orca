@@ -1,3 +1,4 @@
+import { GitCommandTimeoutError } from '../../shared/git-command-timeout'
 import { resolveWorktreeAddBaseRef } from '../../shared/worktree/base-ref'
 import type {
   LocalBaseRefRefreshResult,
@@ -19,7 +20,11 @@ import type {
   AddWorktreeResult,
   GitWorktreeExecOptions
 } from './worktree-operation-options'
-import { gitExecOptions, resolveWorktreeAddTimeoutMs } from './worktree-operation-options'
+import {
+  gitExecOptions,
+  resolveWorktreeAddTimeoutMs,
+  worktreeAddTimeoutMessage
+} from './worktree-operation-options'
 import { bumpWorktreeScanGeneration } from './worktree-scan-cache'
 import { assertNoPendingWorktreeRemovalConflict } from '../worktree-removal-table'
 import { createWorktreeCheckoutProgressReader } from './worktree-checkout-progress'
@@ -270,6 +275,9 @@ async function performAddWorktree(
   } catch (error) {
     // Settle the refresh before leaving the caller's maintenance pause on failure.
     await pendingLocalBaseRefRefresh
+    if (error instanceof GitCommandTimeoutError) {
+      error.message = worktreeAddTimeoutMessage(error.timeoutMs)
+    }
     throw error
   } finally {
     checkoutProgress?.close()
