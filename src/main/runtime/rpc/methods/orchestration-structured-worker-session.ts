@@ -1,4 +1,7 @@
-import { closeStructuredAgentSessionChild } from '../../agent-session/structured-agent-session-close'
+import {
+  closeStructuredAgentSessionChild,
+  type StructuredAgentSessionCloseOptions
+} from '../../agent-session/structured-agent-session-close'
 /** Create structured workers directly; attach is not readiness, so hold the preamble until the agent takes it.
  * Open dispatches retain agents through the idle sweep; settled workers rest and restart on mail. The preamble is a turn, never keystrokes. */
 
@@ -152,7 +155,7 @@ function structuredCreateMayHaveCommitted(
  * Keep the tab reachable if close throws. Later authority/preamble failures also use this cleanup. */
 export async function discardStructuredWorkerSession(
   sessionId: string,
-  runtime: Pick<OrcaRuntimeService, 'retireStructuredAgentSessionTabFromSnapshot'>
+  runtime: NonNullable<StructuredAgentSessionCloseOptions['runtime']>
 ): Promise<void> {
   const host = getStructuredAgentSessionHost()
   if (!host) {

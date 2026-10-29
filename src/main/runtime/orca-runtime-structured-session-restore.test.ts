@@ -1,5 +1,6 @@
 import { partialRuntimeStore } from './runtime-store-partial-fixture'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
+import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 import { agentSessionRecordFixture } from '../native-chat/agent-session-record-test-fixture'
 import { agentSessionConversationView } from '../../shared/agent-session-conversation-view'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -242,17 +243,16 @@ describe('structured session cold restoration', () => {
       refreshMobileSessionPtyRecords(): Promise<Set<string> | null>
       ensureStructuredAgentSessionHost(): Promise<void>
     }
-    internal.store = partialRuntimeStore({
-      getWorkspaceSession: () => ({
-        ...getDefaultWorkspaceSession(),
-        activeRepoId: null,
-        activeWorktreeId: 'workspace-1',
-        activeTabId: null,
-        tabsByWorktree: {},
-        terminalLayoutsByTabId: {},
-        unifiedTabs: { 'workspace-1': [] }
-      })
+    const getWorkspaceSession = (): WorkspaceSessionState => ({
+      ...getDefaultWorkspaceSession(),
+      activeRepoId: null,
+      activeWorktreeId: 'workspace-1',
+      activeTabId: null,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      unifiedTabs: { 'workspace-1': [] }
     })
+    internal.store = { ...partialRuntimeStore({ getWorkspaceSession }), getWorkspaceSession }
     internal.hasPersistedStructuredAgentSessionStore = () => true
     internal.getKnownWorkspaceSessionWorktreeIds = () => new Set()
     internal.hydrateHeadlessMobileSessionTabsFromWorkspaceSession = () => new Set()
@@ -294,33 +294,32 @@ describe('structured session cold restoration', () => {
       refreshMobileSessionPtyRecords(): Promise<Set<string> | null>
       ensureStructuredAgentSessionHost(): Promise<void>
     }
-    internal.store = partialRuntimeStore({
-      getWorkspaceSession: () => ({
-        ...getDefaultWorkspaceSession(),
-        activeRepoId: null,
-        activeWorktreeId: 'workspace-1',
-        activeTabId: 'agent-session:closed-session',
-        tabsByWorktree: {},
-        terminalLayoutsByTabId: {},
-        activeTabIdByWorktree: { 'workspace-1': 'agent-session:closed-session' },
-        unifiedTabs: {
-          'workspace-1': [
-            {
-              id: 'agent-session:closed-session',
-              entityId: 'closed-session',
-              groupId: 'group-1',
-              worktreeId: 'workspace-1',
-              contentType: 'agent-session',
-              label: 'Codex Chat',
-              customLabel: null,
-              color: null,
-              sortOrder: 0,
-              createdAt: 1
-            }
-          ]
-        }
-      })
+    const getWorkspaceSession = (): WorkspaceSessionState => ({
+      ...getDefaultWorkspaceSession(),
+      activeRepoId: null,
+      activeWorktreeId: 'workspace-1',
+      activeTabId: 'agent-session:closed-session',
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      activeTabIdByWorktree: { 'workspace-1': 'agent-session:closed-session' },
+      unifiedTabs: {
+        'workspace-1': [
+          {
+            id: 'agent-session:closed-session',
+            entityId: 'closed-session',
+            groupId: 'group-1',
+            worktreeId: 'workspace-1',
+            contentType: 'agent-session',
+            label: 'Codex Chat',
+            customLabel: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1
+          }
+        ]
+      }
     })
+    internal.store = { ...partialRuntimeStore({ getWorkspaceSession }), getWorkspaceSession }
     internal.hasPersistedStructuredAgentSessionStore = () => true
     internal.getKnownWorkspaceSessionWorktreeIds = () => new Set()
     internal.hydrateHeadlessMobileSessionTabsFromWorkspaceSession = () => new Set()
