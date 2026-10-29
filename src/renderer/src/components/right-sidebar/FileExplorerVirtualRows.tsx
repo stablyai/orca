@@ -14,6 +14,7 @@ import type { WorkspaceFileDragSource } from '@/lib/workspace-file-drag'
 
 type FileExplorerVirtualRowsProps = {
   virtualizer: Virtualizer<HTMLDivElement, Element>
+  fontSize?: number
   inlineInputIndex: number
   rowProjection: FileExplorerRowProjection
   displayDepthOffset?: number
@@ -103,6 +104,7 @@ function resolveDragSourceOwner(
 export function FileExplorerVirtualRows(props: FileExplorerVirtualRowsProps): React.JSX.Element {
   const {
     virtualizer,
+    fontSize = 12,
     inlineInputIndex,
     rowProjection,
     displayDepthOffset = 0,
@@ -184,6 +186,7 @@ export function FileExplorerVirtualRows(props: FileExplorerVirtualRowsProps): Re
             >
               <InlineInputRow
                 depth={inlineDepth - displayDepthOffset}
+                fontSize={fontSize}
                 inlineInput={inlineInput!}
                 onSubmit={handleInlineSubmit}
                 onCancel={dismissInlineInput}
@@ -222,6 +225,7 @@ export function FileExplorerVirtualRows(props: FileExplorerVirtualRowsProps): Re
             <FileExplorerRow
               displayDepthOffset={displayDepthOffset}
               node={n}
+              fontSize={fontSize}
               isExpanded={expanded.has(n.path)}
               isLoading={n.isDirectory && loadingDirPaths.has(n.path)}
               loadError={n.isDirectory ? (dirCache?.[n.path]?.error ?? null) : null}

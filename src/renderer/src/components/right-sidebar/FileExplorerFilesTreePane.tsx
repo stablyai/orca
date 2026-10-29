@@ -81,7 +81,7 @@ export function FileExplorerFilesTreePane({
   } = paneState
   const { inlineInput, inlineInputIndex, startNew, dismissInlineInput, handleInlineSubmit } =
     inlineInputState
-  const { virtualizer, flashingPath } = rowScrolling
+  const { virtualizer, flashingPath, fileExplorerFontSize } = rowScrolling
   const { handleClick, handleDoubleClick, handleWheelCapture } = handlers
   const {
     handleMoveDrop,
@@ -192,6 +192,7 @@ export function FileExplorerFilesTreePane({
         <FileExplorerVirtualRows
           displayDepthOffset={getExplorerDisplayDepth(worktreePath, displayRootPath)}
           virtualizer={virtualizer}
+          fontSize={fileExplorerFontSize}
           inlineInputIndex={inlineInputIndex}
           rowProjection={rowProjection}
           inlineInput={inlineInput}

@@ -17,11 +17,13 @@ export type InlineInput = {
 
 export function InlineInputRow({
   depth,
+  fontSize = 12,
   inlineInput,
   onSubmit,
   onCancel
 }: {
   depth: number
+  fontSize?: number
   inlineInput: InlineInput
   onSubmit: (value: string) => void
   onCancel: () => void
@@ -133,8 +135,12 @@ export function InlineInputRow({
 
   return (
     <div
-      className="flex items-center w-full h-[26px] px-2 gap-1"
-      style={{ paddingLeft: `${depth * 16 + 8}px` }}
+      className="flex items-center w-full px-2 gap-1"
+      style={{
+        paddingLeft: `${depth * 16 + 8}px`,
+        height: `${fontSize + 14}px`,
+        fontSize: `${fontSize}px`
+      }}
     >
       <span className="size-3 shrink-0" />
       {inlineInput.type === 'folder' ? (
@@ -145,7 +151,8 @@ export function InlineInputRow({
       <input
         key={inlineInputKey}
         ref={setInputRef}
-        className="flex-1 min-w-0 bg-transparent text-xs text-foreground outline-none border border-ring rounded-sm px-1"
+        className="flex-1 min-w-0 bg-transparent text-foreground outline-none border border-ring rounded-sm px-1"
+        style={{ fontSize: `${fontSize}px` }}
         defaultValue={inlineInput.type === 'rename' ? inlineInput.existingName : ''}
         onKeyDown={(e) => {
           // IME confirm Enter may redispatch unmarked; preserve gesture ownership and ignore IME Escape.

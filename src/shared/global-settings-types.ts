@@ -100,6 +100,11 @@ export type GlobalSettings = GlobalSettingsBase & {
    *  Linux/macOS while preserving later explicit opt-outs. */
   primarySelectionMiddleClickPasteDefaultedForTerminalDefaults?: boolean
   terminalFontSize: number
+  /**
+   * File Explorer row label size in px (independent of uiZoomLevel / terminal font).
+   * Default 12 matches the previous `text-xs` rows (#10259).
+   */
+  fileExplorerFontSize: number
   terminalFontFamily: string
   terminalFontWeight: number
   terminalFontWeightBold: number

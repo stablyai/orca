@@ -16,6 +16,10 @@ describe('getDefaultSettings', () => {
   it('asks before closing terminals with running processes by default', () => {
     expect(getDefaultSettings('/tmp').skipCloseTerminalWithRunningProcessConfirm).toBe(false)
   })
+
+  it('defaults File Explorer font size to 12px (previous text-xs)', () => {
+    expect(getDefaultSettings('/tmp').fileExplorerFontSize).toBe(12)
+  })
 })
 
 describe('getDefaultPrimarySelectionMiddleClickPaste', () => {

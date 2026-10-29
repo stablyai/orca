@@ -65,6 +65,7 @@ export function buildDefaultSettings(args: {
     primarySelectionMiddleClickPasteDefaultedForTerminalDefaults:
       args.primarySelectionMiddleClickPaste,
     terminalFontSize: 14,
+    fileExplorerFontSize: 12,
     terminalFontFamily: args.terminalFontFamily,
     terminalFontWeight: DEFAULT_TERMINAL_FONT_WEIGHT,
     terminalFontWeightBold: DEFAULT_TERMINAL_FONT_WEIGHT_BOLD,
