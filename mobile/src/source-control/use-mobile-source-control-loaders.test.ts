@@ -293,6 +293,11 @@ describe('useMobileSourceControlLoaders status on reconnect', () => {
     await act(async () => {
       renderer?.update(createElement(Harness, { client, connState: 'connected' }))
     })
-    expect(client.requests.map((request) => request.method)).toContain('git.status')
+    const statusRequest = client.requests.find((request) => request.method === 'git.status')
+    expect(statusRequest).toBeDefined()
+    expect(statusRequest?.args[1]).toEqual({
+      worktree: `id:${WORKTREE}`,
+      includeLineStats: false
+    })
   })
 })
