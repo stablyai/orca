@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import type { BrowserTabInfo } from '../../../shared/runtime-browser-contracts'
-import type { RuntimeMobileSessionTabsSnapshot } from '../../../shared/runtime-types'
+import type {
+  RuntimeMobileSessionBrowserTab,
+  RuntimeMobileSessionTabsSnapshot
+} from '../../../shared/runtime-types'
 import {
   mergeBrowserTabListing,
   readBrowserTabBar,
@@ -36,7 +39,10 @@ function snapshot(worktree: string, tabs: unknown[]): RuntimeMobileSessionTabsSn
   return { worktree, tabs } as RuntimeMobileSessionTabsSnapshot
 }
 
-function browserRow(browserPageId: string | null, extra: object = {}): object {
+function browserRow(
+  browserPageId: string | null,
+  extra: Partial<RuntimeMobileSessionBrowserTab> = {}
+): RuntimeMobileSessionBrowserTab {
   return {
     type: 'browser',
     id: `tab-${browserPageId}`,
@@ -136,7 +142,14 @@ describe('readBrowserTabBar', () => {
         { type: 'terminal', id: 'term' },
         browserRow('a'),
         browserRow(null),
-        browserRow('client', { placement: { kind: 'client' } }),
+        browserRow('client', {
+          placement: {
+            kind: 'client',
+            browserHostClientId: 'client-1',
+            browserHostGeneration: 1,
+            pageHostGeneration: 1
+          }
+        }),
         browserRow('b')
       ])
     ],

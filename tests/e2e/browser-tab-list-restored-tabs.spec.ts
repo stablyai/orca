@@ -10,30 +10,18 @@ import { waitForSessionReady } from './helpers/store'
 import { attachRepoAndOpenTerminal, createRestartSession } from './helpers/orca-restart'
 import { startBrowserSplitPageServer } from './helpers/browser-split-page-server'
 import { TEST_REPO_PATH_FILE } from './global-setup'
+import { readProperty, rpc } from './helpers/browser-agent-focus-scenarios'
 
-type ListedTab = { browserPageId: string; title: string; active: boolean; loaded?: boolean }
-
-async function callRuntime(page: Page, method: string, params: object): Promise<unknown> {
-  const response = await page.evaluate(
-    ({ targetMethod, targetParams }) =>
-      window.api.runtime.call({ method: targetMethod, params: targetParams }),
-    { targetMethod: method, targetParams: params }
-  )
-  if (Reflect.get(Object(response), 'ok') !== true) {
-    throw new Error(`${method} failed: ${JSON.stringify(response)}`)
-  }
-  return Reflect.get(Object(response), 'result')
-}
+type ListedTab = { browserPageId: string; title: string; active: boolean; loaded: boolean }
 
 async function listTabs(page: Page, worktree: string): Promise<ListedTab[]> {
-  const result = await callRuntime(page, 'browser.tabList', { worktree })
-  const tabs: unknown = Reflect.get(Object(result), 'tabs')
+  const tabs = readProperty(await rpc(page, 'browser.tabList', { worktree }), 'tabs')
   return Array.isArray(tabs)
     ? tabs.map((tab: unknown) => ({
-        browserPageId: String(Reflect.get(Object(tab), 'browserPageId')),
-        title: String(Reflect.get(Object(tab), 'title')),
-        active: Reflect.get(Object(tab), 'active') === true,
-        loaded: Reflect.get(Object(tab), 'loaded')
+        browserPageId: String(readProperty(tab, 'browserPageId')),
+        title: String(readProperty(tab, 'title')),
+        active: readProperty(tab, 'active') === true,
+        loaded: readProperty(tab, 'loaded') === true
       }))
     : []
 }
@@ -94,27 +82,27 @@ test('tab list reports restored tabs, and commands load them in the background',
         ['gamma 1', true]
       ])
 
-    const switched = await callRuntime(second.page, 'browser.tabSwitch', { worktree, index: 0 })
-    const alphaPageId = String(Reflect.get(Object(switched), 'browserPageId'))
-    const title = await callRuntime(second.page, 'browser.eval', {
+    const switched = await rpc(second.page, 'browser.tabSwitch', { worktree, index: 0 })
+    const alphaPageId = String(readProperty(switched, 'browserPageId'))
+    const title = await rpc(second.page, 'browser.eval', {
       worktree,
       page: alphaPageId,
       expression: 'document.title'
     })
-    expect(Reflect.get(Object(title), 'result')).toBe('alpha 1')
+    expect(readProperty(title, 'result')).toBe('alpha 1')
     expect(await activeBrowserTabId(second.page, worktreeId)).toBe(visibleTabId)
 
     // The wake's 10 s visibility lease lapsing must not unload the page again.
     // ast-grep-ignore: test-no-real-time-wait -- the lease is real time in the app and exposes no expiry signal
     await second.page.waitForTimeout(12_000)
-    const later = await callRuntime(second.page, 'browser.eval', {
+    const later = await rpc(second.page, 'browser.eval', {
       worktree,
       page: alphaPageId,
       expression: 'document.title'
     })
-    expect(Reflect.get(Object(later), 'result')).toBe('alpha 1')
+    expect(readProperty(later, 'result')).toBe('alpha 1')
 
-    await callRuntime(second.page, 'browser.tabClose', { worktree, index: 1 })
+    await rpc(second.page, 'browser.tabClose', { worktree, index: 1 })
     await expect
       .poll(async () => (await listTabs(second.page, worktree)).map((tab) => tab.title))
       .toEqual(['alpha 1', 'gamma 1'])
