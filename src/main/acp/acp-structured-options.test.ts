@@ -141,7 +141,7 @@ describe('ACP session options', () => {
       await writeAcpSessionOption(
         {
           setConfigOption: async () => ({ configOptions }),
-          setModel: async () => {}
+          setModel: async () => ({})
         },
         options,
         options.write('model', 'raw/retired')!,
