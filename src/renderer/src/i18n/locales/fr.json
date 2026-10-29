@@ -1595,6 +1595,15 @@
         "title": "Ajoutez les dossiers des lecteurs Windows sur cet ordinateur",
         "descriptionWithPath": "{{value0}} se trouve sur un lecteur Windows. Git dans WSL y signale de faux changements de fin de ligne, ne voit pas les modifications faites depuis Windows et y effectue les recherches lentement.",
         "description": "Ce dossier se trouve sur un lecteur Windows. Git dans WSL y signale de faux changements de fin de ligne, ne voit pas les modifications faites depuis Windows et y effectue les recherches lentement."
+      },
+      "worktreePaletteEvidence": {
+        "workspaceComment": "Commentaire de l'espace de travail",
+        "createdByAutomation": "Créé par automatisation",
+        "linkedTask": "Tâche liée",
+        "pullRequest": "Pull request",
+        "mergeRequest": "Merge request",
+        "linkedIssue": "Issue liée",
+        "listeningPort": "Port en écoute"
       }
     },
     "hooks": {

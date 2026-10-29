@@ -1,16 +1,7 @@
 import type { PaletteSearchResult, PaletteSupportingText } from './worktree-palette-search'
 import type { Worktree } from '../../../shared/worktree/types'
+import { getPaletteSupportingAccessibilityLabel } from './worktree-palette-evidence'
 import { createRecognizedPaletteRank } from '../../../shared/palette-match/palette-document'
-
-const ACCESSIBILITY_LABELS: Record<PaletteSupportingText['labelKind'], string> = {
-  comment: 'Workspace comment',
-  automation: 'Created by automation',
-  task: 'Linked task',
-  pr: 'Pull request',
-  mr: 'Merge request',
-  issue: 'Linked issue',
-  port: 'Listening port'
-}
 
 /**
  * A pasted task URL is a recognized exact intent, so its rows lead every section
@@ -34,7 +25,7 @@ export function buildWorktreePaletteTaskUrlResult(args: {
       labelKind: args.labelKind,
       text: args.text,
       matchRanges: [{ start: 0, end: args.text.length }],
-      accessibilityLabel: ACCESSIBILITY_LABELS[args.labelKind]
+      accessibilityLabel: getPaletteSupportingAccessibilityLabel(args.labelKind)
     },
     qualityClass: 'exact-intent',
     rank: createRecognizedPaletteRank(),

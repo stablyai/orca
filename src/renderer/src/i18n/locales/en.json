@@ -1867,6 +1867,15 @@
         "title": "Add Windows drive folders on this computer",
         "descriptionWithPath": "{{value0}} is on a Windows drive. Git in WSL reports false line-ending changes there, misses edits made from Windows, and searches it slowly.",
         "description": "This folder is on a Windows drive. Git in WSL reports false line-ending changes there, misses edits made from Windows, and searches it slowly."
+      },
+      "worktreePaletteEvidence": {
+        "workspaceComment": "Workspace comment",
+        "createdByAutomation": "Created by automation",
+        "linkedTask": "Linked task",
+        "pullRequest": "Pull request",
+        "mergeRequest": "Merge request",
+        "linkedIssue": "Linked issue",
+        "listeningPort": "Listening port"
       }
     },
     "hooks": {

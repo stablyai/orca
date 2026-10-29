@@ -1369,6 +1369,15 @@
         "title": "在此计算机上添加 Windows 驱动器上的文件夹",
         "descriptionWithPath": "{{value0}} 位于 Windows 驱动器上。在该位置，WSL 中的 Git 会误报行尾更改、无法察觉从 Windows 中进行的编辑，而且搜索速度很慢。",
         "description": "此文件夹位于 Windows 驱动器上。在该位置，WSL 中的 Git 会误报行尾更改、无法察觉从 Windows 中进行的编辑，而且搜索速度很慢。"
+      },
+      "worktreePaletteEvidence": {
+        "workspaceComment": "工作区评论",
+        "createdByAutomation": "由自动化创建",
+        "linkedTask": "关联的任务",
+        "pullRequest": "PR",
+        "mergeRequest": "合并请求",
+        "linkedIssue": "关联的议题",
+        "listeningPort": "监听端口"
       }
     },
     "hooks": {

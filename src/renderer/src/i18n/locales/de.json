@@ -1832,6 +1832,15 @@
         "title": "Ordner auf Windows-Laufwerken auf diesem Computer hinzufügen",
         "descriptionWithPath": "{{value0}} befindet sich auf einem Windows-Laufwerk. Git in WSL meldet dort fälschlicherweise Änderungen an Zeilenenden, erkennt unter Windows vorgenommene Änderungen nicht und durchsucht das Laufwerk nur langsam.",
         "description": "Dieser Ordner befindet sich auf einem Windows-Laufwerk. Git in WSL meldet dort fälschlicherweise Änderungen an Zeilenenden, erkennt unter Windows vorgenommene Änderungen nicht und durchsucht das Laufwerk nur langsam."
+      },
+      "worktreePaletteEvidence": {
+        "workspaceComment": "Arbeitsbereich-Kommentar",
+        "createdByAutomation": "Durch Automatisierung erstellt",
+        "linkedTask": "Verknüpfte Aufgabe",
+        "pullRequest": "Pull Request",
+        "mergeRequest": "Merge Request",
+        "linkedIssue": "Verknüpftes Issue",
+        "listeningPort": "Lauschender Port"
       }
     },
     "hooks": {

@@ -1782,6 +1782,15 @@
         "title": "在這台電腦上新增 Windows 磁碟機中的資料夾",
         "descriptionWithPath": "{{value0}} 位於 Windows 磁碟機上。WSL 中的 Git 會在此位置誤報行尾字元變更、漏掉從 Windows 進行的編輯，搜尋速度也較慢。",
         "description": "此資料夾位於 Windows 磁碟機上。WSL 中的 Git 會在此位置誤報行尾字元變更、漏掉從 Windows 進行的編輯，搜尋速度也較慢。"
+      },
+      "worktreePaletteEvidence": {
+        "workspaceComment": "工作區留言",
+        "createdByAutomation": "由自動化建立",
+        "linkedTask": "連結的任務",
+        "pullRequest": "PR",
+        "mergeRequest": "合併請求",
+        "linkedIssue": "連結的議題",
+        "listeningPort": "監聽連接埠"
       }
     },
     "hooks": {

@@ -1810,6 +1810,15 @@
         "title": "Windows sürücüsündeki klasörleri bu bilgisayarda ekleyin",
         "descriptionWithPath": "{{value0}} bir Windows sürücüsünde bulunuyor. WSL'deki Git burada gerçekte olmayan satır sonu değişiklikleri bildirir, Windows üzerinden yapılan düzenlemeleri algılamaz ve yavaş arama yapar.",
         "description": "Bu klasör bir Windows sürücüsünde bulunuyor. WSL'deki Git burada gerçekte olmayan satır sonu değişiklikleri bildirir, Windows üzerinden yapılan düzenlemeleri algılamaz ve yavaş arama yapar."
+      },
+      "worktreePaletteEvidence": {
+        "workspaceComment": "Çalışma alanı yorumu",
+        "createdByAutomation": "Otomasyon tarafından oluşturuldu",
+        "linkedTask": "Bağlı görev",
+        "pullRequest": "Pull request",
+        "mergeRequest": "Merge request",
+        "linkedIssue": "Bağlı sorun",
+        "listeningPort": "Dinlenen port"
       }
     },
     "hooks": {

@@ -1369,6 +1369,15 @@
         "title": "Windows 드라이브 폴더는 이 컴퓨터에서 추가하세요",
         "descriptionWithPath": "{{value0}}은(는) Windows 드라이브에 있습니다. WSL의 Git은 그곳에서 잘못된 줄 끝 변경을 보고하고, Windows에서 한 편집을 놓치며, 검색도 느립니다.",
         "description": "이 폴더는 Windows 드라이브에 있습니다. WSL의 Git은 그곳에서 잘못된 줄 끝 변경을 보고하고, Windows에서 한 편집을 놓치며, 검색도 느립니다."
+      },
+      "worktreePaletteEvidence": {
+        "workspaceComment": "워크스페이스 댓글",
+        "createdByAutomation": "자동화가 생성함",
+        "linkedTask": "연결된 작업",
+        "pullRequest": "PR",
+        "mergeRequest": "MR",
+        "linkedIssue": "연결된 이슈",
+        "listeningPort": "수신 대기 포트"
       }
     },
     "hooks": {

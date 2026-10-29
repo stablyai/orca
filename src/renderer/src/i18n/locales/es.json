@@ -1375,6 +1375,15 @@
         "title": "Agrega las carpetas de unidades de Windows en este equipo",
         "descriptionWithPath": "{{value0}} está en una unidad de Windows. Git en WSL informa allí de cambios de final de línea falsos, no detecta las ediciones hechas desde Windows y busca en ella lentamente.",
         "description": "Esta carpeta está en una unidad de Windows. Git en WSL informa allí de cambios de final de línea falsos, no detecta las ediciones hechas desde Windows y busca en ella lentamente."
+      },
+      "worktreePaletteEvidence": {
+        "workspaceComment": "Comentario del espacio de trabajo",
+        "createdByAutomation": "Creado por automatización",
+        "linkedTask": "Tarea vinculada",
+        "pullRequest": "Pull request",
+        "mergeRequest": "Merge request",
+        "linkedIssue": "Issue vinculado",
+        "listeningPort": "Puerto en escucha"
       }
     },
     "hooks": {

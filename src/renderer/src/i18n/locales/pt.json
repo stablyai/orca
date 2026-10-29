@@ -2725,6 +2725,15 @@
         "title": "Adicione pastas de unidades do Windows neste computador",
         "descriptionWithPath": "{{value0}} está em uma unidade do Windows. O Git no WSL relata falsas alterações de fim de linha nela, não detecta edições feitas pelo Windows e faz buscas nela lentamente.",
         "description": "Esta pasta está em uma unidade do Windows. O Git no WSL relata falsas alterações de fim de linha nela, não detecta edições feitas pelo Windows e faz buscas nela lentamente."
+      },
+      "worktreePaletteEvidence": {
+        "workspaceComment": "Comentário do espaço de trabalho",
+        "createdByAutomation": "Criado por automação",
+        "linkedTask": "Tarefa vinculada",
+        "pullRequest": "Pull request",
+        "mergeRequest": "Merge request",
+        "linkedIssue": "Issue vinculada",
+        "listeningPort": "Porta em escuta"
       }
     },
     "components": {
