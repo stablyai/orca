@@ -95,10 +95,15 @@ describe('createEditorSlice conflict status reconciliation', () => {
       })
       await main.settle()
 
+      const tabId =
+        executionHostId === 'local'
+          ? 'wt-1::check-details::check-run:42'
+          : 'wt-1::check-details@runtime:server::check-run:42'
+
       store.setState({
         activeWorkspaceExecutionHostId: executionHostId === 'local' ? 'runtime:server' : 'local'
       })
-      await store.getState().reloadOpenCheckRunDetailsTab('wt-1::check-details::check-run:42')
+      await store.getState().reloadOpenCheckRunDetailsTab(tabId)
 
       expect(fetchPRCheckDetails).toHaveBeenCalledWith(
         executionHostId === 'local' ? '/repo' : '/remote',
@@ -111,7 +116,7 @@ describe('createEditorSlice conflict status reconciliation', () => {
       )
       expect(store.getState().openFiles).toContainEqual(
         expect.objectContaining({
-          id: 'wt-1::check-details::check-run:42',
+          id: tabId,
           checkRunDetails: expect.objectContaining({
             loading: false,
             details: expect.objectContaining({ title: 'Build passed', conclusion: 'success' })
@@ -119,6 +124,155 @@ describe('createEditorSlice conflict status reconciliation', () => {
         })
       )
       main.close()
+    }
+  )
+
+  it('keeps a check reopened on a twin host in its own tab with its own project', async () => {
+    const fetchPRCheckDetails = vi.fn().mockResolvedValue(null)
+    const store = createEditorTabsStore()
+    const localRepo = store.getState().repos[0]
+    const localWorktree = store.getState().worktreesByRepo['repo-1'][0]
+    store.setState({
+      activeWorkspaceExecutionHostId: 'local',
+      repos: [localRepo, { ...localRepo, path: '/remote', executionHostId: 'runtime:server' }],
+      worktreesByRepo: {
+        'repo-1': [
+          localWorktree,
+          {
+            ...localWorktree,
+            path: '/remote',
+            hostId: 'runtime:server',
+            runtimeOwnerEnvironmentId: 'server'
+          }
+        ]
+      },
+      fetchPRCheckDetails
+    })
+    const main = await drawTabsFromMain(store)
+    const check = {
+      name: 'verify',
+      status: 'completed' as const,
+      conclusion: 'failure' as const,
+      url: null,
+      checkRunId: 42
+    }
+    const localProject = { owner: 'local-org', repo: 'project' }
+    const remoteProject = { owner: 'remote-org', repo: 'project' }
+
+    store.getState().openCheckRunDetails('wt-1', 'repo:99', check, {
+      details: null,
+      loading: false,
+      error: null,
+      githubRepository: localProject
+    })
+    await main.settle()
+    store.setState({ activeWorkspaceExecutionHostId: 'runtime:server' })
+    store.getState().openCheckRunDetails('wt-1', 'repo:99', check, {
+      details: null,
+      loading: false,
+      error: null,
+      githubRepository: remoteProject
+    })
+    await main.settle()
+    // A sidebar patch on the selected host must not rewrite its twin's tab.
+    store.getState().patchOpenCheckRunDetails('wt-1', 'repo:99', check, {
+      details: null,
+      loading: false,
+      error: 'remote patch'
+    })
+
+    const localTabId = 'wt-1::check-details::check-run:42'
+    const remoteTabId = 'wt-1::check-details@runtime:server::check-run:42'
+    expect(
+      store
+        .getState()
+        .openFiles.filter((file) => file.mode === 'check-details')
+        .map((file) => [
+          file.id,
+          file.checkRunDetails?.githubRepository,
+          file.checkRunDetails?.error
+        ])
+    ).toEqual([
+      [localTabId, localProject, null],
+      [remoteTabId, remoteProject, 'remote patch']
+    ])
+
+    await store.getState().reloadOpenCheckRunDetailsTab(localTabId)
+    await store.getState().reloadOpenCheckRunDetailsTab(remoteTabId)
+
+    expect(fetchPRCheckDetails).toHaveBeenNthCalledWith(
+      1,
+      '/repo',
+      expect.objectContaining({ prRepo: localProject }),
+      { repoId: 'repo-1', repoOwnerExecutionHostId: 'local' }
+    )
+    expect(fetchPRCheckDetails).toHaveBeenNthCalledWith(
+      2,
+      '/remote',
+      expect.objectContaining({ prRepo: remoteProject }),
+      { repoId: 'repo-1', repoOwnerExecutionHostId: 'runtime:server' }
+    )
+    main.close()
+  })
+
+  it.each(['local', 'runtime:server'] as const)(
+    'reloads a check-details tab for a detected %s checkout',
+    async (executionHostId) => {
+      const fetchPRCheckDetails = vi.fn().mockResolvedValue(null)
+      const remote = executionHostId !== 'local'
+      const repoPath = remote ? '/remote' : '/repo'
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const store = createStore<any>()((...args: any[]) => ({
+        activeWorktreeId: 'wt-1',
+        repos: [
+          { id: 'repo-1', path: repoPath, ...(remote ? { executionHostId: 'runtime:server' } : {}) }
+        ],
+        worktreesByRepo: {},
+        detectedWorktreesByRepo: {
+          'repo-1': {
+            repoId: 'repo-1',
+            authoritative: true,
+            source: 'git',
+            worktrees: [
+              {
+                id: 'wt-1',
+                repoId: 'repo-1',
+                path: repoPath,
+                ...(remote ? { hostId: 'runtime:server', runtimeOwnerEnvironmentId: 'server' } : {})
+              }
+            ]
+          }
+        },
+        settings: { activeRuntimeEnvironmentId: null },
+        fetchPRCheckDetails,
+        ...createEditorSlice(...(args as Parameters<typeof createEditorSlice>))
+      })) as unknown as StoreApi<AppState>
+      const check = {
+        name: 'verify',
+        status: 'completed' as const,
+        conclusion: 'failure' as const,
+        url: null,
+        checkRunId: 42
+      }
+
+      store.getState().openCheckRunDetails('wt-1', 'repo:99', check, {
+        details: null,
+        loading: false,
+        error: null
+      })
+      await store
+        .getState()
+        .reloadOpenCheckRunDetailsTab(
+          remote
+            ? 'wt-1::check-details@runtime:server::check-run:42'
+            : 'wt-1::check-details::check-run:42'
+        )
+
+      expect(fetchPRCheckDetails).toHaveBeenCalledWith(
+        repoPath,
+        expect.objectContaining({ checkRunId: 42 }),
+        { repoId: 'repo-1', repoOwnerExecutionHostId: executionHostId }
+      )
     }
   )
 
@@ -260,7 +414,19 @@ describe('createEditorSlice conflict status reconciliation', () => {
       })
     }
 
-    await store.getState().reloadOpenCheckRunDetailsTab('wt-1::check-details::gitlab-job:42')
+    // Reopening on the other host opens that host's own tab; the first tab keeps its owner.
+    const ownerTabId = {
+      local: 'wt-1::check-details::gitlab-job:42',
+      runtime: 'wt-1::check-details@runtime:server::gitlab-job:42',
+      'paired-ssh': 'wt-1::check-details@ssh:builder>runtime:server::gitlab-job:42',
+      'pinned-runtime': 'wt-1::check-details@runtime:server::gitlab-job:42',
+      'pinned-local': 'wt-1::check-details::gitlab-job:42',
+      'pinned-paired-ssh': 'wt-1::check-details@runtime:server::gitlab-job:42'
+    }[owner]
+    expect(store.getState().openFiles.filter((file) => file.mode === 'check-details')).toHaveLength(
+      owner.startsWith('pinned-') ? 2 : 1
+    )
+    await store.getState().reloadOpenCheckRunDetailsTab(ownerTabId)
 
     expect(fetchPRCheckDetails).not.toHaveBeenCalled()
     expect(loadGitLabJobLogDetailsMock).toHaveBeenCalledWith(
@@ -274,7 +440,7 @@ describe('createEditorSlice conflict status reconciliation', () => {
     )
     expect(store.getState().openFiles).toContainEqual(
       expect.objectContaining({
-        id: 'wt-1::check-details::gitlab-job:42',
+        id: ownerTabId,
         checkRunDetails: expect.objectContaining({
           loading: false,
           error: null,

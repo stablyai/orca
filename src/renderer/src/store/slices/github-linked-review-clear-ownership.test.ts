@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../../../shared/repo-types'
 import { createWorktreeIdentity } from '../../../../shared/worktree/identity'
 import { getGitHubPRCacheKey } from '../../../../shared/github/github-cache-key'
@@ -24,6 +24,8 @@ const repository: Repo = {
   connectionId: 'builder'
 }
 const branch = 'feature/review'
+// Why: the cache route relies on isFresh(), so the frozen clock keeps that entry fresh deterministically.
+const NOW = Date.UTC(2026, 0, 1)
 
 function setup(stamped: boolean, durableIdentity = true) {
   const store = createTestStore()
@@ -107,6 +109,8 @@ const diverged = makePR({
 
 describe('linked review clearing retains workspace and credential identities', () => {
   beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(NOW)
     vi.clearAllMocks()
     resetRemoteRuntimeMocks()
     runtimeEnvironmentCall.mockImplementation(({ method }) => ({
@@ -117,13 +121,17 @@ describe('linked review clearing retains workspace and credential identities', (
     }))
   })
 
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
   for (const stamped of [false, true]) {
     it.each(['cache', 'lookup', 'coordinator'] as const)(
       `persists the paired copy through %s (stamp: ${stamped})`,
       async (route) => {
         const { store, workspace, sibling, update, key, alias, options } = setup(stamped)
         if (route === 'cache') {
-          store.setState({ prCache: { [key]: { data: diverged, fetchedAt: Date.now() } } })
+          store.setState({ prCache: { [key]: { data: diverged, fetchedAt: NOW } } })
         }
         if (route === 'coordinator') {
           store.getState().applyGitHubPRRefreshEvent({
@@ -131,13 +139,13 @@ describe('linked review clearing retains workspace and credential identities', (
             reason: 'swr',
             aliases: [alias],
             status: 'in-flight',
-            requestStartedAt: Date.now()
+            requestStartedAt: NOW
           })
           store.getState().applyGitHubPRRefreshEvent({
             sequence: 71,
             reason: 'swr',
             aliases: [alias],
-            outcome: { kind: 'found', pr: diverged, fetchedAt: Date.now() }
+            outcome: { kind: 'found', pr: diverged, fetchedAt: NOW }
           })
         } else {
           await store.getState().fetchPRForBranch(repository.path, branch, options)
@@ -186,13 +194,13 @@ describe('linked review clearing retains workspace and credential identities', (
           reason: 'swr',
           aliases: [alias],
           status: 'in-flight',
-          requestStartedAt: Date.now()
+          requestStartedAt: NOW
         })
         store.getState().applyGitHubPRRefreshEvent({
           sequence: 74,
           reason: 'swr',
           aliases: [alias],
-          outcome: { kind: 'found', pr: mismatch, fetchedAt: Date.now() }
+          outcome: { kind: 'found', pr: mismatch, fetchedAt: NOW }
         })
       }
       await update.mock.results[0]?.value
@@ -256,7 +264,7 @@ describe('linked review clearing retains workspace and credential identities', (
           reason: 'swr',
           aliases: [alias],
           status: 'in-flight',
-          requestStartedAt: Date.now()
+          requestStartedAt: NOW
         })
       }
       store.setState({ worktreesByRepo: { project: [replacement, sibling] } })
@@ -268,7 +276,7 @@ describe('linked review clearing retains workspace and credential identities', (
           sequence: 72,
           reason: 'swr',
           aliases: [alias],
-          outcome: { kind: 'found', pr: diverged, fetchedAt: Date.now() }
+          outcome: { kind: 'found', pr: diverged, fetchedAt: NOW }
         })
       }
       await update.mock.results[0]?.value
@@ -286,14 +294,14 @@ describe('linked review clearing retains workspace and credential identities', (
       reason: 'swr',
       aliases: [alias],
       status: 'in-flight',
-      requestStartedAt: Date.now()
+      requestStartedAt: NOW
     })
     bumpHostedReviewLinkMutationGeneration(workspace.id, workspace)
     store.getState().applyGitHubPRRefreshEvent({
       sequence: 75,
       reason: 'swr',
       aliases: [alias],
-      outcome: { kind: 'found', pr: diverged, fetchedAt: Date.now() }
+      outcome: { kind: 'found', pr: diverged, fetchedAt: NOW }
     })
     await update.mock.results[0]?.value
     expect(findKnownWorktreeById(store.getState(), workspace.id, 'ssh:builder')).toBe(workspace)
@@ -320,7 +328,7 @@ describe('linked review clearing retains workspace and credential identities', (
       reason: 'swr',
       aliases: [alias],
       status: 'in-flight',
-      requestStartedAt: Date.now()
+      requestStartedAt: NOW
     })
     const current = {
       ...workspace,
@@ -334,7 +342,7 @@ describe('linked review clearing retains workspace and credential identities', (
       outcome: {
         kind: 'found',
         pr: makePR({ number: 12, headSha: 'old-head', headRefName: 'feature/old' }),
-        fetchedAt: Date.now()
+        fetchedAt: NOW
       }
     })
     await update.mock.results[0]?.value
@@ -350,7 +358,7 @@ describe('linked review clearing retains workspace and credential identities', (
       sequence: 73,
       reason: 'swr',
       aliases: [alias],
-      outcome: { kind: 'found', pr: diverged, fetchedAt: Date.now() }
+      outcome: { kind: 'found', pr: diverged, fetchedAt: NOW }
     })
     expect(update).not.toHaveBeenCalled()
   })
