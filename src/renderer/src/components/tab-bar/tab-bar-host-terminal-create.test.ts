@@ -27,18 +27,17 @@ vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: mocks.call }))
 vi.mock('@/lib/focus-terminal-tab-surface', () => ({ focusTerminalTabSurface: vi.fn() }))
 createStoreCascadesMockApi()
 const LOCAL = 'repo1::/local'
-const HOST = 'remote::/host'
+const HOST = 'native-repo::/host/native'
 const REQUEST = {
   worktreeId: LOCAL,
   executionHostId: 'runtime:env-1',
-  projectHostSetupId: 'remote-setup',
-  agent: 'codex'
+  projectHostSetupId: 'remote-setup'
 } as const
 beforeEach(() => {
   mocks.call.mockReset()
 })
 
-it('creates a real host tab with native caller navigation and refuses missing host workspaces', async () => {
+it('creates and shows a host catalog tab with caller navigation without viewer host workspaces', async () => {
   const store = createTestStore()
   mocks.store = store
   const repos = [
@@ -65,7 +64,14 @@ it('creates a real host tab with native caller navigation and refuses missing ho
           projectId: 'project'
         })
       ],
-      remote: [makeWorktree({ id: HOST, repoId: 'remote', path: '/host', hostId: 'runtime:env-1' })]
+      remote: [
+        makeWorktree({
+          id: 'remote::/host',
+          repoId: 'remote',
+          path: '/host',
+          hostId: 'runtime:env-1'
+        })
+      ]
     },
     projects: [
       {
@@ -89,13 +95,43 @@ it('creates a real host tab with native caller navigation and refuses missing ho
     ]
   })
   const leafId = '11111111-1111-4111-8111-111111111111'
-  mocks.call.mockResolvedValue({
+  const created = {
     tab: {
       id: 'host-tab',
       parentTabId: 'host-tab',
       leafId,
       terminal: 'host-handle',
       title: 'Host terminal'
+    }
+  }
+  mocks.call.mockImplementation((_target, method) => {
+    switch (method) {
+      case 'projectHostSetup.list':
+        return {
+          setups: [
+            {
+              ...setupFields,
+              id: 'remote-setup',
+              repoId: 'native-repo',
+              hostId: 'local',
+              path: '/host/native'
+            }
+          ]
+        }
+      case 'worktree.ps':
+        return {
+          worktrees: [{ worktreeId: HOST, repoId: 'native-repo', hostId: 'local', isActive: true }]
+        }
+      case 'folderWorkspace.list':
+        return { folderWorkspaces: [] }
+      case 'worktree.show':
+        return { worktree: { id: HOST } }
+      case 'session.tabs.activate':
+        return {}
+      case 'session.tabs.createTerminal':
+        return created
+      default:
+        throw new Error(`Unexpected method: ${method}`)
     }
   })
   expect(await createTerminalTabOnHost(REQUEST)).toMatchObject({
@@ -109,13 +145,17 @@ it('creates a real host tab with native caller navigation and refuses missing ho
     'session.tabs.createTerminal',
     {
       worktree: `id:${HOST}`,
-      activate: false,
+      activate: true,
       select: true,
       navigation: 'caller',
-      clientMutationId: expect.any(String),
-      agent: 'codex'
+      clientMutationId: expect.any(String)
     },
     { timeoutMs: 15_000 }
+  )
+  expect(mocks.call).toHaveBeenCalledWith(
+    { kind: 'environment', environmentId: 'env-1' },
+    'session.tabs.activate',
+    { worktree: `id:${HOST}`, tabId: 'host-tab', leafId, navigation: 'host' }
   )
   expect(store.getState().tabsByWorktree[LOCAL]).toMatchObject([
     {
@@ -130,8 +170,8 @@ it('creates a real host tab with native caller navigation and refuses missing ho
     }
   ])
   store.setState({ worktreesByRepo: { repo1: store.getState().worktreesByRepo.repo1 } })
-  await expect(createTerminalTabOnHost(REQUEST)).rejects.toThrow('selector_not_found')
-  expect(mocks.call).toHaveBeenCalledTimes(1)
+  await expect(createTerminalTabOnHost(REQUEST)).resolves.toMatchObject({ hostWorktreeId: HOST })
+  expect(mocks.call).toHaveBeenCalledTimes(12)
   const source = store.getState().worktreesByRepo.repo1![0]!
   const aliasEntry = store.getState().unifiedTabsByWorktree[LOCAL]![0]!
   expect(isUnifiedTabOwnedByWorktree(aliasEntry, source, new Set())).toBe(true)
@@ -141,5 +181,5 @@ it('creates a real host tab with native caller navigation and refuses missing ho
     }
   })
   await expect(createTerminalTabOnHost(REQUEST)).rejects.toThrow('source_worktree_not_local')
-  expect(mocks.call).toHaveBeenCalledTimes(1)
+  expect(mocks.call).toHaveBeenCalledTimes(12)
 })
