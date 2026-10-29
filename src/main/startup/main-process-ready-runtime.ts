@@ -9,7 +9,11 @@ import { browserManager } from '../browser/browser-manager'
 import { configureBrowserClientPageAutomationRuntime } from '../browser/browser-client-page-automation-runtime'
 import { BrowserExpectedUrlMismatch } from '../../shared/browser-expected-url'
 import { BrowserClientPageCommandError } from '../browser/browser-client-page-command-failure'
-import { startPreGoneCrashSampling } from '../crash-reporting/process-gone-diagnostics'
+import {
+  startPreGoneCrashSampling,
+  zeroRtTimeLimitCrashDetails
+} from '../crash-reporting/process-gone-diagnostics'
+import { recordCrashBreadcrumb } from '../crash-reporting/crash-breadcrumb-store'
 import { recordProcessGoneCrash } from './main-window-lifecycle-flags'
 import { handleGpuChildCrash } from './gpu-lifecycle'
 import { isGpuFallbackCrashCandidate } from '../crash-reporting/gpu-crash-fallback-decision'
@@ -136,6 +140,10 @@ export async function initializeReadyRuntimeServices(): Promise<void> {
   }
   // Sample live processes: gone-time metrics omit dead children and already-released memory.
   startPreGoneCrashSampling()
+  const rtTimeLimit = zeroRtTimeLimitCrashDetails()
+  if (Object.keys(rtTimeLimit).length > 0) {
+    recordCrashBreadcrumb('linux_rttime_limit', rtTimeLimit)
+  }
   app.on('child-process-gone', (_event, details) => {
     recordProcessGoneCrash('child', details.type, details.reason, details.exitCode ?? null, {
       name: details.name,
