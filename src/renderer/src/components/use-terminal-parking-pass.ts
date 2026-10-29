@@ -13,6 +13,7 @@ import {
 import { recordRendererCrashBreadcrumb } from '@/lib/crash-breadcrumb-recorder'
 import { selectEvictionExemptTerminalTabIds } from './terminal-pane/parking/retention/terminal-eviction-exempt-tabs'
 import {
+  beginParkedCapturePass,
   captureParkedTerminalBuffers,
   enqueueParkedTerminalCapture,
   whenParkedCaptureSettles
@@ -49,6 +50,7 @@ export function useTerminalParkingPass(controller: TerminalParkingFoundation): v
     forceParked: ReadonlySet<string>
     evictionExempt: ReadonlySet<string>
   } | null>(null)
+  const parkingPassGenerationRef = useRef(0)
 
   const { revision, takeChangedWorkspaces } =
     useTerminalParkingWorkspaceChanges(workspaceSurfaceIds)
@@ -56,6 +58,9 @@ export function useTerminalParkingPass(controller: TerminalParkingFoundation): v
   const forcedParking = useRef<ReadonlySet<string>>(new Set())
   const exemptionByWorktree = useRef(new Map<string, ReadonlySet<string>>())
   useEffect(() => {
+    // Why a pass token: a yielding capture can outlive this effect; an older settlement
+    // must not overwrite a newer park verdict or mark a worktree captured after a reveal.
+    const passGuard = beginParkedCapturePass(parkingPassGenerationRef)
     const previous = previousController.current
     previousController.current = controller
     const dirty = takeChangedWorkspaces()
@@ -174,7 +179,8 @@ export function useTerminalParkingPass(controller: TerminalParkingFoundation): v
         () => {
           capturedParked.add(worktreeId)
         },
-        pendingCaptures
+        pendingCaptures,
+        passGuard.isCurrent
       )
     }
     for (const id of exemptionByWorktree.current.keys()) {
@@ -220,7 +226,8 @@ export function useTerminalParkingPass(controller: TerminalParkingFoundation): v
           () => {
             capturedParked.add(worktreeId)
           },
-          pendingCaptures
+          pendingCaptures,
+          passGuard.isCurrent
         )
       }
       pass.nextParkedTerminalWorktreeIds.add(worktreeId)
@@ -247,7 +254,8 @@ export function useTerminalParkingPass(controller: TerminalParkingFoundation): v
     }
     whenParkedCaptureSettles(
       pendingCaptures.length > 0 ? Promise.all(pendingCaptures) : undefined,
-      commitParkedIds
+      commitParkedIds,
+      passGuard.isCurrent
     )
     const retentionTtlEligibleIds = new Set(
       retentionBudgetCandidates
@@ -293,6 +301,11 @@ export function useTerminalParkingPass(controller: TerminalParkingFoundation): v
           invalidateTerminalParkingInputs(worktreeId)
         }, delayMs)
         pass.parkingTimers.set(worktreeId, timer)
+      }
+    }
+    return () => {
+      if (passGuard.isCurrent()) {
+        parkingPassGenerationRef.current += 1
       }
     }
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- `controller` is rebuilt every render; the pass reads only the listed values and stable refs.

@@ -1,5 +1,6 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { useAppStore } from '../../../store'
+import { beginParkedCapturePass } from '../parking/capture/parked-terminal-buffer-capture'
 import {
   shutdownBufferCaptures,
   type ShutdownBufferCaptureOptions
@@ -30,6 +31,8 @@ export function useTerminalShutdownBufferCapture({
   | 'tabId'
   | 'worktreeId'
 >): void {
+  const shutdownCaptureGenerationRef = useRef(0)
+
   useEffect(() => {
     const captureBuffers = (options?: ShutdownBufferCaptureOptions): void | Promise<void> => {
       const manager = managerRef.current
@@ -47,6 +50,9 @@ export function useTerminalShutdownBufferCapture({
       const shouldCaptureScrollbackBuffers = includeLocalBuffers
         ? true
         : shouldPreserveTerminalScrollbackBuffers(worktreeId, state.repos)
+      // Why generation + re-read: the yield can admit a concurrent layout write;
+      // applying the pre-yield snapshot would revert it.
+      const pass = beginParkedCapturePass(shutdownCaptureGenerationRef)
       const args = {
         manager,
         paneTransports: paneTransportsRef.current,
@@ -60,6 +66,9 @@ export function useTerminalShutdownBufferCapture({
         clearedScrollbackLeafIds: clearedScrollbackLeafIdsRef.current
       }
       const applyLayout = (layout: ReturnType<typeof captureTerminalShutdownLayout>): void => {
+        if (!pass.isCurrent()) {
+          return
+        }
         if (options?.localOnly && layout.buffersByLeafId) {
           // Cold parks are frequent: keep layout structure shared but buffer bytes in the local-only field excluded from remote export.
           const { buffersByLeafId, ...structureOnly } = layout
@@ -75,12 +84,16 @@ export function useTerminalShutdownBufferCapture({
         }
       }
       if (options?.yieldBetweenPanes) {
-        return captureTerminalShutdownLayoutYielding(args).then(applyLayout)
+        return captureTerminalShutdownLayoutYielding({
+          ...args,
+          readExistingLayout: () => useAppStore.getState().terminalLayoutsByTabId[tabId]
+        }).then(applyLayout)
       }
       applyLayout(captureTerminalShutdownLayout(args))
     }
     shutdownBufferCaptures.set(tabId, captureBuffers)
     return () => {
+      shutdownCaptureGenerationRef.current += 1
       if (shutdownBufferCaptures.get(tabId) === captureBuffers) {
         shutdownBufferCaptures.delete(tabId)
       }

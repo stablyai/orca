@@ -28,6 +28,8 @@ type CaptureTerminalShutdownLayoutArgs = {
   existingLayout: TerminalLayoutSnapshot
   /** Merge prior for buffers, resolved across both scrollback homes; defaults to the shared layout's. */
   priorBuffersByLeafId?: Record<string, string>
+  /** Re-read after a yielding serialize so a concurrent layout write is the merge prior. */
+  readExistingLayout?: () => TerminalLayoutSnapshot | undefined
   captureBuffers?: boolean
   clearedScrollbackLeafIds?: ReadonlySet<string>
 }
@@ -199,7 +201,7 @@ function assembleStoredShutdownLayout(
   const mergedBuffers = captureBuffers
     ? mergeCapturedLeafState({
         prior: omitClearedLeafState(priorBuffersByLeafId, clearedScrollbackLeafIds),
-        fresh: buffers,
+        fresh: omitClearedLeafState(buffers, clearedScrollbackLeafIds) ?? {},
         currentLeafIds
       })
     : {}
@@ -254,5 +256,13 @@ export async function captureTerminalShutdownLayoutYielding(
   } catch {
     panesNow = []
   }
-  return assembleStoredShutdownLayout(args, panesNow, buffers, true)
+  const reread = args.readExistingLayout?.()
+  const nextArgs = reread
+    ? {
+        ...args,
+        existingLayout: reread,
+        priorBuffersByLeafId: reread.buffersByLeafId ?? args.priorBuffersByLeafId
+      }
+    : args
+  return assembleStoredShutdownLayout(nextArgs, panesNow, buffers, true)
 }

@@ -48,30 +48,58 @@ export function captureParkedTerminalBuffers({
   }).then((result) => result.captured === result.requested)
 }
 
-export function whenParkedCaptureSettles(result: unknown, onComplete: () => void): void {
+/** Increment a generation so an overlapping later pass can drop this one's settlement. */
+export function beginParkedCapturePass(generation: { current: number }): {
+  isCurrent: () => boolean
+} {
+  const passGeneration = generation.current + 1
+  generation.current = passGeneration
+  return {
+    isCurrent: () => generation.current === passGeneration
+  }
+}
+
+export function whenParkedCaptureSettles(
+  result: unknown,
+  onComplete: () => void,
+  isCurrent?: () => boolean
+): void {
+  const complete = (): void => {
+    if (isCurrent && !isCurrent()) {
+      return
+    }
+    onComplete()
+  }
   if (isThenable(result)) {
-    void result.then(onComplete, onComplete)
+    void result.then(complete, complete)
     return
   }
-  onComplete()
+  complete()
 }
 
 export function enqueueParkedTerminalCapture(
   result: boolean | Promise<boolean>,
   onOk: () => void,
-  pending: Promise<unknown>[]
+  pending: Promise<unknown>[],
+  isCurrent?: () => boolean
 ): void {
+  const accept = (): void => {
+    if (isCurrent && !isCurrent()) {
+      return
+    }
+    onOk()
+  }
   if (isThenable(result)) {
     pending.push(
       result.then((ok) => {
         if (ok) {
-          onOk()
+          accept()
         }
       })
     )
     return
   }
   if (result) {
-    onOk()
+    accept()
   }
 }

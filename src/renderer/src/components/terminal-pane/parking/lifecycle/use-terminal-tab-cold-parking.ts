@@ -19,10 +19,7 @@ import {
 } from '../retention/terminal-hidden-view-parking'
 import { selectPairedRuntimeParkingEnvironmentIdsFromState } from '../retention/paired-runtime-parking-capabilities'
 import type { ParkVerdictFlipRecord } from '../verdict/terminal-park-verdict-flip-telemetry'
-import {
-  haveSameTerminalTabIds,
-  useTerminalParkVerdictPin
-} from '../verdict/use-terminal-park-verdict-pin'
+import { useTerminalParkVerdictPin } from '../verdict/use-terminal-park-verdict-pin'
 import { withholdUnparkableTerminalTabs } from '../retention/terminal-cold-park-withheld-tabs'
 import { getTerminalParkingPolicyOverrides } from '../instrumentation/terminal-parking-e2e-overrides'
 import { selectEvictionExemptTerminalTabIds } from '../retention/terminal-eviction-exempt-tabs'
@@ -30,8 +27,7 @@ import { selectSleepingRecordParkExemptTabIds } from '../retention/sleeping-reco
 import { usePendingStartupParkPresence } from '../retention/terminal-pending-startup-park-presence'
 import '../output-watchers/terminal-parked-tab-watchers'
 import { canWatcherCoverParkedTerminalTab } from '../output-watchers/parked-terminal-tab-coverage'
-import { captureNewlyParkedTerminalTabs } from '../capture/parked-terminal-tab-capture-episodes'
-import { whenParkedCaptureSettles } from '../capture/parked-terminal-buffer-capture'
+import { scheduleNewlyParkedTerminalTabCapture } from '../capture/parked-terminal-tab-capture-episodes'
 import { createTerminalTabActivationOrder } from '../retention/terminal-tab-activation-order'
 import { buildTerminalTabColdParkCandidates } from '../retention/terminal-tab-park-candidates'
 import {
@@ -115,7 +111,6 @@ export function useTerminalTabColdParking(args: {
   const measureParkCooldownUntilRef = useRef<number | null>(null)
   const terminalTabParkingTimersRef = useRef<TerminalTabColdParkRecheckTimers>(new Map())
   const parkVerdictRecordsRef = useRef(new Map<string, ParkVerdictFlipRecord>())
-  const parkedTabCaptureDoneRef = useRef(new Set<string>())
   const [terminalTabParkingRevision, setTerminalTabParkingRevision] = useState(0)
   const [coldParkedTerminalTabIds, setColdParkedTerminalTabIds] = useState<ReadonlySet<string>>(
     () => new Set()
@@ -193,16 +188,12 @@ export function useTerminalTabColdParking(args: {
       parkVerdictRecords: parkVerdictRecordsRef.current,
       nowMs
     })
-    // Capture while panes are still mounted. A yielding capture returns a Promise; local and no-op captures stay synchronous so park-clock tests do not stall.
-    // Compare via ref before dispatch: no-op updater dispatches can still hit React’s global nested-update limit inside a commit cascade.
-    whenParkedCaptureSettles(
-      captureNewlyParkedTerminalTabs(worktreeId, parkedTabIds, parkedTabCaptureDoneRef.current),
-      () => {
-        if (!haveSameTerminalTabIds(coldParkedTerminalTabIdsRef.current, parkedTabIds)) {
-          coldParkedTerminalTabIdsRef.current = parkedTabIds
-          setColdParkedTerminalTabIds(parkedTabIds)
-        }
-      }
+    // Capture while panes are still mounted. A later pass drops an older settlement so a reveal cannot be overwritten.
+    scheduleNewlyParkedTerminalTabCapture(
+      worktreeId,
+      parkedTabIds,
+      coldParkedTerminalTabIdsRef,
+      setColdParkedTerminalTabIds
     )
 
     const recheckDeadlineMsByTabId = new Map<string, number>()

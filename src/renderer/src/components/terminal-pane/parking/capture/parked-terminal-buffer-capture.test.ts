@@ -1,6 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { RepoConnection } from '../../../../../../shared/workspace-session/workspace-session-terminal-buffers'
-import { captureParkedTerminalBuffers } from './parked-terminal-buffer-capture'
+import {
+  beginParkedCapturePass,
+  captureParkedTerminalBuffers,
+  enqueueParkedTerminalCapture,
+  whenParkedCaptureSettles
+} from './parked-terminal-buffer-capture'
 import { shutdownBufferCaptures } from '../../snapshots/shutdown-buffer-captures'
 
 const LOCAL_REPO: RepoConnection = {
@@ -64,5 +69,68 @@ describe('captureParkedTerminalBuffers', () => {
         localOnly: true
       })
     ).resolves.toBe(false)
+  })
+})
+
+describe('parked capture pass generation', () => {
+  function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
+    let resolve!: (value: T) => void
+    const promise = new Promise<T>((next) => {
+      resolve = next
+    })
+    return { promise, resolve }
+  }
+
+  it('keeps the newer pass when an older overlapping capture settles last', async () => {
+    const generation = { current: 0 }
+    const commits: string[] = []
+    const capturedParked = new Set<string>()
+
+    const older = beginParkedCapturePass(generation)
+    const olderCapture = deferred<boolean>()
+    const olderPending: Promise<unknown>[] = []
+    enqueueParkedTerminalCapture(
+      olderCapture.promise,
+      () => {
+        capturedParked.add('wt-old')
+      },
+      olderPending,
+      older.isCurrent
+    )
+    whenParkedCaptureSettles(
+      Promise.all(olderPending),
+      () => {
+        commits.push('old')
+      },
+      older.isCurrent
+    )
+
+    const newer = beginParkedCapturePass(generation)
+    const newerCapture = deferred<boolean>()
+    const newerPending: Promise<unknown>[] = []
+    enqueueParkedTerminalCapture(
+      newerCapture.promise,
+      () => {
+        capturedParked.add('wt-new')
+      },
+      newerPending,
+      newer.isCurrent
+    )
+    whenParkedCaptureSettles(
+      Promise.all(newerPending),
+      () => {
+        commits.push('new')
+      },
+      newer.isCurrent
+    )
+
+    newerCapture.resolve(true)
+    await vi.waitFor(() => expect(commits).toEqual(['new']))
+    olderCapture.resolve(true)
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(commits).toEqual(['new'])
+    expect(capturedParked).toEqual(new Set(['wt-new']))
   })
 })
