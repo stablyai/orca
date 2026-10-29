@@ -47,6 +47,7 @@ vi.mock('../markdown/MobileFileMarkdownPreview', () => ({
   MobileFileMarkdownPreview: 'MobileFileMarkdownPreview'
 }))
 vi.mock('../../components/MobileSourceCopyButton', () => ({ MobileSourceCopyButton: () => null }))
+vi.mock('../../markdown-text-scale/MarkdownTextSizeButton', () => ({ MarkdownTextSizeButton: () => null }))
 vi.mock('./MobileFilePreviewSourceText', () => ({ MobileFilePreviewSourceText: () => null }))
 // No shell client initially: the screen must settle on waiting.
 vi.mock('../../transport/connection/host-client-hooks', () => ({

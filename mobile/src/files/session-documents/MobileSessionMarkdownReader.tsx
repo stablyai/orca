@@ -1,6 +1,10 @@
 import { useState } from 'react'
 import { View, Text, Pressable, ActivityIndicator } from 'react-native'
 import { RefreshCw } from 'lucide-react-native'
+import { GestureHandlerRootView } from 'react-native-gesture-handler'
+import { useMarkdownTextScale } from '../../markdown-text-scale/use-markdown-text-scale'
+import { useMarkdownTextScalePinchGesture } from '../../markdown-text-scale/use-markdown-text-scale-pinch-gesture'
+import { MarkdownTextSizeButton } from '../../markdown-text-scale/MarkdownTextSizeButton'
 import { MobileRichMarkdownEditor } from '../../components/MobileRichMarkdownEditor'
 import { resolveMarkdownFloatingActionsBottom } from './markdown-floating-actions-layout'
 import { markdownReaderStatusText } from './mobile-markdown-reader-status'
@@ -40,6 +44,8 @@ export function MarkdownReader({
 }) {
   useMobileColorScheme()
   const t = useMobileTranslation()
+  const { textScale, setLiveScale, commitTextScale } = useMarkdownTextScale()
+  const pinchGesture = useMarkdownTextScalePinchGesture({ textScale, onLiveScale: setLiveScale, onCommit: commitTextScale, combineWithNativeScroll: false })
   // Native Keyboard events under-report the WebView editor's covered area, so prefer the larger WebView-measured inset.
   const [webviewKeyboardInset, setWebviewKeyboardInset] = useState(0)
   const effectiveKeyboardLift = Math.max(keyboardLift, webviewKeyboardInset)
@@ -71,11 +77,13 @@ export function MarkdownReader({
   })
 
   return (
-    <View style={styles.markdownEditor}>
+    <GestureHandlerRootView style={styles.markdownEditor}>
       <MobileRichMarkdownEditor
         key={documentId}
         content={doc.localContent}
         editable={doc.editable && !doc.saving}
+        textScale={textScale}
+        pinchGesture={pinchGesture}
         onChange={onChange}
         onKeyboardInsetChange={setWebviewKeyboardInset}
         loadImageSource={loadImageSource}
@@ -106,6 +114,7 @@ export function MarkdownReader({
             </Text>
           ) : null}
           <View style={styles.markdownFloatingActions}>
+            <MarkdownTextSizeButton textScale={textScale} onSelect={commitTextScale} style={[styles.markdownFloatingButton, styles.markdownKeyboardDismissButton]} />
             <Pressable
               style={({ pressed }) => [
                 styles.markdownFloatingButton,
@@ -182,6 +191,6 @@ export function MarkdownReader({
           </View>
         </View>
       )}
-    </View>
+    </GestureHandlerRootView>
   )
 }
