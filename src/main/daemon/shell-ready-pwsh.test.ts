@@ -143,8 +143,10 @@ describe('daemon shell-ready launch config for pwsh', () => {
           }
           if (!commandWritten && output.includes(SHELL_READY_MARKER_OUTPUT)) {
             commandWritten = true
-            // Why: mirror PostReadyFlushGate — flush shortly after the marker draw.
-            setTimeout(() => proc.write(`touch ${sentinel}\r`), 50)
+            // Why: the pwsh marker is a line-editor marker, so PostReadyFlushGate
+            // flushes the queue immediately — any settling delay here would let a
+            // startup-window regression pass.
+            proc.write(`touch ${sentinel}\r`)
           }
           if (commandWritten && existsSync(sentinel)) {
             settle()
