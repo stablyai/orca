@@ -21678,7 +21678,11 @@
       "chooseTransition": "Choose a status change:",
       "cancel": "Cancel",
       "noTransition": "No status change to {{column}} is available for {{key}}.",
-      "queryTooLong": "The Jira query is too long. Shorten the query or clear filters."
+      "queryTooLong": "The Jira query is too long. Shorten the query or clear filters.",
+      "laneActions": "Lane actions for {{column}}",
+      "moveLaneLeft": "Move lane left",
+      "moveLaneRight": "Move lane right",
+      "resetLaneOrder": "Reset lane order"
     },
     "favourites": {
       "loadFailed": "Could not load Jira favourites.",

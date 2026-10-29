@@ -21679,7 +21679,11 @@
       "chooseTransition": "Escolha uma alteração de status:",
       "cancel": "Cancelar",
       "noTransition": "Nenhuma alteração de status para {{column}} está disponível para {{key}}.",
-      "queryTooLong": "A consulta do Jira é muito longa. Encurte a consulta ou limpe os filtros."
+      "queryTooLong": "A consulta do Jira é muito longa. Encurte a consulta ou limpe os filtros.",
+      "laneActions": "Ações da coluna {{column}}",
+      "moveLaneLeft": "Mover coluna para a esquerda",
+      "moveLaneRight": "Mover coluna para a direita",
+      "resetLaneOrder": "Redefinir ordem das colunas"
     },
     "favourites": {
       "loadFailed": "Não foi possível carregar os favoritos do Jira.",

@@ -21925,7 +21925,11 @@
       "chooseTransition": "Elige un cambio de estado:",
       "cancel": "Cancelar",
       "noTransition": "No hay ningún cambio de estado a {{column}} disponible para {{key}}.",
-      "queryTooLong": "La consulta de Jira es demasiado larga. Acorta la consulta o borra los filtros."
+      "queryTooLong": "La consulta de Jira es demasiado larga. Acorta la consulta o borra los filtros.",
+      "laneActions": "Acciones del carril {{column}}",
+      "moveLaneLeft": "Mover carril a la izquierda",
+      "moveLaneRight": "Mover carril a la derecha",
+      "resetLaneOrder": "Restablecer orden de carriles"
     },
     "favourites": {
       "activeLabel": "Favoritos de Jira: {{name}}",

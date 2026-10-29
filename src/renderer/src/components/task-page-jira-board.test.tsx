@@ -53,13 +53,13 @@ describe('TaskPageJiraBoard', () => {
     )
   }
 
-  it('renders one column per status with its issues as draggable cards', () => {
+  it('renders one draggable column per status with its issues as draggable cards', () => {
     const markup = renderBoard([issue('STA-1', todo), issue('STA-2', done), issue('STA-3', todo)])
     expect(markup).toContain('To Do')
     expect(markup).toContain('Done')
     expect(markup).toContain('Title for STA-1')
     expect(markup).toContain('Title for STA-3')
-    expect((markup.match(/draggable="true"/g) ?? []).length).toBe(3)
+    expect((markup.match(/draggable="true"/g) ?? []).length).toBe(5)
   })
 
   it('lays lanes out on one horizontally scrollable row', () => {

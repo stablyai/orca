@@ -21193,7 +21193,11 @@
       "chooseTransition": "选择状态更改：",
       "cancel": "取消",
       "noTransition": "{{key}} 没有可转到 {{column}} 的状态更改。",
-      "queryTooLong": "Jira 查询过长。请缩短查询或清除筛选条件。"
+      "queryTooLong": "Jira 查询过长。请缩短查询或清除筛选条件。",
+      "laneActions": "{{column}} 泳道操作",
+      "moveLaneLeft": "向左移动泳道",
+      "moveLaneRight": "向右移动泳道",
+      "resetLaneOrder": "重置泳道顺序"
     },
     "favourites": {
       "activeLabel": "Jira 收藏夹：{{name}}",

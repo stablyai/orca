@@ -21192,7 +21192,11 @@
       "chooseTransition": "ステータス変更を選択:",
       "cancel": "キャンセル",
       "noTransition": "{{key}} では {{column}} へのステータス変更を利用できません。",
-      "queryTooLong": "Jira クエリが長すぎます。クエリを短くするか、フィルターをクリアしてください。"
+      "queryTooLong": "Jira クエリが長すぎます。クエリを短くするか、フィルターをクリアしてください。",
+      "laneActions": "{{column}} のレーン操作",
+      "moveLaneLeft": "レーンを左へ移動",
+      "moveLaneRight": "レーンを右へ移動",
+      "resetLaneOrder": "レーンの順序をリセット"
     },
     "favourites": {
       "activeLabel": "Jira のお気に入り: {{name}}",

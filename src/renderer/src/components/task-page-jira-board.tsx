@@ -5,7 +5,6 @@ import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
-import { Badge } from '@/components/ui/badge'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -22,6 +21,14 @@ import {
   buildJiraBoardSections,
   type TaskPageJiraBoardSection
 } from './task-page-jira-board-sections'
+import {
+  loadJiraBoardLaneOrder,
+  moveJiraBoardLane,
+  saveJiraBoardLaneOrder
+} from './task-page-jira-board-lane-order'
+import { TaskPageJiraBoardLaneHeader } from './task-page-jira-board-lane-header'
+
+const LANE_DRAG_TYPE = 'application/x-orca-jira-board-lane'
 
 export function jiraBoardIssueRefKey(issue: Pick<JiraIssue, 'key' | 'siteId'>): string {
   return `${issue.siteId ?? 'site'}:${issue.key}`
@@ -69,10 +76,45 @@ export function TaskPageJiraBoard({
 }: TaskPageJiraBoardProps): React.JSX.Element {
   const [draggingIssueRefKey, setDraggingIssueRefKey] = useState<string | null>(null)
   const [dragOverSectionKey, setDragOverSectionKey] = useState<string | null>(null)
+  const [draggingLaneKey, setDraggingLaneKey] = useState<string | null>(null)
+  const [laneOrder, setLaneOrder] = useState(loadJiraBoardLaneOrder)
   const sections = useMemo(
-    () => buildJiraBoardSections(issues, statusOrder, statusDirection),
-    [issues, statusDirection, statusOrder]
+    () => buildJiraBoardSections(issues, statusOrder, statusDirection, laneOrder),
+    [issues, laneOrder, statusDirection, statusOrder]
   )
+
+  const updateLaneOrder = (order: string[]): void => {
+    setLaneOrder(order)
+    saveJiraBoardLaneOrder(order)
+  }
+
+  const moveLane = (fromIndex: number, toIndex: number): void => {
+    if (fromIndex === toIndex || Math.min(fromIndex, toIndex) < 0 || toIndex >= sections.length) {
+      return
+    }
+    const labels = sections.map((section) => section.label)
+    // The saved order is ascending; a descending board shows it mirrored.
+    const last = labels.length - 1
+    updateLaneOrder(
+      statusDirection === 'desc'
+        ? moveJiraBoardLane(labels.toReversed(), last - fromIndex, last - toIndex, laneOrder)
+        : moveJiraBoardLane(labels, fromIndex, toIndex, laneOrder)
+    )
+  }
+
+  const handleLaneDragStart = (
+    section: TaskPageJiraBoardSection,
+    event: React.DragEvent<HTMLDivElement>
+  ): void => {
+    event.dataTransfer.effectAllowed = 'move'
+    event.dataTransfer.setData(LANE_DRAG_TYPE, section.key)
+    setDraggingLaneKey(section.key)
+  }
+
+  const endLaneDrag = (): void => {
+    setDraggingLaneKey(null)
+    setDragOverSectionKey(null)
+  }
 
   const handleCardDragStart = (issue: JiraIssue, event: React.DragEvent<HTMLDivElement>): void => {
     if (updatingIssueKeys.has(jiraBoardIssueRefKey(issue))) {
@@ -92,7 +134,7 @@ export function TaskPageJiraBoard({
     section: TaskPageJiraBoardSection,
     event: React.DragEvent<HTMLElement>
   ): void => {
-    if (!draggingIssueRefKey) {
+    if (!draggingIssueRefKey && !draggingLaneKey) {
       return
     }
     event.preventDefault()
@@ -107,6 +149,15 @@ export function TaskPageJiraBoard({
     event.preventDefault()
     event.stopPropagation()
     setDragOverSectionKey(null)
+
+    if (draggingLaneKey) {
+      setDraggingLaneKey(null)
+      moveLane(
+        sections.findIndex((item) => item.key === draggingLaneKey),
+        sections.findIndex((item) => item.key === section.key)
+      )
+      return
+    }
 
     const payload = readJiraBoardIssueDragData(event.dataTransfer)
     const issue =
@@ -131,7 +182,7 @@ export function TaskPageJiraBoard({
 
   return (
     <div className="flex min-w-0 items-start gap-3 overflow-x-auto p-3 scrollbar-sleek">
-      {sections.map((section) => {
+      {sections.map((section, sectionIndex) => {
         return (
           <section
             key={section.key}
@@ -139,15 +190,22 @@ export function TaskPageJiraBoard({
             onDrop={(event) => handleSectionDrop(section, event)}
             className={cn(
               'w-72 shrink-0 rounded-md border border-border/50 bg-muted/20 transition-[border-color,box-shadow]',
-              dragOverSectionKey === section.key && 'border-ring/70 ring-1 ring-ring/70'
+              dragOverSectionKey === section.key && 'border-ring/70 ring-1 ring-ring/70',
+              draggingLaneKey === section.key && 'opacity-50'
             )}
           >
-            <div className="flex h-9 items-center justify-between border-b border-border/50 px-3">
-              <Badge variant="secondary">
-                <span className="truncate">{section.label || '—'}</span>
-              </Badge>
-              <span className="text-2xs text-muted-foreground">{section.issues.length}</span>
-            </div>
+            <TaskPageJiraBoardLaneHeader
+              label={section.label}
+              issueCount={section.issues.length}
+              canMoveLeft={sectionIndex > 0}
+              canMoveRight={sectionIndex < sections.length - 1}
+              canReset={laneOrder.length > 0}
+              onDragStart={(event) => handleLaneDragStart(section, event)}
+              onDragEnd={endLaneDrag}
+              onMoveLeft={() => moveLane(sectionIndex, sectionIndex - 1)}
+              onMoveRight={() => moveLane(sectionIndex, sectionIndex + 1)}
+              onReset={() => updateLaneOrder([])}
+            />
             <div className="min-h-16 space-y-2 p-2">
               {section.issues.length === 0 ? (
                 <div className="flex h-12 items-center justify-center rounded-md border border-dashed border-border/50 text-2xs text-muted-foreground">

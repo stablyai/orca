@@ -21192,7 +21192,11 @@
       "chooseTransition": "상태 변경을 선택하세요:",
       "cancel": "취소",
       "noTransition": "{{key}}에 대해 {{column}}(으)로 가는 상태 변경을 사용할 수 없습니다.",
-      "queryTooLong": "Jira 쿼리가 너무 깁니다. 쿼리를 줄이거나 필터를 지우세요."
+      "queryTooLong": "Jira 쿼리가 너무 깁니다. 쿼리를 줄이거나 필터를 지우세요.",
+      "laneActions": "{{column}} 레인 작업",
+      "moveLaneLeft": "레인을 왼쪽으로 이동",
+      "moveLaneRight": "레인을 오른쪽으로 이동",
+      "resetLaneOrder": "레인 순서 초기화"
     },
     "favourites": {
       "activeLabel": "Jira 즐겨찾기: {{name}}",

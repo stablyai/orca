@@ -21858,7 +21858,11 @@
       "chooseTransition": "Choisissez un changement de statut :",
       "cancel": "Annuler",
       "noTransition": "Aucun changement de statut vers {{column}} n'est disponible pour {{key}}.",
-      "queryTooLong": "La requête Jira est trop longue. Raccourcissez la requête ou effacez les filtres."
+      "queryTooLong": "La requête Jira est trop longue. Raccourcissez la requête ou effacez les filtres.",
+      "laneActions": "Actions de la colonne {{column}}",
+      "moveLaneLeft": "Déplacer la colonne à gauche",
+      "moveLaneRight": "Déplacer la colonne à droite",
+      "resetLaneOrder": "Réinitialiser l’ordre des colonnes"
     },
     "favourites": {
       "activeLabel": "Favoris Jira : {{name}}",

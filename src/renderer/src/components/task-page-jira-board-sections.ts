@@ -1,5 +1,6 @@
 import type { JiraIssue, JiraProjectStatusOrder } from '../../../shared/jira/jira-types'
 import { groupJiraIssuesByStatus } from './task-page-jira-issue-list'
+import { applyJiraBoardLaneOrder } from './task-page-jira-board-lane-order'
 
 export type TaskPageJiraBoardSection = {
   key: string
@@ -13,11 +14,20 @@ export type TaskPageJiraBoardSection = {
 export function buildJiraBoardSections(
   issues: readonly JiraIssue[],
   statusOrder: JiraProjectStatusOrder | null,
-  statusDirection: 'asc' | 'desc' = 'asc'
+  statusDirection: 'asc' | 'desc' = 'asc',
+  laneOrder: readonly string[] = []
+): TaskPageJiraBoardSection[] {
+  const ordered = applyJiraBoardLaneOrder(buildDefaultSections(issues, statusOrder), laneOrder)
+  return statusDirection === 'desc' ? ordered.toReversed() : ordered
+}
+
+function buildDefaultSections(
+  issues: readonly JiraIssue[],
+  statusOrder: JiraProjectStatusOrder | null
 ): TaskPageJiraBoardSection[] {
   const columns = statusOrder?.columns ?? []
   if (columns.length === 0) {
-    return groupJiraIssuesByStatus(issues, statusOrder, statusDirection).map((section) => ({
+    return groupJiraIssuesByStatus(issues, statusOrder).map((section) => ({
       key: section.key,
       label: section.label,
       statusIds: [...new Set(section.issues.map((issue) => issue.status.id))],
@@ -67,9 +77,5 @@ export function buildJiraBoardSections(
     }
   }
 
-  const ordered = [
-    ...sections,
-    ...[...extras.values()].sort((a, b) => a.label.localeCompare(b.label))
-  ]
-  return statusDirection === 'desc' ? ordered.toReversed() : ordered
+  return [...sections, ...[...extras.values()].sort((a, b) => a.label.localeCompare(b.label))]
 }
