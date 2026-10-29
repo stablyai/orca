@@ -9,7 +9,7 @@ import {
   orchestrationMigrationData
 } from '../../shared/orchestration-rpc-contract'
 import type { PairedRuntimeConnection } from '../../shared/paired-runtime-connection'
-import { launchOrcaApp } from './launch'
+import { launchOrcaApp, type LaunchOrcaAppOptions } from './launch'
 import { getDefaultUserDataPath, readMetadata } from './metadata'
 import { getCliStatus, projectRemoteAppStatus } from './status'
 import { sendRequest } from './transport'
@@ -276,7 +276,10 @@ export class RuntimeClient {
     }
   }
 
-  async openOrca(timeoutMs = 15_000): Promise<RuntimeRpcSuccess<CliStatusResult>> {
+  async openOrca(
+    timeoutMs = 15_000,
+    options?: LaunchOrcaAppOptions
+  ): Promise<RuntimeRpcSuccess<CliStatusResult>> {
     const initial = await this.getCliStatus()
     if (this.remote) {
       return initial
@@ -286,7 +289,7 @@ export class RuntimeClient {
     if (initial.result.app.desktopWindowStatus === 'blocked') {
       throwDesktopActivationBlocked()
     }
-    launchOrcaApp()
+    launchOrcaApp(options)
     if (initial.result.app.desktopWindowStatus === 'available') {
       return initial
     }

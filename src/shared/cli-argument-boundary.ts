@@ -14,6 +14,7 @@ export const CLI_BOOLEAN_FLAGS = new Set([
   'current-json',
   'current-sqlite',
   'debug',
+  'disable-gpu',
   'dry-run',
   'enter',
   'focus',
