@@ -3,6 +3,7 @@ import {
   isPageStorageKeyForRoute,
   PAGE_STORAGE_MAX_VALUE_CHARS
 } from '../page-storage-keys'
+import { notifyMirroredKey } from '../../storage/mirrored-key-listeners'
 
 // Use init-primed native storage, not page localStorage (disabled on Android and session-scoped on iOS).
 // Keep reads synchronous behind AsyncStorage’s async API for first-render timing; writes update cache/post without waiting, and later init repairs dropped writes.
@@ -38,6 +39,23 @@ let hostId = ''
 let routePathname = ''
 // Host-area pages read workspace-scoped keys on demand and may write them across this host’s workspaces.
 let readWorkspaceKey: ((key: string) => Promise<string | null>) | null = null
+
+export function acceptPageStorageUpdate(key: string, value: string | null): void {
+  if (
+    !isPageStorageKeyForRoute(key, hostId, routePathname, readWorkspaceKey !== null) ||
+    oversizeKeys.has(key) ||
+    (value !== null && value.length > PAGE_STORAGE_MAX_VALUE_CHARS) ||
+    (values.get(key) ?? null) === value
+  ) {
+    return
+  }
+  if (value === null) {
+    values.delete(key)
+  } else {
+    values.set(key, value)
+  }
+  notifyMirroredKey(key, value)
+}
 
 export function publishPageStorage(
   entries: Readonly<Record<string, string>>,

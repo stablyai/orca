@@ -35,6 +35,7 @@ export type BridgeHost = {
   publishKeyboardInset: (next: number) => void
   publishColorScheme: (next: BridgeColorScheme) => void
   publishUiLocale: (next: BridgeUiLocale) => void
+  publishStorage: (key: string, value: string | null) => void
   // False leaves Back to native navigation, including pages predating this frame.
   sendBack: () => boolean
   // Transfer the session’s Back state on client-driven host rebuild; the mounted page never reclaims it. Ending sessions simply discard it.
@@ -281,6 +282,11 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
     },
     publishRoute: (next) => {
       routes.publish(next, serving && initSent)
+    },
+    publishStorage: (key, value) => {
+      if (deliverable()) {
+        send({ v: BRIDGE_PROTOCOL_VERSION, type: 'storage', key, value })
+      }
     },
     publishSafeAreaInsets: (next) => {
       routes.publishSafeAreaInsets(next, deliverable())

@@ -94,7 +94,7 @@ export async function saveTerminalTextScale(scale: number): Promise<void> {
   await persistMirrored(TEXT_SCALE_KEY, value)
 }
 
-const MARKDOWN_TEXT_SCALE_KEY = 'orca:markdownTextScale'
+export const MARKDOWN_TEXT_SCALE_KEY = 'orca:markdownTextScale'
 
 export async function loadMarkdownTextScale(): Promise<number> {
   try {

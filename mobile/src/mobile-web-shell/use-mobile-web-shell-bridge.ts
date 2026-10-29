@@ -12,6 +12,7 @@ import type { BridgeClearableRouteParam } from './bridge/bridge-route-update'
 import type { BridgeSafeAreaInsets } from './bridge/bridge-safe-area-insets'
 import type { BridgeHapticsKind } from './bridge/bridge-haptics-notify'
 import { createBridgeHost, type BridgeHost } from './bridge-host'
+import { subscribePageStorage } from './bridge-host-storage-subscription'
 import type { BridgeSessionBack } from './bridge-host-back'
 import type { BridgeNavigateBackOutcome } from './bridge-host-contract'
 import type { BridgeNativeVerb } from './bridge/bridge-native-verbs'
@@ -173,6 +174,18 @@ export function useMobileWebShellBridge(args: MobileWebShellBridgeArgs): MobileW
       host.dispose()
     }
   }, [buildId, client, sessionId, snapshot])
+
+  const pageVersion = ready?.pageVersion
+  const routePathname = args.route.pathname
+  useLayoutEffect(() => {
+    const mounted = hostRef.current
+    if (mounted === null || mounted.sessionId !== sessionId) {
+      return
+    }
+    return subscribePageStorage(args.hostId, routePathname, pageVersion, (key, value) => {
+      mounted.host.publishStorage(key, value)
+    })
+  }, [args.hostId, buildId, client, pageVersion, routePathname, sessionId, snapshot])
 
   // A rebuilt host already starts from the latest scheme; this re-sends init when it changes under a live page.
   const colorScheme = args.colorScheme
