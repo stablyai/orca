@@ -15,8 +15,24 @@ import {
   PairingGetEndpointsParamsSchema,
   PairingProvisionRelayParamsSchema
 } from '../../../../shared/mobile-relay-credential-contract'
+import {
+  PAIRING_CREATE_OFFER_METHOD,
+  PairingCreateOfferParamsSchema
+} from '../../../../shared/pairing-create-offer-contract'
 
 export const PAIRING_METHODS = [
+  defineMethod({
+    name: PAIRING_CREATE_OFFER_METHOD,
+    // Only this host's owner CLI gets the context; paired clients and phones never hold pairing-admin.
+    permission: 'pairing-admin',
+    params: PairingCreateOfferParamsSchema,
+    handler: async (params, ctx) => {
+      if (!ctx.pairingOffers) {
+        throw new Error('pairing_context_unavailable')
+      }
+      return await ctx.pairingOffers.create(params)
+    }
+  }),
   defineMethod({
     name: 'pairing.getEndpoints',
     permission: 'pairing-admin',

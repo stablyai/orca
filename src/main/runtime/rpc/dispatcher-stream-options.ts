@@ -19,6 +19,7 @@ export type RpcDispatchStreamingOptions = Pick<
   | 'capabilitySource'
   | 'updateClientCapabilities'
   | 'pairing'
+  | 'pairingOffers'
   | 'deviceSelf'
   | 'mobileRelayHosts'
   | 'peerDesktops'
@@ -68,6 +69,7 @@ export function rpcContextFromTransport(
     updateClientCapabilities: options?.updateClientCapabilities,
     authenticatedCallerFingerprint: options?.authenticatedCallerFingerprint,
     pairing: options?.pairing,
+    pairingOffers: options?.pairingOffers,
     deviceSelf: options?.deviceSelf,
     mobileRelayHosts: options?.mobileRelayHosts,
     peerDesktops: options?.peerDesktops,

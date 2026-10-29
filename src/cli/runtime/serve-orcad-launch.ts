@@ -5,6 +5,7 @@ import type { ProcessSpec } from '@orca/process-host/process-spec'
 import {
   ORCAD_LOCAL_SERVE_SELECTION_ENTRY,
   ORCAD_LOCAL_SERVE_SELECTION_FLAGS as FLAGS,
+  SERVE_RUNTIME_ENV,
   parseServeRuntimeSelection,
   type ServeRuntimeSelection
 } from '../../shared/orcad-local-serve-selection'
@@ -24,11 +25,13 @@ export async function resolveLocalServeRuntime(
     appRoot: string
     userDataPath: string
     usesMacUpdateHandoff: boolean
+    env?: NodeJS.ProcessEnv
   },
   run: typeof runProcess = runProcess
 ): Promise<ServeRuntimeSelection> {
-  // orcad has no updater; keep Electron for packaged macOS update handoffs.
-  if (options.usesMacUpdateHandoff) {
+  // orcad has no updater; keep Electron for packaged macOS update handoffs unless orcad is asked for,
+  // e.g. over SSH with no desktop login, where Electron cannot start.
+  if (options.usesMacUpdateHandoff && (options.env ?? process.env)[SERVE_RUNTIME_ENV] !== 'orcad') {
     return {
       kind: 'electron',
       reason:
