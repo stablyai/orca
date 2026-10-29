@@ -405,6 +405,12 @@ export type GlobalSettings = GlobalSettingsBase & {
   tabAutoGenerateTitle: boolean
   /** Why: pinned tabs can still be closed via keyboard/native-menu; this gates that behind a confirmation. Defaults on. */
   confirmClosePinnedTab: boolean
+  /**
+   * Prefer `http` or `https` for forge web UI links when the git remote uses ssh/git.
+   * Keyed by hostname (lowercase; port optional). Empty = default https.
+   * Why: ssh remotes carry no web-scheme; http-only self-hosted GitLab/Gitea need an override.
+   */
+  gitHostWebSchemes: Record<string, 'http' | 'https'>
   /** Why: preview tabs reuse one slot per group, so browsing replaces the open file; off makes every open its own tab. Defaults on. */
   editorPreviewTabsEnabled: boolean
   /** When true, Orca requests local awake assertions while hook-reported agents are working. */

@@ -7,6 +7,7 @@ let mockStateIndex = 0
 
 const baseSettings: GlobalSettings = {
   theme: 'system',
+  gitHostWebSchemes: {},
   terminalFontFamily: 'Menlo',
   terminalFontSize: 12,
   terminalFontWeight: 400,

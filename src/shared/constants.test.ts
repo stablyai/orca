@@ -16,6 +16,10 @@ describe('getDefaultSettings', () => {
   it('asks before closing terminals with running processes by default', () => {
     expect(getDefaultSettings('/tmp').skipCloseTerminalWithRunningProcessConfirm).toBe(false)
   })
+
+  it('defaults git host web schemes empty so ssh remotes keep https until overridden', () => {
+    expect(getDefaultSettings('/tmp').gitHostWebSchemes).toEqual({})
+  })
 })
 
 describe('getDefaultPrimarySelectionMiddleClickPaste', () => {
