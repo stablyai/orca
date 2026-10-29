@@ -219,6 +219,8 @@ export function buildDefaultSettings(args: {
     visibleTaskProvidersDefaultedForJira: true,
     defaultRepoSelection: null,
     defaultLinearTeamSelection: null,
+    azureDevOpsTeamSelection: null,
+    azureDevOpsBacklogColumnWidths: null,
     opencodeSessionCookie: '',
     opencodeWorkspaceId: '',
     minimaxGroupId: '',

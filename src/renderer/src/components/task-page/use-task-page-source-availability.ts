@@ -1,4 +1,5 @@
-import type { TaskPageRuntimeHostsModel } from './use-task-page-runtime-hosts'
+import type { TaskPageAzureDevOpsStateModel } from '../use-task-page-azure-devops-state'
+import { isRepoBackedTaskProvider } from '../../../../shared/task-providers'
 import { useCallback, useMemo } from 'react'
 import { getJiraAccountLabel } from '@/lib/jira-account-label'
 import type { Repo } from '../../../../shared/repo-types'
@@ -18,7 +19,7 @@ import { useTaskPageSourceSummary } from './use-task-page-source-summary'
 export type TaskPageSourceAvailabilityPreludeModel = ReturnType<
   typeof useTaskPageSourceAvailabilityPrelude
 >
-export function useTaskPageSourceAvailabilityPrelude(model: TaskPageRuntimeHostsModel) {
+export function useTaskPageSourceAvailabilityPrelude(model: TaskPageAzureDevOpsStateModel) {
   const {
     settings,
     preflightStatus,
@@ -47,15 +48,20 @@ export function useTaskPageSourceAvailabilityPrelude(model: TaskPageRuntimeHosts
     [hostRegistryById, taskSource]
   )
   const taskSourceHostAvailability = useMemo<TaskSourceHostAvailability[]>(() => {
-    if (taskSource !== 'github' && taskSource !== 'gitlab') {
+    if (!isRepoBackedTaskProvider(taskSource)) {
       return []
     }
+    const hostAvailability = taskSourceRepoContexts.flatMap((context) => {
+      const host = hostRegistryById.get(context.hostId)
+      const availability = getTaskSourceHostAvailabilityForHost(host, context.hostId)
+      return availability ? [availability] : []
+    })
+    // Why: Azure DevOps talks HTTP from the main process; there is no CLI tool to preflight.
+    if (taskSource === 'azure-devops') {
+      return hostAvailability
+    }
     return [
-      ...taskSourceRepoContexts.flatMap((context) => {
-        const host = hostRegistryById.get(context.hostId)
-        const availability = getTaskSourceHostAvailabilityForHost(host, context.hostId)
-        return availability ? [availability] : []
-      }),
+      ...hostAvailability,
       ...getRepoBackedProviderAvailability({
         provider: taskSource,
         contexts: taskSourceRepoContexts,
@@ -172,7 +178,7 @@ export function useTaskPageSourceAvailabilityPrelude(model: TaskPageRuntimeHosts
   nextModel.accountBackedTaskSourceHostAvailability = accountBackedTaskSourceHostAvailability
   return nextModel
 }
-export function useTaskPageSourceAvailability(model: TaskPageRuntimeHostsModel) {
+export function useTaskPageSourceAvailability(model: TaskPageAzureDevOpsStateModel) {
   const preludeModel = useTaskPageSourceAvailabilityPrelude(model)
   return useTaskPageSourceSummary(preludeModel)
 }

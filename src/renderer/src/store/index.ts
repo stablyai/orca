@@ -15,6 +15,7 @@ import { createHostedReviewSlice } from './slices/hosted-review'
 import { createLinearSlice } from './slices/linear'
 import { createPreflightSlice } from './slices/preflight'
 import { createJiraSlice } from './slices/jira'
+import { createAzureDevOpsBoardsSlice } from './slices/azure-devops-boards'
 import { createEditorSlice } from './slices/editor'
 import { createStatsSlice } from './slices/stats'
 import { createMemorySlice } from './slices/memory'
@@ -108,6 +109,7 @@ export const useAppStore = create<AppState>()(
           ...createLinearSlice(...a),
           ...createPreflightSlice(...a),
           ...createJiraSlice(...a),
+          ...createAzureDevOpsBoardsSlice(...a),
           ...createEditorSlice(...a),
           ...createStatsSlice(...a),
           ...createMemorySlice(...a),

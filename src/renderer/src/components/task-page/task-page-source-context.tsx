@@ -4,6 +4,8 @@ import type {
 } from '@/components/task-page/task-page-localized-options'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 import type { GitLabProjectRef, GitLabWorkItem } from '../../../../shared/gitlab-types'
+import type { AzureDevOpsWorkItem } from '../../../../shared/azure-devops/boards-types'
+import type { AzureDevOpsTaskProviderIdentity } from '../../../../shared/task-provider-identity'
 import type { JiraIssue } from '../../../../shared/jira/jira-types'
 import type { Repo } from '../../../../shared/repo-types'
 import { getLinkedWorkItemWorkspaceName, getLinkedWorkItemSuggestedName } from '@/lib/new-workspace'
@@ -74,10 +76,22 @@ export function getJiraIssueWorkspaceSeed(issue: JiraIssue): string {
     )?.seedName ?? getLinkedWorkItemSuggestedName(issue)
   )
 }
+export function getAzureDevOpsWorkItemWorkspaceSeed(item: AzureDevOpsWorkItem): string {
+  return (
+    getLinkedWorkItemWorkspaceName({
+      type: 'issue',
+      provider: 'azure-devops',
+      number: item.id,
+      title: item.title,
+      azureDevOpsIdentifier: String(item.id)
+    })?.seedName ?? getLinkedWorkItemSuggestedName(item)
+  )
+}
 export function getTaskPageRepoSourceContext(
   repo: Repo | null | undefined,
-  provider: 'github' | 'gitlab',
-  gitlabProjectRef?: GitLabProjectRef | null
+  provider: 'github' | 'gitlab' | 'azure-devops',
+  gitlabProjectRef?: GitLabProjectRef | null,
+  azureDevOpsIdentity?: AzureDevOpsTaskProviderIdentity | null
 ): TaskSourceContext | null {
   if (!repo) {
     return null
@@ -90,7 +104,9 @@ export function getTaskPageRepoSourceContext(
       ? project.providerIdentity
       : provider === 'gitlab' && gitlabProjectRef
         ? buildGitLabProviderIdentity(gitlabProjectRef)
-        : null
+        : provider === 'azure-devops'
+          ? (azureDevOpsIdentity ?? null)
+          : null
   return normalizeTaskSourceContext({
     provider,
     projectId: setup?.projectId ?? project?.id ?? repo.id,

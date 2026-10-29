@@ -125,6 +125,46 @@ describe('automation RPC methods', () => {
     expect(runtime.listAutomationRunsPage).toHaveBeenCalledWith('auto-1', undefined, 100, undefined)
   })
 
+  it('accepts an azure-devops source context', async () => {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: automation.create reads only getRuntimeId and createAutomation off the runtime.
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      createAutomation: vi.fn().mockResolvedValue({ id: 'auto-3', name: 'ADO review' })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: AUTOMATION_METHODS })
+
+    await expect(
+      dispatcher.dispatch(
+        makeRequest('automation.create', {
+          name: 'ADO review',
+          prompt: 'Review changes',
+          agentId: 'codex',
+          sourceContext: {
+            kind: 'task-source',
+            provider: 'azure-devops',
+            projectId: 'azure-devops:org/project',
+            hostId: 'local',
+            providerIdentity: {
+              provider: 'azure-devops',
+              organization: 'org',
+              project: 'project',
+              teamId: 'team-1',
+              teamName: 'Team'
+            }
+          },
+          repo: 'repo-1',
+          rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+          dtstart: 1
+        })
+      )
+    ).resolves.toMatchObject({ ok: true })
+    expect(runtime.createAutomation).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sourceContext: expect.objectContaining({ provider: 'azure-devops' })
+      })
+    )
+  })
+
   it('rejects unknown providers and invalid schedules', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',

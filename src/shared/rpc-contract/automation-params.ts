@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { isTuiAgent } from '../tui-agent-config'
+import { TaskProviderParam } from './client-settings-params'
 import {
   OptionalBoolean,
   OptionalPlainString,
@@ -98,6 +99,15 @@ export const TaskProviderIdentity = z
         siteUrl: z.string().nullable().optional(),
         projectKey: z.string().nullable().optional()
       })
+      .passthrough(),
+    z
+      .object({
+        provider: z.literal('azure-devops'),
+        organization: z.string().nullable().optional(),
+        project: z.string().nullable().optional(),
+        teamId: z.string().nullable().optional(),
+        teamName: z.string().nullable().optional()
+      })
       .passthrough()
   ])
   .optional()
@@ -106,7 +116,7 @@ export const TaskProviderIdentity = z
 export const TaskSourceContext = z
   .object({
     kind: z.literal('task-source'),
-    provider: z.enum(['github', 'gitlab', 'linear', 'jira']),
+    provider: TaskProviderParam,
     projectId: requiredString('Missing source project id'),
     hostId: ExecutionHostId,
     projectHostSetupId: OptionalNullablePlainString,

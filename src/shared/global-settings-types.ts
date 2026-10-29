@@ -358,6 +358,10 @@ export type GlobalSettings = GlobalSettingsBase & {
   defaultRepoSelection: string[] | null
   /** Linear team selection: null includes all; arrays freeze selected team IDs, matching defaultRepoSelection. */
   defaultLinearTeamSelection: string[] | null
+  /** Azure DevOps team per project, keyed by `"<organization>/<project>"`; null = project default team. */
+  azureDevOpsTeamSelection: Record<string, string> | null
+  /** Local backlog column width overrides (px) keyed by `"<org>/<project>::<team>::<level>"`, then by field reference name. */
+  azureDevOpsBacklogColumnWidths: Record<string, Record<string, number>> | null
   /** Session cookie for OpenCode Go rate-limit fetching. Stored encrypted. */
   opencodeSessionCookie: string
   /** Optional OpenCode Go workspace ID override; when set, skips the workspaces lookup and fetches usage directly. */

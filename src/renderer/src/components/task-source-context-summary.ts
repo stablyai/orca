@@ -3,7 +3,6 @@ import { getExecutionHostLabel } from '../../../shared/execution-host'
 import type { ExecutionHostScope } from '../../../shared/execution-host'
 import type { ExecutionHostHealth } from '../../../shared/execution-host-registry'
 import type { SshConnectionStatus } from '../../../shared/ssh-types'
-import type { TaskProvider } from '../../../shared/task-providers'
 import type { TaskProviderIdentity, TaskSourceContext } from '../../../shared/task-source-context'
 import {
   accountTitlePart,
@@ -40,43 +39,13 @@ export type TaskSourceHostAvailability = {
     | 'unsupported-provider'
 }
 
-type HostLabelLookup = ReadonlyMap<string, string> | undefined
+export type HostLabelLookup = ReadonlyMap<string, string> | undefined
 
 function getHostLabel(hostId: ExecutionHostScope, hostLabelById: HostLabelLookup): string {
   return hostLabelById?.get(hostId) ?? getExecutionHostLabel(hostId)
 }
 
-export function getTaskSourceContextSummary(args: {
-  provider: TaskProvider
-  providerLabel: string
-  repoContexts?: readonly TaskSourceContext[]
-  hostAvailability?: readonly TaskSourceHostAvailability[]
-  hostLabelById?: HostLabelLookup
-  accountHostId?: ExecutionHostScope | null
-  selectedRepoCount?: number
-  linearWorkspaceName?: string | null
-  jiraSiteName?: string | null
-}): TaskSourceContextSummary {
-  switch (args.provider) {
-    case 'github':
-    case 'gitlab':
-      return getRepoBackedTaskSourceSummary(args)
-    case 'linear':
-      return getAccountBackedTaskSourceSummary(args.providerLabel, {
-        accountLabel: args.linearWorkspaceName,
-        accountHostId: args.accountHostId,
-        hostLabelById: args.hostLabelById,
-        hostAvailability: args.hostAvailability
-      })
-    case 'jira':
-      return getAccountBackedTaskSourceSummary(args.providerLabel, {
-        accountLabel: args.jiraSiteName,
-        accountHostId: args.accountHostId,
-        hostLabelById: args.hostLabelById,
-        hostAvailability: args.hostAvailability
-      })
-  }
-}
+export { getTaskSourceContextSummary } from './task-source-context-summary-by-provider'
 
 export function getTaskSourceAvailabilityNotice(args: {
   providerLabel: string
@@ -116,7 +85,7 @@ export function getTaskSourceAvailabilityNotice(args: {
   }
 }
 
-function getRepoBackedTaskSourceSummary(args: {
+export function getRepoBackedTaskSourceSummary(args: {
   providerLabel: string
   repoContexts?: readonly TaskSourceContext[]
   hostAvailability?: readonly TaskSourceHostAvailability[]
@@ -219,6 +188,10 @@ function getProviderIdentityLabel(
       return identity.workspaceName ?? identity.workspaceId ?? null
     case 'jira':
       return identity.siteUrl ?? identity.siteId ?? null
+    case 'azure-devops':
+      return identity.organization && identity.project
+        ? `${identity.organization}/${identity.project}`
+        : null
   }
 }
 

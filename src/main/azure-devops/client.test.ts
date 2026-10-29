@@ -6,13 +6,19 @@ import {
   getAzureDevOpsPullRequestForBranchOrThrow
 } from './client'
 import { _resetAzureDevOpsPreviewApiVersionCache } from './azure-devops-api-request'
+import { _resetAzCliAccessTokenCacheForTests } from './az-cli-access-token'
 import { _resetAzureDevOpsRepoRefCache } from './repository-ref'
 import { __resetRepoDefaultBranchCacheForTests } from '../source-control/repo-default-branch'
 
 const gitExecFileAsyncMock = vi.hoisted(() => vi.fn())
+const runAzAccessTokenCommandMock = vi.hoisted(() => vi.fn())
 
 vi.mock('../git/runner', () => ({
   gitExecFileAsync: gitExecFileAsyncMock
+}))
+
+vi.mock('./az-cli-invocation', () => ({
+  runAzAccessTokenCommand: runAzAccessTokenCommandMock
 }))
 
 function primeGitExecWithDefaultBranch(defaultRef = 'refs/remotes/origin/main'): void {
@@ -34,8 +40,11 @@ describe('Azure DevOps client', () => {
   beforeEach(() => {
     process.env = { ...OLD_ENV, ORCA_AZURE_DEVOPS_TOKEN: 'pat-token' }
     gitExecFileAsyncMock.mockReset()
+    runAzAccessTokenCommandMock.mockReset()
+    runAzAccessTokenCommandMock.mockRejectedValue(new Error('az not available'))
     _resetAzureDevOpsRepoRefCache()
     _resetAzureDevOpsPreviewApiVersionCache()
+    _resetAzCliAccessTokenCacheForTests()
     __resetRepoDefaultBranchCacheForTests()
   })
 
@@ -72,6 +81,30 @@ describe('Azure DevOps client', () => {
       tokenConfigured: true
     })
     expect(versions).toEqual(['7.1', '7.1-preview'])
+  })
+
+  it('marks an az CLI login as configured when no env token or base URL is set', async () => {
+    delete process.env.ORCA_AZURE_DEVOPS_API_BASE_URL
+    delete process.env.ORCA_AZURE_DEVOPS_TOKEN
+    runAzAccessTokenCommandMock.mockResolvedValue(
+      JSON.stringify({ accessToken: 'entra-jwt', expires_on: 32472144000 })
+    )
+    await expect(getAzureDevOpsAuthStatus()).resolves.toEqual({
+      configured: true,
+      authenticated: false,
+      account: null,
+      baseUrl: null,
+      tokenConfigured: false
+    })
+  })
+
+  it('stays not configured when neither env tokens nor an az login exist', async () => {
+    delete process.env.ORCA_AZURE_DEVOPS_API_BASE_URL
+    delete process.env.ORCA_AZURE_DEVOPS_TOKEN
+    await expect(getAzureDevOpsAuthStatus()).resolves.toMatchObject({
+      configured: false,
+      authenticated: false
+    })
   })
 
   it('resolves a PR for a branch through repository, PR, and status REST calls', async () => {

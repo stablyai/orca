@@ -2,22 +2,31 @@ import React, { useEffect, useRef, useState } from 'react'
 import { MIN_COLUMN_WIDTH } from './column-widths'
 import { translate } from '@/i18n/i18n'
 
-type Props = {
-  fieldId: string
+type PairProps = {
+  mode?: 'pair'
   nextFieldId: string
-  currentWidth: number
   nextWidth: number
   onResize: (fieldId: string, width: number, nextFieldId: string, nextWidth: number) => void
 }
 
+/** Pixel widths, one column at a time: the table grows and scrolls, as ADO's backlog grid does. */
+type SingleProps = {
+  mode: 'single'
+  onResize: (fieldId: string, width: number) => void
+}
+
+type Props = {
+  fieldId: string
+  currentWidth: number
+  minWidth?: number
+  /** Fired once per drag on mouse-up; the place to persist what `onResize` streamed. */
+  onResizeEnd?: () => void
+} & (PairProps | SingleProps)
+
 // Redistribute the pair’s stored width total using its measured pixel split; the first two columns use pixels, later columns use fr.
-export default function ColumnResizeHandle({
-  fieldId,
-  nextFieldId,
-  currentWidth,
-  nextWidth,
-  onResize
-}: Props): React.JSX.Element {
+export default function ColumnResizeHandle(props: Props): React.JSX.Element {
+  const { currentWidth } = props
+  const minWidth = props.minWidth ?? MIN_COLUMN_WIDTH
   const [dragging, setDragging] = useState(false)
   const handleRef = useRef<HTMLDivElement | null>(null)
   const dragRef = useRef<{
@@ -26,6 +35,9 @@ export default function ColumnResizeHandle({
     startPxB: number
     totalFr: number
   } | null>(null)
+  // Why: the drag listeners are bound once per drag; reading props through a ref keeps them current.
+  const propsRef = useRef(props)
+  propsRef.current = props
 
   useEffect(() => {
     if (!dragging) {
@@ -33,22 +45,28 @@ export default function ColumnResizeHandle({
     }
     const onMove = (e: MouseEvent): void => {
       const drag = dragRef.current
+      const current = propsRef.current
       if (!drag) {
+        return
+      }
+      const proposedPxA = drag.startPxA + (e.clientX - drag.startX)
+      if (current.mode === 'single') {
+        current.onResize(current.fieldId, Math.max(minWidth, proposedPxA))
         return
       }
       const totalPx = drag.startPxA + drag.startPxB
       if (totalPx <= 0) {
         return
       }
-      const proposedPxA = drag.startPxA + (e.clientX - drag.startX)
-      const newPxA = Math.max(MIN_COLUMN_WIDTH, Math.min(totalPx - MIN_COLUMN_WIDTH, proposedPxA))
+      const newPxA = Math.max(minWidth, Math.min(totalPx - minWidth, proposedPxA))
       const newFrA = (drag.totalFr * newPxA) / totalPx
       const newFrB = drag.totalFr - newFrA
-      onResize(fieldId, newFrA, nextFieldId, newFrB)
+      current.onResize(current.fieldId, newFrA, current.nextFieldId, newFrB)
     }
     const onUp = (): void => {
       dragRef.current = null
       setDragging(false)
+      propsRef.current.onResizeEnd?.()
     }
     document.addEventListener('mousemove', onMove)
     document.addEventListener('mouseup', onUp)
@@ -62,7 +80,7 @@ export default function ColumnResizeHandle({
       document.body.style.cursor = prevCursor
       document.body.style.userSelect = prevSelect
     }
-  }, [dragging, fieldId, nextFieldId, onResize])
+  }, [dragging, minWidth])
 
   return (
     <div
@@ -79,16 +97,18 @@ export default function ColumnResizeHandle({
         }
         const cell = handleRef.current?.parentElement
         const nextCell = cell?.nextElementSibling as HTMLElement | null
-        if (!cell || !nextCell) {
+        if (!cell || (props.mode !== 'single' && !nextCell)) {
           return
         }
         e.preventDefault()
         e.stopPropagation()
         dragRef.current = {
           startX: e.clientX,
-          startPxA: cell.offsetWidth,
-          startPxB: nextCell.offsetWidth,
-          totalFr: currentWidth + nextWidth
+          // Why (single): the rendered width may exceed the stored one (a flex title column);
+          // starting from what the user sees keeps the handle under the cursor.
+          startPxA: props.mode === 'single' ? cell.offsetWidth || currentWidth : cell.offsetWidth,
+          startPxB: props.mode === 'single' ? 0 : (nextCell?.offsetWidth ?? 0),
+          totalFr: props.mode === 'single' ? 0 : currentWidth + props.nextWidth
         }
         setDragging(true)
       }}

@@ -29,11 +29,20 @@ export type JiraTaskProviderIdentity = {
   projectKey?: string | null
 }
 
+export type AzureDevOpsTaskProviderIdentity = {
+  provider: 'azure-devops'
+  organization?: string | null
+  project?: string | null
+  teamId?: string | null
+  teamName?: string | null
+}
+
 export type TaskProviderIdentity =
   | GitHubTaskProviderIdentity
   | GitLabTaskProviderIdentity
   | LinearTaskProviderIdentity
   | JiraTaskProviderIdentity
+  | AzureDevOpsTaskProviderIdentity
 
 export function normalizeTaskProviderIdentity(
   provider: TaskProvider,
@@ -79,6 +88,14 @@ export function normalizeTaskProviderIdentity(
         siteUrl: normalizeNonEmptyString(raw.siteUrl),
         projectKey: normalizeNonEmptyString(raw.projectKey)
       }
+    case 'azure-devops':
+      return {
+        provider,
+        organization: normalizeNonEmptyString(raw.organization),
+        project: normalizeNonEmptyString(raw.project),
+        teamId: normalizeNonEmptyString(raw.teamId),
+        teamName: normalizeNonEmptyString(raw.teamName)
+      }
   }
 }
 
@@ -112,6 +129,10 @@ export function isStoredTaskProviderIdentity(provider: TaskProvider, identity: u
       )
     case 'jira':
       return ['siteId', 'siteUrl', 'projectKey'].every((key) => isNullableOptionalString(raw[key]))
+    case 'azure-devops':
+      return ['organization', 'project', 'teamId', 'teamName'].every((key) =>
+        isNullableOptionalString(raw[key])
+      )
   }
 }
 
@@ -119,7 +140,8 @@ const TASK_PROVIDER_IDENTITY_FIELDS: Record<TaskProvider, readonly string[]> = {
   github: ['owner', 'repo', 'host'],
   gitlab: ['projectId', 'namespace', 'project', 'webUrl'],
   linear: ['workspaceId', 'workspaceName', 'teamId', 'teamKey'],
-  jira: ['siteId', 'siteUrl', 'projectKey']
+  jira: ['siteId', 'siteUrl', 'projectKey'],
+  'azure-devops': ['organization', 'project', 'teamId', 'teamName']
 }
 
 export function areTaskProviderIdentitiesEqual(
@@ -157,6 +179,10 @@ export function taskProviderIdentityCachePart(
       return [identity.workspaceId, identity.teamId ?? identity.teamKey].filter(Boolean).join('/')
     case 'jira':
       return [identity.siteId ?? identity.siteUrl, identity.projectKey].filter(Boolean).join('/')
+    case 'azure-devops':
+      return [identity.organization, identity.project, identity.teamId ?? identity.teamName]
+        .filter(Boolean)
+        .join('/')
   }
 }
 
