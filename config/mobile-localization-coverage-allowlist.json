@@ -945,6 +945,34 @@
     "count": 1
   },
   {
+    "filePath": "mobile/src/session/MobileLinkActionSheet.tsx",
+    "kind": "object-property:label",
+    "text": "Open in Orca browser",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "mobile/src/session/MobileLinkActionSheet.tsx",
+    "kind": "object-property:label",
+    "text": "Open in browser",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "mobile/src/session/MobileLinkActionSheet.tsx",
+    "kind": "object-property:label",
+    "text": "Copy link",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "mobile/src/session/MobileLinkActionSheet.tsx",
+    "kind": "jsx-attribute:title",
+    "text": "Link",
+    "dynamic": false,
+    "count": 1
+  },
+  {
     "filePath": "mobile/src/session/MobileMarkdownReader.tsx",
     "kind": "jsx-attribute:accessibilityHint",
     "text": "Hides the software keyboard and keeps the markdown editor open.",

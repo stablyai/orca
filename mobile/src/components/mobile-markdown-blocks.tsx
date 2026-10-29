@@ -165,7 +165,7 @@ function renderBlock(
           <Pressable
             key={key}
             style={styles.imageFrame}
-            onPress={() => openMarkdownHref(only.url, ctx.onOpenFile)}
+            onPress={() => openMarkdownHref(only.url, ctx)}
             onLongPress={ctx.rowLongPress}
           >
             <NativeText style={styles.link}>

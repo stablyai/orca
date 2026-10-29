@@ -10,6 +10,7 @@ import type {
   NativeChatToolCallBlock
 } from '../../../../../src/shared/native-chat-types'
 import { colors } from '../../../theme/mobile-theme'
+import { MarkdownLinkHandlerContext } from '../../../components/markdown-link-handler'
 
 const scrolls = vi.hoisted(() => ({ toEnd: vi.fn(), to: vi.fn() }))
 
@@ -90,14 +91,19 @@ describe('ToolRun', () => {
 
   function render(
     blocks: NativeChatBlock[] | NativeChatMessage,
-    onOpenFile?: (path: string) => void
+    onOpenFile?: (path: string) => void,
+    onOpenLink: ((url: string) => void) | null = null
   ): ReactTestRenderer {
     act(() => {
       renderer = create(
-        createElement(ToolRun, {
-          blocks: Array.isArray(blocks) ? blocks : blocks.blocks,
-          onOpenFile
-        })
+        createElement(
+          MarkdownLinkHandlerContext.Provider,
+          { value: onOpenLink },
+          createElement(ToolRun, {
+            blocks: Array.isArray(blocks) ? blocks : blocks.blocks,
+            onOpenFile
+          })
+        )
       )
     })
     openRun(renderer!)
@@ -376,6 +382,30 @@ describe('ToolRun', () => {
       )[0]!
       act(() => hit.props.onPress())
       expect(openExternalLink).toHaveBeenCalledWith('https://reactnative.dev/docs/flatlist')
+    })
+
+    it('hands a web search hit to the chat link sheet when one is provided', () => {
+      vi.mocked(openExternalLink).mockClear()
+      const onOpenLink = vi.fn()
+      const tree = render(
+        [
+          {
+            type: 'tool-call',
+            name: 'web_search',
+            input: { query: 'FlatList docs' },
+            webSearchResults: [{ title: 'FlatList', url: 'https://reactnative.dev/docs/flatlist' }]
+          }
+        ],
+        undefined,
+        onOpenLink
+      )
+      openRow(tree, 'FlatList docs')
+      const hit = tree.root.findAll(
+        (node) => String(node.type) === 'Text' && node.props.accessibilityRole === 'link'
+      )[0]!
+      act(() => hit.props.onPress())
+      expect(onOpenLink).toHaveBeenCalledWith('https://reactnative.dev/docs/flatlist')
+      expect(openExternalLink).not.toHaveBeenCalled()
     })
   })
 

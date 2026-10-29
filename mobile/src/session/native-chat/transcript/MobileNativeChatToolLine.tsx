@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useContext, useMemo } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import { MobileNativeChatOwnedScrollView } from '../../MobileNativeChatOwnedScrollView'
 import { ChevronRight } from 'lucide-react-native'
@@ -22,6 +22,7 @@ import type {
 } from '../../../../../src/shared/native-chat-types'
 import { MobileSourceCopyButton } from '../../../components/MobileSourceCopyButton'
 import { MobileSyntaxSegments } from '../../../components/MobileSyntaxSegments'
+import { MarkdownLinkHandlerContext } from '../../../components/markdown-link-handler'
 import { INLINE_TEXT_SELECTION } from '../../../components/inline-text-selection'
 import { openExternalLink } from '../../../platform/external-link'
 import { colors } from '../../../theme/mobile-theme'
@@ -42,6 +43,7 @@ function SearchResults({
 }): React.JSX.Element {
   useMobileColorScheme()
   const type = toolType(fontScale).meta
+  const onOpenLink = useContext(MarkdownLinkHandlerContext)
   return (
     <View style={[styles.codeBox, styles.searchResults]}>
       {results.map((hit) => (
@@ -49,7 +51,7 @@ function SearchResults({
           key={hit.url}
           style={[styles.codeText, styles.searchHit, type]}
           numberOfLines={1}
-          onPress={() => openExternalLink(hit.url)}
+          onPress={() => (onOpenLink ? onOpenLink(hit.url) : openExternalLink(hit.url))}
           accessibilityRole="link"
         >
           {hit.title}
