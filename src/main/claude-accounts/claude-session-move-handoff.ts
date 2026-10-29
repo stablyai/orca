@@ -125,8 +125,8 @@ async function listJobsFromScript(root: string | undefined): Promise<unknown[] |
     if (typeof listJobs !== 'function') {
       return null
     }
-    // SAFETY: listJobs is the durable-job script export; the caller re-checks each row.
-    const listed: unknown = (listJobs as (jobRoot?: string) => unknown)(root)
+    // listJobs is the durable-job script export; the caller re-checks each row.
+    const listed: unknown = Reflect.apply(listJobs, undefined, [root])
     return Array.isArray(listed) ? listed : null
   } catch {
     return null
