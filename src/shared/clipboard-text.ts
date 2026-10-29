@@ -10,6 +10,7 @@ export const CLIPBOARD_TEXT_READ_MAX_BYTES = 16 * 1024 * 1024
 export const CLIPBOARD_TEXT_WRITE_MAX_BYTES = 16 * 1024 * 1024
 export const CLIPBOARD_TEXT_TOO_LARGE_ERROR = 'Clipboard text is too large for this paste target.'
 export const CLIPBOARD_TEXT_WRITE_TOO_LARGE_ERROR = 'Clipboard text is too large to copy safely.'
+export const CLIPBOARD_TEXT_READ_UNRESPONSIVE_ERROR = 'Clipboard read did not respond in time.'
 export const CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS = 256 * 1024
 
 export type ReadClipboardTextOptions = {
@@ -158,6 +159,10 @@ export async function assertClipboardTextWriteWithinLimitWithYield(
 
 export function isClipboardTextTooLargeError(error: unknown): boolean {
   return error instanceof Error && error.message.includes(CLIPBOARD_TEXT_TOO_LARGE_ERROR)
+}
+
+export function isClipboardTextReadUnresponsiveError(error: unknown): boolean {
+  return error instanceof Error && error.message.includes(CLIPBOARD_TEXT_READ_UNRESPONSIVE_ERROR)
 }
 
 export function isClipboardTextWriteTooLargeError(error: unknown): boolean {

@@ -461,6 +461,7 @@ describe('registerClipboardHandlers', () => {
   })
 
   it('rejects oversized text clipboard IPC reads without returning clipboard contents', async () => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
     clipboardReadTextMock.mockImplementation((clipboardType?: string) =>
       clipboardType === 'selection' ? 'selection secret' : 'standard secret'
     )
@@ -478,6 +479,7 @@ describe('registerClipboardHandlers', () => {
 
   it('yields while measuring large accepted text clipboard IPC reads', async () => {
     vi.useFakeTimers()
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
     const text = 'é'.repeat(300_000)
     clipboardReadTextMock.mockReturnValue(text)
 

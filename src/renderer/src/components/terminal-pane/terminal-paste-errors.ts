@@ -1,4 +1,12 @@
 import type { TerminalPasteExecutionReason } from './terminal-paste-model'
+import { isClipboardTextReadUnresponsiveError } from '../../../../shared/clipboard-text'
+
+export function formatTerminalTextPasteError(error: unknown): string {
+  if (isClipboardTextReadUnresponsiveError(error)) {
+    return 'Paste skipped: the clipboard is not responding. Try again in a moment.'
+  }
+  return 'Paste failed: clipboard text is too large for a safe terminal paste.'
+}
 
 export function formatTerminalPasteExecutionError(
   reason: TerminalPasteExecutionReason | undefined

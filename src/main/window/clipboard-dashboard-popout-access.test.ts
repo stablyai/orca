@@ -60,6 +60,8 @@ describe('dashboard popout clipboard access', () => {
   beforeEach(() => {
     handlers.clear()
     vi.clearAllMocks()
+    // Popout access rules are platform-neutral; the macOS bounded read has its own tests.
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
     isDashboardPopoutRenderer.mockReturnValue(true)
     clipboardReadText.mockReturnValue('terminal clipboard text')
     setTrustedClipboardRendererWebContentsId(17)

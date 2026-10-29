@@ -22,6 +22,7 @@ import {
   formatClipboardImagePasteError,
   type TerminalPanePasteExecution
 } from './terminal-pane-paste-execution'
+import { formatTerminalTextPasteError } from './terminal-paste-errors'
 
 export function registerTerminalPanePasteListeners({
   container,
@@ -186,8 +187,7 @@ export function registerTerminalPanePasteListeners({
       protectedMultilineTextPasteOptions: resolvePaneProtectedMultilinePasteOptions(pane),
       pasteText: (text, options) =>
         executePanePasteText(pane, 'app-menu', activeElementAtDispatch, text, options),
-      onTextPasteError: () =>
-        setTerminalError('Paste failed: clipboard text is too large for a safe terminal paste.'),
+      onTextPasteError: (error) => setTerminalError(formatTerminalTextPasteError(error)),
       onImagePasteError: (error) => setTerminalError(formatClipboardImagePasteError(error))
     }).catch(() => setTerminalError('Paste failed.'))
   }

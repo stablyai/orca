@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
+import { CLIPBOARD_TEXT_READ_UNRESPONSIVE_ERROR } from '../../../../shared/clipboard-text'
 import { pasteTerminalClipboard } from './terminal-clipboard-paste'
 import {
   markTerminalBracketedPasteInterrupted,
@@ -372,5 +373,38 @@ describe('terminal clipboard paste', () => {
     expect(terminal.paste).toHaveBeenCalledWith('a69ce28e1d092e0c8825cd1a109ac36409962bc1')
     expect(observedIgnoreBracketedPasteMode).toEqual([true])
     expect(saveClipboardImageAsTempFile).not.toHaveBeenCalled()
+  })
+
+  it('skips the image fallback and reports an unresponsive clipboard read', async () => {
+    const saveClipboardImageAsTempFile = vi.fn()
+    const pasteText = vi.fn()
+    const onTextPasteError = vi.fn()
+
+    const result = await pasteTerminalClipboard({
+      readClipboardText: vi
+        .fn()
+        .mockRejectedValue(new Error(CLIPBOARD_TEXT_READ_UNRESPONSIVE_ERROR)),
+      saveClipboardImageAsTempFile,
+      pasteText,
+      onTextPasteError
+    })
+
+    expect(result).toEqual({ status: 'skipped', reason: 'clipboard-unresponsive' })
+    expect(saveClipboardImageAsTempFile).not.toHaveBeenCalled()
+    expect(pasteText).not.toHaveBeenCalled()
+    expect(onTextPasteError).toHaveBeenCalledTimes(1)
+  })
+
+  it('still probes the screenshot path when a non-unresponsive text read rejects', async () => {
+    const saveClipboardImageAsTempFile = vi.fn().mockResolvedValue(null)
+
+    const result = await pasteTerminalClipboard({
+      readClipboardText: vi.fn().mockRejectedValue(new Error('image-only clipboard rejected text')),
+      saveClipboardImageAsTempFile,
+      pasteText: vi.fn()
+    })
+
+    expect(saveClipboardImageAsTempFile).toHaveBeenCalledTimes(1)
+    expect(result).toEqual({ status: 'skipped', reason: 'empty' })
   })
 })
