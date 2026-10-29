@@ -1,4 +1,8 @@
-import type { DelegatedMobileDeviceSyncParams } from '../../../shared/delegated-mobile-device-contract'
+import {
+  DELEGATED_MOBILE_DEVICE_SYNC_MAX_PHONES,
+  type DelegatedMobileDeviceSyncParams
+} from '../../../shared/delegated-mobile-device-contract'
+import { RemoteRuntimeClientError } from '../../../shared/remote-runtime/remote-runtime-client-error'
 import { syncDelegatedPhoneGrants, type DelegatedPhoneGrants } from './delegated-phone-grants'
 import type { MobileDesktopRelayHost, MobileDesktopRelayHosts } from './mobile-desktop-relay-hosts'
 
@@ -33,6 +37,15 @@ export class DelegatedPhoneGrantCache {
 
   /** `phoneKey: null` accepts any answered sync; a phone the sync never asked about re-syncs. */
   get(host: MobileDesktopRelayHost, phoneKey: string | null): Promise<DelegatedPhoneGrants> {
+    if (phoneKey !== null && !this.withinSyncCap(host.environmentId, phoneKey)) {
+      // Phones rank first and the cap must never drop them; a device past it fails fast, without a sync per request.
+      return Promise.reject(
+        new RemoteRuntimeClientError(
+          'remote_runtime_unavailable',
+          `This computer already relays ${DELEGATED_MOBILE_DEVICE_SYNC_MAX_PHONES} devices to that server.`
+        )
+      )
+    }
     const cached = this.entries.get(host.environmentId)
     if (cached && !cached.settled) {
       // A device enrolled mid-sync is missing from that sync's list, so it must re-sync.
@@ -49,6 +62,12 @@ export class DelegatedPhoneGrantCache {
       (phoneKey === null || cached.result.asked.has(phoneKey))
     // Never cache update-needed: in-place server upgrades must work without re-pairing.
     return answered && cached.result ? Promise.resolve(cached.result) : this.sync(host)
+  }
+
+  private withinSyncCap(environmentId: string, phoneKey: string): boolean {
+    return this.listPhones(environmentId)
+      .slice(0, DELEGATED_MOBILE_DEVICE_SYNC_MAX_PHONES)
+      .some((phone) => phone.phoneKey === phoneKey)
   }
 
   private sync(host: MobileDesktopRelayHost): Promise<DelegatedPhoneGrants> {
