@@ -29,7 +29,7 @@ describe('claude usage polling policy', () => {
     expect(rateLimits.addUsageViewer).toHaveBeenCalledTimes(1)
     expect(rateLimits.refreshIfStale).toHaveBeenCalledTimes(1)
 
-    expect(polling.apply({ theme: 'dark' })).toBe(true)
+    expect(polling.apply({})).toBe(true)
     expect(release).not.toHaveBeenCalled()
 
     settings = { claudeAutoSwitchEnabled: false }
