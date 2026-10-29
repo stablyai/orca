@@ -259,12 +259,7 @@ async function launchOverTransport(
         fullVersion: incumbentVersion,
         readiness: incumbent.readiness
       }
-      await pruneSupersededOrcadCandidates(
-        slot,
-        context.serverTarget,
-        deployed.fullVersion,
-        incumbent.readiness
-      )
+      await pruneSupersededOrcadCandidates(slot, context.serverTarget, deployed.fullVersion)
       return { ...(await readyLaunch(serving)), deferredUpdate }
     }
     return { outcome: 'deferred', distro: name, ...deferredUpdate }

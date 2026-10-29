@@ -60,27 +60,23 @@ export async function pruneManagedOrcadVersions(args: ManagedOrcadPruneArgs): Pr
 export async function pruneSupersededOrcadCandidates(
   slot: OrcadSlotOptions,
   serverTarget: NodeRuntimeTarget,
-  candidateVersion: string,
-  /** The incumbent's readiness when the caller already holds it. */
-  incumbentReadiness?: ServeReadiness
+  candidateVersion: string
 ): Promise<void> {
-  let readiness = incumbentReadiness
-  if (!readiness) {
-    try {
-      const active = (await readOrcadActivationRecord(slot)).active
-      if (!active) {
-        return
-      }
-      const identity = await resolveOrcadSlotIdentity(slot, active)
-      readiness = await probeActiveOrcadReadiness(
-        { ...slot, remoteInstallDir: identity.remoteDir },
-        { buildHash: identity.buildHash, fullVersion: identity.version }
-      )
-    } catch (error) {
-      // Without the incumbent's daemon version a staged tree may still be executing.
-      console.warn('[orcad-gc] Skipped pruning staged orcad versions:', error)
+  let readiness: ServeReadiness
+  try {
+    const active = (await readOrcadActivationRecord(slot)).active
+    if (!active) {
       return
     }
+    const identity = await resolveOrcadSlotIdentity(slot, active)
+    readiness = await probeActiveOrcadReadiness(
+      { ...slot, remoteInstallDir: identity.remoteDir },
+      { buildHash: identity.buildHash, fullVersion: identity.version }
+    )
+  } catch (error) {
+    // Without the incumbent's daemon version a staged tree may still be executing.
+    console.warn('[orcad-gc] Skipped pruning staged orcad versions:', error)
+    return
   }
   await pruneManagedOrcadVersions({
     slot,

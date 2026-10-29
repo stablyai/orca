@@ -190,17 +190,7 @@ export const PR_E2E_SOURCE_ROUTES = [
     matches: (file) =>
       MANAGED_SSH_HARNESS.test(file) ||
       (isProductSource(file) &&
-        /^src\/(?:main\/(?:ssh\/orcad-(?:update-plan|runtime-maintenance|installed-activation|remote-deploy)|managed-server\/lifecycle\/orcad-(?:managed-update-|managed-auto-update|runtime-status))|renderer\/src\/components\/settings\/(?:managed-server-|use-managed-server-lifecycle))/.test(
-          file
-        ))
-  },
-  {
-    id: 'ssh.orcad-deferred-update-slots',
-    specs: ['tests/e2e/ssh-orcad-deferred-update-slots.spec.ts'],
-    matches: (file) =>
-      MANAGED_SSH_HARNESS.test(file) ||
-      (isProductSource(file) &&
-        /^src\/main\/(?:ssh\/orcad-runtime-maintenance|managed-server\/(?:lifecycle\/orcad-managed-version-gc|install\/(?:orcad-remote-gc|remote-install-gc))|wsl\/wsl-orcad-deploy)\.ts$/.test(
+        /^src\/(?:main\/(?:ssh\/orcad-(?:update-plan|runtime-maintenance|installed-activation|remote-deploy)|managed-server\/lifecycle\/orcad-(?:managed-update-|managed-auto-update|runtime-status|managed-version-gc)|managed-server\/install\/(?:orcad-remote-gc|remote-install-gc)|wsl\/wsl-orcad-deploy\.ts)|renderer\/src\/components\/settings\/(?:managed-server-|use-managed-server-lifecycle))/.test(
           file
         ))
   },
