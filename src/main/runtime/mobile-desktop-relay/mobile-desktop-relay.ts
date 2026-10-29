@@ -2,54 +2,22 @@ import { pairedRuntimeConnectionFromOffer } from '../../../shared/paired-runtime
 import { randomUUID } from 'node:crypto'
 import type { RpcRequest } from '../rpc/core'
 import type { DelegatedMobileDeviceSyncParams } from '../../../shared/delegated-mobile-device-contract'
-import type { RuntimeCapability } from '../../../shared/protocol-version'
 import { RemoteRuntimeClientError } from '../../../shared/remote-runtime/remote-runtime-client-error'
-import {
-  openRemoteRuntimePassthroughSocket,
-  type RemoteRuntimePassthroughSocket
-} from '../../../shared/remote-runtime/remote-runtime-passthrough-socket'
+import { openRemoteRuntimePassthroughSocket } from '../../../shared/remote-runtime/remote-runtime-passthrough-socket'
 import { DelegatedPhoneGrantCache } from './delegated-phone-grant-cache'
 import { localHostedBrowserPageRequest } from './hosted-browser-page-route'
 import type { MobileDesktopRelayHosts } from './mobile-desktop-relay-hosts'
 import { RELAYED_STREAM_CARRIERS } from './relayed-stream-carriers'
+import { relayedStreamRefusal } from './relayed-client-stream-admission'
+import { RelayLink, type OpenedRelayLink, type RelayedPhone } from './relay-link'
 import {
   declareRelayedPhoneCapabilities,
-  RelayedPhoneReplies,
   relayedPhoneCapabilities,
   rewriteRelayedPhoneRequest,
   withRelayedLaunchChatDefault
 } from './relayed-phone-frames'
 
 const RELAY_CONNECT_TIMEOUT_MS = 15_000
-
-/** A phone, or a paired desktop/web client relayed under runtime.client-relay.v1; the server sees both as phones. */
-export type RelayedPhone = {
-  connectionId: string
-  deviceId: string
-  deviceToken: string
-  clientCapabilities: () => readonly RuntimeCapability[]
-  /** Runs once the target names a configured server, before its sync asks for this caller's grant. */
-  onServerResolved?: (environmentId: string) => void
-  reply: (frame: string) => void
-  sendBinary: (bytes: Uint8Array<ArrayBufferLike>) => boolean | void
-}
-
-type OpenedRelayLink = { socket: RemoteRuntimePassthroughSocket; hostToken: string }
-
-class RelayLink {
-  readonly replies: RelayedPhoneReplies
-  readonly opened: Promise<OpenedRelayLink>
-
-  constructor(
-    readonly environmentId: string,
-    readonly phone: RelayedPhone,
-    allocateStreamId: () => number,
-    open: (link: RelayLink) => Promise<OpenedRelayLink>
-  ) {
-    this.replies = new RelayedPhoneReplies(allocateStreamId)
-    this.opened = open(this)
-  }
-}
 
 /** One socket per (phone connection, configured server), authenticated with memory-only delegated phone grants.
  * Forward execution-host methods only; old servers require an update, and revocation lasts until the next sync.
@@ -97,35 +65,33 @@ export class MobileDesktopRelay {
     request: { id: string; method: string },
     frame: string
   ): void {
-    if (RELAYED_STREAM_CARRIERS.get(request.method) === 'phone-binary-frames') {
-      phone.reply(
-        failure(
-          request.id,
-          'forbidden',
-          `Method '${request.method}' is driven by binary frames, which the desktop does not relay`
-        )
-      )
+    const carrier = RELAYED_STREAM_CARRIERS.get(request.method)
+    const refusal = relayedStreamRefusal(
+      request.method,
+      carrier,
+      phone,
+      this.linksOf(phone.connectionId).map(({ replies }) => replies)
+    )
+    if (refusal) {
+      phone.reply(failure(request.id, refusal.code, refusal.message))
       return
     }
     const link = this.linkFor(phone, environmentId)
-    link.replies.noteForwarded(request.id)
-    link.opened.then(
-      ({ socket, hostToken }) => {
-        // An opening link may already have ended and answered; never send its request late.
-        if (!this.isCurrent(link)) {
-          return
-        }
-        const outgoing = withRelayedLaunchChatDefault(
-          rewriteRelayedPhoneRequest(frame, phone.deviceToken, hostToken),
-          request.method,
-          this.options.nativeChatDefault
-        )
-        if (!socket.send(outgoing)) {
-          this.endLink(link, unavailable('The server connection could not take the request.'))
-        }
-      },
-      () => {}
-    )
+    link.replies.noteForwarded(request.id, { carrier })
+    link.whenOpen(({ socket, hostToken }) => {
+      // An opening link may already have ended and answered; never send its request late.
+      if (!this.isCurrent(link)) {
+        return
+      }
+      const outgoing = withRelayedLaunchChatDefault(
+        rewriteRelayedPhoneRequest(frame, phone.deviceToken, hostToken),
+        request.method,
+        this.options.nativeChatDefault
+      )
+      if (!socket.send(outgoing)) {
+        this.endLink(link, unavailable('The server connection could not take the request.'))
+      }
+    })
   }
 
   /** Mirrors a phone's capability update to every server socket that phone has open. */
@@ -153,6 +119,24 @@ export class MobileDesktopRelay {
         () => {}
       )
     }
+  }
+
+  /** Whether a relayed multiplex owns this connection's client binary frames. */
+  carriesClientStreams(connectionId: string): boolean {
+    return this.clientStreamLink(connectionId) !== undefined
+  }
+
+  /** Forwards a client frame unchanged when a relayed multiplex owns the connection; false leaves it local. */
+  forwardClientBinary(connectionId: string, bytes: Uint8Array<ArrayBufferLike>): boolean {
+    const link = this.clientStreamLink(connectionId)
+    if (!link) {
+      return false
+    }
+    // Swallow frames before the link opens: the server registers no stream yet, and clients wait for `ready`.
+    if (link.ready && this.isCurrent(link) && !link.ready.socket.sendBinary(bytes)) {
+      this.endLink(link, unavailable('The server connection could not take terminal input.'))
+    }
+    return true
   }
 
   closePhoneConnection(connectionId: string): void {
@@ -243,8 +227,12 @@ export class MobileDesktopRelay {
           },
           onBinary: (bytes) => {
             const frame = link.replies.binary(bytes)
-            if (frame) {
-              phone.sendBinary(frame)
+            // A multiplex frame lost on the way to its client desyncs that stream; only a reconnect resyncs it.
+            if (frame && phone.sendBinary(frame) === false && link.replies.carriesClientStreams()) {
+              this.endLink(
+                link,
+                unavailable('The client connection could not take terminal output.')
+              )
             }
           },
           onClose: (error) => this.endLink(link, error)
@@ -260,6 +248,14 @@ export class MobileDesktopRelay {
       }
       throw error
     }
+  }
+
+  private clientStreamLink(connectionId: string): RelayLink | undefined {
+    return this.linksOf(connectionId).find(({ replies }) => replies.carriesClientStreams())
+  }
+
+  private linksOf(connectionId: string): RelayLink[] {
+    return [...this.links.values()].filter((link) => link.phone.connectionId === connectionId)
   }
 
   private isCurrent(link: RelayLink): boolean {

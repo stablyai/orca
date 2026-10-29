@@ -16,7 +16,8 @@ import { limitRuntimeRpcReplySize } from './runtime-rpc-reply-size-limit'
 import { MOBILE_RPC_METHOD_ALLOWLIST } from './runtime-rpc-mobile-method-allowlist'
 import { MOBILE_RPC_METHOD_ROUTES } from './runtime-rpc-mobile-method-routing'
 import { parseExecutionHostId } from '../../../shared/execution-host'
-import { RUNTIME_CLIENT_RELAY_RUNTIME_CAPABILITY } from '../../../shared/mobile-desktop-relay-contract'
+import { RUNTIME_CLIENT_RELAY_CONNECTION_CAPABILITIES } from '../../../shared/mobile-desktop-relay-contract'
+import type { RuntimeClientRelayCaller } from './runtime-rpc-binary-routing'
 import { runtimeClientRelayAdmission } from './runtime-client-relay-admission'
 import { injectDeviceScope } from './runtime-rpc-status-connection-stamp'
 
@@ -36,7 +37,7 @@ export class RuntimeRpcWebSocketDispatch extends RuntimeRpcMobileDevices {
     reply: (response: string) => void,
     sendBinary: RpcBinarySender,
     socket: AuthenticatedMobileSocket | undefined,
-    onServerResolved?: (environmentId: string) => void
+    runtimeClient?: RuntimeClientRelayCaller
   ): RpcRequest | null {
     const { executionHost } = request
     if (executionHost === undefined) {
@@ -85,11 +86,9 @@ export class RuntimeRpcWebSocketDispatch extends RuntimeRpcMobileDevices {
           deviceId: socket.device.deviceId,
           deviceToken: socket.device.clientId,
           clientCapabilities: () => socket.clientCapabilities,
-          onServerResolved,
+          ...runtimeClient,
           reply,
-          sendBinary: (bytes) => {
-            sendBinary(bytes)
-          }
+          sendBinary: (bytes) => sendBinary(bytes) !== false
         },
         target.environmentId,
         request,
@@ -193,10 +192,7 @@ export class RuntimeRpcWebSocketDispatch extends RuntimeRpcMobileDevices {
           reply,
           sendBinary,
           authenticatedSocket,
-          // Mint this client a device only on a server it actually reached.
-          (environmentId) => {
-            this.relayedRuntimeClients.add(environmentId, device.deviceId)
-          }
+          authenticatedSocket && this.runtimeClientRelayCaller(authenticatedSocket, device.deviceId)
         )
         if (!localRequest) {
           return
@@ -224,7 +220,7 @@ export class RuntimeRpcWebSocketDispatch extends RuntimeRpcMobileDevices {
       this.buildError(id, code, message)
     )
     const connectionCapabilities = this.relaysRuntimeClients(device.scope, authenticatedSocket)
-      ? [RUNTIME_CLIENT_RELAY_RUNTIME_CAPABILITY]
+      ? RUNTIME_CLIENT_RELAY_CONNECTION_CAPABILITIES
       : []
     const replyForRequest =
       request.method === 'status.get'
