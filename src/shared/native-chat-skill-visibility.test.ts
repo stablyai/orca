@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import type { DiscoveredSkill, SkillDiscoveryResult } from './skills'
-import { isNativeChatSkillForAgent } from './native-chat-skill-visibility'
+import {
+  discoveredSkillPlugin,
+  discoveredSkillTokenName,
+  isNativeChatSkillForAgent,
+  pluginNamespacedSkillName
+} from './native-chat-skill-visibility'
 
 function skill(overrides: Partial<DiscoveredSkill>): DiscoveredSkill {
   return {
@@ -34,6 +39,56 @@ function discovery(owner: string | null, rootPath = '/Users/test/.agents/skills'
     ]
   } satisfies Pick<SkillDiscoveryResult, 'sources'>
 }
+
+function pluginSkill(fields: Partial<DiscoveredSkill>): DiscoveredSkill {
+  return {
+    id: 'claude:quiver:catchup',
+    name: 'catchup',
+    description: 'Catch up',
+    providers: ['claude'],
+    sourceKind: 'plugin',
+    sourceLabel: 'Claude plugin quiver',
+    rootPath: '/home/u/.claude/plugins/cache/quiver/quiver/0.4.0/skills',
+    directoryPath: '/home/u/.claude/plugins/cache/quiver/quiver/0.4.0/skills/catchup',
+    skillFilePath: '/home/u/.claude/plugins/cache/quiver/quiver/0.4.0/skills/catchup/SKILL.md',
+    installed: true,
+    updatedAt: null,
+    ...fields
+  }
+}
+
+describe('discoveredSkillTokenName', () => {
+  it('namespaces a plugin skill with the plugin the source label carries', () => {
+    expect(discoveredSkillTokenName(pluginSkill({}))).toBe('quiver:catchup')
+  })
+
+  it('prefers the structured plugin field over parsing the display label', () => {
+    expect(discoveredSkillTokenName(pluginSkill({ plugin: 'qv' }))).toBe('qv:catchup')
+    expect(discoveredSkillPlugin(pluginSkill({ plugin: 'qv' }))).toBe('qv')
+  })
+
+  it('keeps non-plugin skills under their plain name', () => {
+    expect(
+      discoveredSkillTokenName(
+        pluginSkill({
+          id: 'claude:catchup',
+          sourceKind: 'home',
+          sourceLabel: 'Home',
+          rootPath: '/home/u/.claude/skills',
+          directoryPath: '/home/u/.claude/skills/catchup',
+          skillFilePath: '/home/u/.claude/skills/catchup/SKILL.md'
+        })
+      )
+    ).toBe('catchup')
+  })
+
+  it('falls back to the plain name when a plugin label carries no plugin name', () => {
+    expect(discoveredSkillTokenName(pluginSkill({ sourceLabel: 'Claude plugin ' }))).toBe('catchup')
+    expect(pluginNamespacedSkillName(pluginSkill({ sourceLabel: 'Claude plugin ' }), 'safe')).toBe(
+      'safe'
+    )
+  })
+})
 
 describe('isNativeChatSkillForAgent', () => {
   it('shows OpenCode the Claude skill folders it reads, and not Claude plugins', () => {

@@ -13,6 +13,9 @@ export type DiscoveredSkill = {
   providers: SkillProvider[]
   sourceKind: SkillSourceKind
   sourceLabel: string
+  /** Present on plugin-sourced skills: the structured plugin identity for the
+   *  `plugin:skill` invocation namespace. Older hosts omit it. */
+  plugin?: string
   rootPath: string
   /** Retain co-owning roots during canonical-path dedup or symlinked skills lose agents. */
   rootPaths?: string[]
@@ -30,6 +33,9 @@ export type SkillDiscoverySource = {
   providers: SkillProvider[]
   /** Agent that owns this root; null is the explicit shared-skills scope. */
   owner: AgentType | null
+  /** Present on plugin roots: the structured plugin identity the invocation
+   *  namespace uses (`plugin:skill`), so consumers need not parse `label`. */
+  plugin?: string
   exists: boolean
   /** Unavailable means unanswered, so skills are unknown rather than absent. */
   skippedReason?: 'missing' | 'remote-repo' | 'unavailable'
